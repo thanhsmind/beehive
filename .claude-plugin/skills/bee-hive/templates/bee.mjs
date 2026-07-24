@@ -588,6 +588,94 @@ function ungrantedWorktreeNotice(root) {
   );
 }
 
+// multisession-native-4 (advisor consult stage 0-1, condition C4): bounded
+// tail-window summary of lock-contention telemetry
+// (.bee/logs/contention.jsonl, appended by lock.mjs's
+// appendContentionTelemetry — msn-3/C3) for `bee status` / `bee status
+// --json`. Reads ONLY the last CONTENTION_TAIL_MAX_BYTES of the file via
+// readTranscriptTail (the SAME bounded-window primitive transcript-recovery
+// already uses for a possibly multi-MB file) — never a full-file scan, no
+// matter how large the log grows (must_haves prohibition). Malformed lines
+// inside the window are already skipped by readTranscriptTail; a missing or
+// unreadable file resolves to [] there, never throwing.
+//
+// Returns null (buildStatus omits the `contention` key entirely) when the
+// log is absent OR when the tail window contains no LOCK_BUSY ('busy')
+// events — a status payload with nothing to report about waiting sessions
+// stays silent rather than emitting an empty/zero-value block (must_haves:
+// "absent log = silent, zero errors").
+//
+// JSON shape (documented here, mirrored in bee --help --json's schema for
+// the `status` command is not required — this is a computed report field,
+// not an input parameter):
+//   contention: {
+//     busy_count: number,            // count of 'busy' (LOCK_BUSY) events in the tail window
+//     recent_busy: [{                // newest-first, capped at CONTENTION_RECENT_BUSY_LIMIT
+//       ts: string|null,
+//       lock_name: string|null,
+//       holder_session: string|null, // who held the lock the caller was waiting on
+//       caller_session: string|null, // who was waiting
+//       lock_wait_ms: number|null,
+//     }],
+//     top_locks: [{ lock_name: string, busy_count: number }], // sorted desc, capped at CONTENTION_TOP_LOCKS_LIMIT
+//     worst_wait_ms: number|null,    // max lock_wait_ms across ALL events in the window (busy or eventually-acquired)
+//     worst_wait_lock: string|null,  // the lock_name that produced worst_wait_ms
+//   }
+const CONTENTION_TAIL_MAX_BYTES = 65536; // 64KB tail window — see must_haves prohibition on full-file scans
+const CONTENTION_RECENT_BUSY_LIMIT = 5;
+const CONTENTION_TOP_LOCKS_LIMIT = 5;
+
+function buildContentionSummary(root) {
+  const file = path.join(root, '.bee', 'logs', 'contention.jsonl');
+  const events = readTranscriptTail(file, CONTENTION_TAIL_MAX_BYTES);
+  if (events.length === 0) return null;
+  const busyEvents = events.filter((e) => e && typeof e === 'object' && e.result === 'busy');
+  if (busyEvents.length === 0) return null;
+
+  const byLock = new Map();
+  for (const e of busyEvents) {
+    const name = typeof e.lock_name === 'string' && e.lock_name ? e.lock_name : 'unknown';
+    byLock.set(name, (byLock.get(name) || 0) + 1);
+  }
+  const topLocks = [...byLock.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, CONTENTION_TOP_LOCKS_LIMIT)
+    .map(([lock_name, busy_count]) => ({ lock_name, busy_count }));
+
+  // worst_wait_ms spans every event in the window (not just 'busy') — a
+  // caller that eventually acquired after a long retry still answers "why
+  // was I waiting" just as informatively as one that hit LOCK_BUSY outright.
+  let worstWaitMs = null;
+  let worstWaitLock = null;
+  for (const e of events) {
+    if (!e || typeof e !== 'object') continue;
+    const waitMs = typeof e.lock_wait_ms === 'number' && Number.isFinite(e.lock_wait_ms) ? e.lock_wait_ms : null;
+    if (waitMs !== null && (worstWaitMs === null || waitMs > worstWaitMs)) {
+      worstWaitMs = waitMs;
+      worstWaitLock = typeof e.lock_name === 'string' && e.lock_name ? e.lock_name : null;
+    }
+  }
+
+  const recentBusy = busyEvents
+    .slice(-CONTENTION_RECENT_BUSY_LIMIT)
+    .reverse()
+    .map((e) => ({
+      ts: typeof e.ts === 'string' ? e.ts : null,
+      lock_name: typeof e.lock_name === 'string' ? e.lock_name : null,
+      holder_session: e.holder_session ?? null,
+      caller_session: e.caller_session ?? null,
+      lock_wait_ms: typeof e.lock_wait_ms === 'number' ? e.lock_wait_ms : null,
+    }));
+
+  return {
+    busy_count: busyEvents.length,
+    recent_busy: recentBusy,
+    top_locks: topLocks,
+    worst_wait_ms: worstWaitMs,
+    worst_wait_lock: worstWaitLock,
+  };
+}
+
 function buildStatus(root, { lanesFull = false } = {}) {
   const state = readState(root);
   const onboardingRaw = readOnboarding(root);
@@ -686,6 +774,7 @@ function buildStatus(root, { lanesFull = false } = {}) {
     ? classifySource({ hiveDir: repoHive, homeDir: os.homedir() })
     : { kind: 'unknown', root: null };
   const worktreeNotice = ungrantedWorktreeNotice(root);
+  const contention = buildContentionSummary(root);
   return {
     onboarding: {
       installed: Boolean(onboardingRaw),
@@ -741,6 +830,10 @@ function buildStatus(root, { lanesFull = false } = {}) {
     // must stay byte-identical to pre-cell output; the field only appears at
     // all when the current checkout is an ungranted linked worktree.
     ...(worktreeNotice ? { worktree_notice: worktreeNotice } : {}),
+    // multisession-native-4: same additive, omit-when-nothing-to-report
+    // convention as worktree_notice above — an absent/empty-of-busy-events
+    // contention.jsonl keeps status byte-identical to pre-cell output.
+    ...(contention ? { contention } : {}),
   };
 }
 
@@ -828,6 +921,15 @@ function renderStatusText(status) {
         .join(' | ') || 'none recorded'
     }`,
     `Active reservations: ${status.active_reservations.length}`,
+    // multisession-native-4: additive line, omitted whenever buildStatus
+    // omitted the `contention` key (no log, or no busy events in the tail
+    // window) — same "absent = silent" convention as the review/scribing
+    // lines above.
+    ...(status.contention
+      ? [
+          `Contention: ${status.contention.busy_count} LOCK_BUSY event(s) recently (top: ${status.contention.top_locks.map((l) => `${l.lock_name}×${l.busy_count}`).join(', ')}); worst wait ${status.contention.worst_wait_ms}ms${status.contention.worst_wait_lock ? ` on "${status.contention.worst_wait_lock}"` : ''}`,
+        ]
+      : []),
     `Critical patterns file: ${status.critical_patterns_present ? 'present' : 'absent'}`,
     ...(status.models
       ? [

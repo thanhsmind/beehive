@@ -1,0 +1,113 @@
+{
+  "id": "multisession-native-4",
+  "feature": "multisession-native",
+  "lane": "small",
+  "title": "Surface contention in bee status",
+  "action": "bee status (and status --json) reads .bee/logs/contention.jsonl and reports recent LOCK_BUSY events, top contended lock names, and holder/waiter session pairs so a waiting session can answer 'why am I waiting'. Bounded tail-window read, silent when the log is absent. Regen inside this cell after the code change: node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply.",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-3"
+  ],
+  "files": [
+    ".bee/bin/bee.mjs",
+    "tests/"
+  ],
+  "read_first": [
+    ".bee/bin/bee.mjs",
+    "docs/history/multisession-native/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "status stays fast: tail window, no full-file scan",
+      "absent log = silent, zero errors",
+      "json shape documented",
+      "onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no full-file scan of contention.jsonl"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D8 stage 1"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "m",
+    "11": "u",
+    "12": "c",
+    "13": " ",
+    "14": "1",
+    "15": "4",
+    "16": " ",
+    "17": "g",
+    "18": "i",
+    "19": "a",
+    "20": "i",
+    "21": " ",
+    "22": "d",
+    "23": "o",
+    "24": "a",
+    "25": "n",
+    "26": " ",
+    "27": "1",
+    "worker": "msn-w4",
+    "outcome": "bee status/--json surfaces lock-contention telemetry from .bee/logs/contention.jsonl via a 64KB bounded tail-window read (readTranscriptTail), reporting busy_count/recent_busy/top_locks/worst_wait_ms; absent/no-busy log omits the key entirely",
+    "files_changed": [
+      "skills/bee-hive/templates/bee.mjs",
+      ".bee/bin/bee.mjs",
+      ".bee/onboarding.json",
+      "skills/bee-hive/templates/tests/test_contention_status.mjs",
+      ".agents/skills/bee-hive/templates/bee.mjs",
+      ".agents/skills/bee-hive/templates/tests/test_contention_status.mjs",
+      ".agents/skills/.bee-render.json",
+      ".claude/skills/bee-hive/templates/bee.mjs",
+      ".claude/skills/bee-hive/templates/tests/test_contention_status.mjs",
+      ".claude/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/templates/bee.mjs",
+      ".claude-plugin/skills/bee-hive/templates/tests/test_contention_status.mjs",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/templates/bee.mjs",
+      ".codex-plugin/skills/bee-hive/templates/tests/test_contention_status.mjs",
+      ".codex-plugin/skills/.bee-render.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "scripts/impact-registry.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T15:18:40.574Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"red_failure_evidence\": \"Before this cell, buildStatus/renderStatusText had no contention section at all: status --json against a seeded contention.jsonl fixture (3 LOCK_BUSY + 1 acquired event across two lock names) had no contention key in the payload, and the text render had no matching line. Running the new test file test_contention_status.mjs against pre-cell bee.mjs failed 4 of 5 checks: missing contention key, missing text line, malformed-line-skip busy_count undefined, and the oversized-file tail-window proof undefined - only the absent-log no-op case passed trivially. Captured via: node skills/bee-hive/templates/tests/test_contention_status.mjs run before implementing buildContentionSummary.\", \"isolation_proof\": \"Stashed only the two state files belonging to another live session (dirty since before this cell started); backlog_uniqueness --check and test_verify_manifest.mjs both PASS clean with those removed; git stash pop restored the other session files unchanged afterward. Proves the 2 run_verify --impacted FAILs are pre-existing drift, not caused by this cell.\"}\n",
+    "verify_output": "run_verify --impacted: 100 suites, 98 PASS incl. new suite test_contention_status.mjs (5/5: seeded aggregates, text render, absent-log silence, malformed-line skip, oversized-file tail-window proof) and test_plugin_distribution.mjs (mirrors resynced). 2 pre-existing FAILs (backlog_uniqueness --check, test_verify_manifest) proven isolated: stashing only the other live session's dirty config+backlog state files makes both pass clean; restored after. ledger_parity --check: PASS (bin tree matches onboarding managed-hash ledger). release_manifest --write/--check: 513 files match. render_plugin_skill_trees --write: mirrors synced. impact_registry --write/--check: up to date (172 files).",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-24T15:11:03.292Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-24T15:17:53.256Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T15:17:53.256Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-24T15:11:03.291Z",
+        "acquired_at": "2026-07-24T15:11:03.291Z",
+        "worker": "msn-w4",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

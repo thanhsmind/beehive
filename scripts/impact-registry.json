@@ -1278,6 +1278,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_herding_cli.mjs",
@@ -1307,6 +1308,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_herding_cli.mjs",
@@ -1858,6 +1860,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
       ],
@@ -1865,6 +1868,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
       ]
@@ -1888,6 +1892,7 @@
         "skills/bee-hive/templates/tests/test_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
@@ -1914,6 +1919,7 @@
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
         "skills/bee-hive/templates/tests/test_bundle_mode.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
@@ -1948,6 +1954,7 @@
         "skills/bee-hive/templates/tests/test_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
@@ -1992,6 +1999,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_guards_tokenizer.mjs",
@@ -2013,6 +2021,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
       ]
@@ -2045,6 +2054,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
       ]
@@ -2080,6 +2090,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
@@ -2113,6 +2124,7 @@
         "skills/bee-hive/templates/tests/test_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
@@ -2130,6 +2142,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
       ]
@@ -2146,6 +2159,7 @@
         "skills/bee-hive/templates/tests/test_backlog_capture.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
@@ -2161,6 +2175,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
@@ -2199,6 +2214,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
@@ -2233,6 +2249,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
       ]
@@ -2259,6 +2276,7 @@
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
         "skills/bee-hive/templates/tests/test_bundle_mode.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
@@ -2279,6 +2297,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
@@ -2302,6 +2321,7 @@
         "skills/bee-hive/templates/tests/test_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
@@ -2337,6 +2357,7 @@
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
         "skills/bee-hive/templates/tests/test_bundle_mode.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
@@ -2372,6 +2393,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
@@ -2396,6 +2418,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_perf.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
@@ -2410,6 +2433,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
@@ -2445,6 +2469,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_guards_tokenizer.mjs",
@@ -2466,6 +2491,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
@@ -2488,6 +2514,7 @@
         "skills/bee-hive/templates/tests/test_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
@@ -2505,6 +2532,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
       ]
@@ -2522,6 +2550,7 @@
         "scripts/test_skill_render.mjs",
         "skills/bee-hive/scripts/test_plugin_distribution.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
@@ -2538,6 +2567,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
@@ -2566,6 +2596,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_guards_tokenizer.mjs",
@@ -2586,6 +2617,7 @@
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
       ]
@@ -2617,6 +2649,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_guards_tokenizer.mjs",
@@ -2653,6 +2686,7 @@
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_feedback.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_guards_tokenizer.mjs",
@@ -2751,6 +2785,14 @@
       ],
       "all": [
         "skills/bee-hive/templates/tests/test_config_validate.mjs"
+      ]
+    },
+    "skills/bee-hive/templates/tests/test_contention_status.mjs": {
+      "direct": [
+        "skills/bee-hive/templates/tests/test_contention_status.mjs"
+      ],
+      "all": [
+        "skills/bee-hive/templates/tests/test_contention_status.mjs"
       ]
     },
     "skills/bee-hive/templates/tests/test_decisions_propagation.mjs": {
