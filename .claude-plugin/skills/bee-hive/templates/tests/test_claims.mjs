@@ -15,6 +15,8 @@ import {
   createSession,
   readSession,
   heartbeatSession,
+  bindSessionLane,
+  unbindSessionLane,
   claimCellFile,
   readClaim,
   releaseClaim,
@@ -467,6 +469,95 @@ await check('race: sweep-vs-renewal (rel180-2, forced interleaving) — a renewa
   assert(
     failures.length === 0,
     `sweep-vs-renewal forced interleaving: ${failures.length}/${ROUNDS} rounds bad | ${failures.join(' | ')}`,
+  );
+});
+
+// D10a (issue #56 3.8, forced interleaving — same seam discipline as the
+// rel180-2 sweep-vs-renewal test above, never a sleep/Worker race): closes
+// the lost-update window where bindSessionLane/unbindSessionLane raced
+// heartbeatSession's read-modify-write. heartbeatSession's _raceSeam fires
+// once per round, synchronously, at the exact point a concurrent bind/unbind
+// could land — post-fix that point is INSIDE heartbeatSession's own lock
+// hold, so the injected call must come back typed LOCK_BUSY (never a silent
+// unlocked write) and only succeeds once heartbeatSession has released.
+await check('race: heartbeat-vs-bindSessionLane (D10a, forced interleaving) — a bind forced into heartbeat\'s read-modify-write window is never clobbered by the stale heartbeat write', async () => {
+  const ROUNDS = 10;
+  const failures = [];
+  for (let r = 0; r < ROUNDS; r += 1) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-race-bind-'));
+    const sessionId = `bind-race-${r}`;
+    const lane = `bind-race-lane-${r}`;
+    createSession(root, { id: sessionId }); // unbound at start
+    let seamResult = null;
+    const beat = heartbeatSession(root, sessionId, {
+      _raceSeam: () => {
+        // Small lockAttempts: if the lock is genuinely held (post-fix), this
+        // should fail fast as LOCK_BUSY rather than burn the full ~300ms
+        // default budget every round.
+        seamResult = bindSessionLane(root, sessionId, lane, { lockAttempts: 3 });
+      },
+    });
+    if (!beat.ok) failures.push(`round ${r}: heartbeat itself failed: ${JSON.stringify(beat)}`);
+    if (!seamResult) {
+      failures.push(`round ${r}: seam never fired — test setup is broken`);
+      fs.rmSync(root, { recursive: true, force: true });
+      continue;
+    }
+    // A caller that sees LOCK_BUSY retries — same contract as every other
+    // typed LOCK_BUSY in this file. A pre-fix seamResult.ok===true means the
+    // bind already landed (unlocked), which is exactly the bug: it must NOT
+    // then be silently erased by heartbeatSession's stale write.
+    const finalBind = seamResult.ok === true ? seamResult : bindSessionLane(root, sessionId, lane);
+    const onDisk = readSession(root, sessionId);
+    if (!finalBind.ok || !onDisk || onDisk.lane !== lane) {
+      failures.push(
+        `round ${r}: binding lost — seamResult=${JSON.stringify(seamResult)} finalBind=${JSON.stringify(finalBind)} onDisk=${JSON.stringify(onDisk)}`,
+      );
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  assert(
+    failures.length === 0,
+    `heartbeat-vs-bind forced interleaving: ${failures.length}/${ROUNDS} rounds bad | ${failures.join(' | ')}`,
+  );
+});
+
+// Symmetric case: a lane that IS bound must not be resurrected by a stale
+// heartbeat write racing a concurrent unbind — same seam, opposite direction.
+await check('race: heartbeat-vs-unbindSessionLane (D10a, forced interleaving) — an unbind forced into heartbeat\'s read-modify-write window is never resurrected by the stale heartbeat write', async () => {
+  const ROUNDS = 10;
+  const failures = [];
+  for (let r = 0; r < ROUNDS; r += 1) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-race-unbind-'));
+    const sessionId = `unbind-race-${r}`;
+    const lane = `unbind-race-lane-${r}`;
+    createSession(root, { id: sessionId });
+    const setupBind = bindSessionLane(root, sessionId, lane);
+    assert(setupBind.ok === true, `round ${r}: setup bind failed`);
+    let seamResult = null;
+    const beat = heartbeatSession(root, sessionId, {
+      _raceSeam: () => {
+        seamResult = unbindSessionLane(root, sessionId, { lockAttempts: 3 });
+      },
+    });
+    if (!beat.ok) failures.push(`round ${r}: heartbeat itself failed: ${JSON.stringify(beat)}`);
+    if (!seamResult) {
+      failures.push(`round ${r}: seam never fired — test setup is broken`);
+      fs.rmSync(root, { recursive: true, force: true });
+      continue;
+    }
+    const finalUnbind = seamResult.ok === true ? seamResult : unbindSessionLane(root, sessionId);
+    const onDisk = readSession(root, sessionId);
+    if (!finalUnbind.ok || !onDisk || 'lane' in onDisk) {
+      failures.push(
+        `round ${r}: unbind lost (lane resurrected) — seamResult=${JSON.stringify(seamResult)} finalUnbind=${JSON.stringify(finalUnbind)} onDisk=${JSON.stringify(onDisk)}`,
+      );
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  assert(
+    failures.length === 0,
+    `heartbeat-vs-unbind forced interleaving: ${failures.length}/${ROUNDS} rounds bad | ${failures.join(' | ')}`,
   );
 });
 

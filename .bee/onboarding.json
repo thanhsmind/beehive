@@ -11,7 +11,7 @@
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "ef212500da307a5f4654426827198a269acdcd4e79f94e61f5de1c010123a4ea",
-      "claims.mjs": "81257c8797343c0698cda1597774fe32dc59238e031bc2d27de3567e0adbfcc9",
+      "claims.mjs": "79a2d4b7717f10bd389917891c60c52836a0a365d412a1dcfdaebb63139383fe",
       "command-registry.mjs": "753e05533678e7f7e0f8dd9121ed613eb81b43a7fbb9146b1a00870c7374e32e",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0799e8b4a703a453a0ce8490c36991cd74f50312abec88f91a78fbcfbb1a3779",
@@ -76,5 +76,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-24T12:45:19.724Z"
+  "updated_at": "2026-07-24T14:43:52.890Z"
 }

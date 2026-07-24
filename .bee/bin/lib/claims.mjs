@@ -17,9 +17,10 @@
 // Typed-failure contract (pinned, fresh-session-handoff validating repair):
 // every mutating API returns { ok: true, ... } | { ok: false, code, reason }
 // and never throws for contention. Codes: SESSION_EXISTS, SESSION_MISSING,
-// CLAIMED, GATE_HELD, NOT_OWNER, NOT_FOUND, LOCK_BUSY (heartbeatSession only,
-// rel180-2 — see below). Bad arguments (empty/path-shaped ids) still throw,
-// matching reservations.mjs.
+// CLAIMED, GATE_HELD, NOT_OWNER, NOT_FOUND, LOCK_BUSY (heartbeatSession,
+// bindSessionLane, unbindSessionLane — rel180-2 / D10a, all three hold the
+// same 'sessions' store-lock below). Bad arguments (empty/path-shaped ids)
+// still throw, matching reservations.mjs.
 //
 // Ownership changes never delete-then-recreate the claim file: adoption and
 // release run under the exclusive gate, and adoption rewrites the owner IN
@@ -41,6 +42,23 @@
 // unit starts (and is seen) or is forced to wait until it finishes (and only
 // then lands, moot on an already-reclaimed claim). Bounded, never unbounded,
 // matching the per-claim gate's own posture.
+//
+// D10a (multisession-native, issue #56 3.8): the SAME lost-update shape was
+// still open on the lane-binding side — bindSessionLane/unbindSessionLane
+// did their read-modify-write with NO lock at all, and heartbeatSession did
+// its OWN read (of the whole session record, lane field included) OUTSIDE
+// the 'sessions' lock above, so a bind/unbind landing strictly between that
+// unlocked read and heartbeatSession's later locked write was invisible to
+// the stale copy heartbeatSession then wrote back — silently erasing (bind)
+// or resurrecting (unbind) the lane. Closed the same way: heartbeatSession's
+// read moved INSIDE its existing lock section (now genuinely one atomic
+// read-modify-write unit), and bindSessionLane/unbindSessionLane each now
+// acquire the SAME 'sessions' lock (acquireSessionsLock) around their own
+// read-modify-write, never a new lock name. All three call sites are
+// call-site leaves — none nests inside another's lock acquisition (verified:
+// the only bind/unbind callers are bee.mjs's state.session.bind/unbind CLI
+// handlers, dispatched flat with no lock held) — so no self-deadlock risk
+// against acquireSessionsLock's non-reentrant, bounded-retry primitive.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -238,11 +256,7 @@ export function listSessionRecords(root) {
  * never WAIT on a store lock") opt into a single non-retrying attempt; every
  * other caller gets the same bounded-retry budget as acquireGateWithRetry.
  */
-export function heartbeatSession(root, sessionId, { now = Date.now(), lockAttempts = SESSIONS_LOCK_RETRY_ATTEMPTS } = {}) {
-  const session = readSession(root, sessionId);
-  if (!session) {
-    return fail('SESSION_MISSING', `session "${sessionId}" has no record to heartbeat.`);
-  }
+export function heartbeatSession(root, sessionId, { now = Date.now(), lockAttempts = SESSIONS_LOCK_RETRY_ATTEMPTS, _raceSeam } = {}) {
   const lock = acquireSessionsLock(root, lockAttempts);
   if (!lock.acquired) {
     return fail(
@@ -251,6 +265,20 @@ export function heartbeatSession(root, sessionId, { now = Date.now(), lockAttemp
     );
   }
   try {
+    // D10a: the read moved INSIDE the lock (was: readSession before
+    // acquireSessionsLock, above the fold) — a bind/unbind landing between
+    // an unlocked read and this write is exactly the lost-update shape D10a
+    // closes; see the rel180-2/D10a comment block above this function.
+    const session = readSession(root, sessionId);
+    if (!session) {
+      return fail('SESSION_MISSING', `session "${sessionId}" has no record to heartbeat.`);
+    }
+    // _raceSeam: test-only synchronous hook, fired here (post-read,
+    // pre-write, still holding the lock) so a regression test can prove the
+    // window is closed without sleeps or real threads — same seam style as
+    // lock.mjs's _takeoverSeam/_postRenameSeam. Never set by any production
+    // caller; undefined is a complete no-op.
+    if (typeof _raceSeam === 'function') _raceSeam();
     session.last_heartbeat = utcNow(now);
     withTransientFsRetry(() => writeJsonAtomic(sessionPath(root, sessionId), session));
     return { ok: true, session };
@@ -294,28 +322,53 @@ export function isConcurrentMode(root, { excludeSessionId = null, now = Date.now
 // stays lane-agnostic (the same decoupling as sessionId-as-parameter), and
 // state.mjs resolvePipeline owns the typed LANE_MISSING/LANE_CORRUPT refusal.
 
-export function bindSessionLane(root, sessionId, feature) {
+// D10a: bad-argument validation (requireId) still runs BEFORE the lock is
+// touched at all — a malformed id throws exactly as before, with no lock
+// acquisition attempted for garbage input (unchanged from pre-D10a).
+export function bindSessionLane(root, sessionId, feature, { lockAttempts = SESSIONS_LOCK_RETRY_ATTEMPTS } = {}) {
   const session = requireId(sessionId, 'session id');
   const lane = requireId(feature, 'lane feature');
-  const record = readSession(root, session);
-  if (!record) {
-    return fail('SESSION_MISSING', `session "${session}" has no record to bind to lane "${lane}".`);
+  const lock = acquireSessionsLock(root, lockAttempts);
+  if (!lock.acquired) {
+    return fail(
+      'LOCK_BUSY',
+      `session "${session}" bind to lane "${lane}" could not acquire the sessions lock after ${lockAttempts} bounded ${lockAttempts === 1 ? 'attempt' : 'attempts'} — never waited unboundedly.`,
+    );
   }
-  const bound = { ...record, lane };
-  withTransientFsRetry(() => writeJsonAtomic(sessionPath(root, session), bound));
-  return { ok: true, session: bound };
+  try {
+    const record = readSession(root, session);
+    if (!record) {
+      return fail('SESSION_MISSING', `session "${session}" has no record to bind to lane "${lane}".`);
+    }
+    const bound = { ...record, lane };
+    withTransientFsRetry(() => writeJsonAtomic(sessionPath(root, session), bound));
+    return { ok: true, session: bound };
+  } finally {
+    lock.release();
+  }
 }
 
 /** Remove the binding by OMITTING the key (never lane:null), restoring the unbound shape. */
-export function unbindSessionLane(root, sessionId) {
+export function unbindSessionLane(root, sessionId, { lockAttempts = SESSIONS_LOCK_RETRY_ATTEMPTS } = {}) {
   const session = requireId(sessionId, 'session id');
-  const record = readSession(root, session);
-  if (!record) {
-    return fail('SESSION_MISSING', `session "${session}" has no record to unbind.`);
+  const lock = acquireSessionsLock(root, lockAttempts);
+  if (!lock.acquired) {
+    return fail(
+      'LOCK_BUSY',
+      `session "${session}" unbind could not acquire the sessions lock after ${lockAttempts} bounded ${lockAttempts === 1 ? 'attempt' : 'attempts'} — never waited unboundedly.`,
+    );
   }
-  const { lane: _lane, ...unbound } = record;
-  withTransientFsRetry(() => writeJsonAtomic(sessionPath(root, session), unbound));
-  return { ok: true, session: unbound };
+  try {
+    const record = readSession(root, session);
+    if (!record) {
+      return fail('SESSION_MISSING', `session "${session}" has no record to unbind.`);
+    }
+    const { lane: _lane, ...unbound } = record;
+    withTransientFsRetry(() => writeJsonAtomic(sessionPath(root, session), unbound));
+    return { ok: true, session: unbound };
+  } finally {
+    lock.release();
+  }
 }
 
 // ─── claims ──────────────────────────────────────────────────────────────────
