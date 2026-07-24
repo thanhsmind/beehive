@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Workflow State — working sessions, self-derived identity, lanes, and the renewing heartbeat"
-description: "Who the acting session is (resolved from its own environment, never handed down), how a feature gets its own pipeline lane that every reader resolves through, and how a live session's heartbeat renews itself and carries its claims and holds forward with it."
+description: "Who the acting session is (resolved from its own environment, never handed down), how a feature gets its own pipeline lane that every reader resolves through, how a live session's heartbeat renews itself and carries its claims and holds forward with it, and how lane binding now shares the same store lock as the heartbeat so the two writers of one session record can never lose each other's update."
 timestamp: 2026-07-24
 bee:
   id: workflow-state-sessions-lanes-and-identity
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7]
-  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)"]
+  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)"]
+  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)"]
   authoritative_for: "workflow-state: session identity, per-feature lanes, and heartbeat/lease renewal"
 ---
 
@@ -125,6 +125,23 @@ transition (B11) remain the rescue; the staleness threshold itself is
 unchanged, so real silence that long still genuinely means the session is
 gone (D5).
 
+**Lane binding now serializes under the same lock heartbeat renewal already uses
+(multisession-native D10a).** Trigger: a session's lane binding changes (bind
+or unbind) at or near the same moment its own or another session's heartbeat
+renewal (B24) is in flight. What happens: binding and unbinding a lane now
+read and write the session record inside the identical store lock that
+heartbeat renewal already acquires — a read-modify-write on a session record
+is never performed lock-free, on any of the three paths that touch it.
+Exhausting the lock's bounded-retry budget returns the same typed `LOCK_BUSY`
+refusal (Data Dictionary) every other coordination-store contention already
+answers with, naming the current holder, rather than silently proceeding
+unlocked. What each actor observes: a bind or unbind landing in the same
+instant as a heartbeat can no longer be silently clobbered (a fresh bind
+overwritten by heartbeat's stale in-memory copy of the record) or resurrected
+(an unbind reverted the same way) — the two writers of one session record are
+now mutually exclusive, closing the session store's last lock-free
+read-modify-write (issue #56 3.8).
+
 ### Closing a feature — the tail of the chain
 
 Closing is the one stretch of the pipeline where each step must *prove* the step
@@ -197,6 +214,10 @@ its knowledge actually landed — the state and the specs can no longer disagree
   record, symmetric with the read-path resolution in B13; `--no-lane` forces
   the default from a bound session, and a missing or corrupt bound lane
   refuses the write loudly rather than falling back (i54-closeout D7).
+- R57 — Binding and unbinding a session's lane acquire the same `sessions`
+  store lock as heartbeat renewal around their own read-modify-write, with the
+  same bounded-retry / typed `LOCK_BUSY` discipline; no path writes a session
+  record without holding that lock (multisession-native D10a, issue #56 3.8).
 
 ## Edge Cases Settled
 
@@ -215,3 +236,12 @@ its knowledge actually landed — the state and the specs can no longer disagree
   runExample rows in `test_bee_cli.mjs`). Evidence: traces
   `.bee/cells/fsh-{3,4}.json`, commits 257d6b5, 6fa4f89;
   `docs/history/fresh-session-handoff/reports/validation-s2.md`.
+- Lock-serialized bind/unbind (D10a): `bindSessionLane`/`unbindSessionLane`
+  read-modify-write moved inside `acquireSessionsLock` in
+  `skills/bee-hive/templates/lib/claims.mjs`, same bounded-retry/typed
+  `LOCK_BUSY` shape as `heartbeatSession`'s own lock hold. Two forced-
+  interleaving regression tests (`_raceSeam` hook, same style as
+  `lock.mjs`'s `_takeoverSeam`/`_postRenameSeam`) in
+  `skills/bee-hive/templates/tests/test_claims.mjs`, proven red-first against
+  a reconstructed pre-fix build (10/10 rounds failing both directions).
+  Evidence: trace `.bee/cells/multisession-native-1.json`, commit c794eda.

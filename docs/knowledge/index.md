@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 84 concept(s)
-- [patterns/](patterns/index.md) — 59 concept(s)
+- [patterns/](patterns/index.md) — 60 concept(s)
 - [work/](work/index.md) — 4 concept(s)
 
 ## Critical patterns
@@ -75,6 +75,7 @@ never a generation timestamp or any other wall-clock value.
 - [Clearing a red by widening the threshold is not the same act as correcting what is measured — prove which one you did](patterns/20260723-clearing-a-red-by-widening-the-threshold-is-not-fixing-the-check.md) — Both clear the red, both read identically in a commit summary, and only one leaves the guard able to detect what it exists to detect. A negative control is what separates them.
 - [A pinned read-only worker type and a cell-execution dispatch are different jobs — never spawn one for the other](patterns/20260723-pinned-readonly-type-vs-execution-dispatch.md) — bee-gather/bee-extract/bee-review are read-only by hard system contract; a cell that edits, runs git, or runs verify must never be dispatched as one of them, even when a skill doc offers it as a valid tier-matched choice.
 - [Split automation where an action becomes irreversible — automate the recoverable half, keep the irreversible half a human gesture](patterns/20260723-split-automation-where-an-action-becomes-irreversible.md) — When automation both produces work and lands it, the two halves have different blast radii. Autonomy should track blast radius, not convenience.
+- [A lost-update race between two writers of one record closes only when BOTH lock — locking one side moves the race, it does not close it](patterns/20260724-a-lost-update-race-closes-only-when-both-writers-lock.md) — A shared record with two read-modify-write code paths still races even after one path takes a lock; the race closes only once every writer of that record shares the same lock.
 - [A test that runs the canonical source can never catch vendoring drift — only a fresh-install subprocess can](patterns/20260724-canonical-source-tests-cannot-see-vendoring-drift.md) — A guard crashed fail-open on every fresh install for a whole release cycle: its sibling import was never vendored, node --check passes on missing imports, and every suite ran the canonical file where the import always resolves. The only detector was a live canary spawning the actually-vendored copy from a freshly-onboarded fixture.
 - [A managed-file ledger needs a removal path derived from its own diff, not a hand-maintained retired list](patterns/20260724-ledger-diff-derived-removal.md) — A managed-file ledger needs a removal path derived from its own diff, not a hand-maintained retired list
 - [A red-first proof whose oracle can be fed by live-environment detection proves nothing about the code under test](patterns/20260724-red-first-oracle-fed-by-live-environment.md) — Reverting a version-pin constant stayed green locally because the machine's live CLI version equals the new pin — the assertion string was satisfied by live detection, not by the constant. A local red-first that can be fed by the environment is not a red floor; require an environment-independent proof.

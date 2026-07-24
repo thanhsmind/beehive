@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: Workflow State — cross-session file holds and the coordination lock behind every shared write
-description: "The write-time refusal that names the live session holding a path and when its hold expires, and the bounded-wait lock every shared coordination store's read-modify-write body runs inside — including exactly when a stale holder may be taken over and when it may not."
-timestamp: 2026-07-22
+description: "The write-time refusal that names the live session holding a path and when its hold expires, the bounded-wait lock every shared coordination store's read-modify-write body runs inside — including exactly when a stale holder may be taken over and when it may not — and the fail-open contention telemetry every lock acquire now records, surfaced as a bounded summary in bee status."
+timestamp: 2026-07-24
 bee:
   id: workflow-state-holds-and-the-coordination-lock
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["multi-session-hardening D2 with Δ1/Δ3 amendments (the coordination lock: verbs wait bounded, checkpoints try once)", "fresh-session-handoff D3 (a write into another live session's held path is refused at write time)", hardening-1-7-10 (liveness-probed stale takeover with a one-hour pid-reuse ceiling; no timer heartbeat by design)]
-  sources: ["fresh-session-handoff cells fsh-7/fsh-8 (phase-independent deny + fail-closed corrupt-store branch; validation-s3, 2026-07-13)", "multi-session-hardening cells msh-1..7 (coordination lock primitive and forked-racer suites, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B14", "docs/specs/workflow-state.md#B21", "docs/specs/workflow-state.md#R37", "docs/specs/workflow-state.md#R52", "docs/specs/workflow-state.md#P15"]
+  decisions: ["multi-session-hardening D2 with Δ1/Δ3 amendments (the coordination lock: verbs wait bounded, checkpoints try once)", "fresh-session-handoff D3 (a write into another live session's held path is refused at write time)", hardening-1-7-10 (liveness-probed stale takeover with a one-hour pid-reuse ceiling; no timer heartbeat by design), "multisession-native (stage 0-1: lock-acquire outcomes recorded as fail-open contention telemetry; bee status surfaces a bounded contention summary from that telemetry)"]
+  sources: ["fresh-session-handoff cells fsh-7/fsh-8 (phase-independent deny + fail-closed corrupt-store branch; validation-s3, 2026-07-13)", "multi-session-hardening cells msh-1..7 (coordination lock primitive and forked-racer suites, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B14", "docs/specs/workflow-state.md#B21", "docs/specs/workflow-state.md#R37", "docs/specs/workflow-state.md#R52", "docs/specs/workflow-state.md#P15", "multisession-native cell multisession-native-3 (contention telemetry in lock.mjs; trace .bee/cells/multisession-native-3.json, commit 2d66ccc, 2026-07-24)", "multisession-native cell multisession-native-4 (bee status contention summary; trace .bee/cells/multisession-native-4.json, commit 1865cae, 2026-07-24)"]
   authoritative_for: "workflow-state: cross-session file holds and the shared-store coordination lock"
 ---
 
@@ -72,6 +72,43 @@ coordination-record write is ever silently dropped by a second concurrent
 writer; a checkpoint that loses the race simply skips one opportunistic
 refresh, with the next one along shortly (D2).
 
+**Every store-lock acquire outcome is recorded as fail-open contention
+telemetry (multisession-native, stage 0-1).** Trigger: any attempt to acquire
+a shared coordination store's lock — both the retrying path a command-line
+verb waits on and the try-once path a lifecycle checkpoint uses. What
+happens: the outcome — acquired immediately, acquired after retry, or
+`LOCK_BUSY` exhaustion — appends one line to a dedicated contention log,
+carrying when it happened, which lock, how long the caller waited, who
+currently holds the lock, who is asking, and (reserved for a later cell to
+populate) which workflow, workspace, and resource the wait was over. The
+append is itself lock-free — a plain best-effort file write, not gated by the
+lock it is reporting on — and every failure writing it is swallowed, up to
+and including the log file being unwritable: telemetry can never turn a
+successful acquire into a reported failure, and a broken log can never be the
+reason an acquire or a hook's heartbeat trips. What each actor observes: a
+session that later asks "why am I waiting" has a record to answer from; a
+session that never contends a lock produces no new telemetry, no behavior
+change, and no measurable extra latency.
+
+**`bee status` surfaces the same contention log as a bounded summary
+(multisession-native, stage 0-1).** Trigger: `bee status` or
+`bee status --json` runs while the contention log holds at least one busy
+(`LOCK_BUSY`) event inside its recent window. What happens: status reads a
+fixed, bounded 64KB tail of the log — never a full-file scan — through the
+same windowed, malformed-line-skipping, never-throws reader already used to
+recover a crashed session's own transcript tail, itself sometimes multiple
+megabytes; a line that fails to parse is skipped rather than aborting the
+read. From that window it reports how many busy events occurred, the busiest
+locks (at most 5, worst wait first), the single worst wait and which lock it
+fell on (measured across every event in the window, not only the busy ones,
+so a caller that eventually acquired after a long retry still shows up), and
+the most recent busy events (at most 5, newest first). What each actor
+observes: a session waiting on a contended lock gets a concrete answer
+instead of silence; a repo with no contention in the window — including one
+with no contention log at all — sees no contention information in status,
+the same additive silence status already uses elsewhere for a signal with
+nothing to report.
+
 ## Business Rules
 
 - R37 — A shared coordination store's read-modify-write body always serializes
@@ -84,6 +121,24 @@ refresh, with the next one along shortly (D2).
   ceiling to have passed regardless of the probe, so a genuinely live holder
   keeps the lock across a long synchronous child spawn and no timer heartbeat
   is needed or attempted (hardening-1-7-10).
+- R58 — Every store-lock acquire outcome — success with zero retries, a
+  retried success, or `LOCK_BUSY` exhaustion — on both the async retrying
+  path and the hook try-once path, appends one fail-open contention-telemetry
+  line; the append never itself takes a lock, and a telemetry failure never
+  turns a real acquire result into something else (multisession-native).
+- R59 — `bee status`/`bee status --json` reads at most a bounded 64KB tail of
+  the contention log and reports `busy_count`, `top_locks` (≤5),
+  `worst_wait_ms`/`worst_wait_lock`, and `recent_busy` (≤5); the whole key is
+  omitted when the log is absent or the window holds no busy event, and a
+  malformed line is skipped rather than failing the read (multisession-native).
+
+## Edge Cases Settled
+
+- A contention log that does not exist yet, or whose recent window holds zero
+  `LOCK_BUSY` events, produces no `contention` key in status at all — silent,
+  not an empty object and not an error (multisession-native).
+- A malformed or partially written line inside the tail window is skipped,
+  never treated as a parse failure that aborts the read (multisession-native).
 
 ## Pointers (implementation)
 
@@ -93,3 +148,18 @@ refresh, with the next one along shortly (D2).
   `payload.session_id` threaded at `hooks/bee-write-guard.mjs`; `--session` on
   the reservations verb. Evidence: traces `.bee/cells/fsh-{7,8}.json`, commits
   255757d, 4969e8c; `docs/history/fresh-session-handoff/reports/validation-s3.md`.
+- Contention telemetry: `appendContentionTelemetry` in `lock.mjs`, called from
+  both `withStoreLock` (retrying async path) and
+  `acquireStoreLockOnceSync` (hook try-once path); schema `{ts, lock_name,
+  lock_wait_ms, holder_session, caller_session, workflow_id, workspace_id,
+  resource, result}` written to `.bee/logs/contention.jsonl` via a plain
+  `fs.appendFileSync`, mirroring `bee.mjs`'s own `timings.jsonl`
+  `recordTiming`. Evidence: `scripts/test_store_lock.mjs` scenario (i);
+  trace `.bee/cells/multisession-native-3.json`, commit 2d66ccc.
+- Status contention summary: `buildContentionSummary` in `bee.mjs`, reading
+  through `readTranscriptTail` (`lib/recovery.mjs`) for the bounded,
+  windowed, never-throws read. Evidence:
+  `skills/bee-hive/templates/tests/test_contention_status.mjs` (seeded
+  fixture aggregation, text-render mention, absent-log silence, malformed-
+  line skip, 8MB garbage-head tail-window proof); trace
+  `.bee/cells/multisession-native-4.json`, commit 1865cae.
