@@ -28,7 +28,7 @@
   "behavior_change": false,
   "verify": "node scripts/bump_version.mjs --check && node scripts/release_manifest.mjs --check && git describe --tags --exact-match HEAD",
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "decisions": [],
   "trace": {
     "worker": "orchestrator",
@@ -36,12 +36,27 @@
     "files_changed": [],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-07-24T12:49:27.621Z",
     "behavior_change": false,
     "verification_evidence": null,
-    "verify_output": null,
-    "verify_passed": null,
+    "verify_output": "tuple 1.16.1 consistent; manifest 510 files match; HEAD = v1.16.1; pushed 2f11cb4..94bb9d5 + tag; CI run 30094476825 dispatched",
+    "verify_passed": true,
     "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
-    "claimed_at": "2026-07-24T12:45:07.502Z"
+    "claimed_at": "2026-07-24T12:45:07.502Z",
+    "verify_command": "node scripts/bump_version.mjs --check && node scripts/release_manifest.mjs --check && git describe --tags --exact-match HEAD",
+    "verified_at": "2026-07-24T12:49:27.499Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T12:49:27.499Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T12:45:07.499Z",
+        "acquired_at": "2026-07-24T12:45:07.499Z",
+        "worker": "orchestrator",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
   }
 }
