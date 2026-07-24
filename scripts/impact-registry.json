@@ -623,8 +623,7 @@
       "direct": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "scripts/test_store_lock.mjs",
-        "scripts/test_worktree_cli.mjs"
+        "scripts/test_store_lock.mjs"
       ],
       "all": [
         ".bee/bin/bee.mjs knowledge check",

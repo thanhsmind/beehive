@@ -1200,44 +1200,91 @@ async function attachCleanupOutcome(result, { mainRoot, worktreeRoot, branch, id
 
 /**
  * Merges a granted worktree's branch into `mainRoot` as a STAGED
- * transaction (decision D2-REVISED). Sequence, run with `mainRoot` as cwd:
+ * transaction (decision D2-REVISED), split into three phases so the
+ * 'worktree-admin' lock is never held across the verify child
+ * (hardening-4c, issue #56 3.9 / CONTEXT.md D10b — see docs/history/
+ * multisession-native/CONTEXT.md). Sequence, run with `mainRoot` as cwd:
  *
- *   1. Capture pre-merge HEAD (`git rev-parse HEAD`).
- *   2. `git merge --no-ff --no-commit <branch>` — stages the merge WITHOUT
- *      committing it. `--no-ff` also forces a real merge (never a
- *      fast-forward) even when `<branch>` is a fast-forward-eligible
- *      ancestor-of-main relationship, so a staged merge always means a
- *      TRUE merge commit once committed, not a silent ref move.
- *      - Non-zero exit: textual conflict (or another merge-attempt
- *        failure). `git merge --abort`, prove main is untouched
- *        (`mainUntouchedProof`), return typed `MERGE_CONFLICT`.
- *      - Zero exit but no `.git/MERGE_HEAD` created: "Already up to date"
- *        — branch has nothing new for main. Returns a typed no-op result;
- *        `git commit` is NEVER attempted here (there is nothing staged —
- *        committing would either error or produce an empty commit). A
- *        `--cleanup` flag DOES still run on this path (issues-46-53 D3 /
- *        #47): the branch holds nothing main lacks and the worktree was
- *        already proven clean, so there is nothing to lose.
- *   3. A merge is now staged (MERGE_HEAD live, changes staged, nothing
- *      committed). If `verifyCommand` was given, it runs NOW, against this
- *      merged-but-UNCOMMITTED tree (MERGE_HEAD is live, changes are staged
- *      but not committed) — verify is deliberately run before any commit
- *      exists, so a semantic break is caught before it ever becomes a real
- *      commit on main, not after. The abort path for a red verify runs
- *      inside a `finally`-guarded try (see body): a verify crash/timeout
- *      can never strand a staged merge on main.
- *      - Verify red: `git merge --abort`, prove main untouched, return
- *        typed `MERGE_VERIFY_RED` — the semantic-conflict alarm. Unlike
- *        the old D8 contract, NO merge commit exists at this point, so
- *        there is nothing to roll back: main was left byte-untouched.
- *   4. Verify green (or no `verifyCommand` given at all): `git commit`
- *      names the id in its message. Post-commit guard: `git status
- *      --porcelain --untracked-files=no` MUST be empty; if verify itself
- *      left tracked files modified (a misbehaving verify command), the
- *      result carries a typed `warning.code: 'verify_mutated_tracked_files'`
- *      instead of silently claiming the tree matches the commit. Recovery
- *      if a LATER independent verify goes red on an already-committed
- *      merge: `git revert -m 1 <merge-commit>` (documented, not automated).
+ *   P1 (LOCKED — `mergeFeatureWorktreeStage`): every pre-check, plus
+ *   staging the merge itself.
+ *     1. Capture pre-merge HEAD (`git rev-parse HEAD`).
+ *     2. `git merge --no-ff --no-commit <branch>` — stages the merge WITHOUT
+ *        committing it. `--no-ff` also forces a real merge (never a
+ *        fast-forward) even when `<branch>` is a fast-forward-eligible
+ *        ancestor-of-main relationship, so a staged merge always means a
+ *        TRUE merge commit once committed, not a silent ref move.
+ *        - Non-zero exit: textual conflict (or another merge-attempt
+ *          failure). `git merge --abort`, prove main is untouched
+ *          (`mainUntouchedProof`), return typed `MERGE_CONFLICT` — a
+ *          TERMINAL P1 outcome (`{ done: true, result }`); P2/P3 never run.
+ *        - Zero exit but no `.git/MERGE_HEAD` created: "Already up to date"
+ *          — branch has nothing new for main. Returns a typed no-op result;
+ *          `git commit` is NEVER attempted here (there is nothing staged —
+ *          committing would either error or produce an empty commit). A
+ *          `--cleanup` flag DOES still run on this path (issues-46-53 D3 /
+ *          #47): the branch holds nothing main lacks and the worktree was
+ *          already proven clean, so there is nothing to lose. ALSO
+ *          terminal — there is no verify to run for a no-op.
+ *     3. A merge is now staged (MERGE_HEAD live, changes staged, nothing
+ *        committed). P1 captures `git write-tree`'s hash of the staged
+ *        index right now, as `stagedTreeHash` — the identity P3's fence
+ *        re-checks once the lock has been up for grabs. Returns
+ *        `{ done: false, state }`.
+ *
+ *   The lock is released between P1 and P2 (and re-acquired for P3) ONLY
+ *   when `verifyCommand` was actually given; a merge with nothing to verify
+ *   finishes inside the SAME P1 hold, byte-identical to the
+ *   pre-hardening-4c single-lock behavior, since there is no long child to
+ *   protect against.
+ *
+ *   P2 (UNLOCKED — inline in `mergeFeatureWorktree`): if `verifyCommand` was
+ *   given, it runs NOW, unlocked, against the merged-but-UNCOMMITTED tree
+ *   (MERGE_HEAD is live, changes are staged but not committed) — verify is
+ *   deliberately run before any commit exists, so a semantic break is
+ *   caught before it ever becomes a real commit on main, not after. This is
+ *   the whole point of hardening-4c: a verify that runs for minutes no
+ *   longer holds a filesystem lock for those minutes. hardening-4b's
+ *   grant/create serialization (writeGrant/removeGrant/createFeatureWorktree)
+ *   is free to interleave during this window, and a SECOND, unrelated
+ *   "worktree merge" attempt is free to even ATTEMPT the lock — it just
+ *   self-blocks on `isTreeDirty(mainRoot)` (P1's own pre-check) because
+ *   main's tree is genuinely dirty (a real staged merge is sitting there),
+ *   the same refusal a concurrent merge would hit today for any other
+ *   reason a tree is dirty.
+ *
+ *   P3 (RE-LOCKED — `mergeFeatureWorktreeFinish`): re-acquires
+ *   'worktree-admin', then, BEFORE ever committing, re-checks a FOUR-PART
+ *   fence (advisor condition C2) for anything that could have drifted while
+ *   the lock was up for grabs:
+ *     (a) HEAD unchanged from the P1 capture;
+ *     (b) `.git/MERGE_HEAD` still present;
+ *     (c) staged-tree identity — `git write-tree` NOW equals P1's
+ *         `stagedTreeHash`. HEAD alone is NOT enough: HEAD never moves for
+ *         an uncommitted staged merge, so tampering with the staged
+ *         index/tree while the lock was free would sail straight past a
+ *         HEAD-only re-check — this is the check that actually catches it.
+ *     (d) the worktree's grant (`readGrants(...)[id]`) is still `true`.
+ *   ANY mismatch: `git merge --abort`, prove main untouched
+ *   (`mainUntouchedProof`), throw a typed `WorktreeMergeError`
+ *   (`WORKTREE_MERGE_FENCE_DRIFT`) — main is left exactly as untouched as
+ *   every other abort path in this module.
+ *     - Verify red (checked first, before the fence): `git merge --abort`,
+ *       prove main untouched, return typed `MERGE_VERIFY_RED` — the
+ *       semantic-conflict alarm, unchanged from before this rework. NO
+ *       merge commit exists at this point, so there is nothing to roll
+ *       back: main was left byte-untouched.
+ *     - Verify green (or no `verifyCommand` given at all) AND the fence is
+ *       clean: `git commit` names the id in its message. Post-commit guard:
+ *       `git status --porcelain --untracked-files=no` MUST be empty; if
+ *       verify itself left tracked files modified (a misbehaving verify
+ *       command), the result carries a typed `warning.code:
+ *       'verify_mutated_tracked_files'` instead of silently claiming the
+ *       tree matches the commit. Recovery if a LATER independent verify
+ *       goes red on an already-committed merge: `git revert -m 1
+ *       <merge-commit>` (documented, not automated). `attachCleanupOutcome`
+ *       (and, through it, `performCleanup`) runs inside THIS hold — same
+ *       "joins the lock, does not acquire its own" contract hardening-4b
+ *       established, just re-pointed at P3 instead of the old single hold.
  *
  * Returns a plain result object for every outcome that follows a real git
  * mutation (`MERGE_CONFLICT`, `ALREADY_UP_TO_DATE`, `MERGE_VERIFY_RED`, or a
@@ -1249,9 +1296,11 @@ async function attachCleanupOutcome(result, { mainRoot, worktreeRoot, branch, id
  * `wt/<slug>`-style branch) — same error-class style as
  * `createFeatureWorktree`'s `WorktreeCreateError`. A `WorktreeMergeError` is
  * ALSO thrown (not returned) if an abort-then-prove step itself fails
- * (`WORKTREE_MERGE_ABORT_FAILED`) or the commit step itself fails
- * (`WORKTREE_MERGE_COMMIT_FAILED`) — both are environment-level defects,
- * never a normal outcome to fold into a typed result.
+ * (`WORKTREE_MERGE_ABORT_FAILED`), the commit step itself fails
+ * (`WORKTREE_MERGE_COMMIT_FAILED`), or the P3 fence catches drift
+ * (`WORKTREE_MERGE_FENCE_DRIFT`) — all are environment-level (or, for fence
+ * drift, another-actor-level) defects, never a normal outcome to fold into
+ * a typed result.
  *
  * `options`:
  *   - `id` (required): the worktree's git-verified id (as granted via
@@ -1290,15 +1339,66 @@ async function attachCleanupOutcome(result, { mainRoot, worktreeRoot, branch, id
  * async wrapper — callers must `await`/`.catch()` it, not wrap it in a bare
  * synchronous `try { } catch { }`.
  *
- * hardening-4b: the ENTIRE staged-merge transaction below (every pre-check,
- * the merge/abort/commit sequence, and — via attachCleanupOutcome —
- * performCleanup) now runs inside ONE withStoreLock(mainRoot,
- * 'worktree-admin') hold, serialized against writeGrant/removeGrant/
- * createFeatureWorktree. performCleanup itself does NOT acquire the lock
- * (see its own removeGrantCore comment) — it "joins" this same hold.
+ * hardening-4b (AMENDED by hardening-4c — see the phase description above):
+ * every pre-check, the merge/abort sequence, and — via
+ * attachCleanupOutcome — performCleanup still run inside a
+ * withStoreLock(mainRoot, 'worktree-admin') hold, serialized against
+ * writeGrant/removeGrant/createFeatureWorktree exactly as before.
+ * performCleanup itself still does NOT acquire the lock (see its own
+ * removeGrantCore comment) — it "joins" whichever hold is currently live
+ * (P1's, for a no-verify-configured merge; P3's, for a verify-configured
+ * one). What hardening-4b no longer claims is that this is ONE unbroken
+ * hold end to end: when `verifyCommand` is given, the hold is released
+ * between P1 and P3 for exactly the verify child's duration (hardening-4c)
+ * — that release is the fix, not a regression of this serialization.
  */
 export async function mergeFeatureWorktree(mainRoot, options = {}) {
-  return withStoreLock(mainRoot, 'worktree-admin', () => mergeFeatureWorktreeLocked(mainRoot, options));
+  const staged = await withStoreLock(mainRoot, 'worktree-admin', () => mergeFeatureWorktreeStage(mainRoot, options));
+  if (staged.done) {
+    return staged.result;
+  }
+
+  const { verifyCommand } = options;
+  if (!verifyCommand) {
+    // Nothing to release the lock around: no long child ever runs on this
+    // path, so stage and finish inside the SAME hold — byte-identical to
+    // the pre-hardening-4c single-lock behavior.
+    return withStoreLock(mainRoot, 'worktree-admin', () => mergeFeatureWorktreeFinish(mainRoot, options, staged.state, { ran: false }));
+  }
+
+  // P2 — UNLOCKED (hardening-4c): the whole point of this rework. No store
+  // lock is held while the (possibly multi-minute) verify child runs.
+  const verifyResult = spawnSync(verifyCommand, { cwd: mainRoot, shell: true, encoding: 'utf8' });
+  const verifyOutcome = { ran: true, status: verifyResult.status, combined: `${verifyResult.stdout || ''}${verifyResult.stderr || ''}` };
+
+  // P3 — re-acquire the lock and re-check the fence before ever committing.
+  return withStoreLock(mainRoot, 'worktree-admin', () => mergeFeatureWorktreeFinish(mainRoot, options, staged.state, verifyOutcome));
+}
+
+/**
+ * P3 fence (advisor condition C2): everything that must still be true right
+ * before the commit, re-checked AFTER re-acquiring 'worktree-admin' —
+ * because the lock was up for grabs during P2, none of this can be trusted
+ * to still hold just because P1 proved it once. Returns a short drift
+ * description string on mismatch, or `null` when the fence is clean.
+ */
+function checkMergeFence(mainRoot, { id, preMergeHead, mergeHeadFile, stagedTreeHash }) {
+  const headNow = runGit(mainRoot, ['rev-parse', 'HEAD']).stdout.trim();
+  if (headNow !== preMergeHead) {
+    return `HEAD moved from ${preMergeHead} to ${headNow} while the lock was released for verify`;
+  }
+  if (!fs.existsSync(mergeHeadFile)) {
+    return '.git/MERGE_HEAD disappeared while the lock was released for verify — the staged merge was cleared out from under this operation';
+  }
+  const treeNow = runGit(mainRoot, ['write-tree']).stdout.trim();
+  if (treeNow !== stagedTreeHash) {
+    return `the staged tree changed from ${stagedTreeHash} to ${treeNow} while the lock was released for verify — the index was mutated mid-verify`;
+  }
+  const grants = readGrants(path.join(mainRoot, '.bee'));
+  if (grants[id] !== true) {
+    return `the grant for worktree id ${JSON.stringify(id)} was revoked while the lock was released for verify`;
+  }
+  return null;
 }
 
 /**
@@ -1370,11 +1470,22 @@ function teardownCompanionIfPresent(mainRoot, worktreeRoot, companionEndCommand)
   return { ended: !warning, sessionId: marker.sessionId || null, warning };
 }
 
-// hardening-4b: the actual body, unchanged apart from running INSIDE
-// mergeFeatureWorktree's withStoreLock('worktree-admin') hold — split out so
-// the public entrypoint's doc comment above stays attached to it.
-async function mergeFeatureWorktreeLocked(mainRoot, options = {}) {
-  const { id, cleanup = false, verifyCommand, companionEndCommand } = options;
+// hardening-4c PHASE 1 (locked): every pre-check plus staging the merge
+// itself — split out of the old single-hold `mergeFeatureWorktreeLocked` so
+// the public entrypoint's doc comment above stays attached to the exported
+// function while this runs inside its own withStoreLock('worktree-admin')
+// hold (see mergeFeatureWorktree above). Two possible return shapes:
+//   - `{ done: true, result }` — a TERMINAL outcome already fully resolved
+//     inside this lock (a textual conflict, already aborted+proven; or an
+//     ALREADY_UP_TO_DATE no-op, already cleaned up if requested). The
+//     caller returns `result` directly — there is no P2/P3 for these. Every
+//     validation refusal above the staged merge itself is a typed
+//     WorktreeMergeError THROW, same as before this rework.
+//   - `{ done: false, state }` — a merge IS staged (MERGE_HEAD live,
+//     nothing yet committed); `state` carries everything P3 needs to
+//     re-check the fence and finish.
+async function mergeFeatureWorktreeStage(mainRoot, options = {}) {
+  const { id, cleanup = false, companionEndCommand } = options;
 
   if (typeof id !== 'string' || !id) {
     refuseMerge('WORKTREE_MERGE_INVALID_ID', `id ${JSON.stringify(id)} must be a non-empty string.`);
@@ -1472,14 +1583,17 @@ async function mergeFeatureWorktreeLocked(mainRoot, options = {}) {
       );
     }
     return {
-      ok: false,
-      code: 'MERGE_CONFLICT',
-      id,
-      branch,
-      worktreeRoot,
-      message: `"git merge --no-ff ${branch}" hit a textual conflict — the merge was aborted and ${mainRoot} was left byte-untouched (HEAD unchanged, no MERGE_HEAD, clean tracked status); bee does not auto-resolve a textual conflict.`,
-      output: `${mergeResult.stdout || ''}${mergeResult.stderr || ''}`,
-      ...(companion ? { companion } : {}),
+      done: true,
+      result: {
+        ok: false,
+        code: 'MERGE_CONFLICT',
+        id,
+        branch,
+        worktreeRoot,
+        message: `"git merge --no-ff ${branch}" hit a textual conflict — the merge was aborted and ${mainRoot} was left byte-untouched (HEAD unchanged, no MERGE_HEAD, clean tracked status); bee does not auto-resolve a textual conflict.`,
+        output: `${mergeResult.stdout || ''}${mergeResult.stderr || ''}`,
+        ...(companion ? { companion } : {}),
+      },
     };
   }
 
@@ -1510,44 +1624,91 @@ async function mergeFeatureWorktreeLocked(mainRoot, options = {}) {
     // nothing was merged for it to check. `code: 'ALREADY_UP_TO_DATE'` plus
     // `merged: false` already say exactly that, without inventing a risk.
     await attachCleanupOutcome(noopResult, { mainRoot, worktreeRoot, branch, id, cleanup, verifySkipped: false });
-    return noopResult;
+    return { done: true, result: noopResult };
   }
 
   // A merge is now staged (MERGE_HEAD live, changes staged, nothing yet
-  // committed). Every exit from here must either commit (verify green / no
-  // verify configured) or abort (conflict already handled above; red
-  // verify below; any unexpected throw) — the `finally` is the safety net
-  // for that last case, so a verify crash/timeout can never strand a
-  // staged merge on main.
+  // committed). Capture the `git write-tree` hash of the staged INDEX right
+  // now, before this hold is released — P3's fence (checkMergeFence) proves
+  // the staged tree was never tampered with while the lock was up for
+  // grabs during P2 (advisor condition C2: HEAD alone cannot detect this,
+  // since HEAD never moves for an uncommitted staged merge).
+  try {
+    const stagedTreeHash = runGit(mainRoot, ['write-tree']).stdout.trim();
+    return {
+      done: false,
+      state: { id, branch, worktreeRoot, mergeMessage, preMergeHead, mergeHeadFile, stagedTreeHash, companion },
+    };
+  } catch (err) {
+    // Exception-safety net: something unexpected blew up capturing the
+    // staged-tree identity — abort rather than leave a half-done staged
+    // merge sitting on main for a P2/P3 that will now never run.
+    runGit(mainRoot, ['merge', '--abort']);
+    throw err;
+  }
+}
+
+// hardening-4c PHASE 3 (re-locked): re-verify the fence, then commit +
+// post-commit-guard + cleanup. Called either right after Stage (no verify
+// configured — same hold as P1, `verifyOutcome.ran === false`) or after the
+// lock was released and re-acquired around the verify child
+// (`verifyOutcome.ran === true`).
+async function mergeFeatureWorktreeFinish(mainRoot, options, state, verifyOutcome) {
+  const { cleanup = false } = options;
+  const { id, branch, worktreeRoot, mergeMessage, preMergeHead, mergeHeadFile, stagedTreeHash, companion } = state;
+
+  // Every exit from here must either commit (verify green / no verify
+  // configured, fence clean) or abort (red verify below; fence drift below;
+  // any unexpected throw) — the `finally` is the safety net for that last
+  // case, so an unexpected crash between fence-check and commit can never
+  // strand a staged merge on main.
   let committed = false;
   try {
-    if (verifyCommand) {
-      const verifyResult = spawnSync(verifyCommand, { cwd: mainRoot, shell: true, encoding: 'utf8' });
-      if (verifyResult.status !== 0) {
-        const combined = `${verifyResult.stdout || ''}${verifyResult.stderr || ''}`;
-        const tail = combined.split('\n').slice(-30).join('\n');
-        runGit(mainRoot, ['merge', '--abort']);
-        const proof = mainUntouchedProof(mainRoot, preMergeHead, mergeHeadFile);
-        if (!proof.ok) {
-          refuseMerge(
-            'WORKTREE_MERGE_ABORT_FAILED',
-            `verify failed and "git merge --abort" did NOT fully restore ${mainRoot} to its pre-merge state (${proof.reason}) — main may be left mid-merge; inspect it by hand before retrying.`,
-          );
-        }
-        return {
-          ok: false,
-          code: 'MERGE_VERIFY_RED',
-          id,
-          branch,
-          worktreeRoot,
-          merged: false,
-          verify: 'red',
-          message:
-            `the merge was textually clean but the post-merge verify failed against the merged-but-uncommitted tree — this is the semantic-conflict alarm: behavior broke even though git found no textual conflict. The merge was aborted and ${mainRoot} was left byte-untouched (HEAD unchanged, no MERGE_HEAD, clean tracked status); no merge commit exists. Fix-first before release.`,
-          output_tail: tail,
-          ...(companion ? { companion } : {}),
-        };
+    if (verifyOutcome.ran && verifyOutcome.status !== 0) {
+      const tail = verifyOutcome.combined.split('\n').slice(-30).join('\n');
+      runGit(mainRoot, ['merge', '--abort']);
+      const proof = mainUntouchedProof(mainRoot, preMergeHead, mergeHeadFile);
+      if (!proof.ok) {
+        refuseMerge(
+          'WORKTREE_MERGE_ABORT_FAILED',
+          `verify failed and "git merge --abort" did NOT fully restore ${mainRoot} to its pre-merge state (${proof.reason}) — main may be left mid-merge; inspect it by hand before retrying.`,
+        );
       }
+      return {
+        ok: false,
+        code: 'MERGE_VERIFY_RED',
+        id,
+        branch,
+        worktreeRoot,
+        merged: false,
+        verify: 'red',
+        message:
+          `the merge was textually clean but the post-merge verify failed against the merged-but-uncommitted tree — this is the semantic-conflict alarm: behavior broke even though git found no textual conflict. The merge was aborted and ${mainRoot} was left byte-untouched (HEAD unchanged, no MERGE_HEAD, clean tracked status); no merge commit exists. Fix-first before release.`,
+        output_tail: tail,
+        ...(companion ? { companion } : {}),
+      };
+    }
+
+    // P3 fence (advisor condition C2): re-check everything that could have
+    // drifted while the lock was released for verify, BEFORE ever
+    // committing. A no-verify-configured merge reaches this in the SAME
+    // hold P1 staged it in, so the fence is trivially clean there — the
+    // check still runs (uniform code path, negligible cost) rather than
+    // being conditioned on whether verify ran.
+    const fenceDrift = checkMergeFence(mainRoot, { id, preMergeHead, mergeHeadFile, stagedTreeHash });
+    if (fenceDrift) {
+      runGit(mainRoot, ['merge', '--abort']);
+      const proof = mainUntouchedProof(mainRoot, preMergeHead, mergeHeadFile);
+      if (!proof.ok) {
+        refuseMerge(
+          'WORKTREE_MERGE_ABORT_FAILED',
+          `the P3 fence detected drift (${fenceDrift}) and "git merge --abort" did NOT fully restore ${mainRoot} to its pre-merge state (${proof.reason}) — main may be left mid-merge; inspect it by hand before retrying.`,
+        );
+      }
+      refuseMerge(
+        'WORKTREE_MERGE_FENCE_DRIFT',
+        `the staged merge was aborted before commit because the P3 re-check (advisor condition C2) detected drift while the 'worktree-admin' lock was released around the verify child: ${fenceDrift}. ${mainRoot} was left byte-untouched (HEAD unchanged, no MERGE_HEAD, clean tracked status); no merge commit exists.`,
+      );
     }
 
     const commitResult = runGit(mainRoot, ['commit', '-m', mergeMessage]);
@@ -1569,7 +1730,7 @@ async function mergeFeatureWorktreeLocked(mainRoot, options = {}) {
       id,
       branch,
       worktreeRoot,
-      verify: verifyCommand ? 'green' : 'skipped',
+      verify: verifyOutcome.ran ? 'green' : 'skipped',
       ...(companion ? { companion } : {}),
     };
 
@@ -1593,8 +1754,8 @@ async function mergeFeatureWorktreeLocked(mainRoot, options = {}) {
     if (!committed && fs.existsSync(mergeHeadFile)) {
       // Exception-safety net only: every normal exit above already aborted
       // (and proved it) before returning/throwing, so this fires only when
-      // something unexpected blew up mid-verify/mid-commit without going
-      // through either handled path yet.
+      // something unexpected blew up mid-commit without going through
+      // either handled path yet.
       runGit(mainRoot, ['merge', '--abort']);
     }
   }

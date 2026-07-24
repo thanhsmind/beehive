@@ -177,7 +177,7 @@
     },
     {
       "path": ".bee/bin/lib/worktree-store.mjs",
-      "sha256": "76b47ff9018d288d266145db56eb4ff05464062734aaa09c1cfb186f1fbbeefb",
+      "sha256": "0cd4809e8b19ea307dbd93d466810dc609dccb993388f3d2f8c4b7352e484748",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -197,7 +197,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "283e3ebe8d09bc5f3a718bd659bd9ac8c0703a054eae01bc4664c6689c38602c",
+      "sha256": "0d592adf6ee17066a6635c69a5648844801087d58bbab2b5b83a803f4f0131c7",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -813,7 +813,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-hive/templates/lib/worktree-store.mjs",
-      "sha256": "76b47ff9018d288d266145db56eb4ff05464062734aaa09c1cfb186f1fbbeefb",
+      "sha256": "0cd4809e8b19ea307dbd93d466810dc609dccb993388f3d2f8c4b7352e484748",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/templates/lib/worktree-store.mjs"
@@ -1275,7 +1275,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "89fc9f50b4407d2750bd06ccffe27fc260504349c0577be7130db849d4b2ee96",
+      "sha256": "ca9677a769c314bb14e32bc671c502aa9e0fb731a39c66ffdd4e196cd9c32266",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1891,7 +1891,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-hive/templates/lib/worktree-store.mjs",
-      "sha256": "76b47ff9018d288d266145db56eb4ff05464062734aaa09c1cfb186f1fbbeefb",
+      "sha256": "0cd4809e8b19ea307dbd93d466810dc609dccb993388f3d2f8c4b7352e484748",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/templates/lib/worktree-store.mjs"
@@ -3105,7 +3105,7 @@
     },
     {
       "path": "skills/bee-hive/templates/lib/worktree-store.mjs",
-      "sha256": "76b47ff9018d288d266145db56eb4ff05464062734aaa09c1cfb186f1fbbeefb",
+      "sha256": "0cd4809e8b19ea307dbd93d466810dc609dccb993388f3d2f8c4b7352e484748",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/templates/lib/worktree-store.mjs"

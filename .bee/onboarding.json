@@ -37,7 +37,7 @@
       "state.mjs": "1b1fcf5bcc7333ee27dbc95608c85ade9fa5ede979372902850321fab577637b",
       "validate-args.mjs": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
-      "worktree-store.mjs": "76b47ff9018d288d266145db56eb4ff05464062734aaa09c1cfb186f1fbbeefb"
+      "worktree-store.mjs": "0cd4809e8b19ea307dbd93d466810dc609dccb993388f3d2f8c4b7352e484748"
     },
     "repo_hooks": {
       "adapter.mjs": "3b5fcdca501e7a6cbb2988fcd6aa5af43c30e545dfa205b877a1d8b68f64fd85",
@@ -76,5 +76,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-24T15:12:32.145Z"
+  "updated_at": "2026-07-24T15:35:12.221Z"
 }
