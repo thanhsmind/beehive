@@ -107,6 +107,25 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// multisession-native-3 (C3/C4): reads .bee/logs/contention.jsonl and
+// returns the LAST parsed line, or null if the file is missing/empty —
+// mirrors how a real caller would tail the log.
+function contentionLogPath(root) {
+  return path.join(root, '.bee', 'logs', 'contention.jsonl');
+}
+
+function readLastContentionRecord(root) {
+  let raw;
+  try {
+    raw = fs.readFileSync(contentionLogPath(root), 'utf8');
+  } catch {
+    return null;
+  }
+  const lines = raw.split('\n').filter((line) => line.trim().length > 0);
+  if (!lines.length) return null;
+  return JSON.parse(lines[lines.length - 1]);
+}
+
 function resetFixtures(dir) {
   writeJsonRaw(path.join(dir, 'counter.json'), { total: 0 });
   writeJsonRaw(path.join(dir, 'active.json'), { active: false, holder: null });
@@ -324,7 +343,7 @@ function assessLockedRun(label, results, failures, { workers, iters, tmpRoot, re
 // ─── orchestrator ────────────────────────────────────────────────────────────
 
 async function runOrchestrator() {
-  const { lockFilePath, withStoreLock, isPidAlive } = await import(LOCK_LIB_PATH);
+  const { lockFilePath, withStoreLock, acquireStoreLockOnceSync, isPidAlive } = await import(LOCK_LIB_PATH);
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'test-store-lock-'));
   fs.mkdirSync(path.join(tmpRoot, '.bee', 'locks'), { recursive: true });
 
@@ -979,6 +998,177 @@ async function runOrchestrator() {
         fs.renameSync = originalRenameSync;
       }
     }
+
+    // (i) CONTENTION TELEMETRY (multisession-native-3, advisor C3/C4): every
+    // store-lock acquire OUTCOME appends one JSON line to
+    // .bee/logs/contention.jsonl — lock-free (plain appendFileSync, never
+    // routed back through withStoreLock/acquireStoreLockOnceSync) and
+    // fully fail-open (a telemetry write failure must never break the
+    // caller's acquire). Covers both the retrying async path
+    // (withStoreLock) and the sync single-attempt hook path
+    // (acquireStoreLockOnceSync), each for a clean success and a
+    // LOCK_BUSY outcome, plus one fail-open proof per path.
+    {
+      // (i1) withStoreLock, clean success (0 retries): result "acquired",
+      // no contending holder, lock_wait_ms is a real non-negative number.
+      const i1LockName = 'lock-i1-telemetry-success';
+      fs.rmSync(contentionLogPath(tmpRoot), { force: true });
+      let i1Ran = false;
+      await withStoreLock(tmpRoot, i1LockName, async () => {
+        i1Ran = true;
+      });
+      const i1Record = readLastContentionRecord(tmpRoot);
+      if (!i1Ran) failures.push('(i1) withStoreLock did not run fn');
+      if (!i1Record) {
+        failures.push('(i1) withStoreLock success did not append a contention.jsonl line');
+      } else {
+        if (i1Record.result !== 'acquired') failures.push(`(i1) expected result "acquired", got ${JSON.stringify(i1Record.result)}`);
+        if (i1Record.lock_name !== i1LockName) failures.push(`(i1) expected lock_name "${i1LockName}", got ${JSON.stringify(i1Record.lock_name)}`);
+        if (typeof i1Record.lock_wait_ms !== 'number' || i1Record.lock_wait_ms < 0) {
+          failures.push(`(i1) expected numeric non-negative lock_wait_ms, got ${JSON.stringify(i1Record.lock_wait_ms)}`);
+        }
+        if (i1Record.holder_session !== null) {
+          failures.push(`(i1) expected holder_session null (no contention), got ${JSON.stringify(i1Record.holder_session)}`);
+        }
+        for (const field of ['workflow_id', 'workspace_id', 'resource']) {
+          if (i1Record[field] !== null) failures.push(`(i1) expected ${field} null, got ${JSON.stringify(i1Record[field])}`);
+        }
+      }
+
+      // (i2) withStoreLock, LOCK_BUSY exhaustion: result "busy", holder
+      // identity carried from the lock file's owner metadata. Uses a
+      // small maxAttempts so this stays fast and deterministic (no real
+      // ~5s retry budget needed to prove the telemetry shape).
+      const i2LockName = 'lock-i2-telemetry-busy';
+      const i2LockPath = lockFilePath(tmpRoot, i2LockName);
+      const i2SeededHolder = { pid: 424242, session: 'contention-busy-holder-i2', ts: new Date().toISOString(), token: 'i2-token' };
+      fs.writeFileSync(i2LockPath, `${JSON.stringify(i2SeededHolder)}\n`);
+      fs.rmSync(contentionLogPath(tmpRoot), { force: true });
+      let i2Threw = null;
+      try {
+        await withStoreLock(tmpRoot, i2LockName, async () => {}, { maxAttempts: 2, retryDelayMs: 5 });
+      } catch (err) {
+        i2Threw = err;
+      }
+      fs.rmSync(i2LockPath, { force: true });
+      const i2Record = readLastContentionRecord(tmpRoot);
+      if (!i2Threw) failures.push('(i2) withStoreLock unexpectedly succeeded against a fresh, non-stale held lock');
+      if (!i2Record) {
+        failures.push('(i2) withStoreLock LOCK_BUSY exhaustion did not append a contention.jsonl line');
+      } else {
+        if (i2Record.result !== 'busy') failures.push(`(i2) expected result "busy", got ${JSON.stringify(i2Record.result)}`);
+        if (i2Record.lock_name !== i2LockName) failures.push(`(i2) expected lock_name "${i2LockName}", got ${JSON.stringify(i2Record.lock_name)}`);
+        if (i2Record.holder_session !== i2SeededHolder.session) {
+          failures.push(`(i2) expected holder_session "${i2SeededHolder.session}", got ${JSON.stringify(i2Record.holder_session)}`);
+        }
+        if (typeof i2Record.lock_wait_ms !== 'number' || i2Record.lock_wait_ms < 0) {
+          failures.push(`(i2) expected numeric non-negative lock_wait_ms, got ${JSON.stringify(i2Record.lock_wait_ms)}`);
+        }
+      }
+
+      // (i3) withStoreLock, telemetry write failure is fail-open: a
+      // simulated unwritable contention.jsonl must never surface as a
+      // thrown error or block the acquire.
+      const i3LockName = 'lock-i3-telemetry-failopen';
+      {
+        const originalAppendFileSync = fs.appendFileSync;
+        fs.appendFileSync = (...args) => {
+          if (String(args[0]).includes('contention.jsonl')) {
+            const err = new Error('simulated unwritable contention log');
+            err.code = 'EACCES';
+            throw err;
+          }
+          return originalAppendFileSync.apply(fs, args);
+        };
+        let i3Ran = false;
+        try {
+          await withStoreLock(tmpRoot, i3LockName, async () => {
+            i3Ran = true;
+          });
+        } catch (err) {
+          failures.push(`(i3) withStoreLock threw despite a simulated unwritable contention.jsonl (telemetry must be fail-open): ${(err && err.stack) || err}`);
+        } finally {
+          fs.appendFileSync = originalAppendFileSync;
+        }
+        if (!i3Ran) failures.push('(i3) withStoreLock did not run fn when the contention.jsonl telemetry write failed');
+        if (fs.existsSync(lockFilePath(tmpRoot, i3LockName))) {
+          failures.push('(i3) withStoreLock left the lock file behind after a telemetry write failure');
+        }
+      }
+
+      // (i4) acquireStoreLockOnceSync (hook try-once path), clean success.
+      const i4LockName = 'lock-i4-telemetry-success-sync';
+      fs.rmSync(contentionLogPath(tmpRoot), { force: true });
+      const i4Result = acquireStoreLockOnceSync(tmpRoot, i4LockName);
+      if (!i4Result.acquired) {
+        failures.push('(i4) acquireStoreLockOnceSync did not acquire a fresh lock');
+      } else {
+        i4Result.release();
+      }
+      const i4Record = readLastContentionRecord(tmpRoot);
+      if (!i4Record) {
+        failures.push('(i4) acquireStoreLockOnceSync success did not append a contention.jsonl line');
+      } else {
+        if (i4Record.result !== 'acquired') failures.push(`(i4) expected result "acquired", got ${JSON.stringify(i4Record.result)}`);
+        if (i4Record.lock_name !== i4LockName) failures.push(`(i4) expected lock_name "${i4LockName}", got ${JSON.stringify(i4Record.lock_name)}`);
+        if (typeof i4Record.lock_wait_ms !== 'number' || i4Record.lock_wait_ms < 0) {
+          failures.push(`(i4) expected numeric non-negative lock_wait_ms, got ${JSON.stringify(i4Record.lock_wait_ms)}`);
+        }
+        if (i4Record.holder_session !== null) {
+          failures.push(`(i4) expected holder_session null (no contention), got ${JSON.stringify(i4Record.holder_session)}`);
+        }
+      }
+
+      // (i5) acquireStoreLockOnceSync, single-attempt LOCK_BUSY (no retry
+      // loop at all — either the one attempt wins or it reports busy).
+      const i5LockName = 'lock-i5-telemetry-busy-sync';
+      const i5LockPath = lockFilePath(tmpRoot, i5LockName);
+      const i5SeededHolder = { pid: 424242, session: 'contention-busy-holder-i5', ts: new Date().toISOString(), token: 'i5-token' };
+      fs.writeFileSync(i5LockPath, `${JSON.stringify(i5SeededHolder)}\n`);
+      fs.rmSync(contentionLogPath(tmpRoot), { force: true });
+      const i5Result = acquireStoreLockOnceSync(tmpRoot, i5LockName);
+      fs.rmSync(i5LockPath, { force: true });
+      const i5Record = readLastContentionRecord(tmpRoot);
+      if (i5Result.acquired) {
+        failures.push('(i5) acquireStoreLockOnceSync unexpectedly acquired a fresh, non-stale held lock');
+      }
+      if (!i5Record) {
+        failures.push('(i5) acquireStoreLockOnceSync LOCK_BUSY did not append a contention.jsonl line');
+      } else {
+        if (i5Record.result !== 'busy') failures.push(`(i5) expected result "busy", got ${JSON.stringify(i5Record.result)}`);
+        if (i5Record.holder_session !== i5SeededHolder.session) {
+          failures.push(`(i5) expected holder_session "${i5SeededHolder.session}", got ${JSON.stringify(i5Record.holder_session)}`);
+        }
+      }
+
+      // (i6) acquireStoreLockOnceSync, telemetry write failure is
+      // fail-open — same simulated-unwritable-log technique as (i3).
+      const i6LockName = 'lock-i6-telemetry-failopen-sync';
+      {
+        const originalAppendFileSync = fs.appendFileSync;
+        fs.appendFileSync = (...args) => {
+          if (String(args[0]).includes('contention.jsonl')) {
+            const err = new Error('simulated unwritable contention log');
+            err.code = 'EACCES';
+            throw err;
+          }
+          return originalAppendFileSync.apply(fs, args);
+        };
+        let i6Result;
+        try {
+          i6Result = acquireStoreLockOnceSync(tmpRoot, i6LockName);
+        } catch (err) {
+          failures.push(`(i6) acquireStoreLockOnceSync threw despite a simulated unwritable contention.jsonl (telemetry must be fail-open): ${(err && err.stack) || err}`);
+        } finally {
+          fs.appendFileSync = originalAppendFileSync;
+        }
+        if (i6Result && i6Result.acquired) {
+          i6Result.release();
+        } else if (!i6Result || !i6Result.acquired) {
+          failures.push('(i6) acquireStoreLockOnceSync did not acquire a fresh lock when the contention.jsonl telemetry write failed');
+        }
+      }
+    }
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }
@@ -997,6 +1187,8 @@ async function runOrchestrator() {
       `a live-but-past-HARD_STALE_MS-ceiling lock anyway, zero violations/exact count; (g) 10/10 forced-interleaving ` +
       `stale-takeover races held mutual exclusion deterministically; (g2) 10/10 forced third-racer vacancy-exploit ` +
       `attempts held mutual exclusion deterministically; (h) simulated transient/permanent EPERM on ` +
-      `acquire/release/takeover-rename retried and surfaced correctly, bounded.`,
+      `acquire/release/takeover-rename retried and surfaced correctly, bounded; (i) contention.jsonl telemetry ` +
+      `emitted correct success/busy records for both withStoreLock and acquireStoreLockOnceSync, and a simulated ` +
+      `unwritable telemetry log never broke either acquire path (fail-open).`,
   );
 }

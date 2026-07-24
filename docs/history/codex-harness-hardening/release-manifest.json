@@ -111,7 +111,7 @@
     },
     {
       "path": ".bee/bin/lib/lock.mjs",
-      "sha256": "df13959ba646b5ff0ce552e4312026924ed41a3d6df49e55b5557c2c55592f44",
+      "sha256": "2c80c3738ce0f70c69cf45164c30a078a7e7c9c02d9feb702415900f41d4e9c9",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -197,7 +197,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "76427995dc3bac333462661ba9296a75f203c5e21c84fc1a848d671f3d25045d",
+      "sha256": "dab33e116e5a1644b9cc43ce031e0856932699639e39274468b2b40c9f865d9d",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -736,7 +736,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-hive/templates/lib/lock.mjs",
-      "sha256": "df13959ba646b5ff0ce552e4312026924ed41a3d6df49e55b5557c2c55592f44",
+      "sha256": "2c80c3738ce0f70c69cf45164c30a078a7e7c9c02d9feb702415900f41d4e9c9",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/templates/lib/lock.mjs"
@@ -1268,7 +1268,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "dc04afe24b3b269f0d4acce6af412816319d8cd6655e66384fc8dd86ff6ce1f2",
+      "sha256": "18cafc0575253ea4511a3838d5603c04f9977d10603fd29c727b05615a593cb9",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1807,7 +1807,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-hive/templates/lib/lock.mjs",
-      "sha256": "df13959ba646b5ff0ce552e4312026924ed41a3d6df49e55b5557c2c55592f44",
+      "sha256": "2c80c3738ce0f70c69cf45164c30a078a7e7c9c02d9feb702415900f41d4e9c9",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/templates/lib/lock.mjs"
@@ -3014,7 +3014,7 @@
     },
     {
       "path": "skills/bee-hive/templates/lib/lock.mjs",
-      "sha256": "df13959ba646b5ff0ce552e4312026924ed41a3d6df49e55b5557c2c55592f44",
+      "sha256": "2c80c3738ce0f70c69cf45164c30a078a7e7c9c02d9feb702415900f41d4e9c9",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/templates/lib/lock.mjs"

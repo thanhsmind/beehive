@@ -87,7 +87,12 @@ try {
   // Mirrors this repo's own .gitignore for bee's runtime-derived state (grants,
   // locks, etc.) so writeGrant/bootstrapWorktreeStore writes below don't trip
   // isTreeDirty in this fixture the way they wouldn't in the real repo either.
-  fs.writeFileSync(path.join(parentDir, '.gitignore'), '.bee/runtime/\n.bee/locks/\n.bee/cache/\n.bee/spikes/\n');
+  // multisession-native-3: .bee/logs/ joined this list once lock.mjs started
+  // appending contention.jsonl telemetry on every withStoreLock acquire —
+  // mergeFeatureWorktree below acquires 'worktree-admin' against THIS nested
+  // clone's own root, so without this line the telemetry write itself made
+  // "git status --porcelain" non-empty and tripped refuseMerge's dirty check.
+  fs.writeFileSync(path.join(parentDir, '.gitignore'), '.bee/runtime/\n.bee/locks/\n.bee/cache/\n.bee/spikes/\n.bee/logs/\n');
   git(parentDir, ['add', '.']);
   git(parentDir, ['commit', '-q', '-m', 'init parent fixture']);
   git(parentDir, ['remote', 'add', 'origin', bareOrigin]);

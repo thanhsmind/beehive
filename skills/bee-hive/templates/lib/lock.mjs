@@ -108,6 +108,48 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// multisession-native-3 (C3, advisor consult stage 0-1): lock-contention
+// telemetry — one JSON line per store-lock acquire OUTCOME (success with 0
+// retries, retried success, or LOCK_BUSY exhaustion) appended to
+// .bee/logs/contention.jsonl. Deliberately mirrors bee.mjs's OWN
+// recordTiming append for .bee/logs/timings.jsonl byte-for-byte in spirit:
+// plain fs.mkdirSync + fs.appendFileSync, wrapped in a try/catch that
+// swallows EVERYTHING (including EBUSY) — a telemetry write must never
+// break a lock acquisition or a hook heartbeat. This is called from INSIDE
+// withStoreLock/acquireStoreLockOnceSync, so it is intentionally lock-free:
+// routing it back through either of those primitives would recurse forever
+// (this module's whole reason to exist is guarding critical sections, not
+// being one). No fsync — best-effort, hot-path-safe, matching the same
+// no-fsync posture as timings.jsonl's own append.
+function appendContentionTelemetry(root, record) {
+  try {
+    const logsDir = path.join(root, '.bee', 'logs');
+    fs.mkdirSync(logsDir, { recursive: true });
+    fs.appendFileSync(path.join(logsDir, 'contention.jsonl'), `${JSON.stringify(record)}\n`);
+  } catch {
+    // fail-open: telemetry must never change a lock acquisition's outcome
+  }
+}
+
+// Builds one contention.jsonl record. workflow_id/workspace_id/resource are
+// not knowable at this layer yet (no caller currently threads them down to
+// lock.mjs) and are always null — schema fields reserved for a future cell,
+// per C3. holder_session is whatever contending holder session was
+// observed while waiting (null when the acquire never contended at all).
+function buildContentionRecord({ name, session, waitStartMs, holderSession, result }) {
+  return {
+    ts: new Date().toISOString(),
+    lock_name: name,
+    lock_wait_ms: Date.now() - waitStartMs,
+    holder_session: holderSession ?? null,
+    caller_session: session ?? null,
+    workflow_id: null,
+    workspace_id: null,
+    resource: null,
+    result,
+  };
+}
+
 // rel180-4 (Windows CI hazard fix, same class as claims.mjs's rel1710rc-5):
 // lock.mjs's own open ('wx' writeFileSync)/rename/unlink calls can
 // intermittently fail with EBUSY/EPERM/ENOTEMPTY/EMFILE/ENFILE on Windows
@@ -435,15 +477,38 @@ export function acquireStoreLockOnceSync(root, name) {
   const token = crypto.randomBytes(8).toString('hex');
   const session = envSessionId(process.env.BEE_SESSION_ID, process.env.CLAUDE_CODE_SESSION_ID);
   const nowMs = Date.now();
+  const waitStartMs = nowMs;
   const body = { pid: process.pid, session, ts: new Date(nowMs).toISOString(), token };
 
   let acquired = tryAcquire(lockPath, body);
-  if (!acquired && tryStaleTakeover(lockPath, nowMs)) {
-    acquired = tryAcquire(lockPath, { ...body, ts: new Date(Date.now()).toISOString() });
+  let contendedHolderSession = null;
+  if (!acquired) {
+    const contending = readHolder(lockPath);
+    if (contending && typeof contending === 'object' && contending.session) {
+      contendedHolderSession = contending.session;
+    }
+    if (tryStaleTakeover(lockPath, nowMs)) {
+      acquired = tryAcquire(lockPath, { ...body, ts: new Date(Date.now()).toISOString() });
+    }
   }
   if (!acquired) {
-    return { acquired: false, holder: readHolder(lockPath) };
+    const holder = readHolder(lockPath);
+    appendContentionTelemetry(
+      root,
+      buildContentionRecord({
+        name,
+        session,
+        waitStartMs,
+        holderSession: (holder && holder.session) || contendedHolderSession,
+        result: 'busy',
+      }),
+    );
+    return { acquired: false, holder };
   }
+  appendContentionTelemetry(
+    root,
+    buildContentionRecord({ name, session, waitStartMs, holderSession: contendedHolderSession, result: 'acquired' }),
+  );
   let released = false;
   return {
     acquired: true,
@@ -473,6 +538,8 @@ export async function withStoreLock(
   const token = crypto.randomBytes(8).toString('hex');
   const session = envSessionId(process.env.BEE_SESSION_ID, process.env.CLAUDE_CODE_SESSION_ID);
   let acquired = false;
+  const waitStartMs = Date.now();
+  let contendedHolderSession = null;
 
   for (let attempt = 0; attempt < maxAttempts && !acquired; attempt++) {
     const nowMs = Date.now();
@@ -480,6 +547,10 @@ export async function withStoreLock(
     if (tryAcquire(lockPath, body)) {
       acquired = true;
       break;
+    }
+    const contending = readHolder(lockPath);
+    if (contending && typeof contending === 'object' && contending.session) {
+      contendedHolderSession = contending.session;
     }
     // Staleness is re-verified at THIS retry, on the real filesystem mtime —
     // never cached from an earlier check.
@@ -497,8 +568,24 @@ export async function withStoreLock(
   }
 
   if (!acquired) {
-    throw new LockBusyError(name, readHolder(lockPath));
+    const holder = readHolder(lockPath);
+    appendContentionTelemetry(
+      root,
+      buildContentionRecord({
+        name,
+        session,
+        waitStartMs,
+        holderSession: (holder && holder.session) || contendedHolderSession,
+        result: 'busy',
+      }),
+    );
+    throw new LockBusyError(name, holder);
   }
+
+  appendContentionTelemetry(
+    root,
+    buildContentionRecord({ name, session, waitStartMs, holderSession: contendedHolderSession, result: 'acquired' }),
+  );
 
   try {
     return await fn();
