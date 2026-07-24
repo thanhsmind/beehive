@@ -984,18 +984,38 @@ await check('bee.mjs state start-feature refuses when the current phase is not i
   }
 });
 
-await check('bee.mjs state start-feature refuses while .bee/HANDOFF.json exists, zero mutations', async () => {
+await check('bee.mjs state start-feature refuses while .bee/HANDOFF.json names THIS feature, zero mutations (F5: per-feature scoped)', async () => {
   const dir = makeStateRepo('bee-state-start-handoff-');
   try {
     const statePath = path.join(dir, '.bee', 'state.json');
     writeJsonAtomic(statePath, { schema_version: '1.0', phase: 'idle', workers: [] });
-    writeJsonAtomic(path.join(dir, '.bee', 'HANDOFF.json'), { cell: 'x', done: [], remaining: [] });
+    writeJsonAtomic(path.join(dir, '.bee', 'HANDOFF.json'), { feature: 'new-feat', cell: 'x', done: [], remaining: [] });
     const before = fs.readFileSync(statePath, 'utf8');
     const result = await runBeeState(dir, ['start-feature', '--feature', 'new-feat']);
-    assert(result.status !== 0, 'active HANDOFF refuses');
+    assert(result.status !== 0, 'active HANDOFF naming this feature refuses');
     assert(/HANDOFF/.test(result.stderr), `error names HANDOFF.json, got ${result.stderr}`);
     const after = fs.readFileSync(statePath, 'utf8');
     assert(before === after, 'file untouched after a HANDOFF refusal');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// F5 (advisor consult slice 2, binding, multisession-native-6): the default
+// path's HANDOFF precondition is now scoped per-feature exactly like the
+// lane path (state.mjs startFeature header comment) — a handoff naming a
+// DIFFERENT feature (or carrying no feature field at all, the pre-scoping
+// legacy shape) no longer blocks an unrelated start.
+await check('bee.mjs state start-feature succeeds despite .bee/HANDOFF.json naming a DIFFERENT feature (F5)', async () => {
+  const dir = makeStateRepo('bee-state-start-handoff-unrelated-');
+  try {
+    const statePath = path.join(dir, '.bee', 'state.json');
+    writeJsonAtomic(statePath, { schema_version: '1.0', phase: 'idle', workers: [] });
+    writeJsonAtomic(path.join(dir, '.bee', 'HANDOFF.json'), { feature: 'other-feat', cell: 'x', done: [], remaining: [] });
+    const result = await runBeeState(dir, ['start-feature', '--feature', 'new-feat']);
+    assert(result.status === 0, `unrelated-feature HANDOFF must not block, got ${result.status}: ${result.stderr}`);
+    const state = readStateFile(dir);
+    assert(state.feature === 'new-feat', 'new feature recorded despite the unrelated handoff');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

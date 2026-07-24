@@ -30,6 +30,8 @@ import {
 import { readBacklogCounts } from '../lib/backlog.mjs';
 import { reserve, reservationsPath } from '../lib/reservations.mjs';
 import { createSession, heartbeatSession, claimCellFile, sessionPath } from '../lib/claims.mjs';
+import { listWorkflows, updateWorkflow } from '../lib/workflow-store.mjs';
+import { acquireStoreLockOnceSync } from '../lib/lock.mjs';
 // fsh-3 (lane store): namespace imports so a not-yet-implemented export fails
 // its own row ("… is not a function") instead of crashing the whole module
 // graph at import time — the RED-first evidence stays per-row.
@@ -518,7 +520,7 @@ await check('lanes: a lane start refuses while THIS feature has nonterminal cell
   }
 });
 
-await check('lanes: a global HANDOFF blocks a lane start only when its feature names this lane; the DEFAULT start keeps any-handoff-blocks', async () => {
+await check('lanes: a global HANDOFF blocks a lane start only when its feature names this lane', async () => {
   const dir = makeStateRepo('bee-lane-start-handoff-');
   try {
     writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { schema_version: '1.0', phase: 'idle', feature: null, workers: [] });
@@ -527,7 +529,33 @@ await check('lanes: a global HANDOFF blocks a lane start only when its feature n
     assert(!fs.existsSync(laneFile(dir, 'lane-e')), 'refusal writes nothing');
     const unrelated = await startFeature(dir, { feature: 'lane-f', lane: true });
     assert(unrelated.feature === 'lane-f', 'a handoff for another feature does not block this lane');
-    await assertRejects(() => startFeature(dir, { feature: 'lane-g' }), 'HANDOFF', 'the default (non-lane) start keeps today\'s any-handoff-blocks semantics');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// F5 (advisor consult slice 2, binding, multisession-native-6): the DEFAULT
+// (non-lane) start now mirrors the lane path's exact per-feature HANDOFF
+// scoping instead of any-handoff-blocks — see startFeature's own header
+// comment in lib/state.mjs for the residual-coupling note (one shared
+// .bee/HANDOFF.json file until slice 3's per-workflow mailboxes, msn-15).
+await check('F5: the DEFAULT (non-lane) start blocks only when .bee/HANDOFF.json names THIS feature; an unrelated-feature handoff no longer blocks it', async () => {
+  const dir = makeStateRepo('bee-default-start-handoff-scoped-');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { schema_version: '1.0', phase: 'idle', feature: null, workers: [] });
+    writeJsonAtomic(path.join(dir, '.bee', 'HANDOFF.json'), { feature: 'other-feat', cell: 'x', done: [], remaining: [] });
+    const unrelated = await startFeature(dir, { feature: 'new-feat' });
+    assert(unrelated.feature === 'new-feat', 'a handoff naming a DIFFERENT feature no longer blocks the default start (F5)');
+
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { schema_version: '1.0', phase: 'idle', feature: null, workers: [] });
+    writeJsonAtomic(path.join(dir, '.bee', 'HANDOFF.json'), { feature: 'same-feat', cell: 'x', done: [], remaining: [] });
+    const before = fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8');
+    await assertRejects(
+      () => startFeature(dir, { feature: 'same-feat' }),
+      'HANDOFF',
+      'a handoff naming THIS feature still blocks the default start (SAME-feature refusal semantics preserved)',
+    );
+    assert(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8') === before, 'refusal writes nothing');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -619,6 +647,101 @@ await check('lanes: restarting a terminal lane resets exactly its four gates (cr
     const corruptBefore = fs.readFileSync(laneFile(dir, 'lane-p'), 'utf8');
     await assertRejects(() => startFeature(dir, { feature: 'lane-p', lane: true }), 'lane', 'a corrupt lane file refuses the mutation loudly');
     assert(fs.readFileSync(laneFile(dir, 'lane-p'), 'utf8') === corruptBefore, 'corrupt file untouched');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── multisession-native-6: startFeature creates a workflow record ────────
+// D1 (CONTEXT.md), advisor consult slice 2 (C1/C4, the cell's binding
+// conditions). Every startFeature call — default or lane — now also creates
+// a .bee/runtime/workflows/<id>/state.json record via workflow-store.mjs,
+// alongside its unchanged legacy write.
+
+await check('msn-6 (cell truth): two DIFFERENT features started concurrently do not contend on a shared lock for the workflow-record-creation step (deterministic seam proof, msn-5-style)', async () => {
+  const dir = makeStateRepo('bee-start-workflow-concurrency-');
+  try {
+    // Seed feature A's workflow record via a real lane start, then hold ITS
+    // workflow:<id> lock externally. A single-attempt update against that
+    // held lock must see LOCK_BUSY (negative control — proves the harness is
+    // meaningful), while starting feature B (a DIFFERENT feature) must
+    // succeed without waiting on it at all — proving the two never share a
+    // lock for the workflow-record-creation step. The legacy lane-file write
+    // for each call still serializes on the 'state' lock (an honest,
+    // documented caveat until msn-7/10 retire it) — this test isolates the
+    // workflow-record step specifically, exactly the "cell truth" it must
+    // prove.
+    await startFeature(dir, { feature: 'concur-a', lane: true });
+    const wfA = listWorkflows(dir).workflows.find((wf) => wf.feature === 'concur-a');
+    assert(wfA, 'feature A got a workflow record');
+
+    const held = acquireStoreLockOnceSync(dir, `workflow:${wfA.id}`);
+    assert(held.acquired, "precondition: test can acquire feature A's workflow lock directly");
+    try {
+      await assertRejects(
+        () => updateWorkflow(dir, wfA.id, { phase: 'planning' }, { maxAttempts: 1 }),
+        'busy',
+        "sanity control: A's workflow lock really is held",
+      );
+
+      const recordB = await startFeature(dir, { feature: 'concur-b', lane: true });
+      assert(recordB.feature === 'concur-b', "feature B's lane start succeeded without waiting on A's workflow lock");
+      const wfB = listWorkflows(dir).workflows.find((wf) => wf.feature === 'concur-b');
+      assert(wfB, "feature B got its own workflow record, created independently of A's held lock");
+      assert(wfB.id !== wfA.id, 'A and B are distinct workflow records');
+    } finally {
+      held.release();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('msn-6 C1: a mid-flight legacy state.json is idempotently seeded into a workflow record the first time ANY feature is started via the lane path; re-running never duplicates it', async () => {
+  const dir = makeStateRepo('bee-start-c1-seed-');
+  try {
+    // A live legacy pipeline: the DEFAULT state.json is mid-flight for
+    // "old-feature", and this is a fresh repo with zero workflow records —
+    // exactly C1's dangerous moment.
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+      schema_version: '1.0',
+      phase: 'swarming',
+      feature: 'old-feature',
+      mode: 'standard',
+      approved_gates: { context: true, shape: true, execution: false, review: false },
+      workers: [],
+      summary: 'mid-flight legacy work',
+      next_action: 'keep swarming old-feature',
+    });
+    assert(listWorkflows(dir).workflows.length === 0, 'precondition: zero workflow records exist yet');
+
+    // The DEFAULT (non-lane) path would itself refuse here (mid-flight phase
+    // check) — only the LANE path can start an UNRELATED feature while the
+    // legacy default record is mid-flight, which is exactly the scenario
+    // that could silently lose "old-feature" if C1 did not seed it.
+    const started = await startFeature(dir, { feature: 'new-lane-feature', lane: true });
+    assert(started.feature === 'new-lane-feature', 'the unrelated lane feature started normally');
+
+    const afterFirst = listWorkflows(dir).workflows;
+    const seeded = afterFirst.find((wf) => wf.feature === 'old-feature');
+    assert(seeded, `old-feature must survive as a materialized workflow record, got ${JSON.stringify(afterFirst.map((w) => w.feature))}`);
+    assert(seeded.phase === 'swarming', 'materialized record carries the legacy phase');
+    assert(seeded.mode === 'standard', 'materialized record carries the legacy mode');
+    assert(seeded.status === 'active', 'materialized record is active, never silently closed');
+    assert(seeded.gates.context.approved === true && seeded.gates.shape.approved === true, 'approved gates carried over');
+    assert(seeded.gates.execution.approved === false && seeded.gates.review.approved === false, 'unapproved gates carried over as false');
+    assert(seeded.gates.context.approved_for_plan_rev === null, 'materialized gates map to approved_for_plan_rev: null (no plan-rev history to carry)');
+
+    const newWf = afterFirst.find((wf) => wf.feature === 'new-lane-feature');
+    assert(newWf, "the newly-started feature also got its own workflow record");
+    assert(newWf.id !== seeded.id, "the seeded record and the new feature's record are distinct");
+
+    // Idempotency: starting a THIRD unrelated feature must never re-seed or
+    // duplicate old-feature's workflow record.
+    await startFeature(dir, { feature: 'third-lane-feature', lane: true });
+    const afterThird = listWorkflows(dir).workflows;
+    const oldFeatureCount = afterThird.filter((wf) => wf.feature === 'old-feature').length;
+    assert(oldFeatureCount === 1, `old-feature must never be duplicated by a later start, got ${oldFeatureCount} records`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

@@ -968,6 +968,41 @@
         "scripts/test_worktree_holds.mjs"
       ]
     },
+    ".bee/bin/lib/workflow-store.mjs": {
+      "direct": [],
+      "all": [
+        ".bee/bin/bee.mjs knowledge check",
+        ".bee/bin/bee.mjs knowledge index --check",
+        "hooks/test_model_guard.mjs",
+        "scripts/backlog_uniqueness.mjs --check",
+        "scripts/okf_migrate.mjs --check advisor-protocol",
+        "scripts/okf_migrate.mjs --check decision-memory",
+        "scripts/okf_migrate.mjs --check doctrine-layer",
+        "scripts/okf_migrate.mjs --check feedback-digest",
+        "scripts/okf_migrate.mjs --check hook-runtime",
+        "scripts/okf_migrate.mjs --check okf-profile",
+        "scripts/okf_migrate.mjs --check onboarding",
+        "scripts/okf_migrate.mjs --check performance-log",
+        "scripts/okf_migrate.mjs --check verify-pipeline",
+        "scripts/okf_migrate.mjs --check workflow-state",
+        "scripts/okf_migrate.mjs --check worktree-parallelism",
+        "scripts/okf_migrate.mjs --check-patterns",
+        "scripts/test_claim_race.mjs",
+        "scripts/test_compact_verbs.mjs",
+        "scripts/test_config_samples_safe.mjs",
+        "scripts/test_config_validate.mjs",
+        "scripts/test_conformance.mjs",
+        "scripts/test_native_probe.mjs",
+        "scripts/test_nested_clone_isolation.mjs",
+        "scripts/test_okf_pins.mjs",
+        "scripts/test_resolveroots_p40.mjs",
+        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_worktree_cli.mjs",
+        "scripts/test_worktree_companion.mjs",
+        "scripts/test_worktree_grant_resolve.mjs",
+        "scripts/test_worktree_holds.mjs"
+      ]
+    },
     ".bee/bin/lib/worktree-holds.mjs": {
       "direct": [
         ".bee/bin/bee.mjs knowledge check",
@@ -2372,6 +2407,7 @@
       "direct": [
         "skills/bee-hive/templates/tests/test_cells.mjs",
         "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
+        "skills/bee-hive/templates/tests/test_state.mjs",
         "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ],
       "all": [
@@ -2629,9 +2665,42 @@
     },
     "skills/bee-hive/templates/lib/workflow-store.mjs": {
       "direct": [
+        "skills/bee-hive/templates/tests/test_state.mjs",
         "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ],
       "all": [
+        "scripts/okf_instructions_fence.mjs",
+        "scripts/okf_instructions_fence.mjs --selftest",
+        "scripts/okf_specs_fence.mjs",
+        "scripts/okf_specs_fence.mjs --selftest",
+        "scripts/test_compact_capsule.mjs",
+        "scripts/test_compact_verbs.mjs",
+        "scripts/test_compaction_advisories.mjs",
+        "scripts/test_compaction_module.mjs",
+        "scripts/test_dispatch_prepare.mjs",
+        "scripts/test_hook_vendor_closure.mjs",
+        "scripts/test_native_probe.mjs",
+        "scripts/test_render_race.mjs",
+        "scripts/test_skill_render.mjs",
+        "skills/bee-hive/scripts/test_plugin_distribution.mjs",
+        "skills/bee-hive/templates/tests/test_backlog_capture.mjs",
+        "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_bundle_mode.mjs",
+        "skills/bee-hive/templates/tests/test_cells.mjs",
+        "skills/bee-hive/templates/tests/test_cli_cells.mjs",
+        "skills/bee-hive/templates/tests/test_cli_state.mjs",
+        "skills/bee-hive/templates/tests/test_config_validate.mjs",
+        "skills/bee-hive/templates/tests/test_contention_status.mjs",
+        "skills/bee-hive/templates/tests/test_feedback.mjs",
+        "skills/bee-hive/templates/tests/test_guards.mjs",
+        "skills/bee-hive/templates/tests/test_guards_tokenizer.mjs",
+        "skills/bee-hive/templates/tests/test_intent.mjs",
+        "skills/bee-hive/templates/tests/test_knowledge.mjs",
+        "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_recovery.mjs",
+        "skills/bee-hive/templates/tests/test_reviews.mjs",
+        "skills/bee-hive/templates/tests/test_scratch.mjs",
+        "skills/bee-hive/templates/tests/test_state.mjs",
         "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ]
     },

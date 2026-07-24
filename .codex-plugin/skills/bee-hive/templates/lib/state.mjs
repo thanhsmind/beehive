@@ -18,6 +18,12 @@ import { withStoreLock } from './lock.mjs';
 // decisions.mjs imports only node builtins + fsutil (no cycle back to this file);
 // advisorRefAnchors reads the newest active decision id through it (AO13).
 import { activeDecisions } from './decisions.mjs';
+// workflow-store.mjs (multisession-native-5) is a session/state-free LEAF —
+// see its own header's C4 structural guarantee — so importing it here creates
+// no cycle: it never imports this file back. startFeature (below) uses it to
+// create/seed workflow records alongside its existing legacy-store writes
+// (D1, multisession-native-6).
+import { createWorkflow, listWorkflows } from './workflow-store.mjs';
 
 export const BEE_VERSION = '1.16.1';
 
@@ -1711,17 +1717,26 @@ export function advisorRefStale(root, ref, state) {
 // LANE MODE (fresh-session-handoff fsh-3, validated Q4): startFeature with
 // { lane: true } starts the feature AS a lane record under .bee/lanes/ while
 // the default pipeline and every other lane stay byte-untouched. The default
-// (non-lane) path below keeps today's byte-identical semantics. Lane-scoped
-// preconditions — attribution DERIVED from existing fields, never new ones:
+// (non-lane) path below keeps today's byte-identical semantics apart from
+// F5's handoff rescoping (multisession-native-6 — see startFeature's own
+// header comment). Lane-scoped preconditions — attribution DERIVED from
+// existing fields, never new ones:
 //   (a) nonterminal cells whose cell.feature equals THIS lane's feature block;
 //   (b) the global HANDOFF blocks a lane start only when its feature field
-//       names this lane's feature (the default start keeps any-handoff-blocks);
+//       names this lane's feature (F5: the default start now matches this
+//       exact per-feature scoping instead of any-handoff-blocks);
 //   (c) a registered worker blocks only when its cell derives to this lane's
 //       feature (worker → cell → cell.feature);
 //   (d) global holds check: when the caller declares intended paths, any
 //       overlap with ANOTHER session's active holds — claimed cells' files or
 //       active reservations — refuses (own-session claims and expired holds
-//       never block; no declared paths, no check).
+//       never block; no declared paths, no check);
+//   (e) (multisession-native-6) the shared workflow-precondition layer —
+//       checkNoLiveWorkflowForFeature/checkNoSameFeatureClaimedCells — same
+//       as the default path; normally shadowed by (a)'s broader scan but
+//       closes the one gap (a) cannot see: a live workflow record for this
+//       feature with no lane file of its own (e.g. it was started via the
+//       default path, or already dropped).
 
 function listAllCellsForStart(root) {
   const dir = path.join(root, '.bee', 'cells');
@@ -1756,6 +1771,117 @@ function listActiveReservationsForStart(root) {
   });
 }
 
+// ─── C1 (advisor consult slice 2, binding, the seed) — legacy-to-workflow
+// materialization ───────────────────────────────────────────────────────────
+// Workflow records (msn-5, workflow-store.mjs) become the new unit of
+// coordination state (D1), but until msn-7 rebuilds .bee/state.json and
+// .bee/lanes/*.json as READ-ONLY projections, the legacy stores stay the live
+// writers. That leaves exactly one dangerous moment: the very FIRST workflow
+// record ever created in a repo that already has a live legacy pipeline (a
+// non-idle default record, or a non-terminal lane) — if nothing captures that
+// pipeline into a workflow record now, a later reader that trusts workflow
+// records as the source of truth (msn-7+) would see it as if it never
+// existed. C1 closes that gap: before this repo's first-ever workflow record
+// is created, materialize every live legacy record into one.
+//
+// Idempotent two ways: (1) gated on listWorkflows(root).workflows.length===0,
+// so this only ever runs once per repo — once ANY workflow record exists, it
+// is a no-op on every later call; (2) even within one run, each candidate is
+// matched against "does a workflow already carry this feature at a
+// non-closed status" before creating another, so the default record and a
+// lane that happen to share a feature name can never double-materialize it.
+function legacyGatesToWorkflowGates(approvedGates) {
+  const gates = {};
+  for (const name of GATE_NAMES) {
+    gates[name] = { approved: Boolean(approvedGates && approvedGates[name] === true), approved_for_plan_rev: null };
+  }
+  return gates;
+}
+
+async function seedLegacyWorkflows(root) {
+  const { workflows: existing } = listWorkflows(root);
+  if (existing.length > 0) return; // never re-seed once ANY workflow record exists
+
+  const liveForFeature = (feature) => existing.some((wf) => wf.feature === feature && wf.status !== 'closed');
+
+  // (a) the legacy default record. "NON-idle" per C1: phase outside
+  // idle/compounding-complete, OR a gate approved, OR a feature recorded —
+  // read with the fail-open readState (never throw here; a corrupt default
+  // record must never block an unrelated feature's start from seeding).
+  const legacy = readState(root);
+  const legacyLive =
+    Boolean(legacy.feature) ||
+    (legacy.phase && legacy.phase !== 'idle' && legacy.phase !== 'compounding-complete') ||
+    Object.values(legacy.approved_gates || {}).some((v) => v === true);
+  if (legacyLive && legacy.feature && !liveForFeature(legacy.feature)) {
+    const created = await createWorkflow(root, {
+      feature: legacy.feature,
+      phase: isKnownPhase(legacy.phase) ? legacy.phase : 'idle',
+      mode: legacy.mode,
+      gates: legacyGatesToWorkflowGates(legacy.approved_gates),
+      summary: legacy.summary,
+      next_action: legacy.next_action,
+      status: 'active',
+    });
+    existing.push(created);
+  }
+
+  // (b) every non-terminal lane (same phase test as (a) minus the gates/
+  // feature disjuncts — a lane file always carries its feature in the
+  // filename, so "recorded but idle" never arises the way it can for the
+  // singleton default record).
+  for (const lane of listLanes(root)) {
+    if (!lane || !lane.feature) continue;
+    const laneLive = lane.phase && lane.phase !== 'idle' && lane.phase !== 'compounding-complete';
+    if (!laneLive || liveForFeature(lane.feature)) continue;
+    const created = await createWorkflow(root, {
+      feature: lane.feature,
+      phase: isKnownPhase(lane.phase) ? lane.phase : 'idle',
+      mode: lane.mode,
+      gates: legacyGatesToWorkflowGates(lane.approved_gates),
+      summary: lane.summary,
+      next_action: lane.next_action,
+      status: 'active',
+    });
+    existing.push(created);
+  }
+}
+
+// checkNoLiveWorkflowForFeature — the workflow-record sibling of the lane
+// path's own-feature nonterminal-cell check: refuses if a NON-CLOSED workflow
+// record already names this feature, naming the conflicting workflow in the
+// message (must_have: "precondition failures name the conflicting
+// workflow"). Read-only — runs before any write, so a refusal here leaves
+// zero mutations, same discipline as every other precondition in this file.
+function checkNoLiveWorkflowForFeature(root, feature) {
+  const { workflows } = listWorkflows(root);
+  const conflict = workflows.find((wf) => wf.feature === feature && wf.status !== 'closed');
+  if (conflict) {
+    throw new Error(
+      `startFeature: refused — a live workflow already exists for feature "${feature}" (workflow ${conflict.id}, phase "${conflict.phase}", status "${conflict.status}"). FIX: close or resolve that workflow before starting a new one for the same feature.`,
+    );
+  }
+}
+
+// checkNoSameFeatureClaimedCells — the workflow-precondition layer's
+// "claimed-cell check scoped to the same feature's cells" (advisor consult
+// slice 2). Reuses the caller's already-fetched cell list — no extra read.
+// For the default path this is a genuinely NEW check (today's own "any cell
+// anywhere claimed" check is feature-blind); for the lane path it is
+// additive to, and normally shadowed by, lane check (a)'s broader
+// open/claimed/blocked scan — kept here anyway so both paths share one
+// workflow-precondition seam instead of diverging.
+function checkNoSameFeatureClaimedCells(feature, cells) {
+  const claimed = cells.filter((cell) => cell.feature === feature && cell.status === 'claimed');
+  if (claimed.length > 0) {
+    throw new Error(
+      `startFeature: refused — feature "${feature}" already has claimed cell(s): ${claimed
+        .map((c) => c.id)
+        .join(', ')}. FIX: cap or drop them first (bee.mjs cells cap / bee.mjs cells drop).`,
+    );
+  }
+}
+
 // D6 — async: the whole precondition-read-through-write body below runs
 // inside withStoreLock('state', ...) so a concurrent startFeature/set/gate/
 // worker/scribing-run CLI invocation can no longer race this function's
@@ -1765,6 +1891,26 @@ function listActiveReservationsForStart(root) {
 // reserve/release/sweepExpired. CLI verbs WAIT normally (no maxAttempts
 // override): only the hook-driven heartbeat/lease-renewal touch path
 // (claims.mjs/reservations.mjs) uses try-once mode.
+//
+// D1/C4 (multisession-native-6): three steps, in order, NONE nested inside
+// another's lock. (1) seedLegacyWorkflows (C1) runs first, entirely before
+// this call's own legacy write, so it only ever materializes pipelines that
+// were ALREADY live — never the feature/lane this very call is about to
+// write (which would otherwise end up with two workflow records for one
+// start). (2) the legacy precondition-read-through-write body below (default
+// record OR lane, chosen by `lane`) is UNCHANGED in its own lock ('state',
+// exactly as before) except for two additions: F5's per-feature HANDOFF
+// scoping on the default path, and the two workflow-precondition checks
+// (checkNoLiveWorkflowForFeature/checkNoSameFeatureClaimedCells) shared with
+// the lane path. (3) once that body resolves and the 'state' lock is
+// released, startFeature creates THIS feature's fresh workflow record under
+// its OWN lock (workflow:<id>, via createWorkflow -> withWorkflowLock) —
+// never nested inside 'state', and never touching any session record, so
+// 'sessions' and 'workflow:<id>' are structurally never held together (C4).
+// Steps (1)-(3) are three separate transactions, so a crash between them can
+// leave the legacy write landed without its workflow record (or vice versa)
+// — accepted for this transitional slice; msn-7/10 make workflow records the
+// sole source of truth and retire the legacy write entirely.
 export async function startFeature(
   root,
   { feature, mode = null, phase = 'exploring', lane = false, sessionId = null, paths = [] } = {},
@@ -1772,6 +1918,7 @@ export async function startFeature(
   if (typeof feature !== 'string' || !feature.trim()) {
     throw new Error('startFeature: a non-empty --feature slug is required.');
   }
+  const featureTrimmed = feature.trim();
   const phaseValue = String(phase);
   if (!isKnownPhase(phaseValue)) {
     throw new Error(
@@ -1779,7 +1926,15 @@ export async function startFeature(
     );
   }
 
-  return withStoreLock(root, 'state', () => {
+  // D1/C1/C4 (multisession-native-6): seed BEFORE this call's own legacy
+  // write happens (not after) — seeding must see the world as it was before
+  // THIS start, never re-materialize the very feature/lane this same call is
+  // about to write, which would otherwise hand it two workflow records for
+  // one start. Seeding itself never touches 'state' or 'workflow:<id>' for
+  // the feature being started here — only prior, unrelated live records.
+  await seedLegacyWorkflows(root);
+
+  const legacyRecord = await withStoreLock(root, 'state', () => {
     if (lane) {
       return startLane(root, {
         feature: requireLaneFeature(feature),
@@ -1800,10 +1955,18 @@ export async function startFeature(
       );
     }
 
-    const handoffFile = handoffPath(root);
-    if (fs.existsSync(handoffFile)) {
+    // F5 (advisor consult slice 2, binding): scoped per-feature, mirroring
+    // the lane path's own handoff.feature check in startLane below — a
+    // handoff naming a DIFFERENT feature no longer blocks this start.
+    // Residual coupling: both paths still read the SAME single
+    // .bee/HANDOFF.json (one mailbox for the whole repo) until slice 3's
+    // per-workflow mailboxes (D5, msn-15) land — two DIFFERENT features can
+    // still only have one paused handoff on file at a time; they just no
+    // longer block each OTHER's starts the way any-handoff-blocks used to.
+    const handoff = readHandoff(root);
+    if (handoff && handoff.feature === featureTrimmed) {
       throw new Error(
-        'startFeature: refused — .bee/HANDOFF.json exists. A paused session must resume and clear the handoff before a new feature starts. FIX: resume the session (or explicitly delete HANDOFF.json once its work is truly abandoned), then retry.',
+        `startFeature: refused — .bee/HANDOFF.json names feature "${featureTrimmed}"; its paused work must resume or close before this feature restarts. FIX: resume the handoff (or explicitly delete HANDOFF.json once its work is truly abandoned), then retry.`,
       );
     }
 
@@ -1848,10 +2011,16 @@ export async function startFeature(
       }
     }
 
+    // New workflow-precondition layer (advisor consult slice 2): re-scoped
+    // to LIVE workflow records / this feature's own claimed cells, additive
+    // to every legacy check above.
+    checkNoLiveWorkflowForFeature(root, featureTrimmed);
+    checkNoSameFeatureClaimedCells(featureTrimmed, cells);
+
     // All preconditions hold — ONE atomic write: feature/mode/phase, reset all
     // four gates, refreshed summary/next_action. A new feature never inherits
     // approvals from whatever came before it.
-    state.feature = feature.trim();
+    state.feature = featureTrimmed;
     state.mode = mode == null ? null : String(mode);
     state.phase = phaseValue;
     state.approved_gates = { context: false, shape: false, execution: false, review: false };
@@ -1863,6 +2032,18 @@ export async function startFeature(
     writeState(root, state);
     return state;
   });
+
+  // D1/C4 (multisession-native-6): workflow record creation happens OUTSIDE
+  // the 'state' lock — see the block comment above this function (C1 already
+  // seeded above, before the legacy write).
+  await createWorkflow(root, {
+    feature: featureTrimmed,
+    phase: phaseValue,
+    mode: mode == null ? null : String(mode),
+    status: 'active',
+  });
+
+  return legacyRecord;
 }
 
 // Active claim holds by ANOTHER session whose claimed cell's files overlap the
@@ -1980,6 +2161,10 @@ function startLane(root, { feature, mode, phase, sessionId, paths }) {
       );
     }
   }
+
+  // (e) the shared workflow-precondition layer (multisession-native-6).
+  checkNoLiveWorkflowForFeature(root, feature);
+  checkNoSameFeatureClaimedCells(feature, cells);
 
   // All preconditions hold — ONE atomic write to this lane's record: feature/
   // mode/phase, ALL FOUR gates reset (spec R1 applied per lane), refreshed
