@@ -1337,7 +1337,8 @@
         "skills/bee-hive/templates/tests/test_misc.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
-        "skills/bee-hive/templates/tests/test_state.mjs"
+        "skills/bee-hive/templates/tests/test_state.mjs",
+        "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ],
       "all": [
         "scripts/test_compact_capsule.mjs",
@@ -1358,7 +1359,8 @@
         "skills/bee-hive/templates/tests/test_misc.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
-        "skills/bee-hive/templates/tests/test_state.mjs"
+        "skills/bee-hive/templates/tests/test_state.mjs",
+        "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ]
     },
     "scripts/okf_instructions_fence.mjs": {
@@ -2186,7 +2188,8 @@
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs",
-        "skills/bee-hive/templates/tests/test_state.mjs"
+        "skills/bee-hive/templates/tests/test_state.mjs",
+        "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ],
       "all": [
         "scripts/okf_instructions_fence.mjs",
@@ -2227,7 +2230,8 @@
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs",
-        "skills/bee-hive/templates/tests/test_state.mjs"
+        "skills/bee-hive/templates/tests/test_state.mjs",
+        "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ]
     },
     "skills/bee-hive/templates/lib/guards.mjs": {
@@ -2367,7 +2371,8 @@
     "skills/bee-hive/templates/lib/lock.mjs": {
       "direct": [
         "skills/bee-hive/templates/tests/test_cells.mjs",
-        "skills/bee-hive/templates/tests/test_decisions_propagation.mjs"
+        "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
+        "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ],
       "all": [
         "scripts/okf_instructions_fence.mjs",
@@ -2404,7 +2409,8 @@
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs",
-        "skills/bee-hive/templates/tests/test_state.mjs"
+        "skills/bee-hive/templates/tests/test_state.mjs",
+        "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ]
     },
     "skills/bee-hive/templates/lib/perf.mjs": {
@@ -2619,6 +2625,14 @@
         "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
+      ]
+    },
+    "skills/bee-hive/templates/lib/workflow-store.mjs": {
+      "direct": [
+        "skills/bee-hive/templates/tests/test_workflow_store.mjs"
+      ],
+      "all": [
+        "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ]
     },
     "skills/bee-hive/templates/lib/worktree-holds.mjs": {
@@ -2912,6 +2926,14 @@
       ],
       "all": [
         "skills/bee-hive/templates/tests/test_state.mjs"
+      ]
+    },
+    "skills/bee-hive/templates/tests/test_workflow_store.mjs": {
+      "direct": [
+        "skills/bee-hive/templates/tests/test_workflow_store.mjs"
+      ],
+      "all": [
+        "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ]
     },
     "skills/bee-writing-skills/scripts/render_openai_metadata.mjs": {

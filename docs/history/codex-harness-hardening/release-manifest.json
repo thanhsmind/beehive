@@ -170,6 +170,12 @@
       "role": "runtime_lib"
     },
     {
+      "path": ".bee/bin/lib/workflow-store.mjs",
+      "sha256": "5bcfe2e7b69d65de1f7146b9e06b9d69c6d7431d1d571cff8f9b4125fa6bc641",
+      "mode": "644",
+      "role": "runtime_lib"
+    },
+    {
       "path": ".bee/bin/lib/worktree-holds.mjs",
       "sha256": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
       "mode": "644",
@@ -197,7 +203,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "0d592adf6ee17066a6635c69a5648844801087d58bbab2b5b83a803f4f0131c7",
+      "sha256": "522d69a55e095d2e3f8a0210fc57c7777c134b0d26f69b6d470f6ad13e5e77f4",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -805,6 +811,13 @@
       "packagePath": ".claude-plugin/skills/bee-hive/templates/lib/validate-args.mjs"
     },
     {
+      "path": ".claude-plugin/skills/bee-hive/templates/lib/workflow-store.mjs",
+      "sha256": "5bcfe2e7b69d65de1f7146b9e06b9d69c6d7431d1d571cff8f9b4125fa6bc641",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-hive/templates/lib/workflow-store.mjs"
+    },
+    {
       "path": ".claude-plugin/skills/bee-hive/templates/lib/worktree-holds.mjs",
       "sha256": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
       "mode": "644",
@@ -1020,6 +1033,13 @@
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/templates/tests/test_state.mjs"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-hive/templates/tests/test_workflow_store.mjs",
+      "sha256": "0af8ca674fed01aa285028b8a232d994d20775794efc113ac88955f6143af432",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-hive/templates/tests/test_workflow_store.mjs"
     },
     {
       "path": ".claude-plugin/skills/bee-planning/agents/openai.yaml",
@@ -1275,7 +1295,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "ca9677a769c314bb14e32bc671c502aa9e0fb731a39c66ffdd4e196cd9c32266",
+      "sha256": "38071d431c46837e86d1ee20d75768f71c5a110bc16ffebb957ba35da68eb607",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1883,6 +1903,13 @@
       "packagePath": ".codex-plugin/skills/bee-hive/templates/lib/validate-args.mjs"
     },
     {
+      "path": ".codex-plugin/skills/bee-hive/templates/lib/workflow-store.mjs",
+      "sha256": "5bcfe2e7b69d65de1f7146b9e06b9d69c6d7431d1d571cff8f9b4125fa6bc641",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-hive/templates/lib/workflow-store.mjs"
+    },
+    {
       "path": ".codex-plugin/skills/bee-hive/templates/lib/worktree-holds.mjs",
       "sha256": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
       "mode": "644",
@@ -2098,6 +2125,13 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/templates/tests/test_state.mjs"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-hive/templates/tests/test_workflow_store.mjs",
+      "sha256": "0af8ca674fed01aa285028b8a232d994d20775794efc113ac88955f6143af432",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-hive/templates/tests/test_workflow_store.mjs"
     },
     {
       "path": ".codex-plugin/skills/bee-planning/agents/openai.yaml",
@@ -3097,6 +3131,13 @@
       "packagePath": "skills/bee-hive/templates/lib/validate-args.mjs"
     },
     {
+      "path": "skills/bee-hive/templates/lib/workflow-store.mjs",
+      "sha256": "5bcfe2e7b69d65de1f7146b9e06b9d69c6d7431d1d571cff8f9b4125fa6bc641",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-hive/templates/lib/workflow-store.mjs"
+    },
+    {
       "path": "skills/bee-hive/templates/lib/worktree-holds.mjs",
       "sha256": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
       "mode": "644",
@@ -3312,6 +3353,13 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/templates/tests/test_state.mjs"
+    },
+    {
+      "path": "skills/bee-hive/templates/tests/test_workflow_store.mjs",
+      "sha256": "0af8ca674fed01aa285028b8a232d994d20775794efc113ac88955f6143af432",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-hive/templates/tests/test_workflow_store.mjs"
     },
     {
       "path": "skills/bee-planning/agents/openai.yaml",
