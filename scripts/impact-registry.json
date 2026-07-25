@@ -2600,6 +2600,7 @@
         "skills/bee-hive/templates/tests/test_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
+        "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_state.mjs",
         "skills/bee-hive/templates/tests/test_workflow_store.mjs"
       ],
@@ -2941,6 +2942,7 @@
     },
     "skills/bee-hive/templates/lib/workspace-store.mjs": {
       "direct": [
+        "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_workspace_store.mjs",
         "skills/bee-hive/templates/tests/test_worktree_store.mjs",
         "skills/bee-hive/templates/tests/test_write_policy.mjs"

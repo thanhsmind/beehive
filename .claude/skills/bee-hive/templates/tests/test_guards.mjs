@@ -32,6 +32,11 @@ import { reserve, reservationsPath } from '../lib/reservations.mjs';
 // guards.mjs's fail-closed check exactly as before.
 import { renewLease } from '../lib/lease-store.mjs';
 import { createSession } from '../lib/claims.mjs';
+// multisession-native-21: workspace registry fixtures (deny class (c)) and
+// the lock-file primitive (the "hook never waits on a store lock"
+// regression proves checkWrite never even reaches this file).
+import { registerWorkspace, claimWriteOwnership, readWorkspace } from '../lib/workspace-store.mjs';
+import { lockFilePath } from '../lib/lock.mjs';
 // fsh-3 (lane store): namespace imports so a not-yet-implemented export fails
 // its own row ("… is not a function") instead of crashing the whole module
 // graph at import time — the RED-first evidence stays per-row.
@@ -1217,6 +1222,303 @@ await check('checkWrite (xwh-4): DIRECT_EDIT_DENY covers .bee/runtime/cross-work
     }
     // other .bee/runtime/ files are not this rule's concern
     assert(checkWrite(dir, defaultState(), '.bee/runtime/something-else.json').allow === true, 'other .bee/runtime files unaffected');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── msn-21: single resolveContext resolution, workspace-scoped hard
+// leases, and the new workspace-ownership deny class ──────────────────────
+
+await check("checkWrite (msn-21, deny class (b)): a foreign session's exact lease taken in a DIFFERENT workspace never hard-blocks (repo-relative path collision across physical checkouts is not a real conflict) — the SAME-workspace case still hard-blocks byte-identically", async () => {
+  const dir = makeStateRepo('bee-msn21-ws-lease-');
+  try {
+    laneBinding.createSession(dir, { id: 'sess-main-actor' });
+    laneBinding.createSession(dir, { id: 'sess-main-holder' });
+    laneBinding.createSession(dir, { id: 'sess-other-ws-holder', workspace_id: 'wt-other' });
+    writeLaneFixture(dir, 'lane-msn21-ws', {
+      phase: 'swarming',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+    });
+    laneBinding.bindSessionLane(dir, 'sess-main-actor', 'lane-msn21-ws');
+    const state = readState(dir);
+
+    // A lease held by a session whose OWN workspace_id is a different
+    // workspace ('wt-other') never hard-blocks a 'main'-workspace actor,
+    // even though the path string collides exactly.
+    await reserve(dir, { agent: 'other-ws-agent', cell: 'ws-1', path: 'src/cross-ws.ts', session: 'sess-other-ws-holder' });
+    const crossWs = checkWrite(dir, state, 'src/cross-ws.ts', null, { sessionId: 'sess-main-actor' });
+    assert(crossWs.allow === true, `a lease held in a DIFFERENT workspace must never hard-block, got ${JSON.stringify(crossWs)}`);
+
+    // A lease held by a session in the SAME ('main') workspace still hard-blocks — unchanged.
+    await reserve(dir, { agent: 'same-ws-agent', cell: 'ws-1', path: 'src/same-ws.ts', session: 'sess-main-holder' });
+    const sameWs = checkWrite(dir, state, 'src/same-ws.ts', null, { sessionId: 'sess-main-actor' });
+    assert(
+      sameWs.allow === false && sameWs.kind === 'hold',
+      `a lease held in the SAME workspace must still hard-block byte-identically, got ${JSON.stringify(sameWs)}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function ownershipRepo(prefix) {
+  const dir = makeStateRepo(prefix);
+  // The DEFAULT (non-lane) pipeline governs — an idle default record with
+  // execution NOT approved would hit the intake/gate branch before ever
+  // reaching the ownership check, so every fixture below runs 'swarming'...
+  // no: swarming is the OTHER exempted branch. Use 'validating' with
+  // execution approved so writes reach past the gate branches and the
+  // ownership check is the thing actually deciding, same placement
+  // discipline test_guards.mjs's own D3 panel pin uses for cross-session holds.
+  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+    schema_version: '1.0',
+    phase: 'validating',
+    feature: 'msn21-owned',
+    mode: 'standard',
+    approved_gates: { context: true, shape: true, execution: true, review: false },
+    workers: [],
+  });
+  return dir;
+}
+
+await check('checkWrite (msn-21, deny class (c)): a non-owner session refuses a write in a workspace another LIVE session already write-owns — named in the reason, allowed once the owner is stale, allowed for the owner itself, allowed when unregistered', async () => {
+  const dir = ownershipRepo('bee-msn21-owner-deny-');
+  try {
+    const state = readState(dir);
+    laneBinding.createSession(dir, { id: 'sess-owner' });
+    laneBinding.createSession(dir, { id: 'sess-intruder' });
+
+    // Before anybody has claimed ownership, the workspace is unregistered —
+    // never blocks (a solo caller always becomes owner byte-identical
+    // prohibition — checkWrite itself never claims, it only refuses to
+    // block an unclaimed workspace).
+    const beforeClaim = checkWrite(dir, state, 'src/owned.ts', null, { sessionId: 'sess-intruder' });
+    assert(beforeClaim.allow === true, `an unregistered workspace must never block, got ${JSON.stringify(beforeClaim)}`);
+
+    await registerWorkspace(dir, { id: 'main', type: 'main', root: dir });
+    await claimWriteOwnership(dir, 'main', 'sess-owner');
+
+    // The owner itself is always allowed.
+    const ownerWrite = checkWrite(dir, state, 'src/owned.ts', null, { sessionId: 'sess-owner' });
+    assert(ownerWrite.allow === true, `the workspace's own owner must never be blocked, got ${JSON.stringify(ownerWrite)}`);
+
+    // A different, LIVE session refuses, naming the owner.
+    const intruderWrite = checkWrite(dir, state, 'src/owned.ts', null, { sessionId: 'sess-intruder' });
+    assert(
+      intruderWrite.allow === false && intruderWrite.kind === 'workspace-ownership',
+      `a non-owner session must refuse with kind 'workspace-ownership', got ${JSON.stringify(intruderWrite)}`,
+    );
+    assert(intruderWrite.reason.includes('sess-owner'), `the refusal must name the live owner, got: ${intruderWrite.reason}`);
+    assert(/--isolate/.test(intruderWrite.reason), `the refusal must name the --isolate escape hatch, got: ${intruderWrite.reason}`);
+
+    // A sessionless write (no sessionId) never consults ownership at all —
+    // byte-identical to every pre-msn-21 sessionless call.
+    const sessionless = checkWrite(dir, state, 'src/owned.ts');
+    assert(sessionless.allow === true, `a sessionless write must never consult workspace ownership, got ${JSON.stringify(sessionless)}`);
+
+    // A DEAD owner (heartbeat past the staleness window) never blocks.
+    const longAgo = Date.now() - 3600 * 1000 * 10;
+    laneBinding.createSession(dir, { id: 'sess-dead-owner', now: longAgo });
+    // Force the transfer regardless of the CURRENT owner's real liveness —
+    // this call is only fixture setup for the "dead owner" scenario;
+    // checkWrite's own production isOwnerLive equivalent (unfaked) is what
+    // the assertion below actually exercises.
+    await claimWriteOwnership(dir, 'main', 'sess-dead-owner', { now: longAgo, isOwnerLive: () => false });
+    const staleOwnerWrite = checkWrite(dir, state, 'src/owned.ts', null, { sessionId: 'sess-intruder' });
+    assert(staleOwnerWrite.allow === true, `a stale/dead owner must never block, got ${JSON.stringify(staleOwnerWrite)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check("checkWrite (msn-21, deny class (c) scoping): the ownership deny ONLY engages where applyWritePolicy's isolated mode governs — a lane-bound session, a swarming-phase write, and a config write_policy of 'observe'/'shared-disjoint' all pass through untouched even with a different LIVE owner", async () => {
+  const dir = ownershipRepo('bee-msn21-owner-scope-');
+  try {
+    const state = readState(dir);
+    laneBinding.createSession(dir, { id: 'sess-owner-2' });
+    laneBinding.createSession(dir, { id: 'sess-intruder-2' });
+    await registerWorkspace(dir, { id: 'main', type: 'main', root: dir });
+    await claimWriteOwnership(dir, 'main', 'sess-owner-2');
+
+    // A lane-bound session ('source' resolves to 'lane', not 'default') is untouched.
+    writeLaneFixture(dir, 'lane-msn21-owner', {
+      phase: 'swarming',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+    });
+    laneBinding.bindSessionLane(dir, 'sess-intruder-2', 'lane-msn21-owner');
+    const laneGoverned = checkWrite(dir, state, 'src/lane-owned.ts', null, { sessionId: 'sess-intruder-2' });
+    assert(
+      laneGoverned.allow === true,
+      `a lane-bound session must pass through the ownership check untouched (lanes keep their existing branches), got ${JSON.stringify(laneGoverned)}`,
+    );
+
+    // A DEFAULT-pipeline session in phase 'swarming' with an agent identity
+    // is governed by the existing reservation branch, not ownership. An
+    // UNBOUND session resolves through resolvePipeline to the DEFAULT
+    // record read fresh from disk (never the in-memory `state` argument
+    // passed to checkWrite once sessionId is set) — so the fixture must
+    // overwrite .bee/state.json itself to actually govern this call.
+    laneBinding.createSession(dir, { id: 'sess-intruder-3' });
+    writeState(dir, { ...defaultState(), phase: 'swarming', approved_gates: { context: true, shape: true, execution: true, review: false } });
+    const swarmingWrite = checkWrite(dir, readState(dir), 'src/swarm-owned.ts', 'some-agent', { sessionId: 'sess-intruder-3' });
+    assert(
+      swarmingWrite.allow === true,
+      `a swarming-phase write must pass through the ownership check untouched (the reservation branch governs it), got ${JSON.stringify(swarmingWrite)}`,
+    );
+    // restore the 'validating' default record for the remaining sub-assertions
+    writeState(dir, { ...defaultState(), phase: 'validating', feature: 'msn21-owned', mode: 'standard', approved_gates: { context: true, shape: true, execution: true, review: false } });
+
+    // config.guards.write_policy: 'observe' skips ownership entirely.
+    const configPath = path.join(dir, '.bee', 'config.json');
+    const beforeConfig = readJson(configPath, {});
+    writeJsonAtomic(configPath, { ...beforeConfig, guards: { ...(beforeConfig.guards || {}), write_policy: 'observe' } });
+    laneBinding.createSession(dir, { id: 'sess-intruder-4' });
+    const observeWrite = checkWrite(dir, state, 'src/observe-owned.ts', null, { sessionId: 'sess-intruder-4' });
+    assert(observeWrite.allow === true, `write_policy 'observe' must skip the ownership check entirely, got ${JSON.stringify(observeWrite)}`);
+    writeJsonAtomic(configPath, beforeConfig || {});
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkWrite (msn-21): a legacy no-records repo (no .bee/runtime/workspaces/ store, no session workspace_id anywhere) is byte-identical — the ownership check never denies, the cross-session hold check hard-blocks exactly as before', async () => {
+  const dir = makeStateRepo('bee-msn21-legacy-');
+  try {
+    assert(!fs.existsSync(path.join(dir, '.bee', 'runtime', 'workspaces')), 'fixture sanity: no workspace store exists at all');
+    laneBinding.createSession(dir, { id: 'sess-legacy-a' });
+    laneBinding.createSession(dir, { id: 'sess-legacy-b' });
+    writeLaneFixture(dir, 'lane-legacy', {
+      phase: 'swarming',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+    });
+    laneBinding.bindSessionLane(dir, 'sess-legacy-a', 'lane-legacy');
+    const state = readState(dir);
+
+    // No workspace store at all -> the ownership check never denies, no
+    // matter which session writes.
+    const open = checkWrite(dir, state, 'src/legacy.ts', null, { sessionId: 'sess-legacy-a' });
+    assert(open.allow === true, `a legacy repo with no workspace store must stay open, got ${JSON.stringify(open)}`);
+
+    // The pre-msn-21 cross-session hard-lease behavior is unchanged: both
+    // sessions default to workspace_id 'main' (OMITTED on their records),
+    // so the SAME-workspace scoping is a no-op here — hard block preserved.
+    await reserve(dir, { agent: 'legacy-agent', cell: 'lg-1', path: 'src/legacy-hold.ts', session: 'sess-legacy-b' });
+    const held = checkWrite(dir, state, 'src/legacy-hold.ts', null, { sessionId: 'sess-legacy-a' });
+    assert(
+      held.allow === false && held.kind === 'hold',
+      `a legacy repo's cross-session hard lease must hard-block exactly as before msn-21, got ${JSON.stringify(held)}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkWrite (msn-21): a present-but-corrupt workspace record fails CLOSED with a typed workspace-unreadable deny — never a throw; a missing workspace record stays open', async () => {
+  const dir = ownershipRepo('bee-msn21-owner-corrupt-');
+  try {
+    const state = readState(dir);
+    laneBinding.createSession(dir, { id: 'sess-corrupt-actor' });
+    fs.mkdirSync(path.join(dir, '.bee', 'runtime', 'workspaces'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.bee', 'runtime', 'workspaces', 'main.json'), '{ not json', 'utf8');
+    let verdict;
+    let threw = false;
+    try {
+      verdict = checkWrite(dir, state, 'src/owned-corrupt.ts', null, { sessionId: 'sess-corrupt-actor' });
+    } catch {
+      threw = true;
+    }
+    assert(!threw, 'checkWrite must never throw on a corrupt workspace record');
+    assert(
+      verdict && verdict.allow === false && verdict.kind === 'workspace-unreadable',
+      `a corrupt workspace record must be a typed {allow:false, kind:'workspace-unreadable'} deny, got ${JSON.stringify(verdict)}`,
+    );
+    fs.rmSync(path.join(dir, '.bee', 'runtime', 'workspaces', 'main.json'));
+    const restored = checkWrite(dir, state, 'src/owned-corrupt.ts', null, { sessionId: 'sess-corrupt-actor' });
+    assert(restored.allow === true, `a missing (never-registered) workspace record must stay open, got ${JSON.stringify(restored)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkWrite (msn-21, worktree-topology condition 7): from a LINKED WORKTREE, the workspace-ownership check resolves against MAIN\'s control store, never a nonexistent worktree-local one', async () => {
+  const main = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-msn21-wt-main-'));
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-msn21-wt-work-'));
+  try {
+    const id = 'msn21-wt-fixture';
+    const gitdir = path.join(main, '.git', 'worktrees', id);
+    fs.mkdirSync(gitdir, { recursive: true });
+    fs.writeFileSync(path.join(work, '.git'), `gitdir: ${gitdir}\n`);
+    fs.writeFileSync(path.join(gitdir, 'gitdir'), path.join(work, '.git') + '\n');
+    fs.mkdirSync(path.join(main, '.bee'), { recursive: true });
+    writeJsonAtomic(path.join(main, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+    // An unbound session resolves to the DEFAULT record read fresh from
+    // MAIN's own state.json (never the worktree's, which has none) — give
+    // it an allowed phase so the second (owner) assertion below is decided
+    // by the ownership check, not an unrelated intake-gate deny.
+    writeJsonAtomic(path.join(main, '.bee', 'state.json'), {
+      schema_version: '1.0',
+      phase: 'validating',
+      feature: 'msn21-wt-owned',
+      mode: 'standard',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+      workers: [],
+    });
+
+    // Ownership registered/claimed ONLY in main's store — the worktree has
+    // no .bee/runtime/workspaces/ of its own (ungranted: not registered in
+    // worktree-grants.json, so ctx.workspaceId falls back to 'main' — this
+    // write is governed by the SAME 'main' workspace record main itself
+    // writes to, proving the ownership check reaches main's store rather
+    // than silently finding "nothing registered" in a worktree-local one).
+    laneBinding.createSession(main, { id: 'sess-wt-owner' });
+    laneBinding.createSession(main, { id: 'sess-wt-intruder' });
+    await registerWorkspace(main, { id: 'main', type: 'main', root: main });
+    await claimWriteOwnership(main, 'main', 'sess-wt-owner');
+    assert(!fs.existsSync(path.join(work, '.bee', 'runtime', 'workspaces')), 'the worktree must have no workspace store of its own for this proof');
+
+    const state = defaultState();
+    const denied = checkWrite(work, state, 'src/wt-owned.ts', null, { sessionId: 'sess-wt-intruder' });
+    assert(
+      denied.allow === false && denied.kind === 'workspace-ownership',
+      `a write from the linked worktree must resolve ownership against MAIN's store, got ${JSON.stringify(denied)}`,
+    );
+    assert(denied.reason.includes('sess-wt-owner'), `the refusal must name the owner found in MAIN's store, got: ${denied.reason}`);
+
+    const allowed = checkWrite(work, state, 'src/wt-owned.ts', null, { sessionId: 'sess-wt-owner' });
+    assert(allowed.allow === true, `the owner itself, writing from the worktree, must be allowed, got ${JSON.stringify(allowed)}`);
+  } finally {
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+});
+
+await check('checkWrite (msn-21): the hook posture regression — checkWrite never acquires ANY store lock (readWorkspace/readSession are plain reads), so a write resolves promptly even while another process genuinely holds the workspace lock file', async () => {
+  const dir = ownershipRepo('bee-msn21-no-wait-');
+  try {
+    const state = readState(dir);
+    laneBinding.createSession(dir, { id: 'sess-lockcheck' });
+    await registerWorkspace(dir, { id: 'main', type: 'main', root: dir });
+    await claimWriteOwnership(dir, 'main', 'sess-lockcheck');
+
+    // Simulate a genuinely live holder of the SAME lock claimWriteOwnership/
+    // attachWorkspace would take (withStoreLock's own 'workspace:<id>' name,
+    // workspace-store.mjs's withWorkspaceLock) — an O_EXCL lockfile is NOT
+    // even how withStoreLock/lock.mjs marks a hold (it uses a directory or
+    // sentinel file the retry loop polls for), but the point of this
+    // regression is structural: checkWrite must complete near-instantly no
+    // matter what sits at that path, because it never calls
+    // withStoreLock/acquireStoreLockOnceSync at all — only readWorkspace,
+    // a plain fs.readFileSync.
+    const locksDirPath = path.dirname(lockFilePath(dir, 'workspace:main'));
+    fs.mkdirSync(locksDirPath, { recursive: true });
+    fs.writeFileSync(lockFilePath(dir, 'workspace:main'), JSON.stringify({ pid: process.pid, ts: new Date().toISOString() }));
+
+    const started = Date.now();
+    const verdict = checkWrite(dir, state, 'src/no-wait.ts', null, { sessionId: 'sess-lockcheck' });
+    const elapsedMs = Date.now() - started;
+    assert(verdict.allow === true, `the owner's own write must still be allowed, got ${JSON.stringify(verdict)}`);
+    assert(elapsedMs < 500, `checkWrite must never wait on a store lock — took ${elapsedMs}ms with a lock file present`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

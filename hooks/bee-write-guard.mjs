@@ -816,7 +816,15 @@ async function main() {
       // the whole request is denied either way, and the concrete policy
       // reason (for example direct-edit) remains the user-facing correction.
       for (const rel of relPaths) {
-        const verdict = guards.checkWrite(storeRoot, state, rel, agentName, { sessionId });
+        const verdict = guards.checkWrite(storeRoot, state, rel, agentName, {
+          sessionId,
+          // msn-21: the adapter already resolved topology once
+          // (readHookContext's own resolveRoots walk, exposed as
+          // ctx.controlRoot since d69d81e) — pass it through so
+          // guards.checkWrite's own resolveWriteTopology reuses it instead
+          // of re-deriving controlRoot from scratch a second time.
+          controlRoot: ctx.controlRoot,
+        });
         if (verdict && verdict.allow === false) {
           denial = {
             reason:
@@ -843,7 +851,11 @@ async function main() {
       if (!denial && toolName === "Bash" && typeof guards.checkGitBashCommand === "function") {
         const bashCommand = typeof toolInput.command === "string" ? toolInput.command : "";
         if (bashCommand) {
-          const gitVerdict = guards.checkGitBashCommand(storeRoot, state, bashCommand, { cwd, sessionId });
+          const gitVerdict = guards.checkGitBashCommand(storeRoot, state, bashCommand, {
+            cwd,
+            sessionId,
+            controlRoot: ctx.controlRoot, // msn-21: reuse the adapter's own topology resolution
+          });
           if (gitVerdict && gitVerdict.allow === false) {
             denial = {
               reason: gitVerdict.reason || `bee ${gitVerdict.kind || "git"} guard denied: ${bashCommand}`,

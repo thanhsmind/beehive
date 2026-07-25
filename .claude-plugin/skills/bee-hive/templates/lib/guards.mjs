@@ -5,11 +5,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { findConflicts, findSessionConflicts, reservationsPath, isHardConflict } from './reservations.mjs';
-import { readConfig, resolveContext, resolvePipeline, resolveRoots } from './state.mjs';
+import { readConfig, resolveContext, resolvePipeline } from './state.mjs';
 // xwh-4: cross-worktree foreign-hold consultation. worktree-holds.mjs imports
 // only fsutil/lock/reservations.mjs — no cycle (same discipline cells.mjs's
 // own findForeignHolds import documents).
 import { findForeignHolds, holdsStoreCorrupt } from './worktree-holds.mjs';
+// multisession-native-21 (D2/D3, invariant-15 groundwork): the workspace
+// single-write-owner registry (msn-19) and session heartbeat/workspace_id
+// (msn-19's session stamping) — both structurally isolated leaf modules, no
+// cycle back into guards.mjs (workspace-store.mjs imports only fs/path/
+// fsutil/lock; claims.mjs imports fs/path/crypto/fsutil/lock/decisions.mjs).
+import { readWorkspace, workspacePath, WorkspaceStoreError } from './workspace-store.mjs';
+import { readSession, heartbeatStale } from './claims.mjs';
 
 /** File-path patterns that must never be read without asking the human. */
 export const SECRET_PATTERNS = [
@@ -222,28 +229,66 @@ function intakeRefusal(phase, blockedDescription, extraSentence = '') {
 // the caller's own `state` (byte-identical to the pre-fsh-8 checkWrite
 // contract). An unresolvable lane binding is a typed deny, never a silent
 // fallback to the default pipeline. Shared by checkWrite and
-// checkGitBashCommand so both apply the SAME phase/lane semantics.
+// checkGitBashCommand so both apply the SAME phase/lane semantics. `source`
+// ('default'|'lane') is carried through on success (msn-21) so a caller can
+// tell a plain default-pipeline write from a lane-governed one without
+// re-deriving it — lane flows opt out of this cell's new workspace-ownership
+// check (see checkWrite below).
 //
-// msn-18a (advisor-digest-slice4 binding condition 2): `root` here is
-// whatever the hook/dispatcher's write path happened to resolve — for a
-// write originating in a linked worktree this can be the WORKTREE's own
-// checkout, not main's. resolvePipeline's lane/session/workflow reads are
-// control-plane (resolveContext.controlRoot = mainRoot), so this call routes
-// through controlRoot explicitly rather than trusting every caller to have
-// pre-resolved it — a worktree-bound write must find the SAME lane record
-// main sees, never hard-deny with LANE_MISSING just because its own checkout
-// has no `.bee/lanes/<feature>.json` of its own. Main/solo repos:
-// controlRoot === root, byte-identical to the pre-msn-18a behavior.
-function resolveWriteRecord(root, state, sessionId) {
+// msn-18a (advisor-digest-slice4 binding condition 2): `controlRoot` here is
+// resolvePipeline's lane/session/workflow reads are control-plane
+// (resolveContext.controlRoot = mainRoot) — a worktree-bound write must find
+// the SAME lane record main sees, never hard-deny with LANE_MISSING just
+// because its own checkout has no `.bee/lanes/<feature>.json` of its own.
+// Main/solo repos: controlRoot === root, byte-identical to the pre-msn-18a
+// behavior.
+//
+// msn-21: `controlRoot` is now a caller-supplied, ALREADY-RESOLVED value
+// (checkWrite/checkGitBashCommand resolve topology exactly once via
+// resolveWriteTopology below and thread the result through every branch that
+// needs it) rather than this function re-resolving resolveContext(root)
+// itself — a second, independent topology walk inside the SAME checkWrite
+// call (advisor-digest-slice4 binding condition 5: "resolveContext is THE
+// single git-common-dir resolver", applied inside this file too).
+function resolveWriteRecord(controlRoot, state, sessionId) {
   if (typeof sessionId === 'string' && sessionId.trim()) {
-    const { controlRoot } = resolveContext(root);
-    const resolved = resolvePipeline(controlRoot ?? root, { sessionId });
+    const resolved = resolvePipeline(controlRoot, { sessionId });
     if (!resolved.ok) {
       return { ok: false, reason: `bee lane guard: ${resolved.reason}` };
     }
-    return { ok: true, record: resolved.record };
+    return { ok: true, record: resolved.record, source: resolved.source };
   }
-  return { ok: true, record: state };
+  return { ok: true, record: state, source: 'default' };
+}
+
+// resolveWriteTopology(root, controlRootOverride) — the ONE resolveContext
+// call per checkWrite/checkGitBashCommand invocation, feeding every branch
+// below that needs topology (resolveWriteRecord's controlRoot, the
+// cross-worktree hold consultation, and the new workspace-ownership check).
+// Wrapped in try/catch: an invalid linked-worktree marker
+// (WorktreeLinkInvalidError) resolves to an all-null context — the SAME
+// fail-open outcome the pre-msn-21 resolveHoldTopology's own try/catch
+// always produced for that case (critical pattern 20260716: an over-denying
+// guard must never lock a session out of its own fix).
+//
+// `controlRootOverride`: when the caller already resolved topology itself
+// (the write-guard hook's own readHookContext/resolveRoots walk, exposed as
+// ctx.controlRoot since d69d81e) and passes it through, that value wins over
+// this function's own resolveContext(root).controlRoot — the adapter's
+// resolution is authoritative once it exists, rather than re-derived from
+// scratch a second time. Omitted (every existing library/test caller):
+// byte-identical to today, controlRoot comes from resolveContext(root) alone.
+function resolveWriteTopology(root, controlRootOverride) {
+  let ctx;
+  try {
+    ctx = resolveContext(root);
+  } catch {
+    ctx = { controlRoot: null, workspaceRoot: null, workspaceId: null, worktreeId: null };
+  }
+  const override =
+    typeof controlRootOverride === 'string' && controlRootOverride.trim() ? controlRootOverride.trim() : null;
+  const controlRoot = override || ctx.controlRoot || root;
+  return { ctx, controlRoot };
 }
 
 // ─── git write-exemption classification (D1/D3/D4, ige-2 / P46 / GH #1) ───
@@ -400,8 +445,9 @@ function resolveGitMutationPaths(cwd, subcommand, restTokens) {
  *                                    or a mutating command touching a
  *                                    non-bookkeeping path (today's refusal).
  */
-export function checkGitBashCommand(root, state, command, { cwd = root, sessionId = null } = {}) {
-  const recordResolution = resolveWriteRecord(root, state, sessionId);
+export function checkGitBashCommand(root, state, command, { cwd = root, sessionId = null, controlRoot: controlRootOverride = null } = {}) {
+  const { controlRoot } = resolveWriteTopology(root, controlRootOverride);
+  const recordResolution = resolveWriteRecord(controlRoot, state, sessionId);
   if (!recordResolution.ok) {
     return { allow: false, kind: 'lane', reason: recordResolution.reason };
   }
@@ -610,41 +656,96 @@ function isExclusivePath(root, normalizedPath) {
   return globs.some((glob) => globToRegExp(glob).test(normalizedPath));
 }
 
-// xwh-4: resolves the cross-worktree HOLD topology for the write guard —
-// same shape/naming as cells.mjs's resolveHoldTopology (xwh-3), rebased on
-// the `root` checkWrite already carries (the guard is a library call whose
-// `root` IS the checkout being written to, exactly like claim-next). Returns
-// `{ mainRoot, holder }` for the two topologies worth consulting:
-//   - an ORDINARY checkout: holder = 'main', mainRoot = the checkout itself.
-//   - a GRANTED linked worktree (its own storeRoot === its own worktreeRoot,
-//     i.e. resolveRoots did NOT fall back to main): holder = its
-//     git-verified id, mainRoot = resolveRoots' own `mainRoot`.
+// xwh-4/msn-21: resolves the cross-worktree HOLD topology for the write
+// guard — same shape/naming as cells.mjs's resolveHoldTopology (xwh-3), now
+// DERIVED from the single resolveWriteTopology(root) resolution checkWrite
+// already computed (msn-21: no second resolveRoots(root) walk of its own).
+// Returns `{ mainRoot, holder }` for the two topologies worth consulting:
+//   - an ORDINARY checkout (ctx.worktreeId is null): holder = 'main',
+//     mainRoot = controlRoot.
+//   - a GRANTED linked worktree (ctx.workspaceId === ctx.worktreeId — i.e.
+//     resolveContext did NOT fall back to the 'main' workspaceId default,
+//     the exact same "registered" condition the old storeRoot===worktreeRoot
+//     check proved): holder = ctx.workspaceId (its git-verified id),
+//     mainRoot = controlRoot.
 // Returns `null` for every other case — an UNGRANTED linked worktree
-// (storeRoot === mainRoot already: the shared main store's same-checkout
-// reservation guards above already govern it directly) and an
-// unresolvable/invalid checkout (resolveRoots threw) both fall through to
-// `null`, which checkWrite treats as "skip the foreign-hold consultation
+// (ctx.worktreeId set but ctx.workspaceId fell back to 'main': the shared
+// main store's same-checkout reservation guards above already govern it
+// directly) and an unresolvable/invalid checkout (ctx.workspaceRoot null —
+// resolveWriteTopology's own try/catch already turned a thrown
+// WorktreeLinkInvalidError into this same all-null shape) both fall through
+// to `null`, which checkWrite treats as "skip the foreign-hold consultation
 // entirely, byte-identical to before this cell" — FAIL-OPEN, never a deny.
 // An over-denying write guard can lock every session out of its own fix
 // (critical pattern 20260716), so no error path in this resolution may deny.
-function resolveHoldTopology(root) {
-  let resolution;
-  try {
-    resolution = resolveRoots(root);
-  } catch {
-    return null;
-  }
-  if (resolution.worktreeResolution === 'ordinary') {
-    return { mainRoot: resolution.workRoot || root, holder: 'main' };
-  }
-  if (resolution.worktreeResolution === 'linked-valid' && resolution.mainRoot && resolution.id) {
-    const granted =
-      resolution.storeRoot && resolution.worktreeRoot && path.resolve(resolution.storeRoot) === path.resolve(resolution.worktreeRoot);
-    if (granted) {
-      return { mainRoot: resolution.mainRoot, holder: resolution.id };
-    }
+function resolveHoldTopology(ctx, controlRoot) {
+  if (!ctx.workspaceRoot) return null;
+  if (!ctx.worktreeId) return { mainRoot: controlRoot, holder: 'main' };
+  if (ctx.workspaceId && ctx.workspaceId === ctx.worktreeId) {
+    return { mainRoot: controlRoot, holder: ctx.workspaceId };
   }
   return null;
+}
+
+// msn-21 (deny class (b) workspace scoping): the SAME 3-mode resolution
+// state.mjs's own (unexported) resolveWritePolicyMode applies for
+// applyWritePolicy (msn-20) — duplicated here as a tiny, deliberately
+// inline read rather than an added export, since guards.mjs's `files` scope
+// for this cell is the guard lib/hook/tests only. Kept BYTE-IDENTICAL in
+// logic to state.mjs's own resolver: 'observe'/'shared-disjoint' read
+// straight off config.guards.write_policy; anything else (including absent)
+// is the default 'isolated'.
+function resolveWritePolicyMode(config) {
+  const configured =
+    config && config.guards && typeof config.guards.write_policy === 'string' ? config.guards.write_policy.trim() : '';
+  if (configured === 'observe') return 'observe';
+  if (configured === 'shared-disjoint') return 'shared-disjoint';
+  return 'isolated';
+}
+
+// A session's own workspace identity, from its stamped `workspace_id`
+// (msn-19, createSession) — OMITTED on every legacy/pre-msn-19 session and
+// on any unreadable/missing session record, both of which read as 'main'
+// here (the same default resolveContext itself uses for an ordinary
+// checkout), never a throw or a guessed-blank value.
+function sessionWorkspaceId(controlRoot, sessionId) {
+  const session = readSession(controlRoot, sessionId);
+  return (session && typeof session.workspace_id === 'string' && session.workspace_id.trim()) || 'main';
+}
+
+// msn-21 (deny class (c)): does a DIFFERENT, LIVE session already hold
+// write ownership of ctx's workspace? Read-only — this never CLAIMS
+// ownership itself (that stays applyWritePolicy's job, msn-20); checkWrite
+// only asks whether the acting session is entitled to write here right now.
+// Returns `{ blocked: false }` when the workspace has never been registered
+// (WORKSPACE_MISSING — nobody has claimed it yet, matches "a solo caller
+// always becomes owner" byte-identical prohibition), when nobody/only the
+// acting session owns it, or when the current owner's heartbeat is stale
+// (a dead owner never blocks — this function does not reclaim, it simply
+// stops treating a crashed session as a live blocker, same posture
+// applyWritePolicy's own isOwnerLive predicate documents). Returns
+// `{ blocked: true, corrupt: true }` for a present-but-unreadable workspace
+// record (fail CLOSED, matching this file's reservationStoreCorrupt/
+// holdsStoreCorrupt precedent: missing is open, corrupt is denied — a torn
+// record could otherwise silently misreport who owns the workspace).
+// Otherwise `{ blocked: true, owner }` names the live foreign owner.
+function checkWorkspaceOwnership(controlRoot, ctx, sessionId) {
+  const workspaceId = (ctx && ctx.workspaceId) || 'main';
+  let workspace;
+  try {
+    workspace = readWorkspace(controlRoot, workspaceId);
+  } catch (err) {
+    if (err instanceof WorkspaceStoreError && err.code === 'WORKSPACE_MISSING') {
+      return { blocked: false };
+    }
+    return { blocked: true, corrupt: true };
+  }
+  const owner = workspace.write_owner_session;
+  if (!owner || owner === sessionId) return { blocked: false };
+  const ownerSession = readSession(controlRoot, owner);
+  const live = ownerSession ? !heartbeatStale(ownerSession) : false;
+  if (!live) return { blocked: false };
+  return { blocked: true, owner };
 }
 
 /**
@@ -701,8 +802,27 @@ function resolveHoldTopology(root) {
  *   SAME-workspace conflicts (the cross-session hold block above, and the
  *   swarming reservation block below) are untouched by this cell — only the
  *   cross-worktree branch's policy changed.
+ * - Workspace-ownership deny (msn-21, deny class (c), invariant-15
+ *   groundwork): right after the phase is known, before every phase-based
+ *   branch below — a write from a real session into a workspace a
+ *   DIFFERENT, LIVE session already write-owns (workspace-store.mjs, msn-19)
+ *   is denied, but ONLY where applyWritePolicy's 'isolated' mode governs
+ *   (msn-20 D3): sessionId present, config.guards.write_policy resolves to
+ *   'isolated' (the default — 'observe'/'shared-disjoint' opt out
+ *   entirely), the DEFAULT pipeline (a lane-bound session is untouched —
+ *   lanes keep their existing guard branches, CONTEXT.md's "Scope
+ *   boundaries"), and phase !== 'swarming' (the reservation block below IS
+ *   the sanctioned multi-session-in-one-checkout pattern). Never claims or
+ *   reclaims ownership itself — read-only, applyWritePolicy remains the one
+ *   writer. An unregistered workspace, no owner, the acting session's own
+ *   ownership, or a stale/dead owner's heartbeat never blocks; a
+ *   present-but-corrupt workspace record fails closed
+ *   ({allow:false, kind:'workspace-unreadable'}), matching this file's
+ *   holds-unreadable/worktree-holds-unreadable precedent. No new hard-block
+ *   CLASS beyond the three enumerated (must_haves prohibition) — this is
+ *   class (c) itself, not a fourth.
  */
-export function checkWrite(root, state, relPath, agentName = null, { sessionId = null } = {}) {
+export function checkWrite(root, state, relPath, agentName = null, { sessionId = null, controlRoot: controlRootOverride = null } = {}) {
   const normalized = normalizeRel(relPath);
 
   const directEditVerb = DIRECT_EDIT_DENY[normalized];
@@ -743,7 +863,14 @@ export function checkWrite(root, state, relPath, agentName = null, { sessionId =
     };
   }
 
-  const recordResolution = resolveWriteRecord(root, state, sessionId);
+  // msn-21: ONE topology resolution feeds every branch below that needs it
+  // (resolveWriteRecord's controlRoot, the SAME-workspace scoping on the
+  // cross-session hold check just below, the cross-worktree hold topology,
+  // and the new workspace-ownership check) — see resolveWriteTopology's own
+  // header for the fail-open/override contract.
+  const { ctx, controlRoot } = resolveWriteTopology(root, controlRootOverride);
+
+  const recordResolution = resolveWriteRecord(controlRoot, state, sessionId);
   if (!recordResolution.ok) {
     return { allow: false, kind: 'lane', reason: recordResolution.reason };
   }
@@ -763,15 +890,31 @@ export function checkWrite(root, state, relPath, agentName = null, { sessionId =
     }
     const holdConflicts = findSessionConflicts(root, acting, [normalized]);
     if (holdConflicts.length > 0) {
-      const holder = holdConflicts[0];
-      return {
-        allow: false,
-        kind: 'hold',
-        reason:
-          `bee cross-session hold: "${normalized}" is held by session "${holder.session}" ` +
-          `(agent ${holder.agent}, cell ${holder.cell}), ${holdExpiry(holder)}. ` +
-          'Wait for the hold to expire or coordinate with that session — a cross-session hold is a hard block (D3).',
-      };
+      // msn-21 (deny class (b), workspace-aware): a lease is keyed by REPO-
+      // RELATIVE path in the shared control-plane store — the same path
+      // string names a DIFFERENT physical file in a DIFFERENT workspace
+      // (main vs. a linked worktree), so a foreign session's exact lease
+      // only hard-blocks when it was taken from the SAME workspace this
+      // write is happening in. A session's workspace comes from its own
+      // stamped `workspace_id` (msn-19, createSession) — OMITTED on every
+      // legacy/pre-msn-19 session, which reads as 'main' here, exactly
+      // matching resolveContext's own 'main' default for an ordinary
+      // checkout — so a solo/single-workspace repo (every existing test in
+      // this file) sees byte-identical hard-block behavior: acting and
+      // holder both read 'main', always match.
+      const actingWorkspaceId = ctx.workspaceId || 'main';
+      const sameWorkspace = holdConflicts.filter((holder) => sessionWorkspaceId(controlRoot, holder.session) === actingWorkspaceId);
+      if (sameWorkspace.length > 0) {
+        const holder = sameWorkspace[0];
+        return {
+          allow: false,
+          kind: 'hold',
+          reason:
+            `bee cross-session hold: "${normalized}" is held by session "${holder.session}" ` +
+            `(agent ${holder.agent}, cell ${holder.cell}), ${holdExpiry(holder)}. ` +
+            'Wait for the hold to expire or coordinate with that session — a cross-session hold is a hard block (D3).',
+        };
+      }
     }
   }
 
@@ -787,7 +930,7 @@ export function checkWrite(root, state, relPath, agentName = null, { sessionId =
   // swallowed into an allow, never a deny (critical pattern 20260716: an
   // over-denying guard locks the session out of its own fix).
   {
-    const topology = resolveHoldTopology(root);
+    const topology = resolveHoldTopology(ctx, controlRoot);
     if (topology) {
       if (holdsStoreCorrupt(topology.mainRoot)) {
         return {
@@ -838,6 +981,58 @@ export function checkWrite(root, state, relPath, agentName = null, { sessionId =
   }
 
   const phase = record?.phase || 'idle';
+
+  // msn-21 (deny class (c), invariant-15 groundwork): a write into a
+  // workspace a DIFFERENT live session already owns (workspace-store.mjs,
+  // msn-19) is denied — but ONLY in the exact scope applyWritePolicy's
+  // 'isolated' mode governs (msn-20's own "default-path feature work"
+  // reasoning applied at write time, not just at startFeature): a real
+  // acting session (sessionless calls have no workspace to own — skip,
+  // matching applyWritePolicy's own "nothing here ACQUIRES ownership for a
+  // sessionless caller"), write_policy resolved to 'isolated' (config can
+  // opt out via 'observe'/'shared-disjoint', same resolution
+  // applyWritePolicy uses), the DEFAULT pipeline (recordResolution.source
+  // === 'default' — "lane flows keep their existing guard branches", D2's
+  // "Scope boundaries" locks lanes-as-UX unchanged), and phase !== 'swarming'
+  // ("swarming reservations keep their existing guard branches" — the
+  // reservation block just below IS the sanctioned multi-session-in-one-
+  // checkout pattern, same enforceIsolation:false reasoning
+  // applyWritePolicy's own header documents for cells claim/claim-next).
+  // No new hard-block CLASS beyond the three enumerated (must_haves
+  // prohibition) — this only widens WHEN class (c) fires, never adds a
+  // fourth.
+  if (
+    typeof sessionId === 'string' &&
+    sessionId.trim() &&
+    recordResolution.source === 'default' &&
+    phase !== 'swarming' &&
+    resolveWritePolicyMode(readConfig(root)) === 'isolated'
+  ) {
+    const ownership = checkWorkspaceOwnership(controlRoot, ctx, sessionId.trim());
+    if (ownership.blocked) {
+      if (ownership.corrupt) {
+        return {
+          allow: false,
+          kind: 'workspace-unreadable',
+          reason:
+            `bee workspace-ownership guard: the workspace record for "${ctx.workspaceId || 'main'}" ` +
+            `(${path.relative(controlRoot, workspacePath(controlRoot, ctx.workspaceId || 'main'))}) is present but ` +
+            'unreadable/corrupt — failing closed for a session-aware write rather than silently treating it as ' +
+            'unowned. FIX: inspect/restore the workspace record, then retry.',
+        };
+      }
+      return {
+        allow: false,
+        kind: 'workspace-ownership',
+        reason:
+          `bee write-policy: workspace "${ctx.workspaceId || 'main'}" is write-owned by session "${ownership.owner}" ` +
+          `— a second write-capable session defaults to isolation, never a shared write into the same checkout. ` +
+          'FIX: coordinate with that session, wait for its heartbeat to go stale, or start your own feature with ' +
+          '`bee.mjs state start-feature --isolate` (or set guards.auto_isolate to true in .bee/config.json) to work ' +
+          'in a fresh worktree instead.',
+      };
+    }
+  }
 
   if (TERMINAL_PHASES.has(phase)) {
     const config = readConfig(root);
