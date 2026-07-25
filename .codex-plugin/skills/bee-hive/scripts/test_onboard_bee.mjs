@@ -4546,6 +4546,201 @@ const RETIRED_HELPER_NAMES = [
   }
 }
 
+// --- 15. worktree-local coordination migration (msn-18d, advisor condition
+// F4): a linked worktree carrying pre-existing worktree-local sessions/
+// claims/runtime records (stranded by the msn-18a-c control-plane re-root
+// onto controlRootFor(root)) must MIGRATE them into main's control store, or
+// FAIL LOUD naming every conflicting record — never silently orphan them.
+// Same lightweight manual .git-worktree-marker fixture test_state.mjs's
+// resolveContext tests use (main .git/worktrees/<id> + reverse gitdir
+// pointer under work/.git) — no real `git worktree add` spawn needed.
+{
+  function makeLinkedWorktreeFixture(prefix) {
+    const main = fs.mkdtempSync(path.join(os.tmpdir(), `bee-msn18d-main-${prefix}-`));
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), `bee-msn18d-work-${prefix}-`));
+    fs.mkdirSync(path.join(main, ".git"));
+    const id = `msn18d-${prefix}-${crypto.randomBytes(4).toString("hex")}`;
+    const gitdir = path.join(main, ".git", "worktrees", id);
+    fs.mkdirSync(gitdir, { recursive: true });
+    fs.writeFileSync(path.join(work, ".git"), `gitdir: ${gitdir}\n`);
+    fs.writeFileSync(path.join(gitdir, "gitdir"), `${path.join(work, ".git")}\n`);
+    return { main, work, id };
+  }
+
+  function writeJson(filePath, value) {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  }
+
+  function cleanupFixture(...dirs) {
+    for (const dir of dirs) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // best-effort cleanup
+      }
+    }
+  }
+
+  // --- 15a. migrate happy path: a live worktree-local claim + session
+  // migrate idempotently into main's store; local copies removed. ----------
+  {
+    const { main, work } = makeLinkedWorktreeFixture("happy");
+    const home = makeFakeHome();
+    const sessionId = "sess-happy-1";
+    const cellId = "cell-happy-1";
+    const sessionRecord = { id: sessionId, started_at: "2026-07-01T00:00:00.000Z", last_heartbeat: "2026-07-01T00:00:00.000Z" };
+    const claimRecord = { cell: cellId, session: sessionId, epoch: 1 };
+    writeJson(path.join(work, ".bee", "sessions", `${sessionId}.json`), sessionRecord);
+    writeJson(path.join(work, ".bee", "claims", `${cellId}.json`), claimRecord);
+
+    try {
+      const plan = await runOnboard(["--repo-root", work, "--json"], home);
+      check(plan.payload?.status === "changes_needed",
+        "msn-18d happy path: plan mode reports changes_needed (pending migration + fresh onboard)",
+        JSON.stringify(plan.payload?.status));
+      const planActions = (plan.payload?.plan || []).map((i) => i.action);
+      check(planActions.includes("migrate_worktree_records"),
+        "msn-18d happy path: plan lists migrate_worktree_records",
+        JSON.stringify(planActions));
+      check(plan.payload?.worktree_migration?.blocked === false &&
+        plan.payload?.worktree_migration?.pending === 2,
+        "msn-18d happy path: worktree_migration reports 2 pending, not blocked",
+        JSON.stringify(plan.payload?.worktree_migration));
+
+      const apply = await runOnboard(["--repo-root", work, "--apply", "--json"], home);
+      check(apply.payload?.status === "applied", "msn-18d happy path: apply succeeds", JSON.stringify(apply.payload));
+      const appliedActions = (apply.payload?.applied || []).map((i) => i.action);
+      check(appliedActions.includes("migrate_worktree_records"),
+        "msn-18d happy path: applied list includes migrate_worktree_records",
+        JSON.stringify(appliedActions));
+
+      const mainSessionPath = path.join(main, ".bee", "sessions", `${sessionId}.json`);
+      const mainClaimPath = path.join(main, ".bee", "claims", `${cellId}.json`);
+      const workSessionPath = path.join(work, ".bee", "sessions", `${sessionId}.json`);
+      const workClaimPath = path.join(work, ".bee", "claims", `${cellId}.json`);
+      check(fs.existsSync(mainSessionPath), "msn-18d happy path: session record now lives in main's store");
+      check(fs.existsSync(mainClaimPath), "msn-18d happy path: claim record now lives in main's store");
+      check(!fs.existsSync(workSessionPath), "msn-18d happy path: local session copy removed");
+      check(!fs.existsSync(workClaimPath), "msn-18d happy path: local claim copy removed");
+      check(JSON.parse(fs.readFileSync(mainSessionPath, "utf8")).id === sessionId,
+        "msn-18d happy path: migrated session content preserved");
+      check(JSON.parse(fs.readFileSync(mainClaimPath, "utf8")).session === sessionId,
+        "msn-18d happy path: migrated claim content preserved");
+
+      // --- 15c. re-run is a no-op (idempotency): no local copies left to
+      // find, so a second run neither re-migrates nor reports blocked. -----
+      const replan = await runOnboard(["--repo-root", work, "--json"], home);
+      const replanActions = (replan.payload?.plan || []).map((i) => i.action);
+      check(!replanActions.includes("migrate_worktree_records"),
+        "msn-18d re-run: no more migration items once local copies are gone",
+        JSON.stringify(replanActions));
+      check(replan.payload?.worktree_migration?.pending === 0 &&
+        replan.payload?.worktree_migration?.blocked === false,
+        "msn-18d re-run: worktree_migration reports zero pending, still not blocked",
+        JSON.stringify(replan.payload?.worktree_migration));
+    } finally {
+      cleanupFixture(main, work, home);
+    }
+  }
+
+  // --- 15b. conflict variant: main already holds a DIFFERENT record under
+  // the same id -> loud abort, zero mutations anywhere in the whole apply
+  // (not just the migration). ------------------------------------------------
+  {
+    const { main, work } = makeLinkedWorktreeFixture("conflict");
+    const home = makeFakeHome();
+    const sessionId = "sess-conflict-1";
+    const localRecord = { id: sessionId, started_at: "2026-07-01T00:00:00.000Z", last_heartbeat: "2026-07-01T00:00:00.000Z" };
+    const mainRecord = { id: sessionId, started_at: "2026-07-01T00:00:00.000Z", last_heartbeat: "2026-07-02T09:00:00.000Z" };
+    const workSessionPath = path.join(work, ".bee", "sessions", `${sessionId}.json`);
+    const mainSessionPath = path.join(main, ".bee", "sessions", `${sessionId}.json`);
+    writeJson(workSessionPath, localRecord);
+    writeJson(mainSessionPath, mainRecord);
+
+    try {
+      const plan = await runOnboard(["--repo-root", work, "--json"], home);
+      check(plan.payload?.status === "blocked_worktree_migration_conflict",
+        "msn-18d conflict: plan mode reports blocked_worktree_migration_conflict",
+        JSON.stringify(plan.payload?.status));
+      check(plan.payload?.worktree_migration?.blocked === true &&
+        Array.isArray(plan.payload?.worktree_migration?.stranded) &&
+        plan.payload.worktree_migration.stranded.length === 1 &&
+        plan.payload.worktree_migration.stranded[0].id === sessionId &&
+        plan.payload.worktree_migration.stranded[0].kind === "session",
+        "msn-18d conflict: worktree_migration names the exact stranded record",
+        JSON.stringify(plan.payload?.worktree_migration));
+      check(typeof plan.payload?.reason === "string" && plan.payload.reason.includes(sessionId),
+        "msn-18d conflict: plan reason names the stranded record id", plan.payload?.reason);
+
+      const apply = await runOnboard(["--repo-root", work, "--apply", "--json"], home);
+      check(apply.status === 1, "msn-18d conflict: apply exits nonzero", JSON.stringify(apply.payload));
+      check(apply.payload?.status === "blocked_worktree_migration_conflict",
+        "msn-18d conflict: apply refusal reports blocked_worktree_migration_conflict",
+        JSON.stringify(apply.payload?.status));
+      check(apply.payload?.worktree_migration?.stranded?.length === 1,
+        "msn-18d conflict: apply refusal names the stranded record too",
+        JSON.stringify(apply.payload?.worktree_migration));
+
+      // Zero mutations anywhere: neither copy touched, nothing else onboarded.
+      check(JSON.stringify(JSON.parse(fs.readFileSync(workSessionPath, "utf8"))) === JSON.stringify(localRecord),
+        "msn-18d conflict: local record left byte-for-byte untouched");
+      check(JSON.stringify(JSON.parse(fs.readFileSync(mainSessionPath, "utf8"))) === JSON.stringify(mainRecord),
+        "msn-18d conflict: main's conflicting record left byte-for-byte untouched (never overwritten)");
+      check(!fs.existsSync(path.join(work, "AGENTS.md")),
+        "msn-18d conflict: the ENTIRE apply is refused, not just the migration (AGENTS.md never written)");
+      check(!fs.existsSync(path.join(work, ".bee", "onboarding.json")),
+        "msn-18d conflict: onboarding.json never written on a migration-conflict refusal");
+    } finally {
+      cleanupFixture(main, work, home);
+    }
+  }
+
+  // --- 15d. identical-content duplicate: already-migrated -> local copy
+  // removed silently, main's copy never rewritten. --------------------------
+  {
+    const { main, work } = makeLinkedWorktreeFixture("dup");
+    const home = makeFakeHome();
+    const cellId = "cell-dup-1";
+    // Same logical content, deliberately different KEY ORDER — proves the
+    // duplicate check is structural (canonicalJson), not a raw byte compare.
+    const workClaimPath = path.join(work, ".bee", "claims", `${cellId}.json`);
+    const mainClaimPath = path.join(main, ".bee", "claims", `${cellId}.json`);
+    fs.mkdirSync(path.dirname(workClaimPath), { recursive: true });
+    fs.mkdirSync(path.dirname(mainClaimPath), { recursive: true });
+    fs.writeFileSync(workClaimPath, `${JSON.stringify({ cell: cellId, session: "s1", epoch: 1 })}\n`, "utf8");
+    const mainOriginal = `${JSON.stringify({ epoch: 1, session: "s1", cell: cellId })}\n`;
+    fs.writeFileSync(mainClaimPath, mainOriginal, "utf8");
+
+    try {
+      const apply = await runOnboard(["--repo-root", work, "--apply", "--json"], home);
+      check(apply.payload?.status === "applied",
+        "msn-18d duplicate: apply succeeds (never blocked by an identical duplicate)",
+        JSON.stringify(apply.payload?.status));
+      check(!fs.existsSync(workClaimPath), "msn-18d duplicate: local duplicate copy removed");
+      check(fs.readFileSync(mainClaimPath, "utf8") === mainOriginal,
+        "msn-18d duplicate: main's copy is never rewritten (byte-identical to before)");
+    } finally {
+      cleanupFixture(main, work, home);
+    }
+  }
+
+  // --- 15e. main/solo checkouts: zero behavior change (must_have truth) ----
+  {
+    const solo = fs.mkdtempSync(path.join(os.tmpdir(), "bee-msn18d-solo-"));
+    fs.mkdirSync(path.join(solo, ".git"));
+    const home = makeFakeHome();
+    try {
+      const plan = await runOnboard(["--repo-root", solo, "--json"], home);
+      check(plan.payload !== null && !("worktree_migration" in plan.payload),
+        "msn-18d: an ordinary/main checkout's payload carries no worktree_migration key at all",
+        JSON.stringify(plan.payload?.worktree_migration));
+    } finally {
+      cleanupFixture(solo, home);
+    }
+  }
+}
+
 // --- suite-wide isolation invariant -----------------------------------------
 // Helper-level check: not a single spawn across the whole suite inherited the
 // real HOME/USERPROFILE unmodified. launchedHomes is populated by runOnboard

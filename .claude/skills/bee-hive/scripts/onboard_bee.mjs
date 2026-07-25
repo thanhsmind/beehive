@@ -65,6 +65,19 @@ import { fileURLToPath } from "node:url";
 import { detectCommands } from "../templates/lib/commands_detect.mjs";
 import { hashFile } from "../templates/lib/fsutil.mjs";
 import { classifySource } from "../templates/lib/source-identity.mjs";
+// msn-18d deliberately does NOT `import { resolveContext } from
+// "../templates/lib/state.mjs"` here, even though that is the real,
+// canonical resolver every leaf coordination module uses (advisor-digest-
+// slice4 binding condition 5). This file's OWN test suite (test_onboard_bee.
+// mjs's makeFakeSkillsRoot) ships a deliberately minimal fake state.mjs
+// (BEE_VERSION + COMMAND_KEYS only, to pin a controlled version for
+// skill-sync tests) at the fixture's templates/lib/state.mjs — a static
+// `import { resolveContext } from ...` against a module that does not
+// export that name fails the WHOLE ESM module load, uncatchable by any
+// try/catch in this file, before a single line of onboard_bee.mjs runs.
+// reservations.mjs carries the exact same kind of minimal, cycle-safe
+// replica for its own reasons (see its own module header) — the same
+// precedent applies here. See resolveWorktreeContextForMigration below.
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SCRIPTS_DIR = path.dirname(SCRIPT_PATH);
@@ -2514,6 +2527,295 @@ function trackedPathsNotices(repoRoot) {
   ];
 }
 
+// ---------- worktree-local coordination migration (msn-18d) ----------
+//
+// advisor-digest-slice4 binding condition F4: a linked worktree that
+// accumulated its OWN .bee/sessions, .bee/claims, .bee/runtime/workflows,
+// .bee/runtime/leases, and .bee/runtime/handoffs records (a granted
+// worktree's storeRoot, pre-msn-18a-c) now has those stores stranded —
+// msn-18a-c re-rooted every coordination read/write onto controlRootFor(root)
+// (always mainRoot, D2), so bee will never look at the worktree's own copies
+// again. onboarding a checkout that resolveContext identifies as a linked
+// worktree MUST either MIGRATE those stranded records into main's control
+// store or FAIL LOUD — never leave them silently orphaned.
+//
+// Migration semantics (documented choice, msn-18d): ALL-OR-NOTHING ACROSS
+// THE WHOLE MIGRATION SET, not per-store and not per-record. Every local
+// coordination file across every store is classified first (pure scan, zero
+// writes); if ANY record conflicts (main's store already holds a DIFFERENT
+// record under the same id), the ENTIRE apply is refused before a single
+// byte moves anywhere — not just the migration, the whole onboarding run —
+// matching the existing preflight-abort shape this file already uses for
+// skillSync.blocked and the codex-hybrid hook-write gate below. This is the
+// simplest rule that can never partially migrate: a human resolving one
+// stranded record never has to wonder whether nine others already moved out
+// from under them. A record that is unreadable or not valid JSON is treated
+// as a conflict too (never silently dropped, never blindly copied unread).
+
+// kind/relDir/match/id — one entry per coordination store this cell owns.
+// `relDir` is POSIX-joined (this repo's convention throughout this file: see
+// GITIGNORE_BLOCK_PATTERNS above), `match` filters a walked relative file
+// path (also POSIX, forward-slash-joined) to the shape that store's own
+// module gives its records, and `id` derives the logical record id from
+// that relative path.
+const WORKTREE_COORD_STORES = [
+  {
+    kind: "session",
+    relDir: ".bee/sessions",
+    match: (relFile) => /^[^/]+\.json$/.test(relFile),
+    id: (relFile) => relFile.slice(0, -".json".length),
+  },
+  {
+    kind: "claim",
+    relDir: ".bee/claims",
+    // claims.mjs also writes transient <cellId>.adopting gate files
+    // alongside <cellId>.json records — the .json filter already excludes
+    // them (they are locks, not persisted records worth migrating).
+    match: (relFile) => /^[^/]+\.json$/.test(relFile),
+    id: (relFile) => relFile.slice(0, -".json".length),
+  },
+  {
+    kind: "workflow",
+    relDir: ".bee/runtime/workflows",
+    match: (relFile) => /^[^/]+\/state\.json$/.test(relFile),
+    id: (relFile) => relFile.split("/")[0],
+  },
+  {
+    kind: "lease-cell",
+    relDir: ".bee/runtime/leases/cells",
+    match: (relFile) => /^[^/]+\.json$/.test(relFile),
+    id: (relFile) => relFile.slice(0, -".json".length),
+  },
+  {
+    kind: "lease-path",
+    relDir: ".bee/runtime/leases/paths",
+    // lease-store.mjs shards these under <prefix>/<hash>.json — the full
+    // relative path IS the natural composite id (no shorter id exists).
+    match: () => true,
+    id: (relFile) => relFile,
+  },
+  {
+    kind: "handoff",
+    relDir: ".bee/runtime/handoffs",
+    match: (relFile) => /^[^/]+\/\d+\.json$/.test(relFile),
+    id: (relFile) => relFile,
+  },
+];
+
+// walkJsonFiles — every *.json file under rootDir, returned as POSIX
+// (forward-slash) relative paths regardless of platform. Fail-open: a
+// missing/unreadable directory anywhere in the walk contributes zero files
+// rather than throwing (mirrors claims.mjs listSessionRecords/
+// workflow-store.mjs listWorkflows's own "absent store = no records" stance).
+function walkJsonFiles(rootDir) {
+  const results = [];
+  const stack = [""];
+  while (stack.length) {
+    const relDir = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(path.join(rootDir, relDir), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        stack.push(relPath);
+      } else if (entry.isFile() && entry.name.endsWith(".json")) {
+        results.push(relPath);
+      }
+    }
+  }
+  return results;
+}
+
+// canonicalJson — deterministic (sorted-key) JSON serialization used ONLY to
+// compare two records for "identical content"; never used for anything that
+// gets written to disk (a migrated record is always written with its
+// original, unmodified bytes — see applyWorktreeMigration below).
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+// classifyMigrationRecord — pure classification of ONE local coordination
+// file against its would-be home in main's control store. Never writes.
+//   status: "migrate"  — main has no record at this path; safe to move.
+//   status: "duplicate" — main already has a BYTE-for-structurally-identical
+//                          record; the local copy is stale leftover, safe to
+//                          delete without touching main.
+//   status: "conflict"  — main has a DIFFERENT record, or either copy is
+//                          unreadable/not valid JSON; never auto-resolved.
+function classifyMigrationRecord({ workspaceRoot, mainRoot, kind, relPath, id }) {
+  const localAbs = path.join(workspaceRoot, ...relPath.split("/"));
+  const mainAbs = path.join(mainRoot, ...relPath.split("/"));
+  let localRaw;
+  try {
+    localRaw = fs.readFileSync(localAbs, "utf8");
+  } catch (error) {
+    return { kind, path: relPath, id, status: "conflict", reason: `local record unreadable: ${String(error?.message || error)}` };
+  }
+  let localParsed;
+  try {
+    localParsed = JSON.parse(localRaw);
+  } catch {
+    return { kind, path: relPath, id, status: "conflict", reason: "local record is not valid JSON — cannot verify it is safe to migrate" };
+  }
+  if (!fs.existsSync(mainAbs)) {
+    return { kind, path: relPath, id, status: "migrate", localAbs, mainAbs, content: localRaw };
+  }
+  let mainParsed;
+  try {
+    mainParsed = JSON.parse(fs.readFileSync(mainAbs, "utf8"));
+  } catch (error) {
+    return { kind, path: relPath, id, status: "conflict", reason: `main store already has a record at this id but it is not valid JSON: ${String(error?.message || error)}` };
+  }
+  if (canonicalJson(localParsed) === canonicalJson(mainParsed)) {
+    return { kind, path: relPath, id, status: "duplicate", localAbs, mainAbs };
+  }
+  return {
+    kind,
+    path: relPath,
+    id,
+    status: "conflict",
+    reason: "main's control store already has a DIFFERENT record under this id",
+  };
+}
+
+// resolveWorktreeContextForMigration — a minimal, SELF-CONTAINED replica of
+// state.mjs's resolveRootsCore git-worktree walk-up (see the module-header
+// note next to this file's imports for why it is never imported). Computes
+// ONLY what migration detection needs: the physical workspace root, whether
+// it is a linked worktree, and the shared main root — not the full
+// resolveContext shape. Grants/workspaceId are irrelevant here: D2 made
+// controlRoot unconditionally mainRoot for every linked worktree regardless
+// of grant status (msn-18a), so this never reads worktree-grants.json.
+// Fails open to "ordinary, not a linked worktree" (worktreeId null) on
+// anything unresolvable or malformed — a broken worktree link is
+// resolveContext's own concern to fail loud about when something actually
+// tries to read/write coordination state there, not this scan's job to
+// diagnose (mirrors resolveContext's own "give up gracefully" posture for a
+// no-git-root repo).
+function locateGitRootForMigration(start) {
+  let dir = path.resolve(start || process.cwd());
+  while (true) {
+    const marker = path.join(dir, ".git");
+    if (fs.existsSync(marker)) return { workRoot: dir, marker };
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+function readGitdirFileForMigration(file, base) {
+  try {
+    let raw = fs.readFileSync(file, "utf8").trim();
+    if (!raw) return null;
+    if (raw.startsWith("gitdir:")) raw = raw.slice("gitdir:".length).trim();
+    return path.resolve(base, raw.replace(/\\/g, path.sep));
+  } catch {
+    return null;
+  }
+}
+
+function resolveWorktreeContextForMigration(startDir) {
+  const located = locateGitRootForMigration(startDir);
+  if (!located) {
+    return { workspaceRoot: null, mainRoot: null, worktreeId: null };
+  }
+  const { workRoot, marker } = located;
+  const ordinary = { workspaceRoot: workRoot, mainRoot: workRoot, worktreeId: null };
+  let isFile = false;
+  try {
+    isFile = fs.statSync(marker).isFile();
+  } catch {
+    return ordinary;
+  }
+  if (!isFile) {
+    return ordinary; // a real .git DIRECTORY: ordinary checkout.
+  }
+  const gitdir = readGitdirFileForMigration(marker, workRoot);
+  if (!gitdir) return ordinary;
+  const worktreesRoot = path.resolve(gitdir, "..");
+  const commonGitDir = path.resolve(worktreesRoot, "..");
+  if (path.basename(commonGitDir) !== ".git" || path.basename(worktreesRoot) !== "worktrees") {
+    return ordinary;
+  }
+  const id = path.basename(gitdir);
+  if (!id || id === "." || id === "..") return ordinary;
+  const reverse = readGitdirFileForMigration(path.join(gitdir, "gitdir"), gitdir);
+  if (!reverse || path.resolve(reverse) !== path.resolve(marker)) return ordinary;
+  return { workspaceRoot: workRoot, mainRoot: path.dirname(commonGitDir), worktreeId: id };
+}
+
+// detectWorktreeMigration — the read-only scan. `applicable` is false for
+// every ordinary/main/solo checkout (byte-identical, zero behavior change —
+// must_have truth) and true only when this checkout is a linked worktree
+// whose main root differs from its own workspace root.
+function detectWorktreeMigration(repoRoot) {
+  const context = resolveWorktreeContextForMigration(repoRoot);
+  if (!context.workspaceRoot || !context.worktreeId || context.mainRoot === context.workspaceRoot) {
+    return {
+      applicable: false,
+      workspaceRoot: context.workspaceRoot || null,
+      mainRoot: context.mainRoot || null,
+      records: [],
+      conflicts: [],
+    };
+  }
+  const { workspaceRoot, mainRoot } = context;
+  const records = [];
+  for (const store of WORKTREE_COORD_STORES) {
+    const baseDir = path.join(workspaceRoot, ...store.relDir.split("/"));
+    for (const relFile of walkJsonFiles(baseDir)) {
+      if (!store.match(relFile)) continue;
+      const relPath = `${store.relDir}/${relFile}`;
+      const id = store.id(relFile);
+      records.push(classifyMigrationRecord({ workspaceRoot, mainRoot, kind: store.kind, relPath, id }));
+    }
+  }
+  const conflicts = records.filter((r) => r.status === "conflict");
+  return { applicable: true, workspaceRoot, mainRoot, records, conflicts };
+}
+
+// buildMigrationConflictReason — the loud, exact-list failure message (never
+// silent orphaning): every stranded record's path/id/kind/reason, plus the
+// fix.
+function buildMigrationConflictReason(conflicts) {
+  const lines = conflicts.map((c) => `  - [${c.kind}] ${c.path} (id: ${c.id}) — ${c.reason}`);
+  return (
+    `${conflicts.length} worktree-local coordination record(s) could not be migrated into main's ` +
+    `control store — onboarding refused UNTOUCHED, no partial migration:\n${lines.join("\n")}\n` +
+    "FIX: compare each local copy against main's, keep the correct one, delete the stale one by " +
+    "hand, then re-run onboarding."
+  );
+}
+
+// applyWorktreeMigration — the only function in this section that writes.
+// Only ever called after detectWorktreeMigration reported zero conflicts
+// (both call sites below check that first). "migrate" records are copied
+// verbatim (original bytes, not the canonicalized form) then removed
+// locally; "duplicate" records are simply removed locally (main already has
+// the same content) — idempotent by construction: a second run finds
+// nothing left to walk.
+function applyWorktreeMigration(migration) {
+  for (const record of migration.records) {
+    if (record.status === "migrate") {
+      writeFileAtomic(record.mainAbs, record.content);
+      fs.rmSync(record.localAbs, { force: true });
+    } else if (record.status === "duplicate") {
+      fs.rmSync(record.localAbs, { force: true });
+    }
+  }
+}
+
 // ---------- plan computation ----------
 
 function blockedSourceIdentitySkillSync(repoRoot, options, identity) {
@@ -2559,6 +2861,20 @@ function computePlan(
   // block below and the managed-set gate (buildManagedVersions/subsetManaged)
   // so the two can never drift from each other.
   const codexHybrid = pluginSource && runtimeCoversCodex(runtime);
+
+  // 0. worktree-local coordination migration (msn-18d): computed before the
+  // release-identity gate below since it never depends on it, so even a
+  // blocked-source-identity plan/apply still reports pending/stranded
+  // migration state honestly.
+  const worktreeMigration = detectWorktreeMigration(repoRoot);
+  if (worktreeMigration.applicable && !worktreeMigration.conflicts.length && worktreeMigration.records.length) {
+    plan.push({
+      action: "migrate_worktree_records",
+      path: ".bee/ (worktree-local coordination stores)",
+      count: worktreeMigration.records.length,
+    });
+  }
+
   const releaseIdentity = readSourceReleaseIdentity();
   if (releaseIdentity.blocked) {
     return {
@@ -2573,6 +2889,7 @@ function computePlan(
         releaseIdentity,
       ),
       codexHybrid,
+      worktreeMigration,
     };
   }
   const beeVersion = releaseIdentity.version;
@@ -2829,7 +3146,7 @@ function computePlan(
     }
   }
 
-  return { plan, beeVersion, renderedBlock, renderedGitignoreBlock, desiredManaged, skillSync, codexHybrid };
+  return { plan, beeVersion, renderedBlock, renderedGitignoreBlock, desiredManaged, skillSync, codexHybrid, worktreeMigration };
 }
 
 // Legacy-global version-parity refresh items are a best-effort side pass over
@@ -2987,7 +3304,7 @@ function applyPlan(
     runtime = "both",
   } = {},
 ) {
-  const { plan, beeVersion, renderedBlock, renderedGitignoreBlock, desiredManaged, skillSync, codexHybrid } =
+  const { plan, beeVersion, renderedBlock, renderedGitignoreBlock, desiredManaged, skillSync, codexHybrid, worktreeMigration } =
     computePlan(repoRoot, {
       repoHooks,
       claudeMd,
@@ -2996,6 +3313,23 @@ function applyPlan(
       pluginSource,
       runtime,
     });
+
+  // msn-18d / advisor condition F4: the worktree-migration preflight. Checked
+  // FIRST, before every other write gate below (including codexHybrid and
+  // skillSync.blocked) — an untrustworthy/stranded coordination store must
+  // never let the rest of onboarding proceed. ALL-OR-NOTHING: a single
+  // conflicting record anywhere refuses the ENTIRE apply, zero mutations,
+  // every stranded record named (see buildMigrationConflictReason).
+  if (worktreeMigration.conflicts.length) {
+    return {
+      blocked: {
+        status: "blocked_worktree_migration_conflict",
+        reason: buildMigrationConflictReason(worktreeMigration.conflicts),
+        stranded: worktreeMigration.conflicts.map((c) => ({ path: c.path, id: c.id, kind: c.kind, reason: c.reason })),
+      },
+      beeVersion,
+    };
+  }
 
   // GH #22 P0-1 / advisor R3: the codex-hybrid write preflight. Checked
   // BEFORE the skillSync.blocked branch below and before any write anywhere
@@ -3243,6 +3577,13 @@ function applyPlan(
       }
       case "write_onboarding": {
         // handled after the loop so managed versions reflect the final state
+        break;
+      }
+      case "migrate_worktree_records": {
+        // Safe by construction: applyPlan already refused above (zero
+        // mutations) when worktreeMigration.conflicts was non-empty, so
+        // every record here is "migrate" or "duplicate".
+        applyWorktreeMigration(worktreeMigration);
         break;
       }
       case "sync_skill": {
@@ -3534,15 +3875,22 @@ export function main(argv = process.argv.slice(2)) {
       codexHybrid: args.pluginSource && runtimeCoversCodex(args.runtime),
     });
     if (!args.apply) {
-      const { plan, beeVersion, skillSync } = computePlan(repoRoot, options);
+      const { plan, beeVersion, skillSync, worktreeMigration } = computePlan(repoRoot, options);
+      // msn-18d: the migration conflict gate outranks EVERY other status,
+      // including skillSync.blocked — an untrustworthy coordination store is
+      // more fundamental than a stale skill tree, and plan mode must report
+      // it honestly even though (being read-only) it never refuses to run.
+      const migrationBlocked = worktreeMigration.conflicts.length > 0;
       const payload = {
         repo_root: repoRoot,
         // Blocked-first across targets (D5): any blocked target's status wins.
-        status: skillSync.blocked
-          ? skillSync.blocked.status
-          : coreChangesNeeded(plan)
-            ? "changes_needed"
-            : "up_to_date",
+        status: migrationBlocked
+          ? "blocked_worktree_migration_conflict"
+          : skillSync.blocked
+            ? skillSync.blocked.status
+            : coreChangesNeeded(plan)
+              ? "changes_needed"
+              : "up_to_date",
         // Source identity of THIS launcher (DIST-04, SRC-01): the same detector
         // status uses. Report-only — the authoritative-source decision stays
         // with identityOk/computeSkillSync; this only names what ran.
@@ -3566,7 +3914,19 @@ export function main(argv = process.argv.slice(2)) {
           ...hooksTransitionNotices,
         ],
       };
-      if (skillSync.blocked) {
+      // Only surfaced for a linked worktree (applicable) — an ordinary/main/
+      // solo checkout's payload carries no worktree_migration key at all
+      // (must_have truth: zero behavior change there).
+      if (worktreeMigration.applicable) {
+        payload.worktree_migration = {
+          blocked: migrationBlocked,
+          pending: worktreeMigration.records.filter((r) => r.status !== "conflict").length,
+          stranded: worktreeMigration.conflicts.map((c) => ({ path: c.path, id: c.id, kind: c.kind, reason: c.reason })),
+        };
+      }
+      if (migrationBlocked) {
+        payload.reason = buildMigrationConflictReason(worktreeMigration.conflicts);
+      } else if (skillSync.blocked) {
         // Reporting is not failing: plan mode exits 0 with the blocked status.
         // Top-level reason/versions are blocked-first aggregates (first
         // blocked target's versions; every blocked target named in reason).
@@ -3598,6 +3958,11 @@ export function main(argv = process.argv.slice(2)) {
       // otherwise.
       if (result.host_items !== undefined) {
         refusalPayload.host_items = result.host_items;
+      }
+      // msn-18d: a worktree-migration-conflict refusal names every stranded
+      // record machine-readably, same shape as plan mode's worktree_migration.
+      if (result.blocked.stranded !== undefined) {
+        refusalPayload.worktree_migration = { blocked: true, stranded: result.blocked.stranded };
       }
       emit(refusalPayload, args.json);
       return 1;
