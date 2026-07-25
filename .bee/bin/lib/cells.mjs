@@ -18,6 +18,7 @@ import {
   readConfig,
   NO_TEST_SENTINEL,
   isNoTestRepo,
+  controlRootFor,
 } from './state.mjs';
 // fsh-11 (D2/D4): claim-next's cross-session selection + throw-safe two-store
 // claim needs claims.mjs's atomic primitive, reservations.mjs's cross-session
@@ -377,7 +378,12 @@ export function normalizeFailureSignature(output) {
 // expiry clock, still recorded verbatim).
 function appendAttempt(root, id, trace, { verdict, failureSignature = null, note = null }) {
   const attempts = Array.isArray(trace.attempts) ? trace.attempts : [];
-  const claim = readClaim(root, id);
+  // msn-18b: claims are control-plane (PLANE RULE) — resolved through
+  // controlRootFor so an attempt appended from a linked worktree reads the
+  // SAME claim record main sees, never a worktree-local one. `id`/`trace`
+  // themselves stay entirely on the cell-file plane (unaffected — cell files
+  // are workspace-local, never re-rooted).
+  const claim = readClaim(controlRootFor(root), id);
   return {
     ...trace,
     attempts: [
@@ -416,7 +422,8 @@ function appendAttempt(root, id, trace, { verdict, failureSignature = null, note
 // outlives the "claimed" status it was created for.
 function releaseClaimFileBestEffort(root, id) {
   try {
-    clearClaim(root, id);
+    // msn-18b: claims are control-plane — see appendAttempt's comment above.
+    clearClaim(controlRootFor(root), id);
   } catch {
     // never let claim-file cleanup fail a cell transition that already committed
   }
@@ -436,7 +443,8 @@ function releaseClaimFileBestEffort(root, id) {
 // LIVE claim carrying a session that differs from the caller ⇒ typed
 // NOT_OWNER, naming owner + expiry in claimCellFile's own wording.
 function checkClaimOwnership(root, id, sessionId) {
-  const claim = readClaim(root, id);
+  // msn-18b: claims are control-plane — see appendAttempt's comment above.
+  const claim = readClaim(controlRootFor(root), id);
   if (!claim || !isClaimActive(claim)) return { ok: true };
   const owner = claim.session;
   if (!owner) return { ok: true };
@@ -2684,8 +2692,17 @@ export async function claimCellCrossSession(root, { sessionId, worker, cellId, t
   }
   const session = sessionId == null ? null : sessionId.trim();
   const id = cellId.trim();
+  // msn-18b (PLANE RULE): the claim itself is control-plane — resolved
+  // through controlRootFor so a claim taken from a linked worktree lands in
+  // main's shared claims store (the topology this cell's must_have tests),
+  // never a worktree-local one. `id` is the join key back to the cell FILE,
+  // which stays on the caller's own workspace-local `root` below (readCell/
+  // claimCell) — same-plane claim-to-cell resolution: any workspace can
+  // resolve the shared claim by cell id, then read ITS OWN local cell file
+  // for that same id.
+  const controlRoot = controlRootFor(root);
 
-  const fileClaim = claimCellFile(root, session, id, ttl);
+  const fileClaim = claimCellFile(controlRoot, session, id, ttl);
   if (!fileClaim.ok) return fileClaim; // typed CLAIMED failure, propagated as-is
 
   // D2+Δ2: budget check runs INSIDE the O_EXCL critical section — only after
@@ -2704,7 +2721,7 @@ export async function claimCellCrossSession(root, { sessionId, worker, cellId, t
   if (cellForBudget) {
     const budgetCheck = checkCellBudgets(cellForBudget);
     if (!budgetCheck.ok) {
-      releaseClaim(root, session, id);
+      releaseClaim(controlRoot, session, id);
       return budgetCheck;
     }
   }
@@ -2717,7 +2734,7 @@ export async function claimCellCrossSession(root, { sessionId, worker, cellId, t
     const cell = await claimCell(root, id, worker, { sessionId: session });
     return { ok: true, cell, claim: fileClaim.claim };
   } catch (err) {
-    releaseClaim(root, session, id); // never orphan the claim file we just created
+    releaseClaim(controlRoot, session, id); // never orphan the claim file we just created
     return {
       ok: false,
       code: 'CLAIM_CELL_FAILED',
@@ -2826,11 +2843,16 @@ export async function claimNextCell(root, { sessionId, worker, ttl } = {}) {
     throw new Error('claimNextCell: worker is required.');
   }
   const session = sessionId.trim();
+  // msn-18b (PLANE RULE): claims/sessions are control-plane — resolved
+  // through controlRootFor once here and reused for every claims.mjs/
+  // reservations.mjs touch below. Cell-file reads (readyCells/readState/
+  // listLanes) stay on the caller's own workspace-local `root`.
+  const controlRoot = controlRootFor(root);
 
   // Unconditional, first thing — the production sweep trigger (C10). A swept
   // cell's stale claims-store file is gone by the time selection below reads
   // anything, so it is claimable in this exact pass.
-  await sweepExpiredClaims(root);
+  await sweepExpiredClaims(controlRoot);
 
   const resolved = resolvePipeline(root, { sessionId: session });
   if (!resolved.ok) {
@@ -2844,7 +2866,7 @@ export async function claimNextCell(root, { sessionId, worker, ttl } = {}) {
   const holdFree = (cell) => {
     const files = Array.isArray(cell.files) ? cell.files : [];
     if (files.length === 0) return true;
-    if (findSessionConflicts(root, session, files).length > 0) return false;
+    if (findSessionConflicts(controlRoot, session, files).length > 0) return false;
     // xwh-3: read-only foreign-hold consultation, same silent-skip posture
     // as the same-checkout reservation check just above — a missing ledger
     // (findForeignHolds' own fail-open read) or an unresolvable/ungranted
@@ -2885,12 +2907,24 @@ export async function claimNextCell(root, { sessionId, worker, ttl } = {}) {
     // heartbeatStale's own "missing/unparseable = stale" posture: it can
     // never mark a lane as live-owned.
     const liveOwnedLanes = new Set();
-    for (const record of listSessionRecords(root)) {
+    for (const record of listSessionRecords(controlRoot)) {
       if (!record || record.id === session) continue;
       const boundLane = typeof record.lane === 'string' ? record.lane.trim() : '';
       if (!boundLane || heartbeatStale(record)) continue;
       liveOwnedLanes.add(boundLane);
     }
+    // msn-18b: deliberately NOT re-rooted. Lane records are themselves still
+    // written by bee.mjs's own lane-mutation handlers (writeLane/
+    // updateWorkflowAssumingLock, `state gate`/`state set --lane`) on the
+    // bare, workspace-local root — that write side is msn-18c's scope, not
+    // this cell's. Re-rooting only this READ ahead of its own writers would
+    // desync the pool from the granted-worktree lanes actually being
+    // mutated, trading a mostly-harmless staleness gap for a
+    // silently-wrong one. `liveOwnedLanes` above IS control-rooted (session
+    // binding is unambiguously control-plane and has no such writer-lag
+    // risk); GH#20's anti-steal check therefore degrades gracefully — it may
+    // simply not see every lane a granted worktree has, never crash or
+    // mis-claim.
     for (const lane of listLanes(root)) {
       if (!lane.feature || lane.feature === ownFeature || pipelines.has(lane.feature)) continue;
       if (liveOwnedLanes.has(lane.feature)) continue; // GH#20: a lane actively owned by another live session is never pooled

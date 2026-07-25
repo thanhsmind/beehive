@@ -1004,6 +1004,10 @@ const EXPECTED_STATE_EXPORTS = [
   // data-plane split resolveRoots now compat-wraps.
   'resolveContext',
   'WorktreeLinkInvalidError',
+  // msn-18b: exported (was internal-only since msn-18a) so cells.mjs/
+  // recovery.mjs/compaction.mjs can re-root their own claims/sessions call
+  // sites onto the shared control plane — see those modules' own comments.
+  'controlRootFor',
   'defaultState',
   'statePath',
   'readState',

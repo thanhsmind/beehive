@@ -30,7 +30,7 @@ import {
   readClaim,
   isClaimActive,
 } from './claims.mjs';
-import { readLane, readConfig } from './state.mjs';
+import { readLane, readConfig, controlRootFor } from './state.mjs';
 import { listCells } from './cells.mjs';
 import { activeDecisions } from './decisions.mjs';
 import { captureQueuePath } from './capture.mjs';
@@ -217,16 +217,20 @@ export function lastDurableSettlement(root, lane = null, injected = null) {
 // non-expired cell claim (D1's "claimed cells owned by that session" signal).
 // Reuses claims.mjs's own reader/expiry primitives; no duplicated logic.
 function sessionHasActiveClaim(root, sessionId, nowMs) {
+  // msn-18b (PLANE RULE): claims are control-plane — resolved through
+  // controlRootFor so recovery scanning from a linked worktree sees the
+  // SAME claim store main sees, never a worktree-local one.
+  const controlRoot = controlRootFor(root);
   let entries;
   try {
-    entries = fs.readdirSync(claimsDir(root));
+    entries = fs.readdirSync(claimsDir(controlRoot));
   } catch {
     return false;
   }
   for (const entry of entries) {
     if (!entry.endsWith('.json')) continue;
     const cellId = entry.slice(0, -'.json'.length);
-    const claim = readClaim(root, cellId);
+    const claim = readClaim(controlRoot, cellId);
     if (claim && claim.session === sessionId && isClaimActive(claim, nowMs)) return true;
   }
   return false;
@@ -315,7 +319,10 @@ export function detectCrashCandidates(
   { projectsRoot = claudeProjectsRoot(), projectPath = root, now = Date.now(), currentSessionId = null } = {},
 ) {
   const resolvedCurrent = resolveSessionId({ flag: currentSessionId });
-  const sessions = listSessionRecords(root);
+  // msn-18b (PLANE RULE): sessions are control-plane — see
+  // sessionHasActiveClaim's own comment above.
+  const controlRoot = controlRootFor(root);
+  const sessions = listSessionRecords(controlRoot);
   if (!sessions.length) return [];
 
   const roots = scanTranscriptRoots(root, { projectsRoot });
@@ -388,6 +395,14 @@ export function detectCrashCandidates(
 
     let workSignal = null;
     if (lane) {
+      // msn-18b: deliberately NOT re-rooted — lane records are still
+      // written by bee.mjs's own bare-root lane-mutation handlers (msn-18c
+      // scope, not this cell's). Re-rooting only this read would look at
+      // main's copy of a lane a granted worktree is actually mutating
+      // locally, turning a stale-but-harmless signal into a wrong one (a
+      // real in-flight worktree lane could read as absent/terminal at main
+      // and wrongly suppress the 'lane' work signal). Same reasoning as
+      // cells.mjs's claimNextCell pool-building listLanes call.
       const laneRecord = readLane(root, lane);
       if (laneRecord && !TERMINAL_LANE_PHASES.has(laneRecord.phase)) {
         workSignal = 'lane';

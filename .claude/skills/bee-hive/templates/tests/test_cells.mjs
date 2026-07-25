@@ -57,6 +57,7 @@ import {
   CHANGE_CLASSES,
 } from '../lib/cells.mjs';
 import { claimCellFile, readClaim, claimPath } from '../lib/claims.mjs';
+import { reserve } from '../lib/reservations.mjs';
 import { activeDecisions } from '../lib/decisions.mjs';
 import { writeJsonAtomic } from '../lib/fsutil.mjs';
 import { acquireStoreLockOnceSync } from '../lib/lock.mjs';
@@ -2419,6 +2420,105 @@ await check('census: every logDecision( call inside .bee/bin/** and skills/bee-h
     offenders.length === 0,
     `every internal logDecision( call must carry a tags: array (docs/decisions/taxonomy.json makes an untagged event a hard refusal) — offenders: ${offenders.join(', ') || '(none)'}`,
   );
+});
+
+// ─── msn-18b: linked-worktree claim topology (must_have, red-first per the
+// cell contract) — a claim taken from a linked worktree lands in MAIN's
+// control store, while the CELL FILE itself stays workspace-local (PLANE
+// RULE), and the claim resolves back to the SAME cell from the claiming
+// workspace (same-plane claim-to-cell resolution). Same manual worktree-
+// fixture pattern test_state.mjs uses for resolveRoots/resolveContext.
+
+function makeLinkedWorktreeCellFixture(mainPrefix, workPrefix, id) {
+  const main = fs.mkdtempSync(path.join(os.tmpdir(), mainPrefix));
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), workPrefix));
+  fs.mkdirSync(path.join(main, '.git'));
+  const gitdir = path.join(main, '.git', 'worktrees', id);
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(work, '.git'), `gitdir: ${gitdir}\n`);
+  fs.writeFileSync(path.join(gitdir, 'gitdir'), path.join(work, '.git') + '\n');
+
+  for (const dir of [main, work]) {
+    fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
+    writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+    fs.mkdirSync(path.join(dir, 'docs', 'decisions'), { recursive: true });
+    writeJsonAtomic(path.join(dir, 'docs', 'decisions', 'taxonomy.json'), {
+      schema_version: 1,
+      tags: [{ name: 'cells', description: 'Work cells: authoring, claims, caps' }],
+      candidates: [],
+    });
+  }
+  // Gate 3 pre-approved — the gate check reads the CLAIMING workspace's own
+  // state.json (claimCell's gateSource = laneRecord || readState(root)),
+  // which stays workspace-local regardless of msn-18b — a linked worktree
+  // needs its OWN gate approval, exactly like today.
+  writeJsonAtomic(path.join(work, '.bee', 'state.json'), {
+    schema_version: '1.0',
+    phase: 'swarming',
+    feature: 'topo-feat',
+    mode: 'standard',
+    approved_gates: { context: true, shape: true, execution: true, review: false },
+    workers: [],
+  });
+  return { main, work };
+}
+
+await check('TOPOLOGY (red-first): claimCellCrossSession from a linked worktree lands the claims-store record in MAIN, while the cell FILE stays in the claiming workspace', async () => {
+  const { main, work } = makeLinkedWorktreeCellFixture('bee-topo-cells-main-', 'bee-topo-cells-work-', 'topo-cells-fixture');
+  addCell(work, makeCell('topo-claim-1', { feature: 'topo-feat' }));
+
+  const claimed = await claimCellCrossSession(work, { sessionId: 'topo-sess-1', worker: 'topo-worker-1', cellId: 'topo-claim-1' });
+  assert(claimed.ok === true, `precondition: claim from the worktree must succeed, got ${JSON.stringify(claimed)}`);
+
+  // The claims-store record is visible from MAIN — the whole point of the
+  // control-plane split this cell implements.
+  const claimAtMain = readClaim(main, 'topo-claim-1');
+  assert(claimAtMain && claimAtMain.session === 'topo-sess-1', `expected the claim to be readable from main's store, got ${JSON.stringify(claimAtMain)}`);
+
+  // The worktree's OWN local claims dir never received a copy — pre-msn-18b
+  // baseline was the exact opposite (claim landed ONLY in the worktree's own
+  // .bee/claims/, invisible from main); this is the red-first flip.
+  const workClaimPath = claimPath(work, 'topo-claim-1');
+  assert(!fs.existsSync(workClaimPath), `the worktree's own claims dir must NOT hold a copy — expected it physically at main instead, got a file at ${workClaimPath}`);
+  assert(fs.existsSync(claimPath(main, 'topo-claim-1')), 'the claim must physically exist under MAIN\'s .bee/claims/');
+
+  // Same-plane claim-to-cell resolution: the cell FILE itself stays in the
+  // CLAIMING workspace (PLANE RULE) — never migrated to main.
+  const cellAtWork = readCell(work, 'topo-claim-1');
+  assert(cellAtWork && cellAtWork.status === 'claimed', 'the cell file must be readable (and reflect claimed) from the claiming WORKSPACE');
+  assert(!fs.existsSync(path.join(main, '.bee', 'cells', 'topo-claim-1.json')), 'the cell file must NOT have been written to main — cells/backlog/decisions stay workspace-local');
+
+  // A second claimant, querying from MAIN directly, sees the SAME live
+  // claim and is correctly refused — proving the shared store is really
+  // shared, not just readable one-way.
+  const secondFromMain = await claimCellCrossSession(main, { sessionId: 'topo-sess-2', worker: 'topo-worker-2', cellId: 'topo-claim-1' });
+  assert(secondFromMain.ok === false && secondFromMain.code === 'CLAIMED', `a second claim attempt from MAIN on the same cell id must see the worktree's live claim and refuse, got ${JSON.stringify(secondFromMain)}`);
+});
+
+await check('TOPOLOGY: claimNextCell\'s cross-session hold check (findSessionConflicts) sees a reservation made from a DIFFERENT worktree of the same main', async () => {
+  const { main, work } = makeLinkedWorktreeCellFixture('bee-topo-holdcheck-main-', 'bee-topo-holdcheck-work-', 'topo-holdcheck-fixture');
+  addCell(work, makeCell('topo-hold-1', { feature: 'topo-feat', files: ['src/topo/held.ts'] }));
+
+  const otherSessionReservation = await reserve(main, {
+    agent: 'other-worker',
+    cell: 'other-cell',
+    path: 'src/topo/held.ts',
+    session: 'other-live-session',
+  });
+  assert(otherSessionReservation.ok === true, 'precondition: another session\'s reservation at main must succeed');
+
+  // claimNextCell, run from the WORKTREE, must see that main-side hold and
+  // skip the cell rather than claiming over it.
+  const result = await claimNextCell(work, { sessionId: 'topo-sess-holdcheck', worker: 'topo-worker-holdcheck' });
+  assert(result.ok === false && result.code === 'NO_APPROVED_WORK', `expected claim-next to see the cross-worktree hold and refuse NO_APPROVED_WORK, got ${JSON.stringify(result)}`);
+});
+
+await check('solo/main repos byte-identical: claimCellCrossSession behaves exactly as before this cell (no linked worktree involved)', async () => {
+  addCell(root, makeCell('topo-solo-1'));
+  const claimed = await claimCellCrossSession(root, { sessionId: 'topo-solo-sess', worker: 'topo-solo-worker', cellId: 'topo-solo-1' });
+  assert(claimed.ok === true, `byte-identical solo behavior expected, got ${JSON.stringify(claimed)}`);
+  assert(readClaim(root, 'topo-solo-1').session === 'topo-solo-sess', 'claim visible at the same root, unchanged');
+  assert(readCell(root, 'topo-solo-1').status === 'claimed', 'cell file visible at the same root, unchanged');
 });
 
 printSummaryAndExit();

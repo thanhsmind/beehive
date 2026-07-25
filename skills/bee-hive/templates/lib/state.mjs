@@ -925,14 +925,25 @@ export function findRepoRoot(startDir) {
  * controlRootFor(root) — resolveContext(root).controlRoot, with a fallback
  * to `root` itself when nothing is resolvable at all (no git root, no
  * onboarding marker reachable — resolveContext's own "give up" case) so a
- * caller never has to null-check before using the result. Internal helper:
- * this is how state.mjs re-roots its OWN claims/sessions/workflow-store call
- * sites (msn-18a) onto the shared control plane, so a `root` that happens to
- * be a linked worktree's checkout still reaches the SAME store main uses.
+ * caller never has to null-check before using the result. This is how
+ * state.mjs re-roots its OWN claims/sessions/workflow-store call sites
+ * (msn-18a) onto the shared control plane, so a `root` that happens to be a
+ * linked worktree's checkout still reaches the SAME store main uses.
  * Main/solo repos: byte-identical to `root` (controlRoot === workspaceRoot
  * there).
+ *
+ * Exported as of msn-18b: cells.mjs/recovery.mjs/compaction.mjs import this
+ * directly (none of them import state.mjs in a way that cycles back here —
+ * verified against every module state.mjs itself imports). reservations.mjs
+ * CANNOT import this (state.mjs imports reservations.mjs directly — see this
+ * file's own `import { pathsOverlap, listReservations } from
+ * './reservations.mjs'` above — so the reverse import would cycle); it
+ * carries its own minimal, cycle-safe replica instead (see reservations.mjs
+ * module header for why, and advisor-digest-slice4 binding condition 6 for
+ * the "single git-common-dir resolver, or a tracking note" precedent this
+ * follows).
  */
-function controlRootFor(root) {
+export function controlRootFor(root) {
   return resolveContext(root).controlRoot ?? root;
 }
 

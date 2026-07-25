@@ -2494,6 +2494,7 @@
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_lease_store.mjs",
+        "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_state.mjs"
       ],
       "all": [
@@ -2618,6 +2619,7 @@
     },
     "skills/bee-hive/templates/lib/reservations.mjs": {
       "direct": [
+        "skills/bee-hive/templates/tests/test_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_cells.mjs",
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",

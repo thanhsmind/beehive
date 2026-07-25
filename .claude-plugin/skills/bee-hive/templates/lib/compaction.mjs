@@ -51,6 +51,7 @@ import {
   resolvePipeline,
   gateApproved,
   bypassLevel,
+  controlRootFor,
 } from './state.mjs';
 import { readIntent } from './intent.mjs';
 import { claimsDir, sessionPath, readClaim } from './claims.mjs';
@@ -123,9 +124,14 @@ export function readCompactionCounts(root, { sessionId = null, cell = null } = {
 
 // ─── cell ownership ─────────────────────────────────────────────────────────
 
+// msn-18b (PLANE RULE): claims are control-plane — resolved through
+// controlRootFor so a compaction/injection read from a linked worktree sees
+// the SAME claim store main sees, never a worktree-local one. This is the
+// single chokepoint every caller below (claimStoreCellIds, attributedToSession)
+// goes through.
 function safeReadClaim(root, cellId) {
   try {
-    return readClaim(root, cellId);
+    return readClaim(controlRootFor(root), cellId);
   } catch {
     return null;
   }
@@ -136,7 +142,7 @@ function claimStoreCellIds(root, session) {
   if (!session) return [];
   let entries;
   try {
-    entries = fs.readdirSync(claimsDir(root));
+    entries = fs.readdirSync(claimsDir(controlRootFor(root)));
   } catch {
     return [];
   }
@@ -412,7 +418,9 @@ export function compactCheck(root, { sessionId = null, now = Date.now() } = {}) 
   } else {
     let file = null;
     try {
-      file = sessionPath(root, session);
+      // msn-18b (PLANE RULE): sessions are control-plane — see
+      // safeReadClaim's own comment above.
+      file = sessionPath(controlRootFor(root), session);
     } catch {
       file = null;
     }
@@ -529,6 +537,9 @@ export function compactCheck(root, { sessionId = null, now = Date.now() } = {}) 
   // 6. This session's reservations are still held by it. A row with NO
   //    `session` field is a legacy / intra-swarm row (reservations.mjs:92-98):
   //    it is REPORTED as unbound and is never counted as a mismatch (D13).
+  // msn-18b: no change needed here — reservations.mjs's listReservations
+  // self-resolves the control root internally (see that module's header),
+  // so it is already correct regardless of which root this call passes.
   let rows = [];
   try {
     rows = listReservations(root, {});

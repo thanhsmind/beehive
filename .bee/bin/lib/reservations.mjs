@@ -101,6 +101,7 @@
 // grabbing the literal same file — stays fully race-free through
 // acquireLeases' O_EXCL. Documented here rather than silently narrowed.
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { writeJsonAtomic } from './fsutil.mjs';
 import { resolveSessionId, isConcurrentMode } from './claims.mjs';
@@ -111,6 +112,141 @@ import {
   listLeases,
   LeaseStoreError,
 } from './lease-store.mjs';
+
+// ─── msn-18b: control-plane root resolution (self-contained) ───────────────
+// Leases are control-plane (PLANE RULE, docs/history/multisession-native
+// CONTEXT.md D2/D3) — a lease taken from a linked worktree must land in
+// MAIN's shared `.bee/runtime/leases/` store, not a worktree-local one, the
+// same way msn-18a re-rooted claims/sessions/workflow reads onto
+// state.mjs's `controlRootFor(root)`.
+//
+// This module CANNOT import controlRootFor (or resolveContext/resolveRoots)
+// from state.mjs: state.mjs already imports THIS module directly
+// (`import { pathsOverlap, listReservations } from './reservations.mjs'`,
+// used by resolvePipeline/startFeature/etc.), so the reverse import would be
+// a straight two-file cycle. Threading a `controlRoot` parameter from every
+// caller was the other option (see this cell's own instructions), but
+// `reservations reserve`/`release`/`list`/`sweep-expired` are called
+// DIRECTLY from bee.mjs's CLI dispatcher with the bare, workspace-local
+// `root` (bee.mjs is out of this cell's scope — msn-18c) — threading would
+// leave every one of those call sites silently unfixed until 18c lands,
+// which is exactly the "no coordination store left worktree-local in these
+// modules" prohibition this cell must not violate.
+//
+// So this module resolves its OWN control root instead: `findMainRoot`
+// below is a minimal, self-contained replica of state.mjs's
+// resolveRootsCore/resolveContext linked-worktree walk-up — ONLY the
+// mainRoot-finding portion (the grant-registry/workspaceId half of
+// resolveContext is irrelevant here; a lease always targets the SHARED
+// control store regardless of whether the worktree is grant-registered for
+// its OWN local coordination store). This is a deliberate second
+// implementation of "find the git-common mainRoot", accepted per
+// advisor-digest-slice4 binding condition 6 ("resolveContext is THE single
+// git-common-dir resolver ... see herding.mjs's resolveHerdingMainRoot for
+// the one call site left independent, and why") — this is the SECOND such
+// documented exception, for the same reason (a real import-cycle
+// constraint, not convenience). Any future refactor that extracts this walk
+// into its own zero-dependency leaf module (so state.mjs and this module
+// share one implementation instead of two) should retire this copy.
+//
+// DELIBERATE divergence from state.mjs's resolveRootsCore: that function
+// THROWS WorktreeLinkInvalidError for a malformed linked-worktree `.git`
+// file — correct for a CLI dispatcher that can surface the error to a
+// human. This module cannot make the same choice: guards.mjs's checkWrite
+// (the write-guard hot path, called on every tool write) imports
+// findConflicts/findSessionConflicts straight from here and has its OWN
+// documented "unresolvable topology fails OPEN, never denies, never
+// throws" contract (xwh-4) for exactly this malformed-link shape — proven
+// red-first by test_guards.mjs's own "unresolvable topology fails OPEN"
+// row, which this function's first draft (a throwing version, mirroring
+// state.mjs 1:1) broke by turning that guard's fail-open path into an
+// uncaught throw. So `findMainRoot` below FAILS OPEN on every malformed
+// shape (returns `null`, exactly like "no git root reachable at all") —
+// never throws — matching this module's own pre-existing "hook/guard-
+// reachable, must never throw" posture (D5 "hooks never wait on the lock").
+// A caller that specifically wants the CLI-facing throw-on-malformed
+// behavior already has it via state.mjs's own resolveRoots/resolveContext.
+function readGitdirFileForRoot(file, base) {
+  try {
+    let raw = fs.readFileSync(file, 'utf8').trim();
+    if (!raw) return null;
+    if (raw.startsWith('gitdir:')) raw = raw.slice('gitdir:'.length).trim();
+    return path.resolve(base, raw.replace(/\\/g, path.sep));
+  } catch {
+    return null;
+  }
+}
+
+function locateGitRootForRoot(start) {
+  let dir = path.resolve(start || process.cwd());
+  while (true) {
+    const marker = path.join(dir, '.git');
+    if (fs.existsSync(marker)) return { workRoot: dir, marker };
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * findMainRoot(root) — the git-common mainRoot for `root` (byte-for-byte the
+ * same value state.mjs's resolveContext(root).controlRoot resolves for
+ * every WELL-FORMED topology, minus the grant-registry workspaceId
+ * computation this module never needs). An ORDINARY checkout (no `.git`
+ * file, i.e. not a linked worktree) returns `root`'s own git root —
+ * byte-identical to `root` for every solo/main repo, so main-checkout
+ * callers see zero behavior change. A LINKED worktree returns the MAIN
+ * checkout's root. Never throws (see the block comment above for why this
+ * diverges from state.mjs's own WorktreeLinkInvalidError-throwing
+ * resolveRoots): a malformed linked-worktree `.git` file, OR no git root
+ * reachable at all, both resolve to `null` — the caller (controlRootFor)
+ * falls back to `root` itself, the exact pre-msn-18b behavior for that
+ * checkout.
+ */
+export function findMainRoot(root) {
+  const located = locateGitRootForRoot(root);
+  if (!located) return null;
+  const { workRoot, marker } = located;
+  let isFile = false;
+  try {
+    isFile = fs.statSync(marker).isFile();
+  } catch {
+    return null;
+  }
+  if (!isFile) return workRoot; // ordinary checkout: mainRoot === workRoot
+
+  const gitdir = readGitdirFileForRoot(marker, workRoot);
+  if (!gitdir) return null; // malformed — fail open, see block comment above
+  const worktreesRoot = path.resolve(gitdir, '..');
+  const commonGitDir = path.resolve(worktreesRoot, '..');
+  if (path.basename(commonGitDir) !== '.git' || path.basename(worktreesRoot) !== 'worktrees') {
+    return null; // outside the expected .git/worktrees namespace — fail open
+  }
+  const id = path.basename(gitdir);
+  if (!id || id === '.' || id === '..') return null; // empty id — fail open
+  const reverse = readGitdirFileForRoot(path.join(gitdir, 'gitdir'), gitdir);
+  if (!reverse || path.resolve(reverse) !== path.resolve(marker)) {
+    return null; // reverse pointer missing/mismatched — fail open
+  }
+  return path.dirname(commonGitDir);
+}
+
+/** controlRootFor(root) — findMainRoot(root), falling back to `root` itself
+ * when nothing is resolvable (no git root, no onboarding marker reachable,
+ * OR a malformed linked-worktree link — findMainRoot fails open on all
+ * three, never throws), so every exported store-touching function below can
+ * call this unconditionally with no try/catch of its own. Every
+ * lease-store.mjs call in this module goes through this — see each
+ * function's own use below. This is what keeps reserve/release/
+ * sweepExpired/renewHoldsBySession/listReservations/findConflicts/
+ * findSessionConflicts safe to call from guards.mjs's write-guard hot path
+ * (swarming-reservation check), which has its OWN documented "unresolvable
+ * topology fails OPEN, never throws" contract (xwh-4) — see findMainRoot's
+ * own doc comment for the regression this fail-open design fixes
+ * (test_guards.mjs's "unresolvable topology fails OPEN" case). */
+function controlRootFor(root) {
+  return findMainRoot(root) ?? root;
+}
 
 const DEFAULT_TTL_SECONDS = 3600;
 
@@ -270,8 +406,12 @@ function leaseToReservation(record) {
   };
 }
 
+// msn-18b: the single chokepoint every reader below (listReservations,
+// release, sweepExpired, renewHoldsBySession) goes through — re-rooted once
+// here via controlRootFor so a linked worktree's read lands in main's shared
+// leases store, never a worktree-local one.
 function listPathLeaseRecords(root) {
-  return listLeases(root).leases.filter(isPathLease);
+  return listLeases(controlRootFor(root)).leases.filter(isPathLease);
 }
 
 export function listReservations(root, { activeOnly = false, now = Date.now() } = {}) {
@@ -361,6 +501,11 @@ export async function reserve(
   if (!RESERVATION_KINDS.includes(kind)) {
     throw new Error(`reserve: kind must be one of ${RESERVATION_KINDS.join('/')} (got ${JSON.stringify(kind)}).`);
   }
+  // msn-18b (PLANE RULE): sessions are control-plane — resolved once here
+  // via controlRootFor and reused for every claims.mjs/lease-store.mjs touch
+  // below, so a reserve taken from a linked worktree sees the SAME live
+  // sessions and lands its lease in the SAME shared store main uses.
+  const controlRoot = controlRootFor(root);
   // hardening-1-7-10 D5/1710-10: `root` is passed through so
   // resolveSessionId's durable single-live-session fallback can adopt an
   // identity here too — a solo native Codex session has a real session
@@ -371,13 +516,13 @@ export async function reserve(
   // fresh live session now resolves and adopts before isConcurrentMode is
   // ever consulted; two-or-more still leaves resolvedSession null and hits
   // the unchanged refusal below.
-  const resolvedSession = resolveSessionId({ flag: session, root });
+  const resolvedSession = resolveSessionId({ flag: session, root: controlRoot });
   // hardening-4a: mirrors claimCellFile's typed refusal — a solo caller
   // (nobody else live) keeps today's sessionless-reserve behavior
   // byte-unchanged; `conflicts: []` is included defensively alongside `code`
   // so any existing caller that only inspects `.conflicts` on !ok never
   // crashes on this new failure shape.
-  if (resolvedSession == null && isConcurrentMode(root)) {
+  if (resolvedSession == null && isConcurrentMode(controlRoot)) {
     return {
       ok: false,
       code: 'SESSION_REQUIRED',
@@ -395,7 +540,7 @@ export async function reserve(
   // conflict refuses the reserve — a pre-existing 'intent' row (declared
   // broad/glob scope) never blocks a fellow caller from staking out their
   // own exact write-time lease inside that scope (isHardConflict above).
-  const overlapConflicts = findConflicts(root, trimmedAgent, [reservedPath], { now }).filter((c) =>
+  const overlapConflicts = findConflicts(controlRoot, trimmedAgent, [reservedPath], { now }).filter((c) =>
     isHardConflict(c, reservedPath),
   );
   if (overlapConflicts.length > 0) {
@@ -406,7 +551,7 @@ export async function reserve(
   let leaseRecord;
   try {
     [leaseRecord] = acquireLeases(
-      root,
+      controlRoot,
       [
         {
           type: 'path',
@@ -447,15 +592,17 @@ export async function release(root, { agent, cell = null }) {
   if (typeof agent !== 'string' || !agent.trim()) {
     throw new Error('release: agent is required.');
   }
+  // msn-18b (PLANE RULE): see reserve()'s own comment.
+  const controlRoot = controlRootFor(root);
   const trimmedAgent = agent.trim();
-  const matches = listPathLeaseRecords(root).filter((record) => {
+  const matches = listPathLeaseRecords(controlRoot).filter((record) => {
     if (leaseAgent(record) !== trimmedAgent) return false;
     if (cell && record.workflow_id !== cell) return false;
     return true;
   });
   let released = 0;
   for (const record of matches) {
-    const result = await releaseLease(root, { type: 'path', id: record.resource.slice(PATH_RESOURCE_PREFIX.length) });
+    const result = await releaseLease(controlRoot, { type: 'path', id: record.resource.slice(PATH_RESOURCE_PREFIX.length) });
     if (result.released) released += 1;
   }
   return { released };
@@ -471,12 +618,14 @@ export async function release(root, { agent, cell = null }) {
  * SAME resource file (lease-store's own per-file lock/O_EXCL discipline).
  */
 export async function sweepExpired(root, { now = Date.now() } = {}) {
+  // msn-18b (PLANE RULE): see reserve()'s own comment.
+  const controlRoot = controlRootFor(root);
   let released = 0;
-  for (const record of listPathLeaseRecords(root)) {
+  for (const record of listPathLeaseRecords(controlRoot)) {
     // isLeaseRecordExpired on the RAW record — see its own comment for why
     // this must never go through the translated reservation shape.
     if (!isLeaseRecordExpired(record, now)) continue;
-    const result = await releaseLease(root, { type: 'path', id: record.resource.slice(PATH_RESOURCE_PREFIX.length) });
+    const result = await releaseLease(controlRoot, { type: 'path', id: record.resource.slice(PATH_RESOURCE_PREFIX.length) });
     if (result.released) released += 1;
   }
   return released;
@@ -497,8 +646,10 @@ export async function sweepExpired(root, { now = Date.now() } = {}) {
 export async function renewHoldsBySession(root, sessionId, { now = Date.now(), lockOptions } = {}) {
   const session = typeof sessionId === 'string' ? sessionId.trim() : '';
   if (!session) return { ok: true, renewed: 0 };
+  // msn-18b (PLANE RULE): see reserve()'s own comment.
+  const controlRoot = controlRootFor(root);
   let renewed = 0;
-  for (const record of listPathLeaseRecords(root)) {
+  for (const record of listPathLeaseRecords(controlRoot)) {
     if (record.session_id !== session) continue;
     // Renew by the lease's OWN original ttl window, not lease-store's
     // renewLease default — the pre-msn-16 renewHoldsBySession contract was
@@ -507,7 +658,7 @@ export async function renewHoldsBySession(root, sessionId, { now = Date.now(), l
     // widened to lease-store's own DEFAULT_TTL_SECONDS (3600).
     const ttl = leaseTtlSeconds(record);
     try {
-      await renewLease(root, { type: 'path', id: record.resource.slice(PATH_RESOURCE_PREFIX.length) }, { ttl, now, lockOptions });
+      await renewLease(controlRoot, { type: 'path', id: record.resource.slice(PATH_RESOURCE_PREFIX.length) }, { ttl, now, lockOptions });
       renewed += 1;
     } catch (error) {
       if (error instanceof LeaseStoreError && error.code === 'LEASE_MISSING') continue; // swept concurrently — fine, skip
@@ -536,6 +687,16 @@ export async function renewHoldsBySession(root, sessionId, { now = Date.now(), l
  * (state.mjs's startFeature precondition, advisor consult slice 3 condition
  * C) was migrated onto listReservations() directly instead of reading this
  * projection, so no correctness-critical caller depends on this being fresh.
+ *
+ * msn-18b: `root` here is deliberately NOT re-rooted for the WRITE
+ * (`reservationsPath(root)`) — `.bee/reservations.json` is a legacy,
+ * single-checkout DISPLAY projection, same class as `.bee/state.json`/
+ * `.bee/HANDOFF.json` (state-projection.mjs leaves those on the caller's own
+ * workspace root too, see that module's header for the full reasoning). The
+ * READ (`listReservations` below) IS control-rooted regardless, via
+ * listPathLeaseRecords's own controlRootFor — so every checkout's local
+ * projection file becomes an accurate full mirror of the SHARED lease data,
+ * which is exactly what a display-only projection should do.
  */
 export function rebuildReservationsProjection(root) {
   const rows = listReservations(root, { activeOnly: true });

@@ -5,6 +5,8 @@
 // as every other suite here — see scripts/lib/test-fixture.mjs.
 
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   makeTempRepo,
@@ -24,8 +26,10 @@ import {
   reservationsPath,
   rebuildReservationsProjection,
   RESERVATION_KINDS,
+  findMainRoot,
 } from '../lib/reservations.mjs';
 import { createSession } from '../lib/claims.mjs';
+import { leasesRoot } from '../lib/lease-store.mjs';
 
 const root = makeTempRepo();
 
@@ -279,6 +283,141 @@ await check('rebuildReservationsProjection writes .bee/reservations.json in the 
   assert(Array.isArray(raw.reservations) && raw.reservations.length === 1, 'projection file must be the legacy {reservations:[...]} shape');
   assert(raw.reservations[0].path === 'src/proj-solo/one.ts' && raw.reservations[0].agent === 'proj-solo', 'projected row carries the correct agent/path');
   assert(raw.reservations[0].released_at === null, 'a live lease projects with released_at: null (no soft-delete history in the new architecture)');
+});
+
+// ─── msn-18b: findMainRoot — the cycle-safe control-root replica ──────────
+// (see reservations.mjs's own module header for why this module cannot
+// import state.mjs's controlRootFor). Same manual worktree-fixture pattern
+// test_state.mjs uses for resolveRoots/resolveContext.
+
+function makeLinkedWorktree(mainPrefix, workPrefix, id) {
+  const main = fs.mkdtempSync(path.join(os.tmpdir(), mainPrefix));
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), workPrefix));
+  fs.mkdirSync(path.join(main, '.git'));
+  const gitdir = path.join(main, '.git', 'worktrees', id);
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(work, '.git'), `gitdir: ${gitdir}\n`);
+  fs.writeFileSync(path.join(gitdir, 'gitdir'), path.join(work, '.git') + '\n');
+  return { main, work };
+}
+
+await check('findMainRoot: ordinary checkout resolves to itself (byte-identical to controlRootFor there)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-reslv-ordinary-'));
+  fs.mkdirSync(path.join(dir, '.git'));
+  assert(findMainRoot(path.join(dir, 'child')) === dir, 'ordinary checkout must resolve to its own git root');
+});
+
+await check('findMainRoot: linked worktree resolves to MAIN, matching state.mjs resolveContext(work).controlRoot', async () => {
+  const { main, work } = makeLinkedWorktree('bee-reslv-main-', 'bee-reslv-work-', 'reslv-fixture');
+  assert(findMainRoot(work) === main, `expected main root ${main}, got ${findMainRoot(work)}`);
+});
+
+await check('findMainRoot: no git root reachable anywhere -> null (caller falls back to root itself, same as controlRootFor)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-reslv-none-'));
+  assert(findMainRoot(dir) === null, 'no .git anywhere up the tree must resolve to null');
+});
+
+await check('findMainRoot: a malformed linked-worktree gitdir fails OPEN (returns null), never throws — deliberate divergence from state.mjs\'s WorktreeLinkInvalidError, required so guards.mjs\'s write-guard hot path (findConflicts/findSessionConflicts) never crashes on a malformed link (test_guards.mjs xwh-4 "unresolvable topology fails OPEN")', async () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-reslv-invalid-'));
+  fs.writeFileSync(path.join(work, '.git'), 'gitdir: /tmp/forged/.git/worktrees/x\n');
+  let caught = null;
+  let result;
+  try {
+    result = findMainRoot(work);
+  } catch (err) {
+    caught = err;
+  }
+  assert(caught === null, `findMainRoot must never throw for a malformed link, got ${caught}`);
+  assert(result === null, `a malformed link must resolve to null (caller falls back to root), got ${result}`);
+});
+
+// ─── msn-18b topology (red-first per this cell's must_haves): reservations
+// reserve() from a linked worktree lands its lease in MAIN's control store,
+// visible from main, never a worktree-local one. ──────────────────────────
+
+await check('TOPOLOGY: reserve() from a linked worktree lands the lease in MAIN\'s .bee/runtime/leases — visible via listReservations(main), invisible to a bare leasesRoot(work) scan', async () => {
+  const { main, work } = makeLinkedWorktree('bee-topo-reserve-main-', 'bee-topo-reserve-work-', 'topo-reserve-fixture');
+  fs.mkdirSync(path.join(main, '.bee'), { recursive: true });
+  fs.mkdirSync(path.join(work, '.bee'), { recursive: true });
+
+  const made = await reserve(work, {
+    agent: 'topo-agent',
+    cell: 'topo-cell',
+    path: 'src/topo/file.ts',
+    session: 'topo-sess',
+  });
+  assert(made.ok === true, `precondition: reservation from the worktree must succeed, got ${JSON.stringify(made)}`);
+
+  // Visible from MAIN — the whole point of the control-plane split.
+  const fromMain = listReservations(main, { activeOnly: true });
+  assert(
+    fromMain.some((r) => r.path === 'src/topo/file.ts' && r.agent === 'topo-agent'),
+    `expected the worktree's reservation to be visible from main's store, got ${JSON.stringify(fromMain)}`,
+  );
+
+  // The worktree's OWN local .bee/runtime/leases never received a copy — the
+  // lease physically lives at MAIN, not siloed per-checkout (pre-msn-18b
+  // behavior, captured here as the red-first baseline this fix flips).
+  assert(
+    !fs.existsSync(leasesRoot(work)) || fs.readdirSync(leasesRoot(work), { recursive: true }).length === 0,
+    'the worktree\'s own leases directory must stay empty — the lease physically landed at main, not siloed locally',
+  );
+  assert(fs.existsSync(leasesRoot(main)), 'main\'s own leases directory must exist and hold the lease');
+
+  // Same visibility holds for findSessionConflicts (the cells.mjs claim-next
+  // consumer) called from EITHER root, since both resolve to the same
+  // physical store now.
+  const conflictsFromMain = findSessionConflicts(main, 'some-other-sess', ['src/topo/file.ts']);
+  const conflictsFromWork = findSessionConflicts(work, 'some-other-sess', ['src/topo/file.ts']);
+  assert(conflictsFromMain.length === 1 && conflictsFromWork.length === 1, 'a cross-session conflict check must see the SAME lease from either root');
+});
+
+await check('TOPOLOGY: release()/sweepExpired()/renewHoldsBySession() from a linked worktree operate on MAIN\'s store too', async () => {
+  const { main, work } = makeLinkedWorktree('bee-topo-release-main-', 'bee-topo-release-work-', 'topo-release-fixture');
+  fs.mkdirSync(path.join(main, '.bee'), { recursive: true });
+  fs.mkdirSync(path.join(work, '.bee'), { recursive: true });
+
+  await reserve(work, { agent: 'topo-agent-2', cell: 'topo-cell-2', path: 'src/topo/two.ts', session: 'topo-sess-2' });
+  const renewed = await renewHoldsBySession(work, 'topo-sess-2', { lockOptions: { maxAttempts: 1 } });
+  assert(renewed.ok === true && renewed.renewed === 1, `renew from the worktree must find and renew main's lease, got ${JSON.stringify(renewed)}`);
+
+  const released = await release(work, { agent: 'topo-agent-2' });
+  assert(released.released === 1, `release from the worktree must clear main's lease, got ${JSON.stringify(released)}`);
+  assert(listReservations(main, { activeOnly: true }).length === 0, 'main\'s store must reflect the release');
+});
+
+await check('solo/main repos byte-identical: findMainRoot(root) === root, and reserve() behaves exactly as before this cell', async () => {
+  const dir = makeTempRepo();
+  assert(findMainRoot(dir) === dir, 'main/solo checkout: findMainRoot must equal the checkout root itself');
+  const made = await reserve(dir, { agent: 'solo-agent', cell: 'solo-cell', path: 'src/solo/file.ts' });
+  assert(made.ok === true, 'byte-identical behavior for a solo/main repo');
+  assert(listReservations(dir, { activeOnly: true }).some((r) => r.path === 'src/solo/file.ts'), 'visible from the same root, unchanged');
+});
+
+// ─── msn-18b regression (public-API level, complementing the findMainRoot
+// unit test above): a malformed linked-worktree link must never crash a
+// store-touching call — guards.mjs's write guard (checkWrite, xwh-4
+// "unresolvable topology fails OPEN") reaches listReservations/
+// findConflicts/findSessionConflicts through the swarming-reservation branch
+// with NO try/catch of its own, matching resolveHoldTopology's own "no error
+// path in this resolution may deny" fail-open discipline elsewhere in
+// guards.mjs/cells.mjs. An earlier draft of findMainRoot threw
+// WorktreeLinkInvalidError for this shape (mirroring state.mjs 1:1) and left
+// that throw unabsorbed by controlRootFor, which crashed checkWrite's NET
+// branch 7 / xwh-4 unresolvable-topology test the moment a reservation check
+// touched a malformed `.git` marker — findMainRoot now fails open (returns
+// null) instead, so every public function below inherits the fail-open
+// behavior with no try/catch of its own.
+await check('REGRESSION: a malformed linked-worktree .git marker never throws through listReservations/findConflicts/findSessionConflicts/reserve — fails open to workspace-local instead', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-reslv-crashguard-'));
+  fs.mkdirSync(path.join(dir, '.bee'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.git'), '', 'utf8'); // empty .git FILE — the same invalid marker test_guards.mjs's xwh-4 case uses
+
+  assert(listReservations(dir, { activeOnly: true }).length === 0, 'listReservations must fail open (empty list), never throw, on a malformed link');
+  assert(findConflicts(dir, 'some-agent', ['src/x.ts']).length === 0, 'findConflicts must fail open, never throw');
+  assert(findSessionConflicts(dir, 'some-sess', ['src/x.ts']).length === 0, 'findSessionConflicts must fail open, never throw');
+  const made = await reserve(dir, { agent: 'crashguard-agent', cell: 'crashguard-cell', path: 'src/x.ts', session: 'crashguard-sess' });
+  assert(made.ok === true, `reserve must fail open to workspace-local rather than throw, got ${JSON.stringify(made)}`);
 });
 
 printSummaryAndExit();
