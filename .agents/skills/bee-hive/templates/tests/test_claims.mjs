@@ -763,4 +763,58 @@ await check('activeWorkers: session.lane binding is surfaced when bound, null wh
   }
 });
 
+await check('createSession stamps workspace_id when given (msn-19); omits the field entirely when absent/blank, same convention as transcript_path', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-workspace-id-'));
+  try {
+    const withWorkspace = createSession(root, { id: 'sess-ws-a', workspace_id: 'wt-abc123' });
+    assert(withWorkspace.ok === true, 'createSession with workspace_id succeeds');
+    assert(withWorkspace.session.workspace_id === 'wt-abc123', 'returned record carries workspace_id');
+    const readBack = readSession(root, 'sess-ws-a');
+    assert(readBack.workspace_id === 'wt-abc123', 'workspace_id round-trips through disk');
+
+    const withoutWorkspace = createSession(root, { id: 'sess-ws-b' });
+    assert(withoutWorkspace.ok === true, 'createSession without workspace_id still succeeds');
+    assert(!('workspace_id' in withoutWorkspace.session), 'workspace_id key is OMITTED, never written as null/undefined, when absent');
+
+    const blankWorkspace = createSession(root, { id: 'sess-ws-c', workspace_id: '   ' });
+    assert(!('workspace_id' in blankWorkspace.session), 'a blank/whitespace-only workspace_id is treated as absent, same as transcript_path');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('claimCellFile (msn-19): auto-looks-up workspace_id from the ACTING SESSION\'s own record — never a caller-supplied claim argument; omitted when the session carries none, or for a sessionless claim', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-claim-workspace-id-'));
+  try {
+    createSession(root, { id: 'sess-ws-owner', workspace_id: 'wt-owner-1' });
+    createSession(root, { id: 'sess-ws-none' });
+
+    const claimed = claimCellFile(root, 'sess-ws-owner', 'cell-ws-1');
+    assert(claimed.ok === true, 'claim succeeds');
+    assert(claimed.claim.workspace_id === 'wt-owner-1', 'claim record carries the acting session\'s stamped workspace_id');
+    const readBack = readClaim(root, 'cell-ws-1');
+    assert(readBack.workspace_id === 'wt-owner-1', 'workspace_id round-trips through the claim file on disk');
+
+    const claimedNoWorkspace = claimCellFile(root, 'sess-ws-none', 'cell-ws-2');
+    assert(claimedNoWorkspace.ok === true, 'claim succeeds for a session with no stamped workspace_id');
+    assert(!('workspace_id' in claimedNoWorkspace.claim), 'claim omits workspace_id when the acting session has none — never null');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('claimCellFile (msn-19): a sessionless claim never carries workspace_id — nothing to look up', async () => {
+  // Deliberately its OWN fresh root (no other live sessions) — a sessionless
+  // claim in a concurrent-mode root is a SEPARATE refusal path
+  // (SESSION_REQUIRED, see hardening-4a above) unrelated to workspace_id.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-claim-workspace-id-sessionless-'));
+  try {
+    const sessionlessClaim = claimCellFile(root, null, 'cell-ws-3');
+    assert(sessionlessClaim.ok === true, 'sessionless claim still succeeds when solo (no other live session)');
+    assert(!('workspace_id' in sessionlessClaim.claim), 'a sessionless claim never carries workspace_id — nothing to look up');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 printSummaryAndExit();

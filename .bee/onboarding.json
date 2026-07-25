@@ -11,7 +11,7 @@
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "b40d2eb10a9611ef59bbbff1725fc9e1c942e8fef226990ae7399d6ad9bdeffd",
-      "claims.mjs": "6bdb5269b43e4b992b390e1e18fc84cfb186d84b017ee17e792173b510613180",
+      "claims.mjs": "8869e1ed8f4efe89adf69f2f3b566f295665f42965964ad5e8839eeee957102b",
       "command-registry.mjs": "3487803df45ba3ee28b8fbf6a3532fed4786f680d096e1a1319fe5b37839372e",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
@@ -39,13 +39,14 @@
       "state.mjs": "90f7248b4c295167019eab6cae26d1cb956b67a79c0668d469e390f5eb2c3f5c",
       "validate-args.mjs": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
       "workflow-store.mjs": "27aa64ffab30bdda9c939cdb6def6106c9ef9648067078eda27d512b5a1e41d4",
+      "workspace-store.mjs": "b7355d3fe6a398475edab10b50de7958601034ce771c66af775f2ce21ab3b641",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
-      "worktree-store.mjs": "0cd4809e8b19ea307dbd93d466810dc609dccb993388f3d2f8c4b7352e484748"
+      "worktree-store.mjs": "9375f19727af1fe26e17aee8dde9a0574c5966e4d460336c37044821385539bf"
     },
     "repo_hooks": {
       "adapter.mjs": "e21c39e993390600cb2fe352078ae7554c74db0ee6ffd5bdb443c49192689dca",
       "bee-codex-subagent-audit.mjs": "f9f6900705aa20dfc0035a8c8c5c4b22fc56c9d0a4953e1b0ba3fd9466dec85e",
-      "bee-session-init.mjs": "0f2bf378191f21d75063d0823374f616df073bf8324ae6e4bd813a029bdf8351",
+      "bee-session-init.mjs": "88eb00fc4893788637c5523d6b3217bb367c94d50bb9fcaa8962f8b94a089b20",
       "bee-prompt-context.mjs": "1efd6ed7f90a7025648a550245c62b999a77dac77a7d1f206a44bef2e4626a6a",
       "bee-write-guard.mjs": "ba4358146a76432bb21b906eb2808b57179673b2f4726245b82a73fe972f88e4",
       "tokenize-command.mjs": "e1da8db4a06525c92fb01495e718a0a2f94d87b2c7808458e306b480b353a77a",
@@ -79,5 +80,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T07:19:41.301Z"
+  "updated_at": "2026-07-25T07:55:25.650Z"
 }

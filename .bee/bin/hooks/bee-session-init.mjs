@@ -135,6 +135,21 @@ async function main() {
     if (sessionId) {
       try {
         const claims = await import(libModuleUrl(root, "claims.mjs"));
+        // msn-19 (CONTEXT.md D2/D3): sessions/claims are control-plane —
+        // resolveContext(root) gives BOTH the re-root target (controlRoot,
+        // same fix adapter.mjs's own ctx.controlRoot documents as "wiring
+        // the individual hook consumers... is out of [that] cell's file
+        // scope — a later cell wires them to [this]", i.e. here) and the
+        // workspaceId to stamp onto the session record — one call instead of
+        // two, since resolveContext already computes both from the same
+        // git-worktree classification. Fail-open: an unresolvable context
+        // (state.resolveContext's own "give up" case) falls back to `root`
+        // itself and a null workspaceId, never a throw — this whole block is
+        // already inside the try/catch that treats registration/heartbeat
+        // failures as non-fatal to the preamble.
+        const context = state.resolveContext(root);
+        const sessionRoot = context.controlRoot || root;
+        const workspaceId = typeof context.workspaceId === "string" ? context.workspaceId : undefined;
         // hardening-1-7-10 D5 (Codex session bridge): persist the real hook
         // payload's transcript_path onto the session record at creation time
         // (createSession itself omits it when absent/blank) so recovery.mjs
@@ -144,9 +159,32 @@ async function main() {
         // relabeled Claude layout.
         const transcriptPath =
           typeof ctx.payload.transcript_path === "string" ? ctx.payload.transcript_path : undefined;
-        const created = claims.createSession(root, { id: sessionId, transcript_path: transcriptPath });
+        const created = claims.createSession(sessionRoot, {
+          id: sessionId,
+          transcript_path: transcriptPath,
+          workspace_id: workspaceId,
+        });
         if (!created.ok) {
-          claims.heartbeatSession(root, sessionId);
+          claims.heartbeatSession(sessionRoot, sessionId);
+        }
+        // msn-19: "Main checkout auto-registered lazily (first touch)" — the
+        // session-init hook is the natural first-touch point for BOTH the
+        // main checkout and a linked worktree (a worktree created via
+        // `createFeatureWorktree` already registered itself; this call is
+        // then an idempotent no-op — see workspace-store.mjs's own header
+        // for why registerWorkspace never errors or overwrites on an
+        // existing record). Best-effort: never blocks the preamble.
+        try {
+          const workspaceStore = await import(libModuleUrl(root, "workspace-store.mjs"));
+          if (workspaceId) {
+            await workspaceStore.registerWorkspace(sessionRoot, {
+              id: workspaceId,
+              type: context.worktreeId ? "worktree" : "main",
+              root: context.workspaceRoot || root,
+            });
+          }
+        } catch (error) {
+          logCrash(root, HOOK_NAME, error, ctx.source);
         }
       } catch (error) {
         // fail-open: registration/heartbeat never blocks the preamble.

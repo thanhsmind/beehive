@@ -14,8 +14,10 @@
 //   const decision = decideWorktreeStore(classification, { grants });
 //
 // Zero deps beyond node: built-ins, EXCEPT `releaseAllForHolder` (xwh-2,
-// imported below from worktree-holds.mjs) and `withStoreLock` (hardening-4b,
-// imported below from lock.mjs) — the two intentional exceptions.
+// imported below from worktree-holds.mjs), `withStoreLock` (hardening-4b,
+// imported below from lock.mjs), and `registerWorkspace`/`unregisterWorkspace`
+// (multisession-native-19, imported below from workspace-store.mjs) — the
+// three intentional exceptions.
 // releaseAllForHolder is wired into performCleanup below so a removed
 // worktree's mirrored cross-worktree holds are released alongside its grant.
 // withStoreLock serializes writeGrant/removeGrant/createFeatureWorktree/
@@ -24,14 +26,22 @@
 // MAIN store — the audit finding was that two concurrent worktree admin ops
 // (e.g. `new` racing `merge`, or two `register`s) could interleave their
 // read-check-write of runtime/worktree-grants.json and the worktree
-// lifecycle itself. No cycle: neither worktree-holds.mjs nor lock.mjs import
-// this module. Node 18+.
+// lifecycle itself. registerWorkspace/unregisterWorkspace (msn-19, CONTEXT.md
+// D2/D3) are called from createFeatureWorktreeLocked/performCleanup below —
+// GRANT (this file's own runtime/worktree-grants.json, store TOPOLOGY) and
+// WORKSPACE REGISTRATION (workspace-store.mjs, write OWNERSHIP) are two
+// independent, composable facts about the same worktree id; see
+// workspace-store.mjs's own header for why registration/grant never subsume
+// each other (advisor digest slice4, binding condition 4). No cycle:
+// worktree-holds.mjs, lock.mjs, and workspace-store.mjs import none of this
+// module. Node 18+.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { releaseAllForHolder } from './worktree-holds.mjs';
 import { withStoreLock } from './lock.mjs';
+import { registerWorkspace, unregisterWorkspace } from './workspace-store.mjs';
 
 // ---------------------------------------------------------------------------
 // readGrants — load the MAIN store's grant registry.
@@ -711,7 +721,11 @@ function runCompanionStart(mainRoot, worktreeRoot, companionStartCommand, mountP
 // `removeGrantCore` in the rollback path below — split out so
 // createFeatureWorktree's own doc comment above stays attached to the public
 // entrypoint while this runs INSIDE its withStoreLock('worktree-admin') hold.
-function createFeatureWorktreeLocked(
+// msn-19: `async` (was sync) purely because registerWorkspace below is
+// async (withStoreLock-backed, workspace-store.mjs) — every other line is
+// unchanged; withStoreLock (see createFeatureWorktree above) already awaits
+// whatever this returns, so the caller needed no change.
+async function createFeatureWorktreeLocked(
   mainRoot,
   { feature, baseRef, companionStartCommand, companionMountPath, _writeGrant, _bootstrapWorktreeStore, _syncWorktreeSkills },
 ) {
@@ -816,6 +830,18 @@ function createFeatureWorktreeLocked(
     id = readWorktreeGitVerifiedId(worktreeRoot);
     _writeGrant(mainStoreRoot, id);
     const bootstrap = _bootstrapWorktreeStore(worktreeRoot, mainStoreRoot, feature);
+    // msn-19: register the WORKSPACE (write-ownership ledger) alongside the
+    // grant (store-topology ledger) — see the module header for why these
+    // are two independent, composable facts about the same id, never one
+    // subsuming the other. base_sha prefers the resolved --base-ref sha
+    // (baseRefSha, captured once above so it can never drift between the
+    // refusal-check and this use); when no --base-ref was given, `git
+    // worktree add` branched from mainRoot's own HEAD at creation time, so
+    // the worktree's own current HEAD (no commits made yet) IS that base —
+    // resolved fresh here rather than re-deriving mainRoot's pre-add HEAD,
+    // since they are the same commit at this exact point in the flow.
+    const workspaceBaseSha = baseRefSha || runGit(worktreeRoot, ['rev-parse', 'HEAD']).stdout.trim() || null;
+    await registerWorkspace(mainRoot, { id, type: 'worktree', root: worktreeRoot, branch, base_sha: workspaceBaseSha });
     // worktree-companion-hook: deliberately INSIDE this try — a companion
     // start failure folds into the exact same post-add rollback below as any
     // other post-`git worktree add` failure, so a worktree is never left
@@ -847,6 +873,19 @@ function createFeatureWorktreeLocked(
         removeGrantCore(mainStoreRoot, id);
       } catch {
         // best-effort — the typed error below still fires either way.
+      }
+      try {
+        // msn-19: best-effort, same posture as the grant rollback right
+        // above — a workspace-registration failure never turns an already-
+        // failing rollback into a harder failure; the typed
+        // WORKTREE_POST_ADD_FAILED/ROLLBACK_FAILED refusal below fires
+        // either way, and a stray workspace record left behind here (only
+        // reachable if THIS unregister itself throws) is caught by the
+        // "no unregistered workspace gains write ownership" prohibition, not
+        // by a live worktree it would ever be re-attributed to.
+        await unregisterWorkspace(mainRoot, id);
+      } catch {
+        // best-effort — see above.
       }
     }
     const removeResult = runGit(mainRoot, ['worktree', 'remove', '--force', worktreeRoot]);
@@ -1147,6 +1186,20 @@ async function performCleanup(mainRoot, { worktreeRoot, branch, id, verifySkippe
     removeGrantCore(path.join(mainRoot, '.bee'), id);
   } catch {
     // best-effort — the worktree and branch are already gone either way.
+  }
+
+  try {
+    // msn-19: unregisterWorkspace acquires its OWN lock (`workspace:<id>`,
+    // workspace-store.mjs), a DIFFERENT name from 'worktree-admin' — nesting
+    // it inside this function's already-live 'worktree-admin' hold is safe
+    // (no reentrant same-name acquisition), the same shape releaseAllForHolder
+    // right below already establishes for a lock-backed call made from
+    // inside performCleanup. Best-effort: the worktree and branch are
+    // already gone either way, so a registry-removal failure here never
+    // turns an otherwise-successful cleanup into a failure.
+    await unregisterWorkspace(mainRoot, id);
+  } catch {
+    // best-effort — same posture as the grant removal above.
   }
 
   try {

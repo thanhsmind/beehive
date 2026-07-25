@@ -1,12 +1,25 @@
 // claims.mjs — cross-session session identity + atomic per-cell claims.
 // Stores (all repo-relative under .bee/ — never system temp, pattern 20260708):
-//   .bee/sessions/<session-id>.json  { id, started_at, last_heartbeat, lane? }
+//   .bee/sessions/<session-id>.json  { id, started_at, last_heartbeat, lane?,
+//                                       workspace_id? }
 //                                    (lane is OPTIONAL and OMITTED while
-//                                     unbound — see bindSessionLane below)
+//                                     unbound — see bindSessionLane below;
+//                                     workspace_id is likewise OPTIONAL and
+//                                     OMITTED — msn-19, CONTEXT.md D2/D3:
+//                                     stamped from the caller's resolved
+//                                     resolveContext(cwd).workspaceId at
+//                                     session-create time, same "omit rather
+//                                     than write a placeholder" convention as
+//                                     transcript_path below)
 //   .bee/claims/<cell-id>.json       { cell, session?, ttl_seconds, claimed_at,
-//                                      adopted_from?, adopted_at? }
+//                                      adopted_from?, adopted_at?, workspace_id? }
 //                                    (session is OMITTED, never null, for a
-//                                     sessionless single-user claim — D1 Δ2)
+//                                     sessionless single-user claim — D1 Δ2;
+//                                     workspace_id — msn-19 — is OMITTED
+//                                     unless the acting session's OWN record
+//                                     carries one, auto-looked-up at claim
+//                                     time — see claimCellFile below, never a
+//                                     caller-supplied argument)
 //   .bee/claims/<cell-id>.adopting   exclusive per-claim gate (adopt/sweep/release)
 //
 // Claim creation is exclusive-create ('wx' → O_EXCL): the probe-proven
@@ -183,7 +196,15 @@ export function claimGatePath(root, cellId) {
 // through here so recovery.mjs can resolve a session's transcript from the
 // stored path directly instead of guessing via Claude's encoded-layout math
 // (recovery.mjs prefers this when present; layout math stays the fallback).
-export function createSession(root, { id = randomUUID(), now = Date.now(), transcript_path } = {}) {
+//
+// msn-19 (CONTEXT.md D2/D3): `workspace_id` is likewise OPTIONAL and OMITTED
+// when absent/blank — the caller (hooks/bee-session-init.mjs) passes
+// `state.resolveContext(cwd).workspaceId` through here so a session created
+// from inside a registered worktree carries that worktree's workspace
+// identity for the rest of its life; a caller with no workspace concept
+// (most tests, and any pre-msn-19 caller) sees byte-identical session
+// records, same as omitting transcript_path always has.
+export function createSession(root, { id = randomUUID(), now = Date.now(), transcript_path, workspace_id } = {}) {
   const sessionId = requireId(id, 'session id');
   ensureDir(sessionsDir(root));
   const session = {
@@ -191,6 +212,7 @@ export function createSession(root, { id = randomUUID(), now = Date.now(), trans
     started_at: utcNow(now),
     last_heartbeat: utcNow(now),
     ...(typeof transcript_path === 'string' && transcript_path.trim() ? { transcript_path: transcript_path.trim() } : {}),
+    ...(typeof workspace_id === 'string' && workspace_id.trim() ? { workspace_id: workspace_id.trim() } : {}),
   };
   try {
     fs.writeFileSync(sessionPath(root, sessionId), `${JSON.stringify(session, null, 2)}\n`, {
@@ -642,9 +664,25 @@ export function claimCellFile(root, sessionId, cellId, ttl = DEFAULT_CLAIM_TTL_S
     }
   }
   ensureDir(claimsDir(root));
+  // msn-19 (CONTEXT.md D2/D3): workspace_id is NEVER a caller-supplied
+  // argument here — it is auto-looked-up from the ACTING session's own
+  // record (stamped there at createSession time, see that function's own
+  // comment) and carried onto the claim, mirroring how `session` itself is
+  // either explicit or resolved/adopted above. A sessionless claim, or a
+  // session whose own record predates msn-19 (no workspace_id stamped),
+  // simply omits the field — same "omit rather than write a placeholder"
+  // convention as every other optional field in this module.
+  let workspaceId;
+  if (session) {
+    const sessionRecord = readSession(root, session);
+    if (sessionRecord && typeof sessionRecord.workspace_id === 'string' && sessionRecord.workspace_id) {
+      workspaceId = sessionRecord.workspace_id;
+    }
+  }
   const claim = {
     cell,
     ...(session ? { session } : {}),
+    ...(workspaceId ? { workspace_id: workspaceId } : {}),
     ttl_seconds: Number.isFinite(ttl) && ttl > 0 ? Math.floor(ttl) : DEFAULT_CLAIM_TTL_SECONDS,
     claimed_at: utcNow(now),
     // GH #27.1 (D-GHF-B): stamped ONCE here, at claim creation — the
