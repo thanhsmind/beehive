@@ -13,7 +13,7 @@
 // .claude/skills and .agents/skills targets entirely - that preflight is the
 // ONLY place onboard_bee.mjs currently compares source version against host
 // version. Step 3 of computePlan ("vendored helpers + lib") is a raw
-// byte-diff against the running launcher's OWN templates with NO version
+// byte-diff against the running launcher's OWN vendored packages/bee with NO version
 // gate whatsoever, so a stale launcher plans (and, on --apply, actually
 // performs) a downgrade of .bee/bin/lib/state.mjs from 0.1.44 back to 0.1.43.
 //
@@ -65,6 +65,14 @@ const SCRIPTS_DIR = path.dirname(SCRIPT_PATH);
 const REAL_HIVE_DIR = path.dirname(SCRIPTS_DIR); // .../skills/bee-hive (this repo's real, current tree)
 const REPO_ROOT = path.join(SCRIPTS_DIR, "..", "..", ".."); // matches test_onboard_bee.mjs's REPO_ROOT calc
 const REAL_BEE_BIN_DIR = path.join(REPO_ROOT, ".bee", "bin");
+// D3 (packages-restructure): onboard_bee.mjs resolves its vendored payload
+// PLUGIN_ROOT-relative, not self-relative to its own scripts dir anymore. A
+// launcher copied to <root>/.agents/skills/bee-hive/scripts/onboard_bee.mjs
+// computes PLUGIN_ROOT as 3-up from its own dir, i.e. <root>/.agents (NOT
+// fixtureRepo itself) - so each projection's packages/bee copy must live at
+// that SAME nesting depth for the copied launcher to resolve its own imports
+// and its own source version marker.
+const REAL_PACKAGES_BEE_DIR = path.join(REPO_ROOT, "packages", "bee");
 
 class FixtureBugError extends Error {}
 
@@ -191,24 +199,28 @@ try {
   // the STALE 0.1.43.
   const agentsHive = path.join(fixtureRepo, ".agents", "skills", "bee-hive");
   copyTree(REAL_HIVE_DIR, agentsHive);
-  patchVersion(path.join(agentsHive, "templates", "lib", "state.mjs"), "0.1.43");
+  const agentsPackagesBee = path.join(fixtureRepo, ".agents", "packages", "bee");
+  copyTree(REAL_PACKAGES_BEE_DIR, agentsPackagesBee);
+  patchVersion(path.join(agentsPackagesBee, "lib", "state.mjs"), "0.1.43");
 
   // Claude projection: same stale content (independent copy, same patch).
   const claudeHive = path.join(fixtureRepo, ".claude", "skills", "bee-hive");
   copyTree(REAL_HIVE_DIR, claudeHive);
-  patchVersion(path.join(claudeHive, "templates", "lib", "state.mjs"), "0.1.43");
+  const claudePackagesBee = path.join(fixtureRepo, ".claude", "packages", "bee");
+  copyTree(REAL_PACKAGES_BEE_DIR, claudePackagesBee);
+  patchVersion(path.join(claudePackagesBee, "lib", "state.mjs"), "0.1.43");
 
   // The current release version is derived from the real source of truth, not
   // hardcoded here — a release bump no longer has to hand-edit this fixture
   // (decision cba8b832). The value must be equal across the whole tuple; the
-  // canonical source is templates/lib/state.mjs (test_release_tuple guards the
-  // rest).
+  // canonical source is packages/bee/lib/state.mjs (test_release_tuple guards
+  // the rest).
   const expectedCurrentVersion = readVersionLoose(
-    path.join(REAL_HIVE_DIR, "templates", "lib", "state.mjs"),
+    path.join(REAL_PACKAGES_BEE_DIR, "lib", "state.mjs"),
   );
   if (!expectedCurrentVersion) {
     fixtureBug(
-      "could not read the current BEE_VERSION from skills/bee-hive/templates/lib/state.mjs - " +
+      "could not read the current BEE_VERSION from packages/bee/lib/state.mjs - " +
         "cannot establish the fixture's expected runtime version",
     );
   }
@@ -221,7 +233,7 @@ try {
   if (preVersion !== expectedCurrentVersion) {
     fixtureBug(
       `this checkout's real .bee/bin/lib/state.mjs (${preVersion}) does not match the ` +
-        `canonical templates/lib/state.mjs (${expectedCurrentVersion}) - the release tuple is ` +
+        `canonical packages/bee/lib/state.mjs (${expectedCurrentVersion}) - the release tuple is ` +
         "desynced, this is not the defect under test (run test_release_tuple / bump_version)",
     );
   }

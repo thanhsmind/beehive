@@ -5,7 +5,7 @@
 // mainRoot through the integration queue instead of racing the
 // 'worktree-admin' lock (whose loser used to hit an opaque
 // WORKTREE_MERGE_MAIN_DIRTY refusal mid-verify — see
-// skills/bee-hive/templates/lib/integration-queue.mjs's own module header
+// packages/bee/lib/integration-queue.mjs's own module header
 // for the full problem statement). Runs the REAL vendored dispatcher
 // (.bee/bin/bee.mjs) as two genuine child OS processes for the contested
 // case (never spawnSync for that call — a blocking spawnSync would itself

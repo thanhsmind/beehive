@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // test_dispatch_prepare.mjs — contract tests for `bee dispatch prepare`
 // (g22-1, GH #22 P0-3): the payload/economics builder in
-// skills/bee-hive/templates/lib/dispatch-prepare.mjs, run both through the
+// packages/bee/lib/dispatch-prepare.mjs, run both through the
 // real dispatcher (bee.mjs) and, for the headline round-trip, directly
 // against the REAL dispatch-guard.mjs evaluateDispatch() the PreToolUse hook
 // enforces — proving prepare and the guard share one vocabulary rather than
@@ -19,8 +19,8 @@ import { runModuleWorker } from "../lib/run-module-worker.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.dirname(path.dirname(path.dirname(SCRIPT_PATH)));
-const TEMPLATES_LIB = path.join(REPO_ROOT, "skills", "bee-hive", "templates", "lib");
-const BEE_MJS = path.join(REPO_ROOT, "skills", "bee-hive", "templates", "bee.mjs");
+const TEMPLATES_LIB = path.join(REPO_ROOT, "packages", "bee", "lib");
+const BEE_MJS = path.join(REPO_ROOT, "packages", "bee", "bee.mjs");
 
 // Direct lib imports (codex-native-transport cnt-3): the native-override
 // branch needs a `classification` value prepareDispatch never derives itself

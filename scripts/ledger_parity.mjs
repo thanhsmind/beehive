@@ -2,7 +2,7 @@
 // Ledger parity checker (lpsp-1) — the THIRD copy relationship this repo
 // carries, and until now the only unguarded one:
 //
-//   skills/bee-hive/templates/** <-> .bee/bin/**          guarded by scripts/tests/test_lib_mirror.mjs
+//   packages/bee/** <-> .bee/bin/**                        guarded by scripts/tests/test_lib_mirror.mjs
 //   the plugin trees                                       guarded by scripts/release_manifest.mjs --check
 //   .bee/bin/** <-> .bee/onboarding.json managed hashes    guarded by NOTHING  <- this file
 //

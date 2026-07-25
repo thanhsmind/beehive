@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // test_store_lock.mjs — proves withStoreLock (.bee/bin/lib/lock.mjs, mirrored
-// from skills/bee-hive/templates/lib/lock.mjs) actually serializes a critical
+// from packages/bee/lib/lock.mjs) actually serializes a critical
 // section across real OS processes (CONTEXT.md D2, cell msh-1).
 //
 // Self-contained child orchestrator (fork racers, assert internally, exit

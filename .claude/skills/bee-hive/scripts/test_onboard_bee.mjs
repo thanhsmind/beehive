@@ -17,9 +17,9 @@ import { runModuleWorker } from "../../../scripts/lib/run-module-worker.mjs";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SCRIPTS_DIR = path.dirname(SCRIPT_PATH);
 const ONBOARD = path.join(SCRIPTS_DIR, "onboard_bee.mjs");
-const TEMPLATES_DIR = path.join(path.dirname(SCRIPTS_DIR), "templates");
-const TEMPLATES_LIB_DIR = path.join(TEMPLATES_DIR, "lib");
 const REPO_ROOT = path.join(SCRIPTS_DIR, "..", "..", "..");
+const TEMPLATES_DIR = path.join(REPO_ROOT, "packages", "bee");
+const TEMPLATES_LIB_DIR = path.join(TEMPLATES_DIR, "lib");
 
 let failures = 0;
 let skips = 0;
@@ -456,10 +456,10 @@ try {
   check(config.hooks && Object.values(config.hooks).every((v) => v === true) &&
     Object.keys(config.hooks).length === 6, "config.json has all 6 hooks enabled");
 
-  // --- 5. verify bin/lib copy (tolerate missing templates: parallel INFRA) ---
+  // --- 5. verify bin/lib copy (tolerate missing packages/bee: parallel INFRA) ---
   const helperNames = listMjs(TEMPLATES_DIR);
   if (helperNames.length === 0) {
-    skip("helper copy to .bee/bin", "no templates/*.mjs present yet");
+    skip("helper copy to .bee/bin", "no packages/bee/*.mjs present yet");
   } else {
     for (const name of helperNames) {
       const src = fs.readFileSync(path.join(TEMPLATES_DIR, name), "utf8");
@@ -470,7 +470,7 @@ try {
   }
   const libNames = listMjs(TEMPLATES_LIB_DIR);
   if (libNames.length === 0) {
-    skip("lib copy to .bee/bin/lib", "no templates/lib/*.mjs present yet");
+    skip("lib copy to .bee/bin/lib", "no packages/bee/lib/*.mjs present yet");
   } else {
     for (const name of libNames) {
       const src = fs.readFileSync(path.join(TEMPLATES_LIB_DIR, name), "utf8");
@@ -1158,7 +1158,7 @@ try {
   }
 
   // --- 9c. statusline opt-in vendor -----------------------------------------
-  // The pair templates/statusline/{statusline-command.sh,statusline-usage.mjs}
+  // The pair packages/bee/statusline/{statusline-command.sh,statusline-usage.mjs}
   // is synced ONLY into repos whose .claude/settings.json already points
   // statusLine at .claude/statusline-command.sh. Onboarding never creates the
   // opt-in and never mutates settings.json in this stage.
@@ -1911,24 +1911,31 @@ function makeFakeSkillsRoot(skillsRoot, {
 } = {}) {
   const pluginRoot = path.dirname(skillsRoot);
   const hive = path.join(skillsRoot, hiveDirName);
+  // D3 (packages-restructure): the real launcher resolves its vendored payload
+  // PLUGIN_ROOT-relative (packages/bee), not self-relative to its own scripts
+  // dir. pluginRoot here already equals what the fake launcher itself computes
+  // as PLUGIN_ROOT (dirname(dirname(hive))), so the fixture's packages/bee
+  // copy must live OUTSIDE the fake skills tree, as pluginRoot's sibling of
+  // skillsRoot — never nested under hive/templates anymore.
+  const packagesBee = path.join(pluginRoot, "packages", "bee");
   fs.mkdirSync(path.join(hive, "scripts"), { recursive: true });
-  fs.mkdirSync(path.join(hive, "templates", "lib"), { recursive: true });
+  fs.mkdirSync(path.join(packagesBee, "lib"), { recursive: true });
   fs.writeFileSync(path.join(hive, "scripts", "onboard_bee.mjs"), REAL_ONBOARD_SRC, "utf8");
-  // Vendor EVERY real templates/lib/*.mjs into the fixture launcher, derived via
-  // readdirSync — never a hand-list (crit-pattern 20260714: a curated subset
+  // Vendor EVERY real packages/bee/lib/*.mjs into the fixture launcher, derived
+  // via readdirSync — never a hand-list (crit-pattern 20260714: a curated subset
   // rots silently the moment onboard imports a new lib module, e.g. fsutil for
   // the shared hashFile). state.mjs stays version-controlled below; every other
   // module is copied verbatim so the real onboard's imports all resolve.
   for (const libName of fs.readdirSync(TEMPLATES_LIB_DIR)) {
     if (!libName.endsWith(".mjs") || libName === "state.mjs") continue;
     fs.writeFileSync(
-      path.join(hive, "templates", "lib", libName),
+      path.join(packagesBee, "lib", libName),
       fs.readFileSync(path.join(TEMPLATES_LIB_DIR, libName), "utf8"), "utf8");
   }
   fs.writeFileSync(
-    path.join(hive, "templates", "lib", "state.mjs"),
+    path.join(packagesBee, "lib", "state.mjs"),
     stateText !== null ? stateText : fakeStateSource(version), "utf8");
-  fs.writeFileSync(path.join(hive, "templates", "AGENTS.block.md"), REAL_AGENTS_BLOCK_SRC, "utf8");
+  fs.writeFileSync(path.join(packagesBee, "AGENTS.block.md"), REAL_AGENTS_BLOCK_SRC, "utf8");
   fs.writeFileSync(path.join(hive, "SKILL.md"), "# fake bee-hive\n", "utf8");
   const writeManifest = (dirName, spec) => {
     if (spec === false) return;
@@ -2077,10 +2084,15 @@ function hashTree(dir) {
         `fresh install: bee-alpha synced byte-exact into ${relRoot}`);
       check(readRepoTarget(repo, relRoot, "bee-beta/references/notes.md") === "beta notes\n",
         `fresh install: nested skill files synced into ${relRoot}`);
+      // D1 (packages-restructure): skills are instruction-only now - the
+      // synced bee-hive skill dir never carries templates/lib/state.mjs. The
+      // per-target release tuple now lives in the sync-owned version stamp
+      // (SKILLS_VERSION_STAMP) written at the projection root instead.
+      const stampRaw = readRepoTarget(repo, relRoot, ".bee-skills-version.json");
       check(
-        readRepoTarget(repo, relRoot, "bee-hive/templates/lib/state.mjs") ===
-          fakeStateSource("0.1.19"),
+        stampRaw !== null && JSON.parse(stampRaw).version === "0.1.19",
         `fresh install: ${relRoot} projection equals the validated release tuple`,
+        String(stampRaw),
       );
     }
     check(!fs.existsSync(path.join(home, ".claude")),
@@ -2338,10 +2350,15 @@ for (const scenario of [
         JSON.stringify(skillTarget(apply.payload, kind)));
     }
     for (const relRoot of REPO_TARGET_ROOTS) {
+      // D1 (packages-restructure): the stale seeded legacy marker
+      // (bee-hive/templates/lib/state.mjs) is pruned by the sync itself
+      // (skills are instruction-only, no templates/ in the source walk); the
+      // refreshed release tuple now lives in the sync-owned version stamp.
+      const stampRaw = readRepoTarget(repo, relRoot, ".bee-skills-version.json");
       check(readRepoTarget(repo, relRoot, "bee-alpha/SKILL.md") === "# alpha self\n" &&
-        readRepoTarget(repo, relRoot, "bee-hive/templates/lib/state.mjs") ===
-          fakeStateSource("0.1.19"),
-        `self-onboard: refreshes ${relRoot} to the validated source tuple`);
+        stampRaw !== null && JSON.parse(stampRaw).version === "0.1.19",
+        `self-onboard: refreshes ${relRoot} to the validated source tuple`,
+        String(stampRaw));
     }
     check(apply.payload?.recheck === "up_to_date",
       "self-onboard: immediate recheck is up_to_date",
@@ -2626,8 +2643,14 @@ for (const scenario of [
     check(fv.source === "0.1.18" && fv.host_helpers === "0.1.19" && fv.installed_skills === "0.1.19",
       "forced apply reports the versions triple alongside the flag (F9)",
       JSON.stringify(fv));
-    check(readInstalled(home, "bee-hive/templates/lib/state.mjs") === fakeStateSource("0.1.18"),
-      "forced apply actually syncs the older source into the install");
+    // D1 (packages-restructure): skills are instruction-only - the forced
+    // sync prunes the seeded legacy marker along with the rest of the stale
+    // bee-hive skill dir; the sync-owned version stamp is what now carries
+    // the applied release.
+    const forcedStampRaw = readInstalled(home, ".bee-skills-version.json");
+    check(forcedStampRaw !== null && JSON.parse(forcedStampRaw).version === "0.1.18",
+      "forced apply actually syncs the older source into the install",
+      String(forcedStampRaw));
   } finally {
     try {
       fs.rmSync(base, { recursive: true, force: true });
@@ -3847,8 +3870,8 @@ for (const scenario of [
 // {action, path} array equality across all three steps (10v's :3311 discards
 // fields and tolerates a subset - not repeated here), and the fixture is
 // seeded so BOTH action classes fire. makeFakeSkillsRoot vendors every real
-// templates/lib/*.mjs (readdirSync) into the fake source but never a
-// top-level templates/*.mjs helper, so reusing it unchanged only ever
+// packages/bee/lib/*.mjs (readdirSync) into the fake source but never a
+// top-level packages/bee/*.mjs helper, so reusing it unchanged only ever
 // exercises copy_lib - the real top-level helper set is vendored here too,
 // itself via readdirSync of the real TEMPLATES_DIR (never a hand-kept
 // filename list - critical-patterns fixture-list-rot).
@@ -3860,14 +3883,18 @@ for (const scenario of [
       version: "0.1.18",
     });
     const hiveDir = path.dirname(path.dirname(launcher));
-    const fakeTemplatesDir = path.join(hiveDir, "templates");
+    // D3 (packages-restructure): the fake source's vendored payload lives
+    // OUTSIDE the fake skills tree now, at pluginRoot/packages/bee (sibling of
+    // skillsRoot) - never nested under hiveDir/templates.
+    const fakePluginRoot = path.dirname(path.dirname(hiveDir));
+    const fakePackagesBeeDir = path.join(fakePluginRoot, "packages", "bee");
     const realHelperNames = fs
       .readdirSync(TEMPLATES_DIR, { withFileTypes: true })
       .filter((e) => e.isFile() && e.name.endsWith(".mjs"))
       .map((e) => e.name);
     for (const name of realHelperNames) {
       fs.writeFileSync(
-        path.join(fakeTemplatesDir, name),
+        path.join(fakePackagesBeeDir, name),
         fs.readFileSync(path.join(TEMPLATES_DIR, name), "utf8"),
         "utf8",
       );
@@ -3897,7 +3924,7 @@ for (const scenario of [
     const expectedHostItems = [
       ...realHelperNames.slice().sort()
         .map((name) => ({ action: "copy_helper", path: `.bee/bin/${name}` })),
-      ...fs.readdirSync(path.join(hiveDir, "templates", "lib"), { withFileTypes: true })
+      ...fs.readdirSync(path.join(fakePackagesBeeDir, "lib"), { withFileTypes: true })
         .filter((e) => e.isFile() && e.name.endsWith(".mjs"))
         .map((e) => e.name).sort()
         .map((name) => ({ action: "copy_lib", path: `.bee/bin/lib/${name}` })),
@@ -3963,8 +3990,11 @@ for (const scenario of [
       version: "0.1.18",
     });
     const hiveDir = path.dirname(path.dirname(launcher));
-    const fakeTemplatesDir = path.join(hiveDir, "templates");
-    const fakeTemplatesLibDir = path.join(hiveDir, "templates", "lib");
+    // D3 (packages-restructure): fake source's vendored payload lives OUTSIDE
+    // the fake skills tree now, at pluginRoot/packages/bee.
+    const fakePluginRoot = path.dirname(path.dirname(hiveDir));
+    const fakeTemplatesDir = path.join(fakePluginRoot, "packages", "bee");
+    const fakeTemplatesLibDir = path.join(fakeTemplatesDir, "lib");
     const realHelperNames = fs
       .readdirSync(TEMPLATES_DIR, { withFileTypes: true })
       .filter((e) => e.isFile() && e.name.endsWith(".mjs"))
@@ -4159,7 +4189,7 @@ for (const scenario of [
 // bbc6bcea D2: a host with leftover bee_*.mjs shims in its own .bee/bin/ gets
 // them removed on the next --apply; a second run plans nothing further; a
 // brand-new host never sees them appear in the first place (listTemplateHelpers()
-// already stopped copying them once shim-retire-1 deleted the source templates
+// already stopped copying them once shim-retire-1 deleted the source packages/bee
 // - this section only proves the explicit *removal* pass, which is the part
 // that would otherwise never happen for an already-onboarded host).
 const RETIRED_HELPER_NAMES = [
@@ -4248,7 +4278,7 @@ const RETIRED_HELPER_NAMES = [
 
 // --- retired lib module removal (self-derived from the ledger diff) --------
 // A lib module the recorded ledger's managed.lib still names, but current
-// source templates/lib no longer has, is an orphan on every host that
+// source packages/bee/lib no longer has, is an orphan on every host that
 // installed it before the removal: copy_lib only ever adds/updates names the
 // source still has, so nothing before this removed the stale file, and
 // computeRuntimeDrift (bee.mjs) flags it as "(extra)" forever. Unlike
@@ -4385,9 +4415,17 @@ const RETIRED_HELPER_NAMES = [
     check(readInstalled(home, "bee-alpha/SKILL.md") === "# alpha CURRENT\n",
       "legacy refresh: stale bee-alpha refreshed to current source content",
       String(readInstalled(home, "bee-alpha/SKILL.md")));
-    check(readInstalled(home, "bee-hive/templates/lib/state.mjs") === fakeStateSource("1.0.0"),
+    // D1 (packages-restructure): skills are instruction-only - there is no
+    // version marker left inside a synced bee-hive dir to compare (the
+    // legacy-global refresh path is a side channel that predates
+    // SKILLS_VERSION_STAMP and stays out of scope for it here). Content
+    // parity against the fake source's OWN bee-hive dir is the honest
+    // structural proof that the refresh actually landed current content.
+    const sourceHiveDir = path.dirname(path.dirname(launcher));
+    check(
+      hashTree(path.join(installedRoot, "bee-hive")) === hashTree(sourceHiveDir),
       "legacy refresh: stale bee-hive marker refreshed to the current source version",
-      String(readInstalled(home, "bee-hive/templates/lib/state.mjs")));
+    );
 
     // (3) never created: absent bee-beta stays absent in the global root.
     check(!fs.existsSync(path.join(installedRoot, "bee-beta")),

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Guard: the release-version tuple must never desync. DIST-05 (SPEC), decision
-// ed0b2920: BEE_VERSION is duplicated across the templates/lib mirror and the
+// ed0b2920: BEE_VERSION is duplicated across the packages/bee/lib mirror and the
 // live .bee/bin/lib copy, and the two plugin manifests carry their own
 // top-level `.version`. All four must always read the same value — this is
 // the mechanical guard that catches a release that bumped one and missed

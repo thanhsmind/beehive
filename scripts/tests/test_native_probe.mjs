@@ -25,7 +25,7 @@ const {
   NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE,
   NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
   NATIVE_TRANSPORT_EXTERNAL_CLI_ONLY,
-} = await import(path.join(REPO_ROOT, "skills", "bee-hive", "templates", "lib", "dispatch-guard.mjs"));
+} = await import(path.join(REPO_ROOT, "packages", "bee", "lib", "dispatch-guard.mjs"));
 
 const {
   writeNativeTransportProbe,
@@ -35,7 +35,7 @@ const {
   doctorCodexVersion,
   doctorCodexFeaturesList,
   doctorNativeTransportUnlock,
-} = await import(path.join(REPO_ROOT, "skills", "bee-hive", "templates", "bee.mjs"));
+} = await import(path.join(REPO_ROOT, "packages", "bee", "bee.mjs"));
 
 let failures = 0;
 function check(cond, label, detail) {
@@ -354,7 +354,7 @@ check(
 // dispatch-guard.mjs must expose the exact same exports (test_lib_mirror
 // already proves byte-identity for dispatch-guard.mjs; this proves bee.mjs's
 // runtime copy — not covered by test_lib_mirror since it only compares
-// templates/lib <-> .bee/bin/lib — carries the same native-transport exports
+// packages/bee/lib <-> .bee/bin/lib — carries the same native-transport exports
 // as the template it was copied from).
 {
   const runtimeBee = await import(path.join(REPO_ROOT, ".bee", "bin", "bee.mjs"));
@@ -362,7 +362,7 @@ check(
     typeof runtimeBee.readNativeTransportClassification === "function" &&
       typeof runtimeBee.writeNativeTransportProbe === "function" &&
       typeof runtimeBee.doctorNativeTransportUnlock === "function",
-    ".bee/bin/bee.mjs (the runtime copy) exports the same native-transport-probe functions as skills/bee-hive/templates/bee.mjs",
+    ".bee/bin/bee.mjs (the runtime copy) exports the same native-transport-probe functions as packages/bee/bee.mjs",
   );
 }
 

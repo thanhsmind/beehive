@@ -20,14 +20,14 @@
       "dispatch-prepare.mjs": "039f2af9196809081bd4118c1f36f9bb886eaeb541f0b5a08659892c150d6b8e",
       "feedback.mjs": "a38aabf50fc1fd597bddc208160b0f27bf270773c403de75a0c3b4783c95e02c",
       "fsutil.mjs": "c0a65d8aebfca7f7423f10cc9e13fa8ca43234c4a7b7e7ea1f05619b18e06af0",
-      "guards.mjs": "1fed21102028d58335a1798eaf2a9d0ac9c3b91ad0bd457480077de945a4a334",
+      "guards.mjs": "93e4ee2a084f653b027705e73436b6549ac60dde65921017cb1c82bbfd995ff5",
       "herding.mjs": "95a81c8f17a84e2b57a1f8081f5f4a3ec7703432e81b2741c8795bd30a181433",
       "inject.mjs": "4df920d3d430c1e0aba2d41f09d764396e2f030bd525b78aa0ab68163703c7cb",
-      "integration-queue.mjs": "3a9f883aa490009c7af30de2a0baf3bafd4b37048c79d3e841ae232cd5cea3c9",
+      "integration-queue.mjs": "149a03dfb4723a18008e3b0f3890e8dcd7b6fb660a2cf7dda3874e08fb8e172d",
       "intent.mjs": "acb9a427caf2e1aae106407a96a9fc0a2c16a087d31af057f704afa2619255e8",
       "judge.mjs": "5057e17a6bcd3dacff21fe479e13570620cfe1b9c821c0ff5c8254f39e3c6ed1",
       "knowledge.mjs": "73ed66b2df865d665bb4c7224084ccec0b5ce2d84f31c7384bdc19e0998908b6",
-      "lease-store.mjs": "a61d70b4732c13e622068648cd65ffa5023937cb0cde8649390aaf89bb38fa92",
+      "lease-store.mjs": "69135c9341310f4799da461f8185f7842a22fcf46332041b10951ad618a09c13",
       "lock.mjs": "2c80c3738ce0f70c69cf45164c30a078a7e7c9c02d9feb702415900f41d4e9c9",
       "perf.mjs": "57dedfbd53cfce7a35ddb1e2cae1cc9c86533bdfa4df45965fcca0fc8497e5fc",
       "recovery.mjs": "8efe2fef7fbfd4d70f48b96e36cb87f37d39a77858df4444ff643aee114d84be",
@@ -39,8 +39,8 @@
       "state-projection.mjs": "372e78ecbce14115cbc2b88bfe10d23f55fa9716d4ed586370e532484dcf00c1",
       "state.mjs": "3618184ae83ca754df936c520cad46250be2fdb8640663f2863c192e53f60f68",
       "validate-args.mjs": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
-      "workflow-store.mjs": "27aa64ffab30bdda9c939cdb6def6106c9ef9648067078eda27d512b5a1e41d4",
-      "workspace-store.mjs": "b7355d3fe6a398475edab10b50de7958601034ce771c66af775f2ce21ab3b641",
+      "workflow-store.mjs": "c5460cd0cd9b5cb9d49f2b7f5d4d4113e1bd3e790b0c8670c716f9ba50628c12",
+      "workspace-store.mjs": "aa8017d71df1e3d35f40503b47bbe1aa1a2e110623b4a480fe66eb5bb1f3c3c1",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
       "worktree-store.mjs": "99802ffb7dd382a2c7e069f308cddaa44901fd66c637165e67c58c9041de5e89"
     },
@@ -77,9 +77,9 @@
     },
     "codex": {
       "agents": [],
-      "note": "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design, templates/lib/state.mjs) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11)."
+      "note": "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design, packages/bee/lib/state.mjs) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11)."
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T14:52:56.846Z"
+  "updated_at": "2026-07-25T17:13:05.757Z"
 }

@@ -24,7 +24,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 import { runModuleWorker } from "../lib/run-module-worker.mjs";
-import { ANCHOR_NUDGE_COMMAND } from "../../skills/bee-hive/templates/lib/compaction.mjs";
+import { ANCHOR_NUDGE_COMMAND } from "../../packages/bee/lib/compaction.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");

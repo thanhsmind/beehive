@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");
 
-const TEMPLATE_PATH = path.join(REPO_ROOT, "skills", "bee-hive", "templates", "AGENTS.block.md");
+const TEMPLATE_PATH = path.join(REPO_ROOT, "packages", "bee", "AGENTS.block.md");
 const ROOT_AGENTS_PATH = path.join(REPO_ROOT, "AGENTS.md");
 
 const MARKER_START = "<!-- BEE:START -->";
@@ -55,7 +55,7 @@ const rootBytes = utf8Bytes(rootText);
 check("template block stays under the 20 KiB hard budget", () => {
   assert(
     templateBytes < HARD_FAIL_BYTES,
-    `skills/bee-hive/templates/AGENTS.block.md is ${templateBytes} UTF-8 bytes, ` +
+    `packages/bee/AGENTS.block.md is ${templateBytes} UTF-8 bytes, ` +
       `at or over the ${HARD_FAIL_BYTES}-byte hard budget`,
   );
   if (templateBytes >= WARN_BYTES) {
@@ -104,7 +104,7 @@ check("managed block in AGENTS.md renders byte-identically to the template", () 
   assert(
     renderedBlock === templateBlock,
     "the block rendered inside AGENTS.md's BEE:START/BEE:END markers is not byte-identical " +
-      "to skills/bee-hive/templates/AGENTS.block.md — re-run the onboarding sync",
+      "to packages/bee/AGENTS.block.md — re-run the onboarding sync",
   );
 });
 

@@ -62,16 +62,16 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { detectCommands } from "../templates/lib/commands_detect.mjs";
-import { hashFile } from "../templates/lib/fsutil.mjs";
-import { classifySource } from "../templates/lib/source-identity.mjs";
+import { detectCommands } from "../../../packages/bee/lib/commands_detect.mjs";
+import { hashFile } from "../../../packages/bee/lib/fsutil.mjs";
+import { classifySource } from "../../../packages/bee/lib/source-identity.mjs";
 // msn-18d deliberately does NOT `import { resolveContext } from
-// "../templates/lib/state.mjs"` here, even though that is the real,
+// "../../../packages/bee/lib/state.mjs"` here, even though that is the real,
 // canonical resolver every leaf coordination module uses (advisor-digest-
 // slice4 binding condition 5). This file's OWN test suite (test_onboard_bee.
 // mjs's makeFakeSkillsRoot) ships a deliberately minimal fake state.mjs
 // (BEE_VERSION + COMMAND_KEYS only, to pin a controlled version for
-// skill-sync tests) at the fixture's templates/lib/state.mjs — a static
+// skill-sync tests) at the fixture's packages/bee/lib/state.mjs — a static
 // `import { resolveContext } from ...` against a module that does not
 // export that name fails the WHOLE ESM module load, uncatchable by any
 // try/catch in this file, before a single line of onboard_bee.mjs runs.
@@ -82,13 +82,13 @@ import { classifySource } from "../templates/lib/source-identity.mjs";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SCRIPTS_DIR = path.dirname(SCRIPT_PATH);
 const HIVE_DIR = path.dirname(SCRIPTS_DIR);
-const TEMPLATES_DIR = path.join(HIVE_DIR, "templates");
+const PLUGIN_ROOT = path.dirname(path.dirname(HIVE_DIR));
+const PLUGIN_HOOKS_DIR = path.join(PLUGIN_ROOT, "hooks");
+const TEMPLATES_DIR = path.join(PLUGIN_ROOT, "packages", "bee");
 const TEMPLATES_LIB_DIR = path.join(TEMPLATES_DIR, "lib");
 const TEMPLATES_STATUSLINE_DIR = path.join(TEMPLATES_DIR, "statusline");
 const TEMPLATES_AGENTS_DIR = path.join(TEMPLATES_DIR, "agents");
 const AGENTS_BLOCK_TEMPLATE = path.join(TEMPLATES_DIR, "AGENTS.block.md");
-const PLUGIN_ROOT = path.dirname(path.dirname(HIVE_DIR));
-const PLUGIN_HOOKS_DIR = path.join(PLUGIN_ROOT, "hooks");
 
 const ONBOARDING_SCHEMA_VERSION = "1.0";
 const MIN_NODE_MAJOR = 18;
@@ -489,7 +489,7 @@ function readManifestVersionStrict(manifestPath) {
 // target and only discover the split afterwards.
 function readSourceReleaseIdentity() {
   const runtimeComponent = {
-    name: "skills/bee-hive/templates/lib/state.mjs",
+    name: "packages/bee/lib/state.mjs",
     version: readVersionStrict(path.join(TEMPLATES_LIB_DIR, "state.mjs"), true),
   };
   let sourceKind = "unknown";
@@ -675,6 +675,24 @@ export const RENDER_SCHEMA = "bee-render/2";
 // root carrying it as a rendered projection and refuses it as an onboarding
 // source for ANY target (D9 provenance).
 export const RENDER_SIDECAR = ".bee-render.json";
+
+// D1/D3 (packages-restructure deviation, logged): skills are instruction-only
+// now, so the vendored payload's own version marker (packages/bee/lib/
+// state.mjs) no longer travels inside a synced skill dir - a fresh sync's
+// source walk never produces bee-hive/templates/**, so nothing would ever
+// repopulate the three-version preflight's old installed_skills marker
+// (<target>/bee-hive/templates/lib/state.mjs) post-sync, permanently
+// bricking re-onboarding (unknown, never forceable) the moment a synced
+// target's stale templates/ gets pruned by the next whole-skill resync.
+// SKILLS_VERSION_STAMP is a sync-owned replacement: written at the skills
+// ROOT (sibling of the RENDER_SIDECAR above, never inside a bee-* dir so the
+// per-skill mirror never touches or deletes it) on every successful apply,
+// for every target kind. computeSkillSyncTarget reads it first and treats it
+// as authoritative; only when it is genuinely ABSENT (never when malformed or
+// symlinked) does the preflight fall back to the legacy nested marker, so an
+// already-onboarded host self-migrates on its very next onboard with zero
+// flags and zero manual steps.
+export const SKILLS_VERSION_STAMP = ".bee-skills-version.json";
 
 // One skill's content digest: sha256 over manifestFingerprint's sorted
 // [relPath, sha256(fileBytes)] pairs, so it folds the same fingerprint
@@ -1242,14 +1260,26 @@ function computeSkillSyncTarget({
       installedTreeExists = true; // unreadable target: fail closed -> unknown
     }
   }
+  // packages-restructure deviation (see SKILLS_VERSION_STAMP doc comment):
+  // skills are instruction-only now, so the vendored payload's own version
+  // marker no longer travels inside a synced skill dir - read the sync-owned
+  // stamp first (authoritative: present-but-malformed/symlinked stays
+  // "unknown", never falls through), and only when the stamp is genuinely
+  // ABSENT fall back to the legacy nested marker so an already-onboarded host
+  // (synced by a pre-restructure bee) still resolves a real version, applies,
+  // and gets the stamp written for every onboard after that.
+  const stampPath = path.join(targetRoot, SKILLS_VERSION_STAMP);
+  const stampPresent = Boolean(lstatIfExists(stampPath));
   const installedVersion =
     target.mode === "noop"
       ? sourceVersion
-      : readVersionStrict(
-          path.join(installedHive, "templates", "lib", "state.mjs"),
-          installedTreeExists,
-          { componentRoot: targetRoot }, // lstat every component inside the managed target (review P1-2)
-        );
+      : stampPresent
+        ? readManifestVersionStrict(stampPath)
+        : readVersionStrict(
+            path.join(installedHive, "templates", "lib", "state.mjs"),
+            installedTreeExists,
+            { componentRoot: targetRoot }, // lstat every component inside the managed target (review P1-2)
+          );
   target.versions = {
     source: versionLabel(sourceVersion),
     host_helpers: versionLabel(hostVersion),
@@ -1428,11 +1458,19 @@ function computeLegacyGlobalRefresh({ sourceRoot, realSource, realRepo, sourceVe
   // Downgrade guard: never overwrite a RESOLVED-newer global copy with older
   // source. An absent/unknown installed version proceeds (parity intent: bring
   // pre-1.0 copies, whose marker may be unreadable, up to current).
-  const installedVersion = readVersionStrict(
-    path.join(globalRoot, "bee-hive", "templates", "lib", "state.mjs"),
-    true,
-    { componentRoot: globalRoot },
-  );
+  // packages-restructure deviation (SKILLS_VERSION_STAMP doc comment): same
+  // stamp-first, legacy-marker-fallback read as computeSkillSyncTarget above
+  // - a refreshed legacy global root gets the stamp written on its own next
+  // ordinary sync (once --global-skills is used) or keeps resolving via the
+  // legacy marker here in the meantime.
+  const globalStampPath = path.join(globalRoot, SKILLS_VERSION_STAMP);
+  const installedVersion = lstatIfExists(globalStampPath)
+    ? readManifestVersionStrict(globalStampPath)
+    : readVersionStrict(
+        path.join(globalRoot, "bee-hive", "templates", "lib", "state.mjs"),
+        true,
+        { componentRoot: globalRoot },
+      );
   if (
     sourceVersion.state === "resolved" &&
     installedVersion.state === "resolved" &&
@@ -1533,7 +1571,7 @@ function computeSkillSync(repoRoot, { globalSkills = false } = {}) {
   // Shared version resolutions (D3): source and host helpers are per-run, the
   // installed tree is per target (resolved inside computeSkillSyncTarget).
   const sourceVersion = readVersionStrict(
-    path.join(HIVE_DIR, "templates", "lib", "state.mjs"),
+    path.join(TEMPLATES_LIB_DIR, "state.mjs"),
     true, // the running script's tree exists by definition
   );
   const hostStateFile = path.join(repoRoot, ".bee", "bin", "lib", "state.mjs");
@@ -1720,7 +1758,7 @@ function listTemplateHelpers() {
 
 // ---------- retired helper shims (D2, shim-retire) --------------------------
 // bee.mjs <group> <verb> is the sole shipped CLI (decision bbc6bcea, D1); the
-// 9 per-group shims below were deleted from skills/bee-hive/templates/ in
+// 9 per-group shims below were deleted from packages/bee/ in
 // shim-retire-1. listTemplateHelpers() is name-agnostic (readdir), so it
 // naturally stops copying them - but nothing ever deletes a copy a host
 // already has vendored into its own .bee/bin/, so a host upgrading through
@@ -1800,7 +1838,7 @@ function statuslineOptIn(repoRoot) {
 // from, so joining it there would resolve "unknown" and brick onboarding
 // non-forceably on every host. Codex gets no agent files at all (AO11): Codex
 // has no per-agent model selection (DEFAULT_MODELS.codex is all-null by
-// design, templates/lib/state.mjs), so a `model:` pin would be a no-op file
+// design, packages/bee/lib/state.mjs), so a `model:` pin would be a no-op file
 // implying an enforcement that does not exist for that runtime.
 function listTemplateAgents() {
   if (!fs.existsSync(TEMPLATES_AGENTS_DIR)) {
@@ -1823,7 +1861,7 @@ const AGENT_TIER_BY_NAME = {
 };
 
 // Deliberately duplicated, not imported: this script never import-depends on
-// templates/lib/state.mjs's exports (see the STALE_ADVISOR_KEY_WARNING
+// packages/bee/lib/state.mjs's exports (see the STALE_ADVISOR_KEY_WARNING
 // comment below, same discipline) - the skill-sync test fixture's fake
 // state.mjs is minimal by design, and importing modelForTier/resolveTier here
 // would break against it. AGENT_TIER_DEFAULTS_CLAUDE is text-pinned against
@@ -1831,7 +1869,7 @@ const AGENT_TIER_BY_NAME = {
 // (same pattern as the COMMAND_KEYS / STALE_ADVISOR_KEY_WARNING checks).
 const AGENT_TIER_DEFAULTS_CLAUDE = { extraction: "haiku", generation: "sonnet", review: "opus" };
 
-// Mirrors templates/lib/state.mjs normalizeTierValue (state.mjs:159-175),
+// Mirrors packages/bee/lib/state.mjs normalizeTierValue (state.mjs:159-175),
 // narrowed to what agent-file rendering needs: a resolved model NAME string,
 // `undefined` for "no override" (default stands, same as normalizeTierValue),
 // `null` for an EXPLICIT null override, or the CLI_TIER_SENTINEL for a
@@ -1947,7 +1985,7 @@ function computeAgentsSyncRecord(repoRoot, beeVersion) {
       agents: [],
       note:
         "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design, " +
-        "templates/lib/state.mjs) - tiers are enforced as a read budget + output cap in the " +
+        "packages/bee/lib/state.mjs) - tiers are enforced as a read budget + output cap in the " +
         "worker prompt instead. No agent files are rendered under .agents/ (AO11).",
     },
   };
@@ -2484,11 +2522,11 @@ function commandsNotices(repoRoot, { firstOnboard = false } = {}) {
 
 // ---------- stale advisor key notice (D1: advisor mode removed in full) -----
 // Warn, never error, when a repo's raw .bee/config.json still carries the
-// removed `advisor` key — templates/lib/state.mjs readConfig() tolerates and
+// removed `advisor` key — packages/bee/lib/state.mjs readConfig() tolerates and
 // strips it, but the human should still be told to delete it. Same warning
-// text as templates/lib/state.mjs STALE_ADVISOR_KEY_WARNING / bee_status.mjs
+// text as packages/bee/lib/state.mjs STALE_ADVISOR_KEY_WARNING / bee_status.mjs
 // so it reads identically wherever it is noticed. Deliberately NOT imported
-// from templates/lib/state.mjs (this script only ever text-scans that tree
+// from packages/bee/lib/state.mjs (this script only ever text-scans that tree
 // for BEE_VERSION — see readBeeVersion — and never import-depends on its
 // exports; the skill-sync test fixture's fake state.mjs is minimal by design).
 const STALE_ADVISOR_KEY_WARNING =
@@ -2973,7 +3011,7 @@ function computePlan(
   }
   // 3c. retired lib modules (mirrors 3a, but self-derived instead of a hand
   // list): a lib module the recorded ledger's managed.lib still names, but the
-  // current source templates/lib no longer has, is an orphan on every host
+  // current source packages/bee/lib no longer has, is an orphan on every host
   // that installed it before the removal. computeRuntimeDrift (bee.mjs)
   // already flags such a file as "(extra)" forever, because nothing before
   // this removed it - copy_lib only ever adds/updates names the source still
@@ -3671,7 +3709,34 @@ function applyPlan(
   if (syncSkills) {
     const sidecarByRuntime = new Map();
     for (const t of skillSync.targets) {
-      if (t.blocked || (t.mode !== "sync" && t.mode !== "fresh")) {
+      // packages-restructure deviation (SKILLS_VERSION_STAMP doc comment):
+      // the stamp is written on its own condition, NOT gated on `t.blocked`
+      // like the sidecar below - by the time this loop runs, the apply
+      // already proved either `t` was never blocked, or every blocked target
+      // was forceable and the human forced it through (blocked-first
+      // aggregation above), so `t.blocked` alone is not "this target was
+      // skipped", it can also mean "this target was forced". A forced target
+      // DID actually receive its sync_skill items via the main item loop
+      // above (unconditional on t.blocked) and must get its stamp updated
+      // too, or the very next onboard falls back to a legacy marker that no
+      // longer exists post-sync and reads permanently unknown.
+      // Mirrors the OLD marker's exact fate, not "every skill in parity": the
+      // legacy marker lived INSIDE bee-hive's own skill dir, so it only ever
+      // failed to update when bee-hive ITSELF was skipped/blocked - an
+      // unrelated skill (bee-alpha, say) sitting out never stopped bee-hive's
+      // own sync from landing the current version. Gating on "any skill
+      // skipped" is stricter than that and wrongly forces a resolvable
+      // version into "unknown" (recheck 10f: unaffected skills still land,
+      // only the affected ones stay out of parity - that must read as
+      // ordinary changes_needed, never blocked_downgrade).
+      const targetSynced = t.mode === "sync" || t.mode === "fresh";
+      if (targetSynced && !skippedSkills.some((s) => s.target === t.kind && s.skill === "bee-hive")) {
+        writeFileAtomic(
+          path.join(t.target_root, SKILLS_VERSION_STAMP),
+          `${JSON.stringify({ version: beeVersion }, null, 2)}\n`,
+        );
+      }
+      if (t.blocked || !targetSynced) {
         continue;
       }
       const runtime = runtimeForTargetKind(t.kind);

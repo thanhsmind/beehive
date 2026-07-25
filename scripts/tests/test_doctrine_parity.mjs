@@ -339,10 +339,10 @@ function runSelftest(counts) {
     );
     writeFixture(
       rootA,
-      "skills/bee-hive/templates/AGENTS.block.md",
+      "packages/bee/AGENTS.block.md",
       "## Guardrails (hook-equivalent rules)\n\nBoth runtimes ship hooks rendered from one shared catalog.\n",
     );
-    const scanA = ["AGENTS.md", "skills/bee-hive/templates/AGENTS.block.md"];
+    const scanA = ["AGENTS.md", "packages/bee/AGENTS.block.md"];
     const resultA = checkDoctrine({ root: rootA, scanSet: scanA, counts });
 
     const projectionHit = resultA.retired.some((h) => h.file !== "AGENTS.md");

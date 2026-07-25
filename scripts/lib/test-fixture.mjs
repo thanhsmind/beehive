@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // test-fixture.mjs — shared temp-repo bootstrap, cell factory, and the
 // check/assert runner plumbing used by
-// skills/bee-hive/templates/tests/test_lib.mjs.
+// packages/bee/tests/test_lib.mjs.
 //
 // Extracted 1:1 from that file's original top section (cs-1): same
 // PASS/FAIL console output, same passed/failed counters, same exit-code
@@ -9,7 +9,7 @@
 // that used to be inline.
 //
 // Import-path note: this file is only ever imported from the CANONICAL
-// skills/bee-hive/templates/tests/test_lib.mjs, which is the only copy
+// packages/bee/tests/test_lib.mjs, which is the only copy
 // run_verify.mjs spawns (scripts/run_verify.mjs SUITES lists that exact
 // path). The .claude-plugin/ and .codex-plugin/ trees carry byte-rendered
 // mirror copies of test_lib.mjs that are never separately executed — they
@@ -22,7 +22,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { writeJsonAtomic } from '../../skills/bee-hive/templates/lib/fsutil.mjs';
+import { writeJsonAtomic } from '../../packages/bee/lib/fsutil.mjs';
 
 // ─── temp repo setup ────────────────────────────────────────────────────────
 

@@ -44,17 +44,17 @@ const RUNNER_PATH = path.join(REPO_ROOT, "scripts", "run_verify.mjs");
 // cs-4 discovery flip — this list is the curated subset that gets the
 // stronger per-suite protection on top of the floor count below.
 const MANDATORY_SUITES = [
-  "skills/bee-hive/templates/tests/test_cli_state.mjs",
-  "skills/bee-hive/templates/tests/test_cli_cells.mjs",
-  "skills/bee-hive/templates/tests/test_state.mjs",
-  "skills/bee-hive/templates/tests/test_guards.mjs",
-  "skills/bee-hive/templates/tests/test_backlog_capture.mjs",
-  "skills/bee-hive/templates/tests/test_misc.mjs",
-  "skills/bee-hive/templates/tests/test_cells.mjs",
-  "skills/bee-hive/templates/tests/test_reservations.mjs",
-  "skills/bee-hive/templates/tests/test_claims.mjs",
-  "skills/bee-hive/templates/tests/test_feedback.mjs",
-  "skills/bee-hive/templates/tests/test_reviews.mjs",
+  "packages/bee/tests/test_cli_state.mjs",
+  "packages/bee/tests/test_cli_cells.mjs",
+  "packages/bee/tests/test_state.mjs",
+  "packages/bee/tests/test_guards.mjs",
+  "packages/bee/tests/test_backlog_capture.mjs",
+  "packages/bee/tests/test_misc.mjs",
+  "packages/bee/tests/test_cells.mjs",
+  "packages/bee/tests/test_reservations.mjs",
+  "packages/bee/tests/test_claims.mjs",
+  "packages/bee/tests/test_feedback.mjs",
+  "packages/bee/tests/test_reviews.mjs",
   "scripts/tests/test_skill_render.mjs",
   "skills/bee-hive/scripts/test_onboard_bee.mjs",
   "skills/bee-hive/scripts/test_plugin_distribution.mjs",
@@ -62,12 +62,12 @@ const MANDATORY_SUITES = [
   "hooks/test_model_guard.mjs",
   "hooks/test_write_guard.mjs",
   "hooks/test_hook_contracts.mjs",
-  "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+  "packages/bee/tests/test_bee_cli.mjs",
   "scripts/tests/test_state_write_concurrency.mjs",
   "scripts/tests/test_installers_e2e.mjs",
   "scripts/tests/test_conformance.mjs",
   "scripts/tests/test_agents_budget.mjs",
-  "skills/bee-hive/templates/tests/test_recovery.mjs",
+  "packages/bee/tests/test_recovery.mjs",
   // okf-3: knowledge check joins the chain as a chain-failing suite (D22/D34)
   // — pinned here so it can never silently drop out of commands.verify again.
   // okf-4: the same pinned path also carries `knowledge index --check`
@@ -93,7 +93,7 @@ const MANDATORY_SUITES = [
   // can. Dropping it out of the chain would leave the guarantee as unasserted
   // prose again, which is exactly how it would rot in one release with no
   // error (advisor-digest-f3 finding 1).
-  "skills/bee-hive/templates/tests/test_bundle_mode.mjs",
+  "packages/bee/tests/test_bundle_mode.mjs",
   // f3-4 (G2): the fence that makes `docs/specs/` read-only for NEW content.
   // Pinned exact-path because it does not match the `test_*.mjs` discovery
   // glob — EXTRA_SUITES membership is its only way into the chain, and a
@@ -193,7 +193,7 @@ export const MANDATORY_SUITE_ARGS = [
 // 2026-07-20): 47 suites from the old hand-written array, plus 3 real
 // `test_*.mjs` files discovery found sitting in the repo that the old array
 // had silently never run (scripts/test_config_samples_safe.mjs,
-// skills/bee-hive/templates/tests/test_perf.mjs, hooks/test_bypass_stop_net.mjs)
+// packages/bee/tests/test_perf.mjs, hooks/test_bypass_stop_net.mjs)
 // = 50. Bump this UP whenever a suite is intentionally added; it should
 // never need to go down.
 // f2-1b: +1 for scripts/test_okf_pins.mjs (the derived-pin honesty suite) = 51.
@@ -221,7 +221,7 @@ const SUITE_FLOOR_COUNT = 65;
 /**
  * Checks a discovered suite list against a mandatory list and a floor count.
  * `suitePaths` is a flat list of repo-relative suite path strings (e.g.
- * "skills/bee-hive/templates/tests/test_cells.mjs"). Returns
+ * "packages/bee/tests/test_cells.mjs"). Returns
  * { ok, belowFloor, count, missingOnDisk, missingFromSuites } —
  * missingOnDisk / missingFromSuites are `mandatory`-ordered subsets that
  * failed each respective check (no substring matching — a mandatory path

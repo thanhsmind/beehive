@@ -42,7 +42,7 @@
 // row here either asserts a string only the new wiring can produce, or pins the
 // exact bytes the module returns.
 //
-// D17: the suite imports the SOURCE modules (skills/bee-hive/templates/lib/)
+// D17: the suite imports the SOURCE modules (packages/bee/lib/)
 // and vendors .bee/bin/lib into each fixture, exactly as
 // scripts/tests/test_compact_capsule.mjs does; scripts/tests/test_lib_mirror.mjs is what
 // proves the two trees match.
@@ -59,8 +59,8 @@ import {
   survivalWarning,
   readCompactionRecords,
   ANCHOR_NUDGE_COMMAND,
-} from '../../skills/bee-hive/templates/lib/compaction.mjs';
-import { shouldInject, markInjected } from '../../skills/bee-hive/templates/lib/inject.mjs';
+} from '../../packages/bee/lib/compaction.mjs';
+import { shouldInject, markInjected } from '../../packages/bee/lib/inject.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, '..', '..');

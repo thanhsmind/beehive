@@ -20,12 +20,12 @@ import {
   RENDER_RUNTIMES,
   RENDER_SIDECAR,
 } from "../../skills/bee-hive/scripts/onboard_bee.mjs";
-import { classifySource } from "../../skills/bee-hive/templates/lib/source-identity.mjs";
+import { classifySource } from "../../packages/bee/lib/source-identity.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");
 const ONBOARD = path.join(REPO_ROOT, "skills", "bee-hive", "scripts", "onboard_bee.mjs");
-const TEMPLATES_LIB_DIR = path.join(REPO_ROOT, "skills", "bee-hive", "templates", "lib");
+const TEMPLATES_LIB_DIR = path.join(REPO_ROOT, "packages", "bee", "lib");
 
 let passed = 0;
 let failed = 0;
@@ -192,18 +192,23 @@ function mkdtemp() {
 
 // Build a launchable skills projection under <base>/.claude/skills so it
 // classifies as project_projection unless the render sidecar promotes it to
-// rendered_projection. Copies the REAL onboarder + templates/lib so the child
-// process resolves its imports and the runtime version marker.
+// rendered_projection. Copies the REAL onboarder + packages/bee/lib so the
+// child process resolves its imports and the runtime version marker.
+// D3 (packages-restructure): the copied launcher resolves its vendored
+// payload PLUGIN_ROOT-relative (dirname(dirname(hive)) = base/.claude here,
+// NOT base itself) - the packages/bee copy must live at that same nesting
+// depth, outside the skills tree, never nested under hive/templates.
 function buildProjection(base, { sidecar = false, extraSkills = {} } = {}) {
   const skillsRoot = path.join(base, ".claude", "skills");
   const hive = path.join(skillsRoot, "bee-hive");
+  const packagesBeeDir = path.join(base, ".claude", "packages", "bee");
   fs.mkdirSync(path.join(hive, "scripts"), { recursive: true });
-  fs.mkdirSync(path.join(hive, "templates", "lib"), { recursive: true });
+  fs.mkdirSync(path.join(packagesBeeDir, "lib"), { recursive: true });
   fs.writeFileSync(path.join(hive, "scripts", "onboard_bee.mjs"), fs.readFileSync(ONBOARD));
   for (const libName of fs.readdirSync(TEMPLATES_LIB_DIR)) {
     if (!libName.endsWith(".mjs")) continue;
     fs.writeFileSync(
-      path.join(hive, "templates", "lib", libName),
+      path.join(packagesBeeDir, "lib", libName),
       fs.readFileSync(path.join(TEMPLATES_LIB_DIR, libName)),
     );
   }

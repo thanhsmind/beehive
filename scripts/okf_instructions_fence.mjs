@@ -126,7 +126,7 @@ import { fileURLToPath } from 'node:url';
 // copy. `bundleMode` is f3-2/f3-3's ONE predicate — re-deriving "is this repo
 // migrated" here would let the two answers drift apart, which is the failure
 // class G12/G13 exist to prevent.
-import { bundleMode } from '../skills/bee-hive/templates/lib/knowledge.mjs';
+import { bundleMode } from '../packages/bee/lib/knowledge.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, '..');
@@ -524,8 +524,8 @@ function runSelftest() {
 
   check('shipped MACHINERY under skills/ (non-markdown) is out of scope, by decision', () => {
     const root = bundle(makeRepo('machinery'));
-    writeFile(root, 'skills/bee-hive/templates/tests/test_guards.mjs', `const ok = checkWrite(root, state, 'docs/specs/tasks.md');\n`);
-    writeFile(root, 'skills/bee-hive/templates/lib/capture.mjs', '// `into` names where it landed (e.g. "docs/specs/<area>.md").\n');
+    writeFile(root, 'skills/bee-hive/scripts/test_onboard_bee.mjs', `const ok = checkWrite(root, state, 'docs/specs/tasks.md');\n`);
+    writeFile(root, 'skills/bee-hive/scripts/onboard_bee.mjs', '// `into` names where it landed (e.g. "docs/specs/<area>.md").\n');
     writeFile(root, 'skills/bee-hive/SKILL.md', `# hive\n\n${MISROUTE_LINE}\n`);
     const result = fenceFindings(root);
     assert(

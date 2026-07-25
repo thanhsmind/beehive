@@ -2,7 +2,7 @@
 // Release manifest generator + checker (DIST-01/DIST-03/D-03, decision ed0b2920).
 //
 // Enumerates the release-identity file set for the bee distribution:
-//   - skills/bee-hive/templates/lib/*.mjs   -> role "source_lib"
+//   - packages/bee/** (excl. any hooks/ subtree) -> role "package_payload"
 //   - .bee/bin/lib/*.mjs                    -> role "runtime_lib"
 //   - skills/** and hooks/**                 -> canonical plugin package
 //   - both plugin manifests + marketplace   -> plugin metadata
@@ -93,11 +93,18 @@ function buildRecord(absPath, role, packagePath = null) {
   return record;
 }
 
-function enumerateTree(dirAbsPath, role) {
+// `excludeTopDirNames` skips an immediate child directory by name (never
+// nested matches) - used to carve the hooks/ subtree out of the packages/bee
+// payload walk once cell 2 lands it at packages/bee/hooks/ (the dedicated
+// plugin_hook walk below stays the single source for that content; D5).
+function enumerateTree(dirAbsPath, role, { excludeTopDirNames = [] } = {}) {
   if (!fs.existsSync(dirAbsPath)) throw new Error(`release_manifest: expected directory missing: ${dirAbsPath}`);
   const records = [];
   const walk = (current) => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (current === dirAbsPath && entry.isDirectory() && excludeTopDirNames.includes(entry.name)) {
+        continue;
+      }
       const absPath = path.join(current, entry.name);
       if (entry.isSymbolicLink()) throw new Error(`release_manifest: symlink forbidden in package inventory: ${absPath}`);
       if (entry.isDirectory()) walk(absPath);
@@ -128,6 +135,9 @@ function enumerateMjsDir(dirAbsPath, role) {
 function buildCurrentRecords() {
   const records = [
     ...enumerateMjsDir(RUNTIME_LIB_DIR, "runtime_lib"),
+    ...enumerateTree(path.join(REPO_ROOT, "packages", "bee"), "package_payload", {
+      excludeTopDirNames: ["hooks"],
+    }),
     ...enumerateTree(path.join(REPO_ROOT, "skills"), "plugin_skill"),
     ...PLUGIN_SKILL_RENDER_ROOTS.flatMap(({ dir, role }) => enumerateTree(dir, role)),
     ...enumerateTree(path.join(REPO_ROOT, "hooks"), "plugin_hook"),
@@ -240,10 +250,10 @@ function runSelftest() {
     return 1;
   }
 
-  // Pick a covered file to bite on — prefer a source_lib/runtime_lib record
-  // so the mutation exercises a real enumerated file, not a named one.
+  // Pick a covered file to bite on — prefer a package_payload/runtime_lib
+  // record so the mutation exercises a real enumerated file, not a named one.
   const target =
-    baseline.find((r) => r.role === "source_lib" || r.role === "runtime_lib") ?? baseline[0];
+    baseline.find((r) => r.role === "package_payload" || r.role === "runtime_lib") ?? baseline[0];
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "release-manifest-selftest-"));
   let selftestOk = false;

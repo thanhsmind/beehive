@@ -1,0 +1,168 @@
+[
+  {
+    "id": "packages-restructure-1",
+    "feature": "packages-restructure",
+    "lane": "standard",
+    "title": "Move skills/bee-hive/templates -> packages/bee + fix all source/test path resolution",
+    "files": [
+      "packages/bee/",
+      "skills/bee-hive/scripts/onboard_bee.mjs",
+      "skills/bee-hive/scripts/test_onboard_bee.mjs",
+      "skills/bee-hive/scripts/test_split_brain_regression.mjs",
+      "scripts/run_verify.mjs",
+      "scripts/lib/release-tuple.mjs",
+      "scripts/okf_specs_fence.mjs",
+      "scripts/tests/test_verify_manifest.mjs",
+      "scripts/tests/test_gate_bypass_doctrine.mjs",
+      "scripts/tests/test_lib_mirror.mjs",
+      "scripts/tests/test_compact_capsule.mjs",
+      "scripts/lib/test-fixture.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "docs/history/packages-restructure/plan.md",
+      "skills/bee-hive/scripts/onboard_bee.mjs:60-100",
+      "scripts/run_verify.mjs:85-100"
+    ],
+    "action": "Per D1/D2/D3: `git mv skills/bee-hive/templates packages/bee` (history-preserving). Then fix-forward: (a) onboard_bee.mjs — 3 ESM imports :65-67 -> ../../../packages/bee/lib/*, replace TEMPLATES_DIR self-relative resolution :82-90 with path.join(PLUGIN_ROOT, 'packages', 'bee') (same mechanism as PLUGIN_HOOKS_DIR :91), tuple literal :492 -> packages/bee/lib/state.mjs, sweep remaining ~15 refs; (b) test_onboard_bee.mjs 14 refs + test_split_brain_regression.mjs 3 refs; (c) packages/bee/tests/*.mjs — the ~35x2 imports ../../../../scripts/lib/{run-module-worker,test-fixture}.mjs -> ../../../scripts/lib/... (../lib imports stay untouched per D2); (d) packages/bee/lib/guards.mjs write-guard classification literals :1416-1498 templates/lib -> packages/bee/lib (keep both segments recognized if the guard classifies vendored .bee/bin paths separately — read the block first); (e) run_verify.mjs DISCOVERY_ROOTS 'skills/bee-hive/templates/tests' -> 'packages/bee/tests' (hooks entry untouched, cell 2); (f) scripts/tests literal sweeps: test_verify_manifest (16), test_gate_bypass_doctrine (11), test_lib_mirror (6), test_compact_capsule (5), test-fixture.mjs (3); (g) release-tuple.mjs 2 refs, okf_specs_fence.mjs 2 imports. Regenerate impact registry if verify refuses stale paths (node scripts/impact_registry.mjs --write if that flag exists; else note for cell 3). REGEN OBLIGATION (mandatory, this order, inside this cell): node scripts/render_plugin_skill_trees.mjs, then node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+    "must_haves": {
+      "truths": [
+        "git log --follow works on packages/bee/lib/state.mjs (real rename, not delete+add)",
+        "no file under skills/bee-hive/templates remains",
+        "resolution is PLUGIN_ROOT-relative, never self-relative ../templates"
+      ],
+      "artifacts": [
+        "packages/bee/{bee.mjs,AGENTS.block.md,lib/,tests/,agents/,statusline/}"
+      ],
+      "key_links": [
+        "docs/history/packages-restructure/plan.md#approach"
+      ],
+      "prohibitions": [
+        "no hand-edit of scripts/impact-registry.json",
+        "no HAND-edits under .bee/bin — the only writes there come from onboard_bee.mjs --apply (regen obligation)",
+        "no hooks/ move (cell 2)"
+      ]
+    },
+    "verify": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check",
+    "behavior_change": true,
+    "deps": []
+  },
+  {
+    "id": "packages-restructure-2",
+    "feature": "packages-restructure",
+    "lane": "standard",
+    "title": "Move repo-root hooks/ -> packages/bee/hooks + resolution/manifest/CI refs",
+    "files": [
+      "packages/bee/hooks/",
+      "skills/bee-hive/scripts/onboard_bee.mjs",
+      "scripts/run_verify.mjs",
+      "scripts/release_manifest.mjs",
+      ".github/workflows/windows.yml",
+      ".github/workflows/canary.yml",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "skills/bee-hive/scripts/onboard_bee.mjs:88-95",
+      "scripts/release_manifest.mjs:125-140",
+      ".github/workflows/windows.yml:30-115"
+    ],
+    "action": "Per D2: `git mv hooks packages/bee/hooks`. Fix-forward: (a) onboard_bee.mjs PLUGIN_HOOKS_DIR :91 -> path.join(PLUGIN_ROOT, 'packages', 'bee', 'hooks') — do NOT touch the separate host-repo probe at :2206 (repoRoot/hooks/catalog.mjs is the HOST project's own catalog, different concept); (b) run_verify.mjs DISCOVERY_ROOTS 'hooks' -> 'packages/bee/hooks'; (c) release_manifest.mjs :133 enumerateTree hooks path; (d) windows.yml 8 path lines incl BEE_VERIFY_ROOT_FILTER and both templates/tests refs from cell 1 if any remain, canary.yml comment; (e) hooks source comments/fixture strings referencing old paths (bee-write-guard.mjs :520,:869, test_write_guard.mjs :1196). REGEN OBLIGATION (mandatory, this order, inside this cell): node scripts/render_plugin_skill_trees.mjs, then node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+    "must_haves": {
+      "truths": [
+        "no top-level hooks/ dir remains",
+        "host-repo catalog probe (repoRoot/hooks/catalog.mjs) untouched",
+        "CI root filter names packages/bee paths"
+      ],
+      "artifacts": [
+        "packages/bee/hooks/ with all 11+ files and its test_*.mjs suites"
+      ],
+      "key_links": [
+        "docs/history/packages-restructure/plan.md#approach"
+      ],
+      "prohibitions": [
+        "no hand-edit of scripts/impact-registry.json",
+        "no HAND-edits under .bee/bin — the only writes there come from onboard_bee.mjs --apply (regen obligation)"
+      ]
+    },
+    "verify": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check",
+    "behavior_change": true,
+    "deps": [
+      "packages-restructure-1"
+    ]
+  },
+  {
+    "id": "packages-restructure-3",
+    "feature": "packages-restructure",
+    "lane": "standard",
+    "title": "Distribution surface: manifest role, plugin renders regen, impact registry regen, self-onboard refresh",
+    "files": [
+      "scripts/release_manifest.mjs",
+      "skills/bee-hive/scripts/plugin_distribution.mjs",
+      "scripts/impact-registry.json",
+      ".claude-plugin/",
+      ".codex-plugin/",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "scripts/release_manifest.mjs:120-140",
+      "skills/bee-hive/scripts/plugin_distribution.mjs:20-35",
+      "docs/history/packages-restructure/plan.md"
+    ],
+    "action": "Per D5: (a) release_manifest.mjs — add enumerateTree(REPO_ROOT/'packages/bee', 'package_payload') (hooks walk from cell 2 folds into it if simpler: one payload role covering the whole packages/bee tree beats two; keep plugin_hook role name if plugin_distribution/proveInstalledPackage or installed-package layout depends on it — read before merging roles), fix stale source_lib doc comment :5; (b) plugin_distribution.mjs PACKAGE_ROLES accepts the new role(s); (c) regen plugin skill trees: node scripts/render_plugin_skill_trees.mjs — verify .claude-plugin/skills/bee-hive/templates and .codex-plugin equivalent are GONE from disk AND git index (git rm stale committed subtrees if regen does not remove them); (d) regen impact registry per its own builder (scripts/impact_registry.mjs) so 842 stale refs rebuild from new paths; (e) self-onboard: node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --json, then --apply if changes_needed — .bee/bin mirrors refresh from packages/bee; assert NO spurious drift (module names+contents unchanged) and no lib module orphan-deleted from .bee/bin/lib (count parity before/after); (f) parity suites green (test_lib_mirror, test_misc parity guards). REGEN OBLIGATION (mandatory, this order, inside this cell): node scripts/render_plugin_skill_trees.mjs, then node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+    "must_haves": {
+      "truths": [
+        "release manifest enumerates every packages/bee file under a role plugin_distribution accepts",
+        "self-onboard reports clean after apply — no drift, no orphan deletions",
+        ".claude-plugin and .codex-plugin carry no templates subtree"
+      ],
+      "artifacts": [
+        "regenerated scripts/impact-registry.json",
+        "regenerated plugin skill trees"
+      ],
+      "key_links": [
+        "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md"
+      ],
+      "prohibitions": [
+        "never hand-edit impact-registry.json or .bee/onboarding.json",
+        "no version bump — this is not a release"
+      ]
+    },
+    "verify": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs --impacted-from-git && node scripts/release_manifest.mjs --check",
+    "behavior_change": true,
+    "deps": [
+      "packages-restructure-2"
+    ]
+  },
+  {
+    "id": "packages-restructure-4",
+    "feature": "packages-restructure",
+    "lane": "standard",
+    "title": "Prose sweep: skill docs + README references to retired paths",
+    "files": [
+      "README.md",
+      "skills/bee-evolving/SKILL.md",
+      "skills/bee-executing/SKILL.md",
+      "skills/bee-reviewing/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "read_first": [
+      "docs/history/packages-restructure/plan.md"
+    ],
+    "action": "Sweep prose refs to skills/bee-hive/templates and repo-root hooks/ in living docs: README (incl. managed-files table ~:450 and install docs), SKILL.md files (bee-evolving, bee-executing, bee-reviewing prose refs), CREATION-LOG refs only where they state CURRENT truth (historical narrative stays as history). AGENTS.md Working-files section if it names old paths. docs/history/** and docs/knowledge/** archives stay untouched — knowledge sync is scribing's job next phase. Then rerender plugin trees if any swept SKILL.md is vendored (node scripts/render_plugin_skill_trees.mjs). REGEN OBLIGATION (mandatory, this order, inside this cell): node scripts/render_plugin_skill_trees.mjs, then node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+    "must_haves": {
+      "truths": [
+        "rg 'skills/bee-hive/templates' over README.md + skills/ returns zero current-truth hits (historical CREATION-LOG narrative exempt)"
+      ],
+      "artifacts": [],
+      "key_links": [],
+      "prohibitions": [
+        "no edits under docs/history or docs/knowledge (scribing owns knowledge sync)"
+      ]
+    },
+    "verify": "bash -c \"! rg -l 'skills/bee-hive/templates' README.md scripts/run_verify.mjs scripts/release_manifest.mjs skills/bee-hive/scripts/onboard_bee.mjs\" && node scripts/release_manifest.mjs --check",
+    "behavior_change": false,
+    "deps": [
+      "packages-restructure-3"
+    ]
+  }
+]

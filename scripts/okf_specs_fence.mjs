@@ -47,8 +47,8 @@ import { fileURLToPath } from 'node:url';
 // template is the one under edit). `bundleMode` is f3-2/f3-3's ONE predicate —
 // the fence never re-implements "is this repo migrated", or the two answers
 // could drift apart.
-import { bundleMode, parseFrontmatter, emitFrontmatter } from '../skills/bee-hive/templates/lib/knowledge.mjs';
-import { resolveProductRoot } from '../skills/bee-hive/templates/lib/state.mjs';
+import { bundleMode, parseFrontmatter, emitFrontmatter } from '../packages/bee/lib/knowledge.mjs';
+import { resolveProductRoot } from '../packages/bee/lib/state.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, '..');

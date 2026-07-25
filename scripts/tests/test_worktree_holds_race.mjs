@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // test_worktree_holds_race.mjs — proves worktree-holds.mjs's mirrorHold()
-// (skills/bee-hive/templates/lib/worktree-holds.mjs, cell xwh-1) is
+// (packages/bee/lib/worktree-holds.mjs, cell xwh-1) is
 // race-safe end to end, the exact same shape scripts/tests/test_reservation_race.mjs
 // already proves for reservations.mjs's reserve(): the read-check-write body
 // (fresh read, append, write) runs inside withStoreLock(mainRoot,

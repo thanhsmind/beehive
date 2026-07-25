@@ -90,7 +90,7 @@ function triggerCiDelegation() {
 // records the old-vs-discovered set diff captured at flip time).
 const DISCOVERY_ROOTS = [
   "scripts/tests",
-  "skills/bee-hive/templates/tests",
+  "packages/bee/tests",
   "skills/bee-hive/scripts",
   "hooks",
 ];

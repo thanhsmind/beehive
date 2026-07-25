@@ -344,7 +344,7 @@ for (const { file, gate, tokens } of GATE_SKILLS) {
 // fan-out this feature removes.
 {
   const readmeAbs = path.join(REPO_ROOT, 'README.md');
-  const agentsBlockAbs = path.join(REPO_ROOT, 'skills/bee-hive/templates/AGENTS.block.md');
+  const agentsBlockAbs = path.join(REPO_ROOT, 'packages/bee/AGENTS.block.md');
   let readmeText = '';
   let agentsBlockText = '';
   try {
@@ -355,7 +355,7 @@ for (const { file, gate, tokens } of GATE_SKILLS) {
   try {
     agentsBlockText = fs.readFileSync(agentsBlockAbs, 'utf8');
   } catch {
-    fail('skills/bee-hive/templates/AGENTS.block.md: unreadable — lane-ceremony-v3 AGENTS block doctrine lives here');
+    fail('packages/bee/AGENTS.block.md: unreadable — lane-ceremony-v3 AGENTS block doctrine lives here');
   }
 
   // (a) D7: old narrow-flag wordings must be gone from README.md.
@@ -414,11 +414,11 @@ for (const { file, gate, tokens } of GATE_SKILLS) {
     ok('README.md (D9/D10): retired "(bigger work)" briefing fan-out wording absent');
   }
   if (agentsBlockText.includes('implement-plan.md (small+)')) {
-    fail('skills/bee-hive/templates/AGENTS.block.md (D9/D10): chain line still carries the retired unconditional "(small+)" briefing fan-out wording');
+    fail('packages/bee/AGENTS.block.md (D9/D10): chain line still carries the retired unconditional "(small+)" briefing fan-out wording');
   } else {
-    ok('skills/bee-hive/templates/AGENTS.block.md (D9/D10): retired "(small+)" briefing fan-out wording absent');
+    ok('packages/bee/AGENTS.block.md (D9/D10): retired "(small+)" briefing fan-out wording absent');
   }
-  for (const [label, text] of [['README.md', readmeText], ['skills/bee-hive/templates/AGENTS.block.md', agentsBlockText]]) {
+  for (const [label, text] of [['README.md', readmeText], ['packages/bee/AGENTS.block.md', agentsBlockText]]) {
     if (!text.includes('standard: on-demand') || !text.includes('high-risk: always')) {
       fail(`${label} (D9/D10): missing the real briefing fan-out wording ("standard: on-demand" / "high-risk: always")`);
     } else {
@@ -430,16 +430,16 @@ for (const { file, gate, tokens } of GATE_SKILLS) {
   // plan.md's freeze + per-lane conditionality, not the old unconditional
   // "always: CONTEXT.md, plan.md, reports/" line.
   if (agentsBlockText.includes('always: CONTEXT.md, plan.md, reports/')) {
-    fail('skills/bee-hive/templates/AGENTS.block.md (D1/D3/D4): docs/history tree note still states plan.md as unconditionally always-present');
+    fail('packages/bee/AGENTS.block.md (D1/D3/D4): docs/history tree note still states plan.md as unconditionally always-present');
   } else {
-    ok('skills/bee-hive/templates/AGENTS.block.md (D1/D3/D4): docs/history tree note no longer states plan.md as unconditional');
+    ok('packages/bee/AGENTS.block.md (D1/D3/D4): docs/history tree note no longer states plan.md as unconditional');
   }
   const TREE_TOKENS = ['frozen at Gate 2', 'plan.md is opt-in', 'cell is the micro-plan'];
   for (const token of TREE_TOKENS) {
     if (!agentsBlockText.includes(token)) {
-      fail(`skills/bee-hive/templates/AGENTS.block.md: docs/history tree note missing "${token}"`);
+      fail(`packages/bee/AGENTS.block.md: docs/history tree note missing "${token}"`);
     } else {
-      ok(`skills/bee-hive/templates/AGENTS.block.md: docs/history tree note carries "${token}"`);
+      ok(`packages/bee/AGENTS.block.md: docs/history tree note carries "${token}"`);
     }
   }
 
@@ -448,9 +448,9 @@ for (const { file, gate, tokens } of GATE_SKILLS) {
   // so the scribing-capture obligation is legible even when a lane produced
   // no plan.md at all.
   if (!agentsBlockText.includes('whether or not the lane produced a `plan.md` (D3/D4)')) {
-    fail('skills/bee-hive/templates/AGENTS.block.md: critical rule 9 missing the D3/D4 tie ("whether or not the lane produced a `plan.md` (D3/D4)")');
+    fail('packages/bee/AGENTS.block.md: critical rule 9 missing the D3/D4 tie ("whether or not the lane produced a `plan.md` (D3/D4)")');
   } else {
-    ok('skills/bee-hive/templates/AGENTS.block.md: critical rule 9 ties lanes-scale-ceremony to D3/D4');
+    ok('packages/bee/AGENTS.block.md: critical rule 9 ties lanes-scale-ceremony to D3/D4');
   }
 }
 

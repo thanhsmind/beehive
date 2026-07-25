@@ -1,7 +1,7 @@
 // release-tuple.mjs — the single registry of WHERE the release version lives.
 //
 // The bee release version is physically duplicated across four "tuple"
-// components: the templates/lib source constant, its byte-identical .bee/bin
+// components: the packages/bee/lib source constant, its byte-identical .bee/bin
 // runtime mirror, and the two plugin manifests (Claude + Codex) that external
 // plugin systems read as raw JSON and therefore cannot import a JS const from.
 // One canonical value, four physical homes.
@@ -29,8 +29,8 @@ export const REPO_ROOT = path.join(__dirname, "..", "..");
  */
 export const COMPONENTS = [
   {
-    name: "skills/bee-hive/templates/lib/state.mjs (BEE_VERSION)",
-    path: path.join(REPO_ROOT, "skills", "bee-hive", "templates", "lib", "state.mjs"),
+    name: "packages/bee/lib/state.mjs (BEE_VERSION)",
+    path: path.join(REPO_ROOT, "packages", "bee", "lib", "state.mjs"),
     kind: "js-const",
   },
   {

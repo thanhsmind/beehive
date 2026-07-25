@@ -2,7 +2,7 @@
 // test_compaction_module.mjs — the suite for lib/compaction.mjs (feature
 // compaction-hardening, cell cz-3; decisions D3/D4/D5/D9/D10/D12/D13/D17).
 //
-// It targets the SOURCE module (skills/bee-hive/templates/lib/compaction.mjs),
+// It targets the SOURCE module (packages/bee/lib/compaction.mjs),
 // never the .bee/bin/lib mirror — D17: the template tree is the edit target and
 // scripts/tests/test_lib_mirror.mjs is what proves the mirror matches it.
 //
@@ -47,19 +47,19 @@ import {
   survivalWarning,
   anchorMissing,
   compactCheck,
-} from '../../skills/bee-hive/templates/lib/compaction.mjs';
+} from '../../packages/bee/lib/compaction.mjs';
 // multisession-native-16: `.bee/reservations.json` is a rebuildable
 // PROJECTION over lease-store.mjs now (reservations.mjs's own module
 // header) — compaction.mjs's `reservations` check reads live leases through
 // reservations.mjs's listReservations, so a fixture reservation must be a
 // real lease, seeded via lease-store.mjs's synchronous acquireLeases
 // (same source tree this file already targets, D17).
-import { acquireLeases } from '../../skills/bee-hive/templates/lib/lease-store.mjs';
+import { acquireLeases } from '../../packages/bee/lib/lease-store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, '..', '..');
 const MODULE_URL = pathToFileURL(
-  path.join(REPO_ROOT, 'skills', 'bee-hive', 'templates', 'lib', 'compaction.mjs'),
+  path.join(REPO_ROOT, 'packages', 'bee', 'lib', 'compaction.mjs'),
 ).href;
 
 // ─── fixtures ───────────────────────────────────────────────────────────────

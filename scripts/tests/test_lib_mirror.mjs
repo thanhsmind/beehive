@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Guard: skills/bee-hive/templates/lib/ and .bee/bin/lib/ must stay byte-
+// Guard: packages/bee/lib/ and .bee/bin/lib/ must stay byte-
 // identical mirrors of each other. PROJ-08 (SPEC), crit-pattern 20260714
 // (derive file lists, never hand-enumerate): the template copy is what ships
 // to a fresh onboard, the .bee/bin copy is what actually runs in this repo —
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");
 
-const TEMPLATES_LIB = path.join(REPO_ROOT, "skills", "bee-hive", "templates", "lib");
+const TEMPLATES_LIB = path.join(REPO_ROOT, "packages", "bee", "lib");
 const BIN_LIB = path.join(REPO_ROOT, ".bee", "bin", "lib");
 const SOURCE_HOOKS = path.join(REPO_ROOT, "hooks");
 const BIN_HOOKS = path.join(REPO_ROOT, ".bee", "bin", "hooks");
@@ -182,7 +182,7 @@ function compareInventory(expected, sourceDir, runtimeDir) {
   }
 }
 
-// ─── real check: THIS repo's real templates/lib <-> .bee/bin/lib mirror ────
+// ─── real check: THIS repo's real packages/bee/lib <-> .bee/bin/lib mirror ─
 
 if (!fs.existsSync(TEMPLATES_LIB)) {
   console.error(`FAIL test_lib_mirror: ${TEMPLATES_LIB} does not exist`);
@@ -195,12 +195,12 @@ if (!fs.existsSync(BIN_LIB)) {
 
 const result = compareDirs(TEMPLATES_LIB, BIN_LIB);
 if (!result.ok) {
-  console.error("FAIL test_lib_mirror: skills/bee-hive/templates/lib/ and .bee/bin/lib/ have drifted:");
+  console.error("FAIL test_lib_mirror: packages/bee/lib/ and .bee/bin/lib/ have drifted:");
   if (result.missingInB.length) {
-    console.error(`      present in templates/lib but missing from .bee/bin/lib: ${result.missingInB.join(", ")}`);
+    console.error(`      present in packages/bee/lib but missing from .bee/bin/lib: ${result.missingInB.join(", ")}`);
   }
   if (result.extraInB.length) {
-    console.error(`      present in .bee/bin/lib but missing from templates/lib: ${result.extraInB.join(", ")}`);
+    console.error(`      present in .bee/bin/lib but missing from packages/bee/lib: ${result.extraInB.join(", ")}`);
   }
   if (result.diffing.length) {
     console.error(`      byte-diffing in both: ${result.diffing.join(", ")}`);
@@ -208,7 +208,7 @@ if (!result.ok) {
   process.exit(1);
 }
 
-console.log(`PASS test_lib_mirror: templates/lib and .bee/bin/lib are byte-identical (${listFiles(TEMPLATES_LIB).length} files)`);
+console.log(`PASS test_lib_mirror: packages/bee/lib and .bee/bin/lib are byte-identical (${listFiles(TEMPLATES_LIB).length} files)`);
 
 if (!fs.existsSync(BIN_HOOKS)) {
   console.error(`FAIL test_lib_mirror: ${BIN_HOOKS} does not exist`);

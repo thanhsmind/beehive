@@ -211,6 +211,8 @@ function stagedSource() {
     "plugin_hook",
     "plugin_manifest",
     "plugin_marketplace",
+    // D5 (packages-restructure): packages/bee/ vendor payload role.
+    "package_payload",
   ]);
   const manifest = JSON.parse(fs.readFileSync(path.join(src, "docs/history/codex-harness-hardening/release-manifest.json"), "utf8"));
   for (const record of manifest.files) {
@@ -349,7 +351,7 @@ check("install.ps1 sparse-checkout set fetches every tree onboarding reads (incl
   const m = ps1.match(/sparse-checkout set ([^\r\n]+)/);
   assert.ok(m, "install.ps1 must contain a `sparse-checkout set` line");
   const roots = m[1].trim().split(/\s+/);
-  for (const required of ["skills", "hooks", ".claude-plugin", ".codex-plugin", "docs/history/codex-harness-hardening"]) {
+  for (const required of ["skills", "packages", "hooks", ".claude-plugin", ".codex-plugin", "docs/history/codex-harness-hardening"]) {
     assert.ok(roots.includes(required), `sparse-checkout set must include ${required} (got: ${roots.join(" ")})`);
   }
 });
@@ -794,7 +796,7 @@ check("repeat install reports current without timestamp-only managed rewrites (b
 
 // ── 15a. extra-file-only drift (unmanaged .mjs in .bee/bin/lib/) is a warning,
 //        not a hard-fail: installer-verify-extra-drift-1. computeRuntimeDrift
-//        (skills/bee-hive/templates/bee.mjs) flags any .mjs file living in
+//        (packages/bee/bee.mjs) flags any .mjs file living in
 //        .bee/bin/lib/ that the recorded managed.lib ledger does not name as
 //        "(extra)" drift -- a much softer signal than a real hash mismatch,
 //        because onboard_bee.mjs's plan/apply never touches a name outside

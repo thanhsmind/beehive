@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // test_state_write_concurrency.mjs — proves writeJsonAtomic (.bee/bin/lib/fsutil.mjs,
-// mirrored from skills/bee-hive/templates/lib/fsutil.mjs) survives real concurrent
+// mirrored from packages/bee/lib/fsutil.mjs) survives real concurrent
 // writers hammering ONE shared target file.
 //
 // Why real OS processes, not async calls in one event loop: fs.writeFileSync and

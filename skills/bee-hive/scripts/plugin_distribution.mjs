@@ -27,6 +27,9 @@ const PACKAGE_ROLES = new Set([
   "plugin_hook",
   "plugin_manifest",
   "plugin_marketplace",
+  // D5 (packages-restructure): the packages/bee/ vendor payload role,
+  // enumerated by release_manifest.mjs's dedicated packages/bee walk.
+  "package_payload",
 ]);
 const BEE_HOOK_HANDLERS = new Set([
   "bee-session-init.mjs", "bee-prompt-context.mjs", "bee-write-guard.mjs",

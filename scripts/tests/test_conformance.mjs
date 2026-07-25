@@ -24,7 +24,7 @@
 //
 // Helper policy (advisor finding 4, cell action text): existing test files
 // (hooks/test_write_guard.mjs, hooks/test_model_guard.mjs,
-// skills/bee-hive/templates/tests/test_bee_cli.mjs) export nothing, so
+// packages/bee/tests/test_bee_cli.mjs) export nothing, so
 // fixture builders below are narrow, deliberate duplication of theirs (mkFixture,
 // copyLib, buildDoctorFixture) — never an import of those top-level runners,
 // which would execute them as a side effect.

@@ -3,7 +3,7 @@
 // three renderers it shares with the full session preamble (feature
 // compaction-hardening, cell cz-5; decisions D6/D7/D8/D15/D19/D26/D27).
 //
-// It targets the SOURCE modules (skills/bee-hive/templates/lib/), never the
+// It targets the SOURCE modules (packages/bee/lib/), never the
 // .bee/bin/lib mirror — D17: the template tree is the edit target and
 // scripts/tests/test_lib_mirror.mjs is what proves the mirror matches it.
 //
@@ -68,21 +68,21 @@ import { fileURLToPath } from 'node:url';
 
 import { check, assert, printSummaryAndExit } from '../lib/test-fixture.mjs';
 import { runModuleWorker } from '../lib/run-module-worker.mjs';
-import { BEE_VERSION } from '../../skills/bee-hive/templates/lib/state.mjs';
+import { BEE_VERSION } from '../../packages/bee/lib/state.mjs';
 import {
   buildSessionPreamble,
   onboardingLine,
   bypassBannerLines,
   handoffBlockLines,
   firstOpenGate,
-} from '../../skills/bee-hive/templates/lib/inject.mjs';
+} from '../../packages/bee/lib/inject.mjs';
 import {
   buildCompactCapsule,
   appendCompactionRecord,
   nonAdoptingHandoffOutcome,
   readCompactionRecords,
-} from '../../skills/bee-hive/templates/lib/compaction.mjs';
-import { readIntent, resumeBlock } from '../../skills/bee-hive/templates/lib/intent.mjs';
+} from '../../packages/bee/lib/compaction.mjs';
+import { readIntent, resumeBlock } from '../../packages/bee/lib/intent.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, '..', '..');

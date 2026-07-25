@@ -314,7 +314,7 @@ try {
     # sparse-checkout needs git 2.25+; on older git it exits non-zero and the checkout
     # below is simply a full one (which may still trip over an invalid path; the probe
     # is what turns that into an honest error instead of a silent empty source).
-    git -C $clonePath sparse-checkout set skills hooks .claude-plugin .codex-plugin docs/history/codex-harness-hardening
+    git -C $clonePath sparse-checkout set skills packages hooks .claude-plugin .codex-plugin docs/history/codex-harness-hardening
     git -C $clonePath checkout --quiet HEAD
 
     $beeSrc = $clonePath
