@@ -146,7 +146,7 @@ the first; a re-run plans nothing.
   `statusline` key.
 - `skills/bee-hive/templates/statusline/` — canonical pair
   (`statusline-command.sh`, `statusline-usage.mjs`).
-- `skills/bee-hive/scripts/test_onboard_bee.mjs` — section 9c sandbox cases.
+- `skills/bee-hive/scripts/tests/test_onboard_bee.mjs` — section 9c sandbox cases.
 - `skills/bee-hive/templates/tests/test_lib.mjs` — statusline byte-equality sweep.
 - Host-side settings contract: `.claude/settings.json` → `statusLine.command`.
 - `skills/bee-hive/scripts/onboard_bee.mjs` — `CODEX_STATUS_LINE_BLOCK`,

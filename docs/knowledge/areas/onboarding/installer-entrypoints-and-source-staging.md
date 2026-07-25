@@ -84,7 +84,7 @@ carries a forbidden character, a reserved device name, or a trailing dot/space.
 - `scripts/lib/run-module-worker.mjs` — shared isolated test-entrypoint runner;
   preserves arguments, environment, stdout, stderr, and exit status without
   changing the production entrypoint.
-- `skills/bee-hive/scripts/test_onboard_bee.mjs` — the complete onboarding
+- `skills/bee-hive/scripts/tests/test_onboard_bee.mjs` — the complete onboarding
   suite keeps its real and fixture-local entrypoints and all prior assertions
   while routing nested Node launches through the shared runner.
 - `scripts/install.sh`, `scripts/install.ps1`, `.codex-plugin/plugin.json`,

@@ -73,7 +73,7 @@
   to one concept — genuinely the right shape at this size, not a fit to the metric — brought
   both ratios back inside the [0.5x, 2x] band with content unchanged and fidelity at min/median/
   max 1.000 (verbatim re-homing). Coverage is machine-checked by `scripts/okf_migrate.mjs --check
-  decision-memory` (D35), now a chain suite. `scripts/test_okf_pins.mjs`'s refusal assertions for
+  decision-memory` (D35), now a chain suite. `scripts/tests/test_okf_pins.mjs`'s refusal assertions for
   decision-memory were retired (it is no longer unscheme'd) and replaced with a pass assertion,
   leaving worktree-parallelism as the sole remaining refused area.
 
@@ -210,7 +210,7 @@
   `installer-entrypoints-and-source-staging.md`'s `bee.sources`, `--check onboarding` failed with
   the real coverage-loss finding (`LOST in concepts: R20b`), then was restored to green. Coverage
   is machine-checked by `scripts/okf_migrate.mjs --check onboarding` (D35), now a chain suite.
-  `scripts/test_okf_pins.mjs`' section 12 — the guard that proves the extractor is not blind by
+  `scripts/tests/test_okf_pins.mjs`' section 12 — the guard that proves the extractor is not blind by
   requiring a NON-ZERO unparsed-block count from this very spec — now reads those same bytes from
   the committed, hash-verified source copy rather than the path this cell turned into a stub: the
   assertion follows the bytes, never the convenience.
@@ -262,7 +262,7 @@
   is as loud as a drifting pin — while the committed copy at
   `docs/history/okf-migration-f2/sources/hook-runtime.md` is the pinned bytes' only content
   address. An undeclared disagreement, a `repaired_from` that does not match, or a repair with no
-  stated reason are all still `PIN_SHA_MISMATCH`; `scripts/test_okf_pins.mjs` section 15 asserts
+  stated reason are all still `PIN_SHA_MISMATCH`; `scripts/tests/test_okf_pins.mjs` section 15 asserts
   every one of those from both sides, asserts the branch is inert on an unrepaired pin, and
   asserts the property the repair exists to create — every derived id distinct, with `R14` and
   `R14a` carrying their own separate texts so the floor measures each individually.
@@ -312,7 +312,7 @@
   hyphen). Nothing is invented: the structure the author actually wrote IS the ground truth,
   exactly as `flat-pattern-list` already treats a `## [YYYYMMDD] …` heading as an anchor.
 - Three boundaries hold the scheme in place, each a test before it was a line of code
-  (`scripts/test_okf_pins.mjs` section 27). A `## ` heading becomes an anchor; a `###`
+  (`scripts/tests/test_okf_pins.mjs` section 27). A `## ` heading becomes an anchor; a `###`
   SUBHEADING does not — its prose travels with the section containing it, so the fidelity floor
   measures it there, and the subheading itself is still REPORTED as an unparsed block so a
   subheading-heavy shape this scheme cannot see stays visible. A source with ZERO `## ` headings

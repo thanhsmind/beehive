@@ -57,7 +57,7 @@ because it is syntax-only and does not detect a missing relative-import module.
 
 - Vendored-hook list: `HOOK_FILENAMES` in
   `skills/bee-hive/scripts/onboard_bee.mjs`.
-- Regression suite: `scripts/test_hook_vendor_closure.mjs` (static
+- Regression suite: `scripts/tests/test_hook_vendor_closure.mjs` (static
   import-closure parse + fresh-install/subprocess proof).
 - Evidence: `.bee/cells/i54-closeout-9.json`,
   `docs/history/i54-closeout/reports/validation-canary.md` (section 1, P5).

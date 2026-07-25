@@ -144,12 +144,12 @@ and the strongest of them is the one that reports success.
   the version — `templates/lib/state.mjs` + its `.bee/bin/lib` mirror, and the
   two plugin manifests' `.version` — are enumerated once in
   `scripts/lib/release-tuple.mjs` (a side-effect-free registry of location +
-  read/write). `scripts/test_release_tuple.mjs` (check) and
+  read/write). `scripts/tests/test_release_tuple.mjs` (check) and
   `scripts/bump_version.mjs` (write) both import it, so a release sets every
   member from one command — `node scripts/bump_version.mjs <version>` — which
   also regenerates the hash manifest. The split-brain regression fixture's
   "current version" is derived at runtime from the canonical
-  `templates/lib/state.mjs` (no hand-edited anchor); `scripts/test_bump_version.mjs`
+  `templates/lib/state.mjs` (no hand-edited anchor); `scripts/tests/test_bump_version.mjs`
   proves the writer covers every registry component and preserves each file's
   surrounding bytes. Plugin manifests keep a literal `.version` because external
   plugin systems read them as raw JSON and cannot import the JS const.
@@ -159,11 +159,11 @@ and the strongest of them is the one that reports success.
   `listTemplateLibModules()` set (section 3c, immediately after the existing
   `copy_lib`/`RETIRED_HELPERS` items it mirrors); apply executes it with the
   same exact-dirname safety `remove_helper` uses. Regression coverage:
-  `skills/bee-hive/scripts/test_onboard_bee.mjs` ("stale lib" block).
+  `skills/bee-hive/scripts/tests/test_onboard_bee.mjs` ("stale lib" block).
 - Extra-file-only drift tolerance (R28): the verify node snippet at the tail of
   `scripts/install.sh` (piped after `printf '%s' "$STATUS" | node -e '...'`),
   reading `s.onboarding.drift_detail` (populated by `computeRuntimeDrift`,
   `skills/bee-hive/templates/bee.mjs`). Regression test:
-  `scripts/test_installers_e2e.mjs` ("extra unmanaged .mjs in .bee/bin/lib/
+  `scripts/tests/test_installers_e2e.mjs` ("extra unmanaged .mjs in .bee/bin/lib/
   does not hard-fail install.sh's verify step" case). Evidence:
   `.bee/cells/installer-verify-extra-drift-1.json`.

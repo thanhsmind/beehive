@@ -129,7 +129,7 @@ same filename *without* a marker fails as new content.
 - Red-first proof and both directions of the profile-stub assertion:
   `node scripts/okf_specs_fence.mjs --selftest`.
 - Wired into the chain as two entries (`--selftest` and `--check`): `scripts/run_verify.mjs`
-  `EXTRA_SUITES`, pinned in `scripts/test_verify_manifest.mjs` `MANDATORY_SUITE_ARGS`.
+  `EXTRA_SUITES`, pinned in `scripts/tests/test_verify_manifest.mjs` `MANDATORY_SUITE_ARGS`.
 - The shared bundle-mode predicate and product-root resolver:
   `skills/bee-hive/templates/lib/knowledge.mjs` (`bundleMode`) and
   `skills/bee-hive/templates/lib/state.mjs` (`resolveProductRoot`).

@@ -22,7 +22,7 @@ canonical sibling always resolves. The drift is only visible where it exists —
 in the vendored copy — so the only honest detectors are (a) a static
 import-closure check over the ship list itself, and (b) a subprocess spawn of
 the actually-installed file inside a fresh-install fixture. Mechanized here as
-scripts/test_hook_vendor_closure.mjs.
+scripts/tests/test_hook_vendor_closure.mjs.
 
 **The tell:** a hand-maintained ship/allowlist next to files that import each
 other, with green tests that all import from the source tree.

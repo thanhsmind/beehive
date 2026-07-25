@@ -180,5 +180,5 @@ orientation ended with zero edits to that suite.
   read-only `state compact-check` verb.
 - Proof: `skills/bee-hive/templates/tests/test_intent.mjs` (incl. the
   two-boundary simulation), the intent rows in `hooks/test_hook_contracts.mjs`,
-  and `scripts/test_compaction_advisories.mjs` (the nudge and survival-warning
+  and `scripts/tests/test_compaction_advisories.mjs` (the nudge and survival-warning
   rows against the real hooks).

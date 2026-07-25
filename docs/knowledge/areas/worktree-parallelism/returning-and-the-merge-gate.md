@@ -106,7 +106,7 @@ gap:
   lease is free, the requester becomes processor and merges directly** — an empty
   queue resolves on the first iteration with no real sleep at all, so a solo merge is
   **byte-identical** to pre-D9 behavior: proven by the full 159-case
-  `scripts/test_worktree_cli.mjs` regression suite passing unmodified. **When the lease
+  `scripts/tests/test_worktree_cli.mjs` regression suite passing unmodified. **When the lease
   is held, the requester enqueues and bounded-waits** (`--queue-wait-ms`, default
   180s), polling every 500ms. **A timeout returns a typed
   `{ok: false, code: 'INTEGRATION_QUEUE_TIMEOUT', merged: false}` result whose text
@@ -139,7 +139,7 @@ gap:
   has never required session identity to run solo, and this cell does not change that.
 - Tests: `test_integration_queue.mjs` (14 checks, deterministic seams — a virtual `now`
   drives dead-processor takeover, no real sleeps), `test_worktree_store.mjs` (+4, the
-  `checkProcessorLease`/`onVerifyTick` wiring), and `scripts/test_worktree_merge_queue.mjs`
+  `checkProcessorLease`/`onVerifyTick` wiring), and `scripts/tests/test_worktree_merge_queue.mjs`
   (15 checks, real two-OS-process CLI dispatch proving serialization, no-lock-held-
   across-verify, the timeout path, and the byte-identical solo surface). Evidence: trace
   `.bee/cells/multisession-native-22.json`, commit 546d532.

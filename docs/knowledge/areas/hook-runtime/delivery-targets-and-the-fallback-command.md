@@ -141,7 +141,7 @@ capable of denial).
 ## Pointers (implementation)
 
 - Package/fallback distribution proof: `skills/bee-hive/scripts/plugin_distribution.mjs`
-  and `skills/bee-hive/scripts/test_plugin_distribution.mjs`. The checked-in
+  and `skills/bee-hive/scripts/tests/test_plugin_distribution.mjs`. The checked-in
   `.codex/hooks.json` is a development/fallback snapshot, not package proof.
 
 - Codex source-repository fallback: `.codex/hooks.json`, generated only by

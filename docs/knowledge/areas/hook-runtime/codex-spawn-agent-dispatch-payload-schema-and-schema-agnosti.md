@@ -80,7 +80,7 @@ form.
 - Judge: `evaluateCodexSpawn` in `skills/bee-hive/templates/lib/dispatch-guard.mjs`
   (mirrored in `.bee/bin/lib/dispatch-guard.mjs`).
 - Doc: the Spawn row in `skills/bee-swarming/references/swarming-reference.md`.
-- Suites: `scripts/test_dispatch_prepare.mjs` (doc-canonical/legacy round-trip
+- Suites: `scripts/tests/test_dispatch_prepare.mjs` (doc-canonical/legacy round-trip
   rows), `hooks/test_model_guard.mjs` (rows 47-49, 58-59).
 - Evidence: `.bee/cells/i54-closeout-1.json`,
   `docs/history/i54-closeout/reports/validation-canary.md`,

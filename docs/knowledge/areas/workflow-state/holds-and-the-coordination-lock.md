@@ -356,7 +356,7 @@ drift from it.
   lock_wait_ms, holder_session, caller_session, workflow_id, workspace_id,
   resource, result}` written to `.bee/logs/contention.jsonl` via a plain
   `fs.appendFileSync`, mirroring `bee.mjs`'s own `timings.jsonl`
-  `recordTiming`. Evidence: `scripts/test_store_lock.mjs` scenario (i);
+  `recordTiming`. Evidence: `scripts/tests/test_store_lock.mjs` scenario (i);
   trace `.bee/cells/multisession-native-3.json`, commit 2d66ccc.
 - Status contention summary: `buildContentionSummary` in `bee.mjs`, reading
   through `readTranscriptTail` (`lib/recovery.mjs`) for the bounded,

@@ -94,6 +94,6 @@ runtime state, though reads from it are permitted.
 ## Pointers (implementation)
 
 - Checker + emitter-first codec + concept model: `.bee/bin/lib/knowledge.mjs` (mirrored from
-  `skills/bee-hive/templates/lib/knowledge.mjs` — `scripts/test_lib_mirror.mjs:196` enforces the
+  `skills/bee-hive/templates/lib/knowledge.mjs` — `scripts/tests/test_lib_mirror.mjs:196` enforces the
   mirror). `checkBundle` is the two-level check; `emitFrontmatter`/`parseFrontmatter` are the D12
   codec; `CONCEPT_TYPES`/`LIFECYCLES`/`PROFILE_REQUIRED` are the D18/D19 tables.

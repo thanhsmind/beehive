@@ -109,7 +109,7 @@ it did before this behavior existed (hardening-1-7-10).
   mirrored under `.bee/bin/hooks/`. Coordination lock primitive:
   `withStoreLock` (`options.maxAttempts`/`retryDelayMs` power the checkpoint's
   try-once mode) in `skills/bee-hive/templates/lib/lock.mjs`. Suite:
-  `scripts/test_heartbeat_touch.mjs` (throttle no-op, real-hook-driven
+  `scripts/tests/test_heartbeat_touch.mjs` (throttle no-op, real-hook-driven
   refresh, touch-throw fail-open, `LOCK_BUSY` silent skip, renewal-vs-adopt
   gate skip). Evidence: `.bee/cells/msh-5.json`,
   `docs/history/multi-session-hardening/reports/msh-5.md`.

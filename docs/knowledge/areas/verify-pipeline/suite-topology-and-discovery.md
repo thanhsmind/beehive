@@ -180,6 +180,6 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
 
 - **P1** — `scripts/run_verify.mjs` — discovery roots, EXTRA/EXCLUDE, serial
   convention, pool.
-- **P2** — `scripts/test_verify_manifest.mjs` — floor + existence + membership guard.
+- **P2** — `scripts/tests/test_verify_manifest.mjs` — floor + existence + membership guard.
 - **P3** — `scripts/lib/test-fixture.mjs` — shared fixture/check-runner.
 - **P4** — `skills/bee-hive/templates/tests/` — per-module suites (11 files).

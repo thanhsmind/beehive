@@ -163,22 +163,22 @@ behavior change at all.
 - Multi-session hardening (B11/B21-B24, R36-R40): coordination lock primitive
   `withStoreLock` in `skills/bee-hive/templates/lib/lock.mjs` (byte-mirrored
   to `.bee/bin/lib/`), O_EXCL acquire with stale-holder takeover by atomic
-  rename, forked-racer suite `scripts/test_store_lock.mjs`; `cells claim --id`
+  rename, forked-racer suite `scripts/tests/test_store_lock.mjs`; `cells claim --id`
   re-backed by the same claim-file gate `claim-next` uses
   (`claimCellCrossSession` in `lib/cells.mjs`), forked-racer suite
-  `scripts/test_claim_race.mjs`; session id self-derivation `resolveSessionId`
+  `scripts/tests/test_claim_race.mjs`; session id self-derivation `resolveSessionId`
   in `lib/claims.mjs`; claim-clearing release on cap/unclaim/block/drop/reopen
   via `clearClaim` in `lib/claims.mjs`; reservation read-modify-write and
   session auto-derive under the lock in `lib/reservations.mjs`
   (`reserve`/`release`/`sweepExpired`), forked-racer suite
-  `scripts/test_reservation_race.mjs`; ownership guard on cell mutators
+  `scripts/tests/test_reservation_race.mjs`; ownership guard on cell mutators
   (`checkClaimOwnership`/`guardClaimOwnership`, `--force-ownership`, the
   `trace.ownership_overrides` audit key kept apart from `trace.deviations`)
   in `lib/cells.mjs`; throttled heartbeat-and-lease renewal
   (`heartbeatTouch`, `renewClaimTTL` in `lib/claims.mjs`,
   `renewHoldsBySession` in `lib/reservations.mjs`) wired into
   `hooks/bee-prompt-context.mjs` and `hooks/bee-state-sync.mjs` in try-once
-  mode, suite `scripts/test_heartbeat_touch.mjs`; state logical
+  mode, suite `scripts/tests/test_heartbeat_touch.mjs`; state logical
   read-modify-write verbs (`startFeature` in `lib/state.mjs`;
   `handleStateSet`/`handleStateGate`/`stateWorkerMutate`/
   `handleStateScribingRun` in `bee.mjs`) serialized under the same lock,

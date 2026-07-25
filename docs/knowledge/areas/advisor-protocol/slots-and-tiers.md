@@ -103,7 +103,7 @@ bee:
 
 - **P3 —** Read-only validation: `validateModelsConfig` (advice-class token
   blocklist) + `validateAgentFilesDrift`, same lib; suite
-  `scripts/test_config_validate.mjs`.
+  `scripts/tests/test_config_validate.mjs`.
 - **P4 —** Guard allowlist fold (E6, cnt-7): `configuredModelSet` in
   `skills/bee-hive/templates/lib/dispatch-guard.mjs` (mirrored in
   `.bee/bin/lib/dispatch-guard.mjs`) calls `resolveAdvisor(root, 'claude')`

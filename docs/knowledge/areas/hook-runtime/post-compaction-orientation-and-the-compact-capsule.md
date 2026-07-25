@@ -194,6 +194,6 @@ adopted.
   passes `handoffOutcome` through to the builder), `hooks/bee-session-close.mjs`
   (the pre-compaction log append and survival notice).
 - Golden fixture: `scripts/fixtures/preamble-golden.txt`.
-- Proof: `scripts/test_compact_capsule.mjs`, `scripts/test_compaction_module.mjs`,
-  `scripts/test_compaction_advisories.mjs`, and the compaction-resume rows in
+- Proof: `scripts/tests/test_compact_capsule.mjs`, `scripts/tests/test_compaction_module.mjs`,
+  `scripts/tests/test_compaction_advisories.mjs`, and the compaction-resume rows in
   `hooks/test_hook_contracts.mjs`.

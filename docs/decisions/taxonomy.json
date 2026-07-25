@@ -219,6 +219,7 @@
     "close",
     "grooming",
     "test-prune",
-    "gitignore"
+    "gitignore",
+    "scripts-tests-move"
   ]
 }

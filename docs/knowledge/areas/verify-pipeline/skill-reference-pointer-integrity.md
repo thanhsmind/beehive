@@ -131,7 +131,7 @@ nothing had ever looked.
 
 ## Pointers (implementation)
 
-- `scripts/test_skill_pointers.mjs` — the check, with `--selftest` carrying the negative controls.
+- `scripts/tests/test_skill_pointers.mjs` — the check, with `--selftest` carrying the negative controls.
 - `scripts/run_verify.mjs` — the discovery roots that make registration unnecessary.
 - `scripts/okf_instructions_fence.mjs` — the sibling instruction-surface check whose reporting style
   this one follows.
