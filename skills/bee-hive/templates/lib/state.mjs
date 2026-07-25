@@ -833,10 +833,19 @@ export function resolveRoots(startDir) {
  *   `.git` dir when ordinary, the MAIN checkout's `.git` dir when a linked
  *   worktree; null when no git root is reachable at all (the same
  *   onboarding-marker-only fallback resolveRoots already tolerates).
- * - controlRoot: `<mainRoot>/.bee/runtime/control` — mainRoot is the MAIN
- *   checkout regardless of worktree registration (D2: control plane is
- *   shared across ALL worktrees, not opt-in). This directory need not exist
- *   yet — no store paths move in this cell; msn-18 populates/wires it.
+ * - controlRoot: `mainRoot` itself (msn-18a: least-churn reading of D2) —
+ *   mainRoot is the MAIN checkout regardless of worktree registration
+ *   (control plane is shared across ALL worktrees, not opt-in). Coordination
+ *   stores resolve as `<controlRoot>/.bee/...`, exactly the paths the leaf
+ *   modules (claims.mjs sessionsDir/claimsDir, workflow-store.mjs
+ *   workflowsDir) already build from a bare root — so main-checkout callers
+ *   are byte-identical (controlRoot === workspaceRoot === mainRoot there) and
+ *   a linked worktree's coordination reads/writes land in the SAME physical
+ *   `<mainRoot>/.bee/...` tree main itself uses, with zero path-shape change
+ *   to those leaf modules. (An earlier draft nested this under
+ *   `mainRoot/.bee/runtime/control`, a store shape nothing else in the
+ *   codebase reads or writes — corrected here before any caller shipped
+ *   against it.)
  * - localRuntimeRoot: `<workspaceRoot>/.bee/runtime/local` — always the
  *   CURRENT physical checkout, never the main checkout (per-checkout caches
  *   that never need sharing).
@@ -898,7 +907,7 @@ export function resolveContext(cwd) {
 
   return {
     projectRoot: resolveProductRoot(workspaceRoot),
-    controlRoot: path.join(mainRoot, '.bee', 'runtime', 'control'),
+    controlRoot: mainRoot,
     workspaceRoot,
     localRuntimeRoot: path.join(workspaceRoot, '.bee', 'runtime', 'local'),
     gitCommonDir,
@@ -910,6 +919,21 @@ export function resolveContext(cwd) {
 export function findRepoRoot(startDir) {
   const roots = resolveRoots(startDir);
   return roots.storeRoot;
+}
+
+/**
+ * controlRootFor(root) — resolveContext(root).controlRoot, with a fallback
+ * to `root` itself when nothing is resolvable at all (no git root, no
+ * onboarding marker reachable — resolveContext's own "give up" case) so a
+ * caller never has to null-check before using the result. Internal helper:
+ * this is how state.mjs re-roots its OWN claims/sessions/workflow-store call
+ * sites (msn-18a) onto the shared control plane, so a `root` that happens to
+ * be a linked worktree's checkout still reaches the SAME store main uses.
+ * Main/solo repos: byte-identical to `root` (controlRoot === workspaceRoot
+ * there).
+ */
+function controlRootFor(root) {
+  return resolveContext(root).controlRoot ?? root;
 }
 
 // resolveProductRoot — where the host project's PRODUCT docs live: docs/backlog.md,
@@ -1145,7 +1169,7 @@ export function writeHandoff(root, input = {}) {
     );
   }
 
-  const claim = readClaim(root, nextCell);
+  const claim = readClaim(controlRootFor(root), nextCell);
   if (!claim || claim.session !== writerSession) {
     throw new Error(
       `writeHandoff: refused — next cell "${nextCell}" has no claim owned by writer session "${writerSession}" (found ${claim ? `owner "${claim.session}"` : 'no claim'}). The next cell must already be claimed by the writing session before a planned-next handoff carries it. FIX: claim "${nextCell}" as session "${writerSession}" first (claims.mjs claimCellFile), then retry.`,
@@ -1203,7 +1227,7 @@ export function adoptHandoff(root, sessionId) {
     return { ok: false, code: 'MALFORMED', reason: 'planned-next handoff has no next_cell to adopt.' };
   }
 
-  const adopted = adoptClaim(root, nextCell, sessionId);
+  const adopted = adoptClaim(controlRootFor(root), nextCell, sessionId);
   if (!adopted.ok) {
     // adoptClaim's own typed failure (GATE_HELD / NOT_FOUND) — propagate
     // as-is; neither the claim nor the handoff has been touched by this call.
@@ -1387,7 +1411,7 @@ export function writeMailboxHandoff(root, workflowId, input = {}) {
         `writeMailboxHandoff: refused — previous cell "${previousCell}" is not capped with a passing verify (found status "${previous?.status ?? 'missing'}", verify_passed ${JSON.stringify(previous?.trace?.verify_passed ?? null)}). A planned-next handoff may only follow a green-verified cap. FIX: cap "${previousCell}" with a recorded passing verify first (bee.mjs cells verify then cap), then retry.`,
       );
     }
-    const claim = readClaim(root, nextCell);
+    const claim = readClaim(controlRootFor(root), nextCell);
     if (!claim || claim.session !== writerSession) {
       throw new Error(
         `writeMailboxHandoff: refused — next cell "${nextCell}" has no claim owned by writer session "${writerSession}" (found ${claim ? `owner "${claim.session}"` : 'no claim'}). The next cell must already be claimed by the writing session before a planned-next handoff carries it. FIX: claim "${nextCell}" as session "${writerSession}" first (claims.mjs claimCellFile), then retry.`,
@@ -1491,7 +1515,7 @@ export function adoptMailboxHandoff(root, workflowId, sessionId, { targetRole = 
     let claim;
     let previousOwner = candidate.adopted_previous_owner ?? null;
     if (candidate.status === 'open') {
-      const adopted = adoptClaim(root, nextCell, sessionId);
+      const adopted = adoptClaim(controlRootFor(root), nextCell, sessionId);
       if (!adopted.ok) return adopted; // untouched, propagate typed refusal as-is
       claim = adopted.claim;
       previousOwner = adopted.previous_owner;
@@ -1506,7 +1530,7 @@ export function adoptMailboxHandoff(root, workflowId, sessionId, { targetRole = 
     } else {
       // Self-heal: the claim already moved on a prior (crashed-before-clear)
       // call — never re-adopt (would double-bump fence_epoch for nothing).
-      claim = readClaim(root, nextCell);
+      claim = readClaim(controlRootFor(root), nextCell);
     }
     writeJsonAtomic(handoffRecordPath(root, wfId, seq), {
       ...rest,
@@ -1688,13 +1712,20 @@ export function listLanes(root) {
 export function resolvePipeline(root, { sessionId = null } = {}) {
   const defaults = () => ({ ok: true, source: 'default', record: readState(root) });
   if (typeof sessionId !== 'string' || !sessionId.trim()) return defaults();
-  const session = readSession(root, sessionId);
+  // Sessions and lanes are coordination-store state (msn-18a): resolved
+  // through controlRootFor so a `root` that is a linked worktree's own
+  // checkout still finds the SAME session/lane records main sees — a
+  // worktree-bound session must resolve its lane, not hard-deny on it
+  // (advisor-digest-slice4 binding condition 2). Main/solo repos:
+  // controlRootFor(root) === root, byte-identical.
+  const controlRoot = controlRootFor(root);
+  const session = readSession(controlRoot, sessionId);
   if (!session) return defaults();
   const bound = typeof session.lane === 'string' ? session.lane.trim() : '';
   if (!bound) return defaults();
   let file;
   try {
-    file = lanePath(root, bound);
+    file = lanePath(controlRoot, bound);
   } catch (err) {
     return {
       ok: false,
@@ -1708,16 +1739,16 @@ export function resolvePipeline(root, { sessionId = null } = {}) {
       ok: false,
       code: 'LANE_MISSING',
       feature: bound,
-      reason: `session "${session.id}" is bound to lane "${bound}" but ${path.relative(root, file)} does not exist — resolution never guesses back to the default pipeline. FIX: start the lane (startFeature with lane mode) or unbind the session.`,
+      reason: `session "${session.id}" is bound to lane "${bound}" but ${path.relative(controlRoot, file)} does not exist — resolution never guesses back to the default pipeline. FIX: start the lane (startFeature with lane mode) or unbind the session.`,
     };
   }
-  const record = readLane(root, bound);
+  const record = readLane(controlRoot, bound);
   if (!record) {
     return {
       ok: false,
       code: 'LANE_CORRUPT',
       feature: bound,
-      reason: `session "${session.id}" is bound to lane "${bound}" but its record is corrupt — display never guesses and mutations must refuse. FIX: inspect/restore ${path.relative(root, file)}, then retry.`,
+      reason: `session "${session.id}" is bound to lane "${bound}" but its record is corrupt — display never guesses and mutations must refuse. FIX: inspect/restore ${path.relative(controlRoot, file)}, then retry.`,
     };
   }
   return { ok: true, source: 'lane', feature: bound, record };
@@ -2242,7 +2273,11 @@ function legacyGatesToWorkflowGates(approvedGates) {
 }
 
 async function seedLegacyWorkflows(root) {
-  const { workflows: existing } = listWorkflows(root);
+  // Workflow records are control-plane (msn-18a) — resolved through
+  // controlRootFor so seeding from a worktree lands in the SAME workflow
+  // store main reads, never a worktree-local one.
+  const controlRoot = controlRootFor(root);
+  const { workflows: existing } = listWorkflows(controlRoot);
   if (existing.length > 0) return; // never re-seed once ANY workflow record exists
 
   const liveForFeature = (feature) => existing.some((wf) => wf.feature === feature && wf.status !== 'closed');
@@ -2257,7 +2292,7 @@ async function seedLegacyWorkflows(root) {
     (legacy.phase && legacy.phase !== 'idle' && legacy.phase !== 'compounding-complete') ||
     Object.values(legacy.approved_gates || {}).some((v) => v === true);
   if (legacyLive && legacy.feature && !liveForFeature(legacy.feature)) {
-    const created = await createWorkflow(root, {
+    const created = await createWorkflow(controlRoot, {
       feature: legacy.feature,
       phase: isKnownPhase(legacy.phase) ? legacy.phase : 'idle',
       mode: legacy.mode,
@@ -2277,7 +2312,7 @@ async function seedLegacyWorkflows(root) {
     if (!lane || !lane.feature) continue;
     const laneLive = lane.phase && lane.phase !== 'idle' && lane.phase !== 'compounding-complete';
     if (!laneLive || liveForFeature(lane.feature)) continue;
-    const created = await createWorkflow(root, {
+    const created = await createWorkflow(controlRoot, {
       feature: lane.feature,
       phase: isKnownPhase(lane.phase) ? lane.phase : 'idle',
       mode: lane.mode,
@@ -2297,7 +2332,8 @@ async function seedLegacyWorkflows(root) {
 // workflow"). Read-only — runs before any write, so a refusal here leaves
 // zero mutations, same discipline as every other precondition in this file.
 function checkNoLiveWorkflowForFeature(root, feature) {
-  const { workflows } = listWorkflows(root);
+  // Workflow records are control-plane (msn-18a) — see seedLegacyWorkflows.
+  const { workflows } = listWorkflows(controlRootFor(root));
   const conflict = workflows.find((wf) => wf.feature === feature && wf.status !== 'closed');
   if (conflict) {
     throw new Error(
@@ -2497,7 +2533,8 @@ export async function startFeature(
   // string defaults — a lane projection rebuilt from this record (see
   // handleStateStartFeature in bee.mjs) must show the same descriptive text
   // startLane already wrote, not a blank one.
-  await createWorkflow(root, {
+  // Workflow records are control-plane (msn-18a) — see seedLegacyWorkflows.
+  await createWorkflow(controlRootFor(root), {
     feature: featureTrimmed,
     phase: phaseValue,
     mode: mode == null ? null : String(mode),
@@ -2514,9 +2551,13 @@ export async function startFeature(
 // paths, so the held paths are DERIVED from the claimed cell's files list —
 // same derivation discipline as the handoff/worker attribution above.
 function listClaimHoldsForStart(root, sessionId, cellById, declared) {
+  // Claims are control-plane (msn-18a) — resolved through controlRootFor so
+  // a start from a worktree checks holds against the SAME claim store main
+  // reads, never a worktree-local one.
+  const controlRoot = controlRootFor(root);
   let entries;
   try {
-    entries = fs.readdirSync(claimsDir(root));
+    entries = fs.readdirSync(claimsDir(controlRoot));
   } catch {
     return [];
   }
@@ -2526,7 +2567,7 @@ function listClaimHoldsForStart(root, sessionId, cellById, declared) {
     if (!entry.endsWith('.json')) continue;
     let claim;
     try {
-      claim = readClaim(root, entry.slice(0, -'.json'.length));
+      claim = readClaim(controlRoot, entry.slice(0, -'.json'.length));
     } catch {
       continue; // a filename that is not a plain cell id is no claim of ours
     }

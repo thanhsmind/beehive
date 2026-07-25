@@ -251,7 +251,7 @@ await check('resolveContext: main checkout — control/local/git roots, workspac
   const ctx = resolveContext(path.join(dir, 'child'));
   assert(ctx.workspaceRoot === dir, `workspaceRoot should be the checkout root, got ${ctx.workspaceRoot}`);
   assert(ctx.gitCommonDir === path.join(dir, '.git'), `gitCommonDir should be the checkout's own .git, got ${ctx.gitCommonDir}`);
-  assert(ctx.controlRoot === path.join(dir, '.bee', 'runtime', 'control'), `unexpected controlRoot ${ctx.controlRoot}`);
+  assert(ctx.controlRoot === dir, `unexpected controlRoot ${ctx.controlRoot} (msn-18a: controlRoot is mainRoot itself, not a runtime/control subdir)`);
   assert(ctx.localRuntimeRoot === path.join(dir, '.bee', 'runtime', 'local'), `unexpected localRuntimeRoot ${ctx.localRuntimeRoot}`);
   assert(ctx.projectRoot === dir, `projectRoot should default to workspaceRoot, got ${ctx.projectRoot}`);
   assert(ctx.workspaceId === 'main', `workspaceId should be 'main', got ${ctx.workspaceId}`);
@@ -270,7 +270,7 @@ await check('resolveContext: unregistered linked worktree — control root share
   const ctx = resolveContext(work);
   assert(ctx.workspaceRoot === work, `workspaceRoot should be the worktree's own checkout, got ${ctx.workspaceRoot}`);
   assert(ctx.gitCommonDir === path.join(main, '.git'), `gitCommonDir should be the MAIN checkout's .git, got ${ctx.gitCommonDir}`);
-  assert(ctx.controlRoot === path.join(main, '.bee', 'runtime', 'control'), `controlRoot should be shared at MAIN (D2), got ${ctx.controlRoot}`);
+  assert(ctx.controlRoot === main, `controlRoot should be shared at MAIN itself (msn-18a), got ${ctx.controlRoot}`);
   assert(ctx.localRuntimeRoot === path.join(work, '.bee', 'runtime', 'local'), `localRuntimeRoot should stay per-checkout (worktree), got ${ctx.localRuntimeRoot}`);
   assert(ctx.worktreeId === id, `worktreeId should report the git-verified id, got ${ctx.worktreeId}`);
   assert(ctx.workspaceId === 'main', `unregistered worktree's workspaceId should fall back to 'main' (P40 default), got ${ctx.workspaceId}`);
@@ -292,12 +292,42 @@ await check('resolveContext: REGISTERED (granted) linked worktree — workspaceI
   const ctx = resolveContext(work);
   assert(ctx.workspaceId === id, `registered worktree's workspaceId should be its own id, got ${ctx.workspaceId}`);
   assert(ctx.worktreeId === id, `worktreeId should still be the git-verified id, got ${ctx.worktreeId}`);
-  assert(ctx.controlRoot === path.join(main, '.bee', 'runtime', 'control'), `controlRoot must stay shared at MAIN even when granted (D2), got ${ctx.controlRoot}`);
+  assert(ctx.controlRoot === main, `controlRoot must stay shared at MAIN itself even when granted (msn-18a), got ${ctx.controlRoot}`);
   assert(ctx.localRuntimeRoot === path.join(work, '.bee', 'runtime', 'local'), `localRuntimeRoot must stay the worktree's own checkout, got ${ctx.localRuntimeRoot}`);
 
   // workspaceId is stable across repeated calls (must_have).
   const again = resolveContext(work);
   assert(again.workspaceId === ctx.workspaceId, 'workspaceId must be stable across repeated resolveContext calls');
+});
+
+// BINDING (advisor-digest-slice4, msn-18 re-slice): the topology test data-
+// plane isolation must not silently collapse when the control plane
+// collapses onto mainRoot (msn-18a's controlRoot fix above) — a linked
+// worktree's localRuntimeRoot must resolve to a DISTINCT subtree under the
+// WORKTREE's own root, never main's, even though controlRoot now equals
+// main's bare checkout root for both.
+await check('resolveContext BINDING: localRuntimeRoot is a DISTINCT per-worktree subtree, never collapsing onto main (data-plane isolation)', async () => {
+  const main = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-ctx-distinct-main-'));
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-ctx-distinct-work-'));
+  fs.mkdirSync(path.join(main, '.git'));
+  const id = 'ctx-fixture-distinct';
+  const gitdir = path.join(main, '.git', 'worktrees', id);
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(work, '.git'), `gitdir: ${gitdir}\n`);
+  fs.writeFileSync(path.join(gitdir, 'gitdir'), path.join(work, '.git') + '\n');
+
+  const mainCtx = resolveContext(main);
+  const workCtx = resolveContext(work);
+
+  // Control plane collapses onto the SAME shared root for both (msn-18a).
+  assert(mainCtx.controlRoot === main, `main's own controlRoot should be itself, got ${mainCtx.controlRoot}`);
+  assert(workCtx.controlRoot === mainCtx.controlRoot, `worktree controlRoot must equal main's controlRoot, got ${workCtx.controlRoot} vs ${mainCtx.controlRoot}`);
+
+  // Local runtime plane must NOT collapse — each checkout gets its own
+  // subtree, and the worktree's lives under the WORKTREE's root, never main's.
+  assert(workCtx.localRuntimeRoot !== mainCtx.localRuntimeRoot, `worktree localRuntimeRoot must differ from main's, both resolved to ${workCtx.localRuntimeRoot}`);
+  assert(workCtx.localRuntimeRoot === path.join(work, '.bee', 'runtime', 'local'), `worktree localRuntimeRoot must nest under the WORKTREE's own root, got ${workCtx.localRuntimeRoot}`);
+  assert(!workCtx.localRuntimeRoot.startsWith(main + path.sep), `worktree localRuntimeRoot must never nest under main's root, got ${workCtx.localRuntimeRoot}`);
 });
 
 await check('resolveRoots compat wrapper stays byte-identical after the resolveContext refactor', async () => {

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { findConflicts, findSessionConflicts, reservationsPath, isHardConflict } from './reservations.mjs';
-import { readConfig, resolvePipeline, resolveRoots } from './state.mjs';
+import { readConfig, resolveContext, resolvePipeline, resolveRoots } from './state.mjs';
 // xwh-4: cross-worktree foreign-hold consultation. worktree-holds.mjs imports
 // only fsutil/lock/reservations.mjs — no cycle (same discipline cells.mjs's
 // own findForeignHolds import documents).
@@ -223,9 +223,21 @@ function intakeRefusal(phase, blockedDescription, extraSentence = '') {
 // contract). An unresolvable lane binding is a typed deny, never a silent
 // fallback to the default pipeline. Shared by checkWrite and
 // checkGitBashCommand so both apply the SAME phase/lane semantics.
+//
+// msn-18a (advisor-digest-slice4 binding condition 2): `root` here is
+// whatever the hook/dispatcher's write path happened to resolve — for a
+// write originating in a linked worktree this can be the WORKTREE's own
+// checkout, not main's. resolvePipeline's lane/session/workflow reads are
+// control-plane (resolveContext.controlRoot = mainRoot), so this call routes
+// through controlRoot explicitly rather than trusting every caller to have
+// pre-resolved it — a worktree-bound write must find the SAME lane record
+// main sees, never hard-deny with LANE_MISSING just because its own checkout
+// has no `.bee/lanes/<feature>.json` of its own. Main/solo repos:
+// controlRoot === root, byte-identical to the pre-msn-18a behavior.
 function resolveWriteRecord(root, state, sessionId) {
   if (typeof sessionId === 'string' && sessionId.trim()) {
-    const resolved = resolvePipeline(root, { sessionId });
+    const { controlRoot } = resolveContext(root);
+    const resolved = resolvePipeline(controlRoot ?? root, { sessionId });
     if (!resolved.ok) {
       return { ok: false, reason: `bee lane guard: ${resolved.reason}` };
     }

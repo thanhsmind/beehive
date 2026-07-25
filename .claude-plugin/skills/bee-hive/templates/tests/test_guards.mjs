@@ -508,6 +508,56 @@ await check("lanes: checkWrite with a bound sessionId resolves phase/gates from 
   }
 });
 
+// ─── msn-18a topology (advisor-digest-slice4 binding condition 2) ──────────
+// checkWrite's `root` is the physical checkout being written to (the hook's
+// ctx.root) — for a write happening inside a LINKED WORKTREE, that root is
+// the worktree's own checkout, never main's, even though the session/lane
+// binding this write is governed by lives in MAIN's store (a worktree never
+// gets its own session/lane store — msn-18a's control plane is shared).
+// Before msn-18a's controlRoot fix, resolveWriteRecord passed this worktree
+// root straight into resolvePipeline, which could not find the session (or,
+// once found, the lane) in the worktree's own (nonexistent) `.bee/sessions`/
+// `.bee/lanes` — a hard deny. Post-fix, resolveWriteRecord resolves through
+// resolveContext(root).controlRoot first, landing back in MAIN's store.
+await check('checkWrite: a write from a LINKED WORKTREE with a session bound to a lane in MAIN\'s store passes the lane guard (msn-18a, condition 2) — pre-fix this hard-denied because the worktree has no session/lane store of its own', async () => {
+  const main = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-guard-wt-main-'));
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-guard-wt-work-'));
+  try {
+    // Real linked-worktree gitdir shape (same manual fixture pattern
+    // test_state.mjs's resolveContext tests use — main .git/worktrees/<id> +
+    // reverse gitdir pointer).
+    const id = 'guard-wt-fixture';
+    const gitdir = path.join(main, '.git', 'worktrees', id);
+    fs.mkdirSync(gitdir, { recursive: true });
+    fs.writeFileSync(path.join(work, '.git'), `gitdir: ${gitdir}\n`);
+    fs.writeFileSync(path.join(gitdir, 'gitdir'), path.join(work, '.git') + '\n');
+
+    // The session and its lane live ONLY in MAIN's store — a worktree never
+    // gets its own (msn-18a: control plane is shared, not per-checkout).
+    laneBinding.createSession(main, { id: 'sess-wt' });
+    writeLaneFixture(main, 'feature-wt', {
+      phase: 'swarming',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+    });
+    laneBinding.bindSessionLane(main, 'sess-wt', 'feature-wt');
+
+    // work's own .bee tree has NO session, NO lane — proving resolution
+    // reaches all the way back to main's store rather than finding a
+    // worktree-local copy that happens to also exist.
+    assert(!fs.existsSync(path.join(work, '.bee', 'sessions')), 'the worktree must have no session store of its own for this proof');
+    assert(!fs.existsSync(path.join(work, '.bee', 'lanes')), 'the worktree must have no lane store of its own for this proof');
+
+    const verdict = checkWrite(work, defaultState(), 'src/app.ts', null, { sessionId: 'sess-wt' });
+    assert(
+      verdict.allow === true,
+      `a worktree write governed by a lane-bound session must pass the lane guard against MAIN's control store, got ${JSON.stringify(verdict)}`,
+    );
+  } finally {
+    fs.rmSync(main, { recursive: true, force: true });
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+});
+
 // ─── fsh-7: cross-session hold hard block in the guard lib (D3, RED-first) ──
 // PLACEMENT PIN (panel W1): D3 is unconditional on phase, so every deny test
 // here deliberately runs the bound lane in phase 'swarming' with execution
