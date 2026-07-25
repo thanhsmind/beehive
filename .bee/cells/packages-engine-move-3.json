@@ -86,7 +86,47 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "red-first",
+            "status": "PASS",
+            "evidence": "reports/packages-engine-move-3.md:28-30 '295 passed, 1 failed, the exact expected failure ... green after (296 passed)'; trace.verification_run quotes 'expected --text named as the unknown flag, got: Missing required flag --outcome.'"
+          },
+          {
+            "id": "live-run",
+            "status": "PASS",
+            "evidence": "capture add --text x -> STDERR 'capture add: unknown flag --text (known: ...)' exit 1 (stderr confirmed); status --json exit 0; cells list --json exit 0"
+          },
+          {
+            "id": "bespoke-loops-intact",
+            "status": "PASS",
+            "evidence": "bee.mjs:1239 and :3084 still carry their own unknown-flag throws; test_cli_state 102/0, test_cli_cells 40/0"
+          },
+          {
+            "id": "validator-not-loosened",
+            "status": "PASS",
+            "evidence": "git show 4882586 -- command-registry.mjs = +17/-0 additions only, no required[] change; validate-args.mjs +5/-1 comment-only :90 matching bee.mjs:7181-7192"
+          },
+          {
+            "id": "mirror-sync",
+            "status": "PASS",
+            "evidence": "cmp clean: bee.mjs, command-registry.mjs, validate-args.mjs vs .bee/bin equivalents"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-25T20:34:58.655Z"
+      }
+    ]
   },
   "tier": "generation"
 }
