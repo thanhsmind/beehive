@@ -20,14 +20,15 @@ bee/
     bee.mjs                       ← sole shipped CLI: bee.mjs <group> <verb> over all 9 command groups (D1, shim-retire, decision bbc6bcea; supersedes the 9-shim compat net from harness-integration-adopt/decision 30606de4)
     lib/command-registry.mjs      ← single source of truth for every subcommand's JSON-Schema parameters
     lib/validate-args.mjs         ← validates parsed CLI args against a registry entry's schema; shared by bee.mjs and bee-write-guard.mjs
+    scripts/
+      onboard_bee.mjs             ← installer: AGENTS.md block, .bee/, bee.mjs + lib
+      test_onboard_bee.mjs
   AGENTS.template.md             ← Codex bootstrap block (installed into repo AGENTS.md, BEE:START/END markers)
   skills/
-    hive/                        ← bootstrap + routing meta-skill
+    hive/                        ← bootstrap + routing meta-skill (instructions only; the onboarding engine lives at packages/bee/scripts/ above)
       SKILL.md
       references/routing-and-contracts.md
       references/go-mode.md
-      scripts/onboard_bee.mjs    ← installer: AGENTS.md block, .bee/, bee.mjs + lib
-      scripts/test_onboard_bee.mjs
     exploring/     SKILL.md + references/{gray-area-probes.md, context-template.md}
     planning/      SKILL.md + references/{planning-reference.md, edge-dimensions.md}
     validating/    SKILL.md + references/validation-reference.md
@@ -213,7 +214,7 @@ The spawn *contract* is identical on both: assigned cell id, CONTEXT.md path, gl
 
 ### Everything else is shared
 
-Skills, artifacts, cells, gates, helpers, templates: one copy of prose/logic in `skills/`. Each plugin manifest routes to its own **committed rendered tree** instead — `.claude-plugin/plugin.json` → `.claude-plugin/skills/` = `render(skills/, "claude")`, `.codex-plugin/plugin.json` → `.codex-plugin/skills/` = `render(skills/, "codex")` — generated only through the D9 renderer (`skills/bee-hive/scripts/onboard_bee.mjs::renderSkillBytes`, regenerated via `scripts/render_plugin_skill_trees.mjs`); with zero runtime markers today both rendered trees stay byte-identical to `skills/` (cnr2-12).
+Skills, artifacts, cells, gates, helpers, templates: one copy of prose/logic in `skills/`. Each plugin manifest routes to its own **committed rendered tree** instead — `.claude-plugin/plugin.json` → `.claude-plugin/skills/` = `render(skills/, "claude")`, `.codex-plugin/plugin.json` → `.codex-plugin/skills/` = `render(skills/, "codex")` — generated only through the D9 renderer (`packages/bee/scripts/onboard_bee.mjs::renderSkillBytes`, regenerated via `scripts/render_plugin_skill_trees.mjs`); with zero runtime markers today both rendered trees stay byte-identical to `skills/` (cnr2-12).
 
 ## Hooks: one automation skeleton, both runtimes + the helper floor underneath
 

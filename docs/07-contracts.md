@@ -223,7 +223,7 @@ Enforced invariants only — this section states no promise the code above does 
 
 Common prologue for every hook: read stdin fully (may be empty), `findRepoRoot(cwd)`, require `.bee/onboarding.json` + `hookEnabled(root, '<name>')`, dynamic-import lib from `<root>/.bee/bin/lib/` with try/catch → exit 0 on any miss; crash-log to `.bee/logs/hooks.jsonl`.
 
-## Onboarding (`skills/bee-hive/scripts/onboard_bee.mjs`)
+## Onboarding (`packages/bee/scripts/onboard_bee.mjs`)
 
 ```
 node onboard_bee.mjs --repo-root <path> [--apply] [--json] [--repo-hooks] [--claude-md]

@@ -37,7 +37,7 @@ The first three rows go straight to the merged shape+execution gate and the one 
 ## Onboarding
 
 1. Run `node --version`. Missing or below 18 → stop; bee requires Node.js 18+.
-2. From this skill directory, run `node scripts/onboard_bee.mjs --repo-root <repo-root> --json`.
+2. From the bee source root (the checkout or installed plugin package), run `node packages/bee/scripts/onboard_bee.mjs --repo-root <repo-root> --json`.
 3. Branch on `status`: `up_to_date` → continue. `changes_needed` → summarize the plan to the user, ask for approval, and only then re-run with `--apply` — never silently, and never over content outside the BEE markers without explicit consent. `blocked_downgrade` / `blocked_no_source` → zero mutations happened; surface the reported `versions` and resolve it with the user before retrying.
 
 If onboarding is not complete, do not continue into the rest of the bee workflow.

@@ -123,7 +123,62 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "1-rename-history",
+            "status": "PASS",
+            "evidence": "git log --follow packages/bee/scripts/onboard_bee.mjs => 50 commits through 8bff2a8/0a5639c; git show --stat renders true rename (4 of 5 files; test_split_brain_regression.mjs intentional re-author)"
+          },
+          {
+            "id": "2-hive-dir-three-semantics",
+            "status": "PASS",
+            "evidence": "onboard_bee.mjs:96-98 ENGINE_DIR/PLUGIN_ROOT/SKILLS_ROOT split; classifySource sites :510,:3932 pass join(SKILLS_ROOT,'bee-hive'); source-identity.mjs absent from commit (prohibition C3 held)"
+          },
+          {
+            "id": "3-identityok-falsifiable",
+            "status": "PASS",
+            "evidence": "onboard_bee.mjs:1561-1577 skills-tree realpath containment + payload existsSync; no SCRIPTS_DIR tautology; failure -> blocked_no_source"
+          },
+          {
+            "id": "4-projection-semantics",
+            "status": "PASS",
+            "evidence": "test_misc.mjs:2431-2437 pins project_projection (no sibling packages, file untouched); test_split_brain_regression rewritten invariants A/B live-run ok EXIT=0; test_skill_render.mjs:278 second pin"
+          },
+          {
+            "id": "5-self-onboard",
+            "status": "PASS",
+            "evidence": "onboard --json => up_to_date, plan [], exit 0; no bee-hive/scripts dir in any of 4 projections or skills/"
+          },
+          {
+            "id": "6-manifest-roles",
+            "status": "PASS",
+            "evidence": "release-manifest.json: 5 engine records under package_payload at packages/bee/scripts/*; zero skills/bee-hive/scripts records; --check 394 match exit 0"
+          },
+          {
+            "id": "7-acceptance-deviation",
+            "status": "PASS",
+            "evidence": "sole remaining hit skills/bee-evolving/CREATION-LOG.md:98 is a frozen validation-run log (historical); exemption pre-declared. Caveat: stored verify string lacks the CREATION-LOG glob so verbatim replay is red; globbed form green (orchestrator re-ran globbed: exit 0)"
+          },
+          {
+            "id": "8-live-callers",
+            "status": "PASS",
+            "evidence": "canary_codex:77, ledger_parity:54, install.ps1:293/321/326-328 backslash forms, install.sh:164/175/177, LLM.md:86-87, INSTALL.md:142/148 repointed; remaining refs owned by cell 2 + scribing; 4 moved suites run green from new home"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-25T20:09:31.742Z"
+      }
+    ]
   },
   "tier": "generation"
 }

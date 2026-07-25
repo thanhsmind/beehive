@@ -46,10 +46,10 @@ Open this when the compact bootstrap in `SKILL.md` is not enough.
 
 `SKILL.md`'s Onboarding section carries the three steps a session actually runs; this is the full
 status contract behind them (moved here by router-cost rc-4 — the router keeps the steps, this file
-keeps the detail). Run from the `bee-hive` skill directory:
+keeps the detail). Run from the bee source root (the checkout or installed plugin package):
 
 ```bash
-node scripts/onboard_bee.mjs --repo-root <repo-root> --json
+node packages/bee/scripts/onboard_bee.mjs --repo-root <repo-root> --json
 ```
 
 Then inspect the result:
