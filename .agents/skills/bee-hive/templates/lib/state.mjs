@@ -8,9 +8,15 @@ import { readJson, writeJsonAtomic } from './fsutil.mjs';
 // only fsutil/lock.mjs/node builtins (unlike cells.mjs, which imports THIS
 // file) and never each other or this file, so composing both here stays
 // cycle-free (msh-5).
-import { readSession, readClaim, isClaimActive, claimsDir, adoptClaim, activeWorkers } from './claims.mjs';
+import { readSession, readClaim, isClaimActive, claimsDir, adoptClaim, activeWorkers, heartbeatStale } from './claims.mjs';
 import { pathsOverlap, listReservations } from './reservations.mjs';
-import { readGrants, decideWorktreeStore } from './worktree-store.mjs';
+import { readGrants, decideWorktreeStore, createFeatureWorktree } from './worktree-store.mjs';
+// workspace-store.mjs (multisession-native-19) is structurally isolated —
+// imports only fsutil.mjs/lock.mjs (its own header's C4 guarantee) — so
+// importing it here, same as workflow-store.mjs above, creates no cycle.
+// multisession-native-20 (D3) uses it to resolve write-policy ownership at
+// this file's own write-capable entry point (startFeature).
+import { registerWorkspace, attachWorkspace } from './workspace-store.mjs';
 // D6 — startFeature's single read-check-write body runs inside this lock
 // (CLI verbs WAIT normally: no maxAttempts override here, unlike the hook-
 // driven touch path in claims.mjs/reservations.mjs).
@@ -2403,7 +2409,7 @@ function checkNoSameFeatureClaimedCells(feature, cells) {
 // sole source of truth and retire the legacy write entirely.
 export async function startFeature(
   root,
-  { feature, mode = null, phase = 'exploring', lane = false, sessionId = null, paths = [] } = {},
+  { feature, mode = null, phase = 'exploring', lane = false, sessionId = null, paths = [], isolate = false } = {},
 ) {
   if (typeof feature !== 'string' || !feature.trim()) {
     throw new Error('startFeature: a non-empty --feature slug is required.');
@@ -2429,6 +2435,35 @@ export async function startFeature(
   // id from "other" live workers, so a solo caller's own heartbeat never
   // blocks its own start.
   const sessionIdTrimmed = typeof sessionId === 'string' && sessionId.trim() ? sessionId.trim() : null;
+
+  // multisession-native-20 (D3): this file's own write-capable entry point —
+  // resolved BEFORE the 'state' lock is ever acquired (same "never nested"
+  // discipline seedLegacyWorkflows above already follows: applyWritePolicy
+  // takes its own, separate locks — workspace:<id>/worktree-admin — that must
+  // never be held simultaneously with 'state'). Scoped to the DEFAULT
+  // (non-lane) path only: CONTEXT.md's "Scope boundaries" locks lanes-as-UX
+  // unchanged, and lanes are bee's existing, already-coordinated concurrent-
+  // same-checkout mechanism (many sessions on many features, deliberately
+  // supported — see the lane precondition checks a few lines below, which
+  // this cell leaves byte-untouched). The literal "another session is
+  // active, wait" refusal D3 describes replacing is the DEFAULT path's own
+  // `others.length > 0` activeWorkers check further down — this is that
+  // replacement. A successful isolate-create returns here directly, before
+  // this call's own legacy write, never touching root's pipeline at all —
+  // the caller (bee.mjs's handleStateStartFeature) checks `.redirect` and
+  // must not proceed with its own follow-up projection rebuild when true.
+  if (!lane) {
+    const policy = await applyWritePolicy(root, {
+      sessionId: sessionIdTrimmed,
+      paths: Array.isArray(paths) ? paths : [],
+      isolate: isolate === true,
+      feature: featureTrimmed,
+      verbHint: `state start-feature --feature ${featureTrimmed}`,
+    });
+    if (policy.redirect) {
+      return policy;
+    }
+  }
 
   const legacyRecord = await withStoreLock(root, 'state', () => {
     if (lane) {
@@ -2466,18 +2501,19 @@ export async function startFeature(
       );
     }
 
-    // D6 (multisession-native-8): derived from live-heartbeat sessions x
-    // claims (claims.mjs activeWorkers), never the hand-mutated
-    // state.workers array — a hand-written entry with nobody actually
-    // heartbeating is no longer a reason to refuse. excludeSessionId is C3:
-    // the calling session's own liveness is never "another" active worker.
-    const others = activeWorkers(root, { excludeSessionId: sessionIdTrimmed });
-    if (others.length > 0) {
-      const names = others.map((w) => (w.cell ? `${w.session_id}(${w.cell})` : w.session_id)).join(', ');
-      throw new Error(
-        `startFeature: refused — ${others.length} active worker session(s) remain (${names}). FIX: wait for the session's heartbeat to go stale, or have it cap/drop its claimed cell, then retry.`,
-      );
-    }
+    // multisession-native-20 (D3) RETIRES this precondition's old shape.
+    // Pre-msn-20 (D6, multisession-native-8) this refused whenever ANY other
+    // session merely had a live heartbeat — regardless of whether it had
+    // ever actually written anything — with a bare "wait" message. D3
+    // explicitly describes replacing exactly that "another session is
+    // active, wait" answer with the isolate-or-consent flow: applyWritePolicy
+    // above (this file's own write-capable entry point, run before the
+    // 'state' lock) already covers the real case worth blocking — another
+    // session that has ACTUALLY become this workspace's live write owner —
+    // with a strictly better UX (refuse naming the exact --isolate
+    // one-liner, or auto-isolate with consent) instead of a bare wait. A
+    // session that merely has an open heartbeat but has never itself
+    // attempted a write here is no longer, on its own, a reason to refuse.
 
     const activeReservations = listActiveReservationsForStart(root);
     if (activeReservations.length > 0) {
@@ -2555,6 +2591,233 @@ export async function startFeature(
   });
 
   return legacyRecord;
+}
+
+// ─── write-policy resolution (multisession-native-20, D3, advisor-digest-
+// slice4 condition 6) ───────────────────────────────────────────────────────
+// Three modes, resolved fresh on every call at each write-capable entry
+// point (startFeature above, and bee.mjs's cells claim/claim-next):
+//
+//   - 'observe'         (config.guards.write_policy === 'observe'): this
+//     workspace's ownership machinery is never consulted at all — the
+//     unlimited-concurrent, read/analyze/review mode. An explicit opt-OUT of
+//     this whole feature, byte-identical to pre-msn-20 behavior.
+//   - 'shared-disjoint' (config.guards.write_policy === 'shared-disjoint'):
+//     opt-in. Ownership is never claimed; instead an EXACT-path lease (the
+//     existing reservations.mjs/lease-store.mjs machinery, msn-11/16 — never
+//     a broad/glob reservation) must already be held by the acting session
+//     over every declared path, or the call refuses LEASE_REQUIRED naming
+//     what is missing. Nothing here ACQUIRES the lease on the caller's
+//     behalf — "mandatory before write" is a precondition, not an
+//     auto-grant (bee.mjs reservations reserve remains the one CLI writer).
+//   - default ('isolated'): the workspace registry's single write owner
+//     (workspace-store.mjs, msn-19) decides. A solo caller (nobody else
+//     live) always becomes owner — byte-identical to today, the must_have
+//     prohibition this cell is bound by. A caller that finds a DIFFERENT,
+//     LIVE session already owning the workspace either (a) refuses, naming
+//     the exact one-liner to retry with (surfaced in full once per session,
+//     a shorter repeat after — never spammed), or (b) with explicit
+//     --isolate / config.guards.auto_isolate=true, creates a fresh feature
+//     worktree (worktree-store.mjs createFeatureWorktree, which already
+//     registers its own workspace record per msn-19) and answers with the
+//     new checkout's path plus a loud one-line disk-cost disclosure —
+//     condition 6's (a)/(b). The ORIGINAL write-capable call is never
+//     silently redirected into the new checkout by this function itself
+//     (a different process, possibly a different physical machine, cannot
+//     be redirected mid-call) — callers check `.redirect` and stop short of
+//     performing their own write when it is true, surfacing `.text` instead.
+//
+// Sessionless callers (no sessionId — the legacy, pre-multisession-native
+// calling convention some tests and sessionless CLI invocations still use)
+// skip ownership entirely under the default mode: there is no session
+// identity to own a workspace with, so this returns `workspace: 'unbound'`
+// and never touches workspace-store.mjs — zero new writes, zero new
+// behavior for a caller this cell was never asked to change (prohibition:
+// "no silent default change for solo single-session repos").
+export class WritePolicyRefusalError extends Error {
+  constructor(code, message, details) {
+    super(message);
+    this.name = 'WritePolicyRefusalError';
+    this.type = 'refused';
+    this.code = code;
+    if (details && typeof details === 'object' && details.holder !== undefined) this.holder = details.holder;
+  }
+}
+
+function resolveWritePolicyMode(config) {
+  const configured = config && config.guards && typeof config.guards.write_policy === 'string' ? config.guards.write_policy.trim() : '';
+  if (configured === 'observe') return 'observe';
+  if (configured === 'shared-disjoint') return 'shared-disjoint';
+  return 'isolated';
+}
+
+function writePolicyIsolateOneLiner(verbHint) {
+  const verb = typeof verbHint === 'string' && verbHint.trim() ? verbHint.trim() : '<verb>';
+  return (
+    `bee.mjs ${verb} --isolate (creates a fresh worktree for this session), or set ` +
+    'guards.auto_isolate to true in .bee/config.json to always auto-isolate on contention.'
+  );
+}
+
+// "Surfaced once per session" (condition 6a) — a small per-session marker
+// under the control plane, checked/stamped ONLY on the refusal path (never
+// on a successful isolate-create, never on ordinary ownership). Corrupt or
+// unreadable is treated as "not yet shown" (fail-open toward the FULLER
+// message — the safer direction when the marker itself cannot be trusted).
+function isolateNoticeMarkerPath(controlRoot, sessionId) {
+  const safeId = String(sessionId).replace(/[\\/]/g, '_');
+  return path.join(controlRoot, '.bee', 'runtime', 'notices', 'isolate', `${safeId}.json`);
+}
+
+function hasIsolateNoticeShown(controlRoot, sessionId) {
+  return fs.existsSync(isolateNoticeMarkerPath(controlRoot, sessionId));
+}
+
+function markIsolateNoticeShown(controlRoot, sessionId) {
+  try {
+    writeJsonAtomic(isolateNoticeMarkerPath(controlRoot, sessionId), { session_id: sessionId, shown_at: new Date().toISOString() });
+  } catch {
+    // best-effort — a failed stamp only means the next refusal shows the
+    // fuller message again, never a functional failure of the refusal itself.
+  }
+}
+
+/**
+ * applyWritePolicy(root, { sessionId, paths, isolate, feature, verbHint, now,
+ * enforceIsolation }) — resolve and, where the mode requires it, ENFORCE this
+ * cell's write policy for one write-capable call. Returns `{ ok: true, mode,
+ * ... }` when the caller may proceed with its own write; throws
+ * WritePolicyRefusalError (typed, never a silent deny) when it may not. A
+ * successful isolate-create returns `{ ok: true, mode: 'isolated', workspace:
+ * 'isolated-created', redirect: true, worktreeRoot, workspaceId, text,
+ * costDisclosure }` — the caller's own write must NOT proceed in `root` when
+ * `redirect` is true; surface `.text` instead (must_have: "with
+ * --isolate/config: worktree created, workspace registered, caller told the
+ * path").
+ *
+ * `enforceIsolation` (default true): whether the DEFAULT ('isolated') mode's
+ * single-write-owner check actually blocks/redirects a second live session,
+ * as opposed to treating 'isolated' as a no-op passthrough (byte-identical
+ * to `workspace: 'unbound'`) — 'observe' and 'shared-disjoint' are UNCHANGED
+ * either way, since they never depend on this flag. `false` is bee.mjs's own
+ * choice for `cells claim`/`claim-next` (never state start-feature's default
+ * path, where this cell's own single-write-owner truths are proven): those
+ * two verbs ARE the mechanism bee's existing, already-coordinated concurrent
+ * swarm model uses (multiple LIVE sessions legitimately claiming DIFFERENT
+ * cells of the SAME feature in the SAME checkout — bee-swarming, reservations
+ * D3, claims.mjs — the exact pattern CONTEXT.md's "Scope boundaries" locks as
+ * unchanged "for the user", same reasoning this file's own lane path is
+ * exempted by). Blocking a swarm worker's claim on workspace ownership would
+ * not replace an unwanted "another session is active, wait" — it would BE
+ * one, reintroduced under a new name, against the one entry point bee's own
+ * README calls out as normal multi-session operation.
+ */
+export async function applyWritePolicy(
+  root,
+  { sessionId = null, paths = [], isolate = false, feature = null, verbHint = null, now = Date.now(), enforceIsolation = true } = {},
+) {
+  const config = readConfig(root);
+  const mode = resolveWritePolicyMode(config);
+
+  if (mode === 'observe') {
+    return { ok: true, mode: 'observe' };
+  }
+
+  const controlRoot = controlRootFor(root);
+
+  if (mode === 'shared-disjoint') {
+    const declared = Array.isArray(paths) ? paths.filter((p) => typeof p === 'string' && p.trim()) : [];
+    if (declared.length === 0) {
+      return { ok: true, mode: 'shared-disjoint', leased: [] };
+    }
+    const active = listReservations(controlRoot, { activeOnly: true, now });
+    const missing = declared.filter(
+      (p) =>
+        !active.some(
+          (r) => sessionId && r.session === sessionId && !String(r.path).endsWith('*') && pathsOverlap(r.path, p),
+        ),
+    );
+    if (missing.length > 0) {
+      throw new WritePolicyRefusalError(
+        'LEASE_REQUIRED',
+        `bee write-policy (shared-disjoint): no exact-path lease held for: ${missing.join(', ')}. ` +
+          'A broad/glob reservation never satisfies shared-disjoint — an exact-path lease is mandatory before write. ' +
+          `FIX: bee.mjs reservations reserve --agent <worker> --cell <id> --path <path>${
+            sessionId ? ` --session-id ${sessionId}` : ''
+          } for each path, then retry.`,
+      );
+    }
+    return { ok: true, mode: 'shared-disjoint', leased: declared };
+  }
+
+  // isolated (default). No session identity => nothing to own a workspace
+  // with — the legacy sessionless calling convention proceeds untouched.
+  // enforceIsolation === false (cells claim/claim-next): same no-op — see
+  // this function's own header for why those two verbs opt out.
+  if (!sessionId || !enforceIsolation) {
+    return { ok: true, mode: 'isolated', workspace: 'unbound' };
+  }
+
+  const ctx = resolveContext(root);
+  const workspaceId = (ctx && ctx.workspaceId) || 'main';
+  const workspaceRoot = (ctx && ctx.workspaceRoot) || root;
+  await registerWorkspace(controlRoot, {
+    id: workspaceId,
+    type: ctx && ctx.worktreeId ? 'worktree' : 'main',
+    root: workspaceRoot,
+  });
+
+  // Production-shaped isOwnerLive (test_workspace_store.mjs precedent,
+  // msn-19): built from claims.mjs's own readSession + heartbeatStale rather
+  // than imported into workspace-store.mjs itself (structural isolation,
+  // that module's own header).
+  const isOwnerLive = (ownerSessionId, nowMs) => {
+    const session = readSession(controlRoot, ownerSessionId);
+    return session ? !heartbeatStale(session, nowMs) : false;
+  };
+
+  const attach = await attachWorkspace(controlRoot, workspaceId, sessionId, { now, isOwnerLive });
+  if (attach.role === 'owner') {
+    return { ok: true, mode: 'isolated', workspace: 'owner', reclaimed: Boolean(attach.reclaimed) };
+  }
+
+  // blocked: a DIFFERENT, live session already owns this workspace's writes.
+  const autoIsolate = isolate === true || (config.guards && config.guards.auto_isolate === true);
+  if (!autoIsolate) {
+    const alreadyShown = hasIsolateNoticeShown(controlRoot, sessionId);
+    if (!alreadyShown) markIsolateNoticeShown(controlRoot, sessionId);
+    const oneLiner = writePolicyIsolateOneLiner(verbHint);
+    throw new WritePolicyRefusalError(
+      'WORKSPACE_ISOLATION_REQUIRED',
+      alreadyShown
+        ? `bee write-policy: workspace "${workspaceId}" is still write-owned by session "${attach.write_owner_session}". FIX: ${oneLiner}`
+        : `bee write-policy: a second write-capable session defaults to isolation, not a wait — workspace "${workspaceId}" ` +
+          `already has a live write owner (session "${attach.write_owner_session}"). Bee never writes into the same ` +
+          `checkout as a live owner. FIX: ${oneLiner}`,
+      { holder: attach.write_owner_session },
+    );
+  }
+
+  // Consented (--isolate) or configured (guards.auto_isolate) — create a
+  // fresh feature worktree. createFeatureWorktree already registers its own
+  // workspace record (msn-19, worktree-store.mjs's own registerWorkspace
+  // call) — this call attaches the ACTING session as that new workspace's
+  // first (and, since it was just created, uncontested) write owner.
+  const isolateFeature = (typeof feature === 'string' && feature.trim()) || `session-${sessionId}`;
+  const created = await createFeatureWorktree(controlRoot, { feature: isolateFeature });
+  await attachWorkspace(controlRoot, created.id, sessionId, { now });
+  const costDisclosure = `[bee cost] Isolated worktree created — a FULL working-tree copy at ${created.worktreeRoot} (disk cost scales with repo size).`;
+  return {
+    ok: true,
+    mode: 'isolated',
+    workspace: 'isolated-created',
+    redirect: true,
+    worktreeRoot: created.worktreeRoot,
+    workspaceId: created.id,
+    branch: created.branch,
+    costDisclosure,
+    text: `${costDisclosure}\nOpen your next session with cwd=${created.worktreeRoot} to continue "${isolateFeature}" there — this checkout stays untouched.`,
+  };
 }
 
 // Active claim holds by ANOTHER session whose claimed cell's files overlap the

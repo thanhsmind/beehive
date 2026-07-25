@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runModuleWorker } from '../../../../scripts/lib/run-module-worker.mjs';
 import {
@@ -1425,20 +1426,43 @@ await check('bee.mjs state start-feature: a hand-written state.workers entry alo
   }
 });
 
-await check('bee.mjs state start-feature refuses while ANOTHER session has a live heartbeat + an active claim, zero mutations', async () => {
+// multisession-native-20 (D3) RETIRES the pre-msn-20 shape of this test: a
+// mere live heartbeat (no write ever attempted) is no longer, on its own, a
+// refusal reason — see the comment at this precondition's old call site in
+// lib/state.mjs. What used to trigger this test (another session simply
+// being open) now succeeds; what NOW triggers a refusal is another session
+// having actually become this workspace's live write owner — the scenario
+// below, and the fuller applyWritePolicy coverage in test_write_policy.mjs /
+// this file's own dedicated "CLI multisession-native-20" check further down.
+await check('bee.mjs state start-feature: another session merely being live (heartbeat + an unrelated claim, never having itself write-started anything here) no longer blocks a start — D3 retires the old "any open session blocks" rule', async () => {
   const dir = makeStateRepo('bee-state-start-worker-live-');
   try {
     const statePath = path.join(dir, '.bee', 'state.json');
     writeJsonAtomic(statePath, { schema_version: '1.0', phase: 'idle', workers: [] });
     createSession(dir, { id: 'other-live' });
     claimCellFile(dir, 'other-live', 'x-1');
-    const before = fs.readFileSync(statePath, 'utf8');
     const result = await runBeeState(dir, ['start-feature', '--feature', 'new-feat', '--session-id', 'caller']);
-    assert(result.status !== 0, 'a live other session with an active claim refuses');
-    assert(/worker/i.test(result.stderr), `error names the active worker, got ${result.stderr}`);
-    assert(/other-live/.test(result.stderr), `error names the live session, got ${result.stderr}`);
+    assert(result.status === 0, `a live-but-never-write-started session no longer blocks a start (D3), got ${result.status}: ${result.stderr}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('bee.mjs state start-feature: once another session has ACTUALLY become the workspace write owner (via its own prior start-feature), a second session refuses naming --isolate — the NEW D3 reason this precondition blocks on', async () => {
+  const dir = makeStateRepo('bee-state-start-worker-owner-');
+  try {
+    createSession(dir, { id: 'other-live' });
+    const first = await runBeeState(dir, ['start-feature', '--feature', 'owner-feat', '--session-id', 'other-live']);
+    assert(first.status === 0, `precondition: the first session's own start must succeed, got ${first.status}: ${first.stderr}`);
+    const statePath = path.join(dir, '.bee', 'state.json');
+    const before = fs.readFileSync(statePath, 'utf8');
+
+    const result = await runBeeState(dir, ['start-feature', '--feature', 'new-feat', '--session-id', 'caller']);
+    assert(result.status !== 0, 'a second session, with a DIFFERENT live write owner already established, refuses');
+    assert(/--isolate/.test(result.stderr), `the refusal names the --isolate one-liner, got ${result.stderr}`);
+    assert(/other-live/.test(result.stderr), `the refusal names the live owner, got ${result.stderr}`);
     const after = fs.readFileSync(statePath, 'utf8');
-    assert(before === after, 'file untouched after a worker refusal');
+    assert(before === after, 'file untouched after the refusal');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -2972,6 +2996,61 @@ await check('TOPOLOGY: solo/main repos byte-identical — `bee state session bin
     const record = readJson(path.join(dir, '.bee', 'sessions', 'topo-sess-solo-1.json'), null);
     assert(record && record.lane === 'topo-feat-solo', `expected the bound record to carry the lane, got ${JSON.stringify(record)}`);
   } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── multisession-native-20 (D3): `state start-feature --isolate`, the
+// CLI-level end of applyWritePolicy's DEFAULT (non-lane) wiring ───────────
+// A real git repo is required here (unlike makeStateRepo's plain onboarding-
+// marker fixture): --isolate shells out through createFeatureWorktree to a
+// real `git worktree add`. Mirrors test_worktree_store.mjs's
+// makeOrdinaryRepoFixture git-init shape.
+function git(cwd, args, { allowFailure = false } = {}) {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  if (!allowFailure && result.status !== 0) {
+    throw new Error(`git ${args.join(' ')} failed (${result.status}): ${result.stderr || result.stdout}`);
+  }
+  return result;
+}
+function makeGitStateRepo(prefix) {
+  const dir = makeStateRepo(prefix);
+  git(dir, ['init', '-b', 'main']);
+  git(dir, ['config', 'user.email', 'bee@example.invalid']);
+  git(dir, ['config', 'user.name', 'Bee Test']);
+  fs.writeFileSync(path.join(dir, '.gitignore'), '.bee/\n');
+  git(dir, ['add', '.gitignore']);
+  git(dir, ['commit', '-m', 'base']);
+  return dir;
+}
+
+await check('CLI multisession-native-20: `state start-feature` with a LIVE other write owner and no consent refuses, naming the exact --isolate one-liner; `--isolate` then creates a worktree and answers with its path, never touching this checkout\'s own state.json', async () => {
+  const dir = makeGitStateRepo('bee-msn20-cli-isolate-');
+  try {
+    laneBinding.createSession(dir, { id: 'sess-owner' });
+    laneBinding.createSession(dir, { id: 'sess-second' });
+
+    // handleStateStartFeature reads --session-id as a plain flag (no
+    // BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID env fallback, unlike cells
+    // claim/claim-next's resolveSessionId) — pass it explicitly rather than
+    // via runBeeStateAs's env-only identity.
+    const owned = await runBeeState(dir, ['start-feature', '--feature', 'msn20-owner-feat', '--mode', 'standard', '--session-id', 'sess-owner', '--json']);
+    assert(owned.status === 0, `the first live session's start-feature should succeed, got ${owned.status}: ${owned.stderr}`);
+    const stateAfterFirst = fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8');
+
+    const refused = await runBeeState(dir, ['start-feature', '--feature', 'msn20-second-feat', '--mode', 'standard', '--session-id', 'sess-second']);
+    assert(refused.status !== 0, 'a second live session with no consent must be refused, not silently proceed');
+    assert(/--isolate/.test(refused.stderr), `the refusal names the --isolate one-liner, got stderr=${refused.stderr}`);
+    assert(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8') === stateAfterFirst, 'the refusal leaves state.json byte-untouched');
+
+    const isolated = await runBeeState(dir, ['start-feature', '--feature', 'msn20-second-feat', '--mode', 'standard', '--session-id', 'sess-second', '--isolate', '--json']);
+    assert(isolated.status === 0, `--isolate should succeed, got ${isolated.status}: ${isolated.stderr}`);
+    const parsed = JSON.parse(isolated.stdout);
+    assert(parsed.redirect === true, `the isolate-create response is a redirect, got ${isolated.stdout}`);
+    assert(fs.existsSync(parsed.worktreeRoot), `the created worktree physically exists at ${parsed.worktreeRoot}`);
+    assert(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8') === stateAfterFirst, 'a successful isolate-create never touches this checkout\'s own state.json (the write happened in the NEW worktree, never here)');
+  } finally {
+    git(dir, ['worktree', 'prune'], { allowFailure: true });
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

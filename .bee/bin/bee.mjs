@@ -94,6 +94,11 @@ import {
   // state.json, lanes/<feature>.json, the legacy HANDOFF.json file) is left
   // untouched everywhere — only the control-plane STORE calls are re-rooted.
   controlRootFor,
+  // multisession-native-20 (D3): the write-policy resolution called at every
+  // write-capable entry point (state start-feature below, and cells
+  // claim/claim-next further down) — see applyWritePolicy's own header in
+  // state.mjs for the observe/shared-disjoint/isolated contract.
+  applyWritePolicy,
 } from './lib/state.mjs';
 // multisession-native-7/10 (C1/C4/C5/F8): workflow-store.mjs's read/update/
 // lock primitives and state-projection.mjs's rebuild functions, composed
@@ -1272,6 +1277,30 @@ async function handleCellsClaim(root, flags) {
   if (flags.ttl !== undefined && (!Number.isFinite(ttl) || ttl <= 0)) {
     throw new Error('--ttl must be a positive integer (seconds).');
   }
+  // multisession-native-20 (D3): cells claim is a write-capable entry point
+  // — resolved BEFORE claimCellCrossSession ever touches the claim/cell
+  // stores. The cell's own declared `files` (when readable) feed
+  // shared-disjoint's exact-path lease check; a missing/unreadable cell
+  // leaves paths empty rather than failing this precondition on the CLI's
+  // own behalf (claimCellCrossSession's own not-found path still runs next).
+  // enforceIsolation: false — cells claim IS bee-swarming's own mechanism
+  // (multiple live sessions legitimately claiming DIFFERENT cells of the
+  // SAME feature in the SAME checkout); the single-write-owner branch would
+  // block that normal, already-coordinated pattern (see applyWritePolicy's
+  // own header for the full reasoning). observe/shared-disjoint still apply.
+  const cellForPolicy = readCell(root, id);
+  const isolate = flags.isolate === true;
+  const policy = await applyWritePolicy(root, {
+    sessionId,
+    paths: cellForPolicy && Array.isArray(cellForPolicy.files) ? cellForPolicy.files : [],
+    isolate,
+    feature: cellForPolicy ? cellForPolicy.feature : null,
+    verbHint: `cells claim --id ${id} --worker ${worker}`,
+    enforceIsolation: false,
+  });
+  if (policy.redirect) {
+    return { result: policy, text: policy.text };
+  }
   // hardening-4b: claimCellCrossSession composes claimCell, now
   // withStoreLock-wrapped (async).
   const result = await claimCellCrossSession(root, { sessionId, worker, cellId: id, ttl });
@@ -1508,6 +1537,24 @@ async function handleCellsClaimNext(root, flags) {
   const ttl = flags.ttl !== undefined ? Number.parseInt(String(flags.ttl), 10) : undefined;
   if (flags.ttl !== undefined && (!Number.isFinite(ttl) || ttl <= 0)) {
     throw new Error('--ttl must be a positive integer (seconds).');
+  }
+  // multisession-native-20 (D3): resolved BEFORE selection — claim-next
+  // doesn't know which cell it will land on ahead of claimNextCell's own
+  // selection pass, so shared-disjoint's declared-paths check runs with an
+  // empty path list here (always satisfied) rather than blocking selection
+  // on a cell not yet chosen. enforceIsolation: false — same reasoning as
+  // `cells claim` just above: claim-next IS bee-swarming's own selection
+  // mechanism, not the "second uncoordinated session" scenario D3 targets.
+  const isolate = flags.isolate === true;
+  const policy = await applyWritePolicy(root, {
+    sessionId,
+    paths: [],
+    isolate,
+    verbHint: `cells claim-next --worker ${worker}`,
+    enforceIsolation: false,
+  });
+  if (policy.redirect) {
+    return { result: policy, text: policy.text };
   }
   // hardening-4b: claimNextCell now awaits sweepExpiredClaims (sweep-reset)
   // and composes the now-async claimCellCrossSession.
@@ -3067,8 +3114,16 @@ async function handleStateStartFeature(root, flags) {
   const lane = flags['as-lane'] === true;
   const sessionId = flags['session-id'] !== undefined ? String(flags['session-id']) : null;
   const paths = flags.paths !== undefined ? splitList(flags.paths) : [];
+  const isolate = flags.isolate === true;
   // startFeature() re-reads state and performs every precondition check (C1).
-  const state = await startFeature(root, { feature, mode, phase, lane, sessionId, paths });
+  const state = await startFeature(root, { feature, mode, phase, lane, sessionId, paths, isolate });
+  // multisession-native-20 (D3): a successful isolate-create short-circuits
+  // here — startFeature never touched root's own pipeline (see its own
+  // header comment), so the lane/state projection rebuild below must not
+  // run either; surface the new checkout's path instead.
+  if (state.redirect) {
+    return { result: state, text: state.text };
+  }
   // multisession-native-7/10 (C5/F8 — "startFeature's dual-write can now
   // route its write through the projection builder"): the legacy record
   // (lane file OR state.json) startFeature just wrote is a hand-built record
@@ -6514,7 +6569,7 @@ const HANDLERS = {
 // here or `state scribing-run --show --feature X` would consume `--feature`
 // as --show's own value, same class of bug dry-run/write/as-lane guard
 // against above.
-export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show']);
+export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate']);
 
 export function splitCommandTokens(argv) {
   const leading = [];

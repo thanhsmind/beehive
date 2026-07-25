@@ -1032,6 +1032,11 @@ const EXPECTED_STATE_EXPORTS = [
   'advisorRefAnchors',
   'advisorRefStale',
   'startFeature',
+  // multisession-native-20 (D3): write-policy resolution (observe/
+  // shared-disjoint/isolated) at write-capable entry points — startFeature
+  // above, and bee.mjs's cells claim/claim-next.
+  'applyWritePolicy',
+  'WritePolicyRefusalError',
   // chain-integrity (D1-REVISED/D3): the tail guard. Pure and cells-free by
   // necessity — cells.mjs imports state.mjs, so the scribing-debt half of the
   // rule lives at the bee.mjs choke point instead.
