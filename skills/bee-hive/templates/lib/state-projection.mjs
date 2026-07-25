@@ -67,49 +67,44 @@
 // see rebuildStateProjection's own comment).
 
 import fs from 'node:fs';
-import { readState, writeState, defaultState, readLane, writeLane, GATE_NAMES, handoffPath, listHandoffMailbox } from './state.mjs';
+import { readState, writeState, defaultState, readLane, writeLane, GATE_NAMES, handoffPath, listHandoffMailbox, controlRootFor } from './state.mjs';
 import { listWorkflows } from './workflow-store.mjs';
 import { writeJsonAtomic } from './fsutil.mjs';
 import { rebuildReservationsProjection } from './reservations.mjs';
 
-// ─── msn-18b PLANE RULE finding — NOT re-rooted in this cell ───────────────
+// ─── msn-18c: PLANE RULE gap closed ─────────────────────────────────────────
 // Workflow records, lane records, and the handoff mailbox are control-plane
 // (msn-18's original scope). This module's whole job is READ-then-WRITE-BACK
 // of those records into legacy single-checkout files (.bee/state.json,
-// .bee/lanes/<feature>.json, .bee/HANDOFF.json) — but every one of its own
-// WRITERS is currently bare-root: `listWorkflows`/`createWorkflow`/
-// `updateWorkflow`/`updateWorkflowAssumingLock` (workflow-store.mjs, called
-// directly from bee.mjs's gate/plan-rev/lane handlers), `writeLane`
-// (state.mjs, called from bee.mjs's own lane-mutation handlers), and
-// `writeMailboxHandoff`/`listHandoffMailbox` (state.mjs — confirmed by
-// reading their bodies: they build `handoffMailboxDir(root, ...)` from
-// whatever `root` they are given, with NO internal re-rooting of their own,
-// unlike the readClaim/adoptClaim calls INSIDE writeHandoff/writeMailboxHandoff
-// that msn-18a already re-rooted). None of those writers are in this cell's
-// files list — they are bee.mjs's own call sites (msn-18c) or state.mjs's
-// own leaf storage (out of scope here; state.mjs's mailbox functions were
-// only PARTIALLY re-rooted by msn-18a — the ownership CHECK inside them, not
-// the mailbox storage path itself).
+// .bee/lanes/<feature>.json, .bee/HANDOFF.json) — msn-18b left this module's
+// OWN `listWorkflows`/`listHandoffMailbox` reads bare-root on purpose (see
+// git history for the full finding): bee.mjs's matching WRITE call sites
+// (writeLaneRecordThroughProjection/writeStateRecordThroughProjection/
+// handleStateGate/handleStatePlanRevBump/handleStateHandoffWrite/
+// handleStateHandoffAdopt) were still bare-root too at that point, so
+// re-rooting only the read side here would have made this module look at
+// MAIN's copy of a workflow/handoff-mailbox record while a granted
+// worktree's bee.mjs calls kept mutating the WORKTREE-local one — worse than
+// today's "worktree self-consistent, just not shared" gap.
 //
-// Re-rooting ONLY the read/rebuild side here, ahead of those writers, would
-// not fix anything — it would make this module look at MAIN's copy of a
-// workflow/lane/handoff-mailbox record while a granted worktree's bee.mjs
-// calls keep mutating the WORKTREE-local one, turning today's "worktree
-// self-consistent, just not shared" gap into a strictly worse "reads a
-// stale, unrelated record and silently overwrites the legacy projection
-// file with it" bug for that population. (Contrast with reservations.mjs,
-// where THIS cell made the leases store self-rooting end-to-end — see that
-// module's header — so `rebuildReservationsProjection(root)` below needed
-// no change at all: its read is correct no matter what root is passed.)
+// msn-18c re-roots those bee.mjs write call sites (controlRootFor(root),
+// same primitive) in the SAME landing as this file's read side below, so the
+// write and the read/rebuild that immediately follows it (every
+// write-then-rebuild pair in bee.mjs) now agree on which copy of the
+// workflow/mailbox record is authoritative. `readState`/`writeState`/
+// `readLane`/`writeLane`/`handoffPath` stay on the bare `root` passed in —
+// those are the legacy single-checkout PROJECTION files themselves (D1),
+// deliberately workspace-local, never control-plane. (Contrast with
+// reservations.mjs, where THIS module's `rebuildReservationsProjection(root)`
+// call needs no change — msn-18b made the leases store self-rooting
+// end-to-end, so its read is correct no matter what root is passed.)
 //
-// Every function below is therefore UNCHANGED except this note. Closing this
-// gap needs bee.mjs's own workflow/lane/handoff-mailbox call sites re-rooted
-// in the SAME landing as this module's read side — msn-18c's declared scope.
-// Main/solo checkouts are unaffected either way (controlRoot === root there).
+// Main/solo checkouts are unaffected either way (controlRootFor(root) ===
+// root there, byte-identical).
 
 /** True once at least one workflow record exists anywhere in the repo — the C1 authority switch. */
 export function projectionsAuthoritative(root) {
-  return listWorkflows(root).workflows.length > 0;
+  return listWorkflows(controlRootFor(root)).workflows.length > 0;
 }
 
 // workflowGatesToApprovedGates — the D1 workflow gates map (per-name
@@ -213,7 +208,7 @@ export function pickNewestActiveWorkflow(workflows) {
  * sourced from a workflow record on THIS call.
  */
 export function rebuildStateProjection(root, overrides = {}) {
-  const { workflows } = listWorkflows(root);
+  const { workflows } = listWorkflows(controlRootFor(root)); // msn-18c: workflows are control-plane
   const current = readState(root);
   const hasOverrides =
     Object.prototype.hasOwnProperty.call(overrides, 'cellCounts') ||
@@ -305,7 +300,7 @@ export function rebuildStateProjection(root, overrides = {}) {
  * guesses, never deletes an existing lane file it cannot derive.
  */
 export function rebuildLaneProjection(root, feature) {
-  const { workflows } = listWorkflows(root);
+  const { workflows } = listWorkflows(controlRootFor(root)); // msn-18c: workflows are control-plane
   if (workflows.length === 0) {
     return { authoritative: false, source: null, lane: readLane(root, feature) };
   }
@@ -373,13 +368,17 @@ export function rebuildLaneProjection(root, feature) {
  * instead of leaving a stale copy behind.
  */
 export function rebuildHandoffProjection(root) {
-  const { workflows } = listWorkflows(root);
+  // msn-18c: workflows AND the mailbox are both control-plane; `root` itself
+  // (the legacy .bee/HANDOFF.json this function writes below) stays
+  // workspace-local, unchanged.
+  const ctrlRoot = controlRootFor(root);
+  const { workflows } = listWorkflows(ctrlRoot);
   if (workflows.length === 0) {
     return { authoritative: false, source: null };
   }
   let newest = null; // { record, workflowId }
   for (const wf of workflows) {
-    const open = listHandoffMailbox(root, wf.id).filter((r) => r.status === 'open');
+    const open = listHandoffMailbox(ctrlRoot, wf.id).filter((r) => r.status === 'open');
     if (open.length === 0) continue;
     const candidate = open[open.length - 1]; // highest seq among open records for this workflow
     if (!newest) {
@@ -443,7 +442,7 @@ export function rebuildAllProjections(root) {
   const state = rebuildStateProjection(root);
   const handoff = rebuildHandoffProjection(root);
   const reservations = rebuildReservationsProjection(root);
-  const { workflows } = listWorkflows(root);
+  const { workflows } = listWorkflows(controlRootFor(root)); // msn-18c: workflows are control-plane
   const active = workflows.filter((wf) => wf.status === 'active');
   const lanes = active.map((wf) => rebuildLaneProjection(root, wf.feature));
   return { state, handoff, reservations, lanes };

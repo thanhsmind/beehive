@@ -479,4 +479,71 @@ await check(
   },
 );
 
+// ─── msn-18c TOPOLOGY (must_have, red-first per the cell contract): a
+// projection rebuild called with a GRANTED linked worktree's own root still
+// finds and reflects MAIN's workflow record — this module's read side
+// (listWorkflows/listHandoffMailbox) is re-rooted through controlRootFor in
+// the SAME landing as bee.mjs's own write call sites (see this file's own
+// header note for the msn-18b finding this closes). Same manual
+// worktree-fixture pattern test_reservations.mjs's makeLinkedWorktree /
+// test_cells.mjs's makeLinkedWorktreeCellFixture use.
+
+function makeLinkedWorktree(mainPrefix, workPrefix, id) {
+  const main = fs.mkdtempSync(path.join(os.tmpdir(), mainPrefix));
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), workPrefix));
+  fs.mkdirSync(path.join(main, '.git'));
+  const gitdir = path.join(main, '.git', 'worktrees', id);
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(work, '.git'), `gitdir: ${gitdir}\n`);
+  fs.writeFileSync(path.join(gitdir, 'gitdir'), path.join(work, '.git') + '\n');
+  return { main, work };
+}
+
+await check(
+  'TOPOLOGY (red-first): rebuildLaneProjection(work, feature) finds the LIVE workflow record at MAIN (created via createWorkflow(main, ...)) — pre-cell it looked ONLY at the worktree\'s own (always-empty) .bee/runtime/workflows/ and silently no-op\'d (authoritative:false)',
+  async () => {
+    const { main, work } = makeLinkedWorktree('bee-topo-projlane-main-', 'bee-topo-projlane-work-', 'topo-projlane-fixture');
+    try {
+      const wf = await createWorkflow(main, {
+        feature: 'topo-lane-feat',
+        phase: 'swarming',
+        mode: 'standard',
+        summary: 'topology summary',
+        next_action: 'topology next',
+      });
+      assert(wf && wf.id, `precondition: workflow record must be creatable at main, got ${JSON.stringify(wf)}`);
+
+      // The call site (bee.mjs's writeLaneRecordThroughProjection, this same
+      // cell) passes the WORKTREE's own root — the lane projection FILE is
+      // workspace-local — while this function's internal listWorkflows read
+      // must still find MAIN's record.
+      const rebuilt = rebuildLaneProjection(work, 'topo-lane-feat');
+      assert(rebuilt.authoritative === true && rebuilt.source === wf.id, `expected an authoritative rebuild sourced from main's workflow ${wf.id}, got ${JSON.stringify(rebuilt)}`);
+      assert(rebuilt.lane.phase === 'swarming' && rebuilt.lane.summary === 'topology summary', `expected the projected lane to carry main's workflow fields, got ${JSON.stringify(rebuilt.lane)}`);
+
+      // The lane projection FILE itself stays workspace-local — written at
+      // the worktree's own .bee/lanes/, never main's (PLANE RULE: only the
+      // STORE the record lives in is control-plane, not the legacy
+      // presentation file this function writes).
+      assert(fs.existsSync(lanePath(work, 'topo-lane-feat')), 'the lane file must be written at the WORKTREE root (workspace-local presentation)');
+      assert(!fs.existsSync(lanePath(main, 'topo-lane-feat')), 'the lane file must NOT have been written to main');
+    } finally {
+      fs.rmSync(main, { recursive: true, force: true });
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  },
+);
+
+await check('TOPOLOGY: solo/main repos byte-identical — rebuildLaneProjection behaves exactly as before this cell (no linked worktree involved)', async () => {
+  const root = makeRoot();
+  try {
+    const wf = await createWorkflow(root, { feature: 'topo-lane-solo', phase: 'planning', mode: 'small', summary: 'solo summary', next_action: 'solo next' });
+    const rebuilt = rebuildLaneProjection(root, 'topo-lane-solo');
+    assert(rebuilt.authoritative === true && rebuilt.source === wf.id, `expected an authoritative rebuild, got ${JSON.stringify(rebuilt)}`);
+    assert(rebuilt.lane.phase === 'planning', `expected the projected lane fields, got ${JSON.stringify(rebuilt.lane)}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 printSummaryAndExit();

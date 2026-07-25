@@ -5,7 +5,7 @@
     "agents_block": "d0515b3ab1b91fc381e757d6a1c64bf2f15d8db6d78361818178aea51368dca7",
     "gitignore_block": "97bc58361c5dee4c4212b3c2ba1b5b91d5c3c17c2be4690baa2abe9bd014253c",
     "helpers": {
-      "bee.mjs": "04a457a3a6799692fdda531c705126d7b03ac2097eebe9e708140f1fd751edf5"
+      "bee.mjs": "d49c24bb7d8fd1e823312998ec66617a917380d0807c2fccd5961582abd93cc5"
     },
     "lib": {
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
@@ -35,7 +35,7 @@
       "schedule.mjs": "9f46b580f71f6be9e38740124d3e7745af972c37fad91ce99433f405eae16351",
       "scratch.mjs": "3b7ab2e104b3f4cee240a43fac49ee630df7ca2ed995eb71f403d25eae17afb0",
       "source-identity.mjs": "716740641e1f6bfbb5ccc5b4fe7827f1165c2a1f1127ee3800f52a47ac09fc7a",
-      "state-projection.mjs": "c7402e9698f4351c234c1a98490933317e50ee055371708652bc7c34889cf6eb",
+      "state-projection.mjs": "0883afeeadf64bd95011f85c78e95ca584a74c4b699b8f26dec59c1927a7f63e",
       "state.mjs": "90f7248b4c295167019eab6cae26d1cb956b67a79c0668d469e390f5eb2c3f5c",
       "validate-args.mjs": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
       "workflow-store.mjs": "27aa64ffab30bdda9c939cdb6def6106c9ef9648067078eda27d512b5a1e41d4",
@@ -43,7 +43,7 @@
       "worktree-store.mjs": "0cd4809e8b19ea307dbd93d466810dc609dccb993388f3d2f8c4b7352e484748"
     },
     "repo_hooks": {
-      "adapter.mjs": "3b5fcdca501e7a6cbb2988fcd6aa5af43c30e545dfa205b877a1d8b68f64fd85",
+      "adapter.mjs": "e21c39e993390600cb2fe352078ae7554c74db0ee6ffd5bdb443c49192689dca",
       "bee-codex-subagent-audit.mjs": "f9f6900705aa20dfc0035a8c8c5c4b22fc56c9d0a4953e1b0ba3fd9466dec85e",
       "bee-session-init.mjs": "0f2bf378191f21d75063d0823374f616df073bf8324ae6e4bd813a029bdf8351",
       "bee-prompt-context.mjs": "1efd6ed7f90a7025648a550245c62b999a77dac77a7d1f206a44bef2e4626a6a",
@@ -79,5 +79,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T06:29:48.969Z"
+  "updated_at": "2026-07-25T06:53:26.751Z"
 }

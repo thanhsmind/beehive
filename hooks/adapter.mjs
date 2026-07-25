@@ -131,7 +131,10 @@ function locateOnboardedRoot(startDir) {
 
 // Non-throwing hook-side twin of state.mjs resolveRoots. `root` remains the
 // physical checkout for every existing hook consumer; only write-guard uses
-// storeRoot for coordination state and authorization.
+// storeRoot for coordination state and authorization. `mainRoot` (present
+// only on the "linked-valid" branch below) is what controlRootFor() reads
+// to resolve the multisession-native-18c control root — see that function's
+// own comment.
 export function resolveRoots(startDir) {
   try {
     const onboarded = locateOnboardedRoot(startDir);
@@ -204,6 +207,35 @@ export function resolveRoots(startDir) {
 
 export function findRepoRoot(startDir) {
   return resolveRoots(startDir).workRoot;
+}
+
+// controlRootFor(root) — hooks/adapter.mjs's own minimal replica of
+// state.mjs's controlRootFor(root) (multisession-native-18a), needed here
+// because this adapter is deliberately import-light and fail-open (hook
+// posture: no lib/state.mjs import at hook-execution time — see this file's
+// header, responsibility 2, and lib/reservations.mjs's own cycle-safe
+// replica for the precedent this follows). `root` here is expected to
+// already be a resolved, physical checkout path (typically ctx.root from
+// readHookContext below) — re-walking it through resolveRoots is the SAME
+// cheap, sync, try-once git-worktree walk-up every hook already pays for
+// once per invocation, so calling it a second time here stays inside hook
+// posture (no unbounded work, no retries).
+//
+// Sessions/workflows/claims/the handoff mailbox are control-plane
+// (multisession-native CONTEXT.md D2): a hook running inside a linked
+// worktree must resolve those stores to MAIN's `.bee/`, exactly like
+// resolveRoots' own `storeRoot` already does for grant-gated cells/backlog
+// state — but controlRoot is grant-INDEPENDENT (always main for a linked
+// worktree, regardless of whether that worktree also holds its own granted
+// local store for workspace-local state). Fail-open like every other
+// resolution in this file: an unresolvable/invalid topology (linked-invalid,
+// or `root` not even a git checkout) falls back to `root` itself — never
+// null, never a throw — so a caller never has to special-case the result
+// before using it as a plain path.
+export function controlRootFor(root) {
+  if (!root) return root;
+  const roots = resolveRoots(root);
+  return roots.mainRoot || roots.workRoot || root;
 }
 
 export function libModuleUrl(root, name) {
@@ -321,6 +353,11 @@ export async function readHookContext(hookName, { argv = process.argv } = {}) {
 
   const roots = resolveRoots(cwd);
   const root = roots.workRoot;
+  // msn-18c: reuse THIS call's own resolveRoots walk (roots.mainRoot is
+  // already set on the "linked-valid" branch) instead of paying for a
+  // second one via controlRootFor(root) — same result, half the fs work per
+  // hook invocation. Fail-open like `root` itself: null when unresolvable.
+  const controlRoot = roots.mainRoot || root || null;
 
   if (root) {
     for (const g of gaps) {
@@ -334,6 +371,15 @@ export async function readHookContext(hookName, { argv = process.argv } = {}) {
     cwd,
     root,
     storeRoot: roots.storeRoot,
+    // msn-18c: session/workflow/claims/handoff-mailbox stores are
+    // control-plane — a hook consumer that touches those (heartbeat touch,
+    // session reads) should resolve against `ctx.controlRoot`, never
+    // `ctx.root`/`ctx.storeRoot` (storeRoot is grant-topology, orthogonal to
+    // the control plane). Wiring the individual hook consumers
+    // (bee-session-init.mjs, bee-prompt-context.mjs, bee-state-sync.mjs) is
+    // out of this cell's file scope — this field/helper is the primitive a
+    // later cell wires them to.
+    controlRoot,
     worktreeResolution: roots.worktreeResolution,
     source: parsedSource.source,
     event,

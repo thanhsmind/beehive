@@ -79,6 +79,21 @@ import {
   localConfigPath,
   isLocalOnlyConfigKey,
   trackedLocalOnlyKeyWarning,
+  // multisession-native-18c: the coordination-store (sessions/workflows/
+  // handoff-mailbox) re-rooting primitive msn-18a introduced and msn-18b
+  // threaded through cells.mjs/reservations.mjs/recovery.mjs/compaction.mjs/
+  // state-projection.mjs. This cell threads it through bee.mjs's OWN direct
+  // claims.mjs/workflow-store.mjs call sites below — every readSession/
+  // resolveSessionId/bindSessionLane/unbindSessionLane/listWorkflows/
+  // updateWorkflow/updateWorkflowAssumingLock/withWorkflowLock call in this
+  // file builds its store path straight from whatever `root` it is given
+  // (confirmed by reading each function body — none of them re-root
+  // internally), so a call made from a linked worktree's checkout landed
+  // its session/workflow record in the WORKTREE's own .bee/ tree pre-cell —
+  // invisible to main. `root` itself (workspace-local presentation: cells,
+  // state.json, lanes/<feature>.json, the legacy HANDOFF.json file) is left
+  // untouched everywhere — only the control-plane STORE calls are re-rooted.
+  controlRootFor,
 } from './lib/state.mjs';
 // multisession-native-7/10 (C1/C4/C5/F8): workflow-store.mjs's read/update/
 // lock primitives and state-projection.mjs's rebuild functions, composed
@@ -471,10 +486,13 @@ function buildLaneRows(root) {
 function buildLaneSummary(root) {
   const lanes = buildLaneRows(root);
   if (lanes.length === 0) return { active: null, counts: {}, ids: [] };
-  const sessionId = resolveSessionId({ root });
+  // msn-18c: sessions are control-plane — resolve/read against controlRootFor
+  // so a linked worktree's calling session (registered in main) is found.
+  const ctrlRoot = controlRootFor(root);
+  const sessionId = resolveSessionId({ root: ctrlRoot });
   let active = null;
   if (sessionId) {
-    const session = readSession(root, sessionId);
+    const session = readSession(ctrlRoot, sessionId);
     if (session && typeof session.lane === 'string' && session.lane) {
       active = lanes.find((l) => l.feature === session.lane) || null;
     }
@@ -838,7 +856,9 @@ function buildStatus(root, { lanesFull = false } = {}) {
     // `state worker *` CLI verbs for backward compat but read by nothing
     // here). Same always-present-array convention as active_reservations
     // above (an empty array reports "nobody active", not an omitted key).
-    workers: activeWorkers(root),
+    // msn-18c: sessions/claims are control-plane — a linked worktree's live
+    // session must show up in main's `status` output too.
+    workers: activeWorkers(controlRootFor(root)),
     critical_patterns_present: fs.existsSync(
       path.join(root, 'docs', 'history', 'learnings', 'critical-patterns.md'),
     ),
@@ -1475,9 +1495,12 @@ async function handleCellsClaimNext(root, flags) {
   // though claimCellFile's own fallback (a layer deeper) would have adopted
   // it. Two-or-more fresh live sessions still resolves null here (real
   // ambiguity) and falls through to the unchanged refusal below.
+  // msn-18c: sessions are control-plane — the durable single-live-session
+  // fallback above must list MAIN's session records, not a linked worktree's
+  // own (pre-cell: empty) local .bee/sessions/.
   const sessionId = resolveSessionId({
     flag: flags['session-id'] !== undefined ? String(flags['session-id']) : undefined,
-    root,
+    root: controlRootFor(root),
   });
   if (!sessionId) {
     throw new Error('claim-next: --session-id or CLAUDE_CODE_SESSION_ID env is required.');
@@ -2130,8 +2153,10 @@ function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {})
     };
   }
   if (noLane) return defaultTarget();
-  const sessionId = resolveSessionId({ root });
-  const session = sessionId ? readSession(root, sessionId) : null;
+  // msn-18c: sessions are control-plane.
+  const ctrlRoot = controlRootFor(root);
+  const sessionId = resolveSessionId({ root: ctrlRoot });
+  const session = sessionId ? readSession(ctrlRoot, sessionId) : null;
   const bound = session && typeof session.lane === 'string' ? session.lane.trim() : '';
   if (!bound) return defaultTarget();
   // Bound session: the lane IS the target. readLaneStrict throws loud on a
@@ -2193,12 +2218,17 @@ function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {})
 // — it is protected by that same outer `workflow:<id>` hold, same as the
 // updateWorkflowAssumingLock call above it.
 async function writeLaneRecordThroughProjection(root, laneFeature, updated, gateStamp = null) {
-  const wf = listWorkflows(root).workflows.find((w) => w.feature === laneFeature && w.status !== 'closed');
+  // msn-18c: workflow records are control-plane — resolve/update against
+  // controlRootFor so a linked worktree's write lands in main's SAME record
+  // rebuildLaneProjection (state-projection.mjs, re-rooted this same cell)
+  // reads back below. `root` itself (the lane projection file this function
+  // writes) stays workspace-local, unchanged.
+  const wf = listWorkflows(controlRootFor(root)).workflows.find((w) => w.feature === laneFeature && w.status !== 'closed');
   if (!wf) {
     writeLane(root, updated);
     return updated;
   }
-  updateWorkflowAssumingLock(root, wf.id, {
+  updateWorkflowAssumingLock(controlRootFor(root), wf.id, {
     phase: updated.phase,
     mode: updated.mode == null ? null : String(updated.mode),
     summary: updated.summary,
@@ -2240,12 +2270,14 @@ async function writeLaneRecordThroughProjection(root, laneFeature, updated, gate
 // verb's behavior before this cell, for this one narrow case only.
 async function writeStateRecordThroughProjection(root, targetFeature, updated, gateStamp = null) {
   const routable = targetFeature && updated.feature === targetFeature;
-  const wf = routable ? listWorkflows(root).workflows.find((w) => w.feature === targetFeature && w.status !== 'closed') : null;
+  // msn-18c: same control-plane re-rooting as writeLaneRecordThroughProjection
+  // above; `root` (state.json itself) stays workspace-local.
+  const wf = routable ? listWorkflows(controlRootFor(root)).workflows.find((w) => w.feature === targetFeature && w.status !== 'closed') : null;
   if (!wf) {
     writeState(root, updated);
     return updated;
   }
-  updateWorkflowAssumingLock(root, wf.id, {
+  updateWorkflowAssumingLock(controlRootFor(root), wf.id, {
     phase: updated.phase,
     mode: updated.mode == null ? null : String(updated.mode),
     summary: updated.summary,
@@ -2295,8 +2327,10 @@ async function writeStateRecordThroughProjection(root, targetFeature, updated, g
 function resolveMutationLockFeature(root, laneFeature, noLane) {
   if (laneFeature) return laneFeature;
   if (noLane) return null;
-  const sessionId = resolveSessionId({ root });
-  const session = sessionId ? readSession(root, sessionId) : null;
+  // msn-18c: sessions are control-plane.
+  const ctrlRoot = controlRootFor(root);
+  const sessionId = resolveSessionId({ root: ctrlRoot });
+  const session = sessionId ? readSession(ctrlRoot, sessionId) : null;
   const bound = session && typeof session.lane === 'string' ? session.lane.trim() : '';
   if (bound) return bound;
   const state = readState(root); // fail-open peek; readStateStrict's throw still happens inside resolveMutationTarget
@@ -2321,9 +2355,14 @@ function resolveMutationLockFeature(root, laneFeature, noLane) {
 // wrapper only changes WHICH lock protects that call.
 async function withMutationLock(root, laneFeature, noLane, fn) {
   const feature = resolveMutationLockFeature(root, laneFeature, noLane);
-  const wf = feature ? listWorkflows(root).workflows.find((w) => w.feature === feature && w.status !== 'closed') : null;
+  // msn-18c: workflow records (and the workflow:<id> lock guarding them) are
+  // control-plane — a linked worktree and main must contend on the SAME lock
+  // file for the same workflow. The C1 fallback ('state' lock) below stays on
+  // `root` — it only ever guards the workspace-local state.json/lane write.
+  const ctrlRoot = controlRootFor(root);
+  const wf = feature ? listWorkflows(ctrlRoot).workflows.find((w) => w.feature === feature && w.status !== 'closed') : null;
   if (wf) {
-    return withWorkflowLock(root, wf.id, fn);
+    return withWorkflowLock(ctrlRoot, wf.id, fn);
   }
   return withStoreLock(root, 'state', fn);
 }
@@ -2643,7 +2682,8 @@ async function handleStateGate(root, flags) {
     // rev-stamping behavior stays scoped to lanes exactly as msn-9 shipped it.
     let gateStamp = null;
     if (name === 'execution' && target.lane) {
-      const wf = listWorkflows(root).workflows.find((w) => w.feature === target.lane && w.status !== 'closed');
+      // msn-18c: workflow records are control-plane.
+      const wf = listWorkflows(controlRootFor(root)).workflows.find((w) => w.feature === target.lane && w.status !== 'closed');
       if (wf) {
         gateStamp = { name: 'execution', approvedForPlanRev: approved ? wf.plan_rev : null };
       }
@@ -2701,14 +2741,19 @@ async function handleStatePlanRevBump(root, flags) {
           '("state session bind --session-id <id> --lane <feature>").',
       );
     }
-    const wf = listWorkflows(root).workflows.find((w) => w.feature === target.lane && w.status !== 'closed');
+    // msn-18c: workflow records are control-plane; `updateWorkflow` below is
+    // self-locking (workflow-store.mjs), so it must re-root to the SAME
+    // control root the lookup just used, or it would lock/write a DIFFERENT
+    // workflow file than the one `wf` was resolved from.
+    const ctrlRoot = controlRootFor(root);
+    const wf = listWorkflows(ctrlRoot).workflows.find((w) => w.feature === target.lane && w.status !== 'closed');
     if (!wf) {
       throw new Error(
         `plan-rev bump: no live workflow record found for lane "${target.lane}" — nothing to bump. ` +
           `FIX: start the lane first ("state start-feature --feature ${target.lane} --as-lane").`,
       );
     }
-    const updated = await updateWorkflow(root, wf.id, (current) => ({ plan_rev: (current.plan_rev || 0) + 1 }));
+    const updated = await updateWorkflow(ctrlRoot, wf.id, (current) => ({ plan_rev: (current.plan_rev || 0) + 1 }));
     const rebuilt = rebuildLaneProjection(root, target.lane);
     return { feature: target.lane, planRev: updated.plan_rev, lane: rebuilt.lane };
   });
@@ -3081,17 +3126,21 @@ function handleStateRebuildProjections(root) {
 // a second implementation of a mutation, only a read-side enumeration no
 // lib module currently offers.
 
+// msn-18c: sessions are control-plane — re-rooted ONCE here, inside this
+// local wrapper, so every caller (handleStateSessionList) sees a linked
+// worktree's session records the same as main's own.
 function listSessionRecords(root) {
+  const ctrlRoot = controlRootFor(root);
   let entries;
   try {
-    entries = fs.readdirSync(sessionsDir(root));
+    entries = fs.readdirSync(sessionsDir(ctrlRoot));
   } catch {
     return [];
   }
   const sessions = [];
   for (const entry of entries) {
     if (!entry.endsWith('.json')) continue;
-    const record = readSession(root, entry.slice(0, -'.json'.length));
+    const record = readSession(ctrlRoot, entry.slice(0, -'.json'.length));
     if (record) sessions.push(record);
   }
   return sessions;
@@ -3127,7 +3176,9 @@ function handleStateSessionList(root) {
 function handleStateSessionBind(root, flags) {
   const sessionId = requireFlag(flags, 'session-id');
   const laneFeature = requireFlag(flags, 'lane');
-  const result = bindSessionLane(root, sessionId, laneFeature);
+  // msn-18c: sessions are control-plane — a session bound from a linked
+  // worktree binds the SAME record main's own session listing/lookup sees.
+  const result = bindSessionLane(controlRootFor(root), sessionId, laneFeature);
   if (!result.ok) {
     throw new Error(`session bind: ${result.reason}`);
   }
@@ -3136,7 +3187,7 @@ function handleStateSessionBind(root, flags) {
 
 function handleStateSessionUnbind(root, flags) {
   const sessionId = requireFlag(flags, 'session-id');
-  const result = unbindSessionLane(root, sessionId);
+  const result = unbindSessionLane(controlRootFor(root), sessionId);
   if (!result.ok) {
     throw new Error(`session unbind: ${result.reason}`);
   }
@@ -3173,7 +3224,9 @@ function handleStateSessionUnbind(root, flags) {
 // legacy file) — same "never guess" discipline resolveMutationTarget already
 // uses for a bound session's missing lane record.
 function resolveHandoffWorkflowId(root, { laneFeature = null, sessionIdFlag } = {}) {
-  const { workflows } = listWorkflows(root);
+  // msn-18c: workflow records and sessions are both control-plane.
+  const ctrlRoot = controlRootFor(root);
+  const { workflows } = listWorkflows(ctrlRoot);
   if (workflows.length === 0) return null; // C1: no workflow records anywhere.
   const findLive = (feature) => workflows.find((w) => w.feature === feature && w.status !== 'closed');
   if (laneFeature) {
@@ -3185,8 +3238,8 @@ function resolveHandoffWorkflowId(root, { laneFeature = null, sessionIdFlag } = 
     }
     return wf.id;
   }
-  const sessionId = resolveSessionId({ flag: sessionIdFlag, root });
-  const session = sessionId ? readSession(root, sessionId) : null;
+  const sessionId = resolveSessionId({ flag: sessionIdFlag, root: ctrlRoot });
+  const session = sessionId ? readSession(ctrlRoot, sessionId) : null;
   const bound = session && typeof session.lane === 'string' ? session.lane.trim() : '';
   if (bound) {
     const wf = findLive(bound);
@@ -3232,7 +3285,14 @@ async function handleStateHandoffWrite(root, flags) {
     // and awaits withMutationLock. The dispatcher already does
     // `await handler(...)` uniformly (main()), so widening this one handler
     // to async is a safe, isolated change.
-    const record = await writeMailboxHandoff(root, workflowId, { ...input, target_role: targetRole });
+    // msn-18c: the handoff mailbox (.bee/runtime/handoffs/<workflow-id>/) is
+    // control-plane — its storage dir is built straight from whatever root it
+    // is given (handoffMailboxDir, state.mjs), no internal re-rooting of its
+    // own (unlike the readClaim/adoptClaim ownership check msn-18a already
+    // re-rooted inside writeMailboxHandoff/adoptMailboxHandoff). The legacy
+    // single-file projection rebuildHandoffProjection writes below stays on
+    // `root` (workspace-local presentation), unchanged.
+    const record = await writeMailboxHandoff(controlRootFor(root), workflowId, { ...input, target_role: targetRole });
     rebuildHandoffProjection(root);
     return {
       result: record,
@@ -3250,7 +3310,9 @@ async function handleStateHandoffAdopt(root, flags) {
   const targetRole = flags['target-role'] !== undefined ? String(flags['target-role']) : null;
   const workflowId = resolveHandoffWorkflowId(root, { laneFeature, sessionIdFlag: sessionId });
   if (workflowId) {
-    const result = await adoptMailboxHandoff(root, workflowId, sessionId, { targetRole });
+    // msn-18c: mailbox storage is control-plane — see the writeMailboxHandoff
+    // call site above for why.
+    const result = await adoptMailboxHandoff(controlRootFor(root), workflowId, sessionId, { targetRole });
     if (!result.ok) {
       throw new Error(`state handoff adopt: ${result.reason}`);
     }
@@ -3274,7 +3336,9 @@ function handleStateHandoffShow(root, flags) {
   const laneFeature = optionalLaneFlag(flags, 'state handoff show');
   const targetRole = flags['target-role'] !== undefined ? String(flags['target-role']) : null;
   const workflowId = resolveHandoffWorkflowId(root, { laneFeature, sessionIdFlag: flags['session-id'] });
-  const handoff = workflowId ? newestOpenHandoffMailboxRecord(root, workflowId, targetRole) : readHandoff(root);
+  // msn-18c: mailbox storage is control-plane; the legacy readHandoff(root)
+  // fallback stays workspace-local, unchanged.
+  const handoff = workflowId ? newestOpenHandoffMailboxRecord(controlRootFor(root), workflowId, targetRole) : readHandoff(root);
   if (!handoff) return { result: null, text: 'No handoff.' };
   return {
     result: handoff,
@@ -4512,7 +4576,8 @@ function handleRecoveryScan(root, _flags) {
 // calls an LLM.
 function handleRecoveryWindow(root, flags) {
   const sessionId = requireFlag(flags, 'session');
-  const session = readSession(root, sessionId);
+  // msn-18c: sessions are control-plane.
+  const session = readSession(controlRootFor(root), sessionId);
   if (!session) throw new Error(`Session "${sessionId}" not found.`);
   const transcript = resolveTranscript(claudeProjectsRoot(), root, { sessionId });
   const lane = session.lane || null;

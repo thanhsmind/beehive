@@ -49,7 +49,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runModuleWorker } from "../scripts/lib/run-module-worker.mjs";
-import { resolveRoots as resolveHookRoots } from "./adapter.mjs";
+import { resolveRoots as resolveHookRoots, controlRootFor as hookControlRootFor } from "./adapter.mjs";
 import {
   RUNTIMES,
   TARGETS,
@@ -187,6 +187,31 @@ function runWorktreeAdapterRows() {
         "separate-git-dir-remains-ordinary",
         separate.worktreeResolution === "ordinary" && separate.workRoot === fs.realpathSync.native(separateRoot) && separate.storeRoot === fs.realpathSync.native(separateRoot),
         `separate=${JSON.stringify(separate)}`,
+      ),
+      // msn-18c: controlRootFor(root) — session/workflow/claims/handoff-mailbox
+      // stores are control-plane, grant-INDEPENDENT (unlike storeRoot above,
+      // which follows the worktree-grants.json opt-in). A linked worktree
+      // resolves to MAIN regardless of whether it also holds its own granted
+      // local store; every other topology (ordinary, linked-invalid) falls
+      // back to `root` itself — never null, never a throw (fail-open, same
+      // posture as every other resolution in this file).
+      genericRow(
+        "worktree-adapter",
+        "control-root-linked-valid-resolves-to-main",
+        hookControlRootFor(workRoot) === fs.realpathSync.native(mainRoot),
+        `controlRootFor(workRoot)=${hookControlRootFor(workRoot)} main=${fs.realpathSync.native(mainRoot)}`,
+      ),
+      genericRow(
+        "worktree-adapter",
+        "control-root-linked-invalid-fails-open-to-root-itself",
+        hookControlRootFor(invalidRoot) === fs.realpathSync.native(invalidRoot),
+        `controlRootFor(invalidRoot)=${hookControlRootFor(invalidRoot)} invalidRoot=${fs.realpathSync.native(invalidRoot)}`,
+      ),
+      genericRow(
+        "worktree-adapter",
+        "control-root-ordinary-checkout-resolves-to-itself",
+        hookControlRootFor(separateRoot) === fs.realpathSync.native(separateRoot),
+        `controlRootFor(separateRoot)=${hookControlRootFor(separateRoot)} separate=${fs.realpathSync.native(separateRoot)}`,
       ),
     ];
   } finally {

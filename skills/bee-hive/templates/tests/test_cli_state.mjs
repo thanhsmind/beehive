@@ -2895,6 +2895,87 @@ await check('sqs-b3: bee.mjs --help --json advertises scribing-run --show', asyn
   }
 });
 
+// ─── msn-18c TOPOLOGY (must_have, red-first per the cell contract): a
+// session bound from a linked worktree's `bee state session bind` lands the
+// UPDATED record in MAIN's .bee/sessions/, never the worktree's own (pre-cell:
+// nonexistent/empty) local sessions dir. Same manual worktree-fixture
+// pattern test_cells.mjs's makeLinkedWorktreeCellFixture / test_reservations
+// .mjs's makeLinkedWorktree use — this file's own minimal variant, onboarded
+// on both sides so bee.mjs's CLI dispatch (subprocess, via runBeeState)
+// resolves a real root on both.
+
+function makeLinkedWorktreeStateFixture(mainPrefix, workPrefix, id) {
+  const main = fs.mkdtempSync(path.join(os.tmpdir(), mainPrefix));
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), workPrefix));
+  fs.mkdirSync(path.join(main, '.git'));
+  const gitdir = path.join(main, '.git', 'worktrees', id);
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(work, '.git'), `gitdir: ${gitdir}\n`);
+  fs.writeFileSync(path.join(gitdir, 'gitdir'), path.join(work, '.git') + '\n');
+  for (const dir of [main, work]) {
+    fs.mkdirSync(path.join(dir, '.bee'), { recursive: true });
+    writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+  }
+  // GRANTED worktree (worktree-feature-parallelism): resolveRoots' own P40
+  // default already resolves storeRoot to MAIN for an UNGRANTED worktree —
+  // that path never touches the control-plane gap this cell fixes. Only a
+  // GRANTED worktree (its own local store for workspace-local state) gets
+  // `root` === workRoot at the CLI layer (findRepoRoot -> resolveRoots(cwd)
+  // .storeRoot), which is exactly the population where session/workflow/
+  // handoff-mailbox stores must STILL resolve to main (control-plane) even
+  // though cells/backlog/decisions now resolve to the worktree itself —
+  // advisor-digest-slice4 binding condition F4's "granted worktrees have
+  // fully worktree-local stores today" population.
+  fs.mkdirSync(path.join(main, '.bee', 'runtime'), { recursive: true });
+  writeJsonAtomic(path.join(main, '.bee', 'runtime', 'worktree-grants.json'), { [id]: true });
+  return { main, work };
+}
+
+await check(
+  'TOPOLOGY (red-first): `bee state session bind` invoked from a linked worktree updates the session record in MAIN\'s .bee/sessions — pre-cell it looked for (and failed to find) the record in the worktree\'s own, always-empty local sessions dir',
+  async () => {
+    const { main, work } = makeLinkedWorktreeStateFixture('bee-topo-sess-main-', 'bee-topo-sess-work-', 'topo-sess-fixture');
+    try {
+      // Seed the session record where a live session's session-init hook
+      // would actually create it post-cell: MAIN's control store. This is
+      // the record the bind call below must find and update.
+      const created = createSession(main, { id: 'topo-sess-1' });
+      assert(created.ok === true, `precondition: session record must be creatable at main, got ${JSON.stringify(created)}`);
+
+      const bound = await runBeeState(work, ['session', 'bind', '--session-id', 'topo-sess-1', '--lane', 'topo-feat', '--json']);
+      assert(bound.status === 0, `session bind run from the worktree must succeed (the session lives at main), got ${bound.status}: ${bound.stderr}`);
+
+      const atMain = readJson(path.join(main, '.bee', 'sessions', 'topo-sess-1.json'), null);
+      assert(atMain && atMain.lane === 'topo-feat', `expected the bound record at MAIN to carry lane "topo-feat", got ${JSON.stringify(atMain)}`);
+
+      // The worktree's own local sessions dir must never have received a
+      // copy — pre-cell baseline was the exact opposite (bindSessionLane
+      // looked ONLY at the worktree's own .bee/sessions/, found nothing,
+      // and refused SESSION_MISSING even though a live record existed at
+      // main); this is the red-first flip this cell fixes.
+      const atWork = path.join(work, '.bee', 'sessions', 'topo-sess-1.json');
+      assert(!fs.existsSync(atWork), `the worktree's own sessions dir must NOT hold a copy, found a file at ${atWork}`);
+    } finally {
+      fs.rmSync(main, { recursive: true, force: true });
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  },
+);
+
+await check('TOPOLOGY: solo/main repos byte-identical — `bee state session bind` behaves exactly as before this cell (no linked worktree involved)', async () => {
+  const dir = makeStateRepo('bee-topo-sess-solo-');
+  try {
+    const created = createSession(dir, { id: 'topo-sess-solo-1' });
+    assert(created.ok === true, `precondition: session record must be creatable, got ${JSON.stringify(created)}`);
+    const bound = await runBeeState(dir, ['session', 'bind', '--session-id', 'topo-sess-solo-1', '--lane', 'topo-feat-solo', '--json']);
+    assert(bound.status === 0, `session bind should succeed, got ${bound.status}: ${bound.stderr}`);
+    const record = readJson(path.join(dir, '.bee', 'sessions', 'topo-sess-solo-1.json'), null);
+    assert(record && record.lane === 'topo-feat-solo', `expected the bound record to carry the lane, got ${JSON.stringify(record)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // si-3: the isolation guard itself — run last, over every check above.
 // liveFeatureAtSuiteStart was captured once before the first check ran; this
 // re-reads the SAME live path and asserts byte-identical `feature`. A
