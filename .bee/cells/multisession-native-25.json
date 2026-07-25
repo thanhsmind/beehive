@@ -37,7 +37,7 @@
   "decisions": [
     "CONTEXT.md D8 stage 5, D9"
   ],
-  "status": "open",
+  "status": "claimed",
   "trace": {
     "0": "r",
     "1": "e",
@@ -64,7 +64,7 @@
     "22": "#",
     "23": "5",
     "24": "6",
-    "worker": null,
+    "worker": "orchestrator-release",
     "outcome": null,
     "files_changed": [],
     "deviations": [],
@@ -74,6 +74,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-25T11:22:17.364Z"
   }
 }

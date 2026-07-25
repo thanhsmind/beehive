@@ -1,16 +1,16 @@
 ---
 type: bee.area
 title: "Workflow State — the two-kind handoff, its per-workflow mailbox, and pulling the next approved unit"
-description: "How a finished task hands itself to a fresh session through a guarded planned-next record adopted only at a real fresh-session boundary, how that record now lives in a per-workflow mailbox scoped by target role so one workflow pausing never blocks another, and how a session out of work pulls its next unit without ever widening the authority a human granted."
+description: "How a finished task hands itself to a fresh session through a guarded planned-next record adopted only at a real fresh-session boundary, how that record now lives in a per-workflow mailbox scoped by target role so one workflow pausing never blocks another, how the legacy single HANDOFF.json file survives only as a projection with exactly one sanctioned writer set enforced by a grep audit, and how a session out of work pulls its next unit without ever widening the authority a human granted."
 timestamp: 2026-07-25
 bee:
   id: workflow-state-handoff
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: [fresh-session-handoff D1-D4 (docs/history/fresh-session-handoff/CONTEXT.md — auto-resume authority exists only at the fresh-session boundary; the puller never widens authority), no-clear-stop D1 (planned-next is written only at real session exit; the orchestrator never stops mid-flow to offer /clear), "multisession-native D5 (slice 3, issue #56 3.7/mục 10: per-workflow handoff mailboxes replace the single-file HANDOFF.json as the durable record; the legacy file becomes a projection of the newest open mailbox record — docs/history/multisession-native/CONTEXT.md)"]
-  sources: ["fresh-session-handoff S1 cells fsh-1/fsh-2 (traces in .bee/cells/, reports docs/history/fresh-session-handoff/reports/, 2026-07-13)", fresh-session-handoff validation-s4 C10/C11 (docs/history/fresh-session-handoff/reports/validation-s4.md), "GH #20 live-owner lane guard (trace .bee/cells/cnlg-1.json)", "docs/specs/workflow-state.md#B15", "docs/specs/workflow-state.md#B16", "docs/specs/workflow-state.md#R19", "docs/specs/workflow-state.md#R20", "docs/specs/workflow-state.md#R21", "docs/specs/workflow-state.md#P16", "multisession-native cell multisession-native-15 (per-workflow handoff mailboxes; trace .bee/cells/multisession-native-15.json, commit 60d0419, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice3.md condition G)"]
-  authoritative_for: "workflow-state: the two-kind session handoff, its per-workflow mailbox, and the cross-lane work puller"
+  decisions: [fresh-session-handoff D1-D4 (docs/history/fresh-session-handoff/CONTEXT.md — auto-resume authority exists only at the fresh-session boundary; the puller never widens authority), no-clear-stop D1 (planned-next is written only at real session exit; the orchestrator never stops mid-flow to offer /clear), "multisession-native D5 (slice 3, issue #56 3.7/mục 10: per-workflow handoff mailboxes replace the single-file HANDOFF.json as the durable record; the legacy file becomes a projection of the newest open mailbox record — docs/history/multisession-native/CONTEXT.md)", "multisession-native D5 amendment (msn-24, advisor-digest-slice5 condition E: rebuildHandoffProjection is reclassified as the sole sanctioned writer of the legacy .bee/HANDOFF.json for any repo with a live workflow record; writeHandoff/adoptHandoff are retained one more release as the C1 no-workflow-records fallback with dated deprecation notes naming the removal condition; a grep-audit test enforces the exact production writer set)"]
+  sources: ["fresh-session-handoff S1 cells fsh-1/fsh-2 (traces in .bee/cells/, reports docs/history/fresh-session-handoff/reports/, 2026-07-13)", fresh-session-handoff validation-s4 C10/C11 (docs/history/fresh-session-handoff/reports/validation-s4.md), "GH #20 live-owner lane guard (trace .bee/cells/cnlg-1.json)", "docs/specs/workflow-state.md#B15", "docs/specs/workflow-state.md#B16", "docs/specs/workflow-state.md#R19", "docs/specs/workflow-state.md#R20", "docs/specs/workflow-state.md#R21", "docs/specs/workflow-state.md#P16", "multisession-native cell multisession-native-15 (per-workflow handoff mailboxes; trace .bee/cells/multisession-native-15.json, commit 60d0419, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice3.md condition G)", "multisession-native cell multisession-native-24 (rebuildHandoffProjection reclassified as sole sanctioned writer; writeHandoff/adoptHandoff dated deprecation notes; grep-audit test in test_state.mjs enforcing the exact writer set; trace .bee/cells/multisession-native-24.json, commit cee2d5f, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice5.md condition E)"]
+  authoritative_for: "workflow-state: the two-kind session handoff, its per-workflow mailbox, the legacy projection's sanctioned writer set, and the cross-lane work puller"
 ---
 
 # Workflow State — the two-kind handoff, its per-workflow mailbox, and pulling the next approved unit
@@ -123,6 +123,36 @@ blocks or leaks into a different workflow's own mailbox (proven directly,
 not merely asserted); a repo that has never touched slice 3 sees no behavior
 change at all.
 
+**The legacy `.bee/HANDOFF.json` has exactly one sanctioned writer set, enforced
+by a grep audit rather than trusted as documentation (multisession-native D5
+amendment, msn-24, advisor-digest-slice5 condition E).** `rebuildHandoffProjection`
+is documented in its own header as the ONLY writer of the legacy file for any repo
+with at least one workflow record: every mailbox write/adopt call in `bee.mjs`
+invokes it immediately afterward to keep the projection current, and no other
+production path writes that file on the live-workflow side. `writeHandoff`/
+`adoptHandoff` (`state.mjs`) — the pre-mailbox direct-file writers — are retained
+for exactly ONE more release as the C1 no-workflow-records legacy fallback:
+`handleStateHandoffWrite`/`handleStateHandoffAdopt` in `bee.mjs` call them ONLY on
+the branch where resolving the target workflow id returns null (a repo with zero
+workflow records anywhere — the same C1 fallback `workflow-records-and-
+projections.md` documents for state/lane projections). Each carries a dated
+deprecation note naming its removal condition: once no supported repo can lack
+workflow records (every `startFeature` call already seeds one via
+`seedLegacyWorkflows` — this fallback exists only for a repo that predates
+multisession-native or was never onboarded through it), both retire together. A
+grep-audit test (`test_state.mjs`) makes this a structural guarantee, not a
+convention to remember: it scans every `.mjs` file under `lib/` plus `bee.mjs` for
+the two mutation primitives every legal writer uses
+(`writeJsonAtomic(handoffPath(...))` / `fs.rmSync(handoffPath(...))`), resolves each
+hit's enclosing function name, and asserts the exact production writer set is
+`{rebuildHandoffProjection, writeHandoff, adoptHandoff}` — a fourth writer added
+anywhere in the codebase fails this test by name, and the audit itself asserts it
+found at least one hit so a broken regex can never silently pass the sweep. What
+each actor observes: the legacy file's contents are always traceable to one of
+exactly three functions, never a stray direct write; a repo with live workflow
+records sees the projection stay current automatically, and a repo with none keeps
+using the untouched pre-mailbox path.
+
 ## Business Rules
 
 - R19 — A planned-next handoff's preconditions live in its verb, never in
@@ -144,6 +174,13 @@ change at all.
   newest open mailbox record across every workflow, and shows at most one
   workflow's handoff at a time until a later slice retires the file
   (multisession-native D5, msn-15).
+- R77 — The legacy `.bee/HANDOFF.json`'s production writer set is exactly
+  `{rebuildHandoffProjection, writeHandoff C1 fallback, adoptHandoff C1
+  fallback}`, enforced by a grep-audit test rather than merely documented; the
+  two fallback writers fire only when no workflow record resolves and each
+  carries a dated deprecation note naming its removal condition
+  (multisession-native D5 amendment, msn-24, advisor-digest-slice5 condition
+  E).
 
 ## Pointers (implementation)
 
@@ -172,3 +209,10 @@ change at all.
   advisor digest
   `docs/history/multisession-native/reports/advisor-digest-slice3.md`
   condition G.
+- Sanctioned-writer reclassification (R77, msn-24): dated deprecation notes on
+  `writeHandoff`/`adoptHandoff` and on `rebuildHandoffProjection`'s own header
+  in `state.mjs`/`state-projection.mjs`; the grep-audit test in
+  `skills/bee-hive/templates/tests/test_state.mjs`. Evidence: trace
+  `.bee/cells/multisession-native-24.json`, commit cee2d5f; advisor digest
+  `docs/history/multisession-native/reports/advisor-digest-slice5.md`
+  condition E.

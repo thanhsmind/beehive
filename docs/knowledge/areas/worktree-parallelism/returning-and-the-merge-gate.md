@@ -1,16 +1,16 @@
 ---
 type: bee.area
-title: "Worktree Parallelism — returning: the staged merge and its verify gate"
-description: "Why a feature worktree returns through a merge that is staged but never committed until the configured verify passes, why the coordination lock releases around that verify child and re-acquires behind a four-part fence before any commit, how a textual conflict, a red verify, and fence drift all abort while proving main untouched, and when post-commit cleanup runs and when it refuses."
-timestamp: 2026-07-24
+title: "Worktree Parallelism — returning: the staged merge, its verify gate, and the integration queue that serializes concurrent merges"
+description: "Why a feature worktree returns through a merge that is staged but never committed until the configured verify passes, why the coordination lock releases around that verify child and re-acquires behind a fence before any commit, how a second concurrent merge against the same main checkout now queues and bounded-waits behind a single processor lease instead of racing the lock, and when post-commit cleanup runs and when it refuses."
+timestamp: 2026-07-25
 bee:
   id: worktree-parallelism-returning-and-the-merge-gate
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/entering-creating-and-registering.md]
-  decisions: [worktree-session-routing D8 (worktree merge --id <id> is the return path), D2-REVISED (the merge is a staged transaction — user review P1-2), D8a (dirty is git status --porcelain without --ignored), D8b/D8c (--cleanup is strictly post-commit), I47 (issues-46-53 — cleanup on ALREADY_UP_TO_DATE), "multisession-native D10b (issue #56 3.9 — the worktree-admin lock releases around the verify child and re-acquires behind a four-part fence before any commit)"]
-  sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-returning-worktree-merge-id-id-d8", "issues-46-53 cell i-2 (GH #47 — the safety property is \"nothing would be lost\", not \"a commit happened\"; --cleanup runs on the no-op and still refuses on conflict and red verify; trace in `.bee/cells/`, 2026-07-23)", "multisession-native cell multisession-native-2 (three-phase lock split around the verify child, four-part fence, WORKTREE_MERGE_FENCE_DRIFT; trace .bee/cells/multisession-native-2.json, commit b8fc926, 2026-07-24)"]
-  authoritative_for: "worktree-parallelism: the return path, the merge verify gate, and cleanup"
+  decisions: [worktree-session-routing D8 (worktree merge --id <id> is the return path), D2-REVISED (the merge is a staged transaction — user review P1-2), D8a (dirty is git status --porcelain without --ignored), D8b/D8c (--cleanup is strictly post-commit), I47 (issues-46-53 — cleanup on ALREADY_UP_TO_DATE), "multisession-native D10b (issue #56 3.9 — the worktree-admin lock releases around the verify child and re-acquires behind a four-part fence before any commit)", "multisession-native D8 stage 5 / D9 invariant 12 (issue #56 3.9/mục queue — bee worktree merge requests against the same main checkout serialize through a durable integration queue and a single processor lease instead of racing the coordination lock; a busy processor bounded-waits and a timeout returns a typed, unambiguous not-run result)"]
+  sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-returning-worktree-merge-id-id-d8", "issues-46-53 cell i-2 (GH #47 — the safety property is \"nothing would be lost\", not \"a commit happened\"; --cleanup runs on the no-op and still refuses on conflict and red verify; trace in `.bee/cells/`, 2026-07-23)", "multisession-native cell multisession-native-2 (three-phase lock split around the verify child, four-part fence, WORKTREE_MERGE_FENCE_DRIFT; trace .bee/cells/multisession-native-2.json, commit b8fc926, 2026-07-24)", "multisession-native cell multisession-native-22 (integration-queue.mjs: durable queue + processor lease serializing worktree merge; async verify child (runVerifyChild) replacing spawnSync so a heartbeat can interleave; checkProcessorLease as the P3 fence's first line; trace .bee/cells/multisession-native-22.json, commit 546d532, 2026-07-25)", "multisession-native cell multisession-native-23 (test_msn_invariants.mjs, invariant 7's fresh two-worktree merge-time MERGE_CONFLICT proof chained to the write-time advisory-allow+warning; trace .bee/cells/multisession-native-23.json, commit 06cd209, 2026-07-25)", "docs/history/multisession-native/reports/advisor-digest-slice5.md (conditions A/B/C, verdict proceed-with-conditions)"]
+  authoritative_for: "worktree-parallelism: the return path, the merge verify gate, the integration queue that serializes concurrent merges, and cleanup"
 ---
 
 # Worktree Parallelism — Returning and the Merge Gate
@@ -87,6 +87,81 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   carries no "cleaned up unchecked" warning: that warning means *no verify command is recorded*,
   which would be a lie where verify was skipped only because nothing was merged.
 
+## Concurrent merges serialize through an integration queue, never the lock (multisession-native D8 stage 5, D9 invariant 12, msn-22)
+
+Phase 2's lock release (D10b, above) is correct for letting other worktree-admin
+operations run during a multi-minute verify, but it opened a gap: a **second**
+`worktree merge` against the *same* main checkout no longer waits politely on the lock
+— it slips straight into phase 1's own dirty-tree pre-check and gets a hard
+`WORKTREE_MERGE_MAIN_DIRTY` refusal, honest but unfriendly, because the first merge's
+staged-but-uncommitted tree genuinely *is* dirty. `integration-queue.mjs` closes that
+gap:
+
+- **Only `bee worktree merge` (`handleWorktreeMerge`) becomes queue-aware** (advisor
+  condition A) — `dispatch-interlock.mjs` and `herding.mjs` are untouched; the queue is
+  a merge-serialization concern only, never wired into the herding cockpit's own
+  enable/disable gesture.
+- Every merge request enqueues a durable record first, at
+  `controlRoot/.bee/runtime/integration/queue/<seq>.json`. **When the single processor
+  lease is free, the requester becomes processor and merges directly** — an empty
+  queue resolves on the first iteration with no real sleep at all, so a solo merge is
+  **byte-identical** to pre-D9 behavior: proven by the full 159-case
+  `scripts/test_worktree_cli.mjs` regression suite passing unmodified. **When the lease
+  is held, the requester enqueues and bounded-waits** (`--queue-wait-ms`, default
+  180s), polling every 500ms. **A timeout returns a typed
+  `{ok: false, code: 'INTEGRATION_QUEUE_TIMEOUT', merged: false}` result whose text
+  unambiguously says the merge did NOT run** (advisor condition B) — never a shape a
+  caller could mistake for success, the same truth-telling discipline
+  `MERGE_CONFLICT`/`MERGE_VERIFY_RED` already use.
+- **The processor lease** is a `path` resource in lease-store.mjs
+  (`"path:integration-processor"`, under `controlRoot`), acquired with a **strictly
+  positive TTL** — a non-positive one is refused before ever calling lease-store,
+  because lease-store treats it as "never expires" and would deadlock the queue behind
+  a crashed processor forever. **Heartbeat-renewed through the verify child**: phase 2's
+  verify now runs via async `spawn` (`runVerifyChild`) instead of `spawnSync`
+  specifically so a timer can interleave with a multi-minute child without being
+  starved by a blocked event loop; `onVerifyTick` fires on that timer (default every
+  30s) and attempts a best-effort lease renewal each time — a missed renewal is never
+  silently fatal to correctness, because the epoch re-check below is the authoritative
+  gate, not this heartbeat. A dead processor's lease is swept before every acquire
+  attempt, and the next caller's takeover bumps `epoch` by exactly 1 — a real takeover,
+  never a silently reused epoch.
+- **Phase 3's fence gains a first line of defense, ahead of the existing
+  `checkMergeFence` staged-tree/HEAD check**: immediately after `'worktree-admin'` is
+  re-acquired and before ever committing, `checkProcessorLease` re-checks the acquired
+  epoch against the on-disk lease record. A **zombie processor whose lease was already
+  taken over aborts here** — `git merge --abort`, main proven untouched, typed
+  `WORKTREE_MERGE_FENCE_DRIFT` — exactly like any other fence-drift abort. A merge with
+  no queue contention (or any caller that predates this cell and passes no
+  `checkProcessorLease` at all) reaches phase 3 with both checks trivially clean.
+- A caller with no resolvable session identity (no `BEE_SESSION_ID`, no live session
+  record) still gets a stable sessionless lease identity rather than a refusal — merge
+  has never required session identity to run solo, and this cell does not change that.
+- Tests: `test_integration_queue.mjs` (14 checks, deterministic seams — a virtual `now`
+  drives dead-processor takeover, no real sleeps), `test_worktree_store.mjs` (+4, the
+  `checkProcessorLease`/`onVerifyTick` wiring), and `scripts/test_worktree_merge_queue.mjs`
+  (15 checks, real two-OS-process CLI dispatch proving serialization, no-lock-held-
+  across-verify, the timeout path, and the byte-identical solo surface). Evidence: trace
+  `.bee/cells/multisession-native-22.json`, commit 546d532.
+
+**The issue-#56 acceptance suite (msn-23) indexes this and every other
+multisession-native invariant.** `test_msn_invariants.mjs` is one numbered, named
+entry per invariant 1-15 — an INDEX, not a from-scratch reproof: a reused entry fails
+loud (never a silent pass) if its underlying suite file goes missing, its assertion
+text is renamed, the underlying suite goes red as a whole, or its specific PASS line
+vanishes from actual runtime output. Invariant 7 is fresh for this concept: a real
+two-worktree git fixture where both sides edit the same file differently — `checkWrite`
+proves the write-time advisory-allow-plus-warning (see `cross-worktree-holds.md`), then
+`mergeFeatureWorktree` proves the typed `MERGE_CONFLICT` catches the same conflict at
+merge time — chaining two facts no existing suite chained together. Invariant 12
+(no lock held across a long op) is deliberately scoped to the two enumerated long
+ops — queue processing and the merge-verify child — not a blanket "zero `spawnSync`
+under any lock" claim, which is false today (short git plumbing legitimately runs via
+`spawnSync` while holding `'worktree-admin'`). The suite prints a verbatim
+`"15/15 PASS: invariants 1,2,...,15 all green"` summary line. Evidence: trace
+`.bee/cells/multisession-native-23.json`, commit 06cd209; advisor digest
+`docs/history/multisession-native/reports/advisor-digest-slice5.md`.
+
 ## Pointers (implementation)
 
 - The three-phase merge (D10b): `mergeFeatureWorktree` / `mergeFeatureWorktreeStage`
@@ -97,3 +172,14 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   self-tampers the staged tree mid-verify to prove the fence catches it, both red-first
   against the pre-fix code. Evidence: trace `.bee/cells/multisession-native-2.json`,
   commit b8fc926.
+- The integration queue (D9 invariant 12, msn-22): `runThroughQueue` / `tryBecomeProcessor`
+  / `checkProcessorLeaseEpoch` in `skills/bee-hive/templates/lib/integration-queue.mjs`;
+  `runVerifyChild` (the async verify-child replacement for `spawnSync`) and the
+  `onVerifyTick`/`checkProcessorLease` hooks in `worktree-store.mjs`; CLI wiring
+  (`--queue-wait-ms`, the `INTEGRATION_QUEUE_TIMEOUT` text) in `handleWorktreeMerge`,
+  `skills/bee-hive/templates/bee.mjs`. Evidence: trace
+  `.bee/cells/multisession-native-22.json`, commit 546d532.
+- The acceptance suite (D9, msn-23): `skills/bee-hive/templates/tests/test_msn_invariants.mjs`
+  (index, 15 numbered entries) plus its two fresh Worker-concurrency race harnesses
+  (`race_lease_child.mjs`, invariants 5/6). Evidence: trace
+  `.bee/cells/multisession-native-23.json`, commit 06cd209.

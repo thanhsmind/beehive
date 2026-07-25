@@ -31,7 +31,7 @@ import { activeDecisions } from './decisions.mjs';
 // (D1, multisession-native-6).
 import { createWorkflow, listWorkflows } from './workflow-store.mjs';
 
-export const BEE_VERSION = '1.16.1';
+export const BEE_VERSION = '1.17.0';
 
 export const GATE_NAMES = ['context', 'shape', 'execution', 'review'];
 

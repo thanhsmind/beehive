@@ -1,16 +1,16 @@
 ---
 type: bee.area
 title: "Workflow State — the workflow record, its rebuildable projections, and plan-revision-scoped gates"
-description: "The durable per-feature workflow record that is now the real unit of pipeline state, the three-transaction creation that seeds live legacy work into it, the legacy state.json/lane files as mechanically rebuildable projections that never outrank the record, the plan-revision-scoped execution gate, and the per-workflow lock every state-mutation write now routes through instead of one blanket lock."
+description: "The durable per-feature workflow record that is now the real unit of pipeline state, the three-transaction creation that seeds live legacy work into it, the legacy state.json/lane files (and the legacy handoff file) as mechanically rebuildable projections that never outrank the record and whose writer set is enforced by a grep audit rather than convention, the plan-revision-scoped execution gate, and the per-workflow lock every state-mutation write now routes through instead of one blanket lock."
 timestamp: 2026-07-25
 bee:
   id: workflow-state-workflow-records-and-projections
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/workflow-state/sessions-lanes-and-identity.md, areas/workflow-state/holds-and-the-coordination-lock.md, areas/worktree-parallelism/control-plane-topology.md]
-  decisions: ["multisession-native D1 (workflow-first state: the workflow record becomes the unit of state; state.json/lanes become read-only compatibility projections; startFeature's lock becomes workflow:<id>, ending cross-feature contention on the single state lock — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D2 (control plane / data plane split: the workflow record and every store it seeds from — sessions, claims — resolve through controlRoot, i.e. main, from any linked worktree; docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D7 (gates scoped to plan revision: gate approval records approved_for_plan_rev; a plan_rev bump invalidates only that workflow's execution gate)", "multisession-native advisor-digest-slice2 conditions C1-C5/F5/F7/F8 (docs/history/multisession-native/reports/advisor-digest-slice2.md — idempotent seed before any rebuild treats state.json as derived, plan-rev-effective gate formula, startFeature worker-precondition self-exclusion, one global lock order with sessions and workflow:<id> never held together, the default-path residual seam scoped and later closed)"]
-  sources: ["multisession-native cells multisession-native-5..10 (workflow-store.mjs, startFeature workflow creation, state-projection.mjs, activeWorkers, plan-rev gate scoping, default-path routing; traces .bee/cells/multisession-native-{5,6,7,8,9,10}.json, commits 1e7b538, f4fe163, 1c4d45d, c435add, 2dd834f, e7f365a, 2026-07-25)", "docs/history/multisession-native/CONTEXT.md (D1, D6, D7, D8 stage 2)", "docs/history/multisession-native/reports/advisor-digest-slice2.md (conditions C1-C5, findings F5/F7/F8)", "multisession-native cells multisession-native-18a/18b/18c (state.mjs's own workflow-record call sites, then bee.mjs's dispatcher, re-rooted onto controlRootFor(root); traces .bee/cells/multisession-native-{18a,18b,18c}.json, commits 5d0ec3c, a1431448, d69d81e, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)"]
-  authoritative_for: "workflow-state: the workflow record schema and module, its creation at feature start, the rebuildable state.json/lane projections, plan-revision-scoped gates, and the per-workflow write lock"
+  decisions: ["multisession-native D1 (workflow-first state: the workflow record becomes the unit of state; state.json/lanes become read-only compatibility projections; startFeature's lock becomes workflow:<id>, ending cross-feature contention on the single state lock — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D2 (control plane / data plane split: the workflow record and every store it seeds from — sessions, claims — resolve through controlRoot, i.e. main, from any linked worktree; docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D7 (gates scoped to plan revision: gate approval records approved_for_plan_rev; a plan_rev bump invalidates only that workflow's execution gate)", "multisession-native advisor-digest-slice2 conditions C1-C5/F5/F7/F8 (docs/history/multisession-native/reports/advisor-digest-slice2.md — idempotent seed before any rebuild treats state.json as derived, plan-rev-effective gate formula, startFeature worker-precondition self-exclusion, one global lock order with sessions and workflow:<id> never held together, the default-path residual seam scoped and later closed)", "multisession-native D5 amendment (msn-24, advisor-digest-slice5 condition E: the projection-writer discipline this concept states for state.json/lanes is generalized and enforced for the legacy handoff projection too — rebuildHandoffProjection is the sole sanctioned writer, a grep-audit test proves the exact production writer set rather than trusting a header comment; full detail in areas/workflow-state/handoff.md)"]
+  sources: ["multisession-native cells multisession-native-5..10 (workflow-store.mjs, startFeature workflow creation, state-projection.mjs, activeWorkers, plan-rev gate scoping, default-path routing; traces .bee/cells/multisession-native-{5,6,7,8,9,10}.json, commits 1e7b538, f4fe163, 1c4d45d, c435add, 2dd834f, e7f365a, 2026-07-25)", "docs/history/multisession-native/CONTEXT.md (D1, D6, D7, D8 stage 2)", "docs/history/multisession-native/reports/advisor-digest-slice2.md (conditions C1-C5, findings F5/F7/F8)", "multisession-native cells multisession-native-18a/18b/18c (state.mjs's own workflow-record call sites, then bee.mjs's dispatcher, re-rooted onto controlRootFor(root); traces .bee/cells/multisession-native-{18a,18b,18c}.json, commits 5d0ec3c, a1431448, d69d81e, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "multisession-native cell multisession-native-24 (rebuildHandoffProjection reclassified as sole sanctioned writer of the legacy handoff projection; grep-audit test in test_state.mjs; trace .bee/cells/multisession-native-24.json, commit cee2d5f, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice5.md condition E; full detail in areas/workflow-state/handoff.md)"]
+  authoritative_for: "workflow-state: the workflow record schema and module, its creation at feature start, the rebuildable state.json/lane/handoff projections and their audited writer sets, plan-revision-scoped gates, and the per-workflow write lock"
 ---
 
 # Workflow State — the workflow record, its rebuildable projections, and plan-revision-scoped gates
@@ -117,6 +117,23 @@ lane projections and for the idle-`state.json` case (F8). What each actor
 observes: a projection file can always be deleted and regenerated with no
 information lost, because it never held information the workflow record did
 not already have.
+
+**The "record wins, projection never a second source of truth" discipline is
+enforced structurally for the legacy handoff projection too, not merely
+documented (multisession-native D5 amendment, msn-24).** `state.json` and the
+lane files are rebuildable *because their writers are constrained* — this
+concept's own module-import guarantee (R63) is one such constraint. The legacy
+`.bee/HANDOFF.json` (a projection this area's own `handoff.md` concept owns in
+full) generalizes the same idea one step further: rather than trusting a
+header comment that `rebuildHandoffProjection` is the only writer,
+`test_state.mjs` grep-audits every `.mjs` file under `lib/` plus `bee.mjs` for
+the file's two mutation primitives and asserts the production writer set is
+exactly `{rebuildHandoffProjection, writeHandoff C1 fallback, adoptHandoff C1
+fallback}` — a fourth writer added anywhere fails the audit by name. See
+`areas/workflow-state/handoff.md` for the full mailbox/legacy-file story;
+this concept notes the pattern because it is the same "projection is
+derived, never authoritative" contract R65 states for `state.json`/lanes,
+proven here by a structural test rather than asserted in prose.
 
 **A granted gate's effective approval is scoped to the plan revision it was
 granted under (multisession-native D7, advisor condition C2).** Trigger: any
@@ -304,3 +321,8 @@ workspace-local).
   the declared plane split, and the msn-18 honest-block re-slice that swept
   it in. Evidence: traces `.bee/cells/multisession-native-{18a,18b,18c}.json`,
   commits 5d0ec3c, a1431448, d69d81e.
+- Legacy handoff projection's audited writer set (msn-24): see
+  `areas/workflow-state/handoff.md` (R77) for the full behavior; the
+  grep-audit test itself lives in
+  `skills/bee-hive/templates/tests/test_state.mjs`. Evidence: trace
+  `.bee/cells/multisession-native-24.json`, commit cee2d5f.
