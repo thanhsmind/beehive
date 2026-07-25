@@ -1,0 +1,64 @@
+{
+  "id": "packages-engine-move-3",
+  "feature": "packages-engine-move",
+  "lane": "standard",
+  "title": "Dispatcher-level unknown-flag rejection (stderr, message-compatible) + registry gap declarations + red-first regression",
+  "files": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/command-registry.mjs",
+    "packages/bee/lib/validate-args.mjs",
+    "packages/bee/tests/test_bee_cli.mjs",
+    "packages/bee/tests/test_cli_state.mjs",
+    "packages/bee/tests/test_cli_cells.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/packages-engine-move/plan.md",
+    "docs/history/packages-engine-move/reports/validation-slice1.md",
+    "packages/bee/lib/validate-args.mjs:85-110",
+    "packages/bee/bee.mjs:7125-7165",
+    "packages/bee/tests/test_cli_state.mjs:1110-1125"
+  ],
+  "action": "Per D4 RESCOPED by validation C7/C8/C9 — unknown-flag rejection ONLY; required-flag enforcement stays with handlers (validate-args.mjs:100-107 DB3 comment: required:[] is deliberate on 69/116 entries; handler requireFlag already exits 1). CORRECTED PREMISE (C7): 'bee capture add --text x' already exits 1 via requireFlag(outcome) — the gap is the error never NAMES the unknown flag --text, and the orchestrator-visible symptom (timing line only, stderr swallowed by tail) misread it as silent success. (1) RED FIRST: add test asserting `bee capture add --text x` stderr NAMES '--text' as unknown — run before the fix, record the red (today stderr only complains missing outcome). (2) Central check in the dispatcher AFTER resolveCommand, BEFORE handler dispatch: any parsed flag not in entry.parameters.properties and not in the explicit global allow-list (json, help) -> emitError to STDERR, exit 1, message shape compatible with existing bespoke loops: `<group> <verb>: unknown flag --X (known: ...)` (C8: stderr channel is pinned by test_cli_state.mjs:1116; KEEP both bespoke loops bee.mjs:1236-1239 and :3084-3087, delete nothing — central check simply fires first with the same channel+shape so their assertions still pass; if any pinned assertion regex conflicts, match the assertion, never the other way). Entry with no registry match -> throw unknown command, never silently skip (C9). (3) DECLARE the 7 known registry gaps in command-registry.mjs so the suite stays green (C9 floor): cells.claim --isolate, cells.claim-next --isolate, state.gate --owner, state.start-feature --isolate, config.get/set/unset --local; and FLAG_ALONE_BOOLEANS local+isolate get declared on those entries. Any additional red = another gap: declare it, never loosen the validator. (4) Update the now-false comment validate-args.mjs:90 ('unknown-flag rejection is the dispatcher/hook's own concern' — it now IS the dispatcher's concern; point at the dispatcher check). (5) Fix the friction record honestly: log one decision correcting the earlier friction note (bug was message quality + orchestrator tail habit, not silent exit 0). (6) REGEN OBLIGATION: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write, then node scripts/impact_registry.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "red-first evidence: pre-fix stderr does NOT name --text, post-fix it does",
+      "unknown flags rejected on stderr exit 1 for every verb, message names flag + verb",
+      "--json/--help still accepted everywhere",
+      "the two bespoke loops and their pinned assertions (test_cli_state.mjs:1116 dryrun stderr, :902 --owner) still pass unchanged",
+      "7 registry gaps declared; validator never loosened"
+    ],
+    "artifacts": [
+      "regression test in test_bee_cli.mjs for unknown-flag naming on capture add"
+    ],
+    "key_links": [
+      "docs/history/packages-engine-move/plan.md",
+      "docs/history/packages-engine-move/reports/validation-slice1.md"
+    ],
+    "prohibitions": [
+      "never loosen the validator to green a suite — declare the flag in the registry instead",
+      "required:[] semantics (DB3) must not change",
+      "no hand-edit of .bee/bin mirrors"
+    ]
+  },
+  "verify": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs && node scripts/release_manifest.mjs --check",
+  "behavior_change": true,
+  "deps": [
+    "packages-engine-move-2"
+  ],
+  "status": "open",
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

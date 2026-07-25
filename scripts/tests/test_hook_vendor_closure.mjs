@@ -3,7 +3,7 @@
 //
 // Canary P5 (docs/history/i54-closeout/reports/validation-canary.md §1) caught
 // a live bug: hooks/bee-write-guard.mjs imports ./tokenize-command.mjs, but
-// HOOK_FILENAMES in skills/bee-hive/scripts/onboard_bee.mjs never listed it,
+// HOOK_FILENAMES in packages/bee/scripts/onboard_bee.mjs never listed it,
 // so a fresh --repo-hooks install never vendored the file and the write guard
 // crashed ERR_MODULE_NOT_FOUND — a hard import-time crash, invisible to the
 // guard's own try/catch fail-open path — on every fresh install, silently
@@ -24,7 +24,7 @@
 //      against the real tree.
 //   2. FRESH-INSTALL PROOF — actually run onboard_bee.mjs --apply --repo-hooks
 //      against a brand-new temp repo (same isolation pattern as
-//      skills/bee-hive/scripts/test_onboard_bee.mjs: fake HOME, throwaway
+//      packages/bee/scripts/test_onboard_bee.mjs: fake HOME, throwaway
 //      target dir), then spawn the VENDORED copy of bee-write-guard.mjs — not
 //      the canonical source, whose sibling import always resolves and so
 //      never reproduces the bug — and assert it never crashes with
@@ -43,7 +43,7 @@ import { runModuleWorker } from "../lib/run-module-worker.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");
-const ONBOARD = path.join(REPO_ROOT, "skills", "bee-hive", "scripts", "onboard_bee.mjs");
+const ONBOARD = path.join(REPO_ROOT, "packages", "bee", "scripts", "onboard_bee.mjs");
 const HOOKS_DIR = path.join(REPO_ROOT, "packages", "bee", "hooks");
 
 let failures = 0;

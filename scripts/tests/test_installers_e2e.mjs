@@ -317,7 +317,7 @@ function assertVersionParity(sb, expected = SOURCE_VERSION, { sourceRoot = REPO_
   assert.equal(status.onboarding?.plugin_version, expected, "plugin_version must equal source");
   assert.equal(status.onboarding?.drift, false, "status must report no drift");
   // Independent immediate up_to_date recheck (mirrors the flags the installer used).
-  const planRaw = execFileSync("node", [path.join(sourceRoot, "skills/bee-hive/scripts/onboard_bee.mjs"), "--repo-root", sb.target, "--json", ...onboardFlags], { encoding: "utf8", env: sandboxEnv(sb) });
+  const planRaw = execFileSync("node", [path.join(sourceRoot, "packages/bee/scripts/onboard_bee.mjs"), "--repo-root", sb.target, "--json", ...onboardFlags], { encoding: "utf8", env: sandboxEnv(sb) });
   assert.equal(JSON.parse(planRaw).status, "up_to_date", "onboarding must be up_to_date immediately after apply");
 }
 
@@ -370,7 +370,7 @@ check("every post-install verification call in this suite carries the sandbox en
   const selfSource = fs.readFileSync(__filename, "utf8");
   const postInstallCallSites = [
     /execFileSync\("node", \[".bee\/bin\/bee\.mjs", "status", "--json"\][^;]*?\);/s,
-    /execFileSync\("node", \[path\.join\(sourceRoot, "skills\/bee-hive\/scripts\/onboard_bee\.mjs"\)[^;]*?\);/s,
+    /execFileSync\("node", \[path\.join\(sourceRoot, "packages\/bee\/scripts\/onboard_bee\.mjs"\)[^;]*?\);/s,
     /spawnSync\("node", \[".bee\/bin\/bee\.mjs", "doctor", "--runtime", "codex", "--json"\][^;]*?\);/s,
   ];
   for (const re of postInstallCallSites) {

@@ -524,8 +524,13 @@ function runSelftest() {
 
   check('shipped MACHINERY under skills/ (non-markdown) is out of scope, by decision', () => {
     const root = bundle(makeRepo('machinery'));
-    writeFile(root, 'skills/bee-hive/scripts/test_onboard_bee.mjs', `const ok = checkWrite(root, state, 'docs/specs/tasks.md');\n`);
-    writeFile(root, 'skills/bee-hive/scripts/onboard_bee.mjs', '// `into` names where it landed (e.g. "docs/specs/<area>.md").\n');
+    // packages-engine-move D1: the onboarding/distribution engine itself no
+    // longer lives under skills/ (it moved to packages/bee/scripts) - a
+    // still-shipped example of non-markdown machinery under skills/ is a
+    // helper script belonging to a DIFFERENT skill (bee-herding), never the
+    // retired bee-hive engine location.
+    writeFile(root, 'skills/bee-herding/scripts/test_classify_lane.mjs', `const ok = checkWrite(root, state, 'docs/specs/tasks.md');\n`);
+    writeFile(root, 'skills/bee-herding/scripts/classify-lane.mjs', '// `into` names where it landed (e.g. "docs/specs/<area>.md").\n');
     writeFile(root, 'skills/bee-hive/SKILL.md', `# hive\n\n${MISROUTE_LINE}\n`);
     const result = fenceFindings(root);
     assert(

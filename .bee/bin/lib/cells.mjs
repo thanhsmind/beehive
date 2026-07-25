@@ -189,7 +189,7 @@ const REGEN_GUARDS = [
     covers: 'the release manifest hashes',
     required: 'release_manifest.mjs --check',
     command: 'node scripts/release_manifest.mjs --check',
-    regen: 'node scripts/render_plugin_skill_trees.mjs, then node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write (in that order)',
+    regen: 'node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write (in that order)',
     derive: deriveManifestScope,
   },
   {
@@ -198,7 +198,7 @@ const REGEN_GUARDS = [
     covers: 'the .bee/onboarding.json managed-hash ledger covers',
     required: 'ledger_parity.mjs --check',
     command: 'node scripts/ledger_parity.mjs --check',
-    regen: 'node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply',
+    regen: 'node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply',
     derive: deriveLedgerScope,
   },
 ];

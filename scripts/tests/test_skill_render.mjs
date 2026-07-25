@@ -19,12 +19,12 @@ import {
   validateSkillMarkers,
   RENDER_RUNTIMES,
   RENDER_SIDECAR,
-} from "../../skills/bee-hive/scripts/onboard_bee.mjs";
+} from "../../packages/bee/scripts/onboard_bee.mjs";
 import { classifySource } from "../../packages/bee/lib/source-identity.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");
-const ONBOARD = path.join(REPO_ROOT, "skills", "bee-hive", "scripts", "onboard_bee.mjs");
+const ONBOARD = path.join(REPO_ROOT, "packages", "bee", "scripts", "onboard_bee.mjs");
 const TEMPLATES_LIB_DIR = path.join(REPO_ROOT, "packages", "bee", "lib");
 
 let passed = 0;
@@ -194,17 +194,23 @@ function mkdtemp() {
 // classifies as project_projection unless the render sidecar promotes it to
 // rendered_projection. Copies the REAL onboarder + packages/bee/lib so the
 // child process resolves its imports and the runtime version marker.
-// D3 (packages-restructure): the copied launcher resolves its vendored
-// payload PLUGIN_ROOT-relative (dirname(dirname(hive)) = base/.claude here,
-// NOT base itself) - the packages/bee copy must live at that same nesting
-// depth, outside the skills tree, never nested under hive/templates.
+// packages-engine-move D1/D3: the engine no longer lives inside the skills
+// tree it renders - the copied launcher goes to packagesBeeDir/scripts
+// (never hive/scripts) so its own "../lib" relative import resolves to
+// packagesBeeDir/lib, exactly like the real packages/bee/scripts/
+// onboard_bee.mjs resolves against its real packages/bee/lib sibling. The
+// copied launcher's own PLUGIN_ROOT arithmetic (dirname(dirname(ENGINE_DIR)))
+// still lands on base/.claude, NOT base itself, so packagesBeeDir sits at
+// that same nesting depth, outside the skills tree.
 function buildProjection(base, { sidecar = false, extraSkills = {} } = {}) {
   const skillsRoot = path.join(base, ".claude", "skills");
   const hive = path.join(skillsRoot, "bee-hive");
   const packagesBeeDir = path.join(base, ".claude", "packages", "bee");
-  fs.mkdirSync(path.join(hive, "scripts"), { recursive: true });
+  const engineScripts = path.join(packagesBeeDir, "scripts");
+  fs.mkdirSync(hive, { recursive: true });
+  fs.mkdirSync(engineScripts, { recursive: true });
   fs.mkdirSync(path.join(packagesBeeDir, "lib"), { recursive: true });
-  fs.writeFileSync(path.join(hive, "scripts", "onboard_bee.mjs"), fs.readFileSync(ONBOARD));
+  fs.writeFileSync(path.join(engineScripts, "onboard_bee.mjs"), fs.readFileSync(ONBOARD));
   for (const libName of fs.readdirSync(TEMPLATES_LIB_DIR)) {
     if (!libName.endsWith(".mjs")) continue;
     fs.writeFileSync(
@@ -225,7 +231,7 @@ function buildProjection(base, { sidecar = false, extraSkills = {} } = {}) {
       `${JSON.stringify({ schema: "bee-render/1", target_runtime: "claude" }, null, 2)}\n`,
     );
   }
-  return { skillsRoot, launcher: path.join(hive, "scripts", "onboard_bee.mjs") };
+  return { skillsRoot, launcher: path.join(engineScripts, "onboard_bee.mjs") };
 }
 
 function runOnboard(launcher, args) {

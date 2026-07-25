@@ -418,7 +418,7 @@ Copied into every onboarded repo, so enforcement works even for agents that igno
 - **`decisions`** — append-only decision log (rejects secrets and injection patterns): `log` / `supersede` / `redact` / `active` / `search`.
 - plus **`state`**, **`backlog`**, **`capture`**, **`reviews`**, **`feedback`** — see `node .bee/bin/bee.mjs --help --json` for the full manifest.
 
-### Onboarding — `skills/bee-hive/scripts/onboard_bee.mjs`
+### Onboarding — `packages/bee/scripts/onboard_bee.mjs`
 
 ```bash
 node onboard_bee.mjs --repo-root <path> [--apply] [--json] [--repo-hooks] [--claude-md] [--force-downgrade]

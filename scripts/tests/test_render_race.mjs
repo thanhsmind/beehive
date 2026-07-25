@@ -226,7 +226,7 @@ async function runOrchestrator() {
     }
 
     // Independently recompute the expected render straight from canonical
-    // skills/ (mirrors skills/bee-hive/scripts/test_plugin_distribution.mjs's
+    // skills/ (mirrors packages/bee/scripts/test_plugin_distribution.mjs's
     // drift-pin check) and byte-compare against what actually landed on disk.
     const mod = await import(pathToFileURL(RENDER_SCRIPT).href);
     const files = mod.canonicalFiles();

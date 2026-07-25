@@ -83,8 +83,8 @@ Windows PowerShell and all flags (`--dry-run`, `--runtime`, `--no-hooks`, …): 
 **From a local checkout of bee**, onboard a repo directly (plan first, then apply):
 
 ```bash
-node skills/bee-hive/scripts/onboard_bee.mjs --repo-root <your-repo> --json    # plan, writes nothing
-node skills/bee-hive/scripts/onboard_bee.mjs --repo-root <your-repo> --apply   # install
+node packages/bee/scripts/onboard_bee.mjs --repo-root <your-repo> --json    # plan, writes nothing
+node packages/bee/scripts/onboard_bee.mjs --repo-root <your-repo> --apply   # install
 ```
 
 Onboarding installs: the `AGENTS.md` BEE block (content outside the markers untouched), a

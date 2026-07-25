@@ -62,11 +62,11 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { detectCommands } from "../../../packages/bee/lib/commands_detect.mjs";
-import { hashFile } from "../../../packages/bee/lib/fsutil.mjs";
-import { classifySource } from "../../../packages/bee/lib/source-identity.mjs";
+import { detectCommands } from "../lib/commands_detect.mjs";
+import { hashFile } from "../lib/fsutil.mjs";
+import { classifySource } from "../lib/source-identity.mjs";
 // msn-18d deliberately does NOT `import { resolveContext } from
-// "../../../packages/bee/lib/state.mjs"` here, even though that is the real,
+// "../lib/state.mjs"` here, even though that is the real,
 // canonical resolver every leaf coordination module uses (advisor-digest-
 // slice4 binding condition 5). This file's OWN test suite (test_onboard_bee.
 // mjs's makeFakeSkillsRoot) ships a deliberately minimal fake state.mjs
@@ -81,8 +81,21 @@ import { classifySource } from "../../../packages/bee/lib/source-identity.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SCRIPTS_DIR = path.dirname(SCRIPT_PATH);
-const HIVE_DIR = path.dirname(SCRIPTS_DIR);
-const PLUGIN_ROOT = path.dirname(path.dirname(HIVE_DIR));
+// packages-engine-move D2: HIVE_DIR used to be one name doing three jobs
+// (engine geometry, classifySource input, skills-root-for-sync) because the
+// engine used to live INSIDE the skills tree it renders (skills/bee-hive/
+// scripts). Now that the engine lives at packages/bee/scripts, those three
+// jobs are split explicitly so none of them silently drifts:
+//   - ENGINE_DIR: this engine's own directory (packages/bee) - geometry only.
+//   - PLUGIN_ROOT: same arithmetic as before the move (scripts -> bee ->
+//     packages -> root), just walked from ENGINE_DIR instead of the old
+//     skills/bee-hive HIVE_DIR.
+//   - SKILLS_ROOT: the skills/ tree that skill-sync renders into projections
+//     and that classifySource's hiveDir input is built from - NEVER derived
+//     from ENGINE_DIR (that would make sync walk packages/, not skills/).
+const ENGINE_DIR = path.dirname(SCRIPTS_DIR);
+const PLUGIN_ROOT = path.dirname(path.dirname(ENGINE_DIR));
+const SKILLS_ROOT = path.join(PLUGIN_ROOT, "skills");
 const PLUGIN_HOOKS_DIR = path.join(PLUGIN_ROOT, "packages", "bee", "hooks");
 const TEMPLATES_DIR = path.join(PLUGIN_ROOT, "packages", "bee");
 const TEMPLATES_LIB_DIR = path.join(TEMPLATES_DIR, "lib");
@@ -494,7 +507,7 @@ function readSourceReleaseIdentity() {
   };
   let sourceKind = "unknown";
   try {
-    sourceKind = classifySource({ hiveDir: HIVE_DIR, homeDir: os.homedir() }).kind;
+    sourceKind = classifySource({ hiveDir: path.join(SKILLS_ROOT, "bee-hive"), homeDir: os.homedir() }).kind;
   } catch {}
 
   // D9 provenance: a rendered per-runtime projection (carries the render
@@ -1512,7 +1525,7 @@ function computeLegacyGlobalRefresh({ sourceRoot, realSource, realRepo, sourceVe
 
 // D2 resolution over ALL sync targets. Fully read-only.
 function computeSkillSync(repoRoot, { globalSkills = false } = {}) {
-  const sourceRoot = path.dirname(HIVE_DIR);
+  const sourceRoot = SKILLS_ROOT;
   const targetSpecs = skillSyncTargets(repoRoot, { globalSkills });
   const result = {
     source_root: sourceRoot,
@@ -1534,19 +1547,32 @@ function computeSkillSync(repoRoot, { globalSkills = false } = {}) {
     return result;
   };
 
-  // Identity anchor (F2): the source is authoritative only if the running
-  // script's own skill dir IS <sourceRoot>/bee-hive by realpath. Structural,
-  // target-independent: a failure blocks every target before resolution.
+  // Identity anchor (F2, re-anchored post-move - validation B5/C2): NOT the
+  // tautology realpath(PLUGIN_ROOT/packages/bee/scripts)===SCRIPTS_DIR (true
+  // by construction - the running script IS that path, so it proves nothing
+  // about whether the skills tree it is about to render into projections is
+  // legitimate). Falsifiable instead: the engine and skills tree must share
+  // one legitimate package root - <sourceRoot>/bee-hive exists, its realpath
+  // resolves INSIDE this same PLUGIN_ROOT (not some other package's skills
+  // tree reached via a stray symlink), and the payload this engine ships
+  // alongside is actually readable from here. Structural, target-independent:
+  // a failure blocks every target before resolution. blocked_no_source
+  // semantics for projections are unchanged by this re-anchor.
   let identityOk = false;
   try {
-    identityOk =
-      fs.realpathSync(HIVE_DIR) === fs.realpathSync(path.join(sourceRoot, "bee-hive"));
+    const beeHiveSkillDir = fs.realpathSync(path.join(sourceRoot, "bee-hive")); // throws if absent
+    const realPluginRoot = fs.realpathSync(PLUGIN_ROOT);
+    const relFromRoot = path.relative(realPluginRoot, beeHiveSkillDir);
+    const containedUnderRoot =
+      relFromRoot !== "" && !relFromRoot.startsWith("..") && !path.isAbsolute(relFromRoot);
+    const payloadReadable = fs.existsSync(path.join(TEMPLATES_LIB_DIR, "state.mjs"));
+    identityOk = containedUnderRoot && payloadReadable;
   } catch {
     identityOk = false;
   }
   if (!identityOk) {
     return blockAll(
-      "no authoritative skill source: the running script's tree failed the bee-hive realpath identity check",
+      "no authoritative skill source: the engine and skills tree do not share one legitimate package root",
     );
   }
 
@@ -2887,7 +2913,7 @@ function blockedSourceIdentitySkillSync(repoRoot, options, identity) {
   };
   const blocked = { ...identity.blocked, versions };
   return {
-    source_root: path.dirname(HIVE_DIR),
+    source_root: SKILLS_ROOT,
     targets: targetSpecs.map(function ({ kind, target_root }) {
       return {
         kind,
@@ -3192,7 +3218,7 @@ function computePlan(
   // skills.targets for forced-apply transparency (D2).
   const skillSync = syncSkills
     ? computeSkillSync(repoRoot, { globalSkills })
-    : { blocked: null, source_root: HIVE_DIR, targets: [] };
+    : { blocked: null, source_root: path.join(SKILLS_ROOT, "bee-hive"), targets: [] };
   if (!skillSync.blocked) {
     for (const target of skillSync.targets) {
       plan.push(...target.items);
@@ -3903,7 +3929,7 @@ function emit(payload, asJson) {
 
 function sourceKindForReport() {
   try {
-    return classifySource({ hiveDir: HIVE_DIR, homeDir: os.homedir() }).kind;
+    return classifySource({ hiveDir: path.join(SKILLS_ROOT, "bee-hive"), homeDir: os.homedir() }).kind;
   } catch {
     return "unknown";
   }

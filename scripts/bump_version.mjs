@@ -128,7 +128,7 @@ if (!flags.includes("--no-manifest")) {
 console.log(`
 Version set to ${newVersion}. Remaining release steps:
   1. Propagate projections + onboarding ledger:
-       node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply
+       node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply
      (refreshes .claude/ and .agents/ skill copies and .bee/onboarding.json;
       the split-brain test anchors self-update — no hand edit.)
   2. Run the impacted verify run (must be green):

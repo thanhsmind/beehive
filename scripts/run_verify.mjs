@@ -91,7 +91,7 @@ function triggerCiDelegation() {
 const DISCOVERY_ROOTS = [
   "scripts/tests",
   "packages/bee/tests",
-  "skills/bee-hive/scripts",
+  "packages/bee/scripts",
   "packages/bee/hooks",
 ];
 

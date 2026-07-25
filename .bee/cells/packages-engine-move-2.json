@@ -1,0 +1,62 @@
+{
+  "id": "packages-engine-move-2",
+  "feature": "packages-engine-move",
+  "lane": "standard",
+  "title": "Docs + SKILL.md sweep to the new engine path; projection-shrink proof",
+  "files": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "README.md",
+    "docs/02-architecture.md",
+    "docs/07-contracts.md",
+    "docs/specs/onboarding.md",
+    "docs/specs/reading-map.md",
+    ".claude-plugin/",
+    ".codex-plugin/",
+    "scripts/impact-registry.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/packages-engine-move/plan.md",
+    "docs/history/packages-engine-move/reports/validation-slice1.md",
+    "skills/bee-hive/SKILL.md:30-50",
+    "skills/bee-hive/references/routing-and-contracts.md:45-60"
+  ],
+  "action": "Per D1 + validation B6/C6/C10: (1) skills/bee-hive/SKILL.md Onboarding step 2 — replace the relative instruction ('From this skill directory, run node scripts/onboard_bee.mjs...') with the source-root form: 'From the bee source root (the checkout or installed plugin package), run node packages/bee/scripts/onboard_bee.mjs --repo-root <repo-root> --json'. Same replacement for the equivalent relative instruction in skills/bee-hive/references/routing-and-contracts.md:52. (2) Sweep remaining current-truth refs in README.md, docs/02-architecture.md, docs/07-contracts.md, docs/specs/onboarding.md, docs/specs/reading-map.md (docs/specs: path corrections inside existing lines only — okf fence). (3) docs/knowledge stale engine-path pointers (12 concept files, onboarding area) are OWNED BY SCRIBING at feature close, not this cell (C10 resolution) — do not touch docs/knowledge. (4) Projection-shrink proof: run node packages/bee/scripts/onboard_bee.mjs --repo-root . --json, quote up_to_date; assert .claude/skills/bee-hive and .agents/skills/bee-hive have no scripts/ dir. (5) REGEN OBLIGATION in order: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write, then node scripts/impact_registry.mjs --write (W3).",
+  "must_haves": {
+    "truths": [
+      "SKILL.md + routing-and-contracts.md name the packages/bee/scripts entrypoint (positive assertion in verify)",
+      "zero current-truth refs to the old engine path in living docs (exit-1-guarded rg)",
+      "onboard --json quotes up_to_date"
+    ],
+    "artifacts": [],
+    "key_links": [
+      "docs/history/packages-engine-move/plan.md",
+      "docs/history/packages-engine-move/reports/validation-slice1.md"
+    ],
+    "prohibitions": [
+      "no new prose under docs/specs — path corrections in existing lines only",
+      "no edits under docs/history (except regen-owned manifest) or docs/knowledge (scribing owns the 12-concept sweep at close)"
+    ]
+  },
+  "verify": "bash -c 'rg -q \"packages/bee/scripts/onboard_bee\\\\.mjs\" skills/bee-hive/SKILL.md' && bash -c 'rg -n \"bee-hive[/\\\\\\\\]scripts|(^|[^a-z/])scripts/onboard_bee\\\\.mjs\" README.md docs/02-architecture.md docs/07-contracts.md docs/specs/ skills/ --glob \"!**/CREATION-LOG.md\"; [ $? -eq 1 ]' && node scripts/release_manifest.mjs --check",
+  "behavior_change": false,
+  "deps": [
+    "packages-engine-move-1"
+  ],
+  "status": "open",
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

@@ -42,7 +42,7 @@ const MANIFEST_PATH = path.join(
 
 const RUNTIME_LIB_DIR = path.join(REPO_ROOT, ".bee", "bin", "lib");
 // D9/cnr2-12: the committed per-runtime plugin skill-route trees (render at
-// skills/bee-hive/scripts/onboard_bee.mjs::renderSkillBytes). Distinct roles
+// packages/bee/scripts/onboard_bee.mjs::renderSkillBytes). Distinct roles
 // from "plugin_skill" (the canonical skills/ tree, still hashed unchanged for
 // package integrity) so managedSkillNames() — which parses "skills/bee-*"
 // paths — never sees these ".claude-plugin/skills/..." / ".codex-plugin/

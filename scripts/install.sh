@@ -161,7 +161,7 @@ trap cleanup EXIT
 
 if [ -n "$SOURCE" ]; then
   BEE_SRC="$(cd "$SOURCE" && pwd -P)" || fail "--source path not found: $SOURCE"
-elif [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/../skills/bee-hive/scripts/onboard_bee.mjs" ]; then
+elif [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/../packages/bee/scripts/onboard_bee.mjs" ]; then
   BEE_SRC="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 else
   command -v git >/dev/null 2>&1 || fail "git is required to fetch bee (or pass --source <local-checkout>)."
@@ -172,9 +172,9 @@ else
   BEE_SRC="$CLEANUP_DIR/bee"
 fi
 
-ONBOARD="$BEE_SRC/skills/bee-hive/scripts/onboard_bee.mjs"
-[ -f "$ONBOARD" ] || fail "Not a bee checkout (missing skills/bee-hive/scripts/onboard_bee.mjs): $BEE_SRC"
-DIST_HELPER="$BEE_SRC/skills/bee-hive/scripts/plugin_distribution.mjs"
+ONBOARD="$BEE_SRC/packages/bee/scripts/onboard_bee.mjs"
+[ -f "$ONBOARD" ] || fail "Not a bee checkout (missing packages/bee/scripts/onboard_bee.mjs): $BEE_SRC"
+DIST_HELPER="$BEE_SRC/packages/bee/scripts/plugin_distribution.mjs"
 RELEASE_MANIFEST="$BEE_SRC/docs/history/codex-harness-hardening/release-manifest.json"
 [ -f "$DIST_HELPER" ] || fail "Not a bee release (missing plugin_distribution.mjs): $BEE_SRC"
 [ -f "$RELEASE_MANIFEST" ] || fail "Not a bee release (missing release manifest): $BEE_SRC"

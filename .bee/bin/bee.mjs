@@ -5615,7 +5615,7 @@ function doctorCapabilityBaselineMatch(root) {
       'warn',
       false,
       `live .codex/hooks.json sha256 (${live}) does not match the recorded baseline (${recorded}).`,
-      { fix: 'Re-render via self-onboard sync: node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply', blocking: true },
+      { fix: 'Re-render via self-onboard sync: node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply', blocking: true },
     );
   }
   return doctorRow('capability_baseline_match', 'ok', true, `live .codex/hooks.json byte-matches the recorded baseline (${live}).`, { blocking: true });
@@ -5637,7 +5637,7 @@ function doctorCodexTrustUnknownRows(liveVersion) {
   );
 }
 
-// Ported from skills/bee-hive/scripts/onboard_bee.mjs::repoOwnsHookCatalog
+// Ported from packages/bee/scripts/onboard_bee.mjs::repoOwnsHookCatalog
 // (a bare reference here would ReferenceError — bee.mjs and onboard_bee.mjs
 // are separate files, not mirrors of each other). Used only for evidence
 // labeling below: which install topology produced the resolution, never to
@@ -5785,7 +5785,7 @@ function doctorHookSourcesCodex(root) {
 }
 
 // D7/g22-4: the bee-render/2 sidecar schema this deep audit expects. bee.mjs
-// cannot import skills/bee-hive/scripts/onboard_bee.mjs (separate
+// cannot import packages/bee/scripts/onboard_bee.mjs (separate
 // distribution target — templates/bee.mjs and .bee/bin/bee.mjs ship without
 // the scripts/ tree; see the mirror-discipline note at the top of this
 // file), so this literal and the digest algorithm below are hand-mirrors of
@@ -5912,7 +5912,7 @@ function doctorSkillsInstalled(root, skillsDir) {
       'warn',
       { count: entries.length, provenance: sidecar, audit },
       `${entries.length} skill dir(s) under ${skillsDir}/ do not match the bee-render/2 sidecar inventory — ${parts.join('; ')}.`,
-      { blocking: true, fix: 'Re-render via self-onboard sync: node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply' },
+      { blocking: true, fix: 'Re-render via self-onboard sync: node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply' },
     );
   }
   return doctorRow(

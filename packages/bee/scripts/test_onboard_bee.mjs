@@ -1911,16 +1911,22 @@ function makeFakeSkillsRoot(skillsRoot, {
 } = {}) {
   const pluginRoot = path.dirname(skillsRoot);
   const hive = path.join(skillsRoot, hiveDirName);
-  // D3 (packages-restructure): the real launcher resolves its vendored payload
-  // PLUGIN_ROOT-relative (packages/bee), not self-relative to its own scripts
-  // dir. pluginRoot here already equals what the fake launcher itself computes
-  // as PLUGIN_ROOT (dirname(dirname(hive))), so the fixture's packages/bee
-  // copy must live OUTSIDE the fake skills tree, as pluginRoot's sibling of
-  // skillsRoot — never nested under hive/templates anymore.
+  // packages-engine-move D1/D3 (fixture re-author, not a path swap - validation
+  // B4/C4): the real launcher no longer lives inside the skills tree it syncs
+  // into projections. It moved to packages/bee/scripts, so the fake skills
+  // tree's bee-hive dir is instruction-only here too (SKILL.md, no scripts/
+  // of its own) - exactly mirroring the real split between the engine
+  // (packages/bee/scripts) and the skills tree (skills/bee-hive). pluginRoot
+  // here already equals what the fake launcher itself computes as PLUGIN_ROOT
+  // (dirname(dirname(ENGINE_DIR))), so the fixture's packages/bee copy — now
+  // including its own scripts/ — lives OUTSIDE the fake skills tree, as
+  // pluginRoot's sibling of skillsRoot.
   const packagesBee = path.join(pluginRoot, "packages", "bee");
-  fs.mkdirSync(path.join(hive, "scripts"), { recursive: true });
+  const engineScripts = path.join(packagesBee, "scripts");
+  fs.mkdirSync(hive, { recursive: true });
+  fs.mkdirSync(engineScripts, { recursive: true });
   fs.mkdirSync(path.join(packagesBee, "lib"), { recursive: true });
-  fs.writeFileSync(path.join(hive, "scripts", "onboard_bee.mjs"), REAL_ONBOARD_SRC, "utf8");
+  fs.writeFileSync(path.join(engineScripts, "onboard_bee.mjs"), REAL_ONBOARD_SRC, "utf8");
   // Vendor EVERY real packages/bee/lib/*.mjs into the fixture launcher, derived
   // via readdirSync — never a hand-list (crit-pattern 20260714: a curated subset
   // rots silently the moment onboard imports a new lib module, e.g. fsutil for
@@ -1951,7 +1957,7 @@ function makeFakeSkillsRoot(skillsRoot, {
   for (const [skill, files] of Object.entries(skills)) {
     writeSkillFiles(skillsRoot, skill, files);
   }
-  return { skillsRoot, launcher: path.join(hive, "scripts", "onboard_bee.mjs") };
+  return { skillsRoot, launcher: path.join(engineScripts, "onboard_bee.mjs") };
 }
 
 function makeInstalledSkills(fakeHome, { version = "0.1.19", stateText = null, skills = {} } = {}) {
@@ -4356,7 +4362,7 @@ const RETIRED_HELPER_NAMES = [
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "bee-legacy-refresh-"));
   const home = makeFakeHome();
   try {
-    const { launcher } = makeFakeSkillsRoot(path.join(base, "skills"), {
+    const { launcher, skillsRoot: fakeSkillsRoot } = makeFakeSkillsRoot(path.join(base, "skills"), {
       version: "1.0.0",
       skills: {
         "bee-alpha": { "SKILL.md": "# alpha CURRENT\n" },
@@ -4421,7 +4427,11 @@ const RETIRED_HELPER_NAMES = [
     // SKILLS_VERSION_STAMP and stays out of scope for it here). Content
     // parity against the fake source's OWN bee-hive dir is the honest
     // structural proof that the refresh actually landed current content.
-    const sourceHiveDir = path.dirname(path.dirname(launcher));
+    // packages-engine-move D1: the launcher no longer lives inside the fake
+    // skills tree (it moved to packagesBee/scripts, mirroring the real
+    // engine move) - the source hive dir must be read from the fixture's own
+    // skillsRoot, never derived from the launcher's own path anymore.
+    const sourceHiveDir = path.join(fakeSkillsRoot, "bee-hive");
     check(
       hashTree(path.join(installedRoot, "bee-hive")) === hashTree(sourceHiveDir),
       "legacy refresh: stale bee-hive marker refreshed to the current source version",

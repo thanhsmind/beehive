@@ -1,0 +1,56 @@
+[
+  {
+    "id": "packages-engine-move-1",
+    "feature": "packages-engine-move",
+    "lane": "standard",
+    "title": "Move onboarding/distribution engine skills/bee-hive/scripts -> packages/bee/scripts + full resolution sweep",
+    "files": ["packages/bee/scripts/", "packages/bee/lib/source-identity.mjs", "packages/bee/bee.mjs", "packages/bee/lib/cells.mjs", "scripts/install.sh", "scripts/install.ps1", "scripts/run_verify.mjs", "scripts/release_manifest.mjs", "scripts/render_plugin_skill_trees.mjs", "scripts/tests/", ".github/workflows/", ".claude-plugin/", ".codex-plugin/", "docs/history/codex-harness-hardening/release-manifest.json"],
+    "read_first": ["docs/history/packages-engine-move/plan.md", "skills/bee-hive/scripts/onboard_bee.mjs:60-95", "skills/bee-hive/scripts/onboard_bee.mjs:1500-1560", "packages/bee/lib/source-identity.mjs:40-110", "docs/knowledge/patterns/20260726-migration-tooling-is-a-consumer-of-the-migration.md"],
+    "action": "Per D1/D2/D3/D5: `git mv skills/bee-hive/scripts packages/bee/scripts` (5 files, history-preserving). Fix-forward: (1) engine internals — onboard_bee.mjs imports :65-67 -> '../lib/*.mjs'; consts :82-91: SCRIPTS_DIR unchanged arithmetic, PLUGIN_ROOT = 3xdirname STILL = root (packages/bee/scripts -> packages/bee -> packages -> root) so TEMPLATES_DIR/PLUGIN_HOOKS_DIR keep working — but HIVE_DIR now means packages/bee: rename/re-derive honestly (HIVE_DIR semantics die; introduce ENGINE_DIR/PACKAGE_DIR names) and update EVERY use site; identityOk anchor :1515,1537-1551 re-anchors on realpath(<root>/packages/bee/scripts) === realpath(SCRIPTS_DIR); readSourceReleaseIdentity :490-534 keeps blocked_no_source semantics for projections. (2) packages/bee/lib/source-identity.mjs classifySource :50-108 — input is engine location; re-derive sourceRoot/pluginRoot for the new geometry; a host projection (.claude/skills/bee-hive WITHOUT sibling packages) must STILL classify project_projection and refuse as source — extend tests to pin this. (3) render_plugin_skill_trees.mjs renderSkillBytes import -> packages/bee/scripts/onboard_bee.mjs (D5 — regen tool is a consumer). (4) run_verify.mjs DISCOVERY_ROOTS :94 'skills/bee-hive/scripts' -> 'packages/bee/scripts'. (5) install.sh :162-179 + install.ps1 :293,:321,:326-327 literal paths. (6) bee.mjs fix-hint strings :5618,:5640,:5788,:5915 + cells.mjs regen strings :192,:201 -> node packages/bee/scripts/onboard_bee.mjs. (7) release_manifest.mjs :45 comment; engine now enumerated by the package_payload walk (excludeTopDirNames still only hooks) — assert the manifest gains the 5 engine records and the plugin_skill role loses them. (8) scripts/tests + any CI workflow refs to the old path; test_onboard_bee runner paths ride the move. (9) ACCEPTANCE: rg 'skills/bee-hive/scripts' over scripts/ skills/ packages/ .github/ docs/specs/ README.md returns ZERO hits (docs/history + docs/knowledge narrative exempt; rendered mirror trees regenerate). (10) REGEN OBLIGATION in order: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply (NEW path — self-onboard also shrinks synced projections by the 5 engine files; verify removal happened), then node scripts/release_manifest.mjs --write, then node scripts/impact_registry.mjs --write.",
+    "must_haves": {
+      "truths": ["git log --follow packages/bee/scripts/onboard_bee.mjs shows history through the move", "PLUGIN_ROOT-derived payload paths resolve identically (self-onboard up_to_date after apply)", "a projection dir without sibling packages still classifies project_projection and yields blocked_no_source (test-pinned)", "release manifest: 5 engine files under package_payload, absent from plugin_skill", "rg 'skills/bee-hive/scripts' clean per acceptance scope", ".claude/skills + .agents/skills bee-hive copies no longer contain scripts/ after apply"],
+      "artifacts": ["packages/bee/scripts/{onboard_bee.mjs,plugin_distribution.mjs,test_onboard_bee.mjs,test_plugin_distribution.mjs,test_split_brain_regression.mjs}"],
+      "key_links": ["docs/history/packages-engine-move/plan.md", "docs/knowledge/patterns/20260726-migration-tooling-is-a-consumer-of-the-migration.md"],
+      "prohibitions": ["no hand-edit of scripts/impact-registry.json or .bee/onboarding.json", "no HAND-edits under .bee/bin — only onboard --apply writes there", "blocked_no_source semantics for projections must not weaken"]
+    },
+    "verify": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs && node scripts/release_manifest.mjs --check",
+    "behavior_change": true,
+    "deps": []
+  },
+  {
+    "id": "packages-engine-move-2",
+    "feature": "packages-engine-move",
+    "lane": "standard",
+    "title": "Docs + SKILL.md sweep to the new engine path; projection-shrink proof",
+    "files": ["skills/bee-hive/SKILL.md", "README.md", "AGENTS.md", "docs/02-architecture.md", "docs/07-contracts.md", "docs/specs/onboarding.md", "docs/specs/reading-map.md", ".claude-plugin/", ".codex-plugin/", "docs/history/codex-harness-hardening/release-manifest.json"],
+    "read_first": ["docs/history/packages-engine-move/plan.md", "skills/bee-hive/SKILL.md:30-50"],
+    "action": "Per D1: (1) skills/bee-hive/SKILL.md Onboarding step 2 — the instruction 'From this skill directory, run node scripts/onboard_bee.mjs' becomes an instruction that resolves the ENGINE at the source root: 'From the bee source root (the checkout or installed plugin package), run node packages/bee/scripts/onboard_bee.mjs --repo-root <repo-root> --json'. Keep the meaning: the engine lives with the package, the skill only instructs. (2) Sweep remaining current-truth refs to skills/bee-hive/scripts in README.md, AGENTS.md, docs/02-architecture.md, docs/07-contracts.md, docs/specs/onboarding.md + reading-map.md (path-pointer corrections only in specs — okf fence). (3) Projection-shrink proof: run node packages/bee/scripts/onboard_bee.mjs --repo-root . --json and quote up_to_date; assert .claude/skills/bee-hive and .agents/skills/bee-hive contain no scripts/ dir. (4) REGEN OBLIGATION in order: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+    "must_haves": {
+      "truths": ["SKILL.md names the packages/bee/scripts entrypoint", "zero current-truth refs to the old engine path in living docs", "onboard --json quotes up_to_date"],
+      "artifacts": [],
+      "key_links": ["docs/history/packages-engine-move/plan.md"],
+      "prohibitions": ["no new prose under docs/specs — path corrections in existing lines only", "no edits under docs/history (except regen-owned manifest) or docs/knowledge"]
+    },
+    "verify": "bash -c \"! rg -l 'skills/bee-hive/scripts' README.md AGENTS.md docs/02-architecture.md docs/07-contracts.md docs/specs/ skills/ --glob '!**/CREATION-LOG.md'\" && node scripts/release_manifest.mjs --check",
+    "behavior_change": false,
+    "deps": ["packages-engine-move-1"]
+  },
+  {
+    "id": "packages-engine-move-3",
+    "feature": "packages-engine-move",
+    "lane": "standard",
+    "title": "Dispatcher-level unknown-flag rejection for every bee.mjs verb (registry-driven) + red-first regression",
+    "files": ["packages/bee/bee.mjs", "packages/bee/lib/command-registry.mjs", "packages/bee/tests/test_bee_cli.mjs", "docs/history/codex-harness-hardening/release-manifest.json"],
+    "read_first": ["docs/history/packages-engine-move/plan.md", "packages/bee/bee.mjs:1230-1245", "packages/bee/lib/command-registry.mjs:1290-1315"],
+    "action": "Per D4 (friction: capture add --text exit 0, wrote nothing, 2 settlements nearly lost): (1) RED FIRST — add test to packages/bee/tests/test_bee_cli.mjs: `bee capture add --text \"x\"` must exit non-zero naming the unknown flag AND missing required --outcome; run it, record the red output BEFORE the fix. (2) In the bee.mjs dispatcher, after resolving the verb's registry entry, validate the parsed flags map against entry.parameters.properties: any flag not in properties -> throw 'unknown flag --X for <group verb> (known: ...)'; also enforce entry.parameters.required missing -> the existing requireFlag error (keep message shape). Central, one place — remove now-redundant per-verb strict loops (update :1236-1239, worker prune :3084) only if behavior stays identical, else leave them. Mind legitimate global flags (--json, --help, BEE_* env) — allow-list globals explicitly. (3) Run the FULL suite: any suite red because a caller passed an undeclared flag = a registry schema gap — fix the registry entry (declare the flag), never loosen the validator. (4) Mirror refresh: the vendored .bee/bin/bee.mjs must pick the change up via REGEN OBLIGATION: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+    "must_haves": {
+      "truths": ["red-first evidence recorded: capture add --text failed BEFORE the fix with the old silent exit 0 shown", "every verb rejects unknown flags with a message naming the flag and the verb", "--json/--help and other genuinely global flags still work everywhere", "full suite green after registry gaps (if any) declared"],
+      "artifacts": ["regression test in test_bee_cli.mjs covering unknown-flag rejection + required-flag enforcement for capture add"],
+      "key_links": ["docs/history/packages-engine-move/plan.md"],
+      "prohibitions": ["never loosen the validator to make a suite pass — declare the flag in the registry instead", "no hand-edit of .bee/bin mirrors"]
+    },
+    "verify": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs && node scripts/release_manifest.mjs --check",
+    "behavior_change": true,
+    "deps": ["packages-engine-move-2"]
+  }
+]

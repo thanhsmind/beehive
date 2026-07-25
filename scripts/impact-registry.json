@@ -1301,11 +1301,11 @@
     "packages/bee/hooks/catalog.mjs": {
       "direct": [
         "packages/bee/hooks/test_hook_contracts.mjs",
-        "skills/bee-hive/scripts/test_onboard_bee.mjs"
+        "packages/bee/scripts/test_onboard_bee.mjs"
       ],
       "all": [
         "packages/bee/hooks/test_hook_contracts.mjs",
-        "skills/bee-hive/scripts/test_onboard_bee.mjs"
+        "packages/bee/scripts/test_onboard_bee.mjs"
       ]
     },
     "packages/bee/hooks/test_bypass_stop_net.mjs": {
@@ -1455,6 +1455,7 @@
         "packages/bee/tests/test_write_policy.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bundle_mode.mjs",
@@ -1492,8 +1493,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/command-registry.mjs": {
@@ -1514,11 +1514,11 @@
         "packages/bee/tests/test_misc.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_misc.mjs",
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/compaction.mjs": {
@@ -1551,6 +1551,7 @@
         "packages/bee/tests/test_misc.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bundle_mode.mjs",
@@ -1589,8 +1590,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/dispatch-guard.mjs": {
@@ -1680,6 +1680,7 @@
         "packages/bee/tests/test_write_policy.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bee_write_guard_hook.mjs",
@@ -1725,8 +1726,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_worktree_holds.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_worktree_holds.mjs"
       ]
     },
     "packages/bee/lib/guards.mjs": {
@@ -1892,6 +1892,7 @@
         "scripts/tests/test_compaction_module.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bee_write_guard_hook.mjs",
@@ -1931,8 +1932,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/lock.mjs": {
@@ -1946,6 +1946,7 @@
         "packages/bee/tests/test_workflow_store.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bee_write_guard_hook.mjs",
@@ -1988,8 +1989,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/perf.mjs": {
@@ -2036,6 +2036,7 @@
         "packages/bee/tests/test_write_policy.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bundle_mode.mjs",
@@ -2072,8 +2073,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/reviews.mjs": {
@@ -2136,6 +2136,7 @@
         "scripts/tests/test_skill_render.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_contention_status.mjs",
         "packages/bee/tests/test_knowledge.mjs",
@@ -2145,8 +2146,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/state-projection.mjs": {
@@ -2188,6 +2188,7 @@
         "scripts/tests/test_compact_capsule.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bundle_mode.mjs",
@@ -2222,8 +2223,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/validate-args.mjs": {
@@ -2248,6 +2248,7 @@
         "packages/bee/tests/test_workflow_store.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bundle_mode.mjs",
@@ -2283,8 +2284,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/workspace-store.mjs": {
@@ -2296,6 +2296,7 @@
         "packages/bee/tests/test_write_policy.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bundle_mode.mjs",
@@ -2331,8 +2332,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/worktree-holds.mjs": {
@@ -2342,6 +2342,7 @@
         "packages/bee/tests/test_misc.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bundle_mode.mjs",
@@ -2377,8 +2378,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
       ]
     },
     "packages/bee/lib/worktree-store.mjs": {
@@ -2388,6 +2388,7 @@
         "packages/bee/tests/test_worktree_store.mjs"
       ],
       "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bundle_mode.mjs",
@@ -2423,8 +2424,52 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
+        "scripts/tests/test_skill_render.mjs"
+      ]
+    },
+    "packages/bee/scripts/onboard_bee.mjs": {
+      "direct": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
+        "scripts/tests/test_hook_vendor_closure.mjs",
+        "scripts/tests/test_skill_render.mjs"
+      ],
+      "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
+        "scripts/tests/test_hook_vendor_closure.mjs",
+        "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_skill_render.mjs"
+      ]
+    },
+    "packages/bee/scripts/plugin_distribution.mjs": {
+      "direct": [
+        "packages/bee/scripts/test_plugin_distribution.mjs"
+      ],
+      "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs"
+      ]
+    },
+    "packages/bee/scripts/test_onboard_bee.mjs": {
+      "direct": [
+        "packages/bee/scripts/test_onboard_bee.mjs"
+      ],
+      "all": [
+        "packages/bee/scripts/test_onboard_bee.mjs"
+      ]
+    },
+    "packages/bee/scripts/test_plugin_distribution.mjs": {
+      "direct": [
+        "packages/bee/scripts/test_plugin_distribution.mjs"
+      ],
+      "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs"
+      ]
+    },
+    "packages/bee/scripts/test_split_brain_regression.mjs": {
+      "direct": [
+        "packages/bee/scripts/test_split_brain_regression.mjs"
+      ],
+      "all": [
+        "packages/bee/scripts/test_split_brain_regression.mjs"
       ]
     },
     "packages/bee/tests/race_claims_child.mjs": {
@@ -2808,6 +2853,8 @@
         "packages/bee/hooks/test_hook_contracts.mjs",
         "packages/bee/hooks/test_model_guard.mjs",
         "packages/bee/hooks/test_write_guard.mjs",
+        "packages/bee/scripts/test_onboard_bee.mjs",
+        "packages/bee/scripts/test_split_brain_regression.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_cells.mjs",
@@ -2830,15 +2877,15 @@
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_heartbeat_touch.mjs",
-        "scripts/tests/test_hook_vendor_closure.mjs",
-        "skills/bee-hive/scripts/test_onboard_bee.mjs",
-        "skills/bee-hive/scripts/test_split_brain_regression.mjs"
+        "scripts/tests/test_hook_vendor_closure.mjs"
       ],
       "all": [
         "packages/bee/hooks/test_bypass_stop_net.mjs",
         "packages/bee/hooks/test_hook_contracts.mjs",
         "packages/bee/hooks/test_model_guard.mjs",
         "packages/bee/hooks/test_write_guard.mjs",
+        "packages/bee/scripts/test_onboard_bee.mjs",
+        "packages/bee/scripts/test_split_brain_regression.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_cells.mjs",
@@ -2861,9 +2908,7 @@
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_heartbeat_touch.mjs",
-        "scripts/tests/test_hook_vendor_closure.mjs",
-        "skills/bee-hive/scripts/test_onboard_bee.mjs",
-        "skills/bee-hive/scripts/test_split_brain_regression.mjs"
+        "scripts/tests/test_hook_vendor_closure.mjs"
       ]
     },
     "scripts/lib/test-fixture.mjs": {
@@ -3345,51 +3390,6 @@
       ],
       "all": [
         "scripts/tests/test_worktree_store.mjs"
-      ]
-    },
-    "skills/bee-hive/scripts/onboard_bee.mjs": {
-      "direct": [
-        "scripts/tests/test_hook_vendor_closure.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
-      ],
-      "all": [
-        "scripts/tests/test_hook_vendor_closure.mjs",
-        "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs",
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
-      ]
-    },
-    "skills/bee-hive/scripts/plugin_distribution.mjs": {
-      "direct": [
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
-      ],
-      "all": [
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
-      ]
-    },
-    "skills/bee-hive/scripts/test_onboard_bee.mjs": {
-      "direct": [
-        "skills/bee-hive/scripts/test_onboard_bee.mjs"
-      ],
-      "all": [
-        "skills/bee-hive/scripts/test_onboard_bee.mjs"
-      ]
-    },
-    "skills/bee-hive/scripts/test_plugin_distribution.mjs": {
-      "direct": [
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
-      ],
-      "all": [
-        "skills/bee-hive/scripts/test_plugin_distribution.mjs"
-      ]
-    },
-    "skills/bee-hive/scripts/test_split_brain_regression.mjs": {
-      "direct": [
-        "skills/bee-hive/scripts/test_split_brain_regression.mjs"
-      ],
-      "all": [
-        "skills/bee-hive/scripts/test_split_brain_regression.mjs"
       ]
     },
     "skills/bee-writing-skills/scripts/render_openai_metadata.mjs": {
