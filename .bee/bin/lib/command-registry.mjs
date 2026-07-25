@@ -1939,7 +1939,14 @@ export const COMMAND_REGISTRY = [
   // `.claude/skills/bee-herding/scripts/dispatch-interlock.mjs` stays the
   // sole reader and is never modified or called from here (D4). No runtime
   // guard is added (D5, explicit user decision) — no TTY/interactivity
-  // check, and this group is NOT hidden from `bee.mjs --help --json`. ──────
+  // check, and this group is NOT hidden from `bee.mjs --help --json`.
+  // TRACKING (multisession-native-17): the `git rev-parse --git-common-dir`
+  // mention in herding.enable's description below is documentation only —
+  // the actual resolution lives in lib/herding.mjs's resolveHerdingMainRoot,
+  // which this file never duplicates (no fs/child_process code in this
+  // module at all). See herding.mjs's own tracking comment for why that
+  // resolver is deliberately left independent of state.mjs's resolveContext
+  // (the canonical resolver everywhere else). ──────────────────────────────
   {
     name: 'herding.enable',
     invoke: 'bee herding enable',

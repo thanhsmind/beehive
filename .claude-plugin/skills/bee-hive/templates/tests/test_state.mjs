@@ -18,6 +18,7 @@ import {
 import {
   findRepoRoot,
   resolveRoots,
+  resolveContext,
   WorktreeLinkInvalidError,
   readState,
   readStateStrict,
@@ -236,6 +237,79 @@ await check('linked-shaped invalid metadata fails closed with typed error', asyn
   let rootError;
   try { findRepoRoot(work); } catch (err) { rootError = err; }
   assert(rootError && rootError.code === 'WORKTREE_LINK_INVALID', 'findRepoRoot must fail closed');
+});
+
+// ─── resolveContext (multisession-native-17, CONTEXT.md D2) ────────────────
+// Two-topology proof, same manual worktree-fixture pattern as the resolveRoots
+// tests just above (main .git/worktrees/<id> + reverse gitdir pointer) —
+// lighter-weight than test_worktree_cli.mjs's real `git worktree add` spawn,
+// consistent with how this file already proves resolveRoots itself.
+
+await check('resolveContext: main checkout — control/local/git roots, workspaceId main, worktreeId null', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-ctx-main-'));
+  fs.mkdirSync(path.join(dir, '.git'));
+  const ctx = resolveContext(path.join(dir, 'child'));
+  assert(ctx.workspaceRoot === dir, `workspaceRoot should be the checkout root, got ${ctx.workspaceRoot}`);
+  assert(ctx.gitCommonDir === path.join(dir, '.git'), `gitCommonDir should be the checkout's own .git, got ${ctx.gitCommonDir}`);
+  assert(ctx.controlRoot === path.join(dir, '.bee', 'runtime', 'control'), `unexpected controlRoot ${ctx.controlRoot}`);
+  assert(ctx.localRuntimeRoot === path.join(dir, '.bee', 'runtime', 'local'), `unexpected localRuntimeRoot ${ctx.localRuntimeRoot}`);
+  assert(ctx.projectRoot === dir, `projectRoot should default to workspaceRoot, got ${ctx.projectRoot}`);
+  assert(ctx.workspaceId === 'main', `workspaceId should be 'main', got ${ctx.workspaceId}`);
+  assert(ctx.worktreeId === null, `worktreeId should be null for the main checkout, got ${ctx.worktreeId}`);
+});
+
+await check('resolveContext: unregistered linked worktree — control root shared at MAIN, local root at the worktree, workspaceId still main', async () => {
+  const main = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-ctx-main2-'));
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-ctx-work-'));
+  const id = 'ctx-fixture-unregistered';
+  const gitdir = path.join(main, '.git', 'worktrees', id);
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(work, '.git'), `gitdir: ${gitdir}\n`);
+  fs.writeFileSync(path.join(gitdir, 'gitdir'), path.join(work, '.git') + '\n');
+
+  const ctx = resolveContext(work);
+  assert(ctx.workspaceRoot === work, `workspaceRoot should be the worktree's own checkout, got ${ctx.workspaceRoot}`);
+  assert(ctx.gitCommonDir === path.join(main, '.git'), `gitCommonDir should be the MAIN checkout's .git, got ${ctx.gitCommonDir}`);
+  assert(ctx.controlRoot === path.join(main, '.bee', 'runtime', 'control'), `controlRoot should be shared at MAIN (D2), got ${ctx.controlRoot}`);
+  assert(ctx.localRuntimeRoot === path.join(work, '.bee', 'runtime', 'local'), `localRuntimeRoot should stay per-checkout (worktree), got ${ctx.localRuntimeRoot}`);
+  assert(ctx.worktreeId === id, `worktreeId should report the git-verified id, got ${ctx.worktreeId}`);
+  assert(ctx.workspaceId === 'main', `unregistered worktree's workspaceId should fall back to 'main' (P40 default), got ${ctx.workspaceId}`);
+});
+
+await check('resolveContext: REGISTERED (granted) linked worktree — workspaceId becomes its own id, controlRoot stays shared at MAIN', async () => {
+  const main = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-ctx-main3-'));
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-ctx-work2-'));
+  const id = 'ctx-fixture-registered';
+  const gitdir = path.join(main, '.git', 'worktrees', id);
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(work, '.git'), `gitdir: ${gitdir}\n`);
+  fs.writeFileSync(path.join(gitdir, 'gitdir'), path.join(work, '.git') + '\n');
+  // Grant the worktree its own workspace via the MAIN store's registry —
+  // the same registry decideWorktreeStore/readGrants read (worktree-store.mjs).
+  fs.mkdirSync(path.join(main, '.bee', 'runtime'), { recursive: true });
+  fs.writeFileSync(path.join(main, '.bee', 'runtime', 'worktree-grants.json'), JSON.stringify({ [id]: true }));
+
+  const ctx = resolveContext(work);
+  assert(ctx.workspaceId === id, `registered worktree's workspaceId should be its own id, got ${ctx.workspaceId}`);
+  assert(ctx.worktreeId === id, `worktreeId should still be the git-verified id, got ${ctx.worktreeId}`);
+  assert(ctx.controlRoot === path.join(main, '.bee', 'runtime', 'control'), `controlRoot must stay shared at MAIN even when granted (D2), got ${ctx.controlRoot}`);
+  assert(ctx.localRuntimeRoot === path.join(work, '.bee', 'runtime', 'local'), `localRuntimeRoot must stay the worktree's own checkout, got ${ctx.localRuntimeRoot}`);
+
+  // workspaceId is stable across repeated calls (must_have).
+  const again = resolveContext(work);
+  assert(again.workspaceId === ctx.workspaceId, 'workspaceId must be stable across repeated resolveContext calls');
+});
+
+await check('resolveRoots compat wrapper stays byte-identical after the resolveContext refactor', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-ctx-wrapper-'));
+  fs.mkdirSync(path.join(dir, '.git'));
+  const roots = resolveRoots(path.join(dir, 'child'));
+  assert(Object.keys(roots).sort().join(',') === 'storeRoot,workRoot,worktreeResolution', `resolveRoots must keep its exact original key set, got ${Object.keys(roots).sort().join(',')}`);
+  assert(roots.storeRoot === dir && roots.workRoot === dir && roots.worktreeResolution === 'ordinary', 'resolveRoots wrapper must still resolve an ordinary checkout unchanged');
+
+  // Cross-check resolveContext agrees on the same underlying checkout.
+  const ctx = resolveContext(path.join(dir, 'child'));
+  assert(ctx.workspaceRoot === roots.workRoot, 'resolveContext.workspaceRoot must agree with resolveRoots.workRoot for the same cwd');
 });
 
 await check('readState returns defaults when state.json missing', async () => {

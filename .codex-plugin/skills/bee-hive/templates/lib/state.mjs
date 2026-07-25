@@ -10,7 +10,7 @@ import { readJson, writeJsonAtomic } from './fsutil.mjs';
 // cycle-free (msh-5).
 import { readSession, readClaim, isClaimActive, claimsDir, adoptClaim, activeWorkers } from './claims.mjs';
 import { pathsOverlap, listReservations } from './reservations.mjs';
-import { readGrants } from './worktree-store.mjs';
+import { readGrants, decideWorktreeStore } from './worktree-store.mjs';
 // D6 — startFeature's single read-check-write body runs inside this lock
 // (CLI verbs WAIT normally: no maxAttempts override here, unlike the hook-
 // driven touch path in claims.mjs/reservations.mjs).
@@ -744,8 +744,14 @@ function locateGitRoot(start) {
   }
 }
 
-/** Resolve the physical checkout and the single coordination-store root. */
-export function resolveRoots(startDir) {
+/**
+ * Resolve the physical checkout and the single coordination-store root.
+ * `resolveRoots` is a compat wrapper (byte-identical shape/throw semantics)
+ * around `resolveRootsCore` below — `resolveContext` (multisession-native D2)
+ * is built from the SAME core, so there is exactly one git-worktree walk-up
+ * classification in this codebase, not two.
+ */
+function resolveRootsCore(startDir) {
   // A fixture/project may live below an unrelated ancestor that happens to
   // contain a .git directory (for example /tmp/.git). Prefer the nearest
   // onboarding marker when the current directory itself is not a Git root;
@@ -802,6 +808,103 @@ export function resolveRoots(startDir) {
   // anything the worktree claims about itself.
   const storeRoot = readGrants(path.join(mainRoot, '.bee'))[id] === true ? workRoot : mainRoot;
   return { storeRoot, workRoot, worktreeResolution: 'linked-valid', id, mainRoot, worktreeRoot: workRoot };
+}
+
+/** Compat wrapper: byte-identical to the original resolveRoots — every
+ * existing caller keeps working unchanged. Delegates to the same core
+ * resolveContext is built from (see resolveContext below); this function
+ * carries no resolution logic of its own anymore. */
+export function resolveRoots(startDir) {
+  return resolveRootsCore(startDir);
+}
+
+/**
+ * resolveContext(cwd) — the control-plane/data-plane split (multisession-
+ * native D2): `{ projectRoot, controlRoot, workspaceRoot, localRuntimeRoot,
+ * gitCommonDir, workspaceId, worktreeId }`. Built on the SAME classification
+ * resolveRoots has always computed (resolveRootsCore above) — one canonical
+ * git-worktree resolution, never a second copy of the walk-up-and-validate
+ * logic (advisor digest slice4, binding condition 5: resolveContext is THE
+ * single git-common-dir resolver; see herding.mjs's resolveHerdingMainRoot
+ * for the one call site left independent, and why — comment there).
+ *
+ * - workspaceRoot: the physical checkout (today's resolveRoots `workRoot`).
+ * - gitCommonDir: the real `.git` COMMON directory — the checkout's own
+ *   `.git` dir when ordinary, the MAIN checkout's `.git` dir when a linked
+ *   worktree; null when no git root is reachable at all (the same
+ *   onboarding-marker-only fallback resolveRoots already tolerates).
+ * - controlRoot: `<mainRoot>/.bee/runtime/control` — mainRoot is the MAIN
+ *   checkout regardless of worktree registration (D2: control plane is
+ *   shared across ALL worktrees, not opt-in). This directory need not exist
+ *   yet — no store paths move in this cell; msn-18 populates/wires it.
+ * - localRuntimeRoot: `<workspaceRoot>/.bee/runtime/local` — always the
+ *   CURRENT physical checkout, never the main checkout (per-checkout caches
+ *   that never need sharing).
+ * - projectRoot: today's product-root concept (resolveProductRoot below),
+ *   kept distinct from workspaceRoot for the repo-divorce topology (#14).
+ * - workspaceId / worktreeId: the MAIN checkout is always `('main', null)`.
+ *   A linked worktree always reports its git-verified id as `worktreeId`
+ *   (it IS a worktree, registered or not). `workspaceId` only becomes that
+ *   same id once the worktree has been REGISTERED as its own workspace
+ *   (today's `bee worktree register`/`new` — decideWorktreeStore's
+ *   'linked-valid-granted'); an unregistered linked worktree still reports
+ *   workspaceId 'main', matching the existing P40 store-fallback default
+ *   (worktree-store.mjs decideWorktreeStore/readGrants — the "existing
+ *   worktree registry" this field derives from).
+ *
+ * Returns every field null when nothing is resolvable at all (no git root,
+ * no onboarding marker anywhere up the tree) — the same "give up" case
+ * resolveRoots has always had (storeRoot/workRoot both null).
+ */
+export function resolveContext(cwd) {
+  const core = resolveRootsCore(cwd);
+  if (!core.workRoot) {
+    return {
+      projectRoot: null,
+      controlRoot: null,
+      workspaceRoot: null,
+      localRuntimeRoot: null,
+      gitCommonDir: null,
+      workspaceId: null,
+      worktreeId: null,
+    };
+  }
+
+  const workspaceRoot = core.workRoot;
+  const isLinked = core.worktreeResolution === 'linked-valid';
+  const mainRoot = isLinked ? core.mainRoot : workspaceRoot;
+
+  const ordinaryGitDir = path.join(workspaceRoot, '.git');
+  const gitCommonDir = isLinked
+    ? path.join(mainRoot, '.git')
+    : fs.existsSync(ordinaryGitDir) && fs.statSync(ordinaryGitDir).isDirectory()
+      ? ordinaryGitDir
+      : null;
+
+  // Reuse the NEW decision layer (worktree-store.mjs) instead of re-deriving
+  // "is this worktree registered" by hand — this is decideWorktreeStore's
+  // first production call site (previously wired nowhere, per that module's
+  // own header comment).
+  const classification = {
+    kind: core.worktreeResolution,
+    id: core.id,
+    mainRoot,
+    worktreeRoot: isLinked ? core.worktreeRoot : workspaceRoot,
+  };
+  const grants = readGrants(path.join(mainRoot, '.bee'));
+  const decision = decideWorktreeStore(classification, { grants });
+  const workspaceId = decision.ok && decision.kind === 'linked-valid-granted' ? decision.id : 'main';
+  const worktreeId = isLinked ? core.id : null;
+
+  return {
+    projectRoot: resolveProductRoot(workspaceRoot),
+    controlRoot: path.join(mainRoot, '.bee', 'runtime', 'control'),
+    workspaceRoot,
+    localRuntimeRoot: path.join(workspaceRoot, '.bee', 'runtime', 'local'),
+    gitCommonDir,
+    workspaceId,
+    worktreeId,
+  };
 }
 
 export function findRepoRoot(startDir) {

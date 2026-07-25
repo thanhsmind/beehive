@@ -1000,6 +1000,9 @@ const EXPECTED_STATE_EXPORTS = [
   'validateAgentFilesDrift',
   'findRepoRoot',
   'resolveRoots',
+  // multisession-native-17 (D2): resolveContext(cwd) — the control-plane/
+  // data-plane split resolveRoots now compat-wraps.
+  'resolveContext',
   'WorktreeLinkInvalidError',
   'defaultState',
   'statePath',

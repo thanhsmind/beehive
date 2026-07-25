@@ -18,6 +18,27 @@ import { execFileSync } from 'node:child_process';
 
 export const ENABLE_BASENAME = 'bee-herding.enable';
 
+// TRACKING (multisession-native-17, advisor digest slice4 binding condition
+// 5): state.mjs's resolveContext(cwd) is the canonical single git-common-dir
+// resolver everywhere else in this codebase. resolveHerdingMainRoot below is
+// deliberately left as its own independent `git rev-parse --git-common-dir`
+// call rather than reconciled onto resolveContext, because its entire reason
+// to exist (see the module header above) is byte-for-byte agreement with
+// dispatch-interlock.mjs — a standalone, zero-bee-dependency script this
+// cell does not touch and that itself shells out to git directly rather than
+// importing state.mjs (state.mjs's import graph pulls in claims.mjs,
+// reservations.mjs, worktree-store.mjs, lock.mjs, decisions.mjs, and
+// workflow-store.mjs — real hook/process-startup cost for a script invoked
+// every dispatch-loop iteration, and out of scope to change here). Making
+// THIS module delegate to resolveContext while dispatch-interlock.mjs keeps
+// its own inline copy would trade today's proven agreement for a NEW drift
+// risk (resolveContext's walk-up-and-validate algorithm is not proven
+// byte-identical to a raw `git rev-parse --git-common-dir` call in every
+// edge case — e.g. the onboarding-marker-without-.git fallback resolveRoots
+// already tolerates has no git-CLI equivalent at all). Reconciling this
+// properly means changing dispatch-interlock.mjs too, which is out of this
+// cell's scope (D4 forbids calling into it from bee automation code in
+// either direction). Revisit together, in one cell, if that changes.
 export function resolveHerdingMainRoot(explicit) {
   if (explicit) return explicit;
   try {
