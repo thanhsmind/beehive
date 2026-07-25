@@ -87,7 +87,7 @@ import { rebuildLaneProjection, rebuildAllProjections } from './lib/state-projec
 // stays out of this cell's file scope — these are already-exported read/
 // mutate primitives from fsh-3, composed here for presentation (session list)
 // and forwarded as-is (bind/unbind), never a second implementation.
-import { sessionsDir, readSession, bindSessionLane, unbindSessionLane, resolveSessionId } from './lib/claims.mjs';
+import { sessionsDir, readSession, bindSessionLane, unbindSessionLane, resolveSessionId, activeWorkers } from './lib/claims.mjs';
 import {
   listCells,
   readyCells,
@@ -822,6 +822,13 @@ function buildStatus(root, { lanesFull = false } = {}) {
       : null,
     commands,
     active_reservations: active,
+    // D6 (multisession-native-8): derived from live-heartbeat sessions x
+    // claims (claims.mjs activeWorkers) — never state.json's hand-mutated
+    // `workers` array (that field is now display-only, written by the
+    // `state worker *` CLI verbs for backward compat but read by nothing
+    // here). Same always-present-array convention as active_reservations
+    // above (an empty array reports "nobody active", not an omitted key).
+    workers: activeWorkers(root),
     critical_patterns_present: fs.existsSync(
       path.join(root, 'docs', 'history', 'learnings', 'critical-patterns.md'),
     ),
@@ -928,6 +935,9 @@ function renderStatusText(status) {
         .join(' | ') || 'none recorded'
     }`,
     `Active reservations: ${status.active_reservations.length}`,
+    // D6 (multisession-native-8): derived-view count, same always-present
+    // convention as the reservations line above.
+    `Active workers: ${status.workers.length}`,
     // multisession-native-4: additive line, omitted whenever buildStatus
     // omitted the `contention` key (no log, or no busy events in the tail
     // window) — same "absent = silent" convention as the review/scribing
@@ -2459,6 +2469,14 @@ async function handleStateGate(root, flags) {
 
 // D6 — async: shared by worker add/update/remove/clear, so all four get the
 // lock for free. The read-check-write body runs inside withStoreLock('state').
+//
+// multisession-native-8: state.json's `workers` array is now DISPLAY-ONLY —
+// these four verbs stay CLI-compatible (same flags, same output shape,
+// same read-check-write-through-state.json mechanics) purely so existing
+// scripts/callers keep working, but nothing in bee reads this array as
+// truth anymore. Gates/preconditions read claims.mjs's activeWorkers
+// derived view instead (state.mjs startFeature, bee status's `workers`
+// field) — see claims.mjs activeWorkers's own doc comment.
 async function stateWorkerMutate(root, flags, mutate, text) {
   rejectDryRun(flags);
   return withStoreLock(root, 'state', () => {
@@ -2533,6 +2551,18 @@ function handleStateWorkerClear(root, flags) {
   });
 }
 
+// multisession-native-8 (D6): this is a DELIBERATE exception to "no reader
+// treats state.workers as truth anymore" — justified, not an oversight.
+// worker prune deletes stale files under .bee/workers/ (transient dispatch
+// output, a *different* store from the state.json array it shares a name
+// with); state.workers here is only an extra, opt-in "protect this cell id's
+// transient file" hint an operator can hand-maintain — never a liveness
+// check, never a gate/precondition on what work may proceed. Rerouting it to
+// activeWorkers' derived (session+claim) view would silently narrow what
+// survives a prune to "currently claimed cells", which is a real behavior
+// change this cell's contract does not ask for and existing coverage
+// (test_cli_state.mjs's worker-prune suite) pins against a hand-written
+// array with no live session/claim in the fixture at all.
 function readPruneKeepSet(root) {
   // Strict read: a corrupt state.json fails loud here, before any deletion.
   // Prune never writes state.json — it is a read-only verb on state.

@@ -315,6 +315,69 @@ export function isConcurrentMode(root, { excludeSessionId = null, now = Date.now
   );
 }
 
+/**
+ * activeWorkers(root, {excludeSessionId}) — D6 derived view (CONTEXT.md:
+ * "Workers derived, never stored"; multisession-native-8). "Active workers"
+ * are live-heartbeat sessions (same heartbeatStale staleness window every
+ * other liveness check here uses) joined with (a) their lane binding —
+ * session.lane, the ONLY session->feature binding that exists today; the
+ * workflow_id binding CONTEXT.md D6 also names is msn-10's job, not yet on
+ * any session record — and (b) their current cell claim, read the same way
+ * state.mjs's listClaimHoldsForStart enumerates .bee/claims/*.json, but
+ * keyed by session rather than by cell.
+ *
+ * `excludeSessionId` reuses isConcurrentMode's exact pattern (hardening-4a):
+ * a caller holding a real session id excludes its OWN record from the view
+ * — its own liveness is never "another" active worker. This is what makes
+ * C3 possible: startFeature's precondition passes its own sessionId here so
+ * a solo starter is never blocked by its own heartbeat.
+ *
+ * Returns one row per live, non-excluded session — the exact replacement
+ * shape for the old hand-mutated state.workers array, but sourced from
+ * ground truth instead of whatever a worker verb last wrote:
+ *   { session_id, lane, cell, last_heartbeat }
+ * `lane` is null while unbound; `cell` is null when the session holds no
+ * currently-active claim (a live session between claims still counts as an
+ * active worker, same as the old array could carry a worker with no cell in
+ * flight). Never throws — a missing .bee/sessions or .bee/claims directory
+ * reads as zero rows, same fail-open posture as listSessionRecords.
+ */
+export function activeWorkers(root, { excludeSessionId = null, now = Date.now(), staleSeconds = DEFAULT_HEARTBEAT_STALE_SECONDS } = {}) {
+  const exclude = typeof excludeSessionId === 'string' ? excludeSessionId.trim() : '';
+  const liveSessions = listSessionRecords(root).filter(
+    (session) => session.id !== exclude && !heartbeatStale(session, now, staleSeconds),
+  );
+  if (liveSessions.length === 0) return [];
+
+  let entries;
+  try {
+    entries = fs.readdirSync(claimsDir(root));
+  } catch {
+    entries = [];
+  }
+  const claimCellBySession = new Map();
+  for (const entry of entries) {
+    if (!entry.endsWith('.json')) continue;
+    let claim;
+    try {
+      claim = readClaim(root, entry.slice(0, -'.json'.length));
+    } catch {
+      continue; // a filename that is not a plain cell id is no claim of ours
+    }
+    if (!claim || !claim.session || !isClaimActive(claim, now)) continue;
+    // One row per worker (same shape as the old array's one-cell-per-nickname
+    // convention): first active claim seen for a session wins.
+    if (!claimCellBySession.has(claim.session)) claimCellBySession.set(claim.session, claim.cell);
+  }
+
+  return liveSessions.map((session) => ({
+    session_id: session.id,
+    lane: typeof session.lane === 'string' && session.lane ? session.lane : null,
+    cell: claimCellBySession.get(session.id) ?? null,
+    last_heartbeat: session.last_heartbeat,
+  }));
+}
+
 // ─── session→lane binding (fresh-session-handoff fsh-3) ─────────────────────
 // The lane field is OPTIONAL and OMITTED while unbound: createSession never
 // writes it, so pre-existing session-record consumers see exactly the shape

@@ -1073,8 +1073,13 @@ await check('bee.mjs state start-feature succeeds despite .bee/HANDOFF.json nami
   }
 });
 
-await check('bee.mjs state start-feature refuses while a registered worker remains, zero mutations', async () => {
-  const dir = makeStateRepo('bee-state-start-worker-');
+// multisession-native-8 (D6): the workers precondition no longer trusts
+// state.json's hand-mutated `workers` array — it now reads claims.mjs's
+// activeWorkers derived view (live-heartbeat sessions x claims). A
+// hand-written entry with nobody actually heartbeating is display data
+// only and must never block anymore.
+await check('bee.mjs state start-feature: a hand-written state.workers entry alone no longer blocks (D6 demotion, msn-8) — the array is display-only', async () => {
+  const dir = makeStateRepo('bee-state-start-worker-ghost-');
   try {
     const statePath = path.join(dir, '.bee', 'state.json');
     writeJsonAtomic(statePath, {
@@ -1082,12 +1087,42 @@ await check('bee.mjs state start-feature refuses while a registered worker remai
       phase: 'idle',
       workers: [{ nickname: 'bob', cell: 'x-1', tier: 'generation', status: 'in-flight' }],
     });
-    const before = fs.readFileSync(statePath, 'utf8');
     const result = await runBeeState(dir, ['start-feature', '--feature', 'new-feat']);
-    assert(result.status !== 0, 'registered worker refuses');
-    assert(/worker/i.test(result.stderr), `error names the worker, got ${result.stderr}`);
+    assert(result.status === 0, `a hand-written workers entry with no live session must never block, got ${result.status}: ${result.stderr}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('bee.mjs state start-feature refuses while ANOTHER session has a live heartbeat + an active claim, zero mutations', async () => {
+  const dir = makeStateRepo('bee-state-start-worker-live-');
+  try {
+    const statePath = path.join(dir, '.bee', 'state.json');
+    writeJsonAtomic(statePath, { schema_version: '1.0', phase: 'idle', workers: [] });
+    createSession(dir, { id: 'other-live' });
+    claimCellFile(dir, 'other-live', 'x-1');
+    const before = fs.readFileSync(statePath, 'utf8');
+    const result = await runBeeState(dir, ['start-feature', '--feature', 'new-feat', '--session-id', 'caller']);
+    assert(result.status !== 0, 'a live other session with an active claim refuses');
+    assert(/worker/i.test(result.stderr), `error names the active worker, got ${result.stderr}`);
+    assert(/other-live/.test(result.stderr), `error names the live session, got ${result.stderr}`);
     const after = fs.readFileSync(statePath, 'utf8');
     assert(before === after, 'file untouched after a worker refusal');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// C3 (advisor consult slice 2, binding — RED-first against pre-msn-8
+// startFeature: without excludeSessionId wired through, a solo session's own
+// live heartbeat would be counted as "an active worker" by the naive derived
+// view and incorrectly refuse its own start).
+await check('bee.mjs state start-feature: the calling session\'s own live heartbeat never blocks its own start (C3 — excludeSessionId pattern, msn-8)', async () => {
+  const dir = makeStateRepo('bee-state-start-worker-solo-');
+  try {
+    createSession(dir, { id: 'solo' });
+    const result = await runBeeState(dir, ['start-feature', '--feature', 'solo-feat', '--session-id', 'solo']);
+    assert(result.status === 0, `a solo session must never be blocked by its own heartbeat, got ${result.status}: ${result.stderr}`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

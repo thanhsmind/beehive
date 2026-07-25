@@ -561,7 +561,13 @@ await check('F5: the DEFAULT (non-lane) start blocks only when .bee/HANDOFF.json
   }
 });
 
-await check('lanes: a registered worker blocks a lane start only when its cell derives to this lane\'s feature (worker→cell→feature, no new fields)', async () => {
+// multisession-native-8 (D6): "worker" is now a derived view (live-heartbeat
+// session x active claim, claims.mjs activeWorkers) — never state.json's
+// hand-mutated `workers` array. A hand-written entry alone (no live session)
+// must never block; a genuinely live OTHER session with a claim on this
+// feature's cell still blocks exactly as before (worker session -> claim ->
+// cell.feature).
+await check('lanes: an OTHER live worker session blocks a lane start only when its claimed cell derives to this lane\'s feature (derived view, msn-8/D6)', async () => {
   const dir = makeStateRepo('bee-lane-start-worker-');
   try {
     makeCellFile(dir, 'wcell-1', { feature: 'lane-h', status: 'capped' }); // terminal, so precondition (a) passes — isolates the worker check
@@ -569,12 +575,35 @@ await check('lanes: a registered worker blocks a lane start only when its cell d
       schema_version: '1.0',
       phase: 'swarming',
       feature: 'default-feat',
-      workers: [{ nickname: 'busy', cell: 'wcell-1', tier: 'generation', status: 'in-flight' }],
+      workers: [],
     });
-    await assertRejects(() => startFeature(dir, { feature: 'lane-h', lane: true }), 'worker', 'a worker on this feature\'s cell blocks the lane start');
+    createSession(dir, { id: 'busy-sess' });
+    claimCellFile(dir, 'busy-sess', 'wcell-1');
+    await assertRejects(
+      () => startFeature(dir, { feature: 'lane-h', lane: true, sessionId: 'caller' }),
+      'worker',
+      'a live OTHER session claiming this feature\'s cell blocks the lane start',
+    );
     assert(!fs.existsSync(laneFile(dir, 'lane-h')), 'refusal writes nothing');
-    const unrelated = await startFeature(dir, { feature: 'lane-i', lane: true });
+    const unrelated = await startFeature(dir, { feature: 'lane-i', lane: true, sessionId: 'caller' });
     assert(unrelated.feature === 'lane-i', 'a worker on another feature\'s cell never blocks this lane');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('lanes: a hand-written state.workers entry alone (no live session) never blocks a lane start (D6 demotion, msn-8)', async () => {
+  const dir = makeStateRepo('bee-lane-start-worker-ghost-');
+  try {
+    makeCellFile(dir, 'wcell-2', { feature: 'lane-ghost', status: 'capped' });
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+      schema_version: '1.0',
+      phase: 'swarming',
+      feature: 'default-feat',
+      workers: [{ nickname: 'ghost', cell: 'wcell-2', tier: 'generation', status: 'in-flight' }],
+    });
+    const started = await startFeature(dir, { feature: 'lane-ghost', lane: true, sessionId: 'caller' });
+    assert(started.feature === 'lane-ghost', 'a hand-written workers entry with no live session must never block');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

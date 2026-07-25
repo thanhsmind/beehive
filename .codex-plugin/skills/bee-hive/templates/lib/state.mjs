@@ -8,7 +8,7 @@ import { readJson, writeJsonAtomic } from './fsutil.mjs';
 // only fsutil/lock.mjs/node builtins (unlike cells.mjs, which imports THIS
 // file) and never each other or this file, so composing both here stays
 // cycle-free (msh-5).
-import { readSession, readClaim, isClaimActive, claimsDir, adoptClaim } from './claims.mjs';
+import { readSession, readClaim, isClaimActive, claimsDir, adoptClaim, activeWorkers } from './claims.mjs';
 import { pathsOverlap } from './reservations.mjs';
 import { readGrants } from './worktree-store.mjs';
 // D6 — startFeature's single read-check-write body runs inside this lock
@@ -1693,8 +1693,12 @@ export function advisorRefStale(root, ref, state) {
 //     (a mid-flight prior feature must finish or be explicitly wound down —
 //     never silently stepped over by starting a new one)
 //   - no .bee/HANDOFF.json exists (a paused session must resume/close first)
-//   - state.workers is empty (registered workers must be cleared through the
-//     existing worker remove/clear verbs first)
+//   - no OTHER live worker remains (D6, multisession-native-8: derived from
+//     live-heartbeat sessions x claims via claims.mjs activeWorkers — never
+//     the hand-mutated state.workers array; the calling session's OWN
+//     heartbeat is excluded, C3, so a solo starter is never blocked by
+//     itself. A worker with a stale heartbeat drops out on its own; there is
+//     no "clear it first" step to take anymore.)
 //   - no active (unreleased, unexpired) reservation exists
 //   - no cell anywhere has status 'claimed' (live worker state; only cap/drop
 //     end a claim)
@@ -1725,8 +1729,10 @@ export function advisorRefStale(root, ref, state) {
 //   (b) the global HANDOFF blocks a lane start only when its feature field
 //       names this lane's feature (F5: the default start now matches this
 //       exact per-feature scoping instead of any-handoff-blocks);
-//   (c) a registered worker blocks only when its cell derives to this lane's
-//       feature (worker → cell → cell.feature);
+//   (c) an OTHER live worker (D6, multisession-native-8 derived view — never
+//       state.workers) blocks only when its current claimed cell derives to
+//       this lane's feature (worker session → claim → cell.feature); the
+//       calling session's own heartbeat is excluded (C3), same as (e) below;
 //   (d) global holds check: when the caller declares intended paths, any
 //       overlap with ANOTHER session's active holds — claimed cells' files or
 //       active reservations — refuses (own-session claims and expired holds
@@ -1934,13 +1940,19 @@ export async function startFeature(
   // the feature being started here — only prior, unrelated live records.
   await seedLegacyWorkflows(root);
 
+  // C3 (multisession-native-8): computed once, shared by both branches below
+  // — the derived-workers precondition on EITHER path excludes exactly this
+  // id from "other" live workers, so a solo caller's own heartbeat never
+  // blocks its own start.
+  const sessionIdTrimmed = typeof sessionId === 'string' && sessionId.trim() ? sessionId.trim() : null;
+
   const legacyRecord = await withStoreLock(root, 'state', () => {
     if (lane) {
       return startLane(root, {
         feature: requireLaneFeature(feature),
         mode,
         phase: phaseValue,
-        sessionId: typeof sessionId === 'string' && sessionId.trim() ? sessionId.trim() : null,
+        sessionId: sessionIdTrimmed,
         paths,
       });
     }
@@ -1970,11 +1982,16 @@ export async function startFeature(
       );
     }
 
-    const workers = Array.isArray(state.workers) ? state.workers : [];
-    if (workers.length > 0) {
-      const names = workers.map((w) => (w && w.nickname) || '?').join(', ');
+    // D6 (multisession-native-8): derived from live-heartbeat sessions x
+    // claims (claims.mjs activeWorkers), never the hand-mutated
+    // state.workers array — a hand-written entry with nobody actually
+    // heartbeating is no longer a reason to refuse. excludeSessionId is C3:
+    // the calling session's own liveness is never "another" active worker.
+    const others = activeWorkers(root, { excludeSessionId: sessionIdTrimmed });
+    if (others.length > 0) {
+      const names = others.map((w) => (w.cell ? `${w.session_id}(${w.cell})` : w.session_id)).join(', ');
       throw new Error(
-        `startFeature: refused — ${workers.length} registered worker(s) remain (${names}). FIX: clear them first (bee.mjs state worker remove --nickname N, or worker clear).`,
+        `startFeature: refused — ${others.length} active worker session(s) remain (${names}). FIX: wait for the session's heartbeat to go stale, or have it cap/drop its claimed cell, then retry.`,
       );
     }
 
@@ -2128,21 +2145,21 @@ function startLane(root, { feature, mode, phase, sessionId, paths }) {
     );
   }
 
-  // (c) a registered worker blocks only when its cell derives to this feature.
-  // readStateStrict: a corrupt default record would HIDE registered workers —
-  // refuse loudly rather than start a lane over invisible work.
-  const state = readStateStrict(root);
-  const workers = Array.isArray(state.workers) ? state.workers : [];
+  // (c) D6 (multisession-native-8): an OTHER live worker (derived from live
+  // heartbeat sessions x claims, claims.mjs activeWorkers — never
+  // state.workers) blocks only when its currently claimed cell derives to
+  // this feature. excludeSessionId (C3) means the calling session's own
+  // heartbeat is never "another" worker.
   const cellById = new Map(cells.map((cell) => [cell.id, cell]));
-  const laneWorkers = workers.filter((worker) => {
-    const cell = worker && typeof worker.cell === 'string' ? cellById.get(worker.cell) : null;
+  const laneWorkers = activeWorkers(root, { excludeSessionId: sessionId }).filter((worker) => {
+    const cell = worker.cell ? cellById.get(worker.cell) : null;
     return Boolean(cell && cell.feature === feature);
   });
   if (laneWorkers.length > 0) {
     throw new Error(
-      `startFeature: refused — registered worker(s) on feature "${feature}": ${laneWorkers
-        .map((w) => `${(w && w.nickname) || '?'}(${w.cell})`)
-        .join(', ')}. FIX: clear them first (bee.mjs state worker remove --nickname N, or worker clear).`,
+      `startFeature: refused — active worker session(s) on feature "${feature}": ${laneWorkers
+        .map((w) => `${w.session_id}(${w.cell})`)
+        .join(', ')}. FIX: wait for the session's heartbeat to go stale, or have it cap/drop its claimed cell, then retry.`,
     );
   }
 

@@ -25,6 +25,7 @@ import {
   sweepExpiredClaims,
   isClaimActive,
   isConcurrentMode,
+  activeWorkers,
   listSessionRecords,
   sessionPath,
   claimPath,
@@ -619,6 +620,69 @@ await check('sweep-reset logs a tagged audit decision even under a taxonomy, ins
       Array.isArray(logged.tags) && logged.tags.includes('claims') && logged.tags.includes('sweep'),
       `sweep-reset decision should be tagged claims+sweep (what the event IS), got ${JSON.stringify(logged.tags)}`,
     );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ─── multisession-native-8 (D6): activeWorkers derived view ─────────────────
+
+await check('activeWorkers: a stale heartbeat drops a session out of the view with NO worker-remove call; a live session with an active claim shows its cell; excludeSessionId drops the caller\'s own row', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-activeworkers-'));
+  try {
+    assert(JSON.stringify(activeWorkers(root)) === '[]', 'zero session records anywhere -> zero active workers');
+
+    createSession(root, { id: 'live-idle' }); // live heartbeat, no claim
+    createSession(root, { id: 'live-claimed' }); // live heartbeat, active claim
+    createSession(root, { id: 'stale-sess' }); // will be staled below
+    claimCellFile(root, 'live-claimed', 'cell-1');
+
+    // Stale it directly on disk (deterministic — no sleeps): older than
+    // DEFAULT_HEARTBEAT_STALE_SECONDS, same technique isConcurrentMode's own
+    // suite above uses.
+    writeJsonAtomic(sessionPath(root, 'stale-sess'), {
+      ...readSession(root, 'stale-sess'),
+      last_heartbeat: new Date(Date.now() - (DEFAULT_HEARTBEAT_STALE_SECONDS + 3600) * 1000).toISOString(),
+    });
+
+    const workers = activeWorkers(root);
+    const byId = Object.fromEntries(workers.map((w) => [w.session_id, w]));
+    assert(
+      workers.length === 2 && !('stale-sess' in byId),
+      `stale-sess must drop out of the view with NO worker-remove call, got ${JSON.stringify(workers)}`,
+    );
+    assert(byId['live-idle'] && byId['live-idle'].cell === null, `a live session with no claim shows cell: null, got ${JSON.stringify(byId['live-idle'])}`);
+    assert(
+      byId['live-claimed'] && byId['live-claimed'].cell === 'cell-1',
+      `a live session with an active claim shows its cell, got ${JSON.stringify(byId['live-claimed'])}`,
+    );
+    assert(typeof byId['live-claimed'].last_heartbeat === 'string', 'last_heartbeat is carried through');
+
+    const excluded = activeWorkers(root, { excludeSessionId: 'live-claimed' });
+    assert(
+      excluded.length === 1 && excluded[0].session_id === 'live-idle',
+      `excludeSessionId drops exactly the caller's own row, got ${JSON.stringify(excluded)}`,
+    );
+
+    // Releasing the claim (not removing any "worker") drops the cell field —
+    // proof the view is truly derived, never hand-mutated.
+    releaseClaim(root, 'live-claimed', 'cell-1');
+    const afterRelease = activeWorkers(root).find((w) => w.session_id === 'live-claimed');
+    assert(afterRelease && afterRelease.cell === null, `releasing the claim clears cell without any worker verb, got ${JSON.stringify(afterRelease)}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('activeWorkers: session.lane binding is surfaced when bound, null while unbound', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-activeworkers-lane-'));
+  try {
+    createSession(root, { id: 'unbound-sess' });
+    createSession(root, { id: 'bound-sess' });
+    bindSessionLane(root, 'bound-sess', 'demo-lane');
+    const byId = Object.fromEntries(activeWorkers(root).map((w) => [w.session_id, w]));
+    assert(byId['unbound-sess'].lane === null, 'unbound session -> lane: null');
+    assert(byId['bound-sess'].lane === 'demo-lane', 'bound session -> lane: the bound feature');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

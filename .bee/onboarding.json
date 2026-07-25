@@ -5,14 +5,14 @@
     "agents_block": "d0515b3ab1b91fc381e757d6a1c64bf2f15d8db6d78361818178aea51368dca7",
     "gitignore_block": "97bc58361c5dee4c4212b3c2ba1b5b91d5c3c17c2be4690baa2abe9bd014253c",
     "helpers": {
-      "bee.mjs": "ce9e5d674369143c696adcbcfbbfd9bbe0aaf248dd09661e391d8380f2f6daf0"
+      "bee.mjs": "7e249d3381b76e2ced60dd75f497af784209b280ba00c62e1f6cd5719668d8d9"
     },
     "lib": {
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "ef212500da307a5f4654426827198a269acdcd4e79f94e61f5de1c010123a4ea",
-      "claims.mjs": "79a2d4b7717f10bd389917891c60c52836a0a365d412a1dcfdaebb63139383fe",
-      "command-registry.mjs": "c6fb85b23215af407230814e1e870bbfdd0e6ca65f46381c4d6de5d3fb84dc83",
+      "claims.mjs": "e5c4cf684b3910af62527012792fa4fe2c44786813d2019b2de36ca0544052c8",
+      "command-registry.mjs": "83f0499d81fc325f0a27a0a5a92c0a20c38c89a671813de965cf285b228b8e32",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0799e8b4a703a453a0ce8490c36991cd74f50312abec88f91a78fbcfbb1a3779",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
@@ -35,7 +35,7 @@
       "scratch.mjs": "3b7ab2e104b3f4cee240a43fac49ee630df7ca2ed995eb71f403d25eae17afb0",
       "source-identity.mjs": "716740641e1f6bfbb5ccc5b4fe7827f1165c2a1f1127ee3800f52a47ac09fc7a",
       "state-projection.mjs": "c042682ce53401e95994bb029b015e819e2416aba7edb2f1377d74a3aa38bd2d",
-      "state.mjs": "0aa9997d6bced7abdb085b7a798ea7f904b6fc9e03dc30f97834978df53d0101",
+      "state.mjs": "ab3f9be654f1e1a53641f1295a54e6ccb19ab5f3bb141ffd49bed4fd03f8f4c6",
       "validate-args.mjs": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
       "workflow-store.mjs": "5bcfe2e7b69d65de1f7146b9e06b9d69c6d7431d1d571cff8f9b4125fa6bc641",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
@@ -78,5 +78,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T00:15:48.989Z"
+  "updated_at": "2026-07-25T00:42:48.817Z"
 }

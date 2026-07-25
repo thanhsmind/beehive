@@ -1,0 +1,102 @@
+{
+  "id": "multisession-native-8",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Workers derived from sessions, claims and heartbeats",
+  "action": "Replace stored state.workers array as source of truth: active workers = live-heartbeat sessions joined with workflow binding + current cell claims. state worker add/update/remove/clear/prune verbs become compat writers to the projection only (or read the derived view), and startFeature/status read the derived view. Test: a dead-heartbeat session drops out of the derived view without any worker remove call. Canonical source: skills/bee-hive/templates/ (vendored to .bee/bin/ + plugin mirrors). Regen inside this cell after the code change: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed).",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-7"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/state.mjs",
+    "skills/bee-hive/templates/bee.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-hive/templates/lib/claims.mjs",
+    "docs/history/multisession-native/CONTEXT.md",
+    "docs/history/multisession-native/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "derived view matches sessions+claims ground truth (test)",
+      "stale heartbeat auto-drops a worker",
+      "worker verbs stay CLI-compatible (no removed flags)",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no gate/precondition reads the stored array as truth"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D1/D6/D7"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "m",
+    "11": "u",
+    "12": "c",
+    "13": " ",
+    "14": "8",
+    "15": ";",
+    "16": " ",
+    "17": "D",
+    "18": "6",
+    "worker": "msn-w8",
+    "outcome": "Derived-workers view (claims.mjs activeWorkers) replaces state.workers as truth for startFeature preconditions (both default and lane paths, C3 excludeSessionId) and bee status reporting; worker CLI verbs + worker-prune keep reading/writing the array for compat/display only.",
+    "files_changed": [
+      "skills/bee-hive/templates/lib/claims.mjs",
+      "skills/bee-hive/templates/lib/state.mjs",
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/lib/command-registry.mjs",
+      "skills/bee-hive/templates/tests/test_claims.mjs",
+      "skills/bee-hive/templates/tests/test_cli_state.mjs",
+      "skills/bee-hive/templates/tests/test_state.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json",
+      ".bee/bin/bee.mjs",
+      ".bee/bin/lib/claims.mjs",
+      ".bee/bin/lib/state.mjs",
+      ".bee/bin/lib/command-registry.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T00:44:50.988Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"red_failure_evidence\": \"C3 red-first proof: temporarily replaced startFeature's default-path call with activeWorkers(root) (no excludeSessionId) and reran test_cli_state.mjs — the new C3 test failed: 'a solo session must never be blocked by its own heartbeat, got 1: startFeature: refused ... 1 active worker session(s) remain (solo)'. Restored the exclusion and reran: 82 passed, 0 failed.\",\n  \"verification_run\": \"node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check -> PASS run_verify: 102 suite(s); release_manifest --check: 527 file(s) match; ledger_parity --check: match.\"\n}\n",
+    "verify_output": "run_verify --impacted: PASS run_verify: 102 suite(s), concurrency=5, wall=59179ms. release_manifest --check: 527 file(s) match stored manifest. ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger.",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-25T00:28:59.621Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-25T00:44:40.031Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T00:44:40.031Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T00:32:39.275Z",
+        "acquired_at": "2026-07-25T00:28:59.619Z",
+        "worker": "msn-w8",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

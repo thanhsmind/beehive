@@ -39,7 +39,7 @@ export const COMMAND_REGISTRY = [
     name: 'status',
     invoke: 'bee status',
     description:
-      'Read-only snapshot: onboarding health, phase, gates, handoff, cell counts, reservations, decisions, staleness warnings, recommended next step. `lanes` is summarized by default (lpsp-2, payload-size): the ACTIVE lane (the one this session is bound to) in full, plus counts-by-phase and bare ids for every other lane record — pass --lanes-full for the full per-lane array.',
+      'Read-only snapshot: onboarding health, phase, gates, handoff, cell counts, reservations, active workers, decisions, staleness warnings, recommended next step. `lanes` is summarized by default (lpsp-2, payload-size): the ACTIVE lane (the one this session is bound to) in full, plus counts-by-phase and bare ids for every other lane record — pass --lanes-full for the full per-lane array. `workers` (D6, multisession-native-8) is a derived view — live-heartbeat sessions joined with their current cell claim — never state.json\'s hand-mutated `workers` array.',
     parameters: {
       type: 'object',
       properties: {
@@ -811,7 +811,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.start-feature',
     invoke: 'bee state start-feature',
-    description: 'Guarded atomic feature start: fails closed with zero mutations unless the workspace is clean (idle/terminal phase, no handoff/workers/reservations/claimed or nonterminal prior cells); on success sets feature/mode/phase and resets all four gates. Optional --as-lane (D2/D4) starts the feature as a per-feature lane record (.bee/lanes/<feature>.json) beside the default pipeline instead of mutating state.json; --session-id names the calling session so its own active holds never count against the declared-paths check; --paths is a comma-separated list of intended file paths checked against other sessions\' active claims/reservations before the lane starts.',
+    description: 'Guarded atomic feature start: fails closed with zero mutations unless the workspace is clean (idle/terminal phase, no handoff/active workers/reservations/claimed or nonterminal prior cells); on success sets feature/mode/phase and resets all four gates. "Active workers" (D6, multisession-native-8) is a derived view — live-heartbeat sessions joined with their current cell claim, never a hand-maintained list — so --session-id names the calling session on EITHER path (default or --as-lane) so its own heartbeat never counts against itself (C3); without --session-id every live session, including the caller\'s own if it has one, counts. Optional --as-lane (D2/D4) starts the feature as a per-feature lane record (.bee/lanes/<feature>.json) beside the default pipeline instead of mutating state.json; --paths is a comma-separated list of intended file paths checked against other sessions\' active claims/reservations before the lane starts (--as-lane only).',
     parameters: {
       type: 'object',
       properties: {
@@ -819,7 +819,7 @@ export const COMMAND_REGISTRY = [
         mode: { type: 'string', description: 'Mode for the new feature.' },
         phase: { type: 'string', description: 'Entry phase (defaults to exploring).', enum: [...KNOWN_PHASES] },
         'as-lane': { type: 'boolean', description: 'Start this feature as a per-feature lane record instead of the default state.json.' },
-        'session-id': { type: 'string', description: 'Calling session id, so its own active holds never count as a conflict in the declared-paths check (only meaningful with --as-lane).' },
+        'session-id': { type: 'string', description: 'Calling session id: excludes its own live heartbeat from the derived active-workers precondition on either path (C3), and — only meaningful with --as-lane and --paths — excludes its own active holds from the declared-paths conflict check.' },
         paths: { type: 'string', description: 'Comma-separated declared file paths checked against other sessions\' active claims/reservations before the lane starts (only meaningful with --as-lane).' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
