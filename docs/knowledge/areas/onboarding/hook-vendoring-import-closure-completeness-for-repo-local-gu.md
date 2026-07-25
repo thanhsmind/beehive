@@ -56,7 +56,7 @@ because it is syntax-only and does not detect a missing relative-import module.
 ## Pointers (implementation)
 
 - Vendored-hook list: `HOOK_FILENAMES` in
-  `skills/bee-hive/scripts/onboard_bee.mjs`.
+  `packages/bee/scripts/onboard_bee.mjs`.
 - Regression suite: `scripts/tests/test_hook_vendor_closure.mjs` (static
   import-closure parse + fresh-install/subprocess proof).
 - Evidence: `.bee/cells/i54-closeout-9.json`,

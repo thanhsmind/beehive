@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: [55ff17ef (release-version parity is fail-closed across every distributed projection), 09b776b5 (both installers prove complete greenfield/brownfield postconditions before success), "fe6593c0 (runtime-lib downgrade refusal targets the vendored copy path; zero-mutation, self-install included)", 485e949a (honest status drift reference = the onboarding managed-hash ledger), "579bbad7 (status drift is report-only, stays a boolean + optional detail; fail-open on absent/legacy ledger)", "ce4eee19 (SRC-01..06 shipped as a pure shared classifier, wrap-not-replace, consumed by status + onboarding)", 21be04f7 (status gains a report-only source field; unknown/legacy never implicit source), cba8b832 (release-version single-source), 9927fafb (a switch that narrows what an upgrade compares must equally narrow what it claims), "6eacf846 (auto-approved shape+execution for installer-verify-orphan-drift, bypass total)", "053a49fa (retired library modules are removed on apply via a ledger-diff derivation, not a hand-maintained list)", "e0f3e40e (packages-restructure D1-D5: vendor payload relocated to packages/bee/, skills instruction-only, PLUGIN_ROOT-relative resolution)", "a25ef382 (packages-restructure D6: release manifest package_payload role for packages/bee, plugin_hook role repointed to packages/bee/hooks)"]
-  sources: ["installer-version-parity-1-3-1 locked rules (fail-closed release tuple, full projection parity, greenfield/brownfield end-to-end success contract; cells -4/-2/-3, 2026-07-16; field fix cells -5/-6)", "codex-harness-hardening cell codex-harness-hardening-1b-1 (runtime-lib downgrade guard R15; split-brain regression 3->0, 2026-07-15)", "codex-harness-hardening-1c cell codex-harness-hardening-1c-1 (honest status drift R16 via the onboarding managed-hash ledger; 5 drift tests, 2026-07-15)", "codex-harness-hardening-1d cells 1d-1/1d-2 (SRC-01..06 source-identity classifier R17 + status source field; 8 classifier/status tests, 2026-07-15)", "sticky-repo-hooks (cell sticky-hooks-1, 2026-07-13; found auditing 8 host projects after the v0.1.30 rollout)", "cell p49-force-downgrade-blast-radius-1 (PBI P49, v1.1.0 review P2; advisor-consulted)", "cell installer-verify-orphan-drift-1 (R27: retired-library removal on apply; repro was install.sh reporting version-parity failure/drift=true post-apply on a host still carrying a retired templates/lib module, 2026-07-24)", "docs/specs/onboarding.md#R15", "docs/specs/onboarding.md#R16", "docs/specs/onboarding.md#R17", "docs/specs/onboarding.md#R21", "docs/specs/onboarding.md#R22", "docs/specs/onboarding.md#R26", "docs/specs/onboarding.md#E8", "docs/specs/onboarding.md#P5", "docs/history/installer-verify-extra-drift/ (cell installer-verify-extra-drift-1: install.sh verify step tolerates extra-file-only drift, 2026-07-24)", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)"]
+  decisions: [55ff17ef (release-version parity is fail-closed across every distributed projection), 09b776b5 (both installers prove complete greenfield/brownfield postconditions before success), "fe6593c0 (runtime-lib downgrade refusal targets the vendored copy path; zero-mutation, self-install included)", 485e949a (honest status drift reference = the onboarding managed-hash ledger), "579bbad7 (status drift is report-only, stays a boolean + optional detail; fail-open on absent/legacy ledger)", "ce4eee19 (SRC-01..06 shipped as a pure shared classifier, wrap-not-replace, consumed by status + onboarding)", 21be04f7 (status gains a report-only source field; unknown/legacy never implicit source), cba8b832 (release-version single-source), 9927fafb (a switch that narrows what an upgrade compares must equally narrow what it claims), "6eacf846 (auto-approved shape+execution for installer-verify-orphan-drift, bypass total)", "053a49fa (retired library modules are removed on apply via a ledger-diff derivation, not a hand-maintained list)", "e0f3e40e (packages-restructure D1-D5: vendor payload relocated to packages/bee/, skills instruction-only, PLUGIN_ROOT-relative resolution)", "a25ef382 (packages-restructure D6: release manifest package_payload role for packages/bee, plugin_hook role repointed to packages/bee/hooks)", "80b64c20 (packages-engine-move D1-D5: onboarding/distribution engine relocated to packages/bee/scripts, strict-flag validation universal, migration-tooling pattern)", "809215be (packages-engine-move Gate 3: classifySource contract unchanged, HIVE_DIR split into ENGINE_DIR/PLUGIN_ROOT/SKILLS_ROOT, identityOk re-anchored falsifiable)"]
+  sources: ["installer-version-parity-1-3-1 locked rules (fail-closed release tuple, full projection parity, greenfield/brownfield end-to-end success contract; cells -4/-2/-3, 2026-07-16; field fix cells -5/-6)", "codex-harness-hardening cell codex-harness-hardening-1b-1 (runtime-lib downgrade guard R15; split-brain regression 3->0, 2026-07-15)", "codex-harness-hardening-1c cell codex-harness-hardening-1c-1 (honest status drift R16 via the onboarding managed-hash ledger; 5 drift tests, 2026-07-15)", "codex-harness-hardening-1d cells 1d-1/1d-2 (SRC-01..06 source-identity classifier R17 + status source field; 8 classifier/status tests, 2026-07-15)", "sticky-repo-hooks (cell sticky-hooks-1, 2026-07-13; found auditing 8 host projects after the v0.1.30 rollout)", "cell p49-force-downgrade-blast-radius-1 (PBI P49, v1.1.0 review P2; advisor-consulted)", "cell installer-verify-orphan-drift-1 (R27: retired-library removal on apply; repro was install.sh reporting version-parity failure/drift=true post-apply on a host still carrying a retired templates/lib module, 2026-07-24)", "docs/specs/onboarding.md#R15", "docs/specs/onboarding.md#R16", "docs/specs/onboarding.md#R17", "docs/specs/onboarding.md#R21", "docs/specs/onboarding.md#R22", "docs/specs/onboarding.md#R26", "docs/specs/onboarding.md#E8", "docs/specs/onboarding.md#P5", "docs/history/installer-verify-extra-drift/ (cell installer-verify-extra-drift-1: install.sh verify step tolerates extra-file-only drift, 2026-07-24)", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)", docs/history/packages-engine-move/]
   authoritative_for: "onboarding: release identity, version parity, and honest reporting"
 ---
 
@@ -68,7 +68,31 @@ and the strongest of them is the one that reports success.
   pure — it only reads, never changes anything, and never fails — and an
   unrecognized origin is named as such, never silently treated as an authoritative
   source that may overwrite an installation (decisions ce4eee19, b5341fe7,
-  21be04f7; cells codex-harness-hardening-1d-1, 1d-2).
+  21be04f7; cells codex-harness-hardening-1d-1, 1d-2). Post-move
+  (packages-engine-move D2-D3; decisions 80b64c20, 809215be): the classifier's
+  own contract is untouched — `classifySource` still takes one `hiveDir` input
+  and returns the same five kinds — but the engine that used to live inside the
+  tree it classifies now builds that input explicitly. Three previously
+  conflated meanings of one `HIVE_DIR` constant (engine geometry, the
+  classifier's `hiveDir` input, and the skills root skill-sync walks) split
+  into `ENGINE_DIR` (`packages/bee`, geometry only), `PLUGIN_ROOT` (the same
+  3×dirname arithmetic as before the move, now walked from `ENGINE_DIR`), and
+  `SKILLS_ROOT` (`PLUGIN_ROOT/skills`, the tree skill-sync renders and
+  `classifySource` reads) — `SKILLS_ROOT` is never derived from `ENGINE_DIR`,
+  so a sync pass can never wander into `packages/`. The identity anchor that
+  gates every sync target was re-anchored the same move: the pre-move check
+  (a bare `realpath` self-comparison) was tautological — the running script
+  IS that path, proving nothing about the skills tree it is about to render
+  into projections — and the post-move anchor is falsifiable instead:
+  `<SKILLS_ROOT>/bee-hive` must exist, its realpath must resolve inside the
+  same `PLUGIN_ROOT`, and the payload the engine ships alongside must be
+  readable; a failure blocks every sync target before any resolution, the same
+  `blocked_no_source` semantics as before the re-anchor. A synced projection
+  (`.claude/skills`, `.agents/skills`) still never carries the engine itself —
+  running it from a projection-shaped root still classifies as
+  `rendered_projection` and still blocks with `blocked_no_source`, now pinned
+  against the new engine location by the rewritten split-brain regression
+  suite.
 - **R21 (not yet implemented — installer-version-parity-1-3-1)** — An install
   has one release version across its authoritative source, enabled package,
   project runtime, and every project-local assistant capability copy. Every
@@ -161,6 +185,19 @@ and the strongest of them is the one that reports success.
 
 ## Pointers (implementation)
 
+- Source-identity geometry and the falsifiable anchor (R17 post-move):
+  `ENGINE_DIR`/`PLUGIN_ROOT`/`SKILLS_ROOT` constants and the `identityOk`
+  check in `packages/bee/scripts/onboard_bee.mjs` (`computeSkillSync`'s
+  identity-anchor block); `classifySource` itself in
+  `packages/bee/lib/source-identity.mjs` is unchanged (packages-engine-move
+  C3) — only its two call sites (`readSourceReleaseIdentity`,
+  `computeSkillSync`) now build `hiveDir` from `SKILLS_ROOT`. Regression:
+  `packages/bee/scripts/tests/test_onboard_bee.mjs`,
+  `packages/bee/scripts/tests/test_split_brain_regression.mjs` (rewritten
+  stale-launcher scenario now asserts a synced projection carries no launcher
+  and an engine copy invoked from a projection-shaped root reports
+  `blocked_no_source`). Evidence: `.bee/cells/packages-engine-move-1.json`,
+  `docs/history/packages-engine-move/reports/packages-engine-move-1.md`.
 - Release-version single-source (decision cba8b832): the four physical homes of
   the version — `packages/bee/lib/state.mjs` + its `.bee/bin/lib` mirror, and the
   two plugin manifests' `.version` — are enumerated once in
@@ -187,7 +224,7 @@ and the strongest of them is the one that reports success.
   `./packages/bee/hooks/hooks.json` respectively.
 - Skill-sync version stamp (R29): `SKILLS_VERSION_STAMP` constant
   (`.bee-skills-version.json`) and the stamp-first/legacy-marker-fallback read
-  in `computeSkillSyncTarget` (`skills/bee-hive/scripts/onboard_bee.mjs:1271-1281`)
+  in `computeSkillSyncTarget` (`packages/bee/scripts/onboard_bee.mjs:1271-1281`)
   and the analogous global-root read (`:1461-1471`). Evidence:
   `.bee/cells/packages-restructure-1.json`.
 - Retired-library removal (R27): `onboard_bee.mjs`'s plan builder derives a
@@ -196,7 +233,7 @@ and the strongest of them is the one that reports success.
   `listTemplateLibModules()` set (section 3c, immediately after the existing
   `copy_lib`/`RETIRED_HELPERS` items it mirrors); apply executes it with the
   same exact-dirname safety `remove_helper` uses. Regression coverage:
-  `skills/bee-hive/scripts/tests/test_onboard_bee.mjs` ("stale lib" block).
+  `packages/bee/scripts/tests/test_onboard_bee.mjs` ("stale lib" block).
 - Extra-file-only drift tolerance (R28): the verify node snippet at the tail of
   `scripts/install.sh` (piped after `printf '%s' "$STATUS" | node -e '...'`),
   reading `s.onboarding.drift_detail` (populated by `computeRuntimeDrift`,

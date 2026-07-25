@@ -265,7 +265,7 @@ half is fresh. Evidence: trace `.bee/cells/multisession-native-23.json`, commit
   minimal, cycle-safe, fail-open replica for structural-isolation reasons
   documented above.
 - Onboarding migration: `detectWorktreeMigration`/`applyWorktreeMigration` in
-  `skills/bee-hive/scripts/onboard_bee.mjs`; five fixture scenarios in
+  `packages/bee/scripts/onboard_bee.mjs`; five fixture scenarios in
   `test_onboard_bee.mjs` (happy path, conflict abort with zero mutations,
   re-run idempotency, identical-content dedup, zero footprint on an
   ordinary/main checkout).

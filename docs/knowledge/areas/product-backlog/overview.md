@@ -129,7 +129,7 @@ project.
   (`handleBacklogPropose`), `packages/bee/lib/command-registry.mjs`
   (`backlog.propose` entry); CLI: `bee backlog propose --story "<s>" --cos "<c>"
   [--feature <slug>]`. Mirrored to `.bee/bin/**` and the plugin/skill trees via
-  `skills/bee-hive/scripts/onboard_bee.mjs --apply`. Tests:
+  `packages/bee/scripts/onboard_bee.mjs --apply`. Tests:
   `packages/bee/tests/test_cli_cells.mjs`,
   `packages/bee/tests/test_bee_cli.mjs`.
 - **P3** — Known counting defect (Open Gaps, first bullet):

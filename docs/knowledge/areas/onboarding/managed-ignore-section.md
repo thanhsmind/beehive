@@ -113,7 +113,7 @@ disappears once no silenced path remains tracked.
 
 ## Pointers (implementation)
 
-- `skills/bee-hive/scripts/onboard_bee.mjs` — `GITIGNORE_MARKER_START`/`_END`,
+- `packages/bee/scripts/onboard_bee.mjs` — `GITIGNORE_MARKER_START`/`_END`,
   `GITIGNORE_START_RE`/`_END_RE` (marker-resemblance guard),
   `gitignoreBlockPresent`, `normalizeGitignoreForCompare` (CRLF tolerance),
   `create_gitignore_block`/`append_gitignore_block`/`update_gitignore_block`

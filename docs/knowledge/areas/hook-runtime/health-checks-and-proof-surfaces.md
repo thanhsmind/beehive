@@ -88,7 +88,7 @@ against isolated fixtures, asserting that a denied action changed nothing.
 - Suites: `hooks/test_hook_contracts.mjs` (modes: default, `--baseline`,
   `--catalog-only`, `--repo-route-only`), `hooks/test_write_guard.mjs`,
   `hooks/test_model_guard.mjs`; parity check in
-  `skills/bee-hive/scripts/tests/test_onboard_bee.mjs`.
+  `packages/bee/scripts/tests/test_onboard_bee.mjs`.
 
 ## Open Gaps
 

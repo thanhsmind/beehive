@@ -141,15 +141,15 @@ the first; a re-run plans nothing.
 
 ## Pointers (implementation)
 
-- `skills/bee-hive/scripts/onboard_bee.mjs` — `statuslineOptIn()`, plan stage 3b,
+- `packages/bee/scripts/onboard_bee.mjs` — `statuslineOptIn()`, plan stage 3b,
   `copy_statusline` apply case, `buildManagedVersions`/`subsetManaged` conditional
   `statusline` key.
 - `packages/bee/statusline/` — canonical pair
   (`statusline-command.sh`, `statusline-usage.mjs`).
-- `skills/bee-hive/scripts/tests/test_onboard_bee.mjs` — section 9c sandbox cases.
+- `packages/bee/scripts/tests/test_onboard_bee.mjs` — section 9c sandbox cases.
 - `packages/bee/tests/test_lib.mjs` — statusline byte-equality sweep.
 - Host-side settings contract: `.claude/settings.json` → `statusLine.command`.
-- `skills/bee-hive/scripts/onboard_bee.mjs` — `CODEX_STATUS_LINE_BLOCK`,
+- `packages/bee/scripts/onboard_bee.mjs` — `CODEX_STATUS_LINE_BLOCK`,
   `codexUserConfigPath()`, `codexStatuslineMissing()`,
   `ensure_codex_statusline` plan/apply action (machine-level: `~/.codex/config.toml`,
   never repoRoot-joined).

@@ -117,6 +117,6 @@ consult budget.
   valid), `hasStaleAdvisorKey`
   in `packages/bee/lib/state.mjs` (byte-mirrored to
   `.bee/bin/lib/state.mjs`); surfaced by `packages/bee/bee.mjs`
-  (`status` group) and `skills/bee-hive/scripts/onboard_bee.mjs` (`staleAdvisorNotices`).
+  (`status` group) and `packages/bee/scripts/onboard_bee.mjs` (`staleAdvisorNotices`).
   Evidence: fanout-delegation cells fanout-1/fanout-4 (commits 0056eda,
   79d96df).

@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: [09b776b5 (both installers prove complete greenfield/brownfield postconditions before success), 17bfc14a (Codex-safe onboarding tests preserve the real CLI entrypoint and observable process contract through an isolated Worker), a83a3613 (shared isolated runner for nested Node entrypoints; real Git/Bash/Codex integration remains external), "e0f3e40e (packages-restructure D1-D5: vendor payload relocated to packages/bee/, skills instruction-only, PLUGIN_ROOT-relative resolution)"]
-  sources: ["gh-issue-fixes-172 cell ghf-2 (GH #26: Windows staged source carries the full release identity — sparse checkout includes both package manifests; absent-package removal probed before attempted; trace in .bee/cells/, 2026-07-20)", "installer-probe-quiet cells installer-probe-quiet-1/-2 (tolerated runtime-CLI probe failures — captured stderr, one condensed warning per broken tool, repo-copy proceeds / plugin-first names the broken tool; reports docs/history/installer-probe-quiet/, 2026-07-20)", "codex-sandbox-baseline cells codex-sandbox-baseline-1/codex-sandbox-baseline-2 (real onboarding entrypoint through the shared isolated test runner; full onboarding suite green, 2026-07-16)", "installer-version-parity-1-3-1 D2/D8 Linux Bash E2E (cells -3, 2026-07-16)", "docs/specs/onboarding.md#R20b", "docs/specs/onboarding.md#R23", "docs/specs/onboarding.md#R27", "docs/specs/onboarding.md#P1", "docs/specs/onboarding.md#P2", "docs/specs/onboarding.md#P4", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)"]
+  decisions: [09b776b5 (both installers prove complete greenfield/brownfield postconditions before success), 17bfc14a (Codex-safe onboarding tests preserve the real CLI entrypoint and observable process contract through an isolated Worker), a83a3613 (shared isolated runner for nested Node entrypoints; real Git/Bash/Codex integration remains external), "e0f3e40e (packages-restructure D1-D5: vendor payload relocated to packages/bee/, skills instruction-only, PLUGIN_ROOT-relative resolution)", "80b64c20 (packages-engine-move D1-D5: onboarding/distribution engine relocated to packages/bee/scripts, strict-flag validation universal, migration-tooling pattern)"]
+  sources: ["gh-issue-fixes-172 cell ghf-2 (GH #26: Windows staged source carries the full release identity — sparse checkout includes both package manifests; absent-package removal probed before attempted; trace in .bee/cells/, 2026-07-20)", "installer-probe-quiet cells installer-probe-quiet-1/-2 (tolerated runtime-CLI probe failures — captured stderr, one condensed warning per broken tool, repo-copy proceeds / plugin-first names the broken tool; reports docs/history/installer-probe-quiet/, 2026-07-20)", "codex-sandbox-baseline cells codex-sandbox-baseline-1/codex-sandbox-baseline-2 (real onboarding entrypoint through the shared isolated test runner; full onboarding suite green, 2026-07-16)", "installer-version-parity-1-3-1 D2/D8 Linux Bash E2E (cells -3, 2026-07-16)", "docs/specs/onboarding.md#R20b", "docs/specs/onboarding.md#R23", "docs/specs/onboarding.md#R27", "docs/specs/onboarding.md#P1", "docs/specs/onboarding.md#P2", "docs/specs/onboarding.md#P4", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)", docs/history/packages-engine-move/]
   authoritative_for: "onboarding: installer entry points and source staging"
 ---
 
@@ -36,7 +36,15 @@ handlers as a labeled subtree of that same payload; the skill set itself now
 carries instructions only. Every path onboarding resolves against that payload
 is relative to its own plugin root, never self-relative to wherever the
 onboarding engine's own script happens to sit (packages-restructure D1-D3;
-decision e0f3e40e). Why it matters: the workspace filesystem
+decision e0f3e40e). The engine itself later moved out of the skill tree it
+renders (packages-engine-move D1; decision 80b64c20): `onboard_bee.mjs`,
+`plugin_distribution.mjs`, and their three test suites now live at
+`packages/bee/scripts/`, so `packages/bee/` is the complete standard code set
+— payload *and* engine — and `skills/` is instruction-only in fact, not just
+intent. The canonical entrypoint is
+`node packages/bee/scripts/onboard_bee.mjs --repo-root <repo-root>`, run from
+a source root (a checkout or an installed plugin package), never from a
+projection. Why it matters: the workspace filesystem
 of one supported platform rejects several characters that the source platform
 allows in filenames (colon, asterisk, question mark, quote, angle brackets,
 pipe), plus reserved device names and trailing dots or spaces; a single such path
@@ -91,10 +99,13 @@ carries a forbidden character, a reserved device name, or a trailing dot/space.
 - `packages/bee/` — the vendored payload's single standard layout (`bee.mjs`,
   `lib/`, `tests/`, `agents/`, `statusline/`, `AGENTS.block.md`), with
   `packages/bee/hooks/` as its hook-catalog subtree (hook modules, `catalog.mjs`,
-  `claude-hooks.json`, `hooks.json`, and their test suites); `skills/` carries
-  instruction-only content (`SKILL.md` + references + the skill's own script
-  engine) — no version marker of its own travels inside a synced skill dir
-  anymore. `onboard_bee.mjs`'s `PLUGIN_ROOT`, `TEMPLATES_DIR`, and
+  `claude-hooks.json`, `hooks.json`, and their test suites) and
+  `packages/bee/scripts/` as the onboarding/distribution engine subtree
+  (`onboard_bee.mjs`, `plugin_distribution.mjs`, `tests/`) — moved out of the
+  skill tree it renders (packages-engine-move D1; decision 80b64c20); `skills/`
+  now carries instruction-only content (`SKILL.md` + references only, no
+  runnable engine of its own) — no version marker of its own travels inside a
+  synced skill dir anymore. `onboard_bee.mjs`'s `PLUGIN_ROOT`, `TEMPLATES_DIR`, and
   `PLUGIN_HOOKS_DIR` resolve every payload path `PLUGIN_ROOT`-relative, the
   same mechanism `PLUGIN_HOOKS_DIR` already used before the move (`../templates`
   self-relative resolution retired). `scripts/install.ps1`'s bootstrap
@@ -106,7 +117,7 @@ carries a forbidden character, a reserved device name, or a trailing dot/space.
 - `scripts/lib/run-module-worker.mjs` — shared isolated test-entrypoint runner;
   preserves arguments, environment, stdout, stderr, and exit status without
   changing the production entrypoint.
-- `skills/bee-hive/scripts/tests/test_onboard_bee.mjs` — the complete onboarding
+- `packages/bee/scripts/tests/test_onboard_bee.mjs` — the complete onboarding
   suite keeps its real and fixture-local entrypoints and all prior assertions
   while routing nested Node launches through the shared runner.
 - `scripts/install.sh`, `scripts/install.ps1`, `.codex-plugin/plugin.json`,
