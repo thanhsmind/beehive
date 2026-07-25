@@ -1,0 +1,87 @@
+{
+  "id": "te-4",
+  "feature": "test-economy",
+  "lane": "standard",
+  "behavior_change": false,
+  "title": "Skill text: bảng proof-tier + read-first/run-second (test-economy D1/D2/D3/D5)",
+  "action": "Per test-economy D1/D2/D3/D5. skills/bee-executing/SKILL.md: thay đoạn red-first :65-71 bằng bảng proof-tier (cite test-economy D1/D2 + ghi chú amend đích danh e54878b1/8ef2bae6: HÌNH scoped-red-first giữ nơi red còn áp, PHẠM VI thu hẹp); luật hình dạng D3 (table-driven ≥3 case, thêm row vào suite sẵn, new_suite_reason, trần tỷ lệ); luật D5 'trước khi viết test mới: trích test có sẵn gần nhất + vì sao chưa cover'. skills/bee-validating/SKILL.md: evidence tĩnh tiny/small (file:line citation đủ, spike chỉ khi công nghệ chưa tiền lệ); kỷ luật debug: giả thuyết + file:line TRƯỚC repro script, tối đa 2 vòng repro sai rồi quay về đọc. Canonical ở bee-executing, chỗ khác trỏ về. KHÔNG đổi goal-check judge. Regen trong cell: render → onboard --apply → manifest --write.",
+  "must_haves": {
+    "truths": [
+      "bee-executing nêu bảng proof-tier đúng D1 từng nhánh, cite D-ID, ghi chú amend e54878b1/8ef2bae6",
+      "bee-validating có giả-thuyết-trước-repro + max 2 vòng + evidence tĩnh tiny/small",
+      "doctrine/render/pointer/ledger/mirror suites + manifest check xanh"
+    ],
+    "prohibitions": [
+      "không đụng goal-check judge",
+      "không sửa skill copies tay"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only test_doctrine_parity,test_skill_render,test_skill_pointers,test_ledger_parity,test_lib_mirror && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "docs/history/test-economy/CONTEXT.md",
+    "skills/bee-executing/SKILL.md",
+    "skills/bee-validating/SKILL.md"
+  ],
+  "files": [
+    "skills/bee-executing/SKILL.md",
+    "skills/bee-validating/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [
+    "te-3"
+  ],
+  "decisions": [
+    "test-economy D1",
+    "test-economy D2",
+    "test-economy D3",
+    "test-economy D5"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "te-worker-4",
+    "outcome": "proof-tier table + D3 test-shape + D5 read-first/debug-discipline landed in bee-executing/bee-validating skill text",
+    "files_changed": [
+      "skills/bee-executing/SKILL.md",
+      "skills/bee-validating/SKILL.md",
+      ".claude/skills/bee-executing/SKILL.md",
+      ".claude/skills/bee-validating/SKILL.md",
+      ".claude/skills/.bee-render.json",
+      ".agents/skills/bee-executing/SKILL.md",
+      ".agents/skills/bee-validating/SKILL.md",
+      ".agents/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-executing/SKILL.md",
+      ".claude-plugin/skills/bee-validating/SKILL.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-executing/SKILL.md",
+      ".codex-plugin/skills/bee-validating/SKILL.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T13:57:31.789Z",
+    "behavior_change": false,
+    "verification_evidence": "{\"tests_inspected\":\"skill-text cell — no new tests; doctrine/render/pointer/ledger/mirror suites are the gate for prose+regen artifact correctness\",\"tests_added_changed\":\"none (docs-only cell, change_class not declared / bc=false — no matrix check per test-economy D1 null row)\",\"verification_run\":\"node scripts/run_verify.mjs --only test_doctrine_parity,test_skill_render,test_skill_pointers,test_ledger_parity,test_lib_mirror -> 5/5 PASS (wall=303ms); node scripts/release_manifest.mjs --check -> 560 file(s) match stored manifest\"}\n",
+    "verify_output": "SCOPED RUN (--only): 5 of 109 runnables selected. PASS test_doctrine_parity, PASS test_ledger_parity, PASS test_lib_mirror, PASS test_skill_pointers, PASS test_skill_render. PASS run_verify: 5 suite(s), wall=303ms. release_manifest --check: 560 file(s) match stored manifest.",
+    "verify_passed": true,
+    "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+    "claimed_at": "2026-07-25T13:52:38.703Z",
+    "verify_command": "node scripts/run_verify.mjs --only test_doctrine_parity,test_skill_render,test_skill_pointers,test_ledger_parity,test_lib_mirror && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-25T13:57:23.278Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T13:57:23.279Z",
+        "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+        "claimed_at": "2026-07-25T13:55:18.695Z",
+        "acquired_at": "2026-07-25T13:52:38.702Z",
+        "worker": "te-worker-4",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

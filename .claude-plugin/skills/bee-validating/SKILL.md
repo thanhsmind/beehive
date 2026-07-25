@@ -46,6 +46,8 @@ Load `references/validation-reference.md` for report formats, repair routing, an
 
 Existing implementation, file/API/type inspection, command output, build/typecheck/test result, official version/doc proof, runtime probe, or a `.bee/spikes/<feature>/` result. Evidence that is only "should work", "likely", "expected", or model knowledge → **NOT READY**.
 
+**Static evidence for `tiny`/`small` (test-economy D5).** At these lanes, a file:line citation proving the code path exists and behaves as assumed — quoted, not paraphrased — is **sufficient** to pass the reality gate; it does not need a runtime spike. Reach for a spike only when the assumption touches an API, library, or technique with no precedent already in this repo (nothing to cite because nothing comparable has been built here yet). Precedent in-repo → cite it and move on; genuinely new technology or API surface → spike per the rules below. This does not loosen `standard`/`high-risk`, where the reality gate and feasibility matrix run at full weight regardless of lane.
+
 ## Spike Rules
 
 - One spike answers exactly one yes/no question.
@@ -53,6 +55,7 @@ Existing implementation, file/API/type inspection, command output, build/typeche
 - **NO** → return to bee-planning with the failed assumption and the required plan change.
 - **YES** → record the discovered constraints for planning and execution.
 - Spike code never silently becomes production code.
+- **Debug discipline (test-economy D5): hypothesis before repro, read before rerun.** Before writing any repro script, record the hypothesis in one line plus the file:line evidence from reading the code that grounds it — a repro script with no prior hypothesis is not a spike, it's a guess with extra steps. Cap the loop at **2** failed repro rounds: after the second wrong repro, stop running scripts and go back to reading/instrumenting the actual code path instead of trying a third guess blind. This is prose law — see `bee-executing/SKILL.md` for the machine-enforced proof-tier matrix; nothing here changes what capCell accepts.
 
 **Verify scripts and any executable code NEVER go in `docs/history/`** (GitHub #17). `docs/history/` is the tech-agnostic knowledge layer — `.md` only (CONTEXT.md, plan.md, reports, walkthrough). A cell's `verify` is a runnable command; when it needs a multi-line harness, that script lives in **the project's own scripts** (committed with the product, so `verify` points at it) or, if disposable, in **`.bee/spikes/<feature>/`** — the disposable-code half of the one canonical scratch home (docs/specs/doctrine-layer.md R17). The write-guard denies a code-extension file (`.sh`, `.mjs`, `.py`, …) written under `docs/history/`, and also denies any scratch-shaped write landing in a tracked directory outside `.bee/tmp/`/`.bee/spikes/`.
 
