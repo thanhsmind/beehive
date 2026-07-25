@@ -27,7 +27,7 @@
     },
     {
       "path": ".bee/bin/lib/command-registry.mjs",
-      "sha256": "3ae9a466c0ed5ce1683196fd18a77fc56ac26f3fd489e501af844b51bfb294e2",
+      "sha256": "1a64f7a777c45f93a596bd064e26b5c80a87a87e5af1b461c2d09b9d3383d837",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -183,7 +183,7 @@
     },
     {
       "path": ".bee/bin/lib/validate-args.mjs",
-      "sha256": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
+      "sha256": "99a28f221deb373ee128a821a1463acafdf91413c377c04d56cbda5137c81b17",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -1438,7 +1438,7 @@
     },
     {
       "path": "packages/bee/bee.mjs",
-      "sha256": "c6dff0e571dd953da795ed63811a0b40f4c82a2d078059fe22ca3f97e46037aa",
+      "sha256": "cf46b1b6edaa9e372395bf06f157841a63384f443e1969a0790e80bacdabea76",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/bee.mjs"
@@ -1599,7 +1599,7 @@
     },
     {
       "path": "packages/bee/lib/command-registry.mjs",
-      "sha256": "3ae9a466c0ed5ce1683196fd18a77fc56ac26f3fd489e501af844b51bfb294e2",
+      "sha256": "1a64f7a777c45f93a596bd064e26b5c80a87a87e5af1b461c2d09b9d3383d837",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/command-registry.mjs"
@@ -1781,7 +1781,7 @@
     },
     {
       "path": "packages/bee/lib/validate-args.mjs",
-      "sha256": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
+      "sha256": "99a28f221deb373ee128a821a1463acafdf91413c377c04d56cbda5137c81b17",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/validate-args.mjs"
@@ -1893,7 +1893,7 @@
     },
     {
       "path": "packages/bee/tests/test_bee_cli.mjs",
-      "sha256": "4c4f18e56357f6b3578264646d2719629ddb22c54358ab682ff9c9940f7f96a4",
+      "sha256": "bb86681311975e393f46da91f866a712243aa8b511a79979d1bfd6fe3da6f8a9",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_bee_cli.mjs"

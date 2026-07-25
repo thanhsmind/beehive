@@ -7158,6 +7158,38 @@ export async function main(argv) {
     );
   }
 
+  // C7/C8/C9 (packages-engine-move-3): dispatcher-level unknown-flag
+  // rejection, universal across every verb. validate-args.mjs deliberately
+  // never checks this (see its own comment at the `if (!propSchema) continue`
+  // line) — it was left to "the dispatcher/hook's own concern", which until
+  // now meant only the two bespoke per-handler loops below (update, worker
+  // prune) actually enforced it, and every other verb silently accepted a
+  // typo'd flag and fell through to whatever the handler happened to read
+  // (often "required flag missing", never naming the typo itself — the
+  // original friction report misread this as a silent no-op on `capture add
+  // --text`). This check fires for EVERY verb, strictly before the handler
+  // ever runs, so it also fires first for `cells update`/`state worker
+  // prune` — their own bespoke loops (bee.mjs:1237-1240, :3082-3086) are
+  // left in place (dead code once this always wins the race, but removing
+  // them is out of scope here) and their pinned test assertions still pass
+  // because the message shape below matches theirs closely enough (both
+  // just substring-match "unknown flag --<name>"). --json/--help are never
+  // real keys in `parsed.flags` by this point (parseFlags siphons --json off
+  // into `parsed.json` before flags is built; --help short-circuits main()
+  // earlier at line ~7009) — the allow-list below is defensive, not load-
+  // bearing, in case that upstream stripping ever changes.
+  const DISPATCH_ALWAYS_ALLOWED_FLAGS = new Set(['json', 'help']);
+  const knownFlagNames = Object.keys(entry.parameters.properties || {});
+  const knownFlagSet = new Set(knownFlagNames);
+  for (const flagName of Object.keys(parsed.flags)) {
+    if (knownFlagSet.has(flagName) || DISPATCH_ALWAYS_ALLOWED_FLAGS.has(flagName)) continue;
+    const known = [...new Set([...knownFlagNames, ...DISPATCH_ALWAYS_ALLOWED_FLAGS])].sort().join(', ');
+    return emitError(
+      `${commandName.split('.').join(' ')}: unknown flag --${flagName} (known: ${known}).`,
+      useJson,
+    );
+  }
+
   const handler = HANDLERS[commandName];
   try {
     // reservations.reserve/release/sweep (D2) run their read-check-write body

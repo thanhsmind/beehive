@@ -5,14 +5,14 @@
     "agents_block": "5986a028dda47a7f1ca932c683bd1f78cc6480d2e09c49192028e12aa25bc8af",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
     "helpers": {
-      "bee.mjs": "c6dff0e571dd953da795ed63811a0b40f4c82a2d078059fe22ca3f97e46037aa"
+      "bee.mjs": "cf46b1b6edaa9e372395bf06f157841a63384f443e1969a0790e80bacdabea76"
     },
     "lib": {
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "d05425d07639c8ca18fe4c46fd4686696807e4c4029a2f5a4ba75421e8a3b68e",
       "claims.mjs": "8869e1ed8f4efe89adf69f2f3b566f295665f42965964ad5e8839eeee957102b",
-      "command-registry.mjs": "3ae9a466c0ed5ce1683196fd18a77fc56ac26f3fd489e501af844b51bfb294e2",
+      "command-registry.mjs": "1a64f7a777c45f93a596bd064e26b5c80a87a87e5af1b461c2d09b9d3383d837",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
@@ -38,7 +38,7 @@
       "source-identity.mjs": "716740641e1f6bfbb5ccc5b4fe7827f1165c2a1f1127ee3800f52a47ac09fc7a",
       "state-projection.mjs": "372e78ecbce14115cbc2b88bfe10d23f55fa9716d4ed586370e532484dcf00c1",
       "state.mjs": "3618184ae83ca754df936c520cad46250be2fdb8640663f2863c192e53f60f68",
-      "validate-args.mjs": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
+      "validate-args.mjs": "99a28f221deb373ee128a821a1463acafdf91413c377c04d56cbda5137c81b17",
       "workflow-store.mjs": "c5460cd0cd9b5cb9d49f2b7f5d4d4113e1bd3e790b0c8670c716f9ba50628c12",
       "workspace-store.mjs": "aa8017d71df1e3d35f40503b47bbe1aa1a2e110623b4a480fe66eb5bb1f3c3c1",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
@@ -81,5 +81,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T20:11:59.224Z"
+  "updated_at": "2026-07-25T20:27:17.874Z"
 }

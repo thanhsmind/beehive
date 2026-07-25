@@ -46,19 +46,47 @@
   "deps": [
     "packages-engine-move-2"
   ],
-  "status": "open",
+  "status": "capped",
   "decisions": [],
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "otto",
+    "outcome": "Dispatcher-level unknown-flag rejection lands: after validate() and before every handler dispatch, main() rejects any flag absent from the verb's own registry schema on STDERR, exit 1, naming the exact flag (capture add --text now says so, instead of only 'outcome missing'). Corrected the C7 premise (capture add already exited 1; the bug was message quality). Declared the plan's 7 known registry gaps (cells.claim/claim-next --isolate, state.gate --owner, state.start-feature --isolate, config.get/set/unset --local) plus 5 more discovered live via full-suite red (cells.verify/cap/block/unclaim/reopen session-id + force-ownership, read indirectly through ownershipFlags) — validator never loosened. Both bespoke per-handler loops (cells update, state worker prune) untouched; their pinned assertions still pass since the central check now simply wins the race first with a compatible message shape. Regen chain run (render_plugin_skill_trees, self-onboard --apply, release_manifest --write, impact_registry --write).",
+    "files_changed": [
+      "packages/bee/bee.mjs",
+      "packages/bee/lib/command-registry.mjs",
+      "packages/bee/lib/validate-args.mjs",
+      "packages/bee/tests/test_bee_cli.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/bin/bee.mjs",
+      ".bee/bin/lib/command-registry.mjs",
+      ".bee/bin/lib/validate-args.mjs",
+      ".bee/onboarding.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
-    "verification_evidence": null,
-    "verify_output": null,
-    "verify_passed": null,
-    "claim_session": null
-  }
+    "capped_at": "2026-07-25T20:30:48.473Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\n    \"packages/bee/tests/test_bee_cli.mjs:3057-3102 (main(): DB3 validate()-layer/handler-owned refusal tests — MISSING/INVALID declared-flag coverage, never an UNDECLARED flag name, so the new row is not a duplicate)\",\n    \"packages/bee/tests/test_cli_state.mjs:1110-1127 (worker prune --dryrun / worker clear --dry-run bespoke-loop pinned assertions — substring-only, confirmed compatible with the central check firing first)\",\n    \"packages/bee/tests/test_cli_state.mjs:901-903 (state gate --owner rejection pinned message — confirmed `owner` must stay a declared-but-handler-rejected flag)\",\n    \"packages/bee/lib/validate-args.mjs:69-118 (validate() — confirmed unknown-flag rejection was explicitly left to \\\"the dispatcher/hook's own concern\\\", never duplicated here)\"\n  ],\n  \"tests_added_or_changed\": [\n    \"packages/bee/tests/test_bee_cli.mjs: one new row in the existing DB3 section — 'main(): capture add --text (an unknown flag) is refused on STDERR naming --text, not just \\\"outcome missing\\\"' (C7 red-first regression). No new test file.\"\n  ],\n  \"verification_run\": \"Red-first (scoped, file-targeted per decision 8ef2bae6): `node packages/bee/tests/test_bee_cli.mjs` BEFORE the dispatcher fix -> 295 passed, 1 failed (the new check) with `expected --text named as the unknown flag, got: Missing required flag --outcome.` — confirms the corrected C7 premise (already exits 1, just doesn't name --text). After implementing the central check + declaring registry gaps: same file -> 296 passed, 0 failed. Then the cell's own full verify chain, once, at the end: `BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs` -> PASS 105 suite(s), 0 failures, wall~42s; `node scripts/release_manifest.mjs --check` -> 394 file(s) match stored manifest.\",\n  \"deliberate_exceptions\": [\n    \"Static + dynamic gap discovery went beyond the plan's 7 named registry gaps: cells.verify/cap/block/unclaim/reopen all call ownershipFlags(flags) (session-id, force-ownership) without declaring either in their schema — undetected by the plan's static scan because the read is indirect (through a shared helper), not a literal flags.X in the handler body itself. Confirmed real (not a false positive) by two independent full test_bee_cli.mjs runs surfacing 'claim #2 should succeed' failures once the central check went live, traced to a silently-refused `cells unclaim --session-id ...` inside an unasserted loop step. Declared session-id + force-ownership on all 5 entries — never loosened the validator.\",\n    \"Left `dry-run` undeclared on 8 state.* verbs (state.set/gate/plan-rev.bump/scribing-run/start-feature/handoff.write/handoff.adopt/advisor-ref.record) that call the shared rejectDryRun(flags) guard (each throws its own '--dry-run is only supported by \\\"worker prune\\\"' message). No test pins that specific string for any of these verbs (only a `/dry-run/` substring check on state.worker.clear, itself a DIFFERENT, already-central-check-covered verb) — the new central check now catches --dry-run on these 8 first with a generic 'unknown flag --dry-run' message that still contains the substring, still exits 1, still names the flag. This is judgment, not omission: declaring it would have required threading an extra rarely-used, deliberately-unsupported flag through 8 schemas for zero behavior or test-coverage gain; the trade only changes wording on an edge case nothing exercises.\",\n    \"requiredProofTier resolves to targeted-green (lane standard, cell.change_class unset -> derives 'behavior', not high-risk) per test-economy D1/D2 — red_failure_evidence is not mandated by the matrix. Produced full scoped red-first evidence anyway because the cell's own must_haves explicitly required it ('red-first evidence: pre-fix stderr does NOT name --text, post-fix it does').\"\n  ]\n}\n",
+    "verify_output": "run_verify: PASS 105 suite(s), concurrency=12, wall=41863ms, 0 failures. release_manifest --check: 394 file(s) match stored manifest.",
+    "verify_passed": true,
+    "claim_session": "5a8119e3-29eb-43ae-8ada-7bae86f3a20e",
+    "claimed_at": "2026-07-25T20:13:39.390Z",
+    "verify_command": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-25T20:30:39.341Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T20:30:39.341Z",
+        "claim_session": "5a8119e3-29eb-43ae-8ada-7bae86f3a20e",
+        "claimed_at": "2026-07-25T20:13:39.387Z",
+        "acquired_at": "2026-07-25T20:13:39.387Z",
+        "worker": "otto",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
 }

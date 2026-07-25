@@ -87,7 +87,11 @@ export function validate(commandEntry, parsedArgs = {}) {
   for (const [field, value] of Object.entries(args)) {
     if (value === undefined) continue;
     const propSchema = schema.properties[field];
-    if (!propSchema) continue; // unknown-flag rejection is the dispatcher/hook's own concern
+    if (!propSchema) continue; // unknown-flag rejection is the dispatcher's own concern —
+    // bee.mjs's main() runs a central check against this same schema's
+    // `properties`, strictly after validate() and strictly before the
+    // handler dispatch (packages-engine-move-3, C7/C8/C9); this file never
+    // duplicates that check.
     if (!typeMatches(propSchema.type, value)) {
       problems.push({ field, reason: `invalid type, expected ${propSchema.type}` });
       continue; // a mistyped value can't also be enum-checked meaningfully

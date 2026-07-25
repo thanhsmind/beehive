@@ -221,6 +221,8 @@
     "test-prune",
     "gitignore",
     "scripts-tests-move",
-    "migration"
+    "migration",
+    "dispatcher",
+    "packages-engine-move"
   ]
 }

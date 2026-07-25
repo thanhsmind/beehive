@@ -3101,6 +3101,26 @@ await check('main(): state scribing-run with zero flags names --feature, --areas
   assert(/Example:/.test(result.stderr), `expected an Example: line, got: ${result.stderr}`);
 });
 
+// ─── C7/C8/C9 (packages-engine-move-3): dispatcher-level unknown-flag
+// rejection. The original friction report misread `bee capture add --text x`
+// as a silent no-op — it actually exits 1 today via the handler's own
+// requireFlag('outcome') check, since --text is simply ignored by validate()
+// (validate-args.mjs:90's "unknown-flag rejection is the dispatcher/hook's
+// own concern"). The real gap: the refusal never NAMES --text as unknown, so
+// an orchestrator skimming only the last line of output misreads a plain
+// "outcome missing" message as an unrelated failure. This is the first test
+// exercising a truly UNKNOWN (undeclared-in-schema) flag through main() end
+// to end — the DB3 tests just above cover MISSING/INVALID values for flags
+// the schema already declares, never an undeclared flag name, so this is a
+// new row, not a duplicate of any of them (test-economy D5).
+await check('main(): capture add --text (an unknown flag) is refused on STDERR naming --text, not just "outcome missing" (C7 dispatcher-level central check)', async () => {
+  const result = await runBee(['capture', 'add', '--text', 'x']);
+  assert(result.status === 1, `expected exit 1, got ${result.status} (stdout: ${result.stdout}, stderr: ${result.stderr})`);
+  assert(result.stdout === '', `unknown-flag refusal stays on STDERR — unexpected stdout: ${result.stdout}`);
+  assert(/--text/.test(result.stderr), `expected --text named as the unknown flag, got: ${result.stderr}`);
+  assert(/unknown flag/.test(result.stderr), `expected "unknown flag" in the message, got: ${result.stderr}`);
+});
+
 // ─── pure-logic unit tests (direct import, no spawn — no side effects since
 // bee.mjs guards main() behind a direct-run check) ──────────────────────────
 
