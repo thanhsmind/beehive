@@ -1,11 +1,21 @@
 #!/usr/bin/env node
 // test_reservation_race.mjs — proves reservations.mjs's reserve()/release()/
 // sweepExpired() (bee.mjs handleReservationsReserve/.../Sweep) are race-safe
-// end to end (CONTEXT.md D2+D3, cell msh-3): the read-check-write body (fresh
-// read, conflict check, append, write) runs inside withStoreLock('reservations'),
-// so two concurrent reserves can no longer both pass the conflict check
-// against the same snapshot and have the later write silently drop the
-// earlier hold — never a lost update.
+// end to end (CONTEXT.md D2+D3, cell msh-3).
+//
+// multisession-native-16 (D4/D5, advisor consult slice 3 conditions B/C/E):
+// reserve() is now a shim over lease-store.mjs's SHARDED per-resource lease
+// files (`.bee/runtime/leases/paths/<hash>.json`), never a single shared
+// `.bee/reservations.json` read-check-write under a store-wide
+// withStoreLock('reservations') lock (D2's original mechanism, retired by
+// this cell's own hot-path requirement: "no global 'reservations' store
+// lock ... on reserve/release/renew"). Race-safety for the identical-path
+// case (scenario (b) below, the one that matters most) now comes from
+// lease-store.mjs's acquireLeases: an O_EXCL ('wx') file CREATE, which the
+// filesystem itself guarantees only one racer can ever win for a given path
+// — see reservations.mjs's own module header ("overlap-conflict race
+// window") for the one narrowed guarantee this migration accepts (two
+// racers on DIFFERENT-but-overlapping, non-identical paths).
 //
 // Self-contained child-orchestrator (fork racers, assert internally, exit
 // 0/1) invoked by ONE blocking row (critical-patterns 20260714 "Async
@@ -18,20 +28,28 @@
 // Three scenarios:
 //   (a) SAFE, distinct paths — N racers through the REAL reserve() on N
 //       distinct paths, same cell: every racer's row must survive (N active
-//       rows at the end) — no lost update even though every racer read-check-
-//       writes the SAME reservations.json.
+//       rows at the end, read through listReservations() — the legacy
+//       reservations.json is a rebuildable projection nothing writes
+//       synchronously anymore, see reservations.mjs's module header). Each
+//       racer's lease now lives at its OWN sharded file, so there is
+//       structurally nothing left to lose an update ON for this scenario —
+//       it stays green as a regression guard, not because a lock protects a
+//       shared file that no longer exists.
 //   (b) SAFE, same path — N racers through the REAL reserve() on ONE shared
 //       path: exactly one ok:true winner, N-1 typed conflict refusals naming
-//       the holder agent.
-//   (c) DELIBERATE RED (falsifiability, critical-patterns 20260714) — N
-//       racers through a test-owned proxy that mimics the PRE-FIX shape
-//       (read the store, WIDEN the window with a short sleep, append, write)
-//       with NO store lock in front of it, each on a distinct path in the
-//       same store. Demonstrates the exact lost-update hazard D2 exists to
-//       kill: fewer than N rows survive because a later writer's read
-//       predates an earlier writer's write and clobbers it on save. Runs in
-//       its own throwaway temp dir — the real (safe) store is never touched
-//       by this scenario, so nothing needs "restoring" afterward.
+//       the holder agent — this is the scenario acquireLeases' O_EXCL
+//       protection is actually load-bearing for.
+//   (c) DELIBERATE RED (falsifiability, critical-patterns 20260714) —
+//       redesigned for the sharded world: N racers through a test-owned
+//       proxy that mimics the PRE-O_EXCL shape (check if the SAME shared
+//       lease file exists, WIDEN the window with a short sleep, then
+//       unconditionally overwrite it — no exclusive-create in front of it).
+//       Demonstrates the double-grant hazard acquireLeases' 'wx' flag exists
+//       to kill: MORE THAN ONE racer believes it exclusively acquired the
+//       identical resource, because the naive existence check and the write
+//       are not atomic. Runs in its own throwaway temp dir — the real (safe)
+//       store is never touched by this scenario, so nothing needs
+//       "restoring" afterward.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -42,7 +60,6 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.join(path.dirname(__filename), '..');
 const RESERVATIONS_LIB_PATH = path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'reservations.mjs');
-const FSUTIL_LIB_PATH = path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'fsutil.mjs');
 
 const RACERS = 8;
 const UNSAFE_WIDEN_MS = 30;
@@ -76,24 +93,50 @@ async function runWorker(workerRole) {
     } else if (workerRole === 'unsafe-racer') {
       const root = argVal('--root');
       const id = argVal('--id');
-      const reservedPath = argVal('--path');
-      const { readJson, writeJsonAtomic } = await import(FSUTIL_LIB_PATH);
-      const storePath = path.join(root, '.bee', 'reservations.json');
-      // Pre-fix shape: read, WIDEN the window, then append+write — no store
-      // lock in front of it (the exact hazard D2 removes from the real
-      // reserve() path).
-      const store = readJson(storePath, { reservations: [] });
+      const reservedPath = argVal('--path'); // every unsafe racer targets the SAME shared path
+      const crypto = await import('node:crypto');
+      // multisession-native-16: reserve() no longer read-check-writes ONE
+      // shared reservations.json (that whole store-wide hazard is gone —
+      // there is no longer any shared mutable file for distinct-path racers
+      // to lose an update on at all, since each resource now lives at its
+      // own path). The hazard this negative control must now reproduce is
+      // lease-store.mjs's OWN protection: acquireLeases' O_EXCL ('wx') create
+      // is what makes two racers targeting the SAME resource key mutually
+      // exclusive (proven safe by scenario (b) above, through the REAL
+      // reserve()). This mimics the PRE-O_EXCL shape instead: a naive
+      // check-if-file-exists, WIDEN the window, then unconditionally
+      // overwrite — no exclusivity at all. Each racer reports what IT
+      // observed at check time (`believedWon: true` means it saw no
+      // pre-existing file) — a TOCTOU race lets MORE THAN ONE racer believe
+      // it exclusively acquired the same resource, the double-grant hazard
+      // O_EXCL exists to kill.
+      const canonical = reservedPath.replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/\/+$/, '');
+      const resourceKey = `path:${canonical}`;
+      const hash = crypto.createHash('sha256').update(resourceKey).digest('hex');
+      const leasePathsDir = path.join(root, '.bee', 'runtime', 'leases', 'paths');
+      fs.mkdirSync(leasePathsDir, { recursive: true });
+      const file = path.join(leasePathsDir, `${hash}.json`);
+      const believedWon = !fs.existsSync(file);
       await new Promise((resolve) => setTimeout(resolve, UNSAFE_WIDEN_MS));
-      store.reservations.push({
-        agent: `worker-unsafe-${id}`,
-        cell: 'race-c',
-        path: reservedPath,
-        ttl_seconds: 3600,
-        reserved_at: new Date().toISOString(),
-        released_at: null,
-      });
-      writeJsonAtomic(storePath, store);
-      process.stdout.write(`${JSON.stringify({ id, path: reservedPath })}\n`);
+      fs.writeFileSync(
+        file,
+        `${JSON.stringify(
+          {
+            resource: resourceKey,
+            mode: 'write',
+            workflow_id: 'race-c',
+            session_id: `unsafe-sess-${id}`,
+            workspace_id: `agent:worker-unsafe-${id}`,
+            epoch: 0,
+            acquired_at: new Date().toISOString(),
+            expires_at: null,
+            kind: 'lease',
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      process.stdout.write(`${JSON.stringify({ id, path: reservedPath, believedWon })}\n`);
       process.exit(0);
     } else {
       throw new Error(`unknown role: ${workerRole}`);
@@ -147,7 +190,12 @@ function makeRoot() {
 // ─── orchestrator ────────────────────────────────────────────────────────────
 
 async function runOrchestrator() {
-  const { readJson } = await import(FSUTIL_LIB_PATH);
+  // multisession-native-16: reserve() is now a shim over lease-store.mjs's
+  // sharded per-resource files — `.bee/reservations.json` is a rebuildable
+  // PROJECTION nothing writes synchronously (see reservations.mjs's own
+  // module header), so scenarios (a)/(b) below must read the LIVE store
+  // through listReservations(), never the legacy file directly.
+  const { listReservations } = await import(RESERVATIONS_LIB_PATH);
   const failures = [];
 
   // (a) SAFE, distinct paths — N racers through the REAL reserve(), each on
@@ -175,12 +223,11 @@ async function runOrchestrator() {
         failures.push(`(a) expected all ${RACERS} distinct-path reserves to succeed, got ${winners.length}: ${JSON.stringify(parsed)}`);
       }
 
-      const store = readJson(path.join(dir, '.bee', 'reservations.json'), { reservations: [] });
-      const active = store.reservations.filter((r) => r.released_at === null && r.cell === 'race-a');
+      const active = listReservations(dir, { activeOnly: true }).filter((r) => r.cell === 'race-a');
       if (active.length !== RACERS) {
         failures.push(
           `(a) LOST UPDATE: expected ${RACERS} surviving active rows, got ${active.length} — ` +
-            `store: ${JSON.stringify(store.reservations)}`,
+            `store: ${JSON.stringify(active)}`,
         );
       }
       const paths = new Set(active.map((r) => r.path));
@@ -230,8 +277,7 @@ async function runOrchestrator() {
         }
       }
 
-      const store = readJson(path.join(dir, '.bee', 'reservations.json'), { reservations: [] });
-      const active = store.reservations.filter((r) => r.released_at === null && r.cell === 'race-b');
+      const active = listReservations(dir, { activeOnly: true }).filter((r) => r.cell === 'race-b');
       if (active.length !== 1) {
         failures.push(`(b) exactly one row should survive on the shared path, got ${active.length}: ${JSON.stringify(active)}`);
       }
@@ -240,9 +286,17 @@ async function runOrchestrator() {
     }
   }
 
-  // (c) DELIBERATE RED — widened-window read-check-write with NO store lock,
-  // proving the pre-fix hazard is real (falsifiability: the safe result above
-  // is not simply "nothing ever races here"). Runs in its own throwaway dir.
+  // (c) DELIBERATE RED — widened-window check-then-write with NO O_EXCL
+  // exclusivity, proving lease-store.mjs's real protection (acquireLeases'
+  // 'wx' create, exercised for real by scenario (b) above) actually matters
+  // (falsifiability: the safe single-winner result above is not simply
+  // "nothing ever races here"). Runs in its own throwaway dir. Redesigned
+  // for multisession-native-16 (see the unsafe-racer worker role's own
+  // comment): the old shape raced N racers appending to ONE shared
+  // reservations.json, which no longer exists as reserve()'s store at all;
+  // this now races N racers on the SAME lease resource key with a naive
+  // (non-exclusive) check-then-write, proving a TOCTOU double-grant is real
+  // without O_EXCL.
   {
     const dir = makeRoot();
     try {
@@ -250,7 +304,7 @@ async function runOrchestrator() {
         '--role=unsafe-racer',
         `--root=${dir}`,
         `--id=${i}`,
-        `--path=src/lib/unsafe-${i}.ts`,
+        '--path=src/lib/unsafe-shared.ts',
       ]);
       const crashed = results.filter((r) => r.code !== 0);
       if (crashed.length) {
@@ -259,12 +313,13 @@ async function runOrchestrator() {
             crashed.map((c) => `  exit=${c.code} stderr=${c.stderr.trim()}`).join('\n'),
         );
       }
-      const store = readJson(path.join(dir, '.bee', 'reservations.json'), { reservations: [] });
-      const survived = store.reservations.length;
-      if (survived >= RACERS) {
+      const parsed = results.map((r) => lastJsonLine(r.stdout));
+      const believedWonCount = parsed.filter((p) => p && p.believedWon === true).length;
+      if (believedWonCount < 2) {
         failures.push(
-          `(c) DETECTOR DID NOT BITE: all ${survived}/${RACERS} unguarded racer rows survived — this negative ` +
-            'control must show FEWER than N surviving rows (a lost update), or the (a) green result proves nothing.',
+          `(c) DETECTOR DID NOT BITE: only ${believedWonCount}/${RACERS} unguarded racers believed they exclusively ` +
+            'acquired the SAME shared resource — this negative control must show MORE THAN ONE racer winning the ' +
+            'naive check (a double grant), or the (b) green single-winner result proves nothing.',
         );
       }
     } finally {

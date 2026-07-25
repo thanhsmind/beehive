@@ -29,6 +29,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { writeJsonAtomic } from '../lib/fsutil.mjs';
+import { acquireLeases } from '../lib/lease-store.mjs';
 
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.dirname(TESTS_DIR);
@@ -126,7 +127,35 @@ function makeFixtureRoot({
     summary: '',
     next_action: '',
   });
-  writeJsonAtomic(path.join(root, '.bee', 'reservations.json'), { reservations });
+  // multisession-native-16: `.bee/reservations.json` is a rebuildable
+  // PROJECTION over lease-store.mjs now (see reservations.mjs's own module
+  // header) — the hook's reservation guard (guards.mjs's checkWrite ->
+  // findConflicts) reads lease-store's files directly, so a fixture
+  // reservation must be seeded as a REAL lease rather than written to the
+  // legacy JSON file, which is no longer consulted for live conflicts at
+  // all. acquireLeases (lease-store.mjs) is synchronous, matching this
+  // file's fully-sync check() harness (spawnSync-based, no async plumbing
+  // anywhere else in this file) — reservations.mjs's own reserve() is async
+  // and deliberately not used here. The field mapping below (workflow_id <-
+  // cell, workspace_id <- 'agent:'+agent, epoch 0, mode 'write', a
+  // sessionless sentinel) is a deliberate small duplicate of reserve()'s own
+  // — see reservations.mjs's module header for the canonical mapping this
+  // mirrors.
+  for (const entry of reservations) {
+    acquireLeases(root, [
+      {
+        type: 'path',
+        id: entry.path,
+        mode: 'write',
+        workflow_id: entry.cell || 'demo-1',
+        session_id: ' bee-reservation-sessionless ',
+        workspace_id: `agent:${entry.agent}`,
+        epoch: 0,
+        ttl: Number.isFinite(entry.ttl_seconds) && entry.ttl_seconds > 0 ? entry.ttl_seconds : 3600,
+        kind: 'lease',
+      },
+    ]);
+  }
   return root;
 }
 

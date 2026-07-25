@@ -29,6 +29,7 @@ import { createSession, bindSessionLane } from '../lib/claims.mjs';
 import { writeJsonAtomic, hashFile, appendJsonl } from '../lib/fsutil.mjs';
 import { defaultState, writeState, writeLane, BEE_VERSION } from '../lib/state.mjs';
 import { listWorkflows } from '../lib/workflow-store.mjs';
+import { mirrorHold, findForeignHolds } from '../lib/worktree-holds.mjs';
 import { ANCHOR_NUDGE_COMMAND } from '../lib/compaction.mjs';
 import { encodeProjectDir } from '../lib/perf.mjs';
 import { emitFrontmatter } from '../lib/knowledge.mjs';
@@ -4296,6 +4297,43 @@ await check('bee reservations reserve returns a CONFLICT (exit 1) when another a
   assert(second.status === 1, `expected exit 1 on conflict, got ${second.status}`);
   assert(JSON.parse(second.stdout).ok === false, `expected ok:false on conflict, got ${second.stdout}`);
 });
+
+// multisession-native-16, advisor consult slice 3 condition B (BINDING,
+// biggest-risk cell): the atomic `findForeignHolds + <lease write> +
+// insertHold` reserve seam (bee.mjs's handleReservationsReserve, ~1529-1616,
+// under worktree-holds.mjs's withHoldsLock) must keep behaving byte-for-byte
+// after reserve() moved onto the lease-store shim — bee.mjs's own reserve
+// handler was NOT touched by this cell, so this proves the shim slots into
+// that unchanged seam correctly rather than merely asserting it wasn't
+// edited.
+await check(
+  "bee reservations reserve (condition B): a successful reserve still double-writes into the shared cross-worktree ledger (a foreign checkout can see it); a path already held by a foreign checkout still denies FOREIGN_HOLD — both through the msn-16 lease-store shim",
+  async () => {
+    // root2 is an ORDINARY checkout (.bee/onboarding.json present, no .git —
+    // see resolveRoots) so resolveHoldTopology resolves holder='main' and the
+    // FULL atomic withHoldsLock(findForeignHolds -> reserve -> insertHold)
+    // seam already runs on every reserve() call through this dispatcher, not
+    // only inside a real linked-worktree checkout.
+    const reserved = await runBee(['reservations', 'reserve', '--agent', 'xwh-b-agent', '--cell', 'xwh-b-cell', '--path', 'src/xwh-b/mine.ts', '--json']);
+    assert(JSON.parse(reserved.stdout).ok === true, `reserve should succeed: ${reserved.stdout}`);
+
+    const mirrored = findForeignHolds(root2, 'some-other-worktree', ['src/xwh-b/mine.ts']);
+    assert(
+      mirrored.length === 1 && mirrored[0].holder === 'main',
+      `the successful reserve must double-write a 'main'-holder mirror any foreign checkout can see, got ${JSON.stringify(mirrored)}`,
+    );
+
+    // A DIFFERENT path, already held by a simulated foreign checkout (a real
+    // linked worktree's own prior reserve would mirror exactly this way): a
+    // new reserve for that same path must still be denied, never silently
+    // succeed just because the local lease store itself has no record of it.
+    await mirrorHold(root2, { path: 'src/xwh-b/foreign-held.ts', holder: 'worktree-other', feature: 'demo2', cell: 'other-cell' });
+    const denied = await runBee(['reservations', 'reserve', '--agent', 'xwh-b-agent2', '--cell', 'xwh-b-cell2', '--path', 'src/xwh-b/foreign-held.ts', '--json']);
+    assert(denied.status === 1, `expected exit 1 on a foreign cross-worktree hold, got ${denied.status}`);
+    const deniedParsed = JSON.parse(denied.stdout);
+    assert(deniedParsed.ok === false && deniedParsed.code === 'FOREIGN_HOLD', `expected a typed FOREIGN_HOLD denial, got ${denied.stdout}`);
+  },
+);
 
 // ─── decisions, through the dispatcher ─────────────────────────────────────
 

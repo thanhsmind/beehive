@@ -4,6 +4,8 @@
 // test_lib.mjs (cs-2a) to shrink the monolith. Same PASS/FAIL/exit-1 contract
 // as every other suite here — see scripts/lib/test-fixture.mjs.
 
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   makeTempRepo,
   check,
@@ -18,11 +20,12 @@ import {
   sweepExpired,
   findConflicts,
   findSessionConflicts,
+  renewHoldsBySession,
   reservationsPath,
+  rebuildReservationsProjection,
   RESERVATION_KINDS,
 } from '../lib/reservations.mjs';
 import { createSession } from '../lib/claims.mjs';
-import { readJson, writeJsonAtomic } from '../lib/fsutil.mjs';
 
 const root = makeTempRepo();
 
@@ -50,15 +53,23 @@ await check('release frees the path for other agents', async () => {
 });
 
 await check('sweepExpired releases TTL-expired reservations', async () => {
-  const store = readJson(reservationsPath(root), { reservations: [] });
-  const active = store.reservations.find((r) => r.agent === 'worker-b' && r.released_at === null);
-  assert(active, 'precondition: worker-b holds an active reservation');
-  active.reserved_at = new Date(Date.now() - 7200 * 1000).toISOString();
-  active.ttl_seconds = 60;
-  writeJsonAtomic(reservationsPath(root), store);
-  const swept = await sweepExpired(root);
+  // multisession-native-16: `.bee/reservations.json` is now a rebuildable
+  // PROJECTION over lease-store.mjs, not the live store — hand-editing it (as
+  // this test did pre-msn-16) no longer reaches the actual lease file, so
+  // expiry is now simulated the same way lease-store's own tests do: an
+  // explicit `now` passed to reserve() at acquire time, and a later `now`
+  // passed to sweepExpired(), both threaded straight through to
+  // acquireLeases/computeExpiresAt — deterministic, no wall-clock sleep.
+  const base = Date.now();
+  const made = await reserve(root, { agent: 'worker-sweep', cell: 'sweep-cell', path: 'src/hold/sweep-me.ts', ttl: 60, now: base });
+  assert(made.ok === true, 'precondition: a fresh reservation was acquired');
+  const future = base + 7200 * 1000; // well past the 60s ttl
+  const swept = await sweepExpired(root, { now: future });
   assert(swept >= 1, `expected at least one swept reservation, got ${swept}`);
-  assert(listReservations(root, { activeOnly: true }).length === 0, 'no active reservations remain');
+  assert(
+    listReservations(root, { activeOnly: true, now: future }).filter((r) => r.path === 'src/hold/sweep-me.ts').length === 0,
+    'no active reservation remains for the swept path',
+  );
 });
 
 // ─── fsh-7: session-owned holds (D3) ────────────────────────────────────────
@@ -101,13 +112,13 @@ await check('findSessionConflicts: a different session conflicts on an overlappi
 });
 
 await check('findSessionConflicts: an expired session-owned hold never conflicts', async () => {
-  await reserve(root, { agent: 'worker-c', cell: 'sess-3', path: 'src/hold/expiring.ts', session: 'sess-C', ttl: 60 });
-  const store = readJson(reservationsPath(root), { reservations: [] });
-  const row = store.reservations.find((r) => r.path === 'src/hold/expiring.ts' && r.session === 'sess-C');
-  assert(row, 'precondition: the just-made hold exists');
-  row.reserved_at = new Date(Date.now() - 7200 * 1000).toISOString();
-  writeJsonAtomic(reservationsPath(root), store);
-  const conflicts = findSessionConflicts(root, 'sess-D', ['src/hold/expiring.ts']);
+  // msn-16: same `now`-threading substitute for hand-editing the (now merely
+  // projected) reservationsPath file — see the sweepExpired test above.
+  const base = Date.now();
+  const made = await reserve(root, { agent: 'worker-c', cell: 'sess-3', path: 'src/hold/expiring.ts', session: 'sess-C', ttl: 60, now: base });
+  assert(made.ok === true, 'precondition: the hold was acquired');
+  const future = base + 7200 * 1000;
+  const conflicts = findSessionConflicts(root, 'sess-D', ['src/hold/expiring.ts'], { now: future });
   assert(conflicts.length === 0, 'a TTL-expired hold is never a conflict, even for a different session');
 });
 
@@ -180,8 +191,94 @@ await check('reserve: kind defaults to "lease" when omitted; an explicit "intent
     'kind must be one of',
     'an invalid kind value is refused synchronously',
   );
-  const store = readJson(reservationsPath(root), { reservations: [] });
-  assert(!store.reservations.some((r) => r.path === 'src/kind/bad.ts'), 'a refused invalid-kind reserve never lands a row on disk');
+  // msn-16: `.bee/reservations.json` is no longer the live store (see module
+  // header) — assert through the live reader (listReservations) instead of
+  // reading the projection file directly.
+  assert(
+    !listReservations(root, { activeOnly: false }).some((r) => r.path === 'src/kind/bad.ts'),
+    'a refused invalid-kind reserve never lands a lease on disk',
+  );
+});
+
+// ─── multisession-native-16: shim over lease-store.mjs ──────────────────────
+
+await check(
+  "reservations.mjs source-scan: reserve/release/renew/sweep never take a store-wide 'reservations' lock (must-have: hot path is per-record via lease-store.mjs's own per-resource locking, not lock.mjs's withStoreLock)",
+  async () => {
+    const source = fs.readFileSync(fileURLToPath(new URL('../lib/reservations.mjs', import.meta.url)), 'utf8');
+    assert(!source.includes('withStoreLock'), "reservations.mjs must never call withStoreLock — a store-wide 'reservations' lock would reintroduce the whole-file hot path this cell removes");
+    assert(!/from ['"]\.\/lock\.mjs['"]/.test(source), 'reservations.mjs must not even import lock.mjs post-msn-16 — confirms no store-wide lock is reachable at all');
+  },
+);
+
+await check(
+  "reserve/release/renewHoldsBySession/sweepExpired never append a 'reservations'-named lock-contention record (runtime confirmation of the source-scan above)",
+  async () => {
+    const dir = makeTempRepo();
+    const contentionPath = `${dir}/.bee/logs/contention.jsonl`;
+    const before = fs.existsSync(contentionPath) ? fs.readFileSync(contentionPath, 'utf8') : '';
+    const first = await reserve(dir, { agent: 'hotpath-a', cell: 'hotpath-cell', path: 'src/hotpath/one.ts', session: 'hotpath-sess' });
+    assert(first.ok === true, 'precondition: reservation acquired');
+    await reserve(dir, { agent: 'hotpath-b', cell: 'hotpath-cell', path: 'src/hotpath/two.ts', session: 'hotpath-sess' });
+    await release(dir, { agent: 'hotpath-a', cell: 'hotpath-cell' });
+    await sweepExpired(dir);
+    await renewHoldsBySession(dir, 'hotpath-sess');
+    const after = fs.existsSync(contentionPath) ? fs.readFileSync(contentionPath, 'utf8') : '';
+    const newLines = after.slice(before.length).split('\n').filter(Boolean);
+    const reservationsLockLines = newLines
+      .map((line) => JSON.parse(line))
+      .filter((record) => typeof record.lock_name === 'string' && record.lock_name.startsWith('reservations'));
+    assert(
+      reservationsLockLines.length === 0,
+      `reserve/release/sweep/renew must never take the 'reservations' lock at all (acquired or busy), got ${JSON.stringify(reservationsLockLines)}`,
+    );
+  },
+);
+
+// ─── multisession-native-16 condition E: heartbeat lease renewal over the shim ─
+
+await check(
+  'renewHoldsBySession renews a shim-backed (lease-store) reservation exactly like it renewed a reservations.json row before this cell — the {maxAttempts:1} try-once posture is preserved (advisor consult slice 3 condition E)',
+  async () => {
+    const base = Date.now();
+    const made = await reserve(root, { agent: 'renew-a', cell: 'renew-cell', path: 'src/renew/me.ts', session: 'renew-sess', ttl: 60, now: base });
+    assert(made.ok === true, 'precondition: reservation acquired');
+
+    // Renew at +30s, extending by the ORIGINAL 60s window from there (new
+    // absolute expiry: +90s) — `future` (+75s) sits past where the
+    // UNRENEWED lease would have expired (+60s) but safely inside the
+    // renewed window, proving the renewal (not some other default) is what
+    // kept it alive.
+    const future = base + 75 * 1000;
+    const renewal = await renewHoldsBySession(root, 'renew-sess', { now: base + 30 * 1000, lockOptions: { maxAttempts: 1 } });
+    assert(renewal.ok === true && renewal.renewed >= 1, `expected at least one renewal, got ${JSON.stringify(renewal)}`);
+
+    const stillActive = listReservations(root, { activeOnly: true, now: future }).some((r) => r.path === 'src/renew/me.ts');
+    assert(stillActive, 'a renewed reservation must still be active past its ORIGINAL ttl window');
+
+    // A session with nothing to renew is a harmless no-op, matching the
+    // pre-msn-16 contract exactly.
+    const noop = await renewHoldsBySession(root, 'nobody-home-sess', { lockOptions: { maxAttempts: 1 } });
+    assert(noop.ok === true && noop.renewed === 0, `expected a no-op for an unknown session, got ${JSON.stringify(noop)}`);
+  },
+);
+
+// ─── multisession-native-16 condition C: rebuildable projection round-trip ──
+// (the delete-and-rebuild proof itself lives in test_state_projection.mjs
+// alongside rebuildAllProjections' other invariant-13/14 coverage — this
+// check only proves rebuildReservationsProjection's own shape/contract in
+// isolation, exported straight from reservations.mjs.)
+
+await check('rebuildReservationsProjection writes .bee/reservations.json in the legacy {reservations:[...]} shape from the current active leases only (no released-history rows — see module header)', async () => {
+  const dir = makeTempRepo();
+  const made = await reserve(dir, { agent: 'proj-solo', cell: 'proj-cell', path: 'src/proj-solo/one.ts', session: 'proj-solo-sess' });
+  assert(made.ok === true, 'precondition: reservation acquired');
+  const rebuilt = rebuildReservationsProjection(dir);
+  assert(rebuilt.authoritative === true && rebuilt.count === 1, `expected exactly one projected row, got ${JSON.stringify(rebuilt)}`);
+  const raw = JSON.parse(fs.readFileSync(reservationsPath(dir), 'utf8'));
+  assert(Array.isArray(raw.reservations) && raw.reservations.length === 1, 'projection file must be the legacy {reservations:[...]} shape');
+  assert(raw.reservations[0].path === 'src/proj-solo/one.ts' && raw.reservations[0].agent === 'proj-solo', 'projected row carries the correct agent/path');
+  assert(raw.reservations[0].released_at === null, 'a live lease projects with released_at: null (no soft-delete history in the new architecture)');
 });
 
 printSummaryAndExit();

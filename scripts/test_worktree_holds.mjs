@@ -380,12 +380,16 @@ check('reserve from an UNGRANTED linked worktree lands in the shared main reserv
   assert(json && json.ok === true, `expected ok:true, got ${r.stdout}`);
 
   // the local reservation landed in MAIN's own store (shared, since
-  // storeRoot === mainRoot for an ungranted linked worktree) ...
-  assert(fs.existsSync(reservationsFilePath(main)), 'the reservation should have landed in the MAIN store (shared store for an ungranted worktree)');
-  const mainReservations = JSON.parse(fs.readFileSync(reservationsFilePath(main), 'utf8'));
+  // storeRoot === mainRoot for an ungranted linked worktree) — multisession-
+  // native-16: `.bee/reservations.json` is a rebuildable PROJECTION nothing
+  // writes synchronously anymore (reservations.mjs's own module header), so
+  // this is proven through the live `reservations list` CLI output (which
+  // reads lease-store.mjs's files through the shim) rather than the legacy
+  // file directly.
+  const { json: mainList } = beeJson(main, ['reservations', 'list', '--active-only']);
   assert(
-    mainReservations.reservations.some((res) => res.path === 'src/ungranted' && res.agent === 'au'),
-    `expected the reservation to appear in main's reservations.json, got ${JSON.stringify(mainReservations)}`,
+    Array.isArray(mainList.reservations) && mainList.reservations.some((res) => res.path === 'src/ungranted' && res.agent === 'au'),
+    `expected the reservation to appear in main's live reservation list, got ${JSON.stringify(mainList)}`,
   );
 
   // ... but nothing was ever mirrored into the cross-worktree ledger — an

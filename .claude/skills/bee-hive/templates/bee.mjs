@@ -3065,7 +3065,11 @@ function handleStateRebuildProjections(root) {
   const stateNote = result.state.authoritative
     ? `rebuilt .bee/state.json from workflow ${result.state.source}`
     : 'state.json left untouched (no workflow records yet, or a live non-idle default feature — see D1 field scoping)';
-  const text = `${stateNote}; ${laneCount} lane projection(s) rebuilt.`;
+  // multisession-native-16: reservations.json is rebuilt unconditionally
+  // (never gated on workflow records — see rebuildReservationsProjection's
+  // own doc comment), so it always reports a concrete count.
+  const reservationsNote = `reservations.json rebuilt (${result.reservations.count} active)`;
+  const text = `${stateNote}; ${laneCount} lane projection(s) rebuilt; ${reservationsNote}.`;
   return { result, text };
 }
 

@@ -9,7 +9,7 @@ import { readJson, writeJsonAtomic } from './fsutil.mjs';
 // file) and never each other or this file, so composing both here stays
 // cycle-free (msh-5).
 import { readSession, readClaim, isClaimActive, claimsDir, adoptClaim, activeWorkers } from './claims.mjs';
-import { pathsOverlap } from './reservations.mjs';
+import { pathsOverlap, listReservations } from './reservations.mjs';
 import { readGrants } from './worktree-store.mjs';
 // D6 — startFeature's single read-check-write body runs inside this lock
 // (CLI verbs WAIT normally: no maxAttempts override here, unlike the hook-
@@ -2036,11 +2036,27 @@ export function advisorRefStale(root, ref, state) {
 // FOUR gates to false, and refreshes summary/next_action.
 //
 // Self-contained by design: cells.mjs already imports readState/gateApproved/
-// MODEL_TIERS from this module, so this function reads .bee/cells/*.json and
-// .bee/reservations.json directly (small local helpers below) rather than
-// importing lib/cells.mjs or the stateful reservations.mjs verbs, avoiding a
-// state.mjs <-> cells.mjs import cycle. (The pure pathsOverlap predicate IS
-// imported from reservations.mjs — that module imports only fsutil, no cycle.)
+// MODEL_TIERS from this module, so this function reads .bee/cells/*.json
+// directly (small local helper below) rather than importing lib/cells.mjs,
+// avoiding a state.mjs <-> cells.mjs import cycle. (The pure pathsOverlap
+// predicate IS imported from reservations.mjs — that module imports only
+// fsutil/lock/claims/lease-store, no cycle back to this file.)
+//
+// multisession-native-16 (advisor consult slice 3, condition C, BINDING):
+// listActiveReservationsForStart used to read `.bee/reservations.json`
+// directly. That file is now a rebuildable PROJECTION (msn-16 demoted
+// reservations.mjs's storage to lease-store.mjs's sharded per-resource lease
+// files) that is only ever refreshed on demand — reading it here would open
+// exactly the "lazy-projection gap" condition C calls out: reserve() could
+// succeed (a live lease acquired) while the stale projection file still
+// showed no conflict, letting startFeature green-light a colliding start.
+// Condition C's two options were (a) synchronously rebuild the projection
+// inside every reserve/release call, or (b) migrate this direct reader onto
+// the shim's own list API — (b) was chosen: listReservations() reads
+// lease-store's live files directly, so this precondition always sees
+// reserve()'s true, current state with no rebuild step, and reserve/release/
+// renew/sweep never pay for a synchronous whole-projection rewrite on their
+// own hot path (this cell's other binding requirement).
 //
 // LANE MODE (fresh-session-handoff fsh-3, validated Q4): startFeature with
 // { lane: true } starts the feature AS a lane record under .bee/lanes/ while
@@ -2087,18 +2103,12 @@ function listAllCellsForStart(root) {
 }
 
 function listActiveReservationsForStart(root) {
-  const store = readJson(path.join(root, '.bee', 'reservations.json'), null);
-  const reservations = store && Array.isArray(store.reservations) ? store.reservations : [];
-  const nowMs = Date.now();
-  return reservations.filter((reservation) => {
-    if (!reservation || reservation.released_at != null) return false;
-    const ttl = reservation.ttl_seconds;
-    if (Number.isFinite(ttl) && ttl > 0) {
-      const reservedMs = Date.parse(reservation.reserved_at);
-      if (Number.isFinite(reservedMs) && reservedMs + ttl * 1000 <= nowMs) return false; // expired, not active
-    }
-    return true;
-  });
+  // msn-16 condition C: reads THROUGH the shim (lease-store-backed), never
+  // the legacy `.bee/reservations.json` projection — see the header comment
+  // above this function for why. listReservations' own activeOnly filter
+  // applies the exact same "unreleased AND not TTL-expired" semantics this
+  // function used to implement by hand against the raw file.
+  return listReservations(root, { activeOnly: true });
 }
 
 // ─── C1 (advisor consult slice 2, binding, the seed) — legacy-to-workflow

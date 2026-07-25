@@ -48,6 +48,13 @@ import {
   anchorMissing,
   compactCheck,
 } from '../skills/bee-hive/templates/lib/compaction.mjs';
+// multisession-native-16: `.bee/reservations.json` is a rebuildable
+// PROJECTION over lease-store.mjs now (reservations.mjs's own module
+// header) — compaction.mjs's `reservations` check reads live leases through
+// reservations.mjs's listReservations, so a fixture reservation must be a
+// real lease, seeded via lease-store.mjs's synchronous acquireLeases
+// (same source tree this file already targets, D17).
+import { acquireLeases } from '../skills/bee-hive/templates/lib/lease-store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, '..');
@@ -134,20 +141,38 @@ function addAnchor(root, key, request = 'do the thing the user actually asked fo
   });
 }
 
+// Deliberate small duplicate of reservations.mjs's own reserve()<->lease
+// field mapping (see that module's header) — seeds a real lease-store lease
+// directly via the synchronous acquireLeases rather than reservations.mjs's
+// async reserve(), so every check() row in this file can stay synchronous.
 function addReservations(root, rows) {
-  writeJson(path.join(root, '.bee', 'reservations.json'), { reservations: rows });
+  for (const row of rows) {
+    acquireLeases(
+      root,
+      [
+        {
+          type: 'path',
+          id: row.path,
+          mode: 'write',
+          workflow_id: row.cell,
+          // Control-char-wrapped sentinel — never a real session id — mirrors
+          // reservations.mjs's own SESSIONLESS_SESSION_ID so an omitted
+          // `session` here reproduces a genuinely session-less/"legacy" row
+          // through the shim.
+          session_id: row.session || '\u0000bee-reservation-sessionless\u0000',
+          workspace_id: `agent:${row.agent}`,
+          epoch: 0,
+          ttl: row.ttl,
+          kind: 'lease',
+        },
+      ],
+      { now: row.now },
+    );
+  }
 }
 
-function reservationRow({ agent = 'tester', cell, filePath, session, ageSeconds = 0, ttl = 3600, released = false }) {
-  return {
-    agent,
-    cell,
-    path: filePath,
-    ttl_seconds: ttl,
-    reserved_at: new Date(Date.now() - ageSeconds * 1000).toISOString(),
-    released_at: released ? new Date().toISOString() : null,
-    ...(session ? { session } : {}),
-  };
+function reservationRow({ agent = 'tester', cell, filePath, session, ageSeconds = 0, ttl = 3600 }) {
+  return { agent, cell, path: filePath, session, ttl, now: Date.now() - ageSeconds * 1000 };
 }
 
 /** sha256 over every path + byte in a directory tree — the idempotence proof. */

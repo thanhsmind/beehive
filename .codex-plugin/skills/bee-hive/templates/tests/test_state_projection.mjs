@@ -29,6 +29,7 @@ import {
   rebuildLaneProjection,
   rebuildAllProjections,
 } from '../lib/state-projection.mjs';
+import { reserve, listReservations, reservationsPath, rebuildReservationsProjection } from '../lib/reservations.mjs';
 
 function makeRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'bee-state-projection-'));
@@ -421,5 +422,61 @@ await check('rebuildAllProjections: rebuilds state.json from the newest active w
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ─── rebuildReservationsProjection (multisession-native-16, advisor consult
+// slice 3 condition C): .bee/reservations.json is now a rebuildable
+// PROJECTION of lease-store.mjs's live path leases, never the live store
+// itself. Deleting it and rebuilding must recover it fully — the same
+// invariant-13/14 proof this file already runs for state.json/lanes,
+// extended to reservations — and legacy readers (listReservations) must
+// never notice its absence, since they never read it. ──────────────────────
+
+await check(
+  "rebuildAllProjections rebuilds .bee/reservations.json from lease-store's current active path leases (unconditionally, never gated on workflow records); deleting the file and rebuilding recovers it byte-identically (invariant 13/14); listReservations (the live reader) is unaffected either way",
+  async () => {
+    const root = makeRoot();
+    try {
+      const first = await reserve(root, { agent: 'proj-a', cell: 'proj-cell', path: 'src/proj/one.ts', session: 'proj-sess' });
+      assert(first.ok === true, 'precondition: reservation acquired');
+      const second = await reserve(root, { agent: 'proj-b', cell: 'proj-cell', path: 'src/proj/two.ts', session: 'proj-sess' });
+      assert(second.ok === true, 'precondition: second reservation acquired');
+
+      // The projection file is NEVER written by reserve() itself (msn-16 hot-
+      // path requirement) — the live reader sees both leases with zero
+      // projection file on disk.
+      assert(!fs.existsSync(reservationsPath(root)), 'precondition: no projection file exists yet (reserve() never writes it)');
+      assert(listReservations(root, { activeOnly: true }).length === 2, 'listReservations sees both live leases with zero projection file present');
+
+      const result = rebuildAllProjections(root);
+      assert(
+        result.reservations.authoritative === true && result.reservations.count === 2,
+        `rebuild must report both active reservations, got ${JSON.stringify(result.reservations)}`,
+      );
+      assert(fs.existsSync(reservationsPath(root)), 'rebuild must write the projection file');
+      const projected = JSON.parse(fs.readFileSync(reservationsPath(root), 'utf8'));
+      assert(Array.isArray(projected.reservations) && projected.reservations.length === 2, 'projection file must list both reservations');
+      assert(
+        projected.reservations.some((r) => r.path === 'src/proj/one.ts' && r.agent === 'proj-a'),
+        'projected row carries the correct agent/path',
+      );
+
+      // delete-and-rebuild (invariant 13/14): losing the projection file
+      // loses nothing — legacy direct readers of the raw file would see it
+      // reappear identically on the next rebuild, and the LIVE reader
+      // (listReservations) never even noticed it was gone in between.
+      fs.rmSync(reservationsPath(root), { force: true });
+      assert(listReservations(root, { activeOnly: true }).length === 2, "listReservations is unaffected by the projection file's deletion — it never reads it");
+      const rebuilt = rebuildReservationsProjection(root);
+      assert(rebuilt.count === 2, `rebuild after deletion must recover both reservations, got ${JSON.stringify(rebuilt)}`);
+      const reprojected = JSON.parse(fs.readFileSync(reservationsPath(root), 'utf8'));
+      assert(
+        JSON.stringify(reprojected) === JSON.stringify(projected),
+        'a rebuild after deletion must reproduce byte-identical projection content (invariant 13/14)',
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 
 printSummaryAndExit();

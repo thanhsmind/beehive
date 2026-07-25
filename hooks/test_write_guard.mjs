@@ -17,12 +17,41 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { runModuleWorker } from "../scripts/lib/run-module-worker.mjs";
+// multisession-native-16: a fixture reservation must be seeded as a REAL
+// lease-store lease, not written to `.bee/reservations.json` (which is now
+// only a rebuildable projection — see reservations.mjs's own module header;
+// the hook's reservation guard reads lease-store's files directly). Imported
+// from the SAME vendored location copyLib() below copies fixtures from
+// (`.bee/bin/lib`), matching this file's existing convention of testing
+// against whatever is actually vendored there. acquireLeases is synchronous,
+// so the fixture builders below stay synchronous too.
+import { acquireLeases } from "../.bee/bin/lib/lease-store.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const HOOKS_DIR = path.dirname(SCRIPT_PATH);
 const REPO_ROOT = path.dirname(HOOKS_DIR);
 const HOOK_PATH = path.join(HOOKS_DIR, "bee-write-guard.mjs");
 const REAL_LIB_DIR = path.join(REPO_ROOT, ".bee", "bin", "lib");
+
+// Deliberate small duplicate of reservations.mjs's own reserve()<->lease
+// field mapping (see that module's header for the canonical explanation) —
+// this file's fixtures seed a lease directly via lease-store.mjs's
+// synchronous acquireLeases rather than reservations.mjs's async reserve().
+function seedReservationLease(root, { path: reservedPath, agent, cell = "other", ttl = 3600 }) {
+  acquireLeases(root, [
+    {
+      type: "path",
+      id: reservedPath,
+      mode: "write",
+      workflow_id: cell,
+      session_id: "\u0000bee-reservation-sessionless\u0000",
+      workspace_id: `agent:${agent}`,
+      epoch: 0,
+      ttl,
+      kind: "lease",
+    },
+  ]);
+}
 
 let failures = 0;
 
@@ -100,28 +129,14 @@ function buildThrowingGuardsFixture() {
   return root;
 }
 
-// A working fixture pre-seeded with one active reservation, written directly
-// to .bee/reservations.json (schema: reservations.mjs's own store shape) so
-// the apply_patch reservation rows below can prove a real conflict/no-conflict
-// decision instead of asserting on string presence alone.
+// A working fixture pre-seeded with one active reservation — a real
+// lease-store lease (multisession-native-16; see seedReservationLease above)
+// — so the apply_patch reservation rows below can prove a real
+// conflict/no-conflict decision instead of asserting on string presence
+// alone.
 function buildReservationFixture(prefix, reservedPath, holderAgent) {
   const root = buildFixture(prefix);
-  const store = {
-    reservations: [
-      {
-        agent: holderAgent,
-        cell: "other-cell",
-        path: reservedPath,
-        ttl_seconds: 3600,
-        reserved_at: new Date().toISOString(),
-        released_at: null,
-      },
-    ],
-  };
-  fs.writeFileSync(
-    path.join(root, ".bee", "reservations.json"),
-    `${JSON.stringify(store, null, 2)}\n`,
-  );
+  seedReservationLease(root, { path: reservedPath, agent: holderAgent, cell: "other-cell" });
   return root;
 }
 
@@ -143,10 +158,10 @@ function buildLinkedFixture(prefix, { invalid = false, reservedPath = null, hold
     approved_gates: { context: true, shape: true, execution: true, review: false },
   });
   if (reservedPath && holderAgent) {
-    fs.writeFileSync(
-      path.join(mainRoot, ".bee", "reservations.json"),
-      `${JSON.stringify({ reservations: [{ agent: holderAgent, cell: "other", path: reservedPath, ttl_seconds: 3600, reserved_at: new Date().toISOString(), released_at: null }] }, null, 2)}\n`,
-    );
+    // multisession-native-16: seeded as a real lease under mainRoot (the
+    // store this linked-but-ungranted worktree's checkWrite call actually
+    // resolves to), not written to mainRoot's `.bee/reservations.json`.
+    seedReservationLease(mainRoot, { path: reservedPath, agent: holderAgent, cell: "other" });
   }
   fs.mkdirSync(path.join(workRoot, "src"), { recursive: true });
   return { mainRoot, workRoot };

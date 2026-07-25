@@ -32,6 +32,8 @@ import * as laneStore from '../lib/state.mjs';
 import * as laneBinding from '../lib/claims.mjs';
 import { buildSessionPreamble } from '../lib/inject.mjs';
 import { readJson, writeJsonAtomic } from '../lib/fsutil.mjs';
+import { reserve } from '../lib/reservations.mjs';
+import { renewLease } from '../lib/lease-store.mjs';
 
 const root = makeTempRepo();
 
@@ -1462,18 +1464,14 @@ await check('bee.mjs state start-feature refuses while an active reservation rem
   try {
     const statePath = path.join(dir, '.bee', 'state.json');
     writeJsonAtomic(statePath, { schema_version: '1.0', phase: 'idle', workers: [] });
-    writeJsonAtomic(path.join(dir, '.bee', 'reservations.json'), {
-      reservations: [
-        {
-          agent: 'bob',
-          cell: 'x-1',
-          path: 'src/app.ts',
-          ttl_seconds: 3600,
-          reserved_at: new Date().toISOString(),
-          released_at: null,
-        },
-      ],
-    });
+    // multisession-native-16: `.bee/reservations.json` is a rebuildable
+    // PROJECTION over lease-store.mjs now — startFeature's precondition
+    // (state.mjs's listActiveReservationsForStart) reads THROUGH the shim
+    // (listReservations) rather than this file (advisor consult slice 3
+    // condition C), so a fixture reservation must be a REAL lease, seeded via
+    // reserve() itself.
+    const made = await reserve(dir, { agent: 'bob', cell: 'x-1', path: 'src/app.ts' });
+    assert(made.ok === true, 'precondition: the reservation was actually acquired');
     const before = fs.readFileSync(statePath, 'utf8');
     const result = await runBeeState(dir, ['start-feature', '--feature', 'new-feat']);
     assert(result.status !== 0, 'active reservation refuses');
@@ -1481,19 +1479,10 @@ await check('bee.mjs state start-feature refuses while an active reservation rem
     const after = fs.readFileSync(statePath, 'utf8');
     assert(before === after, 'file untouched after a reservation refusal');
 
-    // an EXPIRED reservation (reserved long before its own ttl) is not "active"
-    writeJsonAtomic(path.join(dir, '.bee', 'reservations.json'), {
-      reservations: [
-        {
-          agent: 'bob',
-          cell: 'x-1',
-          path: 'src/app.ts',
-          ttl_seconds: 60,
-          reserved_at: new Date(Date.now() - 7200 * 1000).toISOString(),
-          released_at: null,
-        },
-      ],
-    });
+    // an EXPIRED reservation (reserved long before its own ttl) is not
+    // "active" — backdate the SAME underlying lease directly (renewLease)
+    // rather than writing a second, colliding reserve() at the same path.
+    await renewLease(dir, { type: 'path', id: 'src/app.ts' }, { ttl: 60, now: Date.now() - 7200 * 1000 });
     const retry = await runBeeState(dir, ['start-feature', '--feature', 'new-feat']);
     assert(retry.status === 0, `expired reservation must not block start-feature, got ${retry.status}: ${retry.stderr}`);
   } finally {

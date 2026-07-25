@@ -1934,18 +1934,47 @@ async function runLaneSessionRows() {
 
 // fresh-session-handoff fsh-8 (D3/D4): bee-write-guard threads
 // payload.session_id into guards.checkWrite's optional sessionId argument
-// (fsh-5's contract, fsh-7's hold-deny + corrupt-store implementation). No
-// reservations.json fixture writer existed before this cell — authored here
-// mirroring writeSessionFile/writeLaneFile's direct-JSON style (this harness
-// executes wrappers as isolated Workers and never imports the lib under
-// test).
-function writeReservationsFile(root, reservations) {
-  const dir = path.join(root, ".bee");
+// (fsh-5's contract, fsh-7's hold-deny + corrupt-store implementation).
+//
+// multisession-native-16: `.bee/reservations.json` is now a rebuildable
+// PROJECTION over lease-store.mjs (see reservations.mjs's own module
+// header) — the hook's session-hold conflict check (findSessionConflicts)
+// reads lease-store's sharded per-resource files directly, so a fixture
+// reservation must be seeded as a real lease file. seedReservationLease
+// below is a raw fs write of exactly the record shape/path lease-store.mjs's
+// acquireLeases would produce for a `type:'path'` request (resource key
+// `path:<canonicalPath>`, sha256-hashed filename under
+// `.bee/runtime/leases/paths/`) — a deliberate hand-rolled duplicate rather
+// than importing lease-store.mjs, mirroring this file's existing
+// writeSessionFile/writeLaneFile direct-JSON style (this harness executes
+// wrappers as isolated Workers and never imports the lib under test).
+function seedReservationLease(root, { path: reservedPath, agent, cell, session = null, ttlSeconds = 3600, reservedAt = new Date().toISOString() }) {
+  const canonical = String(reservedPath || "")
+    .replace(/\\/g, "/")
+    .replace(/^\.\/+/, "")
+    .replace(/\/+$/, "");
+  const resourceKey = `path:${canonical}`;
+  const hash = createHash("sha256").update(resourceKey).digest("hex");
+  const dir = path.join(root, ".bee", "runtime", "leases", "paths");
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, "reservations.json"),
-    `${JSON.stringify({ reservations }, null, 2)}\n`,
-  );
+  const acquiredMs = Date.parse(reservedAt);
+  const record = {
+    resource: resourceKey,
+    mode: "write",
+    workflow_id: cell,
+    // A control-char-wrapped sentinel (never a real session id, which always
+    // comes from claims.mjs) — mirrors reservations.mjs's own
+    // SESSIONLESS_SESSION_ID so an omitted `session` here reproduces a
+    // genuinely session-less/"legacy" row through the shim, exactly as
+    // before this cell.
+    session_id: session || "\u0000bee-reservation-sessionless\u0000",
+    workspace_id: `agent:${agent}`,
+    epoch: 0,
+    acquired_at: reservedAt,
+    expires_at: Number.isFinite(ttlSeconds) && ttlSeconds > 0 ? new Date(acquiredMs + ttlSeconds * 1000).toISOString() : null,
+    kind: "lease",
+  };
+  fs.writeFileSync(path.join(dir, `${hash}.json`), `${JSON.stringify(record, null, 2)}\n`);
 }
 
 // A PRESENT but unparseable store (panel B1 / C7): must fail closed through
@@ -2100,12 +2129,10 @@ async function runHoldSessionRows() {
 
   const nowIso = new Date().toISOString();
   const expiredIso = new Date(Date.now() - 3600_000).toISOString();
-  writeReservationsFile(holdRoot, [
-    { agent: "otto", cell: "fsh-x", path: "src/held.js", ttl_seconds: 3600, reserved_at: nowIso, released_at: null, session: "sess-holder" },
-    { agent: "phil", cell: "fsh-8", path: "src/own.js", ttl_seconds: 3600, reserved_at: nowIso, released_at: null, session: "sess-acting" },
-    { agent: "otto", cell: "fsh-x", path: "src/expired.js", ttl_seconds: 1, reserved_at: expiredIso, released_at: null, session: "sess-holder-expired" },
-    { agent: "otto", cell: "fsh-x", path: "src/legacy.js", ttl_seconds: 3600, reserved_at: nowIso, released_at: null },
-  ]);
+  seedReservationLease(holdRoot, { agent: "otto", cell: "fsh-x", path: "src/held.js", ttlSeconds: 3600, reservedAt: nowIso, session: "sess-holder" });
+  seedReservationLease(holdRoot, { agent: "phil", cell: "fsh-8", path: "src/own.js", ttlSeconds: 3600, reservedAt: nowIso, session: "sess-acting" });
+  seedReservationLease(holdRoot, { agent: "otto", cell: "fsh-x", path: "src/expired.js", ttlSeconds: 1, reservedAt: expiredIso, session: "sess-holder-expired" });
+  seedReservationLease(holdRoot, { agent: "otto", cell: "fsh-x", path: "src/legacy.js", ttlSeconds: 3600, reservedAt: nowIso });
 
   const rHeld = await runWrapper(
     "bee-write-guard.mjs",
@@ -2268,9 +2295,7 @@ async function runHoldSessionRows() {
   // all behaves byte-identically to today even when an active session-owned
   // hold exists on the exact target path.
   const zeroDiffRoot = buildFixture("hook-contracts-holdzerodiff-");
-  writeReservationsFile(zeroDiffRoot, [
-    { agent: "otto", cell: "fsh-x", path: "src/heldzero.js", ttl_seconds: 3600, reserved_at: nowIso, released_at: null, session: "sess-other" },
-  ]);
+  seedReservationLease(zeroDiffRoot, { agent: "otto", cell: "fsh-x", path: "src/heldzero.js", ttlSeconds: 3600, reservedAt: nowIso, session: "sess-other" });
   const rZero = await runWrapper(
     "bee-write-guard.mjs",
     editPayload({ cwd: zeroDiffRoot, filePath: "src/heldzero.js" }),

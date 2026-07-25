@@ -60,6 +60,7 @@ function libUrl(name) {
 
 const claimsLib = await import(libUrl("claims.mjs"));
 const reservationsLib = await import(libUrl("reservations.mjs"));
+const leaseStoreLib = await import(libUrl("lease-store.mjs"));
 const lockLib = await import(libUrl("lock.mjs"));
 const fsutilLib = await import(libUrl("fsutil.mjs"));
 
@@ -75,7 +76,7 @@ const {
   heartbeatTouch,
   HEARTBEAT_TOUCH_THROTTLE_SECONDS,
 } = claimsLib;
-const { reserve, reservationsPath } = reservationsLib;
+const { reserve, listReservations } = reservationsLib;
 const { withStoreLock, LockBusyError, lockFilePath, locksDir } = lockLib;
 const { ensureDir } = fsutilLib;
 
@@ -217,10 +218,27 @@ function record(name, pass, note) {
     path: "src/refresh-target.mjs",
     session: sessionId,
   });
+  record("refresh:reserve-precondition-ok", Boolean(reserved && reserved.ok === true), `reserve() must succeed, got ${JSON.stringify(reserved)}`);
 
   const sessionBeforeMs = Date.parse(readSession(root, sessionId).last_heartbeat);
   const claimBeforeMs = Date.parse(readClaim(root, "cell-x").claimed_at);
-  const holdBeforeMs = Date.parse(reserved.reservation.reserved_at);
+  // multisession-native-16: renewal now extends the underlying lease's
+  // expires_at directly (lease-store.mjs's renewLease) without moving
+  // acquired_at — DIFFERENT from the pre-msn-16 renewHoldsBySession, which
+  // advanced reserved_at (millisecond precision) and left ttl_seconds fixed.
+  // The TRANSLATED reservation shape's ttl_seconds is only integer-second
+  // precision (leaseToReservation, reservations.mjs), so a renewal that
+  // lands within the same second as the original acquire (routine in a fast
+  // test/heartbeat cycle) can round-trip to an IDENTICAL derived ttl_seconds
+  // even though the real underlying expires_at moved — isLeaseRecordExpired
+  // (the actually-correctness-critical function) is unaffected since it
+  // reads expires_at directly, but this proof needs that same raw,
+  // millisecond-precision field to avoid a false negative from the rounding.
+  const rawLeaseExpiryMs = (r, resourcePath) => {
+    const record = leaseStoreLib.listLeases(r).leases.find((l) => l.resource === `path:${resourcePath}`);
+    return record ? Date.parse(record.expires_at) : null;
+  };
+  const holdBeforeExpiryMs = rawLeaseExpiryMs(root, "src/refresh-target.mjs");
 
   const result = await runHook(PROMPT_CONTEXT_HOOK, root, {
     hook_event_name: "UserPromptSubmit",
@@ -232,8 +250,8 @@ function record(name, pass, note) {
 
   const sessionAfter = readSession(root, sessionId);
   const claimAfter = readClaim(root, "cell-x");
-  const store = JSON.parse(readRaw(reservationsPath(root)));
-  const holdAfter = store.reservations.find((r) => r.cell === "cell-x" && r.agent === "worker-1");
+  const holdAfter = listReservations(root, { activeOnly: true }).find((r) => r.cell === "cell-x" && r.agent === "worker-1");
+  const holdAfterExpiryMs = rawLeaseExpiryMs(root, "src/refresh-target.mjs");
 
   record(
     "refresh:session-heartbeat-advanced",
@@ -247,8 +265,8 @@ function record(name, pass, note) {
   );
   record(
     "refresh:hold-renewed",
-    Boolean(holdAfter) && holdAfter.released_at == null && Date.parse(holdAfter.reserved_at) > holdBeforeMs,
-    `before=${holdBeforeMs} after=${holdAfter && Date.parse(holdAfter.reserved_at)} released_at=${holdAfter && holdAfter.released_at}`,
+    Boolean(holdAfter) && holdAfter.released_at == null && holdAfterExpiryMs > holdBeforeExpiryMs,
+    `before_expiry=${holdBeforeExpiryMs} after_expiry=${holdAfterExpiryMs} released_at=${holdAfter && holdAfter.released_at}`,
   );
 
   fs.rmSync(root, { recursive: true, force: true });

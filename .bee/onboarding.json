@@ -5,14 +5,14 @@
     "agents_block": "d0515b3ab1b91fc381e757d6a1c64bf2f15d8db6d78361818178aea51368dca7",
     "gitignore_block": "97bc58361c5dee4c4212b3c2ba1b5b91d5c3c17c2be4690baa2abe9bd014253c",
     "helpers": {
-      "bee.mjs": "ef8f4f90a663f1d0b9881f4cb5b059062d4313a8c706c8b5e257716dc845b42e"
+      "bee.mjs": "04a457a3a6799692fdda531c705126d7b03ac2097eebe9e708140f1fd751edf5"
     },
     "lib": {
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "ef212500da307a5f4654426827198a269acdcd4e79f94e61f5de1c010123a4ea",
       "claims.mjs": "6bdb5269b43e4b992b390e1e18fc84cfb186d84b017ee17e792173b510613180",
-      "command-registry.mjs": "1b65cdc1723842452f25c3c815c91b87570e3c7141485a520113d4a8527fb1f3",
+      "command-registry.mjs": "cffb1dedb35dac304d523607de686ae7ece30ebb1f5bd06204aa16cf3c42423a",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0799e8b4a703a453a0ce8490c36991cd74f50312abec88f91a78fbcfbb1a3779",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
@@ -30,13 +30,13 @@
       "lock.mjs": "2c80c3738ce0f70c69cf45164c30a078a7e7c9c02d9feb702415900f41d4e9c9",
       "perf.mjs": "57dedfbd53cfce7a35ddb1e2cae1cc9c86533bdfa4df45965fcca0fc8497e5fc",
       "recovery.mjs": "2b11660755ccd76e0ee6cb723e1816d2aa5343b6226dca6ce342de3a50d6dae6",
-      "reservations.mjs": "917168c8e3277d36b293bbdde69ea39756c83ec9981eafb712ef7b9cda7c4825",
+      "reservations.mjs": "ce9a2e1f61d58f4ea44fc1949545cb22887b2584e8e1f958c6b027757bf37d3d",
       "reviews.mjs": "08fe8685f92705b12c4634b93bfaed2b244dff3ffb38f0a4e809de83015955e8",
       "schedule.mjs": "9f46b580f71f6be9e38740124d3e7745af972c37fad91ce99433f405eae16351",
       "scratch.mjs": "3b7ab2e104b3f4cee240a43fac49ee630df7ca2ed995eb71f403d25eae17afb0",
       "source-identity.mjs": "716740641e1f6bfbb5ccc5b4fe7827f1165c2a1f1127ee3800f52a47ac09fc7a",
-      "state-projection.mjs": "359b5f7117faa0e8043282224806ff056de2e36ab732944e573525d0fbdbcc70",
-      "state.mjs": "db87da92c44d92cc907d844ca1c3ac2d63a510da478f2197016a33efd87ea9b6",
+      "state-projection.mjs": "ef22165c09c86dc53f92c3b61ce46f29c9bc4e1834d43c30ddfa50d7a816cce8",
+      "state.mjs": "a01faf73aef93ea6147fc651ffea102c306e6a3bfc7ab525792e057571a26fe3",
       "validate-args.mjs": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
       "workflow-store.mjs": "27aa64ffab30bdda9c939cdb6def6106c9ef9648067078eda27d512b5a1e41d4",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
@@ -79,5 +79,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T03:36:36.435Z"
+  "updated_at": "2026-07-25T04:29:38.500Z"
 }

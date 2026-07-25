@@ -19,6 +19,18 @@ import {
 import { defaultState, readState, writeState } from '../lib/state.mjs';
 import { readCell, claimCell } from '../lib/cells.mjs';
 import { reserve, reservationsPath } from '../lib/reservations.mjs';
+// multisession-native-16: `.bee/reservations.json` is a rebuildable
+// projection over lease-store.mjs now, not the live store — a test that
+// needs to force a reservation into the past backdates the underlying LEASE
+// directly (renewLease), same fix applied throughout this cell's test
+// changes. The corrupt-store tests further down in this file are UNAFFECTED
+// by this shim and stay exactly as they were: guards.mjs's own
+// reservationStoreCorrupt still reads this same literal reservationsPath
+// file directly (out of this cell's scope — see reservations.mjs's own
+// module header) and is never consulted by reserve()/checkWrite's live
+// conflict path, so writing torn JSON straight to that path still exercises
+// guards.mjs's fail-closed check exactly as before.
+import { renewLease } from '../lib/lease-store.mjs';
 import { createSession } from '../lib/claims.mjs';
 // fsh-3 (lane store): namespace imports so a not-yet-implemented export fails
 // its own row ("… is not a function") instead of crashing the whole module
@@ -534,10 +546,7 @@ await check("checkWrite: a cross-session hold denies another session's write in 
 
     // an expired hold never blocks, even from a different session
     await reserve(dir, { agent: 'other-agent', cell: 'hw-1', path: 'src/hold/stale.ts', session: 'sess-other', ttl: 60 });
-    const store = readJson(reservationsPath(dir), { reservations: [] });
-    const row = store.reservations.find((r) => r.path === 'src/hold/stale.ts');
-    row.reserved_at = new Date(Date.now() - 7200 * 1000).toISOString();
-    writeJsonAtomic(reservationsPath(dir), store);
+    await renewLease(dir, { type: 'path', id: 'src/hold/stale.ts' }, { ttl: 60, now: Date.now() - 7200 * 1000 });
     const staleOk = checkWrite(dir, state, 'src/hold/stale.ts', null, { sessionId: 'sess-hw' });
     assert(staleOk.allow === true, `an expired hold must never block, got ${JSON.stringify(staleOk)}`);
 

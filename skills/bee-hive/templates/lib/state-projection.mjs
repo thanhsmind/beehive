@@ -70,6 +70,7 @@ import fs from 'node:fs';
 import { readState, writeState, defaultState, readLane, writeLane, GATE_NAMES, handoffPath, listHandoffMailbox } from './state.mjs';
 import { listWorkflows } from './workflow-store.mjs';
 import { writeJsonAtomic } from './fsutil.mjs';
+import { rebuildReservationsProjection } from './reservations.mjs';
 
 /** True once at least one workflow record exists anywhere in the repo — the C1 authority switch. */
 export function projectionsAuthoritative(root) {
@@ -382,22 +383,33 @@ export function rebuildHandoffProjection(root) {
  * the current default feature's own live workflow record when one names it,
  * else the newest active workflow while state.json is idle — see
  * rebuildStateProjection's own comment for the full two-branch contract,
- * multisession-native-10) and EVERY active workflow's lane projection ("one
- * per active workflow", msn-7 cell contract). This is what proves invariants
- * 13/14 (deleting a projection loses nothing; overview rebuilds fully from
- * records) for whichever projections have a corresponding LIVE workflow
- * record kept in sync by every write path that touches them — true for
- * every lane since msn-7, and true for state.json's live default feature
- * too since msn-10 closed the former C5 residual seam. Cell-counts/
- * last_activity are left untouched here (refreshing them is bee-state-sync's
- * job, not recovery's) — pass `{cellCounts, lastActivity}` to
- * rebuildStateProjection directly for that.
+ * multisession-native-10), EVERY active workflow's lane projection ("one
+ * per active workflow", msn-7 cell contract), and `.bee/reservations.json`
+ * (multisession-native-16, advisor consult slice 3 condition C — the
+ * must_have "projection rebuildable: delete reservations.json, rebuild,
+ * legacy readers unaffected"). Unlike state/handoff/lane, the reservations
+ * projection has NO "authoritative: false when zero workflow records exist"
+ * gate — reservations.mjs's lease-store backing is independent of the
+ * workflow-record system this module otherwise projects from, so
+ * rebuildReservationsProjection always runs and always overwrites the file
+ * with the CURRENT set of active path leases (an empty leases directory
+ * rebuilds an empty `{reservations: []}`, never a no-op). This is what
+ * proves invariants 13/14 (deleting a projection loses nothing; overview
+ * rebuilds fully from records) for whichever projections have a
+ * corresponding LIVE source of truth kept in sync by every write path that
+ * touches them — true for every lane since msn-7, true for state.json's live
+ * default feature since msn-10, and true for reservations since msn-16 (its
+ * live source of truth is lease-store.mjs's sharded files, never this
+ * projection). Cell-counts/last_activity are left untouched here (refreshing
+ * them is bee-state-sync's job, not recovery's) — pass `{cellCounts,
+ * lastActivity}` to rebuildStateProjection directly for that.
  */
 export function rebuildAllProjections(root) {
   const state = rebuildStateProjection(root);
   const handoff = rebuildHandoffProjection(root);
+  const reservations = rebuildReservationsProjection(root);
   const { workflows } = listWorkflows(root);
   const active = workflows.filter((wf) => wf.status === 'active');
   const lanes = active.map((wf) => rebuildLaneProjection(root, wf.feature));
-  return { state, handoff, lanes };
+  return { state, handoff, reservations, lanes };
 }

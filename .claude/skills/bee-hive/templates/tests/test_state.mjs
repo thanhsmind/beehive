@@ -28,7 +28,13 @@ import {
   mergeConfigOverlay,
 } from '../lib/state.mjs';
 import { readBacklogCounts } from '../lib/backlog.mjs';
-import { reserve, reservationsPath } from '../lib/reservations.mjs';
+import { reserve } from '../lib/reservations.mjs';
+// multisession-native-16: reservations.mjs is now a shim over lease-store.mjs
+// — a test that needs to force a reservation into the past (to prove
+// startFeature's expired-hold-never-blocks precondition) backdates the
+// underlying LEASE directly via renewLease, since `.bee/reservations.json`
+// is only a rebuildable projection nothing here reads live anymore.
+import { renewLease } from '../lib/lease-store.mjs';
 import { createSession, heartbeatSession, claimCellFile, sessionPath } from '../lib/claims.mjs';
 import { listWorkflows, updateWorkflow } from '../lib/workflow-store.mjs';
 import { acquireStoreLockOnceSync } from '../lib/lock.mjs';
@@ -640,10 +646,10 @@ await check('lanes: a lane start declaring intended paths refuses on overlap wit
       'worker-z',
       'overlap with an active reservation refuses, naming the holder',
     );
-    const store = readJson(reservationsPath(dir), null);
-    store.reservations[store.reservations.length - 1].reserved_at = new Date(Date.now() - 7200 * 1000).toISOString();
-    store.reservations[store.reservations.length - 1].ttl_seconds = 60;
-    writeJsonAtomic(reservationsPath(dir), store);
+    // Backdate the underlying lease itself (msn-16: reservationsPath is a
+    // rebuildable projection, not the live store) so its expires_at falls
+    // well before the REAL current time — a 60s ttl anchored 2h in the past.
+    await renewLease(dir, { type: 'path', id: 'src/lib/*' }, { ttl: 60, now: Date.now() - 7200 * 1000 });
     const expired = await startFeature(dir, { feature: 'lane-l', lane: true, sessionId: 'sess-me', paths: ['src/lib/util.ts'] });
     assert(expired.feature === 'lane-l', 'an expired hold never blocks');
     const undeclared = await startFeature(dir, { feature: 'lane-m', lane: true, sessionId: 'sess-me' });
