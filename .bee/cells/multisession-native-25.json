@@ -37,7 +37,7 @@
   "decisions": [
     "CONTEXT.md D8 stage 5, D9"
   ],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "0": "r",
     "1": "e",
@@ -66,15 +66,33 @@
     "24": "6",
     "worker": "orchestrator-release",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "package.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
-    "verification_evidence": null,
-    "verify_output": null,
-    "verify_passed": null,
+    "capped_at": "2026-07-25T11:24:43.647Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"summary\":\"Release v1.17.0 executed by orchestrator as release machinery (precedent release-1-16-1): bump, self-onboard, regen, FULL suite foreground green (109 suites), commit+tag, push --tags, CI dispatched, issue #56 closed with per-slice commit map + verbatim 15/15 invariant line + deferral disclosures (truth-chain consistent with msn-23/24).\",\"red_failure_evidence\":\"release cell — no code change of its own; the release gates (full suite green, manifest parity, goal-check RELEASE CLEAR) are the evidence.\",\"deliberate_exceptions\":\"release machinery run in-session by orchestrator, not a dispatched worker (established precedent)\"}",
+    "verify_output": "FULL suite foreground: PASS 109 suites (wall 67.7s). release_manifest --write 560 files. Tag v1.17.0 on 3c5594adda545a305443277aca874b3db1149c6f, pushed with tags, CI run 30156177347 dispatched, issue #56 closed with commit map + 15/15 invariant line.",
+    "verify_passed": true,
     "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
-    "claimed_at": "2026-07-25T11:22:17.364Z"
+    "claimed_at": "2026-07-25T11:22:17.364Z",
+    "verify_command": "node scripts/run_verify.mjs",
+    "verified_at": "2026-07-25T11:24:43.566Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T11:24:43.566Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T11:22:17.362Z",
+        "acquired_at": "2026-07-25T11:22:17.362Z",
+        "worker": "orchestrator-release",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
   }
 }

@@ -2,15 +2,15 @@
   "schema_version": "1.0",
   "feature": "multisession-native",
   "mode": "high-risk",
-  "phase": "swarming",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false
   },
-  "summary": "slice 5 (integration queue + 15-invariant closure) cycle open — FINAL slice",
-  "next_action": "execute msn-22..25 sequentially with slice-5 advisor conditions A-F",
+  "summary": "multisession-native shipped in v1.17.0: multi-session-native bee — workflow records, control-plane topology, fenced leases, mailboxes, workspace ownership, integration queue; 15/15 invariants green",
+  "next_action": "feature complete; review on request (candidates registered); writeHandoff retirement next release",
   "created_at": "2026-07-24T14:19:58.834Z",
   "advisor_ref": {
     "consulted_at": "2026-07-25T09:42:44.297Z",
@@ -23,11 +23,11 @@
   "last_scribing_run": {
     "feature": "multisession-native",
     "date": "2026-07-25",
-    "at": "2026-07-25T09:37:03.919Z",
+    "at": "2026-07-25T11:24:56.318Z",
     "areas_synced": [
       "workflow-state",
       "worktree-parallelism"
     ],
-    "next_action": "close slice 4"
+    "next_action": "close feature"
   }
 }
