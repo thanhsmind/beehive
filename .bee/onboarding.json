@@ -5,14 +5,14 @@
     "agents_block": "d0515b3ab1b91fc381e757d6a1c64bf2f15d8db6d78361818178aea51368dca7",
     "gitignore_block": "97bc58361c5dee4c4212b3c2ba1b5b91d5c3c17c2be4690baa2abe9bd014253c",
     "helpers": {
-      "bee.mjs": "4a2733cbf6ffd8bdb6ebc4aef88618acd2f1987f4b35ae64842cff42a6fca660"
+      "bee.mjs": "ef8f4f90a663f1d0b9881f4cb5b059062d4313a8c706c8b5e257716dc845b42e"
     },
     "lib": {
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "ef212500da307a5f4654426827198a269acdcd4e79f94e61f5de1c010123a4ea",
       "claims.mjs": "6bdb5269b43e4b992b390e1e18fc84cfb186d84b017ee17e792173b510613180",
-      "command-registry.mjs": "1716802ebfb885b1a726f0ee010fba6baf7d01d7e8a7f7529bf5cc68be8a429b",
+      "command-registry.mjs": "1b65cdc1723842452f25c3c815c91b87570e3c7141485a520113d4a8527fb1f3",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0799e8b4a703a453a0ce8490c36991cd74f50312abec88f91a78fbcfbb1a3779",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
@@ -35,8 +35,8 @@
       "schedule.mjs": "9f46b580f71f6be9e38740124d3e7745af972c37fad91ce99433f405eae16351",
       "scratch.mjs": "3b7ab2e104b3f4cee240a43fac49ee630df7ca2ed995eb71f403d25eae17afb0",
       "source-identity.mjs": "716740641e1f6bfbb5ccc5b4fe7827f1165c2a1f1127ee3800f52a47ac09fc7a",
-      "state-projection.mjs": "6af601e52bf4180a43d6c8810a79df57ed1df803eba74aa53f3299da3b3526d7",
-      "state.mjs": "9636574813e41b3cd80f491de582a1042daf86f8aaff63d59231aa844964ae72",
+      "state-projection.mjs": "359b5f7117faa0e8043282224806ff056de2e36ab732944e573525d0fbdbcc70",
+      "state.mjs": "db87da92c44d92cc907d844ca1c3ac2d63a510da478f2197016a33efd87ea9b6",
       "validate-args.mjs": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
       "workflow-store.mjs": "27aa64ffab30bdda9c939cdb6def6106c9ef9648067078eda27d512b5a1e41d4",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
@@ -79,5 +79,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T03:08:04.402Z"
+  "updated_at": "2026-07-25T03:36:36.435Z"
 }

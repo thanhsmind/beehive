@@ -1047,9 +1047,20 @@ const EXPECTED_STATE_EXPORTS = [
   'cacheFilePath',
   // fsh-9 (fresh-session-handoff S4, D1): the two-kind handoff lifecycle.
   'HANDOFF_KINDS',
+  'normalizeHandoffKind',
   'handoffPath',
   'writeHandoff',
   'adoptHandoff',
+  // multisession-native-15 (D5, issue #56 3.7/mục 10): per-workflow handoff
+  // mailboxes — writeHandoff/adoptHandoff above stay the byte-identical
+  // legacy single-file path (C1); these are the mailbox-per-workflow
+  // siblings bee.mjs routes to once a workflow resolves.
+  'HANDOFF_MAILBOX_STATUSES',
+  'handoffMailboxDir',
+  'listHandoffMailbox',
+  'newestOpenHandoffMailboxRecord',
+  'writeMailboxHandoff',
+  'adoptMailboxHandoff',
   // hardening-8 (config overlay): the machine-local .bee/config.local.json
   // sibling readConfig deep-merges over the tracked config (overlay wins,
   // arrays replace) — see test_state.mjs's own readConfig/mergeConfigOverlay

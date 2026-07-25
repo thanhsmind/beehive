@@ -925,7 +925,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.handoff.write',
     invoke: 'bee state handoff write',
-    description: "Write .bee/HANDOFF.json through the guarded writer (fresh-session-handoff fsh-9, D1). --kind is required and never guessed: 'pause' writes today's free-form fields (--cell/--files/--done/--remaining/--next-action/--feature/--phase/--mode, whichever apply) plus the kind — no new precondition, the same surface-and-wait record as always. 'planned-next' REFUSES (typed, zero mutation) unless --previous-cell is capped with a passing verify AND --next-cell already has a claim owned by --writer-session (the carried claim) — on success the record stores writer_session/previous_cell/next_cell alongside kind.",
+    description: "Write a handoff through the guarded writer (fresh-session-handoff fsh-9, D1; multisession-native-15, D5). --kind is required and never guessed: 'pause' writes today's free-form fields (--cell/--files/--done/--remaining/--next-action/--feature/--phase/--mode, whichever apply) plus the kind — no new precondition, the same surface-and-wait record as always. 'planned-next' REFUSES (typed, zero mutation) unless --previous-cell is capped with a passing verify AND --next-cell already has a claim owned by --writer-session (the carried claim) — on success the record stores writer_session/previous_cell/next_cell alongside kind. When a workflow resolves (--lane names it, or the calling session/default record is bound to one), the record is written to that workflow's OWN mailbox (.bee/runtime/handoffs/<workflow-id>/<seq>.json, scoped by --target-role) instead of the single legacy .bee/HANDOFF.json — a repo with no workflow records keeps writing the legacy file, byte-identical to before.",
     parameters: {
       type: 'object',
       properties: {
@@ -941,6 +941,9 @@ export const COMMAND_REGISTRY = [
         phase: { type: 'string', description: 'Phase to record on the handoff.' },
         mode: { type: 'string', description: 'Mode to record on the handoff.' },
         'next-action': { type: 'string', description: 'Saved next-action text.' },
+        lane: { type: 'string', description: 'multisession-native-15: name the target workflow by its lane feature explicitly, instead of resolving it from the calling session or the default record.' },
+        'target-role': { type: 'string', description: 'multisession-native-15: scope this mailbox record to a role (e.g. "reviewer") so it never clobbers another role\'s open handoff for the same workflow. Omitted = the default/unscoped slot.' },
+        'session-id': { type: 'string', description: 'multisession-native-15: the writing session id used ONLY to resolve which workflow this call targets when --lane is omitted (never required — BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID resolve it the usual way otherwise).' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: ['kind'],
@@ -954,11 +957,13 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.handoff.adopt',
     invoke: 'bee state handoff adopt',
-    description: "Adopt a planned-next handoff's carried claim into --session-id (fresh-session-handoff fsh-9, D1): transfers ownership of the handoff's next_cell claim to the adopting session, then clears .bee/HANDOFF.json — clear-after-adopt with idempotent recovery, not a single cross-file transaction (a crash between the two steps self-heals on the next call via a benign self-adopt). Refuses (typed, non-zero exit) when there is no handoff, the handoff is not kind planned-next (pause handoffs are never adopted — surface and wait instead), or the underlying claim adopt fails — every refusal leaves both the claim and the handoff untouched.",
+    description: "Adopt a planned-next handoff's carried claim into --session-id (fresh-session-handoff fsh-9, D1; multisession-native-15, D5): transfers ownership of the handoff's next_cell claim to the adopting session, then clears the handoff — clear-after-adopt with idempotent recovery, not a single cross-file transaction (a crash between the two steps self-heals on the next call via a benign self-adopt). Refuses (typed, non-zero exit) when there is no handoff, the handoff is not kind planned-next (pause handoffs are never adopted — surface and wait instead), or the underlying claim adopt fails — every refusal leaves both the claim and the handoff untouched. When a workflow resolves (--lane, or --session-id's own bound lane/default record), this adopts from that workflow's mailbox instead of the single legacy .bee/HANDOFF.json.",
     parameters: {
       type: 'object',
       properties: {
-        'session-id': { type: 'string', description: 'Adopting session id.' },
+        'session-id': { type: 'string', description: 'Adopting session id — also used to resolve which workflow to adopt from when --lane is omitted.' },
+        lane: { type: 'string', description: 'multisession-native-15: name the target workflow by its lane feature explicitly.' },
+        'target-role': { type: 'string', description: 'multisession-native-15: adopt from this role\'s mailbox slot instead of the default/unscoped one.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: ['session-id'],
@@ -969,10 +974,13 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.handoff.show',
     invoke: 'bee state handoff show',
-    description: 'Show the current .bee/HANDOFF.json, if any, with kind normalized for display (a missing/unknown kind reads as "pause" — fail-safe, D1). Reports "no handoff" when none exists.',
+    description: 'Show the current handoff, if any, with kind normalized for display (a missing/unknown kind reads as "pause" — fail-safe, D1). Reports "no handoff" when none exists. multisession-native-15 (D5): when a workflow resolves (--lane, or the calling --session-id/default record\'s own bound lane), shows that workflow\'s own mailbox instead of the single legacy .bee/HANDOFF.json.',
     parameters: {
       type: 'object',
       properties: {
+        lane: { type: 'string', description: 'multisession-native-15: name the target workflow by its lane feature explicitly.' },
+        'target-role': { type: 'string', description: 'multisession-native-15: show this role\'s mailbox slot instead of the default/unscoped one.' },
+        'session-id': { type: 'string', description: 'multisession-native-15: resolve which workflow to show via this session\'s bound lane, when --lane is omitted.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line summary.' },
       },
       required: [],

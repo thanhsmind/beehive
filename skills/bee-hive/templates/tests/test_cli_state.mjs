@@ -21,6 +21,7 @@ import {
 } from '../../../../scripts/lib/test-fixture.mjs';
 import { readStateStrict, isKnownPhase, startFeature } from '../lib/state.mjs';
 import { listWorkflows, createWorkflow, updateWorkflow } from '../lib/workflow-store.mjs';
+import { rebuildHandoffProjection } from '../lib/state-projection.mjs';
 import { acquireStoreLockOnceSync } from '../lib/lock.mjs';
 import { readCell, dropCell, claimCell } from '../lib/cells.mjs';
 import { createSession, claimCellFile, readClaim, adoptClaim } from '../lib/claims.mjs';
@@ -1968,6 +1969,281 @@ await check('adoptHandoff: idempotent recovery — a crash between claim-adopt a
     assert(!fs.existsSync(path.join(dir, '.bee', 'HANDOFF.json')), 'the handoff is cleared once recovery completes');
     const claim = readClaim(dir, 'next-5');
     assert(claim.session === 'sess-new', 'the claim stays owned by sess-new through the recovery');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── multisession-native-15 (D5, issue #56 3.7/mục 10): handoff mailboxes
+// per workflow. Legacy writeHandoff/adoptHandoff above stay byte-identical
+// (proven by every fsh-9 row above, all still green with zero mailbox
+// involvement) — this section proves the NEW per-workflow mailbox path:
+// distinct seq per workflow, target_role scoping (no clobber), the
+// fence_epoch-bumping adopt with idempotent self-heal, the legacy-fallback
+// boundary (C1, zero workflow records), and invariant 9 (one paused
+// workflow never blocks or is visible to another's own adopt). ───────────
+
+await check('writeMailboxHandoff/listHandoffMailbox: two handoffs for one workflow keep distinct seq; the second (same default role) auto-clears the first; adopt picks the newest OPEN record', async () => {
+  const dir = makeStateRepo('bee-mailbox-two-seq-');
+  try {
+    const wf = await createWorkflow(dir, { feature: 'msn15-two-seq' });
+    const first = await laneStore.writeMailboxHandoff(dir, wf.id, { kind: 'pause', cell: 'wip-a' });
+    assert(first.seq === 1, `expected the first record to be seq 1, got ${JSON.stringify(first)}`);
+
+    writeCappedCellFixture(dir, 'msn15-prev-1');
+    claimCellFile(dir, 'sess-writer-1', 'msn15-next-1');
+    const second = await laneStore.writeMailboxHandoff(dir, wf.id, {
+      kind: 'planned-next',
+      writer_session: 'sess-writer-1',
+      previous_cell: 'msn15-prev-1',
+      next_cell: 'msn15-next-1',
+    });
+    assert(second.seq === 2, `expected the second record to be seq 2 (distinct from the first), got ${JSON.stringify(second)}`);
+
+    const records = laneStore.listHandoffMailbox(dir, wf.id);
+    assert(records.length === 2, `expected both records to remain on disk, got ${records.length}`);
+    assert(records[0].seq === 1 && records[0].status === 'cleared', `expected seq 1 auto-cleared by the same-role rewrite, got ${JSON.stringify(records[0])}`);
+    assert(records[1].seq === 2 && records[1].status === 'open', `expected seq 2 still open, got ${JSON.stringify(records[1])}`);
+
+    const adopted = await laneStore.adoptMailboxHandoff(dir, wf.id, 'sess-adopter-1');
+    assert(adopted.ok === true && adopted.seq === 2, `expected adopt to pick the newest OPEN record (seq 2), got ${JSON.stringify(adopted)}`);
+    const claim = readClaim(dir, 'msn15-next-1');
+    assert(claim.session === 'sess-adopter-1', `expected the claim transferred to the adopter, got ${JSON.stringify(claim)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check("writeMailboxHandoff target_role scoping: a reviewer-role handoff does not clobber an implementer(default)-role handoff — distinct seq records, both stay independently open", async () => {
+  const dir = makeStateRepo('bee-mailbox-role-scope-');
+  try {
+    const wf = await createWorkflow(dir, { feature: 'msn15-role-scope' });
+    const implementerHandoff = await laneStore.writeMailboxHandoff(dir, wf.id, { kind: 'pause', cell: 'wip-impl', next_action: 'resume implementer work' });
+    const reviewerHandoff = await laneStore.writeMailboxHandoff(dir, wf.id, {
+      kind: 'pause',
+      cell: 'wip-review',
+      next_action: 'resume review',
+      target_role: 'reviewer',
+    });
+    assert(implementerHandoff.seq !== reviewerHandoff.seq, 'the two roles get distinct seq records, never sharing one');
+
+    const stillOpenImplementer = laneStore.newestOpenHandoffMailboxRecord(dir, wf.id, null);
+    assert(
+      stillOpenImplementer && stillOpenImplementer.seq === implementerHandoff.seq && stillOpenImplementer.status === 'open',
+      `expected the implementer(default)-role handoff to remain open and untouched, got ${JSON.stringify(stillOpenImplementer)}`,
+    );
+    const openReviewer = laneStore.newestOpenHandoffMailboxRecord(dir, wf.id, 'reviewer');
+    assert(
+      openReviewer && openReviewer.seq === reviewerHandoff.seq && openReviewer.status === 'open',
+      `expected the reviewer-role handoff to be independently open, got ${JSON.stringify(openReviewer)}`,
+    );
+
+    // Writing a SECOND reviewer-role handoff auto-clears only the FIRST
+    // reviewer-role one — the implementer(default)-role handoff is still
+    // completely untouched by either reviewer write.
+    const reviewerHandoff2 = await laneStore.writeMailboxHandoff(dir, wf.id, { kind: 'pause', cell: 'wip-review-2', target_role: 'reviewer' });
+    const records = laneStore.listHandoffMailbox(dir, wf.id);
+    const clearedReviewer1 = records.find((r) => r.seq === reviewerHandoff.seq);
+    assert(clearedReviewer1.status === 'cleared', 'the FIRST reviewer-role record is auto-cleared by the second reviewer-role write');
+    const stillOpenImplementer2 = records.find((r) => r.seq === implementerHandoff.seq);
+    assert(stillOpenImplementer2.status === 'open', 'the implementer(default)-role record is untouched by a reviewer-role write (no clobber)');
+    assert(reviewerHandoff2.status === 'open', 'the newest reviewer-role record is open');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('adoptMailboxHandoff: transfers the claim with a bumped fence_epoch (msn-12), clears the record, and a re-run is a typed NO_HANDOFF no-op (never re-adopts, never re-bumps)', async () => {
+  const dir = makeStateRepo('bee-mailbox-adopt-epoch-');
+  try {
+    const wf = await createWorkflow(dir, { feature: 'msn15-adopt-epoch' });
+    writeCappedCellFixture(dir, 'msn15-prev-2');
+    claimCellFile(dir, 'sess-old-2', 'msn15-next-2');
+    const before = readClaim(dir, 'msn15-next-2');
+    assert(before.fence_epoch === 1, `expected a freshly claimed cell to start at fence_epoch 1, got ${JSON.stringify(before)}`);
+
+    const written = await laneStore.writeMailboxHandoff(dir, wf.id, {
+      kind: 'planned-next',
+      writer_session: 'sess-old-2',
+      previous_cell: 'msn15-prev-2',
+      next_cell: 'msn15-next-2',
+    });
+    assert(written.claim_epoch === 1, `expected claim_epoch snapshotted at write time (still 1, pre-adopt), got ${JSON.stringify(written)}`);
+
+    const adopted = await laneStore.adoptMailboxHandoff(dir, wf.id, 'sess-new-2');
+    assert(adopted.ok === true, `expected adoption to succeed, got ${JSON.stringify(adopted)}`);
+    assert(adopted.claim.fence_epoch === 2, `expected fence_epoch bumped by exactly 1 on adoption, got ${JSON.stringify(adopted.claim)}`);
+    const afterClaim = readClaim(dir, 'msn15-next-2');
+    assert(afterClaim.session === 'sess-new-2' && afterClaim.fence_epoch === 2, `expected the on-disk claim to carry the transferred owner and bumped epoch, got ${JSON.stringify(afterClaim)}`);
+
+    const records = laneStore.listHandoffMailbox(dir, wf.id);
+    assert(records[0].status === 'cleared', `expected the record cleared after adoption, got ${JSON.stringify(records[0])}`);
+
+    // Idempotent re-run: no OPEN or ADOPTED record remains for this
+    // (workflow, role), so this is a typed no-op refusal — never a throw,
+    // never a second claim mutation.
+    const again = await laneStore.adoptMailboxHandoff(dir, wf.id, 'sess-new-2');
+    assert(again.ok === false && again.code === 'NO_HANDOFF', `expected a typed NO_HANDOFF no-op on re-run, got ${JSON.stringify(again)}`);
+    const claimAfterRerun = readClaim(dir, 'msn15-next-2');
+    assert(
+      claimAfterRerun.session === 'sess-new-2' && claimAfterRerun.fence_epoch === 2,
+      `expected the claim byte-unchanged by the no-op re-run, got ${JSON.stringify(claimAfterRerun)}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('adoptMailboxHandoff: idempotent recovery — a crash between claim-adopt and record-clear self-heals on the next call without re-bumping fence_epoch', async () => {
+  const dir = makeStateRepo('bee-mailbox-adopt-crash-recover-');
+  try {
+    const wf = await createWorkflow(dir, { feature: 'msn15-adopt-crash' });
+    writeCappedCellFixture(dir, 'msn15-prev-3');
+    claimCellFile(dir, 'sess-old-3', 'msn15-next-3');
+    await laneStore.writeMailboxHandoff(dir, wf.id, {
+      kind: 'planned-next',
+      writer_session: 'sess-old-3',
+      previous_cell: 'msn15-prev-3',
+      next_cell: 'msn15-next-3',
+    });
+
+    // Simulate a crash landing exactly between the two steps: the claim was
+    // already transferred (and its epoch bumped) by the FIRST step, but the
+    // record was never marked 'cleared' — hand-construct that intermediate
+    // state the way adoptMailboxHandoff's own 'adopted' status represents it.
+    const midCrash = adoptClaim(dir, 'msn15-next-3', 'sess-new-3');
+    assert(midCrash.ok === true && midCrash.claim.fence_epoch === 2, 'the simulated first-step transfer succeeds and bumps the epoch once');
+    const mailboxDir = laneStore.handoffMailboxDir(dir, wf.id);
+    const recordFile = path.join(mailboxDir, '0001.json');
+    const onDisk = readJson(recordFile, null);
+    writeJsonAtomic(recordFile, { ...onDisk, status: 'adopted', claim_epoch: 2, adopted_by: 'sess-new-3' });
+
+    const recovered = await laneStore.adoptMailboxHandoff(dir, wf.id, 'sess-new-3');
+    assert(recovered.ok === true, `expected the recovery call to succeed, got ${JSON.stringify(recovered)}`);
+    const claim = readClaim(dir, 'msn15-next-3');
+    assert(
+      claim.session === 'sess-new-3' && claim.fence_epoch === 2,
+      `expected the claim to stay at epoch 2 (never re-bumped by the self-heal), got ${JSON.stringify(claim)}`,
+    );
+    const record = readJson(recordFile, null);
+    assert(record.status === 'cleared', `expected the record cleared once recovery completes, got ${JSON.stringify(record)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('state handoff write/adopt (CLI, C1): a repo with ZERO workflow records anywhere keeps writing the single legacy .bee/HANDOFF.json — no .bee/runtime/handoffs/ directory is ever created', async () => {
+  const dir = makeStateRepo('bee-mailbox-c1-legacy-');
+  try {
+    const result = await runBeeState(dir, ['handoff', 'write', '--kind', 'pause', '--cell', 'wip-legacy', '--json']);
+    assert(result.status === 0, `expected the legacy write to succeed, got status=${result.status} stderr=${result.stderr}`);
+    assert(fs.existsSync(path.join(dir, '.bee', 'HANDOFF.json')), 'the legacy file exists');
+    assert(!fs.existsSync(path.join(dir, '.bee', 'runtime', 'handoffs')), 'no mailbox directory is created when zero workflow records exist anywhere (C1)');
+    const parsed = JSON.parse(result.stdout);
+    assert(parsed.kind === 'pause' && !('workflow_id' in parsed), `expected a plain legacy record with no mailbox envelope fields, got ${result.stdout}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('rebuildHandoffProjection: the legacy .bee/HANDOFF.json mirrors the newest OPEN mailbox record across every workflow, in the legacy field shape (writer_session, not from_session/id/workflow_id/status/target_role/seq); removed once every mailbox handoff is cleared', async () => {
+  const dir = makeStateRepo('bee-mailbox-projection-');
+  try {
+    const wf = await createWorkflow(dir, { feature: 'msn15-projection' });
+    writeCappedCellFixture(dir, 'msn15-prev-4');
+    claimCellFile(dir, 'sess-writer-4', 'msn15-next-4');
+    await laneStore.writeMailboxHandoff(dir, wf.id, {
+      kind: 'planned-next',
+      writer_session: 'sess-writer-4',
+      previous_cell: 'msn15-prev-4',
+      next_cell: 'msn15-next-4',
+    });
+    const rebuilt = rebuildHandoffProjection(dir);
+    assert(rebuilt.authoritative === true && rebuilt.source === wf.id, `expected an authoritative rebuild sourced from the mailbox's own workflow, got ${JSON.stringify(rebuilt)}`);
+
+    const projected = readJson(path.join(dir, '.bee', 'HANDOFF.json'), null);
+    assert(projected && projected.kind === 'planned-next' && projected.writer_session === 'sess-writer-4', `expected the projected file to carry writer_session, got ${JSON.stringify(projected)}`);
+    for (const mailboxOnlyField of ['id', 'workflow_id', 'status', 'target_role', 'seq', 'from_session']) {
+      assert(!(mailboxOnlyField in projected), `expected the projected legacy file to drop the mailbox-only field "${mailboxOnlyField}", got ${JSON.stringify(projected)}`);
+    }
+    // readHandoff (the byte-identical readers' own entry point) sees exactly
+    // this projected file — proving hooks/bee-session-close.mjs,
+    // lib/compaction.mjs, and lib/inject.mjs need zero code changes.
+    assert(laneStore.readHandoff(dir).kind === 'planned-next', 'readHandoff sees the projected record unchanged');
+
+    await laneStore.adoptMailboxHandoff(dir, wf.id, 'sess-adopter-4');
+    const rebuiltAfterClear = rebuildHandoffProjection(dir);
+    assert(rebuiltAfterClear.authoritative === true && rebuiltAfterClear.source === null, `expected a no-open-handoff rebuild once cleared, got ${JSON.stringify(rebuiltAfterClear)}`);
+    assert(!fs.existsSync(path.join(dir, '.bee', 'HANDOFF.json')), 'the projected legacy file is removed once no workflow has an open mailbox handoff');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('invariant 9 (D9, must-have truth): workflow A paused with an open handoff never blocks workflow B from starting, working, or adopting its OWN handoff — and A\'s own handoff is completely untouched by any of B\'s mailbox activity', async () => {
+  const dir = makeStateRepo('bee-mailbox-invariant9-');
+  try {
+    // Workflow A: the DEFAULT pipeline, paused (an open, never-adopted
+    // 'pause' handoff — real mid-flight-interruption shape).
+    const startA = await runBeeState(dir, ['start-feature', '--feature', 'msn15-inv9-a', '--json']);
+    assert(startA.status === 0, `expected feature A to start, got stderr=${startA.stderr}`);
+    const pauseA = await runBeeState(dir, ['handoff', 'write', '--kind', 'pause', '--cell', 'wip-a', '--next-action', 'resume A', '--json']);
+    assert(pauseA.status === 0, `expected A's pause handoff to write, got stderr=${pauseA.stderr}`);
+    const workflowsAfterA = listWorkflows(dir).workflows;
+    const wfA = workflowsAfterA.find((w) => w.feature === 'msn15-inv9-a');
+    assert(wfA, 'workflow A exists');
+    assert(laneStore.newestOpenHandoffMailboxRecord(dir, wfA.id, null)?.status === 'open', "A's own handoff resolved through the mailbox, open");
+
+    // Workflow B: a LANE, started WHILE A is paused — never blocked (F5
+    // scoping: a handoff naming a DIFFERENT feature never blocks a start).
+    const startB = await runBeeState(dir, ['start-feature', '--feature', 'msn15-inv9-b', '--as-lane', '--json']);
+    assert(startB.status === 0, `expected feature B to start despite A's open handoff, got stderr=${startB.stderr}`);
+    const wfB = listWorkflows(dir).workflows.find((w) => w.feature === 'msn15-inv9-b');
+    assert(wfB, 'workflow B exists');
+
+    // B works and writes its OWN planned-next handoff, targeted at its own
+    // lane via --lane (never touching A's mailbox).
+    writeCappedCellFixture(dir, 'msn15-inv9-prev-b');
+    claimCellFile(dir, 'sess-writer-b', 'msn15-inv9-next-b');
+    const writeB = await runBeeState(dir, [
+      'handoff', 'write',
+      '--kind', 'planned-next',
+      '--lane', 'msn15-inv9-b',
+      '--writer-session', 'sess-writer-b',
+      '--previous-cell', 'msn15-inv9-prev-b',
+      '--next-cell', 'msn15-inv9-next-b',
+      '--json',
+    ]);
+    assert(writeB.status === 0, `expected B's planned-next handoff to write, got stderr=${writeB.stderr}`);
+
+    // B adopts its own handoff freely — succeeds regardless of A's open pause.
+    const adoptB = await runBeeState(dir, ['handoff', 'adopt', '--lane', 'msn15-inv9-b', '--session-id', 'sess-adopter-b', '--json']);
+    assert(adoptB.status === 0, `expected B's adopt to succeed while A is still paused, got stdout=${adoptB.stdout} stderr=${adoptB.stderr}`);
+    const adoptedB = JSON.parse(adoptB.stdout);
+    assert(adoptedB.ok === true, `expected B's adoption to report ok:true, got ${adoptB.stdout}`);
+    const claimB = readClaim(dir, 'msn15-inv9-next-b');
+    assert(claimB.session === 'sess-adopter-b', `expected B's claim transferred to its own adopter, got ${JSON.stringify(claimB)}`);
+
+    // A's own handoff is COMPLETELY untouched: still the same open pause
+    // record it started as, at its original seq — B's start/write/adopt
+    // never wrote a single byte into A's mailbox.
+    const finalA = laneStore.newestOpenHandoffMailboxRecord(dir, wfA.id, null);
+    assert(finalA && finalA.kind === 'pause' && finalA.status === 'open' && finalA.seq === 1, `expected A's pause handoff untouched by any of B's activity, got ${JSON.stringify(finalA)}`);
+
+    // B's mailbox, symmetrically, carries none of A's records.
+    const bRecords = laneStore.listHandoffMailbox(dir, wfB.id);
+    assert(bRecords.every((r) => r.workflow_id === wfB.id), 'every record in B\'s mailbox belongs to B, never A');
+
+    // `state handoff show` with no --lane resolves to the DEFAULT record's
+    // own workflow (A) and still shows A's open pause — while `--lane
+    // msn15-inv9-b` shows B's own (now null, cleared) state. Each session's
+    // view is scoped to the workflow it actually resolves to.
+    const showDefault = await runBeeState(dir, ['handoff', 'show', '--json']);
+    assert(showDefault.status === 0, `expected the default show to succeed, got stderr=${showDefault.stderr}`);
+    const shownDefault = JSON.parse(showDefault.stdout);
+    assert(shownDefault && shownDefault.kind === 'pause', `expected the default (workflow A) show to still see A's pause, got ${showDefault.stdout}`);
+    const showB = await runBeeState(dir, ['handoff', 'show', '--lane', 'msn15-inv9-b', '--json']);
+    assert(JSON.parse(showB.stdout) === null, `expected B's own mailbox to show null once cleared, got ${showB.stdout}`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

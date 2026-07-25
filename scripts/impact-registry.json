@@ -2654,12 +2654,14 @@
     },
     "skills/bee-hive/templates/lib/state-projection.mjs": {
       "direct": [
+        "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_state_projection.mjs"
       ],
       "all": [
         "scripts/test_dispatch_prepare.mjs",
         "scripts/test_native_probe.mjs",
         "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+        "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_contention_status.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs",

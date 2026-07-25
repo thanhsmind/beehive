@@ -66,8 +66,10 @@
 // "newest active workflow" is a deliberate heuristic for that one moment,
 // see rebuildStateProjection's own comment).
 
-import { readState, writeState, defaultState, readLane, writeLane, GATE_NAMES } from './state.mjs';
+import fs from 'node:fs';
+import { readState, writeState, defaultState, readLane, writeLane, GATE_NAMES, handoffPath, listHandoffMailbox } from './state.mjs';
 import { listWorkflows } from './workflow-store.mjs';
+import { writeJsonAtomic } from './fsutil.mjs';
 
 /** True once at least one workflow record exists anywhere in the repo — the C1 authority switch. */
 export function projectionsAuthoritative(root) {
@@ -292,6 +294,89 @@ export function rebuildLaneProjection(root, feature) {
 }
 
 /**
+ * rebuildHandoffProjection(root) — full rebuild of the legacy
+ * .bee/HANDOFF.json as a projection of the newest OPEN mailbox handoff
+ * ACROSS every workflow (multisession-native-15, D5, advisor consult slice 3
+ * condition G: "state-projection.mjs has NO handoff rebuild — msn-15 ADDS
+ * rebuildHandoffProjection, registers in rebuildAllProjections"). Ties
+ * broken by `written_at` descending (ISO strings sort lexically), then
+ * workflow id descending for full determinism when two records land in the
+ * same millisecond across different workflows.
+ *
+ * COMPAT LIMITATION (condition G, explicitly accepted until slice 5 retires
+ * the legacy file): when TWO OR MORE workflows each have an open handoff at
+ * once, this single legacy file can only ever show ONE of them (whichever
+ * is newest) — every byte-identical reader that still reads
+ * .bee/HANDOFF.json directly via lib/state.mjs's readHandoff
+ * (hooks/bee-session-close.mjs, lib/compaction.mjs, lib/inject.mjs,
+ * AGENTS.md's startup step 5 via `state handoff show`'s own legacy-fallback
+ * arm) is blind to the OTHER paused workflow's handoff. A session-aware
+ * caller is NOT blind to this: bee.mjs's `state handoff show/write/adopt`
+ * resolve their OWN workflow's mailbox directly (lib/state.mjs's
+ * listHandoffMailbox/writeMailboxHandoff/adoptMailboxHandoff) and never
+ * consult this projection at all once a workflow resolves — this file
+ * exists purely as a DISPLAY convenience for the legacy, session-unaware
+ * readers above, never a second source of truth.
+ *
+ * `kind` on every mailbox record is already normalized at write time
+ * (writeMailboxHandoff only ever stores the literal 'pause'/'planned-next')
+ * and listHandoffMailbox re-normalizes on read regardless (state.mjs's
+ * normalizeHandoffKind, exported for exactly this reuse) — so this rebuild
+ * never has to normalize anything itself, and readHandoff's own
+ * normalization still runs on every read of the projected file afterward,
+ * unchanged (G: "preserves kind normalization").
+ *
+ * No-op (authoritative: false, legacy file left COMPLETELY untouched) when
+ * zero workflow records exist anywhere (C1) — the legacy file stays exactly
+ * what writeHandoff/adoptHandoff (state.mjs) leave it as, byte-identical to
+ * every pre-msn-15 behavior.
+ *
+ * When at least one workflow exists but NONE has an open mailbox handoff,
+ * the legacy file (if present) is REMOVED — mirrors adoptHandoff's own
+ * rmSync-on-clear, so the projection stays representative of "no handoff"
+ * instead of leaving a stale copy behind.
+ */
+export function rebuildHandoffProjection(root) {
+  const { workflows } = listWorkflows(root);
+  if (workflows.length === 0) {
+    return { authoritative: false, source: null };
+  }
+  let newest = null; // { record, workflowId }
+  for (const wf of workflows) {
+    const open = listHandoffMailbox(root, wf.id).filter((r) => r.status === 'open');
+    if (open.length === 0) continue;
+    const candidate = open[open.length - 1]; // highest seq among open records for this workflow
+    if (!newest) {
+      newest = { record: candidate, workflowId: wf.id };
+      continue;
+    }
+    const a = Date.parse(candidate.written_at) || 0;
+    const b = Date.parse(newest.record.written_at) || 0;
+    if (a > b || (a === b && wf.id > newest.workflowId)) {
+      newest = { record: candidate, workflowId: wf.id };
+    }
+  }
+  if (!newest) {
+    try {
+      fs.rmSync(handoffPath(root), { force: true });
+    } catch {
+      // best-effort cleanup — a projection rebuild never throws.
+    }
+    return { authoritative: true, source: null };
+  }
+  // Translate the mailbox envelope back to the legacy flat shape: drop the
+  // mailbox-only fields (seq, status, id, workflow_id, target_role,
+  // from_session — writer_session already carries the same value verbatim
+  // for a planned-next record, per writeMailboxHandoff's own comment) so a
+  // byte-identical legacy reader sees exactly the shape writeHandoff would
+  // have produced.
+  const { seq: _seq, status: _status, id: _id, workflow_id: _workflowId, target_role: _targetRole, from_session: _fromSession, ...projected } =
+    newest.record;
+  writeJsonAtomic(handoffPath(root), projected);
+  return { authoritative: true, source: newest.workflowId };
+}
+
+/**
  * rebuildAllProjections(root) — the recovery entry point (must_have: "A
  * rebuild verb/function callable for recovery"): rebuilds state.json (from
  * the current default feature's own live workflow record when one names it,
@@ -310,8 +395,9 @@ export function rebuildLaneProjection(root, feature) {
  */
 export function rebuildAllProjections(root) {
   const state = rebuildStateProjection(root);
+  const handoff = rebuildHandoffProjection(root);
   const { workflows } = listWorkflows(root);
   const active = workflows.filter((wf) => wf.status === 'active');
   const lanes = active.map((wf) => rebuildLaneProjection(root, wf.feature));
-  return { state, lanes };
+  return { state, handoff, lanes };
 }

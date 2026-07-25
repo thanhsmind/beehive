@@ -962,7 +962,11 @@ export function gateApproved(state, gateName) {
 // law 12) — HANDOFF.json had no CLI writer before this cell.
 export const HANDOFF_KINDS = ['planned-next', 'pause'];
 
-function normalizeHandoffKind(kind) {
+// Exported (multisession-native-15, condition G) so state-projection.mjs's
+// rebuildHandoffProjection can rely on the SAME normalization this module's
+// own readHandoff uses, rather than reimplementing it — single source of
+// truth for the missing/unknown -> 'pause' fail-safe.
+export function normalizeHandoffKind(kind) {
   return kind === 'planned-next' ? 'planned-next' : 'pause';
 }
 
@@ -1105,6 +1109,313 @@ export function adoptHandoff(root, sessionId) {
 
   fs.rmSync(handoffPath(root), { force: true });
   return { ok: true, claim: adopted.claim, previous_owner: adopted.previous_owner, next_cell: nextCell };
+}
+
+// ─── handoff mailboxes per workflow (multisession-native-15, D5, issue #56
+// 3.7/mục 10, advisor consult slice 3 condition G) ──────────────────────────
+// Legacy .bee/HANDOFF.json above is ONE mailbox for the whole repo
+// (readHandoff/writeHandoff/adoptHandoff, left completely unchanged — still
+// the byte-identical path for a repo with no workflow records at all, C1).
+// A repo with at least one workflow record (workflow-store.mjs,
+// multisession-native-5+) gets a MAILBOX PER WORKFLOW instead:
+// .bee/runtime/handoffs/<workflow-id>/<seq>.json, seq zero-padded and
+// monotonic per mailbox. bee.mjs resolves WHICH workflow a given `state
+// handoff write/show/adopt` call targets (bound session -> its workflow;
+// --lane names it; the default record's own live workflow as the last
+// resort; null when none of those resolve, which is this module's signal to
+// fall back to the single legacy file above) — this module only knows how
+// to read/write a mailbox once it has been handed a concrete workflow id.
+//
+// Each mailbox slot is further scoped by `target_role` (free-form,
+// caller-supplied, default null meaning "the unscoped default recipient"):
+// writing a NEW record for a given (workflow, target_role) pair marks the
+// previous OPEN record for that SAME (workflow, target_role) 'cleared' in
+// the same write — the mailbox's answer to the single legacy file's
+// implicit overwrite-on-rewrite semantics, so a caller who never names a
+// role keeps exactly the old "one active handoff" behavior. A DIFFERENT
+// target_role (e.g. a reviewer's handoff alongside an implementer's) gets
+// its own independent slot and is never touched by this auto-clear — this
+// is what keeps a reviewer handoff from clobbering an implementer handoff
+// (D9 invariant, must_have truth), while every record — cleared or not —
+// stays on disk under its own seq for audit history (never deleted).
+//
+// adoptMailboxHandoff mirrors adoptHandoff's own two-step
+// (transfer-claim-then-clear) idempotent-recovery contract: a crash between
+// the steps leaves the record status 'adopted' (not yet 'cleared'), and the
+// next adopt call for that mailbox+role self-heals by finding that same
+// 'adopted' record and skipping straight to the clear step (never re-runs
+// adoptClaim once status is already 'adopted' — no double fence_epoch bump
+// on recovery).
+const HANDOFF_SEQ_WIDTH = 4;
+export const HANDOFF_MAILBOX_STATUSES = ['open', 'adopted', 'cleared'];
+
+function requireHandoffWorkflowId(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error('handoff mailbox: workflow id is required.');
+  }
+  const id = value.trim();
+  if (/[\\/]/.test(id) || id.includes('..')) {
+    throw new Error(`handoff mailbox: workflow id "${id}" must be a plain id (no path separators).`);
+  }
+  return id;
+}
+
+function normalizeTargetRole(role) {
+  return typeof role === 'string' && role.trim() ? role.trim() : null;
+}
+
+export function handoffMailboxDir(root, workflowId) {
+  return path.join(root, '.bee', 'runtime', 'handoffs', requireHandoffWorkflowId(workflowId));
+}
+
+function handoffRecordPath(root, workflowId, seq) {
+  return path.join(handoffMailboxDir(root, workflowId), `${String(seq).padStart(HANDOFF_SEQ_WIDTH, '0')}.json`);
+}
+
+/**
+ * listHandoffMailbox(root, workflowId) — every record in a workflow's
+ * mailbox, oldest to newest by seq. Fail-open (missing/unreadable dir ->
+ * []), matching listWorkflows/readLane's own convention for a store that may
+ * not exist yet. A record missing/unparseable is skipped, never thrown for
+ * the whole listing. `kind` is normalized the SAME way readHandoff
+ * normalizes it (missing/unknown -> 'pause', G's fail-safe) so a caller
+ * never has to special-case a raw on-disk value. `seq` is derived from the
+ * filename and attached in-memory only — never persisted inside the record
+ * body itself (the filename is the one source of truth for it).
+ */
+export function listHandoffMailbox(root, workflowId) {
+  let entries;
+  try {
+    entries = fs.readdirSync(handoffMailboxDir(root, workflowId));
+  } catch {
+    return [];
+  }
+  const records = [];
+  for (const entry of entries) {
+    if (!entry.endsWith('.json')) continue;
+    const seq = Number.parseInt(entry.slice(0, -'.json'.length), 10);
+    if (!Number.isFinite(seq)) continue;
+    const raw = readJson(handoffRecordPath(root, workflowId, seq), null);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    records.push({ ...raw, kind: normalizeHandoffKind(raw.kind), seq });
+  }
+  records.sort((a, b) => a.seq - b.seq);
+  return records;
+}
+
+/**
+ * newestOpenHandoffMailboxRecord(root, workflowId, targetRole) — the newest
+ * 'open' record for this workflow, scoped to `targetRole` (null = the
+ * default/unscoped slot). Never returns an 'adopted' or 'cleared' record.
+ */
+export function newestOpenHandoffMailboxRecord(root, workflowId, targetRole = null) {
+  const role = normalizeTargetRole(targetRole);
+  const records = listHandoffMailbox(root, workflowId);
+  for (let i = records.length - 1; i >= 0; i--) {
+    const record = records[i];
+    if (record.status !== 'open') continue;
+    if (normalizeTargetRole(record.target_role) !== role) continue;
+    return record;
+  }
+  return null;
+}
+
+// nextHandoffSeq — the highest existing seq + 1 for this mailbox (1 when
+// empty). Only ever called from inside withStoreLock('handoff:<id>', ...)
+// below, so no locking of its own.
+function nextHandoffSeq(root, workflowId) {
+  const records = listHandoffMailbox(root, workflowId);
+  return records.length === 0 ? 1 : records[records.length - 1].seq + 1;
+}
+
+/**
+ * writeMailboxHandoff(root, workflowId, input) — the mailbox-per-workflow
+ * sibling of writeHandoff above. SAME kind/precondition contract (D1,
+ * unchanged): --kind must be 'pause' or 'planned-next' explicitly; a
+ * planned-next record requires the previous cell capped with a passing
+ * verify AND the next cell's claim owned by the writer session. msn-12's
+ * fence_epoch is snapshotted onto the new record's `claim_epoch` field at
+ * write time (informational/audit — adoptMailboxHandoff below is what
+ * actually moves the claim and re-stamps this field with the bumped value).
+ * Every precondition is READ before the single write (fails closed, zero
+ * mutation on refusal — same discipline as writeHandoff).
+ *
+ * `from_session` is the mailbox schema's field name (D5's issue #56 shape);
+ * `writer_session` is kept as an alias on the SAME record (both fields, same
+ * value, for a planned-next handoff) so a caller written against the legacy
+ * `writer_session` name keeps working — a deliberate compatibility
+ * duplication, not schema drift.
+ *
+ * Runs under `withStoreLock(root, 'handoff:<workflowId>')` so two concurrent
+ * writers to the SAME workflow's mailbox can never generate the same seq.
+ * Writing a new record auto-clears the previous OPEN record for the SAME
+ * (workflow, target_role) pair — see this section's header comment for why.
+ */
+export function writeMailboxHandoff(root, workflowId, input = {}) {
+  const wfId = requireHandoffWorkflowId(workflowId);
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('writeMailboxHandoff: an object record is required.');
+  }
+  if (input.kind !== 'planned-next' && input.kind !== 'pause') {
+    throw new Error(
+      `writeMailboxHandoff: --kind must be "planned-next" or "pause" (got ${JSON.stringify(input.kind)}) — D1 requires an explicit kind, never guessed. FIX: pass one of the two handoff kinds.`,
+    );
+  }
+  const role = normalizeTargetRole(input.target_role);
+  const now = new Date().toISOString();
+
+  let fields;
+  if (input.kind === 'pause') {
+    const { kind: _kind, target_role: _role, from_session: rawFromSession, ...rest } = input;
+    const fromSession = typeof rawFromSession === 'string' && rawFromSession.trim() ? rawFromSession.trim() : null;
+    fields = { ...rest, kind: 'pause', from_session: fromSession };
+  } else {
+    const writerSession = typeof input.writer_session === 'string' ? input.writer_session.trim() : '';
+    const previousCell = typeof input.previous_cell === 'string' ? input.previous_cell.trim() : '';
+    const nextCell = typeof input.next_cell === 'string' ? input.next_cell.trim() : '';
+    if (!writerSession || !previousCell || !nextCell) {
+      throw new Error(
+        'writeMailboxHandoff: a planned-next handoff requires non-empty writer_session, previous_cell, and next_cell (D1) — FIX: pass all three.',
+      );
+    }
+    const previous = readJson(path.join(root, '.bee', 'cells', `${previousCell}.json`), null);
+    if (!previous || previous.status !== 'capped' || previous.trace?.verify_passed !== true) {
+      throw new Error(
+        `writeMailboxHandoff: refused — previous cell "${previousCell}" is not capped with a passing verify (found status "${previous?.status ?? 'missing'}", verify_passed ${JSON.stringify(previous?.trace?.verify_passed ?? null)}). A planned-next handoff may only follow a green-verified cap. FIX: cap "${previousCell}" with a recorded passing verify first (bee.mjs cells verify then cap), then retry.`,
+      );
+    }
+    const claim = readClaim(root, nextCell);
+    if (!claim || claim.session !== writerSession) {
+      throw new Error(
+        `writeMailboxHandoff: refused — next cell "${nextCell}" has no claim owned by writer session "${writerSession}" (found ${claim ? `owner "${claim.session}"` : 'no claim'}). The next cell must already be claimed by the writing session before a planned-next handoff carries it. FIX: claim "${nextCell}" as session "${writerSession}" first (claims.mjs claimCellFile), then retry.`,
+      );
+    }
+    const {
+      kind: _kind,
+      target_role: _role,
+      writer_session: _ws,
+      from_session: _fs,
+      previous_cell: _pc,
+      next_cell: _nc,
+      ...rest
+    } = input;
+    fields = {
+      ...rest,
+      kind: 'planned-next',
+      writer_session: writerSession,
+      from_session: writerSession,
+      previous_cell: previousCell,
+      next_cell: nextCell,
+      claim_epoch: Number.isFinite(claim.fence_epoch) ? claim.fence_epoch : 1,
+    };
+  }
+
+  return withStoreLock(root, `handoff:${wfId}`, () => {
+    const seq = nextHandoffSeq(root, wfId);
+    // Auto-clear the previous open record for this SAME (workflow, role) —
+    // see the section header. Never touches a different role's record.
+    const prior = newestOpenHandoffMailboxRecord(root, wfId, role);
+    if (prior) {
+      const { seq: priorSeq, ...priorRest } = prior;
+      writeJsonAtomic(handoffRecordPath(root, wfId, priorSeq), {
+        ...priorRest,
+        status: 'cleared',
+        cleared_at: now,
+      });
+    }
+    const record = {
+      id: `${wfId}-${String(seq).padStart(HANDOFF_SEQ_WIDTH, '0')}`,
+      workflow_id: wfId,
+      target_role: role,
+      status: 'open',
+      written_at: now,
+      ...fields,
+    };
+    writeJsonAtomic(handoffRecordPath(root, wfId, seq), record);
+    return { ...record, seq };
+  });
+}
+
+/**
+ * adoptMailboxHandoff(root, workflowId, sessionId, { targetRole } = {}) —
+ * the mailbox-per-workflow sibling of adoptHandoff above. Finds the newest
+ * record for `(workflowId, targetRole)` that is still 'open' OR already
+ * 'adopted' (the self-heal case — see this section's header) and:
+ *   - refuses NO_HANDOFF if none exists,
+ *   - refuses NOT_PLANNED_NEXT if the found record's kind isn't
+ *     'planned-next' (a pause handoff is never adopted, D1),
+ *   - otherwise transfers the carried claim (adoptClaim, which stamps the
+ *     bumped fence_epoch per msn-12) — skipped when the record is already
+ *     'adopted' (self-heal, the claim already moved) — then marks the
+ *     record 'cleared'.
+ * Never throws (mirrors adoptHandoff/claims.mjs's typed-failure contract
+ * for a REFUSAL); a malformed `sessionId` still throws via adoptClaim's own
+ * requireId, same as adoptHandoff.
+ */
+export function adoptMailboxHandoff(root, workflowId, sessionId, { targetRole = null } = {}) {
+  const wfId = requireHandoffWorkflowId(workflowId);
+  const role = normalizeTargetRole(targetRole);
+  return withStoreLock(root, `handoff:${wfId}`, () => {
+    const records = listHandoffMailbox(root, wfId);
+    let candidate = null;
+    for (let i = records.length - 1; i >= 0; i--) {
+      const record = records[i];
+      if (normalizeTargetRole(record.target_role) !== role) continue;
+      if (record.status === 'open' || record.status === 'adopted') {
+        candidate = record;
+        break;
+      }
+    }
+    if (!candidate) {
+      return {
+        ok: false,
+        code: 'NO_HANDOFF',
+        reason: `no open handoff in workflow "${wfId}"'s mailbox${role ? ` (role "${role}")` : ''} to adopt.`,
+      };
+    }
+    if (candidate.kind !== 'planned-next') {
+      return {
+        ok: false,
+        code: 'NOT_PLANNED_NEXT',
+        reason: `handoff kind "${candidate.kind}" is not "planned-next" — a pause handoff is never adopted, it must be surfaced and WAITED on (D1).`,
+      };
+    }
+    const nextCell = typeof candidate.next_cell === 'string' ? candidate.next_cell.trim() : '';
+    if (!nextCell) {
+      return { ok: false, code: 'MALFORMED', reason: 'planned-next handoff has no next_cell to adopt.' };
+    }
+    const { seq, ...rest } = candidate;
+    let claim;
+    let previousOwner = candidate.adopted_previous_owner ?? null;
+    if (candidate.status === 'open') {
+      const adopted = adoptClaim(root, nextCell, sessionId);
+      if (!adopted.ok) return adopted; // untouched, propagate typed refusal as-is
+      claim = adopted.claim;
+      previousOwner = adopted.previous_owner;
+      writeJsonAtomic(handoffRecordPath(root, wfId, seq), {
+        ...rest,
+        status: 'adopted',
+        claim_epoch: adopted.claim.fence_epoch,
+        adopted_by: sessionId,
+        adopted_at: new Date().toISOString(),
+        adopted_previous_owner: previousOwner,
+      });
+    } else {
+      // Self-heal: the claim already moved on a prior (crashed-before-clear)
+      // call — never re-adopt (would double-bump fence_epoch for nothing).
+      claim = readClaim(root, nextCell);
+    }
+    writeJsonAtomic(handoffRecordPath(root, wfId, seq), {
+      ...rest,
+      status: 'cleared',
+      claim_epoch: claim && Number.isFinite(claim.fence_epoch) ? claim.fence_epoch : candidate.claim_epoch,
+      adopted_by: sessionId,
+      adopted_at: candidate.adopted_at ?? new Date().toISOString(),
+      adopted_previous_owner: previousOwner,
+      cleared_at: new Date().toISOString(),
+    });
+    return { ok: true, claim, previous_owner: previousOwner, next_cell: nextCell, workflow_id: wfId, seq };
+  });
 }
 
 // ─── lanes: per-feature pipeline records beside the default state.json ──────

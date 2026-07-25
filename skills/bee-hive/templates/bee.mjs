@@ -68,6 +68,10 @@ import {
   listLanes,
   writeHandoff,
   adoptHandoff,
+  writeMailboxHandoff,
+  adoptMailboxHandoff,
+  listHandoffMailbox,
+  newestOpenHandoffMailboxRecord,
   resolveRoots,
   cacheFilePath,
   advisorRefAnchors,
@@ -88,7 +92,7 @@ import {
 // SAME lock name and deadlock (see updateWorkflowAssumingLock's own comment
 // in workflow-store.mjs).
 import { listWorkflows, updateWorkflow, withWorkflowLock, updateWorkflowAssumingLock } from './lib/workflow-store.mjs';
-import { rebuildLaneProjection, rebuildStateProjection, rebuildAllProjections } from './lib/state-projection.mjs';
+import { rebuildLaneProjection, rebuildStateProjection, rebuildAllProjections, rebuildHandoffProjection } from './lib/state-projection.mjs';
 // Lane + session CLI surface (fresh-session-handoff fsh-4, D2/D4): claims.mjs
 // stays out of this cell's file scope — these are already-exported read/
 // mutate primitives from fsh-3, composed here for presentation (session list)
@@ -3139,10 +3143,69 @@ function handleStateSessionUnbind(root, flags) {
 // session-handoff fsh-9, D1) over lib/state.mjs's guarded writeHandoff/
 // adoptHandoff. This cell owns the LIFECYCLE only — claim-next selection is
 // fsh-11's, SessionStart wiring (register/rehydrate/auto-resume) is fsh-10's.
+//
+// multisession-native-15 (D5): each of the three verbs below now first
+// resolves WHICH workflow it targets (resolveHandoffWorkflowId) and, when
+// one resolves, reads/writes/adopts that workflow's OWN mailbox
+// (lib/state.mjs's listHandoffMailbox/writeMailboxHandoff/
+// adoptMailboxHandoff) instead of the single legacy .bee/HANDOFF.json —
+// every mailbox mutation triggers a synchronous rebuildHandoffProjection so
+// the legacy file (still read directly by hooks/bee-session-close.mjs,
+// lib/compaction.mjs, lib/inject.mjs, and AGENTS.md's own `state handoff
+// show` step) stays a faithful DISPLAY projection (see that function's own
+// header for the accepted "shows only one workflow at a time" limitation).
+// A repo with no workflow records anywhere (C1), or a call where none of
+// --lane/the bound session/the default record's own feature resolves to a
+// LIVE workflow, falls through to the untouched legacy writeHandoff/
+// adoptHandoff/readHandoff path below — byte-identical to every pre-msn-15
+// repo.
 
-function handleStateHandoffWrite(root, flags) {
+// resolveHandoffWorkflowId — resolution order mirrors resolveMutationTarget
+// above: explicit --lane always wins > the calling session's bound lane >
+// the DEFAULT record's own live workflow (mirrors rebuildStateProjection's
+// feature-matched branch) > null (no workflow resolves — caller falls back
+// to the legacy single file). A --lane or a bound session naming NO live
+// workflow refuses loudly (never silently guesses back to the default or the
+// legacy file) — same "never guess" discipline resolveMutationTarget already
+// uses for a bound session's missing lane record.
+function resolveHandoffWorkflowId(root, { laneFeature = null, sessionIdFlag } = {}) {
+  const { workflows } = listWorkflows(root);
+  if (workflows.length === 0) return null; // C1: no workflow records anywhere.
+  const findLive = (feature) => workflows.find((w) => w.feature === feature && w.status !== 'closed');
+  if (laneFeature) {
+    const wf = findLive(laneFeature);
+    if (!wf) {
+      throw new Error(
+        `state handoff: refused — --lane "${laneFeature}" names no live workflow (no .bee/runtime/workflows/*/state.json with feature "${laneFeature}" and status !== closed). FIX: start it first ("state start-feature --feature ${laneFeature} --as-lane"), or omit --lane.`,
+      );
+    }
+    return wf.id;
+  }
+  const sessionId = resolveSessionId({ flag: sessionIdFlag, root });
+  const session = sessionId ? readSession(root, sessionId) : null;
+  const bound = session && typeof session.lane === 'string' ? session.lane.trim() : '';
+  if (bound) {
+    const wf = findLive(bound);
+    if (!wf) {
+      throw new Error(
+        `state handoff: refused — calling session "${sessionId}" is bound to lane "${bound}" but no live workflow names it. FIX: start the lane, unbind the session, or pass --lane explicitly.`,
+      );
+    }
+    return wf.id;
+  }
+  const defaultRecord = readStateStrict(root);
+  if (defaultRecord.feature) {
+    const wf = findLive(defaultRecord.feature);
+    if (wf) return wf.id;
+  }
+  return null; // Nothing resolves — the legacy single-file path handles this call.
+}
+
+async function handleStateHandoffWrite(root, flags) {
   rejectDryRun(flags);
   const kind = requireFlag(flags, 'kind');
+  const laneFeature = optionalLaneFlag(flags, 'state handoff write');
+  const targetRole = flags['target-role'] !== undefined ? String(flags['target-role']) : null;
   const input = { kind };
   if (flags.feature !== undefined) input.feature = String(flags.feature);
   if (flags.phase !== undefined) input.phase = String(flags.phase);
@@ -3158,13 +3221,41 @@ function handleStateHandoffWrite(root, flags) {
     if (flags.done !== undefined) input.done = splitList(flags.done);
     if (flags.remaining !== undefined) input.remaining = splitList(flags.remaining);
   }
+  const workflowId = resolveHandoffWorkflowId(root, { laneFeature, sessionIdFlag: flags['session-id'] });
+  if (workflowId) {
+    // writeMailboxHandoff runs its body under withStoreLock, which is async
+    // (lock.mjs) — same reason handleStateAdvisorRefRecord below is async
+    // and awaits withMutationLock. The dispatcher already does
+    // `await handler(...)` uniformly (main()), so widening this one handler
+    // to async is a safe, isolated change.
+    const record = await writeMailboxHandoff(root, workflowId, { ...input, target_role: targetRole });
+    rebuildHandoffProjection(root);
+    return {
+      result: record,
+      text: `Wrote "${record.kind}" handoff to workflow "${workflowId}" mailbox (seq ${record.seq}).`,
+    };
+  }
   const record = writeHandoff(root, input);
   return { result: record, text: `Wrote "${record.kind}" handoff.` };
 }
 
-function handleStateHandoffAdopt(root, flags) {
+async function handleStateHandoffAdopt(root, flags) {
   rejectDryRun(flags);
   const sessionId = requireFlag(flags, 'session-id');
+  const laneFeature = optionalLaneFlag(flags, 'state handoff adopt');
+  const targetRole = flags['target-role'] !== undefined ? String(flags['target-role']) : null;
+  const workflowId = resolveHandoffWorkflowId(root, { laneFeature, sessionIdFlag: sessionId });
+  if (workflowId) {
+    const result = await adoptMailboxHandoff(root, workflowId, sessionId, { targetRole });
+    if (!result.ok) {
+      throw new Error(`state handoff adopt: ${result.reason}`);
+    }
+    rebuildHandoffProjection(root);
+    return {
+      result,
+      text: `Adopted the handoff's carried claim on "${result.next_cell}" into session "${sessionId}" (workflow "${workflowId}"); handoff cleared.`,
+    };
+  }
   const result = adoptHandoff(root, sessionId);
   if (!result.ok) {
     throw new Error(`state handoff adopt: ${result.reason}`);
@@ -3175,8 +3266,11 @@ function handleStateHandoffAdopt(root, flags) {
   };
 }
 
-function handleStateHandoffShow(root) {
-  const handoff = readHandoff(root);
+function handleStateHandoffShow(root, flags) {
+  const laneFeature = optionalLaneFlag(flags, 'state handoff show');
+  const targetRole = flags['target-role'] !== undefined ? String(flags['target-role']) : null;
+  const workflowId = resolveHandoffWorkflowId(root, { laneFeature, sessionIdFlag: flags['session-id'] });
+  const handoff = workflowId ? newestOpenHandoffMailboxRecord(root, workflowId, targetRole) : readHandoff(root);
   if (!handoff) return { result: null, text: 'No handoff.' };
   return {
     result: handoff,
