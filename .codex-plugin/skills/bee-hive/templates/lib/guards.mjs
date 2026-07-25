@@ -501,6 +501,103 @@ function foreignHoldExpiry(hold) {
   return `expires ${new Date(mirroredMs + ttl * 1000).toISOString()}`;
 }
 
+// multisession-native-14 (D4, issue #56 3.5): built-in exclusive-resource
+// defaults for the cross-worktree advisory downgrade below. A path matching
+// one of these globs keeps the ORIGINAL hard cross-worktree deny even though
+// every other path downgrades to an advisory warning — these are the
+// resources where two checkouts editing "the same logical thing" from
+// different physical trees is unsafe to discover only at merge time (a
+// migration ordering collision, a lockfile rewritten out from under another
+// checkout's install, a release/onboarding artifact bee itself reads as an
+// atomic ledger). `.bee/config.json`'s `guards.exclusive_paths` EXTENDS this
+// list (never replaces it) — see isExclusivePath below.
+const DEFAULT_EXCLUSIVE_PATHS = [
+  // DB migration directories, any depth.
+  '**/migrations/**',
+  // Lockfiles — matched both at repo root and nested (monorepo packages).
+  'package-lock.json',
+  '**/package-lock.json',
+  'yarn.lock',
+  '**/yarn.lock',
+  'pnpm-lock.yaml',
+  '**/pnpm-lock.yaml',
+  'Cargo.lock',
+  '**/Cargo.lock',
+  'composer.lock',
+  '**/composer.lock',
+  'Gemfile.lock',
+  '**/Gemfile.lock',
+  // Release/manifest artifacts bee itself treats as a single atomic ledger.
+  // (bee.mjs's own RELEASE_MANIFEST_LINT_PATH constant — kept a literal here
+  // too rather than imported, to avoid a guards.mjs -> bee.mjs cycle.)
+  'docs/history/codex-harness-hardening/release-manifest.json',
+  '.bee/onboarding.json',
+  // Generated client directories, any depth.
+  '**/generated/**',
+];
+
+/**
+ * Translates a small glob vocabulary (`*` = any run of non-slash characters,
+ * `**` = zero or more path segments, everything else literal) into an
+ * anchored RegExp. Deliberately NOT reusing reservations.mjs's pathsOverlap —
+ * that predicate answers a different question (does a broad prefix/glob
+ * CONTAIN a path, for reservation/wave-scheduling containment) with only
+ * trailing-`*` support; this one answers "does this glob PATTERN match this
+ * exact path" for the exclusive-resource list, which needs mid-path `**`
+ * (`**\/migrations/**`) that pathsOverlap was never built for.
+ */
+function globToRegExp(glob) {
+  const normalized = String(glob || '').replace(/\\/g, '/').replace(/^\.\/+/, '');
+  let pattern = '';
+  let i = 0;
+  while (i < normalized.length) {
+    const c = normalized[i];
+    if (c === '*' && normalized[i + 1] === '*') {
+      let j = i + 2;
+      if (normalized[j] === '/') {
+        // '**/' — an optional run of whole path segments as a prefix.
+        pattern += '(?:.*/)?';
+        j += 1;
+      } else {
+        // trailing/mid '**' with no following slash — matches any remainder.
+        pattern += '.*';
+      }
+      i = j;
+      continue;
+    }
+    if (c === '*') {
+      pattern += '[^/]*';
+      i += 1;
+      continue;
+    }
+    if ('.+^${}()|[]\\'.includes(c)) {
+      pattern += `\\${c}`;
+      i += 1;
+      continue;
+    }
+    pattern += c;
+    i += 1;
+  }
+  return new RegExp(`^${pattern}$`);
+}
+
+/**
+ * True when `normalizedPath` matches any exclusive-resource glob — the
+ * built-in defaults above, EXTENDED (never replaced) by
+ * `.bee/config.json`'s `guards.exclusive_paths` array (documented in
+ * AGENTS.md/CONTEXT.md D4: "user list extends defaults" — simpler and safer
+ * than a replace, since a repo that adds one project-specific exclusive path
+ * should not have to also re-declare every built-in one to keep it covered).
+ * A malformed/absent config key is silently treated as an empty extension
+ * list, never an error — this is a policy lookup, not a validated write.
+ */
+function isExclusivePath(root, normalizedPath) {
+  const config = readConfig(root);
+  const extra = config.guards && Array.isArray(config.guards.exclusive_paths) ? config.guards.exclusive_paths : [];
+  const globs = DEFAULT_EXCLUSIVE_PATHS.concat(extra.filter((g) => typeof g === 'string' && g.trim()));
+  return globs.some((glob) => globToRegExp(glob).test(normalizedPath));
+}
+
 // xwh-4: resolves the cross-worktree HOLD topology for the write guard —
 // same shape/naming as cells.mjs's resolveHoldTopology (xwh-3), rebased on
 // the `root` checkWrite already carries (the guard is a library call whose
@@ -572,16 +669,26 @@ function resolveHoldTopology(root) {
  *   fails closed with a typed {allow:false, kind:'holds-unreadable'} verdict
  *   (never a throw — the production hook is fail-open and would swallow a
  *   throw into an allow); a missing store stays open, same as today.
- * - Cross-WORKTREE hold deny (xwh-4): right after the cross-session block,
- *   before every phase branch, and NOT gated on sessionId — checkout
- *   identity comes from resolveHoldTopology(root) (ordinary => 'main',
- *   granted worktree => its git-verified id). A path ledger-held by a
- *   DIFFERENT checkout denies with kind 'worktree-hold' naming the holding
- *   checkout, its feature, and the expiry. Own holds, expired/released
- *   holds, and a missing ledger never deny; unresolvable/ungranted topology
- *   skips the consultation entirely (fail-open). The one deny on a broken
- *   store: a present-but-corrupt ledger => typed
+ * - Cross-WORKTREE hold policy (xwh-4, revised multisession-native-14 D4):
+ *   right after the cross-session block, before every phase branch, and NOT
+ *   gated on sessionId — checkout identity comes from
+ *   resolveHoldTopology(root) (ordinary => 'main', granted worktree => its
+ *   git-verified id). A path ledger-held by a DIFFERENT checkout now DENIES
+ *   only when the path matches the exclusive-resource list
+ *   (isExclusivePath — migrations, lockfiles, release/manifest artifacts,
+ *   generated client dirs; kind 'worktree-hold', same reason shape as
+ *   before). Every other cross-worktree overlap ALLOWS with a `warning`
+ *   naming the holding checkout, its feature, and that `bee worktree merge`
+ *   will surface any real conflict at merge time — never a silent allow
+ *   (must_haves prohibition: "no silent allow without the advisory
+ *   warning"). Own holds, expired/released holds, and a missing ledger never
+ *   deny or warn; unresolvable/ungranted topology skips the consultation
+ *   entirely (fail-open). The one unconditional deny on a broken store: a
+ *   present-but-corrupt ledger => typed
  *   {allow:false, kind:'worktree-holds-unreadable'} (holdsStoreCorrupt).
+ *   SAME-workspace conflicts (the cross-session hold block above, and the
+ *   swarming reservation block below) are untouched by this cell — only the
+ *   cross-worktree branch's policy changed.
  */
 export function checkWrite(root, state, relPath, agentName = null, { sessionId = null } = {}) {
   const normalized = normalizeRel(relPath);
@@ -688,13 +795,31 @@ export function checkWrite(root, state, relPath, agentName = null, { sessionId =
       }
       if (foreign.length > 0) {
         const hold = foreign[0];
+        if (isExclusivePath(root, normalized)) {
+          return {
+            allow: false,
+            kind: 'worktree-hold',
+            reason:
+              `bee cross-worktree hold: "${normalized}" is held by checkout "${hold.holder}" ` +
+              `(feature ${hold.feature || 'unknown'}${hold.cell ? `, cell ${hold.cell}` : ''}), ${foreignHoldExpiry(hold)}. ` +
+              'Wait for the hold to expire or coordinate with that checkout — a cross-worktree hold is a hard block.',
+          };
+        }
+        // multisession-native-14 (D4): a NORMAL (non-exclusive) path only
+        // ever downgrades to advisory here — allow, but never silently (the
+        // must_haves prohibition this cell adds). The warning names the
+        // holding checkout/feature/expiry, same facts the old hard deny
+        // reason carried, plus the merge-time consequence: worktree-store.mjs's
+        // merge fence (its own P3 drift check) is what will actually surface
+        // a real collision, not this write-time check.
         return {
-          allow: false,
-          kind: 'worktree-hold',
-          reason:
-            `bee cross-worktree hold: "${normalized}" is held by checkout "${hold.holder}" ` +
-            `(feature ${hold.feature || 'unknown'}${hold.cell ? `, cell ${hold.cell}` : ''}), ${foreignHoldExpiry(hold)}. ` +
-            'Wait for the hold to expire or coordinate with that checkout — a cross-worktree hold is a hard block.',
+          allow: true,
+          warning:
+            `bee cross-worktree hold: "${normalized}" is also held by checkout "${hold.holder}" ` +
+            `(feature ${hold.feature || 'unknown'}${hold.cell ? `, cell ${hold.cell}` : ''}), ${foreignHoldExpiry(hold)} — ` +
+            'advisory only (different workspace, not an exclusive resource). ' +
+            `Coordinate with that checkout if possible; otherwise "bee worktree merge" will surface any real conflict ` +
+            'between the two checkouts at merge time.',
         };
       }
     }

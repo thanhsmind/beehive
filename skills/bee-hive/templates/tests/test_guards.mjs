@@ -942,15 +942,25 @@ await check('NET branch 7 — swarming reservation: foreign reservation denies w
   }
 });
 
-// ─── xwh-4: cross-worktree foreign-hold branch (NEW behavior, RED-first) ────
+// ─── xwh-4: cross-worktree foreign-hold branch ──────────────────────────────
 // The write guard consults the shared cross-worktree holds ledger (xwh-1,
 // worktree-holds.mjs) through the same topology resolution claim-next uses
 // (xwh-3): ordinary checkout => holder 'main', ledger at the checkout's own
 // root; granted linked worktree => holder = git-verified id, ledger at
 // mainRoot; everything else (ungranted, unresolvable) => no consultation at
 // all, fail-open. Runs after the cross-session hold branch, before every
-// phase branch — a foreign checkout's hold denies even in
-// swarming-with-execution-approved.
+// phase branch.
+//
+// multisession-native-14 (D4, issue #56 3.5, NEW behavior, RED-first): a
+// foreign checkout's hold on a NORMAL (non-exclusive) path now downgrades to
+// an advisory allow+warning instead of a hard deny — only paths matching the
+// exclusive-resource list (migrations, lockfiles, release/manifest
+// artifacts, generated client dirs; built-in defaults + config-extended via
+// guards.exclusive_paths) keep the original hard block. Before this cell,
+// EVERY foreign hold denied unconditionally — this first test below is the
+// red-first regression: run against the pre-change guards.mjs it fails as a
+// hard deny; against the post-change guards.mjs it passes as advisory
+// allow+warning.
 
 function writeHoldsLedger(dir, holds) {
   const runtime = path.join(dir, '.bee', 'runtime');
@@ -958,8 +968,8 @@ function writeHoldsLedger(dir, holds) {
   writeJsonAtomic(path.join(runtime, 'cross-worktree-holds.json'), { holds });
 }
 
-await check('checkWrite (xwh-4): a foreign checkout\'s ledger hold denies the write with a typed kind, naming the holding checkout, its feature, and the expiry — phase-independent (swarming with execution approved)', async () => {
-  const dir = makeStateRepo('bee-xwh-foreign-deny-');
+await check('checkWrite (xwh-4/msn-14): a foreign checkout\'s hold on a NORMAL path is advisory — allow:true with a warning naming the holding checkout, its feature, the expiry, and the merge-time consequence — phase-independent (swarming with execution approved)', async () => {
+  const dir = makeStateRepo('bee-xwh-foreign-advisory-');
   try {
     const state = { ...defaultState(), phase: 'swarming', approved_gates: { context: true, shape: true, execution: true, review: false } };
     writeHoldsLedger(dir, [
@@ -974,15 +984,87 @@ await check('checkWrite (xwh-4): a foreign checkout\'s ledger hold denies the wr
         released_at: null,
       },
     ]);
-    const deny = checkWrite(dir, state, 'src/held/feature.ts', 'net-writer');
+    const verdict = checkWrite(dir, state, 'src/held/feature.ts', 'net-writer');
     assert(
-      deny.allow === false && deny.kind === 'worktree-hold',
-      `a foreign ledger hold must deny with kind worktree-hold, got ${JSON.stringify(deny)}`,
+      verdict.allow === true,
+      `a foreign hold on a normal path must ALLOW (advisory, not a hard block), got ${JSON.stringify(verdict)}`,
     );
     assert(
-      deny.reason.includes('wt-featx') && deny.reason.includes('feat-x') && /expires|no expiry/.test(deny.reason),
-      `the deny reason must name the holding checkout, its feature, and the expiry, got: ${deny.reason}`,
+      typeof verdict.warning === 'string' && verdict.warning.length > 0,
+      `a foreign-held normal path must never be a SILENT allow — a warning is required, got ${JSON.stringify(verdict)}`,
     );
+    assert(
+      verdict.warning.includes('wt-featx') && verdict.warning.includes('feat-x') && /expires|no expiry/.test(verdict.warning),
+      `the warning must name the holding checkout, its feature, and the expiry, got: ${verdict.warning}`,
+    );
+    assert(
+      /merge/i.test(verdict.warning),
+      `the warning must name the merge-time consequence ("bee worktree merge" will surface real conflicts), got: ${verdict.warning}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkWrite (xwh-4/msn-14): a foreign hold on an EXCLUSIVE-marked resource (built-in defaults: migrations, lockfiles, release-manifest.json, .bee/onboarding.json, generated/) still hard-denies cross-worktree, same reason shape as before this cell', async () => {
+  const dir = makeStateRepo('bee-xwh-exclusive-deny-');
+  try {
+    const state = { ...defaultState(), phase: 'swarming', approved_gates: { context: true, shape: true, execution: true, review: false } };
+    const exclusivePaths = [
+      'db/migrations/0001_init.sql',
+      'package-lock.json',
+      'packages/api/yarn.lock',
+      'docs/history/codex-harness-hardening/release-manifest.json',
+      '.bee/onboarding.json',
+      'src/generated/client.ts',
+    ];
+    writeHoldsLedger(
+      dir,
+      exclusivePaths.map((p, i) => ({
+        path: p,
+        holder: 'wt-excl',
+        feature: 'feat-excl',
+        session: null,
+        cell: `excl-${i}`,
+        ttl_seconds: 3600,
+        mirrored_at: new Date().toISOString(),
+        released_at: null,
+      })),
+    );
+    for (const p of exclusivePaths) {
+      const deny = checkWrite(dir, state, p, 'net-writer');
+      assert(
+        deny.allow === false && deny.kind === 'worktree-hold',
+        `exclusive path "${p}" must still hard-deny cross-worktree, got ${JSON.stringify(deny)}`,
+      );
+      assert(
+        deny.reason.includes('wt-excl') && deny.reason.includes('feat-excl') && /expires|no expiry/.test(deny.reason),
+        `the deny reason must name the holding checkout, its feature, and the expiry, got: ${deny.reason}`,
+      );
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkWrite (xwh-4/msn-14): guards.exclusive_paths in .bee/config.json EXTENDS the built-in defaults (does not replace them) — a config-declared glob hard-denies cross-worktree, and built-in defaults still hard-deny with no config at all', async () => {
+  const dir = makeStateRepo('bee-xwh-exclusive-config-');
+  try {
+    const state = { ...defaultState(), phase: 'swarming', approved_gates: { context: true, shape: true, execution: true, review: false } };
+    writeHoldsLedger(dir, [
+      { path: 'secrets/vault.bin', holder: 'wt-cfg', feature: 'feat-cfg', session: null, cell: 'cfg-1', ttl_seconds: 3600, mirrored_at: new Date().toISOString(), released_at: null },
+      { path: 'package-lock.json', holder: 'wt-cfg', feature: 'feat-cfg', session: null, cell: 'cfg-2', ttl_seconds: 3600, mirrored_at: new Date().toISOString(), released_at: null },
+    ]);
+    // no config yet: the custom path is advisory (not in the built-in list), the built-in lockfile still hard-denies
+    assert(checkWrite(dir, state, 'secrets/vault.bin', 'net-writer').allow === true, 'a non-listed path is advisory before any config extension');
+    assert(checkWrite(dir, state, 'package-lock.json', 'net-writer').allow === false, 'a built-in default keeps hard-denying with zero config');
+    const configPath = path.join(dir, '.bee', 'config.json');
+    writeJsonAtomic(configPath, { guards: { exclusive_paths: ['**/vault.bin'] } });
+    const deny = checkWrite(dir, state, 'secrets/vault.bin', 'net-writer');
+    assert(deny.allow === false && deny.kind === 'worktree-hold', `a config-extended exclusive glob must hard-deny, got ${JSON.stringify(deny)}`);
+    // the built-in default is still active alongside the extension (extends, never replaces)
+    assert(checkWrite(dir, state, 'package-lock.json', 'net-writer').allow === false, 'built-in defaults stay active alongside a config extension');
+    fs.rmSync(configPath, { force: true });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
