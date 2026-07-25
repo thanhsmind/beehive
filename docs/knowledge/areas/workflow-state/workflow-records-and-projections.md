@@ -7,9 +7,9 @@ bee:
   id: workflow-state-workflow-records-and-projections
   lifecycle: active
   areas: [workflow-state]
-  required_context: [areas/workflow-state/overview.md, areas/workflow-state/sessions-lanes-and-identity.md, areas/workflow-state/holds-and-the-coordination-lock.md]
-  decisions: ["multisession-native D1 (workflow-first state: the workflow record becomes the unit of state; state.json/lanes become read-only compatibility projections; startFeature's lock becomes workflow:<id>, ending cross-feature contention on the single state lock — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D7 (gates scoped to plan revision: gate approval records approved_for_plan_rev; a plan_rev bump invalidates only that workflow's execution gate)", "multisession-native advisor-digest-slice2 conditions C1-C5/F5/F7/F8 (docs/history/multisession-native/reports/advisor-digest-slice2.md — idempotent seed before any rebuild treats state.json as derived, plan-rev-effective gate formula, startFeature worker-precondition self-exclusion, one global lock order with sessions and workflow:<id> never held together, the default-path residual seam scoped and later closed)"]
-  sources: ["multisession-native cells multisession-native-5..10 (workflow-store.mjs, startFeature workflow creation, state-projection.mjs, activeWorkers, plan-rev gate scoping, default-path routing; traces .bee/cells/multisession-native-{5,6,7,8,9,10}.json, commits 1e7b538, f4fe163, 1c4d45d, c435add, 2dd834f, e7f365a, 2026-07-25)", "docs/history/multisession-native/CONTEXT.md (D1, D6, D7, D8 stage 2)", "docs/history/multisession-native/reports/advisor-digest-slice2.md (conditions C1-C5, findings F5/F7/F8)"]
+  required_context: [areas/workflow-state/overview.md, areas/workflow-state/sessions-lanes-and-identity.md, areas/workflow-state/holds-and-the-coordination-lock.md, areas/worktree-parallelism/control-plane-topology.md]
+  decisions: ["multisession-native D1 (workflow-first state: the workflow record becomes the unit of state; state.json/lanes become read-only compatibility projections; startFeature's lock becomes workflow:<id>, ending cross-feature contention on the single state lock — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D2 (control plane / data plane split: the workflow record and every store it seeds from — sessions, claims — resolve through controlRoot, i.e. main, from any linked worktree; docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D7 (gates scoped to plan revision: gate approval records approved_for_plan_rev; a plan_rev bump invalidates only that workflow's execution gate)", "multisession-native advisor-digest-slice2 conditions C1-C5/F5/F7/F8 (docs/history/multisession-native/reports/advisor-digest-slice2.md — idempotent seed before any rebuild treats state.json as derived, plan-rev-effective gate formula, startFeature worker-precondition self-exclusion, one global lock order with sessions and workflow:<id> never held together, the default-path residual seam scoped and later closed)"]
+  sources: ["multisession-native cells multisession-native-5..10 (workflow-store.mjs, startFeature workflow creation, state-projection.mjs, activeWorkers, plan-rev gate scoping, default-path routing; traces .bee/cells/multisession-native-{5,6,7,8,9,10}.json, commits 1e7b538, f4fe163, 1c4d45d, c435add, 2dd834f, e7f365a, 2026-07-25)", "docs/history/multisession-native/CONTEXT.md (D1, D6, D7, D8 stage 2)", "docs/history/multisession-native/reports/advisor-digest-slice2.md (conditions C1-C5, findings F5/F7/F8)", "multisession-native cells multisession-native-18a/18b/18c (state.mjs's own workflow-record call sites, then bee.mjs's dispatcher, re-rooted onto controlRootFor(root); traces .bee/cells/multisession-native-{18a,18b,18c}.json, commits 5d0ec3c, a1431448, d69d81e, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)"]
   authoritative_for: "workflow-state: the workflow record schema and module, its creation at feature start, the rebuildable state.json/lane projections, plan-revision-scoped gates, and the per-workflow write lock"
 ---
 
@@ -175,6 +175,30 @@ workflow lock); a missing or corrupt target workflow record refuses loudly
 (the same typed refusal as any other read), never a silent fallback to an
 unlocked write.
 
+**A workflow record and every store it seeds from resolve through main's
+control plane, not the writing checkout (multisession-native D2, msn-18a-c).**
+Trigger: any read or write of a workflow record, session record, or claim
+made from inside a linked worktree. What happens: `state.mjs`'s own
+`createWorkflow`/`readWorkflow`/`updateWorkflow`/`listWorkflows` call sites,
+its `readClaim`/`adoptClaim` calls inside handoff handling, and its session/
+lane reads inside `resolvePipeline` all route through `controlRootFor(root)`
+instead of the writing checkout's own root — so a workflow record created
+from a granted linked worktree lands at the same path a call from main
+would use, and a later read from either checkout sees the identical record.
+`bee.mjs`'s own dispatcher-level call sites against `claims.mjs` and
+`workflow-store.mjs` (session reads, `withMutationLock`'s target resolution,
+the handoff-mailbox write/adopt/show handlers, `state-projection.mjs`'s
+`rebuildAllProjections`) were swept as their own standalone cell precisely so
+that re-rooting `bee.mjs`'s writes alone could never desync a write-then-
+rebuild pair from a still-bare-root projection read. What each actor
+observes: this concept's own claims — the record's schema, its per-workflow
+lock, the projection rebuild invariant — are unchanged; only *where on disk*
+the record for a linked worktree lives has moved, and it now agrees with
+where every other coordination store for that same checkout lives. See
+`areas/worktree-parallelism/control-plane-topology.md` for the resolver
+itself and the full declared plane split (which stores are control-plane vs.
+workspace-local).
+
 ## Business Rules
 
 - R62 — A workflow record's `id` is a generated `wf-<hex>` value, never the
@@ -209,6 +233,11 @@ unlocked write.
   because identity is immutable on a workflow record) and a repo with zero
   workflow records (multisession-native D1, advisor condition C5, closed by
   `multisession-native-10`).
+- R74 — Every workflow-record and session/claim call site `state.mjs` and
+  `bee.mjs` make resolves through `controlRootFor(root)`, never the writing
+  checkout's own root; a linked worktree's workflow record therefore always
+  lands at the same path a call from main would use (multisession-native D2,
+  msn-18a-c).
 
 ## Edge Cases Settled
 
@@ -269,3 +298,9 @@ unlocked write.
   in `.bee/decisions.jsonl` at feature close (ce89afc5).
 - Advisor consult record for this whole slice: `docs/history/multisession-native/reports/advisor-digest-slice2.md`
   (conditions C1-C5, findings F5/F7/F8, verdict proceed-with-conditions).
+- Control-plane re-root (R74): `controlRootFor(root)` in `state.mjs`, called
+  from every workflow/session/claim site this file and `bee.mjs` own; see
+  `areas/worktree-parallelism/control-plane-topology.md` for the resolver,
+  the declared plane split, and the msn-18 honest-block re-slice that swept
+  it in. Evidence: traces `.bee/cells/multisession-native-{18a,18b,18c}.json`,
+  commits 5d0ec3c, a1431448, d69d81e.

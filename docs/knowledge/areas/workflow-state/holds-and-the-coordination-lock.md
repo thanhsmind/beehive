@@ -7,9 +7,9 @@ bee:
   id: workflow-state-holds-and-the-coordination-lock
   lifecycle: active
   areas: [workflow-state]
-  required_context: [areas/workflow-state/overview.md]
-  decisions: ["multi-session-hardening D2 with Δ1/Δ3 amendments (the coordination lock: verbs wait bounded, checkpoints try once)", "fresh-session-handoff D3 (a write into another live session's held path is refused at write time)", hardening-1-7-10 (liveness-probed stale takeover with a one-hour pid-reuse ceiling; no timer heartbeat by design), "multisession-native (stage 0-1: lock-acquire outcomes recorded as fail-open contention telemetry; bee status surfaces a bounded contention summary from that telemetry)", "multisession-native D1 (state mutation locks its own feature's workflow:<id>, never a blanket state lock; advisor condition C4 — the sessions lock and a workflow lock are never held together)", "multisession-native D4 (slice 3, issue #56: reservations become sharded per-resource lease records; a declared intent scope is advisory, never a hard block; fencing on leases; .bee/reservations.json retired to a rebuildable projection — docs/history/multisession-native/CONTEXT.md)", "multisession-native advisor-digest-slice3 conditions A/B/C/D/E (docs/history/multisession-native/reports/advisor-digest-slice3.md — leases root stays worktree-local until slice 4's controlRoot re-root; the cross-worktree mirror-write reserve seam preserved byte-for-byte; the reservations projection must never let a lazy rebuild green-light a colliding feature start; intra-swarm/cross-session conflicts stay hard leases, only planning-declared broad/glob paths become advisory intents; lease renewal rides the existing heartbeat try-once posture)"]
-  sources: ["fresh-session-handoff cells fsh-7/fsh-8 (phase-independent deny + fail-closed corrupt-store branch; validation-s3, 2026-07-13)", "multi-session-hardening cells msh-1..7 (coordination lock primitive and forked-racer suites, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B14", "docs/specs/workflow-state.md#B21", "docs/specs/workflow-state.md#R37", "docs/specs/workflow-state.md#R52", "docs/specs/workflow-state.md#P15", "multisession-native cell multisession-native-3 (contention telemetry in lock.mjs; trace .bee/cells/multisession-native-3.json, commit 2d66ccc, 2026-07-24)", "multisession-native cell multisession-native-4 (bee status contention summary; trace .bee/cells/multisession-native-4.json, commit 1865cae, 2026-07-24)", "multisession-native cell multisession-native-10 (per-workflow withMutationLock replacing the blanket state lock; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice2.md condition C4)", "multisession-native cell multisession-native-11 (sharded lease-store.mjs; trace .bee/cells/multisession-native-11.json, commit ad19826, 2026-07-25)", "multisession-native cell multisession-native-13 (intent vs write lease split; trace .bee/cells/multisession-native-13.json, commit debe0d9, 2026-07-25)", "multisession-native cell multisession-native-16 (reservations.mjs shim over lease-store; .bee/reservations.json retired to a projection; trace .bee/cells/multisession-native-16.json, commit 81a936c, 2026-07-25)"]
+  required_context: [areas/workflow-state/overview.md, areas/worktree-parallelism/control-plane-topology.md]
+  decisions: ["multi-session-hardening D2 with Δ1/Δ3 amendments (the coordination lock: verbs wait bounded, checkpoints try once)", "fresh-session-handoff D3 (a write into another live session's held path is refused at write time)", hardening-1-7-10 (liveness-probed stale takeover with a one-hour pid-reuse ceiling; no timer heartbeat by design), "multisession-native (stage 0-1: lock-acquire outcomes recorded as fail-open contention telemetry; bee status surfaces a bounded contention summary from that telemetry)", "multisession-native D1 (state mutation locks its own feature's workflow:<id>, never a blanket state lock; advisor condition C4 — the sessions lock and a workflow lock are never held together)", "multisession-native D4 (slice 3, issue #56: reservations become sharded per-resource lease records; a declared intent scope is advisory, never a hard block; fencing on leases; .bee/reservations.json retired to a rebuildable projection — docs/history/multisession-native/CONTEXT.md)", "multisession-native advisor-digest-slice3 conditions A/B/C/D/E (docs/history/multisession-native/reports/advisor-digest-slice3.md — leases root stays worktree-local until slice 4's controlRoot re-root; the cross-worktree mirror-write reserve seam preserved byte-for-byte; the reservations projection must never let a lazy rebuild green-light a colliding feature start; intra-swarm/cross-session conflicts stay hard leases, only planning-declared broad/glob paths become advisory intents; lease renewal rides the existing heartbeat try-once posture)", "multisession-native D2 (slice 4: leases are control-plane — every lease-store call site resolves through controlRootFor(root), closing slice 3's deferred condition A — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D3/msn-21 (a lease's stamped workspace_id, dormant since msn-11, now decides a same-path conflict: same-workspace stays a hard deny, a different workspace downgrades to advisory — docs/history/multisession-native/CONTEXT.md)"]
+  sources: ["fresh-session-handoff cells fsh-7/fsh-8 (phase-independent deny + fail-closed corrupt-store branch; validation-s3, 2026-07-13)", "multi-session-hardening cells msh-1..7 (coordination lock primitive and forked-racer suites, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B14", "docs/specs/workflow-state.md#B21", "docs/specs/workflow-state.md#R37", "docs/specs/workflow-state.md#R52", "docs/specs/workflow-state.md#P15", "multisession-native cell multisession-native-3 (contention telemetry in lock.mjs; trace .bee/cells/multisession-native-3.json, commit 2d66ccc, 2026-07-24)", "multisession-native cell multisession-native-4 (bee status contention summary; trace .bee/cells/multisession-native-4.json, commit 1865cae, 2026-07-24)", "multisession-native cell multisession-native-10 (per-workflow withMutationLock replacing the blanket state lock; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice2.md condition C4)", "multisession-native cell multisession-native-11 (sharded lease-store.mjs; trace .bee/cells/multisession-native-11.json, commit ad19826, 2026-07-25)", "multisession-native cell multisession-native-13 (intent vs write lease split; trace .bee/cells/multisession-native-13.json, commit debe0d9, 2026-07-25)", "multisession-native cell multisession-native-16 (reservations.mjs shim over lease-store; .bee/reservations.json retired to a projection; trace .bee/cells/multisession-native-16.json, commit 81a936c, 2026-07-25)", "multisession-native cell multisession-native-18b (reservations.mjs's lease-store gateway re-rooted onto controlRootFor via its own fail-open findMainRoot replica; trace .bee/cells/multisession-native-18b.json, commit a1431448, 2026-07-25)", "multisession-native cell multisession-native-21 (guards.mjs checkWrite reads a lease's stamped workspace_id to scope the same-path conflict; trace .bee/cells/multisession-native-21.json, commit 3f56916, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)"]
   authoritative_for: "workflow-state: cross-session file holds and the shared-store coordination lock"
 ---
 
@@ -177,6 +177,34 @@ themselves (`CLAIM_FENCE_STALE`) — a deliberately distinct name and a
 deliberately separate mechanism, never shared code, per each store's own
 structural-isolation rule.
 
+**Leases moved onto the control plane, and their long-dormant `workspace_id`
+field now decides a same-path conflict (multisession-native D2/D3, slice 4,
+msn-18b/msn-21).** Trigger: any lease acquire, renew, release, or a write
+whose path collides with another session's already-held exact-path lease.
+What happens: `reservations.mjs` — the sole lease-store gateway — now resolves
+its store root through its own fail-open `findMainRoot`/`controlRootFor`
+replica rather than the writing checkout's own root, closing the gap slice
+3's advisor condition A had deliberately deferred ("leases root stays
+worktree-local until slice 4's controlRoot re-root"); every checkout now
+reads and writes the identical lease files. Separately, the `workspace_id`
+every lease has carried since `multisession-native-11` (forward groundwork,
+unconsumed until now) is read by the write guard's conflict check: a
+collision with a lease stamped with the **same** `workspace_id` as the acting
+session stays a hard deny, exactly as before; a collision with a lease from a
+**different** workspace downgrades to an allow (the write guard's own deny
+class (b) — see `areas/worktree-parallelism/control-plane-topology.md`).
+Legacy and solo-repo leases (no `workspace_id` recorded, defaulting to
+`'main'` on both sides) are byte-identical under this check — the scoping
+only changes behavior once two genuinely different workspaces are in play.
+This is layered on top of, not instead of, the `'intent'`/`'lease'` kind
+split described next: a same-workspace `'lease'`-kind conflict is still hard,
+a same-workspace `'intent'`-kind conflict is still advisory, and now a
+different-workspace conflict of either kind is advisory regardless of kind.
+What each actor observes: two sessions holding the identical exact-path
+lease inside the SAME workspace still collide exactly as they always did; the
+same collision across two different granted worktrees now reads as a warning
+naming the other workspace, not a refusal.
+
 **A reservation's declared kind decides whether a same-workspace conflict is
 a hard block or an advisory (multisession-native D4, slice 3, advisor
 condition D).** Trigger: a swarming-phase write, or `reservations reserve`
@@ -292,6 +320,13 @@ drift from it.
   (`findForeignHolds` + reservation write + `insertHold`, one atomic section
   under `withHoldsLock`) stays byte-for-byte unchanged through the shim
   (multisession-native D4, msn-16, advisor condition B/C).
+- R75 — The lease store resolves through `controlRootFor(root)`, never the
+  writing checkout's own root, closing slice 3's deferred condition A; a
+  same-path lease conflict is a hard deny only when the colliding lease's
+  stamped `workspace_id` matches the acting session's own — a different
+  workspace's lease downgrades to advisory regardless of `'intent'`/`'lease'`
+  kind; legacy/solo leases with no `workspace_id` stay byte-identical
+  (multisession-native D2/D3, slice 4, msn-18b/msn-21).
 
 ## Edge Cases Settled
 
@@ -372,3 +407,10 @@ drift from it.
   consult for this whole slice:
   `docs/history/multisession-native/reports/advisor-digest-slice3.md`
   (conditions A-G, verdict proceed-with-conditions).
+- Leases onto the control plane + workspace-scoped conflict (R75):
+  `reservations.mjs`'s own `findMainRoot`/`controlRootFor` replica (trace
+  `.bee/cells/multisession-native-18b.json`, commit a1431448); the write
+  guard's `workspace_id` read in `guards.mjs` `checkWrite` (trace
+  `.bee/cells/multisession-native-21.json`, commit 3f56916). Full topology
+  resolver and the guard's three deny classes:
+  `areas/worktree-parallelism/control-plane-topology.md`.

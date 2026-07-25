@@ -13,8 +13,8 @@ never a generation timestamp or any other wall-clock value.
 
 ## Sections
 
-- [areas/](areas/index.md) — 85 concept(s)
-- [patterns/](patterns/index.md) — 61 concept(s)
+- [areas/](areas/index.md) — 86 concept(s)
+- [patterns/](patterns/index.md) — 62 concept(s)
 - [work/](work/index.md) — 4 concept(s)
 
 ## Critical patterns
@@ -79,4 +79,5 @@ never a generation timestamp or any other wall-clock value.
 - [A test that runs the canonical source can never catch vendoring drift — only a fresh-install subprocess can](patterns/20260724-canonical-source-tests-cannot-see-vendoring-drift.md) — A guard crashed fail-open on every fresh install for a whole release cycle: its sibling import was never vendored, node --check passes on missing imports, and every suite ran the canonical file where the import always resolves. The only detector was a live canary spawning the actually-vendored copy from a freshly-onboarded fixture.
 - [A managed-file ledger needs a removal path derived from its own diff, not a hand-maintained retired list](patterns/20260724-ledger-diff-derived-removal.md) — A managed-file ledger needs a removal path derived from its own diff, not a hand-maintained retired list
 - [A red-first proof whose oracle can be fed by live-environment detection proves nothing about the code under test](patterns/20260724-red-first-oracle-fed-by-live-environment.md) — Reverting a version-pin constant stayed green locally because the machine's live CLI version equals the new pin — the assertion string was satisfied by live detection, not by the constant. A local red-first that can be fed by the environment is not a red floor; require an environment-independent proof.
+- [A resolver added beside the old one is dead code until every call site is swept — the seam ships when the LAST consumer moves, not when the new function lands](patterns/20260725-a-resolver-added-beside-the-old-one-is-dead-code.md) — A cell that adds a new function beside an old one and calls the migration started ships nothing observable; an honest worker block that names the real sweep size beats a false-green cap that hides it.
 - [A shim that preserves a CLI surface can still drop a side-effect that surface never named](patterns/20260725-a-shim-can-drop-an-unnamed-side-effect.md) — The cross-worktree mirror write lived beside the reservation store's write, not inside it — a neighbor, not a return value. Retiring the store's own implementation without deliberately carrying that neighbor along would have lost cross-worktree coordination silently, because every visible test of the shim's own contract (reserve/release/renew) would still pass.

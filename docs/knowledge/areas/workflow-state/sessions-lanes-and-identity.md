@@ -7,9 +7,9 @@ bee:
   id: workflow-state-sessions-lanes-and-identity
   lifecycle: active
   areas: [workflow-state]
-  required_context: [areas/workflow-state/overview.md]
-  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)", "multisession-native D6 (active workers derived from live-heartbeat sessions + lane/workflow binding + claims, never the stored workers array; advisor condition C3 — startFeature excludes the calling session's own heartbeat)"]
-  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "multisession-native cell multisession-native-8 (activeWorkers derivation, trace .bee/cells/multisession-native-8.json, commit c435add, 2026-07-25)", "multisession-native cell multisession-native-10 (default-path mutation now also routes through its workflow record; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25)"]
+  required_context: [areas/workflow-state/overview.md, areas/worktree-parallelism/control-plane-topology.md]
+  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)", "multisession-native D6 (active workers derived from live-heartbeat sessions + lane/workflow binding + claims, never the stored workers array; advisor condition C3 — startFeature excludes the calling session's own heartbeat)", "multisession-native D2/D3 (slice 4: session creation re-roots onto controlRoot; a session's own record carries workspace_id, auto-looked-up and stamped onto its claims too — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)"]
+  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "multisession-native cell multisession-native-8 (activeWorkers derivation, trace .bee/cells/multisession-native-8.json, commit c435add, 2026-07-25)", "multisession-native cell multisession-native-10 (default-path mutation now also routes through its workflow record; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25)", "multisession-native cell multisession-native-19 (createSession/claimCellFile stamp workspace_id; bee-session-init.mjs re-roots onto resolveContext.controlRoot and lazily auto-registers the workspace; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)"]
   authoritative_for: "workflow-state: session identity, per-feature lanes, and heartbeat/lease renewal"
 ---
 
@@ -135,6 +135,24 @@ session by default rather than only when a caller opted in, so cross-session
 holds and claims become visible without any special handling (D3;
 durable-fallback tier: hardening-1-7-10).
 
+**A session's own record now carries its workspace, stamped once and reused
+by its claims (multisession-native D2/D3, msn-19).** Trigger: session
+creation, or claiming a cell file. What happens: `hooks/bee-session-init.mjs`
+creates the session record at `resolveContext.controlRoot` rather than the
+writing checkout's own root — closing the gap the `18c` adapter comment had
+flagged as deferred to a later cell — and lazily auto-registers that
+checkout's workspace (`workspace-store.mjs`) the first time a session touches
+it. `claims.mjs`'s `createSession` and `claimCellFile` both stamp
+`workspace_id` onto the record they write, auto-looked-up from the acting
+session's own already-resolved workspace rather than accepted as a caller-
+supplied value. What each actor observes: a session created inside a linked
+worktree is visible at the same control-plane path any other checkout's
+session list already reads; its claims now carry enough identity for the
+write guard's same-workspace-vs-different-workspace lease check
+(`holds-and-the-coordination-lock.md`) to answer correctly. See
+`areas/worktree-parallelism/control-plane-topology.md` for the workspace
+registry this stamping feeds and the write-policy decision it enables.
+
 **B24 — A live session's heartbeat renews itself, throttled, and carries its
 claims and holds forward with it.** Trigger: a working session performs any
 tracked activity while it is already known to the coordination store. What
@@ -254,6 +272,12 @@ its knowledge actually landed — the state and the specs can no longer disagree
   array; `startFeature`'s worker precondition (default and `--as-lane` paths
   alike) excludes the calling session's own heartbeat from that computed view
   (multisession-native D6, advisor condition C3).
+- R76 — A session record is created at `resolveContext.controlRoot`, never
+  the writing checkout's own root, and lazily auto-registers that checkout's
+  workspace on first touch; `createSession`/`claimCellFile` stamp
+  `workspace_id` on the session and every claim it makes, auto-looked-up from
+  the acting session's own resolved workspace, never accepted as a caller-
+  supplied value (multisession-native D2/D3, msn-19).
 
 ## Edge Cases Settled
 
@@ -296,3 +320,9 @@ its knowledge actually landed — the state and the specs can no longer disagree
   `workflow-records-and-projections.md` Pointers for `resolveMutationTarget`,
   `writeLaneRecordThroughProjection`/`writeStateRecordThroughProjection`, and
   the `workflow:<id>` lock they acquire.
+- Session workspace stamping (R76): `hooks/bee-session-init.mjs`
+  (control-plane session creation + lazy workspace auto-register);
+  `createSession`/`claimCellFile` in `lib/claims.mjs`. Evidence: trace
+  `.bee/cells/multisession-native-19.json`, commit 09e1ed0. Full workspace
+  registry and write-policy mechanics:
+  `areas/worktree-parallelism/control-plane-topology.md`.

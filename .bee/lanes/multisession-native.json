@@ -2,15 +2,15 @@
   "schema_version": "1.0",
   "feature": "multisession-native",
   "mode": "high-risk",
-  "phase": "swarming",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false
   },
-  "summary": "slice 4 (workspace isolation by default) cycle open",
-  "next_action": "execute msn-17..21 sequentially with slice-4 advisor conditions 1-7",
+  "summary": "slice 4 shipped: control plane shared across worktrees, workspace registry with single write owner, observe/shared-disjoint/isolated policy modes, guard resolves topology once with three deny classes",
+  "next_action": "slice 5 (integration queue + invariant closure, PBI p-4f055a6f) final",
   "created_at": "2026-07-24T14:19:58.834Z",
   "advisor_ref": {
     "consulted_at": "2026-07-25T05:00:09.172Z",
@@ -23,11 +23,11 @@
   "last_scribing_run": {
     "feature": "multisession-native",
     "date": "2026-07-25",
-    "at": "2026-07-25T04:54:23.864Z",
+    "at": "2026-07-25T09:37:03.919Z",
     "areas_synced": [
       "workflow-state",
       "worktree-parallelism"
     ],
-    "next_action": "close slice 3"
+    "next_action": "close slice 4"
   }
 }

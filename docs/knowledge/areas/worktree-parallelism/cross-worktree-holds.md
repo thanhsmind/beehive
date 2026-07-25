@@ -7,9 +7,9 @@ bee:
   id: worktree-parallelism-cross-worktree-holds
   lifecycle: active
   areas: [worktree-parallelism]
-  required_context: [areas/worktree-parallelism/the-trust-model.md]
-  decisions: ["cross-worktree-holds D1-D6 (the shared ledger, 2026-07-20)", "hardening-1-7-10 (acquisition is one atomic step; holds renew on heartbeat, 2026-07-21)", "a0ab91b6 (release is scoped by cell, never by holder alone — live incident)", "multisession-native D4 (slice 3, issue #56: a foreign hold on a normal path downgrades to advisory allow+warning at write time; only a built-in-plus-configured exclusive-resource list keeps the old hard deny — docs/history/multisession-native/CONTEXT.md)"]
-  sources: [docs/history/worktree-feature-parallelism/, "docs/specs/worktree-parallelism.md#S-cross-worktree-holds-the-shared-ledger-cross-worktree-holds-d1-d6-2026-07-20", "multisession-native cell multisession-native-14 (advisory cross-worktree hold on normal paths; exclusive-resource list; trace .bee/cells/multisession-native-14.json, commit 5bee967, 2026-07-25)"]
+  required_context: [areas/worktree-parallelism/the-trust-model.md, areas/worktree-parallelism/control-plane-topology.md]
+  decisions: ["cross-worktree-holds D1-D6 (the shared ledger, 2026-07-20)", "hardening-1-7-10 (acquisition is one atomic step; holds renew on heartbeat, 2026-07-21)", "a0ab91b6 (release is scoped by cell, never by holder alone — live incident)", "multisession-native D4 (slice 3, issue #56: a foreign hold on a normal path downgrades to advisory allow+warning at write time; only a built-in-plus-configured exclusive-resource list keeps the old hard deny — docs/history/multisession-native/CONTEXT.md)", "multisession-native D2 (slice 4, msn-21: the write guard resolves topology exactly ONCE per call via resolveContext, replacing the two separate walks — resolveWriteRecord's own call and resolveHoldTopology's own resolveRoots call — this exclusive-resource-list class of deny previously required; the class's own policy stays byte-for-byte unchanged — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)"]
+  sources: [docs/history/worktree-feature-parallelism/, "docs/specs/worktree-parallelism.md#S-cross-worktree-holds-the-shared-ledger-cross-worktree-holds-d1-d6-2026-07-20", "multisession-native cell multisession-native-14 (advisory cross-worktree hold on normal paths; exclusive-resource list; trace .bee/cells/multisession-native-14.json, commit 5bee967, 2026-07-25)", "multisession-native cell multisession-native-21 (guards.mjs checkWrite unified onto one resolveContext resolution feeding this class plus two new classes; trace .bee/cells/multisession-native-21.json, commit 3f56916, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)"]
   authoritative_for: "worktree-parallelism: the cross-worktree holds ledger, its acquisition, renewal, taps and release"
 ---
 
@@ -70,6 +70,21 @@ shared holds ledger closes that gap at WRITE time:
   its pre-cell content and rerunning its suite failed exactly the two tests this cell adds
   (the normal-path-advisory case, and the config-extension case) while every
   same-workspace/cross-session/swarming regression test stayed green.
+- **The write-guard now resolves this tap's own topology exactly ONCE per call, alongside
+  two entirely new deny classes it never carried before (multisession-native D2, slice 4,
+  msn-21).** Before this cell, `checkWrite` walked topology twice to answer this exclusive-
+  resource-list question at all: `resolveWriteRecord`'s own `resolveContext` call (gated on a
+  session id being present) plus this ledger's own separate `resolveHoldTopology`/
+  `resolveRoots` call, with a THIRD, lane-path-only re-resolution on top. All three collapse
+  into one upfront `resolveWriteTopology` (wrapping `resolveContext(root)`, fail-open) that
+  every branch reads from — this exclusive-resource-list class's own policy is unchanged
+  byte-for-byte by the collapse (same list, same advisory fallback, same merge-time backstop);
+  only the plumbing that resolves WHERE main is got cheaper and singular. The other two deny
+  classes the guard now carries — a same-workspace cross-session exact-path lease, and a
+  non-owner default-path write in a workspace a different live session already owns — are
+  genuinely new, scoped to same-workspace and same-checkout situations respectively, and
+  never touch this cross-worktree tap's own exclusive-resource-list branch. Full three-class
+  breakdown and the resolver itself: `areas/worktree-parallelism/control-plane-topology.md`.
 - **Release is scoped by cell, never by holder alone.** All agents in the main checkout share
   `holder:"main"`; an early cut that released by holder wiped a concurrent worker's mirrored
   holds (live incident, same day, decision a0ab91b6). Release derives the acting agent's own
