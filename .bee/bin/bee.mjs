@@ -76,6 +76,13 @@ import {
   isLocalOnlyConfigKey,
   trackedLocalOnlyKeyWarning,
 } from './lib/state.mjs';
+// multisession-native-7 (C5/F8): workflow-store.mjs's read/update primitives
+// and state-projection.mjs's rebuild functions, composed here at the CLI
+// layer — see resolveMutationTarget and handleStateStartFeature below for
+// exactly where each is used, and lib/state-projection.mjs's own header for
+// the C1/F8/C5 contract they implement.
+import { listWorkflows, updateWorkflow } from './lib/workflow-store.mjs';
+import { rebuildLaneProjection, rebuildAllProjections } from './lib/state-projection.mjs';
 // Lane + session CLI surface (fresh-session-handoff fsh-4, D2/D4): claims.mjs
 // stays out of this cell's file scope — these are already-exported read/
 // mutate primitives from fsh-3, composed here for presentation (session list)
@@ -2056,6 +2063,14 @@ function mutationLaneSelector(flags, verb) {
 // silently guesses back to the default; fresh-session-handoff D2). An unbound
 // session (no resolvable identity, no session record, or no lane binding)
 // targets the default record exactly as before this cell.
+//
+// multisession-native-7 (C5 — "no consumer writes through a projection"
+// scoped to LANE projections): a lane's `write` no longer calls writeLane
+// directly. It routes through writeLaneRecordThroughProjection below, which
+// updates the live workflow record naming this feature and rebuilds the
+// lane projection from it (state-projection.mjs, "record wins"). The
+// DEFAULT branch (defaultTarget, above) is deliberately UNTOUCHED — C5's
+// documented residual seam, msn-10's job.
 function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {}) {
   const defaultTarget = () => ({
     record: readStateStrict(root),
@@ -2070,7 +2085,12 @@ function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {})
         `${verb}: refused — lane "${laneFeature}" does not exist (no .bee/lanes/${laneFeature}.json). FIX: start it first ("state start-feature --feature ${laneFeature} --as-lane"), then retry.`,
       );
     }
-    return { record, write: (updated) => writeLane(root, updated), source: 'lane', lane: laneFeature };
+    return {
+      record,
+      write: (updated) => writeLaneRecordThroughProjection(root, laneFeature, updated),
+      source: 'lane',
+      lane: laneFeature,
+    };
   }
   if (noLane) return defaultTarget();
   const sessionId = resolveSessionId({ root });
@@ -2086,7 +2106,48 @@ function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {})
       `${verb}: refused — calling session "${sessionId}" is bound to lane "${bound}" but no .bee/lanes/${bound}.json exists; resolution never guesses back to the default record. FIX: start the lane ("state start-feature --feature ${bound} --as-lane"), unbind the session, or pass --no-lane to target the default record explicitly.`,
     );
   }
-  return { record, write: (updated) => writeLane(root, updated), source: 'lane', lane: bound };
+  return {
+    record,
+    write: (updated) => writeLaneRecordThroughProjection(root, bound, updated),
+    source: 'lane',
+    lane: bound,
+  };
+}
+
+// writeLaneRecordThroughProjection — the C5-scoped lane write path (see
+// resolveMutationTarget's own comment above). `updated` is the CALLER's
+// already-fully-mutated lane-shaped record (every existing caller mutates
+// `record` in place field-by-field before calling `write`); this function's
+// job is to persist it correctly rather than to decide what changed.
+//
+// Live (non-closed) workflow record found for this feature: update it with
+// the equivalent D1 fields (mergeGates in workflow-store.mjs preserves each
+// gate's `approved_for_plan_rev` untouched — that is msn-9's concern, not
+// this cell's), then rebuild the lane projection from the now-updated
+// record — the file callers read back is always projection-builder output,
+// never a hand-written copy.
+//
+// C1 fallback: no live workflow record names this feature (zero workflow
+// records exist anywhere, or this lane's workflow was never seeded/created —
+// should not happen once msn-6's seed has run, but never assumed here)
+// falls back to writeLane directly, unchanged from before this cell.
+async function writeLaneRecordThroughProjection(root, laneFeature, updated) {
+  const wf = listWorkflows(root).workflows.find((w) => w.feature === laneFeature && w.status !== 'closed');
+  if (!wf) {
+    writeLane(root, updated);
+    return updated;
+  }
+  await updateWorkflow(root, wf.id, {
+    phase: updated.phase,
+    mode: updated.mode == null ? null : String(updated.mode),
+    summary: updated.summary,
+    next_action: updated.next_action,
+    gates: Object.fromEntries(
+      GATE_NAMES.map((name) => [name, { approved: Boolean(updated.approved_gates && updated.approved_gates[name] === true) }]),
+    ),
+  });
+  const rebuilt = rebuildLaneProjection(root, laneFeature);
+  return rebuilt.lane;
 }
 
 // D6 — async: the whole record-read through write() body runs inside
@@ -2122,7 +2183,7 @@ async function handleStateSet(root, flags) {
     );
   }
 
-  const { state, changed, waivedClose, waivedSwap, swapFromFeature, targetLane } = await withStoreLock(root, 'state', () => {
+  const { state, changed, waivedClose, waivedSwap, swapFromFeature, targetLane } = await withStoreLock(root, 'state', async () => {
     const target = resolveMutationTarget(root, laneFeature, 'set', { noLane });
     const { record: state, write } = target;
     // i54-closeout-7 (D7): the fsh-4 identity guard above only sees an
@@ -2202,7 +2263,7 @@ async function handleStateSet(root, flags) {
       state.summary = String(flags.summary);
       changed.push('summary');
     }
-    write(state);
+    await write(state);
     return { state, changed, waivedClose, waivedSwap, swapFromFeature, targetLane: target.lane };
   });
 
@@ -2361,7 +2422,7 @@ async function handleStateGate(root, flags) {
   const approved = approvedRaw === 'true';
   const { laneFeature, noLane } = mutationLaneSelector(flags, 'gate');
 
-  const { state, targetLane } = await withStoreLock(root, 'state', () => {
+  const { state, targetLane } = await withStoreLock(root, 'state', async () => {
     const target = resolveMutationTarget(root, laneFeature, 'gate', { noLane });
     const { record: state, write } = target;
     // Gate 3 advisor precondition (AO3/AO13): high-risk execution never opens
@@ -2387,7 +2448,7 @@ async function handleStateGate(root, flags) {
       state.gate_revoked_at = { ...state.gate_revoked_at, execution: new Date().toISOString() };
     }
     state.approved_gates = { ...state.approved_gates, [name]: approved };
-    write(state);
+    await write(state);
     return { state, targetLane: target.lane };
   });
   return {
@@ -2615,7 +2676,7 @@ async function handleStateScribingRun(root, flags) {
   let stampedActive = true;
   let activeFeatureAtCall = null;
   let targetLane = null;
-  const state = await withStoreLock(root, 'state', () => {
+  const state = await withStoreLock(root, 'state', async () => {
     const target = resolveMutationTarget(root, laneFeature, 'scribing-run', { noLane });
     const { record: state, write } = target;
     targetLane = target.lane;
@@ -2643,7 +2704,7 @@ async function handleStateScribingRun(root, flags) {
       // "plus top-level phase/next_action" (bee-scribing SKILL.md:112).
       state.phase = 'compounding';
       state.next_action = nextAction;
-      write(state);
+      await write(state);
     }
     return state;
   });
@@ -2682,10 +2743,44 @@ async function handleStateStartFeature(root, flags) {
   const paths = flags.paths !== undefined ? splitList(flags.paths) : [];
   // startFeature() re-reads state and performs every precondition check (C1).
   const state = await startFeature(root, { feature, mode, phase, lane, sessionId, paths });
+  // multisession-native-7 (C5/F8 — "startFeature's dual-write can now route
+  // its lane write through the projection builder"): the lane file
+  // startFeature just wrote is a hand-built record inside msn-6's own
+  // documented three-transaction crash window (legacy write, then a
+  // separately-locked workflow create). Reconcile it here against the
+  // workflow record startFeature also just created, so the FILE this call
+  // leaves behind is always what rebuildLaneProjection derives from that
+  // record ("record wins" self-heal, F8) — not merely the raw hand-written
+  // copy. `state` (returned above) already carries the same field values, so
+  // nothing needs to be re-read for this call's own response. The DEFAULT
+  // (non-lane) start path is untouched — C5's documented residual seam,
+  // msn-10's job.
+  if (lane) {
+    rebuildLaneProjection(root, state.feature);
+  }
   return {
     result: state,
     text: `Started feature "${state.feature}"${lane ? ' as a lane' : ''} at phase "${state.phase}" (mode ${state.mode ?? 'null'}); all four gates reset.`,
   };
+}
+
+// multisession-native-7 — recovery verb (must_have: "A rebuild verb/function
+// callable for recovery"): thin CLI wrapper over
+// state-projection.mjs's rebuildAllProjections. Read-only from the CLI's own
+// perspective in the sense that it never fails or refuses — it is a no-op
+// (authoritative:false per record) wherever the projection layer has no
+// authority yet: C1 (zero workflow records anywhere), a lane naming no live
+// workflow record, or — for state.json specifically — a LIVE non-idle
+// default feature (C5's safety gate; see rebuildStateProjection's own
+// comment in state-projection.mjs for why).
+function handleStateRebuildProjections(root) {
+  const result = rebuildAllProjections(root);
+  const laneCount = result.lanes.filter((l) => l.authoritative).length;
+  const stateNote = result.state.authoritative
+    ? `rebuilt .bee/state.json from workflow ${result.state.source}`
+    : 'state.json left untouched (no workflow records yet, or a live non-idle default feature — see D1 field scoping)';
+  const text = `${stateNote}; ${laneCount} lane projection(s) rebuilt.`;
+  return { result, text };
 }
 
 // ─── state.lanes / state.session.*: read-only lane listing + session→lane
@@ -2812,7 +2907,12 @@ function handleStateHandoffShow(root) {
 // verb stamps the staleness anchors ITSELF (current feature, newest active
 // decision id, sha256 of that feature's plan.md) — the caller supplies only the
 // advisor identity and a digest for audit; anchors are never caller-supplied.
-function handleStateAdvisorRefRecord(root, flags) {
+// multisession-native-7: async now — a lane target's write() routes through
+// updateWorkflow (workflow-store.mjs), which is itself async (its own
+// per-workflow lock). Dispatch already awaits every handler uniformly
+// (main()'s `const response = await handler(...)`), so this is a safe,
+// isolated widening.
+async function handleStateAdvisorRefRecord(root, flags) {
   rejectDryRun(flags);
   const advisor = requireFlag(flags, 'advisor');
   const digestFile = requireFlag(flags, 'digest-file');
@@ -2845,7 +2945,7 @@ function handleStateAdvisorRefRecord(root, flags) {
     advisor: String(advisor),
     digest_head: digestHead,
   };
-  write(state);
+  await write(state);
   return {
     result: state.advisor_ref,
     text: `Recorded advisor_ref (advisor "${advisor}", feature "${anchors.feature}").${target.lane ? ` (lane "${target.lane}")` : ''}`,
@@ -5686,7 +5786,7 @@ function stateUsageFallback(leading) {
     const sub = leading[2];
     return `Unknown advisor-ref action "${sub || '(missing)'}". Use: record, show.`;
   }
-  return `Unknown command "${verb || '(missing)'}". Use: set, gate, worker, scribing-run, start-feature, lanes, session, handoff, advisor-ref, compact-log, compact-check, compact-capsule.`;
+  return `Unknown command "${verb || '(missing)'}". Use: set, gate, worker, scribing-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, compact-log, compact-check, compact-capsule.`;
 }
 
 function backlogUsageFallback(leading) {
@@ -5857,6 +5957,7 @@ const HANDLERS = {
   'state.scribing-run': handleStateScribingRun,
   'state.start-feature': handleStateStartFeature,
   'state.lanes': handleStateLanes,
+  'state.rebuild-projections': handleStateRebuildProjections,
   'state.session.list': handleStateSessionList,
   'state.session.bind': handleStateSessionBind,
   'state.session.unbind': handleStateSessionUnbind,

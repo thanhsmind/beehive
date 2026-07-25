@@ -20,6 +20,7 @@ import {
   printSummaryAndExit,
 } from '../../../../scripts/lib/test-fixture.mjs';
 import { readStateStrict, isKnownPhase, startFeature } from '../lib/state.mjs';
+import { listWorkflows } from '../lib/workflow-store.mjs';
 import { readCell, dropCell } from '../lib/cells.mjs';
 import { createSession, claimCellFile, readClaim, adoptClaim } from '../lib/claims.mjs';
 // fsh-3 (lane store): namespace imports so a not-yet-implemented export fails
@@ -313,6 +314,57 @@ await check('bee.mjs state set derives ownership from the selected lane and isol
     assert(lane.phase === 'planning' && lane.summary === 'lane-only', 'only selected lane fields update');
     assert(!Object.prototype.hasOwnProperty.call(lane, 'owner'), 'lane owner is never persisted');
     assert(fs.readFileSync(defaultPath, 'utf8') === defaultBefore, 'successful lane mutation leaves default bytes untouched');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── multisession-native-7 (C5): lane mutations with a LIVE workflow record
+// route through the record, never a direct lanes/*.json write ─────────────
+// The "derives ownership from the selected lane" check above hand-writes a
+// lane file with NO corresponding workflow record — that stays on the C1
+// fallback (direct writeLane, unchanged) and is exactly what proves the
+// fallback still works. This check instead starts the lane through
+// startFeature (creating a real workflow record, msn-6), so the mutation
+// below has a live record to route through.
+
+await check('multisession-native-7: bee.mjs state gate --lane (with a live workflow record) updates the workflow record and rebuilds the lane projection from it — the lane file is never the write target directly', async () => {
+  const dir = makeStateRepo('bee-state-lane-workflow-');
+  try {
+    const started = await startFeature(dir, { feature: 'wf-lane-gate', mode: 'standard', lane: true });
+    assert(started.feature === 'wf-lane-gate', 'precondition: lane started');
+    const wfBefore = listWorkflows(dir).workflows.find((wf) => wf.feature === 'wf-lane-gate');
+    assert(wfBefore, 'precondition: a live workflow record exists for this lane (msn-6)');
+    assert(wfBefore.gates.execution.approved === false, 'precondition: execution gate starts unapproved on the workflow record');
+
+    const result = await runBeeState(dir, [
+      'gate',
+      '--lane',
+      'wf-lane-gate',
+      '--name',
+      'execution',
+      '--approved',
+      'true',
+      '--json',
+    ]);
+    assert(result.status === 0, `gate approval succeeds: ${result.stderr}`);
+
+    const lanePath = path.join(dir, '.bee', 'lanes', 'wf-lane-gate.json');
+    const lane = JSON.parse(fs.readFileSync(lanePath, 'utf8'));
+    assert(
+      lane.approved_gates.execution === true,
+      `lane file reflects the approval (via the rebuilt projection), got ${JSON.stringify(lane.approved_gates)}`,
+    );
+
+    const wfAfter = listWorkflows(dir).workflows.find((wf) => wf.feature === 'wf-lane-gate');
+    assert(
+      wfAfter.gates.execution.approved === true,
+      'the WORKFLOW RECORD (not merely the lane file) carries the approval — proves the write went through updateWorkflow, not a direct writeLane',
+    );
+    assert(
+      wfAfter.gates.context.approved_for_plan_rev === null && wfAfter.gates.execution.approved_for_plan_rev === null,
+      'approved_for_plan_rev is left untouched by this cell\'s gate translation (msn-9\'s concern, not msn-7\'s)',
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

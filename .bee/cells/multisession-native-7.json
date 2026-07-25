@@ -1,0 +1,114 @@
+{
+  "id": "multisession-native-7",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "state.json and lanes become rebuildable projections",
+  "action": "Projection layer: .bee/state.json and .bee/lanes/<feature>.json are rebuilt read-only from workflow records (newest active workflow = default projection; per-feature workflow = lane projection). bee-state-sync hook writes projections only, never source of truth. A rebuild verb/function regenerates both from records; test: delete projections, rebuild, byte-stable; deleting a projection loses nothing (invariants 13/14). Canonical source: skills/bee-hive/templates/ (vendored to .bee/bin/ + plugin mirrors). Regen inside this cell after the code change: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed).",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-6"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/state.mjs",
+    "skills/bee-hive/templates/hooks/bee-state-sync.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-hive/templates/lib/workflow-store.mjs",
+    "docs/history/multisession-native/CONTEXT.md",
+    "docs/history/multisession-native/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "projection delete + rebuild = identical content (test)",
+      "bee-state-sync never writes workflow records",
+      "existing readers (status, prompt-context) see unchanged shapes",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no consumer writes through a projection"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D1/D6/D7"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "3",
+    "11": ".",
+    "12": "6",
+    "13": ";",
+    "14": " ",
+    "15": "D",
+    "16": "1",
+    "17": " ",
+    "18": "i",
+    "19": "n",
+    "20": "v",
+    "21": "a",
+    "22": "r",
+    "23": "i",
+    "24": "a",
+    "25": "n",
+    "26": "t",
+    "27": "s",
+    "28": " ",
+    "29": "1",
+    "30": "3",
+    "31": "/",
+    "32": "1",
+    "33": "4",
+    "worker": "msn-w7",
+    "outcome": "Projection layer built (rebuildStateProjection/rebuildLaneProjection/rebuildAllProjections); lane mutations route through workflow record + rebuild, record wins self-heal; bee-state-sync full idempotent rebuild, idle-gated for safety; new bee state rebuild-projections recovery verb; all impacted suites + manifest + ledger green",
+    "files_changed": [
+      "skills/bee-hive/templates/lib/state.mjs",
+      "skills/bee-hive/templates/lib/state-projection.mjs",
+      "skills/bee-hive/templates/lib/command-registry.mjs",
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/tests/test_state_projection.mjs",
+      "skills/bee-hive/templates/tests/test_cli_state.mjs",
+      "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      "hooks/bee-state-sync.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "scripts/impact-registry.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T00:25:43.925Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"summary\": \"Full impacted verify suite (102 suites) + release_manifest --check + ledger_parity --check all green after implementing the workflow-record projection layer.\",\n  \"must_haves\": {\n    \"projection delete + rebuild = identical content\": \"test_state_projection.mjs proves this for lanes (unconditional) and state.json (idle case) via byte-identical fixture round-trips after fs.rmSync + rebuild\",\n    \"bee-state-sync never writes workflow records\": \"hooks/bee-state-sync.mjs now calls only rebuildStateProjection (writeState) -- no createWorkflow/updateWorkflow import or call\",\n    \"existing readers see unchanged shapes\": \"test_bee_cli.mjs, test_cli_state.mjs, test_guards.mjs, test_state.mjs all green unmodified except the new lane-through-workflow proof rows\",\n    \"release manifest + onboarding ledger regenerated\": \"release_manifest.mjs --write (527 files) + onboard_bee.mjs --repo-root . --apply, both --check green\"\n  },\n  \"prohibition_no_consumer_writes_through_a_projection\": \"scoped to lane projections per C5: bee.mjs resolveMutationTarget lane branches and start-feature --as-lane now route through updateWorkflow + rebuildLaneProjection instead of writeLane directly; default (non-lane) path is the documented C5 residual seam for msn-10\",\n  \"safety_deviation_from_literal_wording\": \"rebuildStateProjection only adopts a workflow record into state.json while the default record is IDLE -- the literal newest-active-workflow wording would otherwise let a lane or a stale default workflow record clobber a live default feature (default-path writes never sync their workflow record until msn-10). Caught by test_bee_cli.mjs's rebuild-projections example against a live rootState fixture; fixed and documented in state-projection.mjs.\",\n  \"red_failure_evidence\": \"Before this cell, lib/state-projection.mjs did not exist at all (git show HEAD:skills/bee-hive/templates/lib/state.mjs has zero references to rebuildLaneProjection/rebuildStateProjection) -- deleting .bee/lanes/<feature>.json or .bee/state.json had NO recovery path; writeLane/writeState were the only writers and neither reads from workflow records. hooks/bee-state-sync.mjs at HEAD (git show HEAD:hooks/bee-state-sync.mjs) did a partial patch only -- readState(root); state.cells = counts; state.last_activity = ...; writeState(root, state) -- never touching phase/feature/mode/approved_gates/summary/next_action from any workflow record, so a workflow record's data could never reach state.json via this hook, and the projection-delete-loses-nothing invariant test in test_state_projection.mjs (new in this cell) would import a nonexistent rebuildLaneProjection/rebuildStateProjection and fail immediately (MODULE has no export) against the pre-cell tree -- confirmed by re-checking those exports are absent from HEAD's state.mjs. bee.mjs's resolveMutationTarget at HEAD (git show HEAD:skills/bee-hive/templates/bee.mjs, lines around resolveMutationTarget) had both lane branches calling writeLane(root, updated) directly with no workflow-record involvement at all -- the new test_cli_state.mjs check (routes through the workflow record) asserts on listWorkflows(...).gates.execution.approved, a field HEAD's write path never touched.\"\n}\n",
+    "verify_output": "HEARTBEAT: 5 suite(s) still running after 30.0s: skills/bee-hive/scripts/test_onboard_bee.mjs (15.6s), skills/bee-hive/templates/tests/test_bee_cli.mjs (13.3s), skills/bee-hive/templates/tests/test_cli_state.mjs (6.9s), skills/bee-hive/templates/tests/test_decisions_propagation.mjs (4.6s), skills/bee-hive/templates/tests/test_herding_cli.mjs (0.9s)\nHEARTBEAT: 1 suite(s) still running after 60.0s: scripts/test_installers_e2e.mjs --installer bash (24.2s)\nPASS     107ms  .bee/bin/bee.mjs knowledge check\nPASS     100ms  .bee/bin/bee.mjs knowledge index --check\nPASS    1139ms  hooks/test_bypass_stop_net.mjs\nPASS   11822ms  hooks/test_hook_contracts.mjs\nPASS    3880ms  hooks/test_model_guard.mjs\nPASS    7559ms  hooks/test_write_guard.mjs\nPASS      60ms  scripts/backlog_uniqueness.mjs --check\nPASS      44ms  scripts/census_stale_spawn_syntax.mjs\nPASS      54ms  scripts/ledger_parity.mjs --check\nPASS      76ms  scripts/okf_instructions_fence.mjs\nPASS     156ms  scripts/okf_instructions_fence.mjs --selftest\nPASS     632ms  scripts/okf_migrate.mjs --check advisor-protocol\nPASS     643ms  scripts/okf_migrate.mjs --check decision-memory\nPASS     631ms  scripts/okf_migrate.mjs --check doctrine-layer\nPASS     630ms  scripts/okf_migrate.mjs --check feedback-digest\nPASS     618ms  scripts/okf_migrate.mjs --check hook-runtime\nPASS     650ms  scripts/okf_migrate.mjs --check okf-profile\nPASS     644ms  scripts/okf_migrate.mjs --check onboarding\nPASS     618ms  scripts/okf_migrate.mjs --check performance-log\nPASS     656ms  scripts/okf_migrate.mjs --check verify-pipeline\nPASS     661ms  scripts/okf_migrate.mjs --check workflow-state\nPASS     690ms  scripts/okf_migrate.mjs --check worktree-parallelism\nPASS     636ms  scripts/okf_migrate.mjs --check-patterns\nPASS      58ms  scripts/okf_specs_fence.mjs\nPASS      99ms  scripts/okf_specs_fence.mjs --selftest\nPASS      96ms  scripts/release_manifest.mjs --check\nPASS      95ms  scripts/release_manifest.mjs --selftest\nPASS      42ms  scripts/test_agents_budget.mjs\nPASS     178ms  scripts/test_bump_version.mjs\nPASS      34ms  scripts/test_bypass_matrix.mjs\nPASS      41ms  scripts/test_ci_verify_issue.mjs\nPASS     855ms  scripts/test_claim_race.mjs\nPASS     365ms  scripts/test_compact_capsule.mjs\nPASS     667ms  scripts/test_compact_verbs.mjs\nPASS    1407ms  scripts/test_compaction_advisories.mjs\nPASS     226ms  scripts/test_compaction_module.mjs\nPASS      53ms  scripts/test_config_samples_safe.mjs\nPASS      67ms  scripts/test_config_validate.mjs\nPASS    2238ms  scripts/test_conformance.mjs\nPASS    1878ms  scripts/test_dispatch_prepare.mjs\nPASS      96ms  scripts/test_doctrine_parity.mjs\nPASS      46ms  scripts/test_gate_bypass_doctrine.mjs\nPASS     410ms  scripts/test_heartbeat_touch.mjs\nPASS     576ms  scripts/test_hook_vendor_closure.mjs\nPASS    1830ms  scripts/test_impact_registry.mjs\nPASS     130ms  scripts/test_install_ps1_flow.mjs\nPASS   24776ms  scripts/test_installers_e2e.mjs --installer bash\nPASS      60ms  scripts/test_ledger_parity.mjs\nPASS      63ms  scripts/test_lib_mirror.mjs\nPASS     737ms  scripts/test_native_probe.mjs\nPASS     386ms  scripts/test_nested_clone_isolation.mjs\nPASS    9739ms  scripts/test_okf_pins.mjs\nPASS      50ms  scripts/test_portable_paths.mjs\nPASS      36ms  scripts/test_release_tuple.mjs\nPASS    1011ms  scripts/test_render_race.mjs\nPASS     432ms  scripts/test_reservation_race.mjs\nPASS     107ms  scripts/test_resolveroots_p40.mjs\nPASS    1330ms  scripts/test_run_verify_impacted.mjs\nPASS     510ms  scripts/test_run_verify_only.mjs\nPASS     209ms  scripts/test_run_verify_skip_marker.mjs\nPASS      54ms  scripts/test_skill_pointers.mjs\nPASS     371ms  scripts/test_skill_render.mjs\nPASS     428ms  scripts/test_state_write_concurrency.mjs\nPASS   12771ms  scripts/test_store_lock.mjs\nPASS      52ms  scripts/test_verify_manifest.mjs\nPASS    1163ms  scripts/test_verify_timeout.mjs\nPASS   11622ms  scripts/test_worktree_cli.mjs\nPASS    1084ms  scripts/test_worktree_companion.mjs\nPASS     135ms  scripts/test_worktree_grant_resolve.mjs\nPASS     640ms  scripts/test_worktree_holds_race.mjs\nPASS    1942ms  scripts/test_worktree_holds.mjs\nPASS     104ms  scripts/test_worktree_store.mjs\nPASS   38800ms  skills/bee-hive/scripts/test_onboard_bee.mjs\nPASS     581ms  skills/bee-hive/scripts/test_plugin_distribution.mjs\nPASS     423ms  skills/bee-hive/scripts/test_split_brain_regression.mjs\nPASS     837ms  skills/bee-hive/templates/tests/test_backlog_capture.mjs\nPASS   26280ms  skills/bee-hive/templates/tests/test_bee_cli.mjs\nPASS    2332ms  skills/bee-hive/templates/tests/test_bee_write_guard_hook.mjs\nPASS     245ms  skills/bee-hive/templates/tests/test_bundle_mode.mjs\nPASS     791ms  skills/bee-hive/templates/tests/test_cells.mjs\nPASS    9822ms  skills/bee-hive/templates/tests/test_claims.mjs\nPASS    3348ms  skills/bee-hive/templates/tests/test_cli_cells.mjs\nPASS    7624ms  skills/bee-hive/templates/tests/test_cli_state.mjs\nPASS     657ms  skills/bee-hive/templates/tests/test_config_validate.mjs\nPASS     489ms  skills/bee-hive/templates/tests/test_contention_status.mjs\nPASS    6867ms  skills/bee-hive/templates/tests/test_decisions_propagation.mjs\nPASS     288ms  skills/bee-hive/templates/tests/test_feedback.mjs\nPASS      98ms  skills/bee-hive/templates/tests/test_guards_tokenizer.mjs\nPASS     222ms  skills/bee-hive/templates/tests/test_guards.mjs\nPASS    1025ms  skills/bee-hive/templates/tests/test_herding_cli.mjs\nPASS    1217ms  skills/bee-hive/templates/tests/test_herding.mjs\nPASS     129ms  skills/bee-hive/templates/tests/test_intent.mjs\nPASS    5143ms  skills/bee-hive/templates/tests/test_knowledge.mjs\nPASS    3690ms  skills/bee-hive/templates/tests/test_misc.mjs\nPASS      67ms  skills/bee-hive/templates/tests/test_perf.mjs\nPASS     142ms  skills/bee-hive/templates/tests/test_recovery.mjs\nPASS      60ms  skills/bee-hive/templates/tests/test_reservations.mjs\nPASS    2756ms  skills/bee-hive/templates/tests/test_reviews.mjs\nPASS     434ms  skills/bee-hive/templates/tests/test_scratch.mjs\nPASS     118ms  skills/bee-hive/templates/tests/test_state_projection.mjs\nPASS     194ms  skills/bee-hive/templates/tests/test_state.mjs\nPASS     103ms  skills/bee-hive/templates/tests/test_workflow_store.mjs\n\nPASS run_verify: 102 suite(s), concurrency=5, wall=60529ms\nrun_verify exit: 0\nrelease_manifest --check: 527 file(s) match stored manifest\nrelease_manifest exit: 0\nledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\nledger_parity exit: 0\n",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-24T23:55:07.992Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-25T00:24:22.204Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T00:24:22.204Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T00:14:00.252Z",
+        "acquired_at": "2026-07-24T23:55:07.989Z",
+        "worker": "msn-w7",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

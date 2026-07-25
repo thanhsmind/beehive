@@ -91,16 +91,35 @@ async function main() {
     // the exact lost-update D2 exists to kill. Same try-once/skip-on-busy
     // contract as the touch above: LOCK_BUSY skips this sync silently
     // (fail-open preserved), never waited on, never escalated to a crash log.
+    //
+    // multisession-native-7 (F8, binding): this write is now a FULL
+    // idempotent rebuild via state-projection.mjs's rebuildStateProjection —
+    // never a partial patch of just `cells`/`last_activity` on top of
+    // whatever readState happens to return. rebuildStateProjection recomputes
+    // every D1-owned field (phase/feature/mode/approved_gates/summary/
+    // next_action) from the newest ACTIVE workflow record in the SAME write
+    // as this hook's own cells/last_activity refresh — but ONLY while
+    // state.json is itself idle (no live default feature); zero workflow
+    // records anywhere (C1) OR a live non-idle default feature (C5 — the
+    // default mutation path does not keep its workflow record in sync until
+    // msn-10) both leave those D1 fields exactly as they already are, and
+    // only refresh cells/last_activity — byte-identical to this hook's
+    // pre-msn-7 behavior for every repo mid-feature on the default pipeline,
+    // which in practice is most of the time this hook runs. This hook
+    // reads/writes .bee/state.json ONLY through that function — it never
+    // calls createWorkflow/updateWorkflow, so it never writes a workflow
+    // record (must_have: "bee-state-sync never writes workflow records").
     const lockLib = await import(libModuleUrl(root, "lock.mjs"));
+    const stateProjectionLib = await import(libModuleUrl(root, "state-projection.mjs"));
     try {
       await lockLib.withStoreLock(
         root,
         "state",
         () => {
-          const state = stateLib.readState(root);
-          state.cells = counts;
-          state.last_activity = new Date().toISOString();
-          stateLib.writeState(root, state);
+          stateProjectionLib.rebuildStateProjection(root, {
+            cellCounts: counts,
+            lastActivity: new Date().toISOString(),
+          });
         },
         { maxAttempts: 1 },
       );

@@ -846,6 +846,20 @@ export const COMMAND_REGISTRY = [
     deprecated: null,
   },
   {
+    name: 'state.rebuild-projections',
+    invoke: 'bee state rebuild-projections',
+    description: 'Recovery verb (multisession-native-7, D1): rebuilds .bee/lanes/<feature>.json for every active workflow, entirely from .bee/runtime/workflows/ records — every lane mutation in this cell keeps its workflow record in sync, so this is always safe and lossless for lanes. Also rebuilds .bee/state.json\'s workflow-owned fields (phase/mode/feature/approved_gates/summary/next_action) from the newest ACTIVE workflow record, but ONLY while state.json is itself idle (no live default feature) — a live default record\'s own workflow record is not yet kept in sync by default-path writes (C5, multisession-native-10), so it is never overwritten. A no-op (authoritative:false in the JSON result) when zero workflow records exist anywhere yet, state.json has a live non-idle default feature, or a lane names no live workflow record — the legacy file is left exactly as it already was in every no-op case. Safe to run any time.',
+    parameters: {
+      type: 'object',
+      properties: {
+        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line summary.' },
+      },
+      required: [],
+    },
+    examples: ['bee state rebuild-projections --json'],
+    deprecated: null,
+  },
+  {
     name: 'state.session.list',
     invoke: 'bee state session list',
     description: 'List every session record (id, started_at, last_heartbeat, bound lane if any) — the cross-session identities lane claims key off (fresh-session-handoff fsh-1/fsh-3).',

@@ -1062,6 +1062,25 @@ await check('state.scribing-run --lane example (examples[1]) stamps the lane rec
   );
 });
 
+await check('state.rebuild-projections example (multisession-native-7) rebuilds demo-lane\'s projection from its live workflow record, and leaves state.json untouched because rootState has a LIVE non-idle default feature by this point (C5 safety gate)', async () => {
+  const beforeDefault = fs.readFileSync(path.join(rootState, '.bee', 'state.json'), 'utf8');
+  const beforeLane = fs.readFileSync(path.join(rootState, '.bee', 'lanes', 'demo-lane.json'), 'utf8');
+  const result = await assertExampleOk('state.rebuild-projections', { cwd: rootState });
+  const parsed = JSON.parse(result.stdout);
+  assert(
+    parsed.state.authoritative === false,
+    `rootState's default record is live and non-idle by this point in the suite — state.json must NOT be rewritten from a workflow record (C5 safety gate), got ${result.stdout}`,
+  );
+  assert(
+    parsed.lanes.some((l) => l.authoritative === true && l.lane && l.lane.feature === 'demo-lane'),
+    `expected demo-lane's projection among the rebuilt lanes (lanes are always kept in sync in this cell), got ${result.stdout}`,
+  );
+  const afterDefault = fs.readFileSync(path.join(rootState, '.bee', 'state.json'), 'utf8');
+  const afterLane = fs.readFileSync(path.join(rootState, '.bee', 'lanes', 'demo-lane.json'), 'utf8');
+  assert(afterDefault === beforeDefault, 'state.json must be byte-untouched: the D1 rebuild never fires while a default feature is live');
+  assert(afterLane === beforeLane, 'rebuilding must be idempotent: demo-lane.json is already what the projection derives, so bytes are unchanged');
+});
+
 await check('state.set --lane refuses loudly when the named lane does not exist, no partial write (must-have truth)', async () => {
   const result = await runModuleWorker(BEE_MJS, {
     args: ['state', 'set', '--lane', 'ghost-lane', '--owner', 'exploring', '--phase', 'planning'],

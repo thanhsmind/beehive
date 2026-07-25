@@ -2036,11 +2036,20 @@ export async function startFeature(
   // D1/C4 (multisession-native-6): workflow record creation happens OUTSIDE
   // the 'state' lock — see the block comment above this function (C1 already
   // seeded above, before the legacy write).
+  //
+  // multisession-native-7: summary/next_action are carried over from the
+  // legacy write's own computed text (`legacyRecord`, either the default
+  // record's or startLane's) rather than left at createWorkflow's empty-
+  // string defaults — a lane projection rebuilt from this record (see
+  // handleStateStartFeature in bee.mjs) must show the same descriptive text
+  // startLane already wrote, not a blank one.
   await createWorkflow(root, {
     feature: featureTrimmed,
     phase: phaseValue,
     mode: mode == null ? null : String(mode),
     status: 'active',
+    summary: legacyRecord.summary,
+    next_action: legacyRecord.next_action,
   });
 
   return legacyRecord;
