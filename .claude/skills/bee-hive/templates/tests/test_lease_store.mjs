@@ -428,4 +428,30 @@ await check('leasesRoot/leaseCellsDir/leasePathsDir all nest under .bee/runtime/
   }
 });
 
+// ─── multisession-native-13: kind field (D4) ────────────────────────────────
+// Forward groundwork only in this cell (see module header) — no production
+// consumer reads this field yet (msn-16's full shim is what wires guards.mjs
+// onto this store). Proven here at the store level: default, explicit, and
+// invalid-value handling.
+
+await check('acquireLeases: kind defaults to "lease" when omitted; an explicit "intent" is stamped verbatim; an invalid kind refuses typed LEASE_INVALID_REQUEST before any file is created', async () => {
+  const root = makeRoot();
+  try {
+    const [defaulted] = acquireLeases(root, [baseRequest({ id: 'kind-default' })]);
+    assert(defaulted.kind === 'lease', `omitted kind defaults to 'lease', got ${JSON.stringify(defaulted)}`);
+
+    const [declared] = acquireLeases(root, [baseRequest({ id: 'kind-intent', kind: 'intent' })]);
+    assert(declared.kind === 'intent', `explicit kind: 'intent' is stamped, got ${JSON.stringify(declared)}`);
+
+    assertThrows(
+      () => acquireLeases(root, [baseRequest({ id: 'kind-bad', kind: 'exclusive' })]),
+      'kind must be one of',
+      'an invalid kind value refuses LEASE_INVALID_REQUEST',
+    );
+    assert(!fs.existsSync(path.join(leaseCellsDir(root), 'kind-bad.json')), 'a refused invalid-kind acquire never creates a lease file');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 printSummaryAndExit();

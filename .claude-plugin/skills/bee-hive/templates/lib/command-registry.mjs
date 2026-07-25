@@ -410,7 +410,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'reservations.reserve',
     invoke: 'bee reservations reserve',
-    description: "Reserve a file or glob path for a cell. A conflicting active reservation held by another agent returns ok:false with the holder(s). Optional --session (fresh-session-handoff D3) stamps the reservation as owned by that cross-session identity, so the write guard's hold check (checkWrite) can deny another live session's write into the same path — a reservation made without --session keeps today's exact intra-swarm-only semantics.",
+    description: "Reserve a file or glob path for a cell. A conflicting active reservation held by another agent returns ok:false with the holder(s). Optional --session (fresh-session-handoff D3) stamps the reservation as owned by that cross-session identity, so the write guard's hold check (checkWrite) can deny another live session's write into the same path — a reservation made without --session keeps today's exact intra-swarm-only semantics. Optional --kind (multisession-native-13, D4) is 'intent' or 'lease' (default 'lease'): 'lease' is a worker's own write-time reservation and stays a hard conflict; 'intent' declares a broad/glob planning-time scope that the write guard only warns about (never hard-blocks) unless it collapses onto the exact write target.",
     parameters: {
       type: 'object',
       properties: {
@@ -419,6 +419,7 @@ export const COMMAND_REGISTRY = [
         path: { type: 'string', description: 'File or directory path to reserve.' },
         ttl: { type: 'number', description: 'Time-to-live in seconds (default 3600).' },
         session: { type: 'string', description: 'Owning cross-session identity (D3 hold). Omit to keep an intra-swarm-only reservation with no cross-session hold effect.' },
+        kind: { type: 'string', description: "'intent' or 'lease' (default 'lease'). 'intent' is advisory-only (warn, never hard-block) on overlap; 'lease' is a hard conflict, unchanged from before this flag existed." },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: ['agent', 'cell', 'path'],
@@ -426,6 +427,7 @@ export const COMMAND_REGISTRY = [
     examples: [
       'bee reservations reserve --agent worker-a --cell demo-1 --path src/example.ts --json',
       'bee reservations reserve --agent worker-a --cell demo-1 --path src/example-session.ts --session sess-fsh7 --json',
+      'bee reservations reserve --agent planner --cell demo-1 --path "src/api/*" --kind intent --json',
     ],
     deprecated: null,
   },

@@ -8,6 +8,24 @@ import { resolveSessionId, isConcurrentMode } from './claims.mjs';
 
 const DEFAULT_TTL_SECONDS = 3600;
 
+// Intent/lease classification (multisession-native-13, CONTEXT.md D4 —
+// advisor consult slice 3 condition D). A reservation row's `kind` decides
+// whether the WRITE GUARD (guards.mjs checkWrite) treats an overlap against
+// it as a hard deny or an advisory warning:
+//   - 'lease' (the default — every row from before this cell, and every row
+//     a worker's own write-time `reservations reserve` call makes unless it
+//     opts in otherwise) is a HARD conflict, byte-unchanged from before this
+//     cell.
+//   - 'intent' is a planning-declared broad/glob scope: advisory only when
+//     the overlap is broad (a directory-prefix or glob-suffix containment),
+//     still hard when it collapses onto the exact same resource as the
+//     write target. See guards.mjs's isAdvisoryIntentConflict for the exact
+//     decision, and its module comment for why pathsOverlap itself stays
+//     unchanged (schedule.mjs/state.mjs/cells.mjs still need broad overlap
+//     for wave-planning purposes, unrelated to this hard/advisory split).
+export const RESERVATION_KINDS = ['intent', 'lease'];
+const DEFAULT_RESERVATION_KIND = 'lease';
+
 function utcNow() {
   return new Date().toISOString();
 }
@@ -70,6 +88,30 @@ export function pathsOverlap(a, b) {
   );
 }
 
+/**
+ * isHardConflict(reservation, targetPath) — the single shared intent/lease
+ * classification (multisession-native-13, D4 — advisor consult slice 3
+ * condition D), used by BOTH reserve()'s own conflict pre-check below and
+ * guards.mjs's write guard (checkWrite), so a declared 'intent' can never
+ * hard-block anyone through EITHER chokepoint: not a fellow reserve() caller
+ * staking out their own exact write path (which would otherwise silently
+ * refuse before the write guard is ever consulted — the exact "hard deny
+ * from an intent record" this cell's must_haves prohibit), and not an
+ * eventual write into that path.
+ *
+ * true (hard) unless `reservation.kind === 'intent'` AND its stored path is
+ * NOT the exact same resource as `targetPath` (a broad/glob-only overlap —
+ * a directory prefix or glob-suffix containment, matched via pathsOverlap
+ * but not string-identical). An 'intent' that collapses onto the exact
+ * target is still a hard, same-resource collision regardless of its label.
+ * `reservation.kind` absent/undefined (every pre-existing row, and every
+ * row from a reserve() call that never passed `kind`) reads as the default
+ * 'lease' — always hard, byte-unchanged from before this cell.
+ */
+export function isHardConflict(reservation, targetPath) {
+  return !(reservation.kind === 'intent' && normalizePath(reservation.path) !== normalizePath(targetPath));
+}
+
 export function listReservations(root, { activeOnly = false } = {}) {
   const store = readStore(root);
   const nowMs = Date.now();
@@ -116,6 +158,15 @@ export function findSessionConflicts(root, sessionId, paths) {
  * the later write silently drop the earlier hold — the conflict check reads
  * the store fresh under the lock, never a pre-lock snapshot.
  *
+ * `kind` (multisession-native-13, D4): OPTIONAL, defaults to `'lease'`
+ * (RESERVATION_KINDS above) — a worker's own write-time reservation stays a
+ * hard conflict exactly as before this cell. Pass `kind: 'intent'` to
+ * declare a broad/glob planning-time scope instead; guards.mjs's checkWrite
+ * downgrades a conflict against an 'intent' row to an advisory warning
+ * unless it collapses onto the exact write target (see guards.mjs
+ * isAdvisoryIntentConflict). Invalid values throw synchronously, before the
+ * store lock is ever taken.
+ *
  * D3: when `session` is absent, it self-derives (explicit flag -> `resolve
  * SessionId`'s own BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID env fallback ->
  * null), so a top-level-session reserve becomes cross-session-visible by
@@ -125,7 +176,7 @@ export function findSessionConflicts(root, sessionId, paths) {
  * refusal below, the reserve-side sibling of claims.mjs claimCellFile's own
  * sessionless-in-concurrent-mode refusal.
  */
-export async function reserve(root, { agent, cell, path: reservedPath, ttl = DEFAULT_TTL_SECONDS, session = null }) {
+export async function reserve(root, { agent, cell, path: reservedPath, ttl = DEFAULT_TTL_SECONDS, session = null, kind = DEFAULT_RESERVATION_KIND }) {
   if (typeof agent !== 'string' || !agent.trim()) {
     throw new Error('reserve: agent is required.');
   }
@@ -134,6 +185,9 @@ export async function reserve(root, { agent, cell, path: reservedPath, ttl = DEF
   }
   if (typeof reservedPath !== 'string' || !reservedPath.trim()) {
     throw new Error('reserve: path is required.');
+  }
+  if (!RESERVATION_KINDS.includes(kind)) {
+    throw new Error(`reserve: kind must be one of ${RESERVATION_KINDS.join('/')} (got ${JSON.stringify(kind)}).`);
   }
   // hardening-1-7-10 D5/1710-10: `root` is passed through so
   // resolveSessionId's durable single-live-session fallback can adopt an
@@ -160,7 +214,12 @@ export async function reserve(root, { agent, cell, path: reservedPath, ttl = DEF
     };
   }
   return withStoreLock(root, 'reservations', () => {
-    const conflicts = findConflicts(root, agent.trim(), [reservedPath]);
+    // multisession-native-13 (D4): ONLY a hard conflict refuses the reserve
+    // — a pre-existing 'intent' row (declared broad/glob scope) never blocks
+    // a fellow caller from staking out their own exact write-time lease
+    // inside that scope (isHardConflict above). Both records end up active
+    // simultaneously; the intent stays purely advisory/informational.
+    const conflicts = findConflicts(root, agent.trim(), [reservedPath]).filter((c) => isHardConflict(c, reservedPath));
     if (conflicts.length > 0) {
       return { ok: false, conflicts };
     }
@@ -176,6 +235,12 @@ export async function reserve(root, { agent, cell, path: reservedPath, ttl = DEF
       // lane-omission pattern): every pre-existing row and every call that never
       // resolves a session keeps today's exact shape, byte for byte.
       ...(resolvedSession ? { session: resolvedSession } : {}),
+      // kind (multisession-native-13, D4): ALWAYS stamped explicitly, unlike
+      // `session` above — every row is unambiguously a lease or an intent,
+      // never merely "no field means legacy". Callers that never pass `kind`
+      // get 'lease', which is exactly what every pre-existing row already
+      // behaved as (hard-conflict-by-default) — semantically byte-unchanged.
+      kind,
     };
     store.reservations.push(reservation);
     writeStore(root, store);

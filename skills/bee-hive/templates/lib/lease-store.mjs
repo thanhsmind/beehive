@@ -10,13 +10,28 @@
 //   .bee/runtime/leases/paths/<path-hash>.json
 //
 // record shape: { resource, mode, workflow_id, session_id, workspace_id,
-//   epoch, acquired_at, expires_at }. `resource` is the type-prefixed key
-//   ("cell:<cell-id>" or "path:<canonical-path>") — carrying the type inline
-//   keeps the record to exactly these eight fields rather than adding a
-//   ninth. `expires_at` is an ISO timestamp, or `null` meaning "never
-//   expires" (TTL semantics matching reservations.mjs's isExpired: a
-//   non-positive ttl at acquire/renew time stores `expires_at: null` and
-//   sweepExpiredLeases never touches it).
+//   epoch, acquired_at, expires_at, kind }. `resource` is the type-prefixed
+//   key ("cell:<cell-id>" or "path:<canonical-path>") — carrying the type
+//   inline keeps the record to exactly these fields rather than adding a
+//   distinct type column. `expires_at` is an ISO timestamp, or `null`
+//   meaning "never expires" (TTL semantics matching reservations.mjs's
+//   isExpired: a non-positive ttl at acquire/renew time stores
+//   `expires_at: null` and sweepExpiredLeases never touches it).
+//
+// `kind` (multisession-native-13, D4 — advisor consult slice 3 condition D):
+// `'intent'|'lease'`, defaults to `'lease'` when the caller omits it — every
+// msn-11/12 acquire (this module had no `kind` concept before this cell)
+// stays semantically a lease, byte-unchanged in behavior. `'intent'` marks a
+// planning-declared broad/glob scope (advisory: warn + a scheduling input,
+// never a hard block); `'lease'` marks an exact path a writer is actually
+// about to touch (hard). This field is FORWARD GROUNDWORK ONLY in this
+// cell — the production write guard (guards.mjs checkWrite) does not read
+// from this store yet, only from reservations.mjs's `.bee/reservations.json`
+// (which gained the equivalent `kind` field in this same cell); msn-16's
+// full shim is what migrates checkWrite onto lease-store.mjs and makes this
+// field load-bearing at guard time. Recorded here now so every future lease
+// carries the classification from day one instead of a later migration
+// having to backfill it.
 //
 // Placement (condition A, advisor consult slice 3): `.bee/runtime/leases/`
 // is deliberate for THIS cell — D2's controlRoot split (shared-across-
@@ -98,6 +113,13 @@ import { withStoreLock } from './lock.mjs';
 
 const DEFAULT_TTL_SECONDS = 3600;
 const RESOURCE_TYPES = ['cell', 'path'];
+// multisession-native-13, D4: same two-value vocabulary as
+// reservations.mjs's RESERVATION_KINDS — kept as an independent duplicate
+// constant (not imported) for the same structural-isolation reason this
+// module never imports reservations.mjs at all (see module header, C4
+// pattern).
+const LEASE_KINDS = ['intent', 'lease'];
+const DEFAULT_LEASE_KIND = 'lease';
 
 /** Typed refusal thrown by lease-store verbs — never a silent fallback. */
 export class LeaseStoreError extends Error {
@@ -280,10 +302,16 @@ function normalizeAcquireRequest(root, req) {
   if (!req || typeof req !== 'object') {
     throw new LeaseStoreError('LEASE_INVALID_REQUEST', 'acquireLeases: each request must be an object.');
   }
-  const { type, id, mode, workflow_id, session_id, workspace_id, epoch, ttl = DEFAULT_TTL_SECONDS } = req;
+  const { type, id, mode, workflow_id, session_id, workspace_id, epoch, ttl = DEFAULT_TTL_SECONDS, kind = DEFAULT_LEASE_KIND } = req;
   const resolved = resolveResourceFile(root, { type, id });
   if (typeof mode !== 'string' || !mode.trim()) {
     throw new LeaseStoreError('LEASE_INVALID_REQUEST', `lease request "${resolved.resourceKey}": mode is required.`);
+  }
+  if (!LEASE_KINDS.includes(kind)) {
+    throw new LeaseStoreError(
+      'LEASE_INVALID_REQUEST',
+      `lease request "${resolved.resourceKey}": kind must be one of ${LEASE_KINDS.join('/')} (got ${JSON.stringify(kind)}).`,
+    );
   }
   for (const [key, value] of [
     ['workflow_id', workflow_id],
@@ -305,6 +333,7 @@ function normalizeAcquireRequest(root, req) {
     workspace_id,
     epoch,
     ttl: Number.isFinite(ttl) ? ttl : DEFAULT_TTL_SECONDS,
+    kind,
   };
 }
 
@@ -312,7 +341,12 @@ function normalizeAcquireRequest(root, req) {
  * acquireLeases(root, requests, options) — acquire one or more leases as a
  * single all-or-nothing batch. Each request:
  *   { type: 'cell'|'path', id, mode, workflow_id, session_id, workspace_id,
- *     epoch, ttl? }
+ *     epoch, ttl?, kind? }
+ *
+ * `kind` (multisession-native-13, D4): optional, `'intent'|'lease'`,
+ * defaults to `'lease'` — see the module header for the full split. Invalid
+ * values throw LEASE_INVALID_REQUEST before any file is touched, same as
+ * every other malformed field here.
  *
  * Deadlock-free regardless of caller order (D4): requests are sorted by the
  * sha256 hash of their resource key BEFORE any file is created, so two
@@ -364,6 +398,7 @@ export function acquireLeases(root, requests, { now = Date.now(), _orderSeam } =
       epoch: item.epoch,
       acquired_at: new Date(now).toISOString(),
       expires_at: computeExpiresAt(item.ttl, now),
+      kind: item.kind,
     };
     if (tryCreateLeaseFile(item.file, record)) {
       acquired.push({ file: item.file, record });

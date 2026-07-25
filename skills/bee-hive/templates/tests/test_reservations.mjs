@@ -8,6 +8,7 @@ import {
   makeTempRepo,
   check,
   assert,
+  assertRejects,
   printSummaryAndExit,
 } from '../../../../scripts/lib/test-fixture.mjs';
 import {
@@ -18,6 +19,7 @@ import {
   findConflicts,
   findSessionConflicts,
   reservationsPath,
+  RESERVATION_KINDS,
 } from '../lib/reservations.mjs';
 import { createSession } from '../lib/claims.mjs';
 import { readJson, writeJsonAtomic } from '../lib/fsutil.mjs';
@@ -154,6 +156,32 @@ await check('reserve: sessionless reserve still works solo (nobody else live) �
     if (savedBeeEnv === undefined) delete process.env.BEE_SESSION_ID;
     else process.env.BEE_SESSION_ID = savedBeeEnv;
   }
+});
+
+// ─── multisession-native-13: intent/lease kind (D4) ─────────────────────────
+
+await check('reserve: kind defaults to "lease" when omitted; an explicit "intent" is stamped verbatim; an invalid kind throws before the store lock', async () => {
+  assert(RESERVATION_KINDS.includes('intent') && RESERVATION_KINDS.includes('lease'), 'RESERVATION_KINDS exports both values');
+
+  // D3 hermeticity: two-or-more live sessions were deliberately left behind
+  // by the concurrent-mode test above (this file shares one `root` across
+  // every check()) — a session-less reserve() would correctly hit
+  // SESSION_REQUIRED there (hardening-4a), unrelated to what THIS test is
+  // proving. Pass an explicit `session` on every call here so kind
+  // classification is exercised independent of that ambient state.
+  const legacy = await reserve(root, { agent: 'kind-a', cell: 'kind-1', path: 'src/kind/plain.ts', session: 'kind-test-sess' });
+  assert(legacy.ok === true && legacy.reservation.kind === 'lease', `omitted kind defaults to 'lease', got ${JSON.stringify(legacy)}`);
+
+  const declared = await reserve(root, { agent: 'kind-a', cell: 'kind-1', path: 'src/kind/api/*', kind: 'intent', session: 'kind-test-sess' });
+  assert(declared.ok === true && declared.reservation.kind === 'intent', `explicit kind: 'intent' is stamped, got ${JSON.stringify(declared)}`);
+
+  await assertRejects(
+    () => reserve(root, { agent: 'kind-a', cell: 'kind-1', path: 'src/kind/bad.ts', kind: 'exclusive', session: 'kind-test-sess' }),
+    'kind must be one of',
+    'an invalid kind value is refused synchronously',
+  );
+  const store = readJson(reservationsPath(root), { reservations: [] });
+  assert(!store.reservations.some((r) => r.path === 'src/kind/bad.ts'), 'a refused invalid-kind reserve never lands a row on disk');
 });
 
 printSummaryAndExit();

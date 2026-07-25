@@ -1537,6 +1537,11 @@ async function handleReservationsReserve(root, flags) {
       path: requestedPath,
       ...(ttl !== undefined ? { ttl } : {}),
       ...(flags.session ? { session: String(flags.session) } : {}),
+      // multisession-native-13 (D4): OPTIONAL --kind, forwarded verbatim so
+      // reserve()'s own RESERVATION_KINDS validation is the single source of
+      // truth. Omitted, this is byte-unchanged: reserve() defaults to
+      // 'lease', exactly today's hard-conflict behavior.
+      ...(flags.kind ? { kind: String(flags.kind) } : {}),
     });
 
   // hardening-1-7-10 (D3): when a topology exists, the foreign-hold check,

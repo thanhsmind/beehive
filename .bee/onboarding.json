@@ -5,14 +5,14 @@
     "agents_block": "d0515b3ab1b91fc381e757d6a1c64bf2f15d8db6d78361818178aea51368dca7",
     "gitignore_block": "97bc58361c5dee4c4212b3c2ba1b5b91d5c3c17c2be4690baa2abe9bd014253c",
     "helpers": {
-      "bee.mjs": "417290be31de6531cb44621054fd70db67ed88ad3536ef484e4e3764820d125c"
+      "bee.mjs": "4a2733cbf6ffd8bdb6ebc4aef88618acd2f1987f4b35ae64842cff42a6fca660"
     },
     "lib": {
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "ef212500da307a5f4654426827198a269acdcd4e79f94e61f5de1c010123a4ea",
       "claims.mjs": "6bdb5269b43e4b992b390e1e18fc84cfb186d84b017ee17e792173b510613180",
-      "command-registry.mjs": "3f024d3bc27d243103a8b1a1682e1956e1b1ea424936c9f2f5d14498515909a5",
+      "command-registry.mjs": "1716802ebfb885b1a726f0ee010fba6baf7d01d7e8a7f7529bf5cc68be8a429b",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0799e8b4a703a453a0ce8490c36991cd74f50312abec88f91a78fbcfbb1a3779",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
@@ -20,17 +20,17 @@
       "dispatch-prepare.mjs": "039f2af9196809081bd4118c1f36f9bb886eaeb541f0b5a08659892c150d6b8e",
       "feedback.mjs": "a38aabf50fc1fd597bddc208160b0f27bf270773c403de75a0c3b4783c95e02c",
       "fsutil.mjs": "c0a65d8aebfca7f7423f10cc9e13fa8ca43234c4a7b7e7ea1f05619b18e06af0",
-      "guards.mjs": "3cecf16ba11c1853c18e68debf909c7d3831706c8d26b8e08b501152c112d36b",
+      "guards.mjs": "0f03bd98f4b1ff962078ea8e8d5d524b5fef517d72cc6492a9765f0220ba439c",
       "herding.mjs": "fb813a3f843109164cdfe56a095f5707202c11b24dae28bb81e794c973c62b7a",
       "inject.mjs": "4df920d3d430c1e0aba2d41f09d764396e2f030bd525b78aa0ab68163703c7cb",
       "intent.mjs": "acb9a427caf2e1aae106407a96a9fc0a2c16a087d31af057f704afa2619255e8",
       "judge.mjs": "5057e17a6bcd3dacff21fe479e13570620cfe1b9c821c0ff5c8254f39e3c6ed1",
       "knowledge.mjs": "73ed66b2df865d665bb4c7224084ccec0b5ce2d84f31c7384bdc19e0998908b6",
-      "lease-store.mjs": "c8d27e712e4fd09e66901f23163ecbc75fa985264882073b56f27ea4e30f795d",
+      "lease-store.mjs": "a61d70b4732c13e622068648cd65ffa5023937cb0cde8649390aaf89bb38fa92",
       "lock.mjs": "2c80c3738ce0f70c69cf45164c30a078a7e7c9c02d9feb702415900f41d4e9c9",
       "perf.mjs": "57dedfbd53cfce7a35ddb1e2cae1cc9c86533bdfa4df45965fcca0fc8497e5fc",
       "recovery.mjs": "2b11660755ccd76e0ee6cb723e1816d2aa5343b6226dca6ce342de3a50d6dae6",
-      "reservations.mjs": "05c120c0d73d2169f210601241bfb6c88cc455b33214dc1367821dd5bf6695fd",
+      "reservations.mjs": "917168c8e3277d36b293bbdde69ea39756c83ec9981eafb712ef7b9cda7c4825",
       "reviews.mjs": "08fe8685f92705b12c4634b93bfaed2b244dff3ffb38f0a4e809de83015955e8",
       "schedule.mjs": "9f46b580f71f6be9e38740124d3e7745af972c37fad91ce99433f405eae16351",
       "scratch.mjs": "3b7ab2e104b3f4cee240a43fac49ee630df7ca2ed995eb71f403d25eae17afb0",
@@ -47,7 +47,7 @@
       "bee-codex-subagent-audit.mjs": "f9f6900705aa20dfc0035a8c8c5c4b22fc56c9d0a4953e1b0ba3fd9466dec85e",
       "bee-session-init.mjs": "0f2bf378191f21d75063d0823374f616df073bf8324ae6e4bd813a029bdf8351",
       "bee-prompt-context.mjs": "1efd6ed7f90a7025648a550245c62b999a77dac77a7d1f206a44bef2e4626a6a",
-      "bee-write-guard.mjs": "a99b0a6ef6a0b160e07e25c9d3982b3643cc2cfd0495955807a1ff5d250defaf",
+      "bee-write-guard.mjs": "ba4358146a76432bb21b906eb2808b57179673b2f4726245b82a73fe972f88e4",
       "tokenize-command.mjs": "e1da8db4a06525c92fb01495e718a0a2f94d87b2c7808458e306b480b353a77a",
       "bee-state-sync.mjs": "8c3a727e95d9f86fe942a5cfffb331e257abec0b5c62680dffabc958d77c45df",
       "bee-chain-nudge.mjs": "0520c71fad2513d93666ad4c3353b7196faeeac382430b1e1395fabd0febd9cb",
@@ -79,5 +79,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T02:29:17.318Z"
+  "updated_at": "2026-07-25T02:56:50.963Z"
 }

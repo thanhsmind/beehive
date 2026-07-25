@@ -265,6 +265,57 @@ await check('checkWrite blocks unreserved conflicting writes during swarming', a
   assert(own.allow === true, 'holder may write its reserved path');
 });
 
+// ─── multisession-native-13: intent/lease split (D4, advisor consult slice 3
+// condition D) ────────────────────────────────────────────────────────────
+// Condition D binding: intra-swarm agent-keyed reservations stay HARD by
+// default (kind:'lease', the row shape from before this cell); ONLY an
+// explicitly kind:'intent' row whose overlap is broad/glob-only (not the
+// exact same path) downgrades to an advisory allow+warning. pathsOverlap
+// itself is never touched by this cell — schedule.mjs/state.mjs/cells.mjs
+// keep exactly the same broad-overlap semantics for wave planning.
+
+await check("checkWrite: a broad 'intent' (src/api/*) does NOT hard-block a disjoint exact write — allow:true with a warning (D4, prohibition: no hard deny from an intent record)", async () => {
+  await reserve(root, { agent: 'planner', cell: 'intent-1', path: 'src/api/*', kind: 'intent' });
+  const state = { ...defaultState(), phase: 'swarming', approved_gates: { ...defaultState().approved_gates, execution: true } };
+  const verdict = checkWrite(root, state, 'src/api/orders/x.ts', 'worker-c');
+  assert(verdict.allow === true, `a broad intent must never hard-block a disjoint write, got ${JSON.stringify(verdict)}`);
+  assert(
+    typeof verdict.warning === 'string' && verdict.warning.includes('src/api/*') && verdict.warning.includes('intent'),
+    `an advisory warning must name the covering intent, got ${JSON.stringify(verdict.warning)}`,
+  );
+});
+
+await check("checkWrite: an exact-path 'lease' (default kind) still hard-blocks a conflicting write — Condition D regression, unchanged from before this cell", async () => {
+  await reserve(root, { agent: 'worker-lease', cell: 'lease-1', path: 'src/lease/exact.ts' });
+  const state = { ...defaultState(), phase: 'swarming', approved_gates: { ...defaultState().approved_gates, execution: true } };
+  const denied = checkWrite(root, state, 'src/lease/exact.ts', 'worker-other');
+  assert(
+    denied.allow === false && denied.kind === 'reservation' && denied.warning === undefined,
+    `an exact lease conflict must stay a hard deny with no warning field, got ${JSON.stringify(denied)}`,
+  );
+});
+
+await check("checkWrite: an 'intent' row that collapses onto the EXACT write target still hard-blocks — a same-resource collision is never merely advisory, regardless of its kind label", async () => {
+  await reserve(root, { agent: 'planner', cell: 'intent-2', path: 'src/exact-intent/target.ts', kind: 'intent' });
+  const state = { ...defaultState(), phase: 'swarming', approved_gates: { ...defaultState().approved_gates, execution: true } };
+  const denied = checkWrite(root, state, 'src/exact-intent/target.ts', 'worker-other');
+  assert(
+    denied.allow === false && denied.kind === 'reservation',
+    `an intent that IS the exact write target must still hard-deny, got ${JSON.stringify(denied)}`,
+  );
+});
+
+await check('checkWrite: a mix of one hard lease conflict and one advisory intent conflict on the SAME path still denies (hard wins) — never silently drops the lease conflict because an intent also overlapped', async () => {
+  await reserve(root, { agent: 'planner', cell: 'intent-3', path: 'src/mixed/*', kind: 'intent' });
+  await reserve(root, { agent: 'worker-lease', cell: 'lease-3', path: 'src/mixed/file.ts' });
+  const state = { ...defaultState(), phase: 'swarming', approved_gates: { ...defaultState().approved_gates, execution: true } };
+  const denied = checkWrite(root, state, 'src/mixed/file.ts', 'worker-other');
+  assert(
+    denied.allow === false && denied.kind === 'reservation' && denied.reason.includes('worker-lease'),
+    `hard lease conflict must win over a co-occurring advisory intent, got ${JSON.stringify(denied)}`,
+  );
+});
+
 await check('checkWrite: root .spikes/ is governed (not allowlisted) while .bee/spikes/ stays allowed (D2 8ed35504)', async () => {
   const state = defaultState(); // phase: idle
   const rootSpikesDenied = checkWrite(root, state, '.spikes/demo/notes.md');

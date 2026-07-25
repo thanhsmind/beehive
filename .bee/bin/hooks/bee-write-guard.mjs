@@ -669,6 +669,7 @@ async function main() {
 
   let denial = null; // { reason }
   let fixedAskVerdict = null; // { fixed, notes } — ask-guard-autofix D1/D2
+  const reservationWarnings = []; // multisession-native-13 (D4): advisory-only intent-overlap notices
   try {
     const stateLib = await import(libModuleUrl(storeRoot, "state.mjs"));
     if (!stateLib.hookEnabled(storeRoot, HOOK_NAME)) {
@@ -823,6 +824,14 @@ async function main() {
           };
           break;
         }
+        // multisession-native-13 (D4): an ALLOWED write can still carry a
+        // non-blocking `warning` (a declared 'intent' reservation whose
+        // broad/glob scope covers this path — advisory only, never a deny).
+        // Collected across every relPath, never breaks the loop — a warning
+        // is not a denial and must never suppress a LATER path's real deny.
+        if (verdict && verdict.allow === true && verdict.warning) {
+          reservationWarnings.push(verdict.warning);
+        }
       }
 
       // Intake-gate git exemption (D1/D3/D4, cell ige-2, closes P46 / GH #1):
@@ -911,6 +920,25 @@ async function main() {
         additionalContext: `bee AskUserQuestion guard auto-fixed: ${notesJoined}`,
       },
       systemMessage: `bee AskUserQuestion guard: ${notesJoined}`,
+    };
+    process.stdout.write(JSON.stringify(output));
+    return 0;
+  }
+
+  if (!denial && reservationWarnings.length > 0) {
+    // multisession-native-13 (D4): a declared-'intent' reservation covered
+    // this write's path but never blocked it (prohibition: "no hard deny
+    // from an intent record") — surface the advisory as a non-blocking
+    // systemMessage, same allow+notice shape as the ask-guard-autofix path
+    // above, so the agent sees the overlap without the write being denied.
+    const joined = reservationWarnings.join("\n");
+    const output = {
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "allow",
+        permissionDecisionReason: joined,
+      },
+      systemMessage: joined,
     };
     process.stdout.write(JSON.stringify(output));
     return 0;

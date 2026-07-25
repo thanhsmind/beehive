@@ -1,0 +1,98 @@
+{
+  "id": "multisession-native-13",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Intent scope split from write lease",
+  "action": "Reservations declared at planning become INTENT records (advisory: warn + scheduling input, never hard-block). Hard blocks come only from exact-path write leases. reserve/paths flows classify: planning-declared broad paths/globs = intent; worker write-time = lease. Write guard consumes leases for hard denial, intents for warnings. Regen inside this cell after the code change: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed). Canonical source: skills/bee-hive/templates/ (vendored to .bee/bin/ + plugin mirrors).",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-12"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/lease-store.mjs",
+    "skills/bee-hive/templates/lib/guards.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".bee/bin/lib/guards.mjs",
+    ".bee/bin/lib/reservations.mjs",
+    "docs/history/multisession-native/CONTEXT.md",
+    "docs/history/multisession-native/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "a broad intent (src/api/*) does NOT hard-block a disjoint exact write (test)",
+      "an exact write lease still hard-blocks a conflicting write (test)",
+      "warning surfaces on intent overlap (test)",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no hard deny from an intent record"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D4/D5"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "3",
+    "11": ".",
+    "12": "4",
+    "13": ";",
+    "14": " ",
+    "15": "D",
+    "16": "4",
+    "worker": "msn-w13",
+    "outcome": "Intent/lease reservation split (D4): kind field on reservation records, guard classifies broad-intent overlap as advisory (allow+warning) vs exact/lease as hard deny; cross-session holds and pathsOverlap scheduling semantics untouched.",
+    "files_changed": [
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/lib/command-registry.mjs",
+      "skills/bee-hive/templates/lib/guards.mjs",
+      "skills/bee-hive/templates/lib/lease-store.mjs",
+      "skills/bee-hive/templates/lib/reservations.mjs",
+      "skills/bee-hive/templates/tests/test_guards.mjs",
+      "skills/bee-hive/templates/tests/test_lease_store.mjs",
+      "skills/bee-hive/templates/tests/test_reservations.mjs",
+      "hooks/bee-write-guard.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T03:02:42.088Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"command\": \"node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check\",\n  \"passed\": true,\n  \"output\": \"PASS run_verify: 103 suite(s), concurrency=5, wall=60617ms; release_manifest --check: 534 file(s) match stored manifest; ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\",\n  \"notes\": \"Condition D regression proofs: test_guards.mjs 'checkWrite blocks unreserved conflicting writes during swarming' (intra-swarm hard deny, unchanged) and the cross-session-hold test at fsh-7 both pass unmodified. New tests: broad intent (src/api/*) vs disjoint exact write -> allow+warning; exact lease conflict -> hard deny; intent collapsing onto exact target -> still hard; mixed hard+advisory conflict on same path -> hard wins. reserve()'s own conflict pre-check was also fixed to use the same isHardConflict classification (a pre-existing intent could otherwise silently block a worker's reserve() call before checkWrite is ever consulted, violating the no-hard-deny-from-intent prohibition through a different chokepoint). pathsOverlap left byte-unchanged for schedule.mjs/state.mjs wave-planning use.\",\n  \"red_failure_evidence\": \"BEFORE this cell, guards.mjs's swarming block hard-denied on ANY findConflicts() overlap unconditionally (git show HEAD~0-before-this-cell:skills/bee-hive/templates/lib/guards.mjs, the swarming branch): `if (conflicts.length > 0) { return { allow:false, kind:'reservation', ... } }` with no kind check at all -- a broad 'src/api/*' reservation (there was no kind field to even declare it as an intent) would have hard-blocked any disjoint write under it. Confirmed red-first during implementation: the new test 'checkWrite: a broad intent (src/api/*) does NOT hard-block a disjoint exact write' was run against the pre-classification guards.mjs and failed with allow:false/kind:reservation; after adding isHardConflict-based classification it passes with allow:true+warning. A second, deeper red was found and fixed in the SAME cell: reserve()'s own conflict pre-check (unrelated to checkWrite) also unconditionally refused on any overlap -- a regression test mixing one intent + one lease reservation on the same path exposed reserve() silently returning ok:false purely because of the intent overlap (violates the 'no hard deny from an intent record' prohibition through a different chokepoint than the guard); fixed by filtering reserve()'s conflict check through the same shared isHardConflict(reservation, targetPath) used by checkWrite.\",\n  \"deliberate_exceptions\": null\n}\n",
+    "verify_output": "PASS run_verify: 103 suite(s), concurrency=5, wall=60617ms; release_manifest --check: 534 file(s) match stored manifest; ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-25T02:46:24.147Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-25T03:01:41.518Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T03:01:41.518Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T02:46:24.145Z",
+        "acquired_at": "2026-07-25T02:46:24.145Z",
+        "worker": "msn-w13",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

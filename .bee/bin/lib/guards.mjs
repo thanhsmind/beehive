@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { findConflicts, findSessionConflicts, reservationsPath } from './reservations.mjs';
+import { findConflicts, findSessionConflicts, reservationsPath, isHardConflict } from './reservations.mjs';
 import { readConfig, resolvePipeline, resolveRoots } from './state.mjs';
 // xwh-4: cross-worktree foreign-hold consultation. worktree-holds.mjs imports
 // only fsutil/lock/reservations.mjs — no cycle (same discipline cells.mjs's
@@ -735,15 +735,39 @@ export function checkWrite(root, state, relPath, agentName = null, { sessionId =
     if (agent) {
       const conflicts = findConflicts(root, agent, [normalized]);
       if (conflicts.length > 0) {
-        const held = conflicts
-          .map((c) => `${c.agent} holds "${c.path}" (cell ${c.cell})`)
+        // multisession-native-13 (D4 — advisor consult slice 3 condition D):
+        // split findConflicts' matches into a HARD set (denies, exactly as
+        // before this cell) and an ADVISORY set (a declared 'intent' whose
+        // glob/dir scope merely covers this write, with no exact-path
+        // conflict) via reservations.mjs's isHardConflict — the SAME
+        // classification reserve()'s own conflict pre-check uses, so a
+        // declared intent can never hard-block through either chokepoint.
+        // pathsOverlap itself (what findConflicts is built on) is left
+        // completely UNCHANGED: wave-scheduling (schedule.mjs/state.mjs/
+        // cells.mjs) still needs broad containment to count as "overlap".
+        const hardConflicts = conflicts.filter((c) => isHardConflict(c, normalized));
+        if (hardConflicts.length > 0) {
+          const held = hardConflicts
+            .map((c) => `${c.agent} holds "${c.path}" (cell ${c.cell})`)
+            .join('; ');
+          return {
+            allow: false,
+            kind: 'reservation',
+            reason:
+              `bee reservation conflict: "${normalized}" is reserved by another agent — ${held}. ` +
+              'Reserve the path first or return [BLOCKED] to the orchestrator.',
+          };
+        }
+        // Every remaining conflict is an advisory intent — allow, but surface
+        // a warning (the hook prints `warning` as a non-blocking notice)
+        // instead of silently dropping the information (prohibition: "no
+        // hard deny from an intent record").
+        const warned = conflicts
+          .map((c) => `${c.agent}'s declared intent "${c.path}" (cell ${c.cell}) covers "${normalized}"`)
           .join('; ');
         return {
-          allow: false,
-          kind: 'reservation',
-          reason:
-            `bee reservation conflict: "${normalized}" is reserved by another agent — ${held}. ` +
-            'Reserve the path first or return [BLOCKED] to the orchestrator.',
+          allow: true,
+          warning: `bee reservation intent: ${warned} — advisory only (kind: intent), not a hard block.`,
         };
       }
     }
