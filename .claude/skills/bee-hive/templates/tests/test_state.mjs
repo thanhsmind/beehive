@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   makeTempRepo,
   makeCell,
@@ -1046,5 +1047,69 @@ await check('mergeConfigOverlay: pure function — base is never mutated, arrays
   assert(mergeConfigOverlay(base, undefined) === base, 'an undefined overlay returns the base object unchanged (identity, not a copy)');
   assert(mergeConfigOverlay(base, null) === base, 'a null overlay returns the base object unchanged');
 });
+
+await check(
+  'grep-audit: production writers of the legacy .bee/HANDOFF.json are exactly {rebuildHandoffProjection, writeHandoff C1 fallback, adoptHandoff C1 fallback} (multisession-native-24, advisor slice 5 condition E)',
+  () => {
+    const templatesRoot = fileURLToPath(new URL('..', import.meta.url));
+    const repoRoot = findRepoRoot(templatesRoot);
+    if (!repoRoot) return; // no repo context to census against (bare checkout)
+
+    const libDir = path.join(repoRoot, 'skills', 'bee-hive', 'templates', 'lib');
+    const beeMjsPath = path.join(repoRoot, 'skills', 'bee-hive', 'templates', 'bee.mjs');
+
+    // A "mutation" of the legacy file: writeJsonAtomic(handoffPath(...)) or
+    // fs.rmSync(handoffPath(...)) — the two primitives every sanctioned
+    // writer uses (readHandoff's own readJson(handoffPath(...)) never
+    // matches, so read-only call sites never trip this audit).
+    const MUTATION_RE = /(?:writeJsonAtomic|fs\.rmSync)\(\s*handoffPath\(/g;
+
+    function enclosingFunctionName(text, matchIndex) {
+      // Walk backwards from the match to the nearest preceding top-level
+      // `[export] [async] function <name>(` declaration — sufficient for
+      // this file's flat, non-nested-function style; a mis-attribution
+      // would surface as an unexpected name in the assertion below, not a
+      // silent pass.
+      const before = text.slice(0, matchIndex);
+      const fnRe = /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(/g;
+      let name = null;
+      let m;
+      while ((m = fnRe.exec(before))) name = m[1];
+      return name;
+    }
+
+    const hits = [];
+    for (const file of fs.readdirSync(libDir).filter((f) => f.endsWith('.mjs'))) {
+      const text = fs.readFileSync(path.join(libDir, file), 'utf8');
+      let m;
+      MUTATION_RE.lastIndex = 0;
+      while ((m = MUTATION_RE.exec(text))) hits.push({ file, fn: enclosingFunctionName(text, m.index) });
+    }
+    // bee.mjs must never mutate the legacy file directly — every mutation
+    // goes through one of the sanctioned lib functions above.
+    if (fs.existsSync(beeMjsPath)) {
+      const beeText = fs.readFileSync(beeMjsPath, 'utf8');
+      let m;
+      MUTATION_RE.lastIndex = 0;
+      while ((m = MUTATION_RE.exec(beeText))) hits.push({ file: 'bee.mjs', fn: enclosingFunctionName(beeText, m.index) });
+    }
+
+    assert(hits.length > 0, 'grep-audit found zero handoffPath mutation sites — a broken regex would silently pass this sweep');
+
+    const SANCTIONED = new Set([
+      'state.mjs::writeHandoff',
+      'state.mjs::adoptHandoff',
+      'state-projection.mjs::rebuildHandoffProjection',
+    ]);
+    const unsanctioned = hits.map((h) => `${h.file}::${h.fn}`).filter((key) => !SANCTIONED.has(key));
+
+    assert(
+      unsanctioned.length === 0,
+      `unsanctioned .bee/HANDOFF.json writer(s) found: ${unsanctioned.join(', ')} — the only allowed writers are ` +
+        'rebuildHandoffProjection (state-projection.mjs) and the C1 no-workflow-records fallback pair ' +
+        'writeHandoff/adoptHandoff (state.mjs, each carrying a dated deprecation note).',
+    );
+  },
+);
 
 printSummaryAndExit();

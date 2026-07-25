@@ -1,7 +1,7 @@
 ---
 type: bee.area
 title: "Workflow State — purpose, entry points, vocabulary, and who may touch the record"
-description: "The one durable record of where the workflow stands: what it is for, the only doors that change it, the full vocabulary every other workflow-state concept is written in, and which actor is allowed to write which part of it."
+description: "The workflow record — one durable unit of pipeline state per feature attempt, with state.json/lane files as its rebuildable read-only projections (multisession-native D1): what the record is for, the only doors that change it, the full vocabulary every other workflow-state concept is written in, and which actor is allowed to write which part of it."
 timestamp: 2026-07-25
 bee:
   id: workflow-state-overview
@@ -25,11 +25,16 @@ anchor lands in one of this area's other concepts.
 
 ## Purpose
 
-A bee-managed project carries one durable record of where the workflow stands:
-which feature is active, which phase it is in, which human approvals (gates)
-have been granted, and which workers are registered. This area describes the
-rules that keep that record trustworthy — above all, that **a new feature can
-never inherit the previous feature's approvals or bury its unfinished work**.
+A bee-managed project's real pipeline state lives in a **workflow record** —
+one durable unit per feature attempt, holding which phase it is in, which
+human approvals (gates) have been granted, and its summary/next-action
+(`workflow-records-and-projections.md`). `.bee/state.json` and
+`.bee/lanes/*.json` are mechanically **rebuilt from that record**, never the
+other way — a legacy-shaped view for readers that predate the record, kept
+current by the same doors that change the record itself. This area describes
+the rules that keep the record trustworthy — above all, that **a new feature
+can never inherit the previous feature's approvals or bury its unfinished
+work**.
 
 ## Entry Points & Triggers
 

@@ -1148,6 +1148,23 @@ export function readHandoff(root) {
  * On success the record also stores writer_session/previous_cell/next_cell
  * alongside kind and written_at, so adoptHandoff below has everything it
  * needs without re-deriving anything.
+ *
+ * DEPRECATION NOTE (multisession-native-24, dated 2026-07-25, advisor
+ * consult slice 5 condition E): this direct-file writer stays for exactly
+ * ONE more release as the C1 no-workflow-records legacy fallback — the sole
+ * production caller is handleStateHandoffWrite in bee.mjs, and ONLY on the
+ * branch where resolveHandoffWorkflowId(root, ...) resolves to null (a repo
+ * with zero workflow records anywhere). Every repo with at least one live
+ * workflow record routes through writeMailboxHandoff instead, and the legacy
+ * .bee/HANDOFF.json there is a rebuildHandoffProjection-owned DISPLAY
+ * projection, never written here. Removal condition: once no supported repo
+ * can lack workflow records (every startFeature call already seeds one via
+ * seedLegacyWorkflows — this fallback exists only for a repo that predates
+ * multisession-native or was never onboarded through it), this function and
+ * its C1 branch in bee.mjs retire together. Until then, writeHandoff plus
+ * adoptHandoff's own rmSync below are the ONLY direct legacy-file writers
+ * besides rebuildHandoffProjection (state-projection.mjs) — enforced by a
+ * grep-audit test (test_state.mjs).
  */
 export function writeHandoff(root, input = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -1226,6 +1243,12 @@ export function writeHandoff(root, input = {}) {
  * claim and the handoff untouched. Only a genuinely bad `sessionId` argument
  * throws (requireId inside adoptClaim), matching claims.mjs's own bad-
  * argument convention.
+ *
+ * DEPRECATION NOTE (multisession-native-24, dated 2026-07-25): same status
+ * and removal condition as writeHandoff's own note above — this is its C1
+ * no-workflow-records fallback counterpart, called only from
+ * handleStateHandoffAdopt in bee.mjs when resolveHandoffWorkflowId resolves
+ * to null. Every live-workflow repo instead calls adoptMailboxHandoff.
  */
 export function adoptHandoff(root, sessionId) {
   const handoff = readHandoff(root);

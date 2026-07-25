@@ -366,6 +366,18 @@ export function rebuildLaneProjection(root, feature) {
  * the legacy file (if present) is REMOVED — mirrors adoptHandoff's own
  * rmSync-on-clear, so the projection stays representative of "no handoff"
  * instead of leaving a stale copy behind.
+ *
+ * RECLASSIFICATION (multisession-native-24, dated 2026-07-25, advisor
+ * consult slice 5 condition E): this is now the ONLY sanctioned writer of
+ * the legacy .bee/HANDOFF.json for every repo with at least one workflow
+ * record — every mailbox mutation (write/adopt) in bee.mjs calls this
+ * function immediately afterward to keep the projection current, and no
+ * other production code path writes that file on the live-workflow side.
+ * The lone exception is the C1 no-workflow-records fallback (writeHandoff/
+ * adoptHandoff, state.mjs), retained one more release per its own dated
+ * deprecation note — grep-audited together as the exact production writer
+ * set `{rebuildHandoffProjection, writeHandoff C1 fallback, adoptHandoff C1
+ * fallback}` (test_state.mjs).
  */
 export function rebuildHandoffProjection(root) {
   // msn-18c: workflows AND the mailbox are both control-plane; `root` itself
