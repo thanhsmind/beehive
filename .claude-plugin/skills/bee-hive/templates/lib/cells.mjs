@@ -82,12 +82,52 @@ export const LANES = ['tiny', 'small', 'standard', 'high-risk', 'spike'];
 // is absent field + `behavior_change:true` -> 'behavior'. Anything else
 // absent derives null ("unclassified" — no matrix advisory at authoring, no
 // cap teeth at cap; CONTEXT: "unclassified ⇒ no matrix check").
-export const CHANGE_CLASSES = ['formatting', 'bugfix', 'behavior', 'api', 'security', 'migration'];
+// test-economy D1: 'refactor' added to the enum — a change with no new
+// behavior to prove, distinct from 'formatting' (both share the same proof
+// tier below, but are named separately since CONTEXT.md and downstream
+// classification prose treat them as distinct authoring choices).
+export const CHANGE_CLASSES = ['formatting', 'bugfix', 'behavior', 'api', 'security', 'migration', 'refactor'];
 
 export function deriveChangeClass(cell) {
   if (!cell || typeof cell !== 'object') return null;
   if (typeof cell.change_class === 'string' && cell.change_class) return cell.change_class;
   return cell.behavior_change === true ? 'behavior' : null;
+}
+
+// test-economy D1/D2 — the proof-tier matrix: given an ALREADY-RESOLVED
+// change_class (callers resolve null/behavior_change=>'behavior' via
+// deriveChangeClass BEFORE calling this — no derivation happens here) and a
+// lane, returns the minimum proof capCell enforces:
+//   'red-first'      — security/migration (every lane, regardless of lane or
+//                       bc), or a behavior-bearing class (bugfix/behavior/
+//                       api) riding the high-risk lane. The pre-existing
+//                       Decision 0009 "before" characterization + the D3
+//                       self-correcting-loop 80-char/anti-duplicate floor
+//                       both stay enforced ONLY where this tier applies —
+//                       CONTEXT test-economy D2's named supersession.
+//   'targeted-green'  — bugfix/behavior/api outside high-risk: a single
+//                       targeted test passing (ordinary verification_evidence)
+//                       is proof enough, no red_failure_evidence required.
+//   'suite-green'     — refactor/formatting, in EVERY lane including
+//                       high-risk (test-economy plan.md "Pin refactor/
+//                       formatting × high-risk": a refactor has no new
+//                       behavior to red-test — forcing red-first there would
+//                       just be pressure to misclassify). The existing suite
+//                       staying green is proof enough. Cap additionally
+//                       refuses outright if the diff adds a new test file
+//                       (see the diff_stats check in capCell) — no
+//                       new_suite_reason can override that (D1).
+//   null              — unclassified with behavior_change=false: NO matrix
+//                       check at all, today's pre-test-economy behavior,
+//                       untouched (CONTEXT: "muốn hưởng tier nhẹ hơn behavior
+//                       phải KHAI class, mặc định không nới").
+export function requiredProofTier(change_class, lane) {
+  if (change_class === 'security' || change_class === 'migration') return 'red-first';
+  if (change_class === 'refactor' || change_class === 'formatting') return 'suite-green';
+  if (change_class === 'bugfix' || change_class === 'behavior' || change_class === 'api') {
+    return lane === 'high-risk' ? 'red-first' : 'targeted-green';
+  }
+  return null;
 }
 
 // Tolerant parse of `verification_evidence` shared by the D3 cap teeth below
@@ -1714,6 +1754,13 @@ export async function capCell(
     sessionId,
     forceOwnership = false,
     overrideJudge = null,
+    // test-economy D1: computed by the bee.mjs `cells cap` handler (the sole
+    // caller — capCell itself has no child_process/git dependency) from
+    // `files_changed` via git. undefined (the default — legacy callers,
+    // tests that don't pass it, or a git-lookup failure at the handler)
+    // means every diff_stats-driven check below skips outright: fail-open,
+    // never a false refusal for a repo/handler that couldn't compute it.
+    diff_stats = undefined,
   } = {},
 ) {
   const overrideReason = typeof overrideJudge === 'string' ? overrideJudge.trim() : '';
@@ -1791,12 +1838,41 @@ export async function capCell(
         `capCell: cell "${id}" declares behavior_change but provides no verification_evidence — attach evidence (--evidence-file) or drop the behavior_change flag.`,
       );
     }
-    // Decision 0009: a behavior_change cell must record the "before" it changed —
-    // a characterization of prior behavior — not just an assertion that the new
-    // behavior works. This blocks assertion-capping at the source (worker must
-    // capture the git-show / failing pre-change check at cap time) instead of
-    // letting reviewing catch it later and spawn a whole evidence-backfill cell.
-    if (bc && verification_evidence) {
+    // test-economy D1/D2: resolve the effective class (same derivation
+    // deriveChangeClass always used — null/bc=true -> 'behavior', nothing new
+    // introduced here) and its required proof tier ONCE, reused by both the
+    // Decision 0009 "before" check and the D3 self-correcting-loop floor
+    // below, plus the refactor/formatting new-test-file refusal further down.
+    const effectiveClass = deriveChangeClass({ ...cell, behavior_change: bc });
+    const proofTier = requiredProofTier(effectiveClass, cell.lane);
+    // test-economy D1: a refactor/formatting cell must never introduce a new
+    // test file — CONTEXT: "cấm tuyệt đối — new_suite_reason của D3 KHÔNG
+    // override được; refactor cần suite mới nghĩa là phân loại sai." Gated on
+    // diff_stats (undefined — no git, or a legacy caller — skips this check
+    // entirely, fail-open); the ratio/new_suite_reason checks for the OTHER
+    // classes belong to a later cell (test-economy D3) and are deliberately
+    // not added here.
+    if (
+      (effectiveClass === 'refactor' || effectiveClass === 'formatting') &&
+      diff_stats &&
+      Array.isArray(diff_stats.new_test_files) &&
+      diff_stats.new_test_files.length > 0
+    ) {
+      throw new Error(
+        `capCell: cell "${id}" is classified "${effectiveClass}" but its diff adds new test file(s) (${diff_stats.new_test_files.join(', ')}) — a refactor/formatting change must not need a new test suite (test-economy D1: no override, not even via new_suite_reason). Reclassify the cell (e.g. "behavior") or drop the new test file(s) from this diff.`,
+      );
+    }
+    // Decision 0009, NARROWED by test-economy D2: a behavior_change cell must
+    // record the "before" it changed — a characterization of prior behavior —
+    // not just an assertion that the new behavior works. This blocks
+    // assertion-capping at the source. test-economy D2 supersedes the
+    // original "every bc=true cell" scope: this "before" requirement now
+    // fires ONLY when the resolved proof tier is 'red-first' (security/
+    // migration in any lane, or a behavior-bearing class in a high-risk
+    // lane) — a targeted-green tier (e.g. bugfix/behavior/api outside
+    // high-risk) accepts ordinary verification_evidence with no
+    // red_failure_evidence at all.
+    if (proofTier === 'red-first' && verification_evidence) {
       let evidence = verification_evidence;
       if (typeof evidence === 'string') {
         try {
@@ -1820,16 +1896,15 @@ export async function capCell(
       }
     }
     // D3 (self-correcting-loop) — behavior-class cap teeth, ADDITIVE to the
-    // Decision 0009 "before" check above. Gated on the cell's (derived or
-    // explicit) change_class, NOT on `bc` — an explicit change_class:"behavior"
-    // cell still gets the teeth even if it forgot --behavior-change; the common
-    // path (behavior_change:true, change_class absent) reaches here via the
-    // same derivation either way (CONTEXT D3 prohibition: no auto-derivation
-    // beyond behavior_change=>behavior). F5: a cap riding the deliberate_
-    // exceptions door keeps today's contract untouched — no length/duplicate
-    // floor; the STDERR advisory noting that lives in bee.mjs's handler layer
-    // (F4 precedent), recomputed from the returned cell post-cap.
-    if (deriveChangeClass({ ...cell, behavior_change: bc }) === 'behavior') {
+    // Decision 0009 "before" check above. test-economy D1/D2: NARROWED from
+    // "effectiveClass === 'behavior'" to "proofTier === 'red-first'" — the
+    // same scope as the Decision 0009 check right above (security/migration
+    // in any lane, or a behavior-bearing class in a high-risk lane). F5: a
+    // cap riding the deliberate_exceptions door keeps today's contract
+    // untouched — no length/duplicate floor; the STDERR advisory noting that
+    // lives in bee.mjs's handler layer (F4 precedent), recomputed from the
+    // returned cell post-cap.
+    if (proofTier === 'red-first') {
       const evidence = parseVerificationEvidence(verification_evidence);
       if (!evidenceRidesExceptionDoor(evidence)) {
         const before = typeof evidence.red_failure_evidence === 'string' ? evidence.red_failure_evidence.trim() : '';

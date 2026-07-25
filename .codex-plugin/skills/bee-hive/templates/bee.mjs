@@ -1355,17 +1355,144 @@ async function handleCellsVerify(root, flags) {
   return { result: cell, text: `Recorded verify on ${cell.id}: passed=${cell.trace.verify_passed}.` };
 }
 
+// test-economy D1: the 5 template-sync mirror trees (onboard --apply's
+// `.bee/bin/`, `.claude/skills/`, `.agents/skills/` + render_plugin_skill_
+// trees.mjs's `.claude-plugin/`, `.codex-plugin/`) are excluded from BOTH
+// the numerator and denominator of every diff_stats count below — a
+// template edit fans out to all 5 mirrors, and without this dedupe it would
+// look several-fold larger than the same logical change to an unmirrored
+// file (CONTEXT D1: "template edit không dedupe permissive ~6×").
+const DIFF_STATS_MIRROR_PREFIXES = ['.bee/bin/', '.claude/skills/', '.agents/skills/', '.claude-plugin/', '.codex-plugin/'];
+
+function isDiffStatsMirrorPath(filePath) {
+  return DIFF_STATS_MIRROR_PREFIXES.some((prefix) => filePath === prefix.slice(0, -1) || filePath.startsWith(prefix));
+}
+
+// test-economy D3 term (used by D1's new-test-file detection): a path
+// matching test[_-]*.mjs at any depth, or living under a tests/ directory
+// segment — the shape run_verify.mjs's discoverSuites auto-registers as a
+// permanent CI suite.
+const DIFF_STATS_TEST_FILE_RE = /(^|\/)test[_-][^/]*\.mjs$/;
+const DIFF_STATS_TESTS_DIR_RE = /(^|\/)tests\//;
+function isDiffStatsTestFilePath(filePath) {
+  return DIFF_STATS_TEST_FILE_RE.test(filePath) || DIFF_STATS_TESTS_DIR_RE.test(filePath);
+}
+
+function countFileLinesOnDisk(absPath) {
+  try {
+    const text = fs.readFileSync(absPath, 'utf8');
+    if (text === '') return 0;
+    return text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+  } catch {
+    return 0;
+  }
+}
+
+/** test-economy D1 — computes `{new_test_files, test_lines_added,
+ * source_lines_changed}` for the `cells cap` handler below (the SOLE caller
+ * of capCell — capCell itself has no child_process/git dependency, per
+ * CONTEXT: "capCell không có child_process/git"). Tracked-file line churn
+ * comes from `git diff --numstat HEAD` (same spawnSync('git', ..., { cwd,
+ * encoding: 'utf8' }) shape as runBacklogGit above); numstat is blind to
+ * untracked paths, so a brand-new file — the exact shape D1's new-test-file
+ * check cares about — is separately detected via `git status --porcelain`
+ * (`??`/staged-`A`) and its lines counted straight off disk instead.
+ *
+ * Returns undefined (never throws) the moment git itself is unusable — no
+ * repo, no HEAD yet, git missing, any spawn error — and appends one warning
+ * line to `.bee/logs/hooks.jsonl` so the failure stays visible without ever
+ * blocking the cap (fail-open, the same philosophy every other hook here
+ * uses). capCell treats `diff_stats: undefined` as "skip every diff_stats-
+ * driven check" — this is what keeps the no-.git tmpdir fixtures already in
+ * test_bee_cli.mjs (e.g. the main `root` fixture, never `git init`-ed) green
+ * unchanged. */
+function computeDiffStats(root, filesChanged) {
+  const allFiles = Array.isArray(filesChanged) ? filesChanged.filter((f) => typeof f === 'string' && f) : [];
+  const files = allFiles.filter((f) => !isDiffStatsMirrorPath(f));
+  if (files.length === 0) {
+    return { new_test_files: [], test_lines_added: 0, source_lines_changed: 0 };
+  }
+  try {
+    const numstat = spawnSync('git', ['diff', '--numstat', 'HEAD', '--', ...files], { cwd: root, encoding: 'utf8' });
+    if (numstat.error || numstat.status !== 0) {
+      throw new Error(numstat.error ? numstat.error.message : `git diff --numstat exited ${numstat.status}: ${(numstat.stderr || '').trim()}`);
+    }
+    const statusResult = spawnSync('git', ['status', '--porcelain', '--', ...files], { cwd: root, encoding: 'utf8' });
+    if (statusResult.error || statusResult.status !== 0) {
+      throw new Error(statusResult.error ? statusResult.error.message : `git status --porcelain exited ${statusResult.status}: ${(statusResult.stderr || '').trim()}`);
+    }
+
+    const trackedChurn = new Map(); // path -> added+deleted lines (numstat)
+    for (const line of (numstat.stdout || '').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const parts = trimmed.split('\t');
+      if (parts.length < 3) continue;
+      const added = parts[0] === '-' ? 0 : Number(parts[0]); // '-' marks a binary file
+      const deleted = parts[1] === '-' ? 0 : Number(parts[1]);
+      const filePath = parts.slice(2).join('\t');
+      const churn = (Number.isFinite(added) ? added : 0) + (Number.isFinite(deleted) ? deleted : 0);
+      trackedChurn.set(filePath, churn);
+    }
+
+    const newPaths = new Set();
+    for (const line of (statusResult.stdout || '').split('\n')) {
+      if (!line || line.length < 3) continue;
+      const code = line.slice(0, 2);
+      const filePath = line.slice(3).trim();
+      if (!filePath) continue;
+      // '??' untracked, any 'A' (staged-added, either column) — both are
+      // "new to this diff" in a way numstat's tracked-file delta never sees.
+      if (code.includes('?') || code.includes('A')) newPaths.add(filePath);
+    }
+
+    let testLinesAdded = 0;
+    let sourceLinesChanged = 0;
+    const newTestFiles = [];
+    const seen = new Set();
+    for (const filePath of files) {
+      if (seen.has(filePath)) continue;
+      seen.add(filePath);
+      const isNew = newPaths.has(filePath);
+      const churn = trackedChurn.has(filePath)
+        ? trackedChurn.get(filePath)
+        : isNew
+          ? countFileLinesOnDisk(path.join(root, filePath))
+          : 0;
+      if (isDiffStatsTestFilePath(filePath)) {
+        testLinesAdded += churn;
+        if (isNew) newTestFiles.push(filePath);
+      } else {
+        sourceLinesChanged += churn;
+      }
+    }
+    return { new_test_files: newTestFiles, test_lines_added: testLinesAdded, source_lines_changed: sourceLinesChanged };
+  } catch (error) {
+    appendJsonl(path.join(root, '.bee', 'logs', 'hooks.jsonl'), {
+      ts: new Date().toISOString(),
+      hook: 'cells-cap-diff-stats',
+      event: 'warning',
+      message: `computeDiffStats: git unavailable/failed — diff_stats skipped, cap proceeds fail-open (test-economy D1): ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return undefined;
+  }
+}
+
 async function handleCellsCap(root, flags) {
   const id = requireFlag(flags, 'id');
   const deviations = flags['deviations-file'] ? parseDeviationsFile(String(flags['deviations-file'])) : [];
+  const filesChanged = flags.files
+    ? String(flags.files)
+        .split(',')
+        .map((f) => f.trim())
+        .filter(Boolean)
+    : [];
+  // test-economy D1: computed BEFORE capCell so a git failure's fail-open
+  // (diff_stats: undefined) never depends on anything capCell itself does.
+  const diffStats = computeDiffStats(root, filesChanged);
   const cell = await capCell(root, id, {
     outcome: flags.outcome ? String(flags.outcome) : undefined,
-    files_changed: flags.files
-      ? String(flags.files)
-          .split(',')
-          .map((f) => f.trim())
-          .filter(Boolean)
-      : [],
+    files_changed: filesChanged,
     behavior_change: flags['behavior-change'] === true ? true : undefined,
     verification_evidence: flags['evidence-stdin']
       ? fs.readFileSync(0, 'utf8')
@@ -1375,6 +1502,7 @@ async function handleCellsCap(root, flags) {
     deviations,
     friction: flags.friction ? String(flags.friction) : null,
     overrideJudge: flags['override-judge'] !== undefined ? String(flags['override-judge']) : null,
+    diff_stats: diffStats,
     ...ownershipFlags(flags),
   });
   emitJudgeStandardCapAdvisory(cell); // F5

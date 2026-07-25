@@ -55,6 +55,7 @@ import {
   checkCellBudgets,
   deriveChangeClass,
   CHANGE_CLASSES,
+  requiredProofTier,
 } from '../lib/cells.mjs';
 import { claimCellFile, readClaim, claimPath } from '../lib/claims.mjs';
 import { reserve } from '../lib/reservations.mjs';
@@ -1795,6 +1796,17 @@ await check(
 // behavior_change:true) in the cap-teeth rows below so the teeth are proven
 // gated on the DERIVED CLASS, not on the `bc` flag — CONTEXT: "additive to
 // today's rules", not a replacement for the pre-existing Decision 0009 check.
+//
+// test-economy D1/D2 (narrowing, applied to the rows below): the red-first
+// "before" floor these rows exercise is no longer enforced for EVERY
+// behavior-class cap — only where requiredProofTier(effectiveClass, lane)
+// resolves 'red-first'. For change_class:'behavior' that is the high-risk
+// lane only (tiny/small/standard are now 'targeted-green', proven by the
+// dedicated D1/D2 rows further below). Every row in this block is therefore
+// updated to `lane: 'high-risk'` so it keeps proving red-first IS still
+// enforced in the scope test-economy D2 actually pins it to — this is the
+// "chiều giữ" (keep) side of the D8 negative-control pair; the "chiều nới"
+// (loosen) side lives in the new rows appended after this block.
 
 await check('deriveChangeClass resolves explicit change_class, the sole behavior_change=>behavior derivation, and null otherwise — no other auto-derivation (D3)', async () => {
   assert(deriveChangeClass({ change_class: 'api' }) === 'api', 'explicit change_class wins');
@@ -1804,7 +1816,8 @@ await check('deriveChangeClass resolves explicit change_class, the sole behavior
   assert(deriveChangeClass({}) === null, 'absent change_class + absent behavior_change is unclassified');
   assert(deriveChangeClass(null) === null, 'null cell tolerated, never throws');
   assert(deriveChangeClass(undefined) === null, 'undefined cell tolerated, never throws');
-  assert(CHANGE_CLASSES.includes('behavior') && CHANGE_CLASSES.length === 6, `expected the 6-member enum, got ${JSON.stringify(CHANGE_CLASSES)}`);
+  // test-economy D1: 'refactor' extends the enum to 7 members.
+  assert(CHANGE_CLASSES.includes('behavior') && CHANGE_CLASSES.includes('refactor') && CHANGE_CLASSES.length === 7, `expected the 7-member enum (D1 adds 'refactor'), got ${JSON.stringify(CHANGE_CLASSES)}`);
 });
 
 await check('addCell validates optional change_class against the enum, naming CHANGE_CLASSES on refusal (D3)', async () => {
@@ -1830,7 +1843,7 @@ await check('updateCell validates change_class the same way, and accepts null to
 });
 
 await check('capCell refuses a behavior-class cap with no red_failure_evidence at all, naming the missing minimum — gated on change_class, independent of the behavior_change flag (D3)', async () => {
-  addCell(root, makeCell('jsm-missing-1', { change_class: 'behavior' }));
+  addCell(root, makeCell('jsm-missing-1', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-missing-1: high-risk truth fixture'] } }));
   await claimCell(root, 'jsm-missing-1', 'worker-jsm');
   await recordVerify(root, 'jsm-missing-1', { command: 'x', output: 'ok', passed: true });
   await assertRejects(
@@ -1841,7 +1854,7 @@ await check('capCell refuses a behavior-class cap with no red_failure_evidence a
 });
 
 await check('capCell refuses a behavior-class cap whose red_failure_evidence is under 80 chars, naming the length floor (D3)', async () => {
-  addCell(root, makeCell('jsm-short-1', { change_class: 'behavior' }));
+  addCell(root, makeCell('jsm-short-1', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-short-1: high-risk truth fixture'] } }));
   await claimCell(root, 'jsm-short-1', 'worker-jsm');
   await recordVerify(root, 'jsm-short-1', { command: 'x', output: 'ok', passed: true });
   await assertRejects(
@@ -1861,7 +1874,7 @@ await check('capCell refuses a behavior-class cap whose red_failure_evidence is 
     'this exact red_failure_evidence text is reused verbatim across two different cells to trigger the D3 anti-boilerplate duplicate refusal.';
   assert(sharedText.length >= 80, 'fixture text must clear the length floor on its own, so only the duplicate check fires');
 
-  addCell(root, makeCell('jsm-dup-a', { change_class: 'behavior' }));
+  addCell(root, makeCell('jsm-dup-a', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-dup-a: high-risk truth fixture'] } }));
   await claimCell(root, 'jsm-dup-a', 'worker-jsm');
   await recordVerify(root, 'jsm-dup-a', { command: 'x', output: 'ok', passed: true });
   await capCell(root, 'jsm-dup-a', {
@@ -1870,7 +1883,7 @@ await check('capCell refuses a behavior-class cap whose red_failure_evidence is 
     verification_evidence: { red_failure_evidence: sharedText },
   });
 
-  addCell(root, makeCell('jsm-dup-b', { change_class: 'behavior' }));
+  addCell(root, makeCell('jsm-dup-b', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-dup-b: high-risk truth fixture'] } }));
   await claimCell(root, 'jsm-dup-b', 'worker-jsm');
   await recordVerify(root, 'jsm-dup-b', { command: 'x', output: 'ok', passed: true });
   await assertRejects(
@@ -1886,7 +1899,7 @@ await check('capCell refuses a behavior-class cap whose red_failure_evidence is 
 });
 
 await check('capCell caps a behavior-class cell whose red_failure_evidence clears the D3 floor and is unique (green row)', async () => {
-  addCell(root, makeCell('jsm-green-1', { change_class: 'behavior' }));
+  addCell(root, makeCell('jsm-green-1', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-green-1: high-risk truth fixture'] } }));
   await claimCell(root, 'jsm-green-1', 'worker-jsm');
   await recordVerify(root, 'jsm-green-1', { command: 'x', output: 'ok', passed: true });
   const capped = await capCell(root, 'jsm-green-1', {
@@ -1901,7 +1914,7 @@ await check('capCell caps a behavior-class cell whose red_failure_evidence clear
 });
 
 await check('capCell caps a behavior-class cell riding deliberate_exceptions without the D3 length/duplicate floor — today\'s contract unchanged (F5 passthrough)', async () => {
-  addCell(root, makeCell('jsm-exception-1', { change_class: 'behavior' }));
+  addCell(root, makeCell('jsm-exception-1', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-exception-1: high-risk truth fixture'] } }));
   await claimCell(root, 'jsm-exception-1', 'worker-jsm');
   await recordVerify(root, 'jsm-exception-1', { command: 'x', output: 'ok', passed: true });
   const capped = await capCell(root, 'jsm-exception-1', {
@@ -1916,7 +1929,7 @@ await check('capCell tolerates a corrupt sibling cell file during the D3 duplica
   const corruptPath = path.join(root, '.bee', 'cells', 'jsm-corrupt-sibling.json');
   fs.writeFileSync(corruptPath, '{ not valid json', 'utf8');
   try {
-    addCell(root, makeCell('jsm-corrupt-check', { change_class: 'behavior' }));
+    addCell(root, makeCell('jsm-corrupt-check', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-corrupt-check: high-risk truth fixture'] } }));
     await claimCell(root, 'jsm-corrupt-check', 'worker-jsm');
     await recordVerify(root, 'jsm-corrupt-check', { command: 'x', output: 'ok', passed: true });
     const capped = await capCell(root, 'jsm-corrupt-check', {
@@ -1939,6 +1952,173 @@ await check('capCell applies NO teeth to non-behavior classes — an api-class c
   await recordVerify(root, 'jsm-api-1', { command: 'x', output: 'ok', passed: true });
   const capped = await capCell(root, 'jsm-api-1', { files_changed: ['a.js'], outcome: 'done' });
   assert(capped.status === 'capped', 'a non-behavior change_class never gets D3 cap teeth');
+});
+
+// ─── test-economy D1/D2/D8: proof-tier matrix (requiredProofTier) + the
+// diff_stats-driven refactor/formatting new-test-file refusal, table-driven,
+// with paired negative controls — every loosened assertion above (the
+// jsm-* rows, now `lane: 'high-risk'`) keeps a "chiều giữ" (keep) partner
+// here proving red-first still fires exactly where test-economy D1/D2 pins
+// it (security/migration in any lane, or a behavior-bearing class in the
+// high-risk lane), alongside a "chiều nới" (loosen) partner proving the
+// newly-accepted targeted-green tiers actually cap.
+
+await check('requiredProofTier resolves the test-economy D1 proof-tier matrix, table-driven (D1)', () => {
+  const cases = [
+    ['security', 'tiny', 'red-first'],
+    ['security', 'standard', 'red-first'],
+    ['migration', 'small', 'red-first'],
+    ['migration', 'high-risk', 'red-first'],
+    ['refactor', 'standard', 'suite-green'],
+    ['refactor', 'high-risk', 'suite-green'], // plan.md pin: refactor never red-first, even high-risk
+    ['formatting', 'tiny', 'suite-green'],
+    ['formatting', 'high-risk', 'suite-green'],
+    ['bugfix', 'tiny', 'targeted-green'],
+    ['bugfix', 'small', 'targeted-green'],
+    ['behavior', 'standard', 'targeted-green'],
+    ['api', 'standard', 'targeted-green'],
+    ['bugfix', 'high-risk', 'red-first'],
+    ['behavior', 'high-risk', 'red-first'],
+    ['api', 'high-risk', 'red-first'],
+    [null, 'small', null],
+    [null, 'high-risk', null],
+    [undefined, 'standard', null],
+  ];
+  for (const [changeClass, lane, expected] of cases) {
+    const got = requiredProofTier(changeClass, lane);
+    assert(
+      got === expected,
+      `requiredProofTier(${JSON.stringify(changeClass)}, ${JSON.stringify(lane)}) expected ${JSON.stringify(expected)}, got ${JSON.stringify(got)}`,
+    );
+  }
+});
+
+await check('capCell (D2 loosen): bugfix x small and null-unclassified x standard bc=true cap on targeted-green — ordinary evidence, no red_failure_evidence required — table-driven (D2/D8)', async () => {
+  const cases = [
+    { id: 'te1-bugfix-small', lane: 'small', extra: { change_class: 'bugfix' } },
+    {
+      id: 'te1-null-standard-bc',
+      lane: 'standard',
+      extra: { must_haves: { truths: ['te1-null-standard-bc: targeted-green truth fixture'] } },
+    },
+  ];
+  for (const c of cases) {
+    addCell(root, makeCell(c.id, { lane: c.lane, ...c.extra }));
+    await claimCell(root, c.id, 'worker-te1');
+    await recordVerify(root, c.id, { command: 'x', output: 'ok', passed: true });
+    const capped = await capCell(root, c.id, {
+      files_changed: ['a.js'],
+      outcome: 'done',
+      behavior_change: true,
+      verification_evidence: { verification_run: `${c.id}: targeted test ran green, no red_failure_evidence attached` },
+    });
+    assert(capped.status === 'capped', `${c.id}: targeted-green tier must cap without red_failure_evidence`);
+  }
+});
+
+await check('capCell (D2 keep — negative control): security/migration (any lane) and null-unclassified high-risk bc=true STILL refuse without red_failure_evidence — table-driven (D2/D8)', async () => {
+  const cases = [
+    { id: 'te1-sec-tiny', lane: 'tiny', extra: { change_class: 'security' }, bc: undefined },
+    { id: 'te1-mig-small', lane: 'small', extra: { change_class: 'migration' }, bc: undefined },
+    {
+      id: 'te1-null-hr-bc',
+      lane: 'high-risk',
+      extra: { must_haves: { truths: ['te1-null-hr-bc: red-first truth fixture'] } },
+      bc: true,
+    },
+  ];
+  for (const c of cases) {
+    addCell(root, makeCell(c.id, { lane: c.lane, ...c.extra }));
+    await claimCell(root, c.id, 'worker-te1');
+    await recordVerify(root, c.id, { command: 'x', output: 'ok', passed: true });
+    await assertRejects(
+      () =>
+        capCell(root, c.id, {
+          files_changed: ['a.js'],
+          outcome: 'done',
+          behavior_change: c.bc,
+          verification_evidence: { verification_run: `${c.id}: targeted test ran green, no before-characterization` },
+        }),
+      'red_failure_evidence',
+      `${c.id}: red-first tier must still refuse without red_failure_evidence`,
+    );
+  }
+});
+
+await check('capCell (D2 pin — regression guard): null-unclassified high-risk bc=false caps with no matrix check at all, exactly like before test-economy (D2)', async () => {
+  addCell(
+    root,
+    makeCell('te1-null-hr-bc-false', {
+      lane: 'high-risk',
+      must_haves: { truths: ['te1-null-hr-bc-false: pin fixture'] },
+    }),
+  );
+  await claimCell(root, 'te1-null-hr-bc-false', 'worker-te1');
+  await recordVerify(root, 'te1-null-hr-bc-false', { command: 'x', output: 'ok', passed: true });
+  const capped = await capCell(root, 'te1-null-hr-bc-false', {
+    files_changed: ['a.js'],
+    outcome: 'done',
+    behavior_change: false,
+  });
+  assert(
+    capped.status === 'capped',
+    'an unclassified bc=false high-risk cell must cap with no matrix check, unchanged from pre-test-economy behavior',
+  );
+});
+
+await check('capCell (D1): a refactor-class cell whose diff_stats carries a new test file is refused, no new_suite_reason override, at standard AND high-risk — table-driven (D1/D8)', async () => {
+  const cases = ['standard', 'high-risk'];
+  for (const lane of cases) {
+    const id = `te1-refactor-newtest-${lane}`;
+    addCell(root, makeCell(id, { lane, change_class: 'refactor', must_haves: { truths: [`${id}: refactor truth fixture`] } }));
+    await claimCell(root, id, 'worker-te1');
+    await recordVerify(root, id, { command: 'x', output: 'ok', passed: true });
+    await assertRejects(
+      () =>
+        capCell(root, id, {
+          files_changed: ['a.js', 'tests/test_new_thing.mjs'],
+          outcome: 'done',
+          verification_evidence: { new_suite_reason: 'trying to override the refactor ban with a stated reason' },
+          diff_stats: { new_test_files: ['tests/test_new_thing.mjs'], test_lines_added: 40, source_lines_changed: 5 },
+        }),
+      'refactor',
+      `${id}: a refactor cap must refuse a new test file — new_suite_reason does not override (D1)`,
+    );
+  }
+});
+
+await check('capCell (D1 pin): a refactor-class cell caps clean at high-risk with no red-first and no new test file (suite-green applies in EVERY lane) (D1/D8)', async () => {
+  addCell(
+    root,
+    makeCell('te1-refactor-hr-green', {
+      lane: 'high-risk',
+      change_class: 'refactor',
+      must_haves: { truths: ['te1-refactor-hr-green: suite-green truth fixture'] },
+    }),
+  );
+  await claimCell(root, 'te1-refactor-hr-green', 'worker-te1');
+  await recordVerify(root, 'te1-refactor-hr-green', { command: 'x', output: 'ok', passed: true });
+  const capped = await capCell(root, 'te1-refactor-hr-green', {
+    files_changed: ['a.js'],
+    outcome: 'done',
+    behavior_change: false,
+    diff_stats: { new_test_files: [], test_lines_added: 0, source_lines_changed: 12 },
+  });
+  assert(
+    capped.status === 'capped',
+    'refactor never needs red-first, even in the high-risk lane — the existing suite staying green is proof enough',
+  );
+});
+
+await check('capCell (D1 fail-open): a refactor-class cell with diff_stats omitted (undefined — no git, or a legacy caller) skips the new-test-file check entirely (D1)', async () => {
+  addCell(root, makeCell('te1-refactor-nogit', { lane: 'small', change_class: 'refactor' }));
+  await claimCell(root, 'te1-refactor-nogit', 'worker-te1');
+  await recordVerify(root, 'te1-refactor-nogit', { command: 'x', output: 'ok', passed: true });
+  const capped = await capCell(root, 'te1-refactor-nogit', { files_changed: ['a.js'], outcome: 'done' });
+  assert(
+    capped.status === 'capped',
+    'diff_stats undefined must fail-open — the D1 refactor/new-test-file check never fires without it',
+  );
 });
 
 // ─── D1 Δ2-amendment: EVERY claim-clearing transition releases the claim

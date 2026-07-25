@@ -4112,6 +4112,178 @@ await check('bee cells cap --id demo-2 caps the cell', async () => {
   assert(JSON.parse(result.stdout).status === 'capped', `expected capped, got ${result.stdout}`);
 });
 
+// ─── test-economy D1: the `cells cap` handler's computeDiffStats — real git
+// end-to-end (the `root`/`root2` fixtures above are deliberately never
+// `git init`-ed, so every cap example run against them ALREADY proves the
+// no-git fail-open path — see the no-git-specific assertion below for the
+// warning-log half of that same claim). These rows use a DEDICATED repo
+// with a real `git init` so the tracked/untracked detection, the
+// refactor/formatting new-test-file refusal (D1), and the 5-mirror dedupe
+// are exercised against real `git diff --numstat` / `git status
+// --porcelain` output, not a synthetic diff_stats object. ─────────────────
+
+function gitOk(cwd, args) {
+  const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  assert(r.status === 0, `git ${args.join(' ')} (cwd=${cwd}) failed: ${r.stderr}`);
+  return r.stdout;
+}
+
+function makeDiffStatsRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-diffstats-'));
+  gitOk(dir, ['init', '-q', '-b', 'main']);
+  gitOk(dir, ['config', 'user.email', 's@e']);
+  gitOk(dir, ['config', 'user.name', 's']);
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'src.js'), 'module.exports = 1;\n');
+  fs.mkdirSync(path.join(dir, '.bee', 'bin', 'lib'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.bee', 'bin', 'lib', 'mirror.mjs'), '// mirror placeholder\n');
+  gitOk(dir, ['add', '.']);
+  gitOk(dir, ['commit', '-q', '-m', 'init']);
+  fs.mkdirSync(path.join(dir, '.bee'), { recursive: true });
+  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+  writeState(dir, {
+    ...defaultState(),
+    phase: 'swarming',
+    feature: 'diffstats',
+    approved_gates: { context: true, shape: true, execution: true, review: false },
+  });
+  return dir;
+}
+
+async function runDiffStatsRepo(dir, args) {
+  return await runModuleWorker(BEE_MJS, { args, cwd: dir });
+}
+
+await check('cells cap (D1 real git): a refactor-class cell caps clean when the diff touches only an existing tracked source file (no new test file)', async () => {
+  const dir = makeDiffStatsRepo();
+  try {
+    fs.writeFileSync(path.join(dir, 'src.js'), 'module.exports = 2; // changed\n');
+    const cellFixture = {
+      id: 'ds-refactor-green',
+      feature: 'diffstats',
+      title: 'D1 diff_stats fixture — refactor, tracked-only diff',
+      lane: 'small',
+      action: 'D1 diff_stats fixture only.',
+      verify: 'node -e "process.exit(0)"',
+      change_class: 'refactor',
+    };
+    fs.writeFileSync(path.join(dir, 'cell.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
+    const added = await runDiffStatsRepo(dir, ['cells', 'add', '--file', 'cell.json', '--json']);
+    assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
+    const claimed = await runDiffStatsRepo(dir, ['cells', 'claim', '--id', 'ds-refactor-green', '--worker', 'w', '--json']);
+    assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
+    const verified = await runDiffStatsRepo(dir, ['cells', 'verify', '--id', 'ds-refactor-green', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
+    assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
+    const capped = await runDiffStatsRepo(dir, ['cells', 'cap', '--id', 'ds-refactor-green', '--outcome', 'done', '--files', 'src.js', '--json']);
+    assert(capped.status === 0, `expected a clean cap over a tracked-only diff, got exit ${capped.status}: stdout=${capped.stdout} stderr=${capped.stderr}`);
+    assert(JSON.parse(capped.stdout).status === 'capped', `expected capped, got ${capped.stdout}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('cells cap (D1 real git): a refactor-class cell is REFUSED when its diff adds a real untracked test file, naming "refactor" — new_suite_reason does not override', async () => {
+  const dir = makeDiffStatsRepo();
+  try {
+    fs.writeFileSync(path.join(dir, 'tests', 'test_new_thing.mjs'), 'console.log("new suite");\n'.repeat(5));
+    const cellFixture = {
+      id: 'ds-refactor-newtest',
+      feature: 'diffstats',
+      title: 'D1 diff_stats fixture — refactor, new untracked test file',
+      lane: 'small',
+      action: 'D1 diff_stats fixture only.',
+      verify: 'node -e "process.exit(0)"',
+      change_class: 'refactor',
+    };
+    fs.writeFileSync(path.join(dir, 'cell.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
+    const added = await runDiffStatsRepo(dir, ['cells', 'add', '--file', 'cell.json', '--json']);
+    assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
+    const claimed = await runDiffStatsRepo(dir, ['cells', 'claim', '--id', 'ds-refactor-newtest', '--worker', 'w', '--json']);
+    assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
+    const verified = await runDiffStatsRepo(dir, ['cells', 'verify', '--id', 'ds-refactor-newtest', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
+    assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
+    const capped = await runModuleWorker(BEE_MJS, {
+      args: ['cells', 'cap', '--id', 'ds-refactor-newtest', '--outcome', 'done', '--files', 'tests/test_new_thing.mjs', '--evidence-stdin', '--json'],
+      cwd: dir,
+      input: JSON.stringify({ new_suite_reason: 'trying to override the refactor ban with a stated reason' }),
+    });
+    assert(capped.status !== 0, `expected the cap to be refused, got exit 0: stdout=${capped.stdout}`);
+    assert(/refactor/.test(capped.stdout + capped.stderr), `expected the refusal to name "refactor", got stdout=${capped.stdout} stderr=${capped.stderr}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('cells cap (D1 real git, mirror dedupe): a new untracked test-shaped file under a mirror prefix (.bee/bin/) is excluded from diff_stats — a refactor-class cap over it still succeeds', async () => {
+  const dir = makeDiffStatsRepo();
+  try {
+    fs.writeFileSync(path.join(dir, '.bee', 'bin', 'test_mirror_thing.mjs'), 'console.log("mirror-shaped, must be excluded");\n'.repeat(5));
+    const cellFixture = {
+      id: 'ds-refactor-mirror',
+      feature: 'diffstats',
+      title: 'D1 diff_stats fixture — refactor, new file under a mirror prefix',
+      lane: 'small',
+      action: 'D1 diff_stats fixture only.',
+      verify: 'node -e "process.exit(0)"',
+      change_class: 'refactor',
+    };
+    fs.writeFileSync(path.join(dir, 'cell.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
+    const added = await runDiffStatsRepo(dir, ['cells', 'add', '--file', 'cell.json', '--json']);
+    assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
+    const claimed = await runDiffStatsRepo(dir, ['cells', 'claim', '--id', 'ds-refactor-mirror', '--worker', 'w', '--json']);
+    assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
+    const verified = await runDiffStatsRepo(dir, ['cells', 'verify', '--id', 'ds-refactor-mirror', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
+    assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
+    const capped = await runDiffStatsRepo(dir, ['cells', 'cap', '--id', 'ds-refactor-mirror', '--outcome', 'done', '--files', '.bee/bin/test_mirror_thing.mjs', '--json']);
+    assert(capped.status === 0, `a mirror-prefixed new test file must be dedupe-excluded, so this cap must succeed — got exit ${capped.status}: stdout=${capped.stdout} stderr=${capped.stderr}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('cells cap (D1 fail-open, no-git): a cap over a repo with no .git logs a computeDiffStats warning to .bee/logs/hooks.jsonl and still caps clean', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-diffstats-nogit-'));
+  try {
+    fs.mkdirSync(path.join(dir, '.bee'), { recursive: true });
+    writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+    writeState(dir, {
+      ...defaultState(),
+      phase: 'swarming',
+      feature: 'diffstats-nogit',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+    });
+    const cellFixture = {
+      id: 'ds-nogit-1',
+      feature: 'diffstats-nogit',
+      title: 'D1 fail-open fixture — no .git at all',
+      lane: 'small',
+      action: 'D1 fail-open fixture only.',
+      verify: 'node -e "process.exit(0)"',
+    };
+    fs.writeFileSync(path.join(dir, 'cell.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
+    const added = await runDiffStatsRepo(dir, ['cells', 'add', '--file', 'cell.json', '--json']);
+    assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
+    const claimed = await runDiffStatsRepo(dir, ['cells', 'claim', '--id', 'ds-nogit-1', '--worker', 'w', '--json']);
+    assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
+    const verified = await runDiffStatsRepo(dir, ['cells', 'verify', '--id', 'ds-nogit-1', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
+    assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
+
+    const hooksLog = path.join(dir, '.bee', 'logs', 'hooks.jsonl');
+    assert(!fs.existsSync(hooksLog), 'precondition: no hooks.jsonl warning yet');
+
+    const capped = await runDiffStatsRepo(dir, ['cells', 'cap', '--id', 'ds-nogit-1', '--outcome', 'done', '--files', 'src.js', '--json']);
+    assert(capped.status === 0, `a no-git repo must still cap cleanly (fail-open), got exit ${capped.status}: stdout=${capped.stdout} stderr=${capped.stderr}`);
+    assert(JSON.parse(capped.stdout).status === 'capped', `expected capped, got ${capped.stdout}`);
+
+    assert(fs.existsSync(hooksLog), 'expected computeDiffStats to append a warning line to .bee/logs/hooks.jsonl on git failure');
+    const lines = fs.readFileSync(hooksLog, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    const warning = lines.find((l) => l.hook === 'cells-cap-diff-stats');
+    assert(warning && warning.event === 'warning', `expected a cells-cap-diff-stats warning entry, got ${JSON.stringify(lines)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // D-GHF-C (GH #27.5): `cells cap --override-judge` end to end through the
 // real dispatcher — refused without the flag when the latest judge-recorded
 // verdict is NEEDS_REVISION, capped with an audited trace.judge_overrides

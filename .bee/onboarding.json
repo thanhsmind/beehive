@@ -5,12 +5,12 @@
     "agents_block": "5986a028dda47a7f1ca932c683bd1f78cc6480d2e09c49192028e12aa25bc8af",
     "gitignore_block": "97bc58361c5dee4c4212b3c2ba1b5b91d5c3c17c2be4690baa2abe9bd014253c",
     "helpers": {
-      "bee.mjs": "60a552fb80a4ff9e87f8878549191259008c271d20872a45afa3fbf3831c983b"
+      "bee.mjs": "51ed7e094d52f06678fb68c0adf908ffb7e73756a640733c180b904a776c13e0"
     },
     "lib": {
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
-      "cells.mjs": "b40d2eb10a9611ef59bbbff1725fc9e1c942e8fef226990ae7399d6ad9bdeffd",
+      "cells.mjs": "af5d3f65153193f034929931672b9fa7096e39ff4ab74bff0c4d061056e33e28",
       "claims.mjs": "8869e1ed8f4efe89adf69f2f3b566f295665f42965964ad5e8839eeee957102b",
       "command-registry.mjs": "3ae9a466c0ed5ce1683196fd18a77fc56ac26f3fd489e501af844b51bfb294e2",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
@@ -81,5 +81,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T11:22:18.001Z"
+  "updated_at": "2026-07-25T13:01:56.754Z"
 }
