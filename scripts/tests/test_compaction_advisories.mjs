@@ -65,8 +65,8 @@ import { shouldInject, markInjected } from '../../packages/bee/lib/inject.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, '..', '..');
 const REAL_LIB_DIR = path.join(REPO_ROOT, '.bee', 'bin', 'lib');
-const SESSION_CLOSE_HOOK = path.join(REPO_ROOT, 'hooks', 'bee-session-close.mjs');
-const PROMPT_CONTEXT_HOOK = path.join(REPO_ROOT, 'hooks', 'bee-prompt-context.mjs');
+const SESSION_CLOSE_HOOK = path.join(REPO_ROOT, 'packages', 'bee', 'hooks', 'bee-session-close.mjs');
+const PROMPT_CONTEXT_HOOK = path.join(REPO_ROOT, 'packages', 'bee', 'hooks', 'bee-prompt-context.mjs');
 
 // The exact lead of the nudge string compaction.mjs builds. Used only to prove
 // ABSENCE (a message that must not carry a nudge); every presence assertion

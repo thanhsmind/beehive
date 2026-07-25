@@ -174,7 +174,7 @@
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -276,7 +276,7 @@
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -415,8 +415,8 @@
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
-        "hooks/test_write_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/ledger_parity.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
@@ -647,13 +647,13 @@
     },
     ".bee/bin/lib/lease-store.mjs": {
       "direct": [
-        "hooks/test_write_guard.mjs"
+        "packages/bee/hooks/test_write_guard.mjs"
       ],
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
-        "hooks/test_write_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -695,8 +695,8 @@
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
-        "hooks/test_write_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -801,7 +801,7 @@
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -993,7 +993,7 @@
       "direct": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
         "scripts/tests/test_worktree_cli.mjs",
@@ -1002,7 +1002,7 @@
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1070,7 +1070,7 @@
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1104,7 +1104,7 @@
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1143,7 +1143,7 @@
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1184,7 +1184,7 @@
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1222,113 +1222,6 @@
         "packages/bee/tests/test_herding_cli.mjs"
       ]
     },
-    "hooks/adapter.mjs": {
-      "direct": [
-        "hooks/test_hook_contracts.mjs"
-      ],
-      "all": [
-        "hooks/test_bypass_stop_net.mjs",
-        "hooks/test_hook_contracts.mjs",
-        "hooks/test_model_guard.mjs",
-        "hooks/test_write_guard.mjs",
-        "packages/bee/tests/test_bee_write_guard_hook.mjs",
-        "scripts/tests/test_compact_capsule.mjs",
-        "scripts/tests/test_compaction_advisories.mjs"
-      ]
-    },
-    "hooks/bee-model-guard.mjs": {
-      "direct": [
-        "hooks/test_model_guard.mjs"
-      ],
-      "all": [
-        "hooks/test_model_guard.mjs"
-      ]
-    },
-    "hooks/bee-prompt-context.mjs": {
-      "direct": [
-        "scripts/tests/test_compaction_advisories.mjs"
-      ],
-      "all": [
-        "scripts/tests/test_compaction_advisories.mjs"
-      ]
-    },
-    "hooks/bee-session-close.mjs": {
-      "direct": [
-        "hooks/test_bypass_stop_net.mjs",
-        "scripts/tests/test_compaction_advisories.mjs"
-      ],
-      "all": [
-        "hooks/test_bypass_stop_net.mjs",
-        "scripts/tests/test_compaction_advisories.mjs"
-      ]
-    },
-    "hooks/bee-session-init.mjs": {
-      "direct": [
-        "scripts/tests/test_compact_capsule.mjs"
-      ],
-      "all": [
-        "scripts/tests/test_compact_capsule.mjs"
-      ]
-    },
-    "hooks/bee-write-guard.mjs": {
-      "direct": [
-        "hooks/test_write_guard.mjs",
-        "packages/bee/tests/test_bee_write_guard_hook.mjs"
-      ],
-      "all": [
-        "hooks/test_write_guard.mjs",
-        "packages/bee/tests/test_bee_write_guard_hook.mjs"
-      ]
-    },
-    "hooks/catalog.mjs": {
-      "direct": [
-        "hooks/test_hook_contracts.mjs",
-        "skills/bee-hive/scripts/test_onboard_bee.mjs"
-      ],
-      "all": [
-        "hooks/test_hook_contracts.mjs",
-        "skills/bee-hive/scripts/test_onboard_bee.mjs"
-      ]
-    },
-    "hooks/test_bypass_stop_net.mjs": {
-      "direct": [
-        "hooks/test_bypass_stop_net.mjs"
-      ],
-      "all": [
-        "hooks/test_bypass_stop_net.mjs"
-      ]
-    },
-    "hooks/test_hook_contracts.mjs": {
-      "direct": [
-        "hooks/test_hook_contracts.mjs"
-      ],
-      "all": [
-        "hooks/test_hook_contracts.mjs"
-      ]
-    },
-    "hooks/test_model_guard.mjs": {
-      "direct": [
-        "hooks/test_model_guard.mjs"
-      ],
-      "all": [
-        "hooks/test_model_guard.mjs"
-      ]
-    },
-    "hooks/test_write_guard.mjs": {
-      "direct": [
-        "hooks/test_write_guard.mjs"
-      ],
-      "all": [
-        "hooks/test_write_guard.mjs"
-      ]
-    },
-    "hooks/tokenize-command.mjs": {
-      "direct": [],
-      "all": [
-        "hooks/test_write_guard.mjs",
-        "packages/bee/tests/test_bee_write_guard_hook.mjs"
-      ]
-    },
     "packages/bee/bee.mjs": {
       "direct": [
         "packages/bee/tests/test_bee_cli.mjs",
@@ -1345,6 +1238,113 @@
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_native_probe.mjs"
+      ]
+    },
+    "packages/bee/hooks/adapter.mjs": {
+      "direct": [
+        "packages/bee/hooks/test_hook_contracts.mjs"
+      ],
+      "all": [
+        "packages/bee/hooks/test_bypass_stop_net.mjs",
+        "packages/bee/hooks/test_hook_contracts.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
+        "packages/bee/tests/test_bee_write_guard_hook.mjs",
+        "scripts/tests/test_compact_capsule.mjs",
+        "scripts/tests/test_compaction_advisories.mjs"
+      ]
+    },
+    "packages/bee/hooks/bee-model-guard.mjs": {
+      "direct": [
+        "packages/bee/hooks/test_model_guard.mjs"
+      ],
+      "all": [
+        "packages/bee/hooks/test_model_guard.mjs"
+      ]
+    },
+    "packages/bee/hooks/bee-prompt-context.mjs": {
+      "direct": [
+        "scripts/tests/test_compaction_advisories.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_compaction_advisories.mjs"
+      ]
+    },
+    "packages/bee/hooks/bee-session-close.mjs": {
+      "direct": [
+        "packages/bee/hooks/test_bypass_stop_net.mjs",
+        "scripts/tests/test_compaction_advisories.mjs"
+      ],
+      "all": [
+        "packages/bee/hooks/test_bypass_stop_net.mjs",
+        "scripts/tests/test_compaction_advisories.mjs"
+      ]
+    },
+    "packages/bee/hooks/bee-session-init.mjs": {
+      "direct": [
+        "scripts/tests/test_compact_capsule.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_compact_capsule.mjs"
+      ]
+    },
+    "packages/bee/hooks/bee-write-guard.mjs": {
+      "direct": [
+        "packages/bee/hooks/test_write_guard.mjs",
+        "packages/bee/tests/test_bee_write_guard_hook.mjs"
+      ],
+      "all": [
+        "packages/bee/hooks/test_write_guard.mjs",
+        "packages/bee/tests/test_bee_write_guard_hook.mjs"
+      ]
+    },
+    "packages/bee/hooks/catalog.mjs": {
+      "direct": [
+        "packages/bee/hooks/test_hook_contracts.mjs",
+        "skills/bee-hive/scripts/test_onboard_bee.mjs"
+      ],
+      "all": [
+        "packages/bee/hooks/test_hook_contracts.mjs",
+        "skills/bee-hive/scripts/test_onboard_bee.mjs"
+      ]
+    },
+    "packages/bee/hooks/test_bypass_stop_net.mjs": {
+      "direct": [
+        "packages/bee/hooks/test_bypass_stop_net.mjs"
+      ],
+      "all": [
+        "packages/bee/hooks/test_bypass_stop_net.mjs"
+      ]
+    },
+    "packages/bee/hooks/test_hook_contracts.mjs": {
+      "direct": [
+        "packages/bee/hooks/test_hook_contracts.mjs"
+      ],
+      "all": [
+        "packages/bee/hooks/test_hook_contracts.mjs"
+      ]
+    },
+    "packages/bee/hooks/test_model_guard.mjs": {
+      "direct": [
+        "packages/bee/hooks/test_model_guard.mjs"
+      ],
+      "all": [
+        "packages/bee/hooks/test_model_guard.mjs"
+      ]
+    },
+    "packages/bee/hooks/test_write_guard.mjs": {
+      "direct": [
+        "packages/bee/hooks/test_write_guard.mjs"
+      ],
+      "all": [
+        "packages/bee/hooks/test_write_guard.mjs"
+      ]
+    },
+    "packages/bee/hooks/tokenize-command.mjs": {
+      "direct": [],
+      "all": [
+        "packages/bee/hooks/test_write_guard.mjs",
+        "packages/bee/tests/test_bee_write_guard_hook.mjs"
       ]
     },
     "packages/bee/lib/backlog.mjs": {
@@ -2804,10 +2804,10 @@
     },
     "scripts/lib/run-module-worker.mjs": {
       "direct": [
-        "hooks/test_bypass_stop_net.mjs",
-        "hooks/test_hook_contracts.mjs",
-        "hooks/test_model_guard.mjs",
-        "hooks/test_write_guard.mjs",
+        "packages/bee/hooks/test_bypass_stop_net.mjs",
+        "packages/bee/hooks/test_hook_contracts.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_cells.mjs",
@@ -2835,10 +2835,10 @@
         "skills/bee-hive/scripts/test_split_brain_regression.mjs"
       ],
       "all": [
-        "hooks/test_bypass_stop_net.mjs",
-        "hooks/test_hook_contracts.mjs",
-        "hooks/test_model_guard.mjs",
-        "hooks/test_write_guard.mjs",
+        "packages/bee/hooks/test_bypass_stop_net.mjs",
+        "packages/bee/hooks/test_hook_contracts.mjs",
+        "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "packages/bee/tests/test_backlog_capture.mjs",
         "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_cells.mjs",

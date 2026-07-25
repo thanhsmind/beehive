@@ -44,7 +44,7 @@ import { runModuleWorker } from "../lib/run-module-worker.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");
 const ONBOARD = path.join(REPO_ROOT, "skills", "bee-hive", "scripts", "onboard_bee.mjs");
-const HOOKS_DIR = path.join(REPO_ROOT, "hooks");
+const HOOKS_DIR = path.join(REPO_ROOT, "packages", "bee", "hooks");
 
 let failures = 0;
 function check(condition, label, extra = "") {

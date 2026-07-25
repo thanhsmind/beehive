@@ -5643,7 +5643,14 @@ function doctorCodexTrustUnknownRows(liveVersion) {
 // labeling below: which install topology produced the resolution, never to
 // change which locations are checked.
 function repoOwnsHookCatalog(root) {
-  return fs.existsSync(path.join(root, 'hooks', 'catalog.mjs'));
+  // packages-restructure cell 2: bee's own hooks/ tree moved to
+  // packages/bee/hooks/. Legacy repo-root hooks/catalog.mjs kept as an OR
+  // fallback so this still self-identifies a checkout on an older bee
+  // version, mirroring onboard_bee.mjs's own repoOwnsHookCatalog.
+  return (
+    fs.existsSync(path.join(root, 'packages', 'bee', 'hooks', 'catalog.mjs')) ||
+    fs.existsSync(path.join(root, 'hooks', 'catalog.mjs'))
+  );
 }
 
 // GH #22 P1-1: a normal host install renders hook commands as
@@ -5674,6 +5681,8 @@ function doctorHookHandlersResolvable(root) {
   for (const f of files) {
     if (fs.existsSync(path.join(root, '.bee', 'bin', 'hooks', f))) {
       resolvedAt.push(`${f} -> .bee/bin/hooks/`);
+    } else if (fs.existsSync(path.join(root, 'packages', 'bee', 'hooks', f))) {
+      resolvedAt.push(`${f} -> packages/bee/hooks/`);
     } else if (fs.existsSync(path.join(root, 'hooks', f))) {
       resolvedAt.push(`${f} -> hooks/`);
     } else {
@@ -5741,12 +5750,12 @@ function doctorPermissionModeCodex(root) {
 
 function doctorHookSourcesCodex(root) {
   const repoPresent = fs.existsSync(path.join(root, '.codex', 'hooks.json'));
-  const pluginProjectionCheckedIn = fs.existsSync(path.join(root, 'hooks', 'hooks.json'));
+  const pluginProjectionCheckedIn = fs.existsSync(path.join(root, 'packages', 'bee', 'hooks', 'hooks.json'));
   // D5/#54 item 8: hooks/claude-hooks.json (the plugin.json-declared Claude
   // manifest) is a distinct rendered target from hooks/hooks.json (the Codex
   // plugin projection) — named separately here so the two Claude-shaped
   // renders are never conflated in the configured listing or the evidence text.
-  const claudeHooksManifestCheckedIn = fs.existsSync(path.join(root, 'hooks', 'claude-hooks.json'));
+  const claudeHooksManifestCheckedIn = fs.existsSync(path.join(root, 'packages', 'bee', 'hooks', 'claude-hooks.json'));
   const configured = {
     repo: repoPresent,
     plugin_projection_checked_in: pluginProjectionCheckedIn,
@@ -5952,7 +5961,10 @@ function doctorClaudeHandlersResolvable(root) {
   }
   const files = doctorHookHandlerFilenames(commands);
   const missing = files.filter(
-    (f) => !fs.existsSync(path.join(root, '.bee', 'bin', 'hooks', f)) && !fs.existsSync(path.join(root, 'hooks', f)),
+    (f) =>
+      !fs.existsSync(path.join(root, '.bee', 'bin', 'hooks', f)) &&
+      !fs.existsSync(path.join(root, 'packages', 'bee', 'hooks', f)) &&
+      !fs.existsSync(path.join(root, 'hooks', f)),
   );
   if (missing.length) {
     return doctorRow(

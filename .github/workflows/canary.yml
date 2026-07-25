@@ -3,7 +3,7 @@ name: Codex canary
 # Nightly + on-demand real-codex proof that the INSTALLED bee hook chain
 # (SessionStart, PreToolUse spawn_agent guard, PostToolUse state-sync,
 # pre-Gate-3 write guard) actually fires under a live codex-cli, not just in
-# unit tests against hooks/*.mjs source. See scripts/canary_codex.mjs for the
+# unit tests against packages/bee/hooks/*.mjs source. See scripts/canary_codex.mjs for the
 # probe list and isolation guarantees (advisor R7: every codex invocation
 # runs against a per-run throwaway CODEX_HOME + fixture repo, never the
 # runner's real ~/.codex).

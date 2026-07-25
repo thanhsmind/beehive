@@ -32,9 +32,9 @@ jobs:
   #     across drives/UNC paths is untested on Windows)
   #   - scripts/test_installers_e2e.mjs (installer E2E — invokes install.sh,
   #     bash-shaped, not install.ps1)
-  #   - hooks/test_hook_contracts.mjs
-  #   - hooks/test_write_guard.mjs
-  #   - hooks/test_model_guard.mjs
+  #   - packages/bee/hooks/test_hook_contracts.mjs
+  #   - packages/bee/hooks/test_write_guard.mjs
+  #   - packages/bee/hooks/test_model_guard.mjs
   #     (hook contract suites — not yet read for Windows path assumptions)
   #   - every other scripts/test_*.mjs and skills/*/scripts/test_*.mjs in
   #     the verify chain not named above

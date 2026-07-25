@@ -12,11 +12,11 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { runModuleWorker } from "../scripts/lib/run-module-worker.mjs";
+import { runModuleWorker } from "../../../scripts/lib/run-module-worker.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const HOOKS_DIR = path.dirname(SCRIPT_PATH);
-const REPO_ROOT = path.dirname(HOOKS_DIR);
+const REPO_ROOT = path.dirname(path.dirname(path.dirname(HOOKS_DIR)));
 const HOOK_PATH = path.join(HOOKS_DIR, "bee-model-guard.mjs");
 const REAL_LIB_DIR = path.join(REPO_ROOT, ".bee", "bin", "lib");
 const REAL_CONFIG_PATH = path.join(REPO_ROOT, ".bee", "config.json");

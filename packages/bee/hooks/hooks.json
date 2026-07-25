@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-session-init.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-init.mjs\"",
             "statusMessage": "bee: session bootstrap"
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-prompt-context.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-prompt-context.mjs\"",
             "statusMessage": "bee: phase reminder"
           }
         ]
@@ -29,17 +29,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-write-guard.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-write-guard.mjs\"",
             "statusMessage": "bee: write guard"
           }
         ]
       },
       {
-        "matcher": "Agent|Task",
+        "matcher": "spawn_agent",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-model-guard.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-model-guard.mjs\"",
             "statusMessage": "bee: model-tier guard"
           }
         ]
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-state-sync.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
             "statusMessage": "bee: state sync"
           }
         ]
@@ -60,8 +60,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-tools-logger.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-tools-logger.mjs\"",
             "statusMessage": "bee: tools logger"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-codex-subagent-audit.mjs\"",
+            "statusMessage": "bee: subagent start audit"
           }
         ]
       }
@@ -71,13 +82,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-state-sync.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
             "statusMessage": "bee: state sync"
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-chain-nudge.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-chain-nudge.mjs\"",
             "statusMessage": "bee: chain nudge"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-codex-subagent-audit.mjs\"",
+            "statusMessage": "bee: subagent stop audit"
           }
         ]
       }
@@ -87,7 +107,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-session-close.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-close.mjs\"",
             "statusMessage": "bee: pre-compact flush check"
           }
         ]
@@ -98,12 +118,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-state-sync.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
             "statusMessage": "bee: state sync"
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bee-session-close.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-close.mjs\"",
             "statusMessage": "bee: session close check"
           }
         ]

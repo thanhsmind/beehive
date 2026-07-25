@@ -138,7 +138,7 @@ export const SURFACES = [
   { id: 'operating-block', spec: 'AGENTS.md', reason: 'the operating block loaded into every session before anything else' },
   {
     id: 'hook-output',
-    spec: 'hooks/** except test_*.mjs',
+    spec: 'packages/bee/hooks/** except test_*.mjs',
     reason:
       "any extension: a hook's whole output is prose put in front of an agent. `test_*.mjs` is excluded — run_verify's own suite-discovery glob, so no new naming rule is invented — because a suite's retired-layer strings are its ASSERTIONS and its output goes to a CI log, not to an agent",
   },
@@ -330,7 +330,7 @@ export function isSurface(rel) {
   // directive boundary as non-markdown under skills/, and the reason the
   // suite that pins this very hook's no-bundle wording verbatim is not itself
   // a misroute.
-  if (rel.startsWith('hooks/')) return /^test_.*\.mjs$/.test(base) ? null : 'hook-output';
+  if (rel.startsWith('packages/bee/hooks/')) return /^test_.*\.mjs$/.test(base) ? null : 'hook-output';
   if (rel.startsWith('skills/') && rel.endsWith('.md')) return 'skill-prose';
   return null;
 }
@@ -355,7 +355,7 @@ function listSurfaceFiles(root) {
     }
   };
   walk(path.join(root, 'skills'), 'skills');
-  walk(path.join(root, 'hooks'), 'hooks');
+  walk(path.join(root, 'packages', 'bee', 'hooks'), 'packages/bee/hooks');
   if (fs.existsSync(path.join(root, 'AGENTS.md'))) out.push('AGENTS.md');
   return out.sort();
 }
@@ -471,7 +471,7 @@ function runSelftest() {
     const root = makeRepo('bundleless');
     writeFile(root, 'skills/bee-hive/SKILL.md', `# hive\n\n${MISROUTE_LINE}\n`);
     writeFile(root, 'AGENTS.md', '# bee\n\nRead docs/history/learnings/critical-patterns.md first.\n');
-    writeFile(root, 'hooks/bee-session-close.mjs', 'const msg = "merge it into the area spec under docs/specs/";\n');
+    writeFile(root, 'packages/bee/hooks/bee-session-close.mjs', 'const msg = "merge it into the area spec under docs/specs/";\n');
     const result = fenceFindings(root);
     assert(result.inert === true, 'the result says so explicitly: inert');
     assert(result.findings.length === 0, `a host repo with no bundle is never fenced, got ${JSON.stringify(findingKeys(result))}`);
@@ -498,26 +498,26 @@ function runSelftest() {
   });
 
   // (C) the surfaces, and their boundary.
-  check('hooks/** (any extension) and AGENTS.md are surfaces; scripts/ and docs/ are not', () => {
+  check('packages/bee/hooks/** (any extension) and AGENTS.md are surfaces; scripts/ and docs/ are not', () => {
     const root = bundle(makeRepo('surfaces'));
-    writeFile(root, 'hooks/bee-session-close.mjs', `// close\nconst msg = "merge it into the touched area's spec under docs/specs/";\n`);
+    writeFile(root, 'packages/bee/hooks/bee-session-close.mjs', `// close\nconst msg = "merge it into the touched area's spec under docs/specs/";\n`);
     writeFile(root, 'AGENTS.md', `# bee\n\n${MISROUTE_LINE}\n`);
     writeFile(root, 'scripts/some_tool.mjs', `// ${MISROUTE_LINE}\n`);
     writeFile(root, 'docs/backlog.md', MISROUTE_LINE);
     const result = fenceFindings(root);
     assert(
-      findingKeys(result).join(',') === 'AGENTS.md:3,hooks/bee-session-close.mjs:2',
+      findingKeys(result).join(',') === 'AGENTS.md:3,packages/bee/hooks/bee-session-close.mjs:2',
       `exactly the declared surfaces, got ${JSON.stringify(findingKeys(result))}`,
     );
   });
 
-  check('a SUITE is not a hook: hooks/test_*.mjs is out of scope, the hook beside it is not', () => {
+  check('a SUITE is not a hook: packages/bee/hooks/test_*.mjs is out of scope, the hook beside it is not', () => {
     const root = bundle(makeRepo('hooksuite'));
-    writeFile(root, 'hooks/test_hook_contracts.mjs', 'const PINNED = "area spec under docs/specs/ — settled outcome";\n');
-    writeFile(root, 'hooks/bee-session-close.mjs', 'const msg = "merge it into the area spec under docs/specs/";\n');
+    writeFile(root, 'packages/bee/hooks/test_hook_contracts.mjs', 'const PINNED = "area spec under docs/specs/ — settled outcome";\n');
+    writeFile(root, 'packages/bee/hooks/bee-session-close.mjs', 'const msg = "merge it into the area spec under docs/specs/";\n');
     const result = fenceFindings(root);
     assert(
-      findingKeys(result).join(',') === 'hooks/bee-session-close.mjs:1',
+      findingKeys(result).join(',') === 'packages/bee/hooks/bee-session-close.mjs:1',
       `a suite pins wording, it does not teach it, got ${JSON.stringify(findingKeys(result))}`,
     );
   });
@@ -683,9 +683,9 @@ function runSelftest() {
 
   check('fence tracking is MARKDOWN only — a hook that happens to contain ``` is still graded', () => {
     const root = bundle(makeRepo('fencehook'));
-    writeFile(root, 'hooks/bee-chain-nudge.mjs', ['// ```', 'const msg = "read docs/specs/<area>.md first";', '// ```'].join('\n'));
+    writeFile(root, 'packages/bee/hooks/bee-chain-nudge.mjs', ['// ```', 'const msg = "read docs/specs/<area>.md first";', '// ```'].join('\n'));
     const result = fenceFindings(root);
-    assert(findingKeys(result).join(',') === 'hooks/bee-chain-nudge.mjs:2', `got ${JSON.stringify(findingKeys(result))}`);
+    assert(findingKeys(result).join(',') === 'packages/bee/hooks/bee-chain-nudge.mjs:2', `got ${JSON.stringify(findingKeys(result))}`);
   });
 
   // (G) a directory is not a bundle (the .gitkeep rot case, f3-2).

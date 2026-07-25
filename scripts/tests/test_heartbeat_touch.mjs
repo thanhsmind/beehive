@@ -49,7 +49,7 @@ import { runModuleWorker } from "../lib/run-module-worker.mjs";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(SCRIPT_DIR, "..", "..");
 const LIB_DIR = path.join(REPO_ROOT, ".bee", "bin", "lib");
-const HOOKS_DIR = path.join(REPO_ROOT, "hooks");
+const HOOKS_DIR = path.join(REPO_ROOT, "packages", "bee", "hooks");
 const PROMPT_CONTEXT_HOOK = path.join(HOOKS_DIR, "bee-prompt-context.mjs");
 const STATE_SYNC_HOOK = path.join(HOOKS_DIR, "bee-state-sync.mjs");
 const SPAWN_TIMEOUT_MS = 20000;

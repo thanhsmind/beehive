@@ -6,5 +6,5 @@
     "name": "bee"
   },
   "skills": "./.claude-plugin/skills/",
-  "hooks": "./hooks/claude-hooks.json"
+  "hooks": "./packages/bee/hooks/claude-hooks.json"
 }

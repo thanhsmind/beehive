@@ -89,9 +89,9 @@ function lifecycleEventCount(file) {
 /** The four counts, every one measured from the tree at check time. */
 function deriveCounts(root) {
   const scripts = fs
-    .readdirSync(path.join(root, "hooks"))
+    .readdirSync(path.join(root, "packages", "bee", "hooks"))
     .filter((n) => /^bee-.*\.mjs$/.test(n));
-  if (scripts.length === 0) throw new Error("hooks/bee-*.mjs matched nothing — derivation would assert nothing");
+  if (scripts.length === 0) throw new Error("packages/bee/hooks/bee-*.mjs matched nothing — derivation would assert nothing");
 
   const configHooks = JSON.parse(fs.readFileSync(path.join(root, ".bee", "config.json"), "utf8")).hooks;
   if (!configHooks || typeof configHooks !== "object" || Array.isArray(configHooks)) {
@@ -103,7 +103,7 @@ function deriveCounts(root) {
   return {
     scripts: scripts.length,
     codexEvents: lifecycleEventCount(path.join(root, ".codex", "hooks.json")),
-    claudeEvents: lifecycleEventCount(path.join(root, "hooks", "claude-hooks.json")),
+    claudeEvents: lifecycleEventCount(path.join(root, "packages", "bee", "hooks", "claude-hooks.json")),
     toggles,
   };
 }

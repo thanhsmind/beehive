@@ -89,7 +89,7 @@ const REPO_ROOT = path.join(__dirname, '..', '..');
 const GOLDEN_FILE = path.join(REPO_ROOT, 'scripts', 'tests', 'fixtures', 'preamble-golden.txt');
 const UPDATE_GOLDEN = process.argv.includes('--update-golden');
 const REAL_LIB_DIR = path.join(REPO_ROOT, '.bee', 'bin', 'lib');
-const SESSION_INIT_HOOK = path.join(REPO_ROOT, 'hooks', 'bee-session-init.mjs');
+const SESSION_INIT_HOOK = path.join(REPO_ROOT, 'packages', 'bee', 'hooks', 'bee-session-init.mjs');
 
 // Async rows (the through-the-hook section) are registered at module level but
 // settle later; `check` returns their promise, so they are collected here and

@@ -140,7 +140,7 @@ function buildCurrentRecords() {
     }),
     ...enumerateTree(path.join(REPO_ROOT, "skills"), "plugin_skill"),
     ...PLUGIN_SKILL_RENDER_ROOTS.flatMap(({ dir, role }) => enumerateTree(dir, role)),
-    ...enumerateTree(path.join(REPO_ROOT, "hooks"), "plugin_hook"),
+    ...enumerateTree(path.join(REPO_ROOT, "packages", "bee", "hooks"), "plugin_hook"),
     ...NAMED_PLUGIN_MANIFESTS.map((absPath) => {
       if (!fs.existsSync(absPath)) {
         throw new Error(`release_manifest: expected plugin manifest missing: ${absPath}`);

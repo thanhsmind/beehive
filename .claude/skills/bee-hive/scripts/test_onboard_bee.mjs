@@ -736,7 +736,7 @@ try {
     }
     return triples.sort();
   }
-  const claudeHooksJsonPath = path.join(REPO_ROOT, "hooks", "claude-hooks.json");
+  const claudeHooksJsonPath = path.join(REPO_ROOT, "packages", "bee", "hooks", "claude-hooks.json");
   const claudeHooksJson = JSON.parse(fs.readFileSync(claudeHooksJsonPath, "utf8"));
   const claudeCatalogTriples = flattenHookTriples(claudeHooksJson.hooks);
   const repoTriples = flattenHookTriples(settings.hooks);
@@ -752,9 +752,9 @@ try {
   // declares as allowed (ALLOWED_DIFFERENCES export) — the boundary is
   // imported from the catalog, never re-hardcoded here, and this check must
   // never be dropped (codex-parity-2b; CONTEXT.md decisions D1/D2).
-  const catalogModulePath = path.join(REPO_ROOT, "hooks", "catalog.mjs");
+  const catalogModulePath = path.join(REPO_ROOT, "packages", "bee", "hooks", "catalog.mjs");
   const { ALLOWED_DIFFERENCES } = await import(pathToFileURL(catalogModulePath).href);
-  const codexHooksJsonPath = path.join(REPO_ROOT, "hooks", "hooks.json");
+  const codexHooksJsonPath = path.join(REPO_ROOT, "packages", "bee", "hooks", "hooks.json");
   const codexHooksJson = JSON.parse(fs.readFileSync(codexHooksJsonPath, "utf8"));
   const codexProjectionTriples = flattenHookTriples(codexHooksJson.hooks);
 
@@ -4553,7 +4553,7 @@ const RETIRED_HELPER_NAMES = [
     return names;
   }
 
-  const catalogModulePath = path.join(REPO_ROOT, "hooks", "catalog.mjs");
+  const catalogModulePath = path.join(REPO_ROOT, "packages", "bee", "hooks", "catalog.mjs");
   const { renderProjection, RUNTIMES } = await import(pathToFileURL(catalogModulePath).href);
   const claudeCatalogNames = scriptNamesFromHooksObject(renderProjection(RUNTIMES.CLAUDE).hooks);
   const codexCatalogNames = scriptNamesFromHooksObject(renderProjection(RUNTIMES.CODEX).hooks);

@@ -351,7 +351,7 @@ check("install.ps1 sparse-checkout set fetches every tree onboarding reads (incl
   const m = ps1.match(/sparse-checkout set ([^\r\n]+)/);
   assert.ok(m, "install.ps1 must contain a `sparse-checkout set` line");
   const roots = m[1].trim().split(/\s+/);
-  for (const required of ["skills", "packages", "hooks", ".claude-plugin", ".codex-plugin", "docs/history/codex-harness-hardening"]) {
+  for (const required of ["skills", "packages", ".claude-plugin", ".codex-plugin", "docs/history/codex-harness-hardening"]) {
     assert.ok(roots.includes(required), `sparse-checkout set must include ${required} (got: ${roots.join(" ")})`);
   }
 });

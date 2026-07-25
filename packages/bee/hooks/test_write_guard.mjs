@@ -16,7 +16,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { runModuleWorker } from "../scripts/lib/run-module-worker.mjs";
+import { runModuleWorker } from "../../../scripts/lib/run-module-worker.mjs";
 // multisession-native-16: a fixture reservation must be seeded as a REAL
 // lease-store lease, not written to `.bee/reservations.json` (which is now
 // only a rebuildable projection — see reservations.mjs's own module header;
@@ -25,11 +25,11 @@ import { runModuleWorker } from "../scripts/lib/run-module-worker.mjs";
 // (`.bee/bin/lib`), matching this file's existing convention of testing
 // against whatever is actually vendored there. acquireLeases is synchronous,
 // so the fixture builders below stay synchronous too.
-import { acquireLeases } from "../.bee/bin/lib/lease-store.mjs";
+import { acquireLeases } from "../../../.bee/bin/lib/lease-store.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const HOOKS_DIR = path.dirname(SCRIPT_PATH);
-const REPO_ROOT = path.dirname(HOOKS_DIR);
+const REPO_ROOT = path.dirname(path.dirname(path.dirname(HOOKS_DIR)));
 const HOOK_PATH = path.join(HOOKS_DIR, "bee-write-guard.mjs");
 const REAL_LIB_DIR = path.join(REPO_ROOT, ".bee", "bin", "lib");
 

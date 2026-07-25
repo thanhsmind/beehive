@@ -83,7 +83,7 @@ function repoCommand(script) {
 
 function commandFor(script, target) {
   if (target === TARGETS.REPO) return repoCommand(script);
-  return `node "\${CLAUDE_PLUGIN_ROOT}/hooks/${script}"`;
+  return `node "\${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/${script}"`;
 }
 
 // Windows override for the repo target's Codex projection (Codex hook schema

@@ -48,7 +48,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { runModuleWorker } from "../scripts/lib/run-module-worker.mjs";
+import { runModuleWorker } from "../../../scripts/lib/run-module-worker.mjs";
 import { resolveRoots as resolveHookRoots, controlRootFor as hookControlRootFor } from "./adapter.mjs";
 import {
   RUNTIMES,
@@ -61,7 +61,7 @@ import {
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const HOOKS_DIR = path.dirname(SCRIPT_PATH);
-const REPO_ROOT = path.dirname(HOOKS_DIR);
+const REPO_ROOT = path.dirname(path.dirname(path.dirname(HOOKS_DIR)));
 const REAL_LIB_DIR = path.join(REPO_ROOT, ".bee", "bin", "lib");
 const REPORT_PATH = path.join(
   REPO_ROOT,
@@ -987,7 +987,7 @@ function runCatalogDriftChecks() {
     0,
   );
   const expectedPluginAuditCommand =
-    'node "${CLAUDE_PLUGIN_ROOT}/hooks/bee-codex-subagent-audit.mjs"';
+    'node "${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-codex-subagent-audit.mjs"';
   const pluginTopologyOk =
     codexStartAudit.length === 1 &&
     codexStopAudit.length === 1 &&
@@ -1393,7 +1393,14 @@ function runCodexAcceptanceRows() {
 
     const codexManifest = JSON.parse(fs.readFileSync(CODEX_PLUGIN_MANIFEST_PATH, "utf8"));
     const hooksOverride = codexManifest.hooks;
-    const usesDefaultRoute = hooksOverride === undefined || hooksOverride === "./hooks/hooks.json";
+    // packages-restructure cell 2: hooks/hooks.json moved to
+    // packages/bee/hooks/hooks.json, off Codex's undocumented plugin-root
+    // default lookup path (catalog.mjs header comment). An explicit "hooks"
+    // field naming the new canonical path is now the ONLY proven route — an
+    // absent field (the old implicit-default state) or the stale pre-move
+    // literal no longer names a file that exists, so neither proves anything.
+    const CANONICAL_HOOKS_OVERRIDE = "./packages/bee/hooks/hooks.json";
+    const usesDefaultRoute = hooksOverride === CANONICAL_HOOKS_OVERRIDE;
     const defaultHooksExists = fs.existsSync(CODEX_DEFAULT_HOOKS_PATH);
     const routeProven = usesDefaultRoute && defaultHooksExists;
     rows.push(
@@ -1401,8 +1408,8 @@ function runCodexAcceptanceRows() {
         "codex-default-hooks-route",
         routeProven,
         routeProven
-          ? ".codex-plugin/plugin.json carries no hooks override (or the explicit default) and hooks/hooks.json exists at plugin root"
-          : `default hooks/hooks.json route not proven: hooksOverride=${JSON.stringify(hooksOverride)} defaultHooksExists=${defaultHooksExists}`,
+          ? `.codex-plugin/plugin.json carries the explicit canonical hooks override (${CANONICAL_HOOKS_OVERRIDE}) and that file exists at plugin root`
+          : `canonical hooks.json route not proven: hooksOverride=${JSON.stringify(hooksOverride)} defaultHooksExists=${defaultHooksExists}`,
       ),
     );
 

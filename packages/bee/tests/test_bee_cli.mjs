@@ -2717,8 +2717,9 @@ await check('doctor: hook_sources names the both-present dual-source risk (D5, #
   // the repo fallback (.codex/hooks.json, written by buildDoctorFixture()).
   const bothPresentDir = buildDoctorFixture();
   try {
-    fs.writeFileSync(path.join(bothPresentDir, 'hooks', 'hooks.json'), `${JSON.stringify(DOCTOR_HOOKS_JSON, null, 2)}\n`, 'utf8');
-    fs.writeFileSync(path.join(bothPresentDir, 'hooks', 'claude-hooks.json'), `${JSON.stringify(DOCTOR_HOOKS_JSON, null, 2)}\n`, 'utf8');
+    fs.mkdirSync(path.join(bothPresentDir, 'packages', 'bee', 'hooks'), { recursive: true });
+    fs.writeFileSync(path.join(bothPresentDir, 'packages', 'bee', 'hooks', 'hooks.json'), `${JSON.stringify(DOCTOR_HOOKS_JSON, null, 2)}\n`, 'utf8');
+    fs.writeFileSync(path.join(bothPresentDir, 'packages', 'bee', 'hooks', 'claude-hooks.json'), `${JSON.stringify(DOCTOR_HOOKS_JSON, null, 2)}\n`, 'utf8');
     const result = await runModuleWorker(BEE_MJS, { args: ['doctor', '--runtime', 'codex', '--json'], cwd: bothPresentDir });
     assert(result.status === 0, `doctor must not throw on the both-present fixture, got exit ${result.status}: ${result.stderr}`);
     const parsed = JSON.parse(result.stdout);
@@ -3445,7 +3446,7 @@ await check('measured against THIS checkout\'s real guard scripts (skipped where
   const ledger = guards.find((g) => g.key === 'ledger');
   console.log(`      real manifest roots (${manifest.roots.length}): ${JSON.stringify(manifest.roots)}`);
   console.log(`      real ledger roots (${ledger.roots.length}): ${JSON.stringify(ledger.roots)}`);
-  for (const expected of ['skills', 'hooks', '.bee/bin/lib', '.claude-plugin/skills', '.codex-plugin/skills']) {
+  for (const expected of ['skills', 'packages/bee/hooks', '.bee/bin/lib', '.claude-plugin/skills', '.codex-plugin/skills']) {
     assert(manifest.roots.includes(expected), `the real manifest roots must include "${expected}", got ${JSON.stringify(manifest.roots)}`);
   }
   assert(

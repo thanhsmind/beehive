@@ -83,7 +83,7 @@ const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SCRIPTS_DIR = path.dirname(SCRIPT_PATH);
 const HIVE_DIR = path.dirname(SCRIPTS_DIR);
 const PLUGIN_ROOT = path.dirname(path.dirname(HIVE_DIR));
-const PLUGIN_HOOKS_DIR = path.join(PLUGIN_ROOT, "hooks");
+const PLUGIN_HOOKS_DIR = path.join(PLUGIN_ROOT, "packages", "bee", "hooks");
 const TEMPLATES_DIR = path.join(PLUGIN_ROOT, "packages", "bee");
 const TEMPLATES_LIB_DIR = path.join(TEMPLATES_DIR, "lib");
 const TEMPLATES_STATUSLINE_DIR = path.join(TEMPLATES_DIR, "statusline");
@@ -2241,7 +2241,16 @@ const CODEX_TRANSPORT_DIAGNOSTIC = "bee: hook transport unavailable (no git root
 // self-skip the skill sync already does (mode "self_skip"), keyed on the file that
 // makes a repo the catalog's owner rather than on where the script happens to run from.
 function repoOwnsHookCatalog(repoRoot) {
-  return fs.existsSync(path.join(repoRoot, "hooks", "catalog.mjs"));
+  // packages-restructure D2/cell 2: bee's own hooks/ tree moved to
+  // packages/bee/hooks/ (mirrors the earlier templates/ -> packages/bee/
+  // move). The legacy repo-root hooks/catalog.mjs check stays as an OR
+  // fallback so a checkout still on an older bee version (pre-move) is still
+  // correctly self-identified — never forceable, just backward-compatible
+  // detection.
+  return (
+    fs.existsSync(path.join(repoRoot, "packages", "bee", "hooks", "catalog.mjs")) ||
+    fs.existsSync(path.join(repoRoot, "hooks", "catalog.mjs"))
+  );
 }
 
 // GH #22 P0-1: does the PASSED --runtime cover Codex? "both" (the default)

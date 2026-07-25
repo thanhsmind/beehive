@@ -388,8 +388,8 @@ function findStateSyncMatcher(hooksBlock) {
 
 function adapterRegressionMatcherSuperset() {
   const targets = [
-    path.join(REPO_ROOT, "hooks", "hooks.json"),
-    path.join(REPO_ROOT, "hooks", "claude-hooks.json"),
+    path.join(REPO_ROOT, "packages", "bee", "hooks", "hooks.json"),
+    path.join(REPO_ROOT, "packages", "bee", "hooks", "claude-hooks.json"),
     path.join(REPO_ROOT, ".codex", "hooks.json"),
   ];
   const detail = [];

@@ -35,7 +35,7 @@ const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.dirname(TESTS_DIR);
 const TEMPLATES_LIB_DIR = path.join(TEMPLATES_DIR, 'lib');
 const REPO_ROOT = path.resolve(TESTS_DIR, '..', '..', '..');
-const HOOK_PATH = path.join(REPO_ROOT, 'hooks', 'bee-write-guard.mjs');
+const HOOK_PATH = path.join(REPO_ROOT, 'packages', 'bee', 'hooks', 'bee-write-guard.mjs');
 
 let passed = 0;
 let failed = 0;

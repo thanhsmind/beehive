@@ -15,7 +15,7 @@ const REPO_ROOT = path.join(__dirname, "..", "..");
 
 const TEMPLATES_LIB = path.join(REPO_ROOT, "packages", "bee", "lib");
 const BIN_LIB = path.join(REPO_ROOT, ".bee", "bin", "lib");
-const SOURCE_HOOKS = path.join(REPO_ROOT, "hooks");
+const SOURCE_HOOKS = path.join(REPO_ROOT, "packages", "bee", "hooks");
 const BIN_HOOKS = path.join(REPO_ROOT, ".bee", "bin", "hooks");
 const HOOK_PROJECTIONS = [path.join(SOURCE_HOOKS, "hooks.json"), path.join(SOURCE_HOOKS, "claude-hooks.json")];
 

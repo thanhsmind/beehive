@@ -92,7 +92,7 @@ const DISCOVERY_ROOTS = [
   "scripts/tests",
   "packages/bee/tests",
   "skills/bee-hive/scripts",
-  "hooks",
+  "packages/bee/hooks",
 ];
 
 // `test_*.mjs` files under a discovery root that are NOT independent,

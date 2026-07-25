@@ -15,6 +15,7 @@
     "validate-first"
   ],
   "skills": "./.codex-plugin/skills/",
+  "hooks": "./packages/bee/hooks/hooks.json",
   "interface": {
     "displayName": "Bee",
     "shortDescription": "Validate-first skills for agentic software delivery",
