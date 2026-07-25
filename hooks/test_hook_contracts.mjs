@@ -2342,6 +2342,160 @@ async function runHoldSessionRows() {
   return rows;
 }
 
+// multisession-native-21b (P2 goal-check residual): bee-state-sync.mjs and
+// bee-prompt-context.mjs each call claims.heartbeatTouch(root, sessionId)
+// with the BARE checkout root. Sessions/claims are control-plane (msn-18c,
+// hooks/adapter.mjs's own ctx.controlRoot comment) and MUST resolve against
+// ctx.controlRoot, exactly like bee-session-init.mjs and bee-write-guard.mjs
+// already do. From a GRANTED linked worktree (its own local `.bee` store,
+// same shape a real worktree-feature-parallelism checkout has) a passive
+// hook tick must still renew the acting session's heartbeat in MAIN's
+// session store, never the worktree's own — a live write-owner renewing
+// against the wrong store is silently reclaimable as dead (isOwnerLive /
+// guard class c read the stale MAIN-store heartbeat).
+function writeStaleSessionFile(root, sessionId, { ageSeconds = 120 } = {}) {
+  const sessionsDir = path.join(root, ".bee", "sessions");
+  fs.mkdirSync(sessionsDir, { recursive: true });
+  const stamp = new Date(Date.now() - ageSeconds * 1000).toISOString();
+  const record = { id: sessionId, started_at: stamp, last_heartbeat: stamp };
+  fs.writeFileSync(path.join(sessionsDir, `${sessionId}.json`), `${JSON.stringify(record, null, 2)}\n`);
+  return record;
+}
+
+function readSessionHeartbeat(root, sessionId) {
+  try {
+    const raw = fs.readFileSync(path.join(root, ".bee", "sessions", `${sessionId}.json`), "utf8");
+    return JSON.parse(raw).last_heartbeat;
+  } catch {
+    return null;
+  }
+}
+
+// A GRANTED linked worktree: mainRoot/workRoot are independent buildFixture()
+// checkouts, linked via a real .git-file gitdir round trip (same shape
+// runWorktreeAdapterRows uses), with workRoot's id registered TRUE in
+// mainRoot's runtime/worktree-grants.json — the opt-in that gives a linked
+// worktree its own local store (storeRoot=workRoot) while controlRoot stays
+// grant-independent (always mainRoot).
+function buildGrantedWorktreeFixture(prefix) {
+  const mainRoot = buildFixture(`${prefix}main-`);
+  const workRoot = buildFixture(`${prefix}work-`);
+  const gitdir = path.join(mainRoot, ".git", "worktrees", "fixture");
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(workRoot, ".git"), `gitdir: ${gitdir}\n`);
+  fs.writeFileSync(path.join(gitdir, "gitdir"), `${path.join(workRoot, ".git")}\n`);
+  fs.mkdirSync(path.join(mainRoot, ".bee", "runtime"), { recursive: true });
+  fs.writeFileSync(
+    path.join(mainRoot, ".bee", "runtime", "worktree-grants.json"),
+    `${JSON.stringify({ fixture: true }, null, 2)}\n`,
+  );
+  return { mainRoot, workRoot };
+}
+
+async function runGrantedWorktreeHeartbeatRows() {
+  const rows = [];
+  const { mainRoot, workRoot } = buildGrantedWorktreeFixture("hook-msn21b-");
+
+  // Sanity: the fixture really is a GRANTED linked worktree — control-root
+  // resolves to main, storeRoot resolves to the worktree's own local store
+  // (grant=true). If this row ever fails the rows below are testing nothing.
+  const linked = resolveHookRoots(workRoot);
+  const sanityPass = Boolean(
+    linked.worktreeResolution === "linked-valid" &&
+      linked.storeRoot === fs.realpathSync.native(workRoot) &&
+      hookControlRootFor(workRoot) === fs.realpathSync.native(mainRoot),
+  );
+  rows.push(
+    genericRow(
+      "granted-worktree-heartbeat",
+      "fixture-is-a-granted-linked-worktree",
+      sanityPass,
+      sanityPass
+        ? "fixture resolves linked-valid, storeRoot=workRoot (granted), controlRoot=mainRoot — the rows below exercise a real granted-worktree topology"
+        : `fixture topology is wrong: ${JSON.stringify(linked)} controlRoot=${hookControlRootFor(workRoot)}`,
+    ),
+  );
+
+  // ── bee-state-sync: a passive tick from the granted worktree must renew
+  // the session's heartbeat in MAIN's store, never the worktree's own.
+  const stateSyncSession = "sess-msn21b-state-sync";
+  const staleBefore = writeStaleSessionFile(mainRoot, stateSyncSession);
+  const sTick = await runWrapper(
+    "bee-state-sync.mjs",
+    JSON.stringify({ hook_event_name: "Stop", session_id: stateSyncSession, cwd: workRoot }),
+    workRoot,
+  );
+  const sSilent = sTick.status === 0 && !(sTick.stdout || "").trim();
+  const sAfter = readSessionHeartbeat(mainRoot, stateSyncSession);
+  const sRenewed = Boolean(sAfter && sAfter !== staleBefore.last_heartbeat && Date.now() - Date.parse(sAfter) < 30_000);
+  const sNeverInWorktree = !fs.existsSync(path.join(workRoot, ".bee", "sessions", `${stateSyncSession}.json`));
+  const sPass = sSilent && sRenewed && sNeverInWorktree;
+  rows.push(
+    adapterRow(
+      "granted-worktree-heartbeat",
+      "state-sync-passive-tick-renews-main-store-heartbeat",
+      sPass,
+      sPass
+        ? "a passive bee-state-sync tick from a granted worktree renews the session heartbeat in MAIN's store (ctx.controlRoot), never the worktree's own — a live write-owner stays live"
+        : `expected a silent renewal landing in MAIN's session store; status=${sTick.status} stdout=${truncate(sTick.stdout, 200)} before=${staleBefore.last_heartbeat} after=${sAfter} strayInWorktree=${!sNeverInWorktree}`,
+      sTick,
+    ),
+  );
+
+  // ── bee-prompt-context: same contract, independent session id so the two
+  // rows can never mask each other via the 60s heartbeat-touch throttle.
+  const promptSession = "sess-msn21b-prompt-context";
+  const staleBefore2 = writeStaleSessionFile(mainRoot, promptSession);
+  const pTick = await runWrapper(
+    "bee-prompt-context.mjs",
+    JSON.stringify({ hook_event_name: "UserPromptSubmit", prompt: "hi", session_id: promptSession, cwd: workRoot }),
+    workRoot,
+  );
+  const pAfter = readSessionHeartbeat(mainRoot, promptSession);
+  const pRenewed = Boolean(pAfter && pAfter !== staleBefore2.last_heartbeat && Date.now() - Date.parse(pAfter) < 30_000);
+  const pNeverInWorktree = !fs.existsSync(path.join(workRoot, ".bee", "sessions", `${promptSession}.json`));
+  const pPass = pTick.status === 0 && pRenewed && pNeverInWorktree;
+  rows.push(
+    adapterRow(
+      "granted-worktree-heartbeat",
+      "prompt-context-passive-tick-renews-main-store-heartbeat",
+      pPass,
+      pPass
+        ? "a passive bee-prompt-context tick from a granted worktree renews the session heartbeat in MAIN's store (ctx.controlRoot), never the worktree's own"
+        : `expected a renewal landing in MAIN's session store; status=${pTick.status} before=${staleBefore2.last_heartbeat} after=${pAfter} strayInWorktree=${!pNeverInWorktree}`,
+      pTick,
+    ),
+  );
+
+  // ── control: an ORDINARY (non-worktree) repo renews byte-identically —
+  // controlRoot === root there, so this must pass unchanged before AND
+  // after the fix (must_have: "solo repo byte-identical").
+  const soloRoot = buildFixture("hook-msn21b-solo-");
+  const soloSession = "sess-msn21b-solo";
+  const soloBefore = writeStaleSessionFile(soloRoot, soloSession);
+  const soloTick = await runWrapper(
+    "bee-state-sync.mjs",
+    JSON.stringify({ hook_event_name: "Stop", session_id: soloSession, cwd: soloRoot }),
+    soloRoot,
+  );
+  const soloAfter = readSessionHeartbeat(soloRoot, soloSession);
+  const soloRenewed = Boolean(soloAfter && soloAfter !== soloBefore.last_heartbeat);
+  const soloPass = soloTick.status === 0 && soloRenewed;
+  rows.push(
+    adapterRow(
+      "granted-worktree-heartbeat",
+      "solo-repo-heartbeat-renewal-byte-identical",
+      soloPass,
+      soloPass
+        ? "an ordinary (non-worktree) repo still renews its own session heartbeat in its own store — controlRoot===root there, unaffected by the fix (solo repo byte-identical)"
+        : `expected the solo repo's own heartbeat to renew; status=${soloTick.status} before=${soloBefore.last_heartbeat} after=${soloAfter}`,
+      soloTick,
+    ),
+  );
+
+  return rows;
+}
+
 // fresh-session-handoff fsh-10 (D1, D4, validation-s4 C11/C12): bee-session-init
 // is the ONLY place a planned-next handoff is ever adopted — the hook threads
 // payload.session_id + payload.source, performs the source-gated adoption via
@@ -4117,6 +4271,7 @@ async function main() {
   results.push(...await runCodexSubagentAuditRows());
   results.push(...await runNicknameRows());
   results.push(...await runLaneSessionRows());
+  results.push(...await runGrantedWorktreeHeartbeatRows());
   results.push(...await runCaptureNudgeRows());
   results.push(...await runHoldSessionRows());
   results.push(...await runHandoffSessionRows());

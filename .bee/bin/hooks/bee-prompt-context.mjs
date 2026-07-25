@@ -72,6 +72,11 @@ async function main() {
     // reminder logic below: a throw here must never block the hook's
     // primary job (printing the reminder) — the outer catch alone would
     // abort that too if this ran unguarded inside it.
+    //
+    // multisession-native-21b: same control-plane fix as bee-state-sync.mjs
+    // — heartbeatTouch's `root` argument must resolve against
+    // ctx.controlRoot (always MAIN for a linked worktree), never the bare
+    // `root`. Byte-identical to before for every ordinary/solo checkout.
     const sessionId =
       typeof ctx.payload.session_id === "string" && ctx.payload.session_id.trim()
         ? ctx.payload.session_id.trim()
@@ -79,7 +84,7 @@ async function main() {
     if (sessionId) {
       try {
         const claims = await import(libModuleUrl(root, "claims.mjs"));
-        const touch = await claims.heartbeatTouch(root, sessionId);
+        const touch = await claims.heartbeatTouch(ctx.controlRoot, sessionId);
         if (touch && touch.touched) {
           const reservations = await import(libModuleUrl(root, "reservations.mjs"));
           await reservations.renewHoldsBySession(root, sessionId, { lockOptions: { maxAttempts: 1 } });

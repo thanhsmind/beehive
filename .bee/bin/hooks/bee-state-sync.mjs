@@ -35,6 +35,18 @@ async function main() {
     // bee-prompt-context.mjs: session id off the hook payload, own try/catch
     // so a throw here never blocks this hook's primary job (the state
     // counts/last_activity refresh below).
+    //
+    // multisession-native-21b: sessions/claims are control-plane (msn-18c,
+    // hooks/adapter.mjs's own ctx.controlRoot comment) — heartbeatTouch's
+    // `root` argument must resolve against ctx.controlRoot (always MAIN for
+    // a linked worktree, grant-independent), never the bare `root` this
+    // read from before. A granted worktree's own local `.bee` has no
+    // record for this session at all, so the bare-root call silently
+    // renewed nothing: MAIN's heartbeat went stale and a live write-owner
+    // became reclaimable as dead (isOwnerLive / guard class c read that
+    // stale heartbeat). `ctx.controlRoot` is byte-identical to `root` for
+    // every ordinary/solo checkout (same fallback adapter.mjs's own
+    // readHookContext already guarantees), so this is a no-op there.
     const sessionId =
       typeof ctx.payload.session_id === "string" && ctx.payload.session_id.trim()
         ? ctx.payload.session_id.trim()
@@ -42,7 +54,7 @@ async function main() {
     if (sessionId) {
       try {
         const claims = await import(libModuleUrl(root, "claims.mjs"));
-        const touch = await claims.heartbeatTouch(root, sessionId);
+        const touch = await claims.heartbeatTouch(ctx.controlRoot, sessionId);
         if (touch && touch.touched) {
           const reservations = await import(libModuleUrl(root, "reservations.mjs"));
           await reservations.renewHoldsBySession(root, sessionId, { lockOptions: { maxAttempts: 1 } });

@@ -2538,7 +2538,7 @@
     },
     {
       "path": "hooks/bee-prompt-context.mjs",
-      "sha256": "1efd6ed7f90a7025648a550245c62b999a77dac77a7d1f206a44bef2e4626a6a",
+      "sha256": "ba5d510509ea95cb0de3d4c437daf9501adedcaf7e26b28d35131696344feda7",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "hooks/bee-prompt-context.mjs"
@@ -2559,7 +2559,7 @@
     },
     {
       "path": "hooks/bee-state-sync.mjs",
-      "sha256": "8c3a727e95d9f86fe942a5cfffb331e257abec0b5c62680dffabc958d77c45df",
+      "sha256": "592d57221940816eee31951a96439679e89d1526db4a3280286965b59fe089d3",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "hooks/bee-state-sync.mjs"
@@ -2608,7 +2608,7 @@
     },
     {
       "path": "hooks/test_hook_contracts.mjs",
-      "sha256": "a667289ccd367a6be2655787402d3c82b1b016ca4bff00575e42441fcec0e35c",
+      "sha256": "c26e2d19e034857d6ae8dca0327ca81e98404ad9c16402d6d5b83e2c79bbb4fc",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "hooks/test_hook_contracts.mjs"
