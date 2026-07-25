@@ -216,6 +216,9 @@
     "supersession",
     "negative-control",
     "gate-audit",
-    "close"
+    "close",
+    "grooming",
+    "test-prune",
+    "gitignore"
   ]
 }
