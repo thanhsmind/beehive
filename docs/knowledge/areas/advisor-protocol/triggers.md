@@ -61,6 +61,6 @@ dependency on configuration.
 
 - **P2 —** Orchestrator consult + throw: `skills/bee-validating/SKILL.md`
   (Gate 3); `handleStateGate` + `state advisor-ref record/show` in
-  `skills/bee-hive/templates/bee.mjs`; helpers `advisorRefAnchors` /
-  `advisorRefStale` in `skills/bee-hive/templates/lib/state.mjs`.
+  `packages/bee/bee.mjs`; helpers `advisorRefAnchors` /
+  `advisorRefStale` in `packages/bee/lib/state.mjs`.
 - **P6 —** Gate precondition spec detail: `docs/specs/workflow-state.md` B9/B9a.

@@ -76,8 +76,8 @@ form.
 
 ## Pointers (implementation)
 
-- Emit: the codex branch of `dispatch prepare`, `skills/bee-hive/templates/lib/dispatch-prepare.mjs`.
-- Judge: `evaluateCodexSpawn` in `skills/bee-hive/templates/lib/dispatch-guard.mjs`
+- Emit: the codex branch of `dispatch prepare`, `packages/bee/lib/dispatch-prepare.mjs`.
+- Judge: `evaluateCodexSpawn` in `packages/bee/lib/dispatch-guard.mjs`
   (mirrored in `.bee/bin/lib/dispatch-guard.mjs`).
 - Doc: the Spawn row in `skills/bee-swarming/references/swarming-reference.md`.
 - Suites: `scripts/tests/test_dispatch_prepare.mjs` (doc-canonical/legacy round-trip

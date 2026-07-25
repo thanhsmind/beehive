@@ -168,9 +168,9 @@ the dispatch interlock, or the merge owner-gesture change.
 - The skill and its three roles: `skills/bee-herding/SKILL.md`; the loop driver
   `scripts/control-loop.sh`; the one-shot `scripts/bootstrap-cockpit.sh`; the owner interlock
   `scripts/dispatch-interlock.mjs`; the work classifier `scripts/classify-lane.mjs`.
-- The CLI-verb equivalent of the manual marker gesture: `skills/bee-hive/templates/lib/herding.mjs`,
-  wired into `skills/bee-hive/templates/bee.mjs` as the `herding` command group. Test coverage:
-  `skills/bee-hive/templates/tests/test_herding_cli.mjs`.
-- Regression coverage: `skills/bee-hive/templates/tests/test_herding.mjs`.
+- The CLI-verb equivalent of the manual marker gesture: `packages/bee/lib/herding.mjs`,
+  wired into `packages/bee/bee.mjs` as the `herding` command group. Test coverage:
+  `packages/bee/tests/test_herding_cli.mjs`.
+- Regression coverage: `packages/bee/tests/test_herding.mjs`.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.

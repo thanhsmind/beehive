@@ -71,12 +71,12 @@ stable shape.
 
 ## Pointers (implementation)
 
-- Unified dispatcher and catalog: `skills/bee-hive/templates/bee.mjs`,
-  `skills/bee-hive/templates/lib/command-registry.mjs`, and
-  `skills/bee-hive/templates/lib/validate-args.mjs`, mirrored under `.bee/bin/`.
+- Unified dispatcher and catalog: `packages/bee/bee.mjs`,
+  `packages/bee/lib/command-registry.mjs`, and
+  `packages/bee/lib/validate-args.mjs`, mirrored under `.bee/bin/`.
   Evidence: `.bee/cells/hia-1.json`, `.bee/cells/hia-2.json`, and
   `docs/history/harness-integration-adopt/reports/`.
-- Unified dispatcher (all nine groups): `skills/bee-hive/templates/bee.mjs` owns
+- Unified dispatcher (all nine groups): `packages/bee/bee.mjs` owns
   registry + handlers; dispatcher-unify (`.bee/cells/du-{1..6}.json`,
   `docs/history/dispatcher-unify/`) first made every legacy per-group script a
   2-line forwarder with byte-identical output, then shim-retire (D1, decision

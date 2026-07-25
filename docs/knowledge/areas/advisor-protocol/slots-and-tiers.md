@@ -105,7 +105,7 @@ bee:
   blocklist) + `validateAgentFilesDrift`, same lib; suite
   `scripts/tests/test_config_validate.mjs`.
 - **P4 —** Guard allowlist fold (E6, cnt-7): `configuredModelSet` in
-  `skills/bee-hive/templates/lib/dispatch-guard.mjs` (mirrored in
+  `packages/bee/lib/dispatch-guard.mjs` (mirrored in
   `.bee/bin/lib/dispatch-guard.mjs`) calls `resolveAdvisor(root, 'claude')`
   directly, since the adviser slot is deliberately not a `CONFIGURABLE_SLOTS`
   member. Canary rows: `hooks/test_model_guard.mjs` rows 21-22.
@@ -117,7 +117,7 @@ bee:
   prepare's native branch): capability classification and the doctor unlock
   row are specced in `docs/specs/hook-runtime.md`; the resolver's native leaf
   and explicit-fallback composite sit beside `resolveAdvisor`/`resolveTier`
-  (`skills/bee-hive/templates/lib/state.mjs`); `prepareDispatch`'s
+  (`packages/bee/lib/state.mjs`); `prepareDispatch`'s
   native branch and `deriveEconomics`'s `native-requested` status share
-  `skills/bee-hive/templates/lib/dispatch-prepare.mjs` with R8's
+  `packages/bee/lib/dispatch-prepare.mjs` with R8's
   `evaluateDispatch`.

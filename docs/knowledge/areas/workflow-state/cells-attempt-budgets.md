@@ -102,7 +102,7 @@ against the unit's new attempts (self-correcting-loop D2).
 
 - Self-correcting loop (B26-B32, R41-R50): attempt ledger `appendAttempt` /
   exported `normalizeFailureSignature` in
-  `skills/bee-hive/templates/lib/cells.mjs` (byte-mirrored to `.bee/bin/lib/`),
+  `packages/bee/lib/cells.mjs` (byte-mirrored to `.bee/bin/lib/`),
   invoked from `recordVerify` (both outcomes) and `blockCell`; lifetime
   budgets `checkCellBudgets` runs inside `claimCellCrossSession`'s O_EXCL
   critical section with unwind-on-refusal, typed `CELL_BUDGET_EXHAUSTED` /
@@ -113,7 +113,7 @@ against the unit's new attempts (self-correcting-loop D2).
   pah-2 precedent), behavior-class completion teeth (evidence length +
   tolerant duplicate scan) in `capCell`; judge-verdict schema
   `validateJudgeVerdict` / `deriveModelIndependence` in new
-  `skills/bee-hive/templates/lib/judge.mjs` (byte-mirrored to
+  `packages/bee/lib/judge.mjs` (byte-mirrored to
   `.bee/bin/lib/`), recorder `recordJudgeVerdict` in `cells.mjs`, CLI verb
   `cells judge-record --id --file <verdict.json> [--builder-model]
   [--judge-model]`; goal-check judge-tier table single-homed in

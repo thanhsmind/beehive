@@ -125,7 +125,7 @@ switch, because there is no case where a repository wants the other file guards 
 
 ## Pointers (implementation)
 
-- `hooks/bee-write-guard.mjs` — the `READ_TOOLS` branch carries the size check; `hooks/adapter.mjs`
+- `packages/bee/hooks/bee-write-guard.mjs` — the `READ_TOOLS` branch carries the size check; `packages/bee/hooks/adapter.mjs`
   defines the verdict encoding and the advisory-event set that R2 refers to.
 - `hooks/test_write_guard.mjs` — the eight rows covering refusal, both escapes, the under-threshold
   case, every error path, the toggle, and a custom threshold.

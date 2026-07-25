@@ -84,12 +84,12 @@ mechanism that makes deleting or relocating a rule a visible event.
 
 ## Pointers (implementation)
 
-- Master copy of the standing sheet: `skills/bee-hive/templates/AGENTS.block.md`;
+- Master copy of the standing sheet: `packages/bee/AGENTS.block.md`;
   the rendered per-project copy sits between the `<!-- BEE:START -->` /
   `<!-- BEE:END -->` markers in each host's root `AGENTS.md`.
 - B1's copy-into-project step: `skills/bee-hive/scripts/onboard_bee.mjs`
   (`update_agents_block` plan item).
-- Anchor tests (B4/R2): `skills/bee-hive/templates/tests/test_lib.mjs` — the
+- Anchor tests (B4/R2): `packages/bee/tests/test_lib.mjs` — the
   `census:` checks, including the delegation-layer anchor and the on-demand
   review anchors, plus the native Codex empty-wait anchor across the master,
   root, canonical procedure, and writable `.claude` surfaces.

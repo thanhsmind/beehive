@@ -59,5 +59,5 @@ alongside the manual named-section path owned by
 
 ## Pointers (implementation)
 
-- **P7** — Tests: `skills/bee-hive/templates/tests/test_perf.mjs`, and the
-  perf blocks in `skills/bee-hive/templates/tests/test_bee_cli.mjs`.
+- **P7** — Tests: `packages/bee/tests/test_perf.mjs`, and the
+  perf blocks in `packages/bee/tests/test_bee_cli.mjs`.

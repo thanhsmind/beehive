@@ -345,9 +345,9 @@ drift from it.
 ## Pointers (implementation)
 
 - Hold enforcement (B14): `findSessionConflicts` + optional `session` field in
-  `skills/bee-hive/templates/lib/reservations.mjs`; phase-independent deny +
+  `packages/bee/lib/reservations.mjs`; phase-independent deny +
   fail-closed corrupt-store branch in `lib/guards.mjs` `checkWrite`;
-  `payload.session_id` threaded at `hooks/bee-write-guard.mjs`; `--session` on
+  `payload.session_id` threaded at `packages/bee/hooks/bee-write-guard.mjs`; `--session` on
   the reservations verb. Evidence: traces `.bee/cells/fsh-{7,8}.json`, commits
   255757d, 4969e8c; `docs/history/fresh-session-handoff/reports/validation-s3.md`.
 - Contention telemetry: `appendContentionTelemetry` in `lock.mjs`, called from
@@ -361,12 +361,12 @@ drift from it.
 - Status contention summary: `buildContentionSummary` in `bee.mjs`, reading
   through `readTranscriptTail` (`lib/recovery.mjs`) for the bounded,
   windowed, never-throws read. Evidence:
-  `skills/bee-hive/templates/tests/test_contention_status.mjs` (seeded
+  `packages/bee/tests/test_contention_status.mjs` (seeded
   fixture aggregation, text-render mention, absent-log silence, malformed-
   line skip, 8MB garbage-head tail-window proof); trace
   `.bee/cells/multisession-native-4.json`, commit 1865cae.
 - Per-workflow lock order (D1/C4): `withMutationLock` in
-  `skills/bee-hive/templates/lib/state.mjs` (locks per-workflow instead of
+  `packages/bee/lib/state.mjs` (locks per-workflow instead of
   the blanket `state` lock every state-mutation verb held through
   `multisession-native-9`); two deterministic seam tests proving zero
   cross-workflow `LOCK_BUSY` and decoupling from the `sessions` lock. Trace
@@ -374,7 +374,7 @@ drift from it.
   `workflow-records-and-projections.md` Pointers for the full write path.
 - Sharded lease store: `acquireLeases`/`releaseLease`/`renewLease`/
   `renewLeasesBySession`/`sweepExpiredLeases`/`listLeases` in
-  `skills/bee-hive/templates/lib/lease-store.mjs` (imports only node
+  `packages/bee/lib/lease-store.mjs` (imports only node
   builtins, `fsutil.mjs`, and `lock.mjs` — proven never to import
   `claims.mjs`/`state.mjs`/`reservations.mjs` by a static source-scan test,
   mirroring `workflow-store.mjs`'s own C4 proof). 12 tests in
@@ -387,7 +387,7 @@ drift from it.
   against pristine `lease-store.mjs`, then green after the implementation.
   Evidence: trace `.bee/cells/multisession-native-12.json`, commit 8c002a1.
 - Intent vs write lease (msn-13): `RESERVATION_KINDS`, `isHardConflict` in
-  `skills/bee-hive/templates/lib/reservations.mjs`; classification wired into
+  `packages/bee/lib/reservations.mjs`; classification wired into
   `guards.mjs`'s `checkWrite` (swarming-phase branch) and `reserve()`'s own
   conflict pre-check; `--kind` flag on `bee reservations reserve`; equivalent
   `kind` field added to `lease-store.mjs` as forward groundwork. Red-first

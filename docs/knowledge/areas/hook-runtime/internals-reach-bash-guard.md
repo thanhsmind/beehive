@@ -91,7 +91,7 @@ exactly these two helpers.
 
 ## Pointers (implementation)
 
-- Guard: `hooks/bee-write-guard.mjs`, internals-reach branch (inline-eval
+- Guard: `packages/bee/hooks/bee-write-guard.mjs`, internals-reach branch (inline-eval
   detection + `bin/lib`/`templates/lib` import scan).
 - Helpers this gap affects: `scribingTarget` and `emitFrontmatter` in
   `bin/lib/knowledge.mjs`.

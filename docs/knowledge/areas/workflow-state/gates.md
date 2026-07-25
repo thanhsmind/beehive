@@ -240,15 +240,15 @@ its knowledge actually landed — the state and the specs can no longer disagree
 
 - Record: `.bee/state.json` (CLI-owned). Verbs: `bee.mjs state`
   (`start-feature` — new; set/gate/worker/scribing-run — existing);
-  `startFeature()` + `isKnownPhase` in `skills/bee-hive/templates/lib/state.mjs`
+  `startFeature()` + `isKnownPhase` in `packages/bee/lib/state.mjs`
   (byte-mirrored to `.bee/bin/lib/state.mjs`).
 - Phase-owned routing: generic `state set --owner <pre-phase>` in
-  `skills/bee-hive/templates/bee.mjs` and `.bee/bin/bee.mjs`; required-owner
+  `packages/bee/bee.mjs` and `.bee/bin/bee.mjs`; required-owner
   metadata in both command registries; phase-aware callers in exploring,
   planning, validating, and compounding. Review stays local to its review
   record. Proof: state/CLI suites, `.bee/cells/codex-hook-state-parity-1.json`,
   and `docs/history/codex-hook-state-parity/reports/codex-hook-state-parity-1.md`.
-- Tests: 15 start-feature rows in `skills/bee-hive/templates/tests/test_lib.mjs`.
+- Tests: 15 start-feature rows in `packages/bee/tests/test_lib.mjs`.
 - Evidence: commit `928abf1`; trace `.bee/cells/codex-parity-5.json`.
 - Workflow-record creation on start (D1) and plan-rev-scoped gates (D7): see
   `workflow-records-and-projections.md` Pointers — `seedLegacyWorkflows`,

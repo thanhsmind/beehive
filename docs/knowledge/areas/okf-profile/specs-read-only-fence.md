@@ -131,5 +131,5 @@ same filename *without* a marker fails as new content.
 - Wired into the chain as two entries (`--selftest` and `--check`): `scripts/run_verify.mjs`
   `EXTRA_SUITES`, pinned in `scripts/tests/test_verify_manifest.mjs` `MANDATORY_SUITE_ARGS`.
 - The shared bundle-mode predicate and product-root resolver:
-  `skills/bee-hive/templates/lib/knowledge.mjs` (`bundleMode`) and
-  `skills/bee-hive/templates/lib/state.mjs` (`resolveProductRoot`).
+  `packages/bee/lib/knowledge.mjs` (`bundleMode`) and
+  `packages/bee/lib/state.mjs` (`resolveProductRoot`).

@@ -62,6 +62,6 @@ turns, where no stage is running to remind it (B2's failure mode, observed).
   requires (a `model` param or an anchored `[bee-tier:]` marker, B3a), are
   critical rule 13 on the standing sheet. The guard that rejects a bare,
   config-disagreeing, or cli-tier-declared dispatch (declared tier read before
-  the model param, 2A-iii): `hooks/bee-model-guard.mjs`.
+  the model param, 2A-iii): `packages/bee/hooks/bee-model-guard.mjs`.
 - Model tiers behind R3: `.bee/config.json` `models` (extraction / generation /
   review / advisor slots), resolved per dispatch by `bee-swarming`.

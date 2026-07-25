@@ -83,11 +83,11 @@ states alike, never one but not the other (decision c2c46488).
 ## Pointers (implementation)
 
 - Always-writable set: `GATE_ALLOWED_PREFIXES` in
-  `skills/bee-hive/templates/lib/guards.mjs` (`.bee/`, `docs/`, `plans/`,
+  `packages/bee/lib/guards.mjs` (`.bee/`, `docs/`, `plans/`,
   `AGENTS.md`; repo-root `.spikes/` removed per bee-footprint D2 — the
   workflow's own `.bee/spikes/` subfolder is already covered by `.bee/`);
   session-close nudge mirrors it as `NUDGE_ALLOWED` in
-  `hooks/bee-session-close.mjs`.
+  `packages/bee/hooks/bee-session-close.mjs`.
 
 ## Open Gaps
 

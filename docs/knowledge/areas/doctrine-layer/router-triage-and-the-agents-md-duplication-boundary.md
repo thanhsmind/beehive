@@ -130,6 +130,6 @@ rule never disappears — only its elaboration moves.
   pinned region is `## Modes and Lanes`.
 - `AGENTS.md` — the operating block; its critical rules are what R4 is checked against.
 - `skills/bee-hive/references/routing-and-contracts.md` — where deferred detail lands.
-- `scripts/tests/test_gate_bypass_doctrine.mjs`, `skills/bee-hive/templates/tests/test_misc.mjs` — the
+- `scripts/tests/test_gate_bypass_doctrine.mjs`, `packages/bee/tests/test_misc.mjs` — the
   suites enforcing the pinned wording.
 - `scripts/tests/test_skill_pointers.mjs` — the gate required by R8.

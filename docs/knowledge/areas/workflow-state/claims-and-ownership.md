@@ -152,16 +152,16 @@ behavior change at all.
 
 ## Pointers (implementation)
 
-- Session coordination (B11/R17/R18): `skills/bee-hive/templates/lib/claims.mjs`
+- Session coordination (B11/R17/R18): `packages/bee/lib/claims.mjs`
   (byte-mirrored to `.bee/bin/lib/`) — sessions under `.bee/sessions/`, claims
   under `.bee/claims/`, per-claim gate `<cell>.adopting`; race orchestrator
-  `skills/bee-hive/templates/tests/race_claims_child.mjs` (3 scenarios using
+  `packages/bee/tests/race_claims_child.mjs` (3 scenarios using
   barrier-synchronized isolated Worker racers in `test_lib.mjs`). Evidence:
   traces `.bee/cells/fsh-{1,2}.json` (win32 +
   linux probe PASS lines), commits 0224f6c, edfac87; validation
   `docs/history/fresh-session-handoff/reports/validation-s1.md`.
 - Multi-session hardening (B11/B21-B24, R36-R40): coordination lock primitive
-  `withStoreLock` in `skills/bee-hive/templates/lib/lock.mjs` (byte-mirrored
+  `withStoreLock` in `packages/bee/lib/lock.mjs` (byte-mirrored
   to `.bee/bin/lib/`), O_EXCL acquire with stale-holder takeover by atomic
   rename, forked-racer suite `scripts/tests/test_store_lock.mjs`; `cells claim --id`
   re-backed by the same claim-file gate `claim-next` uses
@@ -177,7 +177,7 @@ behavior change at all.
   in `lib/cells.mjs`; throttled heartbeat-and-lease renewal
   (`heartbeatTouch`, `renewClaimTTL` in `lib/claims.mjs`,
   `renewHoldsBySession` in `lib/reservations.mjs`) wired into
-  `hooks/bee-prompt-context.mjs` and `hooks/bee-state-sync.mjs` in try-once
+  `packages/bee/hooks/bee-prompt-context.mjs` and `packages/bee/hooks/bee-state-sync.mjs` in try-once
   mode, suite `scripts/tests/test_heartbeat_touch.mjs`; state logical
   read-modify-write verbs (`startFeature` in `lib/state.mjs`;
   `handleStateSet`/`handleStateGate`/`stateWorkerMutate`/
@@ -193,7 +193,7 @@ behavior change at all.
   stamped in `claimCellFile` and bumped in `adoptClaim` (the SAME atomic
   write as the ownership rewrite); `CLAIM_FENCE_STALE` refusal in
   `renewClaimTTL`/`releaseClaim`, all in
-  `skills/bee-hive/templates/lib/claims.mjs` (byte-mirrored to
+  `packages/bee/lib/claims.mjs` (byte-mirrored to
   `.bee/bin/lib/`). Red-first: new refusal tests captured failing against
   pristine `claims.mjs`, then green after the implementation. Evidence:
   trace `.bee/cells/multisession-native-12.json`, commit 8c002a1; advisor

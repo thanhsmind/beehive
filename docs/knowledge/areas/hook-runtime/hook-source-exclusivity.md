@@ -47,15 +47,15 @@ after the package is known inactive. User and foreign hook entries survive.
 ## Edge Cases Settled
 
 - **Doctor's `hook_sources` row names the dual-source state explicitly instead
-  of staying silent about it.** When both `hooks/hooks.json` (plugin
+  of staying silent about it.** When both `packages/bee/hooks/hooks.json` (plugin
   projection) and `.codex/hooks.json` (repo fallback) are present on disk at
   once, the row's evidence text says so in plain terms: two hook sources
   exist, exactly-one-active is the law this concept states (B14), and the
   current premise underneath that law — plugin hooks are not-observed on the
   probed codex version (capability matrix row B1) — must be re-proved whenever
   the probed codex version changes. The row also distinguishes
-  `hooks/claude-hooks.json` (the Claude manifest `plugin.json` declares) from
-  `hooks/hooks.json` (the Codex projection) by name, so a reader is never left
+  `packages/bee/hooks/claude-hooks.json` (the Claude manifest `plugin.json` declares) from
+  `packages/bee/hooks/hooks.json` (the Codex projection) by name, so a reader is never left
   guessing which "hooks" file a warning means. None of this changes the row's
   verdict semantics: `active: unknown` stays honest (which source actually
   loaded has no runtime surface to check), and the row remains informational
@@ -63,8 +63,8 @@ after the package is known inactive. User and foreign hook entries survive.
 
 ## Pointers (implementation)
 
-- Doctor row: `doctorHookSourcesCodex` in `skills/bee-hive/templates/bee.mjs`.
-  Both-present regression test: `skills/bee-hive/templates/tests/test_bee_cli.mjs`
+- Doctor row: `doctorHookSourcesCodex` in `packages/bee/bee.mjs`.
+  Both-present regression test: `packages/bee/tests/test_bee_cli.mjs`
   (single-source baseline + both-present fixture). Evidence:
   `.bee/cells/i54-closeout-5.json`.
 

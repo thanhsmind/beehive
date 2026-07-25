@@ -137,7 +137,7 @@ durable-fallback tier: hardening-1-7-10).
 
 **A session's own record now carries its workspace, stamped once and reused
 by its claims (multisession-native D2/D3, msn-19).** Trigger: session
-creation, or claiming a cell file. What happens: `hooks/bee-session-init.mjs`
+creation, or claiming a cell file. What happens: `packages/bee/hooks/bee-session-init.mjs`
 creates the session record at `resolveContext.controlRoot` rather than the
 writing checkout's own root — closing the gap the `18c` adapter comment had
 flagged as deferred to a later cell — and lazily auto-registers that
@@ -289,7 +289,7 @@ its knowledge actually landed — the state and the specs can no longer disagree
 ## Pointers (implementation)
 
 - Lanes (B12): lane store + `resolvePipeline` + lane-mode `startFeature` in
-  `skills/bee-hive/templates/lib/state.mjs`; `bindSessionLane`/`unbindSessionLane`
+  `packages/bee/lib/state.mjs`; `bindSessionLane`/`unbindSessionLane`
   in `lib/claims.mjs`; CLI: `--lane` on `state.set/gate/scribing-run`,
   `--as-lane/--session-id/--paths` on `state.start-feature`, `state.lanes`,
   `state.session.list/bind/unbind` (`lib/command-registry.mjs` + `bee.mjs`,
@@ -298,15 +298,15 @@ its knowledge actually landed — the state and the specs can no longer disagree
   `docs/history/fresh-session-handoff/reports/validation-s2.md`.
 - Lock-serialized bind/unbind (D10a): `bindSessionLane`/`unbindSessionLane`
   read-modify-write moved inside `acquireSessionsLock` in
-  `skills/bee-hive/templates/lib/claims.mjs`, same bounded-retry/typed
+  `packages/bee/lib/claims.mjs`, same bounded-retry/typed
   `LOCK_BUSY` shape as `heartbeatSession`'s own lock hold. Two forced-
   interleaving regression tests (`_raceSeam` hook, same style as
   `lock.mjs`'s `_takeoverSeam`/`_postRenameSeam`) in
-  `skills/bee-hive/templates/tests/test_claims.mjs`, proven red-first against
+  `packages/bee/tests/test_claims.mjs`, proven red-first against
   a reconstructed pre-fix build (10/10 rounds failing both directions).
   Evidence: trace `.bee/cells/multisession-native-1.json`, commit c794eda.
 - Active workers (D6): `activeWorkers(root, {excludeSessionId})` in
-  `skills/bee-hive/templates/lib/claims.mjs`; `startFeature`'s worker
+  `packages/bee/lib/claims.mjs`; `startFeature`'s worker
   precondition (default and `startLane`) reads it instead of
   `state.workers`; `buildStatus`/`renderStatusText` in `bee.mjs` gain a
   `workers` field/line sourced from it. `stateWorkerMutate` and
@@ -320,7 +320,7 @@ its knowledge actually landed — the state and the specs can no longer disagree
   `workflow-records-and-projections.md` Pointers for `resolveMutationTarget`,
   `writeLaneRecordThroughProjection`/`writeStateRecordThroughProjection`, and
   the `workflow:<id>` lock they acquire.
-- Session workspace stamping (R76): `hooks/bee-session-init.mjs`
+- Session workspace stamping (R76): `packages/bee/hooks/bee-session-init.mjs`
   (control-plane session creation + lazy workspace auto-register);
   `createSession`/`claimCellFile` in `lib/claims.mjs`. Evidence: trace
   `.bee/cells/multisession-native-19.json`, commit 09e1ed0. Full workspace

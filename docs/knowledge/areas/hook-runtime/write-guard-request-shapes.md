@@ -104,17 +104,17 @@ copy (ask-guard-autofix D1/D2, cell ag-1, 2026-07-23).
 
 ## Pointers (implementation)
 
-- Batch guard: `hooks/bee-write-guard.mjs` (`extractApplyPatchTargets`).
+- Batch guard: `packages/bee/hooks/bee-write-guard.mjs` (`extractApplyPatchTargets`).
 
-- CLI-shape guard incl. 3-token verb resolution: `hooks/bee-write-guard.mjs`
+- CLI-shape guard incl. 3-token verb resolution: `packages/bee/hooks/bee-write-guard.mjs`
   against the `command-registry.mjs` catalog. Evidence: `.bee/cells/du-2.json`,
   `docs/history/dispatcher-unify/`.
 
 - Question-schema guard + auto-fix: `checkAskUserQuestion` in
-  `skills/bee-hive/templates/lib/guards.mjs` (fixed-verdict shape
+  `packages/bee/lib/guards.mjs` (fixed-verdict shape
   `{allow, fixed, notes}`); updatedInput emission in
-  `hooks/bee-write-guard.mjs` (`fixedAskVerdict` branch — stdout JSON
+  `packages/bee/hooks/bee-write-guard.mjs` (`fixedAskVerdict` branch — stdout JSON
   `hookSpecificOutput.updatedInput`, exit 0; deny path unchanged, exit 2 +
   stderr). Evidence: `.bee/cells/ag-1.json`, tests
-  `skills/bee-hive/templates/tests/test_guards.mjs` and
+  `packages/bee/tests/test_guards.mjs` and
   `hooks/test_write_guard.mjs`, commit 52dad26.

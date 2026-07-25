@@ -185,9 +185,9 @@ using the untouched pre-mailbox path.
 ## Pointers (implementation)
 
 - Fresh-session flow (B15/B16): two-kind handoff (`readHandoff` normalization,
-  strict `writeHandoff`, `adoptHandoff`) in `skills/bee-hive/templates/lib/state.mjs`;
+  strict `writeHandoff`, `adoptHandoff`) in `packages/bee/lib/state.mjs`;
   CLI `state.handoff.write/adopt/show`; source-gated adoption + session
-  registration in `hooks/bee-session-init.mjs`; pure kind-branch rendering in
+  registration in `packages/bee/hooks/bee-session-init.mjs`; pure kind-branch rendering in
   `lib/inject.mjs` (`handoffOutcome` param); `claimNextCell`/`claimCellCrossSession`
   in `lib/cells.mjs` + `featureBacklogRank` in `lib/backlog.mjs`; CLI
   `cells.claim-next` (the production `sweepExpiredClaims` trigger); live-owner
@@ -199,7 +199,7 @@ using the untouched pre-mailbox path.
   orchestrator's retro-RED probe for fsh-11).
 - Per-workflow mailbox (multisession-native D5, msn-15): `writeMailboxHandoff`/
   `adoptMailboxHandoff`/`listHandoffMailbox`/`newestOpenHandoffMailboxRecord`
-  in `skills/bee-hive/templates/lib/state.mjs`; `state handoff write/show/adopt`
+  in `packages/bee/lib/state.mjs`; `state handoff write/show/adopt`
   resolve their target workflow (`--lane`, the calling session's bound lane,
   or the default record's live workflow) in `bee.mjs`; `rebuildHandoffProjection`
   in `state-projection.mjs`, registered in `rebuildAllProjections` (see
@@ -212,7 +212,7 @@ using the untouched pre-mailbox path.
 - Sanctioned-writer reclassification (R77, msn-24): dated deprecation notes on
   `writeHandoff`/`adoptHandoff` and on `rebuildHandoffProjection`'s own header
   in `state.mjs`/`state-projection.mjs`; the grep-audit test in
-  `skills/bee-hive/templates/tests/test_state.mjs`. Evidence: trace
+  `packages/bee/tests/test_state.mjs`. Evidence: trace
   `.bee/cells/multisession-native-24.json`, commit cee2d5f; advisor digest
   `docs/history/multisession-native/reports/advisor-digest-slice5.md`
   condition E.

@@ -9,7 +9,7 @@ bee:
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/the-trust-model.md, areas/worktree-parallelism/store-tiers-and-where-it-lives.md, areas/workflow-state/sessions-lanes-and-identity.md]
   decisions: ["multisession-native D2 (control plane / data plane split — resolveContext(cwd) replaces resolveRoots; controlRoot is session records, workflow state, claims, leases, and the workspace registry, shared across all worktrees; workspaceRoot is the physical checkout; localRuntimeRoot never needs sharing — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D3 (second write session defaults to isolation: observe/shared-disjoint/isolated write-policy modes; a workspace has exactly one write_owner_session, others attach read-only — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native re-slice decision 89a4a87b (msn-18 honest block: resolveContext was dead code with zero production call sites until every coordination-store call site is swept — re-sliced into 18a state.mjs mapping, 18b cells/reservations/recovery/compaction/state-projection sweep, 18c the standalone bee.mjs dispatcher sweep, 18d onboard migrate-or-fail-loud)", "multisession-native advisor-digest-slice4 conditions 1-7 (docs/history/multisession-native/reports/advisor-digest-slice4.md — file anchors fixed at authoring; msn-18 must close the guard's lane/workflow read in-cell and migrate-or-fail-loud on pre-existing worktree-local sessions/claims/leases, never silently orphaning in-flight data; grant and write ownership compose and never subsume each other; resolveContext becomes the single git-common-dir resolver, with herding.mjs's own standalone resolver tracked rather than reconciled; auto-isolation needs one-line cost disclosure and CLI-owned-allowlisted register/create writes so isolation cannot self-deadlock)", "multisession-native D9 invariant 15 (issue #56 3.9 — write-capable ops refuse without identity where identity is mandatory today: lease acquire and workspace ownership claim; legacy carve-outs — unfenced lease renew/release, sessionless calls proceeding untouched, the C1 no-workflow handoff fallback — are named explicitly, not silently tightened)"]
-  sources: ["multisession-native cell multisession-native-17 (resolveContext(cwd) added beside resolveRoots in state.mjs, controlRoot mapped to <mainRoot>/.bee/runtime/control; trace .bee/cells/multisession-native-17.json, commit bd8f755, 2026-07-25)", "multisession-native cell multisession-native-18a (controlRoot corrected to mainRoot itself; state.mjs's own claims/sessions/workflow-store call sites and guards.mjs's resolveWriteRecord re-rooted; trace .bee/cells/multisession-native-18a.json, commit 5d0ec3c, 2026-07-25)", "multisession-native cell multisession-native-18b (cells.mjs/reservations.mjs/recovery.mjs/compaction.mjs/state-projection.mjs claims/sessions/leases call sites re-rooted via controlRootFor; reservations.mjs carries its own fail-open findMainRoot/controlRootFor replica to avoid an import cycle; trace .bee/cells/multisession-native-18b.json, commit a1431448, 2026-07-25)", "multisession-native cell multisession-native-18c (bee.mjs's own claims/workflow-store call sites and state-projection.mjs's rebuild reads re-rooted; hooks/adapter.mjs gains its own import-light controlRootFor(root) and ctx.controlRoot; trace .bee/cells/multisession-native-18c.json, commit d69d81e, 2026-07-25)", "multisession-native cell multisession-native-18d (onboard_bee.mjs detectWorktreeMigration/applyWorktreeMigration — migrate-or-fail-loud, all-or-nothing; trace .bee/cells/multisession-native-18d.json, commit c90dd37, 2026-07-25)", "multisession-native cell multisession-native-19 (workspace-store.mjs: registerWorkspace/unregisterWorkspace/claimWriteOwnership/attachWorkspace; wired into worktree-store.mjs and claims.mjs; bee-session-init.mjs re-roots session creation onto controlRoot; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25)", "multisession-native cell multisession-native-20 (applyWritePolicy: observe/shared-disjoint/isolated; wired into startFeature's default path; trace .bee/cells/multisession-native-20.json, commit 84376ce, 2026-07-25)", "multisession-native cell multisession-native-21 (guards.mjs checkWrite unified onto one resolveContext resolution; workspace-scoped lease deny; workspace-ownership deny; trace .bee/cells/multisession-native-21.json, commit 3f56916, 2026-07-25)", "multisession-native cell multisession-native-23 (test_msn_invariants.mjs invariant 15 — fresh identity-mandatory refusal proofs for lease acquire and workspace ownership claim, reusing test_guards.mjs's existing deny-class-(c) proof, legacy carve-outs named explicitly in the invariant's own PASS-line output; trace .bee/cells/multisession-native-23.json, commit 06cd209, 2026-07-25)", "docs/history/multisession-native/reports/advisor-digest-slice4.md (conditions 1-7, verdict proceed-with-conditions)"]
+  sources: ["multisession-native cell multisession-native-17 (resolveContext(cwd) added beside resolveRoots in state.mjs, controlRoot mapped to <mainRoot>/.bee/runtime/control; trace .bee/cells/multisession-native-17.json, commit bd8f755, 2026-07-25)", "multisession-native cell multisession-native-18a (controlRoot corrected to mainRoot itself; state.mjs's own claims/sessions/workflow-store call sites and guards.mjs's resolveWriteRecord re-rooted; trace .bee/cells/multisession-native-18a.json, commit 5d0ec3c, 2026-07-25)", "multisession-native cell multisession-native-18b (cells.mjs/reservations.mjs/recovery.mjs/compaction.mjs/state-projection.mjs claims/sessions/leases call sites re-rooted via controlRootFor; reservations.mjs carries its own fail-open findMainRoot/controlRootFor replica to avoid an import cycle; trace .bee/cells/multisession-native-18b.json, commit a1431448, 2026-07-25)", "multisession-native cell multisession-native-18c (bee.mjs's own claims/workflow-store call sites and state-projection.mjs's rebuild reads re-rooted; packages/bee/hooks/adapter.mjs gains its own import-light controlRootFor(root) and ctx.controlRoot; trace .bee/cells/multisession-native-18c.json, commit d69d81e, 2026-07-25)", "multisession-native cell multisession-native-18d (onboard_bee.mjs detectWorktreeMigration/applyWorktreeMigration — migrate-or-fail-loud, all-or-nothing; trace .bee/cells/multisession-native-18d.json, commit c90dd37, 2026-07-25)", "multisession-native cell multisession-native-19 (workspace-store.mjs: registerWorkspace/unregisterWorkspace/claimWriteOwnership/attachWorkspace; wired into worktree-store.mjs and claims.mjs; bee-session-init.mjs re-roots session creation onto controlRoot; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25)", "multisession-native cell multisession-native-20 (applyWritePolicy: observe/shared-disjoint/isolated; wired into startFeature's default path; trace .bee/cells/multisession-native-20.json, commit 84376ce, 2026-07-25)", "multisession-native cell multisession-native-21 (guards.mjs checkWrite unified onto one resolveContext resolution; workspace-scoped lease deny; workspace-ownership deny; trace .bee/cells/multisession-native-21.json, commit 3f56916, 2026-07-25)", "multisession-native cell multisession-native-23 (test_msn_invariants.mjs invariant 15 — fresh identity-mandatory refusal proofs for lease acquire and workspace ownership claim, reusing test_guards.mjs's existing deny-class-(c) proof, legacy carve-outs named explicitly in the invariant's own PASS-line output; trace .bee/cells/multisession-native-23.json, commit 06cd209, 2026-07-25)", "docs/history/multisession-native/reports/advisor-digest-slice4.md (conditions 1-7, verdict proceed-with-conditions)"]
   authoritative_for: "worktree-parallelism: the control-plane/workspace-local topology resolver, the workspace registry's write ownership, and the write-policy isolation default"
 ---
 
@@ -155,7 +155,7 @@ new store, structurally isolated the same way `workflow-store.mjs` and
   later failure); `performCleanup` unregisters it alongside the grant.
   `claims.mjs`'s `createSession`/`claimCellFile` stamp and carry `workspace_id`
   on every session and claim, auto-looked-up from the acting session's own
-  record. `hooks/bee-session-init.mjs` re-roots session creation onto
+  record. `packages/bee/hooks/bee-session-init.mjs` re-roots session creation onto
   `resolveContext.controlRoot` — closing the gap `18c`'s adapter comment had
   flagged as deferred — and lazily auto-registers the workspace on first
   touch.
@@ -207,7 +207,7 @@ lane-path-only `resolveContext` re-resolution. `multisession-native-21`
 collapses all three into **one** upfront `resolveWriteTopology` (wrapping
 `resolveContext(root)`, fail-open) that every branch — lane-bound or not —
 now reads from, feeding `resolvePipeline`'s session → bound-lane → default
-routing uniformly. `hooks/bee-write-guard.mjs` passes the adapter's
+routing uniformly. `packages/bee/hooks/bee-write-guard.mjs` passes the adapter's
 already-resolved `ctx.controlRoot` straight through instead of leaving
 `guards.mjs` to re-derive it.
 
@@ -259,9 +259,9 @@ half is fresh. Evidence: trace `.bee/cells/multisession-native-23.json`, commit
 ## Where it lives (reading map)
 
 - Resolver: `resolveContext`/`resolveRootsCore`/`resolveRoots` (compat
-  wrapper) in `skills/bee-hive/templates/lib/state.mjs`. `controlRootFor(root)`
+  wrapper) in `packages/bee/lib/state.mjs`. `controlRootFor(root)`
   (same file) is the shared helper every re-rooted call site in this concept
-  uses; `reservations.mjs` and `hooks/adapter.mjs` each carry their own
+  uses; `reservations.mjs` and `packages/bee/hooks/adapter.mjs` each carry their own
   minimal, cycle-safe, fail-open replica for structural-isolation reasons
   documented above.
 - Onboarding migration: `detectWorktreeMigration`/`applyWorktreeMigration` in
@@ -272,7 +272,7 @@ half is fresh. Evidence: trace `.bee/cells/multisession-native-23.json`, commit
 - Workspace registry: `workspace-store.mjs`
   (`registerWorkspace`/`unregisterWorkspace`/`claimWriteOwnership`/
   `attachWorkspace`); wiring in `worktree-store.mjs` and `claims.mjs`;
-  `hooks/bee-session-init.mjs`. Tests: `test_workspace_store.mjs`,
+  `packages/bee/hooks/bee-session-init.mjs`. Tests: `test_workspace_store.mjs`,
   `test_worktree_store.mjs`, plus 3 rows in `test_claims.mjs` — including a
   real exactly-one-owner race proven through the lock.
 - Write policy: `applyWritePolicy` in `state.mjs`; `startFeature`'s default
@@ -281,7 +281,7 @@ half is fresh. Evidence: trace `.bee/cells/multisession-native-23.json`, commit
   heartbeat blocks a start" test replaced by two tests distinguishing that
   from the new actually-live-owner behavior).
 - Unified write guard: `resolveWriteTopology`/`checkWrite` in `guards.mjs`;
-  `ctx.controlRoot` threaded from `hooks/bee-write-guard.mjs`. 7 new tests in
+  `ctx.controlRoot` threaded from `packages/bee/hooks/bee-write-guard.mjs`. 7 new tests in
   `test_guards.mjs` (same-workspace lease scoping, ownership deny + its exact
   scoping boundaries, legacy no-records byte-identical, corrupt-workspace
   fail-closed, linked-worktree topology, never-waits regression).
@@ -290,7 +290,7 @@ half is fresh. Evidence: trace `.bee/cells/multisession-native-23.json`, commit
   (conditions 1-7, verdict proceed-with-conditions); the re-slice decision is
   `.bee/decisions.jsonl` id `89a4a87b`.
 - Acceptance suite (D9 invariant 15, msn-23):
-  `skills/bee-hive/templates/tests/test_msn_invariants.mjs` (see
+  `packages/bee/tests/test_msn_invariants.mjs` (see
   `returning-and-the-merge-gate.md`'s Pointers for the suite's full index).
   Evidence: trace `.bee/cells/multisession-native-23.json`, commit 06cd209;
   advisor digest

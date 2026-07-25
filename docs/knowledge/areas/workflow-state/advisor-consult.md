@@ -100,10 +100,10 @@ consult budget.
 ## Pointers (implementation)
 
 - Cost pattern / tier resolution: `modelForTier`, `MODEL_TIERS`,
-  `CONFIGURABLE_TIERS` in `skills/bee-hive/templates/lib/state.mjs` (ceiling
+  `CONFIGURABLE_TIERS` in `packages/bee/lib/state.mjs` (ceiling
   never configured; extraction/generation/review are the configurable tiers).
 - Adviser (worker consult): `resolveAdvisor` + `MODEL_NORMALIZE_SLOTS` in
-  `skills/bee-hive/templates/lib/state.mjs` (byte-mirrored to `.bee/bin/lib/`);
+  `packages/bee/lib/state.mjs` (byte-mirrored to `.bee/bin/lib/`);
   slot `models.<runtime>.advisor` in `.bee/config.json`; worker protocol in
   `skills/bee-executing/SKILL.md` (Advisor Consult section); dispatch-time
   same-model no-op + Advisor line (AO5 form, ladder removed by ao-2b-1) in
@@ -115,8 +115,8 @@ consult budget.
 - Advisor config tolerance: `STALE_ADVISOR_KEY_WARNING` (copy names the
   top-level key; the nested `models.<runtime>.advisor` slot is separate and
   valid), `hasStaleAdvisorKey`
-  in `skills/bee-hive/templates/lib/state.mjs` (byte-mirrored to
-  `.bee/bin/lib/state.mjs`); surfaced by `skills/bee-hive/templates/bee.mjs`
+  in `packages/bee/lib/state.mjs` (byte-mirrored to
+  `.bee/bin/lib/state.mjs`); surfaced by `packages/bee/bee.mjs`
   (`status` group) and `skills/bee-hive/scripts/onboard_bee.mjs` (`staleAdvisorNotices`).
   Evidence: fanout-delegation cells fanout-1/fanout-4 (commits 0056eda,
   79d96df).

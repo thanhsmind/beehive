@@ -144,10 +144,10 @@ the first; a re-run plans nothing.
 - `skills/bee-hive/scripts/onboard_bee.mjs` — `statuslineOptIn()`, plan stage 3b,
   `copy_statusline` apply case, `buildManagedVersions`/`subsetManaged` conditional
   `statusline` key.
-- `skills/bee-hive/templates/statusline/` — canonical pair
+- `packages/bee/statusline/` — canonical pair
   (`statusline-command.sh`, `statusline-usage.mjs`).
 - `skills/bee-hive/scripts/tests/test_onboard_bee.mjs` — section 9c sandbox cases.
-- `skills/bee-hive/templates/tests/test_lib.mjs` — statusline byte-equality sweep.
+- `packages/bee/tests/test_lib.mjs` — statusline byte-equality sweep.
 - Host-side settings contract: `.claude/settings.json` → `statusLine.command`.
 - `skills/bee-hive/scripts/onboard_bee.mjs` — `CODEX_STATUS_LINE_BLOCK`,
   `codexUserConfigPath()`, `codexStatuslineMissing()`,

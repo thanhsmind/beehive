@@ -122,13 +122,13 @@ falls through to the advisory path with a visible log, never a crash.
 
 ## Pointers (implementation)
 
-- Shared adapter: `hooks/adapter.mjs` (`encodeAdvisory`; `encodeBlock` — the
+- Shared adapter: `packages/bee/hooks/adapter.mjs` (`encodeAdvisory`; `encodeBlock` — the
   deliberate turn-control inverse used ONLY by the gate-bypass net); the eight
-  handlers `hooks/bee-*.mjs`, including the paired Codex native-subagent audit
+  handlers `packages/bee/hooks/bee-*.mjs`, including the paired Codex native-subagent audit
   handler and its vendored mirror.
 
-- Gate-bypass net (B15, R14): `maybeBypassBlock` in `hooks/bee-session-close.mjs`
+- Gate-bypass net (B15, R14): `maybeBypassBlock` in `packages/bee/hooks/bee-session-close.mjs`
   (fire matrix `PHASE_GATE` + `levelCoversGate`; loop-guard via
-  `shouldInject`/`markInjected` in `skills/bee-hive/templates/lib/inject.mjs`
+  `shouldInject`/`markInjected` in `packages/bee/lib/inject.mjs`
   keyed `sessionId:phase:gate:level`; level via `bypassLevel` in
   `.../lib/state.mjs`). Suite: `hooks/test_bypass_stop_net.mjs`.

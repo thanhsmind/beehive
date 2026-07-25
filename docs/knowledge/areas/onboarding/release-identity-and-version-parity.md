@@ -2,14 +2,14 @@
 type: bee.area
 title: "Onboarding — release identity, version parity, and honest reporting"
 description: "One release version across every projection, the refusal to downgrade a project's vendored runtime, drift reported from real file content, the five source origins named rather than guessed, the blast radius a forceable refusal must enumerate before consent, and a retired library module removed from the project the moment its ledger entry drops."
-timestamp: 2026-07-24
+timestamp: 2026-07-26
 bee:
   id: onboarding-release-identity-and-version-parity
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: [55ff17ef (release-version parity is fail-closed across every distributed projection), 09b776b5 (both installers prove complete greenfield/brownfield postconditions before success), "fe6593c0 (runtime-lib downgrade refusal targets the vendored copy path; zero-mutation, self-install included)", 485e949a (honest status drift reference = the onboarding managed-hash ledger), "579bbad7 (status drift is report-only, stays a boolean + optional detail; fail-open on absent/legacy ledger)", "ce4eee19 (SRC-01..06 shipped as a pure shared classifier, wrap-not-replace, consumed by status + onboarding)", 21be04f7 (status gains a report-only source field; unknown/legacy never implicit source), cba8b832 (release-version single-source), 9927fafb (a switch that narrows what an upgrade compares must equally narrow what it claims), "6eacf846 (auto-approved shape+execution for installer-verify-orphan-drift, bypass total)", "053a49fa (retired library modules are removed on apply via a ledger-diff derivation, not a hand-maintained list)"]
-  sources: ["installer-version-parity-1-3-1 locked rules (fail-closed release tuple, full projection parity, greenfield/brownfield end-to-end success contract; cells -4/-2/-3, 2026-07-16; field fix cells -5/-6)", "codex-harness-hardening cell codex-harness-hardening-1b-1 (runtime-lib downgrade guard R15; split-brain regression 3->0, 2026-07-15)", "codex-harness-hardening-1c cell codex-harness-hardening-1c-1 (honest status drift R16 via the onboarding managed-hash ledger; 5 drift tests, 2026-07-15)", "codex-harness-hardening-1d cells 1d-1/1d-2 (SRC-01..06 source-identity classifier R17 + status source field; 8 classifier/status tests, 2026-07-15)", "sticky-repo-hooks (cell sticky-hooks-1, 2026-07-13; found auditing 8 host projects after the v0.1.30 rollout)", "cell p49-force-downgrade-blast-radius-1 (PBI P49, v1.1.0 review P2; advisor-consulted)", "cell installer-verify-orphan-drift-1 (R27: retired-library removal on apply; repro was install.sh reporting version-parity failure/drift=true post-apply on a host still carrying a retired templates/lib module, 2026-07-24)", "docs/specs/onboarding.md#R15", "docs/specs/onboarding.md#R16", "docs/specs/onboarding.md#R17", "docs/specs/onboarding.md#R21", "docs/specs/onboarding.md#R22", "docs/specs/onboarding.md#R26", "docs/specs/onboarding.md#E8", "docs/specs/onboarding.md#P5", "docs/history/installer-verify-extra-drift/ (cell installer-verify-extra-drift-1: install.sh verify step tolerates extra-file-only drift, 2026-07-24)"]
+  decisions: [55ff17ef (release-version parity is fail-closed across every distributed projection), 09b776b5 (both installers prove complete greenfield/brownfield postconditions before success), "fe6593c0 (runtime-lib downgrade refusal targets the vendored copy path; zero-mutation, self-install included)", 485e949a (honest status drift reference = the onboarding managed-hash ledger), "579bbad7 (status drift is report-only, stays a boolean + optional detail; fail-open on absent/legacy ledger)", "ce4eee19 (SRC-01..06 shipped as a pure shared classifier, wrap-not-replace, consumed by status + onboarding)", 21be04f7 (status gains a report-only source field; unknown/legacy never implicit source), cba8b832 (release-version single-source), 9927fafb (a switch that narrows what an upgrade compares must equally narrow what it claims), "6eacf846 (auto-approved shape+execution for installer-verify-orphan-drift, bypass total)", "053a49fa (retired library modules are removed on apply via a ledger-diff derivation, not a hand-maintained list)", "e0f3e40e (packages-restructure D1-D5: vendor payload relocated to packages/bee/, skills instruction-only, PLUGIN_ROOT-relative resolution)", "a25ef382 (packages-restructure D6: release manifest package_payload role for packages/bee, plugin_hook role repointed to packages/bee/hooks)"]
+  sources: ["installer-version-parity-1-3-1 locked rules (fail-closed release tuple, full projection parity, greenfield/brownfield end-to-end success contract; cells -4/-2/-3, 2026-07-16; field fix cells -5/-6)", "codex-harness-hardening cell codex-harness-hardening-1b-1 (runtime-lib downgrade guard R15; split-brain regression 3->0, 2026-07-15)", "codex-harness-hardening-1c cell codex-harness-hardening-1c-1 (honest status drift R16 via the onboarding managed-hash ledger; 5 drift tests, 2026-07-15)", "codex-harness-hardening-1d cells 1d-1/1d-2 (SRC-01..06 source-identity classifier R17 + status source field; 8 classifier/status tests, 2026-07-15)", "sticky-repo-hooks (cell sticky-hooks-1, 2026-07-13; found auditing 8 host projects after the v0.1.30 rollout)", "cell p49-force-downgrade-blast-radius-1 (PBI P49, v1.1.0 review P2; advisor-consulted)", "cell installer-verify-orphan-drift-1 (R27: retired-library removal on apply; repro was install.sh reporting version-parity failure/drift=true post-apply on a host still carrying a retired templates/lib module, 2026-07-24)", "docs/specs/onboarding.md#R15", "docs/specs/onboarding.md#R16", "docs/specs/onboarding.md#R17", "docs/specs/onboarding.md#R21", "docs/specs/onboarding.md#R22", "docs/specs/onboarding.md#R26", "docs/specs/onboarding.md#E8", "docs/specs/onboarding.md#P5", "docs/history/installer-verify-extra-drift/ (cell installer-verify-extra-drift-1: install.sh verify step tolerates extra-file-only drift, 2026-07-24)", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)"]
   authoritative_for: "onboarding: release identity, version parity, and honest reporting"
 ---
 
@@ -127,6 +127,19 @@ and the strongest of them is the one that reports success.
   hash-mismatch or missing-file entry anywhere in the same drift set still
   hard-fails exactly as before — extra-file-only is the only tolerated shape
   (installer-verify-extra-drift cell installer-verify-extra-drift-1, 2026-07-24).
+- **R29** — Since the vendored payload stopped shipping a version marker of its
+  own inside every synced skill directory (skills are instruction-only), the
+  per-target skill-sync version preflight reads a sync-owned version stamp
+  written at the skill-sync root on every successful apply, for every target
+  kind, and treats it as authoritative when present. Only when the stamp is
+  genuinely absent does the preflight fall back to the legacy nested marker, so
+  an already-onboarded host synced by a pre-restructure release still resolves
+  a real version, applies, and gets the stamp written for every onboard after
+  that — zero flags, zero manual steps. A stamp that is present but malformed
+  or a symlink reads as unknown and is never treated as absent — it is never
+  allowed to fall through to the legacy marker, which would reopen a
+  downgrade-bypass path R15 already closed (packages-restructure D1;
+  decision e0f3e40e; cell packages-restructure-1).
 
 ## Edge Cases Settled
 
@@ -138,10 +151,18 @@ and the strongest of them is the one that reports success.
   versions. Whenever a switch narrows what a run compares, the switch's absence
   must narrow what the run *claims*, never only what it does.
 
+## Open Gaps
+
+- R29's malformed/symlinked-stamp behavior (never falling back to the legacy
+  marker) is correct by construction in the code path but has no dedicated
+  negative regression test yet: a case proving "stamp present but malformed or
+  a symlink, with a valid legacy marker also present, still resolves to
+  unknown" is unpinned.
+
 ## Pointers (implementation)
 
 - Release-version single-source (decision cba8b832): the four physical homes of
-  the version — `templates/lib/state.mjs` + its `.bee/bin/lib` mirror, and the
+  the version — `packages/bee/lib/state.mjs` + its `.bee/bin/lib` mirror, and the
   two plugin manifests' `.version` — are enumerated once in
   `scripts/lib/release-tuple.mjs` (a side-effect-free registry of location +
   read/write). `scripts/tests/test_release_tuple.mjs` (check) and
@@ -149,10 +170,26 @@ and the strongest of them is the one that reports success.
   member from one command — `node scripts/bump_version.mjs <version>` — which
   also regenerates the hash manifest. The split-brain regression fixture's
   "current version" is derived at runtime from the canonical
-  `templates/lib/state.mjs` (no hand-edited anchor); `scripts/tests/test_bump_version.mjs`
+  `packages/bee/lib/state.mjs` (no hand-edited anchor); `scripts/tests/test_bump_version.mjs`
   proves the writer covers every registry component and preserves each file's
   surrounding bytes. Plugin manifests keep a literal `.version` because external
   plugin systems read them as raw JSON and cannot import the JS const.
+- Release manifest payload/hook roles (packages-restructure D5-D6; decision
+  a25ef382; cell packages-restructure-3): `scripts/release_manifest.mjs` walks
+  `packages/bee/` (excluding its `hooks/` subtree) under a new role,
+  `package_payload` (78 records) — replacing the payload's old implicit
+  coverage via the `skills/` walk — and walks `packages/bee/hooks/` under the
+  pre-existing role `plugin_hook`, unchanged in name (18 records).
+  `plugin_distribution.mjs`'s `PACKAGE_ROLES` set accepts both roles so
+  `proveInstalledPackage` keeps proving the vendored payload ships.
+  `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` each point their
+  `hooks` config at `./packages/bee/hooks/claude-hooks.json` and
+  `./packages/bee/hooks/hooks.json` respectively.
+- Skill-sync version stamp (R29): `SKILLS_VERSION_STAMP` constant
+  (`.bee-skills-version.json`) and the stamp-first/legacy-marker-fallback read
+  in `computeSkillSyncTarget` (`skills/bee-hive/scripts/onboard_bee.mjs:1271-1281`)
+  and the analogous global-root read (`:1461-1471`). Evidence:
+  `.bee/cells/packages-restructure-1.json`.
 - Retired-library removal (R27): `onboard_bee.mjs`'s plan builder derives a
   `remove_lib` item per retired library module by diffing the previous
   `.bee/onboarding.json` `managed.lib` keys against the current
@@ -163,7 +200,7 @@ and the strongest of them is the one that reports success.
 - Extra-file-only drift tolerance (R28): the verify node snippet at the tail of
   `scripts/install.sh` (piped after `printf '%s' "$STATUS" | node -e '...'`),
   reading `s.onboarding.drift_detail` (populated by `computeRuntimeDrift`,
-  `skills/bee-hive/templates/bee.mjs`). Regression test:
+  `packages/bee/bee.mjs`). Regression test:
   `scripts/tests/test_installers_e2e.mjs` ("extra unmanaged .mjs in .bee/bin/lib/
   does not hard-fail install.sh's verify step" case). Evidence:
   `.bee/cells/installer-verify-extra-drift-1.json`.

@@ -87,17 +87,17 @@ unaffected (codex-native-transport D6; decision 350f1e82).
 ## Pointers (implementation)
 
 - Native-transport classification: `classifyNativeTransport(evidence)` (pure,
-  `skills/bee-hive/templates/lib/dispatch-guard.mjs`). Probe record reader/
+  `packages/bee/lib/dispatch-guard.mjs`). Probe record reader/
   writer and the D4 doctor row: `readNativeTransportClassification`,
   `writeNativeTransportProbe`, `doctorNativeTransportUnlock`
-  (`skills/bee-hive/templates/bee.mjs`, mirroring the doctor-attest pattern).
+  (`packages/bee/bee.mjs`, mirroring the doctor-attest pattern).
   Suite: `scripts/tests/test_native_probe.mjs`. Advisor-marker acceptance on the
   codex branch: `ANCHORED_CODEX_TIER_MARKER_RE` in `dispatch-guard.mjs`.
   Evidence: `.bee/cells/cnt-2.json`, `.bee/cells/cnt-3.json`,
   `docs/history/codex-native-transport/`.
 
 - Override-field pass-through gap (B19): documented inline above
-  `evaluateCodexSpawn` in `skills/bee-hive/templates/lib/dispatch-guard.mjs`
+  `evaluateCodexSpawn` in `packages/bee/lib/dispatch-guard.mjs`
   (mirrored in `.bee/bin/lib/dispatch-guard.mjs`); canary rows
   `hooks/test_model_guard.mjs` rows 56-57. Evidence: `.bee/cells/cnt-4.json`,
   `docs/history/codex-native-transport/reports/cnt-4.md`.

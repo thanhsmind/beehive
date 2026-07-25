@@ -76,10 +76,10 @@ cross-project view built from this same store is `cross-project-matrix.md`.
   `syncSessionsToLog`), matrix build-from-log grouped by last folder
   (`buildMatrixFromLog`, `projectName`), HTML (`renderMatrixHtml`/
   `writeReport`), and section schema (`bee-perf/v1`):
-  `skills/bee-hive/templates/lib/perf.mjs` (mirrored to
+  `packages/bee/lib/perf.mjs` (mirrored to
   `.bee/bin/lib/perf.mjs` and the `.claude`/`.agents` distribution trees).
 - **P3** — Automatic write + refresh at session close: `maybePerfRefresh`
-  in `hooks/bee-session-close.mjs` (Stop + PreCompact) — upserts the
+  in `packages/bee/hooks/bee-session-close.mjs` (Stop + PreCompact) — upserts the
   current session row into the log then rebuilds the HTML from the log;
   best-effort/fail-open, parses only the one current transcript.
 - **P5** — Global store: `~/.config/beehive/performance.jsonl` (manual

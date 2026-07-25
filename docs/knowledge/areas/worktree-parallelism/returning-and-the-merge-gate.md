@@ -166,20 +166,20 @@ under any lock" claim, which is false today (short git plumbing legitimately run
 
 - The three-phase merge (D10b): `mergeFeatureWorktree` / `mergeFeatureWorktreeStage`
   (phase 1) / `mergeFeatureWorktreeFinish` (phase 3) / `checkMergeFence` (the four-part
-  check, advisor condition C2) in `skills/bee-hive/templates/lib/worktree-store.mjs`.
+  check, advisor condition C2) in `packages/bee/lib/worktree-store.mjs`.
   Deterministic-seam regression tests replace the old sleep-based lock-duration proof: an
   injected verify script self-checks the lock's absence during phase 2, and another
   self-tampers the staged tree mid-verify to prove the fence catches it, both red-first
   against the pre-fix code. Evidence: trace `.bee/cells/multisession-native-2.json`,
   commit b8fc926.
 - The integration queue (D9 invariant 12, msn-22): `runThroughQueue` / `tryBecomeProcessor`
-  / `checkProcessorLeaseEpoch` in `skills/bee-hive/templates/lib/integration-queue.mjs`;
+  / `checkProcessorLeaseEpoch` in `packages/bee/lib/integration-queue.mjs`;
   `runVerifyChild` (the async verify-child replacement for `spawnSync`) and the
   `onVerifyTick`/`checkProcessorLease` hooks in `worktree-store.mjs`; CLI wiring
   (`--queue-wait-ms`, the `INTEGRATION_QUEUE_TIMEOUT` text) in `handleWorktreeMerge`,
-  `skills/bee-hive/templates/bee.mjs`. Evidence: trace
+  `packages/bee/bee.mjs`. Evidence: trace
   `.bee/cells/multisession-native-22.json`, commit 546d532.
-- The acceptance suite (D9, msn-23): `skills/bee-hive/templates/tests/test_msn_invariants.mjs`
+- The acceptance suite (D9, msn-23): `packages/bee/tests/test_msn_invariants.mjs`
   (index, 15 numbered entries) plus its two fresh Worker-concurrency race harnesses
   (`race_lease_child.mjs`, invariants 5/6). Evidence: trace
   `.bee/cells/multisession-native-23.json`, commit 06cd209.

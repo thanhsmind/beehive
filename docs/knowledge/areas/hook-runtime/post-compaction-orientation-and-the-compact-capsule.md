@@ -183,15 +183,15 @@ adopted.
 ## Pointers (implementation)
 
 - Builder: `buildCompactCapsule(root, {sessionId, handoffOutcome})` in
-  `skills/bee-hive/templates/lib/compaction.mjs`, alongside
+  `packages/bee/lib/compaction.mjs`, alongside
   `appendCompactionRecord`, `readCompactionCounts`, `survivalWarning`,
   `anchorMissing`, `compactCheck`, and `CAPSULE_MUTED_CHECKS` (the anchor-mute
   list). Mirrored to `.bee/bin/lib/`.
 - CLI: `state compact-log`, `state compact-check`, and `state compact-capsule` in
   `command-registry.mjs` + `bee.mjs` — each reachable independent of whether any
   lifecycle checkpoint fires.
-- Wiring: `hooks/bee-session-init.mjs` (the compaction-resume branch; computes and
-  passes `handoffOutcome` through to the builder), `hooks/bee-session-close.mjs`
+- Wiring: `packages/bee/hooks/bee-session-init.mjs` (the compaction-resume branch; computes and
+  passes `handoffOutcome` through to the builder), `packages/bee/hooks/bee-session-close.mjs`
   (the pre-compaction log append and survival notice).
 - Golden fixture: `scripts/fixtures/preamble-golden.txt`.
 - Proof: `scripts/tests/test_compact_capsule.mjs`, `scripts/tests/test_compaction_module.mjs`,

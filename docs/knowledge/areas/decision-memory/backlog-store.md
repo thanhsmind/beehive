@@ -122,11 +122,11 @@ one owner, generated ids that never collide however many sessions run at once.
 ## Pointers (implementation)
 
 - Store and fold: `foldPbis`, `pbiAdd`, `pbiStatus`, `pbiAmend`, `listPbis`, `PBI_STATUSES` in
-  `.bee/bin/lib/backlog.mjs` (mirrored at `skills/bee-hive/templates/lib/backlog.mjs`).
+  `.bee/bin/lib/backlog.mjs` (mirrored at `packages/bee/lib/backlog.mjs`).
 - Generated view: `renderBacklogMd` in the same file; `backlog render --write|--check` in
   `.bee/bin/bee.mjs`.
 - Write-guard: `DIRECT_EDIT_DENY` in `.bee/bin/lib/guards.mjs` (mirrored at
-  `skills/bee-hive/templates/lib/guards.mjs`).
+  `packages/bee/lib/guards.mjs`).
 - One-time migration and its invariant check: `scripts/migrate_backlog_pbis.mjs`,
   `scripts/backlog_uniqueness.mjs`.
 - Verb prose and merge rules: `skills/bee-scribing/references/scribing-reference.md`'s

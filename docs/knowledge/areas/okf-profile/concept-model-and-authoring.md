@@ -307,13 +307,13 @@ comma, or other reserved character; both forms round-trip.
 
 - The bundle-mode predicate, the scribing-target resolver and the frontmatter emitter:
   `bundleMode`, `scribingTarget`, `emitFrontmatter` in `.bee/bin/lib/knowledge.mjs` (mirrored at
-  `skills/bee-hive/templates/lib/knowledge.mjs`).
+  `packages/bee/lib/knowledge.mjs`).
 - The product-root resolution both doc trees share: `resolveProductRoot` in
   `.bee/bin/lib/state.mjs` — the same resolver the session preamble (`inject.mjs`), the backlog
   and the session-close hook already use.
 - The scribe's own routing prose: `skills/bee-scribing/SKILL.md` §2 and §2a.
 - Coverage for the gate, its three refusals and the repo-divorce topology:
-  `skills/bee-hive/templates/tests/test_bundle_mode.mjs`.
+  `packages/bee/tests/test_bundle_mode.mjs`.
 
 ### `bee.plan` — `docs/knowledge/work/okf-foundation/plan.md` (live)
 

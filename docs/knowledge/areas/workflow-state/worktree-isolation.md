@@ -90,8 +90,8 @@ recovery reference or patch.
 ## Pointers (implementation)
 
 - Worktree isolation (B20/R32-R35): root resolution in
-  `skills/bee-hive/templates/lib/state.mjs`; hook transport and containment in
-  `hooks/adapter.mjs` and `hooks/bee-write-guard.mjs`; dispatch, attestation,
+  `packages/bee/lib/state.mjs`; hook transport and containment in
+  `packages/bee/hooks/adapter.mjs` and `packages/bee/hooks/bee-write-guard.mjs`; dispatch, attestation,
   merge-back, recovery, and disposal contracts in `skills/bee-swarming/SKILL.md`,
   `skills/bee-swarming/references/swarming-reference.md`, and
   `skills/bee-executing/references/worker-details.md`. Evidence: capped cells

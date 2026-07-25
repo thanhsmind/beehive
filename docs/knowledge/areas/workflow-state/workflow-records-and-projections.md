@@ -278,21 +278,21 @@ workspace-local).
 
 - Workflow record store: `createWorkflow`/`readWorkflow`/`updateWorkflow`/
   `listWorkflows`/`withWorkflowLock`/`updateWorkflowAssumingLock` in
-  `skills/bee-hive/templates/lib/workflow-store.mjs` (byte-mirrored to
+  `packages/bee/lib/workflow-store.mjs` (byte-mirrored to
   `.bee/bin/lib/`). 13 tests in `test_workflow_store.mjs`, red-first proven
   (constant lock name broke cross-workflow isolation; silent-default
   `readWorkflow` broke the typed-refusal tests). Evidence: trace
   `.bee/cells/multisession-native-5.json`, commit 1e7b538.
 - Feature-start workflow creation: `seedLegacyWorkflows`,
   `checkNoLiveWorkflowForFeature`, `checkNoSameFeatureClaimedCells` in
-  `skills/bee-hive/templates/lib/state.mjs`. New msn-6 concurrency test proves
+  `packages/bee/lib/state.mjs`. New msn-6 concurrency test proves
   two different features' workflow-record creation never share a lock; new
   msn-6 C1 test proves a mid-flight legacy `state.json` survives as a
   workflow record after an unrelated feature's lane start and is never
   duplicated on a later start. Evidence: trace
   `.bee/cells/multisession-native-6.json`, commit f4fe163.
 - Projections: `rebuildStateProjection`/`rebuildLaneProjection`/
-  `rebuildAllProjections` in `skills/bee-hive/templates/lib/state-projection.mjs`;
+  `rebuildAllProjections` in `packages/bee/lib/state-projection.mjs`;
   `bee-state-sync.mjs` (hook) rewritten onto a full idempotent rebuild; new
   verb `bee state rebuild-projections`. Invariant proof (delete → rebuild →
   byte-identical) in `test_state_projection.mjs`. Evidence: trace
@@ -300,7 +300,7 @@ workspace-local).
 - Plan-rev-scoped gates: `workflowGatesToApprovedGates` in
   `state-projection.mjs`; `handleStateGate`'s execution-gate stamping and
   `writeLaneRecordThroughProjection`'s optional `gateStamp` param, and the new
-  `state plan-rev bump` verb, in `skills/bee-hive/templates/bee.mjs` +
+  `state plan-rev bump` verb, in `packages/bee/bee.mjs` +
   `lib/command-registry.mjs`. Proved red-first (a `plan_rev` bump flips only
   the targeted workflow's projected execution boolean; a sibling workflow is
   untouched). Evidence: trace `.bee/cells/multisession-native-9.json`, commit
@@ -324,5 +324,5 @@ workspace-local).
 - Legacy handoff projection's audited writer set (msn-24): see
   `areas/workflow-state/handoff.md` (R77) for the full behavior; the
   grep-audit test itself lives in
-  `skills/bee-hive/templates/tests/test_state.mjs`. Evidence: trace
+  `packages/bee/tests/test_state.mjs`. Evidence: trace
   `.bee/cells/multisession-native-24.json`, commit cee2d5f.

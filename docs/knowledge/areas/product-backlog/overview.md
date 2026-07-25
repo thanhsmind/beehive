@@ -121,18 +121,18 @@ project.
 
 ## Pointers (implementation)
 
-- **P1** — Counting/reordering/badges: `skills/bee-hive/templates/lib/backlog.mjs`
+- **P1** — Counting/reordering/badges: `packages/bee/lib/backlog.mjs`
   (`readBacklogCounts`, `rankBacklog`, `renderBacklogBadges`); CLI:
   `bee backlog counts|rank|badges`.
-- **P2** — Submission: `skills/bee-hive/templates/lib/backlog.mjs`
-  (`proposePbiRow`), `skills/bee-hive/templates/bee.mjs`
-  (`handleBacklogPropose`), `skills/bee-hive/templates/lib/command-registry.mjs`
+- **P2** — Submission: `packages/bee/lib/backlog.mjs`
+  (`proposePbiRow`), `packages/bee/bee.mjs`
+  (`handleBacklogPropose`), `packages/bee/lib/command-registry.mjs`
   (`backlog.propose` entry); CLI: `bee backlog propose --story "<s>" --cos "<c>"
   [--feature <slug>]`. Mirrored to `.bee/bin/**` and the plugin/skill trees via
   `skills/bee-hive/scripts/onboard_bee.mjs --apply`. Tests:
-  `skills/bee-hive/templates/tests/test_cli_cells.mjs`,
-  `skills/bee-hive/templates/tests/test_bee_cli.mjs`.
+  `packages/bee/tests/test_cli_cells.mjs`,
+  `packages/bee/tests/test_bee_cli.mjs`.
 - **P3** — Known counting defect (Open Gaps, first bullet):
-  `skills/bee-hive/templates/lib/backlog.mjs` `normalizeStatus`/
+  `packages/bee/lib/backlog.mjs` `normalizeStatus`/
   `readBacklogCounts` (exact-match only, no tolerance for a trailing
   annotation) — filed as friction `.bee/backlog.jsonl` 2026-07-23T10:20:34.557Z.
