@@ -168,6 +168,11 @@ import { findForeignHolds, releaseHolds, sweepExpiredHolds, withHoldsLock, inser
 // maxAttempts override is ever passed here.
 import { withStoreLock } from './lib/lock.mjs';
 import { writeGrant, removeGrant, listGrants, bootstrapWorktreeStore, createFeatureWorktree, mergeFeatureWorktree } from './lib/worktree-store.mjs';
+// multisession-native-22 (D8 stage 5, D9 invariant 12, advisor condition A):
+// ONLY handleWorktreeMerge below becomes queue-aware — see
+// integration-queue.mjs's own header for why nothing else (dispatch-
+// interlock.mjs, herding.mjs) is ever wired to this.
+import { runThroughQueue, DEFAULT_WAIT_BOUND_MS } from './lib/integration-queue.mjs';
 import { enableHerding, disableHerding, herdingStatus } from './lib/herding.mjs';
 import { prepareDispatch } from './lib/dispatch-prepare.mjs';
 import {
@@ -4863,6 +4868,13 @@ async function handleWorktreeNew(_root, flags) {
 // companionEndCommand (worktree-companion-hook) is resolved the same way,
 // from commands.worktree_companion_end — see teardownCompanionIfPresent's
 // own doc comment in worktree-store.mjs for why it runs unconditionally.
+// multisession-native-22: identity fallback for the processor lease when no
+// session id is resolvable at all (no BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID,
+// no live session record) — merge has never required session identity to
+// run solo, and this cell does not add that requirement; the lease record
+// just needs SOME non-empty session_id string (lease-store's own hard
+// requirement), same posture as reservations.mjs's SESSIONLESS_SESSION_ID.
+const WORKTREE_MERGE_SESSIONLESS_ID = 'bee-worktree-merge-sessionless';
 async function handleWorktreeMerge(_root, flags) {
   const id = requireFlag(flags, 'id');
   const cleanup = flags.cleanup === true;
@@ -4903,13 +4915,41 @@ async function handleWorktreeMerge(_root, flags) {
   // torn down even if this specific merge invocation forgets to opt in to
   // anything — there is nothing to opt in to.
   const companionEndCommand = configCommands.worktree_companion_end || undefined;
-  // xwh-2: mergeFeatureWorktree is now async (its --cleanup path awaits
-  // releaseAllForHolder) — the dispatcher already does `await handler(...)`
-  // for every command, so this only needed the local await.
-  const mergeResultValue = await mergeFeatureWorktree(mainRoot, { id, cleanup, verifyCommand, companionEndCommand });
+  // multisession-native-22 (D8 stage 5, D9 invariant 12): route through the
+  // integration queue instead of calling mergeFeatureWorktree directly —
+  // integration-queue.mjs's own header documents the drainer/processor-lease
+  // mechanics (advisor conditions A/B/C). controlRootFor(mainRoot) is the
+  // SHARED queue/lease root across every worktree of this project (msn-18c
+  // PLANE RULE, same re-rooting every other coordination call in this file
+  // already does). A resolvable session id is required by lease-store; a
+  // caller with none identifiable (no BEE_SESSION_ID, no live session
+  // record) still gets a stable sessionless identity rather than a refusal —
+  // merge itself has never required session identity, and this cell does not
+  // change that.
+  const ctrlRootForMerge = controlRootFor(mainRoot);
+  const mergeSessionId = resolveSessionId({ root: ctrlRootForMerge }) || WORKTREE_MERGE_SESSIONLESS_ID;
+  let queueWaitBoundMs = DEFAULT_WAIT_BOUND_MS;
+  if (flags['queue-wait-ms'] !== undefined) {
+    const parsedWaitBoundMs = Number(flags['queue-wait-ms']);
+    if (Number.isFinite(parsedWaitBoundMs) && parsedWaitBoundMs > 0) queueWaitBoundMs = parsedWaitBoundMs;
+  }
+  // xwh-2: mergeFeatureWorktree is async (its --cleanup path awaits
+  // releaseAllForHolder) — runThroughQueue already `await`s runMerge(...),
+  // so this only needed the local await.
+  const mergeResultValue = await runThroughQueue(ctrlRootForMerge, {
+    worktreeId: id,
+    sessionId: mergeSessionId,
+    waitBoundMs: queueWaitBoundMs,
+    runMerge: (hooks) => mergeFeatureWorktree(mainRoot, { id, cleanup, verifyCommand, companionEndCommand, ...hooks }),
+  });
 
   const lines = [];
-  if (mergeResultValue.ok) {
+  if (mergeResultValue.code === 'INTEGRATION_QUEUE_TIMEOUT') {
+    // Advisor condition B: this text must UNAMBIGUOUSLY say the merge did
+    // NOT run — never readable as success. `mergeResultValue.message`
+    // already says so explicitly; this line just leads with it.
+    lines.push(`Merge of worktree ${id} did NOT run: ${mergeResultValue.message}`);
+  } else if (mergeResultValue.ok) {
     // issues-46-53 D3 (#47): the no-op branch used to end here, printing one
     // headline and nothing else — so a `--cleanup` that had just been silently
     // dropped by the library was invisible in the text output too. The

@@ -1,0 +1,79 @@
+{
+  "id": "multisession-native-25",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Release + issue #56 closure",
+  "action": "Version bump (next minor — check scripts/bump_version.mjs usage and current version), self-onboard, full verify FOREGROUND (node scripts/run_verify.mjs — the full suite, not impacted), commit+tag, push with tags, dispatch CI full run, then close GitHub issue #56 with a comment: per-slice commit map, the 15-invariant suite result verbatim, and what was deliberately deferred (exclusive-path tightening, invariant-15 full enforcement, herding resolver reconciliation). Follow the bee release flow (docs in memory: bump → onboard → verify → commit+tag vX.Y.Z → push --tags → STOP, no host propagation). Regen inside this cell: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed). Canonical source: skills/bee-hive/templates/.",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-24"
+  ],
+  "files": [
+    "package.json",
+    "skills/bee-hive/templates/bee.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "scripts/bump_version.mjs",
+    "scripts/release_manifest.mjs",
+    "docs/history/multisession-native/CONTEXT.md",
+    "docs/history/multisession-native/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "full suite green FOREGROUND before tag (recorded)",
+      "tag on the release commit, pushed with tags, CI dispatched",
+      "issue #56 closed with invariant results + commit map",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no push of a red tree; no host propagation"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D8 stage 5, D9"
+  ],
+  "status": "open",
+  "trace": {
+    "0": "r",
+    "1": "e",
+    "2": "l",
+    "3": "e",
+    "4": "a",
+    "5": "s",
+    "6": "e",
+    "7": ";",
+    "8": " ",
+    "9": "c",
+    "10": "l",
+    "11": "o",
+    "12": "s",
+    "13": "e",
+    "14": "s",
+    "15": " ",
+    "16": "i",
+    "17": "s",
+    "18": "s",
+    "19": "u",
+    "20": "e",
+    "21": " ",
+    "22": "#",
+    "23": "5",
+    "24": "6",
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

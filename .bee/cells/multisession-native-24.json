@@ -1,0 +1,88 @@
+{
+  "id": "multisession-native-24",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Legacy retirement + knowledge closure",
+  "action": "Retire what slice-5 makes SAFE (advisor condition E corrected the original premise): writeHandoff STAYS one more release as the C1 no-workflow fallback (bee.mjs:3357 via resolveHandoffWorkflowId null) — do NOT delete it; instead (a) reclassify rebuildHandoffProjection (state-projection.mjs:410) as the ONLY sanctioned projection writer with a dated deprecation note on the legacy path, (b) keep read-projection (readHandoff/adoptHandoff) one release. Remove dead lane-cache branches msn-21 left enumerated. Rewrite docs/knowledge/ workflow-state area index intro presenting the workflow-record model as THE model. Update AGENTS.md handoff wording if it references single-file behavior. Enumerate every retirement/deferral with reason; deferrals get dated deprecation notes. Edit CANONICAL templates (skills/bee-hive/templates/), never .bee/bin runtime copies, then vendor via onboard. Regen inside this cell: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed).",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-23"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/state.mjs",
+    "skills/bee-hive/templates/bee.mjs",
+    "docs/knowledge/areas/workflow-state/index.md",
+    "AGENTS.md",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".bee/bin/lib/state-projection.mjs",
+    "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md",
+    "docs/history/multisession-native/CONTEXT.md",
+    "docs/history/multisession-native/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "rebuildHandoffProjection is the only sanctioned legacy-file writer; C1 fallback retained with deprecation note (grep + test)",
+      "every retirement or deferral enumerated with reason",
+      "knowledge area presents workflow-records as the model",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no retirement that breaks a byte-identical legacy reader still in support window",
+      "writeHandoff C1 fallback NOT deleted this release"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D8 stage 5, D9"
+  ],
+  "status": "open",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "m",
+    "11": "u",
+    "12": "c",
+    "13": " ",
+    "14": "1",
+    "15": "0",
+    "16": "/",
+    "17": "1",
+    "18": "2",
+    "19": ";",
+    "20": " ",
+    "21": "D",
+    "22": "8",
+    "23": " ",
+    "24": "s",
+    "25": "t",
+    "26": "a",
+    "27": "g",
+    "28": "e",
+    "29": " ",
+    "30": "5",
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

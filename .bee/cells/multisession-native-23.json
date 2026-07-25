@@ -1,0 +1,74 @@
+{
+  "id": "multisession-native-23",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "The 15-invariant acceptance suite",
+  "action": "One suite (test_msn_invariants.mjs) asserting all 15 issue #56 invariants as automated tests, each numbered and named: 1 concurrent planning no shared lock; 2 phase change isolation; 3 gate isolation cross-workflow; 4 heartbeat never erases binding; 5 disjoint-resource cells never contend; 6 same-workspace same-file lease: one winner; 7 cross-worktree same-file allowed with integration warning; 8 exclusive resources hard-block cross-worktree; 9 handoff isolation; 10 epoch fencing; 11 hooks never wait on store locks; 12 no long op holds a filesystem lock; 13 overview rebuilds from records; 14 projection delete loses nothing; 15 write-capable ops refuse without session_id+workflow_id+workspace_id (scope invariant 15 honestly: enforce where identity is mandatory today — leases/claims/ownership — and document the legacy-compat carve-outs, tightening is post-feature work). Reuse existing per-slice tests via imports/fixtures where they already prove an invariant — the suite is the INDEX that runs them all; write fresh tests only for gaps (5, 7, 15 likely). Every invariant green or the suite names which failed. Regen inside this cell: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed). Canonical source: skills/bee-hive/templates/.",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-22"
+  ],
+  "files": [
+    "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".bee/bin/lib/guards.mjs",
+    ".bee/bin/lib/lease-store.mjs",
+    ".bee/bin/lib/workspace-store.mjs",
+    "docs/history/multisession-native/CONTEXT.md",
+    "docs/history/multisession-native/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "all 15 invariants automated and green (suite output listed in evidence)",
+      "each invariant numbered/named traceable to issue #56 muc 15",
+      "gaps 5/7/15 covered by fresh tests",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no invariant marked green by assertion alone — each has a runnable test"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D8 stage 5, D9"
+  ],
+  "status": "open",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "m",
+    "11": "u",
+    "12": "c",
+    "13": " ",
+    "14": "1",
+    "15": "5",
+    "16": ";",
+    "17": " ",
+    "18": "D",
+    "19": "9",
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

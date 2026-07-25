@@ -38,7 +38,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { releaseAllForHolder } from './worktree-holds.mjs';
 import { withStoreLock } from './lock.mjs';
 import { registerWorkspace, unregisterWorkspace } from './workspace-store.mjs';
@@ -1374,6 +1374,32 @@ async function attachCleanupOutcome(result, { mainRoot, worktreeRoot, branch, id
  *     marker (written by `worktree new --with-companion`). No flag gates
  *     this on the merge side: the marker's presence IS the signal. See
  *     `teardownCompanionIfPresent` below for exactly when this runs and why.
+ *   - `onVerifyTick` (optional, multisession-native-22): an async callback
+ *     invoked periodically WHILE the verify child (P2) is running — never
+ *     called at all when no `verifyCommand` is given, or when the verify
+ *     child finishes before the first interval elapses. This exists so a
+ *     caller-owned heartbeat (integration-queue.mjs's processor-lease
+ *     renewal) can actually fire alongside a multi-minute verify: P2 used to
+ *     run the verify via `spawnSync`, which blocks the event loop for the
+ *     child's whole duration and starves any timer (see lock.mjs's own
+ *     comment on exactly this limitation) — P2 now runs the child via async
+ *     `spawn` (`runVerifyChild` below) precisely so this tick can interleave.
+ *     A throwing/rejecting tick is swallowed (best-effort, never aborts the
+ *     verify child); this module has no opinion on what the tick does.
+ *   - `verifyTickIntervalMs` (optional, default 30000): how often
+ *     `onVerifyTick` fires during P2. Ignored when `onVerifyTick` is not a
+ *     function.
+ *   - `checkProcessorLease` (optional, multisession-native-22): an async
+ *     callback `() => Promise<string|null>`, called once inside P3
+ *     (`mergeFeatureWorktreeFinish`), immediately after 'worktree-admin' is
+ *     re-acquired and BEFORE ever committing — the FIRST line of the P3
+ *     fence (advisor condition C), ahead of the existing `checkMergeFence`
+ *     staged-tree/HEAD check (the second line). A non-null return is treated
+ *     exactly like `checkMergeFence` drift: `git merge --abort`, main proven
+ *     untouched, typed `WORKTREE_MERGE_FENCE_DRIFT` thrown. This module
+ *     never interprets what the string means (own header: worktree-store.mjs
+ *     has zero lease-store knowledge) — integration-queue.mjs's
+ *     `checkProcessorLeaseEpoch` is what supplies it in production.
  *
  * "Own worktree" refusal: running merge from inside a linked worktree —
  * including the very worktree named by `id` — is caught by the SAME
@@ -1411,7 +1437,7 @@ export async function mergeFeatureWorktree(mainRoot, options = {}) {
     return staged.result;
   }
 
-  const { verifyCommand } = options;
+  const { verifyCommand, onVerifyTick, verifyTickIntervalMs } = options;
   if (!verifyCommand) {
     // Nothing to release the lock around: no long child ever runs on this
     // path, so stage and finish inside the SAME hold — byte-identical to
@@ -1421,11 +1447,87 @@ export async function mergeFeatureWorktree(mainRoot, options = {}) {
 
   // P2 — UNLOCKED (hardening-4c): the whole point of this rework. No store
   // lock is held while the (possibly multi-minute) verify child runs.
-  const verifyResult = spawnSync(verifyCommand, { cwd: mainRoot, shell: true, encoding: 'utf8' });
-  const verifyOutcome = { ran: true, status: verifyResult.status, combined: `${verifyResult.stdout || ''}${verifyResult.stderr || ''}` };
+  // multisession-native-22: run via async `spawn` (never `spawnSync`) so an
+  // optional `onVerifyTick` heartbeat can actually interleave with the
+  // child's run instead of being starved by a blocked event loop — see
+  // `runVerifyChild` below and this function's own doc comment.
+  const verifyChild = await runVerifyChild(verifyCommand, mainRoot, { onTick: onVerifyTick, tickIntervalMs: verifyTickIntervalMs });
+  const verifyOutcome = { ran: true, status: verifyChild.status, combined: `${verifyChild.stdout || ''}${verifyChild.stderr || ''}` };
 
   // P3 — re-acquire the lock and re-check the fence before ever committing.
   return withStoreLock(mainRoot, 'worktree-admin', () => mergeFeatureWorktreeFinish(mainRoot, options, staged.state, verifyOutcome));
+}
+
+/**
+ * runVerifyChild(command, cwd, { onTick, tickIntervalMs }) — the async
+ * `spawn`-based replacement for the old `spawnSync(verifyCommand, { cwd,
+ * shell: true, encoding: 'utf8' })` call (multisession-native-22). Resolves
+ * to the SAME shape spawnSync produced (`{ status, stdout, stderr }`,
+ * combined by the caller exactly as before) — this is a plumbing change
+ * only, never an observable-output change on the byte-identical/no-tick
+ * path (no `onTick` given: this still awaits the child to completion and
+ * returns the same fields, just without blocking the event loop while doing
+ * it).
+ *
+ * `onTick` (optional): fired on a `setInterval(tickIntervalMs)` for as long
+ * as the child is still running; the timer is `unref()`d so it can never by
+ * itself keep the process alive, and is always cleared the instant the
+ * child exits/errors. A throwing/rejecting tick is swallowed — this helper
+ * has no opinion on what the tick does or means (see `mergeFeatureWorktree`
+ * options doc above).
+ *
+ * A spawn-level `error` event (the shell itself could not be started — rare,
+ * distinct from the command running and exiting non-zero, which the shell
+ * itself reports as a normal exit code) resolves with `status: null`,
+ * mirroring what `spawnSync` would have reported via its own `.status` in
+ * that case, so the caller's `verifyOutcome.status !== 0` red-check still
+ * fires correctly.
+ */
+function runVerifyChild(command, cwd, { onTick, tickIntervalMs = 30_000 } = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(command, { cwd, shell: true });
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (chunk) => {
+      stdout += chunk.toString('utf8');
+    });
+    child.stderr?.on('data', (chunk) => {
+      stderr += chunk.toString('utf8');
+    });
+
+    let settled = false;
+    let timer = null;
+    const clearTick = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    if (typeof onTick === 'function') {
+      timer = setInterval(() => {
+        if (settled) return;
+        Promise.resolve()
+          .then(() => onTick())
+          .catch(() => {
+            /* best-effort — see doc comment */
+          });
+      }, tickIntervalMs);
+      if (typeof timer.unref === 'function') timer.unref();
+    }
+
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTick();
+      resolve({ status: null, stdout, stderr: `${stderr}${stderr ? '\n' : ''}${error.message}` });
+    });
+    child.on('exit', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTick();
+      resolve({ status: code, stdout, stderr });
+    });
+  });
 }
 
 /**
@@ -1707,7 +1809,7 @@ async function mergeFeatureWorktreeStage(mainRoot, options = {}) {
 // lock was released and re-acquired around the verify child
 // (`verifyOutcome.ran === true`).
 async function mergeFeatureWorktreeFinish(mainRoot, options, state, verifyOutcome) {
-  const { cleanup = false } = options;
+  const { cleanup = false, checkProcessorLease } = options;
   const { id, branch, worktreeRoot, mergeMessage, preMergeHead, mergeHeadFile, stagedTreeHash, companion } = state;
 
   // Every exit from here must either commit (verify green / no verify
@@ -1742,13 +1844,21 @@ async function mergeFeatureWorktreeFinish(mainRoot, options, state, verifyOutcom
       };
     }
 
-    // P3 fence (advisor condition C2): re-check everything that could have
-    // drifted while the lock was released for verify, BEFORE ever
-    // committing. A no-verify-configured merge reaches this in the SAME
-    // hold P1 staged it in, so the fence is trivially clean there — the
-    // check still runs (uniform code path, negligible cost) rather than
-    // being conditioned on whether verify ran.
-    const fenceDrift = checkMergeFence(mainRoot, { id, preMergeHead, mergeHeadFile, stagedTreeHash });
+    // P3 fence (advisor condition C2, amended by multisession-native-22's
+    // condition C): re-check everything that could have drifted while the
+    // lock was released for verify, BEFORE ever committing. The processor
+    // lease epoch (`checkProcessorLease`, integration-queue.mjs's
+    // `checkProcessorLeaseEpoch` in production) is the FIRST line — a zombie
+    // processor whose lease was already taken over must abort here, before
+    // ever consulting git state; `checkMergeFence`'s staged-tree/HEAD check
+    // is the second line, unchanged. A no-verify-configured merge (or a
+    // caller that passes no `checkProcessorLease` at all — every existing
+    // caller before this cell) reaches this in the SAME hold P1 staged it
+    // in, so both checks are trivially clean there — they still run
+    // (uniform code path, negligible cost) rather than being conditioned on
+    // whether verify ran.
+    const leaseDrift = typeof checkProcessorLease === 'function' ? await checkProcessorLease() : null;
+    const fenceDrift = leaseDrift || checkMergeFence(mainRoot, { id, preMergeHead, mergeHeadFile, stagedTreeHash });
     if (fenceDrift) {
       runGit(mainRoot, ['merge', '--abort']);
       const proof = mainUntouchedProof(mainRoot, preMergeHead, mergeHeadFile);

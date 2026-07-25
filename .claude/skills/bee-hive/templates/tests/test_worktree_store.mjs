@@ -143,4 +143,109 @@ await check('TOPOLOGY: a session created from the MAIN checkout resolves workspa
   }
 });
 
+// ─── multisession-native-22 (D8 stage 5, advisor condition C): mergeFeatureWorktree's
+// new options.checkProcessorLease / options.onVerifyTick hooks. This module
+// (worktree-store.mjs) has zero lease-store knowledge (see its own header,
+// "zero deps beyond node builtins" + the module header note added by this
+// cell) — these tests exercise the hooks as plain caller-supplied callbacks,
+// exactly the way integration-queue.mjs's runThroughQueue wires them in
+// production, without importing integration-queue.mjs itself. ───────────────
+
+// mergeableWorktreeFixture — a worktree with a REAL new commit on its branch
+// (never ALREADY_UP_TO_DATE) so P2's verify actually runs and P3 actually
+// reaches the fence checks these tests are about.
+async function mergeableWorktreeFixture(feature) {
+  const mainRoot = makeOrdinaryRepoFixture();
+  const created = await createFeatureWorktree(mainRoot, { feature });
+  fs.writeFileSync(path.join(created.worktreeRoot, 'work.txt'), 'x\n');
+  git(created.worktreeRoot, ['add', 'work.txt']);
+  git(created.worktreeRoot, ['commit', '-m', 'fixture work']);
+  return { mainRoot, created };
+}
+
+await check('checkProcessorLease returning null (no drift) never affects an otherwise-clean merge — pure passthrough', async () => {
+  const { mainRoot, created } = await mergeableWorktreeFixture('demo-lease-clean');
+  try {
+    let calls = 0;
+    const merged = await mergeFeatureWorktree(mainRoot, {
+      id: created.id,
+      verifyCommand: 'node -e "process.exit(0)"',
+      checkProcessorLease: () => {
+        calls += 1;
+        return null;
+      },
+    });
+    assert(calls === 1, `checkProcessorLease must be called exactly once (P3), got ${calls}`);
+    assert(merged.ok === true && merged.merged === true, `a clean merge with a null-returning checkProcessorLease must still succeed, got ${JSON.stringify(merged)}`);
+  } finally {
+    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
+    fs.rmSync(mainRoot, { recursive: true, force: true });
+  }
+});
+
+await check('checkProcessorLease returning a drift string aborts the merge untouched (WORKTREE_MERGE_FENCE_DRIFT) — the FIRST line of the P3 fence, independent of checkMergeFence', async () => {
+  const { mainRoot, created } = await mergeableWorktreeFixture('demo-lease-drift');
+  const preHead = gitText(mainRoot, ['rev-parse', 'HEAD']);
+  try {
+    let threw = null;
+    try {
+      await mergeFeatureWorktree(mainRoot, {
+        id: created.id,
+        verifyCommand: 'node -e "process.exit(0)"',
+        // Simulates integration-queue.mjs's checkProcessorLeaseEpoch
+        // detecting a takeover — nothing about the staged tree/HEAD is
+        // tampered here, proving this check is independent of (and runs
+        // ahead of) the existing checkMergeFence staged-tree/HEAD check.
+        checkProcessorLease: () => 'simulated processor-lease takeover: epoch 1 -> 2',
+      });
+    } catch (err) {
+      threw = err;
+    }
+    assert(threw && threw.code === 'WORKTREE_MERGE_FENCE_DRIFT', `expected a typed WORKTREE_MERGE_FENCE_DRIFT throw, got ${threw ? threw.code || threw.message : '(no throw)'}`);
+    assert(/simulated processor-lease takeover/.test(threw.message), `the refusal message must carry the processor-lease drift text, got: ${threw.message}`);
+
+    const headAfter = gitText(mainRoot, ['rev-parse', 'HEAD']);
+    assert(headAfter === preHead, 'HEAD is unchanged after the processor-lease-drift abort');
+    assert(!fs.existsSync(path.join(mainRoot, '.git', 'MERGE_HEAD')), 'no MERGE_HEAD lingers after the abort');
+    const status = git(mainRoot, ['status', '--porcelain', '--untracked-files=no']).stdout;
+    assert(status.trim() === '', `main tracked status must be clean after the abort, got: ${status}`);
+  } finally {
+    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
+    fs.rmSync(mainRoot, { recursive: true, force: true });
+  }
+});
+
+await check('onVerifyTick fires periodically DURING the verify child (P2) — proves the async spawn replacement for spawnSync actually interleaves a timer, not just accepts the option', async () => {
+  const { mainRoot, created } = await mergeableWorktreeFixture('demo-verify-tick');
+  try {
+    const ticks = [];
+    const merged = await mergeFeatureWorktree(mainRoot, {
+      id: created.id,
+      // Sleeps ~300ms before exiting 0 — long enough for several 40ms ticks
+      // if (and only if) the child truly runs unblocked alongside a timer.
+      verifyCommand: 'node -e "setTimeout(() => process.exit(0), 300)"',
+      onVerifyTick: () => {
+        ticks.push(Date.now());
+      },
+      verifyTickIntervalMs: 40,
+    });
+    assert(merged.ok === true && merged.verify === 'green', `expected a green merge, got ${JSON.stringify(merged)}`);
+    assert(ticks.length >= 2, `expected onVerifyTick to fire at least twice during a ~300ms verify child with a 40ms interval, got ${ticks.length} tick(s) — spawnSync would have blocked the event loop and fired zero`);
+  } finally {
+    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
+    fs.rmSync(mainRoot, { recursive: true, force: true });
+  }
+});
+
+await check('a merge with NO onVerifyTick/checkProcessorLease given at all (every pre-existing caller) is unaffected — byte-identical result shape', async () => {
+  const { mainRoot, created } = await mergeableWorktreeFixture('demo-no-hooks');
+  try {
+    const merged = await mergeFeatureWorktree(mainRoot, { id: created.id, verifyCommand: 'node -e "process.exit(0)"' });
+    assert(merged.ok === true && merged.merged === true && merged.verify === 'green', `expected the ordinary green-merge shape with no queue hooks, got ${JSON.stringify(merged)}`);
+  } finally {
+    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
+    fs.rmSync(mainRoot, { recursive: true, force: true });
+  }
+});
+
 printSummaryAndExit();

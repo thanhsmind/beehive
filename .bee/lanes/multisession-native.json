@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "feature": "multisession-native",
   "mode": "high-risk",
-  "phase": "compounding-complete",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false
   },
-  "summary": "slice 4 shipped: control plane shared across worktrees, workspace registry with single write owner, observe/shared-disjoint/isolated policy modes, guard resolves topology once with three deny classes",
-  "next_action": "slice 5 (integration queue + invariant closure, PBI p-4f055a6f) final",
+  "summary": "slice 5 (integration queue + 15-invariant closure) cycle open — FINAL slice",
+  "next_action": "execute msn-22..25 sequentially with slice-5 advisor conditions A-F",
   "created_at": "2026-07-24T14:19:58.834Z",
   "advisor_ref": {
-    "consulted_at": "2026-07-25T05:00:09.172Z",
+    "consulted_at": "2026-07-25T09:42:44.297Z",
     "feature": "multisession-native",
-    "newest_decision_id": "05ea9f58-78a9-4b9c-bafe-8400a9f30cea",
+    "newest_decision_id": "4d6a185f-5407-4146-8445-e3715bbea554",
     "plan_sha256": "6e078fa7cae305c60cc431b5eed884aeefff42719d74698c2ad532ebb627aedb",
-    "advisor": "claude/fable ceiling (bee-review dispatch, slice 4)",
-    "digest_head": "# Advisor consult — slice 4 execution (workspace isolation by default)\n\nAdvisor: claude/fable (ceiling), read-only, 2026-07-25. VERDICT: proceed-with-conditions.\n\nBinding conditions:\n1. File anchors FIXED at authoring (F1/F2): msn-17 edits lib/state.mjs (resolveRoots lives at state.mjs:748, NOT fsutil.mjs); msn-21 edits hooks/bee-write-guard.mjs at repo root (templates/hooks/ does not exist — confirm vendoring reality before editing).\n2. (F3) msn-18 re-roots the guard's lane/workflow read IN-CEL"
+    "advisor": "claude/fable ceiling (bee-review dispatch, slice 5)",
+    "digest_head": "# Advisor consult — slice 5 execution (integration queue + invariant closure + release)\n\nAdvisor: claude/fable (ceiling), read-only, 2026-07-25. VERDICT: proceed-with-conditions.\n\nBinding conditions:\n- A (msn-22): queue wraps the `worktree.merge` CLI verb only — never dispatch-interlock.mjs; herding merge (human single-shot gesture, herding.mjs:11-13) untouched.\n- B (msn-22): define the drainer — enqueuer becomes processor when the lease frees, bounded-wait its turn; a position-returned merge NE"
   },
   "last_scribing_run": {
     "feature": "multisession-native",

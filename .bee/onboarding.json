@@ -5,14 +5,14 @@
     "agents_block": "d0515b3ab1b91fc381e757d6a1c64bf2f15d8db6d78361818178aea51368dca7",
     "gitignore_block": "97bc58361c5dee4c4212b3c2ba1b5b91d5c3c17c2be4690baa2abe9bd014253c",
     "helpers": {
-      "bee.mjs": "dd0caf643c5ceb5af7be4ef1b8e4f150d64675e29c7d5dd7cb8a0b2e183e86fa"
+      "bee.mjs": "60a552fb80a4ff9e87f8878549191259008c271d20872a45afa3fbf3831c983b"
     },
     "lib": {
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "b40d2eb10a9611ef59bbbff1725fc9e1c942e8fef226990ae7399d6ad9bdeffd",
       "claims.mjs": "8869e1ed8f4efe89adf69f2f3b566f295665f42965964ad5e8839eeee957102b",
-      "command-registry.mjs": "3487803df45ba3ee28b8fbf6a3532fed4786f680d096e1a1319fe5b37839372e",
+      "command-registry.mjs": "3ae9a466c0ed5ce1683196fd18a77fc56ac26f3fd489e501af844b51bfb294e2",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
@@ -23,6 +23,7 @@
       "guards.mjs": "1fed21102028d58335a1798eaf2a9d0ac9c3b91ad0bd457480077de945a4a334",
       "herding.mjs": "95a81c8f17a84e2b57a1f8081f5f4a3ec7703432e81b2741c8795bd30a181433",
       "inject.mjs": "4df920d3d430c1e0aba2d41f09d764396e2f030bd525b78aa0ab68163703c7cb",
+      "integration-queue.mjs": "3a9f883aa490009c7af30de2a0baf3bafd4b37048c79d3e841ae232cd5cea3c9",
       "intent.mjs": "acb9a427caf2e1aae106407a96a9fc0a2c16a087d31af057f704afa2619255e8",
       "judge.mjs": "5057e17a6bcd3dacff21fe479e13570620cfe1b9c821c0ff5c8254f39e3c6ed1",
       "knowledge.mjs": "73ed66b2df865d665bb4c7224084ccec0b5ce2d84f31c7384bdc19e0998908b6",
@@ -41,7 +42,7 @@
       "workflow-store.mjs": "27aa64ffab30bdda9c939cdb6def6106c9ef9648067078eda27d512b5a1e41d4",
       "workspace-store.mjs": "b7355d3fe6a398475edab10b50de7958601034ce771c66af775f2ce21ab3b641",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
-      "worktree-store.mjs": "9375f19727af1fe26e17aee8dde9a0574c5966e4d460336c37044821385539bf"
+      "worktree-store.mjs": "99802ffb7dd382a2c7e069f308cddaa44901fd66c637165e67c58c9041de5e89"
     },
     "repo_hooks": {
       "adapter.mjs": "e21c39e993390600cb2fe352078ae7554c74db0ee6ffd5bdb443c49192689dca",
@@ -80,5 +81,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T09:33:15.179Z"
+  "updated_at": "2026-07-25T10:06:05.561Z"
 }
