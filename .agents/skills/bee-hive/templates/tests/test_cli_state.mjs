@@ -20,7 +20,8 @@ import {
   printSummaryAndExit,
 } from '../../../../scripts/lib/test-fixture.mjs';
 import { readStateStrict, isKnownPhase, startFeature } from '../lib/state.mjs';
-import { listWorkflows } from '../lib/workflow-store.mjs';
+import { listWorkflows, createWorkflow, updateWorkflow } from '../lib/workflow-store.mjs';
+import { acquireStoreLockOnceSync } from '../lib/lock.mjs';
 import { readCell, dropCell, claimCell } from '../lib/cells.mjs';
 import { createSession, claimCellFile, readClaim, adoptClaim } from '../lib/claims.mjs';
 // fsh-3 (lane store): namespace imports so a not-yet-implemented export fails
@@ -478,6 +479,169 @@ await check('multisession-native-9 (C2, binding, RED-then-GREEN): plan-rev bump 
     assert(laneBFile.approved_gates.execution === true, 'lane-b.json projected execution boolean must remain true on disk (invariant 3)');
     const claimedB = await claimCell(dir, 'b-1', 'worker-b1');
     assert(claimedB.status === 'claimed', "W2 (lane-b) claim must be unaffected by W1's bump");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── multisession-native-10 (D9 invariants 1/2, advisor consult slice 2 C4):
+// state set/gate/scribing-run/advisor-ref record now route a workflow-backed
+// target's mutation through withMutationLock, locking on `workflow:<id>`
+// ONLY — never the blanket 'state' lock every one of these verbs held for
+// its WHOLE body through msn-9. The two checks below prove decoupling from
+// both angles: the shared 'state' lock, and a DIFFERENT feature's own
+// workflow lock — deterministic (real O_EXCL file locks held for the whole
+// call, msn-6-style seam proof), never timing-flaky.
+
+await check("multisession-native-10 (invariant 1/2, C4): a lane mutation with a live workflow record never needs the shared 'state' lock — held externally for the whole call, the CLI mutation still completes near-instantly", async () => {
+  const dir = makeStateRepo('bee-msn10-no-state-lock-');
+  try {
+    const started = await startFeature(dir, { feature: 'no-state-lock', mode: 'standard', lane: true });
+    assert(started.feature === 'no-state-lock', 'precondition: lane started with a live workflow record');
+
+    const held = acquireStoreLockOnceSync(dir, 'state');
+    assert(held.acquired, "precondition: test can hold the 'state' lock directly");
+    try {
+      const startedAt = Date.now();
+      const result = await runBeeState(dir, ['set', '--lane', 'no-state-lock', '--owner', 'exploring', '--phase', 'planning', '--json']);
+      const elapsedMs = Date.now() - startedAt;
+      assert(result.status === 0, `mutation must succeed while 'state' is held externally: ${result.stderr}`);
+      assert(
+        elapsedMs < 2000,
+        `mutation must complete without waiting out any 'state' lock retry budget (structurally a different lock, single attempt) — took ${elapsedMs}ms`,
+      );
+      const lane = JSON.parse(result.stdout);
+      assert(lane.phase === 'planning', `mutation must have actually applied, got ${result.stdout}`);
+    } finally {
+      held.release();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check("multisession-native-10 (invariant 1/2, C4): two DIFFERENT features' workflow-routed mutations never contend on a shared lock — holding feature A's workflow lock never blocks feature B's mutation (deterministic seam proof, msn-6-style)", async () => {
+  const dir = makeStateRepo('bee-msn10-cross-workflow-');
+  try {
+    const startedA = await startFeature(dir, { feature: 'lock-a', mode: 'standard', lane: true });
+    assert(startedA.feature === 'lock-a', 'precondition: lane A started');
+    const startedB = await startFeature(dir, { feature: 'lock-b', mode: 'standard', lane: true });
+    assert(startedB.feature === 'lock-b', 'precondition: lane B started');
+    const wfA = listWorkflows(dir).workflows.find((wf) => wf.feature === 'lock-a');
+    assert(wfA, "precondition: A's workflow record exists");
+
+    const held = acquireStoreLockOnceSync(dir, `workflow:${wfA.id}`);
+    assert(held.acquired, "precondition: test can hold A's workflow lock directly");
+    try {
+      // Sanity/negative control: a single-attempt mutation against A's OWN
+      // workflow really is denied while its lock is held — proves the held
+      // lock is meaningful, not a no-op (same control shape as msn-6's own
+      // cross-workflow-concurrency test above, test_state.mjs).
+      await assertRejects(
+        () => updateWorkflow(dir, wfA.id, { phase: 'planning' }, { maxAttempts: 1 }),
+        'busy',
+        "sanity control: A's workflow lock really is held",
+      );
+
+      // The real proof: feature B's mutation, run through the FULL CLI path
+      // (bee.mjs state set), succeeds without ever contending on A's lock.
+      const result = await runBeeState(dir, ['set', '--lane', 'lock-b', '--owner', 'exploring', '--phase', 'planning', '--json']);
+      assert(result.status === 0, `B's mutation must succeed while A's workflow lock is held: ${result.stderr}`);
+      const lane = JSON.parse(result.stdout);
+      assert(lane.phase === 'planning', `B's mutation must have actually applied, got ${result.stdout}`);
+
+      const wfB = listWorkflows(dir).workflows.find((wf) => wf.feature === 'lock-b');
+      assert(wfB.phase === 'planning', "B's own workflow record carries the mutation");
+      const wfAAfter = listWorkflows(dir).workflows.find((wf) => wf.feature === 'lock-a');
+      assert(wfAAfter.phase === 'exploring', "A's workflow record is untouched by B's mutation");
+    } finally {
+      held.release();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── multisession-native-10: DEFAULT-path mutations now route through the
+// default feature's OWN live workflow record too (closes the C5 residual
+// seam left open by msn-7/9) ─────────────────────────────────────────────
+
+await check('multisession-native-10: state set on the DEFAULT (non-lane) record, with a live workflow, updates the workflow record AND rebuilds state.json from it — no longer a direct writeState', async () => {
+  const dir = makeStateRepo('bee-msn10-default-workflow-');
+  try {
+    const started = await runBeeState(dir, ['start-feature', '--feature', 'wf-default-set', '--mode', 'standard', '--json']);
+    assert(started.status === 0, `start-feature should succeed: ${started.stderr}`);
+    const wfBefore = listWorkflows(dir).workflows.find((wf) => wf.feature === 'wf-default-set');
+    assert(wfBefore, 'precondition: the default feature has a live workflow record (msn-6)');
+    assert(wfBefore.phase === 'exploring', `precondition: fresh workflow starts at exploring, got ${wfBefore.phase}`);
+
+    const result = await runBeeState(dir, ['set', '--owner', 'exploring', '--phase', 'planning', '--summary', 'msn-10 default routing', '--json']);
+    assert(result.status === 0, `default set should succeed: ${result.stderr}`);
+
+    const wfAfter = listWorkflows(dir).workflows.find((wf) => wf.feature === 'wf-default-set');
+    assert(
+      wfAfter.phase === 'planning' && wfAfter.summary === 'msn-10 default routing',
+      `the WORKFLOW RECORD (not merely state.json) must carry the mutation, got ${JSON.stringify({ phase: wfAfter.phase, summary: wfAfter.summary })}`,
+    );
+
+    const onDisk = readStateFile(dir);
+    assert(
+      onDisk.phase === 'planning' && onDisk.summary === 'msn-10 default routing',
+      `state.json must reflect the same mutation (rebuilt from the workflow record), got ${JSON.stringify({ phase: onDisk.phase, summary: onDisk.summary })}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('multisession-native-10 (C1 fallback, unbound/no-records parity): state set on the default record with ZERO workflow records anywhere writes state.json directly, byte-identical to pre-msn-10 behavior', async () => {
+  const dir = makeStateRepo('bee-msn10-c1-default-');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+      schema_version: '1.0',
+      phase: 'exploring',
+      feature: 'hand-written-default',
+      mode: 'standard',
+      approved_gates: { context: false, shape: false, execution: false, review: false },
+      workers: [],
+      summary: 'hand-written, no workflow record',
+      next_action: 'keep going',
+    });
+    assert(listWorkflows(dir).workflows.length === 0, 'precondition: zero workflow records anywhere');
+
+    const result = await runBeeState(dir, ['set', '--owner', 'exploring', '--phase', 'planning', '--json']);
+    assert(result.status === 0, `set should succeed via the C1 fallback: ${result.stderr}`);
+    assert(listWorkflows(dir).workflows.length === 0, 'C1 fallback must never create a workflow record as a side effect');
+    const onDisk = readStateFile(dir);
+    assert(onDisk.phase === 'planning' && onDisk.feature === 'hand-written-default', `state.json must be written directly, got ${JSON.stringify(onDisk)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check("multisession-native-10 (swap carve-out): state set --feature on the default record writes state.json directly and never corrupts the OLD feature's own workflow record", async () => {
+  const dir = makeStateRepo('bee-msn10-default-swap-');
+  try {
+    const started = await runBeeState(dir, ['start-feature', '--feature', 'swap-old', '--mode', 'standard', '--json']);
+    assert(started.status === 0, `start-feature should succeed: ${started.stderr}`);
+    const wfOldBefore = listWorkflows(dir).workflows.find((wf) => wf.feature === 'swap-old');
+    assert(wfOldBefore, "precondition: swap-old has a live workflow record");
+
+    const result = await runBeeState(dir, ['set', '--owner', 'exploring', '--feature', 'swap-new', '--phase', 'exploring', '--json']);
+    assert(result.status === 0, `feature swap should succeed: ${result.stderr}`);
+
+    const onDisk = readStateFile(dir);
+    assert(onDisk.feature === 'swap-new', `state.json must carry the swap, got ${JSON.stringify(onDisk.feature)}`);
+
+    const wfOldAfter = listWorkflows(dir).workflows.find((wf) => wf.feature === 'swap-old');
+    assert(
+      wfOldAfter.feature === 'swap-old' && wfOldAfter.phase === wfOldBefore.phase,
+      `swap-old's own workflow record must be completely untouched by the swap, got ${JSON.stringify(wfOldAfter)}`,
+    );
+    assert(
+      listWorkflows(dir).workflows.every((wf) => wf.feature !== 'swap-new'),
+      'a swap never fabricates a workflow record for the NEW feature name either — it is not startFeature',
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

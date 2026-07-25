@@ -5,7 +5,7 @@
     "agents_block": "d0515b3ab1b91fc381e757d6a1c64bf2f15d8db6d78361818178aea51368dca7",
     "gitignore_block": "97bc58361c5dee4c4212b3c2ba1b5b91d5c3c17c2be4690baa2abe9bd014253c",
     "helpers": {
-      "bee.mjs": "ad5d9cac9466ee41ab457aa2ed4523de52e41d27b9b5352541c837c46cbfdb69"
+      "bee.mjs": "417290be31de6531cb44621054fd70db67ed88ad3536ef484e4e3764820d125c"
     },
     "lib": {
       "backlog.mjs": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
@@ -34,10 +34,10 @@
       "schedule.mjs": "9f46b580f71f6be9e38740124d3e7745af972c37fad91ce99433f405eae16351",
       "scratch.mjs": "3b7ab2e104b3f4cee240a43fac49ee630df7ca2ed995eb71f403d25eae17afb0",
       "source-identity.mjs": "716740641e1f6bfbb5ccc5b4fe7827f1165c2a1f1127ee3800f52a47ac09fc7a",
-      "state-projection.mjs": "d06537da3e0baa2c73fb99f90dcb385917ee80bc0c64db3bb7ca8fd2aa0c685c",
-      "state.mjs": "ab3f9be654f1e1a53641f1295a54e6ccb19ab5f3bb141ffd49bed4fd03f8f4c6",
+      "state-projection.mjs": "6af601e52bf4180a43d6c8810a79df57ed1df803eba74aa53f3299da3b3526d7",
+      "state.mjs": "9636574813e41b3cd80f491de582a1042daf86f8aaff63d59231aa844964ae72",
       "validate-args.mjs": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
-      "workflow-store.mjs": "5bcfe2e7b69d65de1f7146b9e06b9d69c6d7431d1d571cff8f9b4125fa6bc641",
+      "workflow-store.mjs": "27aa64ffab30bdda9c939cdb6def6106c9ef9648067078eda27d512b5a1e41d4",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
       "worktree-store.mjs": "0cd4809e8b19ea307dbd93d466810dc609dccb993388f3d2f8c4b7352e484748"
     },
@@ -78,5 +78,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T01:05:52.830Z"
+  "updated_at": "2026-07-25T01:39:21.476Z"
 }

@@ -207,6 +207,61 @@ await check('rebuildStateProjection: idle-shaped when zero workflows are ACTIVE 
   }
 });
 
+// ─── rebuildStateProjection: feature-matched branch (multisession-native-10,
+// closes the C5 residual seam) — a LIVE default feature with its OWN
+// matching workflow record is now authoritative EVEN WHILE NON-IDLE ────────
+
+await check('multisession-native-10: rebuildStateProjection rebuilds D1 fields from the CURRENT default feature\'s own live workflow record even while non-idle — the exact case the pre-msn-10 idle gate refused', async () => {
+  const root = makeRoot();
+  try {
+    writeJsonAtomic(statePath(root), { schema_version: '1.0', phase: 'swarming', feature: 'matched-feat', mode: 'standard', approved_gates: { context: true, shape: false, execution: false, review: false }, workers: [{ nickname: 'w1' }], summary: 'stale', next_action: 'stale' });
+    const wf = await createWorkflow(root, { feature: 'matched-feat', phase: 'validating', mode: 'high-risk', plan_rev: 1, gates: { context: { approved: true, approved_for_plan_rev: null }, shape: { approved: true, approved_for_plan_rev: null } }, summary: 'fresh from record', next_action: 'fresh next' });
+
+    const result = rebuildStateProjection(root);
+    assert(result.authoritative === true && result.source === wf.id, `must be sourced from matched-feat's own workflow record, got ${JSON.stringify(result)}`);
+    const onDisk = readState(root);
+    assert(onDisk.phase === 'validating' && onDisk.mode === 'high-risk', `D1 fields must come from the matching record even though the default record is non-idle, got ${JSON.stringify({ phase: onDisk.phase, mode: onDisk.mode })}`);
+    assert(onDisk.approved_gates.context === true && onDisk.approved_gates.shape === true && onDisk.approved_gates.execution === false, 'approved_gates re-derived from the record');
+    assert(onDisk.summary === 'fresh from record' && onDisk.next_action === 'fresh next', 'summary/next_action re-derived, not left stale');
+    assert(onDisk.feature === 'matched-feat', 'feature stays matched-feat (unchanged — no swap happened)');
+    assert(JSON.stringify(onDisk.workers) === JSON.stringify([{ nickname: 'w1' }]), 'workers (not D1-owned) pass through unchanged');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('multisession-native-10: rebuildStateProjection is a no-op on D1 fields when the default feature is set but NO live workflow names it (pre-msn-6 legacy record) — unchanged since before this cell', async () => {
+  const root = makeRoot();
+  try {
+    writeJsonAtomic(statePath(root), { schema_version: '1.0', phase: 'swarming', feature: 'legacy-live', mode: 'standard', approved_gates: { context: true, shape: false, execution: false, review: false }, workers: [], summary: 'legacy summary', next_action: 'legacy next' });
+    await createWorkflow(root, { feature: 'unrelated-other', phase: 'planning' }); // workflows.length > 0, but none names legacy-live
+    const before = fs.readFileSync(statePath(root), 'utf8');
+
+    const result = rebuildStateProjection(root);
+    assert(result.authoritative === false, 'no live workflow names the current default feature — never authoritative');
+    assert(fs.readFileSync(statePath(root), 'utf8') === before, 'state.json must stay byte-identical — no guessing at an unrelated workflow record');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('multisession-native-10: feature-matched rebuild takes precedence over the idle-bootstrap heuristic — never picks "the newest active workflow" once the current feature has its OWN live record, even if a DIFFERENT workflow is more recently created', async () => {
+  const root = makeRoot();
+  try {
+    writeJsonAtomic(statePath(root), { schema_version: '1.0', phase: 'exploring', feature: 'own-feat', mode: 'tiny', approved_gates: { context: false, shape: false, execution: false, review: false }, workers: [], summary: 'own', next_action: 'own next' });
+    const ownWf = await createWorkflow(root, { feature: 'own-feat', phase: 'exploring', mode: 'tiny', summary: 'own', next_action: 'own next' });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await createWorkflow(root, { feature: 'newer-unrelated', phase: 'swarming', mode: 'standard', summary: 'newer', next_action: 'newer next' });
+
+    const result = rebuildStateProjection(root);
+    assert(result.authoritative === true && result.source === ownWf.id, `must source the CURRENT feature's own record, never the newer unrelated one, got source=${result.source}`);
+    const onDisk = readState(root);
+    assert(onDisk.feature === 'own-feat' && onDisk.summary === 'own', `must reflect own-feat's own record, got ${JSON.stringify({ feature: onDisk.feature, summary: onDisk.summary })}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // ─── rebuildLaneProjection: authoritative rebuild, ad hoc field pass-through ─
 
 await check('rebuildLaneProjection: derives every D1 field from the live workflow record; preserves created_at and ad hoc fields (last_scribing_run, gate_revoked_at, advisor_ref) from the existing lane file', async () => {

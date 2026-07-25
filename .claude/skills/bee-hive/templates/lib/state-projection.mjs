@@ -40,25 +40,31 @@
 // rebuildStateProjection again always self-heals any such divergence; there
 // is no separate repair path to keep in sync.
 //
-// C5 residual seam (documented, binding — scoped honestly per the advisor
-// consult, not swept under the rug): the DEFAULT (non-lane) state.json
-// mutation path — bee.mjs's resolveMutationTarget default branch, which
-// still calls writeState(root, record) directly, and every verb built on it
-// (state set/gate/scribing-run/advisor-ref record without --lane) — is NOT
-// rerouted through this module in this cell. That is multisession-native-10.
-// Only LANE projections are rerouted in this cell: bee.mjs's lane branches
-// of resolveMutationTarget, and the lane path of `bee state start-feature
-// --as-lane` (handleStateStartFeature) — see those call sites' own comments
-// for exactly how each routes through rebuildLaneProjection below.
+// C5 residual seam — CLOSED by multisession-native-10 (documented here for
+// history; the seam itself no longer exists). Through multisession-native-9,
+// the DEFAULT (non-lane) state.json mutation path — bee.mjs's
+// resolveMutationTarget default branch, and every verb built on it (state
+// set/gate/scribing-run/advisor-ref record without --lane) — called
+// writeState(root, record) directly, never touching the matching workflow
+// record. multisession-native-10 rewires that default branch through
+// writeStateRecordThroughProjection (bee.mjs, mirroring writeLaneRecordThrough
+// Projection) whenever a LIVE workflow already names the default record's
+// current feature (the narrow exception: a `--feature` SWAP that changes
+// identity mid-call keeps writing state.json directly, since a workflow
+// record's `feature` is immutable identity — see writeStateRecordThrough
+// Projection's own comment in bee.mjs).
 //
 // Consequence for rebuildStateProjection specifically (see its own doc
-// comment for the full reasoning): because C5 leaves the default path's
-// workflow record stale from the moment of creation onward, this module
-// only ever ADOPTS a workflow record's fields into .bee/state.json while it
-// is genuinely IDLE — never overwrites a LIVE default record. Lane
-// projections carry no such caveat: every lane mutation in this cell is
-// rerouted through its workflow record, so a lane's record is always kept
-// in sync and safe to treat as fully authoritative.
+// comment below for the full reasoning): now that the default path keeps its
+// live workflow record in sync at every mutation (same discipline lanes have
+// had since msn-7), this module ADOPTS a workflow record's fields into
+// .bee/state.json whenever a LIVE workflow names the CURRENT default
+// feature — idle or not. The idle gate survives ONLY for the different,
+// still-real case it was never about protecting against C5 in the first
+// place for: bootstrapping the very first feature a fresh/idle repo starts
+// (state.json knows no feature yet, so there is nothing to match by name —
+// "newest active workflow" is a deliberate heuristic for that one moment,
+// see rebuildStateProjection's own comment).
 
 import { readState, writeState, defaultState, readLane, writeLane, GATE_NAMES } from './state.mjs';
 import { listWorkflows } from './workflow-store.mjs';
@@ -121,53 +127,50 @@ export function pickNewestActiveWorkflow(workflows) {
 
 /**
  * rebuildStateProjection(root, overrides) — full rebuild of .bee/state.json's
- * D1-owned fields (phase/feature/mode/approved_gates/summary/next_action)
- * from the newest ACTIVE workflow record — but ONLY while the current
- * default record is itself IDLE (no feature, phase 'idle'/
- * 'compounding-complete'/absent). Every other field already on the file
- * (`workers`, `schema_version`, and any ad hoc field a future cell adds)
- * passes through unchanged. `overrides.cellCounts`/`overrides.lastActivity`,
- * when present, are written into `cells`/`last_activity` in this SAME write
- * REGARDLESS of the idle gate — the seam bee-state-sync's F8 full rebuild
- * uses so its counts/timestamp refresh (unrelated to D1, and needed on
- * every hook tick whether or not a feature is active) and this module's
- * D1-field rebuild land in one write, never two.
+ * D1-owned fields (phase/feature/mode/approved_gates/summary/next_action).
+ * Two sources, tried in order:
  *
- * Why the idle gate (a deliberate narrowing of the literal "newest ACTIVE
- * workflow" contract, documented honestly rather than silently): C5 (this
- * cell's own binding scope) leaves the DEFAULT (non-lane) mutation path —
- * `state set`/`gate`/`scribing-run`/`advisor-ref record` without `--lane` —
- * writing state.json directly, WITHOUT updating the matching workflow
- * record (msn-10's job). That workflow record is therefore only ever as
- * fresh as the moment `state start-feature` created it — genuinely stale
- * the instant any further default-path mutation lands. Rebuilding a LIVE
- * default record's D1 fields from ANY workflow record — its own stale one,
- * or worse, a DIFFERENT feature's (e.g. an active lane, which workflow
- * records cannot be told apart from by kind — msn-6 creates one uniformly
- * for both start paths) — would silently regress or misattribute real,
- * current default-pipeline state. That is unsafe at ANY call rate, and
- * actively dangerous at bee-state-sync's (every hook tick). The idle gate
- * makes this safe by construction: state.json is only ever ADOPTED (never
- * overwritten) from a workflow record while there is nothing live to
- * protect — bootstrapping the very first feature a fresh/idle repo starts,
- * or after `startFeature`'s own dual-write just created both the legacy
- * record and its workflow record together (see handleStateStartFeature's
- * lane-only wiring in bee.mjs, which calls rebuildLaneProjection, never
- * rebuildStateProjection, for exactly this reason on the default path).
- * Full default-record losslessness across arbitrary mutation history is
- * D8's later-stage guarantee (msn-10, or 7+10 landing atomically) — this
- * cell's own C5 comment says so — not a claim made here.
+ * (1) FEATURE-MATCHED (multisession-native-10): when the current default
+ * record already names a feature (`current.feature`) AND a LIVE (non-closed)
+ * workflow record names that SAME feature, that record is authoritative —
+ * REGARDLESS of phase, idle or not. This is safe now (it was not, before
+ * msn-10): bee.mjs's writeStateRecordThroughProjection keeps this exact
+ * workflow record in sync at every default-path mutation (state set/gate/
+ * scribing-run/advisor-ref record), the same discipline rebuildLaneProjection
+ * has relied on for lanes since msn-7. Matched strictly BY FEATURE NAME,
+ * mirroring rebuildLaneProjection — never "the newest active workflow"
+ * once we know which feature state.json is actually tracking; guessing at
+ * a DIFFERENT feature's (or an active lane's) workflow record here would
+ * silently misattribute real, current default-pipeline state, which is
+ * exactly the danger the ORIGINAL idle-only gate (below) existed to prevent
+ * back when this branch did not exist.
  *
- * C1 fallback is scoped to the D1-owned fields ONLY, never to `overrides`:
- * zero workflow records anywhere in the repo leaves phase/feature/mode/
- * approved_gates/summary/next_action exactly as they already are (the
- * projection layer has no authority over them yet) — but `cells`/
- * `last_activity` still get written when `overrides` supplies them, because
- * that refresh is bee-state-sync's own pre-existing job, unrelated to D1,
- * and must keep working in every repo that has not yet started a workflow-
- * creating feature (i.e. every repo before its first startFeature call since
- * msn-6 landed). With no overrides AND (zero workflow records OR a live
- * non-idle default record) this is a pure no-op read (nothing written).
+ * (2) IDLE BOOTSTRAP (unchanged since msn-7): when the default record names
+ * NO feature at all (idle, or the terminal alias compounding-complete) and
+ * at least one workflow record exists, adopt the newest ACTIVE workflow —
+ * this is the ONE moment "which workflow" cannot be decided by feature-name
+ * match (there is no name yet), so a heuristic is unavoidable: bootstrapping
+ * the very first feature a fresh/idle repo starts, or right after
+ * `startFeature`'s own dual-write just created both the legacy record and
+ * its workflow record together.
+ *
+ * Neither source fires (pure no-op on the D1 fields) when: zero workflow
+ * records exist anywhere (C1); OR a feature is set but NO live workflow
+ * names it — a pre-msn-6 legacy record, or the narrow `--feature` SWAP
+ * carve-out (writeStateRecordThroughProjection's own comment: a workflow
+ * record's `feature` is immutable identity, so a swap that changes
+ * state.json's feature mid-call is deliberately left writing state.json
+ * directly, never routed through this rebuild).
+ *
+ * Every other field already on the file (`workers`, `schema_version`, and
+ * any ad hoc field a future cell adds) passes through unchanged in every
+ * branch. `overrides.cellCounts`/`overrides.lastActivity`, when present, are
+ * written into `cells`/`last_activity` in this SAME write REGARDLESS of
+ * which branch fired (or none) — the seam bee-state-sync's F8 full rebuild
+ * uses so its counts/timestamp refresh (unrelated to D1, needed on every
+ * hook tick whether or not a feature is active) and this module's D1-field
+ * rebuild land in one write, never two.
+ *
  * `authoritative` always reflects whether the D1 fields specifically were
  * sourced from a workflow record on THIS call.
  */
@@ -177,7 +180,6 @@ export function rebuildStateProjection(root, overrides = {}) {
   const hasOverrides =
     Object.prototype.hasOwnProperty.call(overrides, 'cellCounts') ||
     Object.prototype.hasOwnProperty.call(overrides, 'lastActivity');
-  const currentIsIdle = !current.feature && (current.phase === 'idle' || current.phase === 'compounding-complete' || !current.phase);
 
   const applyOverridesOnly = () => {
     if (!hasOverrides) {
@@ -190,12 +192,46 @@ export function rebuildStateProjection(root, overrides = {}) {
     return { authoritative: false, source: null, state: next };
   };
 
-  if (workflows.length === 0 || !currentIsIdle) {
+  if (workflows.length === 0) {
+    return applyOverridesOnly();
+  }
+
+  const applyOverrides = (next) => {
+    if (Object.prototype.hasOwnProperty.call(overrides, 'cellCounts')) next.cells = overrides.cellCounts;
+    if (Object.prototype.hasOwnProperty.call(overrides, 'lastActivity')) next.last_activity = overrides.lastActivity;
+    return next;
+  };
+
+  // Branch (1) — feature-matched, msn-10.
+  if (current.feature) {
+    const wf = workflows.find((w) => w.feature === current.feature && w.status !== 'closed');
+    if (wf) {
+      const next = applyOverrides({
+        ...current,
+        phase: wf.phase,
+        feature: wf.feature,
+        mode: wf.mode,
+        approved_gates: workflowGatesToApprovedGates(wf.gates, wf.plan_rev),
+        summary: wf.summary,
+        next_action: wf.next_action,
+      });
+      writeState(root, next);
+      return { authoritative: true, source: wf.id, state: next };
+    }
+    // A feature is set but no LIVE workflow names it — falls through to the
+    // idle-bootstrap branch below, which requires `!current.feature` and so
+    // is always skipped here too; the net effect is applyOverridesOnly(),
+    // unchanged from before this cell for this specific case.
+  }
+
+  // Branch (2) — idle bootstrap, unchanged since msn-7.
+  const currentIsIdle = !current.feature && (current.phase === 'idle' || current.phase === 'compounding-complete' || !current.phase);
+  if (!currentIsIdle) {
     return applyOverridesOnly();
   }
 
   const active = pickNewestActiveWorkflow(workflows);
-  const next = {
+  const next = applyOverrides({
     ...current,
     phase: active ? active.phase : 'idle',
     feature: active ? active.feature : null,
@@ -203,9 +239,7 @@ export function rebuildStateProjection(root, overrides = {}) {
     approved_gates: active ? workflowGatesToApprovedGates(active.gates, active.plan_rev) : defaultState().approved_gates,
     summary: active ? active.summary : defaultState().summary,
     next_action: active ? active.next_action : defaultState().next_action,
-  };
-  if (Object.prototype.hasOwnProperty.call(overrides, 'cellCounts')) next.cells = overrides.cellCounts;
-  if (Object.prototype.hasOwnProperty.call(overrides, 'lastActivity')) next.last_activity = overrides.lastActivity;
+  });
   writeState(root, next);
   return { authoritative: true, source: active ? active.id : null, state: next };
 }
@@ -260,17 +294,19 @@ export function rebuildLaneProjection(root, feature) {
 /**
  * rebuildAllProjections(root) — the recovery entry point (must_have: "A
  * rebuild verb/function callable for recovery"): rebuilds state.json (from
- * the newest active workflow, only while state.json is itself idle — see
- * rebuildStateProjection's own comment for why) and EVERY active workflow's
- * lane projection ("one per active workflow", msn-7 cell contract). This is
- * what proves invariants 13/14 (deleting a projection loses nothing;
- * overview rebuilds fully from records) for whichever projections have a
- * corresponding workflow record kept in sync by every write path that
- * touches them — true for every lane in this cell, true for state.json only
- * while it is idle (its live/non-idle case is C5's residual seam, msn-10).
- * Cell-counts/last_activity are left untouched here
- * (refreshing them is bee-state-sync's job, not recovery's) — pass
- * `{cellCounts, lastActivity}` to rebuildStateProjection directly for that.
+ * the current default feature's own live workflow record when one names it,
+ * else the newest active workflow while state.json is idle — see
+ * rebuildStateProjection's own comment for the full two-branch contract,
+ * multisession-native-10) and EVERY active workflow's lane projection ("one
+ * per active workflow", msn-7 cell contract). This is what proves invariants
+ * 13/14 (deleting a projection loses nothing; overview rebuilds fully from
+ * records) for whichever projections have a corresponding LIVE workflow
+ * record kept in sync by every write path that touches them — true for
+ * every lane since msn-7, and true for state.json's live default feature
+ * too since msn-10 closed the former C5 residual seam. Cell-counts/
+ * last_activity are left untouched here (refreshing them is bee-state-sync's
+ * job, not recovery's) — pass `{cellCounts, lastActivity}` to
+ * rebuildStateProjection directly for that.
  */
 export function rebuildAllProjections(root) {
   const state = rebuildStateProjection(root);

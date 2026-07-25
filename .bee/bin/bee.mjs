@@ -76,13 +76,19 @@ import {
   isLocalOnlyConfigKey,
   trackedLocalOnlyKeyWarning,
 } from './lib/state.mjs';
-// multisession-native-7 (C5/F8): workflow-store.mjs's read/update primitives
-// and state-projection.mjs's rebuild functions, composed here at the CLI
-// layer — see resolveMutationTarget and handleStateStartFeature below for
-// exactly where each is used, and lib/state-projection.mjs's own header for
-// the C1/F8/C5 contract they implement.
-import { listWorkflows, updateWorkflow } from './lib/workflow-store.mjs';
-import { rebuildLaneProjection, rebuildAllProjections } from './lib/state-projection.mjs';
+// multisession-native-7/10 (C1/C4/C5/F8): workflow-store.mjs's read/update/
+// lock primitives and state-projection.mjs's rebuild functions, composed
+// here at the CLI layer — see resolveMutationTarget, withMutationLock, and
+// handleStateStartFeature below for exactly where each is used, and
+// lib/state-projection.mjs's own header for the C1/F8/C5 contract they
+// implement. withWorkflowLock/updateWorkflowAssumingLock (msn-10): the
+// mutation verbs below hold `workflow:<id>` for their whole read-validate-
+// write body, so the write-through helpers must use the ASSUMING-LOCK form —
+// updateWorkflow's own self-locking form would nest a second acquire of the
+// SAME lock name and deadlock (see updateWorkflowAssumingLock's own comment
+// in workflow-store.mjs).
+import { listWorkflows, updateWorkflow, withWorkflowLock, updateWorkflowAssumingLock } from './lib/workflow-store.mjs';
+import { rebuildLaneProjection, rebuildStateProjection, rebuildAllProjections } from './lib/state-projection.mjs';
 // Lane + session CLI surface (fresh-session-handoff fsh-4, D2/D4): claims.mjs
 // stays out of this cell's file scope — these are already-exported read/
 // mutate primitives from fsh-3, composed here for presentation (session list)
@@ -2074,20 +2080,32 @@ function mutationLaneSelector(flags, verb) {
 // session (no resolvable identity, no session record, or no lane binding)
 // targets the default record exactly as before this cell.
 //
-// multisession-native-7 (C5 — "no consumer writes through a projection"
-// scoped to LANE projections): a lane's `write` no longer calls writeLane
-// directly. It routes through writeLaneRecordThroughProjection below, which
-// updates the live workflow record naming this feature and rebuilds the
-// lane projection from it (state-projection.mjs, "record wins"). The
-// DEFAULT branch (defaultTarget, above) is deliberately UNTOUCHED — C5's
-// documented residual seam, msn-10's job.
+// multisession-native-7/10 (C5 — "no consumer writes through a projection"):
+// neither branch below calls writeLane/writeState directly anymore. Both
+// route through a write-through-projection helper — writeLaneRecordThrough
+// Projection (lane) or writeStateRecordThroughProjection (default, msn-10) —
+// which updates the live workflow record naming the target's feature and
+// rebuilds its projection from it (state-projection.mjs, "record wins").
+// Each captures its target FEATURE NAME here, at resolution time, BEFORE any
+// caller mutation — never re-derived from the post-mutation record — mirroring
+// how `laneFeature` below is already fixed at resolution time for the whole
+// call.
 function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {}) {
-  const defaultTarget = () => ({
-    record: readStateStrict(root),
-    write: (record) => writeState(root, record),
-    source: 'default',
-    lane: null,
-  });
+  const defaultTarget = () => {
+    const record = readStateStrict(root);
+    // Captured NOW, before the caller mutates `record` in place — the ONE
+    // exception is a `--feature` SWAP (state set --feature X on the default
+    // record), whose whole point is to change this value out from under
+    // itself; writeStateRecordThroughProjection's own comment documents why
+    // that case is deliberately excluded from workflow-routing.
+    const targetFeature = record.feature || null;
+    return {
+      record,
+      write: (updated, gateStamp) => writeStateRecordThroughProjection(root, targetFeature, updated, gateStamp),
+      source: 'default',
+      lane: null,
+    };
+  };
   if (laneFeature) {
     const record = readLaneStrict(root, laneFeature);
     if (!record) {
@@ -2154,13 +2172,24 @@ function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {})
 // records exist anywhere, or this lane's workflow was never seeded/created —
 // should not happen once msn-6's seed has run, but never assumed here)
 // falls back to writeLane directly, unchanged from before this cell.
+//
+// multisession-native-10: uses updateWorkflowAssumingLock, NOT updateWorkflow
+// — this function only ever runs as the `write` callback inside
+// withMutationLock's closure below, which already holds `workflow:<id>` for
+// this exact workflow for the WHOLE mutation body. Calling the self-locking
+// updateWorkflow here would try to acquire that SAME lock a second time from
+// the SAME process and deadlock (see updateWorkflowAssumingLock's own
+// comment in workflow-store.mjs). The projection rebuild that follows
+// (rebuildLaneProjection -> writeLane) takes no lock of its own here either
+// — it is protected by that same outer `workflow:<id>` hold, same as the
+// updateWorkflowAssumingLock call above it.
 async function writeLaneRecordThroughProjection(root, laneFeature, updated, gateStamp = null) {
   const wf = listWorkflows(root).workflows.find((w) => w.feature === laneFeature && w.status !== 'closed');
   if (!wf) {
     writeLane(root, updated);
     return updated;
   }
-  await updateWorkflow(root, wf.id, {
+  updateWorkflowAssumingLock(root, wf.id, {
     phase: updated.phase,
     mode: updated.mode == null ? null : String(updated.mode),
     summary: updated.summary,
@@ -2177,6 +2206,117 @@ async function writeLaneRecordThroughProjection(root, laneFeature, updated, gate
   });
   const rebuilt = rebuildLaneProjection(root, laneFeature);
   return rebuilt.lane;
+}
+
+// writeStateRecordThroughProjection — the DEFAULT-record sibling of
+// writeLaneRecordThroughProjection above (multisession-native-10, closing
+// the C5 residual seam). Same shape, same updateWorkflowAssumingLock/no-
+// self-lock discipline (this also only ever runs inside withMutationLock's
+// closure), same C1 fallback (no live workflow names `targetFeature` ->
+// writeState directly, unchanged from every verb's pre-msn-10 behavior).
+//
+// The ONE default-only wrinkle: `targetFeature` is captured by
+// resolveMutationTarget BEFORE any caller mutation (mirrors `laneFeature`,
+// which can never change mid-call because a lane's feature is its filename
+// identity). The default record's `feature` CAN change mid-call — `state set
+// --feature NEW` (a swap) — and a workflow record's own `feature` field is
+// immutable identity (updateWorkflow/updateWorkflowAssumingLock never let a
+// patch touch it). Routing a swap through the OLD feature's workflow would
+// silently update the WRONG record's phase/summary/etc under the NEW
+// feature's name change; routing it through a (usually nonexistent) NEW
+// feature's workflow would misattribute state that workflow never asked
+// for. Neither is safe, so a swap (`updated.feature !== targetFeature`) is
+// deliberately excluded from workflow-routing altogether and falls to the
+// SAME direct writeState the C1 fallback uses — byte-identical to every
+// verb's behavior before this cell, for this one narrow case only.
+async function writeStateRecordThroughProjection(root, targetFeature, updated, gateStamp = null) {
+  const routable = targetFeature && updated.feature === targetFeature;
+  const wf = routable ? listWorkflows(root).workflows.find((w) => w.feature === targetFeature && w.status !== 'closed') : null;
+  if (!wf) {
+    writeState(root, updated);
+    return updated;
+  }
+  updateWorkflowAssumingLock(root, wf.id, {
+    phase: updated.phase,
+    mode: updated.mode == null ? null : String(updated.mode),
+    summary: updated.summary,
+    next_action: updated.next_action,
+    gates: Object.fromEntries(
+      GATE_NAMES.map((name) => {
+        const entry = { approved: Boolean(updated.approved_gates && updated.approved_gates[name] === true) };
+        if (gateStamp && gateStamp.name === name) {
+          entry.approved_for_plan_rev = gateStamp.approvedForPlanRev;
+        }
+        return [name, entry];
+      }),
+    ),
+  });
+  // multisession-native-10 (extends msn-7's idle-gate, state-projection.mjs):
+  // rebuildStateProjection now adopts a LIVE default feature's own workflow
+  // record even while non-idle, precisely because this call just kept that
+  // record in sync — see rebuildStateProjection's own comment for the full
+  // two-branch contract this depends on.
+  const rebuilt = rebuildStateProjection(root);
+  return rebuilt.state;
+}
+
+// resolveMutationLockFeature — a read-only PEEK at which feature's workflow
+// lock (if any) should protect a mutation, computed BEFORE any lock is
+// acquired. Mirrors resolveMutationTarget's own resolution order (explicit
+// --lane > session-bound lane > default) but never reads/validates the
+// target record itself — only the feature NAME, via a fail-open read
+// (readState/readSession, never the *Strict throwing siblings): anything
+// uncertain here — a corrupt or missing default record, a session with no
+// binding — degrades to null, which withMutationLock below treats as "use
+// the legacy 'state' lock", exactly today's behavior. The real,
+// authoritative read (and any throw it can produce) still happens inside
+// resolveMutationTarget, under whichever lock this function's answer
+// selected.
+//
+// C4 (advisor consult slice 2, binding — sessions and workflow:<id> are
+// NEVER held together): this function reads a session record via
+// readSession, but it NEVER acquires the 'sessions' store lock to do so —
+// readSession is a plain, lock-free file read (see claims.mjs). The only
+// lock this whole seam ever holds at once is EITHER 'sessions' (inside
+// bindSessionLane/unbindSessionLane, claims.mjs — see that module's own
+// D10a comment) OR 'workflow:<id>' (inside withMutationLock below) — never
+// both, because binding a session to a lane and mutating a workflow's
+// record are always two separate calls/transactions, never nested inside
+// one another's lock hold.
+function resolveMutationLockFeature(root, laneFeature, noLane) {
+  if (laneFeature) return laneFeature;
+  if (noLane) return null;
+  const sessionId = resolveSessionId({ root });
+  const session = sessionId ? readSession(root, sessionId) : null;
+  const bound = session && typeof session.lane === 'string' ? session.lane.trim() : '';
+  if (bound) return bound;
+  const state = readState(root); // fail-open peek; readStateStrict's throw still happens inside resolveMutationTarget
+  return (state && state.feature) || null;
+}
+
+// withMutationLock — C4-safe lock routing for the four record-mutating state
+// verbs (set/gate/scribing-run/advisor-ref record; multisession-native-10).
+// Replaces the blanket `withStoreLock(root, 'state', fn)` every one of these
+// verbs used through msn-9: a workflow-record-routed target (lane, OR
+// default once msn-10 keeps it in sync) now locks on `workflow:<id>` ONLY —
+// the SAME per-workflow lock workflow-store.mjs's own mutating verbs use —
+// so two sessions mutating two DIFFERENT workflows never contend on a
+// shared lock (invariants 1/2, CONTEXT.md D9). A target with no live
+// workflow record (C1 fallback: a legacy lane/default record, or a
+// --feature swap that intentionally stays off the workflow-routing model —
+// see writeStateRecordThroughProjection) keeps today's single 'state' lock,
+// byte-identical to every verb's pre-msn-10 behavior.
+//
+// fn itself still calls resolveMutationTarget (the real, strict read +
+// validation + mutation), same as every caller did before this cell — this
+// wrapper only changes WHICH lock protects that call.
+async function withMutationLock(root, laneFeature, noLane, fn) {
+  const feature = resolveMutationLockFeature(root, laneFeature, noLane);
+  const wf = feature ? listWorkflows(root).workflows.find((w) => w.feature === feature && w.status !== 'closed') : null;
+  if (wf) {
+    return withWorkflowLock(root, wf.id, fn);
+  }
+  return withStoreLock(root, 'state', fn);
 }
 
 // D6 — async: the whole record-read through write() body runs inside
@@ -2212,7 +2352,7 @@ async function handleStateSet(root, flags) {
     );
   }
 
-  const { state, changed, waivedClose, waivedSwap, swapFromFeature, targetLane } = await withStoreLock(root, 'state', async () => {
+  const { state, changed, waivedClose, waivedSwap, swapFromFeature, targetLane } = await withMutationLock(root, laneFeature, noLane, async () => {
     const target = resolveMutationTarget(root, laneFeature, 'set', { noLane });
     const { record: state, write } = target;
     // i54-closeout-7 (D7): the fsh-4 identity guard above only sees an
@@ -2451,7 +2591,7 @@ async function handleStateGate(root, flags) {
   const approved = approvedRaw === 'true';
   const { laneFeature, noLane } = mutationLaneSelector(flags, 'gate');
 
-  const { state, targetLane } = await withStoreLock(root, 'state', async () => {
+  const { state, targetLane } = await withMutationLock(root, laneFeature, noLane, async () => {
     const target = resolveMutationTarget(root, laneFeature, 'gate', { noLane });
     const { record: state, write } = target;
     // Gate 3 advisor precondition (AO3/AO13): high-risk execution never opens
@@ -2483,9 +2623,15 @@ async function handleStateGate(root, flags) {
     // plan-rev bump` on that same workflow flips this approval's projected
     // effectiveness false without touching any other workflow (invariant 3)
     // or any other gate on THIS workflow (D7 default: context/shape/review
-    // stay rev-immune, never stamped). No live workflow for this lane (C1) —
-    // or no lane at all (the default C5-scoped path, msn-10) — leaves
-    // gateStamp null: nothing plan-rev-scoped to stamp.
+    // stay rev-immune, never stamped). No live workflow for this lane (C1)
+    // leaves gateStamp null: nothing plan-rev-scoped to stamp. Deliberately
+    // lane-only, permanently — not a msn-10 gap: `state plan-rev bump`
+    // itself still refuses outright on the default record (see its own
+    // comment below), so stamping a plan_rev on the default path's execution
+    // gate would record a value that can never be bumped, and could never
+    // go stale. msn-10 keeps the default record's OTHER fields (phase, mode,
+    // summary, approved booleans) in sync via workflow-routing, but this ONE
+    // rev-stamping behavior stays scoped to lanes exactly as msn-9 shipped it.
     let gateStamp = null;
     if (name === 'execution' && target.lane) {
       const wf = listWorkflows(root).workflows.find((w) => w.feature === target.lane && w.status !== 'closed');
@@ -2504,13 +2650,17 @@ async function handleStateGate(root, flags) {
 
 // state.plan-rev.bump (multisession-native-9, CONTEXT.md D7, advisor consult
 // slice 2 C2 — binding): bumps a single workflow's plan_rev by 1. plan_rev
-// lives ONLY on the workflow record (workflow-store.mjs) — the default
-// (non-lane) pipeline's workflow record is not yet kept in sync by
-// default-path writes (C5, multisession-native-10's residual seam), so this
-// verb REFUSES outright when resolution lands on the default record; it only
+// lives ONLY on the workflow record (workflow-store.mjs), so this verb
+// REFUSES outright when resolution lands on the default record; it only
 // ever targets a lane (explicit --lane, or the calling session's bound
 // lane — same resolution order as gate/set/scribing-run via
-// resolveMutationTarget, minus the default fallback).
+// resolveMutationTarget, minus the default fallback). Deliberately
+// permanent, not a msn-10 gap: msn-10 closed C5 for set/gate/scribing-run/
+// advisor-ref record (the default record's OTHER fields now stay in sync
+// with its own live workflow), but plan_rev bumping stays lane-only by
+// design — see handleStateGate's own gateStamp comment for why stamping the
+// default path's execution gate with a plan_rev would be pointless (nothing
+// can ever bump it).
 //
 // The bump's ONLY effect on gates is indirect, via the projection formula in
 // state-projection.mjs's workflowGatesToApprovedGates (C2): a gate whose
@@ -2535,8 +2685,9 @@ async function handleStatePlanRevBump(root, flags) {
     const target = resolveMutationTarget(root, laneFeature, 'plan-rev bump', { noLane });
     if (!target.lane) {
       throw new Error(
-        'plan-rev bump: refused — plan_rev lives on a workflow record, and the default (non-lane) pipeline is not ' +
-          'yet kept in sync with its workflow record (C5 residual seam, multisession-native-10). ' +
+        'plan-rev bump: refused — resolution landed on the default (non-lane) record. plan_rev bumping is scoped ' +
+          'to lanes only, by design (nothing else ever reads or bumps the default pipeline\'s plan_rev, so ' +
+          'stamping it would be meaningless). ' +
           'FIX: target a lane explicitly with --lane <feature>, or bind the calling session to one first ' +
           '("state session bind --session-id <id> --lane <feature>").',
       );
@@ -2797,7 +2948,7 @@ async function handleStateScribingRun(root, flags) {
   let stampedActive = true;
   let activeFeatureAtCall = null;
   let targetLane = null;
-  const state = await withStoreLock(root, 'state', async () => {
+  const state = await withMutationLock(root, laneFeature, noLane, async () => {
     const target = resolveMutationTarget(root, laneFeature, 'scribing-run', { noLane });
     const { record: state, write } = target;
     targetLane = target.lane;
@@ -2864,20 +3015,25 @@ async function handleStateStartFeature(root, flags) {
   const paths = flags.paths !== undefined ? splitList(flags.paths) : [];
   // startFeature() re-reads state and performs every precondition check (C1).
   const state = await startFeature(root, { feature, mode, phase, lane, sessionId, paths });
-  // multisession-native-7 (C5/F8 — "startFeature's dual-write can now route
-  // its lane write through the projection builder"): the lane file
-  // startFeature just wrote is a hand-built record inside msn-6's own
-  // documented three-transaction crash window (legacy write, then a
-  // separately-locked workflow create). Reconcile it here against the
-  // workflow record startFeature also just created, so the FILE this call
-  // leaves behind is always what rebuildLaneProjection derives from that
-  // record ("record wins" self-heal, F8) — not merely the raw hand-written
-  // copy. `state` (returned above) already carries the same field values, so
-  // nothing needs to be re-read for this call's own response. The DEFAULT
-  // (non-lane) start path is untouched — C5's documented residual seam,
-  // msn-10's job.
+  // multisession-native-7/10 (C5/F8 — "startFeature's dual-write can now
+  // route its write through the projection builder"): the legacy record
+  // (lane file OR state.json) startFeature just wrote is a hand-built record
+  // inside msn-6's own documented three-transaction crash window (legacy
+  // write, then a separately-locked workflow create). Reconcile it here
+  // against the workflow record startFeature also just created, so the FILE
+  // this call leaves behind is always what the matching rebuild derives from
+  // that record ("record wins" self-heal, F8) — not merely the raw
+  // hand-written copy. `state` (returned above) already carries the same
+  // field values, so nothing needs to be re-read for this call's own
+  // response, on EITHER branch: rebuildStateProjection's feature-matched
+  // branch (msn-10) always finds this exact just-created workflow record
+  // (same feature name, freshly created, nothing else could have raced
+  // ahead of it), so it can only reproduce byte-identical D1 fields here —
+  // a true self-heal, never a surprise.
   if (lane) {
     rebuildLaneProjection(root, state.feature);
+  } else {
+    rebuildStateProjection(root);
   }
   return {
     result: state,
@@ -3033,43 +3189,52 @@ function handleStateHandoffShow(root) {
 // per-workflow lock). Dispatch already awaits every handler uniformly
 // (main()'s `const response = await handler(...)`), so this is a safe,
 // isolated widening.
+// multisession-native-10: now wrapped in withMutationLock, closing a
+// pre-existing gap — through msn-9 this verb ran its whole read-check-write
+// with NO lock at all (unlike set/gate/scribing-run, which at least held
+// 'state'). Same lock-routing rule as the other three: a workflow-record-
+// routed target locks on `workflow:<id>` only; the C1/no-workflow fallback
+// keeps the legacy 'state' lock.
 async function handleStateAdvisorRefRecord(root, flags) {
   rejectDryRun(flags);
   const advisor = requireFlag(flags, 'advisor');
   const digestFile = requireFlag(flags, 'digest-file');
   const { laneFeature, noLane } = mutationLaneSelector(flags, 'advisor-ref record');
-  const target = resolveMutationTarget(root, laneFeature, 'advisor-ref record', { noLane });
-  const { record: state, write } = target;
-  const phase = state.phase;
-  if (!state.feature || phase === 'idle' || phase === 'compounding-complete') {
-    throw new Error(
-      `advisor-ref record: refused — no active feature to anchor the consult to (phase "${phase ?? 'idle'}", feature "${state.feature ?? 'none'}"). ` +
-        'FIX: start a feature and reach an in-flight phase before recording an advisor consult.',
-    );
-  }
-  let digestHead = '';
-  try {
-    digestHead = fs.readFileSync(path.resolve(String(digestFile)), 'utf8').slice(0, 500);
-  } catch (err) {
-    throw new Error(
-      `advisor-ref record: could not read --digest-file "${digestFile}" (${err && err.code ? err.code : err}). ` +
-        'FIX: pass the path to the captured advisor consult digest.',
-    );
-  }
-  // Anchors bound to the SELECTED record's feature (M1), stamped by the verb.
-  const anchors = advisorRefAnchors(root, state.feature);
-  state.advisor_ref = {
-    consulted_at: new Date().toISOString(),
-    feature: anchors.feature,
-    newest_decision_id: anchors.newest_decision_id,
-    plan_sha256: anchors.plan_sha256,
-    advisor: String(advisor),
-    digest_head: digestHead,
-  };
-  await write(state);
+  const { state, anchors, targetLane } = await withMutationLock(root, laneFeature, noLane, async () => {
+    const target = resolveMutationTarget(root, laneFeature, 'advisor-ref record', { noLane });
+    const { record: state, write } = target;
+    const phase = state.phase;
+    if (!state.feature || phase === 'idle' || phase === 'compounding-complete') {
+      throw new Error(
+        `advisor-ref record: refused — no active feature to anchor the consult to (phase "${phase ?? 'idle'}", feature "${state.feature ?? 'none'}"). ` +
+          'FIX: start a feature and reach an in-flight phase before recording an advisor consult.',
+      );
+    }
+    let digestHead = '';
+    try {
+      digestHead = fs.readFileSync(path.resolve(String(digestFile)), 'utf8').slice(0, 500);
+    } catch (err) {
+      throw new Error(
+        `advisor-ref record: could not read --digest-file "${digestFile}" (${err && err.code ? err.code : err}). ` +
+          'FIX: pass the path to the captured advisor consult digest.',
+      );
+    }
+    // Anchors bound to the SELECTED record's feature (M1), stamped by the verb.
+    const anchors = advisorRefAnchors(root, state.feature);
+    state.advisor_ref = {
+      consulted_at: new Date().toISOString(),
+      feature: anchors.feature,
+      newest_decision_id: anchors.newest_decision_id,
+      plan_sha256: anchors.plan_sha256,
+      advisor: String(advisor),
+      digest_head: digestHead,
+    };
+    await write(state);
+    return { state, anchors, targetLane: target.lane };
+  });
   return {
     result: state.advisor_ref,
-    text: `Recorded advisor_ref (advisor "${advisor}", feature "${anchors.feature}").${target.lane ? ` (lane "${target.lane}")` : ''}`,
+    text: `Recorded advisor_ref (advisor "${advisor}", feature "${anchors.feature}").${targetLane ? ` (lane "${targetLane}")` : ''}`,
   };
 }
 

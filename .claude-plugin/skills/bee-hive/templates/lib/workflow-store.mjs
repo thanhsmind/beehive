@@ -325,6 +325,51 @@ export function createWorkflow(
 }
 
 /**
+ * updateWorkflowAssumingLock(root, id, updater) — the SAME read-modify-write
+ * body updateWorkflow uses, but WITHOUT acquiring `workflow:<id>` itself
+ * (multisession-native-10). For a caller that ALREADY holds that lock —
+ * bee.mjs's mutation verbs (state set/gate/scribing-run/advisor-ref record)
+ * hold `workflow:<id>` for their WHOLE read-validate-write body via
+ * withWorkflowLock so a concurrent CLI call on the SAME workflow can't race
+ * a lost update, exactly the shape createWorkflow/updateWorkflow's own lock
+ * would otherwise NEST inside. lock.mjs's file lock is a non-reentrant O_EXCL
+ * primitive: a second acquire of the SAME lock name from the SAME process
+ * would just contend against its own outer hold and eventually throw
+ * LockBusyError — a self-deadlock-shaped bug, not a race. This function is
+ * the escape hatch: identical merge semantics (mergeGates, protected identity
+ * fields), zero locking of its own. NEVER call this without already holding
+ * `workflow:<id>` for this exact `id` — every other caller must use
+ * updateWorkflow below, which still self-locks as before.
+ */
+export function updateWorkflowAssumingLock(root, id, updater) {
+  const workflowId = requireWorkflowId(id);
+  const current = readWorkflowRecord(root, workflowId); // throws WORKFLOW_MISSING/WORKFLOW_CORRUPT, file untouched
+  const patch = typeof updater === 'function' ? updater({ ...current }) : updater;
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    throw new WorkflowStoreError(
+      'WORKFLOW_INVALID_PATCH',
+      'updateWorkflowAssumingLock: updater must be (or return) a plain object patch.',
+    );
+  }
+  if (patch.status !== undefined && !STATUS_VALUES.includes(patch.status)) {
+    throw new WorkflowStoreError(
+      'WORKFLOW_INVALID_STATUS',
+      `updateWorkflowAssumingLock: status must be one of ${STATUS_VALUES.join('/')} (got ${JSON.stringify(patch.status)}).`,
+    );
+  }
+  const next = {
+    ...current,
+    ...patch,
+    id: current.id,
+    feature: current.feature,
+    created_at: current.created_at,
+    gates: mergeGates(current.gates, patch.gates),
+  };
+  writeJsonAtomic(workflowStatePath(root, workflowId), next);
+  return next;
+}
+
+/**
  * updateWorkflow(root, id, updater, options) — read-modify-write a workflow
  * record under withWorkflowLock (the workflow-scoped sibling of cells.mjs's
  * `withStoreLock(root, \`cells:${id}\`, ...)` RMW verbs). `updater` is either
@@ -335,41 +380,13 @@ export function createWorkflow(
  * plan_rev). `id`, `feature`, and `created_at` are identity fields and are
  * never touched by a patch, even if the patch happens to name them — the
  * same "never let a write silently corrupt identity" posture as readWorkflow
- * refusing to guess at a corrupt record.
+ * refusing to guess at a corrupt record. Thin lock-then-delegate wrapper
+ * (multisession-native-10) over updateWorkflowAssumingLock above — same
+ * behavior as before this cell for every existing caller.
  */
 export function updateWorkflow(root, id, updater, options) {
   const workflowId = requireWorkflowId(id);
-  return withWorkflowLock(
-    root,
-    workflowId,
-    () => {
-      const current = readWorkflowRecord(root, workflowId); // throws WORKFLOW_MISSING/WORKFLOW_CORRUPT, file untouched
-      const patch = typeof updater === 'function' ? updater({ ...current }) : updater;
-      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-        throw new WorkflowStoreError(
-          'WORKFLOW_INVALID_PATCH',
-          'updateWorkflow: updater must be (or return) a plain object patch.',
-        );
-      }
-      if (patch.status !== undefined && !STATUS_VALUES.includes(patch.status)) {
-        throw new WorkflowStoreError(
-          'WORKFLOW_INVALID_STATUS',
-          `updateWorkflow: status must be one of ${STATUS_VALUES.join('/')} (got ${JSON.stringify(patch.status)}).`,
-        );
-      }
-      const next = {
-        ...current,
-        ...patch,
-        id: current.id,
-        feature: current.feature,
-        created_at: current.created_at,
-        gates: mergeGates(current.gates, patch.gates),
-      };
-      writeJsonAtomic(workflowStatePath(root, workflowId), next);
-      return next;
-    },
-    options,
-  );
+  return withWorkflowLock(root, workflowId, () => updateWorkflowAssumingLock(root, workflowId, updater), options);
 }
 
 /**

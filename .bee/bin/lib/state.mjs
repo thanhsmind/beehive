@@ -1257,6 +1257,19 @@ export function listLanes(root) {
  * ({ ok:false, code, reason, feature }) — silently falling back to the default
  * there would point a bound session at the wrong pipeline's gates.
  * Returns { ok:true, source:'default'|'lane', feature?, record } on success.
+ *
+ * multisession-native-10 (session→workflow binding): `session.lane` is kept
+ * as the field name (an intentional alias — no session-record schema break),
+ * but what it names is now, in effect, a WORKFLOW-backed feature: since
+ * msn-7, every write to `.bee/lanes/<feature>.json` routes through the live
+ * workflow record naming that feature (state-projection.mjs's "record
+ * wins"), so reading the lane file here already reflects the workflow
+ * record's current content — no extra I/O or extra lock is added on this
+ * hot hook-driven read path (bee-prompt-context.mjs's try-once/no-wait
+ * discipline is unchanged by this cell). The refusal codes below
+ * (LANE_INVALID/LANE_MISSING/LANE_CORRUPT) are unchanged in name and
+ * trigger, but now, in substance, ARE the missing/corrupt-workflow refusal
+ * for a bound session — never a silent fallback to the default pipeline.
  */
 export function resolvePipeline(root, { sessionId = null } = {}) {
   const defaults = () => ({ ok: true, source: 'default', record: readState(root) });

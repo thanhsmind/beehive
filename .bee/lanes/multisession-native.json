@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "feature": "multisession-native",
   "mode": "high-risk",
-  "phase": "compounding-complete",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false
   },
-  "summary": "stage 0-1 shipped: sessions-lock race fix, contention telemetry + status surfacing, 3-phase worktree merge with 4-part fence",
-  "next_action": "slice 2 (workflow-first state, PBI p-3416fb38) awaits plan-rev bump + validation",
+  "summary": "slice 2 (workflow-first state) cycle open: plan-rev bump + cells + validation",
+  "next_action": "execute msn-5..10 sequentially with slice-2 advisor conditions",
   "created_at": "2026-07-24T14:19:58.834Z",
   "advisor_ref": {
-    "consulted_at": "2026-07-24T14:35:41.261Z",
+    "consulted_at": "2026-07-24T23:01:55.818Z",
     "feature": "multisession-native",
-    "newest_decision_id": "a7c9f337-db5c-4d35-b7a4-ba5d5ea014c1",
+    "newest_decision_id": "526f586e-d3ef-4775-9d32-870002879355",
     "plan_sha256": "6e078fa7cae305c60cc431b5eed884aeefff42719d74698c2ad532ebb627aedb",
-    "advisor": "claude/fable ceiling (bee-review dispatch)",
-    "digest_head": "# Advisor consult — stage 0-1 execution (Gate 3)\n\nAdvisor: claude/fable (ceiling), read-only, 2026-07-24.\nVERDICT: proceed-with-conditions.\n\n- C1 (msn-1): wrap alone insufficient — heartbeatSession reads the session record OUTSIDE its lock (claims.mjs:242 vs :246); move that read inside the lock symmetrically, and confirm no bind/unbind caller nests inside the sessions lock (O_EXCL, non-reentrant).\n- C2 (msn-2): post-reacquire fence must check HEAD (worktree-store.mjs:1456) + MERGE_HEAD (:1486) "
+    "advisor": "claude/fable ceiling (bee-review dispatch, slice 2)",
+    "digest_head": "# Advisor consult — slice 2 execution (workflow-first state)\n\nAdvisor: claude/fable (ceiling), read-only, 2026-07-25. VERDICT: proceed-with-conditions.\n\nBinding conditions:\n- C1 (msn-7, biggest risk): idempotent seed — a non-idle legacy state.json is materialized into a workflow record BEFORE any rebuild treats state.json as derived; projection readers fall back to legacy state.json when zero workflow records exist. Land in msn-6 or pre-7, never slice 5.\n- C2 (msn-9): projected gate boolean = pl"
   },
   "last_scribing_run": {
     "feature": "multisession-native",

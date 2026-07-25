@@ -28,6 +28,7 @@ import { addCell, updateCell, deriveRegenGuards, regenObligationRefusal } from '
 import { createSession, bindSessionLane } from '../lib/claims.mjs';
 import { writeJsonAtomic, hashFile, appendJsonl } from '../lib/fsutil.mjs';
 import { defaultState, writeState, writeLane, BEE_VERSION } from '../lib/state.mjs';
+import { listWorkflows } from '../lib/workflow-store.mjs';
 import { ANCHOR_NUDGE_COMMAND } from '../lib/compaction.mjs';
 import { encodeProjectDir } from '../lib/perf.mjs';
 import { emitFrontmatter } from '../lib/knowledge.mjs';
@@ -1081,14 +1082,17 @@ await check('state.scribing-run --lane example (examples[1]) stamps the lane rec
   );
 });
 
-await check('state.rebuild-projections example (multisession-native-7) rebuilds demo-lane\'s projection from its live workflow record, and leaves state.json untouched because rootState has a LIVE non-idle default feature by this point (C5 safety gate)', async () => {
+await check('state.rebuild-projections example (multisession-native-7/10) rebuilds demo-lane\'s projection AND state.json\'s, both from their own live workflow record — rootState\'s default feature ("newf") has been kept in sync at every default-path mutation since msn-10, so its rebuild is now authoritative even though it is live and non-idle', async () => {
   const beforeDefault = fs.readFileSync(path.join(rootState, '.bee', 'state.json'), 'utf8');
   const beforeLane = fs.readFileSync(path.join(rootState, '.bee', 'lanes', 'demo-lane.json'), 'utf8');
+  const wfNewf = listWorkflows(rootState).workflows.find((wf) => wf.feature === 'newf');
+  assert(wfNewf, 'precondition: rootState\'s default feature has a live workflow record (msn-6)');
+
   const result = await assertExampleOk('state.rebuild-projections', { cwd: rootState });
   const parsed = JSON.parse(result.stdout);
   assert(
-    parsed.state.authoritative === false,
-    `rootState's default record is live and non-idle by this point in the suite — state.json must NOT be rewritten from a workflow record (C5 safety gate), got ${result.stdout}`,
+    parsed.state.authoritative === true && parsed.state.source === wfNewf.id,
+    `multisession-native-10: state.json's live default feature ("newf") now has its OWN workflow record kept in sync — rebuild must be authoritative and sourced from it, got ${result.stdout}`,
   );
   assert(
     parsed.lanes.some((l) => l.authoritative === true && l.lane && l.lane.feature === 'demo-lane'),
@@ -1096,7 +1100,7 @@ await check('state.rebuild-projections example (multisession-native-7) rebuilds 
   );
   const afterDefault = fs.readFileSync(path.join(rootState, '.bee', 'state.json'), 'utf8');
   const afterLane = fs.readFileSync(path.join(rootState, '.bee', 'lanes', 'demo-lane.json'), 'utf8');
-  assert(afterDefault === beforeDefault, 'state.json must be byte-untouched: the D1 rebuild never fires while a default feature is live');
+  assert(afterDefault === beforeDefault, 'rebuilding must be idempotent: state.json is already what its workflow record derives (kept in sync at every mutation since msn-10), so bytes are unchanged');
   assert(afterLane === beforeLane, 'rebuilding must be idempotent: demo-lane.json is already what the projection derives, so bytes are unchanged');
 });
 

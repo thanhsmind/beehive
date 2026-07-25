@@ -24,6 +24,7 @@ import {
   createWorkflow,
   readWorkflow,
   updateWorkflow,
+  updateWorkflowAssumingLock,
   listWorkflows,
   withWorkflowLock,
   workflowStatePath,
@@ -253,6 +254,74 @@ await check('updateWorkflow propagates the same typed refusals as readWorkflow, 
     );
     const after = fs.readFileSync(workflowStatePath(root, created.id), 'utf8');
     assert(before === after, 'a refused update never touches the corrupt file on disk');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ─── updateWorkflowAssumingLock (multisession-native-10): the same
+// read-modify-write body as updateWorkflow, but for a caller that ALREADY
+// holds workflow:<id> itself (bee.mjs's mutation verbs — see this function's
+// own doc comment). Same merge/refusal contract, MINUS locking of its own —
+// proven below by the exact inverse of updateWorkflow's own lock-isolation
+// proof further down this file: updateWorkflow is DENIED while workflow:<id>
+// is held externally (it tries to acquire that same lock itself), while
+// updateWorkflowAssumingLock succeeds through the SAME held lock, because it
+// never asks for it.
+
+await check('updateWorkflowAssumingLock: same merge semantics and typed refusals as updateWorkflow (missing/corrupt propagate, valid patch merges gates per-name)', async () => {
+  const root = makeRoot();
+  try {
+    assertThrows(
+      () => updateWorkflowAssumingLock(root, 'wf-ghost', { phase: 'planning' }),
+      'no workflow record',
+      'updateWorkflowAssumingLock refuses a missing workflow',
+    );
+
+    const created = await createWorkflow(root, { feature: 'demo-feature-assuming-lock' });
+    fs.writeFileSync(workflowStatePath(root, created.id), '{not valid json', 'utf8');
+    const before = fs.readFileSync(workflowStatePath(root, created.id), 'utf8');
+    assertThrows(
+      () => updateWorkflowAssumingLock(root, created.id, { phase: 'planning' }),
+      'not valid json',
+      'updateWorkflowAssumingLock refuses a corrupt record instead of clobbering it',
+    );
+    const after = fs.readFileSync(workflowStatePath(root, created.id), 'utf8');
+    assert(before === after, 'a refused update never touches the corrupt file on disk');
+
+    const created2 = await createWorkflow(root, { feature: 'demo-feature-assuming-lock-2', gates: { execution: { approved: true, approved_for_plan_rev: 1 } } });
+    const updated = updateWorkflowAssumingLock(root, created2.id, { phase: 'planning', gates: { shape: { approved: true } } });
+    assert(updated.phase === 'planning', 'patch applies');
+    assert(updated.gates.execution.approved === true && updated.gates.execution.approved_for_plan_rev === 1, 'an untouched gate name is preserved by mergeGates, exactly like updateWorkflow');
+    assert(updated.gates.shape.approved === true, 'the patched gate name merges in');
+    assert(updated.id === created2.id && updated.feature === created2.feature, 'identity fields (id/feature) are protected, exactly like updateWorkflow');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('updateWorkflowAssumingLock (multisession-native-10, C4): succeeds through an externally-held workflow:<id> lock that DENIES updateWorkflow itself — proves it takes no lock of its own, the exact property that makes it safe for a caller already holding that lock', async () => {
+  const root = makeRoot();
+  try {
+    const created = await createWorkflow(root, { feature: 'assuming-lock-deadlock-proof' });
+    const held = acquireStoreLockOnceSync(root, `workflow:${created.id}`);
+    assert(held.acquired, 'precondition: test can hold workflow:<id> directly');
+    try {
+      // Negative control: the SELF-LOCKING form really is denied here — this
+      // is exactly the shape that would deadlock if bee.mjs called it from
+      // inside its own withWorkflowLock hold instead of the assuming-lock form.
+      await assertRejects(
+        () => updateWorkflow(root, created.id, { phase: 'planning' }, { maxAttempts: 1 }),
+        'busy',
+        'updateWorkflow (self-locking) must be denied while the same lock is already held',
+      );
+      // The real proof: the assuming-lock form succeeds through the SAME held
+      // lock, because it never tries to acquire it.
+      const updated = updateWorkflowAssumingLock(root, created.id, { phase: 'planning' });
+      assert(updated.phase === 'planning', `updateWorkflowAssumingLock must succeed while workflow:<id> is externally held, got ${JSON.stringify(updated)}`);
+    } finally {
+      held.release();
+    }
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
