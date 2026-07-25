@@ -1,0 +1,83 @@
+{
+ "schema": "judge-verdict/1",
+ "verdict": "PASS",
+ "checks": [
+  {
+   "id": "truth1-matrix-7-branches",
+   "status": "PASS",
+   "evidence": "cells.mjs:124 requiredProofTier covers 7 classes per D1; CHANGE_CLASSES :89 has 7 incl refactor; comments cite test-economy D1/D2/D8; 18-case table-driven unit test"
+  },
+  {
+   "id": "truth2-red-first-keep-80char",
+   "status": "PASS",
+   "evidence": "cells.mjs:1875/:1907 gate on proofTier==='red-first'; RED_EVIDENCE_MIN_CHARS=80 :1730 + anti-dup :1738 unchanged; keep rows te1-sec-tiny/te1-mig-small/te1-null-hr-bc refuse without red evidence"
+  },
+  {
+   "id": "truth3-loosen-bugfix-small-null-standard",
+   "status": "PASS",
+   "evidence": "rows te1-bugfix-small + te1-null-standard-bc cap on targeted-green without red_failure_evidence"
+  },
+  {
+   "id": "truth4-refactor-newtestfile-refuse",
+   "status": "PASS",
+   "evidence": "cells.mjs:1855-1864 refuse refactor/formatting with new_test_files, new_suite_reason no override; unit rows standard+high-risk; e2e test_bee_cli.mjs:4186 real untracked test file"
+  },
+  {
+   "id": "truth5-nogit-failopen-warning",
+   "status": "PASS",
+   "evidence": "bee.mjs computeDiffStats catch :1471-1478 appends warning to .bee/logs/hooks.jsonl, returns undefined; e2e :4244 no-git cap succeeds + warning found"
+  },
+  {
+   "id": "truth6-mirror-dedupe",
+   "status": "PASS",
+   "evidence": "bee.mjs:1365 5 mirror prefixes filtered before numerator+denominator; e2e :4217 .bee/bin/test_mirror_thing.mjs excluded"
+  },
+  {
+   "id": "truth7-mirrors-manifest",
+   "status": "PASS",
+   "evidence": "run_verify --only test_cells,test_bee_cli,test_lib_mirror,test_ledger_parity all PASS; release_manifest --check 560 files match; cmp canonical vs 5 mirrors zero diff"
+  },
+  {
+   "id": "prohibition-no-new-test-files",
+   "status": "PASS",
+   "evidence": "git show df13878 --diff-filter=A --name-only prints only .bee/cells/te-1.json"
+  },
+  {
+   "id": "prohibition-no-hand-edited-mirror",
+   "status": "PASS",
+   "evidence": "cmp zero differences across all mirrors; ledger+manifest updated same commit consistent with regen scripts"
+  },
+  {
+   "id": "prohibition-no-loosening-security-migration-highrisk",
+   "status": "PASS",
+   "evidence": "security/migration red-first unconditional (net tightening: bc=false security previously escaped, now cannot); 80-char floor byte-unchanged on those branches"
+  },
+  {
+   "id": "highrisk-refactor-pin-is-sanctioned",
+   "status": "PASS",
+   "evidence": "plan.md:18 pin quoted verbatim in code comment cells.mjs:106-110; paired D8 rows refuse+pass exist"
+  },
+  {
+   "id": "action-alignment-null-bcfalse-pin",
+   "status": "PASS",
+   "evidence": "fallthrough return null; both guards keyed on red-first; regression row null-high-risk-bc=false caps clean"
+  },
+  {
+   "id": "action-alignment-api-class",
+   "status": "PASS",
+   "evidence": "api grouped with bugfix/behavior :126; table rows api standard=targeted-green, api high-risk=red-first"
+  },
+  {
+   "id": "action-alignment-enforcement-site",
+   "status": "PASS",
+   "evidence": "computeDiffStats in bee.mjs handler :1409, passed to capCell :1505; capCell git-free; runBacklogGit untouched"
+  },
+  {
+   "id": "verify-command-reproduced",
+   "status": "PASS",
+   "evidence": "judge re-ran cell verify read-only: both suites PASS, manifest 560 match — matches trace.verify_output"
+  }
+ ],
+ "fixability": "automatic",
+ "confidence": "high"
+}

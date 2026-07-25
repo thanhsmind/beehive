@@ -205,6 +205,17 @@
     "harness",
     "flaky",
     "architecture",
-    "multi-session"
+    "multi-session",
+    "test-economy",
+    "proof-tier",
+    "test-shape",
+    "prune",
+    "read-first",
+    "impacted-cap",
+    "scope",
+    "supersession",
+    "negative-control",
+    "gate-audit",
+    "close"
   ]
 }
