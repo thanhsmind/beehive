@@ -583,7 +583,57 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "real-rename-history",
+            "status": "PASS",
+            "evidence": "git log --follow packages/bee/lib/state.mjs: 50 commits through the move (8bff2a8 -> f4fe163)"
+          },
+          {
+            "id": "no-templates-tree-no-live-refs",
+            "status": "PASS",
+            "evidence": "git ls-files skills/bee-hive/templates empty; rg over scripts/ skills/ .github/ hits only 2 CREATION-LOG historical transcripts (accepted exception)"
+          },
+          {
+            "id": "guards-regex-dual-segment",
+            "status": "PASS",
+            "evidence": "guards.mjs:1454 /(^|\\/)(?:bin\\/lib|packages\\/bee\\/lib)(\\/|$)/ — live-tested: bin/lib true, packages/bee/lib true, old templates path false"
+          },
+          {
+            "id": "manifest-package-payload-role",
+            "status": "PASS",
+            "evidence": "release-manifest.json role histogram package_payload:78, plugin_hook:18 separate; release_manifest.mjs --check 404 files match exit 0"
+          },
+          {
+            "id": "installps1-sparse-packages",
+            "status": "PASS",
+            "evidence": "install.ps1:317 sparse-checkout set skills packages hooks ... ('hooks' retained for cell 2 by design)"
+          },
+          {
+            "id": "plugin-trees-clean",
+            "status": "PASS",
+            "evidence": "fd -td templates .claude-plugin .codex-plugin empty; git ls-files | rg templates empty; 156 stale rendered files deleted in 8bff2a8"
+          },
+          {
+            "id": "deviation-skills-version-stamp",
+            "status": "PASS",
+            "evidence": "in-scope repair (move breaks three-version preflight); legacy fallback onboard_bee.mjs:1271-1281,1461-1471; covered by test_onboard_bee.mjs:2358,:2643,:4423 both branches; advisory gap (malformed-stamp negative test) captured as stub"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-25T17:38:02.186Z"
+      }
+    ]
   },
   "tier": "generation"
 }

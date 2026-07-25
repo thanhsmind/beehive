@@ -76,7 +76,47 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "zero-diff-source",
+            "status": "PASS",
+            "evidence": "git show --stat ccf9d2f -> 2 files +113/-0: .bee/cells/packages-restructure-3.json, docs/history/packages-restructure/reports/packages-restructure-3.md; no source/script/plugin paths"
+          },
+          {
+            "id": "self-onboard-up-to-date",
+            "status": "PASS",
+            "evidence": "onboard_bee.mjs --repo-root . --json -> status=up_to_date, plan=[], bee_version=1.17.1, all targets source/host_helpers/installed_skills=1.17.1"
+          },
+          {
+            "id": "impact-registry-fresh-and-clean",
+            "status": "PASS",
+            "evidence": "impact_registry.mjs --check -> up to date exit 0; rg -c 'skills/bee-hive/templates|\"hooks/' scripts/impact-registry.json -> no match = 0 stale"
+          },
+          {
+            "id": "trace-verify-and-suites",
+            "status": "PASS",
+            "evidence": "trace.verify_passed=true, verify_command identical to cell.verify; judge re-ran: PASS run_verify 105 suites wall=46946ms exit 0 + release_manifest --check 404 match; direct: test_installers_e2e 24/0, plugin_distribution 40/0, test_lib_mirror 4/4 incl 35-file byte-identity"
+          },
+          {
+            "id": "working-tree-note",
+            "status": "PASS",
+            "evidence": "non-blocking: .bee/onboarding.json uncommitted timestamp-only updated_at bump, generator-written during cell 3 apply; not in files list, no prohibition breached"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-25T18:23:43.691Z"
+      }
+    ]
   },
   "tier": "generation"
 }

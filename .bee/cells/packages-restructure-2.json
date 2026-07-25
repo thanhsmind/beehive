@@ -149,7 +149,57 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "1-move-complete",
+            "status": "PASS",
+            "evidence": "ls hooks -> No such file or directory; git ls-files hooks/ empty; git ls-files packages/bee/hooks/ = 18 (catalog.mjs, claude-hooks.json, hooks.json, adapter.mjs, tokenize-command.mjs, 10 bee-*.mjs, 4 test_*.mjs); stat shows {hooks => packages/bee/hooks}/ renames"
+          },
+          {
+            "id": "2-probe-or-fallback",
+            "status": "PASS",
+            "evidence": "skills/bee-hive/scripts/onboard_bee.mjs:2250-2253 returns existsSync(packages/bee/hooks/catalog.mjs) || existsSync(hooks/catalog.mjs); node probe on this repo -> packages:true legacy:false (fires); mirrored at packages/bee/bee.mjs:5647-5653; PLUGIN_HOOKS_DIR onboard_bee.mjs:86"
+          },
+          {
+            "id": "3-manifest-and-commands",
+            "status": "PASS",
+            "evidence": ".claude-plugin/plugin.json hooks=./packages/bee/hooks/claude-hooks.json (exists); .codex-plugin/plugin.json hooks=./packages/bee/hooks/hooks.json (exists); JSON walk: claude-hooks.json 11/11 new-path 0 stale, hooks.json 13/13 new-path 0 stale; generator packages/bee/hooks/catalog.mjs:86 commandFor -> packages/bee/hooks/${script}"
+          },
+          {
+            "id": "4-verify-and-manifest",
+            "status": "PASS",
+            "evidence": "scripts/run_verify.mjs:95 DISCOVERY_ROOTS 'packages/bee/hooks'; scripts/release_manifest.mjs:140 enumerateTree(packages/bee/hooks,'plugin_hook'); release-manifest.json has 18 plugin_hook records all packages/bee/hooks/*; release_manifest.mjs --check -> 404 files match, exit 0"
+          },
+          {
+            "id": "5-installer",
+            "status": "PASS",
+            "evidence": "scripts/install.ps1:317 sparse-checkout set skills packages .claude-plugin .codex-plugin docs/history/codex-harness-hardening (no 'hooks'); scripts/tests/test_installers_e2e.mjs:351 required-roots drops 'hooks', keeps 'packages', assert body unchanged; install.sh has no sparse-checkout"
+          },
+          {
+            "id": "6-stragglers",
+            "status": "PASS",
+            "evidence": "rg pattern -> 158 hits, all packages/bee/hooks, .bee/bin/hooks mirror, deliberate legacy fixtures, or prose comments. .bee/bin/hooks mirror cmp-identical to all 11 source .mjs. Cosmetic only: test_plugin_distribution.mjs:55-64 synthetic fixture paths, bee.mjs comment strings"
+          },
+          {
+            "id": "7-frozen-judge-6-files",
+            "status": "PASS",
+            "evidence": "test_conformance:388-390, test_heartbeat_touch:49, test_hook_vendor_closure:44, test_lib_mirror:15, test_bee_write_guard_hook:35 = pure path-constant repoints; test_bee_cli:2717-2719 adds mkdirSync for deeper fixture dir + :3446 root-name swap, assertions unchanged. No threshold/assertion relaxed. test_hook_contracts.mjs:1393 tightens (drops 'hooksOverride === undefined' arm)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-25T18:12:59.565Z"
+      }
+    ]
   },
   "tier": "generation"
 }
