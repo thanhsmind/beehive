@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: Workflow State — cross-session file holds and the coordination lock behind every shared write
-description: "The write-time refusal that names the live session holding a path and when its hold expires, the bounded-wait lock every shared coordination store's read-modify-write body runs inside — including exactly when a stale holder may be taken over and when it may not — and the fail-open contention telemetry every lock acquire now records, surfaced as a bounded summary in bee status."
-timestamp: 2026-07-24
+description: "The write-time refusal that names the live session holding a path and when its hold expires, the bounded-wait lock every shared coordination store's read-modify-write body runs inside — including exactly when a stale holder may be taken over and when it may not — the fail-open contention telemetry every lock acquire now records, surfaced as a bounded summary in bee status, and the per-workflow lock order that keeps two features' state mutations from ever contending on one lock."
+timestamp: 2026-07-25
 bee:
   id: workflow-state-holds-and-the-coordination-lock
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["multi-session-hardening D2 with Δ1/Δ3 amendments (the coordination lock: verbs wait bounded, checkpoints try once)", "fresh-session-handoff D3 (a write into another live session's held path is refused at write time)", hardening-1-7-10 (liveness-probed stale takeover with a one-hour pid-reuse ceiling; no timer heartbeat by design), "multisession-native (stage 0-1: lock-acquire outcomes recorded as fail-open contention telemetry; bee status surfaces a bounded contention summary from that telemetry)"]
-  sources: ["fresh-session-handoff cells fsh-7/fsh-8 (phase-independent deny + fail-closed corrupt-store branch; validation-s3, 2026-07-13)", "multi-session-hardening cells msh-1..7 (coordination lock primitive and forked-racer suites, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B14", "docs/specs/workflow-state.md#B21", "docs/specs/workflow-state.md#R37", "docs/specs/workflow-state.md#R52", "docs/specs/workflow-state.md#P15", "multisession-native cell multisession-native-3 (contention telemetry in lock.mjs; trace .bee/cells/multisession-native-3.json, commit 2d66ccc, 2026-07-24)", "multisession-native cell multisession-native-4 (bee status contention summary; trace .bee/cells/multisession-native-4.json, commit 1865cae, 2026-07-24)"]
+  decisions: ["multi-session-hardening D2 with Δ1/Δ3 amendments (the coordination lock: verbs wait bounded, checkpoints try once)", "fresh-session-handoff D3 (a write into another live session's held path is refused at write time)", hardening-1-7-10 (liveness-probed stale takeover with a one-hour pid-reuse ceiling; no timer heartbeat by design), "multisession-native (stage 0-1: lock-acquire outcomes recorded as fail-open contention telemetry; bee status surfaces a bounded contention summary from that telemetry)", "multisession-native D1 (state mutation locks its own feature's workflow:<id>, never a blanket state lock; advisor condition C4 — the sessions lock and a workflow lock are never held together)"]
+  sources: ["fresh-session-handoff cells fsh-7/fsh-8 (phase-independent deny + fail-closed corrupt-store branch; validation-s3, 2026-07-13)", "multi-session-hardening cells msh-1..7 (coordination lock primitive and forked-racer suites, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B14", "docs/specs/workflow-state.md#B21", "docs/specs/workflow-state.md#R37", "docs/specs/workflow-state.md#R52", "docs/specs/workflow-state.md#P15", "multisession-native cell multisession-native-3 (contention telemetry in lock.mjs; trace .bee/cells/multisession-native-3.json, commit 2d66ccc, 2026-07-24)", "multisession-native cell multisession-native-4 (bee status contention summary; trace .bee/cells/multisession-native-4.json, commit 1865cae, 2026-07-24)", "multisession-native cell multisession-native-10 (per-workflow withMutationLock replacing the blanket state lock; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice2.md condition C4)"]
   authoritative_for: "workflow-state: cross-session file holds and the shared-store coordination lock"
 ---
 
@@ -109,6 +109,31 @@ with no contention log at all — sees no contention information in status,
 the same additive silence status already uses elsewhere for a signal with
 nothing to report.
 
+**A workflow's own lock, not one shared store lock, now serializes state
+mutation (multisession-native D1/C4).** Trigger: any state-mutation write
+(`state set`, `state gate`, `state scribing-run`, `state advisor-ref record`,
+`start-feature`) against a feature that has a live workflow record. What
+happens: the write acquires that workflow's own `workflow:<id>` lock — never
+the single blanket `state` lock every one of those verbs held through
+`multisession-native-9` — so two different features' state mutations no
+longer contend on one lock at all (closing issue #56 3.1/3.2). This sits
+beside, not instead of, the `sessions` store lock (B21/R37-style: heartbeat
+renewal, lane bind/unbind): the two are never held together in the same
+operation — a fixed lock-order rule, not a convention to remember. A workflow
+lock is acquired, its body runs, and it is released before any `sessions`
+lock the same logical operation might need is taken (or the reverse never
+happens at all on any of these paths) — an operation never asks for both at
+once. Crossing a workflow's own lock with a *different* feature's workflow
+lock is likewise impossible: each write names its own `id`, so the only lock
+two writers could ever contend on is one they both genuinely target the same
+workflow. See `workflow-records-and-projections.md` for the workflow record
+itself and exactly which write paths route through this lock. What each actor
+observes: a session mutating feature A's state is never blocked by another
+session mutating feature B's state, even while both are mid-write at the
+same instant; a missing or corrupt workflow record still refuses loudly
+(typed `WORKFLOW_MISSING`/`WORKFLOW_CORRUPT`) rather than silently falling
+back to an unlocked write.
+
 ## Business Rules
 
 - R37 — A shared coordination store's read-modify-write body always serializes
@@ -131,6 +156,12 @@ nothing to report.
   `worst_wait_ms`/`worst_wait_lock`, and `recent_busy` (≤5); the whole key is
   omitted when the log is absent or the window holds no busy event, and a
   malformed line is skipped rather than failing the read (multisession-native).
+- R61 — State-mutation writes (default and lane alike) lock their own
+  feature's `workflow:<id>`, never a blanket `state` lock; a `sessions` store
+  lock and a `workflow:<id>` lock are never held together in the same
+  operation (fixed lock order, no AB-BA), so two different features' state
+  mutations never contend on a shared lock (multisession-native D1, advisor
+  condition C4).
 
 ## Edge Cases Settled
 
@@ -163,3 +194,10 @@ nothing to report.
   fixture aggregation, text-render mention, absent-log silence, malformed-
   line skip, 8MB garbage-head tail-window proof); trace
   `.bee/cells/multisession-native-4.json`, commit 1865cae.
+- Per-workflow lock order (D1/C4): `withMutationLock` in
+  `skills/bee-hive/templates/lib/state.mjs` (locks per-workflow instead of
+  the blanket `state` lock every state-mutation verb held through
+  `multisession-native-9`); two deterministic seam tests proving zero
+  cross-workflow `LOCK_BUSY` and decoupling from the `sessions` lock. Trace
+  `.bee/cells/multisession-native-10.json`, commit e7f365a. See
+  `workflow-records-and-projections.md` Pointers for the full write path.

@@ -21,5 +21,5 @@ never a generation timestamp or any other wall-clock value.
 - [performance-log/](performance-log/index.md) — 4 concept(s)
 - [product-backlog/](product-backlog/index.md) — 1 concept(s)
 - [verify-pipeline/](verify-pipeline/index.md) — 3 concept(s)
-- [workflow-state/](workflow-state/index.md) — 15 concept(s)
+- [workflow-state/](workflow-state/index.md) — 16 concept(s)
 - [worktree-parallelism/](worktree-parallelism/index.md) — 7 concept(s)
