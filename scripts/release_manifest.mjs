@@ -61,8 +61,8 @@ const DISTRIBUTION_TOOLS = [
   path.join(REPO_ROOT, "scripts", "install.ps1"),
 ];
 const DISTRIBUTION_TESTS = [
-  path.join(REPO_ROOT, "scripts", "test_verify_manifest.mjs"),
-  path.join(REPO_ROOT, "scripts", "test_release_tuple.mjs"),
+  path.join(REPO_ROOT, "scripts", "tests", "test_verify_manifest.mjs"),
+  path.join(REPO_ROOT, "scripts", "tests", "test_release_tuple.mjs"),
 ];
 
 const SCHEMA_VERSION = 1;

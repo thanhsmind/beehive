@@ -817,7 +817,7 @@ const BLOCK_START_RE = /^(-\s+|\*\*)/;
 //      exactly 26 {4,9,6,7} with unparsed_blocks 0, and critical-patterns 47,
 //      from their pinned blobs with expected_counts untouched. A widening that
 //      moves either is too broad and gets narrowed — never the pin relaxed.
-//      Asserted in scripts/test_okf_pins.mjs (sections 24-26).
+//      Asserted in scripts/tests/test_okf_pins.mjs (sections 24-26).
 const BOLD_MARKER_RE = /\*\*/g;
 /** Bold markers dropped, for ID MATCHING ONLY — never for anchor text. */
 const unbold = (line) => line.replace(BOLD_MARKER_RE, "");
@@ -1005,7 +1005,7 @@ export function inventoryPatterns(text) {
 // ground truth is read off the source's own structure.
 //
 // Three boundaries hold this in place, all asserted in
-// scripts/test_okf_pins.mjs section 27:
+// scripts/tests/test_okf_pins.mjs section 27:
 //
 //   1. A `## ` HEADING IS AN ANCHOR; A `###` SUBHEADING IS NOT. Deeper
 //      headings are structure WITHIN a section, so their prose travels with
@@ -1340,7 +1340,7 @@ function reportPinFailure(label, result) {
 // advisor-protocol's 26 anchors and critical-patterns' 47 must ALL clear this
 // floor with ZERO edits to their concepts. If one fails, the NORMALIZATION is
 // wrong — never the migrated content, never the threshold. Both are asserted
-// in scripts/test_okf_pins.mjs, which also asserts that the MEDIAN sits well
+// in scripts/tests/test_okf_pins.mjs, which also asserts that the MEDIAN sits well
 // clear of the floor: a median barely above 0.60 would itself mean the
 // normalization had become too strict and the floor was measuring the metric
 // rather than the migration. Measured as shipped:
@@ -1655,7 +1655,7 @@ export async function collectTelemetry() {
       // for every pin that existed before: the eight ba-nine-section areas
       // group exactly as the eight `kind: "area"` pins did, and
       // critical-patterns stays alone exactly as `kind: "patterns"` did
-      // (asserted in scripts/test_okf_pins.mjs section 29).
+      // (asserted in scripts/tests/test_okf_pins.mjs section 29).
       scheme: pin.scheme,
       anchors: derived.counts.total,
       // The measured denominator: concepts owning >= 1 pinned anchor (f4-7).

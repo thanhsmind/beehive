@@ -2709,14 +2709,14 @@
       "role": "distribution_tool"
     },
     {
-      "path": "scripts/test_release_tuple.mjs",
-      "sha256": "2be718dae4d657cd76a254ff7a5a1ae685ff5f66a8fba5c57977a8a6439795bf",
+      "path": "scripts/tests/test_release_tuple.mjs",
+      "sha256": "363a6faf9d86ffff07f41a8a0314b26808355ea1fe9b231c2dc9b3ec9619e0e9",
       "mode": "644",
       "role": "distribution_test"
     },
     {
-      "path": "scripts/test_verify_manifest.mjs",
-      "sha256": "c57f3e9a5b9ccd124590e1738294420d3d606b91e9317024f0c72d20c3d5835b",
+      "path": "scripts/tests/test_verify_manifest.mjs",
+      "sha256": "be30531ab3dbc8ec3310322e58b5ad5c43a9636a2b75e71e29ed6a9b70e81e48",
       "mode": "644",
       "role": "distribution_test"
     },

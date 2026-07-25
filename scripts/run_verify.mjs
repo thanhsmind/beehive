@@ -89,7 +89,7 @@ function triggerCiDelegation() {
 // from; nothing is lost (docs/history/contention-split/reports/cs-4.md
 // records the old-vs-discovered set diff captured at flip time).
 const DISCOVERY_ROOTS = [
-  "scripts",
+  "scripts/tests",
   "skills/bee-hive/templates/tests",
   "skills/bee-hive/scripts",
   "hooks",
@@ -122,7 +122,7 @@ const EXTRA_SUITES = [
   // idiom as ledger_parity.mjs --check just above.
   ["scripts/backlog_uniqueness.mjs", "--check"],
   ["scripts/census_stale_spawn_syntax.mjs"],
-  ["scripts/test_installers_e2e.mjs", "--installer", "bash"],
+  ["scripts/tests/test_installers_e2e.mjs", "--installer", "bash"],
   // okf-3: joins the chain as a chain-failing suite per D22/D34. Plain check
   // (NEVER --strict here — D8-graduation keeps profile warnings as warnings
   // until F2): docs/knowledge/ OKF errors fail the chain (exit 1), profile
@@ -143,7 +143,7 @@ const EXTRA_SUITES = [
   // blob_sha + scheme + expected_counts, all asserted, with a committed
   // verbatim source copy as the shallow-clone fallback). An empty, failed,
   // unresolvable, or unscheme'd extraction now exits 1 instead of reporting
-  // 0/0 green. scripts/test_okf_pins.mjs (auto-discovered) is what proves it.
+  // 0/0 green. scripts/tests/test_okf_pins.mjs (auto-discovered) is what proves it.
   ["scripts/okf_migrate.mjs", "--check", "advisor-protocol"],
   // okf-6: the D35 coverage gate for critical-patterns.md's migration into
   // docs/knowledge/patterns/ — same coverage law, PATn anchors instead of
@@ -355,11 +355,11 @@ const EXTRA_SUITES = [
   ["scripts/okf_instructions_fence.mjs"],
 ];
 
-// scripts/test_installers_e2e.mjs is discovered by the glob too (it matches
-// `test_*.mjs`); its args variant is supplied via EXTRA_SUITES above, so the
-// bare no-args discovery hit for this one path is dropped to avoid running
-// it twice.
-const ARGS_OVERRIDE = new Set(["scripts/test_installers_e2e.mjs"]);
+// scripts/tests/test_installers_e2e.mjs is discovered by the glob too (it
+// matches `test_*.mjs`); its args variant is supplied via EXTRA_SUITES above,
+// so the bare no-args discovery hit for this one path is dropped to avoid
+// running it twice.
+const ARGS_OVERRIDE = new Set(["scripts/tests/test_installers_e2e.mjs"]);
 
 function discoverSuites() {
   const found = [];
@@ -396,7 +396,7 @@ export const SUITES = discoverSuites();
 // convention; they are listed explicitly below.
 const SERIAL_NAME_PATTERN = /_(race|lock|concurrency)\.mjs$/;
 const SERIAL_EXCEPTIONS = new Set([
-  "scripts/test_heartbeat_touch.mjs",
+  "scripts/tests/test_heartbeat_touch.mjs",
 ]);
 
 const SERIAL_SENSITIVE = new Set(
@@ -417,7 +417,7 @@ function suiteLabel(entry) {
 // its members must not overlap each other because one of them deliberately
 // mutates a file the others read.
 //
-// `scripts/test_okf_pins.mjs` section 22 proves the coverage gate's bundle
+// `scripts/tests/test_okf_pins.mjs` section 22 proves the coverage gate's bundle
 // invariants are actually WIRED, end to end, by writing one deliberately
 // non-canonical concept into the REAL docs/knowledge/ bundle, asserting the
 // real CLI turns red, and removing it again. That is the right test — an
@@ -438,7 +438,7 @@ function suiteLabel(entry) {
 function touchesLiveBundle(entry) {
   const [cmd, ...args] = entry;
   if (cmd === "scripts/okf_migrate.mjs") return true; // every --check <area>
-  if (cmd === "scripts/test_okf_pins.mjs") return true; // the deliberate mutator
+  if (cmd === "scripts/tests/test_okf_pins.mjs") return true; // the deliberate mutator
   if (cmd === ".bee/bin/bee.mjs" && args[0] === "knowledge") return true; // check / index --check
   return false;
 }
@@ -1187,7 +1187,7 @@ async function main() {
 
 // Only run the suite pool when this file is executed directly (`node
 // scripts/run_verify.mjs`) — NOT when imported, e.g. by
-// scripts/test_verify_manifest.mjs pulling in the exported SUITES list. An
+// scripts/tests/test_verify_manifest.mjs pulling in the exported SUITES list. An
 // unconditional call here would spawn the entire suite as a side effect of
 // a plain `import`.
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;

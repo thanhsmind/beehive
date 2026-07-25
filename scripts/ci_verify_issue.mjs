@@ -8,7 +8,7 @@
 // the create-vs-comment dedupe decision) and a thin CLI shell that reads
 // GitHub Actions env vars and drives `gh` through an INJECTABLE exec
 // function — so the decision logic is unit-testable offline, with no
-// network and no real `gh` binary required (scripts/test_ci_verify_issue.mjs).
+// network and no real `gh` binary required (scripts/tests/test_ci_verify_issue.mjs).
 //
 // Pure core:
 //   buildIssueTitle(workflow, branch)        -> deterministic issue title
