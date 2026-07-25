@@ -177,7 +177,7 @@
     },
     {
       "path": ".bee/bin/lib/state.mjs",
-      "sha256": "a35492e899c818405a8c21f1ff5d5bc14c362d0ef2ef20bf85df5ea2e54b9056",
+      "sha256": "3618184ae83ca754df936c520cad46250be2fdb8640663f2863c192e53f60f68",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -220,7 +220,7 @@
     },
     {
       "path": ".claude-plugin/plugin.json",
-      "sha256": "df86df01d121abace9699419019992374b0f1471657638718879c2e01b4ee544",
+      "sha256": "d15b08632a10f060feeb198f1497eb95454d00329f0d6c41ff1cfcfe5169760b",
       "mode": "644",
       "role": "plugin_manifest",
       "packagePath": ".claude-plugin/plugin.json"
@@ -1396,7 +1396,7 @@
     },
     {
       "path": ".codex-plugin/plugin.json",
-      "sha256": "c738d7de47b45c7aa919a1083198fce408ba8d1363d0a722f630b85d1d4515c2",
+      "sha256": "c834ee10143979e126d889724dd0644972abed9e75d36e02b9449a75b58b79a2",
       "mode": "644",
       "role": "plugin_manifest",
       "packagePath": ".codex-plugin/plugin.json"
@@ -3331,7 +3331,7 @@
     },
     {
       "path": "skills/bee-hive/templates/lib/state.mjs",
-      "sha256": "a35492e899c818405a8c21f1ff5d5bc14c362d0ef2ef20bf85df5ea2e54b9056",
+      "sha256": "3618184ae83ca754df936c520cad46250be2fdb8640663f2863c192e53f60f68",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/templates/lib/state.mjs"

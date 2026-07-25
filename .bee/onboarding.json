@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "bee_version": "1.17.0",
+  "bee_version": "1.17.1",
   "managed": {
     "agents_block": "5986a028dda47a7f1ca932c683bd1f78cc6480d2e09c49192028e12aa25bc8af",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
@@ -37,7 +37,7 @@
       "scratch.mjs": "3b7ab2e104b3f4cee240a43fac49ee630df7ca2ed995eb71f403d25eae17afb0",
       "source-identity.mjs": "716740641e1f6bfbb5ccc5b4fe7827f1165c2a1f1127ee3800f52a47ac09fc7a",
       "state-projection.mjs": "372e78ecbce14115cbc2b88bfe10d23f55fa9716d4ed586370e532484dcf00c1",
-      "state.mjs": "a35492e899c818405a8c21f1ff5d5bc14c362d0ef2ef20bf85df5ea2e54b9056",
+      "state.mjs": "3618184ae83ca754df936c520cad46250be2fdb8640663f2863c192e53f60f68",
       "validate-args.mjs": "10668ba817359f58fac7622f1993ebeae111614d49b51c7cca807ec2224dde2c",
       "workflow-store.mjs": "27aa64ffab30bdda9c939cdb6def6106c9ef9648067078eda27d512b5a1e41d4",
       "workspace-store.mjs": "b7355d3fe6a398475edab10b50de7958601034ce771c66af775f2ce21ab3b641",
@@ -64,7 +64,7 @@
     }
   },
   "agents_sync": {
-    "bee_version": "1.17.0",
+    "bee_version": "1.17.1",
     "files": [
       ".claude/agents/bee-extract.md",
       ".claude/agents/bee-gather.md",
@@ -81,5 +81,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-25T14:40:12.187Z"
+  "updated_at": "2026-07-25T14:52:56.846Z"
 }
