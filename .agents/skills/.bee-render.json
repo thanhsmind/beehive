@@ -12,7 +12,7 @@
     },
     {
       "name": "bee-compounding",
-      "sha256": "436f106996c51f7ca47e67228faee123ee2afec6dcaf1adda6854255b8d221a9"
+      "sha256": "43077acc9d3437b41d7fcd6d455278bc24510458d2a86f7e40ae17ad71175e36"
     },
     {
       "name": "bee-context-locking",
@@ -32,7 +32,7 @@
     },
     {
       "name": "bee-grooming",
-      "sha256": "678a167102e27755b33b242169a525754473035bc78be438eafcc4cc8b678519"
+      "sha256": "434f7acf2ab1508c290aab1bcea08fd9a3362227319b3deda8804bc9225fa3f8"
     },
     {
       "name": "bee-herding",

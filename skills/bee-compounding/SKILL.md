@@ -133,6 +133,16 @@ The phase is set **after** the commit in §10 has landed, never before: `compoun
 
 Record the completed compounding run: `node .bee/bin/bee.mjs state set --owner compounding --phase compounding-complete --next-action "<next action>" --summary "learnings: <file path>; promoted: <count>"`.
 
+## 12. Suite Census (test-economy D4)
+
+Report three counts in the close's run summary, so suite growth has a visible ledger instead of climbing unnoticed (test-economy D4 — the counterweight to auto-discovery's monotonic growth; no bundle, no test-prune has run yet, is a legitimate delta of zero):
+
+- **suites in registry** — total distinct suites `run_verify.mjs` discovers, e.g. `node -e "import('./scripts/run_verify.mjs').then(m => console.log(m.SUITES.length))"` (adjust to the registry's actual export if the script's shape has moved on)
+- **total test lines** — summed line count across test files, e.g. `fd -e mjs 'test_' | xargs wc -l | tail -1`
+- **delta for the feature just closed** — the same two counts compared against the feature's first commit, e.g. `git diff --stat <feature-first-commit>..HEAD -- '*test_*.mjs'`, so the report shows whether this feature grew, held, or shrank the suite
+
+These are read-only shell one-liners — no new `bee.mjs` CLI verb. Fold the three numbers into the run summary text; they are informational context for the human, not durable evidence and not a gate on the close.
+
 ## Hard Gates
 
 - Do NOT skip compounding for meaningful work. "The session feels done" is the rationalization, not a reason.

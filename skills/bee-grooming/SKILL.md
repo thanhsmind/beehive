@@ -56,8 +56,11 @@ Scope every check to the **project's own files** — exclude `.bee/`, `.claude/`
 - verify-commands that no longer run
 - superseded-but-still-cited decisions
 - slop patterns in recent diffs (empty catches, redundant `return await`, dead flags, copy-paste drift)
+- **test-prune (test-economy D4)** — duplicate-logic or low-validation-value tests: an agent review-tier, read-only scan surfaces candidates with evidence of *why* each is a duplicate or adds little verification value
 
 Prove non-use before calling anything dead: dynamic imports, reflection, config-driven loading, and external callers all count as use. "Obviously dead" without evidence is a red flag, not a finding.
+
+**Test-prune's hard gate (test-economy D4):** the action is merging near-duplicate cases into one table-driven test, or deleting a genuinely dead case — never a raw line-count cut. Deleting a test is a change to guard *behavior*, so it ships under the same discipline as any other guard narrowing: every suite touched by the prune must run and show **green AFTER the prune, in the same batch** — a prune proposed now and verified "later" is not ready to execute. And because pruning removes coverage, the test-economy D8 negative-control principle still applies to what remains: the surviving case(s) must still demonstrably catch what the pruned duplicates caught — a quieter suite is not proof of a safe prune, a still-triggering guard is.
 
 ## 3. Propose
 
@@ -88,6 +91,7 @@ After execution, record the actual outcome against the prediction: `node .bee/bi
 - deleting anything without recorded user approval
 - "obviously dead" claimed without proof of non-use
 - batching multiple kills into one approved cell
+- executing a test-prune kill without the touched suites showing green *after* the prune, in the same batch (test-economy D4)
 - grooming editing files directly instead of dispatching cells
 - dumping every candidate instead of ranking by pain × impact
 - skipping the actual-outcome record after execution
