@@ -36,14 +36,14 @@ function makeRoot() {
 
 // ─── workflowGatesToApprovedGates ───────────────────────────────────────────
 
-await check('workflowGatesToApprovedGates: translates the D1 gates map to the legacy boolean shape, in fixed GATE_NAMES order', async () => {
+await check('workflowGatesToApprovedGates: translates the D1 gates map to the legacy boolean shape, in fixed GATE_NAMES order (null approved_for_plan_rev — never rev-scoped, D7 default for context/shape/review)', async () => {
   const gates = {
-    review: { approved: true, approved_for_plan_rev: 2 },
-    context: { approved: true, approved_for_plan_rev: 1 },
+    review: { approved: true, approved_for_plan_rev: null },
+    context: { approved: true, approved_for_plan_rev: null },
     execution: { approved: false, approved_for_plan_rev: null },
-    shape: { approved: true, approved_for_plan_rev: 1 },
+    shape: { approved: true, approved_for_plan_rev: null },
   };
-  const approved = workflowGatesToApprovedGates(gates);
+  const approved = workflowGatesToApprovedGates(gates, 7); // arbitrary planRev — null revs are immune to it
   assert(
     JSON.stringify(Object.keys(approved)) === JSON.stringify(GATE_NAMES),
     `key order must be GATE_NAMES order regardless of input order, got ${JSON.stringify(Object.keys(approved))}`,
@@ -57,6 +57,31 @@ await check('workflowGatesToApprovedGates: translates the D1 gates map to the le
 await check('workflowGatesToApprovedGates: a missing/malformed gates map reads as all-false, never throws', async () => {
   assert(JSON.stringify(workflowGatesToApprovedGates(null)) === JSON.stringify({ context: false, shape: false, execution: false, review: false }));
   assert(JSON.stringify(workflowGatesToApprovedGates({})) === JSON.stringify({ context: false, shape: false, execution: false, review: false }));
+});
+
+// ─── C2 (multisession-native-9, CONTEXT.md D7, advisor consult slice 2 —
+// binding): the projected boolean is plan-rev-EFFECTIVE, not the bare
+// `approved` flag ─────────────────────────────────────────────────────────
+
+await check('workflowGatesToApprovedGates (C2): a gate approved AT the current plan_rev projects true; the SAME gate reads false once planRev moves past its stamped rev', async () => {
+  const gates = { execution: { approved: true, approved_for_plan_rev: 1 } };
+  assert(workflowGatesToApprovedGates(gates, 1).execution === true, 'matching plan_rev (1 === 1) must stay effective');
+  assert(workflowGatesToApprovedGates(gates, 2).execution === false, 'a plan_rev bump past the stamped rev (2 !== 1) must project ineffective');
+  assert(workflowGatesToApprovedGates(gates, 0).execution === false, 'a mismatched rev in EITHER direction is ineffective, not just "newer wins"');
+});
+
+await check('workflowGatesToApprovedGates (C2): approved_for_plan_rev === null (or the field absent) is ALWAYS effective, independent of planRev — the D7 default keeps context/shape/review rev-immune', async () => {
+  const nullRev = { execution: { approved: true, approved_for_plan_rev: null } };
+  assert(workflowGatesToApprovedGates(nullRev, 0).execution === true);
+  assert(workflowGatesToApprovedGates(nullRev, 999).execution === true);
+
+  const noRevField = { execution: { approved: true } }; // legacy/hand-written shape, no approved_for_plan_rev key at all
+  assert(workflowGatesToApprovedGates(noRevField, 999).execution === true, 'an absent approved_for_plan_rev field must read the same as null — always effective');
+});
+
+await check('workflowGatesToApprovedGates (C2): a false `approved` flag stays false regardless of rev match — rev-effectiveness never turns an unapproved gate on', async () => {
+  const gates = { execution: { approved: false, approved_for_plan_rev: 3 } };
+  assert(workflowGatesToApprovedGates(gates, 3).execution === false, 'approved:false must project false even at a matching plan_rev');
 });
 
 // ─── pickNewestActiveWorkflow ───────────────────────────────────────────────
@@ -151,7 +176,7 @@ await check('rebuildStateProjection: sources the newest ACTIVE workflow, resets 
     writeJsonAtomic(statePath(root), { schema_version: '1.0', phase: 'idle', feature: null, mode: null, approved_gates: { context: false, shape: false, execution: false, review: false }, workers: [{ nickname: 'kevin', cell: 'x-1' }], summary: '', next_action: 'No active bee work — awaiting a user request.' });
     const older = await createWorkflow(root, { feature: 'older-feature', phase: 'planning', mode: 'small', summary: 'older summary', next_action: 'older next' });
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const newer = await createWorkflow(root, { feature: 'newer-feature', phase: 'swarming', mode: 'standard', gates: { execution: { approved: true, approved_for_plan_rev: 1 } }, summary: 'newer summary', next_action: 'newer next' });
+    const newer = await createWorkflow(root, { feature: 'newer-feature', phase: 'swarming', mode: 'standard', plan_rev: 1, gates: { execution: { approved: true, approved_for_plan_rev: 1 } }, summary: 'newer summary', next_action: 'newer next' });
 
     const result = rebuildStateProjection(root);
     assert(result.authoritative === true && result.source === newer.id, `must source the newer, more-recently-created active workflow, got source=${result.source}`);
@@ -191,6 +216,7 @@ await check('rebuildLaneProjection: derives every D1 field from the live workflo
       feature: 'lane-feat',
       phase: 'swarming',
       mode: 'standard',
+      plan_rev: 1,
       gates: { shape: { approved: true, approved_for_plan_rev: 1 } },
       summary: 'lane summary',
       next_action: 'lane next',
@@ -274,7 +300,7 @@ await check('self-heal (F8): a lane file that has drifted from its workflow reco
 await check('invariant 13/14: deleting .bee/lanes/<feature>.json and rebuilding it reproduces byte-identical content — "deleting a projection loses nothing"', async () => {
   const root = makeRoot();
   try {
-    await createWorkflow(root, { feature: 'invariant-lane', phase: 'validating', mode: 'high-risk', gates: { context: { approved: true, approved_for_plan_rev: 1 }, shape: { approved: true, approved_for_plan_rev: 1 } }, summary: 'invariant summary', next_action: 'invariant next' });
+    await createWorkflow(root, { feature: 'invariant-lane', phase: 'validating', mode: 'high-risk', plan_rev: 1, gates: { context: { approved: true, approved_for_plan_rev: 1 }, shape: { approved: true, approved_for_plan_rev: 1 } }, summary: 'invariant summary', next_action: 'invariant next' });
 
     const first = rebuildLaneProjection(root, 'invariant-lane');
     assert(first.authoritative === true);
@@ -296,7 +322,7 @@ await check('invariant 13/14: deleting .bee/lanes/<feature>.json and rebuilding 
 await check('invariant 13/14: deleting .bee/state.json and rebuilding it (no overrides) reproduces byte-identical D1-owned content — "overview rebuilds fully from records"', async () => {
   const root = makeRoot();
   try {
-    await createWorkflow(root, { feature: 'invariant-state', phase: 'swarming', mode: 'standard', gates: { execution: { approved: true, approved_for_plan_rev: 2 } }, summary: 'overview summary', next_action: 'overview next' });
+    await createWorkflow(root, { feature: 'invariant-state', phase: 'swarming', mode: 'standard', plan_rev: 2, gates: { execution: { approved: true, approved_for_plan_rev: 2 } }, summary: 'overview summary', next_action: 'overview next' });
 
     const first = rebuildStateProjection(root);
     assert(first.authoritative === true);

@@ -704,6 +704,22 @@ export const COMMAND_REGISTRY = [
     deprecated: null,
   },
   {
+    name: 'state.plan-rev.bump',
+    invoke: 'bee state plan-rev bump',
+    description: "Bump a workflow's plan_rev by 1 (multisession-native-9, CONTEXT.md D7; advisor consult slice 2 C2, binding). plan_rev lives ONLY on the workflow record, so this verb targets a lane exactly like gate/set/scribing-run (explicit --lane > the calling session's bound lane) but REFUSES when resolution would land on the default (non-lane) record — that record's workflow is not yet kept in sync (C5 residual seam, multisession-native-10). The bump immediately rebuilds the lane's projection: any gate stamped with the PRE-bump plan_rev (only the execution gate is ever stamped a real rev — D7 default) now projects as unapproved in .bee/lanes/<feature>.json, so a subsequent `cells claim` against that lane's cells refuses right away. Never touches any other workflow's record (invariant 3) — context/shape/review on THIS workflow are also untouched (D7 default: they are never rev-stamped, so they stay effective across a bump).",
+    parameters: {
+      type: 'object',
+      properties: {
+        lane: { type: 'string', description: 'Route the bump to this lane\'s workflow record. Refuses if the lane is missing/corrupt, or names no live workflow record. Omitted: the calling session\'s bound lane is targeted automatically.' },
+        'no-lane': { type: 'boolean', description: 'Force default-record resolution — always refused (plan_rev is not yet default-path-synced, C5). Named so the refusal is explicit rather than a silent fallback.' },
+        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
+      },
+      required: [],
+    },
+    examples: ['bee state plan-rev bump --lane demo-lane --json'],
+    deprecated: null,
+  },
+  {
     name: 'state.worker.add',
     invoke: 'bee state worker add',
     description: 'Append a worker entry (nickname + cell, optional tier/status) to state.workers.',

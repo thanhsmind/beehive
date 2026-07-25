@@ -17,7 +17,7 @@
 //   bee cells <list|ready|show|add|claim|verify|cap|block|drop|tier|judge|claim-next|reset-budget|judge-record|schedule|archive|unarchive> ... [--json]
 //   bee reservations <reserve|release|list|sweep> ... [--json]
 //   bee decisions <log|supersede|redact|active|search|archive|tag> ... [--json]
-//   bee state <set|gate|worker add/update/remove/clear/prune|scribing-run|start-feature|lanes|session list/bind/unbind> ... [--json]
+//   bee state <set|gate|plan-rev bump|worker add/update/remove/clear/prune|scribing-run|start-feature|lanes|session list/bind/unbind> ... [--json]
 //   bee backlog <add|counts|rank|badges> ... [--json]
 //   bee capture <add|list|flush|count> ... [--json]
 //   bee intent <set|show|advance|clear> ... [--json]
@@ -2097,7 +2097,7 @@ function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {})
     }
     return {
       record,
-      write: (updated) => writeLaneRecordThroughProjection(root, laneFeature, updated),
+      write: (updated, gateStamp) => writeLaneRecordThroughProjection(root, laneFeature, updated, gateStamp),
       source: 'lane',
       lane: laneFeature,
     };
@@ -2118,7 +2118,7 @@ function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {})
   }
   return {
     record,
-    write: (updated) => writeLaneRecordThroughProjection(root, bound, updated),
+    write: (updated, gateStamp) => writeLaneRecordThroughProjection(root, bound, updated, gateStamp),
     source: 'lane',
     lane: bound,
   };
@@ -2131,17 +2131,30 @@ function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {})
 // job is to persist it correctly rather than to decide what changed.
 //
 // Live (non-closed) workflow record found for this feature: update it with
-// the equivalent D1 fields (mergeGates in workflow-store.mjs preserves each
-// gate's `approved_for_plan_rev` untouched — that is msn-9's concern, not
-// this cell's), then rebuild the lane projection from the now-updated
-// record — the file callers read back is always projection-builder output,
-// never a hand-written copy.
+// the equivalent D1 fields, then rebuild the lane projection from the
+// now-updated record — the file callers read back is always
+// projection-builder output, never a hand-written copy.
+//
+// `gateStamp` (multisession-native-9, D7/C2 — optional, `{ name, approvedForPlanRev }`):
+// ONLY handleStateGate passes this, and ONLY for the 'execution' gate (D7
+// default: a plan_rev bump invalidates only the execution gate — context/
+// shape/review are never stamped with a real rev, so mergeGates in
+// workflow-store.mjs preserves their `approved_for_plan_rev` (always null in
+// practice) untouched across every other write here). When present, the
+// named gate's patch carries an explicit `approved_for_plan_rev` (the
+// workflow's CURRENT plan_rev at approval time, or null on revocation);
+// every other gate's patch carries `approved` only, so mergeGates preserves
+// its existing `approved_for_plan_rev` field exactly as before this write —
+// this is what keeps a plain `state set`/`scribing-run` write (which also
+// round-trips `updated.approved_gates` through this same function, unchanged
+// booleans and all) from ever silently re-stamping or clearing a rev it
+// wasn't asked to touch.
 //
 // C1 fallback: no live workflow record names this feature (zero workflow
 // records exist anywhere, or this lane's workflow was never seeded/created —
 // should not happen once msn-6's seed has run, but never assumed here)
 // falls back to writeLane directly, unchanged from before this cell.
-async function writeLaneRecordThroughProjection(root, laneFeature, updated) {
+async function writeLaneRecordThroughProjection(root, laneFeature, updated, gateStamp = null) {
   const wf = listWorkflows(root).workflows.find((w) => w.feature === laneFeature && w.status !== 'closed');
   if (!wf) {
     writeLane(root, updated);
@@ -2153,7 +2166,13 @@ async function writeLaneRecordThroughProjection(root, laneFeature, updated) {
     summary: updated.summary,
     next_action: updated.next_action,
     gates: Object.fromEntries(
-      GATE_NAMES.map((name) => [name, { approved: Boolean(updated.approved_gates && updated.approved_gates[name] === true) }]),
+      GATE_NAMES.map((name) => {
+        const entry = { approved: Boolean(updated.approved_gates && updated.approved_gates[name] === true) };
+        if (gateStamp && gateStamp.name === name) {
+          entry.approved_for_plan_rev = gateStamp.approvedForPlanRev;
+        }
+        return [name, entry];
+      }),
     ),
   });
   const rebuilt = rebuildLaneProjection(root, laneFeature);
@@ -2458,12 +2477,84 @@ async function handleStateGate(root, flags) {
       state.gate_revoked_at = { ...state.gate_revoked_at, execution: new Date().toISOString() };
     }
     state.approved_gates = { ...state.approved_gates, [name]: approved };
-    await write(state);
+    // multisession-native-9 (D7, C2): only the execution gate is ever
+    // stamped with a real approved_for_plan_rev — approving it records the
+    // TARGET LANE's live workflow's CURRENT plan_rev, so a later `state
+    // plan-rev bump` on that same workflow flips this approval's projected
+    // effectiveness false without touching any other workflow (invariant 3)
+    // or any other gate on THIS workflow (D7 default: context/shape/review
+    // stay rev-immune, never stamped). No live workflow for this lane (C1) —
+    // or no lane at all (the default C5-scoped path, msn-10) — leaves
+    // gateStamp null: nothing plan-rev-scoped to stamp.
+    let gateStamp = null;
+    if (name === 'execution' && target.lane) {
+      const wf = listWorkflows(root).workflows.find((w) => w.feature === target.lane && w.status !== 'closed');
+      if (wf) {
+        gateStamp = { name: 'execution', approvedForPlanRev: approved ? wf.plan_rev : null };
+      }
+    }
+    await write(state, gateStamp);
     return { state, targetLane: target.lane };
   });
   return {
     result: state,
     text: `Gate "${name}" set to ${approved}.${targetLane ? ` (lane "${targetLane}")` : ''}`,
+  };
+}
+
+// state.plan-rev.bump (multisession-native-9, CONTEXT.md D7, advisor consult
+// slice 2 C2 — binding): bumps a single workflow's plan_rev by 1. plan_rev
+// lives ONLY on the workflow record (workflow-store.mjs) — the default
+// (non-lane) pipeline's workflow record is not yet kept in sync by
+// default-path writes (C5, multisession-native-10's residual seam), so this
+// verb REFUSES outright when resolution lands on the default record; it only
+// ever targets a lane (explicit --lane, or the calling session's bound
+// lane — same resolution order as gate/set/scribing-run via
+// resolveMutationTarget, minus the default fallback).
+//
+// The bump's ONLY effect on gates is indirect, via the projection formula in
+// state-projection.mjs's workflowGatesToApprovedGates (C2): a gate whose
+// `approved_for_plan_rev` was stamped to the PRE-bump rev now reads
+// ineffective (`rev !== planRev`) the moment the projection is next
+// rebuilt — which this verb does immediately (rebuildLaneProjection), so
+// `.bee/lanes/<feature>.json`'s `approved_gates.execution` flips false in
+// the SAME call, and a subsequent `cells claim` against that lane's cells
+// refuses immediately (cells.mjs's claimCell reads gateApproved off exactly
+// this projected file, laneRecordForFeature). Per D7's default (see
+// handleStateGate's own gateStamp comment), only the execution gate is ever
+// stamped with a real rev, so this is the ONLY gate a bump can ever flip —
+// context/shape/review keep whatever they had (null in practice, always
+// effective). Bumping workflow W never reads or writes any OTHER workflow's
+// record — cross-workflow isolation (invariant 3) falls out of updateWorkflow
+// only ever touching the single `wf.id` resolved here, under nothing but
+// that workflow's own `workflow:<id>` lock.
+async function handleStatePlanRevBump(root, flags) {
+  rejectDryRun(flags);
+  const { laneFeature, noLane } = mutationLaneSelector(flags, 'plan-rev bump');
+  const { feature, planRev, lane } = await withStoreLock(root, 'state', async () => {
+    const target = resolveMutationTarget(root, laneFeature, 'plan-rev bump', { noLane });
+    if (!target.lane) {
+      throw new Error(
+        'plan-rev bump: refused — plan_rev lives on a workflow record, and the default (non-lane) pipeline is not ' +
+          'yet kept in sync with its workflow record (C5 residual seam, multisession-native-10). ' +
+          'FIX: target a lane explicitly with --lane <feature>, or bind the calling session to one first ' +
+          '("state session bind --session-id <id> --lane <feature>").',
+      );
+    }
+    const wf = listWorkflows(root).workflows.find((w) => w.feature === target.lane && w.status !== 'closed');
+    if (!wf) {
+      throw new Error(
+        `plan-rev bump: no live workflow record found for lane "${target.lane}" — nothing to bump. ` +
+          `FIX: start the lane first ("state start-feature --feature ${target.lane} --as-lane").`,
+      );
+    }
+    const updated = await updateWorkflow(root, wf.id, (current) => ({ plan_rev: (current.plan_rev || 0) + 1 }));
+    const rebuilt = rebuildLaneProjection(root, target.lane);
+    return { feature: target.lane, planRev: updated.plan_rev, lane: rebuilt.lane };
+  });
+  return {
+    result: { feature, plan_rev: planRev, lane },
+    text: `Bumped plan_rev to ${planRev} for lane "${feature}" (workflow); lane projection rebuilt.`,
   };
 }
 
@@ -5816,7 +5907,13 @@ function stateUsageFallback(leading) {
     const sub = leading[2];
     return `Unknown advisor-ref action "${sub || '(missing)'}". Use: record, show.`;
   }
-  return `Unknown command "${verb || '(missing)'}". Use: set, gate, worker, scribing-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, compact-log, compact-check, compact-capsule.`;
+  // plan-rev (multisession-native-9, D7/C2): a one-verb family, mirroring
+  // the worker/session/handoff/advisor-ref branches above.
+  if (verb === 'plan-rev') {
+    const sub = leading[2];
+    return `Unknown plan-rev action "${sub || '(missing)'}". Use: bump.`;
+  }
+  return `Unknown command "${verb || '(missing)'}". Use: set, gate, plan-rev bump, worker, scribing-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, compact-log, compact-check, compact-capsule.`;
 }
 
 function backlogUsageFallback(leading) {
@@ -5979,6 +6076,7 @@ const HANDLERS = {
   'decisions.render': handleDecisionsRender,
   'state.set': handleStateSet,
   'state.gate': handleStateGate,
+  'state.plan-rev.bump': handleStatePlanRevBump,
   'state.worker.add': handleStateWorkerAdd,
   'state.worker.update': handleStateWorkerUpdate,
   'state.worker.remove': handleStateWorkerRemove,

@@ -1,0 +1,108 @@
+{
+  "id": "multisession-native-9",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Gates scoped to plan revision",
+  "action": "Gate approvals in workflow records carry approved_for_plan_rev. A plan_rev bump on workflow W invalidates only W's execution gate; other workflows untouched. state gate reads/writes route to the workflow record; projections mirror the boolean for compat. Test: bump W1 plan_rev, W1 execution gate invalid, W2 gates intact. Canonical source: skills/bee-hive/templates/ (vendored to .bee/bin/ + plugin mirrors). Regen inside this cell after the code change: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed).",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-7"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/state.mjs",
+    "skills/bee-hive/templates/bee.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-hive/templates/lib/workflow-store.mjs",
+    "docs/history/multisession-native/CONTEXT.md",
+    "docs/history/multisession-native/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "plan-rev bump invalidates only that workflow's execution gate (test)",
+      "gate verb stays CLI-compatible",
+      "projection mirrors booleans for legacy readers",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no cross-workflow gate read in any guard"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D1/D6/D7"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "m",
+    "11": "u",
+    "12": "c",
+    "13": " ",
+    "14": "9",
+    "15": ";",
+    "16": " ",
+    "17": "D",
+    "18": "7",
+    "19": " ",
+    "20": "i",
+    "21": "n",
+    "22": "v",
+    "23": "a",
+    "24": "r",
+    "25": "i",
+    "26": "a",
+    "27": "n",
+    "28": "t",
+    "29": " ",
+    "30": "3",
+    "worker": "msn-w9",
+    "outcome": "Gates scoped to plan revision (D7/C2): gate approval stamps execution's approved_for_plan_rev to the workflow's current plan_rev; new 'state plan-rev bump --lane' verb bumps a workflow's plan_rev and rebuilds its lane projection; projected gate boolean is now plan-rev-effective, proven via claim refusal on the bumped workflow + cross-workflow isolation (invariant 3); all impacted suites + manifest + ledger green",
+    "files_changed": [
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/lib/state-projection.mjs",
+      "skills/bee-hive/templates/lib/command-registry.mjs",
+      "skills/bee-hive/templates/tests/test_state_projection.mjs",
+      "skills/bee-hive/templates/tests/test_cli_state.mjs",
+      "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T01:10:07.588Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"summary\": \"Gates scoped to plan revision (D7/C2): gate approval on a workflow record now stamps the execution gate's approved_for_plan_rev to the workflow's CURRENT plan_rev; new `bee state plan-rev bump --lane <feature>` verb bumps a single workflow's plan_rev by 1 and immediately rebuilds that lane's projection. The projected boolean (workflowGatesToApprovedGates) is now plan-rev-EFFECTIVE: approved && (approved_for_plan_rev == null || approved_for_plan_rev === plan_rev). Only the execution gate is ever stamped a real rev (D7 default) -- context/shape/review stay null/rev-immune. Full impacted verify (102 suites) + release_manifest --check + ledger_parity --check all green.\",\n  \"must_haves\": {\n    \"plan-rev bump invalidates only that workflow's execution gate (test)\": \"test_cli_state.mjs 'multisession-native-9 (C2, binding, RED-then-GREEN)...' proves: pre-bump claim succeeds; bump W1; PROJECTED lane-a.json approved_gates.execution flips false; post-bump cells claim on lane-a refuses citing execution; W2 (lane-b) plan_rev, gate approval, and cells claim all untouched (invariant 3)\",\n    \"gate verb stays CLI-compatible\": \"state.gate's flags/examples unchanged; new state.plan-rev.bump follows the same --lane/--no-lane/--json shape as gate/set/scribing-run\",\n    \"projection mirrors booleans for legacy readers\": \"state-projection.mjs workflowGatesToApprovedGates(gates, planRev) computes the effective boolean once, at rebuild time, so .bee/lanes/<feature>.json and .bee/state.json keep plain booleans for every existing reader (cells.mjs's gateApproved, buildLaneRows, etc.) -- zero changes needed at read sites\",\n    \"release manifest + onboarding ledger regenerated\": \"render_plugin_skill_trees.mjs + onboard_bee.mjs --apply + release_manifest.mjs --write run inside this cell; release_manifest --check and ledger_parity --check both green\"\n  },\n  \"prohibitions\": {\n    \"no cross-workflow gate read in any guard\": \"handleStatePlanRevBump/writeLaneRecordThroughProjection resolve exactly ONE workflow (by the target lane's feature) via listWorkflows().find(...) and mutate only wf.id under its own workflow:<id> lock; claimCell's gate check (cells.mjs:laneRecordForFeature) reads only the CELL's own feature's lane file -- proven by W2 staying untouched in the C2 test\"\n  },\n  \"red_failure_evidence\": \"BEFORE this cell: workflowGatesToApprovedGates(gates) (state-projection.mjs) translated only the bare `approved` flag -- plan_rev was never consulted, so a gate stayed projected true forever once approved, and there was no `state plan-rev bump` verb at all. Proved red-first via `git stash` on state-projection.mjs/bee.mjs/command-registry.mjs, then re-running test_state_projection.mjs + test_cli_state.mjs against that pre-change code: the new pure-function test 'workflowGatesToApprovedGates (C2): a gate approved AT the current plan_rev...' FAILED ('a plan_rev bump past the stamped rev (2 !== 1) must project ineffective'); the CLI-level msn-7 lane-gate test FAILED on the approved_for_plan_rev assertion (got null, expected 0 -- old code never stamped a rev at all); and the 4 new plan-rev-bump CLI tests FAILED (command not found: 'Unknown command \\\"plan-rev\\\"'). `git stash pop` restored the implementation and every failure flipped green with zero other regressions (full stash-pop diff verified byte-identical to the pre-stash working tree).\",\n  \"red_first\": \"Confirmed by `git stash` on the three lib/registry files (state-projection.mjs, bee.mjs, command-registry.mjs) and re-running test_state_projection.mjs + test_cli_state.mjs against the pre-change code: 1 pure-function test failed as expected (rev-effectiveness not yet implemented), and 5 CLI-level tests failed as expected (plan-rev bump command did not exist; execution approval left approved_for_plan_rev null). `git stash pop` restored the implementation; all failures flipped green with no other regressions.\",\n  \"verify_tail\": \"PASS run_verify: 102 suite(s), concurrency=5, wall=59404ms\\nrelease_manifest --check: 527 file(s) match stored manifest\\nledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\",\n  \"deviations_note\": \"cell.files listed skills/bee-hive/templates/lib/state.mjs as an anticipated touch point; it needed no change (gateApproved/GATE_NAMES/legacyGatesToWorkflowGates were already correct -- the rev-effectiveness computation lives entirely in state-projection.mjs's workflowGatesToApprovedGates, not state.mjs). state-projection.mjs itself (not listed in cell.files, but named by the advisor digest's own C2 condition text and read_first's workflow-store.mjs gates schema) was the necessary and sufficient edit point for the projected-boolean formula.\"\n}\n",
+    "verify_output": "HEARTBEAT: 5 suite(s) still running after 30.0s: skills/bee-hive/scripts/test_onboard_bee.mjs (16.0s), skills/bee-hive/templates/tests/test_bee_cli.mjs (13.5s), skills/bee-hive/templates/tests/test_cli_state.mjs (7.5s), skills/bee-hive/templates/tests/test_decisions_propagation.mjs (5.2s), skills/bee-hive/templates/tests/test_herding.mjs (0.7s)\nPASS     107ms  .bee/bin/bee.mjs knowledge check\nPASS     101ms  .bee/bin/bee.mjs knowledge index --check\nPASS    1065ms  hooks/test_bypass_stop_net.mjs\nPASS   11539ms  hooks/test_hook_contracts.mjs\nPASS    3712ms  hooks/test_model_guard.mjs\nPASS    7410ms  hooks/test_write_guard.mjs\nPASS      59ms  scripts/backlog_uniqueness.mjs --check\nPASS      42ms  scripts/census_stale_spawn_syntax.mjs\nPASS      51ms  scripts/ledger_parity.mjs --check\nPASS      78ms  scripts/okf_instructions_fence.mjs\nPASS     149ms  scripts/okf_instructions_fence.mjs --selftest\nPASS     597ms  scripts/okf_migrate.mjs --check advisor-protocol\nPASS     611ms  scripts/okf_migrate.mjs --check decision-memory\nPASS     617ms  scripts/okf_migrate.mjs --check doctrine-layer\nPASS     614ms  scripts/okf_migrate.mjs --check feedback-digest\nPASS     615ms  scripts/okf_migrate.mjs --check hook-runtime\nPASS     607ms  scripts/okf_migrate.mjs --check okf-profile\nPASS     595ms  scripts/okf_migrate.mjs --check onboarding\nPASS     623ms  scripts/okf_migrate.mjs --check performance-log\nPASS     604ms  scripts/okf_migrate.mjs --check verify-pipeline\nPASS     688ms  scripts/okf_migrate.mjs --check workflow-state\nPASS     582ms  scripts/okf_migrate.mjs --check worktree-parallelism\nPASS     602ms  scripts/okf_migrate.mjs --check-patterns\nPASS      57ms  scripts/okf_specs_fence.mjs\nPASS      95ms  scripts/okf_specs_fence.mjs --selftest\nPASS      96ms  scripts/release_manifest.mjs --check\nPASS      89ms  scripts/release_manifest.mjs --selftest\nPASS      41ms  scripts/test_agents_budget.mjs\nPASS     175ms  scripts/test_bump_version.mjs\nPASS      42ms  scripts/test_bypass_matrix.mjs\nPASS      45ms  scripts/test_ci_verify_issue.mjs\nPASS     897ms  scripts/test_claim_race.mjs\nPASS     396ms  scripts/test_compact_capsule.mjs\nPASS     692ms  scripts/test_compact_verbs.mjs\nPASS    1327ms  scripts/test_compaction_advisories.mjs\nPASS     235ms  scripts/test_compaction_module.mjs\nPASS      51ms  scripts/test_config_samples_safe.mjs\nPASS      62ms  scripts/test_config_validate.mjs\nPASS    2127ms  scripts/test_conformance.mjs\nPASS    1826ms  scripts/test_dispatch_prepare.mjs\nPASS      95ms  scripts/test_doctrine_parity.mjs\nPASS      40ms  scripts/test_gate_bypass_doctrine.mjs\nPASS     358ms  scripts/test_heartbeat_touch.mjs\nPASS     576ms  scripts/test_hook_vendor_closure.mjs\nPASS    1764ms  scripts/test_impact_registry.mjs\nPASS     131ms  scripts/test_install_ps1_flow.mjs\nPASS   24901ms  scripts/test_installers_e2e.mjs --installer bash\nPASS      58ms  scripts/test_ledger_parity.mjs\nPASS      65ms  scripts/test_lib_mirror.mjs\nPASS     715ms  scripts/test_native_probe.mjs\nPASS     381ms  scripts/test_nested_clone_isolation.mjs\nPASS    9412ms  scripts/test_okf_pins.mjs\nPASS      53ms  scripts/test_portable_paths.mjs\nPASS      35ms  scripts/test_release_tuple.mjs\nPASS     937ms  scripts/test_render_race.mjs\nPASS     527ms  scripts/test_reservation_race.mjs\nPASS     106ms  scripts/test_resolveroots_p40.mjs\nPASS    1234ms  scripts/test_run_verify_impacted.mjs\nPASS     489ms  scripts/test_run_verify_only.mjs\nPASS     192ms  scripts/test_run_verify_skip_marker.mjs\nPASS      51ms  scripts/test_skill_pointers.mjs\nPASS     327ms  scripts/test_skill_render.mjs\nPASS     412ms  scripts/test_state_write_concurrency.mjs\nPASS   12730ms  scripts/test_store_lock.mjs\nPASS      48ms  scripts/test_verify_manifest.mjs\nPASS    1146ms  scripts/test_verify_timeout.mjs\nPASS   11451ms  scripts/test_worktree_cli.mjs\nPASS    1099ms  scripts/test_worktree_companion.mjs\nPASS     121ms  scripts/test_worktree_grant_resolve.mjs\nPASS     643ms  scripts/test_worktree_holds_race.mjs\nPASS    1886ms  scripts/test_worktree_holds.mjs\nPASS      92ms  scripts/test_worktree_store.mjs\nPASS   38002ms  skills/bee-hive/scripts/test_onboard_bee.mjs\nPASS     486ms  skills/bee-hive/scripts/test_plugin_distribution.mjs\nPASS     420ms  skills/bee-hive/scripts/test_split_brain_regression.mjs\nPASS     857ms  skills/bee-hive/templates/tests/test_backlog_capture.mjs\nPASS   25336ms  skills/bee-hive/templates/tests/test_bee_cli.mjs\nPASS    2205ms  skills/bee-hive/templates/tests/test_bee_write_guard_hook.mjs\nPASS     231ms  skills/bee-hive/templates/tests/test_bundle_mode.mjs\nPASS     781ms  skills/bee-hive/templates/tests/test_cells.mjs\nPASS    9809ms  skills/bee-hive/templates/tests/test_claims.mjs\nPASS    3312ms  skills/bee-hive/templates/tests/test_cli_cells.mjs\nPASS    7650ms  skills/bee-hive/templates/tests/test_cli_state.mjs\nPASS     656ms  skills/bee-hive/templates/tests/test_config_validate.mjs\nPASS     490ms  skills/bee-hive/templates/tests/test_contention_status.mjs\nPASS    6219ms  skills/bee-hive/templates/tests/test_decisions_propagation.mjs\nPASS     267ms  skills/bee-hive/templates/tests/test_feedback.mjs\nPASS      77ms  skills/bee-hive/templates/tests/test_guards_tokenizer.mjs\nPASS     164ms  skills/bee-hive/templates/tests/test_guards.mjs\nPASS     897ms  skills/bee-hive/templates/tests/test_herding_cli.mjs\nPASS    1204ms  skills/bee-hive/templates/tests/test_herding.mjs\nPASS     108ms  skills/bee-hive/templates/tests/test_intent.mjs\nPASS    4757ms  skills/bee-hive/templates/tests/test_knowledge.mjs\nPASS    3433ms  skills/bee-hive/templates/tests/test_misc.mjs\nPASS      63ms  skills/bee-hive/templates/tests/test_perf.mjs\nPASS     150ms  skills/bee-hive/templates/tests/test_recovery.mjs\nPASS      67ms  skills/bee-hive/templates/tests/test_reservations.mjs\nPASS    2609ms  skills/bee-hive/templates/tests/test_reviews.mjs\nPASS     421ms  skills/bee-hive/templates/tests/test_scratch.mjs\nPASS     117ms  skills/bee-hive/templates/tests/test_state_projection.mjs\nPASS     209ms  skills/bee-hive/templates/tests/test_state.mjs\nPASS     100ms  skills/bee-hive/templates/tests/test_workflow_store.mjs\n\nPASS run_verify: 102 suite(s), concurrency=5, wall=59404ms\nRUN_VERIFY_EXIT=0\nrelease_manifest --check: 527 file(s) match stored manifest\nRELEASE_MANIFEST_EXIT=0\nledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\nLEDGER_PARITY_EXIT=0\n",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-25T01:02:33.023Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-25T01:08:55.452Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T01:08:55.452Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T01:02:33.021Z",
+        "acquired_at": "2026-07-25T01:02:33.021Z",
+        "worker": "msn-w9",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

@@ -21,7 +21,7 @@ import {
 } from '../../../../scripts/lib/test-fixture.mjs';
 import { readStateStrict, isKnownPhase, startFeature } from '../lib/state.mjs';
 import { listWorkflows } from '../lib/workflow-store.mjs';
-import { readCell, dropCell } from '../lib/cells.mjs';
+import { readCell, dropCell, claimCell } from '../lib/cells.mjs';
 import { createSession, claimCellFile, readClaim, adoptClaim } from '../lib/claims.mjs';
 // fsh-3 (lane store): namespace imports so a not-yet-implemented export fails
 // its own row ("… is not a function") instead of crashing the whole module
@@ -362,9 +362,173 @@ await check('multisession-native-7: bee.mjs state gate --lane (with a live workf
       'the WORKFLOW RECORD (not merely the lane file) carries the approval — proves the write went through updateWorkflow, not a direct writeLane',
     );
     assert(
-      wfAfter.gates.context.approved_for_plan_rev === null && wfAfter.gates.execution.approved_for_plan_rev === null,
-      'approved_for_plan_rev is left untouched by this cell\'s gate translation (msn-9\'s concern, not msn-7\'s)',
+      wfAfter.gates.execution.approved_for_plan_rev === 0,
+      `multisession-native-9 (D7): approving execution stamps approved_for_plan_rev to the workflow's CURRENT ` +
+        `plan_rev (0, freshly started) — got ${JSON.stringify(wfAfter.gates.execution)}`,
     );
+    assert(
+      wfAfter.gates.context.approved_for_plan_rev === null,
+      'context (never approved in this test, and never rev-scoped by D7 default even when approved) stays null',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── multisession-native-9 (CONTEXT.md D7, advisor consult slice 2 C2 —
+// binding): gates scoped to plan revision. `state gate` stamps the execution
+// gate's approved_for_plan_rev to the workflow's CURRENT plan_rev (proven
+// above); `state plan-rev bump` advances that plan_rev by 1, and the
+// PROJECTED gate boolean (state-projection.mjs's
+// workflowGatesToApprovedGates) is plan-rev-EFFECTIVE: `approved &&
+// (approved_for_plan_rev == null || approved_for_plan_rev === plan_rev)`. A
+// bump therefore flips the projected execution boolean false for the BUMPED
+// workflow only — cells.mjs's claimCell (which reads gateApproved off
+// exactly this projected lane file, laneRecordForFeature) refuses a claim
+// the moment that happens, with ZERO effect on any other workflow's own
+// execution gate (invariant 3). ─────────────────────────────────────────────
+
+function writeOpenCellFixture(root, id, feature) {
+  writeJsonAtomic(path.join(root, '.bee', 'cells', `${id}.json`), {
+    id,
+    feature,
+    title: `fixture ${id}`,
+    lane: 'small',
+    action: 'demo',
+    verify: 'node -e "process.exit(0)"',
+    status: 'open',
+    trace: {
+      worker: null,
+      outcome: null,
+      files_changed: [],
+      deviations: [],
+      friction: null,
+      capped_at: null,
+      behavior_change: false,
+      verification_evidence: null,
+      verify_output: null,
+      verify_passed: null,
+      claim_session: null,
+    },
+  });
+}
+
+await check('multisession-native-9 (C2, binding, RED-then-GREEN): plan-rev bump flips the PROJECTED execution boolean for the bumped workflow only — a claim refuses on W1; W2 is untouched (invariant 3)', async () => {
+  const dir = makeStateRepo('bee-plan-rev-bump-');
+  try {
+    fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
+
+    // W1 (lane-a) and W2 (lane-b): each its own live workflow, its own
+    // execution approval, stamped at its OWN plan_rev (0 for both, freshly
+    // started).
+    const startedA = await startFeature(dir, { feature: 'lane-a', mode: 'standard', lane: true });
+    assert(startedA.feature === 'lane-a', 'precondition: lane-a started');
+    const startedB = await startFeature(dir, { feature: 'lane-b', mode: 'standard', lane: true });
+    assert(startedB.feature === 'lane-b', 'precondition: lane-b started');
+
+    const gateA = await runBeeState(dir, ['gate', '--lane', 'lane-a', '--name', 'execution', '--approved', 'true', '--json']);
+    assert(gateA.status === 0, `lane-a execution approval should succeed: ${gateA.stderr}`);
+    const gateB = await runBeeState(dir, ['gate', '--lane', 'lane-b', '--name', 'execution', '--approved', 'true', '--json']);
+    assert(gateB.status === 0, `lane-b execution approval should succeed: ${gateB.stderr}`);
+
+    writeOpenCellFixture(dir, 'a-1', 'lane-a');
+    writeOpenCellFixture(dir, 'a-2', 'lane-a');
+    writeOpenCellFixture(dir, 'b-1', 'lane-b');
+
+    // Pre-bump: claiming a lane-a cell succeeds (execution effective at plan_rev 0).
+    const claimed = await claimCell(dir, 'a-1', 'worker-a1');
+    assert(claimed.status === 'claimed', 'pre-bump claim on lane-a must succeed');
+
+    // Bump W1 (lane-a) ONLY.
+    const bump = await runBeeState(dir, ['plan-rev', 'bump', '--lane', 'lane-a', '--json']);
+    assert(bump.status === 0, `plan-rev bump should succeed: ${bump.stderr}`);
+    const bumped = JSON.parse(bump.stdout);
+    assert(bumped.plan_rev === 1, `expected plan_rev bumped to 1, got ${bump.stdout}`);
+    assert(
+      bumped.lane.approved_gates.execution === false,
+      `PROJECTED execution boolean must flip false on the bumped workflow's lane file, got ${bump.stdout}`,
+    );
+
+    // The workflow record itself: execution stays `approved:true` (the
+    // APPROVAL is never revoked by a bump — only its plan-rev EFFECTIVENESS
+    // changes); its approved_for_plan_rev is unchanged at 0, now stale
+    // against plan_rev 1.
+    const wfA = listWorkflows(dir).workflows.find((wf) => wf.feature === 'lane-a');
+    assert(
+      wfA.gates.execution.approved === true && wfA.gates.execution.approved_for_plan_rev === 0,
+      `the raw approval record is untouched by a bump, got ${JSON.stringify(wfA.gates.execution)}`,
+    );
+    assert(wfA.plan_rev === 1, 'the workflow record itself carries the bumped plan_rev');
+
+    // Post-bump: a NEW claim on lane-a refuses, naming the execution gate.
+    await assertRejects(
+      () => claimCell(dir, 'a-2', 'worker-a2'),
+      'execution',
+      'post-bump claim on the bumped lane must refuse citing the execution gate',
+    );
+
+    // W2 (lane-b) is completely untouched — invariant 3.
+    const wfB = listWorkflows(dir).workflows.find((wf) => wf.feature === 'lane-b');
+    assert(wfB.plan_rev === 0, "W1's bump must never touch W2's plan_rev");
+    assert(
+      wfB.gates.execution.approved === true && wfB.gates.execution.approved_for_plan_rev === 0,
+      "W2's execution approval is untouched",
+    );
+    const laneBFile = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'lanes', 'lane-b.json'), 'utf8'));
+    assert(laneBFile.approved_gates.execution === true, 'lane-b.json projected execution boolean must remain true on disk (invariant 3)');
+    const claimedB = await claimCell(dir, 'b-1', 'worker-b1');
+    assert(claimedB.status === 'claimed', "W2 (lane-b) claim must be unaffected by W1's bump");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('state plan-rev bump refuses when resolution lands on the default (non-lane) record — C5 residual seam, zero mutation', async () => {
+  const dir = makeStateRepo('bee-plan-rev-bump-default-');
+  try {
+    const result = await runBeeState(dir, ['plan-rev', 'bump', '--no-lane', '--json']);
+    assert(result.status !== 0, `expected a refusal, got exit ${result.status}`);
+    // --json mode: a refusal's message lands in the JSON error payload on
+    // STDOUT (DB3 channel convention), not stderr.
+    assert(
+      /default \(non-lane\)|multisession-native-10/.test(result.stdout),
+      `refusal should name the default/C5 seam, got stdout=${result.stdout}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('state plan-rev bump refuses when the named lane has no live workflow record, zero mutation', async () => {
+  const dir = makeStateRepo('bee-plan-rev-bump-nolane-');
+  try {
+    laneStore.writeLane(dir, {
+      schema_version: '1.0',
+      feature: 'orphan-lane',
+      mode: null,
+      phase: 'exploring',
+      approved_gates: { context: false, shape: false, execution: false, review: false },
+      summary: '',
+      next_action: '',
+      created_at: new Date().toISOString(),
+    });
+    const result = await runBeeState(dir, ['plan-rev', 'bump', '--lane', 'orphan-lane', '--json']);
+    assert(result.status !== 0, `expected a refusal, got exit ${result.status}`);
+    assert(
+      /no live workflow record/.test(result.stdout),
+      `refusal should name the missing workflow record, got stdout=${result.stdout}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('bee state plan-rev with an unknown subaction reports "Use: bump" (usage-fallback branch)', async () => {
+  const dir = makeStateRepo('bee-plan-rev-usage-');
+  try {
+    const result = await runBeeState(dir, ['plan-rev', 'bogus']);
+    assert(result.status !== 0, `expected a refusal, got exit ${result.status}`);
+    assert(/Unknown plan-rev action "bogus"\. Use: bump\./.test(result.stderr), `expected the plan-rev usage fallback, got stderr=${result.stderr}`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

@@ -73,10 +73,31 @@ export function projectionsAuthoritative(root) {
 // shape, in the FIXED GATE_NAMES key order (deterministic JSON output —
 // never derived from Object.entries' insertion order on the workflow
 // record, which is not guaranteed stable across records).
-export function workflowGatesToApprovedGates(gates) {
+//
+// multisession-native-9 (D7, C2 — advisor consult slice 2, binding): the
+// projected boolean is now the PLAN-REV-EFFECTIVE approval, not the bare
+// `approved` flag — `approved && (approved_for_plan_rev == null ||
+// approved_for_plan_rev === planRev)`. `approved_for_plan_rev === null` (or
+// the field being absent — a hand-written/legacy record predating this
+// cell, or msn-6's own seedLegacyWorkflows) means "not rev-scoped" and is
+// ALWAYS effective, independent of `planRev` — this is what keeps the
+// context/shape/review gates immune to a plan_rev bump by construction
+// (CONTEXT.md D7 default: only the execution gate is ever stamped with a
+// real rev number — see bee.mjs's handleStateGate/writeLaneRecordThroughProjection).
+// `planRev` is OPTIONAL and defaults to `undefined`: a caller that omits it
+// (e.g. a bare structural translation with no live workflow record's
+// plan_rev in hand) gets the SAME rev-immune behavior only for `null`/absent
+// revs; a gate stamped with an explicit rev number never matches `undefined`,
+// so it reads as ineffective — callers that DO have a plan_rev (every
+// production caller below) must pass it for a stamped gate to project true.
+export function workflowGatesToApprovedGates(gates, planRev) {
   const approved = {};
   for (const name of GATE_NAMES) {
-    approved[name] = Boolean(gates && gates[name] && gates[name].approved === true);
+    const entry = gates && gates[name];
+    const isApproved = Boolean(entry && entry.approved === true);
+    const rev = entry ? entry.approved_for_plan_rev : undefined;
+    const revEffective = rev === null || rev === undefined || rev === planRev;
+    approved[name] = isApproved && revEffective;
   }
   return approved;
 }
@@ -179,7 +200,7 @@ export function rebuildStateProjection(root, overrides = {}) {
     phase: active ? active.phase : 'idle',
     feature: active ? active.feature : null,
     mode: active ? active.mode : null,
-    approved_gates: active ? workflowGatesToApprovedGates(active.gates) : defaultState().approved_gates,
+    approved_gates: active ? workflowGatesToApprovedGates(active.gates, active.plan_rev) : defaultState().approved_gates,
     summary: active ? active.summary : defaultState().summary,
     next_action: active ? active.next_action : defaultState().next_action,
   };
@@ -227,7 +248,7 @@ export function rebuildLaneProjection(root, feature) {
     feature: wf.feature,
     mode: wf.mode,
     phase: wf.phase,
-    approved_gates: workflowGatesToApprovedGates(wf.gates),
+    approved_gates: workflowGatesToApprovedGates(wf.gates, wf.plan_rev),
     summary: wf.summary,
     next_action: wf.next_action,
     created_at: (existing && existing.created_at) || wf.created_at || new Date().toISOString(),

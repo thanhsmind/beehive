@@ -1049,6 +1049,25 @@ await check('state.gate --lane example (examples[1]) approves a gate on the lane
   assert(lane.feature === 'demo-lane' && lane.approved_gates.execution === true, `expected lane execution gate approved, got ${result.stdout}`);
 });
 
+// state.plan-rev.bump (multisession-native-9, D7/C2): exercised against its
+// OWN isolated fixture — never rootState's shared demo-lane chain above,
+// since bumping plan_rev deliberately flips demo-lane's projected execution
+// boolean false, which every later rootState check (scribing-run, rebuild-
+// projections, session bind, ...) assumes stays true. The full C2 proof
+// (claim refusal + cross-workflow isolation, invariant 3) lives in
+// test_cli_state.mjs, right beside msn-7's own lane-gate test.
+await check('state.plan-rev.bump example (multisession-native-9) bumps a freshly-started lane workflow\'s plan_rev by 1, rebuilding its projection', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-plan-rev-bump-example-'));
+  fs.mkdirSync(path.join(dir, '.bee'), { recursive: true });
+  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+  writeState(dir, defaultState());
+  const started = await runBee(['state', 'start-feature', '--feature', 'demo-lane', '--as-lane', '--json'], dir);
+  assert(started.status === 0, `start-feature --as-lane should succeed: ${started.stderr}`);
+  const result = await assertExampleOk('state.plan-rev.bump', { cwd: dir });
+  const out = JSON.parse(result.stdout);
+  assert(out.feature === 'demo-lane' && out.plan_rev === 1, `expected demo-lane's plan_rev bumped to 1, got ${result.stdout}`);
+});
+
 await check('state.scribing-run --lane example (examples[1]) stamps the lane record only', async () => {
   // Same D3 rule on the lane record: the tail guard reads `from` off whichever
   // record is being mutated, so the lane must reach an executed phase too.
