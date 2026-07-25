@@ -1497,6 +1497,7 @@
         "skills/bee-hive/templates/tests/test_herding_cli.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
       ],
@@ -1527,6 +1528,7 @@
         "skills/bee-hive/templates/tests/test_herding_cli.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs"
       ]
@@ -1551,6 +1553,7 @@
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_lease_store.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_state.mjs",
@@ -1579,6 +1582,7 @@
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_lease_store.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_state.mjs",
@@ -2208,6 +2212,7 @@
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_state.mjs",
         "skills/bee-hive/templates/tests/test_workspace_store.mjs",
@@ -2244,6 +2249,7 @@
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
@@ -2340,6 +2346,7 @@
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
@@ -2473,6 +2480,7 @@
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_lease_store.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_perf.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
@@ -2490,12 +2498,14 @@
       "direct": [
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_guards_tokenizer.mjs",
-        "skills/bee-hive/templates/tests/test_misc.mjs"
+        "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs"
       ],
       "all": [
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_guards_tokenizer.mjs",
-        "skills/bee-hive/templates/tests/test_misc.mjs"
+        "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs"
       ]
     },
     "skills/bee-hive/templates/lib/herding.mjs": {
@@ -2641,6 +2651,7 @@
         "skills/bee-hive/templates/tests/test_cli_state.mjs",
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_lease_store.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_state.mjs",
         "skills/bee-hive/templates/tests/test_worktree_store.mjs"
@@ -2677,6 +2688,7 @@
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_lease_store.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
@@ -2732,6 +2744,7 @@
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_lease_store.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
@@ -2816,6 +2829,7 @@
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reservations.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
@@ -2931,6 +2945,7 @@
         "skills/bee-hive/templates/tests/test_guards.mjs",
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_state.mjs",
         "skills/bee-hive/templates/tests/test_state_projection.mjs",
@@ -2966,6 +2981,7 @@
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs",
@@ -3025,6 +3041,7 @@
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs",
@@ -3038,6 +3055,7 @@
     "skills/bee-hive/templates/lib/workspace-store.mjs": {
       "direct": [
         "skills/bee-hive/templates/tests/test_guards.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_workspace_store.mjs",
         "skills/bee-hive/templates/tests/test_worktree_store.mjs",
         "skills/bee-hive/templates/tests/test_write_policy.mjs"
@@ -3071,6 +3089,7 @@
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs",
@@ -3116,6 +3135,7 @@
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs",
@@ -3128,6 +3148,7 @@
     },
     "skills/bee-hive/templates/lib/worktree-store.mjs": {
       "direct": [
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_workspace_store.mjs",
         "skills/bee-hive/templates/tests/test_worktree_store.mjs"
       ],
@@ -3160,6 +3181,7 @@
         "skills/bee-hive/templates/tests/test_intent.mjs",
         "skills/bee-hive/templates/tests/test_knowledge.mjs",
         "skills/bee-hive/templates/tests/test_misc.mjs",
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs",
         "skills/bee-hive/templates/tests/test_recovery.mjs",
         "skills/bee-hive/templates/tests/test_reviews.mjs",
         "skills/bee-hive/templates/tests/test_scratch.mjs",
@@ -3184,6 +3206,14 @@
       ],
       "all": [
         "skills/bee-hive/templates/tests/test_decisions_propagation.mjs"
+      ]
+    },
+    "skills/bee-hive/templates/tests/race_lease_child.mjs": {
+      "direct": [
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs"
+      ],
+      "all": [
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs"
       ]
     },
     "skills/bee-hive/templates/tests/test_backlog_capture.mjs": {
@@ -3352,6 +3382,14 @@
       ],
       "all": [
         "skills/bee-hive/templates/tests/test_misc.mjs"
+      ]
+    },
+    "skills/bee-hive/templates/tests/test_msn_invariants.mjs": {
+      "direct": [
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs"
+      ],
+      "all": [
+        "skills/bee-hive/templates/tests/test_msn_invariants.mjs"
       ]
     },
     "skills/bee-hive/templates/tests/test_perf.mjs": {
