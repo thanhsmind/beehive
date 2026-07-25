@@ -4284,6 +4284,71 @@ await check('cells cap (D1 fail-open, no-git): a cap over a repo with no .git lo
   }
 });
 
+// ─── test-economy D3: the D3 new_suite_reason + ratio-ceiling checks driven
+// by the SAME real-git computeDiffStats as the D1 rows above (not a
+// synthetic diff_stats object) — a behavior-class cell that adds a real
+// untracked test file and only lightly touches an existing tracked source
+// file, so the ratio genuinely exceeds the standard-lane ceiling.
+
+await check('cells cap (D3 real git): a behavior-class cell adding a new test file with a high test/source ratio is refused for the missing new_suite_reason first, then for the missing ratio_waiver, and caps once both are supplied', async () => {
+  const dir = makeDiffStatsRepo();
+  try {
+    // small tracked source churn (a couple of changed lines)...
+    fs.writeFileSync(path.join(dir, 'src.js'), 'module.exports = 2; // changed\n// a second changed line\n');
+    // ...next to a much larger new untracked test file, so the ratio (test
+    // lines added / source lines changed) genuinely clears the standard-lane
+    // ceiling of 4.
+    fs.writeFileSync(path.join(dir, 'tests', 'test_new_behavior.mjs'), 'console.log("new behavior suite");\n'.repeat(30));
+    const cellFixture = {
+      id: 'ds-behavior-ratio',
+      feature: 'diffstats',
+      title: 'D3 diff_stats fixture — behavior, new test file + high ratio',
+      lane: 'standard',
+      action: 'D3 diff_stats fixture only.',
+      verify: 'node -e "process.exit(0)"',
+      change_class: 'behavior',
+      must_haves: { truths: ['ds-behavior-ratio: D3 real-git fixture'] },
+    };
+    fs.writeFileSync(path.join(dir, 'cell.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
+    const added = await runDiffStatsRepo(dir, ['cells', 'add', '--file', 'cell.json', '--json']);
+    assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
+    const claimed = await runDiffStatsRepo(dir, ['cells', 'claim', '--id', 'ds-behavior-ratio', '--worker', 'w', '--json']);
+    assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
+    const verified = await runDiffStatsRepo(dir, ['cells', 'verify', '--id', 'ds-behavior-ratio', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
+    assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
+
+    const capArgs = ['cells', 'cap', '--id', 'ds-behavior-ratio', '--outcome', 'done', '--files', 'src.js,tests/test_new_behavior.mjs'];
+
+    // 1. no evidence at all -> refused for the missing new_suite_reason (D3 checks new_suite_reason before the ratio).
+    const noEvidence = await runModuleWorker(BEE_MJS, { args: [...capArgs, '--json'], cwd: dir });
+    assert(noEvidence.status !== 0, `expected the cap to be refused with no evidence, got exit 0: stdout=${noEvidence.stdout}`);
+    assert(/new_suite_reason/.test(noEvidence.stdout + noEvidence.stderr), `expected the refusal to name new_suite_reason, got stdout=${noEvidence.stdout} stderr=${noEvidence.stderr}`);
+
+    // 2. new_suite_reason supplied, but no ratio_waiver -> refused for the ratio ceiling.
+    const reasonOnly = await runModuleWorker(BEE_MJS, {
+      args: [...capArgs, '--evidence-stdin', '--json'],
+      cwd: dir,
+      input: JSON.stringify({ new_suite_reason: 'this behavior needed its own dedicated test suite file' }),
+    });
+    assert(reasonOnly.status !== 0, `expected the cap to still be refused without ratio_waiver, got exit 0: stdout=${reasonOnly.stdout}`);
+    assert(/ratio_waiver/.test(reasonOnly.stdout + reasonOnly.stderr), `expected the refusal to name ratio_waiver, got stdout=${reasonOnly.stdout} stderr=${reasonOnly.stderr}`);
+
+    // 3. both fields supplied -> caps clean.
+    const bothSupplied = await runModuleWorker(BEE_MJS, {
+      args: [...capArgs, '--evidence-stdin', '--json'],
+      cwd: dir,
+      input: JSON.stringify({
+        new_suite_reason: 'this behavior needed its own dedicated test suite file',
+        ratio_waiver: 'the new suite legitimately dwarfs the small source tweak it covers',
+      }),
+    });
+    assert(bothSupplied.status === 0, `expected the cap to succeed once both fields are supplied, got exit ${bothSupplied.status}: stdout=${bothSupplied.stdout} stderr=${bothSupplied.stderr}`);
+    assert(JSON.parse(bothSupplied.stdout).status === 'capped', `expected capped, got ${bothSupplied.stdout}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // D-GHF-C (GH #27.5): `cells cap --override-judge` end to end through the
 // real dispatcher — refused without the flag when the latest judge-recorded
 // verdict is NEEDS_REVISION, capped with an audited trace.judge_overrides

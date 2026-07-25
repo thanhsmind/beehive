@@ -1729,6 +1729,18 @@ export async function recordVerify(
 // never throws") instead of a second hand-rolled readdir/parse loop.
 const RED_EVIDENCE_MIN_CHARS = 80;
 
+// test-economy D3: the new-test-file justification floor and the
+// ratio-ceiling waiver floor share RED_EVIDENCE_MIN_CHARS's "evidence must be
+// JSON with this named field" shape above, just a lower bar (20 chars, a
+// one-line reason — no anti-boilerplate/anti-duplicate check like red
+// evidence gets). RATIO_WARN_CEILING/RATIO_REFUSE_CEILING are the "Ngưỡng &
+// pin chốt" numbers pinned in plan.md: tiny/small warns above 3, standard/
+// high-risk refuses above 4.
+const NEW_SUITE_REASON_MIN_CHARS = 20;
+const RATIO_WAIVER_MIN_CHARS = 20;
+const RATIO_WARN_CEILING = 3;
+const RATIO_REFUSE_CEILING = 4;
+
 function findDuplicateRedEvidence(root, id, trimmed) {
   const hash = crypto.createHash('sha256').update(trimmed, 'utf8').digest('hex');
   for (const sibling of listCells(root)) {
@@ -1862,6 +1874,70 @@ export async function capCell(
         `capCell: cell "${id}" is classified "${effectiveClass}" but its diff adds new test file(s) (${diff_stats.new_test_files.join(', ')}) — a refactor/formatting change must not need a new test suite (test-economy D1: no override, not even via new_suite_reason). Reclassify the cell (e.g. "behavior") or drop the new test file(s) from this diff.`,
       );
     }
+    // test-economy D3: any OTHER change_class (refactor/formatting are
+    // refused unconditionally just above — D1 wins over D3, new_suite_reason
+    // cannot rescue those) that introduces a new test file must justify it:
+    // verification_evidence must be a JSON object carrying `new_suite_reason`
+    // (>=20 chars) — a new test_*.mjs/tests/ path becomes a permanent
+    // CI-registered suite forever (run_verify.mjs's discoverSuites), so the
+    // decision to add one needs a stated reason, not silence. Gated on
+    // diff_stats the same way D1 is (undefined — no git, or a legacy caller —
+    // skips this check entirely, fail-open).
+    if (
+      effectiveClass !== 'refactor' &&
+      effectiveClass !== 'formatting' &&
+      diff_stats &&
+      Array.isArray(diff_stats.new_test_files) &&
+      diff_stats.new_test_files.length > 0
+    ) {
+      const newSuiteEvidence = parseVerificationEvidence(verification_evidence);
+      const newSuiteReason =
+        typeof newSuiteEvidence.new_suite_reason === 'string' ? newSuiteEvidence.new_suite_reason.trim() : '';
+      if (newSuiteReason.length < NEW_SUITE_REASON_MIN_CHARS) {
+        throw new Error(
+          `capCell: cell "${id}" adds new test file(s) (${diff_stats.new_test_files.join(', ')}) — evidence phải là JSON có field new_suite_reason (≥${NEW_SUITE_REASON_MIN_CHARS} ký tự) explaining why a new permanent CI suite is warranted (test-economy D3). Attach --evidence-file/--evidence-stdin with a JSON object like {"new_suite_reason": "..."}.`,
+        );
+      }
+    }
+    // test-economy D3: test-lines-added / source-lines-changed ratio ceiling
+    // (both counts already mirror-deduped upstream by bee.mjs's
+    // computeDiffStats, per plan.md's dedupe rule). tiny/small only ADD a
+    // non-blocking warning — collected into `ratioWarning` here, folded into
+    // `trace.warnings` near the bottom of this function. standard/high-risk
+    // REFUSE past the ceiling unless verification_evidence carries a JSON
+    // `ratio_waiver` (>=20 chars) — using the waiver is itself audited as a
+    // decision (D8: a loosened guard's use stays visible, never silent).
+    let ratioWarning = null;
+    if (
+      diff_stats &&
+      Number.isFinite(diff_stats.test_lines_added) &&
+      Number.isFinite(diff_stats.source_lines_changed)
+    ) {
+      const ratio = diff_stats.test_lines_added / Math.max(diff_stats.source_lines_changed, 1);
+      if ((cell.lane === 'tiny' || cell.lane === 'small') && ratio > RATIO_WARN_CEILING) {
+        ratioWarning = `capCell: cell "${id}" test-to-source line ratio is ${ratio.toFixed(2)} (>${RATIO_WARN_CEILING}) for lane "${cell.lane}" — test-economy D3 non-blocking warning.`;
+      } else if ((cell.lane === 'standard' || cell.lane === 'high-risk') && ratio > RATIO_REFUSE_CEILING) {
+        const ratioEvidence = parseVerificationEvidence(verification_evidence);
+        const ratioWaiver =
+          typeof ratioEvidence.ratio_waiver === 'string' ? ratioEvidence.ratio_waiver.trim() : '';
+        if (ratioWaiver.length < RATIO_WAIVER_MIN_CHARS) {
+          throw new Error(
+            `capCell: cell "${id}" test-to-source line ratio is ${ratio.toFixed(2)} (>${RATIO_REFUSE_CEILING}) for lane "${cell.lane}" — evidence phải là JSON có field ratio_waiver (≥${RATIO_WAIVER_MIN_CHARS} ký tự) justifying the ratio, or shrink the diff (test-economy D3).`,
+          );
+        }
+        // D8: the waiver's use is audited the same way a judge override is
+        // (line ~1826 above) — the ceiling itself is never rewritten, only a
+        // decision record marks that this one cap was exempted, and why.
+        logDecision(root, {
+          decision: `«cells cap: cell "${id}" test-to-source ratio ${ratio.toFixed(2)} waived by ${trace.worker || 'unknown'} (lane ${cell.lane}) — ${ratioWaiver}»`,
+          rationale:
+            'Audited ratio_waiver over the test-economy D3 lane ceiling (standard/high-risk >4) — the ceiling itself is unchanged, only this cap is exempted with a recorded reason (D8: a loosened guard stays visible).',
+          scope: 'repo',
+          source: 'user',
+          tags: ['cells', 'test-economy'],
+        });
+      }
+    }
     // Decision 0009, NARROWED by test-economy D2: a behavior_change cell must
     // record the "before" it changed — a characterization of prior behavior —
     // not just an assertion that the new behavior works. This blocks
@@ -1959,6 +2035,11 @@ export async function capCell(
       verification_evidence: verification_evidence ?? null,
       outcome: typeof outcome === 'string' && outcome.trim() ? outcome : trace.outcome,
       capped_at: utcNow(),
+      // test-economy D3: non-blocking ratio-ceiling warning (tiny/small
+      // only, computed above) — additive field, an empty array whenever
+      // diff_stats is absent or the ratio is within bounds, so existing
+      // consumers of trace see no schema break.
+      warnings: ratioWarning ? [ratioWarning] : [],
     };
     return writeCell(root, cell);
   });

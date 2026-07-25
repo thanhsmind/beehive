@@ -2121,6 +2121,130 @@ await check('capCell (D1 fail-open): a refactor-class cell with diff_stats omitt
   );
 });
 
+// ─── test-economy D3/D8: test-shape guard at cap — new_suite_reason for any
+// non-refactor/formatting class that adds a new test file, and the
+// test-lines/source-lines ratio ceiling (tiny/small warn, standard/high-risk
+// refuse-unless-waived). Table-driven, with the D8-required negative
+// controls (refactor still refuses even WITH a reason — the te-1 rows above
+// already prove this; diff_stats undefined still skips every D3 check here
+// too, not just D1's).
+
+await check('capCell (D3): a non-refactor/formatting class adding a new test file is refused without a JSON new_suite_reason (>=20 chars) — table-driven (D3/D8)', async () => {
+  const cases = [
+    { id: 'te2-newtest-noevidence', lane: 'standard', evidence: undefined, why: 'no evidence at all' },
+    { id: 'te2-newtest-prose', lane: 'standard', evidence: 'adding a new suite because it seemed useful', why: 'prose (non-JSON) evidence' },
+    { id: 'te2-newtest-shortreason', lane: 'small', evidence: { new_suite_reason: 'too short' }, why: 'a new_suite_reason under 20 chars' },
+    { id: 'te2-newtest-unrelated-json', lane: 'small', evidence: { verification_run: 'targeted test passed' }, why: 'a JSON evidence object missing the new_suite_reason field entirely' },
+  ];
+  for (const c of cases) {
+    addCell(root, makeCell(c.id, { lane: c.lane, change_class: 'behavior', must_haves: { truths: [`${c.id}: D3 fixture`] } }));
+    await claimCell(root, c.id, 'worker-te2');
+    await recordVerify(root, c.id, { command: 'x', output: 'ok', passed: true });
+    await assertRejects(
+      () =>
+        capCell(root, c.id, {
+          files_changed: ['a.js', 'tests/test_new_suite.mjs'],
+          outcome: 'done',
+          verification_evidence: c.evidence,
+          diff_stats: { new_test_files: ['tests/test_new_suite.mjs'], test_lines_added: 10, source_lines_changed: 8 },
+        }),
+      'new_suite_reason',
+      `${c.id}: a new test file with ${c.why} must be refused naming new_suite_reason`,
+    );
+    // D8 (keep the same failure legible): the refusal also names the JSON
+    // requirement, so a worker who supplied prose knows exactly what shape
+    // is owed instead of guessing.
+    await assertRejects(
+      () =>
+        capCell(root, c.id, {
+          files_changed: ['a.js', 'tests/test_new_suite.mjs'],
+          outcome: 'done',
+          verification_evidence: c.evidence,
+          diff_stats: { new_test_files: ['tests/test_new_suite.mjs'], test_lines_added: 10, source_lines_changed: 8 },
+        }),
+      'JSON',
+      `${c.id}: the refusal must tell the worker evidence is owed as JSON`,
+    );
+  }
+});
+
+await check('capCell (D3): a new test file WITH a JSON new_suite_reason (>=20 chars) caps clean (D3)', async () => {
+  addCell(root, makeCell('te2-newtest-ok', { lane: 'standard', change_class: 'behavior', must_haves: { truths: ['te2-newtest-ok: D3 fixture'] } }));
+  await claimCell(root, 'te2-newtest-ok', 'worker-te2');
+  await recordVerify(root, 'te2-newtest-ok', { command: 'x', output: 'ok', passed: true });
+  const capped = await capCell(root, 'te2-newtest-ok', {
+    files_changed: ['a.js', 'tests/test_new_suite.mjs'],
+    outcome: 'done',
+    verification_evidence: { new_suite_reason: 'the new table-driven cases needed their own fixture file' },
+    diff_stats: { new_test_files: ['tests/test_new_suite.mjs'], test_lines_added: 10, source_lines_changed: 8 },
+  });
+  assert(capped.status === 'capped', 'a new_suite_reason of >=20 chars must let the cap through');
+});
+
+await check('capCell (D3 ratio, tiny/small): a ratio over 3 appends a non-blocking warning, never refuses (D3)', async () => {
+  addCell(root, makeCell('te2-ratio-tiny-warn', { lane: 'tiny' }));
+  await claimCell(root, 'te2-ratio-tiny-warn', 'worker-te2');
+  await recordVerify(root, 'te2-ratio-tiny-warn', { command: 'x', output: 'ok', passed: true });
+  const capped = await capCell(root, 'te2-ratio-tiny-warn', {
+    files_changed: ['a.js'],
+    outcome: 'done',
+    // ratio 31/10 = 3.1 (> RATIO_WARN_CEILING of 3)
+    diff_stats: { new_test_files: [], test_lines_added: 31, source_lines_changed: 10 },
+  });
+  assert(capped.status === 'capped', 'a tiny/small ratio over 3 must still cap — warning only, never a refusal');
+  assert(
+    Array.isArray(capped.trace.warnings) && capped.trace.warnings.length === 1 && /ratio/.test(capped.trace.warnings[0]),
+    `expected exactly one ratio warning in trace.warnings, got ${JSON.stringify(capped.trace.warnings)}`,
+  );
+});
+
+await check('capCell (D3 ratio, standard/high-risk): a ratio over 4 is refused unless verification_evidence carries a JSON ratio_waiver (>=20 chars), and the waiver is audited as a decision (D3/D8)', async () => {
+  addCell(root, makeCell('te2-ratio-standard-refuse', { lane: 'standard', must_haves: { truths: ['te2-ratio-standard-refuse: D3 ratio fixture'] } }));
+  await claimCell(root, 'te2-ratio-standard-refuse', 'worker-te2');
+  await recordVerify(root, 'te2-ratio-standard-refuse', { command: 'x', output: 'ok', passed: true });
+  // ratio 41/10 = 4.1 (> RATIO_REFUSE_CEILING of 4)
+  await assertRejects(
+    () =>
+      capCell(root, 'te2-ratio-standard-refuse', {
+        files_changed: ['a.js'],
+        outcome: 'done',
+        diff_stats: { new_test_files: [], test_lines_added: 41, source_lines_changed: 10 },
+      }),
+    'ratio_waiver',
+    'a standard-lane ratio over 4 must refuse, naming ratio_waiver',
+  );
+
+  addCell(root, makeCell('te2-ratio-standard-waived', { lane: 'standard', must_haves: { truths: ['te2-ratio-standard-waived: D3 ratio fixture'] } }));
+  await claimCell(root, 'te2-ratio-standard-waived', 'worker-te2');
+  await recordVerify(root, 'te2-ratio-standard-waived', { command: 'x', output: 'ok', passed: true });
+  const capped = await capCell(root, 'te2-ratio-standard-waived', {
+    files_changed: ['a.js'],
+    outcome: 'done',
+    verification_evidence: { ratio_waiver: 'this cell legitimately rewrote its entire test fixture set' },
+    diff_stats: { new_test_files: [], test_lines_added: 41, source_lines_changed: 10 },
+  });
+  assert(capped.status === 'capped', 'a >=20 char ratio_waiver must let the cap through despite the ratio');
+  const decisions = activeDecisions(root, { recent: 1 });
+  assert(
+    decisions.length > 0 && decisions[0].decision.includes('te2-ratio-standard-waived') && /waived/.test(decisions[0].decision),
+    `using ratio_waiver must be audited as a decision naming the cell, got ${JSON.stringify(decisions)}`,
+  );
+});
+
+await check('capCell (D3 fail-open): diff_stats omitted skips BOTH new_suite_reason and the ratio ceiling — a behavior-class cell with no reason at all still caps (D3)', async () => {
+  addCell(root, makeCell('te2-nogit', { lane: 'standard', change_class: 'behavior', must_haves: { truths: ['te2-nogit: D3 fail-open fixture'] } }));
+  await claimCell(root, 'te2-nogit', 'worker-te2');
+  await recordVerify(root, 'te2-nogit', { command: 'x', output: 'ok', passed: true });
+  const capped = await capCell(root, 'te2-nogit', {
+    files_changed: ['a.js', 'tests/test_new_suite.mjs'],
+    outcome: 'done',
+    verification_evidence: { verification_run: 'targeted test passed, no new_suite_reason attached' },
+    // diff_stats intentionally omitted (undefined) — no git, or a legacy caller.
+  });
+  assert(capped.status === 'capped', 'diff_stats undefined must fail-open for D3 exactly as it does for D1');
+  assert(!capped.trace.warnings || capped.trace.warnings.length === 0, 'no ratio warning can be computed without diff_stats');
+});
+
 // ─── D1 Δ2-amendment: EVERY claim-clearing transition releases the claim
 // file — cap, unclaim, block, drop, reopen — not only the claim-next unwind.
 // Without this a same-session round trip through one of these verbs would
