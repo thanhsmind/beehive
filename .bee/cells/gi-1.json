@@ -1,0 +1,82 @@
+{
+  "id": "gi-1",
+  "feature": "bee-gitignore-debris",
+  "lane": "tiny",
+  "behavior_change": true,
+  "title": "Gitignore block học pattern tmp-debris + dọn 6 file rác tracked ở gốc .bee",
+  "action": "(1) skills/bee-hive/scripts/onboard_bee.mjs: thêm '.bee/tmp_*' và '.bee/patch-*.json' vào GITIGNORE_BLOCK_PATTERNS (:115) — lớp rác: evidence/verify/deviations tạm thời flow cũ ghi ra gốc .bee trước khi có --evidence-stdin, và patch một-lần. Đọc thêm cơ chế quanh :2495-2510 (đã có bước quét ls-files các path thuộc block còn bị track — xác nhận pattern mới đi qua đường đó, nghĩa là host repo cũ sẽ được cảnh báo/untrack ở lần onboard sau; nếu bước đó chỉ cảnh báo không untrack, ghi nhận hành vi thật vào evidence). (2) git rm --cached VÀ xoá khỏi disk 6 file rác: .bee/vout.txt .bee/tmp_verify_1710-4.txt .bee/tmp_evidence_1710-4.json .bee/tmp_deviations_1710-4.json .bee/patch-cz5.json .bee/patch-cz6.json (giá trị lịch sử = 0, evidence thật nằm trong cell json đã commit). (3) Chạy onboard --apply để block .gitignore local được re-render với pattern mới + mirror sync, rồi render plugin trees + release_manifest --write (onboard_bee.mjs thuộc skills root — nghĩa vụ regen). (4) Test: thêm row vào suite có sẵn cover gitignore block (tìm bằng rg 'GITIGNORE_BLOCK|gitignore' trong templates/tests + scripts/test_onboard* — per D5 trích suite gần nhất) khẳng định 2 pattern mới nằm trong block render và file .bee/tmp_foo.txt giả trong fixture không bị track-able (git check-ignore).",
+  "must_haves": {
+    "truths": [
+      "GITIGNORE_BLOCK_PATTERNS chứa .bee/tmp_* và .bee/patch-*.json; .gitignore local re-render có 2 pattern",
+      "6 file rác biến khỏi index lẫn disk",
+      "suite gitignore/onboard liên quan + test_verify_manifest xanh sau thay đổi",
+      "mirror + manifest khớp"
+    ],
+    "prohibitions": [
+      "không đụng file tracked hợp lệ nào khác của .bee (cells/, bin/, lanes/, reviews/, decisions, backlog, config, onboarding)",
+      "không file test mới"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only test_onboard_bee,test_verify_manifest && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "skills/bee-hive/scripts/onboard_bee.mjs"
+  ],
+  "files": [
+    "skills/bee-hive/scripts/onboard_bee.mjs",
+    ".gitignore",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": "gi-worker",
+    "outcome": "gitignore block learns .bee/tmp_* + .bee/patch-*.json; 6 tracked debris files removed from .bee root",
+    "files_changed": [
+      "skills/bee-hive/scripts/onboard_bee.mjs",
+      "skills/bee-hive/scripts/test_onboard_bee.mjs",
+      ".agents/skills/bee-hive/scripts/onboard_bee.mjs",
+      ".agents/skills/.bee-render.json",
+      ".claude/skills/bee-hive/scripts/onboard_bee.mjs",
+      ".claude/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/scripts/onboard_bee.mjs",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/scripts/onboard_bee.mjs",
+      ".codex-plugin/skills/.bee-render.json",
+      ".gitignore",
+      ".bee/onboarding.json",
+      ".bee/vout.txt",
+      ".bee/tmp_verify_1710-4.txt",
+      ".bee/tmp_evidence_1710-4.json",
+      ".bee/tmp_deviations_1710-4.json",
+      ".bee/patch-cz5.json",
+      ".bee/patch-cz6.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T14:48:48.535Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"tests_inspected\":\"skills/bee-hive/scripts/test_onboard_bee.mjs section 9g (crash-leak scratch ignore patterns), the two loops that iterate .gitignore-block-includes patterns and the git check-ignore fixture block, plus the earlier independently-reconstructed sha256 block at ~line 1427 (GITIGNORE_PATTERNS_FOR_HASH) that ties onboarding.json's managed.gitignore_block hash to a second, hand-duplicated copy of the pattern list.\",\"tests_added_changed\":\"Added '.bee/tmp_*' and '.bee/patch-*.json' to 3 places in test_onboard_bee.mjs: (1) the scratch-fixture .gitignore-block-includes loop (new rows: '.gitignore block includes crash-leak pattern .bee/tmp_*' / '...patch-*.json'); (2) new git check-ignore fixture rows writing .bee/tmp_foo.txt and .bee/patch-cz1.json into the scratch repo and asserting 'IS matched by the managed ignore pattern' for both; (3) GITIGNORE_PATTERNS_FOR_HASH (the independently-reconstructed hash list) so the sha256 tie-out still matches after the block gains the two new lines.\",\"red_failure_evidence\":\"git stash push -- skills/bee-hive/scripts/onboard_bee.mjs (reverting ONLY the canonical source, keeping the new test rows), then ran node scripts/run_verify.mjs --only test_onboard_bee: 5 FAIL lines - sha256 tie-out mismatch (97bc583... != 094d0da...), gitignore block includes crash-leak pattern .bee/tmp_* missing, same for .bee/patch-*.json, and both new git check-ignore assertions failed with status:1 (git said NOT ignored) for .bee/tmp_foo.txt and .bee/patch-cz1.json. git stash pop restored the fix; suite re-ran green afterward.\",\"verification_run\":\"node scripts/run_verify.mjs --only test_onboard_bee,test_verify_manifest -> PASS (both suites) && node scripts/release_manifest.mjs --check -> 560 file(s) match stored manifest. Tracked-paths advisory (trackedPathsNotices, onboard_bee.mjs ~L2495-2531): confirmed ADVISORY-ONLY, never untracks - it shells out to git ls-files -z -- <patterns> and, if any managed path is still tracked on a previously-onboarded host, appends one warning notice naming the count and the exact git rm -r --cached ... command for a human to run; onboard_bee.mjs itself never runs git rm. Since this cell's own git rm ran BEFORE the --apply pass, the live --apply --json run emitted zero notices (nothing left tracked to warn about).\"}\n",
+    "verify_output": "SCOPED RUN (--only): 2 of 105 runnables selected — full verify still required before close\nHEARTBEAT: 1 suite(s) still running after 30.0s: skills/bee-hive/scripts/test_onboard_bee.mjs (30.0s)\nPASS      42ms  scripts/test_verify_manifest.mjs\nPASS   38347ms  skills/bee-hive/scripts/test_onboard_bee.mjs\n\nPASS run_verify: 2 suite(s), concurrency=5, wall=38351ms\nSCOPED RUN (--only): 2 of 105 runnables selected — full verify still required before close\nrelease_manifest --check: 560 file(s) match stored manifest\n",
+    "verify_passed": true,
+    "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+    "claimed_at": "2026-07-25T14:38:19.285Z",
+    "verify_command": "node scripts/run_verify.mjs --only test_onboard_bee,test_verify_manifest && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-25T14:48:33.738Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T14:48:33.738Z",
+        "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+        "claimed_at": "2026-07-25T14:38:19.284Z",
+        "acquired_at": "2026-07-25T14:38:19.284Z",
+        "worker": "gi-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

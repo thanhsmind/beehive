@@ -25,4 +25,6 @@
 .claude-plugin/skills.old-*/
 .codex-plugin/skills.tmp-*/
 .codex-plugin/skills.old-*/
+.bee/tmp_*
+.bee/patch-*.json
 # BEE:END

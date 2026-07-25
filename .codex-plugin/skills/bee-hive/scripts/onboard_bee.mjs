@@ -185,6 +185,17 @@ const GITIGNORE_BLOCK_PATTERNS = [
   ".claude-plugin/skills.old-*/",
   ".codex-plugin/skills.tmp-*/",
   ".codex-plugin/skills.old-*/",
+  // Legacy-flow debris (bee-gitignore-debris gi-1): pre-`--evidence-stdin`
+  // verify/evidence/deviations scratch a worker's flow used to write straight
+  // into the .bee ROOT (e.g. `.bee/tmp_verify_1710-4.txt`,
+  // `.bee/tmp_evidence_1710-4.json`) before being read and discarded, plus
+  // one-off `.bee/patch-cz*.json` hand patches applied outside the normal
+  // cell-cap path. Both shapes are machine/session-scratch, never a
+  // deliverable, and never team-durable (contrast .bee/cells/, .bee/bin/,
+  // .bee/config.json above) — six such files were found still tracked at
+  // the .bee root and removed by this same cell.
+  ".bee/tmp_*",
+  ".bee/patch-*.json",
 ];
 
 const HOOK_FILENAMES = [

@@ -1451,6 +1451,8 @@ try {
     ".claude-plugin/skills.old-*/",
     ".codex-plugin/skills.tmp-*/",
     ".codex-plugin/skills.old-*/",
+    ".bee/tmp_*",
+    ".bee/patch-*.json",
   ];
   const expectedGitignoreBlockSource =
     `# BEE:START\n${GITIGNORE_PATTERNS_FOR_HASH.join("\n")}\n# BEE:END\n`;
@@ -1620,6 +1622,11 @@ try {
       ".claude-plugin/skills.old-*/",
       ".codex-plugin/skills.tmp-*/",
       ".codex-plugin/skills.old-*/",
+      // Legacy-flow debris (bee-gitignore-debris gi-1): pre-`--evidence-stdin`
+      // verify/evidence/deviations scratch and one-off patch files that used
+      // to land tracked at the .bee root (six such files removed by gi-1).
+      ".bee/tmp_*",
+      ".bee/patch-*.json",
     ]) {
       check(scratchGiText.includes(pattern), `.gitignore block includes crash-leak pattern ${pattern}`,
         scratchGiText);
@@ -1642,6 +1649,22 @@ try {
       check(checkIgnoreAtomic.status === 0,
         "an atomic-tmp-SHAPED file (<pid>-<counter>-<random>.tmp) IS matched by the managed ignore pattern",
         JSON.stringify(checkIgnoreAtomic));
+
+      // Legacy-flow debris shapes (bee-gitignore-debris gi-1): a fresh
+      // '.bee/tmp_foo.txt' or '.bee/patch-cz1.json' must be untrack-able the
+      // moment the managed block lands, so a re-onboarded host never lets
+      // this class of scratch reappear as tracked git-status noise.
+      fs.mkdirSync(path.join(scratchGiTmp, ".bee"), { recursive: true });
+      fs.writeFileSync(path.join(scratchGiTmp, ".bee", "tmp_foo.txt"), "scratch\n", "utf8");
+      fs.writeFileSync(path.join(scratchGiTmp, ".bee", "patch-cz1.json"), "{}\n", "utf8");
+      const checkIgnoreTmpDebris = runGit(scratchGiTmp, ["check-ignore", "-q", ".bee/tmp_foo.txt"]);
+      check(checkIgnoreTmpDebris.status === 0,
+        "a .bee/tmp_* legacy-flow scratch file IS matched by the managed ignore pattern",
+        JSON.stringify(checkIgnoreTmpDebris));
+      const checkIgnorePatchDebris = runGit(scratchGiTmp, ["check-ignore", "-q", ".bee/patch-cz1.json"]);
+      check(checkIgnorePatchDebris.status === 0,
+        "a .bee/patch-*.json one-off patch file IS matched by the managed ignore pattern",
+        JSON.stringify(checkIgnorePatchDebris));
     } else {
       skip("atomic-tmp shape ignore (git check-ignore)", "git binary not available");
     }

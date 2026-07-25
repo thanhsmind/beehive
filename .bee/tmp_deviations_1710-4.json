@@ -1,5 +1,0 @@
-[
-  "Touched skills/bee-hive/templates/lib/lock.mjs (not in the cell's declared `files` list) to add an exported acquireStoreLockOnceSync — writeCell's SYNC single-attempt O_EXCL acquire needed a primitive lock.mjs didn't have; lock.mjs was already in the cell's read_first list. No existing export/behavior in lock.mjs changed.",
-  "unarchiveFeature's journal-clear ordering: cleared the journal right after the rename loop succeeds (before the rmdir + summary-delete), rather than strictly after the summary write as archiveFeature does — the journal lives inside archiveDir, so rmdir cannot succeed while it is still present, and once every rename has landed there is nothing left for the journal to protect.",
-  "Fixed the false comment on archiveFeature's top-level lock (explicitly requested by the cell action text): it claimed a concurrent mutator could never interleave (false pre-fix — mutators held no lock against archive at all) and implied per-feature scoping (false — the 'cells-archive' lock name is global across all features)."
-]
