@@ -220,6 +220,7 @@
     "grooming",
     "test-prune",
     "gitignore",
-    "scripts-tests-move"
+    "scripts-tests-move",
+    "migration"
   ]
 }
