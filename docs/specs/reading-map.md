@@ -153,7 +153,7 @@ Where things live. Read the touched area's spec before its code.
 - Communication doctrine (plain language, Gate Presentation Contract, Silent Bookkeeping —
   bee mechanics never narrated into chat, work language only; decision 1689af1b) lives in
   `skills/bee-hive/references/routing-and-contracts.md` § Communication Contract, mirrored as
-  hive law 11 (`skills/bee-hive/SKILL.md`) and host critical rule 11 (`templates/AGENTS.block.md`).
+  hive law 11 (`skills/bee-hive/SKILL.md`) and host critical rule 11 (`packages/bee/AGENTS.block.md`).
   The *placement* rule behind every such mirror — always-applies doctrine belongs in
   `AGENTS.block.md`, a stage's own procedure detail may stay in `references/` — is specced in
   `docs/knowledge/areas/doctrine-layer/placement-and-anchoring.md` (R1/B2); read it before
@@ -162,9 +162,9 @@ Where things live. Read the touched area's spec before its code.
 - `docs/history/<feature>/` — how a feature was decided, planned, validated, reviewed, and shipped.
 - `docs/decisions/` — numbered design decisions. `.bee/decisions.jsonl` — the live decision log.
 - `docs/backlog.md` — the product backlog. `.bee/backlog.jsonl` — friction and findings.
-- `.bee/state.json` and `.bee/backlog.jsonl` are **CLI-owned**: every mutation goes through `bee.mjs state` (generic routing changes require the selected record's pre-change phase as owner; gates use their dedicated verb; worker/scribing-run remain dedicated; `worker prune` cleans `.bee/workers` transients — prefix keep-set, fail-closed destructive verbs) or `bee.mjs backlog add`; direct edits are denied by the write-guard, and a standing suite keeps templates byte-identical to `.bee/bin/`.
+- `.bee/state.json` and `.bee/backlog.jsonl` are **CLI-owned**: every mutation goes through `bee.mjs state` (generic routing changes require the selected record's pre-change phase as owner; gates use their dedicated verb; worker/scribing-run remain dedicated; `worker prune` cleans `.bee/workers` transients — prefix keep-set, fail-closed destructive verbs) or `bee.mjs backlog add`; direct edits are denied by the write-guard, and a standing suite keeps `packages/bee/` byte-identical to `.bee/bin/`.
 - `docs/history/research/` — standalone bee-xia research briefs (topic-slug files; each leads with its Bottom Line).
-- `hooks/` — the catalog and handlers for the installed plugin projection and generated repository fallback. It declares the pre-spawn model-tier guard on both runtimes (Claude via its dispatch tools, Codex via its native spawn call on the observed envelope — unobserved shapes pass through open) and the paired Codex-only child-start/child-stop audit; onboarding activates exactly one source. Vendored handlers live under `.bee/bin/hooks/`.
+- `packages/bee/hooks/` — the catalog and handlers for the installed plugin projection and generated repository fallback. It declares the pre-spawn model-tier guard on both runtimes (Claude via its dispatch tools, Codex via its native spawn call on the observed envelope — unobserved shapes pass through open) and the paired Codex-only child-start/child-stop audit; onboarding activates exactly one source. Vendored handlers live under `.bee/bin/hooks/`.
 - `skills/bee-hive/scripts/plugin_distribution.mjs` and `test_plugin_distribution.mjs` — shared strict distribution planner/prover and transaction suite. `scripts/install.sh`, `scripts/install.ps1`, and release-inventory tests are the two platform entrypoints and package proof.
 - [`docs/knowledge/areas/verify-pipeline/`](../knowledge/areas/verify-pipeline/index.md) — test
   topology & discovery, migrated into the knowledge bundle (okf-foundation D20/D29;
@@ -183,8 +183,8 @@ Where things live. Read the touched area's spec before its code.
   (new/cached/total), parallelism, and active running time, plus a cross-project HTML matrix
   (`~/.config/beehive/performance.html`) that auto-refreshes at session close. Driven by the
   `bee perf start|stop|section|log|render|report` command group + `maybePerfRefresh` in
-  `hooks/bee-session-close.mjs`. Core, cross-project scan, and HTML renderer live in
-  `templates/lib/perf.mjs`. Split by TOPIC into `sections-lifecycle-and-measurement.md`,
+  `packages/bee/hooks/bee-session-close.mjs`. Core, cross-project scan, and HTML renderer live in
+  `packages/bee/lib/perf.mjs`. Split by TOPIC into `sections-lifecycle-and-measurement.md`,
   `persistent-store-and-sync.md`, and `cross-project-matrix.md`. The legacy path
   [`performance-log.md`](./performance-log.md) remains as a pointer stub carrying the full
   23-anchor map (D37).
@@ -222,6 +222,6 @@ Where things live. Read the touched area's spec before its code.
   the `narrative-sections` scheme, added for it (F9/D10). The legacy path
   [`worktree-parallelism.md`](./worktree-parallelism.md) remains as a pointer stub carrying the
   full 10-anchor map (D37).
-- `skills/bee-hive/templates/bee.mjs` + `templates/lib/command-registry.mjs` — the sole shipped CLI (`bee.mjs <group> <verb>` over all 10 command groups, the 10th being `perf`; originated as an additive dispatcher in harness-integration-adopt, decision 30606de4, `docs/decisions/0024`, then made the sole canonical *and* sole shipped surface by shim-retire, D1, decision bbc6bcea — the 9 legacy per-group shims are deleted); `command-registry.mjs` is the single source of truth for the command surface. Contract in `docs/07-contracts.md`; spec-before-code still applies — read the touched area's spec before this code.
-- `skills/bee-hive/templates/lib/schedule.mjs` — the computed work schedule (`computeSchedule`/`detectCycles`: dep layering + declared-path overlap packing into waves; consumed by `bee cells schedule`, cycle refusal in `cells.mjs` add/update, and the swarming/validating prose). Spec: `docs/knowledge/areas/workflow-state/cells-scheduling.md` (B17/B18, R26/R27).
-- `skills/bee-hive/templates/lib/recovery.mjs` — crash-recovery transcript mining (`detectCrashCandidates`/`readTranscriptTail`/`hasCleanEndTrio`/`lastDurableSettlement`/`computeMiningWindow`/`buildMiningPrompt`: stale-heartbeat + non-clean-transcript-tail + work-in-flight detection; bounded mining window; the down-tier miner prompt). Consumed by `bee recovery scan|window` and the `status` recovery block; imports `perf.mjs` (transcript resolution) + `claims.mjs` (heartbeat/session), never imported by `command-registry.mjs`. Spec: `docs/knowledge/areas/workflow-state/recovery.md` (B33, R51).
+- `packages/bee/bee.mjs` + `packages/bee/lib/command-registry.mjs` — the sole shipped CLI (`bee.mjs <group> <verb>` over all 10 command groups, the 10th being `perf`; originated as an additive dispatcher in harness-integration-adopt, decision 30606de4, `docs/decisions/0024`, then made the sole canonical *and* sole shipped surface by shim-retire, D1, decision bbc6bcea — the 9 legacy per-group shims are deleted); `command-registry.mjs` is the single source of truth for the command surface. Contract in `docs/07-contracts.md`; spec-before-code still applies — read the touched area's spec before this code.
+- `packages/bee/lib/schedule.mjs` — the computed work schedule (`computeSchedule`/`detectCycles`: dep layering + declared-path overlap packing into waves; consumed by `bee cells schedule`, cycle refusal in `cells.mjs` add/update, and the swarming/validating prose). Spec: `docs/knowledge/areas/workflow-state/cells-scheduling.md` (B17/B18, R26/R27).
+- `packages/bee/lib/recovery.mjs` — crash-recovery transcript mining (`detectCrashCandidates`/`readTranscriptTail`/`hasCleanEndTrio`/`lastDurableSettlement`/`computeMiningWindow`/`buildMiningPrompt`: stale-heartbeat + non-clean-transcript-tail + work-in-flight detection; bounded mining window; the down-tier miner prompt). Consumed by `bee recovery scan|window` and the `status` recovery block; imports `perf.mjs` (transcript resolution) + `claims.mjs` (heartbeat/session), never imported by `command-registry.mjs`. Spec: `docs/knowledge/areas/workflow-state/recovery.md` (B33, R51).

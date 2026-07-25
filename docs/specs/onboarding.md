@@ -97,9 +97,9 @@ into the concept whose topic it matches.
 | P5 | [docs/knowledge/areas/onboarding/release-identity-and-version-parity.md](../knowledge/areas/onboarding/release-identity-and-version-parity.md) | release-version single-source — `scripts/lib/release-tuple.mjs` |
 | P6 | [docs/knowledge/areas/onboarding/distribution-source-exclusivity.md](../knowledge/areas/onboarding/distribution-source-exclusivity.md) | fresh-host handler-delivery proof |
 | P7 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | statusline opt-in, plan stage 3b, `copy_statusline` — `onboard_bee.mjs` |
-| P8 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | canonical pair — `skills/bee-hive/templates/statusline/` |
+| P8 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | canonical pair — `packages/bee/statusline/` |
 | P9 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | section 9c sandbox cases — `test_onboard_bee.mjs` |
-| P10 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | statusline byte-equality sweep — `templates/tests/test_lib.mjs` |
+| P10 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | statusline byte-equality sweep — `packages/bee/tests/test_lib.mjs` |
 | P11 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | host-side settings contract — `.claude/settings.json` |
 | P12 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | the second runtime's machine-level status block — `ensure_codex_statusline` |
 | P13 | [docs/knowledge/areas/onboarding/repo-local-guardrails.md](../knowledge/areas/onboarding/repo-local-guardrails.md) | Codex hook render/merge plus the create-only specs-stub action |

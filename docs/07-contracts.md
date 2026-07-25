@@ -7,8 +7,8 @@ Normative contracts every v0.1 component codes against. When this doc and anothe
 - Node 18+, ESM (`.mjs`), **zero npm dependencies**. Windows-safe paths (use `node:path`).
 - Atomic writes everywhere: write `<file>.tmp`, then `renameSync`.
 - All scripts fail safe: helpers exit non-zero with a one-line JSON error on `--json`; hooks NEVER break a session (wrap everything, log to `.bee/logs/hooks.jsonl`, exit 0 unless deliberately blocking).
-- Source of truth for vendored code: `skills/bee-hive/templates/` in the plugin. Onboarding copies it to `<repo>/.bee/bin/` (helpers) and `<repo>/.bee/bin/lib/` (modules).
-- Hooks live in the plugin (`hooks/`). At runtime they resolve the target repo root from CWD and dynamic-import lib from `<root>/.bee/bin/lib/`. If root or lib is missing → exit 0 silently (self-arm rule).
+- Source of truth for vendored code: `packages/bee/` in the plugin. Onboarding copies it to `<repo>/.bee/bin/` (helpers) and `<repo>/.bee/bin/lib/` (modules).
+- Hooks live in the plugin (`packages/bee/hooks/`). At runtime they resolve the target repo root from CWD and dynamic-import lib from `<root>/.bee/bin/lib/`. If root or lib is missing → exit 0 silently (self-arm rule).
 
 ## Refusal messages: ERROR / WHY / FIX (docs/09 item 5)
 
@@ -59,7 +59,7 @@ reservation-conflict.
 
 Cell schema: as in [02-architecture.md](02-architecture.md) (id, feature, title, lane, status, deps, decisions, files, read_first, action, must_haves, verify, trace{worker, outcome, files_changed, deviations, friction, capped_at, behavior_change, verification_evidence, verify_output}).
 
-## lib API (`skills/bee-hive/templates/lib/`)
+## lib API (`packages/bee/lib/`)
 
 All functions are sync unless noted. `root` = absolute repo root path.
 
@@ -118,11 +118,11 @@ All functions are sync unless noted. `root` = absolute repo root path.
 
 ### `validate-args.mjs` (harness-integration-adopt, decision 30606de4)
 - `isValidParameterSchema(schema)` → boolean — structural check that a `parameters` value is well-formed JSON-Schema in the registry's shape (object type, every `required` name present in `properties`, every property carrying a `type`).
-- `validate(commandEntry, parsedArgs={})` → `{ok:true}` or `{ok:false, error:{field, reason, command}}` — never throws. Checks every schema-required field is present, then that every present field's CLI-string value type-matches its schema `type` (CLI flags arrive as strings; a schema `type:"boolean"` accepts `"true"`/`"false"` as well as a native boolean). Shared by `bee.mjs` (dispatch-time validation) and `hooks/bee-write-guard.mjs`'s CLI-shape check (pre-execution validation of Bash calls) — one validator, two call sites, never duplicated.
+- `validate(commandEntry, parsedArgs={})` → `{ok:true}` or `{ok:false, error:{field, reason, command}}` — never throws. Checks every schema-required field is present, then that every present field's CLI-string value type-matches its schema `type` (CLI flags arrive as strings; a schema `type:"boolean"` accepts `"true"`/`"false"` as well as a native boolean). Shared by `bee.mjs` (dispatch-time validation) and `packages/bee/hooks/bee-write-guard.mjs`'s CLI-shape check (pre-execution validation of Bash calls) — one validator, two call sites, never duplicated.
 
-## CLI surface (`skills/bee-hive/templates/bee.mjs`)
+## CLI surface (`packages/bee/bee.mjs`)
 
-`bee.mjs <group> <verb> [--flags]` is the sole shipped CLI (D1, shim-retire, decision bbc6bcea): one argv wrapper over `lib/`, every group supports `--json`, non-zero exit + `{error}` JSON on failure. It began (harness-integration-adopt Phase 1, decision 30606de4) as an *additive* dispatcher living alongside one legacy script per group; those per-group scripts are now deleted from `skills/bee-hive/templates/` and, on `--apply`, from every host's `.bee/bin/` too (D2's `RETIRED_HELPERS` removal pass) — `bee.mjs` imports the same `lib/*.mjs` functions they used to.
+`bee.mjs <group> <verb> [--flags]` is the sole shipped CLI (D1, shim-retire, decision bbc6bcea): one argv wrapper over `lib/`, every group supports `--json`, non-zero exit + `{error}` JSON on failure. It began (harness-integration-adopt Phase 1, decision 30606de4) as an *additive* dispatcher living alongside one legacy script per group; those per-group scripts are now deleted from `packages/bee/` and, on `--apply`, from every host's `.bee/bin/` too (D2's `RETIRED_HELPERS` removal pass) — `bee.mjs` imports the same `lib/*.mjs` functions they used to.
 
 ```
 bee.mjs status [--json]
@@ -200,7 +200,7 @@ Enforced invariants only — this section states no promise the code above does 
   never trusted as-is. `bee.mjs feedback rank`/`collect` only ever consume `mergeDigests`'s output,
   never a foreign digest file directly.
 - **Bee-repo-only (D3).** `skills/bee-evolving/SKILL.md` step 0 is a hard guard
-  (`test -f skills/bee-hive/templates/lib/feedback.mjs && test -f skills/bee-writing-skills/SKILL.md`)
+  (`test -f packages/bee/lib/feedback.mjs && test -f skills/bee-writing-skills/SKILL.md`)
   that refuses to proceed anywhere the bee-repo-only files are absent; pressure-tested RED-first
   under the full Iron Law (decision `ff26725d`) — see
   `docs/history/evolving-loop/reports/evolving-10-pressure.md`.
@@ -208,9 +208,9 @@ Enforced invariants only — this section states no promise the code above does 
   (Gate A) and an explicit human approval of the complete diff before any push (Gate B); push is a
   named manual step, never automatic. Both gates are pressure-tested RED-first (same report).
 
-## Hook contracts (`hooks/`)
+## Hook contracts (`packages/bee/hooks/`)
 
-`hooks/hooks.json` (Claude Code plugin hook config) wires:
+`packages/bee/hooks/hooks.json` (Claude Code plugin hook config) wires:
 
 | Script | Event / matcher | Behavior |
 |---|---|---|
@@ -229,7 +229,7 @@ Common prologue for every hook: read stdin fully (may be empty), `findRepoRoot(c
 node onboard_bee.mjs --repo-root <path> [--apply] [--json] [--repo-hooks] [--claude-md]
 ```
 
-1. Verify Node ≥18. 2. Compute plan: AGENTS.md BEE block (insert or update between `<!-- BEE:START -->` / `<!-- BEE:END -->`, content from `../templates/AGENTS.block.md` — do NOT touch anything outside markers); create `.bee/` runtime files if missing (never overwrite existing state/decisions/cells); copy `templates/*.mjs` + `templates/lib/*` → `.bee/bin/`; create `docs/history/learnings/critical-patterns.md` stub if missing. 3. Without `--apply` → report `{status: 'up_to_date'|'changes_needed', plan:[...]}`. With `--apply` → apply + write `.bee/onboarding.json` with managed versions. `--repo-hooks` additionally merges hook entries into `<repo>/.claude/settings.json` (backup first). `--claude-md` writes/extends `CLAUDE.md` with a bare `@AGENTS.md` import (harness pattern: auto-loads the BEE block on Claude Code when plugin hooks are unavailable); never duplicates the import, never rewrites existing user content.
+1. Verify Node ≥18. 2. Compute plan: AGENTS.md BEE block (insert or update between `<!-- BEE:START -->` / `<!-- BEE:END -->`, content from `packages/bee/AGENTS.block.md` — do NOT touch anything outside markers); create `.bee/` runtime files if missing (never overwrite existing state/decisions/cells); copy `packages/bee/*.mjs` + `packages/bee/lib/*` → `.bee/bin/`; create `docs/history/learnings/critical-patterns.md` stub if missing. 3. Without `--apply` → report `{status: 'up_to_date'|'changes_needed', plan:[...]}`. With `--apply` → apply + write `.bee/onboarding.json` with managed versions. `--repo-hooks` additionally merges hook entries into `<repo>/.claude/settings.json` (backup first). `--claude-md` writes/extends `CLAUDE.md` with a bare `@AGENTS.md` import (harness pattern: auto-loads the BEE block on Claude Code when plugin hooks are unavailable); never duplicates the import, never rewrites existing user content.
 
 `BEE_VERSION = '0.1.0'` exported from `lib/state.mjs`; onboarding compares for drift.
 

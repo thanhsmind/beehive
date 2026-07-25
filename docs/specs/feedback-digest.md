@@ -59,11 +59,11 @@ and not a reason to invent structure that was never there.
 | E4 | [docs/knowledge/areas/feedback-digest/data-model.md](../knowledge/areas/feedback-digest/data-model.md) | a record whose text names an internal function, file, or configuration key is not a problem |
 | E5 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | a source repository that has never closed a feature has no digest |
 | E6 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | two generations from unchanged records differ only in the recorded generation moment |
-| P1 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | collector, boundary, merge, and ranking — `skills/bee-hive/templates/lib/feedback.mjs` |
-| P2 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | command surface — `skills/bee-hive/templates/bee.mjs` (`feedback` group) |
+| P1 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | collector, boundary, merge, and ranking — `packages/bee/lib/feedback.mjs` |
+| P2 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | command surface — `packages/bee/bee.mjs` (`feedback` group) |
 | P3 | [docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md](../knowledge/areas/feedback-digest/ranking-and-self-improvement.md) | the self-improvement process — `skills/bee-evolving/SKILL.md` |
 | P4 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | source-repository list — `.bee/config.json` → `dogfood_repos` |
 | P5 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | credential / instruction patterns and the neutralizer |
 | P6 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | close-time refresh — `skills/bee-compounding/SKILL.md` step 8 |
 | P7 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | written artifact — `.bee/feedback-digest.json` |
-| P8 | [docs/knowledge/areas/feedback-digest/data-model.md](../knowledge/areas/feedback-digest/data-model.md) | tests — `skills/bee-hive/templates/tests/test_lib.mjs` |
+| P8 | [docs/knowledge/areas/feedback-digest/data-model.md](../knowledge/areas/feedback-digest/data-model.md) | tests — `packages/bee/tests/test_lib.mjs` |

@@ -408,7 +408,7 @@ node .bee/bin/bee.mjs cells claim --id anything --worker w1
 
 Everything is Node 18+ ESM, **zero npm dependencies**, atomic writes, Windows-safe paths. Helpers exit non-zero with a one-line `{error}` JSON on `--json`; hooks never break a session (fail-open, crash-logged to `.bee/logs/hooks.jsonl`).
 
-### Vendored CLI — `<repo>/.bee/bin/bee.mjs` (source: `skills/bee-hive/templates/`)
+### Vendored CLI — `<repo>/.bee/bin/bee.mjs` (source: `packages/bee/`)
 
 Copied into every onboarded repo, so enforcement works even for agents that ignore instructions. `bee.mjs <group> <verb>` is the sole shipped CLI, covering all 9 command groups:
 
@@ -428,7 +428,7 @@ Without `--apply` it only reports the plan. With `--apply` it installs/refreshes
 
 Every `--apply` now updates helpers and skills together: by default it syncs the bee skill set into the host repo's own managed roots (`<repo>/.claude/skills/bee-*` for Claude Code, `<repo>/.agents/skills/bee-*` for Codex) from this repo's `skills/` tree in the same run, so helpers and installed skills can no longer drift apart. These trees are committed to the host repo, never gitignored. `--global-skills` additionally syncs the legacy global `~/.claude/skills/bee-*` root; without the flag the global root is never read, written, or deleted. Downgrades are refused by default — if the source tree is older than the repo's vendored helpers or a target's installed skills, apply refuses with zero mutations (`blocked_downgrade`); an unidentifiable source refuses too (`blocked_no_source`), and only `blocked_downgrade` is escapable, via `--force-downgrade`, and only when every version resolves numeric.
 
-### Hooks — `hooks/` (both runtimes; the plugin route loads them automatically)
+### Hooks — `packages/bee/hooks/` (both runtimes; the plugin route loads them automatically)
 
 Self-arming (silent unless the repo has `.bee/onboarding.json`); per-repo kill switch in `.bee/config.json → hooks.<name>`.
 
@@ -441,7 +441,7 @@ Self-arming (silent unless the repo has `.bee/onboarding.json`); per-repo kill s
 | `bee-chain-nudge.mjs` | subagent stop | nudges the orchestrator to collect worker status / synthesize reviews |
 | `bee-session-close.mjs` | session stop | warns about claimed-uncapped cells, missing HANDOFF, or unlogged decisions |
 
-The six core hooks are tabled above; `bee-model-guard.mjs`, `bee-tools-logger.mjs` and `bee-codex-subagent-audit.mjs` complete the 9-script set. Both runtimes are wired from the same shared catalog — `.codex/hooks.json` (8 lifecycle events) for Codex, `hooks/claude-hooks.json` (7) for Claude Code. Whether an installed Codex CLI actually executes its hooks is unverified, so the *helpers* remain the enforcement floor regardless of hook state, and the AGENTS.md block covers bootstrap either way. Parity matrix: [docs/06-runtime-integration.md](docs/06-runtime-integration.md).
+The six core hooks are tabled above; `bee-model-guard.mjs`, `bee-tools-logger.mjs` and `bee-codex-subagent-audit.mjs` complete the 9-script set. Both runtimes are wired from the same shared catalog — `.codex/hooks.json` (8 lifecycle events) for Codex, `packages/bee/hooks/claude-hooks.json` (7) for Claude Code. Whether an installed Codex CLI actually executes its hooks is unverified, so the *helpers* remain the enforcement floor regardless of hook state, and the AGENTS.md block covers bootstrap either way. Parity matrix: [docs/06-runtime-integration.md](docs/06-runtime-integration.md).
 
 ### Runtime files — `<repo>/.bee/`
 
