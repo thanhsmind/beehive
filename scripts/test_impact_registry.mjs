@@ -21,6 +21,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..");
 const REGISTRY_SCRIPT = path.join(__dirname, "impact_registry.mjs");
 const REGISTRY_JSON = path.join(__dirname, "impact-registry.json");
+const RUN_VERIFY_PATH = path.join(__dirname, "run_verify.mjs");
 
 const { buildRegistry, serializeRegistry, queryRegistry } = await import(
   pathToFileURL(REGISTRY_SCRIPT).href
@@ -95,18 +96,33 @@ await check("a spawned/worker-run bee.mjs inherits its own static import closure
 });
 
 // ── every suite maps to at least itself, DIRECTLY ──────────────────────────
+// Iterates run_verify.mjs's own SUITES discovery rather than hardcoding one
+// suite's filename — a hardcoded name goes stale the moment a suite is
+// renamed/folded/pruned (as test_run_verify_only.mjs was, folded into
+// test_run_verify_impacted.mjs), silently testing nothing once the file is
+// gone instead of catching drift in the property itself.
 await check("every discovered suite's own entry file maps to (at least) itself, and directly so", async () => {
   const registry = await buildRegistry();
-  const entry = registry.files["scripts/test_run_verify_only.mjs"];
-  assert.ok(entry, "expected scripts/test_run_verify_only.mjs to be a known registry entry");
-  assert.ok(
-    entry.all.includes("scripts/test_run_verify_only.mjs"),
-    "a suite's own file must always be in its own impacted set ('all')",
-  );
-  assert.ok(
-    entry.direct.includes("scripts/test_run_verify_only.mjs"),
-    "a suite's own path is direct too (must-have) — must also be in its own 'direct' set",
-  );
+  const { SUITES } = await import(pathToFileURL(RUN_VERIFY_PATH).href);
+  assert.ok(SUITES.length > 0, "expected run_verify.mjs to discover at least one suite");
+  for (const suiteEntry of SUITES) {
+    const suitePath = suiteEntry[0];
+    // Mirrors impact_registry.mjs's own (unexported) suiteLabel(): registry
+    // 'all'/'direct' lists are keyed by suite LABEL, which is the entry-file
+    // path plus any extra argv (e.g. EXTRA_SUITES entries like
+    // ["scripts/release_manifest.mjs", "--selftest"]), not the bare path.
+    const label = [suiteEntry[0], ...suiteEntry.slice(1)].join(" ");
+    const entry = registry.files[suitePath];
+    assert.ok(entry, `expected ${suitePath} to be a known registry entry`);
+    assert.ok(
+      entry.all.includes(label),
+      `a suite's own file must always be in its own impacted set ('all'): ${label}`,
+    );
+    assert.ok(
+      entry.direct.includes(label),
+      `a suite's own path is direct too (must-have) — must also be in its own 'direct' set: ${label}`,
+    );
+  }
 });
 
 // ── edge DEPTH: direct vs transitive (impacted-level1 D1) ──────────────────

@@ -20,7 +20,6 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -44,9 +43,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -55,11 +53,9 @@
     },
     ".bee/bin/hooks/adapter.mjs": {
       "direct": [
-        "scripts/test_resolveroots_p40.mjs",
         "scripts/test_worktree_grant_resolve.mjs"
       ],
       "all": [
-        "scripts/test_resolveroots_p40.mjs",
         "scripts/test_worktree_grant_resolve.mjs"
       ]
     },
@@ -97,9 +93,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -129,9 +124,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -163,9 +157,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -201,11 +194,9 @@
         "scripts/test_config_validate.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
         "scripts/test_reservation_race.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_grant_resolve.mjs",
@@ -238,9 +229,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -270,9 +260,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -307,11 +296,9 @@
         "scripts/test_config_validate.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
         "scripts/test_reservation_race.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_grant_resolve.mjs",
@@ -345,9 +332,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -377,9 +363,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -409,9 +394,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -454,11 +438,9 @@
         "scripts/test_conformance.mjs",
         "scripts/test_ledger_parity.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
         "scripts/test_reservation_race.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_state_write_concurrency.mjs",
         "scripts/test_store_lock.mjs",
         "scripts/test_worktree_cli.mjs",
@@ -493,9 +475,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -522,9 +503,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -554,9 +534,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -586,9 +565,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -616,9 +594,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -660,9 +637,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -697,11 +673,9 @@
         "scripts/test_config_validate.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
         "scripts/test_reservation_race.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_grant_resolve.mjs",
@@ -742,11 +716,9 @@
         "scripts/test_config_validate.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
         "scripts/test_reservation_race.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_store_lock.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
@@ -780,9 +752,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -812,9 +783,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -851,11 +821,9 @@
         "scripts/test_config_validate.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
         "scripts/test_reservation_race.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_grant_resolve.mjs",
@@ -888,9 +856,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -921,9 +888,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -953,9 +919,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -985,9 +950,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -1017,9 +981,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -1033,8 +996,6 @@
         "hooks/test_model_guard.mjs",
         "scripts/test_config_samples_safe.mjs",
         "scripts/test_config_validate.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
-        "scripts/test_resolveroots_p40.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_grant_resolve.mjs"
       ],
@@ -1061,10 +1022,8 @@
         "scripts/test_config_validate.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_grant_resolve.mjs",
@@ -1095,9 +1054,8 @@
         "scripts/test_compact_verbs.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_holds.mjs",
@@ -1132,10 +1090,8 @@
         "scripts/test_config_validate.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_grant_resolve.mjs",
@@ -1168,10 +1124,8 @@
         "scripts/test_config_validate.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_grant_resolve.mjs",
@@ -1209,10 +1163,8 @@
         "scripts/test_config_validate.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_grant_resolve.mjs",
@@ -1226,7 +1178,6 @@
       "direct": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_store.mjs"
       ],
@@ -1253,10 +1204,8 @@
         "scripts/test_config_validate.mjs",
         "scripts/test_conformance.mjs",
         "scripts/test_native_probe.mjs",
-        "scripts/test_nested_clone_isolation.mjs",
         "scripts/test_okf_pins.mjs",
-        "scripts/test_resolveroots_p40.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
+        "scripts/test_run_verify_impacted.mjs",
         "scripts/test_worktree_cli.mjs",
         "scripts/test_worktree_companion.mjs",
         "scripts/test_worktree_grant_resolve.mjs",
@@ -1398,10 +1347,10 @@
     },
     "scripts/canary_codex.mjs": {
       "direct": [
-        "scripts/test_run_verify_skip_marker.mjs"
+        "scripts/test_run_verify_impacted.mjs"
       ],
       "all": [
-        "scripts/test_run_verify_skip_marker.mjs"
+        "scripts/test_run_verify_impacted.mjs"
       ]
     },
     "scripts/census_stale_spawn_syntax.mjs": {
@@ -1427,8 +1376,6 @@
       "all": [
         "scripts/test_impact_registry.mjs",
         "scripts/test_run_verify_impacted.mjs",
-        "scripts/test_run_verify_only.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
         "scripts/test_verify_manifest.mjs",
         "scripts/test_verify_timeout.mjs"
       ]
@@ -1666,17 +1613,14 @@
     },
     "scripts/run_verify.mjs": {
       "direct": [
+        "scripts/test_impact_registry.mjs",
         "scripts/test_run_verify_impacted.mjs",
-        "scripts/test_run_verify_only.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
         "scripts/test_verify_manifest.mjs",
         "scripts/test_verify_timeout.mjs"
       ],
       "all": [
         "scripts/test_impact_registry.mjs",
         "scripts/test_run_verify_impacted.mjs",
-        "scripts/test_run_verify_only.mjs",
-        "scripts/test_run_verify_skip_marker.mjs",
         "scripts/test_verify_manifest.mjs",
         "scripts/test_verify_timeout.mjs"
       ]
@@ -1865,14 +1809,6 @@
         "scripts/test_native_probe.mjs"
       ]
     },
-    "scripts/test_nested_clone_isolation.mjs": {
-      "direct": [
-        "scripts/test_nested_clone_isolation.mjs"
-      ],
-      "all": [
-        "scripts/test_nested_clone_isolation.mjs"
-      ]
-    },
     "scripts/test_okf_pins.mjs": {
       "direct": [
         "scripts/test_okf_pins.mjs"
@@ -1913,36 +1849,12 @@
         "scripts/test_reservation_race.mjs"
       ]
     },
-    "scripts/test_resolveroots_p40.mjs": {
-      "direct": [
-        "scripts/test_resolveroots_p40.mjs"
-      ],
-      "all": [
-        "scripts/test_resolveroots_p40.mjs"
-      ]
-    },
     "scripts/test_run_verify_impacted.mjs": {
       "direct": [
         "scripts/test_run_verify_impacted.mjs"
       ],
       "all": [
         "scripts/test_run_verify_impacted.mjs"
-      ]
-    },
-    "scripts/test_run_verify_only.mjs": {
-      "direct": [
-        "scripts/test_run_verify_only.mjs"
-      ],
-      "all": [
-        "scripts/test_run_verify_only.mjs"
-      ]
-    },
-    "scripts/test_run_verify_skip_marker.mjs": {
-      "direct": [
-        "scripts/test_run_verify_skip_marker.mjs"
-      ],
-      "all": [
-        "scripts/test_run_verify_skip_marker.mjs"
       ]
     },
     "scripts/test_skill_pointers.mjs": {
