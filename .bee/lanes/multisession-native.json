@@ -9,24 +9,25 @@
     "execution": true,
     "review": false
   },
-  "summary": "slice 2 shipped: workflow records are the state unit; state.json/lanes are projections; workers derived; gates plan-rev-scoped; per-workflow locks end cross-feature contention",
-  "next_action": "slice 3 (sharded leases + handoff mailboxes, PBI p-e20d82c9) next",
+  "summary": "slice 3 shipped: sharded fenced leases, intent/lease split, cross-worktree advisory policy, per-workflow handoff mailboxes, reservations.json retired to projection",
+  "next_action": "slice 4 (workspace isolation by default, PBI p-ed2de0d0) next",
   "created_at": "2026-07-24T14:19:58.834Z",
   "advisor_ref": {
-    "consulted_at": "2026-07-24T23:01:55.818Z",
+    "consulted_at": "2026-07-25T02:01:05.804Z",
     "feature": "multisession-native",
-    "newest_decision_id": "526f586e-d3ef-4775-9d32-870002879355",
+    "newest_decision_id": "da55bda4-e1b4-47d6-add9-6b221b911eca",
     "plan_sha256": "6e078fa7cae305c60cc431b5eed884aeefff42719d74698c2ad532ebb627aedb",
-    "advisor": "claude/fable ceiling (bee-review dispatch, slice 2)",
-    "digest_head": "# Advisor consult — slice 2 execution (workflow-first state)\n\nAdvisor: claude/fable (ceiling), read-only, 2026-07-25. VERDICT: proceed-with-conditions.\n\nBinding conditions:\n- C1 (msn-7, biggest risk): idempotent seed — a non-idle legacy state.json is materialized into a workflow record BEFORE any rebuild treats state.json as derived; projection readers fall back to legacy state.json when zero workflow records exist. Land in msn-6 or pre-7, never slice 5.\n- C2 (msn-9): projected gate boolean = pl"
+    "advisor": "claude/fable ceiling (bee-review dispatch, slice 3)",
+    "digest_head": "# Advisor consult — slice 3 execution (sharded leases + handoff mailboxes)\n\nAdvisor: claude/fable (ceiling), read-only, 2026-07-25. VERDICT: proceed-with-conditions.\n\nBinding conditions:\n- A (msn-11): .bee/runtime/leases placement is a NOTE only — no cross-workspace lease read against worktree-local stores before the slice-4 controlRoot re-root (cross-worktree visibility rides worktree-holds' mainRoot ledger, worktree-holds.mjs:28-32).\n- B (msn-16, biggest risk): preserve the atomic `findForeign"
   },
   "last_scribing_run": {
     "feature": "multisession-native",
     "date": "2026-07-25",
-    "at": "2026-07-25T01:56:19.662Z",
+    "at": "2026-07-25T04:54:23.864Z",
     "areas_synced": [
-      "workflow-state"
+      "workflow-state",
+      "worktree-parallelism"
     ],
-    "next_action": "close slice 2"
+    "next_action": "close slice 3"
   }
 }

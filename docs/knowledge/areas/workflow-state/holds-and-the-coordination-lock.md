@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: Workflow State — cross-session file holds and the coordination lock behind every shared write
-description: "The write-time refusal that names the live session holding a path and when its hold expires, the bounded-wait lock every shared coordination store's read-modify-write body runs inside — including exactly when a stale holder may be taken over and when it may not — the fail-open contention telemetry every lock acquire now records, surfaced as a bounded summary in bee status, and the per-workflow lock order that keeps two features' state mutations from ever contending on one lock."
+description: "The write-time refusal that names the live session holding a path and when its hold expires, the bounded-wait lock every shared coordination store's read-modify-write body runs inside — including exactly when a stale holder may be taken over and when it may not — the fail-open contention telemetry every lock acquire now records, surfaced as a bounded summary in bee status, the per-workflow lock order that keeps two features' state mutations from ever contending on one lock, and the sharded per-resource lease store that now backs every reservation instead of one shared file."
 timestamp: 2026-07-25
 bee:
   id: workflow-state-holds-and-the-coordination-lock
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["multi-session-hardening D2 with Δ1/Δ3 amendments (the coordination lock: verbs wait bounded, checkpoints try once)", "fresh-session-handoff D3 (a write into another live session's held path is refused at write time)", hardening-1-7-10 (liveness-probed stale takeover with a one-hour pid-reuse ceiling; no timer heartbeat by design), "multisession-native (stage 0-1: lock-acquire outcomes recorded as fail-open contention telemetry; bee status surfaces a bounded contention summary from that telemetry)", "multisession-native D1 (state mutation locks its own feature's workflow:<id>, never a blanket state lock; advisor condition C4 — the sessions lock and a workflow lock are never held together)"]
-  sources: ["fresh-session-handoff cells fsh-7/fsh-8 (phase-independent deny + fail-closed corrupt-store branch; validation-s3, 2026-07-13)", "multi-session-hardening cells msh-1..7 (coordination lock primitive and forked-racer suites, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B14", "docs/specs/workflow-state.md#B21", "docs/specs/workflow-state.md#R37", "docs/specs/workflow-state.md#R52", "docs/specs/workflow-state.md#P15", "multisession-native cell multisession-native-3 (contention telemetry in lock.mjs; trace .bee/cells/multisession-native-3.json, commit 2d66ccc, 2026-07-24)", "multisession-native cell multisession-native-4 (bee status contention summary; trace .bee/cells/multisession-native-4.json, commit 1865cae, 2026-07-24)", "multisession-native cell multisession-native-10 (per-workflow withMutationLock replacing the blanket state lock; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice2.md condition C4)"]
+  decisions: ["multi-session-hardening D2 with Δ1/Δ3 amendments (the coordination lock: verbs wait bounded, checkpoints try once)", "fresh-session-handoff D3 (a write into another live session's held path is refused at write time)", hardening-1-7-10 (liveness-probed stale takeover with a one-hour pid-reuse ceiling; no timer heartbeat by design), "multisession-native (stage 0-1: lock-acquire outcomes recorded as fail-open contention telemetry; bee status surfaces a bounded contention summary from that telemetry)", "multisession-native D1 (state mutation locks its own feature's workflow:<id>, never a blanket state lock; advisor condition C4 — the sessions lock and a workflow lock are never held together)", "multisession-native D4 (slice 3, issue #56: reservations become sharded per-resource lease records; a declared intent scope is advisory, never a hard block; fencing on leases; .bee/reservations.json retired to a rebuildable projection — docs/history/multisession-native/CONTEXT.md)", "multisession-native advisor-digest-slice3 conditions A/B/C/D/E (docs/history/multisession-native/reports/advisor-digest-slice3.md — leases root stays worktree-local until slice 4's controlRoot re-root; the cross-worktree mirror-write reserve seam preserved byte-for-byte; the reservations projection must never let a lazy rebuild green-light a colliding feature start; intra-swarm/cross-session conflicts stay hard leases, only planning-declared broad/glob paths become advisory intents; lease renewal rides the existing heartbeat try-once posture)"]
+  sources: ["fresh-session-handoff cells fsh-7/fsh-8 (phase-independent deny + fail-closed corrupt-store branch; validation-s3, 2026-07-13)", "multi-session-hardening cells msh-1..7 (coordination lock primitive and forked-racer suites, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B14", "docs/specs/workflow-state.md#B21", "docs/specs/workflow-state.md#R37", "docs/specs/workflow-state.md#R52", "docs/specs/workflow-state.md#P15", "multisession-native cell multisession-native-3 (contention telemetry in lock.mjs; trace .bee/cells/multisession-native-3.json, commit 2d66ccc, 2026-07-24)", "multisession-native cell multisession-native-4 (bee status contention summary; trace .bee/cells/multisession-native-4.json, commit 1865cae, 2026-07-24)", "multisession-native cell multisession-native-10 (per-workflow withMutationLock replacing the blanket state lock; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice2.md condition C4)", "multisession-native cell multisession-native-11 (sharded lease-store.mjs; trace .bee/cells/multisession-native-11.json, commit ad19826, 2026-07-25)", "multisession-native cell multisession-native-13 (intent vs write lease split; trace .bee/cells/multisession-native-13.json, commit debe0d9, 2026-07-25)", "multisession-native cell multisession-native-16 (reservations.mjs shim over lease-store; .bee/reservations.json retired to a projection; trace .bee/cells/multisession-native-16.json, commit 81a936c, 2026-07-25)"]
   authoritative_for: "workflow-state: cross-session file holds and the shared-store coordination lock"
 ---
 
@@ -134,6 +134,109 @@ same instant; a missing or corrupt workflow record still refuses loudly
 (typed `WORKFLOW_MISSING`/`WORKFLOW_CORRUPT`) rather than silently falling
 back to an unlocked write.
 
+**Reservations live as sharded per-resource lease records, not one shared
+file (multisession-native D4, slice 3).** Trigger: any reservation acquire,
+release, renew, or sweep — a swarming worker's path reservation, a
+cross-session file hold. What happens: each lease lives at its own path —
+`.bee/runtime/leases/cells/<cell-id>.json` or
+`.bee/runtime/leases/paths/<path-hash>.json` — carrying `{resource, mode,
+kind, workflow_id, session_id, workspace_id, epoch, acquired_at,
+expires_at}`, so two unrelated resources never contend on a shared file at
+all (the same "sharded beats whole-file" shift `workflow-records-and-
+projections.md`'s own per-workflow lock already made for state mutation).
+Acquiring one or more leases in a single call canonicalizes every request
+first, then sorts them by the sha256 hash of their resource key *before* any
+file is created — so two callers requesting the same resources in opposite
+order still attempt creation in the identical global order, the standard
+fixed-order deadlock-avoidance discipline applied to O_EXCL creates instead
+of mutex acquisition. Each lease is O_EXCL-created; on the first collision,
+every lease already created by that same call is rolled back (deleted)
+before the typed `LEASE_HELD` refusal is thrown, naming the conflicting
+holder — a partial acquire is never left standing. Release/renew/sweep are
+per-record: no store-wide lock exists for this store at all; a renew takes
+only a per-resource `lease:<hash>` lock, so renewing one lease never
+contends with acquiring, renewing, or releasing a different one. TTL
+semantics match the pre-existing store exactly: a non-positive TTL stores
+`expires_at: null` and is never swept; every expiry decision reads the raw
+`expires_at`, never a cached staleness verdict.
+
+**A lease's stored epoch can fence a stale renew or release (multisession-
+native D4/D9 invariant 10).** Trigger: `renewLease`/`releaseLease` called
+with an optional `presentedEpoch`. What happens: `epoch` is stored verbatim
+on every acquire — this store never compares it against a prior value at
+acquire time, and a genuine takeover is release-then-acquire with the new
+caller deciding the bumped value, never a forced-takeover primitive here.
+Given a `presentedEpoch` behind the resource's currently stored `epoch`, a
+renew or release refuses typed `LEASE_FENCE_STALE` and leaves the record on
+disk untouched — a takeover already moved ownership forward. Omitted (every
+production caller today — this store has no production wiring yet), both
+verbs stay byte-unchanged from before fencing existed; full mandatory
+presentation arrives with workspace identity in a later slice. See
+`claims-and-ownership.md` for the equivalent `fence_epoch` token on claims
+themselves (`CLAIM_FENCE_STALE`) — a deliberately distinct name and a
+deliberately separate mechanism, never shared code, per each store's own
+structural-isolation rule.
+
+**A reservation's declared kind decides whether a same-workspace conflict is
+a hard block or an advisory (multisession-native D4, slice 3, advisor
+condition D).** Trigger: a swarming-phase write, or `reservations reserve`
+itself, whose path overlaps another agent's already-declared reservation in
+the SAME workspace. What happens: every reservation record now carries a
+`kind` of `'intent'` or `'lease'`, defaulting to `'lease'` when the caller
+omits it — every reservation before this cell stays semantically a lease,
+byte-unchanged in behavior. `'lease'` marks an exact path a writer is
+actually about to touch (hard, exactly as before this cell); `'intent'`
+marks a planning-declared broad or glob scope (advisory: a warning plus a
+scheduling input, never a hard block through either chokepoint it can reach —
+the write guard or `reserve()`'s own pre-check). Both chokepoints classify a
+conflict through the SAME shared predicate, `isHardConflict(reservation,
+targetPath)`: true (hard) unless the conflicting reservation's kind is
+`'intent'` AND its declared path only broadly covers the target rather than
+matching it exactly. `reserve()`'s own conflict pre-check was fixed onto this
+same predicate in the same cell — a pre-existing intent record would
+otherwise have silently hard-refused a fellow worker's later exact `reserve()`
+call through a different chokepoint than the write guard, caught by a
+red-first regression test. Cross-session file holds (B14) and wave-planning's
+`pathsOverlap` containment semantics (`schedule.mjs`/`state.mjs`/`cells.mjs`)
+are completely untouched by this split — it applies only to the intra-swarm
+agent-reservation conflict, never to a cross-session hold or to what counts
+as "overlap" for dispatch scheduling. What each actor observes: an agent
+whose declared exact-path lease collides with another agent's still gets the
+same hard `reservation conflict` refusal as before; an agent whose write only
+falls inside another agent's broadly-declared intent gets an allow plus a
+non-blocking warning naming the declaring agent, its cell, and the declared
+scope.
+
+**`.bee/reservations.json` is now a rebuildable projection of the lease
+store, never a second source of truth (multisession-native D4, slice 3,
+msn-16, advisor condition C).** Trigger: `reserve`/`release`/`sweepExpired`/
+`renewHoldsBySession`/`listReservations`/`findConflicts`/
+`findSessionConflicts`, or any projection rebuild. What happens: every one of
+those verbs now runs entirely on top of the sharded lease-store files instead
+of one whole-file JSON store guarded by a single store-wide `'reservations'`
+lock — two callers reserving different resources no longer contend on one
+lock at all. `.bee/reservations.json` itself becomes a rebuildable
+projection (`rebuildReservationsProjection`, registered in
+`state-projection.mjs`'s `rebuildAllProjections` alongside the state/lane/
+handoff projections) — never written synchronously on the reserve/release/
+renew/sweep hot path. `state.mjs`'s own `listActiveReservationsForStart`
+(the `start-feature` precondition that must never green-light a colliding
+start) now reads through the live `listReservations()` shim instead of the
+legacy file directly, so it always sees `reserve()`'s true current state
+rather than a possibly-stale projection (closing the advisor's condition C
+concern about a lazily-rebuilt projection). One seam is deliberately left
+byte-for-byte untouched (advisor condition B, the biggest risk in this cell):
+`bee.mjs`'s atomic cross-worktree seam — `findForeignHolds` + the reservation
+write + the mirrored `insertHold` into the cross-worktree ledger — still runs
+as ONE section under `withHoldsLock`, exactly as before the shim; a new
+CLI-level regression test proves both the mirror write and the foreign-hold
+deny still fire correctly through the shimmed store. See
+`worktree-parallelism/cross-worktree-holds.md` for that ledger. What each
+actor observes: reservation behavior is unchanged at every call site; the
+legacy file, when read, always reflects the lease store's true current state
+after the next projection rebuild, never a hand-maintained duplicate that can
+drift from it.
+
 ## Business Rules
 
 - R37 — A shared coordination store's read-modify-write body always serializes
@@ -162,6 +265,33 @@ back to an unlocked write.
   operation (fixed lock order, no AB-BA), so two different features' state
   mutations never contend on a shared lock (multisession-native D1, advisor
   condition C4).
+- R68 — Every reservation lives at its own per-resource file under
+  `.bee/runtime/leases/{cells,paths}/`; acquiring a batch canonicalizes and
+  hash-sorts every request before any file is created (deadlock-free
+  regardless of caller order), and the first collision rolls back every
+  lease already created by that same call before refusing typed
+  `LEASE_HELD` — a partial acquire is never left standing (multisession-native
+  D4, msn-11).
+- R69 — `renewLease`/`releaseLease` accept an optional `presentedEpoch` and
+  refuse typed `LEASE_FENCE_STALE`, record untouched, when it is behind the
+  resource's currently stored `epoch`; omitted, both stay byte-unchanged from
+  before fencing existed (multisession-native D4/D9 invariant 10, msn-12).
+- R70 — A reservation's `kind` (`'intent'`|`'lease'`, default `'lease'`)
+  decides whether a same-workspace conflict hard-blocks: an exact-path or
+  default-kind conflict still denies exactly as before; a broadly-scoped
+  `'intent'` downgrades to an allow plus a non-blocking warning, at both the
+  write-guard chokepoint and `reserve()`'s own pre-check, via the same shared
+  `isHardConflict` predicate. Cross-session holds and wave-scheduling's
+  `pathsOverlap` containment are untouched (multisession-native D4, msn-13,
+  advisor condition D).
+- R71 — `.bee/reservations.json` is a rebuildable projection of the sharded
+  lease store, never written synchronously on the reserve/release/renew/sweep
+  hot path; `start-feature`'s own reservation precondition reads the live
+  shim, never the possibly-stale file, so it can never green-light a
+  colliding start. The cross-worktree mirror-write reserve seam
+  (`findForeignHolds` + reservation write + `insertHold`, one atomic section
+  under `withHoldsLock`) stays byte-for-byte unchanged through the shim
+  (multisession-native D4, msn-16, advisor condition B/C).
 
 ## Edge Cases Settled
 
@@ -170,6 +300,12 @@ back to an unlocked write.
   not an empty object and not an error (multisession-native).
 - A malformed or partially written line inside the tail window is skipped,
   never treated as a parse failure that aborts the read (multisession-native).
+- A lease request presenting no `presentedEpoch` (every production caller
+  today) behaves byte-identically to before fencing existed on this store —
+  the fencing check never runs (multisession-native D4/D9, msn-12).
+- Releasing an absent lease is `{ ok: true, released: false }`, never an
+  error, whether or not a `presentedEpoch` was given — there is nothing on
+  disk left to fence against (multisession-native, msn-12).
 
 ## Pointers (implementation)
 
@@ -201,3 +337,38 @@ back to an unlocked write.
   cross-workflow `LOCK_BUSY` and decoupling from the `sessions` lock. Trace
   `.bee/cells/multisession-native-10.json`, commit e7f365a. See
   `workflow-records-and-projections.md` Pointers for the full write path.
+- Sharded lease store: `acquireLeases`/`releaseLease`/`renewLease`/
+  `renewLeasesBySession`/`sweepExpiredLeases`/`listLeases` in
+  `skills/bee-hive/templates/lib/lease-store.mjs` (imports only node
+  builtins, `fsutil.mjs`, and `lock.mjs` — proven never to import
+  `claims.mjs`/`state.mjs`/`reservations.mjs` by a static source-scan test,
+  mirroring `workflow-store.mjs`'s own C4 proof). 12 tests in
+  `test_lease_store.mjs` cover the round-trip, partial-acquire rollback (zero
+  residue), disjoint-resource non-contention, hash-sort determinism under
+  reversed request order, and TTL never-expires semantics. Evidence: trace
+  `.bee/cells/multisession-native-11.json`, commit ad19826.
+- Lease/claim fencing (msn-12): `LEASE_FENCE_STALE` in `lease-store.mjs`'s
+  `renewLease`/`releaseLease`. Red-first: new refusal tests captured failing
+  against pristine `lease-store.mjs`, then green after the implementation.
+  Evidence: trace `.bee/cells/multisession-native-12.json`, commit 8c002a1.
+- Intent vs write lease (msn-13): `RESERVATION_KINDS`, `isHardConflict` in
+  `skills/bee-hive/templates/lib/reservations.mjs`; classification wired into
+  `guards.mjs`'s `checkWrite` (swarming-phase branch) and `reserve()`'s own
+  conflict pre-check; `--kind` flag on `bee reservations reserve`; equivalent
+  `kind` field added to `lease-store.mjs` as forward groundwork. Red-first
+  regression test proved a pre-existing intent record could otherwise refuse
+  a fellow worker's exact `reserve()` call through the pre-check chokepoint.
+  Evidence: trace `.bee/cells/multisession-native-13.json`, commit debe0d9.
+- Reservations shim over the lease store (msn-16): `reserve`/`release`/
+  `sweepExpired`/`renewHoldsBySession`/`listReservations`/`findConflicts`/
+  `findSessionConflicts`/`leaseToReservation` in `reservations.mjs`;
+  `rebuildReservationsProjection` (wired into `state-projection.mjs`'s
+  `rebuildAllProjections`); `listActiveReservationsForStart` in `state.mjs`
+  reading through the live shim. A CLI-level regression test proves the
+  cross-worktree mirror write and the foreign-hold deny both still hold
+  through the shim (`bee.mjs`'s `withHoldsLock` seam at the
+  `findForeignHolds`/reserve/`insertHold` call site, untouched). Evidence:
+  trace `.bee/cells/multisession-native-16.json`, commit 81a936c; advisor
+  consult for this whole slice:
+  `docs/history/multisession-native/reports/advisor-digest-slice3.md`
+  (conditions A-G, verdict proceed-with-conditions).
