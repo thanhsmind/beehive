@@ -280,5 +280,23 @@ await check("CLI: --query --level 1 prints strictly fewer suites than the defaul
   );
 });
 
+// ── test-economy D6 dependency: level-1 is always a subset of transitive ──
+// run_verify.mjs's impacted cap (D6) falls back from a transitive selection
+// to `queryRegistry(registry, changedList, { level: 1 })` over the SAME
+// changed-file set. That fallback is only safe if level-1 never surfaces a
+// suite absent from the transitive result — pin the subset invariant across
+// a multi-file changed set (not just the single-hub-file case already
+// covered above) so a future registry change can't silently widen it.
+await check("test-economy D6: level-1 query over a multi-file changed set stays a subset of the transitive query for the same set", async () => {
+  const registry = await buildRegistry();
+  const changed = ["scripts/run_verify.mjs", ".bee/bin/lib/state.mjs"];
+  const full = queryRegistry(registry, changed);
+  const level1 = queryRegistry(registry, changed, { level: 1 });
+  assert.ok(level1.mappedSuites.length > 0, "fixture assumption: expected at least one direct suite for this changed set");
+  for (const s of level1.mappedSuites) {
+    assert.ok(full.mappedSuites.includes(s), `every level-1 suite must also appear in the transitive set: ${s}`);
+  }
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

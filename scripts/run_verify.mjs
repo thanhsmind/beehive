@@ -17,7 +17,7 @@
 // Each suite is spawned directly (no shell), stdout/stderr is buffered and
 // only printed when a suite fails, so a green run stays quiet.
 
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -27,6 +27,55 @@ import { buildRegistry, serializeRegistry, queryRegistry, normalizeQueryPath } f
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..");
 const IMPACT_REGISTRY_PATH = path.join(__dirname, "impact-registry.json");
+const BEE_CONFIG_PATH = path.join(REPO_ROOT, ".bee", "config.json");
+
+// test-economy D6: impacted-cap config reader. Key `verify_impacted_cap`
+// (float 0-1) in .bee/config.json — a missing file, a parse failure, or a
+// missing key all fail SAFE to the default 0.30 (measured against this
+// repo's own registry: state.mjs's transitive closure sits at 36/109 ≈ 33%,
+// just over this default, which is the whole point — see plan.md D6). A
+// configured value of 1 is the documented off-switch (a ratio is never > 1).
+const DEFAULT_IMPACTED_CAP = 0.3;
+
+function readImpactedCap() {
+  let raw;
+  try {
+    raw = fs.readFileSync(BEE_CONFIG_PATH, "utf8");
+  } catch {
+    return DEFAULT_IMPACTED_CAP;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return DEFAULT_IMPACTED_CAP;
+  }
+  const value = parsed?.verify_impacted_cap;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_IMPACTED_CAP;
+  }
+  return value;
+}
+
+// test-economy D6: best-effort CI nudge for the delegated transitive tail —
+// client-side only, never touches .github/workflows/*. Missing/erroring `gh`
+// fails open with a one-line note; it must never turn a green run red.
+function triggerCiDelegation() {
+  let result;
+  try {
+    result = spawnSync("gh", ["workflow", "run", "CI"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+  } catch (error) {
+    result = { error };
+  }
+  if (!result || result.error || result.status !== 0) {
+    console.log(
+      "IMPACTED: best-effort `gh workflow run CI` did not succeed (gh missing or errored) — CI still picks up the delegated tail on its own cadence",
+    );
+  }
+}
 
 // ─── suite discovery (cs-4, contention-split) ──────────────────────────────
 // This array used to be a manually maintained list: every feature adding a
@@ -1002,13 +1051,52 @@ async function runImpactedMode(explicitFiles, fromGit, level) {
     return;
   }
 
-  const activeSuites = filterSuitesByLabels(SUITES, new Set(mappedSuites));
+  // test-economy D6: the impacted cap governs ONLY a transitive run — a
+  // caller that already asked for `--level 1` gets today's behavior
+  // unchanged, no banner, no cut (must-have: "--level 1 => no banner, no
+  // cut"). When it does apply and the transitive selection's share of the
+  // full suite pool exceeds the configured cap, the selection narrows to the
+  // level-1 query over the SAME changed-file set — which, per
+  // impact_registry.mjs (a suite's own path is always direct for itself,
+  // :428), already keeps every self-selected suite (a changed test file
+  // maps directly to itself) and every suite that imports a changed file
+  // directly; only the pure-transitive tail is dropped.
+  let selectedSuites = mappedSuites;
+  let capInfo = null;
+  if (level !== 1) {
+    const cap = readImpactedCap();
+    const ratio = mappedSuites.length / SUITES.length;
+    if (cap < 1 && ratio > cap) {
+      const capped = queryRegistry(registry, changedList, { level: 1 });
+      selectedSuites = capped.mappedSuites;
+      capInfo = { total: mappedSuites.length, cap };
+    }
+  }
+
+  const activeSuites = filterSuitesByLabels(SUITES, new Set(selectedSuites));
   printImpactedUnmapped(unmapped);
+  if (capInfo) {
+    console.log(
+      `impacted ${capInfo.total}/${SUITES.length} exceeds cap (${capInfo.cap}) — transitive tail delegated to CI`,
+    );
+  }
+  // Banner reflects what's actually RUNNING: once capped, the selection IS a
+  // level-1 query result, so the per-suite banner says so too, even though
+  // the caller never passed --level 1 itself.
+  const bannerLevel = capInfo ? 1 : level;
 
   await runSelectedSuites(activeSuites, {
     concurrency: impactedConcurrency(),
-    beforeBanner: () => printImpactedBanner(activeSuites.length, changedList.length, level),
-    afterBanner: () => printImpactedBanner(activeSuites.length, changedList.length, level),
+    beforeBanner: () => printImpactedBanner(activeSuites.length, changedList.length, bannerLevel),
+    afterBanner: () => {
+      printImpactedBanner(activeSuites.length, changedList.length, bannerLevel);
+      // exit code is left to the shared execution tail's own anyFail
+      // computation over `activeSuites` — "exit = kết quả phần đã chạy"
+      // (D6): a red suite inside the capped selection stays red, never
+      // silently swallowed the way the unmapped/zero-impacted branch's
+      // unconditional exit-0 is.
+      if (capInfo) triggerCiDelegation();
+    },
   });
 }
 

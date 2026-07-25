@@ -205,11 +205,12 @@ function buildLevelFixture() {
   return { fixture, scriptsDir, runVerifyPath: path.join(scriptsDir, "run_verify.mjs") };
 }
 
-function runFixtureVerify(runVerifyPath, cwd, args) {
+function runFixtureVerify(runVerifyPath, cwd, args, envOverride = {}) {
   return spawnSync(process.execPath, [runVerifyPath, ...args], {
     cwd,
     encoding: "utf8",
     timeout: 30000,
+    env: { ...process.env, ...envOverride },
   });
 }
 
@@ -300,6 +301,182 @@ await check("--impacted-from-git counts a staged-but-uncommitted change in a fix
       `expected the staged-only change to be picked up as exactly 1 impacted file/suite:\n${r.stdout}`,
     );
     assert.match(r.stdout, /PASS\s+\d+ms\s+scripts\/test_fixture_suite\.mjs/, `expected the fixture suite's own PASS line:\n${r.stdout}`);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+// ── test-economy D6: impacted cap — transitive tail delegated to CI ───────
+// A disposable fixture repo (same live-copy idiom as buildLevelFixture
+// above): `lib.mjs` is reached TRANSITIVELY (via `mid.mjs`) by HUB_COUNT
+// suites (test_hub1..test_hubN) and DIRECTLY by exactly 1 suite
+// (test_direct1.mjs). Two more suites (test_narrow1/2.mjs) import
+// `narrow.mjs` DIRECTLY, so it maps to exactly those 2 suites regardless of
+// HUB_COUNT.
+//
+// The copied run_verify.mjs also carries its own hardcoded EXTRA_SUITES
+// entries (release_manifest.mjs, okf_migrate.mjs, etc.) unconditionally,
+// even though none of those files exist in this fixture — they inflate the
+// discovered SUITES total without ever being reachable from lib.mjs/
+// narrow.mjs (so they're never selected to actually run, just counted).
+// Rather than hardcode that incidental denominator, each test below
+// discovers the fixture's OWN total suite count dynamically (fixtureTotal)
+// and picks HUB_COUNT generously (20) so lib.mjs's ratio clears the 0.30
+// default cap with margin even if that unrelated extra-suite count grows.
+const HUB_COUNT = 20;
+
+function buildCapFixture({ failDirect = false } = {}) {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "impacted-cap-fixture-"));
+  const scriptsDir = path.join(fixture, "scripts");
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  fs.copyFileSync(RUN_VERIFY, path.join(scriptsDir, "run_verify.mjs"));
+  fs.copyFileSync(IMPACT_REGISTRY_SRC, path.join(scriptsDir, "impact_registry.mjs"));
+  fs.writeFileSync(path.join(scriptsDir, "lib.mjs"), "export const X = 1;\n");
+  fs.writeFileSync(path.join(scriptsDir, "mid.mjs"), "import \"./lib.mjs\";\nexport const Y = 1;\n");
+  fs.writeFileSync(path.join(scriptsDir, "narrow.mjs"), "export const Z = 1;\n");
+  for (let i = 1; i <= HUB_COUNT; i += 1) {
+    fs.writeFileSync(
+      path.join(scriptsDir, `test_hub${i}.mjs`),
+      "import \"./mid.mjs\";\nprocess.exit(0);\n",
+    );
+  }
+  fs.writeFileSync(
+    path.join(scriptsDir, "test_direct1.mjs"),
+    `import "./lib.mjs";\nprocess.exit(${failDirect ? 1 : 0});\n`,
+  );
+  fs.writeFileSync(path.join(scriptsDir, "test_narrow1.mjs"), "import \"./narrow.mjs\";\nprocess.exit(0);\n");
+  fs.writeFileSync(path.join(scriptsDir, "test_narrow2.mjs"), "import \"./narrow.mjs\";\nprocess.exit(0);\n");
+  return { fixture, scriptsDir, runVerifyPath: path.join(scriptsDir, "run_verify.mjs") };
+}
+
+function writeBeeConfig(fixture, config) {
+  const beeDir = path.join(fixture, ".bee");
+  fs.mkdirSync(beeDir, { recursive: true });
+  fs.writeFileSync(path.join(beeDir, "config.json"), JSON.stringify(config));
+}
+
+// The fixture's own copy of run_verify.mjs exports SUITES; import it (a
+// plain, side-effect-free ESM import — main() only runs when the file is
+// executed directly, per its own isMain guard) to read the real total this
+// fixture discovers, EXTRA_SUITES padding included.
+async function fixtureTotalSuites(runVerifyPath) {
+  const mod = await import(pathToFileURL(runVerifyPath).href);
+  return mod.SUITES.length;
+}
+
+await check("test-economy D6: below cap (narrow.mjs, 2 suites) runs the full transitive selection unchanged, no cap banner", () => {
+  const { fixture, runVerifyPath } = buildCapFixture();
+  try {
+    const r = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/narrow.mjs"]);
+    assert.equal(r.status, 0, `expected exit 0, got ${r.status}; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
+    assert.match(r.stdout, /IMPACTED RUN: 2 suite\(s\) from 1 changed file\(s\)/, `expected both narrow suites selected:\n${r.stdout}`);
+    assert.match(r.stdout, /PASS\s+\d+ms\s+scripts\/test_narrow1\.mjs/, r.stdout);
+    assert.match(r.stdout, /PASS\s+\d+ms\s+scripts\/test_narrow2\.mjs/, r.stdout);
+    assert.doesNotMatch(r.stdout, /exceeds cap/, `below-cap run must never print the cap banner:\n${r.stdout}`);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+await check("test-economy D6: config missing -> default cap 0.30 -> over-cap (lib.mjs) falls back to level-1, banner printed, direct suite still runs", async () => {
+  const { fixture, runVerifyPath } = buildCapFixture();
+  try {
+    const total = await fixtureTotalSuites(runVerifyPath);
+    const mapped = HUB_COUNT + 1;
+    assert.ok(mapped / total > 0.3, `fixture assumption: HUB_COUNT=${HUB_COUNT} must clear the 0.30 cap against this fixture's total=${total} (mapped=${mapped})`);
+    const r = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/lib.mjs"], { PATH: "/nonexistent-bin" });
+    assert.equal(r.status, 0, `expected exit 0 (the one direct suite passes), got ${r.status}; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
+    assert.match(
+      r.stdout,
+      new RegExp(`impacted ${mapped}/${total} exceeds cap \\(0\\.3\\) — transitive tail delegated to CI`),
+      `expected the D6 cap banner naming the pre-cap total and cap:\n${r.stdout}`,
+    );
+    assert.match(r.stdout, /IMPACTED RUN \(level 1\): 1 direct suite\(s\) from 1 changed file\(s\)/, `expected the level-1 fallback banner:\n${r.stdout}`);
+    assert.match(r.stdout, /PASS\s+\d+ms\s+scripts\/test_direct1\.mjs/, `expected the direct suite to actually run:\n${r.stdout}`);
+    assert.doesNotMatch(r.stdout, /test_hub/, `the pure-transitive hub suites must NOT run once capped:\n${r.stdout}`);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+await check("test-economy D6: a red suite inside the capped (level-1) selection still exits red — cap never silences a real failure", () => {
+  const { fixture, runVerifyPath } = buildCapFixture({ failDirect: true });
+  try {
+    const r = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/lib.mjs"], { PATH: "/nonexistent-bin" });
+    assert.equal(r.status, 1, `expected exit 1 (the capped selection's own suite failed), got ${r.status}; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
+    assert.match(r.stdout, /exceeds cap/, `expected the cap banner even on a red capped run:\n${r.stdout}`);
+    assert.match(r.stdout, /FAIL\s+\d+ms\s+scripts\/test_direct1\.mjs/, r.stdout);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+await check("test-economy D6: verify_impacted_cap = 1 disables the cutoff entirely — full transitive selection runs even over the default cap", () => {
+  const { fixture, runVerifyPath } = buildCapFixture();
+  try {
+    writeBeeConfig(fixture, { verify_impacted_cap: 1 });
+    const r = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/lib.mjs"]);
+    assert.equal(r.status, 0, `expected exit 0, got ${r.status}; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
+    assert.match(r.stdout, new RegExp(`IMPACTED RUN: ${HUB_COUNT + 1} suite\\(s\\) from 1 changed file\\(s\\)`), `expected the uncapped full transitive selection:\n${r.stdout}`);
+    assert.doesNotMatch(r.stdout, /exceeds cap/, `cap=1 must fully disable the cutoff banner:\n${r.stdout}`);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+await check("test-economy D6: config present but verify_impacted_cap key missing -> falls back to default 0.30 (same as no config)", async () => {
+  const { fixture, runVerifyPath } = buildCapFixture();
+  try {
+    const total = await fixtureTotalSuites(runVerifyPath);
+    const mapped = HUB_COUNT + 1;
+    writeBeeConfig(fixture, { some_other_key: true });
+    const r = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/lib.mjs"], { PATH: "/nonexistent-bin" });
+    assert.equal(r.status, 0, `expected exit 0, got ${r.status}; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
+    assert.match(r.stdout, new RegExp(`impacted ${mapped}/${total} exceeds cap \\(0\\.3\\)`), `expected the default 0.30 cap to apply when the key is absent:\n${r.stdout}`);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+await check("test-economy D6: malformed .bee/config.json -> parse failure falls back to default 0.30 (fail-open, never a crash)", async () => {
+  const { fixture, runVerifyPath } = buildCapFixture();
+  try {
+    const total = await fixtureTotalSuites(runVerifyPath);
+    const mapped = HUB_COUNT + 1;
+    const beeDir = path.join(fixture, ".bee");
+    fs.mkdirSync(beeDir, { recursive: true });
+    fs.writeFileSync(path.join(beeDir, "config.json"), "{ not valid json");
+    const r = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/lib.mjs"], { PATH: "/nonexistent-bin" });
+    assert.equal(r.status, 0, `expected exit 0, got ${r.status}; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
+    assert.match(r.stdout, new RegExp(`impacted ${mapped}/${total} exceeds cap \\(0\\.3\\)`), `expected the default 0.30 cap on parse failure:\n${r.stdout}`);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+await check("test-economy D6: --level 1 is a no-op for the cap — no banner, no cut, even with an over-cap changed file and a low cap configured", () => {
+  const { fixture, runVerifyPath } = buildCapFixture();
+  try {
+    writeBeeConfig(fixture, { verify_impacted_cap: 0.01 });
+    const r = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/lib.mjs", "--level", "1"]);
+    assert.equal(r.status, 0, `expected exit 0, got ${r.status}; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
+    assert.match(r.stdout, /IMPACTED RUN \(level 1\): 1 direct suite\(s\) from 1 changed file\(s\)/, `expected the plain level-1 selection, untouched by the cap:\n${r.stdout}`);
+    assert.doesNotMatch(r.stdout, /exceeds cap/, `--level 1 must never print the cap banner (must-have: no-op, no banner):\n${r.stdout}`);
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+await check("test-economy D6: gh missing/erroring during a capped run prints a one-line note but never changes the exit code", () => {
+  const { fixture, runVerifyPath } = buildCapFixture();
+  try {
+    const r = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/lib.mjs"], { PATH: "/nonexistent-bin" });
+    assert.equal(r.status, 0, `expected exit 0 unaffected by gh being unavailable, got ${r.status}; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
+    assert.match(
+      r.stdout,
+      /gh workflow run CI.*did not succeed/,
+      `expected a one-line gh-unavailable note:\n${r.stdout}`,
+    );
   } finally {
     fs.rmSync(fixture, { recursive: true, force: true });
   }
