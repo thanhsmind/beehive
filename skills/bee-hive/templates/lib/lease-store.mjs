@@ -32,27 +32,39 @@
 // mainRoot-anchored ledger, not this module).
 //
 // Epoch (advisor consult slice 3, item F): `epoch` is stored VERBATIM from
-// the caller on every acquire/renew — this module never compares it against
-// a prior value and never refuses an acquire because of it. Fencing
-// enforcement (rejecting a stale-epoch caller) is multisession-native-12's
-// job, on the CLAIMS side; this module is only the durable place the value
-// lives until that cell reads it.
+// the caller on every acquire — this module never compares it against a
+// prior value at acquire time, and never refuses an acquire because of it
+// (there is no forced-takeover primitive here; a genuine takeover is
+// release-then-acquire, with the NEW caller deciding the bumped epoch
+// value). Fencing ENFORCEMENT is multisession-native-12's addition, on top
+// of that verbatim storage: `renewLease`/`releaseLease` below both accept
+// an optional `presentedEpoch` and refuse typed LEASE_FENCE_STALE when it
+// is behind the resource's currently stored epoch. Omitted (every caller
+// today — this module has no production wiring yet, msn-16 adds it), both
+// stay byte-unchanged from before this cell; full mandatory presentation
+// arrives with workspace identity in slice 4, matching claims.mjs's own
+// compat posture for `fence_epoch` (a deliberately distinct name — see that
+// module's header — for the equivalent claims-side token).
 //
 // Locking: acquireLeases needs none of its own — O_EXCL create is the whole
 // concurrency primitive (two racers targeting the SAME resource file can
 // never both "win" the create; the loser sees EEXIST and is refused with a
-// typed LEASE_HELD naming the holder). releaseLease/sweepExpiredLeases are a
-// single fs.rmSync per file — also lock-free; a delete of one resource's own
-// file cannot race a create/delete of a DIFFERENT resource's file, and a
-// racing renew on the SAME file is a lost-update at worst (the renewed
-// expires_at simply gets overwritten by the delete, which is the same
-// outcome as if the renew had lost the race a moment earlier). renewLease
-// (a genuine read-modify-write) DOES take a lock — but a lease-scoped one,
-// `lease:<file-hash>`, never a store-wide "leases" lock: renewing lease A
-// never contends with acquiring, renewing, or releasing lease B. That is
-// the structural difference from reservations.mjs (one shared JSON file,
-// hence one shared 'reservations' lock for every mutation) this module is
-// built to remove.
+// typed LEASE_HELD naming the holder). sweepExpiredLeases and the LEGACY
+// (no presentedEpoch) path of releaseLease are a single fs.rmSync per file —
+// also lock-free; a delete of one resource's own file cannot race a
+// create/delete of a DIFFERENT resource's file, and a racing renew on the
+// SAME file is a lost-update at worst (the renewed expires_at simply gets
+// overwritten by the delete, which is the same outcome as if the renew had
+// lost the race a moment earlier). renewLease (a genuine read-modify-write)
+// DOES take a lock — but a lease-scoped one, `lease:<file-hash>`, never a
+// store-wide "leases" lock: renewing lease A never contends with acquiring,
+// renewing, or releasing lease B. That is the structural difference from
+// reservations.mjs (one shared JSON file, hence one shared 'reservations'
+// lock for every mutation) this module is built to remove. The FENCED
+// (presentedEpoch given) path of releaseLease is likewise a genuine
+// read-then-maybe-delete, so multisession-native-12 gives it the SAME
+// per-lease `lease:<file-hash>` lock renewLease already uses — never a new
+// lock name, per that cell's lock-discipline requirement.
 //
 // Structural isolation (C4 pattern, workflow-store.mjs precedent): this
 // module imports ONLY node builtins, fsutil.mjs, and lock.mjs. It never
@@ -371,28 +383,68 @@ export function acquireLeases(root, requests, { now = Date.now(), _orderSeam } =
 }
 
 /**
- * releaseLease(root, { type, id }) — delete the lease file for one
- * resource. Idempotent: releasing an absent lease is `{ ok: true,
- * released: false }`, never an error (mirrors reservations.mjs's release()
- * tolerance of "nothing matched"). A single fs.rmSync is already atomic at
- * the filesystem level — no lock needed.
+ * releaseLease(root, { type, id }, { presentedEpoch }) — delete the lease
+ * file for one resource. Idempotent: releasing an absent lease is `{ ok:
+ * true, released: false }`, never an error (mirrors reservations.mjs's
+ * release() tolerance of "nothing matched") — true whether or not a
+ * presentedEpoch was given, since there is nothing on disk to fence
+ * against.
+ *
+ * multisession-native-12 (D4/D9 invariant 10): `presentedEpoch` is OPTIONAL.
+ * Omitted, this is BYTE-UNCHANGED from before this cell — a single
+ * lock-free fs.rmSync, exactly as documented in the module header. Given
+ * (finite number), the lease record is read first, under the SAME
+ * per-resource `lease:<file-hash>` lock renewLease uses (a genuine
+ * read-then-maybe-delete is no longer safely lock-free); if its stored
+ * `epoch` is ahead of `presentedEpoch`, the release refuses typed
+ * LEASE_FENCE_STALE and the file is left untouched — never deleted on a
+ * stale presentation.
  */
-export function releaseLease(root, request) {
+export async function releaseLease(root, request, { presentedEpoch } = {}) {
   const resolved = resolveResourceFile(root, request || {});
-  try {
-    fs.rmSync(resolved.file, { force: false });
-    return { ok: true, released: true };
-  } catch (error) {
-    if (error && error.code === 'ENOENT') return { ok: true, released: false };
-    throw error;
+  if (presentedEpoch === undefined) {
+    try {
+      fs.rmSync(resolved.file, { force: false });
+      return { ok: true, released: true };
+    } catch (error) {
+      if (error && error.code === 'ENOENT') return { ok: true, released: false };
+      throw error;
+    }
   }
+  return withStoreLock(root, lockNameForFile(resolved.file), () => {
+    const current = readLeaseSafe(resolved.file);
+    if (!current) return { ok: true, released: false }; // nothing on disk — nothing to fence against
+    if (!Number.isFinite(presentedEpoch) || presentedEpoch < current.epoch) {
+      throw new LeaseStoreError(
+        'LEASE_FENCE_STALE',
+        `releaseLease: presented epoch ${JSON.stringify(presentedEpoch)} is behind resource "${current.resource}"'s current epoch ${current.epoch} — a takeover already moved ownership forward.`,
+        { resource: current.resource, holder: current },
+      );
+    }
+    try {
+      fs.rmSync(resolved.file, { force: false });
+      return { ok: true, released: true };
+    } catch (error) {
+      if (error && error.code === 'ENOENT') return { ok: true, released: false };
+      throw error;
+    }
+  });
 }
 
 // Shared renew body: read-modify-write one lease file under its OWN
 // per-file lock (never a store-wide lock — see module header). `ttl`
 // resets the never-expires/expires-at-N clock exactly like a fresh
 // acquire's ttl would (non-positive -> expires_at: null).
-function renewLeaseFile(root, file, { ttl, now, lockOptions }) {
+//
+// multisession-native-12 (D4/D9 invariant 10): `presentedEpoch` is
+// OPTIONAL. Omitted, the fencing check below never runs — byte-unchanged
+// from before this cell. Given, it is compared against the just-read
+// record's stored `epoch` BEFORE the write: behind it, this throws typed
+// LEASE_FENCE_STALE instead of renewing (the record on disk is left
+// exactly as read — no partial write). Renewal never changes the stored
+// `epoch` itself, same as claims.mjs's renewClaimTTL never changing
+// fence_epoch — only a fresh acquire (a caller-decided takeover) does.
+function renewLeaseFile(root, file, { ttl, now, lockOptions, presentedEpoch }) {
   return withStoreLock(
     root,
     lockNameForFile(file),
@@ -409,6 +461,13 @@ function renewLeaseFile(root, file, { ttl, now, lockOptions }) {
           `renewLease: could not read/parse lease record at "${file}" (${error && error.message ? error.message : error}).`,
         );
       }
+      if (presentedEpoch !== undefined && (!Number.isFinite(presentedEpoch) || presentedEpoch < current.epoch)) {
+        throw new LeaseStoreError(
+          'LEASE_FENCE_STALE',
+          `renewLease: presented epoch ${JSON.stringify(presentedEpoch)} is behind resource "${current.resource}"'s current epoch ${current.epoch} — a takeover already moved ownership forward.`,
+          { resource: current.resource, holder: current },
+        );
+      }
       const next = { ...current, expires_at: computeExpiresAt(ttl, now) };
       writeJsonAtomic(file, next);
       return next;
@@ -423,11 +482,12 @@ function renewLeaseFile(root, file, { ttl, now, lockOptions }) {
  * from `options.now` (default Date.now()); non-positive means "never
  * expires" from now on, matching acquire's own TTL semantics. Throws
  * typed LEASE_MISSING/LEASE_CORRUPT, never guesses at a record it cannot
- * read.
+ * read. `options.presentedEpoch` — see renewLeaseFile above (multisession-
+ * native-12): optional, refuses typed LEASE_FENCE_STALE when stale.
  */
-export async function renewLease(root, request, { ttl = DEFAULT_TTL_SECONDS, now = Date.now(), lockOptions } = {}) {
+export async function renewLease(root, request, { ttl = DEFAULT_TTL_SECONDS, now = Date.now(), lockOptions, presentedEpoch } = {}) {
   const resolved = resolveResourceFile(root, request || {});
-  return renewLeaseFile(root, resolved.file, { ttl, now, lockOptions });
+  return renewLeaseFile(root, resolved.file, { ttl, now, lockOptions, presentedEpoch });
 }
 
 function listAllLeaseFiles(root) {

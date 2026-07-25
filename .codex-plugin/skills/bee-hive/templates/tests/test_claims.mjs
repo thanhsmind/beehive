@@ -22,6 +22,7 @@ import {
   releaseClaim,
   clearClaim,
   adoptClaim,
+  renewClaimTTL,
   sweepExpiredClaims,
   isClaimActive,
   isConcurrentMode,
@@ -356,6 +357,80 @@ await check('claimCellFile (hardening-1-7-10 D5): a sessionless claim with TWO O
 });
 
 fs.rmSync(concurrentModeRoot, { recursive: true, force: true });
+
+// ─── multisession-native-12: fence_epoch (D4/D9 invariant 10) ─────────────
+// "fence_epoch" is deliberately NOT called "epoch" bare — cells.mjs:2408's
+// checkCellBudgets already uses "epoch" loosely for a different, unrelated
+// concept (a claim/heartbeat acquisition cycle for budget-collapse
+// counting). This is a distinct, CAS-style fencing token: stamped 1 at
+// claimCellFile creation, bumped +1 by adoptClaim atomically with the
+// ownership rewrite, and — new in this cell — optionally enforced by
+// renewClaimTTL/releaseClaim when (and only when) a caller presents one.
+// Legacy callers that never present an epoch (every production caller
+// today: heartbeatTouch's renewClaimTTL call, cells.mjs's releaseClaim
+// calls) are byte-unchanged — full mandatory presentation arrives with
+// workspace identity in slice 4 (advisor consult slice 3, condition F).
+
+const fenceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-fence-'));
+
+await check('claimCellFile stamps fence_epoch: 1 on a fresh claim', async () => {
+  const made = claimCellFile(fenceRoot, 'sess-fence-a', 'cell-fence-1', 3600);
+  assert(made.ok === true, 'precondition: claim created');
+  assert(made.claim.fence_epoch === 1, `fresh claim must stamp fence_epoch: 1, got ${JSON.stringify(made.claim)}`);
+  assert(readClaim(fenceRoot, 'cell-fence-1').fence_epoch === 1, 'fence_epoch is on the on-disk record too');
+});
+
+await check('adoptClaim bumps fence_epoch by exactly 1, atomically with the ownership rewrite', async () => {
+  const before = readClaim(fenceRoot, 'cell-fence-1');
+  assert(before.fence_epoch === 1, 'precondition: still epoch 1 before adoption');
+  const adopted = adoptClaim(fenceRoot, 'cell-fence-1', 'sess-fence-b');
+  assert(adopted.ok === true, `adopt ok, got ${JSON.stringify(adopted)}`);
+  assert(adopted.claim.fence_epoch === 2, `adoption must bump fence_epoch to 2, got ${JSON.stringify(adopted.claim)}`);
+  assert(readClaim(fenceRoot, 'cell-fence-1').fence_epoch === 2, 'the bump is durable on disk');
+  assert(readClaim(fenceRoot, 'cell-fence-1').session === 'sess-fence-b', 'ownership also transferred in the same write');
+});
+
+await check('renewClaimTTL: no presented epoch is byte-unchanged legacy behavior (never fenced)', async () => {
+  const before = readClaim(fenceRoot, 'cell-fence-1').claimed_at;
+  const result = renewClaimTTL(fenceRoot, 'sess-fence-b', { now: Date.now() + 60_000 });
+  assert(result.ok === true && result.renewed.includes('cell-fence-1'), `legacy (no presentedEpoch) renew must still succeed, got ${JSON.stringify(result)}`);
+  assert(readClaim(fenceRoot, 'cell-fence-1').claimed_at !== before, 'claimed_at actually advanced');
+});
+
+await check('invariant 10: renewClaimTTL refuses typed CLAIM_FENCE_STALE when the presented epoch is behind current fence_epoch; the current epoch succeeds', async () => {
+  // cell-fence-1 is at fence_epoch 2 (bumped by the adoptClaim row above),
+  // owned by sess-fence-b. A caller presenting the OLD epoch (1) — e.g. a
+  // stale in-memory copy captured before the takeover — must be refused
+  // even though the session id itself still matches the current owner: the
+  // epoch check is an independent, stronger guard than session identity
+  // alone (session-mismatch after a cross-session adopt is ALREADY refused
+  // silently by the pre-existing ownership filter a few lines up in
+  // renewClaimTTL — this proves the NEW, orthogonal epoch-CAS guard).
+  const staleClaimBefore = readClaim(fenceRoot, 'cell-fence-1');
+  const staleAttempt = renewClaimTTL(fenceRoot, 'sess-fence-b', { now: Date.now() + 120_000, presentedEpoch: 1 });
+  assert(staleAttempt.ok === false && staleAttempt.code === 'CLAIM_FENCE_STALE', `expected typed CLAIM_FENCE_STALE, got ${JSON.stringify(staleAttempt)}`);
+  assert(typeof staleAttempt.reason === 'string' && staleAttempt.reason.includes('cell-fence-1'), 'refusal names the cell');
+  assert(readClaim(fenceRoot, 'cell-fence-1').claimed_at === staleClaimBefore.claimed_at, 'a fenced-stale renewal never touches claimed_at — no partial write');
+  assert(!fs.existsSync(claimGatePath(fenceRoot, 'cell-fence-1')), 'the per-claim gate is always released, even on a fenced refusal');
+
+  const currentAttempt = renewClaimTTL(fenceRoot, 'sess-fence-b', { now: Date.now() + 120_000, presentedEpoch: 2 });
+  assert(currentAttempt.ok === true && currentAttempt.renewed.includes('cell-fence-1'), `presenting the current epoch must succeed, got ${JSON.stringify(currentAttempt)}`);
+});
+
+await check('invariant 10: releaseClaim refuses typed CLAIM_FENCE_STALE when the presented epoch is behind current fence_epoch — the claim file is never removed on a fenced refusal', async () => {
+  const staleRelease = releaseClaim(fenceRoot, 'sess-fence-b', 'cell-fence-1', { presentedEpoch: 1 });
+  assert(staleRelease.ok === false && staleRelease.code === 'CLAIM_FENCE_STALE', `expected typed CLAIM_FENCE_STALE, got ${JSON.stringify(staleRelease)}`);
+  assert(fs.existsSync(claimPath(fenceRoot, 'cell-fence-1')), 'a fenced-stale release must never remove the claim file');
+});
+
+await check('releaseClaim: presenting the current epoch succeeds and removes the file (no presentedEpoch at all is the same byte-unchanged legacy release path)', async () => {
+  assert(fs.existsSync(claimPath(fenceRoot, 'cell-fence-1')), 'precondition: claim still present (previous row only attempted a stale-fenced release)');
+  const currentRelease = releaseClaim(fenceRoot, 'sess-fence-b', 'cell-fence-1', { presentedEpoch: 2 });
+  assert(currentRelease.ok === true, `presenting the current epoch must release successfully, got ${JSON.stringify(currentRelease)}`);
+  assert(!fs.existsSync(claimPath(fenceRoot, 'cell-fence-1')), 'claim file removed on a correctly-fenced release');
+});
+
+fs.rmSync(fenceRoot, { recursive: true, force: true });
 
 // ─── claims: concurrent Worker races (fsh-2) ───────────────────────────────
 // The entire race lives inside race_claims_child.mjs as a self-contained

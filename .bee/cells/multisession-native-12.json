@@ -1,0 +1,107 @@
+{
+  "id": "multisession-native-12",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Epoch fencing on claims and leases",
+  "action": "Claims and leases carry epoch; takeover/adoption bumps epoch; a write attempt presenting a stale epoch refuses typed (invariant 10). Wire epoch checks into claim adoption (claims.mjs adoption path) and lease renew/release (holder must present current epoch). Regen inside this cell after the code change: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed). Canonical source: skills/bee-hive/templates/ (vendored to .bee/bin/ + plugin mirrors).",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-11"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/claims.mjs",
+    "skills/bee-hive/templates/lib/lease-store.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".bee/bin/lib/claims.mjs",
+    "docs/history/multisession-native/CONTEXT.md",
+    "docs/history/multisession-native/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "stale-epoch write refuses typed (test)",
+      "takeover bumps epoch and old holder's renew fails (test)",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no epoch check bypassed on any release/renew path"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D4/D5"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "m",
+    "11": "u",
+    "12": "c",
+    "13": " ",
+    "14": "7",
+    "15": ";",
+    "16": " ",
+    "17": "D",
+    "18": "4",
+    "19": " ",
+    "20": "i",
+    "21": "n",
+    "22": "v",
+    "23": "a",
+    "24": "r",
+    "25": "i",
+    "26": "a",
+    "27": "n",
+    "28": "t",
+    "29": " ",
+    "30": "1",
+    "31": "0",
+    "worker": "msn-w12",
+    "outcome": "Stamped fence_epoch on claims (claimCellFile:1, adoptClaim:+1 atomically with adoption) and enforced it on renewClaimTTL/releaseClaim (typed CLAIM_FENCE_STALE); threaded presentedEpoch through lease-store's renewLease/releaseLease (typed LEASE_FENCE_STALE), releaseLease's fenced path riding the existing per-lease lock. Legacy callers (no presented epoch) byte-unchanged. Red-first tests captured then green; regen (skill trees, onboard, manifest) done.",
+    "files_changed": [
+      "skills/bee-hive/templates/lib/claims.mjs",
+      "skills/bee-hive/templates/lib/lease-store.mjs",
+      "skills/bee-hive/templates/tests/test_claims.mjs",
+      "skills/bee-hive/templates/tests/test_lease_store.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T02:37:20.930Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"red_failure_evidence\": \"Pre-change (test files edited first, lib untouched): test_claims.mjs's new fence rows failed — claimCellFile's claim object had no fence_epoch key at all (assert 'fresh claim must stamp fence_epoch: 1' failed, actual claim had only cell/session/ttl_seconds/claimed_at/acquired_at); adoptClaim never bumped anything so the 'still epoch 1 before adoption' precondition itself failed; renewClaimTTL(root, sess, {presentedEpoch:1}) returned {ok:true,renewed:[],skipped:[]} instead of a typed refusal (no presentedEpoch parameter existed); releaseClaim with a stale presentedEpoch returned {ok:false,code:'NOT_OWNER'} (session-identity check only, no epoch concept). test_lease_store.mjs likewise failed: renewLease/releaseLease threw/returned null instead of typed LEASE_FENCE_STALE when presented a stale epoch against a bumped-epoch lease. 6 claims-suite + 2 lease-suite rows failed; full run: 29 passed/6 failed (claims), 14 passed/2 failed (leases). All now pass after implementing fence_epoch stamping (claimCellFile), the +1 bump (adoptClaim), and presentedEpoch enforcement (renewClaimTTL/releaseClaim/renewLease/releaseLease).\",\n  \"notes\": \"Enumerated holder-presenting write paths: claims.mjs renewClaimTTL + releaseClaim (fenced); lease-store.mjs renewLease + releaseLease (fenced). Explicitly excluded as non-holder-presenting: clearClaim (unconditional lifecycle clear, own doc comment says so), sweepExpiredClaims/sweepExpiredLeases (sweeper acts as itself, not a holder), renewLeasesBySession (bulk heartbeat sweep, same legacy-compat posture as renewClaimTTL's own no-epoch path). acquireLeases stores epoch verbatim on creation only (unchanged, per ad19826/condition F non-goal). Legacy callers (heartbeatTouch's renewClaimTTL call, cells.mjs's two releaseClaim calls) never present an epoch, so remain byte-unchanged.\"\n}\n",
+    "verify_output": "HEARTBEAT: 5 suite(s) still running after 30.0s: skills/bee-hive/scripts/test_onboard_bee.mjs (15.3s), skills/bee-hive/templates/tests/test_bee_cli.mjs (13.0s), skills/bee-hive/templates/tests/test_cli_state.mjs (6.8s), skills/bee-hive/templates/tests/test_decisions_propagation.mjs (4.2s), skills/bee-hive/templates/tests/test_herding_cli.mjs (0.6s)\nHEARTBEAT: 1 suite(s) still running after 60.0s: scripts/test_installers_e2e.mjs --installer bash (24.4s)\nPASS     124ms  .bee/bin/bee.mjs knowledge check\nPASS     109ms  .bee/bin/bee.mjs knowledge index --check\nPASS    1092ms  hooks/test_bypass_stop_net.mjs\nPASS   12190ms  hooks/test_hook_contracts.mjs\nPASS    3949ms  hooks/test_model_guard.mjs\nPASS    8009ms  hooks/test_write_guard.mjs\nPASS      62ms  scripts/backlog_uniqueness.mjs --check\nPASS      41ms  scripts/census_stale_spawn_syntax.mjs\nPASS      52ms  scripts/ledger_parity.mjs --check\nPASS      69ms  scripts/okf_instructions_fence.mjs\nPASS     148ms  scripts/okf_instructions_fence.mjs --selftest\nPASS     656ms  scripts/okf_migrate.mjs --check advisor-protocol\nPASS     606ms  scripts/okf_migrate.mjs --check decision-memory\nPASS     646ms  scripts/okf_migrate.mjs --check doctrine-layer\nPASS     600ms  scripts/okf_migrate.mjs --check feedback-digest\nPASS     627ms  scripts/okf_migrate.mjs --check hook-runtime\nPASS     615ms  scripts/okf_migrate.mjs --check okf-profile\nPASS     637ms  scripts/okf_migrate.mjs --check onboarding\nPASS     647ms  scripts/okf_migrate.mjs --check performance-log\nPASS     629ms  scripts/okf_migrate.mjs --check verify-pipeline\nPASS     705ms  scripts/okf_migrate.mjs --check workflow-state\nPASS     673ms  scripts/okf_migrate.mjs --check worktree-parallelism\nPASS     602ms  scripts/okf_migrate.mjs --check-patterns\nPASS      58ms  scripts/okf_specs_fence.mjs\nPASS      99ms  scripts/okf_specs_fence.mjs --selftest\nPASS     102ms  scripts/release_manifest.mjs --check\nPASS      91ms  scripts/release_manifest.mjs --selftest\nPASS      42ms  scripts/test_agents_budget.mjs\nPASS     183ms  scripts/test_bump_version.mjs\nPASS      40ms  scripts/test_bypass_matrix.mjs\nPASS      44ms  scripts/test_ci_verify_issue.mjs\nPASS     827ms  scripts/test_claim_race.mjs\nPASS     432ms  scripts/test_compact_capsule.mjs\nPASS     711ms  scripts/test_compact_verbs.mjs\nPASS    1442ms  scripts/test_compaction_advisories.mjs\nPASS     245ms  scripts/test_compaction_module.mjs\nPASS      61ms  scripts/test_config_samples_safe.mjs\nPASS      75ms  scripts/test_config_validate.mjs\nPASS    2386ms  scripts/test_conformance.mjs\nPASS    1906ms  scripts/test_dispatch_prepare.mjs\nPASS     101ms  scripts/test_doctrine_parity.mjs\nPASS      38ms  scripts/test_gate_bypass_doctrine.mjs\nPASS     380ms  scripts/test_heartbeat_touch.mjs\nPASS     596ms  scripts/test_hook_vendor_closure.mjs\nPASS    1841ms  scripts/test_impact_registry.mjs\nPASS     140ms  scripts/test_install_ps1_flow.mjs\nPASS   24987ms  scripts/test_installers_e2e.mjs --installer bash\nPASS      63ms  scripts/test_ledger_parity.mjs\nPASS      62ms  scripts/test_lib_mirror.mjs\nPASS     746ms  scripts/test_native_probe.mjs\nPASS     375ms  scripts/test_nested_clone_isolation.mjs\nPASS   10047ms  scripts/test_okf_pins.mjs\nPASS      51ms  scripts/test_portable_paths.mjs\nPASS      38ms  scripts/test_release_tuple.mjs\nPASS    1019ms  scripts/test_render_race.mjs\nPASS     492ms  scripts/test_reservation_race.mjs\nPASS     107ms  scripts/test_resolveroots_p40.mjs\nPASS    1264ms  scripts/test_run_verify_impacted.mjs\nPASS     486ms  scripts/test_run_verify_only.mjs\nPASS     201ms  scripts/test_run_verify_skip_marker.mjs\nPASS      52ms  scripts/test_skill_pointers.mjs\nPASS     323ms  scripts/test_skill_render.mjs\nPASS     394ms  scripts/test_state_write_concurrency.mjs\nPASS   12775ms  scripts/test_store_lock.mjs\nPASS      45ms  scripts/test_verify_manifest.mjs\nPASS    1156ms  scripts/test_verify_timeout.mjs\nPASS   11719ms  scripts/test_worktree_cli.mjs\nPASS    1100ms  scripts/test_worktree_companion.mjs\nPASS     124ms  scripts/test_worktree_grant_resolve.mjs\nPASS     668ms  scripts/test_worktree_holds_race.mjs\nPASS    1920ms  scripts/test_worktree_holds.mjs\nPASS     102ms  scripts/test_worktree_store.mjs\nPASS   38321ms  skills/bee-hive/scripts/test_onboard_bee.mjs\nPASS     557ms  skills/bee-hive/scripts/test_plugin_distribution.mjs\nPASS     415ms  skills/bee-hive/scripts/test_split_brain_regression.mjs\nPASS     890ms  skills/bee-hive/templates/tests/test_backlog_capture.mjs\nPASS   25461ms  skills/bee-hive/templates/tests/test_bee_cli.mjs\nPASS    2321ms  skills/bee-hive/templates/tests/test_bee_write_guard_hook.mjs\nPASS     248ms  skills/bee-hive/templates/tests/test_bundle_mode.mjs\nPASS     835ms  skills/bee-hive/templates/tests/test_cells.mjs\nPASS    9847ms  skills/bee-hive/templates/tests/test_claims.mjs\nPASS    3387ms  skills/bee-hive/templates/tests/test_cli_cells.mjs\nPASS    8122ms  skills/bee-hive/templates/tests/test_cli_state.mjs\nPASS     636ms  skills/bee-hive/templates/tests/test_config_validate.mjs\nPASS     495ms  skills/bee-hive/templates/tests/test_contention_status.mjs\nPASS    6224ms  skills/bee-hive/templates/tests/test_decisions_propagation.mjs\nPASS     269ms  skills/bee-hive/templates/tests/test_feedback.mjs\nPASS      78ms  skills/bee-hive/templates/tests/test_guards_tokenizer.mjs\nPASS     150ms  skills/bee-hive/templates/tests/test_guards.mjs\nPASS     903ms  skills/bee-hive/templates/tests/test_herding_cli.mjs\nPASS    1199ms  skills/bee-hive/templates/tests/test_herding.mjs\nPASS     121ms  skills/bee-hive/templates/tests/test_intent.mjs\nPASS    4710ms  skills/bee-hive/templates/tests/test_knowledge.mjs\nPASS      94ms  skills/bee-hive/templates/tests/test_lease_store.mjs\nPASS    3489ms  skills/bee-hive/templates/tests/test_misc.mjs\nPASS      67ms  skills/bee-hive/templates/tests/test_perf.mjs\nPASS     148ms  skills/bee-hive/templates/tests/test_recovery.mjs\nPASS      73ms  skills/bee-hive/templates/tests/test_reservations.mjs\nPASS    2624ms  skills/bee-hive/templates/tests/test_reviews.mjs\nPASS     405ms  skills/bee-hive/templates/tests/test_scratch.mjs\nPASS     142ms  skills/bee-hive/templates/tests/test_state_projection.mjs\nPASS     195ms  skills/bee-hive/templates/tests/test_state.mjs\nPASS     115ms  skills/bee-hive/templates/tests/test_workflow_store.mjs\n\nPASS run_verify: 103 suite(s), concurrency=5, wall=60586ms\nrelease_manifest --check: 534 file(s) match stored manifest\nledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\n",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-25T02:23:34.142Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-25T02:36:42.717Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T02:36:42.717Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T02:23:34.140Z",
+        "acquired_at": "2026-07-25T02:23:34.140Z",
+        "worker": "msn-w12",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

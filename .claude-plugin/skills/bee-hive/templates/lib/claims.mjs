@@ -653,6 +653,17 @@ export function claimCellFile(root, sessionId, cellId, ttl = DEFAULT_CLAIM_TTL_S
     // acquired_at never changes for the life of this claim file, so
     // checkCellBudgets can key off it and stay heartbeat-invariant.
     acquired_at: utcNow(now),
+    // multisession-native-12 (D4/D9 invariant 10, advisor consult slice 3
+    // condition F): a CAS-style fencing token, deliberately named
+    // `fence_epoch` rather than bare "epoch" — cells.mjs:2408's
+    // checkCellBudgets already uses "epoch" loosely for a different,
+    // unrelated concept (a claim/heartbeat acquisition cycle for
+    // budget-collapse counting). Stamped 1 here at creation; adoptClaim
+    // bumps it +1 on every ownership transfer; renewClaimTTL/releaseClaim
+    // below refuse a write typed CLAIM_FENCE_STALE when a caller presents an
+    // epoch behind the claim's current one. See adoptClaim's own comment for
+    // the compat posture (presenting an epoch is opt-in until slice 4).
+    fence_epoch: 1,
     // D5: OMITTED (never false) when the session was explicitly supplied —
     // only a durable-fallback adoption ever sets this, same "omit rather than
     // write a placeholder" convention as `session` itself above.
@@ -682,6 +693,15 @@ export function claimCellFile(root, sessionId, cellId, ttl = DEFAULT_CLAIM_TTL_S
  * Transfer ownership IN PLACE under the exclusive gate: the claim file is
  * atomically rewritten, never deleted, so concurrent 'wx' claimers keep
  * getting EEXIST throughout the adoption. Never release-then-reclaim.
+ *
+ * multisession-native-12 (D4/D9 invariant 10): every adoption bumps
+ * `fence_epoch` by exactly 1, in the SAME atomic write as the ownership
+ * change — a stale holder that still presents the pre-adoption epoch to
+ * renewClaimTTL/releaseClaim is refused typed CLAIM_FENCE_STALE (see those
+ * functions below) even in the edge case where session identity alone would
+ * not have caught it (e.g. a stale in-memory copy from before this exact
+ * adoption). A legacy claim with no `fence_epoch` on disk (pre-dates this
+ * cell) is treated as epoch 1, same default a fresh claimCellFile stamps.
  */
 export function adoptClaim(root, cellId, newSessionId, { now = Date.now() } = {}) {
   const cell = requireId(cellId, 'cell id');
@@ -696,12 +716,14 @@ export function adoptClaim(root, cellId, newSessionId, { now = Date.now() } = {}
       return fail('NOT_FOUND', `cell "${cell}" has no claim to adopt.`);
     }
     const previous = claim.session;
+    const previousEpoch = Number.isFinite(claim.fence_epoch) ? claim.fence_epoch : 1;
     const adopted = {
       ...claim,
       session,
       claimed_at: utcNow(now), // fresh ownership renews the TTL clock
       adopted_from: previous,
       adopted_at: utcNow(now),
+      fence_epoch: previousEpoch + 1,
     };
     withTransientFsRetry(() => writeJsonAtomic(claimPath(root, cell), adopted));
     return { ok: true, claim: adopted, previous_owner: previous };
@@ -721,9 +743,27 @@ export function adoptClaim(root, cellId, newSessionId, { now = Date.now() } = {}
  * RE-VERIFIED under the gate (never off the pre-gate listing snapshot), so a
  * claim adopted away between listing and gating is left untouched — a
  * renewal racing an adoption can never revert ownership.
+ *
+ * multisession-native-12 (D4/D9 invariant 10): `options.presentedEpoch` is
+ * OPTIONAL and OFF by default — omitted (the shape every production caller
+ * uses today, e.g. heartbeatTouch below), this function is byte-unchanged
+ * from before this cell: fencing enforcement engages only when a caller
+ * actually presents an epoch (full mandatory presentation arrives with
+ * workspace identity in slice 4, per the advisor consult). When presented,
+ * it is checked against EACH session-owned claim reached in this pass
+ * (after the same gate + re-verified-ownership steps as always); a claim
+ * whose current `fence_epoch` is AHEAD of the presented value means a
+ * takeover moved ownership forward since the caller last knew about this
+ * claim — this whole call refuses immediately, typed CLAIM_FENCE_STALE,
+ * naming the stale cell, rather than silently completing a partial renewal
+ * of other claims. (In real use a session renews at most the one claim it
+ * is actively working, so this short-circuit and a true single-cell
+ * semantics coincide.) The gate is always released via `finally` even on
+ * this refusal — never leaked.
  */
-export function renewClaimTTL(root, sessionId, { now = Date.now() } = {}) {
+export function renewClaimTTL(root, sessionId, { now = Date.now(), presentedEpoch } = {}) {
   const session = requireId(sessionId, 'session id');
+  const fencing = presentedEpoch !== undefined;
   let entries;
   try {
     entries = fs.readdirSync(claimsDir(root));
@@ -744,9 +784,20 @@ export function renewClaimTTL(root, sessionId, { now = Date.now() } = {}) {
     try {
       const claim = readClaim(root, cell); // re-verify ownership under the gate
       if (claim && claim.session === session) {
+        if (fencing) {
+          const currentEpoch = Number.isFinite(claim.fence_epoch) ? claim.fence_epoch : 1;
+          if (!Number.isFinite(presentedEpoch) || presentedEpoch < currentEpoch) {
+            return fail(
+              'CLAIM_FENCE_STALE',
+              `cell "${cell}" renew refused: presented epoch ${JSON.stringify(presentedEpoch)} is behind current fence_epoch ${currentEpoch} — a takeover already moved ownership forward; re-adopt before writing again.`,
+              { cell, current_epoch: currentEpoch, presented_epoch: presentedEpoch },
+            );
+          }
+        }
         // GH #27.1 (D-GHF-B): the `...claim` spread carries acquired_at
         // forward untouched — only claimed_at (the expiry clock) advances
         // on a heartbeat. Never add an explicit acquired_at key here.
+        // Renewal never changes fence_epoch — only adoptClaim bumps it.
         withTransientFsRetry(() => writeJsonAtomic(claimPath(root, cell), { ...claim, claimed_at: utcNow(now) }));
         renewed.push(cell);
       }
@@ -762,8 +813,17 @@ export function renewClaimTTL(root, sessionId, { now = Date.now() } = {}) {
  * (Δ2-amended): sessionId is nullable — null/undefined means "release the
  * sessionless claim", and matches only a claim record that itself carries no
  * `session` key (claim.session ?? null === null).
+ *
+ * multisession-native-12 (D4/D9 invariant 10): `options.presentedEpoch` is
+ * OPTIONAL, checked AFTER the existing owner check above (a release must
+ * already be from the current owner; epoch fencing is an additional,
+ * orthogonal guard, never a substitute for it) — omitted, byte-unchanged
+ * legacy behavior (every production caller today: cells.mjs's two
+ * releaseClaim call sites). Presented and behind the claim's current
+ * `fence_epoch`, the release refuses typed CLAIM_FENCE_STALE and the claim
+ * file is left untouched.
  */
-export function releaseClaim(root, sessionId, cellId) {
+export function releaseClaim(root, sessionId, cellId, { presentedEpoch } = {}) {
   const session = sessionId == null ? null : requireId(sessionId, 'session id');
   const cell = requireId(cellId, 'cell id');
   if (!readClaim(root, cell)) {
@@ -786,6 +846,16 @@ export function releaseClaim(root, sessionId, cellId) {
         'NOT_OWNER',
         `cell "${cell}" is owned by session "${owner ?? 'none (sessionless)'}", not "${session ?? 'none (sessionless)'}".`,
       );
+    }
+    if (presentedEpoch !== undefined) {
+      const currentEpoch = Number.isFinite(claim.fence_epoch) ? claim.fence_epoch : 1;
+      if (!Number.isFinite(presentedEpoch) || presentedEpoch < currentEpoch) {
+        return fail(
+          'CLAIM_FENCE_STALE',
+          `cell "${cell}" release refused: presented epoch ${JSON.stringify(presentedEpoch)} is behind current fence_epoch ${currentEpoch} — a takeover already moved ownership forward; re-adopt before writing again.`,
+          { cell, current_epoch: currentEpoch, presented_epoch: presentedEpoch },
+        );
+      }
     }
     withTransientFsRetry(() => fs.rmSync(claimPath(root, cell), { force: true }));
     return { ok: true, released: claim };

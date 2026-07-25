@@ -50,7 +50,7 @@ function baseRequest(overrides = {}) {
 
 // ─── acquire/release/renew/sweep round-trip ─────────────────────────────────
 
-await check('acquireLeases writes a lease file under leaseCellsDir; releaseLease removes it; re-acquire succeeds after release', () => {
+await check('acquireLeases writes a lease file under leaseCellsDir; releaseLease removes it; re-acquire succeeds after release', async () => {
   const root = makeRoot();
   try {
     const [leased] = acquireLeases(root, [baseRequest()]);
@@ -66,11 +66,11 @@ await check('acquireLeases writes a lease file under leaseCellsDir; releaseLease
     const file = path.join(leaseCellsDir(root), 'demo-cell-1.json');
     assert(fs.existsSync(file), 'lease record exists on disk at the documented cells/<cell-id>.json path');
 
-    const released = releaseLease(root, { type: 'cell', id: 'demo-cell-1' });
+    const released = await releaseLease(root, { type: 'cell', id: 'demo-cell-1' });
     assert(released.ok === true && released.released === true, 'releaseLease reports success for an existing lease');
     assert(!fs.existsSync(file), 'released lease file is gone from disk');
 
-    const secondReleased = releaseLease(root, { type: 'cell', id: 'demo-cell-1' });
+    const secondReleased = await releaseLease(root, { type: 'cell', id: 'demo-cell-1' });
     assert(secondReleased.ok === true && secondReleased.released === false, 'releasing an already-absent lease is idempotent, not an error');
 
     const [reacquired] = acquireLeases(root, [baseRequest({ session_id: 'session-b' })]);
@@ -251,7 +251,7 @@ await check('two disjoint resources never contend: a held cell lease never block
 
 // ─── hash-sort determinism (D4 must_have: deadlock-free regardless of order) ─
 
-await check('hash-sorted multi-resource acquire is deadlock-free: [A,B] and [B,A] both process resources in the identical sorted order', () => {
+await check('hash-sorted multi-resource acquire is deadlock-free: [A,B] and [B,A] both process resources in the identical sorted order', async () => {
   const root = makeRoot();
   try {
     const orderForward = [];
@@ -260,8 +260,8 @@ await check('hash-sorted multi-resource acquire is deadlock-free: [A,B] and [B,A
       [baseRequest({ id: 'order-a', session_id: 'caller-1' }), baseRequest({ id: 'order-b', session_id: 'caller-1' })],
       { _orderSeam: (resourceKey) => orderForward.push(resourceKey) },
     );
-    releaseLease(root, { type: 'cell', id: 'order-a' });
-    releaseLease(root, { type: 'cell', id: 'order-b' });
+    await releaseLease(root, { type: 'cell', id: 'order-a' });
+    await releaseLease(root, { type: 'cell', id: 'order-b' });
 
     const orderReversed = [];
     acquireLeases(
@@ -305,6 +305,96 @@ await check('acquireLeases refuses malformed requests with typed LEASE_INVALID_R
       'refuses the same resource requested twice in one batch',
     );
     assert(!fs.existsSync(leaseCellsDir(root)), 'no lease file is ever created by a batch that is refused up front');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ─── multisession-native-12: fence_epoch enforcement (D4/D9 invariant 10) ──
+// lease-store.mjs has stored `epoch` verbatim from the caller since
+// multisession-native-11 (ad19826) but never compared it against anything —
+// enforcement is this cell's job. `renewLease`/`releaseLease` now accept an
+// optional `presentedEpoch`: omitted, both are byte-unchanged from before
+// this cell (no production caller exists yet — lease-store.mjs is not wired
+// into any CLI verb until msn-16 — so this is a safe, non-breaking addition
+// tested here at the primitive level). Present it stale (< the resource's
+// stored epoch) and both refuse typed LEASE_FENCE_STALE instead of acting.
+// There is no forced-takeover primitive in this module (by design — see the
+// module header's condition-A/F notes), so a "takeover" is proven the way
+// this module actually supports it: release, then a fresh acquire with a
+// caller-bumped epoch (the caller, e.g. a future adopt-a-lease flow, owns
+// deciding the new epoch value — this module only stores and now enforces
+// it).
+
+await check('invariant 10: renewLease refuses typed LEASE_FENCE_STALE when the presented epoch is behind the stored epoch; the stored epoch succeeds', async () => {
+  const root = makeRoot();
+  try {
+    acquireLeases(root, [baseRequest({ id: 'fence-cell', session_id: 'holder-a', epoch: 1, ttl: 3600 })]);
+    await releaseLease(root, { type: 'cell', id: 'fence-cell' });
+    // "Takeover": a new holder acquires the same resource with a bumped epoch.
+    acquireLeases(root, [baseRequest({ id: 'fence-cell', session_id: 'holder-b', epoch: 2, ttl: 3600 })]);
+
+    let threw = null;
+    try {
+      await renewLease(root, { type: 'cell', id: 'fence-cell' }, { presentedEpoch: 1 });
+    } catch (error) {
+      threw = error;
+    }
+    assert(threw instanceof LeaseStoreError && threw.code === 'LEASE_FENCE_STALE', `expected typed LEASE_FENCE_STALE, got ${threw && threw.code}`);
+    assert(threw.resource === 'cell:fence-cell', 'refusal names the resource');
+
+    const untouched = JSON.parse(fs.readFileSync(path.join(leaseCellsDir(root), 'fence-cell.json'), 'utf8'));
+    assert(untouched.epoch === 2 && untouched.session_id === 'holder-b', 'a fenced-stale renew never touches the lease record');
+
+    const renewed = await renewLease(root, { type: 'cell', id: 'fence-cell' }, { presentedEpoch: 2, ttl: 999 });
+    assert(renewed.epoch === 2, 'presenting the stored (current) epoch renews successfully');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('renewLease: omitting presentedEpoch is byte-unchanged legacy behavior (never fenced, even against a bumped epoch)', async () => {
+  const root = makeRoot();
+  try {
+    acquireLeases(root, [baseRequest({ id: 'legacy-cell', session_id: 'holder-a', epoch: 1, ttl: 3600 })]);
+    await releaseLease(root, { type: 'cell', id: 'legacy-cell' });
+    acquireLeases(root, [baseRequest({ id: 'legacy-cell', session_id: 'holder-b', epoch: 5, ttl: 3600 })]);
+
+    const renewed = await renewLease(root, { type: 'cell', id: 'legacy-cell' }, { ttl: 999 });
+    assert(renewed.epoch === 5, 'a legacy (no presentedEpoch) renew succeeds regardless of epoch — enforcement engages only when an epoch is presented');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('invariant 10: releaseLease refuses typed LEASE_FENCE_STALE when the presented epoch is behind the stored epoch — the lease file is never removed on a fenced refusal; the stored epoch succeeds and removes it', async () => {
+  const root = makeRoot();
+  try {
+    acquireLeases(root, [baseRequest({ id: 'fence-release-cell', session_id: 'holder-a', epoch: 3, ttl: 3600 })]);
+    const file = path.join(leaseCellsDir(root), 'fence-release-cell.json');
+
+    let threw = null;
+    try {
+      await releaseLease(root, { type: 'cell', id: 'fence-release-cell' }, { presentedEpoch: 2 });
+    } catch (error) {
+      threw = error;
+    }
+    assert(threw instanceof LeaseStoreError && threw.code === 'LEASE_FENCE_STALE', `expected typed LEASE_FENCE_STALE, got ${threw && threw.code}`);
+    assert(fs.existsSync(file), 'a fenced-stale release must never remove the lease file');
+
+    const released = await releaseLease(root, { type: 'cell', id: 'fence-release-cell' }, { presentedEpoch: 3 });
+    assert(released.ok === true && released.released === true, 'presenting the stored (current) epoch releases successfully');
+    assert(!fs.existsSync(file), 'lease file removed on a correctly-fenced release');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('releaseLease: a presentedEpoch against an already-absent lease is a no-op (ok:true, released:false), never a fence error — nothing to fence against', async () => {
+  const root = makeRoot();
+  try {
+    const result = await releaseLease(root, { type: 'cell', id: 'never-existed' }, { presentedEpoch: 99 });
+    assert(result.ok === true && result.released === false, `releasing an absent resource must stay idempotent even with a presentedEpoch, got ${JSON.stringify(result)}`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
