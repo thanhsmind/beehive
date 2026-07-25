@@ -1,0 +1,75 @@
+{
+  "id": "multisession-native-20",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Policy modes: observe / shared-disjoint / isolated default",
+  "action": "Three write-policy modes resolved per session at write-capable entry points (startFeature, cells claim/claim-next): observe (never claims write ownership, unlimited concurrent), shared-disjoint (opt-in via config guards.write_policy: exact-path leases mandatory before write — slice-3 lease machinery enforces), isolated (DEFAULT when the target workspace already has a LIVE write owner other than the caller). Isolated flow: bee OFFERS/creates a feature worktree via createFeatureWorktree and answers with the new workspace path in work language. Condition 6 BINDING: (a) auto-create only with explicit --isolate flag or config guards.auto_isolate=true, else the refusal NAMES the one-liner (surfaced once per session); (b) loud one-line cost disclosure (full worktree copy + where); (c) register/create writes ride the CLI-owned allowlist (guards.mjs:168-175 pattern) — test proves isolation cannot self-deadlock. Regen inside this cell: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed). Canonical source: skills/bee-hive/templates/.",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-19"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/state.mjs",
+    "skills/bee-hive/templates/bee.mjs",
+    "skills/bee-hive/templates/lib/worktree-store.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".bee/bin/lib/guards.mjs",
+    ".bee/bin/lib/workspace-store.mjs",
+    "docs/history/multisession-native/reports/advisor-digest-slice4.md",
+    "docs/history/multisession-native/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "second write session with live owner + no consent: typed refusal naming the --isolate one-liner (red-first)",
+      "with --isolate/config: worktree created, workspace registered, caller told the path (test)",
+      "observe sessions never blocked by write ownership (test)",
+      "shared-disjoint write without exact lease denied, with lease flows (test)",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no silent default change for solo single-session repos (byte-identical when alone)"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D2/D3"
+  ],
+  "status": "open",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "m",
+    "11": "u",
+    "12": "c",
+    "13": " ",
+    "14": "6",
+    "15": ";",
+    "16": " ",
+    "17": "D",
+    "18": "3",
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

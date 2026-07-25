@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "feature": "multisession-native",
   "mode": "high-risk",
-  "phase": "compounding-complete",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false
   },
-  "summary": "slice 3 shipped: sharded fenced leases, intent/lease split, cross-worktree advisory policy, per-workflow handoff mailboxes, reservations.json retired to projection",
-  "next_action": "slice 4 (workspace isolation by default, PBI p-ed2de0d0) next",
+  "summary": "slice 4 (workspace isolation by default) cycle open",
+  "next_action": "execute msn-17..21 sequentially with slice-4 advisor conditions 1-7",
   "created_at": "2026-07-24T14:19:58.834Z",
   "advisor_ref": {
-    "consulted_at": "2026-07-25T02:01:05.804Z",
+    "consulted_at": "2026-07-25T05:00:09.172Z",
     "feature": "multisession-native",
-    "newest_decision_id": "da55bda4-e1b4-47d6-add9-6b221b911eca",
+    "newest_decision_id": "05ea9f58-78a9-4b9c-bafe-8400a9f30cea",
     "plan_sha256": "6e078fa7cae305c60cc431b5eed884aeefff42719d74698c2ad532ebb627aedb",
-    "advisor": "claude/fable ceiling (bee-review dispatch, slice 3)",
-    "digest_head": "# Advisor consult — slice 3 execution (sharded leases + handoff mailboxes)\n\nAdvisor: claude/fable (ceiling), read-only, 2026-07-25. VERDICT: proceed-with-conditions.\n\nBinding conditions:\n- A (msn-11): .bee/runtime/leases placement is a NOTE only — no cross-workspace lease read against worktree-local stores before the slice-4 controlRoot re-root (cross-worktree visibility rides worktree-holds' mainRoot ledger, worktree-holds.mjs:28-32).\n- B (msn-16, biggest risk): preserve the atomic `findForeign"
+    "advisor": "claude/fable ceiling (bee-review dispatch, slice 4)",
+    "digest_head": "# Advisor consult — slice 4 execution (workspace isolation by default)\n\nAdvisor: claude/fable (ceiling), read-only, 2026-07-25. VERDICT: proceed-with-conditions.\n\nBinding conditions:\n1. File anchors FIXED at authoring (F1/F2): msn-17 edits lib/state.mjs (resolveRoots lives at state.mjs:748, NOT fsutil.mjs); msn-21 edits hooks/bee-write-guard.mjs at repo root (templates/hooks/ does not exist — confirm vendoring reality before editing).\n2. (F3) msn-18 re-roots the guard's lane/workflow read IN-CEL"
   },
   "last_scribing_run": {
     "feature": "multisession-native",
