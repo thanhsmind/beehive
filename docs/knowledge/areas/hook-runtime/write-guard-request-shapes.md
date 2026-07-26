@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)"]
-  sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7"]
+  decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)"]
+  sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7"]
   authoritative_for: "hook-runtime: write-guard request-shape recognition and per-target decisions"
 ---
 
@@ -59,6 +59,18 @@ parameters and value shapes before the command runs. A malformed invocation is
 denied with the command, the missing or wrong field, and the corrective shape;
 a well-formed one proceeds untouched. Deep verbs previously escaped this check
 unvalidated (a silent fail-open); they no longer do.
+
+**B23 — Blanket staging reads as a broad write, not as zero targets.** When a
+shell request's targets are extracted for the reservation guard, `git add
+-A`/`--all`/`-u`/`--update` and `git commit -a`/`--all` (combined short
+clusters like `-am` included) set the broad-write marker even though they name
+no path — they stage or fold in *every* changed file, which on a shared
+checkout can sweep another session's in-progress work into the commit. The
+broad-write marker resolves to the `**` target, so the existing reservation
+flow blocks exactly when another session holds a reservation and stays a no-op
+for a single session. Explicit-path `git add`, plain `git commit`/`-m`, and
+`--amend` (matched by exact token, never substring) are untouched (cell bsg-1,
+2026-07-26).
 
 **B22 — A malformed question-to-the-human request is repaired when the repair
 is mechanical, refused when it is not.** When the runtime announces the
