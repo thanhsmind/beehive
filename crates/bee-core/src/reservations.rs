@@ -1,7 +1,11 @@
 //! reservations — readers for the same-session file-reservation stores,
 //! ported from `.bee/bin/lib/reservations.mjs` and `.bee/bin/lib/
-//! lease-store.mjs` (rust-port-8, CONTEXT.md D3). Read-only, zero
-//! subprocess (D5).
+//! lease-store.mjs` (rust-port-8, CONTEXT.md D3), plus (rust-port-17) the
+//! ONE write path bee-state-sync.mjs's hook call site exercises:
+//! `renewHoldsBySession`, itself a thin per-record loop over lease-store.mjs's
+//! `renewLease`. Every other lease-store mutation (`acquireLeases`,
+//! `releaseLease`, epoch fencing) stays unported — the hook never presents
+//! an epoch and never acquires/releases a lease.
 //!
 //! multisession-native-16 demoted `.bee/reservations.json` to a
 //! rebuildable PROJECTION for legacy readers only — the live storage is
@@ -21,9 +25,11 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
 
-use crate::fsutil::read_json;
+use crate::fsutil::{read_json, write_json_atomic};
 use crate::jsdate::parse_iso_ms;
+use crate::lock::{iso8601_millis, with_store_lock, LockOptions, WithLockError};
 
 pub fn reservations_path(root: &Path) -> PathBuf {
     root.join(".bee").join("reservations.json")
@@ -276,7 +282,111 @@ pub fn expired_unreleased_reservations(root: &Path, now_ms: i64) -> Vec<LeaseRes
     list_reservations(root, false, now_ms)
 }
 
+// ─── lease renewal by session (rust-port-17) ─────────────────────────────
+// Port of reservations.mjs's `renewHoldsBySession` (itself a thin per-record
+// loop over lease-store.mjs's `renewLease`/`renewLeaseFile`) — the ONE
+// write path bee-state-sync.mjs's heartbeat companion calls. `control_root`
+// is caller-supplied, already resolved (this crate's established pattern:
+// `list_reservations`/`list_leases` above already take a resolved `root`
+// directly) — mjs re-derives it internally via its own private
+// `controlRootFor`.
+
+fn sha256_hex(s: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(s.as_bytes());
+    hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// lease-store.mjs's `lockNameForFile(file)` — `lease:<sha256(file)>`, the
+/// same D9 store-lock name a real node `renewLease`/`releaseLease` call on
+/// this exact file takes, so a genuine cross-runtime holder is denied (or
+/// denies) correctly.
+fn lease_lock_name_for_file(file: &Path) -> String {
+    format!("lease:{}", sha256_hex(&file.to_string_lossy()))
+}
+
+/// lease-store.mjs's `computeExpiresAt(ttl, nowMs)` — `ttl <= 0` is the
+/// never-expires sentinel (`null`/`Value::Null`), matching
+/// [`is_lease_record_expired`]'s own `None`-reads-as-"never expires"
+/// convention.
+fn compute_expires_at(ttl: i64, now_ms: i64) -> Value {
+    if ttl > 0 {
+        Value::String(iso8601_millis(now_ms + ttl * 1000))
+    } else {
+        Value::Null
+    }
+}
+
+/// Port of `renewLeaseFile`'s read-modify-write body, scoped to this cell's
+/// call site: `presentedEpoch` fencing is never used here (the hook never
+/// presents one), so it is not ported. `Ok(true)` = renewed; `Ok(false)` =
+/// the record was missing or unreadable/corrupt at read time — mirrors the
+/// mjs source's `LEASE_MISSING`/`LEASE_CORRUPT` typed failures, both of
+/// which `renewHoldsBySession` treats as "skip, never block the caller"
+/// (only `LEASE_MISSING` explicitly; a corrupt record is a hook-scoped
+/// fail-open simplification — nothing this call path can safely renew
+/// anyway). Runs under this file's own per-resource lock
+/// ([`lease_lock_name_for_file`]), never a store-wide lock.
+fn renew_lease_file(control_root: &Path, file: &Path, ttl: i64, now_ms: i64) -> Result<bool, WithLockError> {
+    with_store_lock(control_root, &lease_lock_name_for_file(file), LockOptions::try_once(), || -> bool {
+        let Ok(text) = fs::read_to_string(file) else {
+            return false;
+        };
+        let Ok(mut current) = serde_json::from_str::<Value>(&text) else {
+            return false;
+        };
+        if let Value::Object(ref mut m) = current {
+            m.insert("expires_at".to_string(), compute_expires_at(ttl, now_ms));
+        }
+        write_json_atomic(file, &current).is_ok()
+    })
+}
+
+/// Port of `renewHoldsBySession(root, sessionId, { now, lockOptions })`:
+/// resets each of this session's still-live PATH leases' anchor clock
+/// (`expires_at`) by the lease's OWN original ttl window (never
+/// lease-store's `DEFAULT_TTL_SECONDS`) — "reset the anchor time, never
+/// touch ttl_seconds", the exact contract the mjs source documents. Returns
+/// the renewed count (informational; the hook itself never inspects this).
+/// An empty/blank `session_id` is a no-op, matching the mjs early return.
+pub fn renew_holds_by_session(control_root: &Path, session_id: &str, now_ms: i64) -> usize {
+    let session = session_id.trim();
+    if session.is_empty() {
+        return 0;
+    }
+    let dir = leases_root(control_root).join("paths");
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return 0;
+    };
+    let mut renewed = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(record) = serde_json::from_str::<LeaseRecord>(&text) else {
+            continue;
+        };
+        if record.session_id.as_deref() != Some(session) {
+            continue;
+        }
+        let ttl = lease_ttl_seconds(&record);
+        if matches!(renew_lease_file(control_root, &path, ttl, now_ms), Ok(true)) {
+            renewed += 1;
+        }
+    }
+    renewed
+}
+
 // Tests live in crates/bee-core/tests/guard_support.rs (this cell's single
 // integration target — cargo test -p bee-core --test guard_support) rather
 // than here, so every reader's round-trip/logic proof sits in one place
 // per must-have.
+//
+// (rust-port-17's own lease-renewal write above is proved against the real
+// mjs oracle by crates/queen-bee/tests/heavyhooks_conformance.rs, this
+// cell's mandated single integration target — side-effect parity on
+// seeded fixtures, not here.)

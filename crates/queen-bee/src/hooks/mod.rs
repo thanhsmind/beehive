@@ -2,13 +2,16 @@
 //! (rust-port-7, CONTEXT.md D2: "hooks invoke the same binary (subcommand
 //! per lifecycle event), not separate scripts").
 //!
-//! Only the two trivial hooks are ported this cell: `tools-logger`
-//! (`.bee/bin/hooks/bee-tools-logger.mjs`) and `codex-subagent-audit`
-//! (`.bee/bin/hooks/bee-codex-subagent-audit.mjs`). The other 7 `bee-*.mjs`
-//! hooks land in later slices (per the epic map, Slice 1).
+//! rust-port-7/9/10 ported the four lighter hooks (`tools-logger`,
+//! `codex-subagent-audit`, `write-guard`, `model-guard`); rust-port-17 adds
+//! the two remaining heavy hooks whose dependencies are now all in Rust:
+//! `chain-nudge` and `state-sync`. The other 5 `bee-*.mjs` hooks land in
+//! later slices (per the epic map).
 
+pub mod chain_nudge;
 pub mod codex_subagent_audit;
 pub mod model_guard;
+pub mod state_sync;
 pub mod tools_logger;
 pub mod write_guard;
 
@@ -23,6 +26,8 @@ pub fn run_hook(name: &str, argv: &[String], raw_stdin: &str) -> i32 {
         "codex-subagent-audit" => codex_subagent_audit::run(argv, raw_stdin),
         "write-guard" => write_guard::run(argv, raw_stdin),
         "model-guard" => model_guard::run(argv, raw_stdin),
+        "chain-nudge" => chain_nudge::run(argv, raw_stdin),
+        "state-sync" => state_sync::run(argv, raw_stdin),
         other => {
             eprintln!("queen-bee: unknown hook \"{other}\"");
             2

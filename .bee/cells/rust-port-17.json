@@ -1,0 +1,145 @@
+{
+  "id": "rust-port-17",
+  "feature": "rust-port",
+  "title": "bee-chain-nudge + bee-state-sync hooks incl. worktree-holds renewal, conformance",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "rust-port-16",
+    "rust-port-20"
+  ],
+  "decisions": [
+    "D2",
+    "D7"
+  ],
+  "files": [
+    "crates/bee-core/*",
+    "crates/queen-bee/*"
+  ],
+  "read_first": [
+    ".bee/bin/hooks/bee-chain-nudge.mjs",
+    ".bee/bin/hooks/bee-state-sync.mjs",
+    ".bee/bin/lib/worktree-holds.mjs",
+    "crates/queen-bee/tests/hook_conformance.rs",
+    "crates/queen-bee/tests/modelguard_conformance.rs",
+    "docs/history/rust-port/CONTEXT.md"
+  ],
+  "action": "Port the two heavy hooks whose dependencies are now all in Rust, onto the rust-port-7 hook runtime: (1) bee-chain-nudge — SubagentStop advisory JSON (worker-collect nudge when a bee worker or swarming phase, review-synthesis nudge, scribing-debt warning) built on the already-ported state/cells readers; silent when nothing applies. (2) bee-state-sync — throttled heartbeat touch, reservation lease renewal, cross-worktree hold renewal (port the remaining worktree-holds renewal path), and the locked rebuildStateProjection call from rust-port-16 with LOCK_BUSY skipping silently (msn-7 F8: never writes workflow records); completely silent, always exit 0. RIG NOTE (the rig is NOT a shared module): the conformance discipline lives duplicated in-file — copy the seeded-root, sha256-oracle-verification, node-verdict-non-triviality, twin-pairing and negative-control helpers from crates/queen-bee/tests/hook_conformance.rs (the rig of record), exactly as crates/queen-bee/tests/modelguard_conformance.rs did. Build ONE target heavyhooks_conformance: advisory-text parity for chain-nudge across its trigger classes and silence classes; for state-sync, side-effect parity — the state.json rebuild result, heartbeat/lease/hold renewals, and the LOCK_BUSY skip — plus crash fail-open on both.",
+  "must_haves": {
+    "truths": [
+      "cargo --test heavyhooks_conformance runs and reports at least 12 passed, fixture names listed per class",
+      "chain-nudge advisory JSON matches node byte-for-byte across trigger classes, and both runtimes stay silent on the silence classes",
+      "state-sync side effects (state.json rebuild, heartbeat, lease and hold renewals) match node on the same fixtures; LOCK_BUSY skips silently on both",
+      "crash fixtures exit 0 with a hooks.jsonl crash line on both runtimes"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/",
+        "substantive": "worktree-holds renewal path"
+      },
+      {
+        "path": "crates/queen-bee/",
+        "substantive": "chain-nudge and state-sync hooks plus heavyhooks_conformance corpus"
+      }
+    ],
+    "key_links": [
+      "rig helpers copied from crates/queen-bee/tests/hook_conformance.rs (no shared test module exists)",
+      "rig drives the real bee-chain-nudge.mjs and bee-state-sync.mjs as sha256-verified oracles",
+      "state-sync uses rust-port-16 rebuildStateProjection under the D9 lock"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1)",
+      "No wiring-file edits — ported hooks stay dark until the flip slice",
+      "state-sync never writes workflow records (msn-7 F8)",
+      "Tests never touch the live .bee/ store",
+      "No edits to crates/Cargo.toml members list"
+    ]
+  },
+  "verify": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test heavyhooks_conformance",
+  "trace": {
+    "worker": "Tim",
+    "outcome": "Ported bee-chain-nudge (advisory SubagentStop nudge, read-only) and bee-state-sync (silent state-projection/heartbeat/lease/hold refresh) onto queen-bee's hook runtime, plus the write paths bee-core needed to back state-sync: claims::heartbeat_session/renew_claim_ttl, reservations::renew_holds_by_session, holds::renew_holds (cross-worktree). heavyhooks_conformance.rs (16 tests) proves byte-identical advisory JSON / silence across trigger classes for chain-nudge, and side-effect parity (state.json rebuild, heartbeat, claim/lease/hold renewal, LOCK_BUSY skip, crash fail-open) for state-sync against the real frozen mjs oracles.",
+    "files_changed": [
+      "crates/bee-core/src/claims.rs",
+      "crates/bee-core/src/holds.rs",
+      "crates/bee-core/src/reservations.rs",
+      "crates/queen-bee/src/hooks/mod.rs",
+      "crates/queen-bee/src/hooks/chain_nudge.rs",
+      "crates/queen-bee/src/hooks/state_sync.rs",
+      "crates/queen-bee/tests/heavyhooks_conformance.rs",
+      "crates/queen-bee/tests/support/heavyhooks_fixture.mjs"
+    ],
+    "deviations": [
+      "1. Scoped ports, not full mjs API surfaces. The cell's action calls for",
+      "   heartbeat touch, reservation lease renewal, and cross-worktree hold",
+      "   renewal — but claims.mjs, reservations.mjs/lease-store.mjs, and",
+      "   worktree-holds.mjs each expose a much larger mutating API (session",
+      "   create/adopt/release/sweep, epoch fencing, lease acquire/release,",
+      "   mirrorHold/releaseHolds/sweepExpiredHolds). Only the ONE write path each",
+      "   module's hook call site actually exercises was ported:",
+      "   `claims::heartbeat_session`/`renew_claim_ttl` (never `presentedEpoch`",
+      "   fencing, adoption, or lane binding), `reservations::renew_holds_by_session`",
+      "   (never lease acquire/release), `holds::renew_holds` (never",
+      "   mirror/release/sweep). Every unported function stays exactly as it was",
+      "   (CLI-only, out of this cell's scope) — documented at each new function's",
+      "   own doc comment.",
+      "2. Byte-compatibility bug self-caught by this cell's own oracle diff, fixed",
+      "   before capping: the first `heartbeat_session`/`renew_claim_ttl` draft",
+      "   round-tripped the on-disk record through bee-core's typed `Session`/",
+      "   `Claim` structs (`read_session(...).last_heartbeat = ...;",
+      "   write_json_atomic(...)`). Those structs name `lane`/`transcript_path`",
+      "   (Session) and `session`/`claimed_at`/`ttl_seconds` (Claim) as",
+      "   `Option<...>` WITHOUT `skip_serializing_if`, so a typed round-trip always",
+      "   emits the key — `null` when the source record omits it. The mjs source",
+      "   never does this (`session.last_heartbeat = ...; writeJsonAtomic(file,",
+      "   session)` on the plain object `readSession` returned, which only ever has",
+      "   the keys the file already had). `heavyhooks_conformance.rs`'s",
+      "   `state_sync_heartbeat_claim_lease_hold_renewal_matches_oracle` caught the",
+      "   divergence directly (rust session.json grew `\"lane\": null,",
+      "   \"transcript_path\": null` the node oracle's never did). Fixed by patching",
+      "   the raw `serde_json::Value` in place for both writes instead of the typed",
+      "   round-trip — the typed `Session`/`Claim` readers stay as they were",
+      "   (read-only call sites are unaffected; only these two NEW write paths",
+      "   changed). `holds::renew_holds`'s `Hold` round-trip was checked against",
+      "   the same risk and found safe: `worktree-holds.mjs`'s `insertHold` always",
+      "   writes every field explicitly (nulls included, never omitted), so a",
+      "   typed round-trip there introduces nothing new.",
+      "3. `chain_nudge.rs`/`state_sync.rs` use each hook's OWN root variable",
+      "   exactly as the mjs source does, not a uniform \"always pass control root\"",
+      "   rule: `bee-chain-nudge.mjs` never references `ctx.controlRoot` at all",
+      "   (every call — `hookEnabled`, `readState`, `resolvePipeline`,",
+      "   `scribingDebt` — takes the bare hook root), while `bee-state-sync.mjs`",
+      "   mixes both (`heartbeatTouch`/cross-worktree `renewHolds` take the",
+      "   control root; `renewHoldsBySession`/`rebuildStateProjection` take the",
+      "   bare root and re-derive control-root internally in mjs). This port",
+      "   follows the established rust-port-16 pattern of a caller-supplied,",
+      "   already-resolved control-root parameter rather than re-deriving it",
+      "   inside bee-core, matching each call site's literal mjs identifier usage."
+    ],
+    "friction": null,
+    "capped_at": "2026-07-26T14:56:09.765Z",
+    "behavior_change": false,
+    "verification_evidence": "{\n  \"new_suite_reason\": \"The cell mandates one new integration target, heavyhooks_conformance, covering both chain-nudge and state-sync (verify: cargo test -p queen-bee --test heavyhooks_conformance) -- no existing suite oracle-diffs these two hooks. Nearest precedents (hook_conformance.rs, modelguard_conformance.rs) exercise the four already-ported lighter hooks and their own rig helpers; this cell's fixtures need genuine session/claim/lease/hold seeding via the real claims.mjs/lease-store.mjs/worktree-holds.mjs functions, which no existing driver script provides, hence the new tracked tests/support/heavyhooks_fixture.mjs alongside it.\",\n  \"tests_inspected\": [\n    \"crates/queen-bee/tests/hook_conformance.rs -- read first (rig discipline precedent: sha256-verified seeding, twin allow/deny pairing, negative control, crash fail-open, red-first meta-proof) and copied in-file per the cell's own RIG NOTE (the rig is not a shared module); does not cover chain-nudge/state-sync at all.\",\n    \"crates/queen-bee/tests/modelguard_conformance.rs -- read as the second precedent (dispatch.jsonl ts-redaction pattern, rust-side crash-seam test via run_fail_open directly); reused the same redact-then-structural-diff technique for session/claim/lease/hold volatile timestamp fields here.\",\n    \"crates/bee-core/tests/projection_parity.rs -- read for the lock-interop background-holder pattern (tests/support/lock_driver.mjs) that this cell's own state_sync_lock_busy_skips_state_rebuild_silently_on_both_runtimes test adapts (holding via bee_core::lock::with_store_lock on a background thread instead of a spawned node driver, since the seeded fixture roots here already carry a full bin/lib copy the existing lock_driver.mjs's live-checkout guard would refuse).\"\n  ],\n  \"tests_added_changed\": [\n    \"crates/queen-bee/tests/heavyhooks_conformance.rs -- NEW, this cell's mandated single target: 16 tests across rig self-check, negative control, chain-nudge silence/nudge/reviewing/scribing-debt/disabled-hook/crash classes, and state-sync idle-bootstrap/renewal/throttled-no-op/disabled-hook/LOCK_BUSY/crash classes, plus the red-first meta-proof.\",\n    \"crates/queen-bee/tests/support/heavyhooks_fixture.mjs -- NEW tracked driver (never `node -e`, same discipline as tests/support/lock_driver.mjs): seeds authentic session/claim/lease/hold fixtures via the real claims.mjs/lease-store.mjs/worktree-holds.mjs functions so a lease file's sha256-hashed name is never hand-guessed.\"\n  ],\n  \"red_failure_evidence\": \"Every ported code path in this cell is genuinely new (chain_nudge.rs, state_sync.rs, and the claims/reservations/holds write functions did not exist before this cell), so every fixture in heavyhooks_conformance.rs was red-first by construction during development: state_sync_heartbeat_claim_lease_hold_renewal_matches_oracle failed on its first real run with rust session.json carrying extra `\\\"lane\\\": null, \\\"transcript_path\\\": null` keys the node oracle's own output never had (a typed-struct round-trip in heartbeat_session serializing Option fields the mjs source's plain-object write omits) -- fixed by patching the raw serde_json::Value in place instead of round-tripping through the typed Session/Claim structs (see the cell's disclosed deviation #2), then the full suite went green. This is the exact 'oracle diff catches a real divergence' proof the must-haves ask for, not an assertion with no evidence.\",\n  \"verification_run\": \"cargo test --manifest-path crates/Cargo.toml -p queen-bee --test heavyhooks_conformance -> test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s. Also ran (no regressions): cargo test --manifest-path crates/Cargo.toml -p bee-core (172 passed, 9 suites) and cargo test --manifest-path crates/Cargo.toml -p queen-bee (117 passed, 10 suites incl. this cell's 16) and cargo build --manifest-path crates/Cargo.toml --workspace (clean, no warnings).\"\n}\n",
+    "verify_output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running tests/heavyhooks_conformance.rs (crates/target/debug/deps/heavyhooks_conformance-8c872bbe6800488d)\n\nrunning 16 tests\ntest chain_nudge_crash_fail_open_rust_port_stays_exit_zero_and_logs_crash ... ok\ntest state_sync_crash_fail_open_rust_port_stays_exit_zero_and_logs_crash ... ok\ntest rig_self_check_seeded_files_match_repo_sha256 ... ok\ntest chain_nudge_crash_fail_open_node_oracle_stays_exit_zero_and_logs_crash ... ok\ntest state_sync_crash_fail_open_node_oracle_stays_exit_zero_and_logs_crash ... ok\ntest negative_control_unseeded_root_detected_as_invalid_and_both_hooks_silent ... ok\ntest rig_diff_detector_flags_a_seeded_mutation_as_divergent ... ok\ntest chain_nudge_reviewing_phase_message_matches_oracle ... ok\ntest state_sync_lock_busy_skips_state_rebuild_silently_on_both_runtimes ... ok\ntest state_sync_idle_bootstrap_rebuild_matches_oracle ... ok\ntest state_sync_disabled_hook_makes_no_writes_on_either_runtime ... ok\ntest chain_nudge_silent_when_idle_and_worker_nudge_twin_when_swarming_matches_oracle ... ok\ntest chain_nudge_disabled_hook_silences_both_and_enabled_twin_matches_oracle ... ok\ntest chain_nudge_scribing_debt_suffix_present_and_absent_twin_matches_oracle ... ok\ntest state_sync_throttled_no_op_when_heartbeat_fresh_matches_oracle ... ok\ntest state_sync_heartbeat_claim_lease_hold_renewal_matches_oracle ... ok\n\ntest result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s\n\n",
+    "verify_passed": true,
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T14:27:19.641Z",
+    "verify_command": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test heavyhooks_conformance",
+    "verified_at": "2026-07-26T14:54:55.026Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T14:54:55.027Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T14:42:08.755Z",
+        "acquired_at": "2026-07-26T14:27:19.639Z",
+        "worker": "Tim",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}

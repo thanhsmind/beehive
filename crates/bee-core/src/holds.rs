@@ -1,8 +1,10 @@
 //! holds — reader + `findForeignHolds`/`holdsStoreCorrupt` port for the
 //! cross-worktree holds ledger, from `.bee/bin/lib/worktree-holds.mjs`
-//! (rust-port-8, CONTEXT.md D3). Read-only, zero subprocess (D5): this
-//! module never mirrors, releases, sweeps, or renews a hold — only the two
-//! read-time checks guards.mjs's `checkWrite` imports.
+//! (rust-port-8, CONTEXT.md D3), plus the `renewHolds` write path
+//! (rust-port-17: the state-sync hook's cross-worktree hold renewal).
+//! Every OTHER mutation (`mirrorHold`/`insertHold`/`releaseHolds`/
+//! `sweepExpiredHolds`) stays unported — this cell's action names only the
+//! renewal path bee-state-sync.mjs's heartbeat companion exercises.
 //!
 //! `.bee/bin/lib/worktree-holds.mjs` is FROZEN for the duration of the
 //! rust-port feature (D1). The store always lives at the MAIN checkout's
@@ -11,14 +13,16 @@
 //! source's own `mainRoot` parameter naming.
 
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::fsutil::read_json;
+use crate::fsutil::{read_json, write_json_atomic};
 use crate::jsdate::parse_iso_ms;
+use crate::lock::{iso8601_millis, with_store_lock, LockOptions, WithLockError};
 
 pub fn holds_ledger_path(main_root: &Path) -> PathBuf {
     main_root.join(".bee").join("runtime").join("cross-worktree-holds.json")
@@ -47,20 +51,40 @@ pub struct Hold {
     pub extra: Map<String, Value>,
 }
 
+/// `extra` round-trips any unknown top-level key the mjs source's own plain
+/// object store might carry (D3): [`renew_holds`] (rust-port-17)'s
+/// read-modify-write writes the WHOLE object back, not just the `holds`
+/// array, so a `Vec`-only view would silently drop it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct HoldsStore {
     #[serde(default)]
     holds: Vec<Hold>,
+    #[serde(flatten)]
+    extra: Map<String, Value>,
 }
 
 /// Fail-open read: a missing/malformed store reads as an empty ledger,
 /// matching worktree-holds.mjs's `readStore`.
 fn read_store(main_root: &Path) -> Vec<Hold> {
+    read_full_store(main_root).holds
+}
+
+/// `readStore(mainRoot)` — the whole store object, the shape
+/// [`renew_holds`] needs so its read-modify-write never drops an unknown
+/// top-level field the way [`read_store`]'s `Vec`-only view would.
+fn read_full_store(main_root: &Path) -> HoldsStore {
     let raw: Value = read_json(&holds_ledger_path(main_root), Value::Null);
     if !raw.is_object() {
-        return Vec::new();
+        return HoldsStore::default();
     }
-    serde_json::from_value::<HoldsStore>(raw).map(|s| s.holds).unwrap_or_default()
+    serde_json::from_value::<HoldsStore>(raw).unwrap_or_default()
+}
+
+/// `writeStore(mainRoot, store)` — atomic tmp+rename write, imitating
+/// worktree-holds.mjs's `writeStore` (itself modeled on
+/// `writeGrantsFileAtomic`).
+fn write_store(main_root: &Path, store: &HoldsStore) -> io::Result<()> {
+    write_json_atomic(&holds_ledger_path(main_root), store)
 }
 
 /// `normalizePath` — byte-identical to worktree-holds.mjs's private
@@ -186,6 +210,67 @@ pub fn holds_store_corrupt(main_root: &Path) -> bool {
         Err(_) => return false,
     };
     serde_json::from_str::<Value>(&text).is_err()
+}
+
+// ─── renewal (rust-port-17) ──────────────────────────────────────────────
+// Port of worktree-holds.mjs's `renewHolds` — the ONE mutation
+// bee-state-sync.mjs's heartbeat-renewal companion calls. Every other
+// mutation on this module's mjs source (`mirrorHold`/`insertHold`/
+// `releaseHolds`/`sweepExpiredHolds`) stays out of this cell's scope.
+
+/// worktree-holds.mjs's `CROSS_WORKTREE_HOLDS_LOCK` — the single named lock
+/// every mutation in the mjs module (and this renewal) runs under
+/// (`with_store_lock`, the same D9 cross-runtime lock protocol lock.rs
+/// already implements).
+pub const CROSS_WORKTREE_HOLDS_LOCK: &str = "cross-worktree-holds";
+
+/// `renewHolds(mainRoot, sessionId, options)` result: the count of rows
+/// whose `mirrored_at` was pushed forward.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenewHoldsOutcome {
+    pub renewed: usize,
+}
+
+/// Port of `renewHolds(mainRoot, sessionId, options)`: pushes `mirrored_at`
+/// forward (to now) for every still-`isActive` row this session owns —
+/// never appends a new row, never touches `released_at` (the one path in
+/// this module that rewrites an existing row in place rather than only
+/// ever appending or soft-deleting). Runs under
+/// [`CROSS_WORKTREE_HOLDS_LOCK`] so a renewal can never race a concurrent
+/// insert/release/sweep into a lost update; `options` (hook callers pass
+/// `LockOptions::try_once()`, D3's "hooks never wait") passes straight
+/// through to [`with_store_lock`]. An empty/blank `session_id` is a no-op
+/// (`Ok(Ok(RenewHoldsOutcome { renewed: 0 }))`) without ever touching the
+/// store or taking the lock, matching the mjs source's own early return.
+pub fn renew_holds(
+    main_root: &Path,
+    session_id: &str,
+    options: LockOptions,
+) -> Result<io::Result<RenewHoldsOutcome>, WithLockError> {
+    let session = session_id.trim().to_string();
+    if session.is_empty() {
+        return Ok(Ok(RenewHoldsOutcome { renewed: 0 }));
+    }
+    with_store_lock(main_root, CROSS_WORKTREE_HOLDS_LOCK, options, move || -> io::Result<RenewHoldsOutcome> {
+        let mut store = read_full_store(main_root);
+        let now = now_ms();
+        let now_iso = iso8601_millis(now);
+        let mut renewed = 0usize;
+        for hold in store.holds.iter_mut() {
+            if !is_active(hold, now) {
+                continue;
+            }
+            if hold.session.as_deref() != Some(session.as_str()) {
+                continue;
+            }
+            hold.mirrored_at = Some(now_iso.clone());
+            renewed += 1;
+        }
+        if renewed > 0 {
+            write_store(main_root, &store)?;
+        }
+        Ok(RenewHoldsOutcome { renewed })
+    })
 }
 
 
