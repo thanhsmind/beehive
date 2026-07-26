@@ -167,6 +167,9 @@ fn folded_backlog_counts(items: &BTreeMap<String, PbiItem>) -> Value {
 fn split_row(line: &str) -> Vec<String> {
     let mut cells: Vec<String> = line.split('|').map(|c| c.trim().to_string()).collect();
     if cells.first().is_some_and(String::is_empty) {
+        // ORDER-IRRELEVANT `remove` (rust-port-15 sweep): `Vec::remove`,
+        // not `serde_json::Map::remove` — it shifts and is already
+        // order-preserving.
         cells.remove(0);
     }
     if cells.last().is_some_and(String::is_empty) {

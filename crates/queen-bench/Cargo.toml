@@ -8,4 +8,10 @@ name = "queen-bench"
 path = "src/main.rs"
 
 [dependencies]
-serde_json = "1"
+# Declared with `preserve_order` like every other serde_json consumer in
+# this workspace (see bee-core/Cargo.toml). This crate only parses report
+# JSON, so its Map ordering is not load-bearing today — the point is that NO
+# crate here can compile against different `serde_json::Map` semantics than
+# its siblings, which is what makes `Map::remove`'s `swap_remove` aliasing a
+# uniform, reviewable property rather than a per-crate surprise.
+serde_json = { version = "1", features = ["preserve_order"] }

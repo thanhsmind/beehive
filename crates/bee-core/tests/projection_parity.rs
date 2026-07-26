@@ -185,6 +185,51 @@ fn handoff_json_path(root: &Path) -> PathBuf {
     root.join(".bee").join("HANDOFF.json")
 }
 
+/// Top-level keys of a JSON object file, IN FILE ORDER.
+///
+/// `serde_json` is built with `preserve_order` in this workspace (a D3
+/// byte-compatibility requirement), so parsing round-trips key order and
+/// this reads the real on-disk sequence.
+fn top_level_keys(path: &Path) -> Vec<String> {
+    let text = fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let value: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
+    value.as_object().map(|m| m.keys().cloned().collect()).unwrap_or_default()
+}
+
+/// BYTE-level parity for a projected store file, plus a legible key-order
+/// diff when it fails.
+///
+/// The `assert_eq!` on parsed `Value`s that the tests below already do is
+/// NOT sufficient for a D3 byte-compatibility claim: `serde_json::Map` is
+/// an `IndexMap` under `preserve_order`, and `IndexMap`'s `PartialEq`
+/// ignores order — so two files with the same pairs in a different
+/// sequence compare EQUAL. That blind spot is exactly what hid the
+/// `Map::remove`/`swap_remove` hazard (rust-port-15): under
+/// `preserve_order`, `remove` aliases `swap_remove` (serde_json 1.0.150
+/// `src/map.rs:156-165`), which "perturbs the position of what used to be
+/// the last element", and `rebuild_handoff_projection` drops five keys
+/// from a record it then writes verbatim to `.bee/HANDOFF.json`. The mjs
+/// counterpart uses `delete`, which preserves order. Only a byte compare
+/// can see the difference.
+fn assert_projected_bytes_identical(node_root: &Path, rust_root: &Path, path_of: fn(&Path) -> PathBuf, what: &str) {
+    let node_path = path_of(node_root);
+    let rust_path = path_of(rust_root);
+    let node_bytes = fs::read(&node_path).unwrap_or_else(|e| panic!("read {}: {e}", node_path.display()));
+    let rust_bytes = fs::read(&rust_path).unwrap_or_else(|e| panic!("read {}: {e}", rust_path.display()));
+    if node_bytes != rust_bytes {
+        panic!(
+            "{what} is not BYTE-identical between the mjs oracle and the rust rebuild (D3).\n\
+             mjs  key order: {:?}\n\
+             rust key order: {:?}\n\
+             --- mjs bytes ---\n{}\n--- rust bytes ---\n{}",
+            top_level_keys(&node_path),
+            top_level_keys(&rust_path),
+            String::from_utf8_lossy(&node_bytes),
+            String::from_utf8_lossy(&rust_bytes),
+        );
+    }
+}
+
 /// Two identically-seeded temp roots — one for the node oracle rebuild, one
 /// for the Rust rebuild.
 struct TwinRoots {
@@ -532,6 +577,23 @@ fn rebuild_handoff_projection_single_open_record_parity() {
     assert!(node_handoff.get("workflow_id").is_none());
     assert_eq!(node_handoff["kind"], json!("pause"));
     assert_eq!(node_handoff["cell"], json!("rust-port-16"));
+
+    // D3 byte-parity, not merely structural equality — see
+    // `assert_projected_bytes_identical`. The fixture record above is
+    // ordered {kind, status, written_at, cell, writer_session,
+    // workflow_id, target_role, from_session} precisely so the five
+    // dropped keys are INTERIOR: order-preserving removal leaves
+    // {kind, written_at, cell, writer_session}, while `swap_remove`
+    // would leave {kind, writer_session, written_at, cell}. The explicit
+    // key-order assertion below is the sentinel that names the hazard.
+    assert_projected_bytes_identical(roots.node.path(), roots.rust.path(), handoff_json_path, "HANDOFF.json");
+    assert_eq!(
+        top_level_keys(&handoff_json_path(roots.rust.path())),
+        vec!["kind", "written_at", "cell", "writer_session"],
+        "HANDOFF.json key order regressed — `rebuild_handoff_projection` must drop mailbox-only keys with \
+         `shift_remove` (order-preserving, matching mjs's `delete`), never `remove`, which aliases \
+         `swap_remove` under the `preserve_order` feature this workspace requires"
+    );
 }
 
 #[test]

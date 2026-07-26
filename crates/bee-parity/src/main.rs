@@ -275,7 +275,7 @@ fn run_status_check() -> Result<String, String> {
 
     let mut leg_reports = Vec::new();
     for scenario in [Scenario::Plain, Scenario::Enriched] {
-        for leg in [runner::Leg::Json, runner::Leg::Text] {
+        for leg in [runner::Leg::Json, runner::Leg::Text, runner::Leg::JsonLanesFull] {
             leg_reports.push(check_one_leg(&repo_root, &bins, &golden, scenario, leg, &mut ws)?);
         }
     }
@@ -321,6 +321,20 @@ impl Scenario {
             Scenario::Enriched => enrich::seed_enriched_mutation(root),
         }
     }
+
+    /// The session id both runtimes resolve for this scenario. The
+    /// enriched scenario pins the live session it writes, so
+    /// `buildLaneSummary` resolves an ACTIVE lane and serializes that
+    /// lane record IN FULL — the only way the default (non-`--lanes-full`)
+    /// payload ever exercises `build_lane_rows`'s key ordering. The plain
+    /// fixture has no session records, so it pins nothing and clears the
+    /// ambient environment instead.
+    fn session_id(self) -> Option<&'static str> {
+        match self {
+            Scenario::Plain => None,
+            Scenario::Enriched => Some(enrich::LIVE_SESSION_ID),
+        }
+    }
 }
 
 /// One scenario x one output leg, end to end: parity (mjs vs rust, zero
@@ -347,37 +361,34 @@ fn check_one_leg(
 
     // Root-safety before EVERY command (validation decision B5).
     rootsafety::assert_structural_safety(repo_root, &root_mjs)?;
-    let run_mjs = runner::run_status(bins, runner::Runtime::Mjs, leg, &root_mjs)?;
+    let run_mjs = runner::run_status(bins, runner::Runtime::Mjs, leg, &root_mjs, scenario.session_id())?;
     rootsafety::assert_structural_safety(repo_root, &root_rust)?;
-    let run_rust = runner::run_status(bins, runner::Runtime::QueenBee, leg, &root_rust)?;
+    let run_rust = runner::run_status(bins, runner::Runtime::QueenBee, leg, &root_rust, scenario.session_id())?;
 
     // Positive content assertions, per leg and per runtime — a zero diff
     // between two EMPTY outputs would otherwise read as parity. The JSON
     // leg reuses the existing fixture-signature read; the text leg asserts
     // the renderer's own first line.
-    match leg {
-        // The fixture-signature read pins the PLAIN fixture's own body
-        // (`phase: idle`, `feature: null`, `workers: []`), so it applies
-        // to the plain scenario only — the enriched scenario deliberately
-        // rewrites exactly those fields. Its equivalent proof is the
-        // `assert_enriched_signature` read below.
-        runner::Leg::Json if scenario == Scenario::Plain => {
+    if leg.is_json() {
+        if scenario == Scenario::Plain {
+            // The fixture-signature read pins the PLAIN fixture's own body
+            // (`phase: idle`, `feature: null`, `workers: []`), so it
+            // applies to the plain scenario only — the enriched scenario
+            // deliberately rewrites exactly those fields.
             rootsafety::assert_resolves_to_fixture(&run_mjs)?;
             rootsafety::assert_resolves_to_fixture(&run_rust)?;
-        }
-        runner::Leg::Json => {
+        } else {
             for (who, run) in [("mjs", &run_mjs), ("queen-bee", &run_rust)] {
-                assert_enriched_signature(&label, who, run)?;
+                assert_enriched_signature(&label, who, run, leg)?;
             }
         }
-        runner::Leg::Text => {
-            for (who, run) in [("mjs", &run_mjs), ("queen-bee", &run_rust)] {
-                if !run.stdout.contains("bee status (plugin v") {
-                    return Err(format!(
-                        "[{label}] {who} produced no rendered status text (missing the `bee status (plugin v…)` header) — a zero diff against it would prove nothing: {}",
-                        truncate(&run.stdout)
-                    ));
-                }
+    } else {
+        for (who, run) in [("mjs", &run_mjs), ("queen-bee", &run_rust)] {
+            if !run.stdout.contains("bee status (plugin v") {
+                return Err(format!(
+                    "[{label}] {who} produced no rendered status text (missing the `bee status (plugin v…)` header) — a zero diff against it would prove nothing: {}",
+                    truncate(&run.stdout)
+                ));
             }
         }
     }
@@ -405,7 +416,7 @@ fn check_one_leg(
     // the mutated state.json alone would make the TREE differ, which would
     // mask a leg whose stdout comparison had been normalized into silence.
     rootsafety::assert_structural_safety(repo_root, &root_mutated)?;
-    let run_mutated = runner::run_status(bins, runner::Runtime::QueenBee, leg, &root_mutated)?;
+    let run_mutated = runner::run_status(bins, runner::Runtime::QueenBee, leg, &root_mutated, scenario.session_id())?;
     if run_mutated.exit_code != 0 {
         return Err(format!(
             "[{label}] seeded-mutation leg exited {} unexpectedly (status should still succeed against a mutated-but-valid store): {}",
@@ -430,8 +441,34 @@ fn check_one_leg(
 /// enrichment actually reached the payload on BOTH runtimes, so a zero diff
 /// there is a diff over the branches enrichment exists to light up — not
 /// two runtimes agreeing that they ignored the extra records.
-fn assert_enriched_signature(label: &str, who: &str, run: &differ::RunResult) -> Result<(), String> {
+fn assert_enriched_signature(
+    label: &str,
+    who: &str,
+    run: &differ::RunResult,
+    leg: runner::Leg,
+) -> Result<(), String> {
     let compact: String = run.stdout.chars().filter(|c| !c.is_whitespace()).collect();
+    // A FULL lane record must actually appear in this payload — that is
+    // the object whose key order `build_lane_rows` decides, and without it
+    // a zero diff says nothing about the `shift_remove`/`swap_remove`
+    // hazard (rust-port-15). The default payload reaches it only via the
+    // ACTIVE lane of the summary; `--lanes-full` reaches it via the array.
+    let lane_row_marker = match leg {
+        runner::Leg::JsonLanesFull => "\"lanes\":[{\"schema_version\"",
+        _ => "\"active\":{\"schema_version\"",
+    };
+    if !compact.contains(lane_row_marker) {
+        return Err(format!(
+            "[{label}] {who}: no FULL lane record in the payload (expected `{lane_row_marker}`) — the lane-row key ordering this scenario exists to pin was never serialized, so a zero diff would not cover it.\n{}",
+            truncate(&run.stdout)
+        ));
+    }
+    if !compact.contains("\"bound_sessions\":[\"parity-live-session\"]") {
+        return Err(format!(
+            "[{label}] {who}: the lane record carries no bound session — `resolveSessionId` did not resolve the pinned live session, so the active-lane path was not exercised.\n{}",
+            truncate(&run.stdout)
+        ));
+    }
     let markers = [
         ("\"phase\":\"scribing\"", "the enriched phase"),
         ("\"feature\":\"fixture-enriched\"", "the enriched feature"),

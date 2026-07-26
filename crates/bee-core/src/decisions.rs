@@ -171,6 +171,11 @@ pub fn active_decisions(root: &Path, recent: Option<usize>, all: bool) -> Vec<Va
             }
         }
     }
+    // ORDER-IRRELEVANT `remove` (rust-port-15 sweep): `by_id` is a
+    // `std::collections::HashMap`, not a `serde_json::Map`, so the
+    // `preserve_order`/`swap_remove` aliasing does not apply here at all —
+    // and the output sequence comes from `order`, never from iterating
+    // this map.
     let events: Vec<Value> = order.into_iter().map(|id| by_id.remove(&id).unwrap()).collect();
 
     let indexed: Vec<(usize, Value)> = events.into_iter().enumerate().collect();

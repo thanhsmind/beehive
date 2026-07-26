@@ -119,11 +119,22 @@ pub fn review_git_cache_path(root: &Path) -> std::path::PathBuf {
 ///
 /// This distinction is NOT cosmetic and the report must never collapse it
 /// (decision a7d7b3d5): the measured gix query set costs 12.4–15.2 ms
-/// cold on a real repo versus 1.59–1.82 ms warm, so reporting only the
-/// warm number would be a ~10 ms omission dressed as a result. The 5 ms
-/// D5 gate is defined against the WARM number — the steady state of any
-/// real session, where the cache survives between invocations — and the
-/// cold number rides beside it, always printed, never gated on.
+/// cold on the 971-commit live repo versus 1.59–1.82 ms warm, so reporting
+/// only the warm number would be a ~10 ms omission dressed as a result.
+///
+/// The status gate is defined against the WARM number — the steady state
+/// of any real session, where the cache survives between invocations —
+/// against `status`'s OWN budget of 70 ms (D5 supersession e119fc8b), NOT
+/// D5's original 5 ms figure, which now describes only the `ping` spawn
+/// floor. The cold number rides beside it, always printed, never gated on.
+///
+/// Secondary finding recorded with that supersession: on the PINNED
+/// fixture (60 review candidates over 50 commits) cold and warm are
+/// indistinguishable — store I/O dominates the status path, not this
+/// cache. a7d7b3d5's ~10 ms delta is real on the live repo but is not
+/// observable at this fixture's size, which is precisely why both series
+/// stay reported unconditionally rather than being collapsed to whichever
+/// one happens to look better.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheState {
     Cold,

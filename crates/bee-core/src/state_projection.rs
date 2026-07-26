@@ -322,9 +322,18 @@ pub fn rebuild_handoff_projection(root: &Path, control_root: &Path) -> io::Resul
     // mailbox-only fields so a byte-identical legacy reader sees exactly the
     // shape `writeHandoff` would have produced. `writer_session` is kept
     // verbatim (mirrors a planned-next record's own duplication).
+    //
+    // `shift_remove`, NEVER `remove` (rust-port-15): with `preserve_order`
+    // on, `Map::remove` aliases `swap_remove` (serde_json 1.0.150
+    // `src/map.rs:156-165`), which perturbs the position of the last
+    // element. This map is written straight to `.bee/HANDOFF.json` — a
+    // D3-covered store file whose mjs counterpart (`writeHandoff`) drops
+    // the same five keys with `delete`, which preserves order. Five
+    // swap-removes would scramble the record's tail into an order no mjs
+    // writer ever produces.
     let mut projected = record.fields.clone();
     for key in ["status", "id", "workflow_id", "target_role", "from_session"] {
-        projected.remove(key);
+        projected.shift_remove(key);
     }
     crate::fsutil::write_json_atomic(&handoff_path(root), &Value::Object(projected))?;
     Ok(HandoffProjectionResult { authoritative: true, source: Some(workflow_id) })

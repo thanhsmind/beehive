@@ -905,6 +905,35 @@ pub fn list_lanes(root: &Path) -> Vec<State> {
     lanes
 }
 
+/// `defaultLaneRecord(feature)`'s key order (state.mjs:1619-1630).
+///
+/// This, NOT the shared [`State`] struct's field order, is the emitted key
+/// order of a lane record: `laneRecordFrom` (state.mjs:1638) builds
+/// `{...defaultLaneRecord(feature), ...parsed}`, and a JS spread over an
+/// existing key OVERWRITES IN PLACE rather than reordering — so every key
+/// the default declares keeps the default's position, and only genuinely
+/// new keys from `parsed` are appended after them.
+///
+/// `State` declares `phase` before `feature`/`mode` because that is
+/// `defaultState()`'s order for `state.json`; the lane record's default
+/// puts `feature, mode` before `phase`. Serializing the shared struct and
+/// hoping the order matched emitted
+/// `{schema_version, phase, feature, mode, …}` against mjs's
+/// `{schema_version, feature, mode, phase, …}` — a D3 byte-compat break
+/// (rust-port-15) that stayed invisible until the parity harness gained a
+/// pinned session id and a `--lanes-full` leg, because until then no full
+/// lane record was ever serialized on the status path at all.
+const LANE_RECORD_KEY_ORDER: [&str; 8] = [
+    "schema_version",
+    "feature",
+    "mode",
+    "phase",
+    "approved_gates",
+    "summary",
+    "next_action",
+    "created_at",
+];
+
 /// `buildLaneRows(root)` — every lane record plus `bound_sessions` (the
 /// ids of every session currently bound to it). `sessions` is read from
 /// `root` directly (bee.mjs's own `buildLaneRows` does NOT re-root through
@@ -924,21 +953,39 @@ pub fn build_lane_rows(root: &Path) -> Vec<Value> {
     lanes
         .iter()
         .map(|lane| {
-            let mut v = serde_json::to_value(lane).unwrap_or(Value::Null);
+            let serialized = serde_json::to_value(lane).unwrap_or(Value::Null);
+            let src = serialized.as_object().cloned().unwrap_or_default();
             let feature = lane.feature.clone().unwrap_or_default();
             let bound = bound_by.get(&feature).cloned().unwrap_or_default();
-            if let Value::Object(ref mut map) = v {
-                // `workers` is a `state.json`-only field (`defaultState()`);
-                // `defaultLaneRecord` has no such key and no lane-mutation
-                // path in the mjs source ever writes one — the shared
-                // `State` struct's serde-default empty vec would otherwise
-                // inject a `"workers": []` key no real lane record ever
-                // carries (found while oracle-diffing against the real
-                // mjs `--lanes-full` array).
-                map.remove("workers");
-                map.insert("bound_sessions".to_string(), json!(bound));
+
+            // Rebuild the row in `defaultLaneRecord`'s key order rather
+            // than reordering the struct's serialization in place. Building
+            // it explicitly also removes the old `workers` deletion
+            // entirely: `workers` is a `state.json`-only field
+            // (`defaultState()`), `defaultLaneRecord` has no such key, and
+            // no lane-mutation path in the mjs source ever writes one — so
+            // the honest fix is never to emit it, not to emit and remove
+            // it. (The removal it replaces was also a `Map::remove`, which
+            // under this crate's required `preserve_order` feature aliases
+            // `swap_remove` — serde_json 1.0.150 `src/map.rs:156-165` —
+            // and would have dropped the LAST key into the vacated slot.)
+            let mut row = Map::new();
+            for key in LANE_RECORD_KEY_ORDER {
+                if let Some(value) = src.get(key) {
+                    row.insert(key.to_string(), value.clone());
+                }
             }
-            v
+            // Then any key the record carries that the default does not
+            // declare, in the record's own order — mirroring the spread's
+            // append-only behavior for genuinely new keys.
+            for (key, value) in &src {
+                if key == "workers" || LANE_RECORD_KEY_ORDER.contains(&key.as_str()) {
+                    continue;
+                }
+                row.insert(key.clone(), value.clone());
+            }
+            row.insert("bound_sessions".to_string(), json!(bound));
+            Value::Object(row)
         })
         .collect()
 }

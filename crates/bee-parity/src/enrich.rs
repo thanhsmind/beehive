@@ -38,6 +38,11 @@ use std::path::Path;
 /// The feature slug the enriched lane/state/cells agree on.
 pub const ENRICHED_FEATURE: &str = "fixture-enriched";
 
+/// The live session this scenario writes, pinned into both runtimes'
+/// `resolveSessionId` env chain so `buildLaneSummary` resolves an ACTIVE
+/// lane deterministically (see `runner::run_status`).
+pub const LIVE_SESSION_ID: &str = "parity-live-session";
+
 /// The enriched `state.json` body, written as an exact literal so
 /// [`seed_enriched_mutation`] can pin it the same way `mutate.rs` pins the
 /// plain fixture body.

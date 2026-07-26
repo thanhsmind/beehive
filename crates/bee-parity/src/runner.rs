@@ -31,6 +31,13 @@ pub enum Leg {
     Json,
     /// `status` — the human text render.
     Text,
+    /// `status --json --lanes-full` — the legacy full per-lane array
+    /// (lpsp-2). A SEPARATE leg because it is the only shape that
+    /// serializes every lane record in full regardless of which session is
+    /// bound, and it is therefore the one that exercises
+    /// `build_lane_rows`'s key-order handling (rust-port-15: the
+    /// `shift_remove` vs `swap_remove` hazard lives exactly there).
+    JsonLanesFull,
 }
 
 impl Leg {
@@ -38,13 +45,20 @@ impl Leg {
         match self {
             Leg::Json => "json",
             Leg::Text => "text",
+            Leg::JsonLanesFull => "json+lanes-full",
         }
+    }
+
+    /// Whether this leg's stdout is a JSON object (vs the text render).
+    pub fn is_json(self) -> bool {
+        matches!(self, Leg::Json | Leg::JsonLanesFull)
     }
 
     fn args(self) -> &'static [&'static str] {
         match self {
             Leg::Json => &["status", "--json"],
             Leg::Text => &["status"],
+            Leg::JsonLanesFull => &["status", "--json", "--lanes-full"],
         }
     }
 }
@@ -57,7 +71,27 @@ pub struct Binaries {
 }
 
 /// Run one leg of `status` under one runtime, with `cwd` set to `root`.
-pub fn run_status(bins: &Binaries, runtime: Runtime, leg: Leg, root: &Path) -> Result<RunResult, String> {
+///
+/// `session_id` pins `resolveSessionId`'s env chain (claims.mjs:139) for
+/// BOTH runtimes. This is not a convenience — it is COVERAGE CONTROL
+/// (rust-port-15). `resolveSessionId` reads `BEE_SESSION_ID` then
+/// `CLAUDE_CODE_SESSION_ID` from the ambient environment, and
+/// `buildLaneSummary` uses the result to decide whether there IS an active
+/// lane to serialize in full. Inheriting the parent's environment therefore
+/// made this harness's branch coverage depend on who ran it: under a Claude
+/// Code session, `CLAUDE_CODE_SESSION_ID` is set to an id with no session
+/// record in the fixture, so `active` resolved to null and the full lane
+/// row was never serialized — silently, and only on developer machines.
+/// Both runtimes read the same env so parity itself was never at risk, but
+/// the PROOF quietly shrank. Every leg now runs under an explicitly
+/// controlled environment instead.
+pub fn run_status(
+    bins: &Binaries,
+    runtime: Runtime,
+    leg: Leg,
+    root: &Path,
+    session_id: Option<&str>,
+) -> Result<RunResult, String> {
     let mut command = match runtime {
         Runtime::Mjs => {
             let mut c = Command::new("node");
@@ -68,6 +102,17 @@ pub fn run_status(bins: &Binaries, runtime: Runtime, leg: Leg, root: &Path) -> R
     };
     for arg in leg.args() {
         command.arg(arg);
+    }
+    // Always cleared, then set only when the scenario asks for it — an
+    // ambient value must never reach either runtime.
+    command.env_remove("CLAUDE_CODE_SESSION_ID");
+    match session_id {
+        Some(id) => {
+            command.env("BEE_SESSION_ID", id);
+        }
+        None => {
+            command.env_remove("BEE_SESSION_ID");
+        }
     }
     let output = command
         .current_dir(root)
@@ -89,8 +134,9 @@ fn describe(bins: &Binaries, runtime: Runtime) -> String {
 }
 
 /// The `--self-check` spawn shape, unchanged: the mjs leg's `status
-/// --json` against `root`.
+/// --json` against `root`, with no session id pinned (the plain fixture
+/// carries no session records, so there is no active lane either way).
 pub fn run_bee_status(bee_mjs: &Path, root: &Path) -> Result<RunResult, String> {
     let bins = Binaries { bee_mjs: bee_mjs.to_path_buf(), queen_bee: PathBuf::new() };
-    run_status(&bins, Runtime::Mjs, Leg::Json, root)
+    run_status(&bins, Runtime::Mjs, Leg::Json, root, None)
 }
