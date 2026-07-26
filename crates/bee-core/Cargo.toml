@@ -1,0 +1,10 @@
+[package]
+name = "bee-core"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "bee_core"
+path = "src/lib.rs"
+
+[dependencies]

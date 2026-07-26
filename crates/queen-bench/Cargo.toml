@@ -1,0 +1,10 @@
+[package]
+name = "queen-bench"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "queen-bench"
+path = "src/main.rs"
+
+[dependencies]

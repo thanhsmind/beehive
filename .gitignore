@@ -28,3 +28,7 @@
 .bee/tmp_*
 .bee/patch-*.json
 # BEE:END
+
+# rust-port (crates/): compiled artifacts only — Rust source is never
+# excluded from the host onboarding payload, this is build output.
+crates/target/

@@ -1,0 +1,11 @@
+[package]
+name = "queen-bee"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "queen-bee"
+path = "src/main.rs"
+
+[dependencies]
+bee-core = { path = "../bee-core" }
