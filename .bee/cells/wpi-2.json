@@ -1,0 +1,88 @@
+{
+  "id": "wpi-2",
+  "feature": "windows-path-identity",
+  "title": "stop two tests asserting a contract the product never promised, and canonicalize the herding resolver",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "wpi-1"
+  ],
+  "decisions": [],
+  "files": [
+    "packages/bee/tests/*",
+    "packages/bee/lib/*",
+    ".claude/skills/bee-herding/scripts/*",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee/tests/test_cli_cells.mjs",
+    "packages/bee/tests/test_herding_cli.mjs",
+    "packages/bee/lib/herding.mjs",
+    ".claude/skills/bee-herding/scripts/dispatch-interlock.mjs",
+    "docs/history/windows-path-identity/plan.md"
+  ],
+  "action": "Two test-side corrections. Validation removed the product-mutation half of this cell's earlier draft — read why before you start. SITE 1 — packages/bee/tests/test_cli_cells.mjs:879 asserts `changedFiles[0] === path.join('.bee','backlog.jsonl')` against `git show --name-only` output. git always prints forward slashes on every platform; path.join yields backslashes on win32, so the assertion cannot pass there. The product is correct: its pathspec is only ever fed INTO git add, which accepts either separator. Fix the test — compare against the forward-slash form git actually emits, or normalize the observed value before comparing — and say in the trace which you chose and why. SITE 2 — packages/bee/tests/test_herding_cli.mjs compares BOTH `out.marker === markerFile(root)` (:70) and `out.main_root === root` (:71) with === against fs.realpathSync of a temp dir, while the resolvers return path.dirname of git's stdout with no normalization. Fix BOTH assertions, not just :71 — path.join normalizes separators but not short-name aliasing, so :70 fails for the same underlying reason. DO NOT CANONICALIZE THE RETURNED VALUE, which the earlier draft told you to do and validation refuted: skills/bee-herding/SKILL.md:142 and :303 derive the worktree grant key by string surgery on main_root's basename, and that key is what the merge command expects as its --id — changing the returned spelling changes the key. The safe shape is canonicalize FOR COMPARISON, never mutate what is returned. If you conclude a product change is warranted anyway, that is a finding to report, not a change to make here. DO NOT SHARE A HELPER INTO THE INTERLOCK: packages/bee/lib/herding.mjs:26-41 records that .claude/skills/bee-herding/scripts/dispatch-interlock.mjs is a standalone zero-bee-dependency script whose entire purpose is byte-for-byte agreement with its twin, and that calling into it from bee automation is forbidden in either direction. The earlier draft told you to reuse wpi-1's helper there — do not. EDIT THE SOURCE, NOT THE MIRROR: .claude/skills/... is an onboard-managed install target that this cell's own regen chain rewrites from skills/...; an edit to the mirror is silently reverted while release_manifest --check stays green, because that mirror is not among the hashed roots. If any change to the interlock is warranted, it lands in skills/bee-herding/scripts/dispatch-interlock.mjs and its twin must stay byte-identical. VERIFY MUST DISCRIMINATE: both legs of the earlier draft were green on the unmodified tree — measured. Make your corrected assertions genuinely exercise the mismatch (drive the comparison through a spelling the platform would report differently, using wpi-1's injection seam), and record a red-first proof for each site.",
+  "must_haves": {
+    "truths": [
+      "the cells queue-submit assertion passes against the forward-slash form git actually emits on every platform, with the choice and its reason recorded",
+      "BOTH herding assertions (:70 marker and :71 main_root) compare canonically, using wpi-1's comparison rather than a second implementation",
+      "no product value changes: main_root's returned spelling is untouched, and the report states what the sweep found about consumers — including the SKILL.md grant-key derivation that depends on its basename",
+      "the interlock script and its twin remain byte-identical and dependency-free; any change to them lands in skills/, never in the .claude mirror",
+      "red-first evidence per site: the corrected assertion fails against a spelling the old form accepted, and passes after",
+      "the release-manifest regen chain ran inside this cell and release_manifest.mjs --check is green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/tests/",
+        "substantive": "the three corrected assertions across two suites"
+      }
+    ],
+    "key_links": [
+      "wpi-1 owns the comparison and its injection seam; this cell consumes both",
+      "SKILL.md derives the worktree grant key from main_root's basename — that is why the returned value must not change"
+    ],
+    "prohibitions": [
+      "Never canonicalize main_root's returned value — compare canonically instead",
+      "Never import a shared helper into the interlock script, and never edit the .claude mirror",
+      "Never change the product to satisfy a test that encodes a POSIX assumption",
+      "Never write a second path-comparison implementation"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only packages/bee/tests/test_cli_cells.mjs && node scripts/run_verify.mjs --only packages/bee/tests/test_herding_cli.mjs && node scripts/run_verify.mjs --only scripts/tests/test_path_identity.mjs && node scripts/release_manifest.mjs --check",
+  "behavior_change": true,
+  "tier": "generation",
+  "trace": {
+    "worker": "Bob",
+    "outcome": "Fixed the two test-side POSIX-assumption assertions (test_cli_cells.mjs commit-scope check; test_herding_cli.mjs marker/main_root checks) to use wpi-1's canonicalPathsEqual instead of === / path.join, and added a red-first regression guard proving the divergence on this Linux box via constructed platform-style spellings (path.win32.join backslash form; injected case-fold). main_root's returned value and the interlock script were left untouched per validation's findings; sweep confirmed SKILL.md:142,303's grant-key derivation reads worktree-list's main_root (resolveMainRoot/resolveRoots in bee.mjs/state.mjs), a distinct resolver from herding.mjs's resolveHerdingMainRoot that this cell also does not touch.",
+    "files_changed": [
+      "packages/bee/tests/test_cli_cells.mjs",
+      "packages/bee/tests/test_herding_cli.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T23:10:30.030Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\n    \"packages/bee/tests/test_cli_cells.mjs (site 1, :874-885 before edit)\",\n    \"packages/bee/tests/test_herding_cli.mjs (site 2, :63-75 and :114-132 before edit)\",\n    \"scripts/tests/test_path_identity.mjs (wpi-1's RED-FIRST REGRESSION GUARD pattern, reused rather than reinvented)\",\n    \"packages/bee/lib/path-identity.mjs (canonicalPathsEqual + injectable detectCaseFold/statFn, consumed not reimplemented)\"\n  ],\n  \"tests_added_or_changed\": [\n    \"packages/bee/tests/test_cli_cells.mjs: changed the commit-scope assertion's expected value from path.join('.bee','backlog.jsonl') to the literal '.bee/backlog.jsonl' (git's stdout is always forward-slash), plus an inline red-first sanity assertion using path.win32.join to prove the divergence without a Windows box\",\n    \"packages/bee/tests/test_herding_cli.mjs: changed the marker/main_root assertions (was :70-71, :128) from === to canonicalPathsEqual(...); added one new row 'RED-FIRST REGRESSION GUARD' to the SAME existing suite (test-economy D3 — not a new file) constructing a backslash-spelling and a case-flipped (injected detectCaseFold) divergence and proving raw === rejects both while canonicalPathsEqual accepts them, with a negative control that the fold never applies unpinned\"\n  ],\n  \"red_failure_evidence\": \"Site 1: oldWin32Expectation = path.win32.join('.bee','backlog.jsonl') = '.bee\\\\\\\\backlog.jsonl' !== git's real stdout '.bee/backlog.jsonl' -> the pre-fix path.join-based assertion FAILS (reproduces the actual 4-day Windows CI red); fixed literal '.bee/backlog.jsonl' === changedFiles[0] PASSES. Site 2: backslashRoot = root.split(path.sep).join('\\\\\\\\') !== root under raw === -> FAILS (reproduces main_root's win32 spelling mismatch); canonicalPathsEqual(backslashRoot, root) PASSES. Case: path.join(root,'NotYetCreated') !== path.join(root,'notyetcreated') under raw === -> FAILS; canonicalPathsEqual(..., {detectCaseFold:()=>true}) PASSES, and stays UNEQUAL with detectCaseFold:()=>false (negative control). All four transcripts reproduced live on this Linux box before writing the fix, via ad hoc scripts under .bee/tmp/ (deleted after use, per decision 0009 — nothing left on disk).\",\n  \"verification_run\": \"node scripts/run_verify.mjs --only packages/bee/tests/test_cli_cells.mjs && node scripts/run_verify.mjs --only packages/bee/tests/test_herding_cli.mjs && node scripts/run_verify.mjs --only scripts/tests/test_path_identity.mjs && node scripts/release_manifest.mjs --check -> all 3 suites PASS, release_manifest --check: 395 file(s) match stored manifest (regenerated via --write after the test edits changed their sha256)\",\n  \"deliberate_exceptions\": [\n    \"herding.mjs's resolveHerdingMainRoot and the dispatch-interlock.mjs twin are unchanged, per the cell's explicit prohibition — main_root's returned spelling is untouched; only the TEST-side comparison was corrected.\",\n    \"No product file was touched: worktree-store.mjs (wpi-1's scope) and herding.mjs (this cell's explicit prohibition) are both outside this diff.\"\n  ],\n  \"ratio_waiver\": \"This cell is test-only by design (fixing two test-side assertions that encoded a POSIX-only contract the product never promised); the diff touches zero product source lines, so the test:source ratio is mechanically unbounded/high — there is no source change to shrink toward, and adding unrelated source edits just to lower the ratio would be scope creep the cell explicitly forbids.\"\n}\n",
+    "verify_output": "release_manifest --check: 395 file(s) match stored manifest\n",
+    "verify_passed": true,
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T23:02:04.710Z",
+    "verify_command": "node scripts/run_verify.mjs --only packages/bee/tests/test_cli_cells.mjs && node scripts/run_verify.mjs --only packages/bee/tests/test_herding_cli.mjs && node scripts/run_verify.mjs --only scripts/tests/test_path_identity.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-26T23:09:41.697Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T23:09:41.697Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T23:09:38.834Z",
+        "acquired_at": "2026-07-26T23:02:04.708Z",
+        "worker": "Bob",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

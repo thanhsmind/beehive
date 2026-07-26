@@ -875,8 +875,26 @@ await check('bee.mjs backlog add --queue-submit performs the scoped commit, retu
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean);
+    // `git show --name-only` always prints forward slashes, on every platform
+    // (windows-path-identity wpi-2) — the pathspec fed INTO `git add` accepts
+    // either separator, but what git PRINTS BACK never varies by platform.
+    // The expected value is therefore the literal forward-slash form, never
+    // `path.join('.bee', 'backlog.jsonl')`: path.join emits the native
+    // separator, which is a backslash on win32, so a `path.join`-built
+    // expectation can never match git's real stdout there.
+    //
+    // Red-first proof (no Windows box on hand): simulate what the OLD,
+    // wrong expectation would have evaluated to on win32 via path.win32.join
+    // — this is exactly the value the previous `path.join(...)` assertion
+    // would have compared against real git output on that platform, and it
+    // provably diverges from the forward-slash form git always emits.
+    const oldWin32Expectation = path.win32.join('.bee', 'backlog.jsonl');
     assert(
-      changedFiles.length === 1 && changedFiles[0] === path.join('.bee', 'backlog.jsonl'),
+      oldWin32Expectation !== changedFiles[0],
+      `sanity/red: the old path.join-built expectation (${JSON.stringify(oldWin32Expectation)}) must diverge from git's real forward-slash output (${JSON.stringify(changedFiles[0])}) on win32 — that divergence is exactly why the old assertion could not pass there`,
+    );
+    assert(
+      changedFiles.length === 1 && changedFiles[0] === '.bee/backlog.jsonl',
       `commit touches only .bee/backlog.jsonl, got ${JSON.stringify(changedFiles)}`,
     );
   } finally {

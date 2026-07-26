@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { runModuleWorker } from '../../../scripts/lib/run-module-worker.mjs';
 import { check, assert, printSummaryAndExit } from '../../../scripts/lib/test-fixture.mjs';
 import { writeJsonAtomic } from '../lib/fsutil.mjs';
+import { canonicalPathsEqual } from '../lib/path-identity.mjs';
 
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(TESTS_DIR, '..', '..', '..');
@@ -67,8 +68,16 @@ await check('bee herding status --json on a repo with no marker reports {enabled
     assert(result.status === 0, `status should succeed, got ${result.status}: ${result.stderr}`);
     const out = JSON.parse(result.stdout);
     assert(out.enabled === false, `expected enabled:false, got ${JSON.stringify(out)}`);
-    assert(out.marker === markerFile(root), `expected marker ${markerFile(root)}, got ${out.marker}`);
-    assert(out.main_root === root, `expected main_root ${root}, got ${out.main_root}`);
+    // Canonical comparison (windows-path-identity wpi-2), not `===`: main_root
+    // is `path.dirname(<git stdout>)` (herding.mjs), never normalized by the
+    // product on purpose (SKILL.md derives the worktree grant key from its
+    // exact basename — see the module header there). A raw `===` against
+    // `fs.realpathSync` output asserts a POSIX-only contract the product
+    // never promised; canonicalPathsEqual tolerates the platform divergence
+    // instead of demanding a spelling match. wpi-1 owns this comparison —
+    // reused here, not reimplemented.
+    assert(canonicalPathsEqual(out.marker, markerFile(root)), `expected marker ${markerFile(root)}, got ${out.marker}`);
+    assert(canonicalPathsEqual(out.main_root, root), `expected main_root ${root}, got ${out.main_root}`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -125,7 +134,7 @@ await check('after "bee herding enable", the existing read-only interlock (dispa
     assert(interlockResult.status === 0, `interlock should report enabled (exit 0), got ${interlockResult.status}: ${interlockResult.stderr}`);
     const interlockOut = JSON.parse(interlockResult.stdout);
     assert(interlockOut.enabled === true, `interlock should agree the marker is enabled, got ${JSON.stringify(interlockOut)}`);
-    assert(interlockOut.marker === markerFile(root), `interlock should resolve the SAME marker path, got ${interlockOut.marker}`);
+    assert(canonicalPathsEqual(interlockOut.marker, markerFile(root)), `interlock should resolve the SAME marker path, got ${interlockOut.marker}`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -154,6 +163,52 @@ await check('bee herding with no verb prints a Use: line listing enable/disable/
     assert(
       /enable/.test(result.stderr) && /disable/.test(result.stderr) && /status/.test(result.stderr),
       `Use: line should list all three verbs, got ${result.stderr}`,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('RED-FIRST REGRESSION GUARD (windows-path-identity wpi-2): a platform-style divergent spelling of the SAME main_root is rejected by the pre-fix raw `===` this suite used to assert with, and accepted by the canonical comparison the fixed assertions now use — no real Windows/case-insensitive volume needed, since the divergent spelling is constructed directly', async () => {
+  const root = makeHerdingRepo('bee-herding-redfirst-');
+  try {
+    // Separator divergence: what `main_root` (or the marker path) would look
+    // like coming back through Node's native path machinery on win32 versus
+    // the forward-slash form git's own stdout always emits. Constructed, not
+    // observed — this Linux box cannot make git or fs.realpathSync emit a
+    // backslash — but the OLD assertion's `===` genuinely cannot survive it,
+    // and that is exactly the fact this guard pins down.
+    const backslashSpelling = root.split(path.sep).join('\\');
+    assert(
+      backslashSpelling !== root,
+      'RED: the pre-fix raw `===` comparison rejects the platform-divergent spelling (constructed, since this box cannot make git or fs.realpathSync emit one for real)',
+    );
+    assert(
+      canonicalPathsEqual(backslashSpelling, root),
+      'GREEN: canonicalPathsEqual accepts the SAME directory spelled with the platform-native separator instead of git\'s forward-slash form',
+    );
+
+    // Case divergence: case sensitivity is per-VOLUME, not per-platform
+    // (plan.md CORRECTION 2) — this dev box's real filesystem is case-
+    // sensitive, so a case-flipped spelling of a NON-EXISTENT path (forcing
+    // the string-fallback branch, same technique scripts/tests/
+    // test_path_identity.mjs uses) genuinely stays unequal without pinning,
+    // and genuinely folds equal once a case-insensitive volume is (here,
+    // simulated via injection since none is available) detected.
+    const nonExistent = path.join(root, 'NotYetCreated');
+    const caseFlipped = path.join(root, 'notyetcreated');
+    assert(!fs.existsSync(nonExistent) && !fs.existsSync(caseFlipped), 'fixture precondition: neither path exists, forcing the string-fallback branch');
+    assert(
+      nonExistent !== caseFlipped,
+      'RED: the pre-fix raw `===` comparison rejects the case-divergent spelling',
+    );
+    assert(
+      canonicalPathsEqual(nonExistent, caseFlipped, { detectCaseFold: () => true }),
+      'GREEN: canonicalPathsEqual folds the case-divergent spelling once the volume is (here, pinned) case-insensitive',
+    );
+    assert(
+      canonicalPathsEqual(nonExistent, caseFlipped, { detectCaseFold: () => false }) === false,
+      'negative control: the same pair stays UNEQUAL when the volume is (correctly, for this box) detected as case-sensitive — the fold is conditional, never automatic',
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
