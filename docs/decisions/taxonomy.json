@@ -200,6 +200,12 @@
     "gate3",
     "batch2",
     "gate4",
-    "review-close"
+    "review-close",
+    "worktree-concurrency-guard-controlroot-port",
+    "merge-strategy",
+    "scope",
+    "write-guard",
+    "worktree-new",
+    "error-convention"
   ]
 }

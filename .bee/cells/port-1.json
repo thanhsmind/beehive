@@ -1,0 +1,119 @@
+{
+  "id": "port-1",
+  "feature": "worktree-concurrency-guard-controlroot-port",
+  "title": "Merge origin/main (bee 1.18.2) and re-apply the shared-checkout guard at its new packages/bee/ home, controlRoot-aware",
+  "lane": "high-risk",
+  "deps": [],
+  "decisions": [
+    "Port-D1",
+    "Port-D2",
+    "Port-D3",
+    "Port-D4",
+    "Port-D5",
+    "Port-D6",
+    "Port-D7",
+    "Port-D8"
+  ],
+  "files": [
+    ".bee/bin/bee.mjs",
+    ".bee/bin/hooks/bee-write-guard.mjs",
+    ".bee/bin/lib/guards.mjs",
+    "packages/bee/lib/guards.mjs",
+    "packages/bee/hooks/bee-write-guard.mjs",
+    "packages/bee/bee.mjs",
+    "packages/bee/hooks/test_write_guard.mjs",
+    "scripts/tests/test_worktree_companion.mjs",
+    "hooks/test_write_guard.mjs",
+    "hooks/bee-write-guard.mjs",
+    "scripts/test_worktree_companion.mjs",
+    ".bee/onboarding.json",
+    ".agents/skills/.bee-render.json",
+    ".claude/skills/.bee-render.json",
+    ".claude-plugin/skills/.bee-render.json",
+    ".codex-plugin/skills/.bee-render.json",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "docs/knowledge/index.md",
+    "docs/knowledge/areas/workflow-state/index.md",
+    "docs/knowledge/areas/workflow-state/worktree-isolation.md",
+    "docs/knowledge/areas/worktree-parallelism/index.md",
+    "docs/knowledge/patterns/index.md",
+    "docs/backlog.md",
+    "docs/decisions/taxonomy.json",
+    ".bee/backlog.jsonl",
+    ".bee/decisions.jsonl",
+    ".bee/review-candidates.jsonl",
+    ".bee/cells/rel1150-1.json"
+  ],
+  "read_first": [
+    "docs/history/worktree-concurrency-guard-controlroot-port/CONTEXT.md",
+    "docs/history/worktree-concurrency-guard-controlroot-port/approach.md",
+    "docs/history/worktree-concurrency-guard/CONTEXT.md",
+    "docs/history/worktree-concurrency-guard/reports/review-20260724.md",
+    "docs/history/worktree-concurrency-guard/reports/wcg-1.md"
+  ],
+  "action": "This is ONE cell resolving a single live git merge -- do the whole sequence yourself, in order, do not split it. A safety tag pre-1.18.2-port-backup already exists at 56b437aa (the pre-merge tip) if you need to abort and restart. CRUCIAL MECHANIC (found by plan-checker review, do not skip): our branch has NEVER touched packages/bee/ (it doesn't exist in our tree) -- so packages/bee/* arrives 100% conflict-free from upstream, a brand-new tree. The REAL conflicts are the 3 files we DID touch under the OLD vendored location: .bee/bin/bee.mjs, .bee/bin/lib/guards.mjs, .bee/bin/hooks/bee-write-guard.mjs (confirmed via `git diff --name-only $(git merge-base HEAD origin/main) HEAD -- .bee/bin` vs `... origin/main -- .bee/bin`) -- upstream ALSO changed these plus ~29 other .bee/bin/lib/*.mjs files we never touched (those auto-merge clean, no action needed). Steps: (1) Run `git merge origin/main --no-commit --no-ff`. (2) For the 3 REAL .bee/bin/* conflicts: accept upstream/theirs entirely (`git checkout --theirs -- .bee/bin/bee.mjs .bee/bin/hooks/bee-write-guard.mjs .bee/bin/lib/guards.mjs && git add .bee/bin/bee.mjs .bee/bin/hooks/bee-write-guard.mjs .bee/bin/lib/guards.mjs`) -- the `git add` is required, not optional: `--theirs` alone leaves these 3 paths unmerged in the index, which blocks later mechanical steps. Do NOT try to hand-merge our old logic into these vendored files. They get correctly regenerated with OUR new logic in step 6 below, because vendoring flows packages/bee/* -> .bee/bin/* (confirmed: packages/bee/scripts/onboard_bee.mjs copies bee.mjs/lib/*/hooks/* into .bee/bin/), never the other direction. (3) For .agents/skills/.bee-render.json and .claude/skills/.bee-render.json: accept upstream/theirs -- confirmed render_plugin_skill_trees.mjs's TARGET_ROOTS (origin/main:scripts/render_plugin_skill_trees.mjs:38-41) no longer writes to .agents/.claude at all (only .claude-plugin + .codex-plugin), so these two markers are now static/unregenerated -- just take upstream's. For .claude-plugin/skills/.bee-render.json and .codex-plugin/skills/.bee-render.json: any resolution is fine, they get overwritten fresh by step 7's render run anyway. For .agents/skills/bee-hive/{scripts,templates} and .claude/skills/bee-hive/{scripts,templates} specifically (the modify/delete conflicts) -- accept upstream's DELETION of just these two subtrees (confirmed 0 files remain there on origin/main) -- the surrounding .agents/skills/ and .claude/skills/ directories themselves still exist (other skill docs, e.g. bee-briefing, are untouched) -- do not delete anything beyond the bee-hive/{scripts,templates} subtrees. (4) For hooks/test_write_guard.mjs, hooks/bee-write-guard.mjs, scripts/test_worktree_companion.mjs (the OLD paths, now modify/delete conflicts since upstream relocated them to packages/bee/hooks/* and scripts/tests/*): accept upstream's deletion -- the new canonical is packages/bee/hooks/test_write_guard.mjs and scripts/tests/test_worktree_companion.mjs, resolved fresh in step 6. (5) For docs/knowledge/areas/workflow-state/worktree-isolation.md (a real content conflict, both sides edited this concept file): read both versions (`git show HEAD:docs/knowledge/areas/workflow-state/worktree-isolation.md` and `git show origin/main:docs/knowledge/areas/workflow-state/worktree-isolation.md`), reconcile by keeping BOTH sides' additions (our B21/R36 shared-checkout content, plus whatever upstream's own edits added) -- do not silently drop either side's content. (6) NOW edit the canonical packages/bee/ files (these arrived clean from upstream in step 1, no conflict -- this is a FRESH addition, not conflict resolution). Advisor-consult constraint (2026-07-26, fable): do NOT reconstruct the 10 helpers from memory or from this action's description alone -- read the exact prior implementation via `git show pre-1.18.2-port-backup:.bee/bin/lib/guards.mjs` (and `:.bee/bin/hooks/bee-write-guard.mjs`, `:.bee/bin/bee.mjs` for the other two files below), and transcribe from that real source, adapting only (a) the file path/import shape for the new location and (b) the controlRoot call per Port-D4. A re-derivation from description risks silently regressing one of the 2 already-fixed P1s (self-exclusion, fail-closed-on-error) -- transcription from the proven source does not. Add the 10 relocated exports/helpers (isSharedNestedCheckoutTarget, hasAnySharedNestedCheckout, realpathOrNull, isRealUnderRoot, resolveExistingRealpath, resolveVerifiedCompanionMountReal, targetInsideVerifiedCompanionMount, findNestedCheckoutDir, scanForNestedCheckout with NESTED_SCAN_SKIP_DIRS/NESTED_SCAN_MAX_DEPTH, hasGitNode, isRegisteredSubmodule) to packages/bee/lib/guards.mjs. Per Port-D4: isConcurrentMode inside isSharedNestedCheckoutTarget/hasAnySharedNestedCheckout must take controlRoot (not root) -- pick ONE consistent shape (new positional param, or a field on the existing opts object alongside excludeSessionId) and document which in the cell outcome -- but the filesystem-scan helpers (realpathOrNull, findNestedCheckoutDir, scanForNestedCheckout, hasGitNode, isRegisteredSubmodule) stay root-scoped, never controlRoot (confirmed: resolveWriteTopology's controlRoot = override || ctx.controlRoot || root at guards.mjs:290 -- they are not interchangeable). Add the pre-checkWrite call to packages/bee/hooks/bee-write-guard.mjs, passing ctx.controlRoot (already resolved at bee-write-guard.mjs:650-651's readHookContext) using the signature shape you picked, wrapped in the SAME try/catch-denies-on-throw pattern already shipped in wcg-fix-2 (see docs/history/worktree-concurrency-guard/reports/wcg-fix-2.md if present) -- do not silently drop that fail-closed behavior. In packages/bee/bee.mjs's handleWorktreeNew (find via grep, was ~bee.mjs:4906-4981 on origin/main before your merge, re-grep since the merge may shift lines), plug the pre-creation refusal between mainRoot being set and the createFeatureWorktree call. Derive controlRoot via the existing controlRootFor(mainRoot) helper (already used by sibling functions e.g. handleWorktreeMerge) -- do not invent a new way to find it. Resolve the acting session id via resolveSessionId({ root: controlRoot }) mirroring wcg-fix-1's shipped self-exclusion fix. Per Port-D7: throw a plain `new Error('...')` matching this function's existing refusal style (no [CODE] prefix -- WorktreeCreateError does not exist in the new bee.mjs). (7) Re-vendor: run `node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply --json` to regenerate .bee/bin/* from the now-edited packages/bee/* (this OVERWRITES step 2's accept-theirs resolution with the correct final content, including our new logic) -- this is an UPGRADE for this checkout (1.15.0 -> 1.18.2), so the --force-downgrade flag should not be needed, but if the command reports status blocked_downgrade, investigate why before forcing anything. Also run `node scripts/render_plugin_skill_trees.mjs` (confirm its current invocation/flags first) to refresh .claude-plugin/.codex-plugin's .bee-render.json + templates. (8) Re-apply both test files (Port-D8) at their new paths (packages/bee/hooks/test_write_guard.mjs, scripts/tests/test_worktree_companion.mjs), preserving every already-proven scenario (reachable via `git show pre-1.18.2-port-backup:hooks/test_write_guard.mjs` / `:scripts/test_worktree_companion.mjs` for the exact prior content) adapted for path and controlRoot-awareness. ADD at least one new row proving the controlRoot-vs-root scoping: a target physically under root but with session records living under a DIFFERENT controlRoot (simulate linked-worktree topology) is still detected by the filesystem scan (root-scoped) while the concurrency check correctly reads controlRoot's session records, not root's. (9) Resolve remaining mechanical conflicts: .bee/onboarding.json / release-manifest.json / docs/knowledge/*/index.md / docs/backlog.md / docs/decisions/taxonomy.json -- accept upstream then re-run: node .bee/bin/bee.mjs knowledge index, node .bee/bin/bee.mjs backlog render --write (confirm current flag names first, they may have changed at 1.18.2). For .bee/backlog.jsonl / .bee/decisions.jsonl / .bee/review-candidates.jsonl (append-only JSONL): union both sides' lines, never drop either side's entries. For .bee/cells/rel1150-1.json: stray unrelated record (see docs/knowledge/patterns/20260724-worktree-inherits-stale-cells.md) -- take whichever side shows it capped/dropped, or `bee cells drop` it again if both sides still show it claimed. (10) Run the full test suite at the new paths plus ledger_parity/manifest/knowledge checks (confirm exact current command names/paths before assuming the old invocations still work), resolve anything red. Advisor-consult constraint (2026-07-26, fable): before committing, (a) run `git diff --check` and confirm it reports nothing -- this is git's own leftover-conflict-marker detector and is the actual proof for the 'zero remaining conflict markers' truth, stronger than eyeballing files; (b) run `node packages/bee/scripts/onboard_bee.mjs --repo-root . --json` (no `--apply` this time) and confirm its `status` field reads `up_to_date` -- this is the actual proof that vendored `.bee/bin/*` now matches canonical `packages/bee/*` exactly, the mechanism-appropriate check rather than a raw byte diff (onboard_bee.mjs owns the sync logic and may legitimately transform, not byte-copy). Paste both outputs into the cell's verification evidence. (11) Only once everything is green including (10)'s two checks, commit the merge (a real commit, not --no-commit).",
+  "must_haves": {
+    "truths": [
+      "git merge origin/main completes as a real commit with zero remaining conflict markers anywhere in the tree, proven by a clean `git diff --check` run before the commit (not just visual inspection)",
+      "packages/bee/lib/guards.mjs, packages/bee/hooks/bee-write-guard.mjs, packages/bee/bee.mjs (canonical) all carry the ported logic; .bee/bin/{bee.mjs,lib/guards.mjs,hooks/bee-write-guard.mjs} (vendored) match them exactly after re-vendoring via onboard_bee.mjs --apply, proven by re-running onboard_bee.mjs --json (no --apply) afterward and confirming status: up_to_date",
+      "Every previously-proven scenario from hooks/test_write_guard.mjs and scripts/test_worktree_companion.mjs (pre-port state, tag pre-1.18.2-port-backup) still passes at the new paths, including both P1 fixes (self-exclusion, fail-closed-on-error)",
+      "A new test proves the controlRoot-vs-root scoping DIFFERENTIALLY, not by a single assertion: it seeds a live session record under controlRoot only (root has none) and asserts refusal, AND seeds a live session record under root only (controlRoot has none) and asserts NO refusal -- the verdict must flip depending on which root the concurrency check actually consults, or the test could pass even if the code reads the wrong root",
+      "docs/knowledge/areas/workflow-state/worktree-isolation.md retains BOTH our shared-checkout content (B21/R36) and whatever upstream's own edits added -- neither side silently dropped",
+      ".agents/skills/bee-hive/{scripts,templates} and .claude/skills/bee-hive/{scripts,templates} are absent post-merge (matching upstream's deletion of just those two subtrees, not the surrounding directories)",
+      "ledger_parity (or its current 1.18.2 equivalent), the manifest check, and knowledge check all pass clean"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/lib/guards.mjs",
+        "substantive": "all 10 relocated exports/helpers present, controlRoot-scoped per Port-D4, with a doc comment stating which controlRoot-signature shape was chosen and why"
+      },
+      {
+        "path": "packages/bee/hooks/bee-write-guard.mjs",
+        "substantive": "pre-checkWrite shared-checkout check present, using ctx.controlRoot, fail-closed on exception preserved from wcg-fix-2"
+      },
+      {
+        "path": "packages/bee/bee.mjs",
+        "substantive": "handleWorktreeNew's pre-creation refusal present, using controlRootFor + resolveSessionId + plain Error, self-exclusion preserved from wcg-fix-1"
+      },
+      {
+        "path": "packages/bee/hooks/test_write_guard.mjs",
+        "substantive": "all prior rows plus the new DIFFERENTIAL controlRoot-scoping rows (both directions: controlRoot-only session refuses, root-only session does not), at the new path"
+      },
+      {
+        "path": "scripts/tests/test_worktree_companion.mjs",
+        "substantive": "all prior rows plus the new DIFFERENTIAL controlRoot-scoping rows (both directions: controlRoot-only session refuses, root-only session does not), at the new path"
+      }
+    ],
+    "key_links": [
+      "packages/bee/hooks/bee-write-guard.mjs imports and calls packages/bee/lib/guards.mjs's relocated isSharedNestedCheckoutTarget",
+      "packages/bee/bee.mjs's handleWorktreeNew imports and calls packages/bee/lib/guards.mjs's relocated hasAnySharedNestedCheckout",
+      ".bee/bin/{bee.mjs,lib/guards.mjs,hooks/bee-write-guard.mjs} are re-vendored from packages/bee/* via onboard_bee.mjs --apply, not hand-resolved from the merge conflict directly"
+    ],
+    "prohibitions": [
+      "Do not hand-merge our old logic directly into the .bee/bin/* conflict -- accept upstream there, then re-vendor from the edited packages/bee/* canonical",
+      "Do not regress either P1 fix (self-exclusion in worktree-new, fail-closed-on-error in write-guard) during transcription",
+      "Do not swap controlRoot in for root inside the filesystem-scan helpers -- those stay root-scoped",
+      "Do not expand scope into deeper workspace-ownership integration (Port-D3) -- minimal, behavior-preserving re-application only",
+      "Do not force-push or rebase -- this is a merge commit onto the existing branch history",
+      "Do not delete anything under .agents/skills/ or .claude/skills/ beyond the bee-hive/{scripts,templates} subtrees"
+    ]
+  },
+  "verify": "node --test packages/bee/hooks/test_write_guard.mjs && node --test scripts/tests/test_worktree_companion.mjs && node .bee/bin/bee.mjs knowledge check --json && node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check",
+  "behavior_change": true,
+  "regen_obligation_ack": "This cell IS the regen/merge-resolution step itself for the affected manifest/ledger/index files -- they are deliberately listed in files and resolved via the regen chain described in the action, not exempted. release_manifest.mjs's exact 1.18.2 invocation (or whether it was renamed) is to be confirmed by the worker during execution rather than assumed; if the command name changed, use the correct current one and note the rename as a deviation.",
+  "status": "claimed",
+  "trace": {
+    "worker": "port-1-worker",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "346c5e4d-65e6-40c1-b07c-57cca160d2e3",
+    "claimed_at": "2026-07-26T12:45:44.802Z"
+  }
+}
