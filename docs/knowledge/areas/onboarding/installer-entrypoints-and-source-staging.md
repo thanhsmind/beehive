@@ -9,7 +9,7 @@ bee:
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
   decisions: [09b776b5 (both installers prove complete greenfield/brownfield postconditions before success), 17bfc14a (Codex-safe onboarding tests preserve the real CLI entrypoint and observable process contract through an isolated Worker), a83a3613 (shared isolated runner for nested Node entrypoints; real Git/Bash/Codex integration remains external), "e0f3e40e (packages-restructure D1-D5: vendor payload relocated to packages/bee/, skills instruction-only, PLUGIN_ROOT-relative resolution)", "80b64c20 (packages-engine-move D1-D5: onboarding/distribution engine relocated to packages/bee/scripts, strict-flag validation universal, migration-tooling pattern)"]
-  sources: ["gh-issue-fixes-172 cell ghf-2 (GH #26: Windows staged source carries the full release identity — sparse checkout includes both package manifests; absent-package removal probed before attempted; trace in .bee/cells/, 2026-07-20)", "installer-probe-quiet cells installer-probe-quiet-1/-2 (tolerated runtime-CLI probe failures — captured stderr, one condensed warning per broken tool, repo-copy proceeds / plugin-first names the broken tool; reports docs/history/installer-probe-quiet/, 2026-07-20)", "codex-sandbox-baseline cells codex-sandbox-baseline-1/codex-sandbox-baseline-2 (real onboarding entrypoint through the shared isolated test runner; full onboarding suite green, 2026-07-16)", "installer-version-parity-1-3-1 D2/D8 Linux Bash E2E (cells -3, 2026-07-16)", "docs/specs/onboarding.md#R20b", "docs/specs/onboarding.md#R23", "docs/specs/onboarding.md#R27", "docs/specs/onboarding.md#P1", "docs/specs/onboarding.md#P2", "docs/specs/onboarding.md#P4", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)", docs/history/packages-engine-move/]
+  sources: ["gh-issue-fixes-172 cell ghf-2 (GH #26: Windows staged source carries the full release identity — sparse checkout includes both package manifests; absent-package removal probed before attempted; trace in .bee/cells/, 2026-07-20)", "installer-probe-quiet cells installer-probe-quiet-1/-2 (tolerated runtime-CLI probe failures — captured stderr, one condensed warning per broken tool, repo-copy proceeds / plugin-first names the broken tool; reports docs/history/installer-probe-quiet/, 2026-07-20)", "codex-sandbox-baseline cells codex-sandbox-baseline-1/codex-sandbox-baseline-2 (real onboarding entrypoint through the shared isolated test runner; full onboarding suite green, 2026-07-16)", "installer-version-parity-1-3-1 D2/D8 Linux Bash E2E (cells -3, 2026-07-16)", "docs/specs/onboarding.md#R20b", "docs/specs/onboarding.md#R23", "docs/specs/onboarding.md#R27", "docs/specs/onboarding.md#P1", "docs/specs/onboarding.md#P2", "docs/specs/onboarding.md#P4", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)", docs/history/packages-engine-move/, docs/history/install-tty-fix/]
   authoritative_for: "onboarding: installer entry points and source staging"
 ---
 
@@ -93,6 +93,10 @@ carries a forbidden character, a reserved device name, or a trailing dot/space.
   guarded helper rather than a bare redirection, so a broken tool never crashes
   the installer (installer-probe-quiet-1 4799236 + release 1.7.5 c46a9e4;
   supersedes the earlier "probe failure is fatal" reading, 2026-07-20).
+
+## Edge Cases Settled
+
+- A non-interactive install run (no usable terminal) without the explicit accept-all option fails safe: it stops with guidance naming that option, never a crash — the terminal probe performs a real open, not a permission-bit check.
 
 ## Pointers (implementation)
 
