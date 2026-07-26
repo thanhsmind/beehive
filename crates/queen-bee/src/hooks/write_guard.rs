@@ -20,14 +20,18 @@
 //! check (d) validated against the rust-port-8 registry bridge
 //! (`.bee/cache/command-registry.json`; a stale snapshot skips check (d)
 //! with a visible coverage-gap line — the ACCEPTED rust-only allow window).
-//! - The read side (`checkRead`, read-size guard, privacy/scout),
-//!   `apply_patch` target proving, and `AskUserQuestion` validation are
-//!   cell rust-port-12 — same deliberate fall-open until they land.
+//! - rust-port-12 (split 3 of 3) adds the read side (`checkRead` — privacy
+//!   marker + scout-dir denies — plus the large-read size guard, ported
+//!   here since bee-write-guard.mjs defines it in the HOOK, not
+//!   guards.mjs), Codex `apply_patch` target-by-target provability (same
+//!   gate/reservation decisions as Edit/Write/Bash on every PROVED target),
+//!   and `AskUserQuestion` schema validation including the ask-guard-autofix
+//!   repair path.
 //!
 //! Exit contract (D7b): allow = exit 0 silent (or the allow+notice JSON on
-//! stdout for advisory warnings); deliberate deny = exit 2 with the reason
-//! on stderr; internal crash = exit 0 plus a `.bee/logs/hooks.jsonl` crash
-//! line (fail-open).
+//! stdout for advisory warnings and the ask-guard-autofix repair); deliberate
+//! deny = exit 2 with the reason on stderr; internal crash = exit 0 plus a
+//! `.bee/logs/hooks.jsonl` crash line (fail-open).
 
 use std::fs;
 use std::io::Write as _;
@@ -36,9 +40,10 @@ use std::path::{Component, Path, PathBuf};
 
 use serde_json::{json, Value};
 
+use bee_core::config::read_config_value;
 use bee_core::guards::{
-    check_bin_lib_import_bash_command, check_git_bash_command, check_write, extract_bash_targets, Verdict,
-    WriteTopology,
+    check_ask_user_question, check_bin_lib_import_bash_command, check_git_bash_command, check_read, check_write,
+    extract_bash_targets, AskVerdict, Verdict, WriteTopology,
 };
 use bee_core::registry::{load_registry, CommandRegistryEntry, Registry};
 use bee_core::state::read_state;
@@ -64,6 +69,118 @@ FIX: use plain in-worktree paths without traversal, outside absolute paths, or s
 const WORKTREE_LINK_INVALID_MESSAGE: &str =
     "bee worktree guard denied this write: WORKTREE_LINK_INVALID — linked worktree metadata could not be validated. \
 FIX: repair or recreate the Git worktree before retrying; no worktree-local .bee store is trusted.";
+
+// ─── large-read guard (router-cost D1/D2/D3/D4) — rust-port-12 ────────────
+// Ported here (not bee-core/guards.rs) because bee-write-guard.mjs defines
+// these directly in the hook, not in guards.mjs — `checkRead` itself is
+// pattern-only, no I/O.
+
+/// Default `guards.max_read_lines` (D2's measured value) when the config key
+/// is absent.
+const DEFAULT_MAX_READ_LINES: u64 = 800;
+/// Files larger than this are never measured — fail-open (allow) instead of
+/// reading the whole thing into memory just to decide whether to deny it.
+const READ_SIZE_GUARD_CAP_BYTES: u64 = 25 * 1024 * 1024;
+
+fn resolve_max_read_lines(config: &Value) -> u64 {
+    match config.get("guards").and_then(|g| g.get("max_read_lines")).and_then(Value::as_f64) {
+        Some(n) if n.is_finite() && n > 0.0 => n as u64,
+        _ => DEFAULT_MAX_READ_LINES,
+    }
+}
+
+/// Null-byte sniff over a bounded prefix — the same cheap heuristic the mjs
+/// source uses to distinguish text from binary content.
+fn looks_binary(buffer: &[u8]) -> bool {
+    let scan_len = buffer.len().min(8000);
+    buffer[..scan_len].iter().any(|&b| b == 0)
+}
+
+/// Counts newline-delimited lines, counting a non-empty trailing partial
+/// line (no final `\n`) as one more — "how many lines" a human would say,
+/// including the last one.
+fn count_lines(buffer: &[u8]) -> u64 {
+    let mut count = buffer.iter().filter(|&&b| b == b'\n').count() as u64;
+    if !buffer.is_empty() && buffer[buffer.len() - 1] != b'\n' {
+        count += 1;
+    }
+    count
+}
+
+/// Port of `checkReadSizeDenial(absPath, label, threshold)` — every error
+/// path (ENOENT, EACCES, a directory, a symlink loop, ...) returns `None`:
+/// fail-open, never deny because measurement failed.
+fn check_read_size_denial(abs_path: &Path, label: &str, threshold: u64) -> Option<String> {
+    let meta = fs::metadata(abs_path).ok()?;
+    if !meta.is_file() {
+        return None;
+    }
+    if meta.len() > READ_SIZE_GUARD_CAP_BYTES {
+        return None;
+    }
+    let buffer = fs::read(abs_path).ok()?;
+    if looks_binary(&buffer) {
+        return None;
+    }
+    let line_count = count_lines(&buffer);
+    if line_count < threshold {
+        return None;
+    }
+    Some(format!(
+        "bee read-size guard: \"{label}\" is {line_count} lines (threshold: {threshold}) and this Read \
+has neither `offset` nor `limit` — reading it unbounded would load the whole file into context. \
+FIX: pass `limit` (and optionally `offset`) to read a slice, or dispatch a `bee-extract` worker to read the whole file."
+    ))
+}
+
+// ─── Codex apply_patch target extraction (canonical envelope) ─────────────
+// rust-port-12. Ported here (not bee-core/guards.rs) because
+// bee-write-guard.mjs defines these directly in the hook.
+
+/// One target line per file operation, matched manually (no regex crate
+/// dependency in this bin): `*** Add File: <path>` | `*** Update File:
+/// <path>` | `*** Delete File: <path>` | `*** Move to: <path>` (destination
+/// of an Update File move). Equivalent to the mjs `PATCH_TARGET_RE` —
+/// `^\*\*\*\s+(?:Add File|Update File|Delete File|Move to):\s*(.+)\s*$` —
+/// captured then trimmed either way, so a greedy capture + explicit
+/// `.trim()` reproduces the mjs lazy-quantifier result exactly.
+const PATCH_TARGET_VERBS: [&str; 4] = ["Add File", "Update File", "Delete File", "Move to"];
+
+fn parse_patch_target_line(line: &str) -> Option<String> {
+    let after_stars = line.strip_prefix("***")?;
+    let first = after_stars.chars().next()?;
+    if !first.is_whitespace() {
+        return None;
+    }
+    let after_ws = after_stars.trim_start();
+    for verb in PATCH_TARGET_VERBS {
+        if let Some(rest) = after_ws.strip_prefix(verb) {
+            if let Some(rest) = rest.strip_prefix(':') {
+                return Some(rest.trim().to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Port of `applyPatchText(toolInput)` — the canonical Codex shape is
+/// `tool_input.input`; tolerate the patch envelope arriving under
+/// `patch`/`command` without forking per runtime.
+fn apply_patch_text(tool_input: &Value) -> Option<String> {
+    for key in ["input", "patch", "command"] {
+        if let Some(v) = tool_input.get(key).and_then(Value::as_str) {
+            if v.contains("*** Begin Patch") {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Port of `extractApplyPatchTargets(patchText)`.
+fn extract_apply_patch_targets(patch_text: &str) -> Vec<String> {
+    patch_text.split('\n').map(|line| line.strip_suffix('\r').unwrap_or(line)).filter_map(parse_patch_target_line).collect()
+}
 
 // ─── node-path semantics helpers ────────────────────────────────────────────
 
@@ -462,6 +579,96 @@ fn infer_agent_name(payload: &Value, tool_input: &Value) -> Option<String> {
     std::env::var("BEE_AGENT_NAME").ok().filter(|v| !v.is_empty())
 }
 
+// ─── read-side dispatch (checkRead + read-size guard) — rust-port-12 ──────
+
+/// Port of `lexicalRelPath(root, cwd, rawPath)` — LEXICAL (no filesystem
+/// access) relative-path resolution for the read side; `None` when the
+/// target escapes the repo. Deliberately simpler than `canonical_rel_path`
+/// (no realpath walk) — mirrors the mjs source's own simpler read helper.
+fn lexical_rel_path(root: &Path, cwd: &str, raw_path: &str) -> Option<String> {
+    if raw_path.is_empty() {
+        return None;
+    }
+    let raw = Path::new(raw_path);
+    let abs = if raw.is_absolute() {
+        normalize_lexical(raw)
+    } else {
+        let cwd_path = Path::new(cwd);
+        let base: &Path = if !cwd.is_empty() { cwd_path } else { root };
+        resolve_path(base, raw)
+    };
+    let root_abs = normalize_lexical(root);
+    let rel = path_relative(&root_abs, &abs);
+    let rel_str = rel_forward_slashes(&rel);
+    if rel_str.is_empty() || rel_str == "." || rel_str.starts_with("..") || rel.is_absolute() {
+        return None;
+    }
+    Some(rel_str)
+}
+
+/// Port of the mjs hook's `READ_TOOLS.has(toolName)` branch — `checkRead`
+/// (privacy/scout) first, then the large-read size guard for a bare `Read`
+/// call carrying neither `offset` nor `limit`. `Glob`/`Grep` never carry
+/// whole-file content, so the size guard is scoped to `Read` only, exactly
+/// like the mjs source.
+fn read_outcome(tool_name: &str, root: &Path, store_root: &Path, tool_input: &Value, cwd: &str) -> Outcome {
+    let raw_target = {
+        let fp = tool_input.get("file_path").and_then(Value::as_str).filter(|s| !s.is_empty());
+        let p = tool_input.get("path").and_then(Value::as_str).filter(|s| !s.is_empty());
+        fp.or(p).unwrap_or("")
+    };
+    let Some(rel) = lexical_rel_path(root, cwd, raw_target) else {
+        return Outcome::Allow;
+    };
+
+    let verdict = check_read(&rel);
+    if !verdict.allow {
+        let mut parts = vec![verdict
+            .reason
+            .clone()
+            .unwrap_or_else(|| format!("bee {} guard denied: {rel}", verdict.kind.unwrap_or("read")))];
+        if let Some(marker) = &verdict.marker {
+            parts.push(marker.clone());
+        }
+        return Outcome::Deny(parts.join("\n"));
+    }
+
+    if tool_name == "Read" && tool_input.get("offset").is_none() && tool_input.get("limit").is_none() {
+        let config = read_config_value(store_root);
+        let threshold = resolve_max_read_lines(&config);
+        if let Some(reason) = check_read_size_denial(&root.join(&rel), &rel, threshold) {
+            return Outcome::Deny(reason);
+        }
+    }
+
+    Outcome::Allow
+}
+
+/// Port of the mjs hook's `toolName === "AskUserQuestion"` branch — a
+/// schema deny surfaces as an ordinary `Outcome::Deny`; an ask-guard-autofix
+/// repair surfaces as the PreToolUse `updatedInput` allow+notice contract
+/// (D2), same JSON shape the mjs source emits on stdout.
+fn ask_user_question_outcome(tool_input: &Value) -> Outcome {
+    match check_ask_user_question(tool_input) {
+        AskVerdict::Allow => Outcome::Allow,
+        AskVerdict::Deny { reason, .. } => Outcome::Deny(reason),
+        AskVerdict::Fixed { fixed, notes } => {
+            let notes_joined = notes.join("; ");
+            let output = json!({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "allow",
+                    "permissionDecisionReason": notes_joined,
+                    "updatedInput": fixed,
+                    "additionalContext": format!("bee AskUserQuestion guard auto-fixed: {notes_joined}"),
+                },
+                "systemMessage": format!("bee AskUserQuestion guard: {notes_joined}"),
+            });
+            Outcome::AllowNotice(output.to_string())
+        }
+    }
+}
+
 // ─── fail-open boundary ─────────────────────────────────────────────────────
 
 /// The Rust twin of the mjs hook's shared `try { ... } catch (error) {
@@ -555,15 +762,13 @@ fn decide(ctx: &HookContext, tool_name: &str, root: &Path, store_root: &Path) ->
     };
     let cwd = ctx.cwd.as_str();
 
-    if READ_TOOLS.contains(&tool_name) || tool_name == "AskUserQuestion" {
-        // rust-port-12 scope (read side, AskUserQuestion) — fall open.
-        return Outcome::Allow;
+    if tool_name == "AskUserQuestion" {
+        return ask_user_question_outcome(tool_input);
     }
-    if APPLY_PATCH_TOOLS.contains(&tool_name) {
-        // rust-port-12 scope (apply_patch target proving) — fall open.
-        return Outcome::Allow;
+    if READ_TOOLS.contains(&tool_name) {
+        return read_outcome(tool_name, root, store_root, tool_input, cwd);
     }
-    if !WRITE_TOOLS.contains(&tool_name) && tool_name != "Bash" {
+    if !WRITE_TOOLS.contains(&tool_name) && tool_name != "Bash" && !APPLY_PATCH_TOOLS.contains(&tool_name) {
         return Outcome::Allow;
     }
 
@@ -606,6 +811,61 @@ fn decide(ctx: &HookContext, tool_name: &str, root: &Path, store_root: &Path) ->
                 denial = Some(enriched.unwrap_or_else(|| GENERIC_BASH_CONTAINMENT_MESSAGE.to_string()));
             } else if rel_paths.is_empty() && targets.broad_write {
                 rel_paths.push("**".to_string());
+            }
+        }
+    } else if APPLY_PATCH_TOOLS.contains(&tool_name) {
+        // D2 / approach.md §2: an intercepted apply_patch runs the existing
+        // gate/direct-edit/reservation decisions on every PROVED target.
+        match apply_patch_text(tool_input) {
+            None => {
+                // Malformed OUTER payload: apply_patch fired but tool_input
+                // carries no recognizable "*** Begin Patch" envelope at all —
+                // nothing was genuinely intercepted, so this stays D2's
+                // visible fail-open.
+                adapter::log_coverage_gap(
+                    Some(root),
+                    HOOK_NAME,
+                    "applypatch-unparsed",
+                    "apply_patch intercepted but no canonical patch envelope found in tool_input",
+                    ctx.source.as_deref(),
+                );
+            }
+            Some(patch_text) => {
+                let targets = extract_apply_patch_targets(&patch_text);
+                let resolved: Vec<Option<String>> =
+                    targets.iter().map(|p| canonical_rel_path(root, cwd, p)).collect();
+                rel_paths = resolved.iter().filter_map(|r| r.clone()).collect();
+                if targets.is_empty() || rel_paths.len() < targets.len() {
+                    // P1 repair (codex-parity-4): the envelope WAS
+                    // intercepted, but the target set cannot be fully proved
+                    // (no Add/Update/Delete/Move line parsed at all, or a
+                    // parsed target escapes the repo / fails to resolve) —
+                    // deny rather than risk an unchecked write. Still logged
+                    // as a visible coverage gap for audit (D2).
+                    let detail = if targets.is_empty() {
+                        "apply_patch intercepted but no Add/Update/Delete/Move/\"Move to\" target line could be parsed from the patch body".to_string()
+                    } else {
+                        format!(
+                            "apply_patch intercepted but {} of {} target(s) could not be proved inside the repo",
+                            targets.len() - rel_paths.len(),
+                            targets.len(),
+                        )
+                    };
+                    adapter::log_coverage_gap(
+                        Some(root),
+                        HOOK_NAME,
+                        "applypatch-unparsed",
+                        &detail,
+                        ctx.source.as_deref(),
+                    );
+                    denial = Some(
+                        "bee apply_patch guard: this patch's target set could not be fully proved inside the repo — \
+denying rather than risking an unchecked write. \
+FIX: use canonical \"*** Add File:\", \"*** Update File:\", \"*** Delete File:\", and \"*** Move to:\" \
+lines naming plain in-repo relative paths (no path traversal, no unresolvable escapes), then resubmit."
+                            .to_string(),
+                    );
+                }
             }
         }
     } else {

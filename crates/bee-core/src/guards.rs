@@ -1440,8 +1440,210 @@ FIX: use the paved read instead — `bee status --json` for current state, or \
     None
 }
 
+// ─── read guard (guards.mjs checkRead: privacy + scout) — rust-port-12 ─────
+
+/// guards.mjs `SECRET_PATTERNS` — file-path patterns that must never be read
+/// without asking the human. Case-insensitive, matching the mjs `/i` flag.
+const SECRET_PATTERNS: [&str; 7] = [
+    r"(?i)(^|[\\/])\.env(\.[A-Za-z0-9._-]+)?$",
+    r"(?i)\.pem$",
+    r"(?i)\.key$",
+    r"(?i)(^|[\\/])id_rsa[^\\/]*$",
+    r"(?i)\.p12$",
+    r"(?i)(^|[\\/])credentials[^\\/]*$",
+    r"(?i)(^|[\\/])secrets\.[^\\/]+$",
+];
+
+/// guards.mjs `SCOUT_DIRS` — directories agents should never scout through.
+pub const SCOUT_DIRS: [&str; 8] =
+    ["node_modules/", "dist/", "build/", ".git/objects", "vendor/", "coverage/", ".next/", "__pycache__/"];
+
+/// `checkRead`'s verdict shape: `{allow, kind, reason, marker}` — `marker`
+/// carries the `@@BEE_PRIVACY@@...@@END@@` envelope on a privacy deny only,
+/// and rides along inside the hook's own denial reason (joined with a
+/// newline), never surfaced separately — mirroring the mjs hook's own
+/// `parts.push(verdict.marker)` handling.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReadVerdict {
+    pub allow: bool,
+    pub kind: Option<&'static str>,
+    pub reason: Option<String>,
+    pub marker: Option<String>,
+}
+
+impl ReadVerdict {
+    fn allow() -> Self {
+        ReadVerdict { allow: true, kind: None, reason: None, marker: None }
+    }
+}
+
+/// Port of guards.mjs `checkRead(relPath)` — privacy (secret-shaped paths
+/// emit the `@@BEE_PRIVACY@@{"file":...,"question":...}@@END@@` marker byte-
+/// identically — key order is alphabetical either way: "file" < "question")
+/// and scout-dir denies. First-hit-wins, same as the mjs source.
+pub fn check_read(rel_path: &str) -> ReadVerdict {
+    let normalized = normalize_rel(rel_path);
+
+    if SECRET_PATTERNS.iter().any(|pattern| regex_test(pattern, &normalized)) {
+        let question =
+            format!("\"{normalized}\" looks like a secret/credential file. Ask the user before reading it.");
+        let marker_body = serde_json::json!({ "file": normalized, "question": question }).to_string();
+        return ReadVerdict {
+            allow: false,
+            kind: Some("privacy"),
+            reason: Some(format!("bee privacy guard: {question}")),
+            marker: Some(format!("@@BEE_PRIVACY@@{marker_body}@@END@@")),
+        };
+    }
+
+    if let Some(scout_hit) =
+        SCOUT_DIRS.iter().find(|dir| normalized.starts_with(*dir) || normalized.contains(&format!("/{dir}")))
+    {
+        return ReadVerdict {
+            allow: false,
+            kind: Some("scout"),
+            reason: Some(format!(
+                "bee scout guard: \"{normalized}\" is inside \"{scout_hit}\" — generated/vendored content. \
+Read the source or lockfile instead."
+            )),
+            marker: None,
+        };
+    }
+
+    ReadVerdict::allow()
+}
+
+// ─── AskUserQuestion schema guard (guards.mjs checkAskUserQuestion) ────────
+// rust-port-12.
+
+/// `checkAskUserQuestion`'s verdict: a clean allow, a schema deny (`kind`
+/// is `"ask-schema"` throughout, matching the mjs source), or an
+/// ask-guard-autofix repair — every violation found was fixable (over-long
+/// headers only), so the call proceeds with the rewritten `fixed` input plus
+/// human-readable `notes` describing each rewrite (ask-guard-autofix D1/D2).
+#[derive(Debug, Clone, PartialEq)]
+pub enum AskVerdict {
+    Allow,
+    Deny { kind: &'static str, reason: String },
+    Fixed { fixed: Value, notes: Vec<String> },
+}
+
+/// JS `string.length` is a UTF-16 code-unit count, not a codepoint or byte
+/// count — matched here so header-length checks agree with the mjs oracle
+/// on any non-ASCII header.
+fn js_utf16_len(s: &str) -> usize {
+    s.encode_utf16().count()
+}
+
+/// JS `str.slice(0, units)` — a UTF-16-unit prefix.
+fn js_utf16_slice_first(s: &str, units: usize) -> String {
+    let prefix: Vec<u16> = s.encode_utf16().take(units).collect();
+    String::from_utf16_lossy(&prefix)
+}
+
+struct HeaderFix {
+    index: usize,
+    old_header: String,
+    new_header: String,
+}
+
+/// Port of guards.mjs `checkAskUserQuestion(toolInput)` — turns the
+/// harness's opaque "Invalid tool parameters" rejection of an
+/// AskUserQuestion call into a clear, self-documenting deny that names the
+/// exact schema violation (or, for an over-long header ALONE, an
+/// ask-guard-autofix repair instead of a deny). Fail-open on any shape not
+/// confidently invalid — `toolInput.questions` absent/non-array allows.
+pub fn check_ask_user_question(tool_input: &Value) -> AskVerdict {
+    let Some(questions) = tool_input.get("questions").and_then(Value::as_array) else {
+        return AskVerdict::Allow;
+    };
+    let count = questions.len();
+    if count < 1 || count > 4 {
+        return AskVerdict::Deny {
+            kind: "ask-schema",
+            reason: format!(
+                "bee AskUserQuestion guard: {count} question(s) — the tool takes 1–4 per call. Split into separate calls."
+            ),
+        };
+    }
+
+    let mut header_fixes: Vec<HeaderFix> = Vec::new();
+    for (i, q) in questions.iter().enumerate() {
+        let Some(q_obj) = q.as_object() else { continue };
+        let where_str = if count > 1 { format!(" (question {})", i + 1) } else { String::new() };
+
+        if let Some(header) = q_obj.get("header").and_then(Value::as_str) {
+            if js_utf16_len(header) > 12 {
+                let truncated = js_utf16_slice_first(header, 11);
+                let new_header = format!("{}\u{2026}", truncated.trim_end());
+                header_fixes.push(HeaderFix { index: i, old_header: header.to_string(), new_header });
+            }
+        }
+
+        if let Some(options) = q_obj.get("options").and_then(Value::as_array) {
+            let opt_count = options.len();
+            if opt_count < 2 || opt_count > 4 {
+                return AskVerdict::Deny {
+                    kind: "ask-schema",
+                    reason: format!(
+                        "bee AskUserQuestion guard: {opt_count} option(s){where_str} — each question needs 2–4 options (an \"Other\" free-text choice is added automatically). Fold overflow into a follow-up question."
+                    ),
+                };
+            }
+            for (j, o) in options.iter().enumerate() {
+                let Some(o_obj) = o.as_object() else { continue };
+                let label = o_obj.get("label").and_then(Value::as_str).unwrap_or("");
+                if label.trim().is_empty() {
+                    return AskVerdict::Deny {
+                        kind: "ask-schema",
+                        reason: format!(
+                            "bee AskUserQuestion guard: option {}{where_str} is missing a non-empty \"label\". Every option needs a label and a description.",
+                            j + 1
+                        ),
+                    };
+                }
+                let description = o_obj.get("description").and_then(Value::as_str).unwrap_or("");
+                if description.trim().is_empty() {
+                    return AskVerdict::Deny {
+                        kind: "ask-schema",
+                        reason: format!(
+                            "bee AskUserQuestion guard: option \"{label}\"{where_str} is missing a non-empty \"description\". Every option needs a label and a description."
+                        ),
+                    };
+                }
+            }
+        }
+    }
+
+    if header_fixes.is_empty() {
+        return AskVerdict::Allow;
+    }
+
+    // Every violation found was fixable — deep-clone toolInput, rewrite each
+    // over-long header, and report the rewrite. The original `tool_input` is
+    // never mutated (mirrors the mjs `JSON.parse(JSON.stringify(toolInput))`
+    // clone).
+    let mut fixed = tool_input.clone();
+    let mut notes = Vec::with_capacity(header_fixes.len());
+    for fix in &header_fixes {
+        if let Some(header_slot) =
+            fixed.get_mut("questions").and_then(|v| v.get_mut(fix.index)).and_then(|q| q.get_mut("header"))
+        {
+            *header_slot = Value::String(fix.new_header.clone());
+        }
+        notes.push(format!(
+            "header \"{}\" ({} chars) → \"{}\"",
+            fix.old_header,
+            js_utf16_len(&fix.old_header),
+            fix.new_header
+        ));
+    }
+    AskVerdict::Fixed { fixed, notes }
+}
+
 // Conformance proof for this module lives in
-// crates/queen-bee/tests/writeguard_core.rs (rust-port-9's core spine) and
-// crates/queen-bee/tests/writeguard_bash.rs (rust-port-11's Bash path),
-// driving the sha256-verified node oracle per the rust-port-7 rig
-// discipline.
+// crates/queen-bee/tests/writeguard_core.rs (rust-port-9's core spine),
+// crates/queen-bee/tests/writeguard_bash.rs (rust-port-11's Bash path), and
+// crates/queen-bee/tests/writeguard_read.rs (rust-port-12's read side,
+// apply_patch, and AskUserQuestion), driving the sha256-verified node oracle
+// per the rust-port-7 rig discipline.
