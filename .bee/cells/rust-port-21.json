@@ -1,0 +1,129 @@
+{
+  "id": "rust-port-21",
+  "feature": "rust-port",
+  "title": "close the chain-nudge registered-worker coverage gap and two conformance-honesty residuals left by rust-port-17",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "rust-port-17"
+  ],
+  "decisions": [
+    "D1",
+    "D3"
+  ],
+  "files": [
+    "crates/queen-bee/*"
+  ],
+  "read_first": [
+    ".bee/bin/hooks/bee-chain-nudge.mjs",
+    "crates/queen-bee/src/hooks/chain_nudge.rs",
+    "crates/queen-bee/tests/heavyhooks_conformance.rs",
+    "crates/queen-bee/tests/modelguard_conformance.rs",
+    "docs/history/rust-port/CONTEXT.md"
+  ],
+  "action": "Fix-first cell closing what rust-port-17's rework round did not reach — the orchestrator's own omission when relaying the round-1 judge findings, not the worker's. THREE items, all inside crates/queen-bee. (1) THE REAL GAP: the cell action for rust-port-17 named the worker-collect nudge as firing 'when a bee worker OR swarming phase', but no fixture ever seeds state.workers (`rg workers crates/queen-bee/tests/heavyhooks_conformance.rs` returns nothing). Every nudge fixture triggers via phase=swarming only, so chain_nudge.rs:124 is_registered_worker and the whole ported worker_name() fallback ladder (chain_nudge.rs:62-77, mirroring bee-chain-nudge.mjs:36-47: string entry, then nickname|name|agent|worker) is never diffed against the frozen oracle. Seed state.workers fixtures covering EACH rung of that ladder plus the registered-worker-without-swarming-phase trigger, diffed byte-for-byte against the real mjs hook through the existing rig. Related and in scope: no chain-nudge fixture passes session_id, so state::resolve_pipeline (chain_nudge.rs:116, mjs :78) is never exercised — the phase always arrives via the readState fallback; add at least one fixture that pins a session id so the resolve_pipeline path is diffed too. (2) HONESTY RESIDUALS in the same target: three same-runtime before/after no-op assertions still compare parsed serde_json Values (heavyhooks_conformance.rs:603, :802-803, :861) — under this workspace's preserve_order feature an IndexMap's PartialEq ignores key order, so a rewrite that only reordered keys would pass; :861's message additionally CLAIMS 'byte-identical' while being key-order-blind. Convert them to the target's own assert_files_byte_equal_redacted (or make each message state exactly what it checks). (3) An unasserted argument: model_guard.rs:57 now passes its own hook name to run_fail_open, but modelguard_conformance.rs:569 calls run_fail_open directly with a literal, so a regression at that call site is caught by nothing — assert the model-guard crash line's hook field the way heavyhooks_conformance now does for chain-nudge and state-sync. RED-FIRST IS MANDATORY for every item: reintroduce each defect, quote the failure, revert, show green. Scratch space, if needed, is .bee/tmp/rust-port-21/ inside the worktree — never /tmp, which the write guard denies.",
+  "must_haves": {
+    "truths": [
+      "at least one fixture per rung of the worker_name() fallback ladder (string entry, nickname, name, agent, worker) plus a registered-worker trigger that does not rely on phase=swarming, each diffed byte-for-byte against the real frozen bee-chain-nudge.mjs",
+      "at least one chain-nudge fixture pins a session id so state::resolve_pipeline is exercised rather than the readState fallback",
+      "no store-file or state comparison in heavyhooks_conformance.rs remains parsed-Value-based, and no assertion message claims a byte-level guarantee it does not provide",
+      "the model-guard crash line's hook field is asserted cross-runtime, so a regression at model_guard.rs:57 goes red",
+      "red-first evidence quoted for every item: the defect reintroduced, the exact failure, then green after revert"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/queen-bee/tests/heavyhooks_conformance.rs",
+        "substantive": "worker-ladder and session-id fixtures, byte-level conversions"
+      },
+      {
+        "path": "crates/queen-bee/tests/modelguard_conformance.rs",
+        "substantive": "model-guard crash hook-field assertion"
+      }
+    ],
+    "key_links": [
+      "the rig of record stays crates/queen-bee/tests/hook_conformance.rs — copied in-file, never a shared module",
+      "the oracle is the seeded sha256-verified .bee/bin/hooks/bee-chain-nudge.mjs, never a hand-written expectation"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No wiring-file edits — the ported hooks stay dark until the flip slice",
+      "No production-behaviour changes: this cell closes proof gaps, so a src change is a finding to report, not a fix to make quietly",
+      "Tests never touch the live .bee/ store",
+      "No edits to crates/Cargo.toml members list"
+    ]
+  },
+  "verify": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test heavyhooks_conformance && cargo test --manifest-path crates/Cargo.toml -p queen-bee --test modelguard_conformance",
+  "tier": "generation",
+  "trace": {
+    "worker": "Tim",
+    "outcome": "Closed the chain-nudge registered-worker coverage gap and two conformance-honesty residuals rust-port-17's rework did not reach (orchestrator relay omission, not a worker miss). (1) Added worker_name() fallback-ladder fixtures (string/nickname/name/agent/worker, table-driven) + a no-match silence twin, plus a session-id fixture proving state::resolve_pipeline's lane branch drives the nudge. (2) Converted 3 same-runtime no-op assertions from parsed-Value to byte-level/raw-text comparisons; the LOCK_BUSY message's 'byte-identical' claim is now literally true. (3) Added a cross-runtime model-guard crash hook-field assertion that drives the REAL queen-bee hook model-guard dispatch (not a direct run_fail_open call with a literal), catching a regression at model_guard.rs:57. heavyhooks_conformance 16->19, modelguard_conformance 13->14. Zero production-behaviour changes (prohibition honored) -- every finding proved with red-first evidence.",
+    "files_changed": [
+      "crates/queen-bee/tests/heavyhooks_conformance.rs",
+      "crates/queen-bee/tests/modelguard_conformance.rs",
+      "crates/queen-bee/tests/support/heavyhooks_fixture.mjs"
+    ],
+    "deviations": [
+      "Fix-first cell closing a coverage gap the round-1 judge raised but the",
+      "orchestrator did not relay in rust-port-17's rework round (per the",
+      "coordinator, not a worker miss). Three items, all proof-gap work, zero",
+      "production-behaviour changes:",
+      "1. Added fixtures for every rung of `worker_name()`'s fallback ladder",
+      "   (string entry, then object entries matched via nickname/name/agent/",
+      "   worker), table-driven per test-economy D3, plus a non-triviality twin",
+      "   (an entry matching no rung stays silent) — none of these previously",
+      "   existed; every chain-nudge nudge fixture up to this cell triggered via",
+      "   `phase=swarming` only. Also added a fixture pinning a real `session_id`",
+      "   bound to a lane whose own record carries `phase=swarming` while the",
+      "   default `state.json` stays idle, proving `state::resolve_pipeline`'s",
+      "   lane branch — not the `readState` fallback — decides the nudge.",
+      "2. Converted the three same-runtime before/after no-op assertions the cell",
+      "   named (disabled-hook, throttled-no-op, LOCK_BUSY) from parsed",
+      "   `serde_json::Value` comparisons to raw-text comparisons — under this",
+      "   workspace's `preserve_order` feature an `IndexMap`'s `PartialEq` ignores",
+      "   key order, so these were silently blind to a reordering rewrite; the",
+      "   LOCK_BUSY assertion's message additionally claimed \"byte-identical\"",
+      "   while being exactly the opposite. The message now matches the check.",
+      "3. Added a cross-runtime crash-line assertion for model-guard",
+      "   (`crash_fail_open_both_runtimes_log_the_correct_hook_name`), driving",
+      "   BOTH runtimes through their real crash paths — critically, the rust",
+      "   side through the actual `queen-bee hook model-guard` dispatch (a new",
+      "   `run_rust_with_crash_seam` helper), never a direct call to the shared",
+      "   `run_fail_open` wrapper with a hand-supplied literal (the existing",
+      "   `crash_fail_open_rust_wrapper_...` test does that, which proves the",
+      "   wrapper but not model_guard.rs's own call site) — so a regression at",
+      "   `model_guard.rs:57` is now caught.",
+      "Red-first evidence for all four sub-items (the two halves of item 1, item",
+      "2, and item 3) is in this cap's `verification_evidence` (`red_failure_evidence`",
+      "field) and the report — each defect was genuinely reintroduced in the real",
+      "source (or, for item 2, demonstrated on real session-shaped data via a",
+      "scratch experiment that was run and then removed, never shipped), the",
+      "affected test's failure quoted, then reverted to green.",
+      "No production files were touched — confirmed via `git diff --stat",
+      "crates/queen-bee/src/` after every red-first revert."
+    ],
+    "friction": null,
+    "capped_at": "2026-07-26T16:03:45.251Z",
+    "behavior_change": false,
+    "verification_evidence": "{\n  \"new_suite_reason\": \"No new file added -- all three items are additional rows/helpers inside the EXISTING heavyhooks_conformance/modelguard_conformance targets (test-economy D3: a new scenario for behavior the suite already covers is a new row, never a new file). This field is included because the cell already carries a permanent new-suite declaration (heavyhooks_conformance) and capCell re-validates it on every cap.\",\n  \"ratio_waiver\": \"This cell's diff is entirely test-side by design: it is explicitly a fix-first proof-gap cell (prohibitions: 'No production-behaviour changes: this cell closes proof gaps, so a src change is a finding to report, not a fix to make quietly') -- zero production files were touched, only tests/heavyhooks_conformance.rs, tests/modelguard_conformance.rs, and the new fixture op in tests/support/heavyhooks_fixture.mjs. A cell whose entire mandate is proof rigor has no source diff to size a ratio against by construction.\",\n  \"tests_inspected\": [\n    \"crates/queen-bee/tests/heavyhooks_conformance.rs (own prior state) -- re-read in full before adding rows, confirming (rg workers) that no existing fixture seeded state.workers or passed session_id, and locating the exact three parsed-Value assertions the cell named by line (disabled-hook, throttled-no-op, LOCK_BUSY).\",\n    \"crates/queen-bee/src/hooks/chain_nudge.rs -- re-read worker_name()'s fallback ladder (string entry, then nickname|name|agent|worker) and resolve_pipeline's call shape to design fixtures that isolate each rung and the lane branch specifically (phase=idle everywhere except the lane record, no agent_name on the session-id fixture, so no other trigger could produce a false pass).\",\n    \".bee/bin/lib/claims.mjs bindSessionLane -- read before adding the new 'bind-lane' fixture op, confirming it sets session.lane in place (the exact field state::resolve_pipeline reads), so the seeded session is authentic rather than a hand-guessed shape.\",\n    \"crates/queen-bee/tests/modelguard_conformance.rs's two existing crash tests -- read first, confirming neither ever asserted the hooks.jsonl 'hook' field (only an 'error' substring), and that the rust-side one calls run_fail_open directly with a literal rather than exercising model_guard::run()'s own call site -- exactly the gap item 3 names.\"\n  ],\n  \"tests_added_changed\": [\n    \"crates/queen-bee/tests/heavyhooks_conformance.rs -- NEW chain_nudge_worker_name_ladder_every_rung_matches_oracle (table-driven, 5 rungs: string/nickname/name/agent/worker, phase=idle throughout so only is_registered_worker can fire the nudge) and its non-triviality twin chain_nudge_worker_name_ladder_no_match_stays_silent_twin_matches_oracle; NEW chain_nudge_session_id_exercises_resolve_pipeline_lane_branch_matches_oracle (a session bound to a lane whose OWN phase=swarming drives the nudge while the default record stays idle, proving resolve_pipeline's lane branch, not the readState fallback, decides the outcome) (item 1). Three same-runtime before/after no-op assertions (disabled-hook, throttled-no-op, LOCK_BUSY) converted from parsed-Value assert_eq! to raw-text assert_eq! (or the existing assert_files_byte_equal_redacted where a redaction was already needed) -- the LOCK_BUSY message's literal 'byte-identical' claim is now true, not aspirational (item 2).\",\n    \"crates/queen-bee/tests/support/heavyhooks_fixture.mjs -- NEW 'bind-lane' op, seeding an authentic session-to-lane binding via the real claims.mjs bindSessionLane (item 1).\",\n    \"crates/queen-bee/tests/modelguard_conformance.rs -- NEW crash_fail_open_both_runtimes_log_the_correct_hook_name, driving BOTH runtimes through their REAL crash paths (node's dispatch-guard.mjs fault injection; rust's crash seam through the actual `queen-bee hook model-guard` dispatch, never a direct run_fail_open call with a literal) and asserting the hook field cross-runtime; new run_rust_with_crash_seam + find_crash_line helpers (item 3).\"\n  ],\n  \"red_failure_evidence\": \"All findings red-first proved by reintroducing the exact defect, running the affected test, and reverting: (1a) WORKER LADDER -- temporarily narrowed chain_nudge.rs's fallback list from [nickname,name,agent,worker] to [nickname,name]; chain_nudge_worker_name_ladder_every_rung_matches_oracle failed on the agent-rung row: 'stdout diverged (node=\\\"...Worker \\\\\\\\\\\\\\\"Kevin\\\\\\\\\\\\\\\" returned...\\\\\\\" rust=\\\"\\\")' -- reverted, green. (1b) RESOLVE_PIPELINE -- temporarily changed chain_nudge.rs's phase-selection match arm so the Ok(pipeline) branch also used bee_state.phase (ignoring the resolved lane record); chain_nudge_session_id_exercises_resolve_pipeline_lane_branch_matches_oracle failed: 'stdout diverged (node=\\\"...A bee worker returned...\\\" rust=\\\"\\\")' -- reverted, green. (2) BYTE-LEVEL vs PARSED-VALUE on real session-shaped data -- a scratch experiment (added, run, then removed -- never shipped) built two texts with identical session fields in different key order: assert_eq! on the PARSED Values passed silently (the blind spot), while assert_eq! on the RAW TEXT failed exactly as expected: 'assertion left == right failed: NEW STYLE (raw text): must diverge on the same reordered pair'; the three real call sites now delegate to this exact byte-level technique (two of them via the same assert_files_byte_equal_redacted helper this cell's predecessor's own meta-test already proves has teeth, still green in this run). (3) MODEL-GUARD HOOK NAME -- temporarily made model_guard.rs:57 pass the literal \\\"write-guard\\\" instead of HOOK_NAME (undoing rust-port-17's own fix, reproducing the exact latent gap item 3 named); crash_fail_open_both_runtimes_log_the_correct_hook_name failed: 'assertion left == right failed: rust port crash line hook field, got ... \\\"hook\\\": String(\\\"write-guard\\\") ... left: Some(String(\\\"write-guard\\\")) right: Some(String(\\\"model-guard\\\"))' -- reverted, green.\",\n  \"verification_run\": \"cargo test --manifest-path crates/Cargo.toml -p queen-bee --test heavyhooks_conformance -> ok. 19 passed (was 16; +3 rows, 0 removed, 0 renamed away). cargo test --manifest-path crates/Cargo.toml -p queen-bee --test modelguard_conformance -> ok. 14 passed (was 13; +1). No regressions: cargo test -p queen-bee (121 passed across 10 suites) and cargo test -p bee-core (172 passed across 9 suites) both green; cargo build --manifest-path crates/Cargo.toml --workspace clean, no warnings. Zero production files touched (crates/queen-bee/src untouched in the final diff) -- confirmed by `git diff --stat` after all red-first reverts.\"\n}\n",
+    "verify_output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s\n     Running tests/heavyhooks_conformance.rs (crates/target/debug/deps/heavyhooks_conformance-8c872bbe6800488d)\n\nrunning 19 tests\ntest byte_level_comparison_catches_key_order_divergence_that_value_equality_misses ... ok\ntest rig_self_check_seeded_files_match_repo_sha256 ... ok\ntest negative_control_unseeded_root_detected_as_invalid_and_both_hooks_silent ... ok\ntest chain_nudge_crash_fail_open_both_runtimes_log_the_correct_hook_name ... ok\ntest state_sync_crash_fail_open_both_runtimes_log_the_correct_hook_name ... ok\ntest chain_nudge_reviewing_phase_message_matches_oracle ... ok\ntest chain_nudge_worker_name_ladder_no_match_stays_silent_twin_matches_oracle ... ok\ntest rig_diff_detector_flags_a_seeded_mutation_as_divergent ... ok\ntest state_sync_lock_busy_skips_state_rebuild_silently_on_both_runtimes ... ok\ntest state_sync_no_workflow_records_only_refreshes_overrides_matches_oracle ... ok\ntest state_sync_disabled_hook_makes_no_writes_on_either_runtime ... ok\ntest state_sync_authoritative_idle_bootstrap_adopts_active_workflow_matches_oracle ... ok\ntest chain_nudge_disabled_hook_silences_both_and_enabled_twin_matches_oracle ... ok\ntest chain_nudge_scribing_debt_suffix_present_and_absent_twin_matches_oracle ... ok\ntest chain_nudge_silent_when_idle_and_worker_nudge_twin_when_swarming_matches_oracle ... ok\ntest chain_nudge_session_id_exercises_resolve_pipeline_lane_branch_matches_oracle ... ok\ntest state_sync_throttled_no_op_when_heartbeat_fresh_matches_oracle ... ok\ntest state_sync_heartbeat_claim_lease_hold_renewal_matches_oracle ... ok\ntest chain_nudge_worker_name_ladder_every_rung_matches_oracle ... ok\n\ntest result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.74s\n\n   Compiling queen-bee v0.1.0 (/home/thanhsmind/projects/goglbe/beegog/crates/queen-bee)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.67s\n     Running tests/modelguard_conformance.rs (crates/target/debug/deps/modelguard_conformance-6c6cd141eebf95c7)\n\nrunning 14 tests\ntest crash_fail_open_rust_wrapper_catches_panic_exits_zero_and_writes_crash_line ... ok\ntest rig_self_check_seeded_files_match_repo_sha256 ... ok\ntest negative_control_unseeded_root_detected_as_invalid_and_both_runtimes_silent ... ok\ntest crash_fail_open_node_oracle_exits_zero_and_logs_crash_instead_of_denying ... ok\ntest crash_fail_open_both_runtimes_log_the_correct_hook_name ... ok\ntest rig_diff_detector_flags_a_seeded_mutation_as_divergent ... ok\ntest cli_tier_denied_for_marker_only_cli_slot_and_plain_model_twin_allows ... ok\ntest bare_dispatch_denies_and_marker_twin_allows ... ok\ntest param_on_nameless_tier_denies_for_ceiling_plus_model_and_marker_alone_twin_allows ... ok\ntest dispatch_jsonl_line_shape_parity_for_allow_and_deny ... ok\ntest generic_type_denied_for_pinned_tier_on_general_purpose_and_pinned_type_twin_allows ... ok\ntest param_tier_mismatch_denies_and_matching_param_twin_allows ... ok\ntest param_not_configured_denies_and_configured_model_twin_allows ... ok\ntest codex_spawn_unmarked_denies_and_marker_twin_allows ... ok\n\ntest result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s\n\n",
+    "verify_passed": true,
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T15:52:31.808Z",
+    "verify_command": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test heavyhooks_conformance && cargo test --manifest-path crates/Cargo.toml -p queen-bee --test modelguard_conformance",
+    "verified_at": "2026-07-26T16:02:43.585Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T16:02:43.585Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T15:53:08.352Z",
+        "acquired_at": "2026-07-26T15:52:31.807Z",
+        "worker": "Tim",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

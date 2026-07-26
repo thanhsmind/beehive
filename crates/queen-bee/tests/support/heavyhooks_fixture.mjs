@@ -42,6 +42,12 @@
 //       -- so state-projection.mjs's rebuildStateProjection has a real
 //       workflow to route through the AUTHORITATIVE (feature-matched or
 //       idle-bootstrap) branch, never only the no-workflow-records no-op.
+//   bind-lane <libDir> <root> <sessionId> <feature>
+//       binds an existing session to a lane via claims.mjs's real
+//       bindSessionLane (sets session.lane = feature in place); print
+//       {file} -- so state::resolve_pipeline's lane branch can be
+//       constructed authentically (session.lane is the field it reads),
+//       never a hand-guessed session shape.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -161,6 +167,17 @@ switch (op) {
       next_action: nextAction || '',
     });
     emit({ id: record.id, file: workflowStatePath(root, record.id) });
+    break;
+  }
+  case 'bind-lane': {
+    const [sessionId, feature] = rest;
+    const { bindSessionLane, sessionPath } = await import(libUrl('claims.mjs'));
+    const result = bindSessionLane(root, sessionId, feature);
+    if (!result.ok) {
+      console.error(`heavyhooks_fixture.mjs: bindSessionLane failed: ${JSON.stringify(result)}`);
+      process.exit(1);
+    }
+    emit({ file: sessionPath(root, sessionId) });
     break;
   }
   default: {

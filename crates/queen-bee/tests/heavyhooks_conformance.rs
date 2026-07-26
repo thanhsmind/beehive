@@ -235,6 +235,24 @@ fn seed_workflow(root: &Path, feature: &str, phase: &str, mode: &str, summary: &
     PathBuf::from(v["file"].as_str().expect("fixture file path"))
 }
 
+/// Binds an existing session to a lane via the real `claims.mjs`
+/// `bindSessionLane` (sets `session.lane` in place) — authentic field
+/// naming for `state::resolve_pipeline`'s lane branch (rework rust-port-21,
+/// finding 1's session-id fixture requirement).
+fn bind_session_lane(root: &Path, session_id: &str, feature: &str) -> PathBuf {
+    let v = run_fixture(root, "bind-lane", &[session_id, feature]);
+    PathBuf::from(v["file"].as_str().expect("fixture file path"))
+}
+
+/// `.bee/lanes/<feature>.json` — plain object write (no hashing/locking
+/// concerns here, unlike a lease file), matching the `State`-shaped lane
+/// record `state::read_lane` expects (`feature` must equal the lane name).
+fn write_lane_json(root: &Path, feature: &str, value: &Value) {
+    let dir = root.join(".bee/lanes");
+    fs::create_dir_all(&dir).expect("mkdir lanes");
+    fs::write(dir.join(format!("{feature}.json")), serde_json::to_string_pretty(value).unwrap()).expect("write lane fixture");
+}
+
 fn seed_cell(root: &Path, id: &str, feature: &str, status: &str, behavior_change: bool, capped_at: Option<&str>) {
     let dir = root.join(".bee/cells");
     fs::create_dir_all(&dir).expect("mkdir cells");
@@ -531,6 +549,118 @@ fn chain_nudge_scribing_debt_suffix_present_and_absent_twin_matches_oracle() {
 }
 
 // ---------------------------------------------------------------------------
+// Fixture class: chain-nudge registered-worker trigger — every rung of the
+// worker_name() fallback ladder (rework rust-port-21, finding 1: the real
+// gap. Every fixture up to this point triggered the nudge via
+// phase=swarming only; state.workers was never seeded, so
+// is_registered_worker and the whole ported worker_name() ladder
+// (chain_nudge.rs:62-77, mirroring bee-chain-nudge.mjs:36-47) were never
+// diffed against the frozen oracle).
+// ---------------------------------------------------------------------------
+
+/// Table-driven (test-economy D3: >=3 same-shape cases belong in one row
+/// set, not copy-pasted near-duplicates) — one row per rung of
+/// `workerName(entry)`'s fallback ladder: a bare string entry, then an
+/// object entry matched via `nickname`, `name`, `agent`, and finally
+/// `worker` (each row's object carries ONLY the field that rung reads, so
+/// a regression that skips a rung — e.g. checking `name` before
+/// `nickname` — cannot accidentally still match via an earlier field).
+/// `phase` is deliberately "idle" (never "swarming") on every row: the
+/// nudge here fires ONLY because `is_registered_worker` is true, proving
+/// the ladder is actually consulted rather than piggy-backing on the
+/// phase=swarming trigger every earlier fixture used.
+#[test]
+fn chain_nudge_worker_name_ladder_every_rung_matches_oracle() {
+    let stdin = r#"{"hook_event_name":"SubagentStop","agent_name":"Kevin"}"#;
+    let rows: &[(&str, Value)] = &[
+        ("string-entry", json!(["Kevin"])),
+        ("nickname-rung", json!([{ "nickname": "Kevin" }])),
+        ("name-rung", json!([{ "name": "Kevin" }])),
+        ("agent-rung", json!([{ "agent": "Kevin" }])),
+        ("worker-rung", json!([{ "worker": "Kevin" }])),
+    ];
+
+    for (label, workers) in rows {
+        let (node_seed, rust_seed) = seed_pair(enabling_config());
+        for root in [&node_seed.root, &rust_seed.root] {
+            write_state_json(root, &json!({ "phase": "idle", "workers": workers }));
+        }
+        let node = run_seeded_node_hook(&node_seed.root, "bee-chain-nudge.mjs", stdin);
+        let rust = run_rust_hook("chain-nudge", &rust_seed.root, stdin);
+        assert_process_conformant(&format!("chain-nudge/worker-ladder/{label}"), &node, &rust);
+        assert!(
+            node.stdout.contains("Worker \\\"Kevin\\\" returned"),
+            "{label}: expected the worker-nudge phrase (is_registered_worker must fire on this rung alone, phase is idle), got {:?}",
+            node.stdout
+        );
+    }
+}
+
+/// Non-triviality twin for the ladder above: an entry shape that matches
+/// NONE of the ladder's fields (a bare number, and an object with an
+/// unrecognized key only) must stay silent — proving the ladder rows
+/// above are a genuine match, not a fixture that nudges regardless of
+/// `state.workers`'s content.
+#[test]
+fn chain_nudge_worker_name_ladder_no_match_stays_silent_twin_matches_oracle() {
+    let stdin = r#"{"hook_event_name":"SubagentStop","agent_name":"Kevin"}"#;
+    let (node_seed, rust_seed) = seed_pair(enabling_config());
+    for root in [&node_seed.root, &rust_seed.root] {
+        write_state_json(root, &json!({ "phase": "idle", "workers": [42, { "unrelated_field": "Kevin" }] }));
+    }
+    let node = run_seeded_node_hook(&node_seed.root, "bee-chain-nudge.mjs", stdin);
+    let rust = run_rust_hook("chain-nudge", &rust_seed.root, stdin);
+    assert_process_conformant("chain-nudge/worker-ladder/no-match-twin", &node, &rust);
+    assert!(node.stdout.trim().is_empty(), "no ladder rung matches — must stay silent, got {:?}", node.stdout);
+}
+
+// ---------------------------------------------------------------------------
+// Fixture class: chain-nudge session_id exercises state::resolve_pipeline's
+// lane branch (rework rust-port-21, finding 1's second half: no prior
+// fixture ever passed session_id, so resolve_pipeline always short-circuited
+// on the `None` branch without ever calling claims::read_session).
+// ---------------------------------------------------------------------------
+
+/// A session bound to a lane whose OWN record carries phase="swarming",
+/// while the DEFAULT `state.json` stays phase="idle" with no workers at
+/// all. Only resolve_pipeline's real lane lookup can produce a nudge here
+/// — a regression that used `state.phase` directly (ignoring the pipeline
+/// result, exactly the fallback path chain_nudge.rs's `Err(_) =>
+/// bee_state.phase` arm exists for) would see "idle" and stay silent,
+/// diverging from the real mjs oracle.
+#[test]
+fn chain_nudge_session_id_exercises_resolve_pipeline_lane_branch_matches_oracle() {
+    let stdin = r#"{"hook_event_name":"SubagentStop","session_id":"sess-lane"}"#;
+    let (node_seed, rust_seed) = seed_pair(enabling_config());
+    for root in [&node_seed.root, &rust_seed.root] {
+        write_state_json(root, &json!({ "phase": "idle" })); // the DEFAULT record — deliberately non-swarming
+        seed_session(root, "sess-lane", 0);
+        bind_session_lane(root, "sess-lane", "demo-lane-feat");
+        write_lane_json(
+            root,
+            "demo-lane-feat",
+            &json!({
+                "schema_version": "1.0",
+                "feature": "demo-lane-feat",
+                "phase": "swarming",
+                "mode": null,
+                "approved_gates": { "context": false, "shape": false, "execution": false, "review": false },
+                "summary": "",
+                "next_action": "",
+            }),
+        );
+    }
+    let node = run_seeded_node_hook(&node_seed.root, "bee-chain-nudge.mjs", stdin);
+    let rust = run_rust_hook("chain-nudge", &rust_seed.root, stdin);
+    assert_process_conformant("chain-nudge/resolve-pipeline-lane-branch", &node, &rust);
+    assert!(
+        !node.stdout.trim().is_empty(),
+        "the LANE record's phase=swarming must drive the nudge even though the default record is idle, got empty stdout"
+    );
+    assert!(node.stdout.contains("[STATUS]"), "expected the worker-nudge phrase, got {:?}", node.stdout);
+}
+
+// ---------------------------------------------------------------------------
 // Fixture class: chain-nudge crash fail-open
 // ---------------------------------------------------------------------------
 
@@ -589,7 +719,12 @@ fn state_sync_disabled_hook_makes_no_writes_on_either_runtime() {
     for root in [&node_seed.root, &rust_seed.root] {
         session_files.push(seed_session(root, "sess-disabled", 120)); // stale enough to renew if NOT gated off
     }
-    let session_before: Vec<Value> = session_files.iter().map(|f| read_json_file(f).unwrap()).collect();
+    // Captured as RAW TEXT, never a parsed `Value` (rework rust-port-21,
+    // finding 2): this is a same-runtime before/after no-op check, so the
+    // strongest and most honest claim available is "the file did not
+    // change AT ALL" — a byte comparison, not a structural one that would
+    // stay green through a pure key-reordering rewrite.
+    let session_before: Vec<String> = session_files.iter().map(|f| read_text_file(f)).collect();
 
     let node = run_seeded_node_hook(&node_seed.root, "bee-state-sync.mjs", stdin);
     let rust = run_rust_hook("state-sync", &rust_seed.root, stdin);
@@ -599,8 +734,11 @@ fn state_sync_disabled_hook_makes_no_writes_on_either_runtime() {
     assert!(!rust_seed.root.join(".bee/state.json").exists(), "disabled hook must never write state.json (rust)");
 
     for (i, label) in ["node", "rust"].iter().enumerate() {
-        let session_after = read_json_file(&session_files[i]).unwrap();
-        assert_eq!(session_before[i], session_after, "{label}: a disabled hook must never renew the heartbeat, even for a stale session");
+        let session_after = read_text_file(&session_files[i]);
+        assert_eq!(
+            session_before[i], session_after,
+            "{label}: byte-for-byte comparison — a disabled hook must never renew the heartbeat, even for a stale session"
+        );
     }
 }
 
@@ -789,18 +927,22 @@ fn state_sync_throttled_no_op_when_heartbeat_fresh_matches_oracle() {
         session_files.push(seed_session(root, "sess-fresh", 5)); // fresh: well under the 60s throttle
         claim_files.push(seed_claim(root, "cellA", "sess-fresh", 5));
     }
-    let session_before: Vec<Value> = session_files.iter().map(|f| read_json_file(f).unwrap()).collect();
-    let claim_before: Vec<Value> = claim_files.iter().map(|f| read_json_file(f).unwrap()).collect();
+    // RAW TEXT, not parsed `Value` — same reasoning as the disabled-hook
+    // test above (rework rust-port-21, finding 2): a same-runtime no-op
+    // check should assert byte-for-byte identity, not structural equality
+    // that a key-reordering rewrite would still pass.
+    let session_before: Vec<String> = session_files.iter().map(|f| read_text_file(f)).collect();
+    let claim_before: Vec<String> = claim_files.iter().map(|f| read_text_file(f)).collect();
 
     let node = run_seeded_node_hook(&node_seed.root, "bee-state-sync.mjs", stdin);
     let rust = run_rust_hook("state-sync", &rust_seed.root, stdin);
     assert_process_conformant("state-sync/throttled-no-op", &node, &rust);
 
     for (i, label) in ["node", "rust"].iter().enumerate() {
-        let session_after = read_json_file(&session_files[i]).unwrap();
-        let claim_after = read_json_file(&claim_files[i]).unwrap();
-        assert_eq!(session_before[i], session_after, "{label}: a throttled touch must never rewrite the session file");
-        assert_eq!(claim_before[i], claim_after, "{label}: a throttled touch must never renew a claim either");
+        let session_after = read_text_file(&session_files[i]);
+        let claim_after = read_text_file(&claim_files[i]);
+        assert_eq!(session_before[i], session_after, "{label}: byte-for-byte comparison — a throttled touch must never rewrite the session file");
+        assert_eq!(claim_before[i], claim_after, "{label}: byte-for-byte comparison — a throttled touch must never renew a claim either");
     }
 }
 
@@ -853,22 +995,31 @@ fn state_sync_lock_busy_skips_state_rebuild_silently_on_both_runtimes() {
 
     let node_seeded = seed_root(enabling_config());
     write_state_json(&node_seeded.root, &baseline);
+    // Re-read the file we JUST wrote (rather than re-serializing `baseline`
+    // ourselves) so the "before" text is the literal bytes on disk — the
+    // rework rust-port-21 finding-2 fix: this used to compare a parsed
+    // `Value` against `baseline` and claim "byte-identical" while being
+    // key-order-blind (an `IndexMap`'s `PartialEq` ignores order under this
+    // workspace's `preserve_order` feature). A byte comparison is now the
+    // literal truth of the message.
+    let node_before = read_text_file(&node_seeded.root.join(".bee/state.json"));
     let node_holder = hold_lock_in_background(&node_seeded.root, "state");
     let node = run_seeded_node_hook(&node_seeded.root, "bee-state-sync.mjs", stdin);
     assert_eq!(node.status, 0, "node: LOCK_BUSY must still exit 0 (fail-open) — stderr={:?}", node.stderr);
     assert!(node.stdout.trim().is_empty());
-    let node_after = read_json_file(&node_seeded.root.join(".bee/state.json")).expect("state.json still present");
-    assert_eq!(node_after, baseline, "node: a busy state lock must leave state.json byte-identical — no partial write");
+    let node_after = read_text_file(&node_seeded.root.join(".bee/state.json"));
+    assert_eq!(node_before, node_after, "node: byte-for-byte comparison — a busy state lock must leave state.json completely unchanged, no partial write");
     node_holder.release();
 
     let rust_seeded = seed_root(enabling_config());
     write_state_json(&rust_seeded.root, &baseline);
+    let rust_before = read_text_file(&rust_seeded.root.join(".bee/state.json"));
     let rust_holder = hold_lock_in_background(&rust_seeded.root, "state");
     let rust = run_rust_hook("state-sync", &rust_seeded.root, stdin);
     assert_eq!(rust.status, 0, "rust: LOCK_BUSY must still exit 0 (fail-open) — stderr={:?}", rust.stderr);
     assert!(rust.stdout.trim().is_empty());
-    let rust_after = read_json_file(&rust_seeded.root.join(".bee/state.json")).expect("state.json still present");
-    assert_eq!(rust_after, baseline, "rust: a busy state lock must leave state.json byte-identical — no partial write");
+    let rust_after = read_text_file(&rust_seeded.root.join(".bee/state.json"));
+    assert_eq!(rust_before, rust_after, "rust: byte-for-byte comparison — a busy state lock must leave state.json completely unchanged, no partial write");
     rust_holder.release();
 }
 

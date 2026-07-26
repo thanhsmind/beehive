@@ -221,6 +221,24 @@ fn run_rust(root: &Path, stdin: &str) -> RunResult {
     run(cmd, stdin)
 }
 
+/// Same as [`run_rust`], with the rust-port-18 test-only crash seam armed
+/// for `model-guard` — drives the REAL `queen-bee hook model-guard`
+/// dispatch (model_guard.rs's own `run()`, its own call site at
+/// `run_fail_open(Some(&root), HOOK_NAME, ...)`), never a direct call to
+/// the shared `run_fail_open` wrapper with a hand-supplied literal. That
+/// distinction is the whole point (rust-port-21, finding 3): a direct call
+/// with a literal string proves the wrapper logs whatever it's told, but
+/// proves nothing about whether model_guard.rs's OWN call site still
+/// passes its own name — only exercising the real dispatch path can catch
+/// a regression there.
+fn run_rust_with_crash_seam(root: &Path, stdin: &str) -> RunResult {
+    let mut cmd = Command::new(queen_bee_bin());
+    cmd.arg("hook").arg("model-guard");
+    cmd.current_dir(root);
+    cmd.env("BEE_QUEEN_BEE_CRASH_SEAM", "model-guard");
+    run(cmd, stdin)
+}
+
 fn agent_payload(root: &Path, tool_input: Value) -> String {
     json!({
         "hook_event_name": "PreToolUse",
@@ -553,6 +571,53 @@ fn crash_fail_open_node_oracle_exits_zero_and_logs_crash_instead_of_denying() {
     assert!(
         lines.iter().any(|l| l.get("error").and_then(Value::as_str).map(|s| s.contains("rig-injected-fault")).unwrap_or(false)),
         "expected a crash line naming the injected fault, got {lines:?}"
+    );
+}
+
+/// The first crash line matching `must_contain` in `error` — mirrors
+/// `heavyhooks_conformance.rs`'s helper of the same name/purpose.
+fn find_crash_line<'a>(lines: &'a [Value], must_contain: &str) -> &'a Value {
+    lines
+        .iter()
+        .find(|l| l.get("error").and_then(Value::as_str).map(|s| s.contains(must_contain)).unwrap_or(false))
+        .unwrap_or_else(|| panic!("no crash line containing {must_contain:?} found in {lines:?}"))
+}
+
+/// Rework rust-port-21, finding 3: `model_guard.rs:57` now passes its own
+/// hook name to `run_fail_open` (fixed in rust-port-17's rework), but
+/// nothing asserted the crash line's `hook` field — the two crash tests
+/// above only ever check an `error` substring, and the rust-side one calls
+/// `run_fail_open` directly with a hand-supplied literal rather than
+/// exercising the real `model_guard::run()` dispatch, so a regression at
+/// that exact call site would be caught by nothing. This drives BOTH
+/// runtimes through their real crash paths (the node oracle's own
+/// `dispatch-guard.mjs` fault injection; the rust binary's crash seam
+/// through the REAL `queen-bee hook model-guard` dispatch) and asserts the
+/// `hook` field cross-runtime.
+#[test]
+fn crash_fail_open_both_runtimes_log_the_correct_hook_name() {
+    let node_seeded = seed_crash_root();
+    let node_stdin = agent_payload(&node_seeded.root, json!({}));
+    let node = run_node(&node_seeded.root, &node_stdin);
+    assert_eq!(node.status, 0, "node: fail-open contract: an internal crash must exit 0, never deny — stderr={:?}", node.stderr);
+    assert!(node.stdout.trim().is_empty());
+    let node_lines = read_hooks_log(&node_seeded.root);
+    let node_crash = find_crash_line(&node_lines, "rig-injected-fault");
+
+    let rust_seeded = seed_root_with_config(enabling_config(json!({})));
+    let rust_stdin = agent_payload(&rust_seeded.root, json!({}));
+    let rust = run_rust_with_crash_seam(&rust_seeded.root, &rust_stdin);
+    assert_eq!(rust.status, 0, "rust: fail-open contract: a panic must still exit 0 — stderr={:?}", rust.stderr);
+    assert!(rust.stdout.trim().is_empty());
+    let rust_lines = read_hooks_log(&rust_seeded.root);
+    let rust_crash = find_crash_line(&rust_lines, "rust-port-18 test-only crash seam armed");
+
+    assert_eq!(node_crash.get("hook"), Some(&json!("model-guard")), "node oracle crash line hook field, got {node_crash:?}");
+    assert_eq!(rust_crash.get("hook"), Some(&json!("model-guard")), "rust port crash line hook field, got {rust_crash:?}");
+    assert_eq!(
+        node_crash.get("hook"),
+        rust_crash.get("hook"),
+        "cross-runtime: crash line hook field diverged (node={node_crash:?} rust={rust_crash:?})"
     );
 }
 
