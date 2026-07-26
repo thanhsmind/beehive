@@ -4,8 +4,12 @@
 //!
 //! Subcommands:
 //! - `--generate --out <dir> [--decisions-bytes N] [--reservations-bytes N]
-//!   [--backlog-bytes N] [--cells N]` — the D5 fixture generator. Refuses
-//!   (non-zero exit, no writes) if any size is under its pinned floor.
+//!   [--backlog-bytes N] [--cells N] [--review-candidates N]
+//!   [--git-commits N] [--transcript-tail-bytes N]` — the D5 fixture
+//!   generator. Refuses (non-zero exit, no writes) if any size is under its
+//!   pinned floor (rust-port-19 added the last three: git ancestry, review
+//!   candidates, crash-candidate transcript — the two `status` blocks the
+//!   original fixture measured as zero).
 //! - `--self-test` — proves the generator both directions: all four
 //!   sub-pinned-size refusal cases refuse, and a happy-path generation
 //!   measurably meets every pin and passes a real `bee.mjs status --json`
@@ -32,7 +36,7 @@ fn main() -> ExitCode {
         Some("--generate") => cmd_generate(&args[1..]),
         _ => {
             eprintln!("usage: queen-bench <--generate|--self-test|--check> [flags]");
-            eprintln!("  --generate --out <dir> [--decisions-bytes N] [--reservations-bytes N] [--backlog-bytes N] [--cells N]");
+            eprintln!("  --generate --out <dir> [--decisions-bytes N] [--reservations-bytes N] [--backlog-bytes N] [--cells N] [--review-candidates N] [--git-commits N] [--transcript-tail-bytes N]");
             eprintln!("  --self-test");
             eprintln!("  --check [--budget-ms N] [--bin-path PATH] [--runs N]");
             ExitCode::FAILURE
@@ -72,6 +76,9 @@ fn cmd_generate(args: &[String]) -> ExitCode {
     let mut reservations_bytes = fixture::RESERVATIONS_FLOOR_BYTES;
     let mut backlog_bytes = fixture::BACKLOG_FLOOR_BYTES;
     let mut cells_count = fixture::CELLS_FLOOR_COUNT;
+    let mut review_candidates_count = fixture::REVIEW_CANDIDATES_FLOOR_COUNT;
+    let mut git_commits_count = fixture::GIT_COMMITS_FLOOR_COUNT;
+    let mut transcript_tail_bytes = fixture::TRANSCRIPT_TAIL_FLOOR_BYTES;
 
     let mut i = 0;
     while i < args.len() {
@@ -104,6 +111,24 @@ fn cmd_generate(args: &[String]) -> ExitCode {
                     cells_count = v;
                 }
             }
+            "--review-candidates" => {
+                i += 1;
+                if let Some(v) = args.get(i).and_then(|s| s.parse::<usize>().ok()) {
+                    review_candidates_count = v;
+                }
+            }
+            "--git-commits" => {
+                i += 1;
+                if let Some(v) = args.get(i).and_then(|s| s.parse::<usize>().ok()) {
+                    git_commits_count = v;
+                }
+            }
+            "--transcript-tail-bytes" => {
+                i += 1;
+                if let Some(v) = args.get(i).and_then(|s| s.parse::<u64>().ok()) {
+                    transcript_tail_bytes = v;
+                }
+            }
             _ => {}
         }
         i += 1;
@@ -120,6 +145,9 @@ fn cmd_generate(args: &[String]) -> ExitCode {
         reservations_bytes,
         backlog_bytes,
         cells_count,
+        review_candidates_count,
+        git_commits_count,
+        transcript_tail_bytes,
     };
     match fixture::generate(&req) {
         Ok(report) => {

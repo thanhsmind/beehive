@@ -1,15 +1,44 @@
 //! Fixture generator — the D5 host-real `.bee` store (CONTEXT.md D5,
-//! rust-port-2 truths). Produces a self-sufficient store at pinned minimum
-//! sizes (decisions.jsonl >= 700 KB, reservations.json >= 600 KB,
-//! backlog.jsonl >= 250 KB, >= 250 cell files) that:
+//! rust-port-2 truths, grown by rust-port-19 to also exercise the two
+//! expensive `status` blocks the original pinned-size-only fixture missed).
+//! Produces a self-sufficient store at pinned minimum sizes (decisions.jsonl
+//! >= 700 KB, reservations.json >= 600 KB, backlog.jsonl >= 250 KB, >= 250
+//! cell files, >= 60 review candidates, >= 50 git commits, a >= 300 KB crash-
+//! candidate transcript) that:
 //!
-//! - resolves as a bee root on its own (`.bee/onboarding.json` present, no
-//!   `.git` anywhere above it — `resolveRootsCore`'s first branch matches
-//!   immediately, per the dry-run proof this cell recorded against the real
-//!   `bee.mjs`), and
+//! - resolves as a bee root on its own: `.bee/onboarding.json` is present,
+//!   and (rust-port-19) a real git repo lives at the SAME directory as
+//!   `.bee/` — `resolveRootsCore`'s first branch (no `.git` at that level)
+//!   therefore does NOT match, but its git-root fallback branch does, and
+//!   resolves `storeRoot === workRoot === this fixture root` either way
+//!   (proven empirically against the real `bee.mjs`, see selftest.rs's
+//!   sanity_read `root_resolution` assertion) — this is a DELIBERATE
+//!   divergence from rust-port-2's original no-`.git` fixture: growing real
+//!   ancestry into the store means a `.git` must exist somewhere, and the
+//!   fixture root itself is the only place that keeps root resolution
+//!   correct (per the validation decision this cell implements),
+//! - carries genuine git ancestry (rust-port-19): a real git history so
+//!   `deriveCandidateStatus`'s `merge-base --is-ancestor` / `rev-list
+//!   --count` calls answer real questions instead of matching zero rows,
+//! - carries a review-candidates ledger + review sessions (rust-port-19)
+//!   engineered to hit all four `CANDIDATE_STATUSES` (unreviewed, in review,
+//!   reviewed, review stale — the last one via both a real "commits since"
+//!   count AND an unresolvable-ancestry candidate head), so
+//!   `buildReviewBlock` does real derivation work instead of looping zero
+//!   times,
+//! - carries one heartbeat-stale, non-clean-end crash candidate session with
+//!   an INJECTED transcript root (rust-port-19: `.bee/config.json`
+//!   `recovery.transcript_roots`, never the host `$HOME/.claude/projects`)
+//!   so `detectCrashCandidates`'s encoded-project-dir matching
+//!   (`recovery.mjs`, mirroring `perf.mjs`'s `encodeProjectDir`) actually
+//!   resolves a transcript and `readTranscriptTail` genuinely reads past its
+//!   256 KB default window, and
 //! - survives a real `node .bee/bin/bee.mjs status --json` read without
 //!   crashing (every reader in the mjs estate is fail-open on missing/
-//!   malformed substructure — proven empirically, not just read from source).
+//!   malformed substructure — proven empirically, not just read from source)
+//!   AND reports non-trivial `review`/`recovery` blocks on that read
+//!   (selftest.rs's `non_triviality` assertion — a fixture that still
+//!   measures nothing is a failed generation, not a pass).
 //!
 //! `generate` REFUSES (returns `Err`, writes nothing) if any requested size
 //! is below its pinned floor — the D5 acceptance instrument must never
@@ -18,12 +47,21 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// Pinned minimums from CONTEXT.md D5 / plan.md cell rust-port-2.
 pub const DECISIONS_FLOOR_BYTES: u64 = 700_000;
 pub const RESERVATIONS_FLOOR_BYTES: u64 = 600_000;
 pub const BACKLOG_FLOOR_BYTES: u64 = 250_000;
 pub const CELLS_FLOOR_COUNT: usize = 250;
+
+/// Pinned minimums added by rust-port-19 (validation decision 2026-07-26):
+/// the three costs the original fixture measured as zero (git ancestry,
+/// review candidates, transcript tail). REFUSED below, exactly like the
+/// four floors above — never silently shrunk to make generation succeed.
+pub const REVIEW_CANDIDATES_FLOOR_COUNT: usize = 60;
+pub const GIT_COMMITS_FLOOR_COUNT: usize = 50;
+pub const TRANSCRIPT_TAIL_FLOOR_BYTES: u64 = 300_000;
 
 #[derive(Debug, Clone)]
 pub struct FixtureRequest {
@@ -32,6 +70,9 @@ pub struct FixtureRequest {
     pub reservations_bytes: u64,
     pub backlog_bytes: u64,
     pub cells_count: usize,
+    pub review_candidates_count: usize,
+    pub git_commits_count: usize,
+    pub transcript_tail_bytes: u64,
 }
 
 impl FixtureRequest {
@@ -43,6 +84,9 @@ impl FixtureRequest {
             reservations_bytes: RESERVATIONS_FLOOR_BYTES,
             backlog_bytes: BACKLOG_FLOOR_BYTES,
             cells_count: CELLS_FLOOR_COUNT,
+            review_candidates_count: REVIEW_CANDIDATES_FLOOR_COUNT,
+            git_commits_count: GIT_COMMITS_FLOOR_COUNT,
+            transcript_tail_bytes: TRANSCRIPT_TAIL_FLOOR_BYTES,
         }
     }
 }
@@ -54,17 +98,27 @@ pub struct FixtureReport {
     pub reservations_bytes: u64,
     pub backlog_bytes: u64,
     pub cells_count: usize,
+    pub git_commits_count: usize,
+    pub review_candidates_count: usize,
+    pub transcript_tail_bytes: u64,
+    pub transcript_file: PathBuf,
+    pub crash_session_id: String,
 }
 
 impl FixtureReport {
     pub fn to_json(&self) -> String {
         format!(
-            "{{\"root\":\"{}\",\"decisions_bytes\":{},\"reservations_bytes\":{},\"backlog_bytes\":{},\"cells_count\":{}}}",
+            "{{\"root\":\"{}\",\"decisions_bytes\":{},\"reservations_bytes\":{},\"backlog_bytes\":{},\"cells_count\":{},\"git_commits_count\":{},\"review_candidates_count\":{},\"transcript_tail_bytes\":{},\"transcript_file\":\"{}\",\"crash_session_id\":\"{}\"}}",
             json_escape(&self.root.display().to_string()),
             self.decisions_bytes,
             self.reservations_bytes,
             self.backlog_bytes,
             self.cells_count,
+            self.git_commits_count,
+            self.review_candidates_count,
+            self.transcript_tail_bytes,
+            json_escape(&self.transcript_file.display().to_string()),
+            json_escape(&self.crash_session_id),
         )
     }
 }
@@ -114,6 +168,24 @@ fn check_floors(req: &FixtureRequest) -> Result<(), String> {
             req.cells_count, CELLS_FLOOR_COUNT
         ));
     }
+    if req.review_candidates_count < REVIEW_CANDIDATES_FLOOR_COUNT {
+        return Err(format!(
+            "review candidates count requested {} < pinned floor {} (rust-port-19) — refusing to generate a fixture that would leave buildReviewBlock measuring near-zero rows",
+            req.review_candidates_count, REVIEW_CANDIDATES_FLOOR_COUNT
+        ));
+    }
+    if req.git_commits_count < GIT_COMMITS_FLOOR_COUNT {
+        return Err(format!(
+            "git commits count requested {} < pinned floor {} (rust-port-19) — refusing to generate a fixture with too little real ancestry for deriveCandidateStatus's git questions to be genuine",
+            req.git_commits_count, GIT_COMMITS_FLOOR_COUNT
+        ));
+    }
+    if req.transcript_tail_bytes < TRANSCRIPT_TAIL_FLOOR_BYTES {
+        return Err(format!(
+            "transcript tail bytes requested {} < pinned floor {} (rust-port-19) — refusing to generate a crash-candidate transcript smaller than readTranscriptTail's own default 256 KB window",
+            req.transcript_tail_bytes, TRANSCRIPT_TAIL_FLOOR_BYTES
+        ));
+    }
     Ok(())
 }
 
@@ -127,9 +199,20 @@ pub fn generate(req: &FixtureRequest) -> Result<FixtureReport, String> {
     let cells_dir = bee_dir.join("cells");
     fs::create_dir_all(&cells_dir).map_err(|e| format!("mkdir {}: {e}", cells_dir.display()))?;
 
+    // Canonicalized only AFTER the directory exists (canonicalize requires a
+    // real path). This is the exact string `encodeProjectDir` mirrors below
+    // must match against — Node's own `process.cwd()` when the sanity-read
+    // subprocess's cwd is this same directory resolves the same realpath on
+    // POSIX, so computing the encoded transcript subdir name here (fixture
+    // generation time) rather than re-deriving it at read time keeps the two
+    // sides from ever drifting apart.
+    let canonical_root = fs::canonicalize(&req.out_dir)
+        .map_err(|e| format!("canonicalize {}: {e}", req.out_dir.display()))?;
+    let transcript_root = canonical_root.join("fixture-transcripts");
+
     write_onboarding(&bee_dir)?;
     write_state(&bee_dir)?;
-    write_config(&bee_dir)?;
+    write_config(&bee_dir, &transcript_root)?;
 
     let decisions_bytes = write_jsonl_padded(&bee_dir.join("decisions.jsonl"), req.decisions_bytes, decision_line)?;
     let backlog_bytes = write_jsonl_padded(&bee_dir.join("backlog.jsonl"), req.backlog_bytes, backlog_line)?;
@@ -140,12 +223,27 @@ pub fn generate(req: &FixtureRequest) -> Result<FixtureReport, String> {
         fs::write(&path, cell_json(i)).map_err(|e| format!("write {}: {e}", path.display()))?;
     }
 
+    // rust-port-19: real git ancestry co-located with `.bee/` (see the
+    // module doc comment for why this still resolves the fixture as its own
+    // store root), a review-candidates ledger + review sessions engineered
+    // to hit all four derived statuses, and one injected-transcript crash
+    // candidate — the three costs the pre-growth fixture measured as zero.
+    let commits = init_git_repo(&canonical_root, req.git_commits_count)?;
+    let review_candidates_count = write_review_state(&bee_dir, &commits, req.review_candidates_count)?;
+    let (transcript_tail_bytes, transcript_file, crash_session_id) =
+        write_crash_candidate(&canonical_root, &bee_dir, &transcript_root, req.transcript_tail_bytes)?;
+
     Ok(FixtureReport {
         root: req.out_dir.clone(),
         decisions_bytes,
         reservations_bytes,
         backlog_bytes,
         cells_count: req.cells_count,
+        git_commits_count: commits.len(),
+        review_candidates_count,
+        transcript_tail_bytes,
+        transcript_file,
+        crash_session_id,
     })
 }
 
@@ -165,9 +263,18 @@ fn write_state(bee_dir: &Path) -> Result<(), String> {
     fs::write(&path, body).map_err(|e| format!("write {}: {e}", path.display()))
 }
 
-fn write_config(bee_dir: &Path) -> Result<(), String> {
+/// `recovery.transcript_roots` (rust-port-19) points ONLY at the injected,
+/// fixture-local `transcript_root` — never the host `$HOME/.claude/projects`
+/// (normalizeTranscriptRootsConfig/scanTranscriptRoots, `recovery.mjs`). The
+/// default Claude root is still scanned first by the real mjs code at read
+/// time (that behavior is frozen, D1), but it never holds this fixture's
+/// candidate, so resolution always falls through to this configured entry.
+fn write_config(bee_dir: &Path, transcript_root: &Path) -> Result<(), String> {
     let path = bee_dir.join("config.json");
-    let body = "{\"hooks\":{},\"lanes\":{},\"capabilities\":{},\"commands\":{},\"gate_bypass\":\"off\",\"models\":{}}";
+    let body = format!(
+        "{{\"hooks\":{{}},\"lanes\":{{}},\"capabilities\":{{}},\"commands\":{{}},\"gate_bypass\":\"off\",\"models\":{{}},\"recovery\":{{\"transcript_roots\":[{{\"runtime\":\"fixture\",\"path\":\"{}\"}}]}}}}",
+        json_escape(&transcript_root.display().to_string())
+    );
     fs::write(&path, body).map_err(|e| format!("write {}: {e}", path.display()))
 }
 
@@ -249,6 +356,255 @@ fn write_reservations_padded(path: &Path, target_bytes: u64) -> Result<u64, Stri
     Ok(body.len() as u64)
 }
 
+// ─── rust-port-19: git ancestry + review candidates + injected transcript ──
+
+fn run_git(root: &Path, args: &[&str]) -> Result<(), String> {
+    run_git_capture(root, args).map(|_| ())
+}
+
+fn run_git_capture(root: &Path, args: &[&str]) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .map_err(|e| format!("spawn `git {}`: {e}", args.join(" ")))?;
+    if !output.status.success() {
+        return Err(format!(
+            "`git {}` failed (exit {:?}): {}",
+            args.join(" "),
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Initialize a real git repo at `root` (co-located with `.bee/` — see the
+/// module doc comment) with `commits_count` linear commits, tagging the
+/// first-quarter and final commit as genuine refs. Returns every commit sha,
+/// oldest first. `--allow-empty` keeps each commit a single fast `git
+/// commit` spawn with no working-tree diffing; identity/signing are set
+/// locally so this never depends on (or pollutes) the caller's global git
+/// config.
+fn init_git_repo(root: &Path, commits_count: usize) -> Result<Vec<String>, String> {
+    run_git(root, &["init", "-q"])?;
+    run_git(root, &["config", "user.email", "queen-bench@fixture.invalid"])?;
+    run_git(root, &["config", "user.name", "queen-bench fixture"])?;
+    run_git(root, &["config", "commit.gpgsign", "false"])?;
+    for i in 0..commits_count {
+        run_git(
+            root,
+            &["commit", "--allow-empty", "-q", "-m", &format!("fixture commit {i:05}")],
+        )?;
+    }
+    let log = run_git_capture(root, &["log", "--format=%H"])?;
+    let mut shas: Vec<String> = log
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if shas.len() < commits_count {
+        return Err(format!(
+            "git log reported {} commit(s) after generating {commits_count} — ancestry fixture is short",
+            shas.len()
+        ));
+    }
+    shas.reverse(); // oldest first
+
+    // Real refs (not just bare shas) so a `deriveCandidateStatus` reader that
+    // cares about ref shape sees genuine tags, not only anonymous commit ids.
+    run_git(root, &["tag", "fixture-early", &shas[shas.len() / 4]])?;
+    run_git(root, &["tag", "fixture-late", shas.last().unwrap()])?;
+
+    Ok(shas)
+}
+
+/// Freeze one `.bee/reviews/<id>.json` session (SPEC §8 shape, reviews.mjs)
+/// covering the given features at `head`, with `decision.status` set to
+/// `status` ("approved" or "pending"). `baseline` is schema-required but
+/// unused by `deriveCandidateStatus` — a plain placeholder is honest.
+fn write_review_session(
+    reviews_dir: &Path,
+    id: &str,
+    status: &str,
+    head: &str,
+    features: &[&str],
+) -> Result<(), String> {
+    let included: String = features
+        .iter()
+        .map(|f| format!("{{\"type\":\"feature\",\"id\":\"{}\"}}", json_escape(f)))
+        .collect::<Vec<_>>()
+        .join(",");
+    let body = format!(
+        "{{\"id\":\"{id}\",\"requested_by\":\"queen-bench-fixture\",\"requested_at\":\"2026-07-26T00:00:00.000Z\",\"scope_description\":\"queen-bench D5 fixture review session — not a real review\",\"included\":[{included}],\"excluded\":[],\"baseline\":\"fixture-baseline-unused\",\"head\":\"{head}\",\"reviewer_manifest\":[],\"verification_preflight\":{{\"checked_at\":\"2026-07-26T00:00:00.000Z\",\"cells_checked\":[],\"passed\":true}},\"findings\":[],\"uat\":[],\"decision\":{{\"status\":\"{status}\",\"gate4\":null}},\"created_at\":\"2026-07-26T00:00:00.000Z\",\"updated_at\":\"2026-07-26T00:00:00.000Z\"}}"
+    );
+    let path = reviews_dir.join(format!("{id}.json"));
+    fs::write(&path, body).map_err(|e| format!("write {}: {e}", path.display()))
+}
+
+fn review_candidate_line(feature: &str, head: &str, idx: usize) -> String {
+    format!(
+        "{{\"id\":\"fixture-candidate-{feature}-{idx:04}\",\"type\":\"candidate\",\"date\":\"2026-07-26T00:00:00.000Z\",\"feature\":\"{feature}\",\"head\":\"{head}\",\"mode\":\"standard\",\"baseline\":null,\"cells\":[]}}"
+    )
+}
+
+/// Build `.bee/reviews/` (3 sessions) + `.bee/review-candidates.jsonl`
+/// (`candidates_count` entries) so `deriveCandidateStatus` hits all four
+/// `CANDIDATE_STATUSES` on a real read:
+///   - `queen-bench-fixture-stale`      — approved session, valid ancestor
+///     head, but commits landed after the session's frozen head -> "review
+///     stale" via a real `rev-list --count` > 0.
+///   - `queen-bench-fixture-reviewed`   — approved session pinned at the
+///     actual git tip, candidate head an ancestor of it -> "reviewed" (0
+///     commits since).
+///   - `queen-bench-fixture-inreview`   — session still `pending` -> "in
+///     review" (open session always outranks git ancestry).
+///   - `queen-bench-fixture-unresolved` — approved session, but the
+///     candidate's OWN head is not a real object -> "review stale" via a
+///     real unresolvable `merge-base --is-ancestor`.
+///   - `queen-bench-fixture-unreviewed` — everything else: no covering
+///     session at all -> "unreviewed". Takes the remainder up to
+///     `candidates_count`, which `check_floors` has already proven is >=
+///     `REVIEW_CANDIDATES_FLOOR_COUNT` before this function ever runs.
+fn write_review_state(bee_dir: &Path, commits: &[String], candidates_count: usize) -> Result<usize, String> {
+    if commits.len() < 6 {
+        // Unreachable via the public API: check_floors refuses any
+        // git_commits_count below GIT_COMMITS_FLOOR_COUNT (50) before
+        // init_git_repo ever runs. Guarded explicitly anyway so a future
+        // floor change that shrinks GIT_COMMITS_FLOOR_COUNT below 6 fails
+        // loud here instead of silently panicking on out-of-range indexing.
+        return Err(format!(
+            "write_review_state: need >= 6 commits to build genuine ancestry fixtures, got {}",
+            commits.len()
+        ));
+    }
+    let tip = commits.last().unwrap().as_str();
+    let ancestor_of_tip = commits[commits.len() - 3].as_str();
+    let stale_head = commits[commits.len() - 6].as_str();
+    let ancestor_of_stale = commits[0].as_str();
+    let bogus_head = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+
+    let reviews_dir = bee_dir.join("reviews");
+    fs::create_dir_all(&reviews_dir).map_err(|e| format!("mkdir {}: {e}", reviews_dir.display()))?;
+
+    write_review_session(
+        &reviews_dir,
+        "fixture-review-approved-stale",
+        "approved",
+        stale_head,
+        &["queen-bench-fixture-stale", "queen-bench-fixture-unresolved"],
+    )?;
+    write_review_session(
+        &reviews_dir,
+        "fixture-review-approved-tip",
+        "approved",
+        tip,
+        &["queen-bench-fixture-reviewed"],
+    )?;
+    write_review_session(
+        &reviews_dir,
+        "fixture-review-open",
+        "pending",
+        tip,
+        &["queen-bench-fixture-inreview"],
+    )?;
+
+    const BUCKET: usize = 5;
+    let candidates_path = bee_dir.join("review-candidates.jsonl");
+    let mut file =
+        fs::File::create(&candidates_path).map_err(|e| format!("create {}: {e}", candidates_path.display()))?;
+    let mut write_line = |feature: &str, head: &str, idx: usize| -> Result<(), String> {
+        let line = review_candidate_line(feature, head, idx);
+        file.write_all(line.as_bytes())
+            .and_then(|_| file.write_all(b"\n"))
+            .map_err(|e| format!("write {}: {e}", candidates_path.display()))
+    };
+
+    let mut written = 0usize;
+    for i in 0..BUCKET {
+        write_line("queen-bench-fixture-stale", ancestor_of_stale, i)?;
+        written += 1;
+    }
+    for i in 0..BUCKET {
+        write_line("queen-bench-fixture-reviewed", ancestor_of_tip, i)?;
+        written += 1;
+    }
+    for i in 0..BUCKET {
+        write_line("queen-bench-fixture-inreview", tip, i)?;
+        written += 1;
+    }
+    for i in 0..BUCKET {
+        write_line("queen-bench-fixture-unresolved", bogus_head, i)?;
+        written += 1;
+    }
+    for i in 0..candidates_count.saturating_sub(written) {
+        write_line("queen-bench-fixture-unreviewed", tip, i)?;
+        written += 1;
+    }
+
+    Ok(written)
+}
+
+/// Mirrors `encodeProjectDir` (`.bee/bin/lib/perf.mjs`): the absolute
+/// project path with '/', '\' and '.' each replaced by '-'. Must stay
+/// byte-for-byte identical to the mjs original — this is the exact
+/// computation `resolveTranscript` repeats at read time to find the
+/// directory a session's transcript lives in.
+fn encode_project_dir(path_str: &str) -> String {
+    path_str
+        .chars()
+        .map(|c| if c == '/' || c == '\\' || c == '.' { '-' } else { c })
+        .collect()
+}
+
+const FILLER_TRANSCRIPT_NOTE: &str = "Fixture transcript filler line generated by queen-bench for the D5 recovery-block benchmark store — pads the crash-candidate transcript past readTranscriptTail's default 256 KB window so the bench genuinely exercises the tail-read cost, not a synthetic empty file.";
+
+fn transcript_filler_line(i: usize) -> String {
+    format!(
+        "{{\"type\":\"filler\",\"timestamp\":\"2026-07-26T00:05:00.000Z\",\"seq\":{i},\"note\":\"{FILLER_TRANSCRIPT_NOTE}\"}}"
+    )
+}
+
+/// Write one heartbeat-stale, non-clean-end session (`.bee/sessions/<id>.json`)
+/// plus its transcript file under the INJECTED `transcript_root` (never the
+/// host `$HOME/.claude/projects` — `write_config` above wires
+/// `recovery.transcript_roots` to this exact directory), laid out at
+/// `<transcript_root>/<encodeProjectDir(canonical_root)>/<session_id>.jsonl`
+/// — the same encoded-project-dir shape `detectCrashCandidates`
+/// (`recovery.mjs`) resolves through `resolveTranscript`. `last_heartbeat`
+/// is pinned to 2020 (unambiguously stale under the 900s window regardless
+/// of when this fixture is later read); every transcript event carries a
+/// fixed 2026-07-26 timestamp strictly after the fixture's decisions.jsonl
+/// filler dates, so `lastDurableSettlement`'s comparison always finds
+/// genuine `transcript_activity` — no `system/stop_hook_summary` event is
+/// ever emitted, so `hasCleanEndTrio` never matches and the candidate is
+/// never excluded as a clean stop.
+fn write_crash_candidate(
+    canonical_root: &Path,
+    bee_dir: &Path,
+    transcript_root: &Path,
+    transcript_tail_bytes: u64,
+) -> Result<(u64, PathBuf, String), String> {
+    let sessions_dir = bee_dir.join("sessions");
+    fs::create_dir_all(&sessions_dir).map_err(|e| format!("mkdir {}: {e}", sessions_dir.display()))?;
+
+    let session_id = "fixture-crash-session-000001".to_string();
+    let session_body = format!(
+        "{{\"id\":\"{session_id}\",\"started_at\":\"2020-01-01T00:00:00.000Z\",\"last_heartbeat\":\"2020-01-01T00:00:00.000Z\"}}"
+    );
+    let session_path = sessions_dir.join(format!("{session_id}.json"));
+    fs::write(&session_path, session_body).map_err(|e| format!("write {}: {e}", session_path.display()))?;
+
+    let encoded_dir_name = encode_project_dir(&canonical_root.display().to_string());
+    let encoded_dir = transcript_root.join(&encoded_dir_name);
+    fs::create_dir_all(&encoded_dir).map_err(|e| format!("mkdir {}: {e}", encoded_dir.display()))?;
+
+    let transcript_path = encoded_dir.join(format!("{session_id}.jsonl"));
+    let bytes = write_jsonl_padded(&transcript_path, transcript_tail_bytes, transcript_filler_line)?;
+
+    Ok((bytes, transcript_path, session_id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,6 +628,27 @@ mod tests {
         c.cells_count = CELLS_FLOOR_COUNT - 1;
         assert!(check_floors(&c).is_err());
 
+        let mut rc = base.clone();
+        rc.review_candidates_count = REVIEW_CANDIDATES_FLOOR_COUNT - 1;
+        assert!(check_floors(&rc).is_err());
+
+        let mut gc = base.clone();
+        gc.git_commits_count = GIT_COMMITS_FLOOR_COUNT - 1;
+        assert!(check_floors(&gc).is_err());
+
+        let mut tt = base.clone();
+        tt.transcript_tail_bytes = TRANSCRIPT_TAIL_FLOOR_BYTES - 1;
+        assert!(check_floors(&tt).is_err());
+
         assert!(check_floors(&base).is_ok());
+    }
+
+    #[test]
+    fn encode_project_dir_mirrors_mjs() {
+        // Byte-for-byte parity with perf.mjs's encodeProjectDir: '/', '\',
+        // '.' each become '-'; nothing else is touched.
+        assert_eq!(encode_project_dir("/a/b/c"), "-a-b-c");
+        assert_eq!(encode_project_dir("/tmp/queen-bench.fixture/1"), "-tmp-queen-bench-fixture-1");
+        assert_eq!(encode_project_dir(r"C:\a\b"), "C:-a-b");
     }
 }
