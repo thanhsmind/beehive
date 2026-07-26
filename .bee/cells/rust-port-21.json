@@ -124,6 +124,56 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "worker-ladder-covered",
+            "status": "PASS",
+            "evidence": "Oracle read directly (bee-chain-nudge.mjs:36-47) against chain_nudge.rs:62-77 and :124. The table has 5 rows, each object carrying ONLY its own rung's field, with phase=idle on every row — so phase=swarming cannot be the trigger and the only path to a nudge is is_registered_worker. Teeth verified by EXECUTED falsification in a scratch copy: narrowing the Rust ladder to [nickname, name] produced 'FAILED. 17 passed; 2 failed' with the agent-rung fixture diverging (node emitted the nudge, rust silent). The no-match twin seeds a numeric entry and an unrelated-field object and proves silence on BOTH runtimes (node asserted empty, plus node==rust). OBSERVATION, not a truth violation: the doc comment claims a priority-order regression would be caught, but no row carries two competing fields, so a reordering would NOT be caught — the comment overstates what the table covers."
+          },
+          {
+            "id": "resolve-pipeline-exercised",
+            "status": "PASS",
+            "evidence": "Branch condition read on both sides (state.mjs:1752-1765, state.rs:237-274): both fall back to readState when the session id is absent, when no session record exists, or when session.lane is empty — so merely passing a session id changes nothing. The fixture goes further: default state.json is {phase:'idle'} with NO workers, stdin carries a session id and no agent name (so is_registered_worker is false by construction), the session is bound via the real claims.mjs bindSessionLane through a new fixture op, and the lane record carries phase swarming — the nudge can only come from the lane record. EXECUTED falsification: replacing the resolve_pipeline result with the plain state phase turned exactly this fixture red while every other chain-nudge test stayed green, which is precisely why it was the missing one."
+          },
+          {
+            "id": "no-parsed-value-comparisons-left",
+            "status": "PASS",
+            "evidence": "Confirmed all four prior-commit sites were parsed-Value asserts and that one message read 'byte-identical'. In the new commit all four are converted, not re-worded: they now read raw text into Vec<String> and assert on the text, and the stale baseline Value comparison is gone. Full sweep of the file: the three remaining read_json_file uses are field-level extractions asserted against semantic literals, never whole-file Value equality, and each of those tests separately carries a whole-file redacted byte comparison. Every remaining 'byte' claim now sits on a raw-text comparison. The premise is itself covered by the in-suite meta-test (Value equality order-blind under preserve_order; the byte comparator flags the same pair). Caveat reported honestly: an attempt to isolate the converted disabled-hook assertion tripped an earlier assertion in that test, so that line's teeth rest on String equality being order-sensitive by construction plus the meta-test, not on an isolated red the judge produced."
+          },
+          {
+            "id": "model-guard-crash-asserted",
+            "status": "PASS",
+            "evidence": "The claimed distinction is real: model_guard.rs:57-60 passes its own HOOK_NAME into run_fail_open, which logs that argument. The new helper spawns the real binary as `queen-bee hook model-guard` with the crash seam armed — i.e. through model_guard::run's own dispatch, not a direct run_fail_open call with a literal — and asserts the hook field cross-runtime. EXECUTED falsification: changing model_guard.rs:57 to pass 'write-guard' produced 'FAILED. 13 passed; 1 failed' with the expected hook-field mismatch, while the pre-existing wrapper crash test stayed GREEN under the same mutation — independent confirmation that only the new test covers that call site."
+          },
+          {
+            "id": "red-first-evidence-honest",
+            "status": "PASS",
+            "evidence": "Not static — the judge executed the falsifications itself in a scratch copy under .bee/tmp/judge-rust-port-21/ (source-only copy; the test harness still seeds from the real sha256-checked .bee/bin, and every fixture root is a tempdir). Two of the worker's four quoted failures reproduce essentially verbatim (agent-rung divergence; model-guard hook-field mismatch), and the resolve_pipeline red reproduces matching the third quote. The one item not reproducible as an isolated red is the byte-vs-Value demonstration, which the worker itself describes as a scratch technique demonstration rather than a source mutation; it remains backed by the in-suite meta-test. Scratch removed afterwards; git status shows no judge artifacts."
+          },
+          {
+            "id": "proof-only-scope",
+            "status": "PASS",
+            "evidence": "git show --name-only returns exactly 5 paths: the cell record, the two conformance targets, the fixture mjs, and the report. A stat restricted to crates/*/src, crates/Cargo.toml, .bee/bin and packages/bee prints NOTHING — zero production source, zero frozen mjs, zero wiring, no members-list change. Live-store safety: every root is a tempdir whose seeded oracle files are sha256-verified against the repo copies, the runner passes that temp root's own lib dir, and the new lane/session helpers write only under the seeded temp root."
+          },
+          {
+            "id": "counts-and-no-regression",
+            "status": "PASS",
+            "evidence": "Judge's own runs: heavyhooks_conformance 19 passed, modelguard_conformance 14 passed, -p queen-bee 121 passed across 10 suites, whole workspace 318 passed across 21 suites, 0 failed. New coverage rather than renames or splits: diffing the sorted test-fn inventories between the prior commit and HEAD yields pure additions and zero deletions — three new heavyhooks tests (worker ladder, no-match twin, resolve_pipeline lane branch) and one new modelguard crash test. The claimed 19 (was 16) and 14 (was 13) are exact."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T16:12:53.756Z"
+      }
+    ]
   }
 }

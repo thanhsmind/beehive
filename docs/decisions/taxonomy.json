@@ -227,6 +227,8 @@
     "agents-md",
     "comms",
     "guards",
-    "multisession"
+    "multisession",
+    "rust-port",
+    "d5"
   ]
 }

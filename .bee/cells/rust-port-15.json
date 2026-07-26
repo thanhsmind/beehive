@@ -1,0 +1,300 @@
+{
+  "id": "rust-port-15",
+  "feature": "rust-port",
+  "title": "queen-bee status command: byte-parity vs bee.mjs status --json + host-real 5ms bench gate (D5 proof)",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "rust-port-14",
+    "rust-port-19",
+    "rust-port-20"
+  ],
+  "decisions": [
+    "D3",
+    "D5",
+    "D7"
+  ],
+  "tier": "ceiling",
+  "files": [
+    "crates/queen-bee/*",
+    "crates/bee-parity/*",
+    "crates/queen-bench/*"
+  ],
+  "read_first": [
+    ".bee/bin/bee.mjs",
+    "crates/bee-parity/src/main.rs",
+    "crates/bee-parity/src/runner.rs",
+    "crates/queen-bench/src/main.rs",
+    "crates/queen-bee/src/main.rs",
+    "docs/history/rust-port/CONTEXT.md",
+    "docs/history/rust-port/reports/validation-slice0.md"
+  ],
+  "action": "Assemble `queen-bee status [--json]` from the readers ported in rust-port-13/14, reproducing bee.mjs buildStatus (bee.mjs:724) + renderStatusText exactly (field order, nesting, null-vs-absent, degraded flags, the human text renderer). PROOF IS TWO-PART: (1) BYTE-PARITY — bee-parity today dispatches ONLY `--self-check` (crates/bee-parity/src/main.rs:34-43, self-parity + seeded mutation, which is rust-port-4's verify) and its runner is hardcoded to the mjs leg. ADD a SECOND `--status-check` arm — never repurpose `--self-check`, whose rust-port-4 verify must still pass afterwards: run `node .bee/bin/bee.mjs status --json` and `queen-bee status --json` over the SAME cloned host-real fixture store (queen-bench --generate) in self-sufficient temp roots outside the repo, diff stdout byte-for-byte after the declared volatile allowlist only, and diff post-run store trees (excluded set {.bee/logs/**, .bee/cache/**, .bee/tmp/**}); include a seeded-mutation negative control proving the comparison still detects a difference, and assert BOTH inner exits are 0 (two identical failures are not parity). `--status-check` ALSO runs the text leg (no --json) and diffs the rendered human output, so truth 3 has a real instrument. (2) BENCH GATE — queen-bench already has --generate/--self-test/--check (crates/queen-bench/src/main.rs:27-37) and resolves the queen-bee binary via current_exe or --bin-path; extend `--check` to also measure `queen-bee status --json` on the pinned host-real fixture (min 50 runs, spawn-inclusive p95, --budget-ms default 5) and record the node baseline for the same command in the JSON report. BINARY FRESHNESS: the verify builds the whole workspace FIRST — neither queen-bench nor bee-parity depends on queen-bee as a cargo dependency, so `cargo run -p <x>` alone would silently measure a stale target/release/queen-bee and report a green gate for a status command it never built. TWO ESCAPES, both [BLOCKED] with evidence rather than a weakened proof: (a) if 5ms proves unreachable for status on the host-real fixture, do NOT shrink the fixture — report the measured p95 plus a profile so the orchestrator can log a per-command budget supersession; (b) if the parity leg cannot reach zero diff because of genuine non-determinism the allowlist should not cover, report the exact differing fields rather than widening the allowlist to make it pass.",
+  "must_haves": {
+    "truths": [
+      "cargo build --release of the whole workspace precedes both proofs in the verify (no stale-binary green)",
+      "bee-parity --status-check reports zero diff for BOTH the --json and the text leg between bee.mjs status and queen-bee status on the grown host-real fixture, with both inner exits 0",
+      "the seeded-mutation negative control runs PER LEG (json and text) and is detected on each — a text-leg-only normalization leak must not stay invisible",
+      "all volatility handling for --status-check lives in the ONE declared allowlist — no normalization inside diff helpers or the tree comparison",
+      "bee-parity --self-check (rust-port-4's verify) still passes unchanged",
+      "queen-bench --check gates queen-bee status --json at p95 under the budget on the pinned grown fixture, node baseline recorded alongside",
+      "the bench report states BOTH cold-cache and warm-cache status percentiles explicitly (the review-git cache from rust-port-14 makes them differ by ~10ms) — reporting only the warm number is not an honest D5 result",
+      "the parity legs tolerate the additive .bee/runtime/review-git-cache.json artifact by excluding .bee/runtime/** as a whole-path exclusion beside {.bee/logs/**, .bee/cache/**, .bee/tmp/**}, since the rust leg writes it and the mjs leg never does"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/queen-bee/",
+        "substantive": "status command (json + text render) built on the ported readers"
+      },
+      {
+        "path": "crates/bee-parity/",
+        "substantive": "new --status-check arm (json + text legs, per-leg negative control) beside the untouched --self-check"
+      },
+      {
+        "path": "crates/queen-bench/",
+        "substantive": "status bench added to --check, cold and warm cache percentiles, node baseline"
+      }
+    ],
+    "key_links": [
+      "parity harness drives the real .bee/bin/bee.mjs as oracle",
+      "status is composed only from rust-port-13/14/20 readers — no new store parsing here",
+      "review block comes from bee_core::reviews::build_review_block (rust-port-14), cache artifact .bee/runtime/review-git-cache.json"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "Never shrink the D5 fixture and never widen the volatile allowlist to force a pass — report and block instead",
+      "No normalization outside the declared allowlist (helpers and tree-compare included)",
+      "Never repurpose or break --self-check",
+      "Never report only the warm-cache status number",
+      "No wiring-file edits (flip is a later slice)",
+      "Harness and bench never touch the repo's live .bee/ store",
+      "No edits to crates/Cargo.toml members list"
+    ]
+  },
+  "verify": "cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --status-check && cargo run --release --manifest-path crates/Cargo.toml -p queen-bench -- --check",
+  "trace": {
+    "worker": "Carl",
+    "outcome": "queen-bee status ported and proven byte-identical to the frozen bee.mjs oracle across SIX legs (--json, human text, and --json --lanes-full, each over a plain and an enriched store shape), with per-leg seeded-mutation controls asserted on the stdout diff specifically. Rework round closed the judge's declared-deviations-justified finding: serde_json preserve_order silently aliases Map::remove to swap_remove workspace-wide, which had changed the semantics of two pre-existing call sites — build_lane_rows (status's lanes block) and rebuild_handoff_projection (.bee/HANDOFF.json, a D3 store file). Both fixed to shift_remove/explicit composition, the whole workspace swept (two remaining .remove( calls are order-irrelevant and annotated), and both fixes proven red-first by reverting them. Proving the first uncovered a SECOND, independent D3 break: mjs laneRecordFrom emits defaultLaneRecord's key order (schema_version, feature, mode, phase) while the port emitted the State struct's (schema_version, phase, feature, mode) — invisible until the harness stopped inheriting CLAUDE_CODE_SESSION_ID and gained a --lanes-full leg. Byte-level HANDOFF.json parity plus a key-order sentinel added to projection_parity.rs, whose pre-existing parsed-Value assertions were order-blind by construction. queen-bench --check now carries per-command budgets: ping keeps D5's 5 ms spawn floor (p95 1.425), status carries its own 70 ms from supersession e119fc8b (warm p95 50.979, cold p95 53.493, node 179.188), each gate naming its own budget in the report.",
+    "files_changed": [
+      "crates/queen-bee/src/status.rs",
+      "crates/queen-bee/src/main.rs",
+      "crates/queen-bee/src/lib.rs",
+      "crates/queen-bee/Cargo.toml",
+      "crates/bee-parity/src/main.rs",
+      "crates/bee-parity/src/enrich.rs",
+      "crates/bee-parity/src/runner.rs",
+      "crates/bee-parity/src/differ.rs",
+      "crates/bee-parity/src/rootsafety.rs",
+      "crates/queen-bench/src/main.rs",
+      "crates/queen-bench/src/bench.rs",
+      "crates/queen-bench/Cargo.toml",
+      "crates/bee-core/Cargo.toml",
+      "crates/bee-core/src/state.rs",
+      "crates/bee-core/src/state_projection.rs",
+      "crates/bee-core/src/decisions.rs",
+      "crates/bee-core/src/backlog.rs",
+      "crates/bee-core/tests/projection_parity.rs",
+      "crates/Cargo.lock",
+      "docs/history/rust-port/reports/rust-port-15.md"
+    ],
+    "deviations": [
+      {
+        "kind": "out-of-glob edit with workspace-wide blast radius",
+        "what": "Enabled the serde_json `preserve_order` feature on crates/bee-core, crates/queen-bee and crates/queen-bench Cargo.toml. THIS IS NOT A PURELY ADDITIVE FLAG: in serde_json 1.0.150 (src/map.rs:156-165) `Map::remove` is `#[cfg(feature = \"preserve_order\")] return self.swap_remove(key)`, and swap_remove's own docs say it 'perturbs the position of what used to be the last element'. Enabling the feature therefore silently changed the SEMANTICS of every pre-existing `serde_json::Map::remove` call in the workspace. (An earlier version of this deviation record claimed 'no bee-core SOURCE was edited; the change is one additive cargo feature' -- that claim was false in effect and is retracted here.)",
+        "why": "Byte-parity (D3) is impossible without the feature. JSON.stringify emits JS INSERTION order; a default serde_json::Map is a BTreeMap that re-emits ALPHABETICALLY. That breaks constructed blocks (mjs writes {candidates, open_sessions, high_risk_unreviewed}; a BTreeMap emits {candidates, high_risk_unreviewed, open_sessions}) and, worse, destroys the on-disk file order of every pass-through object status echoes verbatim -- models, handoff, gates, commands -- which nothing on the queen-bee side could reconstruct.",
+        "blast_radius": "Two pre-existing call sites were silently affected, both now fixed to the order-preserving `shift_remove`: (1) crates/bee-core/src/state.rs build_lane_rows -- `map.remove(\"workers\")` on a serialized lane row, feeding status's `lanes` block; (2) crates/bee-core/src/state_projection.rs rebuild_handoff_projection -- `projected.remove(key)` over five mailbox-only keys of a map written straight to .bee/HANDOFF.json, a D3-covered store file whose mjs counterpart drops the same keys with order-preserving `delete`. A full workspace sweep for `.remove(`/`remove_entry(` found only two other hits, both order-irrelevant and now annotated in code: backlog.rs:170 is Vec::remove (already order-preserving, not a Map) and decisions.rs:174 is std HashMap::remove whose output order comes from a separate `order` vector, never from map iteration. rust-port-17's new write paths (claims.rs, reservations.rs, holds.rs) and new queen-bee hooks were included in the sweep and carry no Map::remove.",
+        "proven_by": "HANDOFF.json: crates/bee-core/tests/projection_parity.rs now byte-compares the mjs-oracle-produced and rust-produced files (assert_projected_bytes_identical) plus an explicit key-order assertion -- the pre-existing assert_eq! on parsed Values could NEVER have caught this, because serde_json::Map is an IndexMap under preserve_order and IndexMap's PartialEq ignores order. Lane rows: bee-parity --status-check gained a pinned session id (so buildLaneSummary resolves an ACTIVE lane and serializes a full lane record) and a third `--lanes-full` leg, giving six legs diffed against the frozen mjs. RED-FIRST VERIFIED BOTH WAYS, quoted in the report: reverting state_projection.rs to `remove` fails with `mjs key order: [kind, written_at, cell, writer_session]` vs `rust key order: [kind, writer_session, written_at, cell]`; reverting the lane-row build fails the enriched/json and enriched/json+lanes-full legs.",
+        "scope": "crates/bee-core/* is outside this cell's original files glob (crates/queen-bee/*, crates/bee-parity/*, crates/queen-bench/*). The coordinator confirmed bee-core was free after rust-port-17 released its reservations; the paths were reserved under Carl before any edit."
+      },
+      {
+        "kind": "bug found by the new coverage (bee-core source fix)",
+        "what": "Rewrote crates/bee-core/src/state.rs build_lane_rows to emit lane records in defaultLaneRecord's key order (schema_version, feature, mode, phase, approved_gates, summary, next_action, created_at, then record-only extras, then bound_sessions) instead of serializing the shared `State` struct and deleting `workers`.",
+        "why": "A genuine D3 byte-compatibility break, distinct from the preserve_order hazard and uncovered by the coverage the judge's finding forced into existence. mjs laneRecordFrom (state.mjs:1638) builds `{...defaultLaneRecord(feature), ...parsed}`, and a JS spread over an existing key overwrites IN PLACE rather than reordering -- so the emitted order is the DEFAULT's. The Rust `State` struct declares `phase` before `feature`/`mode` because that is defaultState()'s order for state.json, while defaultLaneRecord puts `feature, mode` before `phase`. The port emitted {schema_version, phase, feature, mode, ...} against mjs's {schema_version, feature, mode, phase, ...}.",
+        "blast_radius": "status's `lanes` block, in both the default summary (the ACTIVE lane, serialized in full) and the --lanes-full array. It was invisible until now for two compounding reasons: --status-check never ran --lanes-full, and the harness inherited the ambient CLAUDE_CODE_SESSION_ID, which resolved to a session with no record in the fixture, so `active` was always null on a developer machine. Building the row explicitly also removes the `workers` deletion entirely -- the honest fix is never to emit a key defaultLaneRecord does not declare, not to emit and then remove it.",
+        "proven_by": "bee-parity --status-check legs enriched/json (5266 bytes) and enriched/json+lanes-full (5223 bytes), both zero diff against the frozen mjs; plus plain/json+lanes-full (3284 bytes). Red-first verified by reverting to struct-order serialization: mjs {schema_version, feature, mode, phase} vs rust {schema_version, phase, feature, mode}.",
+        "scope": "crates/bee-core/src/state.rs -- same out-of-glob justification as above."
+      },
+      {
+        "kind": "harness determinism fix (coverage control)",
+        "what": "crates/bee-parity/src/runner.rs now clears CLAUDE_CODE_SESSION_ID and sets BEE_SESSION_ID explicitly per scenario for every spawned leg, instead of inheriting the parent environment.",
+        "why": "resolveSessionId (claims.mjs:139) reads BEE_SESSION_ID then CLAUDE_CODE_SESSION_ID from the ambient environment, and buildLaneSummary uses the result to decide whether there is an active lane to serialize in full. Inheriting the environment made the harness's BRANCH COVERAGE depend on who ran it: under a Claude Code session, CLAUDE_CODE_SESSION_ID is set to an id with no session record in the fixture, so `active` resolved to null and no full lane record was ever serialized -- silently, and only on developer machines. Parity itself was never at risk (both runtimes read the same env), but the proof quietly shrank, which is how the lane-row ordering bug above survived a green run.",
+        "proven_by": "assert_enriched_signature now requires a FULL lane record in the payload (`\"active\":{\"schema_version\"` for the summary legs, `\"lanes\":[{\"schema_version\"` for --lanes-full) plus `\"bound_sessions\":[\"parity-live-session\"]` on BOTH runtimes, so the harness fails loudly if the active-lane path ever stops being exercised rather than silently proving less.",
+        "scope": "crates/bee-parity/* -- inside the cell's files glob."
+      },
+      {
+        "kind": "fix-first (pre-existing red on main)",
+        "what": "Relaxed crates/bee-parity/src/rootsafety.rs::assert_structural_safety to accept a `.git` DIRECTORY at a fixture root, while newly refusing a `.git` FILE.",
+        "why": "rust-port-4's verify (bee-parity --self-check) had been RED on main since rust-port-19 landed: that cell deliberately grew real git ancestry into the D5 fixture, putting a `.git` directory at the fixture root, and the old check refused any `.git` at all (observed: `root-safety: /tmp/bee-parity-leg-a-... contains a .git`). This cell's truth 5 requires --self-check to still pass, so the red had to be repaired, not routed around. What B5 protects is 'this root resolves to ITSELF, never the repo live store', which still holds -- queen-bench/src/fixture.rs's own module docs state resolveRootsCore's git-root fallback resolves storeRoot === workRoot === the fixture root. The check is now TIGHTER in the case that matters: a `.git` FILE (the linked-worktree marker, whose resolution really does walk out to another checkout's store) is refused, which the old code never distinguished.",
+        "proven_by": "bee-parity --self-check exits 0. Two unit tests: rejects_dot_git_file_marker_at_root, accepts_dot_git_directory_at_root.",
+        "scope": "crates/bee-parity/* -- inside the cell's files glob. The CI blind spot that let a red rust-port-4 verify sit unnoticed on main was filed separately by the orchestrator as its own backlog row."
+      },
+      {
+        "kind": "scope addition beyond the cell's letter",
+        "what": "Added a second parity scenario, `enriched` (crates/bee-parity/src/enrich.rs), and a third leg `--lanes-full`, so --status-check runs 2 scenarios x 3 legs instead of 1 x 2.",
+        "why": "The cell asked for a --status-check arm over the D5 fixture and did not ask for a second store shape. But that fixture is pinned for SIZE and deliberately quiet in SHAPE: phase idle, no feature/mode/lanes/handoff/contention, no configured commands or models, gates all pending. A proof over it alone would have left the bypass banner, the Lanes line, the contention block, recommended_next's handoff branch, formatSlot's cli and model@effort shapes, and the capture-queue / PBI / tier-mix / staleness lines unproven -- a byte-parity claim with a large silent hole. That hole was not hypothetical: the lane-row key-order bug above lived in it. Enrichment only ADDS input records to a clone; mjs remains the sole oracle in both scenarios, nothing is normalized or allowed, and the bench's own fixture is never touched.",
+        "proven_by": "Six legs, all zero diff: plain/json 3339 B, plain/text 1549 B, plain/json+lanes-full 3284 B, enriched/json 5266 B, enriched/text 2542 B, enriched/json+lanes-full 5223 B. Each scenario carries its own content-pinned seeded mutation, asserted on the stdout diff specifically.",
+        "scope": "crates/bee-parity/* -- inside the cell's files glob. The D5 fixture generator was not modified and not shrunk."
+      }
+    ],
+    "friction": null,
+    "capped_at": "2026-07-26T15:15:59.937Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\n    \"crates/bee-core/tests/projection_parity.rs — the existing handoff-projection parity suite. Read FIRST, per test-economy D5: it already drives the REAL mjs state-projection.mjs as oracle over twin roots and already covers rebuild_handoff_projection in four cases. It did NOT cover this case: every assertion compares parsed serde_json::Value, and under the preserve_order feature serde_json::Map is an IndexMap whose PartialEq ignores key order — so two files with identical pairs in a different sequence compare EQUAL. The gap was the assertion strength, not the scenario, so the fix is new assertions on the existing rows rather than a new file.\",\n    \"crates/bee-parity/src/main.rs --status-check — the parity arm added earlier in this cell. It already diffed mjs vs queen-bee byte-for-byte over two scenarios, but never serialized a full lane record: it never ran --lanes-full, and it inherited the ambient CLAUDE_CODE_SESSION_ID so buildLaneSummary's active lane resolved to null on a developer machine.\",\n    \"crates/bee-core/tests/status_readers_b2.rs — the rust-port-20 suite covering build_lane_rows/build_lane_summary. Checked for an existing key-order assertion; it asserts field VALUES and the workers-key absence, never the emitted key SEQUENCE, which is why the defaultLaneRecord ordering break passed it.\"\n  ],\n  \"tests_added_or_changed\": [\n    \"crates/bee-core/tests/projection_parity.rs — added two helpers (top_level_keys, assert_projected_bytes_identical) and strengthened the existing rebuild_handoff_projection_single_open_record_parity row with a byte-level file comparison plus an explicit key-order assertion naming the shift_remove/swap_remove hazard. No new test FILE: this is a new assertion on an existing row, per test-economy D3.\",\n    \"crates/bee-parity/src/main.rs / runner.rs / enrich.rs — --status-check gained a third leg (--lanes-full), a pinned per-scenario BEE_SESSION_ID with CLAUDE_CODE_SESSION_ID cleared, and two new positive-content assertions requiring a FULL lane record plus its bound_sessions on BOTH runtimes. Six mjs-diffed legs total.\",\n    \"crates/bee-parity/src/rootsafety.rs — two unit tests retained from the earlier round (rejects_dot_git_file_marker_at_root, accepts_dot_git_directory_at_root).\"\n  ],\n  \"red_failure_evidence\": \"Both fixes were verified red-first by reverting them and observing a real failure, then restored. (a) Reverting crates/bee-core/src/state_projection.rs from shift_remove back to remove: `cargo test --release -p bee-core --test projection_parity` -> thread 'rebuild_handoff_projection_single_open_record_parity' panicked at bee-core/tests/projection_parity.rs:220:9: HANDOFF.json is not BYTE-identical between the mjs oracle and the rust rebuild (D3). mjs key order: [\\\"kind\\\", \\\"written_at\\\", \\\"cell\\\", \\\"writer_session\\\"] / rust key order: [\\\"kind\\\", \\\"writer_session\\\", \\\"written_at\\\", \\\"cell\\\"]. test result: FAILED. 16 passed; 1 failed; 0 ignored. (b) Reverting crates/bee-core/src/state.rs build_lane_rows to struct-order serialization: `bee-parity --status-check` -> FAIL — [enriched/json] mjs vs queen-bee reported a diff; mjs emitted \\\"active\\\": {\\\"schema_version\\\":\\\"1.0\\\",\\\"feature\\\":\\\"fixture-enriched\\\",\\\"mode\\\":\\\"high-risk\\\",\\\"phase\\\":\\\"scribing\\\",...} while queen-bee emitted \\\"active\\\": {\\\"schema_version\\\":\\\"1.0\\\",\\\"phase\\\":\\\"scribing\\\",\\\"feature\\\":\\\"fixture-enriched\\\",\\\"mode\\\":\\\"high-risk\\\",...}. Note that the PRE-EXISTING parsed-Value assertions in projection_parity.rs stayed GREEN under (a) — IndexMap PartialEq ignores order — which is exactly why the byte comparison had to be added rather than relied upon.\",\n  \"verification_run\": \"cargo build --release --manifest-path crates/Cargo.toml && cargo run --release -p bee-parity -- --status-check && cargo run --release -p queen-bench -- --check => EXIT 0. --status-check PASS on all six legs (plain/json 3339 B, plain/text 1549 B, plain/json+lanes-full 3284 B, enriched/json 5266 B, enriched/text 2542 B, enriched/json+lanes-full 5223 B), each zero diff on stdout + exit + store tree, both inner exits 0, per-leg seeded mutation detected in stdout. --check PASS: ping p95 1.425 ms against its own 5 ms budget; status warm p95 50.979 ms / cold p95 53.493 ms against status's own 70 ms budget (e119fc8b); node baseline for the same command 179.188 ms p95. Side checks: bee-parity --self-check exit 0; cargo test --release 314 passed across 21 suites (298 before this round).\",\n  \"sweep\": \"Workspace-wide hunt for `.remove(` / `remove_entry(` across crates/ (including rust-port-17's new bee-core write paths claims.rs/reservations.rs/holds.rs and its new queen-bee hooks): four hits total. Two were serde_json::Map removals feeding byte-compared output or a D3 store file — state.rs build_lane_rows and state_projection.rs rebuild_handoff_projection — both fixed. Two are order-irrelevant and now annotated in code: backlog.rs:170 is Vec::remove (order-preserving, not a Map) and decisions.rs:174 is std HashMap::remove whose output order comes from a separate `order` vector. preserve_order is now declared on all three serde_json consumers (bee-core, queen-bee, queen-bench) so no crate can compile against different Map semantics than its siblings.\",\n  \"ratio_waiver\": \"Not claimed — this round's diff carries substantive source changes (build_lane_rows rewritten, shift_remove fix, per-command budget split, runner env control, new --lanes-full leg) alongside its test additions, well under the high-risk ceiling.\"\n}\n",
+    "verify_output": "VERIFY EXIT 0 (fresh full chain, rework round).\n\n[1] BUILD: whole workspace, release. No stale-binary green.\n\n[2] bee-parity --status-check: PASS — SIX legs now (was four):\n  [plain/json]             zero diff over 3339 bytes of stdout (+ exit + store tree), both exit 0; seeded-mutation detected in stdout\n  [plain/text]             zero diff over 1549 bytes, same\n  [plain/json+lanes-full]  zero diff over 3284 bytes, same\n  [enriched/json]          zero diff over 5266 bytes, same\n  [enriched/text]          zero diff over 2542 bytes, same\n  [enriched/json+lanes-full] zero diff over 5223 bytes, same\n\n[3] queen-bench --check: PASS (exit 0), per-command budgets:\n{\"budgets\":{\"ping_ms\":5,\"status_ms\":70},\"runs\":50,\"pass\":true,\n \"queen_bee_ping\":{\"budget_ms\":5,\"gated_on\":\"p95\",\"pass\":true,\"p50_ms\":1.079,\"p95_ms\":1.425,\"p99_ms\":2.600,\"samples\":50},\n \"node_baseline\":{\"command\":\"node -e \\\"\\\"\",\"p50_ms\":25.451,\"p95_ms\":28.792,\"samples\":50},\n \"queen_bee_status\":{\"budget_ms\":70,\"budget_source\":\"D5 supersession e119fc8b\",\"gated_on\":\"warm\",\"pass\":true,\n   \"cold_cache\":{\"p50_ms\":47.176,\"p95_ms\":53.493,\"p99_ms\":54.539,\"samples\":50},\n   \"warm_cache\":{\"p50_ms\":44.654,\"p95_ms\":50.979,\"p99_ms\":52.192,\"samples\":50},\n   \"node_status_baseline\":{\"p50_ms\":167.437,\"p95_ms\":179.188,\"samples\":50}}}\n\nSIDE CHECKS: bee-parity --self-check exit 0. cargo test --release: 314 passed (21 suites) — was 298 before this round.\n\nRED-FIRST, both new fixes verified to fail when reverted:\n (a) state_projection.rs shift_remove -> remove: rebuild_handoff_projection_single_open_record_parity PANICS —\n     mjs  key order: [\"kind\",\"written_at\",\"cell\",\"writer_session\"]\n     rust key order: [\"kind\",\"writer_session\",\"written_at\",\"cell\"]\n     test result: FAILED. 16 passed; 1 failed.\n (b) build_lane_rows reverted to struct-order serialization: --status-check FAILS on [enriched/json] —\n     mjs : \"active\": {\"schema_version\":\"1.0\",\"feature\":...,\"mode\":...,\"phase\":...}\n     rust: \"active\": {\"schema_version\":\"1.0\",\"phase\":...,\"feature\":...,\"mode\":...}\nBoth restored; chain green as quoted above.",
+    "verify_passed": true,
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T14:57:34.669Z",
+    "verify_command": "cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --status-check && cargo run --release --manifest-path crates/Cargo.toml -p queen-bench -- --check",
+    "verified_at": "2026-07-26T15:14:52.710Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T14:15:47.491Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T14:11:58.843Z",
+        "acquired_at": "2026-07-26T13:46:48.959Z",
+        "worker": "Carl",
+        "verdict": "fail",
+        "failure_signature": "b95d33976379",
+        "note": null
+      },
+      {
+        "n": 2,
+        "at": "2026-07-26T14:24:59.470Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T14:21:12.081Z",
+        "acquired_at": "2026-07-26T13:46:48.959Z",
+        "worker": "Carl",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      },
+      {
+        "n": 3,
+        "at": "2026-07-26T15:14:52.710Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T15:07:21.155Z",
+        "acquired_at": "2026-07-26T14:57:34.667Z",
+        "worker": "Carl",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "byte-parity-real",
+            "status": "PASS",
+            "evidence": "Judge ran the recorded chain: build + --status-check exit 0, all four legs zero diff (plain/json 3339 B, plain/text 1549 B, enriched/json 4926 B, enriched/text 2464 B). Control is load-bearing: bee-parity/src/main.rs:405-412 asserts mutation_diff.stdout_diff.is_none() specifically, not !is_clean(), and runs inside check_one_leg (once per scenario x leg = 4), each with a content-pinned seed that refuses to seed over unexpected file bodies. Empty-vs-empty parity blocked by fixture-signature / ten-marker / text-header requirements in BOTH runtimes plus an independent exit-0 assertion."
+          },
+          {
+            "id": "allowlist-containment",
+            "status": "PASS",
+            "evidence": "normalize.rs (the declared allowlist) is untouched by b21bb9c. differ.rs's only normalization call sites are normalize::normalize at :91-92 (stdout) and :174-175 (tree files); its edit is one appended EXCLUDED_PREFIXES entry, a whole-path skip with a segment-scoped prefix test. runner.rs captures raw stdout with no trim/sort/filter. Grep over differ/runner/clone/mutate finds only those calls plus a path-separator canonicalization for exclusion matching."
+          },
+          {
+            "id": "self-check-untouched",
+            "status": "PASS",
+            "evidence": "--self-check exit 0 in the judge's own run. Red-on-main claim verified: b21bb9c~1's rootsafety refused any existing .git unconditionally, while queen-bench fixture.rs:231 init_git_repo creates a real git repo AT the fixture root (landed in rust-port-19, 9d6487b). New form `dot_git.exists() && !dot_git.is_dir()` is strictly TIGHTER for the escape the check exists to catch (a .git FILE / linked-worktree marker is now refused with its own message and its own test) and looser only for a plain .git directory, whose self-resolution is separately proven by assert_resolves_to_fixture."
+          },
+          {
+            "id": "bench-honesty",
+            "status": "PASS",
+            "evidence": "Judge's own --check run: exit 0, budgets {ping_ms:5, status_ms:70}, ping gated at 5 ms p95 1.310, status budget_ms 70 with budget_source naming e119fc8b, cold p95 54.700 / warm p95 51.072 / node baseline p95 179.419. Split is real in code: PING_BUDGET_MS and STATUS_BUDGET_MS are separate constants behind separate flags, and pass = ping_pass && status.pass — the spawn floor is still gated. Fixture NOT shrunk: fixture.rs absent from the commit, floors still 700_000 / 600_000 / 250_000 / 250 matching D5 verbatim. Cold measured with the cache deleted before every iteration; warm guarded by an existence check. RESIDUAL (doc-only, no gate effect): bench.rs:123 still says 'The 5 ms D5 gate is defined against the WARM number'."
+          },
+          {
+            "id": "binary-freshness",
+            "status": "PASS",
+            "evidence": "Recorded verify leads with `cargo build --release --manifest-path crates/Cargo.toml`, and crates/Cargo.toml members include queen-bee, so the binary both consumers resolve as a sibling of their own exe is rebuilt before either proof. Judge reproduced the chain in order: exit 0 at each step."
+          },
+          {
+            "id": "runtime-artifact-exclusion",
+            "status": "PASS",
+            "evidence": "differ.rs:28 EXCLUDED_PREFIXES = ['.bee/logs', '.bee/cache', '.bee/tmp', '.bee/runtime'], consumed only by is_excluded() during the tree walk (whole-path skip, no content rewriting), with unit tests asserting .bee/runtime/review-git-cache.json is excluded and .bee/logsomething/file.json is not. Matches decision a7d7b3d5's shape."
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "Commit touches only crates/** and the cell's report — no .bee/bin/, no packages/. crates/Cargo.toml diff empty (members unchanged). normalize.rs and fixture.rs untouched. Dark-command check: rg for queen-bee across .bee/bin, .codex, .claude, packages returns zero hits — nothing dispatches to the ported status yet. Live-store isolation: temp roots via fresh_temp_dir plus an explicit 'parent resolves inside the repo tree' refusal; after three runs the repo's .bee/runtime holds no review-git-cache.json."
+          },
+          {
+            "id": "declared-deviations-justified",
+            "status": "FAIL",
+            "evidence": "(b) rootsafety and (c) the enriched scenario are justified and match the diff. (a) preserve_order is genuinely load-bearing — the mjs oracle emits review keys in insertion order, which a BTreeMap-backed Map cannot reproduce — but the deviation record denies any blast radius beyond ordering ('No bee-core SOURCE was edited; the change is one additive cargo feature'), and that is wrong. In serde_json 1.0.150 map.rs:156-165, `pub fn remove` is `#[cfg(feature = \"preserve_order\")] return self.swap_remove(key)` — documented as perturbing the position of what used to be the last element. Enabling the feature therefore silently changed two pre-existing bee-core call sites: state.rs:938 map.remove(\"workers\") in build_lane_rows (swap_remove drops the last key into the removed slot, so a full lane row emits keys in a different order than mjs's verbatim-record spread), and state_projection.rs:325-328, which swap_removes five keys from record.fields and then write_json_atomic's the result to .bee/HANDOFF.json — a D3-covered store file whose mjs counterpart uses order-preserving `delete`. Neither path is covered by the four green legs: the full lane row serializes only under an active-session lane summary or --lanes-full (never run by --status-check), and the handoff projection is not on the status path. Unproven D3 byte-compat risk introduced out-of-glob. Fix is mechanical: shift_remove at both sites, plus a proof that exercises them."
+          },
+          {
+            "id": "supersession-integrity",
+            "status": "PASS",
+            "evidence": "The bench JSON carries budget_ms 70 and budget_source naming e119fc8b inline in the status gate object, with a budgets pair up front — source and interim framing travel with the number. The report opens with 'byte-parity proven, status budget superseded', records that the cell first returned [BLOCKED] on the 5 ms gate, marks cold as reported-never-gated and warm as gated at 70 ms, and nowhere claims status met 5 ms. Only counterexample is the stale doc comment at bench.rs:123, which overstates strictness and so cannot manufacture a false green."
+          }
+        ],
+        "failure_signature": "declared-deviations-justified: deviation (a) understates preserve_order's blast radius - serde_json Map::remove becomes swap_remove, perturbing key order at bee-core/src/state.rs:938 (lane rows) and bee-core/src/state_projection.rs:327 (writes .bee/HANDOFF.json), neither covered by the four green parity legs.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-07-26T14:37:05.756Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "both-sites-fixed-and-proven",
+            "status": "PASS",
+            "evidence": "state_projection.rs:336 is now shift_remove over the five mailbox-only keys; build_lane_rows no longer calls remove at all (composes a fresh Map). The proof does NOT rest on parsed-Value equality: projection_parity.rs's assert_projected_bytes_identical fs::reads both files and compares raw byte vectors, and the added top_level_keys assertion is an order-sensitive Vec compare. Judge independently simulated swap_remove over the fixture record's key order and derived exactly the worker's quoted red output [kind, writer_session, written_at, cell] — so the revert is provably red, not taken on trust. The parity side compares strings after the declared allowlist, and normalize.rs is untouched by cef0e878."
+          },
+          {
+            "id": "second-break-real-and-fixed",
+            "status": "PASS",
+            "evidence": "Read the frozen mjs directly: state.mjs:1618-1628 defaultLaneRecord emits {schema_version, feature, mode, phase, approved_gates, summary, next_action, created_at}; state.mjs:1636 spreads the default first so parsed values keep default positions; bee.mjs:481 appends bound_sessions last. state.rs:94-113 shows State declares phase BEFORE feature/mode, so the old struct serialization necessarily emitted phase second — the break was real, not hypothetical. New LANE_RECORD_KEY_ORDER matches defaultLaneRecord exactly, extras append from the flatten map in record order, workers is skipped rather than emitted-then-removed, bound_sessions inserted last. Judge ran the chain: --status-check exit 0 with all SIX legs at the exact claimed byte counts (3339 / 1549 / 3284 / 5266 / 2542 / 5223), each with its own mutation control asserted on stdout_diff specifically inside check_one_leg."
+          },
+          {
+            "id": "harness-blindness-closed",
+            "status": "PASS",
+            "evidence": "runner.rs:108-116 env_removes CLAUDE_CODE_SESSION_ID unconditionally, then sets or removes BEE_SESSION_ID — in ONE function applied to the same command regardless of runtime, so both legs get identical environments (parity is not bought with asymmetric env). Scenario::session_id pins a live session for enriched, None for plain. Both runtimes read the same variable in the same precedence (claims.mjs:141-143 vs status.rs:191-194). The blindness cannot silently return: assert_enriched_signature fails the run unless the active/lanes shape AND bound_sessions appear on BOTH runtimes. Residual observation, not a failure: HOME/CLAUDE_CONFIG_DIR remain ambient and reach the compared payload through the recovery block's default claude root, but symmetrically across legs (so no false green), and crash-candidate coverage is pinned by the fixture's own recovery.transcript_roots (so it cannot shrink the proof the way the session id did)."
+          },
+          {
+            "id": "sweep-completeness",
+            "status": "PASS",
+            "evidence": "Judge re-ran the sweep: six hits across crates/*/src — cells.rs and capture.rs (order-preserving Vec/collection retain), decisions.rs, backlog.rs, state_projection.rs (shift_remove). No hits in state.rs. The two annotated sites check out: decisions.rs builds a separate order Vec and drives output from it, so std-HashMap iteration never reaches output; backlog.rs is Vec::remove(0). rust-port-17's code (claims.rs, holds.rs, reservations.rs, both new hooks) has zero hits. Widening beyond .remove(: the one remaining site where non-deterministic map iteration feeds a JSON write is reviews.rs:402-426, which writes .bee/runtime/review-git-cache.json — rust-only with no mjs producer, whole-path excluded per a7d7b3d5, read back by key lookup, so its order is not load-bearing. Observation, not a missed hazard."
+          },
+          {
+            "id": "deviation-record-honest",
+            "status": "PASS",
+            "evidence": "Five deviation entries. Entry (a) states the swap_remove aliasing with its source citation (serde_json 1.0.150 map.rs:156-165), names both affected sites with file and function, explicitly retracts the earlier 'no bee-core SOURCE was edited' claim, and records what proves each. Judge cross-checked its factual claims against the tree: preserve_order is declared on bee-core, queen-bee and queen-bench, and bee-parity has no serde_json dependency at all, so 'all three consumers' is the complete set; rust-port-17's new write paths carry no Map::remove; the quoted leg byte counts match the judge's own run; --self-check exit 0 reproduced. One imprecision, not a contradiction: entry 3 says BEE_SESSION_ID is set for every leg while the plain scenario env_removes it instead — the code comment and Scenario::session_id state it correctly."
+          },
+          {
+            "id": "no-regression-and-scope",
+            "status": "PASS",
+            "evidence": "git show --stat cef0e878: 11 files, 407+/72-, every file mapping to a finding — the two fixes, byte/key-order coverage in projection_parity.rs, two comment-only sweep annotations, the bee-parity lanes-full leg + env pinning + lane-record assertions, queen-bench Cargo.toml for preserve_order uniformity, a doc-comment-only bench.rs hunk correcting the stale 5 ms status claim, plus the report. No queen-bee/src, no .bee/bin, no normalize.rs, no fixture generator. Judge's own runs at HEAD: --status-check exit 0 (six legs), --self-check exit 0, --check exit 0 with budgets {ping_ms:5, status_ms:70}, ping gated separately at its own floor (p95 1.892), status warm p95 50.268 vs 70 ms with budget_source naming e119fc8b, cold p95 53.430 reported alongside, node baseline p95 180.668. cargo test --release: 314 passed across 21 suites, zero failures. The 298 baseline was not independently re-measured (that would require mutating the tree); only the current 314 is the judge's own observation."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-07-26T15:26:18.493Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-07-26T14:37:05.757Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-07-26T15:15:59.903Z",
+        "reason": "Rework round directly targets the judge's single NEEDS_REVISION finding (declared-deviations-justified, fixability:automatic) on deviation (a) preserve_order. Every instruction the coordinator relayed is discharged: both Map::remove sites replaced with order-preserving equivalents; the whole workspace swept with the two remaining hits classified and annotated in code as order-irrelevant; coverage added that FAILS if either regresses, verified red-first by reverting each fix and quoting the failure; the deviation record rewritten to state the swap_remove blast radius, name both affected call sites, and record what now proves them; and the stale 5 ms doc comment at bench.rs corrected. The rework additionally found and fixed a SECOND D3 break the new coverage exposed (build_lane_rows emitting the State struct's key order instead of defaultLaneRecord's) plus the harness env-inheritance that had hidden it. The judge's other eight checks were PASS and are untouched by this round. Overriding because a worker cannot dispatch a fresh judge pass (orchestrator/swarming-owned per AO14) and the coordinator explicitly instructed capping after this rework.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
+  }
+}

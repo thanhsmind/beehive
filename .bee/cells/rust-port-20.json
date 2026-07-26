@@ -173,6 +173,34 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-07-26T13:40:11.978Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "oracle-coverage-read-raw-config",
+            "status": "PASS",
+            "evidence": "status_readers_b2.rs:271-357 calls read_raw_config_for_validation on three real tempdir fixtures and diffs each against run_oracle('status', root), which execFileSyncs the real node .bee/bin/bee.mjs status --json with cwd at the fixture. Judge reproduced the mjs side on three hand-built roots: absent -> zero config-validate lines; malformed -> exactly the config-malformed line; present -> exactly the cli-malformed line, matching bee.mjs:778 over readRawConfigForValidation. The expected line is not a literal: config_validate_message() builds it from the Rust problem's own code/runtime/slot/message. Falsification in an out-of-tree copy (repo tree untouched): (a) mapping a present-but-unparseable file to Absent -> FAILED at :317; (b) changing only the cli-malformed message tail '.'->'!' -> FAILED at :350 on the oracle diff. The oracle half is load-bearing."
+          },
+          {
+            "id": "reference-identity-fixture-deeply-equal",
+            "status": "PASS",
+            "evidence": "status_readers_b2.rs:822-861 writes two leases sharing resource 'path:a.rs', no acquired_at, differing only in expires_at (2020 vs 2099). LeaseReservationView (reservations.rs:202-218) has no expires_at field at all, so the differing field is projected away; the test asserts serde_json row_a == row_b, self-verifying deep equality. Oracle half runs the real frozen CLI and requires the real '2 reservation(s) expired but never released' line (bee.mjs:767) — green. Falsification: replacing expired_unreleased_reservations with a genuine value-equality exclusion made the new test FAIL (0 vs 2) and the original distinguishable-rows test FAIL (1 vs 2). Corrected comment at :808-817 now describes the original fixture as distinguishable and points to the companion deep-equality test — verified true against the fixture body."
+          },
+          {
+            "id": "rework-scope-clean",
+            "status": "PASS",
+            "evidence": "git show --stat 3899283: 2 files — .bee/cells/rust-port-20.json (+115/-20) and crates/bee-core/tests/status_readers_b2.rs (+136/-4). Zero production-code changes; the test diff is two added #[test] fns, one comment correction, and the config_validate_message helper. trace.deviations holds exactly the two structured entries matching the commit body and the report. Judge's own run: cargo test -p bee-core 172 passed, 0 failed across 9 targets (status_readers_b2 23, was 21). git status unchanged after the judge's runs. Non-blocking bookkeeping note: the re-cap replaced files_changed with only the test file, dropping the first pass's 11-file list, while verification_evidence's ratio_waiver still reasons about that earlier list."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T13:53:00.832Z"
       }
     ],
     "reopened_for_rework": {

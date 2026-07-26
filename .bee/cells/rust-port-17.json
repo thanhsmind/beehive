@@ -225,6 +225,54 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-07-26T15:06:45.724Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "crash-hook-name-fixed",
+            "status": "PASS",
+            "evidence": "run_fail_open now takes hook_name and logs it; all four production callers pass their own const, none passes write_guard's HOOK_NAME. The two crash tests compare the log lines' hook field on both legs and to each other, keeping every prior assertion (find_crash_line still panics if the error-substring line is absent). The four pre-existing test files were adapted by a single added argument each and nothing else — 4 one-line hunks, every assert untouched. EXECUTED falsification in a scratch copy under .bee/tmp: reverting to the hardcoded name turned both crash tests red with the expected hook-field mismatch. RESIDUAL: model_guard::run's own argument is fixed but unasserted — modelguard_conformance.rs calls run_fail_open directly with a literal, so a regression at model_guard.rs:57 would not be caught."
+          },
+          {
+            "id": "authoritative-rebuild-proven",
+            "status": "PASS",
+            "evidence": "The new workflow op awaits the real createWorkflow from the seeded sha256-verified workflow-store.mjs — no hand-written record. Branch proof from state_projection.rs:159-219: the new test seeds ONLY a workflow (no write_state_json), so current has no feature and phase idle with one active workflow, which routes to the authoritative idle-bootstrap branch, not apply_overrides_only. It asserts phase/feature/mode/summary/next_action/approved_gates adopted on BOTH runtimes plus a byte-equal state.json comparison. EXECUTED falsification: neutering seed_workflow turned it red exactly as quoted. The renamed fall-through test now positively asserts phase stays idle and feature stays unset on both legs — precisely what apply_overrides_only does."
+          },
+          {
+            "id": "hold-row-compared",
+            "status": "PASS",
+            "evidence": "A whole-file cross-runtime byte comparison of cross-worktree-holds.json with only the volatile mirrored_at masked. Teeth proven by EXECUTION: swapping two field declarations in bee-core's Hold struct turned it red with the expected key-order divergence. The oracle side is real — worktree-holds.mjs insertHold emits the eight fields in exactly the Rust struct's declaration order, so the typed round-trip is held to the mjs key order byte-for-byte. Nuance: because mjs emits all eight fields including nulls, a null-injection cannot manifest on this fixture; what the assertion catches is reordering, added/dropped keys and formatting — the live regression class for this store."
+          },
+          {
+            "id": "byte-comparison-load-bearing",
+            "status": "PASS",
+            "evidence": "assert_files_byte_equal_redacted reads both files as raw text, applies a per-field textual redaction, and asserts String equality — no parse anywhere. The judge compiled the redactor VERBATIM standalone with rustc and probed it: key-order divergence -> caught; injected key -> caught; redacted field string-vs-null type change -> caught; a differing neighbour field next to a redacted one -> caught; escaped quotes inside a redacted value -> under-redacts and still diverges (never over-redacts); a compact no-space key form -> needle misses so redaction silently does not apply and the raw values then diverge, i.e. it fails CLOSED. What it cannot see: the string value of an explicitly named wall-clock field. Everything else including key order, indentation and key presence is visible. The meta-test is genuine on both halves: it asserts two reordered texts parse Value-EQUAL (proving the old blind spot on this build, with a loud message if the premise stops holding) then catch_unwinds the new comparator on the same files and requires a panic."
+          },
+          {
+            "id": "red-first-evidence-honest",
+            "status": "PASS",
+            "evidence": "The judge independently reproduced THREE of the worker's quotes in a scratch copy of crates/ (never the tracked tree): the hook-name quote verbatim including message prefix and left/right ordering; the workflow quote verbatim matching the node-first loop label; the hold/byte quote verbatim including the redacted mirrored_at and each side's field ordering. All three are consistent with the code as it stands — node is the LEFT argument and its ordering matches insertHold's literal, so the quoted sides are the only ones the mutation could have produced. No quote flagged."
+          },
+          {
+            "id": "test-count-unchanged-question",
+            "status": "PASS",
+            "evidence": "Current inventory (16, from the judge's own --list) vs round 1's inventory recovered from git: identical except round 1 had FOUR one-runtime crash tests and the mis-scoped idle_bootstrap test. So -2 (four one-runtime crash tests folded into two cross-runtime ones), +2 (authoritative workflow test, byte-level meta-test), 1 rename. Net 16 -> 16, and coverage did rise. Nothing was lost in the fold: diffing the old crash tests' bodies against the merged ones shows every prior assertion survives, now alongside the new hook-field equality. The report's sentence says '2 crash tests merged into 2' where it should read 4 merged into 2 — imprecise wording, not a false count."
+          },
+          {
+            "id": "no-regression-and-scope",
+            "status": "PASS",
+            "evidence": "git show --stat b63427ce: 12 files, +443/-136 — four src one-liners, the conformance target, the fixture mjs (one new op), four pre-existing test files at +1/-1 each, the cell record and the report. No .bee/bin, no packages/bee, no crates/Cargo.toml, no wiring files. Judge's own runs: heavyhooks 16 passed, queen-bee 117 passed (10 suites), bee-core 172 passed (9 suites). Scratch experiments ran under .bee/tmp/judge-rust-port-17/ and were deleted; git status after cleanup is byte-identical to the pre-run status. Two residuals, neither a regression from this round: (a) three same-runtime before/after no-op assertions still compare parsed Values, and one of their messages claims 'byte-identical' while being key-order-blind; (b) round 1's separate chain-nudge finding is unchanged — no fixture seeds state.workers, so the registered-worker trigger branch remains undiffed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T15:51:55.287Z"
       }
     ],
     "reopened_for_rework": {
