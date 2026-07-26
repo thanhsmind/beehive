@@ -695,6 +695,34 @@ where
     }
 }
 
+/// TEST-ONLY crash trigger (rust-port-18, fix-first). Inert in every real
+/// run: it panics ONLY when the env var `BEE_QUEEN_BEE_CRASH_SEAM` is set
+/// and its value is exactly equal to `hook_name`. No hook runtime, host
+/// repo, CLI flag, or CI path ever sets that var — it exists solely so the
+/// release-profile fail-open conformance target
+/// (`crates/queen-bee/tests/release_failopen.rs`) can force a genuine
+/// unwind through the `catch_unwind` boundary above, INSIDE the actual
+/// shipped `target/release/queen-bee` binary.
+///
+/// Why this had to be added rather than reused: the existing crash fixture
+/// (`hook_conformance.rs`'s `seed_crash_root`/"logs path is blocked"
+/// fixtures) injects a HANDLED I/O fault — `create_dir_all` returning
+/// `Err`, absorbed via ordinary `Result` control flow. That fault never
+/// unwinds the stack, so it exits 0 under `panic = "abort"` exactly the
+/// same as under `panic = "unwind"` — it can neither prove nor disprove
+/// what `catch_unwind` does to a REAL panic when the release profile
+/// aborts on unwind. This seam is a genuine `panic!()`, the only way to
+/// exercise that boundary honestly.
+///
+/// Call this as the first statement inside the closure passed to
+/// `run_fail_open` — panicking outside that closure would not be inside
+/// the `catch_unwind` scope under test.
+pub fn crash_seam_panic_if_armed(hook_name: &str) {
+    if std::env::var("BEE_QUEEN_BEE_CRASH_SEAM").ok().as_deref() == Some(hook_name) {
+        panic!("rust-port-18 test-only crash seam armed for hook {hook_name}");
+    }
+}
+
 // ─── main flow ──────────────────────────────────────────────────────────────
 
 enum Outcome {
@@ -733,6 +761,7 @@ pub fn run(argv: &[String], raw_stdin: &str) -> i32 {
 
     let source = ctx.source.clone();
     run_fail_open(Some(&root), source.as_deref(), || {
+        crash_seam_panic_if_armed(HOOK_NAME);
         match decide(&ctx, tool_name, &root, &store_root) {
             Outcome::Deny(reason) => {
                 // Deliberate deny: exit 2 with the reason on stderr. A

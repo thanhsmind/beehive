@@ -36,7 +36,7 @@ use bee_core::dispatch_guard::{self, Decision, Economics};
 
 use crate::adapter::{self, HookContext};
 use crate::hookconfig;
-use crate::hooks::write_guard::run_fail_open;
+use crate::hooks::write_guard::{crash_seam_panic_if_armed, run_fail_open};
 
 const HOOK_NAME: &str = "model-guard";
 const CODEX_SPAWN_TOOL: &str = "spawn_agent";
@@ -54,7 +54,10 @@ pub fn run(argv: &[String], raw_stdin: &str) -> i32 {
         return 0;
     }
     let source = ctx.source.clone();
-    run_fail_open(Some(&root), source.as_deref(), || decide(&ctx, &root))
+    run_fail_open(Some(&root), source.as_deref(), || {
+        crash_seam_panic_if_armed(HOOK_NAME);
+        decide(&ctx, &root)
+    })
 }
 
 fn decide(ctx: &HookContext, root: &Path) -> i32 {
