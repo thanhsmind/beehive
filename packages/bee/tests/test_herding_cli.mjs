@@ -169,32 +169,41 @@ await check('bee herding with no verb prints a Use: line listing enable/disable/
   }
 });
 
-await check('RED-FIRST REGRESSION GUARD (windows-path-identity wpi-2): a platform-style divergent spelling of the SAME main_root is rejected by the pre-fix raw `===` this suite used to assert with, and accepted by the canonical comparison the fixed assertions now use — no real Windows/case-insensitive volume needed, since the divergent spelling is constructed directly', async () => {
-  const root = makeHerdingRepo('bee-herding-redfirst-');
+await check('RED-FIRST REGRESSION GUARD, separator (windows-path-identity wpi-2, rework round): a genuine win32-shaped rendering of the REAL main_root this suite just observed from the CLI is rejected by the pre-fix raw `===`, rejected too by canonicalPathsEqual with NO platformPath injected (the POSIX-ambient control — a bare backslash is DATA on this platform, per wpi-1 rework commit ddcb6733, never a separator), and accepted ONLY once canonicalPathsEqual is given platformPath: path.win32 (wpi-1\'s injection seam) — the one way to prove separator handling without a real Windows box', async () => {
+  const root = makeHerdingRepo('bee-herding-redfirst-sep-');
   try {
-    // Separator divergence: what `main_root` (or the marker path) would look
-    // like coming back through Node's native path machinery on win32 versus
-    // the forward-slash form git's own stdout always emits. Constructed, not
-    // observed — this Linux box cannot make git or fs.realpathSync emit a
-    // backslash — but the OLD assertion's `===` genuinely cannot survive it,
-    // and that is exactly the fact this guard pins down.
-    const backslashSpelling = root.split(path.sep).join('\\');
-    assert(
-      backslashSpelling !== root,
-      'RED: the pre-fix raw `===` comparison rejects the platform-divergent spelling (constructed, since this box cannot make git or fs.realpathSync emit one for real)',
-    );
-    assert(
-      canonicalPathsEqual(backslashSpelling, root),
-      'GREEN: canonicalPathsEqual accepts the SAME directory spelled with the platform-native separator instead of git\'s forward-slash form',
-    );
+    const result = await runBeeHerding(root, ['status', '--json']);
+    assert(result.status === 0, `status should succeed, got ${result.status}: ${result.stderr}`);
+    const out = JSON.parse(result.stdout);
 
-    // Case divergence: case sensitivity is per-VOLUME, not per-platform
-    // (plan.md CORRECTION 2) — this dev box's real filesystem is case-
-    // sensitive, so a case-flipped spelling of a NON-EXISTENT path (forcing
-    // the string-fallback branch, same technique scripts/tests/
-    // test_path_identity.mjs uses) genuinely stays unequal without pinning,
-    // and genuinely folds equal once a case-insensitive volume is (here,
-    // simulated via injection since none is available) detected.
+    // A genuine win32-shaped rendering of the SAME real main_root this test
+    // just observed — Node's OWN win32 path semantics (path.win32.resolve),
+    // not a hand-rolled regex, produce the backslash-separated form. This
+    // routes the ACTUAL resolver output (out.main_root) through the
+    // divergence, rather than a value disconnected from the code under test.
+    const win32Rendering = path.win32.resolve(out.main_root);
+    assert(win32Rendering !== out.main_root, 'fixture precondition: the win32 rendering must actually differ in spelling from the real POSIX output, or this proves nothing');
+
+    assert(
+      out.main_root !== win32Rendering,
+      'RED: the pre-fix raw `===` this suite used to assert with rejects the win32-shaped rendering of the SAME real main_root',
+    );
+    assert(
+      canonicalPathsEqual(out.main_root, win32Rendering) === false,
+      'POSIX CONTROL: with NO platformPath injected (the ambient default), canonicalPathsEqual must ALSO reject the win32-shaped rendering — a bare backslash is data on this platform, never a separator (the exact false-equal wpi-1\'s rework round removed); ambiently folding it here would silently reintroduce that bug',
+    );
+    assert(
+      canonicalPathsEqual(out.main_root, win32Rendering, { platformPath: path.win32 }),
+      'GREEN: canonicalPathsEqual accepts the SAME real main_root rendered win32-style once platformPath: path.win32 is injected — separator handling is platform-determined, proven here without a real Windows box',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('RED-FIRST REGRESSION GUARD, case (windows-path-identity wpi-2): case sensitivity is per-VOLUME, not per-platform (plan.md CORRECTION 2) — this dev box\'s real filesystem is case-sensitive, so a case-flipped spelling of a NON-EXISTENT path (forcing the string-fallback branch, same technique scripts/tests/test_path_identity.mjs uses) genuinely stays unequal without pinning, and genuinely folds equal once a case-insensitive volume is (here, simulated via injection since none is available) detected', async () => {
+  const root = makeHerdingRepo('bee-herding-redfirst-case-');
+  try {
     const nonExistent = path.join(root, 'NotYetCreated');
     const caseFlipped = path.join(root, 'notyetcreated');
     assert(!fs.existsSync(nonExistent) && !fs.existsSync(caseFlipped), 'fixture precondition: neither path exists, forcing the string-fallback branch');
