@@ -52,31 +52,34 @@
   "verify": "cargo test --manifest-path crates/Cargo.toml -p bee-core --test status_readers_b2",
   "trace": {
     "worker": "Mel",
-    "outcome": "Ported recovery/contention readers (readTranscriptTail, detectCrashCandidates, scanTranscriptRoots, buildRecoveryBlock, buildContentionSummary), the 5 remaining bee.mjs-private helpers (buildLaneRows/buildLaneSummary, computeRuntimeDrift, findRepoHive, ungrantedWorktreeNotice), and the importable state helpers (isKnownPhase, validateModelsConfig, validateAgentFilesDrift, hasStaleAdvisorKey, classifySource, readOnboarding, readHandoff, bypassLevel) plus a new lease-backed listReservations/expiredUnreleasedReservations reader replicating bee.mjs's reference-identity reservation-staleness bug verbatim (D1 freeze). All 21 tests in one target status_readers_b2, oracle-diffed against the real frozen mjs (fine-grained import driver for importable units, whole-command node .bee/bin/bee.mjs status --json for the bee.mjs-private helpers), including a host-real queen-bench crash-candidate fixture and pinned-clock reservation/heartbeat boundary fixtures.",
+    "outcome": "Rework round (goal-check NEEDS_REVISION, 9/11 checks passed): closed the 2 test-only gaps. (1) read_raw_config_for_validation is now oracle-diffed via the whole-command status --json staleness_warnings config-validate line across all three shapes (Absent / Value(null)-malformed / Value(object)-present). (2) The reservation reference-identity fixture gained a second, sharper case with two leases projecting to DEEPLY EQUAL LeaseReservationView rows (same resource, no acquired_at, only expires_at differs and is dropped by the projection), proving the bug defeats even a value-equality dedup, not just distinguishable rows -- and the misleading 'deeply equal' claim on the original fixture's comment was corrected to describe what it actually proves (a distinguishable-rows case). Both auto-fix deviations from the first pass (read_lane's missing created_at:null default merge, build_lane_rows' spurious workers:[] leak) are now recorded as structured cell deviations per the judge's bookkeeping note.",
     "files_changed": [
-      "crates/bee-core/src/recovery.rs",
-      "crates/bee-core/src/source_identity.rs",
-      "crates/bee-core/src/state.rs",
-      "crates/bee-core/src/claims.rs",
-      "crates/bee-core/src/config.rs",
-      "crates/bee-core/src/fsutil.rs",
-      "crates/bee-core/src/reservations.rs",
-      "crates/bee-core/src/lib.rs",
-      "crates/bee-core/tests/status_readers_b2.rs",
-      "crates/bee-core/tests/support/status_readers_b2_oracle.mjs",
-      "crates/bee-core/tests/guard_support.rs"
+      "crates/bee-core/tests/status_readers_b2.rs"
     ],
-    "deviations": [],
+    "deviations": [
+      {
+        "found_in": "crates/bee-core/src/state.rs read_lane (pre-existing, rust-port-16)",
+        "issue": "read_lane deserialized lane records into the shared State struct without merging laneRecordFrom's defaultLaneRecord created_at: null default, so a lane file written without a created_at key produced no created_at field at all instead of an explicit null -- diverging from the real mjs readLane/laneRecordFrom output.",
+        "fix": "read_lane now injects created_at: null into the deserialized State's extra map when the source JSON omitted it, scoped to lane reads only (never state.json's read_state, whose own defaultState() has no created_at key at all).",
+        "found_by": "oracle-diffing build_lane_rows against the real `node .bee/bin/bee.mjs status --json --lanes-full` output on a hand-built two-lane fixture."
+      },
+      {
+        "found_in": "crates/bee-core/src/state.rs build_lane_rows (this cell, rust-port-20)",
+        "issue": "build_lane_rows serialized the shared State struct directly, which always carries a workers: [] field (state.json's defaultState() default) even though no real .bee/lanes/<feature>.json record -- nor laneRecordFrom's defaultLaneRecord -- ever has a workers key.",
+        "fix": "build_lane_rows now removes the workers key from each lane's serialized JSON before adding bound_sessions, matching the real mjs --lanes-full array exactly.",
+        "found_by": "same oracle diff as the created_at deviation above, same fixture."
+      }
+    ],
     "friction": null,
-    "capped_at": "2026-07-26T13:30:00.577Z",
+    "capped_at": "2026-07-26T13:44:50.104Z",
     "behavior_change": true,
-    "verification_evidence": "{\n  \"new_suite_reason\": \"This cell's own action field mandates 'ALL tests in ONE target status_readers_b2' — a brand-new CI-permanent integration target, exactly mirroring the established one-target-per-status-panel precedent (status_readers_a.rs/rust-port-13, status_readers_b1.rs/rust-port-14): the panel this cell ports (recovery/contention + the 7 bee.mjs-private helpers + remaining state readers) has no existing suite to extend. The companion oracle .mjs file is not a second suite but this target's own support driver (same tests/support/ convention as every prior status_readers_* cell).\",\n  \"tests_inspected\": [\n    \"crates/bee-core/tests/status_readers_a.rs / status_readers_b1.rs (rust-port-13/14) — the oracle-driver pattern of record (file-based node driver over tests/support/*_oracle.mjs, host-real fixture via prebuilt queen-bench --generate) this cell's own status_readers_b2.rs and status_readers_b2_oracle.mjs directly copy.\",\n    \"crates/queen-bench/src/fixture.rs (rust-port-19) — the grown D5 fixture's injected transcript_root / crash-candidate session layout this cell's build_recovery_block host-real test reads verbatim rather than re-deriving.\",\n    \"crates/bee-core/tests/guard_support.rs claims_read_session_round_trips_and_rejects_id_mismatch / claims_heartbeat_stale_true_for_absent_and_unparseable_and_old — the existing Session-struct tests this cell's new lane/transcript_path named fields required updating in place (not a new file).\"\n  ],\n  \"tests_added_changed\": [\n    \"crates/bee-core/tests/status_readers_b2.rs (NEW, this cell's one integration target) — 21 tests: is_known_phase (table-driven, 12 phases), validate_models_config (table-driven, 13 problem-code rows + absent + malformed-content), validate_agent_files_drift (4 tests: absent/malformed-frontmatter/matching+drifted), has_stale_advisor_key (table, 3 cases), read_onboarding, read_handoff (absent/unknown-kind/planned-next), bypass_level (tracked+local-overlay), classify_source (5 kinds), source+find_repo_hive via whole-command status, build_recovery_block on the host-real queen-bench crash-candidate fixture, build_contention_summary (absent-log + busy-events fixture), build_lane_rows/build_lane_summary (2 lanes + 1 bound session, --lanes-full and default), compute_runtime_drift (clean+drifted managed-hash fixture), ungranted_worktree_notice (3 WorktreeRootsView cases, no live-git-worktree fixture per its caller-supplied-topology design), the reservation reference-identity bug fixture (must-have #4), a lease-expiry clock-boundary fixture, and a heartbeat-staleness clock-boundary fixture.\",\n    \"crates/bee-core/tests/support/status_readers_b2_oracle.mjs (NEW) — fine-grained ops (is-known-phase, validate-models-config, validate-agent-files-drift, has-stale-advisor-key, read-onboarding, read-handoff, bypass-level, classify-source, list-reservations) importing the real frozen mjs functions directly, PLUS the whole-command 'status' op (execFileSync of the real node .bee/bin/bee.mjs status --json, optional --lanes-full) for the seven bee.mjs-private helpers this cell's action field named — never a hand-invented reimplementation of those seven.\",\n    \"crates/bee-core/src/recovery.rs (NEW) — read_transcript_tail, has_clean_end_trio, scan_transcript_roots, encode_project_dir/claude_projects_root/resolve_transcript (perf.mjs subset), last_durable_settlement, session_has_active_claim, detect_crash_candidates, build_recovery_block, build_contention_summary; 5 inline unit tests.\",\n    \"crates/bee-core/src/source_identity.rs (NEW) — classify_source; 6 inline unit tests.\",\n    \"crates/bee-core/src/state.rs — added is_known_phase/PHASES/KNOWN_PHASES, BEE_VERSION, read_onboarding, read_handoff, bypass_level, RawConfig + read_raw_config_for_validation, ModelConfigProblem + validate_models_config, AgentFileProblem + validate_agent_files_drift, STALE_ADVISOR_KEY_WARNING + has_stale_advisor_key, list_lanes, build_lane_rows, build_lane_summary, compute_runtime_drift, find_repo_hive, WorktreeRootsView + ungranted_worktree_notice.\",\n    \"crates/bee-core/src/reservations.rs — added the current lease-backed list_reservations/lease_to_reservation/LeaseReservationView (distinct from the legacy projection struct) and expired_unreleased_reservations (the D1-frozen reference-identity bug replica).\",\n    \"crates/bee-core/src/claims.rs — added named lane/transcript_path fields to Session (previously only reachable via extra), and Claim/read_claim/is_claim_active.\",\n    \"crates/bee-core/src/fsutil.rs — added hash_file (sha256 of UTF-8 file content, matches fsutil.mjs hashFile).\",\n    \"crates/bee-core/src/config.rs — normalize_models visibility widened to pub(crate) so state.rs's validate_agent_files_drift can reuse it (no second normalization implementation).\"\n  ],\n  \"red_failure_evidence\": \"This cell created a brand-new integration target (status_readers_b2.rs) with no prior green baseline to run red-first against, matching the shape of this cell's own predecessors (status_readers_a.rs/status_readers_b1.rs, rust-port-13/14) — a from-scratch oracle target's 'red' is simply 'does not exist yet / does not compile', proven by the iterative build failures actually hit while writing it: (1) cargo build failed with 'missing fields lane and transcript_path in initializer of Session' at crates/bee-core/tests/guard_support.rs:593/596 the moment Session gained its two new named fields, fixed by adding both fields to the two existing test initializers; (2) cargo test then failed claims_read_session_round_trips_and_rejects_id_mismatch (assertion session.extra.get(\\\"lane\\\") == Some(rust-port) failed, left None) because the new named lane field no longer lands in extra — fixed by asserting session.lane directly and asserting extra no longer carries it; (3) the new status_readers_b2 target itself, on first green compile, FAILED 3 of 21 tests against the real oracle: build_lane_rows_and_summary (Rust output missing a created_at:null key and carrying a spurious workers:[] key the real mjs --lanes-full array never has), compute_runtime_drift (a wrong literal in the test's OWN hardcoded assertion, not an oracle divergence), and build_recovery_block (transcript runtime tag mismatch: claude vs mjs's fixture, caused by the test wrongly passing the fixture's own injected transcript root as the Rust call's claude-default projects_root argument, making the claude entry falsely match too). Each was root-caused against the real mjs source (state.mjs's laneRecordFrom/defaultLaneRecord merges created_at:null and never carries workers; bee.mjs's checkGroup relPosix construction; detectCrashCandidates's per-root prefix-match order) before fixing.\",\n  \"verification_run\": \"cargo test --manifest-path crates/Cargo.toml -p bee-core --test status_readers_b2 -> test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s. Also ran (no regressions): cargo test --manifest-path crates/Cargo.toml -p bee-core (full lib+all integration targets) -> every target green, 0 failed; cargo build --manifest-path crates/Cargo.toml (whole workspace incl. queen-bee/queen-bench) -> clean, 0 warnings.\"\n}\n",
-    "verify_output": "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s -- fixture classes: is_known_phase table (12 phases), validate_models_config table (13 problem-code rows + absent + malformed-content), validate_agent_files_drift (absent/malformed-frontmatter/matching/drifted), has_stale_advisor_key (3 cases), read_onboarding, read_handoff (absent/unknown-kind/planned-next), bypass_level (tracked+overlay), classify_source (unknown/source_checkout/plugin_package/project_projection/unknown-no-manifest), source+find_repo_hive via whole-command status, build_recovery_block on host-real queen-bench crash-candidate fixture, build_contention_summary (absent + busy-events fixture), build_lane_rows/build_lane_summary (2 lanes + bound session, --lanes-full and default), compute_runtime_drift (clean+drifted managed-hash fixture), ungranted_worktree_notice (linked-valid ungranted/granted/ordinary), reservation reference-identity bug fixture (expired+active both counted), lease-expiry clock boundary, heartbeat-staleness clock boundary.",
+    "verification_evidence": "{\n  \"new_suite_reason\": \"No new suite added this round -- both new tests land as additional rows inside the EXISTING status_readers_b2.rs target (test-economy D3: a new scenario for behavior the suite already covers is a new row, never a new file); this field is included only because the cell already carries a permanent new-suite declaration from the first pass and capCell re-validates it on every cap.\",\n  \"ratio_waiver\": \"This rework round's diff is test-only by design: the judge's own two findings (FAIL 1/FAIL 2) were explicitly 'test-only and need no production change' -- read_raw_config_for_validation's logic already matched mjs by inspection, and the original reference-identity fixture already discriminated a value-equality port, so nothing in src/ needed to change. The ratio gate assumes a source diff exists to size against; a round whose entire job is closing a PROOF gap (not a behavior gap) legitimately has zero source lines this time. The cumulative cell diff across both passes (this cap's --files plus the first cap's already-recorded files_changed) carries ~750 source lines against ~900 test lines, well under the standard/high-risk ceiling.\",\n  \"tests_inspected\": [\n    \"crates/bee-core/tests/status_readers_b2.rs validate_models_config_matches_mjs_across_every_problem_code / validate_models_config_malformed_content_reports_config_malformed -- the existing RawConfig-consuming tests read-first before adding read_raw_config_for_validation_matches_mjs_absent_malformed_and_present, confirming no existing row already oracle-diffed the READER itself (every existing test hand-builds RawConfig::Value/Absent, never calls read_raw_config_for_validation).\",\n    \"crates/bee-core/tests/status_readers_b2.rs reservation_reference_identity_bug_is_replicated_not_fixed -- read before adding the deeply-equal-projected-rows companion test, confirming the existing fixture's two distinguishable leases do not exercise the deep-equality property its own comment claimed (the judge's exact finding), so the new case is additive, not a duplicate.\"\n  ],\n  \"tests_added_changed\": [\n    \"crates/bee-core/tests/status_readers_b2.rs: NEW read_raw_config_for_validation_matches_mjs_absent_malformed_and_present -- 3 sub-cases (absent config.json, present-unparseable-JSON, present-parseable-with-a-real-models-problem), each asserting the Rust reader's RawConfig variant AND oracle-diffing the resulting validate_models_config problem's rendered `config validate [...]` line against the real `node .bee/bin/bee.mjs status --json` staleness_warnings array.\",\n    \"crates/bee-core/tests/status_readers_b2.rs: NEW reservation_reference_identity_bug_with_deeply_equal_projected_rows -- two lease files sharing resource path:a.rs, no acquired_at, expires_at 2020 vs 2099; asserts the two projected LeaseReservationView rows are serde_json::Value-equal (deep equality), that expired_unreleased_reservations still returns both, and that the real frozen CLI's own staleness line reads '2 reservation(s) expired but never released'.\",\n    \"crates/bee-core/tests/status_readers_b2.rs: comment fix on reservation_reference_identity_bug_is_replicated_not_fixed (lines formerly 717-721) -- no longer claims the two (distinguishable) leases are 'deeply-equal-in-shape'; now explicitly says this fixture proves the bug fires even on distinguishable rows and points at the new companion test for the sharper deeply-equal case.\"\n  ],\n  \"red_failure_evidence\": \"Both new tests are ADDITIVE rows in an already-green suite (test-economy D2: tiny/small/standard bugfix/behavior rows get targeted-green, not red-first) proving a previously-uncovered reader/fixture rather than fixing a regression -- there is no pre-existing red state to run red-first against; the coverage GAP itself was the judge's finding (a NEEDS_REVISION verdict, not a failing test), and the true 'red' proof is structural: `rg -n \\\"read_raw_config_for_validation\\\" crates/` before this round showed exactly one hit (the function's own definition, zero call sites), and the original reservation fixture's two leases (crates/foo.rs vs crates/bar.rs, differing workflow_id/workspace_id/timestamps) never produced two identical serialized rows -- both gaps are now closed and directly asserted against (the grep count is now >1, and row_a == row_b is asserted true in the new fixture).\",\n  \"verification_run\": \"cargo test --manifest-path crates/Cargo.toml -p bee-core --test status_readers_b2 -> test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s. Also ran (no regressions): cargo test --manifest-path crates/Cargo.toml -p bee-core (full lib + all integration targets) -> every target green, 0 failed; cargo build --manifest-path crates/Cargo.toml (whole workspace incl. queen-bee/queen-bench) -> clean, 0.11s, no warnings.\"\n}\n",
+    "verify_output": "test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s -- rework round adds 2 tests: read_raw_config_for_validation_matches_mjs_absent_malformed_and_present (whole-command oracle covering Absent/Value(null)/Value(object) via staleness_warnings' config-validate line) and reservation_reference_identity_bug_with_deeply_equal_projected_rows (two leases sharing the same resource, no acquired_at, expires_at 2020 vs 2099 -> deeply-equal projected rows, both counted, matching the real CLI's '2 reservation(s) expired but never released' staleness line).",
     "verify_passed": true,
-    "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
-    "claimed_at": "2026-07-26T12:08:46.281Z",
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T13:40:21.347Z",
     "verify_command": "cargo test --manifest-path crates/Cargo.toml -p bee-core --test status_readers_b2",
-    "verified_at": "2026-07-26T13:28:20.021Z",
+    "verified_at": "2026-07-26T13:43:23.909Z",
     "attempts": [
       {
         "n": 1,
@@ -88,9 +91,101 @@
         "verdict": "pass",
         "failure_signature": null,
         "note": null
+      },
+      {
+        "n": 2,
+        "at": "2026-07-26T13:43:23.909Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T13:40:56.080Z",
+        "acquired_at": "2026-07-26T13:40:21.346Z",
+        "worker": "Mel",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "test-count-and-names",
+            "status": "PASS",
+            "evidence": "cargo test --test status_readers_b2: 21 passed, 0 failed (>= 15 required); 21 #[test] fns covering every declared class."
+          },
+          {
+            "id": "oracle-honesty",
+            "status": "PASS",
+            "evidence": "Driver imports the real frozen .bee/bin/lib/{state,source-identity,reservations}.mjs and execFileSyncs the real bee.mjs status --json; no hand-written reimplementation. Literal asserts are extra pins alongside oracle equality, never substitutes. Sole no-oracle case (ungranted_worktree_notice, mjs re-derives process.cwd()) byte-compared by the judge itself: equal."
+          },
+          {
+            "id": "oracle-coverage-every-ported-reader",
+            "status": "FAIL",
+            "evidence": "read_raw_config_for_validation (crates/bee-core/src/state.rs:476) has exactly one hit in the whole workspace - its own definition. No test calls it; every validator test hand-builds RawConfig::Value/Absent. Truth #2 (every ported reader matches its mjs oracle) unmet for the reader the action names explicitly (bee.mjs:600). Logic matches mjs by inspection; the gap is proof, not correctness. Secondary: ungranted_worktree_notice asserts only prefix + 2 substrings, so a mid-string divergence would slip."
+          },
+          {
+            "id": "recovery-tail-injected-root",
+            "status": "PASS",
+            "evidence": "Fixture built via queen-bench --generate; injected root <fixture>/fixture-transcripts in .bee/config.json recovery.transcript_roots with a >=300KB transcript, never host $HOME. Tail window 262144 == recovery.mjs:49; contention window 65536 == bee.mjs:669. Rust side uses parameterized claude_projects_root_with(env, home); env-reading variant never called from tests."
+          },
+          {
+            "id": "clock-pinning",
+            "status": "PASS",
+            "evidence": "PINNED_NOW_MS drives both boundary tests; lease expiry proves the <= edge both ways against the real listReservations oracle with the same pinned now; heartbeat staleness likewise. Only wall-clock use is documented and forced by mjs resolveSessionId calling Date.now() with no override."
+          },
+          {
+            "id": "reference-identity-fixture-discriminating",
+            "status": "FAIL",
+            "evidence": "The two leases at status_readers_b2.rs:676-725 differ in resource path, workflow_id, workspace_id and timestamps - not the deeply-equal expired/active pair truth #4 and the cell action both name, and the test's own comment at :719-721 claims a deep-equality property the fixture does not exercise. It still discriminates a value-equality port (2 vs 1), so the operational purpose holds, but weaker than specified. Judge constructed the specified fixture in /tmp (identical resource path, no acquired_at, expires_at 2020 vs 2099 - identical projected rows) and ran the real frozen CLI there: '2 reservation(s) expired but never released'. Missing test is ~12 lines, no production change."
+          },
+          {
+            "id": "deliberate-bug-replication",
+            "status": "PASS",
+            "evidence": "bee.mjs:739-743 filters with active.includes(r) over two separately-mapped arrays, so the identity test is always false; confirmed end-to-end by running the real CLI on a one-expired/one-active fixture ('2 reservation(s) expired but never released'). reservations.rs:275-277 reproduces it and documents it as deliberate under D1 in a 20-line comment quoting the mjs source. Consistent with D1 (CONTEXT.md:21) and D3 (CONTEXT.md:23)."
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "git show --stat 3eae3a8 touches only .bee/cells/rust-port-20.json and crates/bee-core/{src,tests}/* - no .bee/bin/, no packages/bee/, no crates/Cargo.toml. No subprocess in any ported reader (only pre-existing std::process::id and thread::spawn in fsutil.rs). Every test root is a fresh tempdir; git status clean after the judge's own full test + build runs."
+          },
+          {
+            "id": "key-links-control-root",
+            "status": "PASS",
+            "evidence": "control_root is a parameter on session_has_active_claim, detect_crash_candidates, build_recovery_block, build_lane_summary; no controlRootFor implementation exists in bee-core, only doc references stating the caller supplies it (rust-port-16 pattern). resolved_session_id is likewise a parameter, not re-derived."
+          },
+          {
+            "id": "frozen-judge-hits-justified",
+            "status": "PASS",
+            "evidence": "guard_support.rs 16+/2-: both hunks forced by Session gaining named lane/transcript_path fields. The round-trip assertion went from one line to two and now pins BOTH the named field and the absence of the shadowed extra key - a strengthening, not a weakening. No assertion deleted or loosened. No Session serialization path exists in bee-core or queen-bee, so no 'lane': null can leak to disk."
+          },
+          {
+            "id": "claimed-deviations",
+            "status": "PASS",
+            "evidence": "(1) created_at: defaultLaneRecord carries created_at: null and laneRecordFrom merges it under the parsed record, so mjs readLane always returns the key - Rust read_lane now injects it. (2) workers: defaultLaneRecord has no workers key and buildLaneRows spreads the record whole, so the State struct's serde-default empty vec was spurious - removed only inside build_lane_rows, State itself untouched. Both proven by full-record equality against the real --lanes-full array. No regressions: cargo test -p bee-core 170 passed across all targets, clean build. Bookkeeping: trace.deviations is [] while the commit message and the report both disclose these two - the structured field understates the prose."
+          }
+        ],
+        "failure_signature": "Two test-only must-have gaps: readRawConfigForValidation (crates/bee-core/src/state.rs:476) ported with no oracle diff at all (truth #2), and the reference-identity fixture (status_readers_b2.rs:676-725) uses two clearly-different reservations rather than the deeply-equal expired/active pair truth #4 names.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T13:40:11.978Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-07-26T13:40:11.979Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-07-26T13:44:50.071Z",
+        "reason": "Rework round directly targets the two NEEDS_REVISION findings the coordinator relayed verbatim from the goal-check judge (oracle-coverage-every-ported-reader / reference-identity-fixture-discriminating), both fixability:automatic and test-only; the judge's own 9/11-pass verdict is otherwise unchanged (oracle honesty, prohibitions, clock pinning, deliberate bug replication, and both original deviations already judged acceptable). Overriding here because a worker cannot itself dispatch a fresh judge pass (orchestrator/swarming-owned per AO14); the coordinator explicitly instructed capping after this rework.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
   },
   "tier": "generation"
 }

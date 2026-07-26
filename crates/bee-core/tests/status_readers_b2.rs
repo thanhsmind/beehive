@@ -263,6 +263,97 @@ fn validate_models_config_malformed_content_reports_config_malformed() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// read_raw_config_for_validation — the cell action names this reader
+// explicitly (readRawConfigForValidation, bee.mjs:600, "feeding both
+// validators") and it is bee.mjs-PRIVATE (not exported by state.mjs), so
+// it is oracle-diffed the WHOLE-COMMAND way: `readRawConfigForValidation`
+// feeds `validateModelsConfig`, whose problems are rendered into
+// `staleness_warnings` verbatim (bee.mjs:777-779) — a visible, diffable
+// surface for the file->Absent / Value(null) / Value(object) mapping.
+// ═══════════════════════════════════════════════════════════════════════
+
+/// `config validate [${code}]${runtime ? ' models.RT.SLOT:' : ''} ${message}`
+/// (bee.mjs:778) — reconstructed here so this test can recognize the
+/// REAL CLI's own rendering of `validateModelsConfig(
+/// readRawConfigForValidation(root))`'s output inside `staleness_warnings`,
+/// never a second validation implementation.
+fn config_validate_message(p: &state::ModelConfigProblem) -> String {
+    let cond = match &p.runtime {
+        Some(rt) => format!(" models.{}.{}:", rt, p.slot.as_deref().unwrap_or("")),
+        None => String::new(),
+    };
+    format!("config validate [{}]{cond} {}", p.code, p.message)
+}
+
+#[test]
+fn read_raw_config_for_validation_matches_mjs_absent_malformed_and_present() {
+    // (1) Absent: no .bee/config.json at all -> readRawConfigForValidation
+    // returns JS `undefined` -> validateModelsConfig reports ZERO problems
+    // -> zero "config validate" lines in the real status output.
+    let dir_absent = tempfile::tempdir().unwrap();
+    write_minimal_onboarding(dir_absent.path());
+    let raw_absent = state::read_raw_config_for_validation(dir_absent.path());
+    assert!(matches!(raw_absent, state::RawConfig::Absent));
+    assert_eq!(state::validate_models_config(&raw_absent), Vec::<state::ModelConfigProblem>::new());
+    let mjs_absent = run_oracle("status", Some(dir_absent.path()), None);
+    let warnings_absent = mjs_absent["staleness_warnings"].as_array().cloned().unwrap_or_default();
+    assert!(
+        !warnings_absent.iter().any(|w| w.as_str().unwrap_or("").starts_with("config validate")),
+        "an absent .bee/config.json must produce zero config-validate staleness lines"
+    );
+
+    // (2) Present but unparseable: readJson(file, null) falls back to
+    // `null` on a JSON parse failure (fsutil.mjs) -> RawConfig::Value(Null)
+    // -> ONE config-malformed problem -> ONE matching staleness line.
+    let dir_malformed = tempfile::tempdir().unwrap();
+    write_minimal_onboarding(dir_malformed.path());
+    write_file(&bee_dir(dir_malformed.path()).join("config.json"), "not valid json at all {{{");
+    let raw_malformed = state::read_raw_config_for_validation(dir_malformed.path());
+    let problems_malformed = match &raw_malformed {
+        state::RawConfig::Value(v) => {
+            assert!(v.is_null(), "an unparseable config.json must read as RawConfig::Value(Null), matching readJson's null fallback");
+            state::validate_models_config(&raw_malformed)
+        }
+        state::RawConfig::Absent => panic!("a PRESENT (if malformed) config.json must never read as Absent"),
+    };
+    assert_eq!(problems_malformed.len(), 1);
+    assert_eq!(problems_malformed[0].code, "config-malformed");
+    let mjs_malformed = run_oracle("status", Some(dir_malformed.path()), None);
+    let warnings_malformed = mjs_malformed["staleness_warnings"].as_array().cloned().unwrap_or_default();
+    let expected_malformed = config_validate_message(&problems_malformed[0]);
+    assert!(
+        warnings_malformed.iter().any(|w| w.as_str() == Some(expected_malformed.as_str())),
+        "expected {expected_malformed:?} in the real mjs staleness_warnings, got: {warnings_malformed:?}"
+    );
+
+    // (3) Present, parseable, a normal object with a real models problem
+    // -> RawConfig::Value(object) -> validateModelsConfig finds the SAME
+    // problem set the mjs reader would, rendered into the SAME staleness
+    // line.
+    let dir_present = tempfile::tempdir().unwrap();
+    write_minimal_onboarding(dir_present.path());
+    let config_body = json!({"models": {"claude": {"generation": {"kind": "cli"}}}});
+    write_file(&bee_dir(dir_present.path()).join("config.json"), &config_body.to_string());
+    let raw_present = state::read_raw_config_for_validation(dir_present.path());
+    let problems_present = match &raw_present {
+        state::RawConfig::Value(v) => {
+            assert_eq!(v, &config_body, "a present, parseable config.json must read back byte-identical to what was written");
+            state::validate_models_config(&raw_present)
+        }
+        state::RawConfig::Absent => panic!("a present config.json must never read as Absent"),
+    };
+    assert_eq!(problems_present.len(), 1);
+    assert_eq!(problems_present[0].code, "cli-malformed");
+    let mjs_present = run_oracle("status", Some(dir_present.path()), None);
+    let warnings_present = mjs_present["staleness_warnings"].as_array().cloned().unwrap_or_default();
+    let expected_present = config_validate_message(&problems_present[0]);
+    assert!(
+        warnings_present.iter().any(|w| w.as_str() == Some(expected_present.as_str())),
+        "expected {expected_present:?} in the real mjs staleness_warnings, got: {warnings_present:?}"
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // validate_agent_files_drift
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -716,12 +807,53 @@ fn reservation_reference_identity_bug_is_replicated_not_fixed() {
 
     // THE BUG (bee.mjs:741-746, D1-frozen, deliberately replicated): the
     // buildStatus-inline "expired unreleased" computation counts BOTH
-    // rows, not just the genuinely-expired one — a deeply-equal-in-shape
-    // active reservation is NOT excluded by the JS reference-identity
-    // filter. A value-equality "fix" would return just 1 here and
-    // silently diverge from the frozen mjs oracle.
+    // rows, not just the genuinely-expired one. This fixture's two leases
+    // are DISTINGUISHABLE (different resource/workflow_id/workspace_id/
+    // timestamps) — it proves the bug still fires even when a naive
+    // value-equality port could tell the rows apart by content, not only
+    // when two rows happen to be indistinguishable. The companion test
+    // below (`..._with_deeply_equal_projected_rows`) is the sharper case
+    // truth #4 names explicitly: two rows so `LeaseReservationView`-equal
+    // that even the STRUCTURE of a value-equality "fix" collapses them.
     let rust_expired_unreleased = reservations::expired_unreleased_reservations(dir.path(), PINNED_NOW_MS);
     assert_eq!(rust_expired_unreleased.len(), 2, "mjs's reference-identity bug means the ACTIVE reservation is misclassified as expired-unreleased too — a value-equality port would wrongly return 1 here");
+}
+
+#[test]
+fn reservation_reference_identity_bug_with_deeply_equal_projected_rows() {
+    // Truth #4's sharper fixture: two lease records that project to
+    // DEEPLY EQUAL `LeaseReservationView` rows — same `resource` (so same
+    // `path`), no `acquired_at` (so both `ttl_seconds` compute to the same
+    // 0 sentinel — `lease_ttl_seconds` requires acquired_at to be a real
+    // ISO string to do anything else, reservations.rs), no
+    // `workflow_id`/`workspace_id` (`cell`/`agent` both absent on both
+    // rows), and `released_at` is always `null` regardless of
+    // `expires_at`. The ONE field that differs between the two on-disk
+    // records — `expires_at` — is dropped entirely by the projection
+    // (`LeaseReservationView` has no `expires_at` field at all), so the
+    // two OUTPUT rows are indistinguishable even by full structural
+    // equality, not just by path. A value-equality "dedup" over the
+    // projected shape would collapse these two into one; the real mjs
+    // (and this port) never does — it returns both, unconditionally.
+    let dir = tempfile::tempdir().unwrap();
+    write_minimal_onboarding(dir.path());
+    write_lease(dir.path(), "past", &json!({"resource": "path:a.rs", "expires_at": "2020-01-01T00:00:00.000Z"}));
+    write_lease(dir.path(), "future", &json!({"resource": "path:a.rs", "expires_at": "2099-01-01T00:00:00.000Z"}));
+
+    let rust_expired_unreleased = reservations::expired_unreleased_reservations(dir.path(), PINNED_NOW_MS);
+    assert_eq!(rust_expired_unreleased.len(), 2);
+    let row_a = serde_json::to_value(&rust_expired_unreleased[0]).unwrap();
+    let row_b = serde_json::to_value(&rust_expired_unreleased[1]).unwrap();
+    assert_eq!(row_a, row_b, "the two projected rows must be DEEPLY EQUAL — that is exactly what makes this fixture discriminate a value-equality port, which would see one row and collapse the pair to a count of 1");
+
+    // Whole-command oracle: the real frozen CLI's own staleness_warnings
+    // message (bee.mjs:765-768) must also report 2, never a deduped 1.
+    let mjs_status = run_oracle("status", Some(dir.path()), None);
+    let warnings = mjs_status["staleness_warnings"].as_array().cloned().unwrap_or_default();
+    assert!(
+        warnings.iter().any(|w| w.as_str() == Some("2 reservation(s) expired but never released — run bee_reservations.mjs sweep.")),
+        "expected the real mjs status --json staleness_warnings to report exactly 2 expired-unreleased reservations, got: {warnings:?}"
+    );
 }
 
 #[test]
