@@ -1159,7 +1159,13 @@ export function checkWrite(root, state, relPath, agentName = null, { sessionId =
 // filesystem location to scan.
 export function isSharedNestedCheckoutTarget(root, targetPath, opts = {}) {
   // D6: additive, fires only when a second session is concurrently live.
-  if (!isConcurrentMode(opts.controlRoot || root, opts)) return false;
+  // Review finding F1 (worktree-concurrency-guard-controlroot-port): strict
+  // mode makes a transient/hard error reading session records (EACCES, EIO,
+  // EMFILE) propagate instead of silently reading as "nobody else is live"
+  // — this call is the exact fail-open path the guard's own contract (a
+  // detection failure denies) must hold, so it opts in where every other
+  // isConcurrentMode caller keeps its existing fail-open default.
+  if (!isConcurrentMode(opts.controlRoot || root, { ...opts, strict: true })) return false;
 
   const rootReal = realpathOrNull(root);
   if (!rootReal) return false;
@@ -1194,7 +1200,10 @@ export function isSharedNestedCheckoutTarget(root, targetPath, opts = {}) {
 // when omitted. The directory scan below stays root-scoped.
 export function hasAnySharedNestedCheckout(root, opts = {}) {
   // D6: additive, fires only when a second session is concurrently live.
-  if (!isConcurrentMode(opts.controlRoot || root, opts)) return false;
+  // Review finding F1: strict mode, same rationale as
+  // isSharedNestedCheckoutTarget above — a detection failure must deny, not
+  // silently read as "solo".
+  if (!isConcurrentMode(opts.controlRoot || root, { ...opts, strict: true })) return false;
 
   const rootReal = realpathOrNull(root);
   if (!rootReal) return false;
@@ -1207,10 +1216,25 @@ export function hasAnySharedNestedCheckout(root, opts = {}) {
   return scanForNestedCheckout(rootReal, rootReal, 0);
 }
 
+// Review finding F2 (worktree-concurrency-guard-controlroot-port): a missing
+// path is expected everywhere this block walks the filesystem (an ancestor
+// dir that doesn't exist yet, a dangling companion-mount target) and stays
+// silent. Any OTHER errno (EACCES, EIO, EMFILE, a symlink loop) is genuinely
+// undetectable state, not "nothing here" — it must propagate so the caller
+// (isSharedNestedCheckoutTarget/hasAnySharedNestedCheckout) fails closed
+// instead of silently reading a hard error the same as "not shared". Scoped
+// to this self-contained block only (these helpers have no callers outside
+// it), so nothing else in guards.mjs changes behavior.
+function rethrowUnlessMissing(err) {
+  if (err && err.code === 'ENOENT') return;
+  throw err;
+}
+
 function realpathOrNull(p) {
   try {
     return fs.realpathSync(p);
-  } catch {
+  } catch (err) {
+    rethrowUnlessMissing(err);
     return null;
   }
 }
@@ -1263,7 +1287,13 @@ function resolveVerifiedCompanionMountReal(root) {
     const liveMountReal = realpathOrNull(path.join(root, mountPath));
     if (!declaredReal || !liveMountReal || declaredReal !== liveMountReal) return null;
     return liveMountReal;
-  } catch {
+  } catch (err) {
+    // F2: no marker file at all is the overwhelmingly common, legitimate
+    // case (return null, unverified); a read error beyond "missing" (EACCES)
+    // or a corrupt/unparseable marker (JSON.parse throwing) is ambiguous
+    // state this guard treats the same as any other detection failure —
+    // propagate rather than silently call it "not a companion mount".
+    rethrowUnlessMissing(err);
     return null;
   }
 }
@@ -1318,7 +1348,11 @@ function scanForNestedCheckout(rootReal, dir, depth) {
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
+  } catch (err) {
+    // F2: a dir that vanished mid-scan (ENOENT, benign race) just prunes
+    // this branch; EACCES/EIO/EMFILE mean the scan cannot honestly claim
+    // "nothing found here" and must propagate instead.
+    rethrowUnlessMissing(err);
     return false;
   }
   for (const entry of entries) {
@@ -1349,7 +1383,11 @@ function hasGitNode(dir) {
   try {
     fs.statSync(path.join(dir, '.git'));
     return true;
-  } catch {
+  } catch (err) {
+    // F2: no `.git` node is the expected, overwhelmingly common answer
+    // (ENOENT); a stat failing for any other reason (EACCES on the parent)
+    // is undetectable state, not evidence this dir is plain.
+    rethrowUnlessMissing(err);
     return false;
   }
 }
@@ -1363,7 +1401,11 @@ function isRegisteredSubmodule(rootReal, nestedDirReal) {
   let content;
   try {
     content = fs.readFileSync(path.join(rootReal, '.gitmodules'), 'utf8');
-  } catch {
+  } catch (err) {
+    // F2: no .gitmodules is the ordinary "nothing registered" case
+    // (ENOENT); any other read failure cannot honestly be called "not a
+    // submodule" — it's undetectable, so it propagates.
+    rethrowUnlessMissing(err);
     return false;
   }
   for (const line of content.split(/\r?\n/)) {

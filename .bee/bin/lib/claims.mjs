@@ -243,16 +243,27 @@ export function readSession(root, sessionId) {
 /**
  * List every readable session record under .bee/sessions/ (GH#20: the reader
  * cells.mjs's claim-next fallback pool needs to detect a lane's live owner).
- * Fail-open, matching readSession/heartbeatStale's posture: a missing
- * .bee/sessions/ directory is zero records, never an error, and an
+ * Fail-open by default, matching readSession/heartbeatStale's posture: a
+ * missing .bee/sessions/ directory is zero records, never an error, and an
  * unreadable/corrupt entry is silently skipped rather than surfaced — a
  * broken session record counts as absent, not as a reason to stop.
+ *
+ * `strict` (review finding F1, worktree-concurrency-guard-controlroot-port):
+ * opt-in, default false so every existing caller (claim-next's fallback
+ * pool, reservations.mjs, isConcurrentMode's other callers) keeps today's
+ * fail-open behavior byte-identical. When true, a transient/hard error
+ * reading the sessions directory (EACCES, EIO, EMFILE — anything but a
+ * legitimately absent directory) propagates instead of silently reading as
+ * "zero sessions": a caller that opts into strict is one for whom "could not
+ * tell if anyone else is live" must never look identical to "nobody else is
+ * live".
  */
-export function listSessionRecords(root) {
+export function listSessionRecords(root, { strict = false } = {}) {
   let entries;
   try {
     entries = fs.readdirSync(sessionsDir(root));
-  } catch {
+  } catch (err) {
+    if (strict && err && err.code !== 'ENOENT') throw err;
     return [];
   }
   const sessions = [];
@@ -330,9 +341,9 @@ export function heartbeatStale(session, nowMs = Date.now(), staleSeconds = DEFAU
  * never "another" session; a caller with no session id at all simply asks
  * "is anyone else out there right now."
  */
-export function isConcurrentMode(root, { excludeSessionId = null, now = Date.now(), staleSeconds = DEFAULT_HEARTBEAT_STALE_SECONDS } = {}) {
+export function isConcurrentMode(root, { excludeSessionId = null, now = Date.now(), staleSeconds = DEFAULT_HEARTBEAT_STALE_SECONDS, strict = false } = {}) {
   const exclude = typeof excludeSessionId === 'string' ? excludeSessionId.trim() : '';
-  return listSessionRecords(root).some(
+  return listSessionRecords(root, { strict }).some(
     (session) => session.id !== exclude && !heartbeatStale(session, now, staleSeconds),
   );
 }

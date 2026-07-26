@@ -4949,7 +4949,24 @@ async function handleWorktreeNew(_root, flags) {
   // scope the concurrency signal itself is about to consult (Port-D4).
   const ctrlRoot = controlRootFor(mainRoot);
   const sessionId = resolveSessionId({ root: ctrlRoot });
-  if (!withCompanion && hasAnySharedNestedCheckout(mainRoot, { excludeSessionId: sessionId, controlRoot: ctrlRoot })) {
+  let sharedNestedFound;
+  try {
+    // Review finding F1 (worktree-concurrency-guard-controlroot-port): this
+    // now runs isConcurrentMode in strict mode, so a hard error reading
+    // session records (not just a mundane missing-directory case) throws
+    // here instead of silently reading as "nobody else is live" — caught
+    // below and turned into the same fail-closed, zero-mutation refusal
+    // every other detection failure in this guard produces.
+    sharedNestedFound = !withCompanion && hasAnySharedNestedCheckout(mainRoot, {
+      excludeSessionId: sessionId,
+      controlRoot: ctrlRoot,
+    });
+  } catch (detectionError) {
+    throw new Error(
+      `refusing to create a worktree: could not determine whether ${mainRoot} holds a shared nested checkout another live session could reach — the detection check itself errored (${detectionError instanceof Error ? detectionError.message : String(detectionError)}). This guard fails CLOSED on a detection error rather than risk silently allowing an unguarded worktree. FIX: resolve the underlying filesystem error, then retry.`,
+    );
+  }
+  if (sharedNestedFound) {
     // Port-D7: a plain Error, matching every other refusal in this function —
     // WorktreeCreateError/its [CODE] prefix convention no longer exists here.
     throw new Error(

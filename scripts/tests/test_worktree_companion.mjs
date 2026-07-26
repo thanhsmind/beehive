@@ -409,6 +409,34 @@ try {
     const flagged = hasAnySharedNestedCheckout(physicalRoot, { controlRoot: controlRootDir });
     record('Case 13: the SAME live session planted under root alone (controlRoot has none) is NOT flagged by hasAnySharedNestedCheckout (concurrency ignores root)', flagged === false, `flagged=${flagged}`);
   }
+
+  // -------------------------------------------------------------------
+  // Case 14 (review finding F1, worktree-concurrency-guard-controlroot-port):
+  // a REAL hard fs error reading the controlRoot's session records (not a
+  // synthetic stub) must propagate out of hasAnySharedNestedCheckout, not
+  // silently read as "nobody else is live". `.bee/sessions` is made a FILE
+  // instead of a directory — a genuine, portable (root-safe) ENOTDIR, the
+  // exact shape F1 flagged as fail-open before this fix.
+  // -------------------------------------------------------------------
+  {
+    const physicalRoot = path.join(tmp, 'case14-root');
+    const controlRootDir = path.join(tmp, 'case14-controlroot');
+    fs.mkdirSync(physicalRoot, { recursive: true });
+    fs.mkdirSync(path.join(controlRootDir, '.bee'), { recursive: true });
+    plantNestedRepo(physicalRoot, 'repo');
+    fs.writeFileSync(path.join(controlRootDir, '.bee', 'sessions'), 'not a directory\n');
+    let threw = null;
+    try {
+      hasAnySharedNestedCheckout(physicalRoot, { controlRoot: controlRootDir });
+    } catch (err) {
+      threw = err;
+    }
+    record(
+      'Case 14: a real hard error reading controlRoot session records (ENOTDIR) propagates out of hasAnySharedNestedCheckout instead of silently returning false',
+      threw !== null && /ENOTDIR/.test(threw.message || String(threw)),
+      threw ? `threw: ${threw.message}` : 'did not throw',
+    );
+  }
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

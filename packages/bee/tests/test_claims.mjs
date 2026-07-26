@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runModuleWorker } from '../../../scripts/lib/run-module-worker.mjs';
-import { check, assert, printSummaryAndExit } from '../../../scripts/lib/test-fixture.mjs';
+import { check, assert, assertThrows, printSummaryAndExit } from '../../../scripts/lib/test-fixture.mjs';
 import {
   createSession,
   readSession,
@@ -309,6 +309,28 @@ await check('isConcurrentMode: false with no session records or only the acting 
     last_heartbeat: new Date(Date.now() - (DEFAULT_HEARTBEAT_STALE_SECONDS + 3600) * 1000).toISOString(),
   });
   assert(isConcurrentMode(concurrentModeRoot, { excludeSessionId: 'solo-sess' }) === false, 'a stale-heartbeat other session does not count as concurrent');
+});
+
+await check('listSessionRecords/isConcurrentMode strict mode (review finding F1, worktree-concurrency-guard-controlroot-port): a real hard fs error propagates instead of silently reading as zero sessions; a real missing-directory case stays silent in both modes', async () => {
+  // A path that is a FILE, not a directory: fs.readdirSync on it throws a
+  // real ENOTDIR — a genuine, portable (root-safe, no chmod needed) hard
+  // error, not a synthetic stub. `sessionsDir(root)` is `<root>/.bee/sessions`,
+  // so making that exact path a file forces readdirSync to hit it directly.
+  const notADirRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-strict-notadir-'));
+  fs.mkdirSync(path.join(notADirRoot, '.bee'), { recursive: true });
+  fs.writeFileSync(path.join(notADirRoot, '.bee', 'sessions'), 'not a directory\n');
+
+  assert(listSessionRecords(notADirRoot) instanceof Array && listSessionRecords(notADirRoot).length === 0, 'default (non-strict) mode: a real ENOTDIR error still reads as zero records, byte-unchanged for every existing caller');
+  assert(isConcurrentMode(notADirRoot) === false, 'default (non-strict) mode: isConcurrentMode still reads false on the same real error, byte-unchanged');
+  assertThrows(() => listSessionRecords(notADirRoot, { strict: true }), 'ENOTDIR', 'strict mode: the same real ENOTDIR error now propagates instead of silently returning []');
+  assertThrows(() => isConcurrentMode(notADirRoot, { strict: true }), 'ENOTDIR', 'strict mode: isConcurrentMode propagates the same real error rather than reading false');
+
+  // A genuinely missing .bee/sessions/ (the ordinary case for a fresh/solo
+  // checkout) stays silent in EITHER mode — strict only changes the verdict
+  // on a hard error, never on the legitimate absent-directory case.
+  const missingRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-strict-missing-'));
+  assert(listSessionRecords(missingRoot, { strict: true }).length === 0, 'strict mode: a genuinely missing sessions dir (ENOENT) still reads as zero records, not an error');
+  assert(isConcurrentMode(missingRoot, { strict: true }) === false, 'strict mode: isConcurrentMode still reads false on a genuinely missing sessions dir');
 });
 
 await check('claimCellFile: sessionless claim still works solo (nobody else live) — byte-unchanged, never marked adopted', async () => {
