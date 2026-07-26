@@ -1,0 +1,86 @@
+{
+  "id": "rust-port-4",
+  "feature": "rust-port",
+  "title": "Parity harness: same command, two runtimes, diffed outputs + self-parity and red-first smoke",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "rust-port-1",
+    "rust-port-2"
+  ],
+  "decisions": [
+    "D7"
+  ],
+  "files": [
+    "crates/bee-parity/*"
+  ],
+  "read_first": [
+    "docs/history/rust-port/CONTEXT.md",
+    "docs/history/rust-port/plan.md",
+    "docs/history/rust-port/implement-plan.md"
+  ],
+  "action": "Build the D7a CLI parity harness in the crate named exactly `bee-parity` (member scaffolded by rust-port-1 — do not touch crates/Cargo.toml). Fixture stores come from queen-bench's generator (rust-port-2), never from the repo's live .bee/. Clone the fixture store into two temp roots, run the same command through `node .bee/bin/bee.mjs` (absolute path) in one and (when a port exists) queen-bee in the other, then diff stdout, exit code, and the post-run store tree. ROOT-RESOLUTION SAFETY (validation B5): each temp root MUST be a self-sufficient bee root — the clone includes .bee/onboarding.json and the root contains no .git; roots are created OUTSIDE the repo working tree (state.mjs resolveRootsCore recognizes a root only by walking up for .bee/onboarding.json, else falls to the git root = the LIVE store); bee.mjs is invoked with cwd set to the temp root, and the harness asserts the resolved store root equals the temp root before running any command. DIFF POLICY (validation decision W7 + advisor note 3): whole-path exclusion set is exactly {.bee/logs/**, .bee/cache/**, .bee/tmp/**}; every other file is diffed with a declared volatile allowlist = {timestamps, pids, tokens, AND each leg's own temp-root path rewritten to the literal <ROOT> before compare} — root-path rewriting is part of the declared allowlist, not blanket normalization. SELF-CHECK SEMANTICS (advisor notes 1+2+7): `--self-check` exits 0 ONLY when (a) self-parity (mjs vs mjs, status --json) reports zero diff AND BOTH inner commands exited 0 AND the fixture store passed a prior `bee.mjs status --json` sanity read (non-zero inner exit or sanity failure = self-check failure, even with zero diff — two identical crashes are not parity); AND (b) the seeded-mutation run reports a diff with non-zero inner harness exit.",
+  "must_haves": {
+    "truths": [
+      "self-parity run reports zero diff AND both inner status --json commands exit 0 AND the fixture passes a bee.mjs sanity read",
+      "seeded-mutation run reports a diff and the harness self-check treats missing detection as failure",
+      "harness asserts resolved store root equals the temp root before every command; temp roots live outside the repo tree with their own .bee/onboarding.json and no .git",
+      "each leg's temp-root path is rewritten to <ROOT> pre-compare (declared allowlist member)"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-parity/",
+        "substantive": "runner crate with store-tree differ, declared volatile allowlist (timestamps, pids, tokens, root-path rewrite), and the fixed whole-path exclusion set {.bee/logs/**, .bee/cache/**, .bee/tmp/**}"
+      }
+    ],
+    "key_links": [
+      "harness invokes the real .bee/bin/bee.mjs by absolute path; queen-bee side pluggable for later slices",
+      "fixture store produced by queen-bench generator (rust-port-2)"
+    ],
+    "prohibitions": [
+      "No blanket timestamp/whitespace normalization — declared allowlist plus the fixed exclusion set only",
+      "Harness never reads or writes the repo's live .bee/ store",
+      "No edits to crates/Cargo.toml (members final per rust-port-1)"
+    ]
+  },
+  "verify": "cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --self-check",
+  "trace": {
+    "worker": "Jerry",
+    "outcome": "D7a CLI parity harness (crate bee-parity, std-only): std::process-based runner spawns node .bee/bin/bee.mjs status --json against cloned fixture roots; hand-rolled JSON-scoped normalizer applies the declared allowlist (root-path rewrite to <ROOT>, ISO-8601 timestamps, keyed pid/token values) without any blanket normalization; tree differ enforces the fixed exclusion set {.bee/logs/**,.bee/cache/**,.bee/tmp/**} and content-diffs everything else; rootsafety module asserts structural root safety (onboarding.json present, no .git, outside repo tree) before every invocation plus an empirical fixture-signature check on the resulting status output. --self-check clones one queen-bench-generated fixture into three temp roots outside the repo tree: leg A vs leg B (unmutated) must diff clean with both exiting 0 (self-parity), leg A vs leg C (one deliberate seeded mutation to state.json's phase) must diff non-clean or the self-check itself fails (red-first proof of detection power). Verified PASS, exit 0, all temp roots cleaned up.",
+    "files_changed": [
+      "crates/bee-parity/src/main.rs",
+      "crates/bee-parity/src/normalize.rs",
+      "crates/bee-parity/src/differ.rs",
+      "crates/bee-parity/src/clone.rs",
+      "crates/bee-parity/src/rootsafety.rs",
+      "crates/bee-parity/src/mutate.rs",
+      "crates/bee-parity/src/runner.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T05:36:05.805Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "   Compiling bee-core v0.1.0 (/home/thanhsmind/projects/goglbe/beegog/crates/bee-core)\n   Compiling queen-bee v0.1.0 (/home/thanhsmind/projects/goglbe/beegog/crates/queen-bee)\n    Finished `release` profile [optimized] target(s) in 2.72s\n    Finished `release` profile [optimized] target(s) in 0.01s\n     Running `crates/target/release/bee-parity --self-check`\nbee-parity --self-check: PASS — self-parity (A vs B, `status --json`) zero diff, both exit 0, both legs passed the fixture sanity read; seeded-mutation (A vs C) correctly detected: stdout differs after normalization:\n--- leg A (/tmp/bee-parity-leg-a-1285013-1785044152060072837)\n{\n  \"onboarding\": {\n    \"installed\": true,\n    \"bee_version\": \"1.18.2\",\n    \"plugin_version\": \"1.18.2\",\n    \"drift\": false\n  },\n  \"source\": {\n    \"kind\": \"unknown\",\n    \"root\": null\n  },\n  \"phase\": \"idle\",\n  \"mode\": null,\n  \"feature\": null,\n  \"gates\": {\n    \"context\": false,\n    \"shape\": false,\n    \"execution\": false,\n    \"review\": false\n  },\n  \"gate_bypass\": false,\n  \"gate_bypass_level\": \"off\",\n  \"models\": {\n    \"claude\": {\n      \"extraction\": \"haiku\",\n      \"generation\": \"sonnet\",\n      \"review\": \"opus\"\n    },\n    \"codex\": {\n      \"extraction\": null,\n      \"generation\": null,\n      \"review\": null\n    }\n  },\n  \"tier_mix\": {\n    \"counts\": {\n      \"extraction\": 0,\n      \"generation\": 0,\n      \"ceiling\": 0,\n      \"untiered\": 250\n    },\n    \"tiered\": 0,\n    \"ceilingShare\": 0\n  },\n  \"ceiling_scarcity\": null,\n  \"handoff\": null,\n  \"cells\": {\n    \"open\": 0,\n    \"claimed\": 0,\n    \"capped\": 250,\n    \"blocked\": 0,\n    \"archived\": {\n      \"capped\": 0,\n      \"dropped\": 0,\n      \"total\": 0\n    }\n  },\n  \"lanes\": {\n    \"active\": null,\n    \"counts\": {},\n    \"ids\": []\n  },\n  \"review\": {\n    \"candidates\": {\n      \"total\": 0,\n      \"unreviewed\": 0,\n      \"in_review\": 0,\n      \"reviewed\": 0,\n      \"stale\": 0\n    },\n    \"open_sessions\": [],\n    \"high_risk_unreviewed\": 0\n  },\n  \"recovery\": {\n    \"candidates\": [],\n    \"roots\": [\n      {\n        \"runtime\": \"claude\",\n        \"path\": \"/home/thanhsmind/.claude/projects\",\n        \"scanned\": true,\n        \"reason\": null\n      }\n    ]\n  },\n  \"scribing_debt\": {\n    \"count\": 0,\n    \"cells\": [],\n    \"orphaned\": {\n      \"count\": 0,\n      \"features\": []\n    }\n  },\n  \"capture_queue\": {\n    \"count\": 0,\n    \"ids\": []\n  },\n  \"pbi\": null,\n  \"commands\": {},\n  \"active_reservations\": [],\n  \"workers\": [],\n  \"critical_patterns_present\": false,\n  \"recent_decisions\": [\n    {\n      \"id\": \"fixture-decision-001149\",\n      \"date\": \"<TS>\",\n      \"decision\": \"«Fixture decision line generated by queen-bench for the D5 host-real benchmark store. This text pads the record to a size representative of the live repo's decisions.jsonl so the bench never runs against a synthetic small-store fiction.»\"\n    },\n    {\n      \"id\": \"fixture-decision-001148\",\n      \"date\": \"<TS>\",\n      \"decision\": \"«Fixture decision line generated by queen-bench for the D5 host-real benchmark store. This text pads the record to a size representative of the live repo's decisions.jsonl so the bench never runs against a synthetic small-store fiction.»\"\n    },\n    {\n      \"id\": \"fixture-decision-001147\",\n      \"date\": \"<TS>\",\n      \"decision\": \"«Fixture decision line generated by queen-bench for the D5 host-real benchmark store. This text pads the record to a size representative of the live repo's decisions.jsonl so the bench never runs against a synthetic small-store fiction.»\"\n    }\n  ],\n  \"staleness_warnings\": [\n    \"No standard commands recorded — capture the host project's setup/start/test/verify into .bee/config.json `commands` so sessions can run the CI status gate.\"\n  ],\n  \"recommended_next\": \"No active bee work.\"\n}\n\n--- leg B (/tmp/bee-parity-leg-c-mutated-1285013-1785044152060073931)\n{\n  \"onboarding\": {\n    \"installed\": true,\n    \"bee_version\": \"1.18.2\",\n    \"plugin_version\": \"1.18.2\",\n    \"drift\": false\n  },\n  \"source\": {\n    \"kind\": \"unknown\",\n    \"root\": null\n  },\n  \"phase\": \"bee-parity-seeded-mutation\",\n  \"mode\": null,\n  \"feature\": null,\n  \"gates\": {\n    \"context\": false,\n    \"shape\": false,\n    \"execution\": false,\n    \"review\": false\n  },\n  \"gate_bypass\": false,\n  \"gate_bypass_level\": \"off\",\n  \"models\": {\n    \"claude\": {\n      \"extraction\": \"haiku\",\n      \"generation\": \"sonnet\",\n      \"review\": \"opus\"\n    },\n    \"codex\": {\n      \"extraction\": null,\n      \"generation\": null,\n      \"review\": null\n    }\n  },\n  \"tier_mix\": {\n    \"counts\": {\n      \"extraction\": 0,\n      \"generation\": 0,\n      \"ceiling\": 0,\n      \"untiered\": 250\n    },\n    \"tiered\": 0,\n    \"ceilingShare\": 0\n  },\n  \"ceiling_scarcity\": null,\n  \"handoff\": null,\n  \"cells\": {\n    \"open\": 0,\n    \"claimed\": 0,\n    \"capped\": 250,\n    \"blocked\": 0,\n    \"archived\": {\n      \"capped\": 0,\n      \"dropped\": 0,\n      \"total\": 0\n    }\n  },\n  \"lanes\": {\n    \"active\": null,\n    \"counts\": {},\n    \"ids\": []\n  },\n  \"review\": {\n    \"candidates\": {\n      \"total\": 0,\n      \"unreviewed\": 0,\n      \"in_review\": 0,\n      \"reviewed\": 0,\n      \"stale\": 0\n    },\n    \"open_sessions\": [],\n    \"high_risk_unreviewed\": 0\n  },\n  \"recovery\": {\n    \"candidates\": [],\n    \"roots\": [\n      {\n        \"runtime\": \"claude\",\n        \"path\": \"/home/thanhsmind/.claude/projects\",\n        \"scanned\": true,\n        \"reason\": null\n      }\n    ]\n  },\n  \"scribing_debt\": {\n    \"count\": 0,\n    \"cells\": [],\n    \"orphaned\": {\n      \"count\": 0,\n      \"features\": []\n    }\n  },\n  \"capture_queue\": {\n    \"count\": 0,\n    \"ids\": []\n  },\n  \"pbi\": null,\n  \"commands\": {},\n  \"active_reservations\": [],\n  \"workers\": [],\n  \"critical_patterns_present\": false,\n  \"recent_decisions\": [\n    {\n      \"id\": \"fixture-decision-001149\",\n      \"date\": \"<TS>\",\n      \"decision\": \"«Fixture decision line generated by queen-bench for the D5 host-real benchmark store. This text pads the record to a size representative of the live repo's decisions.jsonl so the bench never runs against a synthetic small-store fiction.»\"\n    },\n    {\n      \"id\": \"fixture-decision-001148\",\n      \"date\": \"<TS>\",\n      \"decision\": \"«Fixture decision line generated by queen-bench for the D5 host-real benchmark store. This text pads the record to a size representative of the live repo's decisions.jsonl so the bench never runs against a synthetic small-store fiction.»\"\n    },\n    {\n      \"id\": \"fixture-decision-001147\",\n      \"date\": \"<TS>\",\n      \"decision\": \"«Fixture decision line generated by queen-bench for the D5 host-real benchmark store. This text pads the record to a size representative of the live repo's decisions.jsonl so the bench never runs against a synthetic small-store fiction.»\"\n    }\n  ],\n  \"staleness_warnings\": [\n    \"No standard commands recorded — capture the host project's setup/start/test/verify into .bee/config.json `commands` so sessions can run the CI status gate.\",\n    \"Unknown phase \\\"bee-parity-seeded-mutation\\\" — not in the enum (idle, exploring, planning, validating, swarming, reviewing, scribing, compounding, grooming; terminal alias: compounding-complete). Set state.phase to a valid value (idle at feature close); invented phases break machine-checkable handoffs (decision 0004).\"\n  ],\n  \"recommended_next\": \"No active bee work.\"\n}\n | .bee/state.json differs after normalization\nEXIT:0\n",
+    "verify_passed": true,
+    "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+    "claimed_at": "2026-07-26T05:23:53.543Z",
+    "verify_command": "cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --self-check",
+    "verified_at": "2026-07-26T05:35:56.154Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T05:35:56.155Z",
+        "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+        "claimed_at": "2026-07-26T05:27:46.633Z",
+        "acquired_at": "2026-07-26T05:23:53.542Z",
+        "worker": "Jerry",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}
