@@ -16,17 +16,19 @@
 //!   sanity read.
 //! - `--check [--budget-ms N] [--status-budget-ms N] [--bin-path PATH]
 //!   [--runs N]` — the spawn-inclusive p95 gates, over >= 50 runs each.
-//!   Budgets are PER COMMAND (D5 supersession e119fc8b), never one shared
-//!   number:
+//!   Budgets are PER COMMAND (D5 supersession e119fc8b, settled by
+//!   rust-port-24 as decision 58ad0b5c), never one shared number:
 //!     * `queen-bee ping` — the spawn floor — keeps D5's original 5 ms dev
 //!       budget (`--budget-ms`; CI perf smoke passes `--budget-ms 15`).
-//!     * `queen-bee status --json` carries its own 70 ms dev budget
-//!       (`--status-budget-ms`; CI perf smoke 210 ms, keeping D5's 3x
-//!       runner-variance ratio). This is an INTERIM REGRESSION GUARD, not
-//!       the goal: the mandatory follow-up (per-invocation store-read
-//!       memoization inside bee-core) targets <= 20 ms, at which point the
-//!       budget tightens to 25 ms. Status never returns to 5 ms — the
-//!       reasons are measured and recorded in e119fc8b.
+//!     * `queen-bee status --json` carries its own 30 ms dev budget
+//!       (`--status-budget-ms`; CI perf smoke 90 ms, keeping D5's 3x
+//!       runner-variance ratio). rust-port-23's per-invocation read dedup
+//!       took warm p95 from ~52.6 ms (e119fc8b's interim 70 ms guard) to a
+//!       measured ~24.5 ms — above e119fc8b's 20 ms follow-up target, so
+//!       decision 58ad0b5c applies the headroom rule to the measured number
+//!       (24.467 ms canonical -> round up to 25, +5 ms headroom = 30 ms)
+//!       rather than the unmet 25 ms promise. Status never returns to 5 ms —
+//!       the measurements and the per-block profile are recorded in 58ad0b5c.
 //!   Prints a JSON report naming which budget each gate was measured
 //!   against, and exits non-zero if any gate's p95 >= its own budget.
 
@@ -182,11 +184,12 @@ fn default_bin_path() -> Option<PathBuf> {
 /// one command the 5 ms number still describes honestly.
 const PING_BUDGET_MS: f64 = 5.0;
 
-/// The `status` command's own budget (supersession e119fc8b). Deliberately
-/// a SEPARATE constant from [`PING_BUDGET_MS`]: folding both gates onto one
-/// `--budget-ms` would mean either loosening the spawn floor to 70 ms or
-/// leaving `status` permanently red, and neither is a gate.
-const STATUS_BUDGET_MS: f64 = 70.0;
+/// The `status` command's own budget (supersession e119fc8b, settled at
+/// this value by decision 58ad0b5c after rust-port-23's read dedup).
+/// Deliberately a SEPARATE constant from [`PING_BUDGET_MS`]: folding both
+/// gates onto one `--budget-ms` would mean either loosening the spawn floor
+/// to 30 ms or leaving `status` permanently red, and neither is a gate.
+const STATUS_BUDGET_MS: f64 = 30.0;
 
 fn cmd_check(args: &[String]) -> ExitCode {
     let mut budget_ms: f64 = PING_BUDGET_MS;
@@ -314,14 +317,15 @@ struct StatusCheckReport {
 
 impl StatusCheckReport {
     /// The gate is the WARM p95 against `status`'s OWN budget (supersession
-    /// e119fc8b), never the ping floor's. The cold percentiles are emitted
+    /// e119fc8b, settled at 30ms by decision 58ad0b5c), never the ping
+    /// floor's. The cold percentiles are emitted
     /// beside it unconditionally (decision a7d7b3d5 / truth 7), so a reader
     /// can never mistake the favourable number for the whole story — even
     /// though, on this fixture, the two are indistinguishable and store I/O
     /// rather than the review-git cache is what dominates.
     fn to_json_fields(&self) -> String {
         format!(
-            "\"queen_bee_status\":{{\"command\":\"queen-bee status --json\",\"budget_ms\":{},\"budget_source\":\"D5 supersession e119fc8b (interim regression guard; dedup follow-up targets <=20ms, then 25ms)\",\"fixture_root\":\"{}\",\"gated_on\":\"{}\",\"cache_artifact\":\".bee/runtime/review-git-cache.json\",\"pass\":{},\"{}_cache\":{{{}}},\"{}_cache\":{{{}}},\"node_status_baseline\":{{\"command\":\"node .bee/bin/bee.mjs status --json\",{}}}}}",
+            "\"queen_bee_status\":{{\"command\":\"queen-bee status --json\",\"budget_ms\":{},\"budget_source\":\"D5 supersession e119fc8b, settled by decision 58ad0b5c (rust-port-24) after the rust-port-23 read dedup: measured warm p95 ~24.5ms, headroom rule -> 30ms\",\"fixture_root\":\"{}\",\"gated_on\":\"{}\",\"cache_artifact\":\".bee/runtime/review-git-cache.json\",\"pass\":{},\"{}_cache\":{{{}}},\"{}_cache\":{{{}}},\"node_status_baseline\":{{\"command\":\"node .bee/bin/bee.mjs status --json\",{}}}}}",
             self.budget_ms,
             json_escape(&self.fixture_root.display().to_string()),
             bench::CacheState::Warm.label(),
@@ -341,9 +345,9 @@ impl StatusCheckReport {
 /// runs, in BOTH cache states, with the same command's node cost recorded
 /// alongside.
 ///
-/// `budget_ms` here is the STATUS budget (supersession e119fc8b), which is
-/// not D5's 5 ms spawn-floor number — that one still gates `ping` and is
-/// passed separately by [`run_check`].
+/// `budget_ms` here is the STATUS budget (supersession e119fc8b, settled at
+/// 30ms by decision 58ad0b5c), which is not D5's 5 ms spawn-floor number —
+/// that one still gates `ping` and is passed separately by [`run_check`].
 fn run_status_check(bin_path: &Path, budget_ms: f64, runs: usize) -> Result<StatusCheckReport, String> {
     let repo_root = repo_root();
     let bee_mjs = repo_root.join(".bee").join("bin").join("bee.mjs");

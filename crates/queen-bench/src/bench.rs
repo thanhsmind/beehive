@@ -124,17 +124,20 @@ pub fn review_git_cache_path(root: &Path) -> std::path::PathBuf {
 ///
 /// The status gate is defined against the WARM number — the steady state
 /// of any real session, where the cache survives between invocations —
-/// against `status`'s OWN budget of 70 ms (D5 supersession e119fc8b), NOT
-/// D5's original 5 ms figure, which now describes only the `ping` spawn
-/// floor. The cold number rides beside it, always printed, never gated on.
+/// against `status`'s OWN budget, 30 ms as of decision 58ad0b5c
+/// (rust-port-24, superseding e119fc8b's 70 ms interim guard after the
+/// rust-port-23 read dedup), NOT D5's original 5 ms figure, which now
+/// describes only the `ping` spawn floor. The cold number rides beside it,
+/// always printed, never gated on.
 ///
-/// Secondary finding recorded with that supersession: on the PINNED
-/// fixture (60 review candidates over 50 commits) cold and warm are
-/// indistinguishable — store I/O dominates the status path, not this
-/// cache. a7d7b3d5's ~10 ms delta is real on the live repo but is not
-/// observable at this fixture's size, which is precisely why both series
-/// stay reported unconditionally rather than being collapsed to whichever
-/// one happens to look better.
+/// Secondary finding recorded with e119fc8b and reconfirmed by 58ad0b5c: on
+/// the PINNED fixture (60 review candidates over 50 commits) cold and warm
+/// remain indistinguishable — store I/O (now deduplicated per rust-port-23,
+/// but still dominated by transcript and cell-directory scanning) is what
+/// the status path costs, not this cache. a7d7b3d5's ~10 ms delta is real
+/// on the live repo but is not observable at this fixture's size, which is
+/// precisely why both series stay reported unconditionally rather than
+/// being collapsed to whichever one happens to look better.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheState {
     Cold,
