@@ -9,6 +9,17 @@ path = "src/lib.rs"
 
 [dependencies]
 getrandom = "0.4.3"
+# rust-port-14 (D5 headline: ZERO subprocess on the status path).
+# `default-features = false` is load-bearing, not tidiness: gix's default set
+# pulls `extras` (worktree mutation, status, dirwalk, credentials) and the
+# network transports drag curl/openssl — a C dependency that is exactly what
+# approach.md:19 rejected libgit2 for (musl static builds, D8). The two
+# features below are the minimum for the only two git questions the review
+# derivation asks: `revision` supplies gix-revision/merge_base (the
+# `merge-base --is-ancestor` answer) and `sha1` supplies the object-hash
+# backend every read needs. No network feature is enabled at all — this crate
+# can never open a connection.
+gix = { version = "0.86", default-features = false, features = ["revision", "sha1"] }
 regex-lite = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -21,6 +21,7 @@ pub mod jsdate;
 pub mod lock;
 pub mod registry;
 pub mod reservations;
+pub mod reviews;
 pub mod state;
 pub mod tokenize;
 pub mod validate_args;
