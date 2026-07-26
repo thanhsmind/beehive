@@ -443,14 +443,14 @@ for (const { file, gate, tokens } of GATE_SKILLS) {
     }
   }
 
-  // (g) D3/D4: AGENTS.block.md critical rule 9 ("Lanes scale ceremony, never
+  // (g) D3/D4: AGENTS.block.md critical rule 8 ("Lanes scale ceremony, never
   // memory") must explicitly tie the tiny/small no-plan.md shapes to D3/D4,
   // so the scribing-capture obligation is legible even when a lane produced
   // no plan.md at all.
   if (!agentsBlockText.includes('whether or not the lane produced a `plan.md` (D3/D4)')) {
-    fail('packages/bee/AGENTS.block.md: critical rule 9 missing the D3/D4 tie ("whether or not the lane produced a `plan.md` (D3/D4)")');
+    fail('packages/bee/AGENTS.block.md: critical rule 8 missing the D3/D4 tie ("whether or not the lane produced a `plan.md` (D3/D4)")');
   } else {
-    ok('packages/bee/AGENTS.block.md: critical rule 9 ties lanes-scale-ceremony to D3/D4');
+    ok('packages/bee/AGENTS.block.md: critical rule 8 ties lanes-scale-ceremony to D3/D4');
   }
 }
 

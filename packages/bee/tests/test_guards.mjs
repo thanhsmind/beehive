@@ -51,7 +51,7 @@ import { readJson, writeJsonAtomic } from '../lib/fsutil.mjs';
 // run_verify.mjs already scrubs all three vars for every child suite it
 // spawns; deleting BEE_AGENT_NAME here at BOOTSTRAP means a bare
 // `node skills/.../test_guards.mjs`, run directly under the very
-// `BEE_AGENT_NAME=<name>` prefix AGENTS.md critical rule 5 mandates for
+// `BEE_AGENT_NAME=<name>` prefix AGENTS.md critical rule 4 mandates for
 // write-heavy commands, is equally hermetic instead of leaking that name
 // into checkWrite's cross-session hold checks and turning "the acting
 // session's own hold must never block its own write" red. The later

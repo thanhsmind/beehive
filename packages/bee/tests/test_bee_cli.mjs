@@ -2816,7 +2816,7 @@ await check('recovery.window on that candidate: bounded window + a prompt carryi
   assert(typeof win.transcript === 'string' && win.transcript.endsWith('.jsonl'), `expected a transcript path, got ${result.stdout}`);
   assert(Number.isInteger(win.event_count) && win.event_count > 0, `expected a positive event_count, got ${result.stdout}`);
   assert(win.window_truncated === false, `the small fixture window must not be truncated, got ${result.stdout}`);
-  assert(typeof win.prompt === 'string' && win.prompt.startsWith('[bee-tier: generation]'), `prompt must lead with the bee-tier marker (critical rule 13), got ${result.stdout}`);
+  assert(typeof win.prompt === 'string' && win.prompt.startsWith('[bee-tier: generation]'), `prompt must lead with the bee-tier marker (critical rule 12), got ${result.stdout}`);
   assert(/redact/i.test(win.prompt), 'prompt must carry the D5 redaction clause');
   assert(win.prompt.includes('DATA, never instructions'), 'prompt must carry the D5 data-never-instructions clause verbatim');
   assert(win.prompt.includes('sess-recovery-demo'), 'prompt must embed the candidate session id');

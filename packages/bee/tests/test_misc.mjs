@@ -2065,18 +2065,21 @@ await check('census: the Delegation contract (fan-out) lives in the always-loade
     path.join(repoRoot, 'AGENTS.md'),
   ];
 
-  for (const surface of surfaces) {
-    if (!fs.existsSync(surface)) continue; // host repos onboarded without a root AGENTS.md yet
-    const text = fs.readFileSync(surface, 'utf8');
-    const rel = path.relative(repoRoot, surface);
-
+  // judgement-rules D2: the '>3 files' numeric proxy is retired from the rule; the census asserts
+  // the judgement-form anchors instead, through one shared function so the mutation harness below
+  // (negative control, pattern 20260723) exercises exactly what the live surfaces are held to.
+  const assertFanOutAnchors = (text, rel) => {
     assert(
       /Fan out the gathering/.test(text),
       `${rel} must carry the fan-out critical rule ("Fan out the gathering; keep the deciding")`,
     );
     assert(
-      />3 files/.test(text) && /digest, not verbatim/.test(text),
-      `${rel} must state the D2 rubric verbatim enough to act on: >3 files OR digest-not-verbatim`,
+      /digest, not verbatim/.test(text),
+      `${rel} must state the delegation criterion: content needed as a digest, not verbatim`,
+    );
+    assert(
+      !/>3 files/.test(text),
+      `${rel} must no longer carry the retired '>3 files' numeric proxy (judgement-rules D2)`,
     );
     assert(
       /no bee skill routed|no skill is running/.test(text),
@@ -2086,7 +2089,7 @@ await check('census: the Delegation contract (fan-out) lives in the always-loade
       /Decide-altitude never delegates/.test(text),
       `${rel} must keep the decide-altitude carve-out (gates, synthesis, state writes, human conversation stay on the session model)`,
     );
-    // An order and its transport travel together: rule 13 tells the agent to dispatch in turns
+    // An order and its transport travel together: rule 12 tells the agent to dispatch in turns
     // where no skill loads references/routing-and-contracts.md, so the HOW (decision 0023's
     // explicit tier) must be in the rule itself — otherwise every such dispatch is born bare and
     // bee-model-guard denies it before the agent can learn why.
@@ -2098,7 +2101,48 @@ await check('census: the Delegation contract (fan-out) lives in the always-loade
       /anchored/i.test(text) && /first/i.test(text),
       `${rel} must say the marker is anchored — first thing in the prompt/description, not buried mid-text`,
     );
+    assert(
+      /never zero \*execution\* workers/.test(text),
+      `${rel} must keep the AO14 execution-worker rider in the fan-out rule`,
+    );
+  };
+
+  let fanOutTemplate = null;
+  for (const surface of surfaces) {
+    if (!fs.existsSync(surface)) continue; // host repos onboarded without a root AGENTS.md yet
+    const text = fs.readFileSync(surface, 'utf8');
+    assertFanOutAnchors(text, path.relative(repoRoot, surface));
+    if (fanOutTemplate === null) fanOutTemplate = text;
   }
+  assert(fanOutTemplate !== null, 'fan-out census found no surface to check');
+
+  // Negative control (judgement-rules D2, pattern 20260723): a fixture violating each kept anchor —
+  // or resurrecting the retired numeric proxy — must FAIL the reshaped census.
+  const fanOutMutationRows = [
+    ['fan-out title dropped', /Fan out the gathering/, 'Gather inline when convenient'],
+    ['digest criterion dropped', /digest, not verbatim/, 'verbatim, never a digest'],
+    ['no-skill reach dropped', /no skill is running/, 'only while a skill is running'],
+    ['decide-altitude carve-out dropped', /Decide-altitude never delegates/, 'Decide-altitude may delegate'],
+    ['tier marker transport dropped', /\[bee-tier:/, '[no-tier:'],
+    ['model param transport dropped', /`model`/, '`agent`'],
+    ['anchored-first placement dropped', /anchored/, 'optional'],
+    ['AO14 execution rider dropped', /never zero \*execution\* workers/, 'zero *execution* workers is fine'],
+  ];
+  const expectFanOutReject = (mutated, name) => {
+    let rejected = false;
+    try {
+      assertFanOutAnchors(mutated, `mutation: ${name}`);
+    } catch {
+      rejected = true;
+    }
+    assert(rejected, `fan-out census must reject mutation: ${name}`);
+  };
+  for (const [name, pattern, replacement] of fanOutMutationRows) {
+    const mutated = fanOutTemplate.replace(pattern, replacement);
+    assert(mutated !== fanOutTemplate, `fan-out mutation fixture must alter the surface: ${name}`);
+    expectFanOutReject(mutated, name);
+  }
+  expectFanOutReject(`${fanOutTemplate}\ndelegate when a step needs reading >3 files`, 'numeric proxy resurrected');
 });
 
 await check('census: AO14 execution-worker class — the Delegation contract, bee-hive lane table, and bee-swarming carry it, and no canonical prose still asserts tiny/small in-session solo implementation', async () => {
@@ -2144,7 +2188,7 @@ await check('census: AO14 execution-worker class — the Delegation contract, be
   const agentsBlockText = fs.readFileSync(agentsBlockPath, 'utf8');
   assert(
     /never zero \*execution\* workers/.test(agentsBlockText),
-    'AGENTS.block.md critical rule 13 parenthetical must carry the AO14 execution-worker rider',
+    'AGENTS.block.md critical rule 12 parenthetical must carry the AO14 execution-worker rider',
   );
 });
 
@@ -2153,15 +2197,12 @@ await check('census: native Codex empty waits use one localized, ordered, mutati
   const repoRoot = findRepoRoot(packagesBeeRoot);
   if (!repoRoot) return; // no repo context to check against (bare checkout)
 
+  // judgement-rules D2/D3: the full ordered-wait contract no longer rides
+  // AGENTS.block.md / root AGENTS.md — the standing sheet carries only an
+  // unnumbered pointer line naming the rule and its home (asserted below,
+  // with its own negative control); the contract itself stays census-pinned
+  // on routing-and-contracts.md and the two bee-swarming copies.
   const writableContractSurfaces = [
-    {
-      path: path.join(repoRoot, 'packages', 'bee', 'AGENTS.block.md'),
-      block: /15\. \*\*Native Codex empty waits require a progress interval\.\*\*[^\n]+/,
-    },
-    {
-      path: path.join(repoRoot, 'AGENTS.md'),
-      block: /15\. \*\*Native Codex empty waits require a progress interval\.\*\*[^\n]+/,
-    },
     // D1 (packages-restructure): skills are instruction-only now - the
     // installed .claude/skills/bee-hive projection no longer carries a
     // packages/bee/AGENTS.block.md copy at all (that content lives ONLY at the
@@ -2241,12 +2282,56 @@ await check('census: native Codex empty waits use one localized, ordered, mutati
     assert(ordered.every((position, index) => index === 0 || position > ordered[index - 1]), `${rel} must order action -> completion handling -> liveness -> commentary -> later wait`);
   };
 
-  const writableContracts = writableContractSurfaces.map((surface) => {
-    const rel = path.relative(repoRoot, surface.path);
-    const contract = extract(surface);
-    assertOrderedWaitContract(contract, rel);
-    return contract;
-  });
+  for (const surface of writableContractSurfaces) {
+    assertOrderedWaitContract(extract(surface), path.relative(repoRoot, surface.path));
+  }
+
+  // judgement-rules D3: the standing sheet (template + rendered root) carries an
+  // unnumbered pointer line naming the ordered-wait rule and its home.
+  const assertNativeWaitPointer = (text, rel) => {
+    assert(
+      /\*\*Native Codex empty waits require a progress interval\*\*/.test(text),
+      `${rel} must carry the native-wait pointer line naming the rule (judgement-rules D3)`,
+    );
+    assert(
+      /Native Codex empty waits require a progress interval[^\n]*routing-and-contracts\.md/.test(text),
+      `${rel} pointer line must name the rule's home (bee-hive → references/routing-and-contracts.md)`,
+    );
+    assert(
+      !/\d+\.\s+\*\*Native Codex empty waits/.test(text),
+      `${rel} must keep the native-wait pointer unnumbered — Critical rules stay at exactly 14 (judgement-rules D1)`,
+    );
+  };
+  const pointerSurfaces = [
+    path.join(repoRoot, 'packages', 'bee', 'AGENTS.block.md'),
+    path.join(repoRoot, 'AGENTS.md'),
+  ];
+  let pointerTemplate = null;
+  for (const surface of pointerSurfaces) {
+    if (!fs.existsSync(surface)) continue; // host repos onboarded without a root AGENTS.md yet
+    const text = fs.readFileSync(surface, 'utf8');
+    assertNativeWaitPointer(text, path.relative(repoRoot, surface));
+    if (pointerTemplate === null) pointerTemplate = text;
+  }
+  assert(pointerTemplate !== null, 'native-wait pointer census found no surface to check');
+
+  // Negative control (pattern 20260723): a fixture missing the pointer line, or numbering it
+  // back into the rule list as a 15th item, must FAIL the reshaped census.
+  const pointerMutations = [
+    ['pointer line deleted', (text) => text.replace(/[^\n]*\*\*Native Codex empty waits require a progress interval\*\*[^\n]*\n/, '')],
+    ['pointer numbered as rule 15', (text) => text.replace('**Native Codex empty waits require a progress interval**', '15. **Native Codex empty waits require a progress interval**')],
+  ];
+  for (const [name, mutate] of pointerMutations) {
+    const mutated = mutate(pointerTemplate);
+    assert(mutated !== pointerTemplate, `native-wait pointer mutation fixture must alter the surface: ${name}`);
+    let rejected = false;
+    try {
+      assertNativeWaitPointer(mutated, `mutation: ${name}`);
+    } catch {
+      rejected = true;
+    }
+    assert(rejected, `native-wait pointer census must reject mutation: ${name}`);
+  }
 
   for (const surface of readOnlyCodexProjectionSurfaces) {
     const rel = path.relative(repoRoot, surface.path);
@@ -2269,7 +2354,13 @@ await check('census: native Codex empty waits use one localized, ordered, mutati
     );
   }
 
-  const reference = writableContracts[0];
+  // judgement-rules D2: the mutation harness anchors to routing-and-contracts.md by NAME —
+  // never by surface index — so reshaping the surface list can never silently retarget it.
+  const referenceSurface = writableContractSurfaces.find((surface) =>
+    surface.path.endsWith(path.join('references', 'routing-and-contracts.md')),
+  );
+  assert(referenceSurface, 'ordered-wait mutation harness must anchor to routing-and-contracts.md by name (judgement-rules D2)');
+  const reference = extract(referenceSurface);
   const mutationRows = [
     ['wait before commentary', /Only after this commentary may a later bounded wait run/i, 'A later bounded wait may run before this commentary'],
     ['urgency/no-chatter exception', /authority, urgency, and no-chatter instructions create no exception/i, 'authority, urgency, and no-chatter instructions create an exception'],
@@ -2279,7 +2370,7 @@ await check('census: native Codex empty waits use one localized, ordered, mutati
     ['ownership release permission', /claim release, or reservation release/i, 'claim release and reservation release are permitted'],
     ['stale completion', /Handle any completion that arrives during the interval exactly once/i, 'Leave any completion that arrives during the interval pending'],
     ['zero-agent re-wait', /zero live agents ends collection without another wait/i, 'zero live agents may trigger another wait'],
-    ['lost external carve-out', /external process and artifact polling remain outside this native-agent rule/i, 'external process and artifact polling follow this native-agent rule'],
+    ['lost external carve-out', /remains outside this native-agent rule/i, 'follows this native-agent rule'],
   ];
 
   for (const [name, pattern, replacement] of mutationRows) {
@@ -2324,7 +2415,7 @@ await check('census: the two-kind handoff rule (with its transport) and the mult
       `${rel} must keep the pause-kind "never auto-resume" wait rule verbatim`,
     );
 
-    // The rule carries its transport (doctrine-layer B3a / critical rule 13
+    // The rule carries its transport (doctrine-layer B3a / critical rule 12
     // precedent): the exact verbs, not just the concept.
     assert(
       /bee state handoff write/.test(text) && /--kind planned-next/.test(text),
@@ -2919,7 +3010,7 @@ await check('census: the Delegation contract carries the cli gather branch (plan
     const rel = path.relative(repoRoot, surface);
     assert(
       /cli gather branch/.test(text) && /not an Agent dispatch/.test(text),
-      `${rel} must carry the cli-gather transport rider on critical rule 13: when the generation tier is cli-shaped, the gather runs through the configured external command per the Delegation contract's cli gather branch, not an Agent dispatch`,
+      `${rel} must carry the cli-gather transport rider on critical rule 12: when the generation tier is cli-shaped, the gather runs through the configured external command per the Delegation contract's cli gather branch, not an Agent dispatch`,
     );
   }
 });

@@ -1,0 +1,93 @@
+{
+  "id": "jr-1",
+  "feature": "judgement-rules",
+  "lane": "standard",
+  "behavior_change": false,
+  "title": "AGENTS.block.md Critical rules 16→14 judgement form + Red flags deleted + census lockstep (judgement-rules D1/D2/D3)",
+  "action": "Per judgement-rules D1-D3 (decisions 5f0147ff/72a617dd/d745a8e4 trong .bee/decisions.jsonl — cite, không reinterpret). Plan: docs/history/judgement-rules/plan.md ## Approach (rev 2) — bản 14-rule CHƯA được viết sẵn, worker tự author từ các bullet Approach + 2 decision D1/D2; map số cũ→mới trong plan là AUTHORITATIVE, giữ nguyên thứ tự tương đối, ghi map vào trace lúc cap. CHECKLIST THEO THỨ TỰ (không đảo — đảo tạo red trung gian): (A) packages/bee/AGENTS.block.md viết lại '## Critical rules' 16→14 (~450 từ): giữ near-verbatim old 1/4+5/7/8/10; rút gọn+pointer old 2/3/14/16; judgement old 6 (bỏ '65%')/9 (GIỮ literal 'whether or not the lane produced a `plan.md` (D3/D4)')/11 (một câu style)/13 (bỏ '>3 files' + narrative; GIỮ anchors: 'Fan out the gathering; keep the deciding', 'digest, not verbatim', 'Decide-altitude never delegates', '[bee-tier:' + `model` + anchored/first, 'never zero *execution* workers', 'no skill is running', VÀ hai literal cli-gather 'cli gather branch' + 'not an Agent dispatch'); hybrid old 12 (giữ 'an unblocked write is not an approved write', cắt chuyện c2c46488); old 15 → MỘT dòng ĐỨNG RIÊNG KHÔNG ĐÁNH SỐ ngay dưới rule 14, nêu tên rule ordered-wait + home (bee-hive → references/routing-and-contracts.md). Xoá section '## Red flags — stop and re-route'. Intra-block cite renumber ĐÚNG HAI CHỖ: rule 14 'as rule 12'→11 và Guardrails :81 'see critical rule 12'→11. HAI cite 'Full rule: `bee-hive` skill, critical rule 10/11' GIỮ NGUYÊN BYTE — chúng trỏ danh sách hive-law của bee-hive SKILL.md, không theo số AGENTS. GIỮ NGUYÊN: Startup, chain diagram ('on user request: `bee-reviewing'), Working files ('frozen at Gate 2', 'plan.md is opt-in', 'cell is the micro-plan'), Guardrails (ngoài cite :81), Session finish. (B) packages/bee/tests/test_misc.mjs lockstep per D2: census rule-13 (~:2073-2100) — refactor các assert inline thành assertFanOutAnchors(text, rel) + vòng mutationRows soi gương :2273-2295 để CẢ HAI census có mutation harness; bỏ dòng />3 files/, thêm assert anchors mới. Census rule-15 (~:2151-2296): (a) hai entry AGENTS trong writableContractSurfaces bị DROP và biến reference (:2272) thành trỏ ĐÍCH DANH contract routing-and-contracts.md theo TÊN, không bao giờ theo index — cấm xoá mutation block; (b) thêm assert dòng pointer tồn tại trên CẢ AGENTS.block.md + AGENTS.md và nêu đúng home; (c) assertOrderedWaitContract TIẾP TỤC chạy trên routing-and-contracts.md + bee-swarming/SKILL.md + swarming-reference.md; (d) mutationRows cập nhật chứng minh census mới vẫn cắn hai chiều (fixture thiếu pointer rule-15 FAIL, fixture thiếu anchor rule-13 FAIL — pattern 20260723). Census handoff/etiquette + AO14 + cli-gather giữ xanh nhờ literals giữ. (C) Renumber cite số rule trong comment/message: test_misc.mjs (:2089,:2147,:2327,:2922 13→12), packages/bee/tests/test_bee_cli.mjs:2819 (13→12), packages/bee/tests/test_guards.mjs:54 (5→4), scripts/tests/test_gate_bypass_doctrine.mjs:446,451,453 (comment/message 9→8 — assertion literal giữ nguyên). (D) Regen theo thứ tự: node scripts/render_plugin_skill_trees.mjs → node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply → node scripts/release_manifest.mjs --write. Lưu ý: manifest --check sau --write là bookkeeping, KHÔNG tính là bằng chứng trong cap note. files_changed lúc cap gồm đủ root AGENTS.md + .bee/onboarding.json + release-manifest.json.",
+  "must_haves": {
+    "truths": [
+      "AGENTS.block.md ## Critical rules còn đúng 14 rule đánh số 1-14, THỨ TỰ TƯƠNG ĐỐI GIỮ NGUYÊN đúng map plan (map ghi vào cell trace), không rule nào mất invariant lõi liệt kê trong plan.md Approach",
+      "Mọi literal trong danh sách GIỮ của D2 (gồm cả 'cli gather branch' + 'not an Agent dispatch') xuất hiện nguyên văn trên CẢ packages/bee/AGENTS.block.md VÀ root AGENTS.md sau regen",
+      "'>3 files' không còn trong AGENTS.block.md; assertOrderedWaitContract không còn đòi inline trên AGENTS nhưng VẪN chạy đủ trên routing-and-contracts.md + 2 file swarming; reference của mutation harness trỏ theo TÊN không theo index",
+      "Section 'Red flags — stop and re-route' không còn trong AGENTS.block.md lẫn root AGENTS.md",
+      "CẢ HAI census (rule-13 assertFanOutAnchors + rule-15 pointer) có mutation harness và mutationRows chứng minh FAIL trên fixture vi phạm (negative control hai chiều)",
+      "Hai cite 'Full rule: `bee-hive` skill, critical rule 10/11' còn nguyên byte; rule 14 'as rule 12' và Guardrails :81 đã thành 11",
+      "test_agents_budget xanh: byte-parity template↔root + dưới 20KiB hard cap",
+      "Root AGENTS.md CHƯA BAO GIỜ bị sửa tay — chỉ qua onboard --apply"
+    ],
+    "prohibitions": [
+      "không file test mới (mọi row vào suite sẵn có)",
+      "không đổi section Startup/Working files/Session finish; Guardrails chỉ đổi cite :81",
+      "không nới assertion nào mà không có negative control cùng commit; không xoá mutation block",
+      "không sửa tay root AGENTS.md hay bất kỳ mirror nào",
+      "không đánh số dòng pointer old-15 thành rule 15"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only test_misc,test_agents_budget,test_gate_bypass_doctrine,test_doctrine_parity,okf_instructions_fence && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "docs/history/judgement-rules/plan.md",
+    ".bee/decisions.jsonl",
+    "packages/bee/AGENTS.block.md",
+    "packages/bee/tests/test_misc.mjs",
+    "docs/knowledge/areas/doctrine-layer/placement-and-anchoring.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "packages/bee/tests/test_misc.mjs",
+    "packages/bee/tests/test_bee_cli.mjs",
+    "packages/bee/tests/test_guards.mjs",
+    "scripts/tests/test_gate_bypass_doctrine.mjs",
+    "AGENTS.md",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [],
+  "decisions": [
+    "judgement-rules D1",
+    "judgement-rules D2",
+    "judgement-rules D3"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "jr-w1",
+    "outcome": "Critical rules 16->14 judgement form + Red flags deleted + census lockstep with negative controls; map old->new: 1->1,2->2,3->3,4+5->4,6->5,7->6,8->7,9->8,10->9,11->10,12->11,13->12,14->13,15->unnumbered-pointer,16->14",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "packages/bee/tests/test_misc.mjs",
+      "packages/bee/tests/test_bee_cli.mjs",
+      "packages/bee/tests/test_guards.mjs",
+      "scripts/tests/test_gate_bypass_doctrine.mjs",
+      "AGENTS.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T00:46:26.186Z",
+    "behavior_change": false,
+    "verification_evidence": "{\n  \"renumber_map\": {\"1\":\"1\",\"2\":\"2\",\"3\":\"3\",\"4\":\"4\",\"5\":\"4\",\"6\":\"5\",\"7\":\"6\",\"8\":\"7\",\"9\":\"8\",\"10\":\"9\",\"11\":\"10\",\"12\":\"11\",\"13\":\"12\",\"14\":\"13\",\"15\":\"unnumbered pointer line under rule 14 (judgement-rules D3)\",\"16\":\"14\"},\n  \"tests_inspected\": \"test_misc.mjs rule-13 census (fan-out anchors), rule-15 census (ordered-wait surfaces), AO14 rider, cli-gather census; test_gate_bypass_doctrine.mjs pinned literals; test_agents_budget byte-parity+20KiB; test_doctrine_parity\",\n  \"tests_changed\": \"test_misc.mjs: rule-13 census refactored to assertFanOutAnchors + 9-row mutation harness (drops />3 files/, adds anti-resurrection control); rule-15 census: AGENTS surfaces dropped from writableContractSurfaces, assertNativeWaitPointer added on AGENTS.block.md+AGENTS.md with delete/renumber mutations, mutation reference re-anchored to routing-and-contracts.md by NAME, external carve-out row retargeted to its wording\",\n  \"negative_controls\": \"fan-out: 8 replace-rows + 1 resurrection fixture all rejected by assertFanOutAnchors; native-wait pointer: deleted-line and numbered-as-15 fixtures rejected by assertNativeWaitPointer; ordered-wait: 9 mutationRows rejected against routing-and-contracts.md reference (pattern 20260723, two-way)\",\n  \"verification_run\": \"node scripts/run_verify.mjs --only test_misc,test_agents_budget,test_gate_bypass_doctrine,test_doctrine_parity,okf_instructions_fence && node scripts/release_manifest.mjs --check — all 6 suites PASS, manifest 394 files match\"\n}\n",
+    "verify_output": "SCOPED RUN (--only): 6 of 105 runnables selected — full verify still required before close\nPASS    3222ms  packages/bee/tests/test_misc.mjs\nPASS      72ms  scripts/okf_instructions_fence.mjs\nPASS     146ms  scripts/okf_instructions_fence.mjs --selftest\nPASS      37ms  scripts/tests/test_agents_budget.mjs\nPASS      87ms  scripts/tests/test_doctrine_parity.mjs\nPASS      37ms  scripts/tests/test_gate_bypass_doctrine.mjs\n\nPASS run_verify: 6 suite(s), concurrency=5, wall=3223ms\nrelease_manifest --check: 394 file(s) match stored manifest",
+    "verify_passed": true,
+    "claim_session": "e3133e36-4277-45a3-a8eb-87fadbd7181d",
+    "claimed_at": "2026-07-26T00:37:11.493Z",
+    "verify_command": "node scripts/run_verify.mjs --only test_misc,test_agents_budget,test_gate_bypass_doctrine,test_doctrine_parity,okf_instructions_fence && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-26T00:46:00.285Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T00:46:00.286Z",
+        "claim_session": "e3133e36-4277-45a3-a8eb-87fadbd7181d",
+        "claimed_at": "2026-07-26T00:37:11.491Z",
+        "acquired_at": "2026-07-26T00:37:11.491Z",
+        "worker": "jr-w1",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "ceiling"
+}

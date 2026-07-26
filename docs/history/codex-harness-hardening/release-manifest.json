@@ -1410,7 +1410,7 @@
     },
     {
       "path": "packages/bee/AGENTS.block.md",
-      "sha256": "4f93eaca64fb42a91f9f68d51fc6a0d6aaefa634718e078e047a21cdce5eb2c3",
+      "sha256": "bb5c2f834486c66e6f020fde301369974e054f28c3fe5a8aaf9ae3b5a14d2b9e",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/AGENTS.block.md"
@@ -1893,7 +1893,7 @@
     },
     {
       "path": "packages/bee/tests/test_bee_cli.mjs",
-      "sha256": "bb86681311975e393f46da91f866a712243aa8b511a79979d1bfd6fe3da6f8a9",
+      "sha256": "824d5829180c4bf0fc65b3148d285911d0164424cab3ce3972a0788aee478208",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_bee_cli.mjs"
@@ -1977,7 +1977,7 @@
     },
     {
       "path": "packages/bee/tests/test_guards.mjs",
-      "sha256": "beea52c293cab6b6ab0c28bc7913ac0aa342a86b670cc462ac401d51030e4d2c",
+      "sha256": "0f832ca69837563524e45b43f0e918ae8e1a0bd406bee1cb45fed276573f581c",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_guards.mjs"
@@ -2026,7 +2026,7 @@
     },
     {
       "path": "packages/bee/tests/test_misc.mjs",
-      "sha256": "22d6cd7681ee7da59574c54ce0c3d6359e64ae1f61ff89688912b342d2ef1ddd",
+      "sha256": "63e3b0383de5c30662b965fb0eb70ac8fa0c82b5cd4a7c2123d7c2b4aa95fe07",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_misc.mjs"
