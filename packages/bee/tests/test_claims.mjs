@@ -333,6 +333,22 @@ await check('listSessionRecords/isConcurrentMode strict mode (review finding F1,
   assert(isConcurrentMode(missingRoot, { strict: true }) === false, 'strict mode: isConcurrentMode still reads false on a genuinely missing sessions dir');
 });
 
+await check('listSessionRecords strict mode also hardens the PER-RECORD read (delta re-review residual, worktree-concurrency-guard-controlroot-port): a hard error reading one specific session file propagates, not just a hard error listing the directory', async () => {
+  const perRecordRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-claims-strict-perrecord-'));
+  createSession(perRecordRoot, { id: 'readable-sess' });
+  // A session "file" that is actually a DIRECTORY: fs.readFileSync on it
+  // throws a real EISDIR — a genuine hard error on one specific record,
+  // while the directory listing itself (readdirSync) succeeds normally.
+  fs.mkdirSync(sessionPath(perRecordRoot, 'unreadable-sess'));
+
+  const nonStrict = listSessionRecords(perRecordRoot);
+  assert(nonStrict.length === 1 && nonStrict[0].id === 'readable-sess', 'default (non-strict) mode: the unreadable record is silently skipped, the readable one still returns — byte-unchanged for every existing caller');
+  assert(isConcurrentMode(perRecordRoot, { excludeSessionId: 'readable-sess' }) === false, 'default (non-strict) mode: the ONLY other session record is unreadable, so it silently reads as absent -- this is the exact fail-open shape strict mode exists to close');
+
+  assertThrows(() => listSessionRecords(perRecordRoot, { strict: true }), 'EISDIR', 'strict mode: the same real per-record hard error now propagates instead of silently skipping that record');
+  assertThrows(() => isConcurrentMode(perRecordRoot, { strict: true, excludeSessionId: 'readable-sess' }), 'EISDIR', 'strict mode: isConcurrentMode propagates the per-record error rather than concluding "solo" from the one readable record');
+});
+
 await check('claimCellFile: sessionless claim still works solo (nobody else live) — byte-unchanged, never marked adopted', async () => {
   // 'solo-sess' is still live from the row above (never staled there) — stale
   // every session record here so this actually starts from a genuine solo

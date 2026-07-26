@@ -101,6 +101,14 @@ export const DEFAULT_HEARTBEAT_STALE_SECONDS = 900;
 // behind it; the 900s threshold itself is unchanged (prohibition, msh-5).
 export const HEARTBEAT_TOUCH_THROTTLE_SECONDS = 60;
 
+// A missing file is the ordinary "record absent" case; any other errno
+// (EACCES, EIO, EMFILE) is undetectable state a strict-mode caller must see
+// as a thrown error, not a silent "absent" (review finding F1 sweep).
+function rethrowUnlessMissing(err) {
+  if (err && err.code === 'ENOENT') return;
+  throw err;
+}
+
 function utcNow(nowMs) {
   return new Date(nowMs).toISOString();
 }
@@ -228,14 +236,36 @@ export function createSession(root, { id = randomUUID(), now = Date.now(), trans
   return { ok: true, session };
 }
 
-export function readSession(root, sessionId) {
+/**
+ * `strict` (review finding F1 sweep, worktree-concurrency-guard-controlroot-
+ * port delta re-review): opt-in, default false — every existing caller keeps
+ * `readJson`'s ordinary fail-open read (a missing/corrupt file reads as no
+ * session). When true, bypasses `readJson` for the file read itself so a
+ * hard error (EACCES/EIO/EMFILE) or a corrupt/unparseable record propagates
+ * instead of silently reading as "session absent" — closing the same
+ * fail-open shape F1 fixed at the directory level, now at the per-record
+ * level `listSessionRecords(root, {strict:true})` reads through this.
+ */
+export function readSession(root, sessionId, { strict = false } = {}) {
   let file;
   try {
     file = sessionPath(root, sessionId); // fail-open: a malformed id reads as "no session"
   } catch {
     return null;
   }
-  const session = readJson(file, null);
+  let session;
+  if (strict) {
+    let text;
+    try {
+      text = fs.readFileSync(file, 'utf8');
+    } catch (err) {
+      rethrowUnlessMissing(err);
+      return null;
+    }
+    session = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
+  } else {
+    session = readJson(file, null);
+  }
   if (!session || typeof session !== 'object' || session.id !== String(sessionId).trim()) return null;
   return session;
 }
@@ -263,13 +293,13 @@ export function listSessionRecords(root, { strict = false } = {}) {
   try {
     entries = fs.readdirSync(sessionsDir(root));
   } catch (err) {
-    if (strict && err && err.code !== 'ENOENT') throw err;
+    if (strict) rethrowUnlessMissing(err);
     return [];
   }
   const sessions = [];
   for (const entry of entries) {
     if (!entry.endsWith('.json')) continue;
-    const record = readSession(root, entry.slice(0, -'.json'.length));
+    const record = readSession(root, entry.slice(0, -'.json'.length), { strict });
     if (record) sessions.push(record);
   }
   return sessions;
