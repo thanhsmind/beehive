@@ -33,6 +33,13 @@ git commit.
   don't claim (D1).
 - **No stubs, TODO-only, or dead code.** Capping requires a *passing recorded
   verify* — an assertion is not evidence.
+- **Proof scales by `change_class × lane`** (test-economy): `cells cap` derives
+  the required evidence tier from the cell's change class and lane — red-first
+  proof only for `security`/`migration` (all lanes) and `high-risk` (all classes);
+  a covered bugfix at tiny/small needs a targeted green test. Cap computes
+  `diff_stats` and a new test suite needs a `new_suite_reason`.
+- **Impacted tests only** — the dev loop runs registry-scoped/impacted suites
+  (transitive tail capped, delegated to CI); the full verify suite is CI-owned.
 - An architectural-change need → **STOP and `[BLOCKED]`**; never redesign inside a
   cell. Package installs always checkpoint (`[BLOCKED]`).
 - Return **exactly one** status token: `[DONE]` · `[BLOCKED]` · `[HANDOFF]` · `[NOOP]`.

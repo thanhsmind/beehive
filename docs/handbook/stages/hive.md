@@ -17,7 +17,7 @@ compaction. Re-entered whenever a routing or mode-gate decision is needed.
 
 ## Outputs
 - A routing decision (which stage skill to load next).
-- Onboarding mutations (via `scripts/onboard_bee.mjs --apply`).
+- Onboarding mutations (via `packages/bee/scripts/onboard_bee.mjs --apply`).
 - Gate presentations. hive owns no feature artifacts of its own.
 
 ## Gate
@@ -41,6 +41,13 @@ Writes onboarding state and gate approvals (`state gate`).
   vibe. Uncertainty resolves *downward* into more ceremony, never upward into less.
 - **The hook is a safety net, not the authority** — an unblocked write is not an
   approved write. Route through hive *before* touching source, every time.
+- **CI status gate before the first `cells claim`** — check the latest full-verify
+  CI run on the base branch plus any open `verify-red` issue; red becomes a
+  fix-first tiny cell, never a base to build on. No local full-suite run is owed.
+- **Multisession etiquette** — coordinate through lanes, claims, and holds, never
+  around them. New feature work in an occupied checkout routes through
+  `bee worktree new` / `bee worktree merge`; docs, tiny, and release work stay in
+  the main checkout.
 
 ## Source
 `skills/bee-hive/SKILL.md`

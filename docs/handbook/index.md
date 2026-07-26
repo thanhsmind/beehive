@@ -38,6 +38,7 @@ On-demand side skills (not chain stages, so no dedicated page): `bee-briefing`
 | How learnings/critical patterns/decisions are captured; feature close | [compounding](stages/compounding.md) |
 | How an independent review is run, findings graded, merge approved | [reviewing](stages/reviewing.md) |
 | A runtime file's schema (`state.json`, `cells`, `decisions.jsonl`, …) | [register.md](register.md) |
+| Multisession state: workflow records, leases, handoff mailboxes, worktrees | [register.md](register.md#beeruntimeworkflowswf-idstatejson) |
 | Using this handbook to localize an edit before touching code | [using-as-planner.md](using-as-planner.md) |
 
 ## The gates (who owns each)

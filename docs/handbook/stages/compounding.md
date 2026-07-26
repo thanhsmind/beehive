@@ -30,7 +30,9 @@ None. It **registers the feature as a review candidate** and states it is
 - Three parallel **read-only** analysts (pattern / decision / failure) are
   synthesized by the orchestrator — never write-capable subagents.
 - **`compounding-complete` is refused while a capped `behavior_change` cell is
-  unscribed** (chain-integrity) unless `--waive-scribing-debt`.
+  unscribed** (chain-integrity) unless `--waive-scribing-debt`. The debt check
+  reads the workflow record's scribing stamp *and* the durable ledger
+  `.bee/logs/scribing-runs.jsonl` (sss-1).
 - The phase is set **only after the close commit lands** — close, then flip.
 
 ## Source

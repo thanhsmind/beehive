@@ -13,7 +13,8 @@ validated.
 
 ## Outputs
 - Capped cells with verify evidence, worker status tokens.
-- `state worker add` records, `.bee/logs/dispatch.jsonl` traces.
+- `.bee/logs/dispatch.jsonl` traces. (Active workers are *derived* — live
+  heartbeat sessions + cell claims; `state worker.*` verbs are compat no-ops.)
 - Orchestrator-authored done-report (tiny/small).
 
 ## Gate
@@ -21,8 +22,9 @@ None directly — it relies on Gate 3 already being approved.
 
 ## State touched
 [`cells claim/claim-next/show/tier/judge/judge-record/cap`](../register.md#beecellsfeature-njson),
-[`reservations reserve/release/sweep/list`](../register.md#beereservationsjson),
-`state worker add`, [`HANDOFF.json`](../register.md#beehandoffjson).
+[`reservations reserve/release/sweep/list`](../register.md#beereservationsjson)
+(backed by the sharded lease store), [`HANDOFF.json`](../register.md#beehandoffjson)
+via the per-workflow handoff mailbox.
 
 ## Key rules
 - **The orchestrator claims a cell before spawning** (D1) — workers never

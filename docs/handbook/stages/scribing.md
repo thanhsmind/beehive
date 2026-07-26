@@ -26,7 +26,8 @@ None.
 [`decisions log`](../register.md#beedecisionsjsonl),
 [`capture add/flush`](../register.md#beecapture-queuejsonl),
 [`backlog pbi add/status/amend`](../register.md#beebacklogjsonl),
-`state scribing-run` (advances phase to `compounding`).
+`state scribing-run` (stamps the workflow record, advances phase to `compounding`,
+and appends to the durable ledger `.bee/logs/scribing-runs.jsonl`).
 
 ## Key rules
 - **NEVER invent** — unverified claims become *Open Gaps*, never asserted fact.

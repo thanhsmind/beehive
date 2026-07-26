@@ -32,8 +32,13 @@ The handbook points; the source decides. Open the actual files the stage page's
 **Source** line names, plus anything `register.md` pointed you to:
 
 - Stage behavior → `skills/bee-<name>/SKILL.md` (and its `references/`).
-- State shape / CLI verbs → `.bee/bin/bee.mjs` and `.bee/bin/lib/*.mjs`.
-- Guardrails → the hook catalog (`.codex/hooks.json`) and `AGENTS.md`.
+- State shape / CLI verbs → the **canonical source** `packages/bee/scripts/bee.mjs`
+  + `packages/bee/lib/` (what a host repo runs at `.bee/bin/` is a vendored
+  render of it — edit the package, never the render).
+- Guardrails → the hook catalog (`.codex/hooks.json`, shipped from
+  `packages/bee/hooks/`) and `AGENTS.md` (rendered from
+  `packages/bee/AGENTS.block.md` — 14 critical rules in judgement form since
+  v1.18.1).
 - Cross-cutting law → `AGENTS.md` (auto-loaded) and `docs/knowledge/`.
 
 Never treat a handbook line as the current truth for an edit — it is the map, the
@@ -62,7 +67,10 @@ TOUCHES
 
 A change to a SKILL's behavior that forgets its handbook page, its `docs/knowledge`
 concept, or a mirrored copy under `.claude/skills/` / `.codex/` is the classic
-half-done migration this section exists to catch.
+half-done migration this section exists to catch. Same for the payload: a change
+to CLI/hook/onboarding behavior that edits a vendored render instead of
+`packages/bee/` (or forgets the release-manifest `package_payload` role) ships
+nothing — the next onboard overwrites it.
 
 ### 4. Hand the plan to bee's own chain
 The EDIT plan is not a green light to write. Route it:

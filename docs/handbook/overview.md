@@ -21,20 +21,27 @@ decisions, scale ceremony to real risk, gate the irreversible steps behind human
 approval, and keep a durable memory of what settled so the next session starts
 smarter.
 
-bee ships as four things working together:
+bee ships as five things working together:
 
-1. **Skills** (`skills/<name>/SKILL.md`) — the phases of the workflow. Each skill
-   is a self-contained instruction set the agent loads when the workflow routes to
-   it. `bee-hive` is the router; the rest are the chain stages.
-2. **A single CLI** (`.bee/bin/bee.mjs`) — every state read and mutation goes
-   through this one dispatcher across nine command groups. State is *never*
-   hand-edited.
-3. **Runtime state** (`.bee/*.json`, `.bee/*.jsonl`, `.bee/cells/`) — the
-   [state registers](register.md): phase, gates, feature, cells, decisions,
-   reservations, backlog, handoff.
-4. **Hooks** (`.codex/hooks.json`, 8 lifecycle events) — a fail-open safety net
-   that catches forgotten rules. The hook is a net, *not* the authority: an
-   unblocked write is not an approved write.
+1. **Skills** (`skills/<name>/SKILL.md`) — the phases of the workflow, instruction
+   content only (SKILL.md + references + scripts). Each skill is a self-contained
+   instruction set the agent loads when the workflow routes to it. `bee-hive` is
+   the router; the rest are the chain stages.
+2. **The payload package** (`packages/bee/`, since v1.18.0) — the single standard
+   code set: the CLI source (`scripts/bee.mjs`), the onboarding/distribution
+   engine (`scripts/onboard_bee.mjs`), `lib/`, `hooks/`, `agents/`, `statusline/`,
+   `AGENTS.block.md`, and its own `tests/`. Install resolves everything from here;
+   what lands in a host repo is a vendored render of this package.
+3. **A single CLI** (`.bee/bin/bee.mjs` — the vendored render of
+   `packages/bee/scripts/bee.mjs`) — every state read and mutation goes through
+   this one dispatcher across nine command groups. State is *never* hand-edited.
+4. **Runtime state** (`.bee/*.json`, `.bee/*.jsonl`, `.bee/cells/`,
+   `.bee/runtime/`) — the [state registers](register.md): workflow records, phase,
+   gates, feature, cells, decisions, leases, backlog, handoff mailboxes.
+5. **Hooks** (`.codex/hooks.json` catalog, 8 lifecycle events, shipped from
+   `packages/bee/hooks/`) — a fail-open safety net that catches forgotten rules.
+   The hook is a net, *not* the authority: an unblocked write is not an approved
+   write.
 
 ## The core model
 
@@ -59,10 +66,27 @@ switch is deliberately set by the human (levels: `normal` / `full` / `total`).
 bundle (`docs/knowledge/`) when the repo has one, or `docs/specs/` otherwise.
 `docs/history/` is archaeology, read last.
 
+**Workflow-first, multisession-native (v1.17.0).** The source of truth for a
+running workflow is its own record (`.bee/runtime/workflows/<wf-id>/state.json`);
+legacy `.bee/state.json` is a read-only projection. State splits into a **control
+plane** shared across worktrees (workflow records, sharded leases, handoff
+mailboxes, cross-worktree holds) and a **data plane** isolated per worktree.
+Sessions coordinate through leases, claims, and holds — never around them; new
+feature work in an occupied checkout goes through `bee worktree new` /
+`bee worktree merge`. Active workers are *derived* (live-heartbeat sessions joined
+with cell claims), never stored.
+
+**Proof scales with the change (test-economy, v1.17.1).** The evidence `cells cap`
+demands is derived from `change_class × lane` — red-first proof is mandatory only
+for `security`/`migration` classes and the `high-risk` lane; a covered bugfix at
+tiny/small needs a targeted green test, not ceremony. The dev loop runs impacted
+tests only (capped, transitive tail delegated); the full verify suite is CI-owned,
+and a red CI run files a `verify-red` issue — never build on red.
+
 ## Architecture at a glance
 
 ```
-skills/                     the workflow, one SKILL.md per phase
+skills/                     the workflow, one SKILL.md per phase (instructions only)
   bee-hive/                 router + gate keeper + onboarding  → stages/hive.md
   bee-exploring/            fuzzy request → locked CONTEXT.md   → stages/exploring.md
   bee-planning/             mode + executable work shape        → stages/planning.md
@@ -75,15 +99,23 @@ skills/                     the workflow, one SKILL.md per phase
   (plus on-demand: bee-briefing, bee-grooming, bee-qualifying,
    bee-xia, bee-writing-skills, bee-evolving, bee-bypass-gate)
 
+packages/bee/               the payload package (v1.18.0) — single standard code set
+  scripts/bee.mjs           CLI source (vendored into host as .bee/bin/bee.mjs)
+  scripts/onboard_bee.mjs   onboarding + distribution engine
+  lib/ · hooks/ · agents/ · statusline/ · tests/ · AGENTS.block.md
+
 .bee/
-  bin/bee.mjs               the single CLI (9 command groups)   → register.md
-  state.json               phase · gates · feature · workers    → register.md
-  config.json              commands · hook toggles · gate_bypass → register.md
+  bin/bee.mjs               the single CLI, vendored render (9 command groups) → register.md
+  runtime/workflows/<wf-id>/state.json  workflow record — SOURCE OF TRUTH → register.md
+  runtime/leases/           sharded cell/path leases (control plane)     → register.md
+  runtime/handoffs/<wf-id>/ per-workflow handoff mailbox                 → register.md
+  state.json               read-only projection: phase · gates · feature → register.md
+  config.json              commands · hook toggles · gate_bypass · models → register.md
   cells/<feature>-<n>.json  one unit of executable work          → register.md
   decisions.jsonl          append-only decision log             → register.md
-  reservations.json        file holds for same-checkout swarms   → register.md
+  reservations.json        compat mirror of the lease store      → register.md
   backlog.jsonl            friction events + PBI records         → register.md
-  HANDOFF.json             pause/resume artifact                → register.md
+  HANDOFF.json             legacy pause/resume projection        → register.md
   onboarding.json          onboarding state + managed versions   → register.md
 
 docs/
