@@ -452,6 +452,26 @@ function sharedNestedCheckoutRefusal(rel) {
   );
 }
 
+// A DISTINCT, typed refusal for when the shared-checkout detection primitive
+// itself throws (an unreadable nested `.git`, a broken symlink, an EACCES
+// realpath). plan.md's Test Matrix requires this exact surface to fail CLOSED
+// — an error is not a "nothing shared here" answer, and it is most likely to
+// happen during the very concurrent race this guard exists to catch, so we
+// deny rather than let the hook's outer catch-all fail open.
+function sharedNestedDetectionErrorRefusal(rel) {
+  return (
+    `bee shared-checkout guard: could not determine whether "${rel}" is inside a ` +
+    "nested checkout another live session can reach — the detection check itself " +
+    "errored. This guard fails CLOSED on a detection error and never silently " +
+    "allows the write, because an error here most likely means exactly the " +
+    "concurrent race this guard exists to prevent. " +
+    "FIX: resolve the underlying filesystem error (a broken symlink, an unreadable " +
+    "nested `.git`, or a permission problem), then retry — or open a FRESH " +
+    "companion worktree with `bee worktree new --with-companion` and do this work " +
+    "there under a verified marker."
+  );
+}
+
 function inferAgentName(payload, toolInput) {
   const fromPayload = getNestedString(payload, [
     "agent_name",
@@ -869,7 +889,23 @@ async function main() {
       let sharedNestedDenied = false;
       if (!denial) {
         for (const cand of sharedNestedCandidates) {
-          if (guards.isSharedNestedCheckoutTarget(root, cand.abs, { excludeSessionId: sessionId })) {
+          // wcg-fix-2 (P1 review finding #2): scope a try/catch to THIS call
+          // only. If the detection primitive throws, the write is DENIED with a
+          // typed message — a detection error is not a "nothing shared here"
+          // answer and must fail closed (plan.md Test Matrix). Without this the
+          // throw would propagate to the hook's outer catch-all and return 0
+          // (fail open). The catch is deliberately NOT the outer general one:
+          // unrelated checks keep their established fail-open philosophy.
+          let isShared;
+          try {
+            isShared = guards.isSharedNestedCheckoutTarget(root, cand.abs, { excludeSessionId: sessionId });
+          } catch (sharedNestedError) {
+            logCrash(root, HOOK_NAME, sharedNestedError, ctx.source);
+            denial = { reason: sharedNestedDetectionErrorRefusal(cand.rel) };
+            sharedNestedDenied = true;
+            break;
+          }
+          if (isShared) {
             denial = { reason: sharedNestedCheckoutRefusal(cand.rel) };
             sharedNestedDenied = true;
             break;

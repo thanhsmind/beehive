@@ -14,7 +14,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { runModuleWorker } from "../scripts/lib/run-module-worker.mjs";
 import { isSharedNestedCheckoutTarget } from "../.bee/bin/lib/guards.mjs";
@@ -97,6 +97,26 @@ function buildThrowingGuardsFixture() {
   fs.writeFileSync(
     path.join(root, ".bee", "bin", "lib", "guards.mjs"),
     "throw new Error('boom: fixture guards.mjs deliberately throws on import');\n",
+  );
+  return root;
+}
+
+// A working fixture whose vendored guards.mjs imports cleanly but whose
+// isSharedNestedCheckoutTarget THROWS WHEN CALLED (not on import — that is
+// buildThrowingGuardsFixture / row7's outer-catch fail-open path). It
+// re-exports the real guards module verbatim and shadows only the one
+// primitive with a throwing stub, so checkWrite and every other guard still
+// behave exactly as in production. Models a real filesystem error raised from
+// inside the detection primitive (unreadable nested .git, EACCES realpath).
+function buildCallThrowingGuardsFixture(prefix) {
+  const root = buildFixture(prefix, { phase: "swarming" });
+  const realGuardsUrl = pathToFileURL(path.join(REAL_LIB_DIR, "guards.mjs")).href;
+  fs.writeFileSync(
+    path.join(root, ".bee", "bin", "lib", "guards.mjs"),
+    `export * from ${JSON.stringify(realGuardsUrl)};\n` +
+      "export function isSharedNestedCheckoutTarget() {\n" +
+      "  throw new Error('boom: forced detection error inside isSharedNestedCheckoutTarget');\n" +
+      "}\n",
   );
   return root;
 }
@@ -1367,6 +1387,55 @@ async function main() {
       root,
     );
     check(r82.status === 0, "row82: a write into a verified companion mount stays ALLOWED even when concurrent (verified marker covers it — paved road preserved)", `status=${r82.status} stderr=${r82.stderr}`);
+  }
+
+  // --- 83-85. worktree-concurrency-guard, cell wcg-fix-2 (P1 review finding
+  // #2): the shared-checkout detection primitive FAILING must fail CLOSED, not
+  // open. plan.md's Test Matrix requires the "failure mode of the check itself"
+  // (a corrupt marker / broken symlink / unreadable nested .git) to deny, not
+  // silently allow because detection errored — most likely exactly during a
+  // real race. Before this fix a thrown isSharedNestedCheckoutTarget propagated
+  // to the hook's outer catch-all and returned 0 (allow); now the call site
+  // wraps it so a genuine exception denies with a typed message.
+
+  // Row 83 (RED-FIRST, behavior_change): an Edit into a physically-contained
+  // target for which isSharedNestedCheckoutTarget THROWS is DENIED (exit 2).
+  // Pre-fix this write was ALLOWED (exit 0) — the outer catch-all swallowed the
+  // throw and failed open, the exact fail-open bug this cell closes.
+  {
+    const root = buildCallThrowingGuardsFixture("bee-wcgfix2-detect-throw-");
+    const r83 = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "src/foo.js", old_string: "x", new_string: "y" }, session_id: "me" },
+      root,
+    );
+    check(r83.status === 2, "row83: an Edit whose shared-checkout detection THROWS is DENIED (was allowed pre-fix — detection now fails CLOSED)", `status=${r83.status} stderr=${r83.stderr}`);
+    // Row 84: the deny is the typed detection-error refusal, distinct from the
+    // ordinary shared-checkout refusal — it names the errored check and the fix.
+    check(/detection/i.test(r83.stderr), "row84: the deny message identifies a detection error (typed, not a silent allow)", r83.stderr);
+    check(/fail(s|ed)? closed/i.test(r83.stderr), "row84: the deny message states the check fails CLOSED on error", r83.stderr);
+    check(/bee worktree new --with-companion/.test(r83.stderr), "row84: the deny still points at the paved-road fix", r83.stderr);
+    // The underlying error is still logged (diagnosable), same as row7's path,
+    // even though the verdict is now a deny rather than a fail-open allow.
+    const crashLog = path.join(root, ".bee", "logs", "hooks.jsonl");
+    const crashEvent = readLastJsonl(crashLog);
+    check(
+      crashEvent && typeof crashEvent.error === "string" && crashEvent.error.includes("boom"),
+      "row84: the underlying detection error is logged for diagnosis",
+      JSON.stringify(crashEvent),
+    );
+  }
+
+  // Row 85 (negative control — proves teeth): the SAME contained target, but
+  // with the REAL (non-throwing) guards and no shared nested checkout, still
+  // ALLOWS (exit 0). Only an actual thrown exception flips the verdict; a
+  // legitimate "nothing shared here" answer is unchanged.
+  {
+    const root = buildFixture("bee-wcgfix2-detect-ok-control-");
+    const r85 = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "src/foo.js", old_string: "x", new_string: "y" }, session_id: "me" },
+      root,
+    );
+    check(r85.status === 0, "row85: the same contained Edit with real, non-throwing detection and nothing shared still ALLOWS (only a thrown error denies)", `status=${r85.status} stderr=${r85.stderr}`);
   }
 
   process.stdout.write(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}\n`);
