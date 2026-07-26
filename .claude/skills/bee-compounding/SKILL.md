@@ -122,7 +122,7 @@ git commit -m "docs(learnings): <feature> close — <one line> [<feature> close]
 ```
 
 Rules:
-- **One commit, and it is the close's own commit** — never fold the close into a cell's commit, and never leave it for "the next commit to pick up". Per-cell commits (critical rule 8) already landed during execution; this one carries the compounding artifacts.
+- **One commit, and it is the close's own commit** — never fold the close into a cell's commit, and never leave it for "the next commit to pick up". Per-cell commits (critical rule 7) already landed during execution; this one carries the compounding artifacts.
 - **The commit message names the feature and the close**, so the close is findable in the log: `[<feature> close]`.
 - **Nothing outside the close belongs in it.** If `git status` shows unrelated dirty files, commit only the close's paths (`docs/history/learnings/`, `docs/knowledge/` or `docs/specs/`, `docs/backlog.md`, `.bee/`) and report the rest in the run summary rather than sweeping it in.
 - **Warn, never block, on a refusal you cannot resolve** (a hook rejects the commit, the repo is mid-rebase, nothing is dirty because a cell already committed it): one line in the run summary naming the reason, and the close proceeds. What is never acceptable is setting the phase in §11 while silently leaving the close's artifacts uncommitted and unmentioned.

@@ -181,7 +181,7 @@ Avoid "violates D5" or "non-monotonic" without immediate explanation.
 Every bee command (`bee.mjs status`, `cells`, `reservations`, `decisions`, onboarding, cell verify
 commands) is run by the agent itself the moment the workflow calls for it — never printed for the
 user to execute, never "run this and tell me the output". The only human actions in bee are gate
-approvals, decision answers, and privacy approvals. `AGENTS.md` critical rule 10 states the same law
+approvals, decision answers, and privacy approvals. `AGENTS.md` critical rule 9 states the same law
 in one line and defers here for the full form; `SKILL.md`'s hive law 10 is the router-side pointer.
 
 ### Silent Bookkeeping — work language only (decision 1689af1b)

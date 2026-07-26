@@ -12,7 +12,7 @@
     },
     {
       "name": "bee-compounding",
-      "sha256": "43077acc9d3437b41d7fcd6d455278bc24510458d2a86f7e40ae17ad71175e36"
+      "sha256": "15d67373c7903b56936131abce90604a0a1649939e0d38f1dbddadc4534896eb"
     },
     {
       "name": "bee-context-locking",
@@ -40,7 +40,7 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "2cf9d2026fcd0db409ddd7a42f17a809ac9e1de93272bf64b900ddfb226a41d0"
+      "sha256": "8402469ad03573cdc9af5178116e0f472b7880e5e07ba863c978a66548df902b"
     },
     {
       "name": "bee-planning",
@@ -52,7 +52,7 @@
     },
     {
       "name": "bee-reviewing",
-      "sha256": "3f1740b63801c97a705fbb85bbf9937ec21a5495a2e40c8cd4acf6c2a6f42a76"
+      "sha256": "6193306a142a7e36d96dfdf40ded8916360275c6f6c6d4290548ad86b462ea44"
     },
     {
       "name": "bee-scribing",
@@ -64,7 +64,7 @@
     },
     {
       "name": "bee-validating",
-      "sha256": "3e896ae9cb77f529ee1f9f122e10fd5cc18cf64f399a99e95a66dd09d6ff87f0"
+      "sha256": "5eacd562e4a0eec943fc2cb5133f416bc4d36af475c9c2ce89f6ea0b0fb26e2d"
     },
     {
       "name": "bee-writing-skills",

@@ -201,7 +201,7 @@ Violating the letter of these rules is violating the spirit of these rules.
 
 ## Handoff
 
-Session complete: record the decision (`record --id <id> --kind decision --file decision.json`) and close the session — this closes the REVIEW, not the feature. Every feature in scope already went through its own execution → scribing → compounding close independently (§11.1); a review session is never a precondition for that chain, and closing one does not re-trigger it. For `standard`/`high-risk` scope, invoke `bee-briefing` in walkthrough mode to write `docs/history/<feature>/walkthrough.md` per feature in scope, as an audit artifact of what the session found. If a P1 fix inside the session settled new behavior worth documenting, that triggers `bee-scribing` under its own standing self-triggering rule (AGENTS.md rule 9) — because a decision settled, not as an automatic hop from this skill.
+Session complete: record the decision (`record --id <id> --kind decision --file decision.json`) and close the session — this closes the REVIEW, not the feature. Every feature in scope already went through its own execution → scribing → compounding close independently (§11.1); a review session is never a precondition for that chain, and closing one does not re-trigger it. For `standard`/`high-risk` scope, invoke `bee-briefing` in walkthrough mode to write `docs/history/<feature>/walkthrough.md` per feature in scope, as an audit artifact of what the session found. If a P1 fix inside the session settled new behavior worth documenting, that triggers `bee-scribing` under its own standing self-triggering rule (AGENTS.md rule 8) — because a decision settled, not as an automatic hop from this skill.
 
 | Reference | When to Load |
 |---|---|
