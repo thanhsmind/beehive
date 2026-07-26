@@ -1,0 +1,593 @@
+//! read_accounting — rust-port-22's own verify target (CONTEXT.md D3/D5,
+//! `docs/history/rust-port/plan-slice3.md` slice 3 cell 1 of 3). This cell
+//! adds the read-instrumentation seam (`bee_core::read_accounting`) and
+//! proves it here as a per-fixture, per-site BASELINE TABLE — the counters
+//! are site-labelled (see that module's doc comment) so this file's own
+//! assertions ARE the table, not prose describing one.
+//!
+//! THIS CELL DOES NOT DEDUP ANYTHING — every test below runs against
+//! TODAY'S un-deduped code, characterising it so rust-port-23's dedup has a
+//! genuine red-to-green transition to prove against (plan-slice3.md's own
+//! stated purpose, `docs/history/rust-port/plan-slice3.md:46`).
+//!
+//! Every fixture below is a fresh `tempfile::tempdir()` — never this repo's
+//! own live `.bee/` store (prohibition: "tests never touch the live .bee/
+//! store").
+//!
+//! ## Reconciling with decision e119fc8b (validation-slice3.md, REPAIRED)
+//!
+//! e119fc8b's "4/6/2" is correct FOR THE QUEEN-BENCH D5 FIXTURE specifically
+//! — not a fixture-independent constant. `bench_fixture_baseline_
+//! reconciles_with_e119fc8b_4_6_2` below runs the REAL, currently-compiled
+//! `queen-bench --generate` binary (same artifact
+//! `crates/bee-core/tests/status_readers_a.rs`'s `host_real_fixture()`
+//! uses) and checks the counters against that reconciled total, not a
+//! re-derived guess.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde_json::{json, Value};
+use tempfile::TempDir;
+
+use bee_core::read_accounting;
+
+// ─────────────────────────────────────────────────────────────────────────
+// Generic fixture plumbing
+// ─────────────────────────────────────────────────────────────────────────
+
+fn write_file(path: &Path, content: &str) {
+    fs::create_dir_all(path.parent().unwrap()).expect("mkdir");
+    fs::write(path, content).expect("write fixture file");
+}
+
+fn write_json(path: &Path, value: &Value) {
+    write_file(path, &serde_json::to_string_pretty(value).unwrap());
+}
+
+fn now_ms() -> i64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+}
+
+/// A bare `.bee` root: onboarding marker + an idle, feature-less state.json
+/// — the minimum `resolve_roots`/`read_state` need to behave predictably.
+fn minimal_root() -> TempDir {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_json(&dir.path().join(".bee/onboarding.json"), &json!({}));
+    write_json(
+        &dir.path().join(".bee/state.json"),
+        &json!({
+            "schema_version": "1.0",
+            "phase": "idle",
+            "feature": null,
+            "mode": null,
+            "approved_gates": {"context": false, "shape": false, "execution": false, "review": false},
+            "workers": [],
+            "summary": "",
+            "next_action": "No active bee work."
+        }),
+    );
+    dir
+}
+
+fn set_state(root: &Path, phase: &str, feature: Option<&str>) {
+    write_json(
+        &root.join(".bee/state.json"),
+        &json!({
+            "schema_version": "1.0",
+            "phase": phase,
+            "feature": feature,
+            "mode": null,
+            "approved_gates": {"context": false, "shape": false, "execution": false, "review": false},
+            "workers": [],
+            "summary": "",
+            "next_action": "No active bee work."
+        }),
+    );
+}
+
+fn seed_cell(root: &Path, id: &str, feature: &str, status: &str, deps: &[&str], behavior_change: bool, capped_at: Option<&str>) {
+    let path = root.join(".bee/cells").join(format!("{id}.json"));
+    write_json(
+        &path,
+        &json!({
+            "id": id,
+            "feature": feature,
+            "status": status,
+            "deps": deps,
+            "trace": {"behavior_change": behavior_change, "capped_at": capped_at},
+        }),
+    );
+}
+
+/// `.bee/cells/archive/<feature>/<id>.json` — the REAL archive layout
+/// (validation-slice3.md's repaired finding #2: feature-subdirectoried,
+/// not a flat `archive/<id>.json`).
+fn seed_archived_cell(root: &Path, id: &str, feature: &str, status: &str) {
+    let path = root.join(".bee/cells/archive").join(feature).join(format!("{id}.json"));
+    write_json(&path, &json!({ "id": id, "feature": feature, "status": status, "deps": [] }));
+}
+
+fn seed_session(root: &Path, id: &str, last_heartbeat_iso: &str, transcript_path: Option<&Path>) {
+    let path = root.join(".bee/sessions").join(format!("{id}.json"));
+    write_json(
+        &path,
+        &json!({
+            "id": id,
+            "started_at": last_heartbeat_iso,
+            "last_heartbeat": last_heartbeat_iso,
+            "transcript_path": transcript_path.map(|p| p.to_string_lossy().into_owned()),
+        }),
+    );
+}
+
+/// A transcript tail with NO clean-end trio (plain `assistant` events only)
+/// — `has_clean_end_trio` is false, so a session pointing at this file is
+/// never excluded as a clean stop.
+fn write_open_transcript(path: &Path) {
+    let mut body = String::new();
+    for i in 0..3 {
+        body.push_str(&json!({"type": "assistant", "timestamp": "2026-07-26T00:05:00.000Z", "n": i}).to_string());
+        body.push('\n');
+    }
+    write_file(path, &body);
+}
+
+fn set_transcript_roots_config(root: &Path, extra_paths: &[&Path]) {
+    let entries: Vec<Value> = extra_paths
+        .iter()
+        .enumerate()
+        .map(|(i, p)| json!({"runtime": format!("fixture-{i}"), "path": p.to_string_lossy()}))
+        .collect();
+    write_json(&root.join(".bee/config.json"), &json!({ "hooks": {}, "recovery": { "transcript_roots": entries } }));
+}
+
+/// `.bee/bin/lib/state.mjs` — chain-nudge/state-sync's own early "is this
+/// even a bee checkout" gate; content is never read, only existence.
+fn seed_hook_lib_marker(root: &Path) {
+    write_file(&root.join(".bee/bin/lib/state.mjs"), "// fixture marker only, never executed\n");
+}
+
+fn hook_payload(root: &Path, event: &str) -> String {
+    json!({ "cwd": root.to_string_lossy(), "hook_event_name": event }).to_string()
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// StatusContext, built by hand (never `from_process`) so every test stays
+// hermetic and independent of this box's real $HOME/session state.
+// ─────────────────────────────────────────────────────────────────────────
+
+fn manual_status_context(root: &Path) -> queen_bee::status::StatusContext {
+    queen_bee::status::StatusContext {
+        root: root.to_path_buf(),
+        control_root: root.to_path_buf(),
+        cwd_roots: bee_core::state::WorktreeRootsView {
+            worktree_resolution: "ordinary".to_string(),
+            store_root: Some(root.to_path_buf()),
+            main_root: None,
+        },
+        session_id: None,
+        now_ms: now_ms(),
+        home_dir: None,
+        // Deliberately a directory that does not exist: every test's
+        // "default Claude root" stat is then a deterministic ENOENT,
+        // independent of whatever this box's real $HOME happens to hold.
+        projects_root: root.join("nonexistent-claude-projects"),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// The real queen-bench D5 fixture (must-have: reconcile with e119fc8b)
+// ─────────────────────────────────────────────────────────────────────────
+
+fn queen_bench_bin() -> PathBuf {
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for _ in 0..12 {
+        let candidate = dir.join("target").join("debug").join(if cfg!(windows) { "queen-bench.exe" } else { "queen-bench" });
+        if candidate.exists() {
+            return candidate;
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    panic!(
+        "read_accounting: could not locate a prebuilt queen-bench binary walking ancestors from {} \
+         — this test uses the CURRENT compiled queen-bench binary as a fixed fixture-generation artifact \
+         (same convention as crates/bee-core/tests/status_readers_a.rs); build the workspace once \
+         (`cargo build --manifest-path crates/Cargo.toml -p queen-bench`) if it is genuinely missing.",
+        env!("CARGO_MANIFEST_DIR")
+    );
+}
+
+fn host_real_bench_fixture() -> TempDir {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let output = Command::new(queen_bench_bin())
+        .arg("--generate")
+        .arg("--out")
+        .arg(dir.path())
+        .output()
+        .expect("failed to spawn queen-bench --generate");
+    assert!(output.status.success(), "queen-bench --generate failed — stderr: {}", String::from_utf8_lossy(&output.stderr));
+    dir
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 1. Lowest-shared-primitive placement, not reader-function entries
+//    (must-have: "demonstrated by a test showing a direct primitive call
+//    increments the same counter a reader call does")
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn primitive_and_reader_calls_increment_the_same_shared_counter() {
+    let fixture = minimal_root();
+    let root = fixture.path();
+    seed_cell(root, "c1", "demo", "open", &[], false, None);
+
+    read_accounting::reset();
+    let direct = bee_core::cells::list_cells(root);
+    let after_direct = read_accounting::snapshot();
+    assert_eq!(after_direct.cells_dir_scans, 1, "a direct list_cells call must increment the shared counter");
+    assert_eq!(direct.len(), 1);
+
+    read_accounting::reset();
+    let _ = bee_core::cells::ready_cells(root, None);
+    let after_reader = read_accounting::snapshot();
+    assert_eq!(
+        after_reader.cells_dir_scans, 1,
+        "ready_cells (a higher-level reader) funnels through the SAME primitive and must \
+         increment the SAME counter by the SAME amount as calling list_cells directly — proving \
+         the counter lives at the shared primitive, not duplicated per reader-function entry"
+    );
+
+    // Same proof for decisions: one call to active_decisions performs TWO
+    // real reads today (build_tag_overlay's own read, plus its own event
+    // read) — a reader-function-entry counter would report 1 and hide
+    // that fact; the primitive-level counter correctly reports 2.
+    read_accounting::reset();
+    let _ = bee_core::decisions::active_decisions(root, None, false);
+    let after_decisions = read_accounting::snapshot();
+    assert_eq!(after_decisions.decisions_journal_parses, 2);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 2. The centerpiece baseline table: the real queen-bench D5 fixture,
+//    reconciled against decision e119fc8b's stated 4/6/2.
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn bench_fixture_baseline_reconciles_with_e119fc8b_4_6_2() {
+    let fixture = host_real_bench_fixture();
+    let root = fixture.path();
+    let ctx = manual_status_context(root);
+
+    read_accounting::reset();
+    let _status = queen_bee::status::build_status(&ctx, queen_bee::status::StatusOptions::default());
+    let snap = read_accounting::snapshot();
+
+    println!("read-accounting baseline table — queen-bench D5 fixture (state.feature: null)");
+    println!("| store class                         | count | unconditional sites | conditional sites (reached?) |");
+    println!("|--------------------------------------|-------|----------------------|-------------------------------|");
+    println!(
+        "| decisions_journal_parses              | {:>5} | status.rs:790 (x2 reads) | recovery SharedInputs init (x2 reads) — REACHED (fixture has a stale, non-clean-end crash-candidate session) |",
+        snap.decisions_journal_parses
+    );
+    println!(
+        "| cells_dir_scans                       | {:>5} | status.rs:539,640,708,712,742 | recovery.rs:522 — REACHED; cells.rs:332 (scribing_debt) — NOT reached (state.feature is null) |",
+        snap.cells_dir_scans
+    );
+    println!(
+        "| cell_dep_reads                        | {:>5} | (none) | ready_cells' deps_all_capped — NOT reached (every fixture cell is \"capped\", none \"open\") |",
+        snap.cell_dep_reads
+    );
+    println!(
+        "| transcript_root_scan_invocations      | {:>5} | build_recovery_block:586 | detect_crash_candidates:457 — REACHED (fixture seeds one session, so sessions.is_empty() is false) |",
+        snap.transcript_root_scan_invocations
+    );
+    println!(
+        "| transcript_root_stat_ops (fs-op unit) | {:>5} | 2 invocations x 2 roots (default Claude root + 1 configured fixture root) — DIVERGES from the invocation count on purpose (W1) |",
+        snap.transcript_root_stat_ops
+    );
+
+    // e119fc8b's "4/6/2" — RECONCILED, not re-asserted blind: this table's
+    // own three headline counters must equal exactly those totals for
+    // THIS fixture (validation-slice3.md's REPAIRED finding: the totals
+    // are correct per-fixture, never claimed fixture-independent).
+    assert_eq!(snap.decisions_journal_parses, 4, "decisions: e119fc8b's stated total for this fixture");
+    assert_eq!(snap.cells_dir_scans, 6, "cells: e119fc8b's stated total for this fixture");
+    assert_eq!(snap.transcript_root_scan_invocations, 2, "transcript roots: e119fc8b's stated total for this fixture");
+
+    // cell_dep_reads is zero on THIS fixture for a documented reason (every
+    // fixture cell is pre-capped) — recorded here, not silently ignored.
+    assert_eq!(snap.cell_dep_reads, 0);
+
+    // The fs-operation-unit counter is a DIFFERENT number from the
+    // invocation-unit counter on this fixture, because the fixture
+    // configures exactly one extra transcript root beyond the always-
+    // present default — see `transcript_root_stat_ops_scale_with_
+    // configured_roots_while_invocations_do_not` below for the isolated
+    // demonstration of why.
+    assert_eq!(snap.transcript_root_stat_ops, 4);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 3. Reach-proof by removal: scribing_debt's cells scan is feature-gated
+//    (validation-slice3.md's repaired finding #1 — cells.rs:332 does NOT
+//    fire on a null-feature store).
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn scribing_debt_cells_scan_is_reachable_only_with_a_resolved_feature() {
+    let fixture = minimal_root();
+    let root = fixture.path();
+    seed_cell(root, "c1", "demo", "capped", &[], true, Some("2026-07-26T00:00:00.000Z"));
+
+    // Neutralized: no feature resolves (neither an explicit override nor
+    // state.feature) -> the early return at cells.rs:319-324 fires BEFORE
+    // any directory scan.
+    read_accounting::reset();
+    let debt_no_feature = bee_core::cells::scribing_debt(root, None, None);
+    let snap_no_feature = read_accounting::snapshot();
+    assert_eq!(snap_no_feature.cells_dir_scans, 0, "no resolvable feature -> the scan never happens (count drops to zero)");
+    assert_eq!(debt_no_feature["count"], json!(0));
+
+    // Reached: an explicit feature override resolves -> exactly one scan.
+    read_accounting::reset();
+    let debt_with_feature = bee_core::cells::scribing_debt(root, Some("demo"), Some(0));
+    let snap_with_feature = read_accounting::snapshot();
+    assert_eq!(snap_with_feature.cells_dir_scans, 1, "a resolved feature -> exactly one directory scan");
+    assert_eq!(debt_with_feature["count"], json!(1));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 4. Reach-proof by removal: recovery's SharedInputs (decisions + cells)
+//    is gated behind reaching the crash-candidate track, which is a
+//    STRICTER gate than "any session exists" (which only gates the
+//    transcript-root scan invocation count — see test 5 below).
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn recovery_shared_inputs_reads_gated_by_reaching_the_crash_candidate_track() {
+    // Tier 0: no sessions at all.
+    let fixture0 = minimal_root();
+    let root0 = fixture0.path();
+    read_accounting::reset();
+    let _ = bee_core::recovery::build_recovery_block(root0, root0, &root0.join("no-claude-root"), root0, now_ms(), None);
+    let snap0 = read_accounting::snapshot();
+    assert_eq!(snap0.decisions_journal_parses, 0);
+    assert_eq!(snap0.cells_dir_scans, 0);
+    assert_eq!(snap0.transcript_root_scan_invocations, 1, "no sessions -> only build_recovery_block's own unconditional scan runs");
+
+    // Tier 1: one session exists, but its heartbeat is FRESH (not stale) ->
+    // sessions.is_empty() is false (transcript-scan invocation count goes
+    // to 2), yet the session is filtered out before ever reaching the
+    // transcript/clean-end/SharedInputs checks -> decisions/cells stay 0.
+    let fixture1 = minimal_root();
+    let root1 = fixture1.path();
+    let fresh_iso = bee_core::lock::iso8601_millis(now_ms());
+    seed_session(root1, "fresh-session", &fresh_iso, None);
+    read_accounting::reset();
+    let _ = bee_core::recovery::build_recovery_block(root1, root1, &root1.join("no-claude-root"), root1, now_ms(), None);
+    let snap1 = read_accounting::snapshot();
+    assert_eq!(snap1.transcript_root_scan_invocations, 2, "a session existing (even a fresh one) -> detect_crash_candidates also scans");
+    assert_eq!(snap1.decisions_journal_parses, 0, "a FRESH heartbeat never reaches the crash-candidate track");
+    assert_eq!(snap1.cells_dir_scans, 0);
+
+    // Tier 2: one session, stale heartbeat, a transcript with no clean-end
+    // trio -> the crash-candidate track IS reached -> SharedInputs fires
+    // exactly once (2 decisions reads via active_decisions, 1 cells scan).
+    let fixture2 = minimal_root();
+    let root2 = fixture2.path();
+    let transcript_path = root2.join("transcript.jsonl");
+    write_open_transcript(&transcript_path);
+    seed_session(root2, "stale-session", "2020-01-01T00:00:00.000Z", Some(&transcript_path));
+    read_accounting::reset();
+    let block = bee_core::recovery::build_recovery_block(root2, root2, &root2.join("no-claude-root"), root2, now_ms(), None);
+    let snap2 = read_accounting::snapshot();
+    assert_eq!(snap2.transcript_root_scan_invocations, 2);
+    assert_eq!(snap2.decisions_journal_parses, 2, "the crash-candidate track was reached -> SharedInputs' one active_decisions call (2 reads)");
+    assert_eq!(snap2.cells_dir_scans, 1, "the crash-candidate track was reached -> SharedInputs' one cells::list_cells call");
+    // Sanity: the candidate really was detected (not just the reads firing
+    // for an unrelated reason).
+    let candidates = block["candidates"].as_array().expect("candidates array");
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0]["session_id"], json!("stale-session"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 5. transcript_root_scan_invocations: gated by "any session exists"
+//    (a WEAKER gate than the crash-candidate track above).
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn transcript_root_scan_invocation_gated_by_any_session_existing() {
+    let empty = minimal_root();
+    read_accounting::reset();
+    let _ = bee_core::recovery::detect_crash_candidates(empty.path(), empty.path(), &empty.path().join("nope"), empty.path(), now_ms(), None);
+    assert_eq!(read_accounting::snapshot().transcript_root_scan_invocations, 0, "detect_crash_candidates returns before scanning when sessions.is_empty()");
+
+    let with_session = minimal_root();
+    seed_session(with_session.path(), "any-session", "2020-01-01T00:00:00.000Z", None);
+    read_accounting::reset();
+    let _ = bee_core::recovery::detect_crash_candidates(
+        with_session.path(),
+        with_session.path(),
+        &with_session.path().join("nope"),
+        with_session.path(),
+        now_ms(),
+        None,
+    );
+    assert_eq!(
+        read_accounting::snapshot().transcript_root_scan_invocations, 1,
+        "any session record present (regardless of whether it becomes a genuine candidate) -> the scan runs"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 6. Unit distinction (validation W1): invocation count vs filesystem-
+//    operation count for the SAME store class diverge whenever more than
+//    one transcript root is configured.
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn transcript_root_stat_ops_scale_with_configured_roots_while_invocations_do_not() {
+    let fixture = minimal_root();
+    let root = fixture.path();
+    let extra_a = root.join("extra-root-a");
+    let extra_b = root.join("extra-root-b");
+    fs::create_dir_all(&extra_a).unwrap();
+    fs::create_dir_all(&extra_b).unwrap();
+    set_transcript_roots_config(root, &[&extra_a, &extra_b]);
+
+    read_accounting::reset();
+    let _ = bee_core::recovery::scan_transcript_roots(root, &root.join("nonexistent-claude-root"));
+    let snap = read_accounting::snapshot();
+    assert_eq!(snap.transcript_root_scan_invocations, 1, "one call to scan_transcript_roots");
+    assert_eq!(
+        snap.transcript_root_stat_ops, 3,
+        "three real fs::metadata stats for that ONE call: the default Claude root (missing) + two configured roots"
+    );
+
+    // A second call doubles the stat-op count but not proportionally in a
+    // way that could be confused with invocation count: two calls, three
+    // roots each = six stats, two invocations.
+    let _ = bee_core::recovery::scan_transcript_roots(root, &root.join("nonexistent-claude-root"));
+    let snap2 = read_accounting::snapshot();
+    assert_eq!(snap2.transcript_root_scan_invocations, 2);
+    assert_eq!(snap2.transcript_root_stat_ops, 6);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 7. Reach-proof by removal: cell_dep_reads only fires when ready_cells
+//    actually has an OPEN cell carrying a dep to resolve.
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn ready_cells_dep_read_count_drops_to_zero_when_no_open_cell_has_a_dep() {
+    let fixture = minimal_root();
+    let root = fixture.path();
+    seed_cell(root, "open-with-dep", "demo", "open", &["some-dep"], false, None);
+    seed_archived_cell(root, "some-dep", "demo", "capped");
+
+    read_accounting::reset();
+    let _ = bee_core::cells::ready_cells(root, Some("demo"));
+    assert_eq!(read_accounting::snapshot().cell_dep_reads, 1, "one open cell with one dep -> exactly one read_cell attempt");
+
+    // Neutralize: the SAME cell, now with an empty deps array (removing
+    // the condition that gates this bucket) -> the count drops to zero,
+    // not merely "the result changes".
+    seed_cell(root, "open-with-dep", "demo", "open", &[], false, None);
+    read_accounting::reset();
+    let _ = bee_core::cells::ready_cells(root, Some("demo"));
+    assert_eq!(read_accounting::snapshot().cell_dep_reads, 0, "no open cell carries a dep -> deps_all_capped is never invoked, count drops to zero");
+}
+
+/// Complements the reach-proof above with a correctness check on the
+/// archive-fallback path itself (validation-slice3.md's repaired finding
+/// #2/#3): an open cell whose dep is CAPPED but lives only in the
+/// feature-subdirectoried archive must still resolve as ready.
+#[test]
+fn ready_cells_resolves_a_dep_through_the_archive_fallback() {
+    let fixture = minimal_root();
+    let root = fixture.path();
+    seed_cell(root, "open-with-archived-dep", "demo", "open", &["archived-dep"], false, None);
+    seed_archived_cell(root, "archived-dep", "demo", "capped");
+
+    read_accounting::reset();
+    let ready = bee_core::cells::ready_cells(root, Some("demo"));
+    let snap = read_accounting::snapshot();
+    assert_eq!(snap.cell_dep_reads, 1);
+    assert_eq!(ready.len(), 1, "the archived, capped dep must resolve -> the open cell is ready");
+    assert_eq!(ready[0].id, "open-with-archived-dep");
+
+    // Negative control: remove the archived file entirely -> the attempt
+    // still happens (same count) but the dep no longer resolves as
+    // capped, so the open cell is NOT ready.
+    fs::remove_file(root.join(".bee/cells/archive/demo/archived-dep.json")).unwrap();
+    read_accounting::reset();
+    let ready_after_removal = bee_core::cells::ready_cells(root, Some("demo"));
+    let snap_after_removal = read_accounting::snapshot();
+    assert_eq!(snap_after_removal.cell_dep_reads, 1, "the read_cell ATTEMPT still happens even on a miss");
+    assert!(ready_after_removal.is_empty(), "an unresolvable dep -> the open cell is never ready");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 8. The hook entry points (advisor note 1 — the sixth blocker): baselined
+//    independently of build_status, since rust-port-23's signature change
+//    lands here too.
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn chain_nudge_cells_scan_zero_with_no_active_feature() {
+    let fixture = minimal_root();
+    let root = fixture.path();
+    seed_hook_lib_marker(root);
+    set_state(root, "swarming", None);
+
+    read_accounting::reset();
+    let argv: Vec<String> = Vec::new();
+    let code = queen_bee::hooks::chain_nudge::run(&argv, &hook_payload(root, "SubagentStop"));
+    assert_eq!(code, 0);
+    assert_eq!(read_accounting::snapshot().cells_dir_scans, 0, "no active feature -> scribing_debt's early return -> zero cells scans");
+}
+
+#[test]
+fn chain_nudge_cells_scan_exactly_one_with_active_feature() {
+    let fixture = minimal_root();
+    let root = fixture.path();
+    seed_hook_lib_marker(root);
+    set_state(root, "swarming", Some("demo-feature"));
+
+    read_accounting::reset();
+    let argv: Vec<String> = Vec::new();
+    let code = queen_bee::hooks::chain_nudge::run(&argv, &hook_payload(root, "SubagentStop"));
+    assert_eq!(code, 0);
+    assert_eq!(read_accounting::snapshot().cells_dir_scans, 1, "an active feature -> scribing_debt performs exactly one cells scan");
+}
+
+#[test]
+fn state_sync_cell_counts_scan_is_unconditional_every_run() {
+    // No active feature: state-sync's own cell_counts() still scans (it
+    // never gates on feature at all — a DIFFERENT shape from chain-nudge's
+    // scribing_debt).
+    let fixture_no_feature = minimal_root();
+    seed_hook_lib_marker(fixture_no_feature.path());
+    set_state(fixture_no_feature.path(), "idle", None);
+    read_accounting::reset();
+    let argv: Vec<String> = Vec::new();
+    let code = queen_bee::hooks::state_sync::run(&argv, &hook_payload(fixture_no_feature.path(), "Stop"));
+    assert_eq!(code, 0);
+    assert_eq!(read_accounting::snapshot().cells_dir_scans, 1, "state-sync's cell_counts() scans unconditionally, feature or not");
+
+    let fixture_with_feature = minimal_root();
+    seed_hook_lib_marker(fixture_with_feature.path());
+    set_state(fixture_with_feature.path(), "swarming", Some("demo-feature"));
+    read_accounting::reset();
+    let code2 = queen_bee::hooks::state_sync::run(&argv, &hook_payload(fixture_with_feature.path(), "Stop"));
+    assert_eq!(code2, 0);
+    assert_eq!(read_accounting::snapshot().cells_dir_scans, 1, "still exactly one scan with a feature active — state-sync's count is unconditional, not feature-gated");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 9. Negative control: the seam must never change observable output.
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn build_status_output_is_byte_identical_regardless_of_prior_counter_state() {
+    let fixture = minimal_root();
+    let root = fixture.path();
+    seed_cell(root, "c1", "demo", "open", &[], false, None);
+    let ctx = manual_status_context(root);
+
+    read_accounting::reset();
+    let first = queen_bee::status::to_json_stdout(&queen_bee::status::build_status(&ctx, queen_bee::status::StatusOptions::default()));
+
+    // Deliberately do NOT reset — the counters now carry whatever the
+    // first build_status call left behind, simulating a process that has
+    // already served other invocations on this thread.
+    let second = queen_bee::status::to_json_stdout(&queen_bee::status::build_status(&ctx, queen_bee::status::StatusOptions::default()));
+
+    assert_eq!(first, second, "build_status's stdout payload must be byte-identical no matter what the read-accounting counters hold");
+}

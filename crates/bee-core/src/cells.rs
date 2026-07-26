@@ -98,7 +98,17 @@ impl Cell {
 /// since each cell is its own file rather than a jsonl line.
 pub fn list_cells(root: &Path) -> Vec<Cell> {
     let dir = cells_dir(root);
-    let entries = match fs::read_dir(&dir) {
+    let attempt = fs::read_dir(&dir);
+    // rust-port-22: lowest-shared-primitive counter (see
+    // `crate::read_accounting`'s module doc comment) — this is the SINGLE
+    // funnel every "cells directory scanned" call site in today's code
+    // goes through (`ready_cells`, `tier_mix`, `ceiling_scarcity_warning`,
+    // `scribing_debt`, `global_scribing_debt` via `list_cells_where`, and
+    // `recovery::detect_crash_candidates`'s own direct call). Counted
+    // whether the scan succeeds or not — a failed `read_dir` is still a
+    // real syscall.
+    crate::read_accounting::record_cells_dir_scan();
+    let entries = match attempt {
         Ok(e) => e,
         Err(_) => return Vec::new(),
     };
@@ -159,6 +169,11 @@ pub fn read_cell(root: &Path, id: &str) -> Option<Cell> {
     if !is_valid_cell_id(id) {
         return None;
     }
+    // rust-port-22: lowest-shared-primitive counter, SEPARATE from
+    // `cells_dir_scans` (validation W6) — see `crate::read_accounting`'s
+    // module doc comment for why the archive-fallback scan below is
+    // folded into this same bucket rather than broken out further.
+    crate::read_accounting::record_cell_dep_read();
     if let Ok(text) = fs::read_to_string(cell_file(root, id)) {
         if let Ok(cell) = serde_json::from_str::<Cell>(&text) {
             return Some(cell);

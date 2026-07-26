@@ -54,6 +54,11 @@ fn event_date_ms(event: &Value) -> Option<i64> {
 /// (by date, ties broken by later file position) wins per `target` id.
 fn build_tag_overlay(root: &Path) -> HashMap<String, TagPatch> {
     let events: Vec<Value> = read_jsonl(&decisions_path(root));
+    // rust-port-22: lowest-shared-primitive counter, see
+    // `crate::read_accounting`'s module doc comment. This is one of the
+    // TWO real decisions.jsonl reads a single `active_decisions` call
+    // performs today (the other is below, in `active_decisions` itself).
+    crate::read_accounting::record_decisions_journal_parse();
     let mut tag_events: Vec<(usize, Value)> = events
         .into_iter()
         .enumerate()
@@ -118,6 +123,7 @@ pub fn active_decisions(root: &Path, recent: Option<usize>, all: bool) -> Vec<Va
 
     if !all {
         let events: Vec<Value> = read_jsonl(&decisions_path(root));
+        crate::read_accounting::record_decisions_journal_parse();
         let mut superseded: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut redacted: std::collections::HashSet<String> = std::collections::HashSet::new();
         for event in &events {
@@ -148,6 +154,10 @@ pub fn active_decisions(root: &Path, recent: Option<usize>, all: bool) -> Vec<Va
     }
 
     let active_events: Vec<Value> = read_jsonl(&decisions_path(root));
+    crate::read_accounting::record_decisions_journal_parse();
+    // The archive file is a DIFFERENT store (`decisions-archive.jsonl`),
+    // deliberately excluded from the `decisions_journal_parses` bucket,
+    // which counts the journal (`decisions.jsonl`) only.
     let archived_events: Vec<Value> = read_jsonl(&decisions_archive_path(root));
 
     // Map insertion-order semantics (JS `Map.set` on an existing key keeps

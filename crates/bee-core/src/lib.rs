@@ -19,6 +19,7 @@ pub mod guards;
 pub mod holds;
 pub mod jsdate;
 pub mod lock;
+pub mod read_accounting;
 pub mod recovery;
 pub mod registry;
 pub mod reservations;

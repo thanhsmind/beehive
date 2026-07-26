@@ -1,0 +1,103 @@
+{
+  "id": "rust-port-22",
+  "feature": "rust-port",
+  "title": "read-accounting seam + today's baseline: prove the status path reads decisions 4x, cells 6x, transcript roots 2x",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "D5",
+    "e119fc8b"
+  ],
+  "files": [
+    "crates/bee-core/*",
+    "crates/queen-bee/*",
+    "docs/history/rust-port/reports/*"
+  ],
+  "read_first": [
+    "crates/bee-core/src/decisions.rs",
+    "crates/bee-core/src/cells.rs",
+    "crates/bee-core/src/recovery.rs",
+    "crates/queen-bee/src/status.rs",
+    "crates/bee-core/src/reviews.rs",
+    "docs/history/rust-port/plan-slice3.md"
+  ],
+  "action": "MECHANISM RISK, ISOLATED AND FIRST. Build the instrument the dedup cell will be judged by, and characterise the CURRENT (un-deduped) code with it, so rust-port-23's proof is a real red-to-green transition rather than an assertion written after the change. Nothing in the suite counts reads today; every parity and oracle test compares final output only, which is exactly why the duplicate reads survived. THE BASELINE IS DERIVED, NOT DICTATED (validation B1/B2 — the earlier draft of this cell hardcoded 4/6/2 and forbade correcting it; that anchor set was wrong, and the prohibition would have sent you hunting a phantom instrument bug). What you must produce is a baseline TABLE: for each named fixture, the measured count per store, and beside each count the call sites that produced it, WITH each site marked unconditional or conditional-on-what. Validation already established the ground truth you are reconciling against, and your table must either match it or explain the difference: cells-directory scans are 5 unconditional (status.rs:539 — a site the earlier draft omitted entirely; status.rs:640 via cells.rs:218 ready_cells; status.rs:708 via cells.rs:415 tier_mix; status.rs:712 via cells.rs:442 ceiling_scarcity_warning which calls tier_mix again; status.rs:742 via cells.rs:347 global_scribing_debt) plus 2 conditional (cells.rs:332 scribing_debt, which returns early at cells.rs:319-324 when no feature resolves — the bench fixture writes feature null at queen-bench/src/fixture.rs:262, while bee-parity's enriched fixture sets a feature, so this site fires on one fixture and not the other; and recovery.rs:522, gated on a crash candidate surviving the filter chain at recovery.rs:453/:466/:469/:509/:512). Decisions-journal parses are 2 unconditional (status.rs:790 reaching decisions.rs:56 and :120) plus 2 more only when that same crash-candidate branch is entered (recovery.rs:518-524). Transcript-root scans are 1 unconditional (recovery.rs:586) plus 1 gated by the early return at recovery.rs:453-455. DEFINE WHAT YOU COUNT, EXPLICITLY (validation W1): scan_transcript_roots performs a config read plus one metadata stat per root, not a directory read — so state in the cell trace whether each counter counts filesystem operations or function invocations, and make the counter's name say which. A counter whose meaning is ambiguous cannot support the 1/1/1 claim rust-port-23 will make. MECHANISM REALITY (validation W2): #[cfg(test)] cannot work — bee-core's cfg(test) is inactive when queen-bee's integration test links it as a dependency. The mechanism decision itself is settled below; record it in the trace with its trade-off and state plainly that it is present in release builds. REACH-PROOF IS MANDATORY (house rule af2b0d2a rule 3): every conditional site your table names must have a fixture that provably reaches it — proven by removal, i.e. neutralize the seeding and show the count drop — or be recorded as unreached with the reason. Also note (validation W6) that ready_cells issues one read_cell per dep plus an archive directory read on each miss (cells.rs:172, :211); state whether those land inside your cells-scan bucket or a separate counter, because rust-port-23's dedup can move that cost without moving your headline number. COUNTER PLACEMENT IS PART OF THE CONTRACT, NOT AN IMPLEMENTATION DETAIL (advisor note 2): put the counters at the LOWEST shared read primitives — the file/jsonl read and directory-scan layer, keyed by store class — never at today's reader-function entries. A counter at the reader entries is gameable by the very refactor it judges: rust-port-23 introduces a new load point, and a counter that only watches the old entries would report 1 while real reads differ. Any code path that touches a store must increment. THE HOOK PATHS ARE IN SCOPE FOR THE BASELINE (advisor note 1, the sixth blocker): the signature change in rust-port-23 lands on two live hook entry points — chain_nudge.rs:133 (scribing_debt) and state_sync.rs (list_cells via its cell_counts loop) — which run per lifecycle event under a tighter latency expectation than status, and today scribing_debt early-returns WITHOUT any cells scan when no feature resolves. Baseline both hook entry points too, not just build_status: chain-nudge with no active feature must show zero cells scans, and with a feature exactly one. Without those baselines, rust-port-23 can turn a conditional scan of 250+ cell files into an unconditional one on every hook event with every verify leg green. THE MECHANISM IS DECIDED, NOT DELEGATED (cold-pickup C3): use an ALWAYS-COMPILED relaxed atomic counter. cfg(test) cannot work (bee-core's cfg(test) is inactive when queen-bee's integration test links it), and a non-default cargo feature is ruled out by this cell's own proof surface — bee-parity spawns the sibling RELEASE binary (bee-parity/src/main.rs:269), so a seam behind a non-default feature would be absent from exactly the build the parity legs measure. The counter ships in release; that is the accepted trade, and the cell's job is to prove its cost is negligible rather than to pretend it has an off state. THE PLAN FILE IS STALE ON THESE POINTS (cold-pickup C1): docs/history/rust-port/plan-slice3.md is frozen at Gate 2 and still carries the superseded material at :33 (a Discovery table omitting status.rs:539 and listing cells.rs:332 as unconditional), :52 ('reproduces today's 4/6/2 exactly') and :65 ('a test-only counting seam, inert unless armed'). Read the plan for approach and rationale; THIS CELL supersedes it on the baseline numbers and the seam mechanism. RECONCILE, DO NOT CONTRADICT (cold-pickup minor): decision e119fc8b's 4x/6x/2x are correct FOR THE BENCH FIXTURE — 4 = 2 unconditional + 2 crash-candidate-gated, 2 = 1 + 1 gated, and 6 = 5 unconditional + recovery.rs:522, with cells.rs:332 early-returning there because queen-bench/src/fixture.rs:262 writes a null feature. What was wrong was treating those totals as fixture-independent and omitting status.rs:539; say that in the table rather than reporting a contradiction. NOTE: no existing test calls build_status (rg over crates/*/tests finds none) — you are writing the first one; StatusContext has public fields and a from_process constructor, so an integration test can drive it directly. DO NOT dedup anything in this cell.",
+  "must_haves": {
+    "truths": [
+      "a baseline table exists naming, per fixture, the measured count per store AND per call site — the counters are site-labelled so the table is the test's own output rather than prose beside it — each site marked unconditional or conditional-on-what, reconciling with the validated ground truth (cells 5 unconditional including status.rs:539 plus 2 conditional; decisions 2 unconditional plus 2 crash-candidate-gated; transcript roots 1 unconditional plus 1 gated) and explaining how those totals produce e119fc8b's fixture-specific 4/6/2",
+      "every conditional site in the table is either reach-proven by removal on a named fixture (neutralize the seeding, show the count drop) or recorded as unreached with its reason",
+      "each counter's unit is stated and reflected in its name — filesystem operations or function invocations — and the per-dep read_cell reads plus the archive directory read are either counted in a named bucket or explicitly excluded with the reason",
+      "the seam mechanism is recorded in the trace with its trade-off and an explicit statement of whether it is compiled into release builds; if it is, a measurement shows its cost is negligible against the status budget",
+      "a negative control proves the counters do not alter behaviour: the six bee-parity status legs stay zero-diff and bee-parity --self-check stays green with the seam present",
+      "the counters sit at the lowest shared read primitives (file/jsonl read and directory scan, keyed by store class), not at reader-function entries — stated in the trace and demonstrated by a test showing a direct primitive call increments the same counter a reader call does",
+      "the two hook entry points are baselined alongside build_status: chain-nudge with no active feature shows zero cells scans, chain-nudge with a feature shows exactly one, and state-sync's own counts are recorded — these are the per-event paths rust-port-23's signature change lands on",
+      "reach-proofs for the conditional sites are labelled baseline-only evidence in the table, since a hoisted read reports one count whether or not the conditional consumer still consumes",
+      "the always-compiled counter's cost is measured, not asserted: queen-bench --check runs with the seam present and the status gate stays green against its current budget"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/",
+        "substantive": "the read-accounting seam"
+      },
+      {
+        "path": "crates/queen-bee/tests/",
+        "substantive": "baseline table test, reach-proofs for conditional sites, behaviour-unchanged control"
+      }
+    ],
+    "key_links": [
+      "rust-port-18's env-gated crash seam is the in-repo precedent for a test seam, but it is a once-per-process branch while this is a per-read one — the precedent informs the shape, it does not settle the mechanism",
+      "rust-port-23 consumes this instrument to prove the dedup"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No dedup, memoization or call-site reordering in this cell — instrument only",
+      "The seam must not change any observable output, field order, or degraded-block behaviour",
+      "Never adjust a measured count to match an expectation: when the instrument and the validated ground truth disagree, report the discrepancy with the call graph that explains it",
+      "Tests never touch the live .bee/ store",
+      "No edits to crates/Cargo.toml members list",
+      "Never gate the seam behind a non-default cargo feature — bee-parity measures the release binary, so a feature-gated seam would be absent from the very build the parity legs prove"
+    ]
+  },
+  "verify": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test read_accounting && cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --status-check && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --self-check && cargo run --release --manifest-path crates/Cargo.toml -p queen-bench -- --check",
+  "behavior_change": true,
+  "tier": "generation",
+  "trace": {
+    "worker": "Phil",
+    "outcome": "Added bee_core::read_accounting: always-compiled, thread-local relaxed-atomic counters at the lowest shared read primitives (decisions.jsonl parse in decisions.rs x2 call sites, cells-dir scan in cells::list_cells, per-dep read_cell, transcript-root scan invocation + fs::metadata stat op in recovery::scan_transcript_roots), never at today's higher-level reader-function entries. New queen-bee integration test crates/queen-bee/tests/read_accounting.rs (12 tests) builds a derived per-fixture, per-site baseline table: reconciles e119fc8b's 4/6/2 exactly against the real queen-bench D5 fixture (with the fs-op-unit transcript counter correctly diverging to 4, explained); reach-proves every conditional site by removal (scribing_debt feature gate, recovery SharedInputs crash-candidate-track gate vs the weaker any-session gate, ready_cells dep-read gate, archive-fallback correctness); baselines both hook entry points named by advisor note 1 (chain-nudge 0-vs-1 cells scan by feature, state-sync's unconditional 1); and a negative control proving build_status output is byte-identical regardless of counter state. No dedup performed — instrument only, per prohibition.",
+    "files_changed": [
+      "crates/bee-core/src/read_accounting.rs",
+      "crates/bee-core/src/lib.rs",
+      "crates/bee-core/src/decisions.rs",
+      "crates/bee-core/src/cells.rs",
+      "crates/bee-core/src/recovery.rs",
+      "crates/queen-bee/tests/read_accounting.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T17:26:25.003Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\n    \"crates/bee-core/tests/status_readers_a.rs (its host_real_fixture()/queen_bench_bin() helpers are the precedent this cell's own bench-fixture helper mirrors — read first, per test-economy D5, before writing a second copy)\",\n    \"crates/queen-bee/tests/heavyhooks_conformance.rs (its seed_session/seed_cell/write_state_json fixture-writing conventions are reused here rather than re-invented)\"\n  ],\n  \"tests_added\": [\n    \"crates/queen-bee/tests/read_accounting.rs — new file, 12 tests: primitive/reader-call parity, the e119fc8b bench-fixture baseline table, four reach-proof-by-removal tests (scribing_debt, recovery SharedInputs, transcript-root invocation gating, ready_cells dep reads), the archive-fallback correctness check, two hook-entry-point baselines (chain-nudge, state-sync), the stat-op-vs-invocation unit-divergence demonstration, and the byte-identical negative control\"\n  ],\n  \"new_suite_reason\": \"This cell's own must-haves require the baseline table, four independent reach-proofs, two hook-entry-point baselines and a negative control to be actual runnable tests (not prose) proving the seam — no existing suite exercises read counting at all, since nothing before this cell counted reads; a new permanent integration-test file is the only place this evidence can live.\",\n  \"red_failure_evidence\": \"Captured a genuine red run before restoring the wiring: `git stash push -- crates/bee-core/src/{cells,decisions,recovery}.rs` reverted the three counter call-sites (keeping the new read_accounting.rs module, its lib.rs registration, and the new test file intact), then `cargo test -p queen-bee --test read_accounting` FAILED 10 of 12 tests with every counter reading 0 where a nonzero count was asserted — e.g. `bench_fixture_baseline_reconciles_with_e119fc8b_4_6_2` panicked \\\"assertion `left == right` failed: decisions: e119fc8b's stated total for this fixture / left: 0 / right: 4\\\", and `primitive_and_reader_calls_increment_the_same_shared_counter` panicked \\\"a direct list_cells call must increment the shared counter / left: 0 / right: 1\\\". `git stash pop` restored the wiring and the same command went to 12/12 green — a genuine red-to-green transition, not an assertion written after the fact.\",\n  \"verification_run\": \"cargo test -p queen-bee --test read_accounting: 12 passed. cargo build --release: ok. bee-parity --status-check: PASS, all 6 legs (plain/enriched x json/text/json+lanes-full) zero-diff. bee-parity --self-check: PASS. queen-bench --check: pass:true, status warm p95 ~51.8-53.7ms (budget 70ms), ping p95 ~1.2-1.3ms (budget 5ms) — the always-compiled counter's cost is negligible against the current status gate.\"\n}\n",
+    "verify_output": "cargo test: 12 passed (read_accounting: baseline table reconciles e119fc8b 4/6/2 on the real queen-bench fixture; reach-proofs by removal for scribing_debt/SharedInputs/ready_cells dep-reads/transcript-root gating; hook entry points baselined: chain-nudge 0-vs-1 cells scan by feature, state-sync unconditional 1; negative control: build_status output byte-identical regardless of counter state). cargo build --release: ok. bee-parity --status-check: PASS -- all 6 legs (plain/enriched x json/text/json+lanes-full) zero-diff, seeded-mutation detected. bee-parity --self-check: PASS -- self-parity zero-diff, seeded-mutation correctly detected. queen-bench --check: pass:true, status warm p95 51.8-53.7ms well under the 70ms e119fc8b interim budget (ping p95 ~1.2-1.3ms under 5ms budget) -- the always-compiled counter's cost is negligible.",
+    "verify_passed": true,
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T17:04:47.963Z",
+    "verify_command": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test read_accounting && cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --status-check && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --self-check && cargo run --release --manifest-path crates/Cargo.toml -p queen-bench -- --check",
+    "verified_at": "2026-07-26T17:24:08.261Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T17:24:08.261Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T17:06:19.745Z",
+        "acquired_at": "2026-07-26T17:04:47.961Z",
+        "worker": "Phil",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

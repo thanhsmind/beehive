@@ -204,6 +204,13 @@ fn io_error_code(err: &std::io::Error) -> String {
 /// its path; the Claude DEFAULT root's own missing case stays silent
 /// (matches the mjs source's D2/hardening-5 contract).
 pub fn scan_transcript_roots(root: &Path, projects_root: &Path) -> Vec<Value> {
+    // rust-port-22: lowest-shared-primitive counter (see
+    // `crate::read_accounting`'s module doc comment) — one increment per
+    // CALL to this shared function (function-invocation unit, reconciles
+    // with decision e119fc8b's stated "2"), distinct from the
+    // per-fs::metadata-stat counter below (filesystem-operation unit,
+    // which scales with how many roots are configured).
+    crate::read_accounting::record_transcript_root_scan_invocation();
     let config = read_config_value(root);
     let configured_raw = config.get("recovery").and_then(|r| r.get("transcript_roots")).cloned().unwrap_or(Value::Null);
     let configured = normalize_transcript_roots_config(&configured_raw);
@@ -217,7 +224,14 @@ pub fn scan_transcript_roots(root: &Path, projects_root: &Path) -> Vec<Value> {
     entries
         .into_iter()
         .map(|(runtime, path_str, is_configured)| {
-            let (scanned, reason) = match fs::metadata(&path_str) {
+            let meta_result = fs::metadata(&path_str);
+            // rust-port-22: the actual filesystem-operation counter (see
+            // `crate::read_accounting`'s module doc comment) — one
+            // increment per real `fs::metadata` stat, counted whether it
+            // succeeds or not, deliberately separate from the
+            // invocation-level counter above.
+            crate::read_accounting::record_transcript_root_stat_op();
+            let (scanned, reason) = match meta_result {
                 Ok(meta) => {
                     if meta.is_dir() {
                         (true, None)
