@@ -1717,6 +1717,13 @@
       "packagePath": "packages/bee/lib/lock.mjs"
     },
     {
+      "path": "packages/bee/lib/path-identity.mjs",
+      "sha256": "228f35fa284b06220e4e364017281c0742db6cf85faf819bc7b7c148ce2d96b1",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/lib/path-identity.mjs"
+    },
+    {
       "path": "packages/bee/lib/perf.mjs",
       "sha256": "57dedfbd53cfce7a35ddb1e2cae1cc9c86533bdfa4df45965fcca0fc8497e5fc",
       "mode": "644",
@@ -1809,7 +1816,7 @@
     },
     {
       "path": "packages/bee/lib/worktree-store.mjs",
-      "sha256": "99802ffb7dd382a2c7e069f308cddaa44901fd66c637165e67c58c9041de5e89",
+      "sha256": "3bf58926db0144e6466996effbc1bcba70da2d711d007db9a9a0c3aa98ab6580",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/worktree-store.mjs"

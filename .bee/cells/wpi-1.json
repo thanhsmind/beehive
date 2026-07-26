@@ -1,0 +1,92 @@
+{
+  "id": "wpi-1",
+  "feature": "windows-path-identity",
+  "title": "canonical path-identity comparison, applied at the worktree gitdir pointer",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee/lib/*",
+    "scripts/tests/*",
+    "packages/bee/tests/*",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee/lib/worktree-store.mjs",
+    ".github/workflows/windows.yml",
+    "scripts/tests/test_portable_paths.mjs",
+    "docs/history/windows-path-identity/plan.md"
+  ],
+  "action": "Fix ONE real product bug: the worktree gitdir bidirectional identity check. Validation corrected this cell's earlier draft on four points — read them as requirements. THE SITE, and only this site: packages/bee/lib/worktree-store.mjs:1110, `if (path.resolve(reverseResolved) !== path.resolve(gitWorktreeDir)) return null;`. When the two strings denote the same directory but do not match byte-for-byte, a linked worktree fails to resolve, `bee worktree merge` never reaches its verify child, and the merge-queue suite times out waiting for a marker — that is the FAIL LOUD chain behind test_msn_invariants invariants 7 and 12. NOT A SITE: worktree-store.mjs:491 (readWorktreeGitVerifiedId) performs no comparison — it extracts an id and returns path.basename(gitdir), which IS git's registry key and must keep git's exact spelling. Canonicalizing there is a category error and case-folding there is actively harmful. Leave it alone. WHAT THE SEPARATOR STORY GETS WRONG: :1098 and :1109 already do .replace(/\\\\/g, path.sep) and wrap in path.resolve, and path.win32.resolve normalizes forward slashes — separators are ALREADY handled at this site. The residual delta is realpath (8.3 short-name aliasing: a runner reports C:\\Users\\RUNNER~1\\... where the long form differs) and case. Do not 'fix separators', re-run, and declare victory. IDENTITY BY INODE IS UNSAFE AS STATED: Node reports ino = 0 on filesystems with no file index (FAT/exFAT, many SMB/UNC shares, historically directories), so two distinct directories would compare EQUAL — exactly the wrong-pointer-accepted failure this fix exists to prevent. Treat a zero inode (or a zero device) as unusable and fall back to the string comparison. Hardlinks and junctions also compare EQUAL by identity while being distinct paths, so identity is a fast path for the common case, never the only rule. CASE SENSITIVITY IS PER-VOLUME, NOT PER-PLATFORM: APFS can be either, Windows supports per-directory case sensitivity (WSL sets it), Linux can mount case-insensitive. A `process.platform === 'win32'` fold is itself the 'EQUAL for two paths that must stay distinct' bug. Detect the volume's actual behaviour — for example by probing whether the existing path resolves under a case-flipped spelling — and cache that per root rather than assuming from the platform. THE TEST SEAM, which the earlier draft left unreachable: resolveWorktreeById(mainRoot, id) has no options bag and is called internally, so a helper that is only unit-testable in isolation leaves the site itself unproven. Give the comparison an explicit injection seam AND thread it to this call site (an options parameter with a default, a module-level test hook, or an env-gated override — choose one, name it in the trace, and make the site's test drive the real resolveWorktreeById rather than the helper alone). THE VERIFY MUST DISCRIMINATE: every leg of the earlier draft's verify was green on the unmodified tree — measured by validation. Name your new test file explicitly in the verify (run_verify --only takes explicit tokens and will not pick up a new file otherwise), and record a red-first proof: with the old raw comparison restored, your new fixture fails; with the fix, it passes.",
+  "must_haves": {
+    "truths": [
+      "a canonical path-identity comparison exists whose case behaviour is detected from the volume in play rather than assumed from process.platform, with the detection result cached per root and the detection itself covered by a test",
+      "a zero inode or zero device is treated as unusable and falls back to string comparison — proven by a test that forces the zero case and shows two distinct paths still compare UNEQUAL",
+      "the comparison is injectable AND the injection reaches resolveWorktreeById's own call site: the site's test drives the real resolveWorktreeById, not the helper in isolation",
+      "a fixture whose pointer differs only in spelling (the case the injection simulates) resolves correctly, and a fixture with a genuinely wrong pointer still returns null",
+      "red-first evidence is recorded: with the old raw comparison restored the new fixture fails; with the fix it passes",
+      "the verify names the new test file explicitly and no existing worktree suite regresses — worktree store, merge queue and msn invariants all pass locally",
+      "the release-manifest regen chain ran inside this cell and release_manifest.mjs --check is green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/lib/",
+        "substantive": "the canonical comparison and its single use at the gitdir identity check"
+      },
+      {
+        "path": "scripts/tests/",
+        "substantive": "volume-behaviour detection tests, the zero-inode negative control, and the resolveWorktreeById site test"
+      }
+    ],
+    "key_links": [
+      "only worktree-store.mjs:1110 is a comparison; :491 returns git's registry key and is out of scope",
+      "windows.yml's comment block names path normalization as this cause's fix direction"
+    ],
+    "prohibitions": [
+      "Never fold case from process.platform — detect the volume's behaviour",
+      "Never accept a zero inode or zero device as proof of identity",
+      "Never touch worktree-store.mjs:491 — its return value must keep git's exact spelling",
+      "Never loosen a timeout or skip a suite to make the chain green",
+      "No behaviour change on POSIX: existing suites pass unchanged"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only scripts/tests/test_path_identity.mjs && node scripts/run_verify.mjs --only scripts/tests/test_worktree_merge_queue.mjs && node scripts/run_verify.mjs --only packages/bee/tests/test_msn_invariants.mjs && node scripts/release_manifest.mjs --check",
+  "behavior_change": true,
+  "tier": "generation",
+  "trace": {
+    "worker": "Bob",
+    "outcome": "Canonical path-identity comparison (packages/bee/lib/path-identity.mjs) wired into worktree-store.mjs's gitdir reverse-pointer check (:1110, resolveWorktreeById) via an injectable pathsEqual seam threaded through mergeFeatureWorktree's options -- fixes the one diagnosed Windows CI cause without touching :491 or folding case from process.platform.",
+    "files_changed": [
+      "packages/bee/lib/path-identity.mjs",
+      "packages/bee/lib/worktree-store.mjs",
+      "scripts/tests/test_path_identity.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T23:00:03.443Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": \"packages/bee/tests/test_worktree_store.mjs (createFeatureWorktree/mergeFeatureWorktree fixture pattern -- exercises the merge lifecycle but every fixture there produces byte-identical forward/reverse gitdir pointers) and scripts/tests/test_worktree_merge_queue.mjs (spawns .bee/bin/bee.mjs end-to-end). Neither covers a case/separator-mismatched or symlink-aliased reverse pointer -- the exact new case this cell adds.\",\n  \"tests_added\": [\"scripts/tests/test_path_identity.mjs\"],\n  \"new_suite_reason\": \"Proves a distinct mechanism -- the path-identity comparison helper's own platform branches, plus the resolveWorktreeById call site itself -- that no existing worktree-store suite has any fixture for; a new permanent CI suite, not a row appended to an existing file.\",\n  \"red_failure_evidence\": \"Pre-fix (git stash push -- packages/bee/lib/worktree-store.mjs, restoring the raw path.resolve(reverseResolved) !== path.resolve(gitWorktreeDir) comparison at line 1110): running node scripts/tests/test_path_identity.mjs gave 7 passed, 2 failed. Both new site-level fixtures failed with WORKTREE_MERGE_UNKNOWN_ID -- the symlink-alias-identity fixture and the case-fold-injected fixture -- because resolveWorktreeById had no way to accept a differently-spelled-but-same-directory reverse pointer; on real Windows CI this is exactly the case/8.3-short-name aliasing that made bee worktree merge refuse a valid linked worktree, cascading into the merge-queue suite timing out waiting for a marker and msn invariants 7 and 12 failing loud (plan.md). git stash pop restored the fix and all 9 tests went green.\",\n  \"verification_run\": \"node scripts/run_verify.mjs --only scripts/tests/test_path_identity.mjs (9/9 PASS, 362ms) && node scripts/run_verify.mjs --only scripts/tests/test_worktree_merge_queue.mjs (PASS, 3023ms) && node scripts/run_verify.mjs --only packages/bee/tests/test_msn_invariants.mjs (PASS, 25149ms, invariants 7/12 included) && node scripts/release_manifest.mjs --check (395 file(s) match stored manifest, regenerated via --write after adding packages/bee/lib/path-identity.mjs). Also spot-checked packages/bee/tests/test_worktree_store.mjs (PASS, 1258ms) for regression on the same module's other call paths.\"\n}\n",
+    "verify_output": "SCOPED RUN test_path_identity.mjs: PASS 362ms (9 passed, 0 failed). RED-FIRST proof (git stash worktree-store.mjs, pre-fix raw comparison restored): 7 passed, 2 failed -- exactly the two new fixtures (symlink-alias identity, case-fold branch) failed with WORKTREE_MERGE_UNKNOWN_ID; unstash restores 9/9 green. SCOPED RUN test_worktree_merge_queue.mjs: PASS 3023ms. SCOPED RUN test_msn_invariants.mjs: PASS 25149ms (invariants 7 and 12 included, green). release_manifest --check: 395 file(s) match stored manifest (regenerated via --write after adding packages/bee/lib/path-identity.mjs; worktree-store.mjs hash updated). No regression: packages/bee/tests/test_worktree_store.mjs also PASS 1258ms.",
+    "verify_passed": true,
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T22:45:12.113Z",
+    "verify_command": "node scripts/run_verify.mjs --only scripts/tests/test_path_identity.mjs && node scripts/run_verify.mjs --only scripts/tests/test_worktree_merge_queue.mjs && node scripts/run_verify.mjs --only packages/bee/tests/test_msn_invariants.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-26T22:58:55.825Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T22:58:55.825Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T22:45:48.029Z",
+        "acquired_at": "2026-07-26T22:45:12.111Z",
+        "worker": "Bob",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}
