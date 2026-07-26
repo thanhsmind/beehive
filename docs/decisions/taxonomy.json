@@ -234,6 +234,8 @@
     "port",
     "slice3",
     "status",
-    "read-dedup"
+    "read-dedup",
+    "windows-path-identity",
+    "correction"
   ]
 }

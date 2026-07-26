@@ -147,6 +147,49 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-07-26T23:10:23.648Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "false-equal-closed",
+            "status": "PASS",
+            "evidence": "Round 1's experiment re-run against the reworked module: two simultaneously-existing, genuinely distinct directories — one named with a literal backslash, one nested — now compare UNEQUAL in both argument orders, and the variant where the nested directory does not exist also returns false, while a path compared with itself still returns true. The hand-rolled fold is gone; the only separator handling is the injected platform's resolve. Win32 injection compares a backslash spelling equal to its slash form, correctly. No NEW false equal from injecting win32 on POSIX: the win32-resolved forms do not exist there, so the identity fast path throws and falls to a string comparison of two strings that are genuinely identical under win32 semantics — the fast path never stats a wrong EXISTING location. A drive letter differing only in case returns false, which is the safe direction. No production caller passes the platform injection; only tests do. Minor injection-only smell: the volume detection walks ancestors with the ambient path rather than the injected one, so under win32-on-POSIX both sides collapse to the same answer — no false equal, but the probe is meaningless in that configuration."
+          },
+          {
+            "id": "regression-guard-is-load-bearing",
+            "status": "PASS",
+            "evidence": "Reproduced read-only via a module resolve hook redirecting the helper to a scratch copy carrying the pre-rework body verbatim, leaving the tracked tree untouched: 11 passed, 2 failed — exactly the both-sides-fold guard and the POSIX backslash guard, with assertion messages rather than compile errors, and the other eleven checks executing and passing. Baseline unmodified: 13 passed. Caveat recorded: the windows-shaped fold test also passes under the pre-rework module (the old fold happened to produce the same lowercased string), so it does not discriminate the blocker on POSIX; the two named guards are the load-bearing ones, as claimed."
+          },
+          {
+            "id": "both-sides-fold",
+            "status": "PASS",
+            "evidence": "The case decision now requires both sides to agree. Measured in both orders on a non-existent pair: insensitive-then-sensitive returns false after two probes; sensitive-then-insensitive returns false after one, since the conjunction short-circuits and never probes the second side — outcome correct either way. Neither side inherits the other's answer. Honesty note on the test: it does not construct a real straddle; it injects a call-counter returning true then false over a pair on one device. It pins the code's contract rather than a real two-volume scenario, and a genuine straddle is unconstructible on this single-volume machine — the test's own comment says so."
+          },
+          {
+            "id": "cache-key-by-device",
+            "status": "PASS",
+            "evidence": "The cache key is now the device number, with the ancestor path string as fallback. Failure modes probed: a throwing stat falls back to the path key and works; two different real volumes do not collide. One real collision class found and recorded as advisory: with a forced zero device, two distinct directories share the single key, the probe runs once, and the second inherits the first's answer — so every no-file-index volume reporting device zero shares one cache slot, and on such a volume the identity fast path is also unusable, leaving the poisoned fold to decide. Narrow and unreproducible on this box. A second residual in the same family: the read-only probe compares device and inode, which on a zero-identity volume evaluates zero-equals-zero twice and reports case-insensitive whenever a case-flipped sibling merely exists. The cache remains module-global and uninvalidated, which matters less with a device key than with a path key but is what makes the zero-device poisoning persist for the process."
+          },
+          {
+            "id": "read-only-probe-first",
+            "status": "PASS",
+            "evidence": "The read-only probe runs first and the write probe is reached only on a null return, which happens in exactly two cases: no case-bearing character in the basename, or an unstat-able sample. Proved by instrumenting the filesystem write and driving the detection: probing a stale gitdir pointer under the git worktrees directory recorded NO writes, because that ancestor has letters and the read-only path settles it; probing under a numeric-basename ancestor recorded a real write. So a comparison can still write, under exactly that condition — identity unusable AND the nearest existing ancestor's basename carrying no case-bearing character. Round 1's specific concern, a write landing inside git worktree metadata on the merge path, is closed for the realistic shape."
+          },
+          {
+            "id": "no-regression",
+            "status": "PASS",
+            "evidence": "Five files, all inside the cell's declared globs plus bookkeeping, and every code change maps to a finding: the fold removed and the platform injected (the blocker), the both-sides conjunction, the device key, the read-only probe, and the fixture cleanup. The worktree store was untouched this round. Judge's own runs: the path-identity suite 13/13, the merge-queue suite, the msn invariants and the worktree store suite all pass, and the release manifest reports 395 files matching. The herding suite's red was confirmed as wpi-2's coupling rather than a wpi-1 break: the only failing check was wpi-2's own guard row, on the single assertion that pins the removed universal backslash fold, with its six other checks green — and re-running that suite through the pre-rework hook turned it fully green, which is proof of causation."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T23:33:19.305Z"
       }
     ],
     "reopened_for_rework": {

@@ -23,4 +23,4 @@ never a generation timestamp or any other wall-clock value.
 - [rust-runtime/](rust-runtime/index.md) — 3 concept(s)
 - [verify-pipeline/](verify-pipeline/index.md) — 3 concept(s)
 - [workflow-state/](workflow-state/index.md) — 16 concept(s)
-- [worktree-parallelism/](worktree-parallelism/index.md) — 8 concept(s)
+- [worktree-parallelism/](worktree-parallelism/index.md) — 9 concept(s)
