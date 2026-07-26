@@ -81,25 +81,55 @@ jobs:
         #
         # ============================================================
         # LOUD WINDOWS-ONLY EXCLUSION (rel1710rc-2, v1.7.10-rc)
+        # STATUS as of windows-path-identity/wpi-3 (2026-07-27): NOT a
+        # single cause, still all 4 excluded, one contributing cause fixed.
         # ============================================================
         # The FIRST real windows-latest run of this job (windows.yml fix,
         # cell 1710-1) exposed genuine, pre-existing Windows portability bugs
         # in exactly these 4 suites — never proven broken before because
-        # nothing had ever actually run them on Windows. Each is excluded
-        # here ONLY for this job, ONLY these 4, nothing else:
+        # nothing had ever actually run them on Windows. The windows-path-
+        # identity feature (wpi-1/wpi-2/wpi-3) later investigated these under
+        # the hypothesis "one mechanism, path-string identity" — that
+        # hypothesis was WRONG for two of the four, corrected below. Each
+        # suite is excluded here ONLY for this job, ONLY these 4, nothing
+        # else:
         #   - packages/bee/tests/test_bee_cli.mjs
-        #     (linked-worktree reverse gitdir pointer mismatch on C:\ paths,
-        #     plus doctor-wording/recovery-window/registry-example failures)
+        #     FIXED (wpi-1, packages/bee/lib/worktree-store.mjs:1110): the
+        #     linked-worktree reverse gitdir pointer mismatch on C:\ paths,
+        #     via canonicalPathsEqual (packages/bee/lib/path-identity.mjs).
+        #     STILL UNFIXED, path-identity never touched these — three
+        #     distinct, undiagnosed failure classes named in the original
+        #     P1 row, each its own backlog row filed by wpi-3:
+        #       - doctor-wording failures
+        #       - recovery-window/recovery-scan failures
+        #       - registry-example failures
         #   - packages/bee/tests/test_bee_write_guard_hook.mjs
+        #     NO DIAGNOSED CAUSE. Never path-identity — that attribution in
+        #     the original finding was assertion, not evidence. Backlog row
+        #     filed by wpi-3 records the absence of a diagnosis as the
+        #     finding.
         #   - packages/bee/tests/test_cells.mjs
+        #     DIAGNOSED, NOT FIXED (out of scope for windows-path-identity):
+        #     an independent PERMISSION-MODEL cause, not path-string.
+        #     test_cells.mjs:1634-1639 skips its write-failure simulation
+        #     when `process.geteuid?.() === 0`; `geteuid` is undefined on
+        #     win32 so the skip never fires, and Node's `chmod` on Windows
+        #     only sets the read-only attribute — it does not stop directory
+        #     entry creation — so the forced write succeeds and the
+        #     assertion fails. Backlog row filed by wpi-3 with this anchor.
         #   - packages/bee/tests/test_misc.mjs
+        #     NO DIAGNOSED CAUSE, same as test_bee_write_guard_hook.mjs above.
         # Reference: P1 backlog row filed 2026-07-21 ("4 template suites fail
         # on real Windows: worktree gitdir pointer path, write-guard hook,
-        # cells, misc" — .bee/backlog.jsonl, CI run 29799623217). Fix path per
-        # that row: make these Windows-portable (path normalization is the
-        # likely shared root cause), then remove them from BEE_VERIFY_EXCLUDE
-        # below and let auto-discovery pick them back up — do NOT silently
-        # extend this list without a matching backlog row.
+        # cells, misc" — .bee/backlog.jsonl, CI run 29799623217); windows-
+        # path-identity's own backlog rows filed 2026-07-27 give each
+        # remaining cause (or its absence) its own row. Removing ANY one of
+        # these 4 from BEE_VERIFY_EXCLUDE is gated on a real windows-latest
+        # CI run showing that specific suite green — a local Linux pass is
+        # NOT evidence: these suites are excluded here precisely because
+        # Windows differs, so passing on Linux proves nothing about them —
+        # do NOT silently extend or shrink this list without a matching
+        # backlog row and, for a removal, a green Windows run to cite.
         # ============================================================
         env:
           BEE_VERIFY_ROOT_FILTER: packages/bee/tests
@@ -111,10 +141,10 @@ jobs:
         run: node scripts/run_verify.mjs
 
       - name: portable paths guard
-        run: node scripts/test_portable_paths.mjs
+        run: node scripts/tests/test_portable_paths.mjs
 
       - name: config validate
-        run: node scripts/test_config_validate.mjs
+        run: node scripts/tests/test_config_validate.mjs
 
   install-ps1-syntax:
     runs-on: windows-latest

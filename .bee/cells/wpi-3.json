@@ -1,0 +1,87 @@
+{
+  "id": "wpi-3",
+  "feature": "windows-path-identity",
+  "title": "repair two broken workflow step paths, guard them with a test, and file what the exclusions really hide",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "wpi-1",
+    "wpi-2"
+  ],
+  "decisions": [],
+  "files": [
+    ".github/workflows/*",
+    "scripts/tests/*",
+    "docs/history/windows-path-identity/*"
+  ],
+  "read_first": [
+    ".github/workflows/windows.yml",
+    "docs/history/windows-path-identity/plan.md"
+  ],
+  "action": "Close the CI loop honestly. Validation deleted this cell's headline job — read why. THE EXCLUSIONS ARE NOT REMOVED IN THIS SLICE. The earlier draft removed all four on the strength of a local pass; validation measured all four passing on this Linux machine and pointed out that they were excluded precisely BECAUSE Windows differs, so a Linux pass is definitionally not evidence about them. Worse, two of the four are documented as having causes this slice does not touch: windows.yml:90-92 lists for test_bee_cli.mjs 'linked-worktree reverse gitdir pointer mismatch on C:\\ paths, plus doctor-wording/recovery-window/registry-example failures' — four classes, one addressed — and test_cells.mjs:1634-1639 skips its write-failure simulation on euid 0, which never fires on win32 where geteuid is undefined, while chmod there does not prevent directory entry creation. Removing those exclusions would convert a documented red into a surprise red. WHAT THIS CELL DOES INSTEAD, three parts. (1) Fix BOTH broken workflow step paths: windows.yml:114 runs node scripts/test_portable_paths.mjs and :117 runs node scripts/test_config_validate.mjs; both files live under scripts/tests/. Neither step can succeed today, and both have been masked by the job failing earlier. (2) Add a test that validates workflow step script paths — nothing in the repo does this today, which is why two broken steps sat unnoticed. It must parse the workflow files, extract every `node <path>` invocation from run steps, and assert each path exists; prove it discriminates by pointing one step at a nonexistent file in a fixture and watching it fail. (3) File one backlog row per remaining Windows cause with what is actually known: test_bee_cli's three non-path classes named individually, test_cells' permission-model difference with its line anchor, and test_bee_write_guard_hook plus test_misc recorded as having NO diagnosed cause — that absence is itself the finding, since attributing them to path identity was assertion. Update windows.yml's comment block to say what is now true: the exclusions stand, one contributing cause has been fixed, each remaining cause is filed, and removal is gated on a Windows run showing the suite green. HONEST VERIFICATION LIMIT: this machine is not Windows. Local green proves no POSIX regression and proves the workflow paths resolve; it proves nothing about Windows behaviour. Write that sentence in the report and do not write one that reads as though Windows was verified here.",
+  "must_haves": {
+    "truths": [
+      "both broken workflow step paths are corrected and a test asserts every `node <path>` run-step invocation across the workflow files resolves to a file that exists",
+      "that test is proven to discriminate: a fixture pointing a step at a nonexistent file makes it fail",
+      "the four exclusions remain in place, and the comment block states what is true now — one contributing cause fixed, the rest filed, removal gated on a Windows run",
+      "one backlog row per remaining cause: test_bee_cli's three non-path classes named individually, test_cells' permission-model difference with its anchor, and the two suites with no diagnosed cause recorded as exactly that",
+      "the report states plainly that local green proves no POSIX regression and that no Windows claim is made from this machine"
+    ],
+    "artifacts": [
+      {
+        "path": ".github/workflows/windows.yml",
+        "substantive": "two corrected step paths and an honest comment block"
+      },
+      {
+        "path": "scripts/tests/",
+        "substantive": "the workflow step-path validator and its negative control"
+      }
+    ],
+    "key_links": [
+      "wpi-1 fixed the one cause that was diagnosed; the others are filed, not fixed"
+    ],
+    "prohibitions": [
+      "Never remove an exclusion in this slice",
+      "Never extend the exclusion list",
+      "Never claim Windows verification from this machine"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only scripts/tests/test_workflow_step_paths.mjs && node scripts/run_verify.mjs --only scripts/tests/test_portable_paths.mjs",
+  "behavior_change": false,
+  "tier": "generation",
+  "trace": {
+    "worker": "Stuart",
+    "outcome": "Fixed windows.yml's two broken run-step paths (portable paths guard, config validate -> scripts/tests/), added scripts/tests/test_workflow_step_paths.mjs guarding every workflow node <path> invocation with a proven-discriminating negative control, filed 4 backlog rows (one per remaining Windows cause: test_bee_cli's 3 undiagnosed non-path classes, test_cells' permission-model cause with line anchor, test_bee_write_guard_hook.mjs and test_misc.mjs recorded as NO diagnosed cause), and rewrote windows.yml's exclusion comment block to state the true current status. No exclusion removed or extended.",
+    "files_changed": [
+      ".github/workflows/windows.yml",
+      "scripts/tests/test_workflow_step_paths.mjs",
+      "docs/history/windows-path-identity/reports/wpi-3.md",
+      ".bee/backlog.jsonl"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T23:43:33.972Z",
+    "behavior_change": false,
+    "verification_evidence": "{\"new_suite_reason\": \"Nothing in the repo checked that a workflow run steps node <path> invocation resolves to a real file. Exactly this gap let two windows.yml steps sit broken (scripts/test_portable_paths.mjs, scripts/test_config_validate.mjs at scripts/tests/ instead), masked by an earlier job failure. This is a permanent CI-registered guard against that class recurring, not a one-off fixture check.\"}",
+    "verify_output": "SCOPED RUN (--only): 1 of 108 runnables selected. PASS 41ms scripts/tests/test_workflow_step_paths.mjs (4/4 assertions: real-repo zero-missing, extractor finds corrected paths, negative control catches nonexistent path, positive control passes real path). PASS run_verify: 1 suite(s). SCOPED RUN (--only): 1 of 108 runnables selected. PASS 56ms scripts/tests/test_portable_paths.mjs (now resolvable at its corrected scripts/tests/ path). PASS run_verify: 1 suite(s). Additionally confirmed offline: running the new extractor against a copy of the actual pre-fix committed windows.yml (git show HEAD:.github/workflows/windows.yml) independently reports the exact two real broken paths (scripts/test_portable_paths.mjs:114, scripts/test_config_validate.mjs:117) as missing, proving discrimination against the real defect, not only synthetic fixtures.",
+    "verify_passed": true,
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T23:36:07.424Z",
+    "verify_command": "node scripts/run_verify.mjs --only scripts/tests/test_workflow_step_paths.mjs && node scripts/run_verify.mjs --only scripts/tests/test_portable_paths.mjs",
+    "verified_at": "2026-07-26T23:43:26.440Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T23:43:26.441Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T23:42:21.818Z",
+        "acquired_at": "2026-07-26T23:36:07.422Z",
+        "worker": "Stuart",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}
