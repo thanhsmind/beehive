@@ -89,7 +89,7 @@ EOF
 log()  { printf '%s\n' "$*"; }
 fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 
-can_prompt() { [ -r /dev/tty ] && [ -w /dev/tty ]; }
+can_prompt() { [ -r /dev/tty ] && [ -w /dev/tty ] && ( : < /dev/tty ) 2>/dev/null; }
 
 confirm() {
   # confirm <question> ; returns 0 for yes. --yes always yes; non-interactive without --yes fails safe.
@@ -99,7 +99,7 @@ confirm() {
     fail "$question — no TTY to ask. Re-run with --yes to accept, or run interactively."
   fi
   printf '%s [y/N] ' "$question" > /dev/tty
-  local answer; IFS= read -r answer < /dev/tty
+  local answer; IFS= read -r answer < /dev/tty || answer=''
   case "$answer" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
 

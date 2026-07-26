@@ -1,0 +1,64 @@
+{
+  "id": "install-tty-fix-1",
+  "feature": "install-tty-fix",
+  "lane": "tiny",
+  "title": "install.sh: can_prompt must fail-safe when /dev/tty exists but cannot open",
+  "files": [
+    "scripts/install.sh",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "scripts/install.sh:92-105"
+  ],
+  "action": "Bug (live repro in this sandbox): can_prompt() tests [ -r /dev/tty ] && [ -w /dev/tty ] which PASS in sandboxed shells where /dev/tty exists but open() fails => confirm() writes to /dev/tty (error), read fails, then 'answer: unbound variable' crash under set -u — instead of the designed fail-safe 'no TTY to ask. Re-run with --yes'. Fix: (1) can_prompt() must attempt a real open: [ -r /dev/tty ] && [ -w /dev/tty ] && ( : </dev/tty ) 2>/dev/null; (2) harden the read: IFS= read -r answer < /dev/tty || answer='' so a mid-read failure can never hit set -u. Mode-gate record: tiny — 1 product file, 0 risk flags, one direct task; red-first evidence = the live crash observed 2026-07-26 (line 101-103 '/dev/tty: No such device or address' + 'answer: unbound variable'). Verify = repro turns into the designed failure message. REGEN OBLIGATION (after the fix): node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "non-tty run WITHOUT --yes exits 1 with the designed 'Re-run with --yes' message, zero 'unbound variable'",
+      "interactive and --yes paths unchanged"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no behavior change beyond the prompt guard",
+      "no edits to install.ps1 (its Confirm-Step has no such bug)"
+    ]
+  },
+  "verify": "bash -c 'cd \"$(mktemp -d)\" && out=$(setsid bash /home/thanhsmind/projects/goglbe/beegog/scripts/install.sh --source /home/thanhsmind/projects/goglbe/beegog --distribution repo-copy 2>&1 </dev/null); rc=$?; echo \"$out\" | tail -3; [ $rc -ne 0 ] && echo \"$out\" | grep -q \"Re-run with --yes\" && ! echo \"$out\" | grep -q \"unbound variable\"' && node scripts/release_manifest.mjs --check",
+  "behavior_change": true,
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "phil",
+    "outcome": "can_prompt now attempts a real /dev/tty open ( : </dev/tty ) 2>/dev/null before trusting -r/-w; read hardened with || answer='' so a mid-read failure can't hit set -u. Repro confirmed: designed fail-safe message shown, no unbound-variable crash. Manifest regenerated (render_plugin_skill_trees, onboard --apply, release_manifest --write) after the fix.",
+    "files_changed": [
+      "scripts/install.sh",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T00:00:50.740Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": \"scripts/install.sh confirm()/can_prompt() — no existing automated test suite covers install.sh interactive prompting; verification is a live repro run per cell verify command.\",\n  \"tests_added_or_changed\": \"none — verify is a scripted repro invocation of scripts/install.sh in a fresh tmp dir with no tty, per cell's verify field\",\n  \"red_failure_evidence\": \"Pre-fix (confirmed in first-dispatch report and by reading scripts/install.sh:92 before editing): can_prompt() { [ -r /dev/tty ] && [ -w /dev/tty ]; } passes in this sandbox even though /dev/tty cannot actually be opened, so confirm() writes the prompt to /dev/tty (I/O error), then `read -r answer < /dev/tty` fails and, under set -euo pipefail with `local answer` unset, the script previously crashed with 'answer: unbound variable' instead of the designed fail-safe message.\",\n  \"verification_run\": \"bash -c 'cd $(mktemp -d) && out=$(setsid bash .../scripts/install.sh --source ... --distribution repo-copy 2>&1 </dev/null); rc=$?; ...' && node scripts/release_manifest.mjs --check -> Error: No git repo at /tmp/tmp.cT8O4wEeQ8. Run git init? — no TTY to ask. Re-run with --yes to accept, or run interactively. / release_manifest --check: 394 file(s) match stored manifest / EXIT: 0\"\n}\n",
+    "verify_output": "source   /home/thanhsmind/projects/goglbe/beegog (bee 1.17.1)\nError: No git repo at /tmp/tmp.cT8O4wEeQ8. Run git init? — no TTY to ask. Re-run with --yes to accept, or run interactively.\nrelease_manifest --check: 394 file(s) match stored manifest\nEXIT: 0",
+    "verify_passed": true,
+    "claim_session": "5a8119e3-29eb-43ae-8ada-7bae86f3a20e",
+    "claimed_at": "2026-07-25T23:59:14.171Z",
+    "verify_command": "bash -c 'cd \"$(mktemp -d)\" && out=$(setsid bash /home/thanhsmind/projects/goglbe/beegog/scripts/install.sh --source /home/thanhsmind/projects/goglbe/beegog --distribution repo-copy 2>&1 </dev/null); rc=$?; echo \"$out\" | tail -3; [ $rc -ne 0 ] && echo \"$out\" | grep -q \"Re-run with --yes\" && ! echo \"$out\" | grep -q \"unbound variable\"' && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-26T00:00:41.403Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T00:00:41.403Z",
+        "claim_session": "5a8119e3-29eb-43ae-8ada-7bae86f3a20e",
+        "claimed_at": "2026-07-25T23:59:14.169Z",
+        "acquired_at": "2026-07-25T23:59:14.169Z",
+        "worker": "phil",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}
