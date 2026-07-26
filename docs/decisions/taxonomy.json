@@ -229,6 +229,8 @@
     "guards",
     "multisession",
     "rust-port",
-    "d5"
+    "d5",
+    "proof-discipline",
+    "port"
   ]
 }
