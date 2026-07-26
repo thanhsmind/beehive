@@ -566,7 +566,7 @@ fn crash_fail_open_rust_wrapper_catches_panic_exits_zero_and_writes_crash_line()
     // panic: exit code 0 and a hooks.jsonl crash line, never a deny.
     let dir = tempfile::tempdir().expect("tempdir");
     let root = dir.path();
-    let code = queen_bee::hooks::write_guard::run_fail_open(Some(root), Some("repo"), || {
+    let code = queen_bee::hooks::write_guard::run_fail_open(Some(root), "model-guard", Some("repo"), || {
         panic!("rig-injected-fault: deliberate panic in the model-guard decision region");
     });
     assert_eq!(code, 0, "fail-open contract: a panic must resolve to exit 0");

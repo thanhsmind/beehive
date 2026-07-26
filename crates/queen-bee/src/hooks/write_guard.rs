@@ -677,7 +677,19 @@ fn ask_user_question_outcome(tool_input: &Value) -> Outcome {
 /// (fail-open) — an internal bug must never flip a decision or an exit
 /// code. Public so the conformance corpus can prove the wrapper itself
 /// (crash fixture class: exit 0 plus crash line) with a genuine panic.
-pub fn run_fail_open<F>(root: Option<&Path>, source: Option<&str>, f: F) -> i32
+///
+/// `hook_name` is the CALLER's own hook name (rust-port-17 rework, finding
+/// 1) — NEVER this file's own `HOOK_NAME` constant. Every caller of this
+/// shared wrapper (`write_guard`, `model_guard`, `chain_nudge`,
+/// `state_sync`) must pass its own name explicitly, mirroring
+/// `adapter.mjs`'s real `logCrash(root, hookName, error, source)`, which
+/// takes the calling hook's name as a parameter rather than reading a
+/// module-level constant. Before this fix, every hook sharing this wrapper
+/// silently logged `"hook":"write-guard"` regardless of which hook actually
+/// crashed — a real cross-hook crash-log divergence from the mjs oracle,
+/// caught by `heavyhooks_conformance.rs`'s cross-runtime crash-line
+/// comparison (not merely a substring check on `error`).
+pub fn run_fail_open<F>(root: Option<&Path>, hook_name: &str, source: Option<&str>, f: F) -> i32
 where
     F: FnOnce() -> i32,
 {
@@ -689,7 +701,7 @@ where
                 .map(|s| s.to_string())
                 .or_else(|| panic.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "unknown panic".to_string());
-            adapter::log_crash(root, HOOK_NAME, &message, source);
+            adapter::log_crash(root, hook_name, &message, source);
             0
         }
     }
@@ -760,7 +772,7 @@ pub fn run(argv: &[String], raw_stdin: &str) -> i32 {
     }
 
     let source = ctx.source.clone();
-    run_fail_open(Some(&root), source.as_deref(), || {
+    run_fail_open(Some(&root), HOOK_NAME, source.as_deref(), || {
         crash_seam_panic_if_armed(HOOK_NAME);
         match decide(&ctx, tool_name, &root, &store_root) {
             Outcome::Deny(reason) => {

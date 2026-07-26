@@ -48,7 +48,7 @@ pub fn run(argv: &[String], raw_stdin: &str) -> i32 {
         return 0;
     }
     let source = ctx.source.clone();
-    run_fail_open(Some(&root), source.as_deref(), || {
+    run_fail_open(Some(&root), HOOK_NAME, source.as_deref(), || {
         crash_seam_panic_if_armed(HOOK_NAME);
         decide(&ctx, &root);
         0

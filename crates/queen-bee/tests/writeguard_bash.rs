@@ -853,7 +853,7 @@ fn crash_fail_open_rust_wrapper_catches_panic_exits_zero_and_writes_crash_line()
     // in. Proven directly against the public wrapper with a real panic.
     let dir = tempfile::tempdir().expect("tempdir");
     let root = dir.path();
-    let code = queen_bee::hooks::write_guard::run_fail_open(Some(root), Some("repo"), || {
+    let code = queen_bee::hooks::write_guard::run_fail_open(Some(root), "write-guard", Some("repo"), || {
         panic!("rig-injected-fault: deliberate panic in the bash decision region");
     });
     assert_eq!(code, 0, "fail-open contract: a panic must resolve to exit 0");

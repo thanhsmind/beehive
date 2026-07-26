@@ -225,6 +225,16 @@ fn seed_hold(root: &Path, holder: &str, session: &str, path: &str, ttl_secs: i64
     PathBuf::from(v["file"].as_str().expect("fixture file path"))
 }
 
+/// Seeds a live (`status: "active"`) workflow record via the real
+/// `workflow-store.mjs` `createWorkflow` — routes `rebuildStateProjection`
+/// through its AUTHORITATIVE branch instead of the no-workflow-records
+/// no-op every other state-sync fixture in this file exercises (rework
+/// finding 2).
+fn seed_workflow(root: &Path, feature: &str, phase: &str, mode: &str, summary: &str, next_action: &str) -> PathBuf {
+    let v = run_fixture(root, "workflow", &[feature, phase, mode, summary, next_action]);
+    PathBuf::from(v["file"].as_str().expect("fixture file path"))
+}
+
 fn seed_cell(root: &Path, id: &str, feature: &str, status: &str, behavior_change: bool, capped_at: Option<&str>) {
     let dir = root.join(".bee/cells");
     fs::create_dir_all(&dir).expect("mkdir cells");
@@ -342,16 +352,52 @@ fn read_jsonl_normalized(path: &Path) -> Vec<Value> {
         .collect()
 }
 
-/// Redacts one named field (a wall-clock stamp) to `"<redacted>"` so a
-/// structural comparison between two independent process runs can still
-/// assert everything else is byte-identical.
-fn redact(mut v: Value, field: &str) -> Value {
-    if let Value::Object(ref mut m) = v {
-        if m.contains_key(field) {
-            m.insert(field.to_string(), Value::String("<redacted>".into()));
-        }
+fn read_text_file(path: &Path) -> String {
+    fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path:?}: {e}"))
+}
+
+/// Redacts a JSON field's STRING VALUE directly in the RAW file text — never
+/// via a parsed `serde_json::Value`. This is the load-bearing distinction
+/// (rework finding 4): this workspace enables serde_json's `preserve_order`
+/// feature, so `Value`'s `Map` is backed by an `IndexMap` — and
+/// `IndexMap`'s `PartialEq` compares as a SET, deliberately IGNORING
+/// element order. A comparison built on parsed `Value`s (this cell's
+/// original technique) can therefore never see a key-order divergence in a
+/// written store file, exactly the class of bug D3 (byte compatibility)
+/// exists to catch — not hypothetical: rust-port-15's own rework found two
+/// real key-order breaks its parsed-`Value` assertions stayed green on.
+/// Every occurrence of `"field": "<value>"` is replaced (loop, not just the
+/// first), preserving every surrounding byte — key order, indentation,
+/// trailing commas — untouched.
+fn redact_text_field(text: &str, field: &str) -> String {
+    let needle = format!("\"{field}\": \"");
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(idx) = rest.find(needle.as_str()) {
+        let (before, after_needle_start) = rest.split_at(idx);
+        out.push_str(before);
+        out.push_str(&needle);
+        let after_needle = &after_needle_start[needle.len()..];
+        let end = after_needle.find('"').unwrap_or(after_needle.len());
+        out.push_str("<redacted>");
+        rest = &after_needle[end..];
     }
-    v
+    out.push_str(rest);
+    out
+}
+
+/// Byte-level equality between two on-disk JSON files, after redacting the
+/// named wall-clock fields directly in the raw text (see
+/// [`redact_text_field`]). Sensitive to key order and formatting — the fix
+/// for the parsed-`Value` blind spot this rework closes.
+fn assert_files_byte_equal_redacted(label: &str, a: &Path, b: &Path, redact_fields: &[&str]) {
+    let mut ta = read_text_file(a);
+    let mut tb = read_text_file(b);
+    for field in redact_fields {
+        ta = redact_text_field(&ta, field);
+        tb = redact_text_field(&tb, field);
+    }
+    assert_eq!(ta, tb, "{label}: byte-level (key-order-sensitive) file comparison diverged");
 }
 
 // ---------------------------------------------------------------------------
@@ -488,33 +534,46 @@ fn chain_nudge_scribing_debt_suffix_present_and_absent_twin_matches_oracle() {
 // Fixture class: chain-nudge crash fail-open
 // ---------------------------------------------------------------------------
 
-#[test]
-fn chain_nudge_crash_fail_open_node_oracle_stays_exit_zero_and_logs_crash() {
-    let seeded = seed_crash_root(enabling_config());
-    write_state_json(&seeded.root, &json!({ "phase": "swarming" })); // a healthy run WOULD nudge here
-    let stdin = r#"{"hook_event_name":"SubagentStop","agent_name":"Kevin"}"#;
-    let node = run_seeded_node_hook(&seeded.root, "bee-chain-nudge.mjs", stdin);
-    assert_eq!(node.status, 0, "fail-open contract: an internal crash must still exit 0 — stderr={:?}", node.stderr);
-    assert!(node.stdout.trim().is_empty(), "a crash must never leak a nudge to stdout");
-    let lines = read_jsonl_normalized(&seeded.root.join(".bee/logs/hooks.jsonl"));
-    assert!(
-        lines.iter().any(|l| l.get("error").and_then(Value::as_str).map(|s| s.contains("rig-injected-fault")).unwrap_or(false)),
-        "expected a crash log line naming the injected fault, got {lines:?}"
-    );
+/// The first crash line matching `must_contain` in `error` — a helper, not
+/// the load-bearing assertion; see the callers below for the field-level
+/// hook-name comparison rework finding 1 requires.
+fn find_crash_line<'a>(lines: &'a [Value], must_contain: &str) -> &'a Value {
+    lines
+        .iter()
+        .find(|l| l.get("error").and_then(Value::as_str).map(|s| s.contains(must_contain)).unwrap_or(false))
+        .unwrap_or_else(|| panic!("no crash line containing {must_contain:?} found in {lines:?}"))
 }
 
 #[test]
-fn chain_nudge_crash_fail_open_rust_port_stays_exit_zero_and_logs_crash() {
-    let seeded = seed_root(enabling_config());
-    write_state_json(&seeded.root, &json!({ "phase": "swarming" })); // a healthy run WOULD nudge here
+fn chain_nudge_crash_fail_open_both_runtimes_log_the_correct_hook_name() {
     let stdin = r#"{"hook_event_name":"SubagentStop","agent_name":"Kevin"}"#;
-    let rust = run_rust_hook_with_crash_seam("chain-nudge", &seeded.root, stdin);
+
+    let node_seeded = seed_crash_root(enabling_config());
+    write_state_json(&node_seeded.root, &json!({ "phase": "swarming" })); // a healthy run WOULD nudge here
+    let node = run_seeded_node_hook(&node_seeded.root, "bee-chain-nudge.mjs", stdin);
+    assert_eq!(node.status, 0, "fail-open contract: an internal crash must still exit 0 — stderr={:?}", node.stderr);
+    assert!(node.stdout.trim().is_empty(), "a crash must never leak a nudge to stdout");
+    let node_lines = read_jsonl_normalized(&node_seeded.root.join(".bee/logs/hooks.jsonl"));
+    let node_crash = find_crash_line(&node_lines, "rig-injected-fault");
+
+    let rust_seeded = seed_root(enabling_config());
+    write_state_json(&rust_seeded.root, &json!({ "phase": "swarming" }));
+    let rust = run_rust_hook_with_crash_seam("chain-nudge", &rust_seeded.root, stdin);
     assert_eq!(rust.status, 0, "fail-open contract: a panic must still exit 0 — stderr={:?}", rust.stderr);
     assert!(rust.stdout.trim().is_empty(), "a crash must never leak a nudge to stdout");
-    let lines = read_jsonl_normalized(&seeded.root.join(".bee/logs/hooks.jsonl"));
-    assert!(
-        lines.iter().any(|l| l.get("error").and_then(Value::as_str).map(|s| s.contains("rust-port-18 test-only crash seam armed")).unwrap_or(false)),
-        "expected a crash log line naming the armed seam, got {lines:?}"
+    let rust_lines = read_jsonl_normalized(&rust_seeded.root.join(".bee/logs/hooks.jsonl"));
+    let rust_crash = find_crash_line(&rust_lines, "rust-port-18 test-only crash seam armed");
+
+    // THE cross-runtime comparison rework finding 1 requires: the `hook`
+    // field must name the ACTUAL crashing hook, never the shared
+    // run_fail_open wrapper's own file-level HOOK_NAME constant
+    // ("write-guard") that every caller used to silently inherit.
+    assert_eq!(node_crash.get("hook"), Some(&json!("chain-nudge")), "node oracle crash line hook field, got {node_crash:?}");
+    assert_eq!(rust_crash.get("hook"), Some(&json!("chain-nudge")), "rust port crash line hook field, got {rust_crash:?}");
+    assert_eq!(
+        node_crash.get("hook"),
+        rust_crash.get("hook"),
+        "cross-runtime: crash line hook field diverged (node={node_crash:?} rust={rust_crash:?})"
     );
 }
 
@@ -546,11 +605,25 @@ fn state_sync_disabled_hook_makes_no_writes_on_either_runtime() {
 }
 
 // ---------------------------------------------------------------------------
-// Fixture class: state-sync idle-bootstrap state.json rebuild (no session)
+// Fixture class: state-sync state.json rebuild — the no-workflow-records
+// overrides-only fall-through, AND (separately) the AUTHORITATIVE
+// idle-bootstrap branch this cell exists to route through (rework finding
+// 2: the first cut of this rig only ever exercised the fall-through, never
+// diffed the authoritative rebuild against the mjs oracle, and the
+// fall-through test's old name overclaimed "idle-bootstrap").
 // ---------------------------------------------------------------------------
 
+/// Zero workflow records anywhere: `rebuildStateProjection`/
+/// `rebuild_state_projection` both take the `apply_overrides_only`
+/// fall-through (state_projection.rs's own doc comment on that branch) —
+/// only `cells`/`last_activity` are ever touched; `phase`/`feature`/`mode`/
+/// `approved_gates`/`summary`/`next_action` are NOT rebuilt from anything
+/// (there is nothing live to adopt). This is deliberately NOT named
+/// "idle-bootstrap" (the cell's rework finding 2): idle-bootstrap is the
+/// AUTHORITATIVE branch proved by the test immediately below, which is the
+/// one that actually adopts a workflow record.
 #[test]
-fn state_sync_idle_bootstrap_rebuild_matches_oracle() {
+fn state_sync_no_workflow_records_only_refreshes_overrides_matches_oracle() {
     let stdin = r#"{}"#;
     let (node_seed, rust_seed) = seed_pair(enabling_config());
     for root in [&node_seed.root, &rust_seed.root] {
@@ -561,18 +634,75 @@ fn state_sync_idle_bootstrap_rebuild_matches_oracle() {
     }
     let node = run_seeded_node_hook(&node_seed.root, "bee-state-sync.mjs", stdin);
     let rust = run_rust_hook("state-sync", &rust_seed.root, stdin);
-    assert_process_conformant("state-sync/idle-bootstrap", &node, &rust);
+    assert_process_conformant("state-sync/no-workflow-records", &node, &rust);
     assert!(node.stdout.trim().is_empty() && rust.stdout.trim().is_empty());
 
-    let state_node = read_json_file(&node_seed.root.join(".bee/state.json")).expect("node state.json written");
-    let state_rust = read_json_file(&rust_seed.root.join(".bee/state.json")).expect("rust state.json written");
+    let node_state_file = node_seed.root.join(".bee/state.json");
+    let rust_state_file = rust_seed.root.join(".bee/state.json");
+    let state_node = read_json_file(&node_state_file).expect("node state.json written");
+    let state_rust = read_json_file(&rust_state_file).expect("rust state.json written");
     assert_eq!(state_node["cells"], json!({ "open": 1, "claimed": 1, "capped": 1, "blocked": 1 }), "node cell counts");
     assert_eq!(state_rust["cells"], json!({ "open": 1, "claimed": 1, "capped": 1, "blocked": 1 }), "rust cell counts");
     assert!(state_node.get("last_activity").and_then(Value::as_str).is_some(), "node must stamp last_activity");
     assert!(state_rust.get("last_activity").and_then(Value::as_str).is_some(), "rust must stamp last_activity");
-    let redacted_node = redact(state_node, "last_activity");
-    let redacted_rust = redact(state_rust, "last_activity");
-    assert_eq!(redacted_node, redacted_rust, "state.json shape diverged (last_activity-redacted)");
+    // The phase/feature/mode fields must be UNTOUCHED (still the fresh
+    // default) — proof this fixture really lands in the fall-through, not
+    // the authoritative branch it used to be misnamed after.
+    assert_eq!(state_node.get("phase"), Some(&json!("idle")), "node: fall-through must never touch phase");
+    assert_eq!(state_rust.get("phase"), Some(&json!("idle")), "rust: fall-through must never touch phase");
+    assert!(state_node.get("feature").is_none() || state_node["feature"].is_null(), "node: fall-through must never invent a feature");
+    assert!(state_rust.get("feature").is_none() || state_rust["feature"].is_null(), "rust: fall-through must never invent a feature");
+
+    assert_files_byte_equal_redacted("state-sync/no-workflow-records state.json", &node_state_file, &rust_state_file, &["last_activity"]);
+}
+
+/// A LIVE (`status: "active"`) workflow record exists and the default
+/// record is idle with no feature — `rebuildStateProjection`'s idle-
+/// bootstrap branch fires and adopts it: `phase`/`feature`/`mode`/
+/// `approved_gates`/`summary`/`next_action` are all rebuilt FROM the
+/// workflow record, the one behavior this cell's state-sync hook exists to
+/// route through on every ordinary run. Proved against the real mjs oracle
+/// (byte-level, key-order sensitive) — never only the do-nothing
+/// fall-through the test above covers.
+#[test]
+fn state_sync_authoritative_idle_bootstrap_adopts_active_workflow_matches_oracle() {
+    let stdin = r#"{}"#;
+    let (node_seed, rust_seed) = seed_pair(enabling_config());
+    for root in [&node_seed.root, &rust_seed.root] {
+        seed_workflow(root, "demo-feat", "executing", "standard", "doing the thing", "ship it");
+    }
+    let node = run_seeded_node_hook(&node_seed.root, "bee-state-sync.mjs", stdin);
+    let rust = run_rust_hook("state-sync", &rust_seed.root, stdin);
+    assert_process_conformant("state-sync/authoritative-idle-bootstrap", &node, &rust);
+    assert!(node.stdout.trim().is_empty() && rust.stdout.trim().is_empty());
+
+    let node_state_file = node_seed.root.join(".bee/state.json");
+    let rust_state_file = rust_seed.root.join(".bee/state.json");
+    let state_node = read_json_file(&node_state_file).expect("node state.json written");
+    let state_rust = read_json_file(&rust_state_file).expect("rust state.json written");
+
+    // THE proof this is the authoritative branch, not the fall-through:
+    // phase/feature/mode/summary/next_action must all have been ADOPTED
+    // from the seeded workflow record, on both runtimes.
+    for (label, state) in [("node", &state_node), ("rust", &state_rust)] {
+        assert_eq!(state.get("phase"), Some(&json!("executing")), "{label}: phase must be adopted from the active workflow");
+        assert_eq!(state.get("feature"), Some(&json!("demo-feat")), "{label}: feature must be adopted from the active workflow");
+        assert_eq!(state.get("mode"), Some(&json!("standard")), "{label}: mode must be adopted from the active workflow");
+        assert_eq!(state.get("summary"), Some(&json!("doing the thing")), "{label}: summary must be adopted from the active workflow");
+        assert_eq!(state.get("next_action"), Some(&json!("ship it")), "{label}: next_action must be adopted from the active workflow");
+        assert_eq!(
+            state.get("approved_gates"),
+            Some(&json!({ "context": false, "shape": false, "execution": false, "review": false })),
+            "{label}: approved_gates must be derived from the workflow's default (unapproved) gates"
+        );
+    }
+
+    assert_files_byte_equal_redacted(
+        "state-sync/authoritative-idle-bootstrap state.json",
+        &node_state_file,
+        &rust_state_file,
+        &["last_activity"],
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -632,18 +762,16 @@ fn state_sync_heartbeat_claim_lease_hold_renewal_matches_oracle() {
         assert!(mirrored_after > mirrored_before, "{label}: hold mirrored_at must move forward (before={mirrored_before} after={mirrored_after})");
     }
 
-    // Structural parity across runtimes, volatile stamps redacted.
-    let session_node = redact(redact(read_json_file(&session_files[0]).unwrap(), "last_heartbeat"), "started_at");
-    let session_rust = redact(redact(read_json_file(&session_files[1]).unwrap(), "last_heartbeat"), "started_at");
-    assert_eq!(session_node, session_rust, "session.json shape diverged (heartbeat-redacted)");
-
-    let claim_node = redact(read_json_file(&claim_files[0]).unwrap(), "claimed_at");
-    let claim_rust = redact(read_json_file(&claim_files[1]).unwrap(), "claimed_at");
-    assert_eq!(claim_node, claim_rust, "claim.json shape diverged (claimed_at-redacted)");
-
-    let lease_node = redact(redact(read_json_file(&lease_files[0]).unwrap(), "expires_at"), "acquired_at");
-    let lease_rust = redact(redact(read_json_file(&lease_files[1]).unwrap(), "expires_at"), "acquired_at");
-    assert_eq!(lease_node, lease_rust, "lease file shape diverged (expires_at/acquired_at-redacted)");
+    // Structural parity across runtimes, BYTE-LEVEL (key-order-sensitive —
+    // rework finding 4) with volatile stamps redacted. All four renewed
+    // records get this treatment, including the hold ledger row (rework
+    // finding 3: previously the only one of the four with no cross-runtime
+    // comparison at all — only prose guarded its `Hold` typed round-trip
+    // against the exact class of bug the session-write path had).
+    assert_files_byte_equal_redacted("state-sync/renewal session.json", &session_files[0], &session_files[1], &["last_heartbeat", "started_at"]);
+    assert_files_byte_equal_redacted("state-sync/renewal claim.json", &claim_files[0], &claim_files[1], &["claimed_at"]);
+    assert_files_byte_equal_redacted("state-sync/renewal lease file", &lease_files[0], &lease_files[1], &["expires_at", "acquired_at"]);
+    assert_files_byte_equal_redacted("state-sync/renewal cross-worktree-holds.json", &hold_files[0], &hold_files[1], &["mirrored_at"]);
 }
 
 // ---------------------------------------------------------------------------
@@ -749,32 +877,31 @@ fn state_sync_lock_busy_skips_state_rebuild_silently_on_both_runtimes() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn state_sync_crash_fail_open_node_oracle_stays_exit_zero_and_logs_crash() {
-    let seeded = seed_crash_root(enabling_config());
+fn state_sync_crash_fail_open_both_runtimes_log_the_correct_hook_name() {
     let stdin = r#"{}"#;
-    let node = run_seeded_node_hook(&seeded.root, "bee-state-sync.mjs", stdin);
+
+    let node_seeded = seed_crash_root(enabling_config());
+    let node = run_seeded_node_hook(&node_seeded.root, "bee-state-sync.mjs", stdin);
     assert_eq!(node.status, 0, "fail-open contract: an internal crash must still exit 0 — stderr={:?}", node.stderr);
     assert!(node.stdout.trim().is_empty());
-    assert!(!seeded.root.join(".bee/state.json").exists(), "a crashed run must never leave a partial state.json");
-    let lines = read_jsonl_normalized(&seeded.root.join(".bee/logs/hooks.jsonl"));
-    assert!(
-        lines.iter().any(|l| l.get("error").and_then(Value::as_str).map(|s| s.contains("rig-injected-fault")).unwrap_or(false)),
-        "expected a crash log line naming the injected fault, got {lines:?}"
-    );
-}
+    assert!(!node_seeded.root.join(".bee/state.json").exists(), "a crashed run must never leave a partial state.json");
+    let node_lines = read_jsonl_normalized(&node_seeded.root.join(".bee/logs/hooks.jsonl"));
+    let node_crash = find_crash_line(&node_lines, "rig-injected-fault");
 
-#[test]
-fn state_sync_crash_fail_open_rust_port_stays_exit_zero_and_logs_crash() {
-    let seeded = seed_root(enabling_config());
-    let stdin = r#"{}"#;
-    let rust = run_rust_hook_with_crash_seam("state-sync", &seeded.root, stdin);
+    let rust_seeded = seed_root(enabling_config());
+    let rust = run_rust_hook_with_crash_seam("state-sync", &rust_seeded.root, stdin);
     assert_eq!(rust.status, 0, "fail-open contract: a panic must still exit 0 — stderr={:?}", rust.stderr);
     assert!(rust.stdout.trim().is_empty());
-    assert!(!seeded.root.join(".bee/state.json").exists(), "a crashed run must never leave a partial state.json");
-    let lines = read_jsonl_normalized(&seeded.root.join(".bee/logs/hooks.jsonl"));
-    assert!(
-        lines.iter().any(|l| l.get("error").and_then(Value::as_str).map(|s| s.contains("rust-port-18 test-only crash seam armed")).unwrap_or(false)),
-        "expected a crash log line naming the armed seam, got {lines:?}"
+    assert!(!rust_seeded.root.join(".bee/state.json").exists(), "a crashed run must never leave a partial state.json");
+    let rust_lines = read_jsonl_normalized(&rust_seeded.root.join(".bee/logs/hooks.jsonl"));
+    let rust_crash = find_crash_line(&rust_lines, "rust-port-18 test-only crash seam armed");
+
+    assert_eq!(node_crash.get("hook"), Some(&json!("state-sync")), "node oracle crash line hook field, got {node_crash:?}");
+    assert_eq!(rust_crash.get("hook"), Some(&json!("state-sync")), "rust port crash line hook field, got {rust_crash:?}");
+    assert_eq!(
+        node_crash.get("hook"),
+        rust_crash.get("hook"),
+        "cross-runtime: crash line hook field diverged (node={node_crash:?} rust={rust_crash:?})"
     );
 }
 
@@ -795,4 +922,41 @@ fn rig_diff_detector_flags_a_seeded_mutation_as_divergent() {
 
     let result = std::panic::catch_unwind(|| assert_process_conformant("deliberately-mutated", &node, &rust));
     assert!(result.is_err(), "the differ failed to flag a deliberately seeded divergence — the rig has no teeth");
+}
+
+/// Rework finding 4's own meta-proof: a parsed-`serde_json::Value`
+/// comparison (this cell's ORIGINAL technique for state.json/session.json/
+/// claim.json/lease-file/hold-ledger parity) is blind to key-order
+/// divergence under this workspace's `preserve_order` feature (`Value`'s
+/// `Map` is an `IndexMap`, whose `PartialEq` compares as a set). This test
+/// proves BOTH halves: (1) the blind spot is real — two texts with the
+/// same keys/values in different order parse to `Value`-equal, and (2)
+/// [`assert_files_byte_equal_redacted`]'s byte-level technique correctly
+/// flags that exact same pair as divergent. Without this test, a future
+/// edit reverting any of this cell's writers back to a Value-comparison
+/// (or a key-reordering serialization change) could regress silently.
+#[test]
+fn byte_level_comparison_catches_key_order_divergence_that_value_equality_misses() {
+    let same_keys_reordered = json!({ "alpha": "1", "beta": "2" });
+    let a_text = "{\n  \"alpha\": \"1\",\n  \"beta\": \"2\"\n}\n";
+    let b_text = "{\n  \"beta\": \"2\",\n  \"alpha\": \"1\"\n}\n";
+
+    // (1) The blind spot: parsed-Value equality really does ignore order.
+    let a_value: Value = serde_json::from_str(a_text).unwrap();
+    let b_value: Value = serde_json::from_str(b_text).unwrap();
+    assert_eq!(a_value, same_keys_reordered, "sanity: a_text parses to the expected object");
+    assert_eq!(
+        a_value, b_value,
+        "sanity check failed: this build's serde_json Value equality is NOT order-blind — the premise for this rig's byte-level rework no longer holds, investigate before trusting the rest of this suite's file comparisons"
+    );
+
+    // (2) The fix: a byte-level (key-order-sensitive) comparison of the
+    // SAME two texts must flag them as divergent.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let a_path = dir.path().join("a.json");
+    let b_path = dir.path().join("b.json");
+    fs::write(&a_path, a_text).unwrap();
+    fs::write(&b_path, b_text).unwrap();
+    let result = std::panic::catch_unwind(|| assert_files_byte_equal_redacted("key-order meta-proof", &a_path, &b_path, &[]));
+    assert!(result.is_err(), "the byte-level comparator failed to flag a key-order divergence between two Value-equal files — no teeth");
 }

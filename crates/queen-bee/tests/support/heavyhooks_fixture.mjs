@@ -36,6 +36,12 @@
 //   hold <libDir> <root> <holder> <sessionId> <path> <ttlSeconds>
 //       mirrors a cross-worktree hold via worktree-holds.mjs's mirrorHold;
 //       print {file} (the ledger path).
+//   workflow <libDir> <root> <feature> <phase> <mode> <summary> <nextAction>
+//       creates a live (status "active") workflow record via
+//       workflow-store.mjs's createWorkflow, default gates; print {id, file}
+//       -- so state-projection.mjs's rebuildStateProjection has a real
+//       workflow to route through the AUTHORITATIVE (feature-matched or
+//       idle-bootstrap) branch, never only the no-workflow-records no-op.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -139,6 +145,22 @@ switch (op) {
     // helper — its module header documents the store location verbatim:
     // "<mainRoot>/.bee/runtime/cross-worktree-holds.json".
     emit({ file: path.join(root, '.bee', 'runtime', 'cross-worktree-holds.json') });
+    break;
+  }
+  case 'workflow': {
+    const [feature, phase, mode, summary, nextAction] = rest;
+    const { createWorkflow, workflowStatePath } = await import(libUrl('workflow-store.mjs'));
+    // createWorkflow is a plain (non-async) function that RETURNS
+    // withWorkflowLock's promise (withStoreLock underneath is async) — it
+    // must be awaited, or the caller gets a Promise instead of the record.
+    const record = await createWorkflow(root, {
+      feature,
+      phase,
+      mode: mode || null,
+      summary: summary || '',
+      next_action: nextAction || '',
+    });
+    emit({ id: record.id, file: workflowStatePath(root, record.id) });
     break;
   }
   default: {
