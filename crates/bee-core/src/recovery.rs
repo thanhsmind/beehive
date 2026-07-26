@@ -22,14 +22,11 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
-use crate::capture::capture_queue_path;
-use crate::cells::{self, Cell};
 use crate::claims;
 use crate::config::read_config_value;
-use crate::decisions::active_decisions;
-use crate::fsutil::read_jsonl;
 use crate::jsdate::parse_iso_ms;
 use crate::lock::iso8601_millis;
+use crate::shared_reads::SharedReads;
 use crate::state::read_lane;
 
 /// recovery.mjs `DEFAULT_TAIL_MAX_BYTES` — `readTranscriptTail`'s default
@@ -328,34 +325,25 @@ pub fn resolve_transcript(
 
 // --- lastDurableSettlement -------------------------------------------------
 
-/// The three shared stores `lastDurableSettlement`/`detectCrashCandidates`
-/// read — the cp-1 perf optimization lets a caller that already loaded
-/// them once (this module's own `detect_crash_candidates` loop) thread
-/// them straight through instead of re-reading per stale session.
-pub struct SharedInputs {
-    pub decisions: Vec<Value>,
-    pub capture_events: Vec<Value>,
-    pub cells: Vec<Cell>,
-}
-
 /// `lastDurableSettlement(root, lane, injected)` — the max timestamp
 /// across decisions.jsonl, capture stubs, and cell-trace cap timestamps.
 /// `lane` scopes capture stubs and cell traces when given; decisions.jsonl
 /// carries no per-feature/lane field, so decisions are always read
 /// globally. No settlement anywhere -> `None`.
-pub fn last_durable_settlement(root: &Path, lane: Option<&str>, injected: Option<&SharedInputs>) -> Option<String> {
-    let owned;
-    let (decisions, capture_events, cells): (&[Value], &[Value], &[Cell]) = match injected {
-        Some(inj) => (&inj.decisions, &inj.capture_events, &inj.cells),
-        None => {
-            owned = (
-                active_decisions(root, None, false),
-                read_jsonl::<Value>(&capture_queue_path(root)),
-                cells::list_cells(root),
-            );
-            (&owned.0, &owned.1, &owned.2)
-        }
-    };
+///
+/// rust-port-23 (validation W4): this function's own `SharedInputs`
+/// injection seam — the cp-1 perf optimization that let
+/// `detect_crash_candidates`' loop avoid re-reading three stores per stale
+/// session — WAS the shape this cell generalizes. It is now the one shared
+/// shape, [`crate::shared_reads::SharedReads`], rather than a second,
+/// competing one: the `Option` is gone because the memo is lazy, so a
+/// caller with nothing preloaded passes a fresh `SharedReads::new(root)`
+/// and gets exactly the old self-loading behavior, at the same three
+/// reads, on first touch.
+pub fn last_durable_settlement(shared: &SharedReads, lane: Option<&str>) -> Option<String> {
+    let decisions = shared.decisions();
+    let capture_events = shared.capture_events();
+    let cells = shared.cells();
 
     let mut max_ms: Option<i64> = None;
     let mut bump = |ms: Option<i64>| {
@@ -462,15 +450,35 @@ pub fn detect_crash_candidates(
     now_ms: i64,
     current_session_id: Option<&str>,
 ) -> Vec<Value> {
+    let shared = SharedReads::new(root);
+    // Standalone form: the transcript-root scan stays BELOW the
+    // no-sessions early return, exactly as it is today, so this function's
+    // own conditional read profile is unchanged for callers that are not
+    // sharing a scan with anyone. [`build_recovery_block`] takes the other
+    // route — see [`detect_crash_candidates_with`].
     let resolved_current = resolve_current_session_id(current_session_id);
     let sessions = claims::list_session_records(control_root);
     if sessions.is_empty() {
         return Vec::new();
     }
-
     let roots = scan_transcript_roots(root, projects_root);
+    detect_crash_candidates_with(&shared, control_root, &roots, project_path, now_ms, resolved_current, sessions)
+}
 
-    let mut shared: Option<SharedInputs> = None;
+/// [`detect_crash_candidates`] over an ALREADY-SCANNED transcript-root list
+/// and a caller-supplied per-invocation memo (rust-port-23), so
+/// [`build_recovery_block`] performs exactly one transcript-root scan per
+/// invocation instead of two.
+fn detect_crash_candidates_with(
+    shared: &SharedReads,
+    control_root: &Path,
+    roots: &[Value],
+    project_path: &Path,
+    now_ms: i64,
+    resolved_current: Option<String>,
+    sessions: Vec<claims::Session>,
+) -> Vec<Value> {
+    let root = shared.root();
     let mut candidates = Vec::new();
 
     for session in &sessions {
@@ -508,7 +516,7 @@ pub fn detect_crash_candidates(
             }
         }
         if transcript.is_none() {
-            for r in &roots {
+            for r in roots {
                 if r.get("scanned").and_then(Value::as_bool) != Some(true) {
                     continue; // missing/unreadable root — already warned (if configured)
                 }
@@ -529,14 +537,12 @@ pub fn detect_crash_candidates(
 
         let lane = session.lane.clone().filter(|l| !l.is_empty());
 
-        if shared.is_none() {
-            shared = Some(SharedInputs {
-                decisions: active_decisions(root, None, false),
-                capture_events: read_jsonl::<Value>(&capture_queue_path(root)),
-                cells: cells::list_cells(root),
-            });
-        }
-        let since = last_durable_settlement(root, lane.as_deref(), shared.as_ref());
+        // rust-port-23: the three-store load that used to be built here on
+        // first reach now lives in the caller-supplied memo. It is still
+        // LAZY, so the gate is unchanged: a run that never reaches this
+        // line still reads none of the three stores (proven by
+        // `recovery_shared_inputs_reads_gated_by_reaching_the_crash_candidate_track`).
+        let since = last_durable_settlement(shared, lane.as_deref());
         let since_ms = since.as_deref().and_then(parse_iso_ms).or_else(|| session.started_at.as_deref().and_then(parse_iso_ms));
 
         let mut work_signal: Option<&'static str> = None;
@@ -589,15 +595,29 @@ pub fn detect_crash_candidates(
 /// try/catch (which exists there only in case some FUTURE change to those
 /// readers' contract starts throwing).
 pub fn build_recovery_block(
-    root: &Path,
+    shared: &SharedReads,
     control_root: &Path,
     projects_root: &Path,
     project_path: &Path,
     now_ms: i64,
     current_session_id: Option<&str>,
 ) -> Value {
-    let candidates = detect_crash_candidates(root, control_root, projects_root, project_path, now_ms, current_session_id);
+    let root = shared.root();
+    // rust-port-23: ONE transcript-root scan per invocation, hoisted ABOVE
+    // `detect_crash_candidates`' own no-sessions early return rather than
+    // returned alongside its candidates. Returning the roots out of
+    // `detect_crash_candidates` would have looked equivalent and been
+    // wrong: that function returns before scanning when there are no
+    // session records, so every such fixture would have rendered an EMPTY
+    // `roots` block — a real output change, on the quietest fixtures.
     let roots = scan_transcript_roots(root, projects_root);
+    let resolved_current = resolve_current_session_id(current_session_id);
+    let sessions = claims::list_session_records(control_root);
+    let candidates = if sessions.is_empty() {
+        Vec::new()
+    } else {
+        detect_crash_candidates_with(shared, control_root, &roots, project_path, now_ms, resolved_current, sessions)
+    };
     json!({"candidates": candidates, "roots": roots})
 }
 

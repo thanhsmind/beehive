@@ -591,7 +591,11 @@ fn build_recovery_block_matches_mjs_status_on_host_real_crash_candidate_fixture(
     // test depending on what is actually in the host's real directory.
     let unrelated_claude_default = tempfile::tempdir().unwrap();
 
-    let rust_recovery = recovery::build_recovery_block(root, root, unrelated_claude_default.path(), root, now_ms, None);
+    // rust-port-23: `build_recovery_block` takes the per-invocation shared
+    // memo (caller-supplied, lazy). A fresh one is exactly the old
+    // self-loading behavior.
+    let shared = bee_core::shared_reads::SharedReads::new(root);
+    let rust_recovery = recovery::build_recovery_block(&shared, root, unrelated_claude_default.path(), root, now_ms, None);
     assert_eq!(rust_recovery["candidates"], mjs_recovery["candidates"], "detect_crash_candidates diverged from mjs on the host-real fixture");
 
     // `roots`: the "claude" entry's PATH is inherently host-specific (the

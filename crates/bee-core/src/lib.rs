@@ -24,6 +24,7 @@ pub mod recovery;
 pub mod registry;
 pub mod reservations;
 pub mod reviews;
+pub mod shared_reads;
 pub mod source_identity;
 pub mod state;
 pub mod state_projection;

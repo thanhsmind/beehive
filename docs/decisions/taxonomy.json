@@ -231,6 +231,9 @@
     "rust-port",
     "d5",
     "proof-discipline",
-    "port"
+    "port",
+    "slice3",
+    "status",
+    "read-dedup"
   ]
 }

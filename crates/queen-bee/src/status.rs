@@ -32,7 +32,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use bee_core::{backlog, capture, cells, claims, config, decisions, recovery, reservations, reviews, source_identity, state};
+use bee_core::{backlog, capture, cells, claims, config, recovery, reservations, reviews, source_identity, state};
 use serde_json::{json, Map, Value};
 
 use crate::adapter;
@@ -532,16 +532,25 @@ pub fn build_status(ctx: &StatusContext, opts: StatusOptions) -> Value {
 /// payload is byte-identical either way — measuring never changes output.
 pub fn build_status_profiled(ctx: &StatusContext, opts: StatusOptions, profile: &mut Profile) -> Value {
     let root = ctx.root.as_path();
+    // rust-port-23 (decision e119fc8b): ONE load point per store for this
+    // whole invocation. `build_status` used to cost 4 decisions-journal
+    // parses, 6 cells-directory scans and 2 transcript-root scans; every
+    // reader below that used to perform its own read now takes this memo.
+    // It is lazy (see `SharedReads`' doc comment), so nothing here is read
+    // before something actually asks for it, and it is per-invocation:
+    // constructed here, dropped at the end, never a process-global or
+    // on-disk cache.
+    let shared = bee_core::shared_reads::SharedReads::new(root);
     let state_rec = timed!(profile, "read_state", state::read_state(root));
     let onboarding_raw = timed!(profile, "read_onboarding", state::read_onboarding(root));
     let handoff = timed!(profile, "read_handoff", state::read_handoff(root));
 
-    let cells_list = timed!(profile, "list_cells (counts)", cells::list_cells(root));
+    let cells_list = timed!(profile, "list_cells (counts)", shared.cells());
     let mut open = 0i64;
     let mut claimed = 0i64;
     let mut capped = 0i64;
     let mut blocked = 0i64;
-    for cell in &cells_list {
+    for cell in cells_list {
         match cell.status.as_deref().unwrap_or("") {
             "open" => open += 1,
             "claimed" => claimed += 1,
@@ -633,11 +642,11 @@ pub fn build_status_profiled(ctx: &StatusContext, opts: StatusOptions, profile: 
     let recovery_block = timed!(
         profile,
         "build_recovery_block (transcripts)",
-        recovery::build_recovery_block(root, &ctx.control_root, &ctx.projects_root, root, ctx.now_ms, None)
+        recovery::build_recovery_block(&shared, &ctx.control_root, &ctx.projects_root, root, ctx.now_ms, None)
     );
 
     let execution_approved = state_rec.approved_gates.execution;
-    let ready = timed!(profile, "ready_cells", cells::ready_cells(root, state_rec.feature.as_deref()));
+    let ready = timed!(profile, "ready_cells", cells::ready_cells_from(&shared, state_rec.feature.as_deref()));
     let review_unreviewed = review.get("candidates").and_then(|c| c.get("unreviewed")).and_then(Value::as_i64).unwrap_or(0);
 
     let recommended: String = if !js_truthy(&onboarding_raw) {
@@ -703,14 +712,18 @@ pub fn build_status_profiled(ctx: &StatusContext, opts: StatusOptions, profile: 
     out.insert("gate_bypass".to_string(), Value::Bool(bypass != "off"));
     out.insert("gate_bypass_level".to_string(), json!(bypass));
     out.insert("models".to_string(), models);
-    out.insert(
-        "tier_mix".to_string(),
-        timed!(profile, "tier_mix", cells::tier_mix(root, state_rec.feature.as_deref())),
-    );
-    out.insert(
-        "ceiling_scarcity".to_string(),
-        timed!(profile, "ceiling_scarcity_warning", cells::ceiling_scarcity_warning(root).unwrap_or(Value::Null)),
-    );
+    // rust-port-23: `ceiling_scarcity_warning` used to recompute `tier_mix`
+    // from its own fresh cells scan, over the same `state.feature` this
+    // line already resolved — it now consumes the mix rendered here.
+    let mix = timed!(profile, "tier_mix", cells::tier_mix_from(&shared, state_rec.feature.as_deref()));
+    let ceiling_scarcity =
+        timed!(profile, "ceiling_scarcity_warning", cells::ceiling_scarcity_warning_from(&mix).unwrap_or(Value::Null));
+    // Key ORDER is part of the contract (`JSON.stringify` emits insertion
+    // order): tier_mix before ceiling_scarcity, exactly as bee.mjs writes
+    // them — the values are computed above in dependency order, inserted
+    // here in source order.
+    out.insert("tier_mix".to_string(), mix);
+    out.insert("ceiling_scarcity".to_string(), ceiling_scarcity);
     out.insert("handoff".to_string(), handoff.clone());
 
     let mut cells_block = Map::new();
@@ -735,11 +748,12 @@ pub fn build_status_profiled(ctx: &StatusContext, opts: StatusOptions, profile: 
     out.insert("review".to_string(), review.clone());
     out.insert("recovery".to_string(), recovery_block);
 
-    let mut scribing = timed!(profile, "scribing_debt", cells::scribing_debt(root, state_rec.feature.as_deref(), None));
+    let mut scribing =
+        timed!(profile, "scribing_debt", cells::scribing_debt_from(&shared, state_rec.feature.as_deref(), None));
     if let Value::Object(ref mut map) = scribing {
         map.insert(
             "orphaned".to_string(),
-            timed!(profile, "global_scribing_debt", cells::global_scribing_debt(root)),
+            timed!(profile, "global_scribing_debt", cells::global_scribing_debt_from(&shared)),
         );
     }
     out.insert("scribing_debt".to_string(), scribing);
@@ -787,9 +801,13 @@ pub fn build_status_profiled(ctx: &StatusContext, opts: StatusOptions, profile: 
         Value::Bool(root.join("docs").join("history").join("learnings").join("critical-patterns.md").exists()),
     );
 
-    let recent_events = timed!(profile, "active_decisions", decisions::active_decisions(root, Some(3), false));
+    // rust-port-23: `activeDecisions(root, {recent: 3})` is the full active
+    // list truncated to its first 3 entries — the shared list, taken from
+    // the front, is that same value without a second journal parse.
+    let recent_events = timed!(profile, "active_decisions", shared.decisions());
     let recent: Vec<Value> = recent_events
         .iter()
+        .take(3)
         .map(|event| {
             let mut row = Map::new();
             // `{id: event.id}` with `event.id === undefined` is dropped by

@@ -31,7 +31,7 @@ use serde_json::{json, Value};
 
 use bee_core::lock::{self, LockOptions, WithLockError};
 use bee_core::state_projection::StateOverrides;
-use bee_core::{cells, claims, holds, reservations};
+use bee_core::{claims, holds, reservations};
 
 use crate::adapter::{self, HookContext};
 use crate::hookconfig;
@@ -63,12 +63,16 @@ fn session_id(ctx: &HookContext) -> Option<String> {
     ctx.payload.get("session_id").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
 }
 
-fn cell_counts(root: &Path) -> Value {
+/// rust-port-23: moved to the shared-read signature. This hook's read
+/// profile is unchanged — its counts are unconditional (a DIFFERENT shape
+/// from chain-nudge's feature-gated scan), so the memo's single lazy load
+/// is still exactly one cells-directory scan per hook run.
+fn cell_counts(shared: &bee_core::shared_reads::SharedReads) -> Value {
     let mut open = 0i64;
     let mut claimed = 0i64;
     let mut capped = 0i64;
     let mut blocked = 0i64;
-    for cell in cells::list_cells(root) {
+    for cell in shared.cells() {
         match cell.status.as_deref() {
             Some("open") => open += 1,
             Some("claimed") => claimed += 1,
@@ -111,7 +115,7 @@ fn decide(ctx: &HookContext, root: &Path) {
         }
     }
 
-    let counts = cell_counts(root);
+    let counts = cell_counts(&bee_core::shared_reads::SharedReads::new(root));
     let overrides = StateOverrides {
         cell_counts: Some(counts),
         last_activity: Some(Value::String(adapter::timestamp_now())),

@@ -5,10 +5,18 @@
 //! are site-labelled (see that module's doc comment) so this file's own
 //! assertions ARE the table, not prose describing one.
 //!
-//! THIS CELL DOES NOT DEDUP ANYTHING — every test below runs against
-//! TODAY'S un-deduped code, characterising it so rust-port-23's dedup has a
-//! genuine red-to-green transition to prove against (plan-slice3.md's own
-//! stated purpose, `docs/history/rust-port/plan-slice3.md:46`).
+//! rust-port-23 UPDATE — this file is now BOTH the instrument and the
+//! dedup's proof surface. rust-port-22 wrote it against the un-deduped
+//! code (4 decisions parses / 6 cells scans / 2 transcript-root scans per
+//! `build_status`); rust-port-23 landed the per-invocation shared reads and
+//! those three totals are now 1 / 1 / 1, asserted below by the same test,
+//! the same fixture and the same counter units that produced the baseline.
+//! Three guards were added with the dedup:
+//! `ready_cells_from_a_shared_inventory_still_resolves_an_archived_capped_dep`
+//! (the archive trap — invisible to every counter here),
+//! `a_second_build_status_invocation_re_reads_every_store` (per-invocation,
+//! never a cache) and `absent_empty_and_malformed_stores_are_each_read_
+//! exactly_once`.
 //!
 //! Every fixture below is a fresh `tempfile::tempdir()` — never this repo's
 //! own live `.bee/` store (prohibition: "tests never touch the live .bee/
@@ -309,14 +317,18 @@ fn primitive_and_reader_calls_increment_the_same_shared_counter() {
          the counter lives at the shared primitive, not duplicated per reader-function entry"
     );
 
-    // Same proof for decisions: one call to active_decisions performs TWO
-    // real reads today (build_tag_overlay's own read, plus its own event
-    // read) — a reader-function-entry counter would report 1 and hide
-    // that fact; the primitive-level counter correctly reports 2.
+    // Same proof for decisions. Before rust-port-23 one call to
+    // active_decisions performed TWO real reads (build_tag_overlay's own
+    // read plus its own event read) and this assertion read 2; the dedup
+    // makes the overlay share the caller's single read, so the
+    // primitive-level counter now correctly reports 1 — the number moved
+    // because a real read disappeared, which is exactly what a counter at
+    // the shared primitive (rather than at the reader-function entry) is
+    // for.
     read_accounting::reset();
     let _ = bee_core::decisions::active_decisions(root, None, false);
     let after_decisions = read_accounting::snapshot();
-    assert_eq!(after_decisions.decisions_journal_parses, 2);
+    assert_eq!(after_decisions.decisions_journal_parses, 1);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -325,7 +337,7 @@ fn primitive_and_reader_calls_increment_the_same_shared_counter() {
 // ─────────────────────────────────────────────────────────────────────────
 
 #[test]
-fn bench_fixture_baseline_reconciles_with_e119fc8b_4_6_2() {
+fn bench_fixture_reads_each_store_once_per_build_status_invocation() {
     let fixture = host_real_bench_fixture();
     let root = fixture.path();
     let ctx = manual_status_context(root);
@@ -334,46 +346,53 @@ fn bench_fixture_baseline_reconciles_with_e119fc8b_4_6_2() {
     let _status = queen_bee::status::build_status(&ctx, queen_bee::status::StatusOptions::default());
     let snap = read_accounting::snapshot();
 
-    println!("read-accounting baseline table — queen-bench D5 fixture (state.feature: null)");
-    println!("| store class                         | count | unconditional sites | conditional sites (reached?) |");
-    println!("|--------------------------------------|-------|----------------------|-------------------------------|");
+    println!("read-accounting table — queen-bench D5 fixture (state.feature: null), AFTER rust-port-23's dedup");
+    println!("| store class                         | was | now | single load point |");
+    println!("|--------------------------------------|-----|-----|-------------------|");
     println!(
-        "| decisions_journal_parses              | {:>5} | status.rs:790 (x2 reads) | recovery SharedInputs init (x2 reads) — REACHED (fixture has a stale, non-clean-end crash-candidate session) |",
+        "| decisions_journal_parses              |   4 | {:>3} | SharedReads::decisions() — one active_decisions call (itself now one journal read, not two), shared by status's recent_decisions and recovery's last_durable_settlement |",
         snap.decisions_journal_parses
     );
     println!(
-        "| cells_dir_scans                       | {:>5} | status.rs:539,640,708,712,742 | recovery.rs:522 — REACHED; cells.rs:332 (scribing_debt) — NOT reached (state.feature is null) |",
+        "| cells_dir_scans                       |   6 | {:>3} | SharedReads::cells() — one list_cells, shared by the status counts, ready_cells, tier_mix, ceiling_scarcity, scribing_debt, global_scribing_debt and recovery |",
         snap.cells_dir_scans
     );
     println!(
-        "| cell_dep_reads                        | {:>5} | (none) | ready_cells' deps_all_capped — NOT reached (every fixture cell is \"capped\", none \"open\") |",
+        "| cell_dep_reads                        |   0 | {:>3} | UNCHANGED BY DESIGN — dep resolution still goes through read_cell (archive fallback intact); zero on this fixture because every cell is capped, none open |",
         snap.cell_dep_reads
     );
     println!(
-        "| transcript_root_scan_invocations      | {:>5} | build_recovery_block:586 | detect_crash_candidates:457 — REACHED (fixture seeds one session, so sessions.is_empty() is false) |",
+        "| transcript_root_scan_invocations      |   2 | {:>3} | build_recovery_block's own scan, hoisted ABOVE detect_crash_candidates' no-sessions early return and passed down |",
         snap.transcript_root_scan_invocations
     );
     println!(
-        "| transcript_root_stat_ops (fs-op unit) | {:>5} | 2 invocations x 2 roots (default Claude root + 1 configured fixture root) — DIVERGES from the invocation count on purpose (W1) |",
+        "| transcript_root_stat_ops (fs-op unit) |   4 | {:>3} | 1 invocation x 2 roots (default Claude root + 1 configured fixture root) — still DIVERGES from the invocation count on purpose (W1) |",
         snap.transcript_root_stat_ops
     );
     println!(
-        "BASELINE-ONLY EVIDENCE (must-have truth 8): every \"REACHED\"/\"NOT reached\" label above describes TODAY'S \
-         un-deduped call graph only. After rust-port-23's dedup, a hoisted read reports its count exactly once per \
-         invocation whether or not the conditional consumer it used to feed still runs — re-derive reachability \
-         against the NEW call graph rather than assuming these labels still hold."
+        "WITHIN-INVOCATION CONSISTENCY: each store is now read at ONE instant per invocation; cross-store \
+         consistency remains unguaranteed, exactly as today (decisions, cells and transcript roots are still \
+         loaded at distinct moments). This is not snapshot semantics. status takes no D9 locks, so the lock and \
+         lease conformance surface is untouched."
+    );
+    println!(
+        "READ-COUNT EVIDENCE IS NOT ARCHIVE EVIDENCE: cell_dep_reads bundles read_cell's archive fallback, so \
+         losing that fallback would move NO counter in this table. \
+         `ready_cells_from_a_shared_inventory_still_resolves_an_archived_capped_dep` is the only guard for it."
     );
 
-    // e119fc8b's "4/6/2" — RECONCILED, not re-asserted blind: this table's
-    // own three headline counters must equal exactly those totals for
-    // THIS fixture (validation-slice3.md's REPAIRED finding: the totals
-    // are correct per-fixture, never claimed fixture-independent).
-    assert_eq!(snap.decisions_journal_parses, 4, "decisions: e119fc8b's stated total for this fixture");
-    assert_eq!(snap.cells_dir_scans, 6, "cells: e119fc8b's stated total for this fixture");
-    assert_eq!(snap.transcript_root_scan_invocations, 2, "transcript roots: e119fc8b's stated total for this fixture");
+    // rust-port-23: ONE read per store per `build_status` invocation. The
+    // pre-dedup baseline for this same fixture, same test, same counter
+    // units was 4 / 6 / 2 (rust-port-22, decision e119fc8b) — those totals
+    // are what these three assertions replace.
+    assert_eq!(snap.decisions_journal_parses, 1, "decisions: one journal parse per build_status invocation (was 4)");
+    assert_eq!(snap.cells_dir_scans, 1, "cells: one directory scan per build_status invocation (was 6)");
+    assert_eq!(snap.transcript_root_scan_invocations, 1, "transcript roots: one scan per build_status invocation (was 2)");
 
     // cell_dep_reads is zero on THIS fixture for a documented reason (every
     // fixture cell is pre-capped) — recorded here, not silently ignored.
+    // UNCHANGED by the dedup on purpose: dep resolution still goes through
+    // `read_cell`, archive fallback and all (the archive trap).
     assert_eq!(snap.cell_dep_reads, 0);
 
     // The fs-operation-unit counter is a DIFFERENT number from the
@@ -381,8 +400,8 @@ fn bench_fixture_baseline_reconciles_with_e119fc8b_4_6_2() {
     // configures exactly one extra transcript root beyond the always-
     // present default — see `transcript_root_stat_ops_scale_with_
     // configured_roots_while_invocations_do_not` below for the isolated
-    // demonstration of why.
-    assert_eq!(snap.transcript_root_stat_ops, 4);
+    // demonstration of why. One invocation x 2 roots = 2 (was 2 x 2 = 4).
+    assert_eq!(snap.transcript_root_stat_ops, 2);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -405,8 +424,8 @@ fn injected_reads_at_a_build_status_level_load_point_are_still_counted_for_both_
     read_accounting::reset();
     let _baseline = queen_bee::status::build_status(&ctx, queen_bee::status::StatusOptions::default());
     let baseline_snap = read_accounting::snapshot();
-    assert_eq!(baseline_snap.decisions_journal_parses, 4);
-    assert_eq!(baseline_snap.cells_dir_scans, 6);
+    assert_eq!(baseline_snap.decisions_journal_parses, 1);
+    assert_eq!(baseline_snap.cells_dir_scans, 1);
 
     // Simulate the judge's hoist: TWO extra real decisions-journal reads
     // and ONE extra real cells-directory scan, called DIRECTLY against the
@@ -424,13 +443,15 @@ fn injected_reads_at_a_build_status_level_load_point_are_still_counted_for_both_
 
     assert_eq!(
         injected_snap.decisions_journal_parses,
-        4 + 2,
+        1 + 2,
         "two extra real decisions-journal reads injected from OUTSIDE decisions.rs must still show up in the total \
-         — a counter placed at decisions.rs's own call sites (the pre-rework placement) would have stayed at 4"
+         — a counter placed at decisions.rs's own call sites (the pre-rework placement) would have stayed at 1. \
+         This is the property that makes the '1 per store' claim above falsifiable: a dedup that reimplemented a \
+         reader instead of calling it would report 1 while really reading twice."
     );
     assert_eq!(
         injected_snap.cells_dir_scans,
-        6 + 1,
+        1 + 1,
         "one extra real cells directory scan injected from OUTSIDE cells.rs's own readers must still show up in the total"
     );
 }
@@ -472,46 +493,56 @@ fn scribing_debt_cells_scan_is_reachable_only_with_a_resolved_feature() {
 // ─────────────────────────────────────────────────────────────────────────
 
 #[test]
-fn recovery_shared_inputs_reads_gated_by_reaching_the_crash_candidate_track() {
+fn recovery_shared_reads_stay_gated_by_reaching_the_crash_candidate_track() {
+    // THE POINT OF THIS TEST AFTER THE DEDUP: the shared memo is LAZY, so
+    // moving recovery's three-store load into it must NOT make those reads
+    // unconditional. Tiers 0 and 1 below are the proof — they still read
+    // zero decisions and zero cells.
+    //
     // Tier 0: no sessions at all.
     let fixture0 = minimal_root();
     let root0 = fixture0.path();
+    let shared0 = bee_core::shared_reads::SharedReads::new(root0);
     read_accounting::reset();
-    let _ = bee_core::recovery::build_recovery_block(root0, root0, &root0.join("no-claude-root"), root0, now_ms(), None);
+    let _ = bee_core::recovery::build_recovery_block(&shared0, root0, &root0.join("no-claude-root"), root0, now_ms(), None);
     let snap0 = read_accounting::snapshot();
     assert_eq!(snap0.decisions_journal_parses, 0);
     assert_eq!(snap0.cells_dir_scans, 0);
-    assert_eq!(snap0.transcript_root_scan_invocations, 1, "no sessions -> only build_recovery_block's own unconditional scan runs");
+    assert_eq!(snap0.transcript_root_scan_invocations, 1, "no sessions -> build_recovery_block's own single scan");
 
     // Tier 1: one session exists, but its heartbeat is FRESH (not stale) ->
-    // sessions.is_empty() is false (transcript-scan invocation count goes
-    // to 2), yet the session is filtered out before ever reaching the
-    // transcript/clean-end/SharedInputs checks -> decisions/cells stay 0.
+    // the session is filtered out before ever reaching the transcript/
+    // clean-end/shared-store checks -> decisions/cells stay 0.
     let fixture1 = minimal_root();
     let root1 = fixture1.path();
     let fresh_iso = bee_core::lock::iso8601_millis(now_ms());
     seed_session(root1, "fresh-session", &fresh_iso, None);
+    let shared1 = bee_core::shared_reads::SharedReads::new(root1);
     read_accounting::reset();
-    let _ = bee_core::recovery::build_recovery_block(root1, root1, &root1.join("no-claude-root"), root1, now_ms(), None);
+    let _ = bee_core::recovery::build_recovery_block(&shared1, root1, &root1.join("no-claude-root"), root1, now_ms(), None);
     let snap1 = read_accounting::snapshot();
-    assert_eq!(snap1.transcript_root_scan_invocations, 2, "a session existing (even a fresh one) -> detect_crash_candidates also scans");
+    assert_eq!(
+        snap1.transcript_root_scan_invocations, 1,
+        "a session existing no longer costs a SECOND scan — the hoisted scan is passed down (was 2)"
+    );
     assert_eq!(snap1.decisions_journal_parses, 0, "a FRESH heartbeat never reaches the crash-candidate track");
     assert_eq!(snap1.cells_dir_scans, 0);
 
     // Tier 2: one session, stale heartbeat, a transcript with no clean-end
-    // trio -> the crash-candidate track IS reached -> SharedInputs fires
-    // exactly once (2 decisions reads via active_decisions, 1 cells scan).
+    // trio -> the crash-candidate track IS reached -> the memo fills, once.
     let fixture2 = minimal_root();
     let root2 = fixture2.path();
     let transcript_path = root2.join("transcript.jsonl");
     write_open_transcript(&transcript_path);
     seed_session(root2, "stale-session", "2020-01-01T00:00:00.000Z", Some(&transcript_path));
+    let shared2 = bee_core::shared_reads::SharedReads::new(root2);
     read_accounting::reset();
-    let block = bee_core::recovery::build_recovery_block(root2, root2, &root2.join("no-claude-root"), root2, now_ms(), None);
+    let block =
+        bee_core::recovery::build_recovery_block(&shared2, root2, &root2.join("no-claude-root"), root2, now_ms(), None);
     let snap2 = read_accounting::snapshot();
-    assert_eq!(snap2.transcript_root_scan_invocations, 2);
-    assert_eq!(snap2.decisions_journal_parses, 2, "the crash-candidate track was reached -> SharedInputs' one active_decisions call (2 reads)");
-    assert_eq!(snap2.cells_dir_scans, 1, "the crash-candidate track was reached -> SharedInputs' one cells::list_cells call");
+    assert_eq!(snap2.transcript_root_scan_invocations, 1);
+    assert_eq!(snap2.decisions_journal_parses, 1, "the track was reached -> one active_decisions call, now one journal read (was 2)");
+    assert_eq!(snap2.cells_dir_scans, 1, "the track was reached -> one cells::list_cells call");
     // Sanity: the candidate really was detected (not just the reads firing
     // for an unrelated reason).
     let candidates = block["candidates"].as_array().expect("candidates array");
@@ -637,9 +668,163 @@ fn ready_cells_resolves_a_dep_through_the_archive_fallback() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// 7b. THE ARCHIVE TRAP (rust-port-23, validation-slice3.md B3). The single
+//     guard standing between the shared-inventory dedup and a silent
+//     regression: `list_cells` skips `archive/` while `read_cell` falls
+//     back to `archive/<feature>/<id>.json`, so resolving deps against the
+//     pre-loaded ACTIVE-ONLY inventory would read an archived capped dep as
+//     uncapped and drop ready cells from the recommendation line — with
+//     byte-parity green (no parity fixture has an archived dep) and with
+//     NO counter moving (cell_dep_reads bundles the archive fallback).
+//     Read counts cannot catch this; only this test can.
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn ready_cells_from_a_shared_inventory_still_resolves_an_archived_capped_dep() {
+    let fixture = minimal_root();
+    let root = fixture.path();
+    // The dep exists ONLY in the archive, at the feature-subdirectoried
+    // path `read_cell` actually searches — it is invisible to `list_cells`,
+    // and therefore invisible to the shared inventory.
+    seed_cell(root, "open-with-archived-dep", "demo", "open", &["archived-dep"], false, None);
+    seed_archived_cell(root, "archived-dep", "demo", "capped");
+
+    let shared = bee_core::shared_reads::SharedReads::new(root);
+    read_accounting::reset();
+    let ready = bee_core::cells::ready_cells_from(&shared, Some("demo"));
+    let snap = read_accounting::snapshot();
+
+    // Confirm the trap's precondition really holds for this fixture: the
+    // shared inventory genuinely does NOT contain the dep. Without this,
+    // the assertion below could pass for the wrong reason.
+    assert!(
+        !shared.cells().iter().any(|c| c.id == "archived-dep"),
+        "precondition: the archived dep must be absent from the active-only shared inventory"
+    );
+    assert_eq!(
+        ready.len(),
+        1,
+        "THE ARCHIVE TRAP: dep resolution must still go through read_cell's archive fallback. If ready_cells_from \
+         were changed to resolve deps against the shared active-only inventory, this dep would read as uncapped \
+         and this cell would silently vanish from the ready list — with every parity leg still green."
+    );
+    assert_eq!(ready[0].id, "open-with-archived-dep");
+    assert_eq!(snap.cells_dir_scans, 1, "the listing came from the shared inventory's single scan");
+    assert_eq!(snap.cell_dep_reads, 1, "the dep went through read_cell, not through the inventory");
+
+    // Negative control: remove the archived file -> the same single dep
+    // read still happens, but nothing resolves, so the cell is not ready.
+    fs::remove_file(root.join(".bee/cells/archive/demo/archived-dep.json")).unwrap();
+    let shared_after = bee_core::shared_reads::SharedReads::new(root);
+    read_accounting::reset();
+    let ready_after = bee_core::cells::ready_cells_from(&shared_after, Some("demo"));
+    let snap_after = read_accounting::snapshot();
+    assert_eq!(snap_after.cell_dep_reads, 1, "the read_cell ATTEMPT still happens even on a miss");
+    assert!(ready_after.is_empty(), "an unresolvable dep -> the open cell is never ready");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 7c. PER INVOCATION, NEVER WIDER: the memo is born and dropped inside one
+//     build_status call. A second invocation re-reads every store, so a
+//     write landing between two invocations is observed — the property
+//     that distinguishes this from the process-global/static/on-disk cache
+//     the plan rejected.
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn a_second_build_status_invocation_re_reads_every_store() {
+    let fixture = minimal_root();
+    let root = fixture.path();
+    seed_cell(root, "c1", "demo", "open", &[], false, None);
+    let ctx = manual_status_context(root);
+
+    read_accounting::reset();
+    let first = queen_bee::status::build_status(&ctx, queen_bee::status::StatusOptions::default());
+    let after_first = read_accounting::snapshot();
+    assert_eq!(after_first.decisions_journal_parses, 1);
+    assert_eq!(after_first.cells_dir_scans, 1);
+    assert_eq!(after_first.transcript_root_scan_invocations, 1);
+    assert_eq!(first["cells"]["open"], json!(1));
+
+    // A write between the two invocations.
+    seed_cell(root, "c2", "demo", "open", &[], false, None);
+
+    // Deliberately NOT reset: the counters accumulate across both calls, so
+    // a memo that survived the first invocation would leave these at 1.
+    let second = queen_bee::status::build_status(&ctx, queen_bee::status::StatusOptions::default());
+    let after_second = read_accounting::snapshot();
+    assert_eq!(after_second.decisions_journal_parses, 2, "invocation 2 parses the journal again — no cache spans invocations");
+    assert_eq!(after_second.cells_dir_scans, 2, "invocation 2 scans the cells directory again");
+    assert_eq!(after_second.transcript_root_scan_invocations, 2, "invocation 2 scans the transcript roots again");
+    assert_eq!(second["cells"]["open"], json!(2), "the write between invocations is observed, not served from a stale memo");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 7d. Degraded stores read once and still degrade. The mjs-oracle proof
+//     that the DEGRADED VALUES themselves are unchanged lives in
+//     `crates/bee-core/tests/status_readers_a.rs` (which diffs every reader
+//     against the real mjs module on absent/empty/malformed fixtures, and
+//     is part of this cell's verify); what is asserted here is the read
+//     COUNT on exactly those store shapes, which no oracle can see.
+// ─────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn absent_empty_and_malformed_stores_are_each_read_exactly_once() {
+    // Absent: `minimal_root` writes no decisions.jsonl, no cells/ directory
+    // and no capture queue at all.
+    let absent = minimal_root();
+    let ctx_absent = manual_status_context(absent.path());
+    read_accounting::reset();
+    let payload_absent = queen_bee::status::build_status(&ctx_absent, queen_bee::status::StatusOptions::default());
+    let snap_absent = read_accounting::snapshot();
+    assert_eq!(snap_absent.decisions_journal_parses, 1, "a MISSING journal is still exactly one read attempt");
+    assert_eq!(snap_absent.cells_dir_scans, 1, "a MISSING cells directory is still exactly one scan attempt");
+    assert_eq!(snap_absent.transcript_root_scan_invocations, 1);
+    assert_eq!(payload_absent["cells"]["open"], json!(0));
+    assert_eq!(payload_absent["recent_decisions"], json!([]));
+
+    // Empty: the files exist but hold nothing.
+    let empty = minimal_root();
+    write_file(&empty.path().join(".bee/decisions.jsonl"), "");
+    fs::create_dir_all(empty.path().join(".bee/cells")).unwrap();
+    write_file(&empty.path().join(".bee/capture-queue.jsonl"), "");
+    let ctx_empty = manual_status_context(empty.path());
+    read_accounting::reset();
+    let payload_empty = queen_bee::status::build_status(&ctx_empty, queen_bee::status::StatusOptions::default());
+    let snap_empty = read_accounting::snapshot();
+    assert_eq!(snap_empty.decisions_journal_parses, 1);
+    assert_eq!(snap_empty.cells_dir_scans, 1);
+    assert_eq!(snap_empty.transcript_root_scan_invocations, 1);
+    assert_eq!(payload_empty["recent_decisions"], json!([]));
+
+    // Malformed: an unparseable journal line and an unparseable cell file —
+    // both are skipped per-record (fail-open), never a panic, and still one
+    // read each.
+    let malformed = minimal_root();
+    write_file(&malformed.path().join(".bee/decisions.jsonl"), "{not json at all\n{\"type\":\"decide\",\"id\":\"ok1\",\"date\":\"2026-07-26T00:00:00.000Z\",\"decision\":\"kept\"}\n");
+    write_file(&malformed.path().join(".bee/cells/broken.json"), "{ nope");
+    seed_cell(malformed.path(), "fine", "demo", "open", &[], false, None);
+    let ctx_malformed = manual_status_context(malformed.path());
+    read_accounting::reset();
+    let payload_malformed = queen_bee::status::build_status(&ctx_malformed, queen_bee::status::StatusOptions::default());
+    let snap_malformed = read_accounting::snapshot();
+    assert_eq!(snap_malformed.decisions_journal_parses, 1);
+    assert_eq!(snap_malformed.cells_dir_scans, 1);
+    assert_eq!(snap_malformed.transcript_root_scan_invocations, 1);
+    assert_eq!(payload_malformed["cells"]["open"], json!(1), "the malformed cell file is skipped, the good one still counted");
+    assert_eq!(
+        payload_malformed["recent_decisions"][0]["id"],
+        json!("ok1"),
+        "the malformed journal line is skipped, the good one still parsed"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // 8. The hook entry points (advisor note 1 — the sixth blocker): baselined
-//    independently of build_status, since rust-port-23's signature change
-//    lands here too.
+//    by rust-port-22 and RE-ASSERTED here after rust-port-23 moved both
+//    call sites onto the shared-read signature. These are the tests that
+//    would catch an eager shared-read shape turning chain-nudge's
+//    feature-gated scan into an unconditional one on every hook event.
 // ─────────────────────────────────────────────────────────────────────────
 
 #[test]

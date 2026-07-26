@@ -130,7 +130,14 @@ fn decide(ctx: &HookContext, root: &Path) -> i32 {
         let mut m = worker_nudge_message(&who);
         // Decision 0011: capture-mode spine — nudge scribing capture
         // in-flight, not only at feature close.
-        let debt = bee_core::cells::scribing_debt(root, None, None);
+        //
+        // rust-port-23: moved to the shared-read signature. The memo is
+        // LAZY, so this hook's read profile is unchanged — with no active
+        // feature `scribing_debt_from` returns before touching
+        // `shared.cells()` and this hook still scans no cells at all,
+        // which matters because it runs on EVERY SubagentStop event.
+        let shared = bee_core::shared_reads::SharedReads::new(root);
+        let debt = bee_core::cells::scribing_debt_from(&shared, None, None);
         let count = debt.get("count").and_then(Value::as_i64).unwrap_or(0);
         if count > 0 {
             let cells: Vec<String> = debt

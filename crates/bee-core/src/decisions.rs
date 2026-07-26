@@ -52,19 +52,22 @@ fn event_date_ms(event: &Value) -> Option<i64> {
 
 /// `buildTagOverlay(root)`: the active file's `tag` events only, latest
 /// (by date, ties broken by later file position) wins per `target` id.
-fn build_tag_overlay(root: &Path) -> HashMap<String, TagPatch> {
-    // rust-port-22 (reworked): the read-accounting counter for this store
-    // lives inside `fsutil::read_jsonl` itself, keyed on the path — NOT
-    // here. A counter placed at this call site would be gameable exactly
-    // the way the goal-check judge proved: a future loader that calls
-    // `fsutil::read_jsonl(&decisions_path(root))` directly from anywhere
-    // else in the tree (e.g. a hoisted pre-load in `queen_bee::status`)
-    // would never pass through this function at all, and the count would
-    // silently under-report. See `crate::fsutil::read_jsonl`'s doc comment
-    // and `crate::read_accounting`'s module doc comment for the full story.
-    let events: Vec<Value> = read_jsonl(&decisions_path(root));
+///
+/// rust-port-23: takes the journal events the caller ALREADY read rather
+/// than reading the file a second time. `buildTagOverlay` and
+/// `activeDecisions` both read `.bee/decisions.jsonl` in the mjs source,
+/// which is why one `active_decisions` call used to cost two journal
+/// parses; they now share one read, at one instant.
+///
+/// The read-accounting counter for this store lives inside
+/// `fsutil::read_jsonl` itself, keyed on the path (rust-port-22's rework)
+/// — so the single surviving read below is still counted, and any future
+/// caller that reads the journal from anywhere else in the crate is
+/// counted too.
+fn build_tag_overlay_from(events: &[Value]) -> HashMap<String, TagPatch> {
     let mut tag_events: Vec<(usize, Value)> = events
-        .into_iter()
+        .iter()
+        .cloned()
         .enumerate()
         .filter(|(_, e)| {
             e.get("type").and_then(Value::as_str) == Some("tag") && e.get("target").and_then(Value::as_str).is_some()
@@ -123,13 +126,15 @@ fn is_decide_or_supersede(event: &Value) -> bool {
 ///   mathematically identical to the `all: false` reverse whenever the
 ///   archive contributes nothing new.
 pub fn active_decisions(root: &Path, recent: Option<usize>, all: bool) -> Vec<Value> {
-    let overlay = build_tag_overlay(root);
+    // rust-port-23: ONE journal read per call, shared by the tag overlay
+    // and the event scan below (this call used to cost two). The archive
+    // file is a DIFFERENT store (`decisions-archive.jsonl`), read only on
+    // the `all` branch and deliberately excluded from the
+    // `decisions_journal_parses` bucket.
+    let events: Vec<Value> = read_jsonl(&decisions_path(root));
+    let overlay = build_tag_overlay_from(&events);
 
     if !all {
-        // rust-port-22 (reworked): no local counter call here — see the
-        // comment on `build_tag_overlay` above; `fsutil::read_jsonl` counts
-        // this read itself.
-        let events: Vec<Value> = read_jsonl(&decisions_path(root));
         let mut superseded: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut redacted: std::collections::HashSet<String> = std::collections::HashSet::new();
         for event in &events {
@@ -159,13 +164,9 @@ pub fn active_decisions(root: &Path, recent: Option<usize>, all: bool) -> Vec<Va
         };
     }
 
-    // rust-port-22 (reworked): no local counter call here either — same
-    // reason as `build_tag_overlay` above. `fsutil::read_jsonl` counts this
-    // journal read; the archive file below is a DIFFERENT store
-    // (`decisions-archive.jsonl`), deliberately excluded from the
-    // `decisions_journal_parses` bucket, which counts the journal
-    // (`decisions.jsonl`) only.
-    let active_events: Vec<Value> = read_jsonl(&decisions_path(root));
+    // rust-port-23: the journal was already read once above; only the
+    // archive file (a different store, uncounted by design) is read here.
+    let active_events: Vec<Value> = events;
     let archived_events: Vec<Value> = read_jsonl(&decisions_archive_path(root));
 
     // Map insertion-order semantics (JS `Map.set` on an existing key keeps

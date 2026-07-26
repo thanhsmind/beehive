@@ -209,17 +209,41 @@ pub fn read_cell(root: &Path, id: &str) -> Option<Cell> {
 /// oracle suite uses; a future consumer needing true natural/locale
 /// ordering should extend this rather than assume it already matches.
 pub fn list_cells_where(root: &Path, feature: Option<&str>, status: Option<&str>) -> Vec<Cell> {
-    let mut cells = list_cells(root);
-    if let Some(f) = feature {
-        cells.retain(|c| c.feature() == Some(f));
-    }
-    if let Some(s) = status {
-        cells.retain(|c| c.status.as_deref() == Some(s));
-    }
+    list_cells_where_from(&list_cells(root), feature, status)
+}
+
+/// [`list_cells_where`] over an inventory the caller already loaded
+/// (rust-port-23). Filters and sorts a COPY — the caller's inventory keeps
+/// its original directory order, which is what
+/// [`crate::shared_reads::SharedReads::cells`]'s other consumers (status
+/// counts, `last_durable_settlement`'s max scan) read.
+pub fn list_cells_where_from(cells: &[Cell], feature: Option<&str>, status: Option<&str>) -> Vec<Cell> {
+    let mut cells: Vec<Cell> = cells
+        .iter()
+        .filter(|c| feature.is_none_or(|f| c.feature() == Some(f)))
+        .filter(|c| status.is_none_or(|s| c.status.as_deref() == Some(s)))
+        .cloned()
+        .collect();
     cells.sort_by(|a, b| a.id.cmp(&b.id));
     cells
 }
 
+/// THE ARCHIVE TRAP (validation-slice3.md B3) — `root` is not redundant
+/// here, and this function must never be "simplified" to resolve deps
+/// against a pre-loaded inventory.
+///
+/// [`read_cell`] falls back to `.bee/cells/archive/<feature>/<id>.json`
+/// when a dep is absent from the active directory (its contract at
+/// [`read_cell`]'s own doc comment), while [`list_cells`] skips `archive/`
+/// entirely. Resolving deps against an ACTIVE-ONLY inventory therefore
+/// reads an archived, capped dep as uncapped, and the cells depending on it
+/// silently vanish from the recommendation line — with byte-parity still
+/// green (no parity fixture has an archived dep) and with the read counters
+/// unmoved (`cell_dep_reads` bundles the archive fallback, so losing it
+/// moves no counter at all). The guard is
+/// `ready_cells_from_a_shared_inventory_still_resolves_an_archived_capped_dep`
+/// in `crates/queen-bee/tests/read_accounting.rs` — the only thing standing
+/// between this function and that regression.
 fn deps_all_capped(root: &Path, cell: &Cell) -> Vec<String> {
     cell.deps()
         .into_iter()
@@ -230,7 +254,16 @@ fn deps_all_capped(root: &Path, cell: &Cell) -> Vec<String> {
 /// `readyCells(root, feature)`: open cells (in `feature`, when given) whose
 /// every dep is capped.
 pub fn ready_cells(root: &Path, feature: Option<&str>) -> Vec<Cell> {
-    list_cells_where(root, feature, Some("open"))
+    ready_cells_from(&crate::shared_reads::SharedReads::new(root), feature)
+}
+
+/// [`ready_cells`] over a caller-supplied per-invocation memo
+/// (rust-port-23). The open-cell LISTING comes from the shared active-only
+/// inventory; DEP RESOLUTION still goes through [`read_cell`] against the
+/// real root, archive fallback intact — see [`deps_all_capped`].
+pub fn ready_cells_from(shared: &crate::shared_reads::SharedReads, feature: Option<&str>) -> Vec<Cell> {
+    let root = shared.root();
+    list_cells_where_from(shared.cells(), feature, Some("open"))
         .into_iter()
         .filter(|cell| deps_all_capped(root, cell).is_empty())
         .collect()
@@ -332,6 +365,23 @@ pub fn best_scribing_stamp_ms(root: &Path, feature: &str, ledger: &[Value], stat
 /// scribing-sync stamp for that feature). `{count: 0, cells: []}` when no
 /// feature is active/given.
 pub fn scribing_debt(root: &Path, feature: Option<&str>, since_ts: Option<i64>) -> Value {
+    scribing_debt_from(&crate::shared_reads::SharedReads::new(root), feature, since_ts)
+}
+
+/// [`scribing_debt`] over a caller-supplied per-invocation memo
+/// (rust-port-23).
+///
+/// The memo is LAZY on purpose: the no-feature early return below fires
+/// before `shared.cells()` is ever touched, so this function still costs
+/// ZERO cells-directory scans when no feature resolves. That is the hook
+/// read profile `bee-chain-nudge` depends on — it calls this on every
+/// SubagentStop event and today scans nothing when no feature is active
+/// (baselined by `chain_nudge_cells_scan_zero_with_no_active_feature` in
+/// `crates/queen-bee/tests/read_accounting.rs`). An eagerly-loaded shared
+/// struct would have made that scan unconditional on every hook event with
+/// every correctness test still green.
+pub fn scribing_debt_from(shared: &crate::shared_reads::SharedReads, feature: Option<&str>, since_ts: Option<i64>) -> Value {
+    let root = shared.root();
     let state = crate::state::read_state(root);
     let feature = feature.map(str::to_string).or_else(|| state.feature.clone());
     let Some(feature) = feature else {
@@ -344,7 +394,7 @@ pub fn scribing_debt(root: &Path, feature: Option<&str>, since_ts: Option<i64>) 
             best_scribing_stamp_ms(root, &feature, &ledger, &state).unwrap_or(0)
         }
     };
-    let ids: Vec<String> = list_cells_where(root, Some(&feature), Some("capped"))
+    let ids: Vec<String> = list_cells_where_from(shared.cells(), Some(&feature), Some("capped"))
         .into_iter()
         .filter(|cell| {
             cell.behavior_change() && cell.capped_at().and_then(parse_iso_ms).is_some_and(|ms| ms > threshold)
@@ -359,7 +409,14 @@ pub fn scribing_debt(root: &Path, feature: Option<&str>, since_ts: Option<i64>) 
 /// after its `capped_at` — `{count, features: [{feature, cells}]}`,
 /// features sorted by name.
 pub fn global_scribing_debt(root: &Path) -> Value {
-    let cells: Vec<Cell> = list_cells_where(root, None, Some("capped"))
+    global_scribing_debt_from(&crate::shared_reads::SharedReads::new(root))
+}
+
+/// [`global_scribing_debt`] over a caller-supplied per-invocation memo
+/// (rust-port-23).
+pub fn global_scribing_debt_from(shared: &crate::shared_reads::SharedReads) -> Value {
+    let root = shared.root();
+    let cells: Vec<Cell> = list_cells_where_from(shared.cells(), None, Some("capped"))
         .into_iter()
         .filter(Cell::behavior_change)
         .collect();
@@ -427,7 +484,12 @@ fn js_number(v: f64) -> Value {
 /// `tierMix(root, {feature})`: tier assignment across a feature's cells
 /// (all statuses), or every cell when `feature` is `None`.
 pub fn tier_mix(root: &Path, feature: Option<&str>) -> Value {
-    let cells = list_cells_where(root, feature, None);
+    tier_mix_from(&crate::shared_reads::SharedReads::new(root), feature)
+}
+
+/// [`tier_mix`] over a caller-supplied per-invocation memo (rust-port-23).
+pub fn tier_mix_from(shared: &crate::shared_reads::SharedReads, feature: Option<&str>) -> Value {
+    let cells = list_cells_where_from(shared.cells(), feature, None);
     let mut extraction = 0i64;
     let mut generation = 0i64;
     let mut ceiling = 0i64;
@@ -454,7 +516,15 @@ pub fn tier_mix(root: &Path, feature: Option<&str>) -> Value {
 /// Advisory only — never a blocker.
 pub fn ceiling_scarcity_warning(root: &Path) -> Option<Value> {
     let state = crate::state::read_state(root);
-    let mix = tier_mix(root, state.feature.as_deref());
+    ceiling_scarcity_warning_from(&tier_mix(root, state.feature.as_deref()))
+}
+
+/// [`ceiling_scarcity_warning`] over a [`tier_mix`] result the caller
+/// already computed (rust-port-23) instead of recomputing it. `status`
+/// renders `tier_mix` for the ACTIVE feature immediately above this value
+/// and passes that same result down — the two were always derived from the
+/// same `state.feature`, so this is a dedup, not a narrowing.
+pub fn ceiling_scarcity_warning_from(mix: &Value) -> Option<Value> {
     let tiered = mix.get("tiered").and_then(Value::as_i64).unwrap_or(0);
     if tiered < SCARCITY_MIN_TIERED {
         return None;
