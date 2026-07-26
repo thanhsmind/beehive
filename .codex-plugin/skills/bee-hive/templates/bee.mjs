@@ -3873,8 +3873,13 @@ async function handleWorktreeNew(_root, flags) {
   // with no override (D3); teaches the paved road — re-enter via --with-companion
   // so the shared checkout is mounted and tracked (D4, never an in-place
   // conversion). --with-companion is never refused by this check. A solo
-  // checkout, or one with nothing shared, is a pure no-op (D6).
-  if (!withCompanion && hasAnySharedNestedCheckout(mainRoot)) {
+  // checkout, or one with nothing shared, is a pure no-op (D6). The ACTING
+  // session is excluded from the concurrency signal (excludeSessionId) so a
+  // genuinely solo agent's own live heartbeat never counts as "another"
+  // session — mirroring bee-write-guard.mjs's isSharedNestedCheckoutTarget
+  // self-exclusion; a real second live session still refuses exactly as before.
+  const sessionId = resolveSessionId({ root: mainRoot });
+  if (!withCompanion && hasAnySharedNestedCheckout(mainRoot, { excludeSessionId: sessionId })) {
     throw new WorktreeCreateError(
       'WORKTREE_CONCURRENT_SHARED_NESTED',
       `refusing to create a worktree: another session is concurrently live on ${mainRoot} and it contains a shared nested checkout a companion mount must cover — running unguarded is how one session silently ate another's work. Re-run with "bee worktree new --feature ${feature} --with-companion" so the shared checkout is mounted and tracked (the paved road for concurrent shared-checkout work — AGENTS.md rule 14). This creates a NEW companion-mounted worktree; it does not retrofit the checkout you are in.`,

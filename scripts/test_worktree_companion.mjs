@@ -29,8 +29,12 @@ function git(cwd, args) {
   return r.stdout;
 }
 
-function bee(cwd, args) {
-  return spawnSync('node', [BEE_MJS, ...args], { cwd, encoding: 'utf8' });
+function bee(cwd, args, { env } = {}) {
+  return spawnSync('node', [BEE_MJS, ...args], {
+    cwd,
+    encoding: 'utf8',
+    env: env ? { ...process.env, ...env } : process.env,
+  });
 }
 
 // Plants a foreign session record with a fresh heartbeat so isConcurrentMode()
@@ -261,10 +265,14 @@ try {
   {
     const main = path.join(tmp, 'case6-main');
     initMain(main, { withCompanion: false });
-    plantLiveSession(main);
+    plantLiveSession(main, 'other-live-session');
     plantNestedRepo(main, 'repo');
     const before = fs.readdirSync(path.join(main, '..'));
-    const r = bee(main, ['worktree', 'new', '--feature', 'demo-f', '--json']);
+    // Acting session is a DISTINCT id from the planted foreign session, so the
+    // self-exclusion in handleWorktreeNew leaves the foreign session genuinely
+    // "other" — the refusal is the real second-session defense, not the acting
+    // session tripping itself.
+    const r = bee(main, ['worktree', 'new', '--feature', 'demo-f', '--json'], { env: { BEE_SESSION_ID: 'acting-session-6' } });
     const after = fs.readdirSync(path.join(main, '..'));
     const branchGone = git(main, ['branch', '--list', 'wt/demo-f']).trim() === '';
     const refused = r.status !== 0 && after.length === before.length && branchGone;
@@ -315,6 +323,44 @@ try {
     const ok = r.status === 0 && !!created && !!created.companion && created.companion.mountPath === 'companion';
     record('concurrent + nested checkout + --with-companion: never refused, mounts as usual', ok, r.status === 0 ? JSON.stringify(created) : `status=${r.status} stdout=${r.stdout} stderr=${r.stderr}`);
     if (r.status === 0 && created) git(main, ['worktree', 'remove', '--force', '--', created.worktreeRoot]);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 10 (wcg-fix-1, P1 self-exclusion): the ONLY live session record is
+  // the acting session's own — no genuine second session — yet a companion-
+  // eligible nested checkout is present. handleWorktreeNew must exclude the
+  // acting session from its own concurrency check, so this is NOT concurrency
+  // and the worktree proceeds. Red-first this row REFUSES (false positive)
+  // before the excludeSessionId wiring lands; green after.
+  // -------------------------------------------------------------------
+  {
+    const main = path.join(tmp, 'case10-main');
+    initMain(main, { withCompanion: false });
+    plantLiveSession(main, 'self-session');
+    plantNestedRepo(main, 'repo');
+    const r = bee(main, ['worktree', 'new', '--feature', 'demo-j', '--json'], { env: { BEE_SESSION_ID: 'self-session' } });
+    const created = r.status === 0 ? JSON.parse(r.stdout) : null;
+    record('self-only live session (no genuine second session) + nested checkout: proceeds, not a false-positive refusal', r.status === 0 && !!created && created.companion === null, r.status === 0 ? JSON.stringify(created) : `status=${r.status} stdout=${r.stdout} stderr=${r.stderr}`);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 11 (wcg-fix-1, P1 regression guard): the acting session is excluded,
+  // but a GENUINE second session is also live alongside the nested checkout —
+  // self-exclusion must NOT disable the real defense. Still a hard refusal.
+  // Green both before and after the fix (proves the fix narrows, not removes).
+  // -------------------------------------------------------------------
+  {
+    const main = path.join(tmp, 'case11-main');
+    initMain(main, { withCompanion: false });
+    plantLiveSession(main, 'self-session');
+    plantLiveSession(main, 'genuine-other-session');
+    plantNestedRepo(main, 'repo');
+    const before = fs.readdirSync(path.join(main, '..'));
+    const r = bee(main, ['worktree', 'new', '--feature', 'demo-k', '--json'], { env: { BEE_SESSION_ID: 'self-session' } });
+    const after = fs.readdirSync(path.join(main, '..'));
+    const branchGone = git(main, ['branch', '--list', 'wt/demo-k']).trim() === '';
+    const refused = r.status !== 0 && after.length === before.length && branchGone;
+    record('acting session excluded but a genuine second session live: still refused (self-exclusion never disables the check)', refused, `status=${r.status} stdout=${r.stdout} stderr=${r.stderr}`);
   }
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

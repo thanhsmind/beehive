@@ -1,0 +1,14 @@
+# wcg-fix-1 — exclude the acting session from `bee worktree new`'s concurrency check
+
+**Status:** [DONE]
+
+**Outcome:** Fixes review finding #1 (P1, `worktree-concurrency-guard-review-20260724`). `handleWorktreeNew` resolved the shared-nested-checkout concurrency signal with `hasAnySharedNestedCheckout(mainRoot)` and **no** options, so `isConcurrentMode` counted the ACTING session's own live heartbeat as "another" session — a false-positive `WORKTREE_CONCURRENT_SHARED_NESTED` refusal for a genuinely solo agent (violating D6 and the feature's own "OTHER session" definition). Fix: resolve the acting session id via `resolveSessionId({ root: mainRoot })` (already imported, same primitive used at bee.mjs:441/1103/1333) and thread it through as `hasAnySharedNestedCheckout(mainRoot, { excludeSessionId: sessionId })`, mirroring exactly how `bee-write-guard.mjs` already self-excludes via `guards.isSharedNestedCheckoutTarget(root, cand.abs, { excludeSessionId: sessionId })`. Self-exclusion only — a genuine second live session still refuses exactly as before.
+
+**Files touched:**
+- `skills/bee-hive/templates/bee.mjs` (canonical) — `handleWorktreeNew` resolves the acting session id and passes `excludeSessionId` into the guard; propagated via the render + onboard regen chain to the 5 other `bee.mjs` copies (`.bee/bin/`, `.claude/`, `.agents/`, `.claude-plugin/`, `.codex-plugin/`), all byte-identical (md5 `6e0b50121488ab479d4d71e5264f3dcd`).
+- `scripts/test_worktree_companion.mjs` — `bee()` helper gains an `env` override; Case 6 amended to run the acting invocation under a distinct `BEE_SESSION_ID` (so a lone foreign session stays genuinely "other" under self-exclusion); new Case 10 (self-only live session → proceeds) and Case 11 (acting excluded + genuine second session → still refused). New rows in the existing suite, no new file.
+- Regen side-effects (sanctioned): `.claude-plugin/skills/.bee-render.json`, `.codex-plugin/skills/.bee-render.json`, `.claude/skills/.bee-render.json`, `.agents/skills/.bee-render.json`, `.bee/onboarding.json` (managed-hash ledger), `docs/history/codex-harness-hardening/release-manifest.json` (5 content-hash entries only; mode-drift noise excluded per the cell's `regen_obligation_ack`).
+
+**Verify:** `node --test scripts/test_worktree_companion.mjs && node scripts/ledger_parity.mjs --check` → exit 0 (SUMMARY 17/17 passed; ledger matches). Red-first proven: before the fix, Case 10 refused a solo agent with the exact `WORKTREE_CONCURRENT_SHARED_NESTED` false positive (16/17); Case 6 and Case 11 passed red, scoping the change to the self-exclusion dimension. `release_manifest.mjs --check` stays dropped from verify (pre-existing unrelated file-mode drift, per the cell ack); `--write` was run then surgically reduced to the 5 content-hash entries.
+
+Full trace and behavior-change evidence: `.bee/cells/wcg-fix-1.json`.
