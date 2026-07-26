@@ -2730,6 +2730,134 @@ await check('si-1: state scribing-run can stamp a NON-active feature — writes 
   }
 });
 
+// ─── scribing-stamp-seam sss-1: the record stamp can vanish through the
+// workflow-record write seam (decision 5b2f963d) ───────────────────────────
+// Read-first (test-economy D5): the "multisession-native-10" block above
+// (~line 573) already proves a workflow-backed default record's `phase`/
+// `summary` mutations survive writeStateRecordThroughProjection's rebuild.
+// It does NOT cover `last_scribing_run` — an AD HOC field never listed in
+// that function's D1 field set (phase/mode/summary/next_action/gates) — so
+// it never caught this seam: the field is silently dropped on exactly this
+// path, and closeGuardScribingDebt (which reads only the default record's
+// stamp) then refuses forever. These three rows close that gap directly
+// against `scribingDebt`'s behavior at the CLI door, not a duplicate of the
+// projection-plumbing assertions already above.
+
+await check('sss-1: a workflow-backed feature closes cleanly with no waiver after scribing-run, even though the record stamp itself never reaches disk (the durable ledger carries the proof instead)', async () => {
+  const dir = makeStateRepo('bee-sss1-seam-green-');
+  try {
+    const started = await runBeeState(dir, ['start-feature', '--feature', 'sss1-seam', '--mode', 'tiny', '--json']);
+    assert(started.status === 0, `start-feature should succeed: ${started.stderr}`);
+    const toSwarm = await runBeeState(dir, ['set', '--owner', 'exploring', '--phase', 'swarming', '--json']);
+    assert(toSwarm.status === 0, `exploring->swarming should succeed: ${toSwarm.stderr}`);
+
+    fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
+    writeJsonAtomic(path.join(dir, '.bee', 'cells', 'sss1-seam-1.json'), {
+      id: 'sss1-seam-1',
+      feature: 'sss1-seam',
+      status: 'capped',
+      trace: { behavior_change: true, capped_at: new Date().toISOString() },
+    });
+
+    const scribe = await runBeeState(dir, [
+      'scribing-run', '--feature', 'sss1-seam', '--areas', 'demo-area', '--next-action', 'bee-compounding', '--json',
+    ]);
+    assert(scribe.status === 0, `scribing-run should succeed, got ${scribe.status}: ${scribe.stderr}`);
+
+    // Live evidence of the seam itself (decision 5b2f963d): the workflow-
+    // routed write never persisted the mutated last_scribing_run to disk.
+    const afterScribe = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
+    assert(
+      afterScribe.last_scribing_run === undefined,
+      'documents the seam this cell works around: the record stamp does not survive the workflow-projection rebuild',
+    );
+
+    const close = await runBeeState(dir, ['set', '--owner', 'compounding', '--phase', 'compounding-complete', '--json']);
+    assert(
+      close.status === 0,
+      `close must succeed with no --waive-scribing-debt once the ledger carries the sync proof, got ${close.status}: ${close.stdout}${close.stderr}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('sss-1 (negative control): a cell capped AFTER the last scribing-run still blocks the close — the ledger fallback never forgives genuinely unsynced work', async () => {
+  const dir = makeStateRepo('bee-sss1-seam-negative-');
+  try {
+    const started = await runBeeState(dir, ['start-feature', '--feature', 'sss1-seam-neg', '--mode', 'tiny', '--json']);
+    assert(started.status === 0, `start-feature should succeed: ${started.stderr}`);
+    const toSwarm = await runBeeState(dir, ['set', '--owner', 'exploring', '--phase', 'swarming', '--json']);
+    assert(toSwarm.status === 0, `exploring->swarming should succeed: ${toSwarm.stderr}`);
+
+    fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
+    writeJsonAtomic(path.join(dir, '.bee', 'cells', 'sss1-seam-neg-a.json'), {
+      id: 'sss1-seam-neg-a',
+      feature: 'sss1-seam-neg',
+      status: 'capped',
+      trace: { behavior_change: true, capped_at: new Date().toISOString() },
+    });
+    const scribe = await runBeeState(dir, [
+      'scribing-run', '--feature', 'sss1-seam-neg', '--areas', 'a', '--next-action', 'bee-compounding', '--json',
+    ]);
+    assert(scribe.status === 0, `scribing-run should succeed, got ${scribe.status}: ${scribe.stderr}`);
+
+    // A cell capped AFTER the sync — genuinely unsynced; must still count.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    writeJsonAtomic(path.join(dir, '.bee', 'cells', 'sss1-seam-neg-b.json'), {
+      id: 'sss1-seam-neg-b',
+      feature: 'sss1-seam-neg',
+      status: 'capped',
+      trace: { behavior_change: true, capped_at: new Date().toISOString() },
+    });
+
+    const close = await runBeeState(dir, ['set', '--owner', 'compounding', '--phase', 'compounding-complete', '--json']);
+    assert(close.status !== 0, 'a genuinely unsynced cell capped after the last scribing-run must still block the close');
+    const out = close.stdout + close.stderr;
+    assert(/sss1-seam-neg-b/.test(out), `refusal must name the unsynced cell, got: ${out}`);
+    assert(!/sss1-seam-neg-a\b/.test(out), `the already-synced cell must NOT be named as debt, got: ${out}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('sss-1 (feature isolation): a ledger entry for an UNRELATED feature never clears this feature\'s own unpaid debt', async () => {
+  const dir = makeStateRepo('bee-sss1-seam-crossfeat-');
+  try {
+    const started = await runBeeState(dir, ['start-feature', '--feature', 'sss1-seam-cross', '--mode', 'tiny', '--json']);
+    assert(started.status === 0, `start-feature should succeed: ${started.stderr}`);
+    const toSwarm = await runBeeState(dir, ['set', '--owner', 'exploring', '--phase', 'swarming', '--json']);
+    assert(toSwarm.status === 0, `exploring->swarming should succeed: ${toSwarm.stderr}`);
+
+    fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
+    writeJsonAtomic(path.join(dir, '.bee', 'cells', 'sss1-seam-cross-1.json'), {
+      id: 'sss1-seam-cross-1',
+      feature: 'sss1-seam-cross',
+      status: 'capped',
+      trace: { behavior_change: true, capped_at: new Date().toISOString() },
+    });
+
+    // An UNRELATED feature's ledger line — a repair-path stamp (si-1: the
+    // default record's active feature is "sss1-seam-cross", a different
+    // name, so the phase gate never applies) lands in the SAME ledger file
+    // this cell's fix reads, but must never be mistaken for sss1-seam-cross's
+    // own sync.
+    const unrelated = await runBeeState(dir, [
+      'scribing-run', '--feature', 'sss1-seam-unrelated', '--areas', 'x', '--next-action', '-', '--json',
+    ]);
+    assert(unrelated.status === 0, `unrelated-feature repair-path scribing-run should succeed: ${unrelated.stdout}${unrelated.stderr}`);
+
+    // No scribing-run for THIS feature — only the unrelated one above. The
+    // swap door (same debt computation as the close door) must still refuse.
+    const swapAway = await runBeeState(dir, ['set', '--owner', 'swarming', '--feature', 'sss1-seam-cross-elsewhere', '--json']);
+    assert(swapAway.status !== 0, "an unrelated feature's ledger entry must not clear this feature's own debt");
+    const out = swapAway.stdout + swapAway.stderr;
+    assert(/sss1-seam-cross-1/.test(out), `refusal must name this feature's own unsynced cell, got: ${out}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 await check('tst-1: state scribing-run for a NON-active feature succeeds from phase "compounding-complete" — the phase gate never applies to a repair-path call that leaves the default record untouched', async () => {
   const dir = makeStateRepo('bee-scribing-nonactive-terminal-');
   try {

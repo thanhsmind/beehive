@@ -2217,11 +2217,27 @@ export function scribingDebt(root, opts = {}) {
   if (opts.sinceTs !== undefined && opts.sinceTs !== null) {
     threshold = Number.isFinite(opts.sinceTs) ? opts.sinceTs : 0;
   } else {
-    const lastRun = state.last_scribing_run;
-    if (lastRun && lastRun.feature === feature) {
-      const parsed = Date.parse(lastRun.at || lastRun.date);
-      if (Number.isFinite(parsed)) threshold = parsed;
-    }
+    // scribing-stamp-seam sss-1: a workflow-backed default record's
+    // last_scribing_run mutation can be silently dropped before it ever
+    // reaches disk. handleStateScribingRun (bee.mjs) mutates the in-memory
+    // record then calls write(state) -> writeStateRecordThroughProjection,
+    // which — whenever a LIVE workflow record names this feature — never
+    // persists the caller's mutated object at all: it pushes only the D1
+    // fields (phase/mode/summary/next_action/gates) onto the workflow record
+    // via updateWorkflowAssumingLock, then rebuildStateProjection derives the
+    // new state.json by spreading `...current` (state-projection.mjs
+    // ~238-250), where `current` is a FRESH readState(root) off the STILL-
+    // STALE disk file — the just-stamped last_scribing_run never lived
+    // there, so it is not in `current` either, and vanishes for good. The
+    // durable ledger (appendScribingLedger) is written unconditionally on
+    // every scribing-run call regardless of whether the record write landed
+    // — bestScribingStampMs's ledger-max-then-lane-then-record logic (si-1/
+    // si-3, reused verbatim, not forked here) survives this seam even when
+    // the state-field stamp does not, so it is the threshold's fallback/max,
+    // scoped to THIS feature the same way bestScribingStampMs already scopes
+    // every source it consults.
+    const best = bestScribingStampMs(root, feature, { state });
+    if (best !== null) threshold = best;
   }
   const cells = listCells(root, { feature, status: 'capped' })
     .filter((cell) => {
