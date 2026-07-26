@@ -115,6 +115,117 @@ pub fn read_state(root: &Path) -> State {
     }
 }
 
+// ─── lanes + pipeline resolution (rust-port-9) ──────────────────────────────
+// Ports of state.mjs's `lanesDir`/`lanePath`/`readLane`/`resolvePipeline`,
+// the slice guards.mjs's `checkWrite` needs through `resolveWriteRecord`:
+// a bound sessionId is governed by its lane record, an unbound/unknown
+// session by the default record, and an unresolvable binding is a typed
+// refusal reason — never a silent fallback to the default pipeline.
+
+pub fn lanes_dir(root: &Path) -> PathBuf {
+    root.join(".bee").join("lanes")
+}
+
+/// `requireLaneFeature` + `lanePath`: the feature becomes a filename under
+/// `.bee/lanes/`, so path separators and `..` are bad arguments (Err with
+/// the mjs error message verbatim — resolvePipeline interpolates it).
+pub fn lane_path(root: &Path, feature: &str) -> Result<PathBuf, String> {
+    let trimmed = feature.trim();
+    if trimmed.is_empty() {
+        return Err("lane feature is required.".to_string());
+    }
+    if trimmed.contains('\\') || trimmed.contains('/') || trimmed.contains("..") {
+        return Err("lane feature must be a plain id (no path separators).".to_string());
+    }
+    Ok(lanes_dir(root).join(format!("{trimmed}.json")))
+}
+
+/// `readLane` (fail-open DISPLAY read): `None` when missing or corrupt; a
+/// present-but-corrupt record is WARNED to stderr exactly like the mjs
+/// source's console.warn, then read as `None`. `laneRecordFrom`'s
+/// feature-match guard is preserved: a record whose `feature` field does not
+/// match the requested lane is corrupt, never trusted.
+pub fn read_lane(root: &Path, feature: &str) -> Option<State> {
+    let file = lane_path(root, feature).ok()?;
+    if !file.exists() {
+        return None;
+    }
+    let trimmed = feature.trim();
+    let raw: Value = read_json(&file, Value::Null);
+    let record = if raw.is_object() {
+        match serde_json::from_value::<State>(raw) {
+            Ok(state) if state.feature.as_deref() == Some(trimmed) => Some(state),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    if record.is_none() {
+        let rel = format!(".bee/lanes/{trimmed}.json");
+        eprintln!(
+            "readLane: skipping corrupt lane record \"{rel}\" for display — mutations through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\")."
+        );
+    }
+    record
+}
+
+/// The `{ok: true}` arm of `resolvePipeline`.
+pub struct PipelineResolution {
+    /// `'default'` or `'lane'` (msn-21: lane flows opt out of the
+    /// workspace-ownership check in guards.mjs `checkWrite`).
+    pub source: &'static str,
+    pub record: State,
+}
+
+/// Port of state.mjs `resolvePipeline(root, {sessionId})`. `Err(reason)`
+/// carries the typed refusal reason (LANE_INVALID / LANE_MISSING /
+/// LANE_CORRUPT) verbatim — the caller (`check_write`) prefixes it with
+/// "bee lane guard: ".
+pub fn resolve_pipeline(root: &Path, session_id: Option<&str>) -> Result<PipelineResolution, String> {
+    let defaults = || PipelineResolution { source: "default", record: read_state(root) };
+    let Some(sid) = session_id.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(defaults());
+    };
+    // Sessions and lanes are coordination-store state; the caller passes the
+    // control root (mjs re-derives it via controlRootFor — the hook's
+    // topology already resolved it once, msn-21).
+    let Some(session) = crate::claims::read_session(root, sid) else {
+        return Ok(defaults());
+    };
+    let bound = session
+        .extra
+        .get("lane")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or("")
+        .to_string();
+    if bound.is_empty() {
+        return Ok(defaults());
+    }
+    let file = match lane_path(root, &bound) {
+        Ok(f) => f,
+        Err(err) => {
+            return Err(format!(
+                "session \"{id}\" is bound to lane \"{bound}\", which is not a valid lane name ({err}) — never guessed back to the default pipeline. FIX: rebind or unbind the session (claims.mjs bindSessionLane/unbindSessionLane).",
+                id = session.id,
+            ));
+        }
+    };
+    if !file.exists() {
+        return Err(format!(
+            "session \"{id}\" is bound to lane \"{bound}\" but .bee/lanes/{bound}.json does not exist — resolution never guesses back to the default pipeline. FIX: start the lane (startFeature with lane mode) or unbind the session.",
+            id = session.id,
+        ));
+    }
+    let Some(record) = read_lane(root, &bound) else {
+        return Err(format!(
+            "session \"{id}\" is bound to lane \"{bound}\" but its record is corrupt — display never guesses and mutations must refuse. FIX: inspect/restore .bee/lanes/{bound}.json, then retry.",
+            id = session.id,
+        ));
+    };
+    Ok(PipelineResolution { source: "lane", record })
+}
+
 /// `gateApproved(state, gateName)` for the four named gates.
 pub fn gate_approved(state: &State, gate_name: &str) -> bool {
     match gate_name {

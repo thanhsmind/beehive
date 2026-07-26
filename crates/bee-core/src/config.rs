@@ -125,6 +125,58 @@ impl Config {
     }
 }
 
+/// state.mjs `localConfigPath` — the per-machine, gitignored overlay sibling
+/// of the tracked `.bee/config.json`.
+pub fn local_config_path(root: &Path) -> PathBuf {
+    root.join(".bee").join("config.local.json")
+}
+
+/// Port of state.mjs `mergeConfigOverlay` — deep-merge `overlay` OVER `base`
+/// (overlay wins on every conflict; plain objects merge key-by-key; arrays
+/// REPLACE wholesale; a scalar overlay value replaces the base value).
+pub fn merge_config_overlay(base: &Value, overlay: &Value) -> Value {
+    match overlay {
+        Value::Array(a) => Value::Array(a.clone()),
+        Value::Object(overlay_map) => {
+            let base_map = match base {
+                Value::Object(m) => m.clone(),
+                _ => Map::new(),
+            };
+            let mut out = base_map.clone();
+            for (key, value) in overlay_map {
+                let merged = match (base_map.get(key), value) {
+                    (Some(bv @ Value::Object(_)), Value::Object(_)) => merge_config_overlay(bv, value),
+                    (_, Value::Array(a)) => Value::Array(a.clone()),
+                    _ => value.clone(),
+                };
+                out.insert(key.clone(), merged);
+            }
+            Value::Object(out)
+        }
+        _ => base.clone(),
+    }
+}
+
+/// The RAW merged config value (tracked `.bee/config.json` with the
+/// `.bee/config.local.json` overlay winning), for callers that need
+/// namespaces outside the typed [`Config`] shape — rust-port-9's guard
+/// checks read `guards.*` here, a LOCAL_ONLY namespace whose live values a
+/// host writes into the overlay (state.mjs `LOCAL_ONLY_CONFIG_NAMESPACES`),
+/// so an overlay-blind read would miss e.g. a `guards.idle_gate` opt-out.
+/// Missing/malformed files fall open exactly like state.mjs `readConfig`:
+/// a non-object tracked file reads as `{}`, an absent/malformed overlay
+/// leaves the tracked object untouched.
+pub fn read_config_value(root: &Path) -> Value {
+    let raw: Value = read_json(&config_path(root), Value::Null);
+    let tracked = if raw.is_object() { raw } else { Value::Object(Map::new()) };
+    let overlay: Value = read_json(&local_config_path(root), Value::Null);
+    if overlay.is_object() {
+        merge_config_overlay(&tracked, &overlay)
+    } else {
+        tracked
+    }
+}
+
 /// Reads `.bee/config.json` under `root`, matching state.mjs's
 /// `readConfig` for the fields this cell's readers need: a missing or
 /// malformed file falls open to `Config::default()` (fail-open, same

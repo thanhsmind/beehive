@@ -66,14 +66,19 @@ fn read_store(main_root: &Path) -> Vec<Hold> {
 /// `normalizePath` — byte-identical to worktree-holds.mjs's private
 /// helper (itself a duplicate of reservations.mjs's own, per that module's
 /// header comment on deliberate small duplication for import-isolation).
-fn normalize_path(value: &str) -> String {
+/// `pub(crate)`: guards.rs (rust-port-9) reuses it for `isHardConflict`,
+/// whose mjs source uses reservations.mjs's identical copy.
+///
+/// rust-port-9 fix (deviation, bug in touched code): the mjs regex
+/// `/^\.\/+/` strips ONE leading `.` followed by a run of slashes — a
+/// single anchored replace, not a loop — so `"././x"` normalizes to
+/// `"./x"`, not `"x"`. The earlier `while strip_prefix("./")` loop here
+/// over-stripped that (edge-case-only) spelling.
+pub(crate) fn normalize_path(value: &str) -> String {
     let backslashes_replaced = value.replace('\\', "/");
-    let no_leading_dot_slashes = {
-        let mut s = backslashes_replaced.as_str();
-        while let Some(rest) = s.strip_prefix("./") {
-            s = rest;
-        }
-        s.to_string()
+    let no_leading_dot_slashes = match backslashes_replaced.strip_prefix("./") {
+        Some(rest) => rest.trim_start_matches('/').to_string(),
+        None => backslashes_replaced,
     };
     let mut chars: Vec<char> = no_leading_dot_slashes.chars().collect();
     while chars.last() == Some(&'/') {

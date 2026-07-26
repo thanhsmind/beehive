@@ -1,0 +1,104 @@
+{
+  "id": "rust-port-9",
+  "feature": "rust-port",
+  "title": "bee-write-guard port 1 of 3 — core write checks: gate/intake, reservations, holds, worktree containment",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "rust-port-7",
+    "rust-port-8"
+  ],
+  "decisions": [
+    "D2",
+    "D7"
+  ],
+  "tier": "ceiling",
+  "files": [
+    "crates/bee-core/*",
+    "crates/queen-bee/*"
+  ],
+  "read_first": [
+    ".bee/bin/hooks/bee-write-guard.mjs",
+    ".bee/bin/lib/guards.mjs",
+    ".bee/bin/lib/validate-args.mjs",
+    ".bee/bin/lib/state.mjs",
+    "docs/history/rust-port/CONTEXT.md"
+  ],
+  "action": "Port the CORE write-check spine of bee-write-guard onto the queen-bee hook runtime (split 1 of 3 per validation decision 2026-07-26; Bash path is rust-port-11, read side is rust-port-12): (a) gate guard — source-edit deny before execution gate, allowlist .bee/ docs/ plans/ AGENTS.md, intake-block on idle and compounding-complete phases (state.mjs hookEnabled plus phase/gate/allowlist readers via rust-port-8); (b) reservation check — swarming writes to paths reserved by another agent denied naming the holder, BEE_AGENT_NAME identity; (c) cross-session holds — foreign-hold deny with holder identity and expiry, fail-closed on a corrupt holds store (worktree-holds semantics via rust-port-8 readers); (d) worktree containment — linked-invalid worktree resolution exits 2, cross-worktree target containment denials (GENERIC_CONTAINMENT_MESSAGE classes, companion mounted rel-path resolution), .bee/runtime/worktree-grants.json sibling enrichment. Exit contract exact: allow 0 silent; deny 2 with reason on stderr; crash 0 plus hooks.jsonl line (fail-open). CONFORMANCE via the rust-port-7 rig in ONE integration target writeguard_core (verify uses cargo --test writeguard_core): fixture corpora per check class, ORACLE SEEDING per panel B3 (temp roots seeded with .bee/bin/lib/ + hooks/ + onboarding.json + enabling config.json; every deny fixture asserts the node oracle exited 2 before diffing; one negative-control unseeded-root fixture must be detected, not passed). Deny-preservation red-first: any fixture node denies MUST be denied by rust.",
+  "must_haves": {
+    "truths": [
+      "cargo --test writeguard_core runs (missing target exits 101) and reports at least 12 passed across classes (a) through (d)",
+      "every deny fixture: node oracle exit 2 asserted, rust matches exit and reason class (zero fail-open regressions)",
+      "every allow fixture: rust allows (zero false denies)",
+      "crash fixtures: rust exits 0 plus crash line",
+      "negative-control unseeded root is detected as invalid rig setup"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/",
+        "substantive": "core write checks: gate/intake, reservations, holds, containment, grants enrichment"
+      },
+      {
+        "path": "crates/queen-bee/",
+        "substantive": "write-guard core wired into hook runtime plus writeguard_core conformance corpus"
+      }
+    ],
+    "key_links": [
+      "rig drives the real .bee/bin/hooks/bee-write-guard.mjs as oracle",
+      "readers from rust-port-8 (state, reservations, holds, workspace, claims)"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1)",
+      "Bash-command analysis (extractBashTargets, checkGitBashCommand, CLI-shape, internals-reach) is OUT — rust-port-11",
+      "Read-side checks (checkRead, read-size, privacy, scout), apply_patch, AskUserQuestion are OUT — rust-port-12",
+      "No wiring-file edits (flip is a later slice)",
+      "Tests never touch the live .bee/ store",
+      "No edits to crates/Cargo.toml members list"
+    ]
+  },
+  "verify": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test writeguard_core",
+  "trace": {
+    "worker": "Dave",
+    "outcome": "Ported the bee-write-guard CORE write-check spine to queen-bee (split 1 of 3): bee_core::guards::check_write (direct-edit/docs-history/scratch-shape first-hit denies, lane-record resolution via new state.rs resolve_pipeline/read_lane, cross-session hold deny with holder+expiry, corrupt-store fail-closed, cross-worktree exclusive-path deny vs advisory warning, workspace ownership, terminal/gated/swarming branches — deny reasons byte-identical to guards.mjs) plus queen-bee hooks/write_guard.rs (Edit/Write/MultiEdit path: linked-invalid exit 2, canonicalRelPath/companion-mount/sibling-grants containment, allow+notice JSON, catch_unwind fail-open crash logging; Bash path deferred to rust-port-11, read side to rust-port-12). Conformance: writeguard_core drives sha256-verified seeded copies of the node hook as oracle — 20/20 passed across classes (a)-(d) with node-exit-2 asserted per deny fixture, allow twins, negative control, and crash fixtures (node oracle crash line + rust panic-wrapper crash line).",
+    "files_changed": [
+      "crates/bee-core/src/guards.rs",
+      "crates/bee-core/src/state.rs",
+      "crates/bee-core/src/config.rs",
+      "crates/bee-core/src/holds.rs",
+      "crates/bee-core/src/lib.rs",
+      "crates/bee-core/Cargo.toml",
+      "crates/Cargo.lock",
+      "crates/queen-bee/src/hooks/write_guard.rs",
+      "crates/queen-bee/src/hooks/mod.rs",
+      "crates/queen-bee/tests/writeguard_core.rs"
+    ],
+    "deviations": [
+      "bee-core/src/holds.rs normalize_path (rust-port-8 code touched by this cell) over-stripped repeated leading './' runs via a while-loop; the frozen mjs normalizePath is a SINGLE anchored /^\\.\\/+/ replace ('././x' -> './x'). Fixed to single-strip semantics to match both worktree-holds.mjs and reservations.mjs (rule-1 auto-fix: bug in touched code).",
+      "writeguard_core sibling-worktree fixture initially shared one sibling tempdir between the node and rust seeded roots; the second fabrication re-pointed the reverse gitdir pointer and broke the first root's bidirectional verification (node oracle correctly fell back to the generic message). Fixed by giving each runtime its own fabricated sibling; the enriched reasons are compared byte-identical after normalizing each root's own sibling realpath."
+    ],
+    "friction": null,
+    "capped_at": "2026-07-26T08:22:03.461Z",
+    "behavior_change": false,
+    "verification_evidence": "{\n  \"new_suite_reason\": \"The cell mandates ONE new integration target named writeguard_core (verify: cargo --test writeguard_core) — the D7b conformance corpus driving sha256-verified node-oracle copies of bee-write-guard.mjs per the rust-port-7 rig discipline. No existing suite covers the write-guard hook: hook_conformance covers only tools-logger/codex-subagent-audit and per validation decision each hook port gets its own cargo --test target so a missing target exits 101 (kills the zero-test-green class).\",\n  \"tests_inspected\": \"crates/queen-bee/tests/hook_conformance.rs (rust-port-7 rig: covers tools-logger + codex-subagent-audit only, no write-guard fixtures) and crates/bee-core/tests/guard_support.rs (rust-port-8 readers: store readers only, no hook exit-contract coverage) — neither exercises bee-write-guard's deny/allow/crash exit contract, hence the cell-mandated new target.\",\n  \"tests_added\": \"crates/queen-bee/tests/writeguard_core.rs — 20 conformance tests across classes (a) gate/intake incl. direct-edit spine, (b) swarming reservations incl. intent advisory downgrade, (c) cross-session + cross-worktree holds incl. corrupt-store fail-closed, (d) containment (traversal/absolute/linked-invalid/sibling-enrichment/companion mount), plus rig self-check, negative control, and both crash fail-open fixtures.\",\n  \"verification_run\": \"cargo test --manifest-path crates/Cargo.toml -p queen-bee --test writeguard_core => ok. 20 passed; 0 failed. Every deny fixture asserts the node oracle exited 2 before diffing; deny stderr byte-compared node vs rust; neighbors re-run green (guard_support 25, hook_conformance 11, bee-core lib 17).\"\n}\n",
+    "verify_output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s\n     Running tests/writeguard_core.rs (crates/target/debug/deps/writeguard_core-d8c6ad041983ae28)\n\nrunning 20 tests\ntest crash_fail_open_rust_wrapper_catches_panic_exits_zero_and_writes_crash_line ... ok\ntest negative_control_unseeded_root_detected_as_invalid_and_both_runtimes_silent ... ok\ntest rig_self_check_seeded_files_match_repo_sha256 ... ok\ntest gate_allowlist_docs_write_allowed_in_gated_phase_without_execution_gate ... ok\ntest foreign_worktree_hold_on_exclusive_path_denies_hard ... ok\ntest foreign_worktree_hold_on_normal_path_downgrades_to_advisory_warning ... ok\ntest crash_fail_open_node_oracle_exits_zero_and_logs_crash_instead_of_denying ... ok\ntest linked_invalid_worktree_resolution_denies_write_capable_tools_with_exit_2 ... ok\ntest corrupt_cross_worktree_ledger_fails_closed_and_valid_twin_allows ... ok\ntest direct_edit_guard_denies_state_json_with_sibling_bee_path_twin_allowed ... ok\ntest corrupt_reservation_store_fails_closed_for_session_writes_and_valid_twin_allows ... ok\ntest intake_gate_bookkeeping_twin_and_idle_gate_opt_out_twin_allow ... ok\ntest gate_denies_source_write_before_execution_gate_and_approved_twin_allows ... ok\ntest cross_session_hold_denies_foreign_session_with_expiry_and_own_session_twin_allows ... ok\ntest companion_mount_target_resolves_inside_marker_verified_mount_and_tampered_marker_twin_denies ... ok\ntest intake_gate_denies_source_writes_in_idle_and_compounding_complete_phases ... ok\ntest sibling_worktree_target_denial_names_granted_worktree_and_ungranted_twin_stays_generic ... ok\ntest swarming_intent_reservation_downgrades_to_advisory_and_lease_kind_twin_denies ... ok\ntest swarming_reservation_conflict_denies_naming_holder_and_own_agent_twin_allows ... ok\ntest containment_denies_traversal_and_absolute_outside_targets_and_inside_twin_allows ... ok\n\ntest result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s\n\n",
+    "verify_passed": true,
+    "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+    "claimed_at": "2026-07-26T07:07:57.308Z",
+    "verify_command": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test writeguard_core",
+    "verified_at": "2026-07-26T08:21:22.124Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T08:21:22.124Z",
+        "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+        "claimed_at": "2026-07-26T08:18:49.383Z",
+        "acquired_at": "2026-07-26T07:07:57.306Z",
+        "worker": "Dave",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

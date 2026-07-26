@@ -11,6 +11,7 @@ pub mod cells;
 pub mod claims;
 pub mod config;
 pub mod fsutil;
+pub mod guards;
 pub mod holds;
 pub mod jsdate;
 pub mod lock;

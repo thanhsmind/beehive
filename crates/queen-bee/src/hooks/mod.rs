@@ -9,6 +9,7 @@
 
 pub mod codex_subagent_audit;
 pub mod tools_logger;
+pub mod write_guard;
 
 /// Runs the named hook with the given argv tail (everything after `hook
 /// <name>`) and raw stdin text, returning the process exit code. An
@@ -19,6 +20,7 @@ pub fn run_hook(name: &str, argv: &[String], raw_stdin: &str) -> i32 {
     match name {
         "tools-logger" => tools_logger::run(argv, raw_stdin),
         "codex-subagent-audit" => codex_subagent_audit::run(argv, raw_stdin),
+        "write-guard" => write_guard::run(argv, raw_stdin),
         other => {
             eprintln!("queen-bee: unknown hook \"{other}\"");
             2
