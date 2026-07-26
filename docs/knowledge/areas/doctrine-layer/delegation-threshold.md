@@ -24,9 +24,12 @@ off, and the fact that the smallest lanes never suspend it.
 
 **B3 — Mechanical gathering is delegated to helpers; deciding is not.** Trigger:
 the assistant faces a mechanical step during any turn. What decides delegation:
-the step is handed to a lower-cost helper when it requires reading more than
-three sources, or when its content is needed only as a summary rather than word
-for word. What each actor observes: the helper returns the sources it read, the
+the step is handed to a lower-cost helper whenever its content is needed only as
+a digest rather than word for word — that is the judgment criterion itself, not
+a proxy for it. "More than three sources" is kept only as an illustrative
+heuristic from the rule's history; since judgement-rules D1 it is no longer a
+pinned threshold on the standing sheet, and a one-source step that only needs a
+digest still delegates. What each actor observes: the helper returns the sources it read, the
 facts with precise anchors, and quoted material only where it was asked for; the
 orchestrator never re-reads what a summary already answered, and never delegates
 decide-altitude work. Why the rule exists as doctrine rather than stage
@@ -36,9 +39,11 @@ turns, where no stage is running to remind it (B2's failure mode, observed).
 
 ## Business Rules
 
-- **R3** — Mechanical gathering delegates to a lower-cost helper when it needs
-  more than three sources, or content wanted only as a summary. The orchestrator
-  may override in either direction; the threshold is judgment, not a mechanism.
+- **R3** — Mechanical gathering delegates to a lower-cost helper whenever its
+  content is wanted only as a digest, not verbatim — that is the standing-sheet
+  criterion (critical rule 12). "More than three sources" is a historical
+  heuristic, not a pinned threshold, since judgement-rules D1. The orchestrator
+  may override in either direction; the criterion is judgment, not a mechanism.
 - **R4** — Decide-altitude work never delegates: gates, the mode decision,
   synthesis, accept/reject of a helper's result, state writes, and conversation
   with the human (D1).
@@ -60,7 +65,7 @@ turns, where no stage is running to remind it (B2's failure mode, observed).
   `skills/bee-hive/references/routing-and-contracts.md` § Delegation contract —
   the *detail* legitimately lives there; the rule itself, and the transport it
   requires (a `model` param or an anchored `[bee-tier:]` marker, B3a), are
-  critical rule 13 on the standing sheet. The guard that rejects a bare,
+  critical rule 12 on the standing sheet. The guard that rejects a bare,
   config-disagreeing, or cli-tier-declared dispatch (declared tier read before
   the model param, 2A-iii): `packages/bee/hooks/bee-model-guard.mjs`.
 - Model tiers behind R3: `.bee/config.json` `models` (extraction / generation /

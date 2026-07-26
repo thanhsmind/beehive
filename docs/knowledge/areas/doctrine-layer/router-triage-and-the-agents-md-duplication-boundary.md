@@ -111,6 +111,14 @@ rule never disappears — only its elaboration moves.
   somewhere.
 - **Restating a pinned string in new text is safe** where the check is a presence test — an extra
   occurrence does not break it. Rewording an existing occurrence does.
+- **2026-07-26 — the operating block's `## Critical rules` shrank 16 → 14, in judgement form
+  (judgement-rules D1-D4)**, without touching this concept's own pinned wording: the fan-out rule
+  (old 13, new 12) dropped its `>3 files` numeric proxy in favor of "digest, not verbatim" (D2), and
+  the `## Red flags — stop and re-route` section was deleted from the standing sheet (D4) — the
+  router's own four router-only red flags are unaffected. `packages/bee/tests/test_misc.mjs`'s
+  mutation harness moved in lockstep: `assertFanOutAnchors` now checks the compressed rule-12 anchor
+  set, and the reshaped rule-15-pointer census (the unnumbered line under rule 14) keeps running
+  `assertOrderedWaitContract` against `routing-and-contracts.md` plus the `bee-swarming` copies.
 
 ## Open Gaps
 

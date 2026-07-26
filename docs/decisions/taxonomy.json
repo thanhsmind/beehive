@@ -223,6 +223,7 @@
     "scripts-tests-move",
     "migration",
     "dispatcher",
-    "packages-engine-move"
+    "packages-engine-move",
+    "agents-md"
   ]
 }

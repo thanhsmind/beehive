@@ -153,7 +153,7 @@ Where things live. Read the touched area's spec before its code.
 - Communication doctrine (plain language, Gate Presentation Contract, Silent Bookkeeping —
   bee mechanics never narrated into chat, work language only; decision 1689af1b) lives in
   `skills/bee-hive/references/routing-and-contracts.md` § Communication Contract, mirrored as
-  hive law 11 (`skills/bee-hive/SKILL.md`) and host critical rule 11 (`packages/bee/AGENTS.block.md`).
+  hive law 11 (`skills/bee-hive/SKILL.md`) and host critical rule 10 (`packages/bee/AGENTS.block.md`).
   The *placement* rule behind every such mirror — always-applies doctrine belongs in
   `AGENTS.block.md`, a stage's own procedure detail may stay in `references/` — is specced in
   `docs/knowledge/areas/doctrine-layer/placement-and-anchoring.md` (R1/B2); read it before

@@ -27,7 +27,7 @@ session's active work — a live cross-session heartbeat plus a non-idle phase i
 store (D9a), or active holds / live-owner lanes — the paved road is `worktree new` and opening
 the next session in the printed path. Docs-lane work, tiny fixes, and release machinery stay
 in the MAIN checkout (release always runs in main). The rule lives in bee-hive's Session Scout
-and AGENTS.md critical rule 14; the existing guards (holds, live-owner lanes, gates) keep
+and AGENTS.md critical rule 13; the existing guards (holds, live-owner lanes, gates) keep
 enforcing the hard parts.
 
 **Visibility (worktree-ux, 2026-07-21, GH #30/#31):** `bee status` inside an UNGRANTED
