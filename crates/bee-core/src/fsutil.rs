@@ -84,7 +84,7 @@ pub fn read_json<T: DeserializeOwned>(file: &Path, fallback: T) -> T {
 /// line parsed fine under mjs but failed to parse under a plain Rust trim.
 /// Matching it exactly (not approximating) is the point of running the real
 /// mjs reader as the oracle instead of guessing from reading the source.
-fn js_trim(s: &str) -> &str {
+pub(crate) fn js_trim(s: &str) -> &str {
     s.trim_matches(|c: char| c.is_whitespace() || c == '\u{FEFF}')
 }
 
