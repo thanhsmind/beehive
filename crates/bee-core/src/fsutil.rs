@@ -44,6 +44,25 @@ pub fn ensure_dir(dir: &Path) -> io::Result<()> {
     fs::create_dir_all(dir)
 }
 
+/// hashFile — sha256 hex digest of a file's UTF-8 CONTENT (rust-port-20,
+/// `.bee/bin/lib/fsutil.mjs` `hashFile`). Reads the file as a UTF-8 string
+/// (not raw bytes) before hashing, matching the mjs source's
+/// `fs.readFileSync(file, 'utf8')` — a lossless round-trip for the
+/// well-formed UTF-8 source files this hashes (the managed-lib/helpers
+/// drift check, `computeRuntimeDrift`), so this agrees byte-for-byte with a
+/// raw-byte hash for every real caller, but stays a faithful port of what
+/// the mjs source actually does rather than an equivalent-in-practice
+/// shortcut. Propagates a read failure as `Err` — callers that need
+/// fail-open "missing" semantics (as `computeRuntimeDrift` does) catch it
+/// themselves, matching mjs's own bare `hashFile(abs)` call inside a
+/// try/catch at the call site, never inside this function.
+pub fn hash_file(file: &Path) -> io::Result<String> {
+    use sha2::{Digest, Sha256};
+    let text = fs::read_to_string(file)?;
+    let digest = Sha256::digest(text.as_bytes());
+    Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
+}
+
 /// readJson — tolerant JSON read. A missing/unreadable file OR malformed
 /// JSON both fall open to `fallback`, mirroring `readJson(file, fallback =
 /// null)`. A malformed-JSON fallback additionally warns to stderr, matching

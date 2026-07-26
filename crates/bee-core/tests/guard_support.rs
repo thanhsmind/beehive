@@ -574,7 +574,12 @@ fn claims_read_session_round_trips_and_rejects_id_mismatch() {
 
     let session = claims::read_session(dir.path(), "sess-1").unwrap();
     assert_eq!(session.id, "sess-1");
-    assert_eq!(session.extra.get("lane"), Some(&json!("rust-port")));
+    // `lane` is now a NAMED field (rust-port-20: `buildLaneRows`/
+    // `buildLaneSummary`/`detectCrashCandidates` all read it), so it no
+    // longer lands in `extra` — `#[serde(flatten)]` only collects keys not
+    // already claimed by a named field.
+    assert_eq!(session.lane.as_deref(), Some("rust-port"));
+    assert!(session.extra.get("lane").is_none());
 
     // A file present but whose own `id` doesn't match the requested id
     // (stale rename/copy) reads as absent, matching claims.mjs's guard.
@@ -590,13 +595,22 @@ fn claims_read_session_round_trips_and_rejects_id_mismatch() {
 fn claims_heartbeat_stale_true_for_absent_and_unparseable_and_old() {
     assert!(claims::heartbeat_stale(None, 0, claims::DEFAULT_HEARTBEAT_STALE_SECONDS));
 
-    let no_beat = Session { id: "s".into(), started_at: None, last_heartbeat: None, extra: Default::default() };
+    let no_beat = Session {
+        id: "s".into(),
+        started_at: None,
+        last_heartbeat: None,
+        lane: None,
+        transcript_path: None,
+        extra: Default::default(),
+    };
     assert!(claims::heartbeat_stale(Some(&no_beat), 0, claims::DEFAULT_HEARTBEAT_STALE_SECONDS));
 
     let fresh = Session {
         id: "s".into(),
         started_at: None,
         last_heartbeat: Some("2026-07-26T00:00:00.000Z".into()),
+        lane: None,
+        transcript_path: None,
         extra: Default::default(),
     };
     let beat_ms = jsdate::parse_iso_ms("2026-07-26T00:00:00.000Z").unwrap();

@@ -1,0 +1,96 @@
+{
+  "id": "rust-port-20",
+  "feature": "rust-port",
+  "title": "status readers B2: recovery tail, contention summary, and the remaining status readers (onboarding, handoff, bypass level, raw config validation, controlRootFor)",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "rust-port-13",
+    "rust-port-19"
+  ],
+  "decisions": [
+    "D3",
+    "D5"
+  ],
+  "files": [
+    "crates/bee-core/*"
+  ],
+  "read_first": [
+    ".bee/bin/lib/recovery.mjs",
+    ".bee/bin/lib/state.mjs",
+    ".bee/bin/lib/source-identity.mjs",
+    ".bee/bin/bee.mjs",
+    "crates/bee-core/tests/fsutil_oracle.rs",
+    "docs/history/rust-port/CONTEXT.md"
+  ],
+  "action": "Split out of rust-port-14 (panel W8) so the gix mechanism risk sits alone. Port the non-git half of the status read spine: (1) RECOVERY/CONTENTION — readTranscriptTail bounded-window semantics (recovery.mjs:70, 64KB tail), the crash-candidate recovery block, and the contention summary over .bee/logs/contention.jsonl (busiest locks, worst wait); the transcript root is taken from the injected fixture root (rust-port-19 generates one at the exact encoded-project-dir path detectCrashCandidates resolves, with a heartbeat-stale session and a 300KB transcript), never the host $HOME. (2) THE READERS PANEL B2 FOUND WITH NO HOME, all called by buildStatus and none ported yet: readOnboarding (state.mjs:1797), readHandoff (state.mjs:1121), bypassLevel (state.mjs:1921 — gate_bypass / gate_bypass_level), readRawConfigForValidation (bee.mjs:600, feeding both validators). NOTE (corrected by rust-port-16's disclosed deviation): controlRootFor does NOT live in crates/bee-core/src/workspace.rs — it is in crates/queen-bee/src/adapter.rs, a binary-crate concern bee-core cannot depend on. Follow the pattern rust-port-16 established: take an already-resolved control_root parameter rather than re-deriving it inside bee-core (same 'supplied by caller' shape as guards.rs's WriteTopology). (3) THE REMAINING STATE HELPERS: importable — isKnownPhase (state.mjs:54), validateModelsConfig (state.mjs:422), validateAgentFilesDrift (state.mjs:669), hasStaleAdvisorKey (state.mjs:1954), classifySource (source-identity.mjs:50); NOT exported, private to bee.mjs — buildRecoveryBlock (:457), buildContentionSummary (:673), buildLaneRows (:471), buildLaneSummary (:496), computeRuntimeDrift (:527), findRepoHive (:580), ungrantedWorktreeNotice (:615). ORACLE SPLIT accordingly: importable units get import-style file-based node drivers (pattern of record: crates/bee-core/tests/fsutil_oracle.rs); the seven bee.mjs-private helpers are oracled through the WHOLE-COMMAND driver `node .bee/bin/bee.mjs status --json`, diffed sub-object by sub-object — never a hand-invented oracle. NON-DETERMINISM FIXTURES (panel W6/W7), each named: clock-boundary reservation expiry (bee.mjs:741-746) and heartbeat staleness (claims.mjs:367) pinned by a frozen/injected clock rather than wall time; and the JS REFERENCE-IDENTITY filter at bee.mjs:744-746 (expiredUnreleased excludes by reference, not value) — include a fixture with an expired reservation deeply equal to an active one, where a value-equality port misclassifies. ALL tests in ONE target status_readers_b2.",
+  "must_haves": {
+    "truths": [
+      "cargo --test status_readers_b2 runs and reports at least 15 passed, output listing fixture names per class",
+      "every ported reader matches its mjs oracle on the same fixtures; the seven bee.mjs-private helpers match the corresponding sub-objects of the real bee.mjs status --json",
+      "recovery tail reads the injected transcript root from the grown fixture (hermetic, never host $HOME) and matches mjs output on a non-degraded recovery block",
+      "the reference-identity reservation fixture passes (deeply-equal expired vs active not misclassified), and clock-boundary fixtures are pinned, not wall-time dependent"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/",
+        "substantive": "recovery tail, contention summary, onboarding/handoff/bypass/raw-config readers, state helpers, status_readers_b2 oracle target"
+      }
+    ],
+    "key_links": [
+      "whole-command oracle for bee.mjs-private helpers",
+      "control_root is a caller-supplied parameter (rust-port-16 pattern), never re-derived inside bee-core",
+      "rust-port-15 consumes these for the status command"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No subprocess spawns in these readers",
+      "Tests never touch the live .bee/ store or the host $HOME",
+      "No edits to crates/Cargo.toml members list"
+    ]
+  },
+  "verify": "cargo test --manifest-path crates/Cargo.toml -p bee-core --test status_readers_b2",
+  "trace": {
+    "worker": "Mel",
+    "outcome": "Ported recovery/contention readers (readTranscriptTail, detectCrashCandidates, scanTranscriptRoots, buildRecoveryBlock, buildContentionSummary), the 5 remaining bee.mjs-private helpers (buildLaneRows/buildLaneSummary, computeRuntimeDrift, findRepoHive, ungrantedWorktreeNotice), and the importable state helpers (isKnownPhase, validateModelsConfig, validateAgentFilesDrift, hasStaleAdvisorKey, classifySource, readOnboarding, readHandoff, bypassLevel) plus a new lease-backed listReservations/expiredUnreleasedReservations reader replicating bee.mjs's reference-identity reservation-staleness bug verbatim (D1 freeze). All 21 tests in one target status_readers_b2, oracle-diffed against the real frozen mjs (fine-grained import driver for importable units, whole-command node .bee/bin/bee.mjs status --json for the bee.mjs-private helpers), including a host-real queen-bench crash-candidate fixture and pinned-clock reservation/heartbeat boundary fixtures.",
+    "files_changed": [
+      "crates/bee-core/src/recovery.rs",
+      "crates/bee-core/src/source_identity.rs",
+      "crates/bee-core/src/state.rs",
+      "crates/bee-core/src/claims.rs",
+      "crates/bee-core/src/config.rs",
+      "crates/bee-core/src/fsutil.rs",
+      "crates/bee-core/src/reservations.rs",
+      "crates/bee-core/src/lib.rs",
+      "crates/bee-core/tests/status_readers_b2.rs",
+      "crates/bee-core/tests/support/status_readers_b2_oracle.mjs",
+      "crates/bee-core/tests/guard_support.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T13:30:00.577Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"new_suite_reason\": \"This cell's own action field mandates 'ALL tests in ONE target status_readers_b2' — a brand-new CI-permanent integration target, exactly mirroring the established one-target-per-status-panel precedent (status_readers_a.rs/rust-port-13, status_readers_b1.rs/rust-port-14): the panel this cell ports (recovery/contention + the 7 bee.mjs-private helpers + remaining state readers) has no existing suite to extend. The companion oracle .mjs file is not a second suite but this target's own support driver (same tests/support/ convention as every prior status_readers_* cell).\",\n  \"tests_inspected\": [\n    \"crates/bee-core/tests/status_readers_a.rs / status_readers_b1.rs (rust-port-13/14) — the oracle-driver pattern of record (file-based node driver over tests/support/*_oracle.mjs, host-real fixture via prebuilt queen-bench --generate) this cell's own status_readers_b2.rs and status_readers_b2_oracle.mjs directly copy.\",\n    \"crates/queen-bench/src/fixture.rs (rust-port-19) — the grown D5 fixture's injected transcript_root / crash-candidate session layout this cell's build_recovery_block host-real test reads verbatim rather than re-deriving.\",\n    \"crates/bee-core/tests/guard_support.rs claims_read_session_round_trips_and_rejects_id_mismatch / claims_heartbeat_stale_true_for_absent_and_unparseable_and_old — the existing Session-struct tests this cell's new lane/transcript_path named fields required updating in place (not a new file).\"\n  ],\n  \"tests_added_changed\": [\n    \"crates/bee-core/tests/status_readers_b2.rs (NEW, this cell's one integration target) — 21 tests: is_known_phase (table-driven, 12 phases), validate_models_config (table-driven, 13 problem-code rows + absent + malformed-content), validate_agent_files_drift (4 tests: absent/malformed-frontmatter/matching+drifted), has_stale_advisor_key (table, 3 cases), read_onboarding, read_handoff (absent/unknown-kind/planned-next), bypass_level (tracked+local-overlay), classify_source (5 kinds), source+find_repo_hive via whole-command status, build_recovery_block on the host-real queen-bench crash-candidate fixture, build_contention_summary (absent-log + busy-events fixture), build_lane_rows/build_lane_summary (2 lanes + 1 bound session, --lanes-full and default), compute_runtime_drift (clean+drifted managed-hash fixture), ungranted_worktree_notice (3 WorktreeRootsView cases, no live-git-worktree fixture per its caller-supplied-topology design), the reservation reference-identity bug fixture (must-have #4), a lease-expiry clock-boundary fixture, and a heartbeat-staleness clock-boundary fixture.\",\n    \"crates/bee-core/tests/support/status_readers_b2_oracle.mjs (NEW) — fine-grained ops (is-known-phase, validate-models-config, validate-agent-files-drift, has-stale-advisor-key, read-onboarding, read-handoff, bypass-level, classify-source, list-reservations) importing the real frozen mjs functions directly, PLUS the whole-command 'status' op (execFileSync of the real node .bee/bin/bee.mjs status --json, optional --lanes-full) for the seven bee.mjs-private helpers this cell's action field named — never a hand-invented reimplementation of those seven.\",\n    \"crates/bee-core/src/recovery.rs (NEW) — read_transcript_tail, has_clean_end_trio, scan_transcript_roots, encode_project_dir/claude_projects_root/resolve_transcript (perf.mjs subset), last_durable_settlement, session_has_active_claim, detect_crash_candidates, build_recovery_block, build_contention_summary; 5 inline unit tests.\",\n    \"crates/bee-core/src/source_identity.rs (NEW) — classify_source; 6 inline unit tests.\",\n    \"crates/bee-core/src/state.rs — added is_known_phase/PHASES/KNOWN_PHASES, BEE_VERSION, read_onboarding, read_handoff, bypass_level, RawConfig + read_raw_config_for_validation, ModelConfigProblem + validate_models_config, AgentFileProblem + validate_agent_files_drift, STALE_ADVISOR_KEY_WARNING + has_stale_advisor_key, list_lanes, build_lane_rows, build_lane_summary, compute_runtime_drift, find_repo_hive, WorktreeRootsView + ungranted_worktree_notice.\",\n    \"crates/bee-core/src/reservations.rs — added the current lease-backed list_reservations/lease_to_reservation/LeaseReservationView (distinct from the legacy projection struct) and expired_unreleased_reservations (the D1-frozen reference-identity bug replica).\",\n    \"crates/bee-core/src/claims.rs — added named lane/transcript_path fields to Session (previously only reachable via extra), and Claim/read_claim/is_claim_active.\",\n    \"crates/bee-core/src/fsutil.rs — added hash_file (sha256 of UTF-8 file content, matches fsutil.mjs hashFile).\",\n    \"crates/bee-core/src/config.rs — normalize_models visibility widened to pub(crate) so state.rs's validate_agent_files_drift can reuse it (no second normalization implementation).\"\n  ],\n  \"red_failure_evidence\": \"This cell created a brand-new integration target (status_readers_b2.rs) with no prior green baseline to run red-first against, matching the shape of this cell's own predecessors (status_readers_a.rs/status_readers_b1.rs, rust-port-13/14) — a from-scratch oracle target's 'red' is simply 'does not exist yet / does not compile', proven by the iterative build failures actually hit while writing it: (1) cargo build failed with 'missing fields lane and transcript_path in initializer of Session' at crates/bee-core/tests/guard_support.rs:593/596 the moment Session gained its two new named fields, fixed by adding both fields to the two existing test initializers; (2) cargo test then failed claims_read_session_round_trips_and_rejects_id_mismatch (assertion session.extra.get(\\\"lane\\\") == Some(rust-port) failed, left None) because the new named lane field no longer lands in extra — fixed by asserting session.lane directly and asserting extra no longer carries it; (3) the new status_readers_b2 target itself, on first green compile, FAILED 3 of 21 tests against the real oracle: build_lane_rows_and_summary (Rust output missing a created_at:null key and carrying a spurious workers:[] key the real mjs --lanes-full array never has), compute_runtime_drift (a wrong literal in the test's OWN hardcoded assertion, not an oracle divergence), and build_recovery_block (transcript runtime tag mismatch: claude vs mjs's fixture, caused by the test wrongly passing the fixture's own injected transcript root as the Rust call's claude-default projects_root argument, making the claude entry falsely match too). Each was root-caused against the real mjs source (state.mjs's laneRecordFrom/defaultLaneRecord merges created_at:null and never carries workers; bee.mjs's checkGroup relPosix construction; detectCrashCandidates's per-root prefix-match order) before fixing.\",\n  \"verification_run\": \"cargo test --manifest-path crates/Cargo.toml -p bee-core --test status_readers_b2 -> test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s. Also ran (no regressions): cargo test --manifest-path crates/Cargo.toml -p bee-core (full lib+all integration targets) -> every target green, 0 failed; cargo build --manifest-path crates/Cargo.toml (whole workspace incl. queen-bee/queen-bench) -> clean, 0 warnings.\"\n}\n",
+    "verify_output": "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s -- fixture classes: is_known_phase table (12 phases), validate_models_config table (13 problem-code rows + absent + malformed-content), validate_agent_files_drift (absent/malformed-frontmatter/matching/drifted), has_stale_advisor_key (3 cases), read_onboarding, read_handoff (absent/unknown-kind/planned-next), bypass_level (tracked+overlay), classify_source (unknown/source_checkout/plugin_package/project_projection/unknown-no-manifest), source+find_repo_hive via whole-command status, build_recovery_block on host-real queen-bench crash-candidate fixture, build_contention_summary (absent + busy-events fixture), build_lane_rows/build_lane_summary (2 lanes + bound session, --lanes-full and default), compute_runtime_drift (clean+drifted managed-hash fixture), ungranted_worktree_notice (linked-valid ungranted/granted/ordinary), reservation reference-identity bug fixture (expired+active both counted), lease-expiry clock boundary, heartbeat-staleness clock boundary.",
+    "verify_passed": true,
+    "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+    "claimed_at": "2026-07-26T12:08:46.281Z",
+    "verify_command": "cargo test --manifest-path crates/Cargo.toml -p bee-core --test status_readers_b2",
+    "verified_at": "2026-07-26T13:28:20.021Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T13:28:20.021Z",
+        "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+        "claimed_at": "2026-07-26T12:09:15.016Z",
+        "acquired_at": "2026-07-26T12:08:46.279Z",
+        "worker": "Mel",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}

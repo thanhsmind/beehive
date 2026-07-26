@@ -364,7 +364,7 @@ fn normalize_native_leaf(obj: &Map<String, Value>) -> Option<Map<String, Value>>
 /// configures nothing gets the plain claude/codex defaults; an `advisor`
 /// slot appears only when the repo configured one (neither default carries
 /// it).
-fn normalize_models(raw: &Value) -> Value {
+pub(crate) fn normalize_models(raw: &Value) -> Value {
     let mut out = default_models();
     if let Value::Object(raw_map) = raw {
         for rt in RUNTIMES {

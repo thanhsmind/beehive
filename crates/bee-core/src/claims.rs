@@ -41,6 +41,16 @@ pub fn claim_path(root: &Path, cell_id: &str) -> PathBuf {
 }
 
 /// `.bee/sessions/<id>.json`: `{id, started_at, last_heartbeat, ...}`.
+///
+/// `lane`/`transcript_path` are named explicitly (rust-port-20:
+/// `buildLaneRows`/`buildLaneSummary` read `session.lane`;
+/// `detectCrashCandidates` reads `session.transcript_path` as its
+/// authoritative, checked-first transcript location, D5 hardening-1-7-10)
+/// — both previously only reachable via `extra`. Adding a named field never
+/// loses round-trip: `#[serde(flatten)]` only collects keys NOT already
+/// claimed by a named field, so existing consumers that read
+/// `extra.get("lane")` must move to the named field (done: `state::
+/// resolve_pipeline`) rather than silently seeing an empty `extra` entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
@@ -48,6 +58,10 @@ pub struct Session {
     pub started_at: Option<String>,
     #[serde(default)]
     pub last_heartbeat: Option<String>,
+    #[serde(default)]
+    pub lane: Option<String>,
+    #[serde(default)]
+    pub transcript_path: Option<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
@@ -114,6 +128,54 @@ pub fn heartbeat_stale(session: Option<&Session>, now_ms: i64, stale_seconds: i6
     beat_ms + stale_seconds * 1000 <= now_ms
 }
 
+// ─── claims (rust-port-20) ───────────────────────────────────────────────
+// Port of claims.mjs `readClaim`/`isClaimActive` — `detectCrashCandidates`'s
+// `sessionHasActiveClaim` work-signal check reads these. Read-only; the
+// mutating claim/adopt/release surface stays out of scope here (bee-swarming
+// owns that verb group).
+
+/// `.bee/claims/<cellId>.json`: `{session, claimed_at, ttl_seconds, ...}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Claim {
+    #[serde(default)]
+    pub session: Option<String>,
+    #[serde(default)]
+    pub claimed_at: Option<String>,
+    #[serde(default)]
+    pub ttl_seconds: Option<Value>,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+/// `readClaim(root, cellId)`: `None` when the record is missing or not a
+/// JSON object — fail-open, same posture as [`read_session`].
+pub fn read_claim(root: &Path, cell_id: &str) -> Option<Claim> {
+    let raw: Value = read_json(&claim_path(root, cell_id), Value::Null);
+    if !raw.is_object() {
+        return None;
+    }
+    serde_json::from_value(raw).ok()
+}
+
+/// `isClaimExpired`: TTL semantics mirror reservations.mjs — a
+/// non-positive/invalid/unparseable `ttl_seconds` or `claimed_at` never
+/// expires (fail-open: an unreadable expiry looks like "still held").
+fn is_claim_expired(claim: &Claim, now_ms: i64) -> bool {
+    let ttl = match claim.ttl_seconds.as_ref().and_then(Value::as_f64) {
+        Some(t) if t.is_finite() && t > 0.0 => t,
+        _ => return false,
+    };
+    let claimed_ms = match claim.claimed_at.as_deref().and_then(parse_iso_ms) {
+        Some(ms) => ms,
+        None => return false,
+    };
+    claimed_ms as f64 + ttl * 1000.0 <= now_ms as f64
+}
+
+/// `isClaimActive(claim, nowMs)`.
+pub fn is_claim_active(claim: &Claim, now_ms: i64) -> bool {
+    !is_claim_expired(claim, now_ms)
+}
 
 // Tests live in crates/bee-core/tests/guard_support.rs (this cell's single
 // integration target — cargo test -p bee-core --test guard_support) rather
