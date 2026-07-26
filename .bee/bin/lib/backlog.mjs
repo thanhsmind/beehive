@@ -26,6 +26,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { resolveProductRoot } from './state.mjs';
+import { acquireStoreLockOnceSync } from './lock.mjs';
 
 // D6: the fixed status enum, priority-ordered. Exported so bee_status, the
 // preamble, and the drift guard all read one source of truth. This is the
@@ -57,19 +58,105 @@ function backlogJsonlPath(root) {
   return path.join(root, '.bee', 'backlog.jsonl');
 }
 
-// Bare fs.appendFileSync, no lock — the SAME no-coordination pattern
-// bee.mjs's existing `backlog add` (friction/proposal) verb already uses to
-// append to this exact file. D2: id generation is collision-free by
-// construction (crypto randomness), so no lock is needed for correctness;
-// the fold (below) is the defensive backstop against a genuine collision.
+// Bare fs.appendFileSync, no lock of its own — the SAME no-coordination
+// pattern bee.mjs's existing `backlog add` (friction/proposal) verb already
+// uses to append to this exact file. Still true for setPbiStatus/amendPbi
+// and every event that does NOT generate a new id: those never contend on
+// anything, so they stay exactly this cheap. addPbi below is the one
+// caller that now wraps its own read+check+append of THIS function in a
+// store lock (see withBacklogPbiLockSync) — pbi-id-collision (issue #55)
+// found that "id generation is collision-free by construction, no lock
+// needed" (the ORIGINAL claim here) was false under concurrent writers:
+// crypto randomness makes an actual collision astronomically rare, but
+// when one does happen, two racing addPbi calls can each read a fold
+// snapshot that predates the other's write and both decide their draw is
+// unique — the fold's first-add-wins backstop then silently drops
+// whichever one appends second (real data loss, not just a duplicate). The
+// lock closes that window for the id-generating path only.
 function appendPbiEvent(root, event) {
   const file = backlogJsonlPath(root);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.appendFileSync(file, `${JSON.stringify(event)}\n`, 'utf8');
 }
 
-function generatePbiId() {
-  return `p-${crypto.randomBytes(4).toString('hex')}`;
+// randomBytesFn is an injectable seam — every production call site omits it
+// and gets real crypto.randomBytes; only a test passes one, to force a
+// deterministic collision and prove the generate-check-regenerate loop in
+// addPbi actually regenerates, rather than relying on 1-in-4-billion luck
+// (same test-seam spirit as lock.mjs's `_takeoverSeam`/`_postRenameSeam`).
+function generatePbiId(randomBytesFn = crypto.randomBytes) {
+  return `p-${randomBytesFn(4).toString('hex')}`;
+}
+
+// ─── pic-1 / issue #55: the backlog-pbi store lock ──────────────────────────
+// Guards ONLY addPbi's read-current-ids -> generate-check-regenerate ->
+// append critical section — never the ordinary status/amend/friction
+// appends, which stay bare and lock-free exactly as before. Bounded
+// synchronous retry on top of lock.mjs's single-attempt
+// acquireStoreLockOnceSync, mirroring decisions.mjs's
+// withDecisionsLockSync/DECISIONS_LOCK_RETRY_ATTEMPTS: addPbi must stay
+// fully synchronous (bee.mjs's handleBacklogPbiAdd/handleBacklogPropose and
+// every existing test call site call it synchronously), so this cannot use
+// lock.mjs's async withStoreLock. The critical section is a small file read
+// plus a handful of in-memory checks plus one append — never a child
+// spawn — so a short bounded wait is the right shape, same rationale
+// decisions.mjs already documents for its own lock.
+const BACKLOG_PBI_LOCK_NAME = 'backlog-pbi';
+const BACKLOG_PBI_LOCK_RETRY_ATTEMPTS = 15;
+const BACKLOG_PBI_LOCK_RETRY_DELAY_MS = 20; // ~300ms worst-case wait
+
+// Bounded generate-check-regenerate loop: 16 consecutive 32-bit crypto draws
+// all landing on an already-used id is astronomically unlikely outside a
+// forced test collision, so hitting this ceiling in practice means
+// something is structurally wrong (e.g. a broken rng injection) — throw a
+// typed, diagnosable error rather than looping forever.
+const MAX_PBI_ID_GEN_ATTEMPTS = 16;
+
+function sleepSyncMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Typed refusal thrown by addPbi when the backlog-pbi store lock stays busy past the retry budget — never a silent unlocked write. */
+export class BacklogPbiLockBusyError extends Error {
+  constructor(holder) {
+    const who =
+      holder && typeof holder === 'object'
+        ? `pid=${holder.pid ?? 'unknown'} session=${holder.session ?? 'unknown'} since ${holder.ts ?? 'unknown'}`
+        : 'unknown holder';
+    super(`backlog-pbi store lock busy: held by ${who}`);
+    this.name = 'BacklogPbiLockBusyError';
+    this.code = 'BACKLOG_PBI_LOCK_BUSY';
+    this.holder = holder ?? null;
+  }
+}
+
+/** Typed refusal thrown by addPbi when MAX_PBI_ID_GEN_ATTEMPTS consecutive generated ids all collided with an existing one. */
+export class PbiIdGenerationExhaustedError extends Error {
+  constructor(attempts) {
+    super(
+      `pbi add: failed to generate a unique id after ${attempts} attempts. FIX: retry — this indicates unexpectedly high id-collision odds (or a broken rng injection in a test).`,
+    );
+    this.name = 'PbiIdGenerationExhaustedError';
+    this.code = 'PBI_ID_GENERATION_EXHAUSTED';
+  }
+}
+
+function withBacklogPbiLockSync(root, fn) {
+  let lock = acquireStoreLockOnceSync(root, BACKLOG_PBI_LOCK_NAME);
+  let attempt = 0;
+  while (!lock.acquired && attempt < BACKLOG_PBI_LOCK_RETRY_ATTEMPTS) {
+    sleepSyncMs(BACKLOG_PBI_LOCK_RETRY_DELAY_MS);
+    lock = acquireStoreLockOnceSync(root, BACKLOG_PBI_LOCK_NAME);
+    attempt += 1;
+  }
+  if (!lock.acquired) {
+    throw new BacklogPbiLockBusyError(lock.holder);
+  }
+  try {
+    return fn();
+  } finally {
+    lock.release();
+  }
 }
 
 /**
@@ -81,7 +168,12 @@ function generatePbiId() {
  * stray duplicate (e.g. two racing writers who both generated the same id, or
  * a bad --id migration override) is neutralized; addPbi below is the primary
  * guard and throws before ever reaching the log, so this path is a backstop,
- * not the normal case.
+ * not the normal case. pic-1 (issue #55): that primary guard now runs its
+ * read+check+append as one critical section under the backlog-pbi store
+ * lock (withBacklogPbiLockSync), so two concurrent addPbi calls can no
+ * longer both pass this check against the same stale fold snapshot — this
+ * backstop is the last line of defense, never the mechanism doing the
+ * actual preventing.
  * @param {string} root
  * @returns {{items: Map<string, {id:string, title:string, cos:string,
  *   status:string, feature:string|null}>, hasEvents: boolean}} hasEvents is
@@ -136,49 +228,71 @@ export function foldPbis(root) {
 }
 
 /**
- * Append a new PBI 'add' event. Generates a collision-free `p-<8hex>` id via
- * crypto randomness (no lock, no read-then-increment — D2) unless an explicit
- * id is given (`--id`, migration-only: preserves a legacy P<n> id verbatim).
- * Refuses up front (throws) when the id — generated or given — already names
- * an item in the current fold, so an operator sees an error immediately
- * rather than a silently-ignored duplicate landing in the log.
+ * Append a new PBI 'add' event. Generates a collision-checked `p-<8hex>` id
+ * via crypto randomness unless an explicit id is given (`--id`,
+ * migration-only: preserves a legacy P<n> id verbatim). Refuses up front
+ * (throws) when the id — generated or given — already names an item in the
+ * current fold, so an operator sees an error immediately rather than a
+ * silently-ignored duplicate landing in the log.
+ *
+ * pic-1 (issue #55): the fold-read, id-generate-check-regenerate loop, and
+ * the append all run as ONE critical section under the backlog-pbi store
+ * lock (withBacklogPbiLockSync) — a plain in-process do/while against a
+ * fold snapshot (the pre-fix shape) could not detect a collision against a
+ * concurrent writer's in-flight add, since both would read the same stale
+ * snapshot before either appended. The regenerate loop itself is bounded at
+ * MAX_PBI_ID_GEN_ATTEMPTS, throwing a typed PbiIdGenerationExhaustedError
+ * rather than looping forever. The fold's first-add-wins backstop (D2,
+ * foldPbis' own doc comment) stays as a defense-in-depth backstop, never
+ * removed — this lock is what makes a real collision unreachable in the
+ * first place instead of merely absorbed silently after the fact.
  * @returns {{id:string, title:string, cos:string, status:string,
  *   feature:string|null}} the created item
  */
-export function addPbi(root, { id, title, cos = '', status = 'proposed', feature } = {}) {
+export function addPbi(root, { id, title, cos = '', status = 'proposed', feature, _randomBytes } = {}) {
   if (typeof title !== 'string' || !title.trim()) {
     throw new Error('pbi add: --title is required and must be non-empty.');
   }
   if (!PBI_STATUSES.includes(status)) {
     throw new Error(`pbi add: invalid --status "${status}". FIX: use one of ${PBI_STATUSES.join(', ')}.`);
   }
-  const { items } = foldPbis(root);
-  let finalId = typeof id === 'string' && id.trim() ? id.trim() : null;
-  if (finalId) {
-    if (items.has(finalId)) {
-      throw new Error(
-        `pbi add: id "${finalId}" already exists — duplicate add refused. FIX: use "bee backlog pbi amend --id ${finalId}" or "bee backlog pbi status --id ${finalId} --to <status>" instead.`,
-      );
-    }
-  } else {
-    do {
-      finalId = generatePbiId();
-    } while (items.has(finalId));
-  }
+  const requestedId = typeof id === 'string' && id.trim() ? id.trim() : null;
   const trimmedCos = typeof cos === 'string' ? cos.trim() : '';
   const trimmedFeature = typeof feature === 'string' ? feature.trim() : '';
-  const event = {
-    ts: new Date().toISOString(),
-    kind: 'pbi',
-    event: 'add',
-    id: finalId,
-    title: title.trim(),
-    status,
-  };
-  if (trimmedCos) event.cos = trimmedCos;
-  if (trimmedFeature) event.feature = trimmedFeature;
-  appendPbiEvent(root, event);
-  return { id: finalId, title: event.title, cos: trimmedCos, status, feature: trimmedFeature || null };
+  const randomBytesFn = typeof _randomBytes === 'function' ? _randomBytes : crypto.randomBytes;
+
+  return withBacklogPbiLockSync(root, () => {
+    const { items } = foldPbis(root);
+    let finalId = requestedId;
+    if (finalId) {
+      if (items.has(finalId)) {
+        throw new Error(
+          `pbi add: id "${finalId}" already exists — duplicate add refused. FIX: use "bee backlog pbi amend --id ${finalId}" or "bee backlog pbi status --id ${finalId} --to <status>" instead.`,
+        );
+      }
+    } else {
+      let attempts = 0;
+      do {
+        attempts += 1;
+        if (attempts > MAX_PBI_ID_GEN_ATTEMPTS) {
+          throw new PbiIdGenerationExhaustedError(MAX_PBI_ID_GEN_ATTEMPTS);
+        }
+        finalId = generatePbiId(randomBytesFn);
+      } while (items.has(finalId));
+    }
+    const event = {
+      ts: new Date().toISOString(),
+      kind: 'pbi',
+      event: 'add',
+      id: finalId,
+      title: title.trim(),
+      status,
+    };
+    if (trimmedCos) event.cos = trimmedCos;
+    if (trimmedFeature) event.feature = trimmedFeature;
+    appendPbiEvent(root, event);
+    return { id: finalId, title: event.title, cos: trimmedCos, status, feature: trimmedFeature || null };
+  });
 }
 
 /**

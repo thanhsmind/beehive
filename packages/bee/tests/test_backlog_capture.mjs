@@ -638,6 +638,73 @@ await check('addPbi: generated ids are p-<8hex>, collision-free across sequentia
   }
 });
 
+await check(
+  "pic-1/issue #55: addPbi's generate-check-regenerate loop catches a forced rng collision (both PBIs survive the fold); a raw duplicate that bypasses addPbi entirely is still silently swallowed by the fold backstop — proving the write-time check, not the backstop alone, is what saves a real collision",
+  () => {
+    const pRoot = makePbiRoot('bee-pbi-collision-');
+    try {
+      // Positive proof of the fix: force generatePbiId's underlying
+      // randomBytes to return the SAME 4 bytes for the first two draws
+      // (simulating two adds racing to the exact same crypto-random value),
+      // then a fresh value on the third draw. read_first (test-economy D5):
+      // the 'addPbi: generated ids are p-<8hex>...' check just above proves
+      // uniqueness across two UNFORCED, independently-random draws, but two
+      // real crypto draws essentially never collide, so it never exercises
+      // the regenerate branch at all — a forced-collision scenario is
+      // needed to actually exercise it.
+      const fixedBytes = Buffer.from('aabbccdd', 'hex');
+      const fallbackBytes = Buffer.from('11223344', 'hex');
+      let call = 0;
+      const forcedRng = () => {
+        call += 1;
+        return call <= 2 ? fixedBytes : fallbackBytes;
+      };
+      const a = addPbi(pRoot, { title: 'First racer', _randomBytes: forcedRng });
+      assert(a.id === 'p-aabbccdd', `first add consumes the forced draw, got "${a.id}"`);
+      const b = addPbi(pRoot, { title: 'Second racer', _randomBytes: forcedRng });
+      assert(a.id !== b.id, 'a forced collision on the SAME draw is caught and regenerated to a different id');
+      assert(b.id === 'p-11223344', `regenerated id is the fallback draw, got "${b.id}"`);
+      const { items } = foldPbis(pRoot);
+      assert(items.size === 2, `both PBIs survive the fold after the forced collision was caught, got ${items.size}`);
+      assert(
+        items.get(a.id).title === 'First racer' && items.get(b.id).title === 'Second racer',
+        'both titles intact — nothing was overwritten or lost',
+      );
+
+      // Negative control (red-first evidence, issue #55): simulate the OLD,
+      // unchecked path by writing two raw 'add' events that share one id
+      // directly to backlog.jsonl — bypassing addPbi's generate-check-
+      // regenerate loop (and its store lock) entirely, the way a genuine
+      // collision would have reached the log before this fix existed. The
+      // fold's first-add-wins backstop (D2, foldPbis' own doc comment)
+      // neutralizes the duplicate EVENT, but it does so by silently
+      // DROPPING the second PBI's content outright — proof that the
+      // backstop alone was never a fix, only damage control after the
+      // fact, and the write-time check above is what actually prevents the
+      // loss.
+      const collideRoot = makePbiRoot('bee-pbi-collision-negctrl-');
+      try {
+        const file = path.join(collideRoot, '.bee', 'backlog.jsonl');
+        const rawEvents = [
+          { ts: 't1', kind: 'pbi', event: 'add', id: 'p-deadbeef', title: 'Lost racer A', status: 'proposed' },
+          { ts: 't2', kind: 'pbi', event: 'add', id: 'p-deadbeef', title: 'Lost racer B — never seen again', status: 'proposed' },
+        ];
+        fs.writeFileSync(file, rawEvents.map((e) => JSON.stringify(e)).join('\n') + '\n', 'utf8');
+        const { items: collided } = foldPbis(collideRoot);
+        assert(collided.size === 1, `RED EVIDENCE: unchecked colliding ids fold to a single surviving PBI, got ${collided.size}`);
+        assert(
+          collided.get('p-deadbeef').title === 'Lost racer A',
+          'RED EVIDENCE: "Lost racer B" is silently swallowed by the fold — the backstop drops the second PBI outright, never surfacing an error',
+        );
+      } finally {
+        fs.rmSync(collideRoot, { recursive: true, force: true });
+      }
+    } finally {
+      fs.rmSync(pRoot, { recursive: true, force: true });
+    }
+  },
+);
+
 await check('setPbiStatus: flips status, optionally stamps --feature in the same event; refuses an unknown id or an out-of-enum --to', () => {
   const pRoot = makePbiRoot('bee-pbi-status-');
   try {

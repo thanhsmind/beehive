@@ -3,7 +3,7 @@
   "files": [
     {
       "path": ".bee/bin/lib/backlog.mjs",
-      "sha256": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
+      "sha256": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -1571,7 +1571,7 @@
     },
     {
       "path": "packages/bee/lib/backlog.mjs",
-      "sha256": "ba800e500b5b1515cff059421bdbe4f42d693f71b64350b7fabc7e9fd90a47a5",
+      "sha256": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/backlog.mjs"
@@ -1886,7 +1886,7 @@
     },
     {
       "path": "packages/bee/tests/test_backlog_capture.mjs",
-      "sha256": "7cc173f7c6fe568574c16acec6cb0bdc7fc7f4ce8726d8ace6a96b66f233aae8",
+      "sha256": "dfa4ed986543409135901456e2c6e4ea1a3cc72e492c28ae3879582e151b213b",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_backlog_capture.mjs"
