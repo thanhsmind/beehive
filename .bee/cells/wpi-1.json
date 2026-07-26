@@ -56,7 +56,7 @@
   "tier": "generation",
   "trace": {
     "worker": "Bob",
-    "outcome": "Canonical path-identity comparison (packages/bee/lib/path-identity.mjs) wired into worktree-store.mjs's gitdir reverse-pointer check (:1110, resolveWorktreeById) via an injectable pathsEqual seam threaded through mergeFeatureWorktree's options -- fixes the one diagnosed Windows CI cause without touching :491 or folding case from process.platform.",
+    "outcome": "Rework round: fixed the goal-check judge's NEEDS_REVISION blocker -- canonicalPathsEqual no longer hand-rolls a backslash-to-separator fold (which ran unconditionally on every platform, before resolve/stat, so a POSIX directory literally named a\\b compared EQUAL to the genuinely different a/b). Separator handling is now delegated entirely to the platform-appropriate path.resolve (injectable via platformPath, default the ambient node:path) -- win32.resolve already normalizes '/' to '\\\\' on its own, and posix.resolve correctly leaves a literal backslash as data. Also addressed all three advisory residuals: case-fold now requires BOTH sides to agree (not just side A), the volume-behaviour cache is keyed by device number (not ancestor path string), and the probe now prefers a read-only basename-case-flip check before ever falling back to the write-based marker probe. Test suite hygiene fixed: sibling worktree directories are now removed alongside mainRoot in every fixture.",
     "files_changed": [
       "packages/bee/lib/path-identity.mjs",
       "packages/bee/lib/worktree-store.mjs",
@@ -65,15 +65,15 @@
     ],
     "deviations": [],
     "friction": null,
-    "capped_at": "2026-07-26T23:00:03.443Z",
+    "capped_at": "2026-07-26T23:24:52.187Z",
     "behavior_change": true,
-    "verification_evidence": "{\n  \"tests_inspected\": \"packages/bee/tests/test_worktree_store.mjs (createFeatureWorktree/mergeFeatureWorktree fixture pattern -- exercises the merge lifecycle but every fixture there produces byte-identical forward/reverse gitdir pointers) and scripts/tests/test_worktree_merge_queue.mjs (spawns .bee/bin/bee.mjs end-to-end). Neither covers a case/separator-mismatched or symlink-aliased reverse pointer -- the exact new case this cell adds.\",\n  \"tests_added\": [\"scripts/tests/test_path_identity.mjs\"],\n  \"new_suite_reason\": \"Proves a distinct mechanism -- the path-identity comparison helper's own platform branches, plus the resolveWorktreeById call site itself -- that no existing worktree-store suite has any fixture for; a new permanent CI suite, not a row appended to an existing file.\",\n  \"red_failure_evidence\": \"Pre-fix (git stash push -- packages/bee/lib/worktree-store.mjs, restoring the raw path.resolve(reverseResolved) !== path.resolve(gitWorktreeDir) comparison at line 1110): running node scripts/tests/test_path_identity.mjs gave 7 passed, 2 failed. Both new site-level fixtures failed with WORKTREE_MERGE_UNKNOWN_ID -- the symlink-alias-identity fixture and the case-fold-injected fixture -- because resolveWorktreeById had no way to accept a differently-spelled-but-same-directory reverse pointer; on real Windows CI this is exactly the case/8.3-short-name aliasing that made bee worktree merge refuse a valid linked worktree, cascading into the merge-queue suite timing out waiting for a marker and msn invariants 7 and 12 failing loud (plan.md). git stash pop restored the fix and all 9 tests went green.\",\n  \"verification_run\": \"node scripts/run_verify.mjs --only scripts/tests/test_path_identity.mjs (9/9 PASS, 362ms) && node scripts/run_verify.mjs --only scripts/tests/test_worktree_merge_queue.mjs (PASS, 3023ms) && node scripts/run_verify.mjs --only packages/bee/tests/test_msn_invariants.mjs (PASS, 25149ms, invariants 7/12 included) && node scripts/release_manifest.mjs --check (395 file(s) match stored manifest, regenerated via --write after adding packages/bee/lib/path-identity.mjs). Also spot-checked packages/bee/tests/test_worktree_store.mjs (PASS, 1258ms) for regression on the same module's other call paths.\"\n}\n",
-    "verify_output": "SCOPED RUN test_path_identity.mjs: PASS 362ms (9 passed, 0 failed). RED-FIRST proof (git stash worktree-store.mjs, pre-fix raw comparison restored): 7 passed, 2 failed -- exactly the two new fixtures (symlink-alias identity, case-fold branch) failed with WORKTREE_MERGE_UNKNOWN_ID; unstash restores 9/9 green. SCOPED RUN test_worktree_merge_queue.mjs: PASS 3023ms. SCOPED RUN test_msn_invariants.mjs: PASS 25149ms (invariants 7 and 12 included, green). release_manifest --check: 395 file(s) match stored manifest (regenerated via --write after adding packages/bee/lib/path-identity.mjs; worktree-store.mjs hash updated). No regression: packages/bee/tests/test_worktree_store.mjs also PASS 1258ms.",
+    "verification_evidence": "{\n  \"tests_inspected\": \"packages/bee/tests/test_worktree_store.mjs (createFeatureWorktree/mergeFeatureWorktree fixture pattern) and scripts/tests/test_worktree_merge_queue.mjs (spawns .bee/bin/bee.mjs end-to-end); neither exercises a mismatched or backslash-bearing gitdir pointer. This rework round's own prior draft of scripts/tests/test_path_identity.mjs was also read first -- its case-fold test used a literal backslash segment mixed with separators, which is exactly what obscured the blocker instead of catching it.\",\n  \"tests_added\": [\"scripts/tests/test_path_identity.mjs\"],\n  \"new_suite_reason\": \"Proves a distinct mechanism (the path-identity comparison helper's own platform branches and volume-cache keying, plus the resolveWorktreeById call site) that no existing worktree-store suite has any fixture for; a new permanent CI suite, not a row appended to an existing file.\",\n  \"red_failure_evidence\": \"A goal-check judge (opus) returned NEEDS_REVISION on this cell's first cap: canonicalPathsEqual's normalizeSeparators replaced every literal backslash with path.sep unconditionally, on the false premise that backslash is illegal in a POSIX filename, and did so BEFORE resolve/stat -- so on this Linux box a real directory named a\\\\b (one segment, literal backslash) and the genuinely different real directory a/b (two nested segments) compared EQUAL, with the identity fast path confirmed to stat a/b for both sides. The judge also flagged: the case-fold decision was taken from side A only and applied to both sides; the volume cache was keyed by ancestor path string rather than device/volume; and the probe always wrote a marker file, landing inside git worktree metadata whenever the merge path's reverse pointer was stale. Fresh reproduction this round: temporarily reintroduced the exact pre-rework comparison (unconditional backslash fold before resolve, single-side case-fold) into canonicalPathsEqual and reran scripts/tests/test_path_identity.mjs -- 11 passed, 2 failed, exactly the POSIX backslash-regression-guard test and the both-sides-fold-guard test (the two new tests targeting this blocker and residual #1); every other test, including all site-level merge tests, stayed green since they never exercise a literal backslash. Restored the real fix immediately after -- 13/13 green.\",\n  \"verification_run\": \"node scripts/run_verify.mjs --only scripts/tests/test_path_identity.mjs (13/13 PASS, 386ms) && node scripts/run_verify.mjs --only scripts/tests/test_worktree_merge_queue.mjs (PASS, 3012ms) && node scripts/run_verify.mjs --only packages/bee/tests/test_msn_invariants.mjs (PASS, 24909ms, invariants 7/12 included) && node scripts/release_manifest.mjs --check (395 file(s) match stored manifest, regenerated via --write after path-identity.mjs's content changed). Also spot-checked packages/bee/tests/test_worktree_store.mjs (PASS, 1240ms) for regression.\"\n}\n",
+    "verify_output": "REWORK ROUND (goal-check judge NEEDS_REVISION on the separator-fold blocker, fixed). SCOPED RUN test_path_identity.mjs: PASS 386ms (13/13, up from 9 -- 4 new tests added: both-sides case-fold guard, POSIX backslash-is-data regression guard, Windows-shaped fold via path.win32, device-keyed cache, plus a strengthened read-only-probe proof). test_worktree_merge_queue.mjs: PASS 3012ms. test_msn_invariants.mjs: PASS 24909ms (invariants 7/12 included). release_manifest --check: 395 file(s) match (path-identity.mjs hash updated, regenerated via --write). FRESH RED-FIRST for the blocker specifically: temporarily reintroduced the exact pre-rework bug (unconditional backslash-to-sep fold applied before resolve/stat, plus single-side case-fold) into canonicalPathsEqual -- reran the suite: 11 passed, 2 failed (the POSIX regression guard and the both-sides-fold guard failed, exactly the two tests targeting the blocker and residual #1; all other tests, including the site-level merge tests, stayed green since they do not exercise a literal backslash). Restored the real fix immediately after -- 13/13 green again. Also verified regression-free: packages/bee/tests/test_worktree_store.mjs PASS 1240ms.",
     "verify_passed": true,
     "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
-    "claimed_at": "2026-07-26T22:45:12.113Z",
+    "claimed_at": "2026-07-26T23:10:23.730Z",
     "verify_command": "node scripts/run_verify.mjs --only scripts/tests/test_path_identity.mjs && node scripts/run_verify.mjs --only scripts/tests/test_worktree_merge_queue.mjs && node scripts/run_verify.mjs --only packages/bee/tests/test_msn_invariants.mjs && node scripts/release_manifest.mjs --check",
-    "verified_at": "2026-07-26T22:58:55.825Z",
+    "verified_at": "2026-07-26T23:24:17.177Z",
     "attempts": [
       {
         "n": 1,
@@ -85,8 +85,80 @@
         "verdict": "pass",
         "failure_signature": null,
         "note": null
+      },
+      {
+        "n": 2,
+        "at": "2026-07-26T23:24:17.177Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T23:18:33.232Z",
+        "acquired_at": "2026-07-26T23:10:23.728Z",
+        "worker": "Bob",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "case-detection-not-platform",
+            "status": "PASS",
+            "evidence": "No platform branch in code — the only win32 mentions are comments. Detection is a real write-probe against the nearest existing ancestor, cached per root, with every failure path defaulting to no-fold (probe target missing, unwritable directory, concurrent rename all return false). The probe marker always contains letters so the comparison cannot degenerate. Residuals recorded as advisory: the fold is decided from side A and applied to both; the cache key is the nearest EXISTING ancestor rather than the volume, so a pair whose own parent is missing can inherit an answer probed at a different mount point; the cache is module-global and never invalidated; and the probe performs a WRITE, which on the merge path lands inside the git worktree metadata whenever the reverse pointer is stale — a comparison with a filesystem side effect."
+          },
+          {
+            "id": "zero-inode-guard",
+            "status": "PASS",
+            "evidence": "Both fields on both sides are guarded. Forcing the zero case in scratch over two genuinely distinct directories: zero inode and device on both sides, zero inode only, zero device only, and zeros on one side only all fall back to string comparison and return unequal; the same path with zeros returns equal. The suite's own control asserts the same."
+          },
+          {
+            "id": "site-not-helper",
+            "status": "PASS",
+            "evidence": "The seam is an options parameter defaulting to the real helper, threaded from the merge entry points. One fixture drives the real merge with NO injection, so the default comparison decides: it builds a directory symlink alias and rewrites the reverse pointer to that string, and the two strings are provably not already equal because reverting the site to the raw comparison makes exactly that test fail. No production caller can inject."
+          },
+          {
+            "id": "491-untouched",
+            "status": "PASS",
+            "evidence": "Byte-diff of the readWorktreeGitVerifiedId region before and after is identical (the region shifted one line from the new import). The returned basename keeps git's exact spelling."
+          },
+          {
+            "id": "red-first-honesty",
+            "status": "PASS",
+            "evidence": "Reproduced in scratch: reverting only the comparison line turns the suite from 9/9 to 7 passed / 2 failed, exactly as the trace records. Both failures are assertion failures carrying the unknown-id error, not compile or import errors — the other seven tests execute and pass, which proves the imports resolved."
+          },
+          {
+            "id": "no-false-equal",
+            "status": "FAIL",
+            "evidence": "Constructed two genuinely different, simultaneously existing directories that compare EQUAL. The helper replaces every literal backslash with the platform separator on the stated claim that a backslash is illegal in a POSIX filename — that claim is false; backslash is a legal POSIX filename character. The fold also runs BEFORE resolve and BEFORE stat, so the identity fast path stats the wrong location. On this Linux box, a directory literally named a-backslash-b compares equal to the genuinely different a/b, and the stat of the first argument was confirmed to land on a/b. True whether or not the second directory exists; identity does not rescue it. Directionally this is a NEW accept: the reverse pointer was already backslash-folded before this cell, but the other side was compared raw, so a backslash-bearing root or worktree id used to refuse and can now be accepted. Reachability at the wired site is narrow — it needs a literal backslash in the main root or the worktree id on a POSIX volume — but this is exactly the wrong-pointer-accept class the cell exists to prevent. Other probes came back clean: a symlink alias to a different directory returns false; hardlinked files share an inode and return true, which the plan's correction explicitly accepts and which cannot arise for directories; the zero-inode plus forced-fold combination needs a case-insensitive volume holding two case-differing directories, which cannot exist."
+          },
+          {
+            "id": "scope-and-regression",
+            "status": "PASS",
+            "evidence": "Six files, all inside the cell's declared globs, no unrelated edits. Judge's own runs: the new suite, the merge-queue suite, the msn invariants and the worktree store suite all pass, and the release manifest reports 395 files matching. Hygiene nit: the new suite removes its main root but not the sibling worktree directories, leaking four directories per run into the temp area."
+          }
+        ],
+        "failure_signature": "canonicalPathsEqual folds literal backslashes to the platform separator on every platform, before resolve and before stat, so on POSIX a directory literally named a-backslash-b compares EQUAL to the genuinely different a/b and the identity fast path stats the wrong location — a wrong-pointer accept newly reachable on one side of the wired comparison.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T23:10:23.648Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-07-26T23:10:23.649Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-07-26T23:24:52.184Z",
+        "reason": "Fixes the exact NEEDS_REVISION finding (backslash-fold false-equal, check id no-false-equal) with a verified red-to-green transition recorded below; a fresh goal-check judge pass is expected on this cap.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
   }
 }

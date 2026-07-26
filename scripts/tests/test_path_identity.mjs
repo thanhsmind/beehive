@@ -44,6 +44,7 @@ import {
   canonicalPathsEqual,
   detectCaseInsensitiveVolume,
   _resetCaseFoldCacheForTests,
+  _readOnlyCaseProbeForTests,
 } from '../../packages/bee/lib/path-identity.mjs';
 import { createFeatureWorktree, mergeFeatureWorktree } from '../../packages/bee/lib/worktree-store.mjs';
 
@@ -103,6 +104,23 @@ function createGitdirAlias(gitWorktreeDir) {
   const aliasPath = `${gitWorktreeDir}-alias`;
   fs.symlinkSync(gitWorktreeDir, aliasPath, 'dir');
   return aliasPath;
+}
+
+/**
+ * Hygiene (residual #4 from the rework round): `createFeatureWorktree`
+ * places the worktree as a SIBLING of `mainRoot`, not nested inside it, so
+ * removing `mainRoot` alone never removes it. `git worktree prune` only
+ * cleans up git's own administrative records for an already-manually-deleted
+ * worktree — it never deletes an existing worktree directory itself. A test
+ * whose merge attempt THROWS before `mergeFeatureWorktree`'s own cleanup
+ * path ever runs (every refusal-path test below) therefore leaked the
+ * sibling worktree directory on every run until this helper explicitly
+ * removes it too, best-effort, alongside `mainRoot`.
+ */
+function cleanupFixture(mainRoot, worktreeRoot) {
+  spawnSync('git', ['worktree', 'prune'], { cwd: mainRoot, encoding: 'utf8' });
+  if (worktreeRoot) fs.rmSync(worktreeRoot, { recursive: true, force: true });
+  fs.rmSync(mainRoot, { recursive: true, force: true });
 }
 
 // ─── Layer 1: canonicalPathsEqual / detectCaseInsensitiveVolume unit tests ──
@@ -169,15 +187,97 @@ await check('zero inode/device is treated as UNUSABLE and falls back to string c
   }
 });
 
-await check('an injected case-insensitive volume detection folds case (and separators) in the string fallback — a mixed-separator, mixed-case spelling of the SAME non-existent path resolves EQUAL', async () => {
+await check('an injected case-insensitive volume detection folds case in the string fallback (BOTH sides must agree, not just side A) — a mixed-case spelling of the SAME non-existent path resolves EQUAL only when both sides probe case-insensitive', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-path-identity-fold-'));
   try {
     const a = path.join(root, 'Worktrees', 'Feature-1');
-    const bMixed = `${root}${path.sep}worktrees\\feature-1`; // mixed case + a literal backslash segment
+    const bMixedCase = path.join(root, 'worktrees', 'feature-1'); // same segments, case only
     assert(!fs.existsSync(a), 'fixture precondition: identity must be unusable (path does not exist) so the string fallback runs');
-    const detectCaseFold = () => true;
-    assert(canonicalPathsEqual(a, bMixed, { detectCaseFold }) === true, 'a mixed-separator, mixed-case spelling of the same path must resolve EQUAL once the volume is detected (or, here, pinned) as case-insensitive');
-    assert(canonicalPathsEqual(a, bMixed, { detectCaseFold: () => false }) === false, 'the SAME mixed-case pair must stay UNEQUAL when the volume is (correctly) detected as case-sensitive — the fold is conditional on real volume behaviour, never automatic');
+    assert(canonicalPathsEqual(a, bMixedCase, { detectCaseFold: () => true }) === true, 'a mixed-case spelling of the same path must resolve EQUAL once BOTH sides are (here, pinned) case-insensitive');
+    assert(canonicalPathsEqual(a, bMixedCase, { detectCaseFold: () => false }) === false, 'the SAME mixed-case pair must stay UNEQUAL when the volume is (correctly) detected as case-sensitive — the fold is conditional on real volume behaviour, never automatic');
+    // Straddling pair: side A probes case-insensitive, side B probes case-sensitive (a
+    // real scenario for two paths on different volumes/mounts). The safe default is
+    // to NOT fold — folding on a mismatched pair could only ever widen a "not equal"
+    // into a wrong "equal", never the reverse, so disagreement must refuse to fold.
+    let call = 0;
+    const straddling = (p) => {
+      call += 1;
+      return call === 1; // side A: true (case-insensitive); side B: false (case-sensitive)
+    };
+    assert(canonicalPathsEqual(a, bMixedCase, { detectCaseFold: straddling }) === false, 'a pair straddling a case-insensitive side A and a case-sensitive side B must NOT fold — the fold requires BOTH sides to agree, never just side A (residual #1)');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('POSIX REGRESSION GUARD (real fixture, the exact blocker a rework-round judge found): a literal backslash is DATA on POSIX, never a separator — a real directory named `a\\b` and a genuinely different real directory `a/b` (two nested segments) must compare UNEQUAL', async () => {
+  if (path.sep === '\\') return; // this guard is meaningless (and its fixture unbuildable) on an actual Windows runtime
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-path-identity-posix-backslash-'));
+  try {
+    const backslashDir = path.join(root, 'a\\b'); // ONE segment, literal backslash character in the name
+    fs.mkdirSync(backslashDir);
+    const nestedDir = path.join(root, 'a', 'b'); // TWO segments, genuinely different real directory
+    fs.mkdirSync(path.dirname(nestedDir), { recursive: true });
+    fs.mkdirSync(nestedDir);
+    assert(fs.statSync(backslashDir).ino !== fs.statSync(nestedDir).ino, 'fixture precondition: the two are genuinely distinct real directories');
+
+    assert(canonicalPathsEqual(backslashDir, nestedDir) === false, 'a directory literally named "a\\b" and the genuinely different "a/b" must compare UNEQUAL on POSIX — folding the backslash to a separator here (BEFORE resolve, BEFORE stat) is exactly the false-equal a rework judge caught: it would have stat\'d "a/b" for BOTH sides and reported them equal');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('WINDOWS-SHAPED FOLD (platformPath: path.win32 — Node\'s own real win32 path semantics, not a mock): a backslash-form and a forward-slash-form of "the same" path, differing only in separator style and case, resolve EQUAL once case-insensitivity is (pinned) true — proving separator handling is delegated to the platform\'s OWN resolve, never hand-rolled', async () => {
+  const backslashForm = 'C:\\Users\\Demo\\Worktrees\\Feature-1';
+  const slashForm = 'C:/Users/Demo/worktrees/feature-1'; // same path, forward slashes + case differs
+  const alwaysThrow = () => {
+    throw new Error('no real C:\\ filesystem on this box — force the string-fallback branch');
+  };
+  assert(
+    canonicalPathsEqual(backslashForm, slashForm, { platformPath: path.win32, statFn: alwaysThrow, detectCaseFold: () => true }) === true,
+    'a backslash-form and a forward-slash-form of the same Windows path (differing only in separator style + case) must resolve EQUAL — path.win32.resolve normalizes the separator style on its own, and case-fold handles the rest',
+  );
+  assert(
+    canonicalPathsEqual(backslashForm, slashForm, { platformPath: path.win32, statFn: alwaysThrow, detectCaseFold: () => false }) === false,
+    'the SAME pair must stay UNEQUAL when the (pinned) volume is case-sensitive — separator normalization alone is not a license to also fold case',
+  );
+});
+
+await check('detectCaseInsensitiveVolume caches by VOLUME (device number), not by the ancestor\'s path string — two different, genuinely existing directories on the SAME device share one probe result (residual #2)', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-path-identity-devcache-'));
+  try {
+    const dirA = path.join(root, 'alpha');
+    const dirB = path.join(root, 'beta');
+    fs.mkdirSync(dirA);
+    fs.mkdirSync(dirB);
+    assert(fs.statSync(dirA).dev === fs.statSync(dirB).dev, 'fixture precondition: both directories must be on the same device (same tmp filesystem)');
+    const calls = [];
+    const probe = (dir) => {
+      calls.push(dir);
+      return false;
+    };
+    const cache = new Map();
+    detectCaseInsensitiveVolume(dirA, { probe, cache });
+    detectCaseInsensitiveVolume(dirB, { probe, cache });
+    assert(calls.length === 1, `two DIFFERENT ancestor directories on the SAME device must share one cached probe result (keyed by device, not by ancestor path), ran ${calls.length} time(s)`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('the volume probe is READ-ONLY when the sample directory itself exists and has a case-bearing basename (residual #3) — proven by calling the read-only probe directly and getting a CONCLUSIVE (non-null) answer, which means it never fell through to the write-based marker probe at all (a leftover-file check alone cannot prove this: the write probe cleans up after itself too)', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-path-identity-readonly-'));
+  try {
+    const sample = path.join(root, 'ReadOnlySample');
+    fs.mkdirSync(sample);
+    const result = _readOnlyCaseProbeForTests(sample);
+    assert(result !== null, 'the read-only probe must conclusively settle an existing, case-bearing directory on its own — a null here means it punted to the write-based fallback unnecessarily');
+    assert(result === false, `this real (case-sensitive) filesystem must read back as case-sensitive via the read-only path, got ${result}`);
+    // Also confirm the module-level entrypoint (detectCaseInsensitiveVolume, no
+    // injection) leaves the directory with no marker litter, as a second signal.
+    detectCaseInsensitiveVolume(sample);
+    const entries = fs.readdirSync(sample);
+    assert(entries.length === 0, `no leftover entries expected either way — found: ${entries.join(', ')}`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -187,8 +287,9 @@ await check('an injected case-insensitive volume detection folds case (and separ
 
 await check('SITE FIX (real, no injection): a reverse gitdir pointer that is a DIFFERENT STRING but the SAME real directory (via a symlink alias — the real-fs shape of 8.3 short-name aliasing) resolves correctly through the REAL resolveWorktreeById, end to end, with the DEFAULT pathsEqual (no test override) — filesystem identity is what decides it', async () => {
   const mainRoot = makeOrdinaryRepoFixture();
+  let created;
   try {
-    const created = await createFeatureWorktree(mainRoot, { feature: 'wpi-symlink-alias' });
+    created = await createFeatureWorktree(mainRoot, { feature: 'wpi-symlink-alias' });
     const gitWorktreeDir = path.join(mainRoot, '.git', 'worktrees', created.id);
     const aliasPath = createGitdirAlias(gitWorktreeDir);
     rewriteReversePointer(created.worktreeRoot, () => aliasPath);
@@ -197,15 +298,15 @@ await check('SITE FIX (real, no injection): a reverse gitdir pointer that is a D
     const merged = await mergeFeatureWorktree(mainRoot, { id: created.id, cleanup: true });
     assert(merged.cleanup && merged.cleanup.ok === true, `expected the symlink-aliased worktree to resolve and merge cleanly with the default (real) pathsEqual, got ${JSON.stringify(merged)}`);
   } finally {
-    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
-    fs.rmSync(mainRoot, { recursive: true, force: true });
+    cleanupFixture(mainRoot, created && created.worktreeRoot);
   }
 });
 
 await check('SITE FIX (case-fold branch, injected): a case-flipped reverse gitdir pointer is NOT refused at the resolveWorktreeById site itself once pathsEqual simulates a case-insensitive volume — this box\'s real git subprocess still cannot itself navigate a fake-cased path afterward (no real case-insensitive filesystem is available here), so the ONLY acceptable failure past this point is that unrelated, untyped git-invocation error, never the typed WORKTREE_MERGE_UNKNOWN_ID the pre-fix comparison would have produced right at resolution', async () => {
   const mainRoot = makeOrdinaryRepoFixture();
+  let created;
   try {
-    const created = await createFeatureWorktree(mainRoot, { feature: 'wpi-case-mismatch' });
+    created = await createFeatureWorktree(mainRoot, { feature: 'wpi-case-mismatch' });
     const original = rewriteReversePointer(created.worktreeRoot, flipCase);
     assert(original !== flipCase(original), 'fixture precondition: flipping case must actually change the pointer spelling (otherwise this proves nothing)');
 
@@ -224,15 +325,15 @@ await check('SITE FIX (case-fold branch, injected): a case-flipped reverse gitdi
       assert(threw.code === undefined && /git status --porcelain/.test(threw.message), `any failure past resolution must be the known, untyped git-subprocess artifact of faking a case-insensitive path on this case-sensitive box, got: ${threw.code || ''} ${threw.message}`);
     }
   } finally {
-    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
-    fs.rmSync(mainRoot, { recursive: true, force: true });
+    cleanupFixture(mainRoot, created && created.worktreeRoot);
   }
 });
 
 await check('RED-FIRST REGRESSION GUARD: the SAME case-mismatched fixture is refused (WORKTREE_MERGE_UNKNOWN_ID) when pathsEqual is the pre-fix raw `===` comparison — proves the injected comparison function, not some other effect, is what makes the case-fold test above get past resolution', async () => {
   const mainRoot = makeOrdinaryRepoFixture();
+  let created;
   try {
-    const created = await createFeatureWorktree(mainRoot, { feature: 'wpi-case-mismatch-prefix' });
+    created = await createFeatureWorktree(mainRoot, { feature: 'wpi-case-mismatch-prefix' });
     rewriteReversePointer(created.worktreeRoot, flipCase);
 
     let threw = null;
@@ -247,15 +348,15 @@ await check('RED-FIRST REGRESSION GUARD: the SAME case-mismatched fixture is ref
     }
     assert(threw && threw.code === 'WORKTREE_MERGE_UNKNOWN_ID', `expected the pre-fix raw comparison to refuse the case-mismatched fixture with WORKTREE_MERGE_UNKNOWN_ID, got ${threw ? threw.code || threw.message : '(no throw — the fixture is not actually mismatched)'}`);
   } finally {
-    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
-    fs.rmSync(mainRoot, { recursive: true, force: true });
+    cleanupFixture(mainRoot, created && created.worktreeRoot);
   }
 });
 
 await check('a GENUINELY wrong reverse pointer (pointing at a totally different worktrees/<id> directory) still returns null and refuses WORKTREE_MERGE_UNKNOWN_ID even with the generous case-insensitive-simulating pathsEqual — the fix never accepts an actually-wrong pointer', async () => {
   const mainRoot = makeOrdinaryRepoFixture();
+  let created;
   try {
-    const created = await createFeatureWorktree(mainRoot, { feature: 'wpi-wrong-pointer' });
+    created = await createFeatureWorktree(mainRoot, { feature: 'wpi-wrong-pointer' });
     rewriteReversePointer(created.worktreeRoot, (original) => path.join(path.dirname(original), 'totally-different-id'));
 
     let threw = null;
@@ -270,8 +371,7 @@ await check('a GENUINELY wrong reverse pointer (pointing at a totally different 
     }
     assert(threw && threw.code === 'WORKTREE_MERGE_UNKNOWN_ID', `a genuinely wrong pointer must still refuse as WORKTREE_MERGE_UNKNOWN_ID, got ${threw ? threw.code || threw.message : '(no throw — the fixture did not actually diverge)'}`);
   } finally {
-    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
-    fs.rmSync(mainRoot, { recursive: true, force: true });
+    cleanupFixture(mainRoot, created && created.worktreeRoot);
   }
 });
 

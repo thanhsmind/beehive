@@ -1718,7 +1718,7 @@
     },
     {
       "path": "packages/bee/lib/path-identity.mjs",
-      "sha256": "228f35fa284b06220e4e364017281c0742db6cf85faf819bc7b7c148ce2d96b1",
+      "sha256": "695073bd84bb473c900219bd792ec5a62a121f638df8503c6d1c2ca38ce0ecbb",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/path-identity.mjs"
