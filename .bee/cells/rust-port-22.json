@@ -175,6 +175,49 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-07-26T17:39:11.747Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "counter-placement-fixed",
+            "status": "PASS",
+            "evidence": "The increment is inside fsutil::read_jsonl itself (fsutil.rs:141), guarded by a component-wise path predicate; all three call-site increments are gone from decisions.rs. Round 1's experiment re-run in scratch: injecting two real read_jsonl calls on the decisions path plus a raw fs::read_dir of .bee/cells above the active_decisions call now turns the baseline test RED (left 6 / right 4, table showing 6). Keying probed from the other side: an archive-only read gives 0, a backlog.jsonl read through the same generic primitive gives 0, and active_decisions(all=true) — journal plus archive in one call — gives 2 not 3, so the archive is genuinely excluded and there is no over-count. Honest nuance: a read of a MISSING journal still counts 1 (the increment precedes the file read), so the unit is 'attempted read', matching the convention already documented for the cells counter. The whole workspace reaches the journal only through this primitive."
+          },
+          {
+            "id": "regression-test-is-load-bearing",
+            "status": "PASS",
+            "evidence": "Reverting ONLY the placement fix in scratch (restoring the call-site increments, removing the primitive one) while leaving the new test intact produced 12 passed, 1 FAILED — exactly the new regression test, panicking left 4 / right 6. Restoring the fix returned 13/13, and nothing else in the suite discriminates. Noted asymmetry for rust-port-23: the test's CELLS half injects list_cells (the counted reader) rather than a raw fs::read_dir, so that half passed even in the reverted state and would only catch a cells counter moved ABOVE list_cells; the decisions half is what carries the regression."
+          },
+          {
+            "id": "hoist-survivability",
+            "status": "PASS",
+            "evidence": "Every store touch in the workspace was enumerated: the journal only through fsutil::read_jsonl; the cells directory only through cells::list_cells; per-dep reads only through cells::read_cell (archive fallback folded into the same bucket); transcript roots only through recovery::scan_transcript_roots. So rust-port-23's stated hoist — load each store once through those functions and pass the results down — is fully counted for all four counters. Residual blind spots, named and measured: a raw fs::read_dir of .bee/cells leaves the counter at 0 while list_cells gives 1, so a hoisted loader that REIMPLEMENTS a reader rather than calling it goes uncounted, and a silent-green 1/1/1 remains possible in principle for the cells store (uncounted hoisted scan plus one surviving recovery scan reads as 1). Unlike round 1's hole this cannot be reached by calling an existing generic utility — it requires re-implementing a reader, a visible act. Also flagged: cell_dep_reads bundles read_cell's archive fallback, so losing that fallback moves no counter at all."
+          },
+          {
+            "id": "caveat-placement",
+            "status": "PASS",
+            "evidence": "The baseline-only caveat appears in the test file header, the seam module's doc, the printed table's own stdout (the judge saw the line in its own run) and the report. Its wording says what the must-have requires: after the dedup a hoisted read reports its count once per invocation whether or not the conditional consumer still runs, so reachability must be re-derived against the new call graph. rust-port-23's read_first does not list the seam or test directly, but the reader sources carry comments pointing at the seam module's doc and that cell must consume the instrument to prove its dedup."
+          },
+          {
+            "id": "verify-self-containment",
+            "status": "PASS",
+            "evidence": "Deleting the debug queen-bench binary in scratch (with the tracked tree's copy verified untouched and no ancestor target dir able to satisfy the search) and running the cell's first verify leg unchanged now self-heals: the nested build fires, the binary reappears, and the suite passes 13/13 with no manual intervention. Round 1's exit-101 failure is gone."
+          },
+          {
+            "id": "no-regression",
+            "status": "PASS",
+            "evidence": "The rework touches six files and nothing beyond what the three findings required; the seam module's own change is doc-only (filtering comment lines from the diff yields zero changed lines). No .bee/bin/, no packages/bee/, no members-list change. Judge's own runs: read_accounting 13 passed, whole workspace 335 passed across 22 targets, release build ok, six parity legs zero-diff with per-leg mutation detected, self-check PASS, bench pass with status warm p95 50.7 ms against the 70 ms budget and ping 1.72 ms. Scratch removed and git status byte-identical to the pre-run snapshot."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T17:59:30.925Z"
       }
     ],
     "reopened_for_rework": {

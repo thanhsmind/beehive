@@ -44,8 +44,8 @@ The port exists for speed, so speed is a gated contract rather than an aspiratio
 
 - **R1** — Budgets are per command, each with its own constant. A shared budget loose enough for the slowest command silently retires the gate on the fastest one (decision e119fc8b).
 - **R2** — The startup-floor command holds the original target: 5 ms at the 95th percentile, spawn-inclusive. It measures what a process costs before doing any work, and it must stay tight for every other number to mean anything.
-- **R3** — Status assembly carries an interim budget of 70 ms at the 95th percentile, superseding the original 5 ms target for that command alone (decision e119fc8b). This is a guard against regression, explicitly not a target met.
-- **R4** — The interim budget is bound to a mandatory follow-up: removing the repeated store reads inside a single invocation, targeting 20 ms, after which the budget tightens to 25 ms. Status never returns to the 5 ms target (decision e119fc8b).
+- **R3** — Status assembly carries a budget of 30 ms at the 95th percentile (CI smoke 90 ms), superseding both the original 5 ms target and the 70 ms interim guard that preceded the read-deduplication work (decisions e119fc8b then 58ad0b5c). The number is derived, not chosen: it is the measured warm 95th percentile rounded up to the next 5 ms multiple plus one 5 ms step of headroom, because the gate is a strict less-than and a budget equal to the measurement would fail on the run that set it.
+- **R4** — The repeated-read elimination that R3's budget follows is done: each store is now read once per invocation, which took the measured warm 95th percentile from roughly 52 ms to roughly 24.5 ms. The 20 ms target named alongside the interim budget was **not** reached and is superseded rather than left standing (decision 58ad0b5c). Status never returns to the 5 ms target.
 - **R5** — A command proven unable to meet its budget on the host-real fixture gets an explicitly recorded per-command budget, never a smaller fixture (D5).
 - **R6** — The scheduled-runner variant of each budget is three times the developer figure, absorbing runner variance without changing what is measured (D5).
 
@@ -54,10 +54,11 @@ The port exists for speed, so speed is a gated contract rather than an aspiratio
 - **Fixture floors are refusals, not warnings.** Generation fails below any of: the decisions journal at 700 KB, the reservation store at 600 KB, the backlog journal at 250 KB, 250 work-item records, 50 commits of history, 60 review candidates, and a 300 KB session transcript. The last three exist because ancestry derivation and crash-candidate detection cost nothing on a store with no history.
 - **The measured cause of the status budget change is recorded, not inferred.** Of a warm run, roughly 40 ms is in-process and almost all of that inside the readers, with well under a millisecond of process envelope: the same large journal parsed four times, the work-item directory scanned six times, the transcript roots walked twice. Perfect elimination of the repeats floors around 13 ms in-process.
 - **The review derivation cache is not what dominates.** Cold and warm series differ by less than measurement noise on the current fixture, so the cache's contribution is real but small at this candidate count; the earlier expectation of a large gap does not hold and is recorded as such rather than quietly kept.
+- **The dedup's own accounting is instrumented, not asserted.** Counters live inside the shared read primitives and reader functions, and a baseline recorded what the un-deduplicated code actually read per fixture before anything was changed, so the one-read-per-store claim is a measured transition rather than a statement written afterwards. The counters ship in release; their cost measures at roughly 1.65 ns per increment, about a millionth of a status invocation.
 
 ## Open Gaps
 
-- The repeated-read elimination is filed and unstarted; until it lands, the status figure sits an order of magnitude above the original goal with the reason recorded.
+- Two blocks now dominate what remains: the crash-recovery block at roughly 54% of a warm run and the work-item directory listing at roughly 24%. Both sit outside the read-deduplication's scope — the reads are already single — so further reduction means doing less work, not reading fewer times.
 - Budgets exist today for the startup floor and status only. Every further command the port assembles needs its own budget entry when it lands.
 
 ## Pointers (implementation)

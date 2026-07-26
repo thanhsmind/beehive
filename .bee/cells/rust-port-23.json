@@ -110,6 +110,61 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "counts-are-real",
+            "status": "PASS",
+            "evidence": "Reproduced independently: the table printed 4->1 decisions parses, 6->1 cells scans, 0->0 per-dep reads, 2->1 transcript invocations, 4->2 stat ops on the D5 fixture, 16/16 green. Every new load path goes THROUGH the counted readers (shared_reads.rs routes to active_decisions/read_jsonl, cells::list_cells, read_cell, scan_transcript_roots); status.rs has exactly two shared-load touchpoints and no raw filesystem read. Instrument still bites: injecting a real list_cells plus active_decisions right after the memo's construction turned four tests red, including 'one journal parse per build_status invocation (was 4), left 2 right 1'."
+          },
+          {
+            "id": "archive-trap-guarded",
+            "status": "PASS",
+            "evidence": "Dep resolution still routes through read_cell with the archive fallback untouched; the listing comes from the shared inventory but the filter does not. Reproducing the worker's mutation (resolve deps against the shared inventory) made the archived-capped-dep guard FAIL with left 0 / right 1, exactly the reported signature — while the 1/1/1 baseline table PASSED under that same mutation, confirming read counts cannot see this regression. Correction to the worker's wording: two other reach-proofs also go red under the mutation because the root-taking entry now delegates to the shared-inventory form, so the guard is not literally alone; the claim as stated (the baseline table moves no counter) holds exactly."
+          },
+          {
+            "id": "hook-read-profile",
+            "status": "PASS",
+            "evidence": "All three hook baselines green. Laziness proven by mutation rather than fixture luck: forcing the memo eager in scratch turned the chain-nudge zero-scan baseline RED (left 1, right 0) along with the scribing-debt reachability proof. The gate is structural — the debt reader returns before touching the shared cells when no feature resolves, and the chain-nudge hook constructs the memo but reads nothing."
+          },
+          {
+            "id": "per-invocation-only",
+            "status": "PASS",
+            "evidence": "Type-level: the memo uses OnceCell (not OnceLock), making it !Sync and un-shareable across threads; no statics, no lazy initialization at module scope, no on-disk artifact. Every construction site is a function local, none stored. The behavioural proof asserts counters accumulate 1->2 per store across two invocations without reset and that an intervening write is observed; it went red under the injected-read mutation, so it is live."
+          },
+          {
+            "id": "byte-parity-and-degradation",
+            "status": "PASS",
+            "evidence": "Judge ran the legs: six legs zero-diff over stdout, exit and store tree with seeded mutation detected on EVERY leg; self-check PASS. Absent, empty and malformed stores each read exactly once, and the bee-core oracle targets are green against the mjs reference. The transcript-root hoist was verified directly rather than by inspection: on a no-session fixture with a configured root the roots block came back populated, and applying the naive hoist (scan only when sessions exist) turned the judge's own test red plus three existing tests — the property is regression-guarded in-tree."
+          },
+          {
+            "id": "disclosed-deviation",
+            "status": "PASS",
+            "evidence": "Harness claim verified: the parity runner's result struct carries root, stdout and exit code — no stderr field — and the diff report compares exit, stdout and tree only. The deviation is real and measured: on a fixture whose configured transcript root does not exist, the reference emitted two warnings and the ported binary one. Judgment: acceptable as a report line, no decision required — the warning still fires once and still names the path and config key, so no operator signal is lost, only a duplicate that was an artifact of the duplicated scan; stderr is on neither D3's nor D7's contracted surface, and no prior slice document treats it as contracted. BOOKKEEPING GAP, real and worth fixing: the trace's deviations array is empty while verification_evidence says 'See the cell trace deviations list' — that field points at an empty list, so the machine-readable record self-contradicts and the disclosure survives only in the prose report."
+          },
+          {
+            "id": "decision-wording",
+            "status": "PASS",
+            "evidence": "The logged decision reads verbatim 'each store is read at ONE instant per invocation; cross-store consistency remains unguaranteed, exactly as today. NOT snapshot semantics', with the rationale adding that the three stores still load at distinct moments, that a journal read racing an in-flight append is still possible, and that status takes no D9 locks. The alternatives field records all three plan-rejected shapes. Logged through the CLI, not hand-edited."
+          },
+          {
+            "id": "scope-and-regression",
+            "status": "PASS",
+            "evidence": "14 files, +812/-151: the cell's named production artifacts plus the new shared-reads module, two test targets, the report and the cell record. Two files outside the declared globs are machine side-effects of the mandated decisions log, not scope creep. D1 freeze intact. Judge's own counts: queen-bee 137 passed across 11 suites, bee-core 176 across 9, whole workspace 338 passed / 0 failed across 22 suites, heavyhooks re-run standalone at 19. Bench in the judge's run: pass true, status warm p95 24.252 ms and cold 26.847 ms against the 70 ms interim budget, node baseline 189.2 ms — consistent with the reported halving. Scratch removed and git status byte-identical to the pre-review snapshot."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-07-26T18:33:56.009Z"
+      }
+    ]
   }
 }
