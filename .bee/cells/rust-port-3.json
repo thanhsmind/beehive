@@ -1,0 +1,89 @@
+{
+  "id": "rust-port-3",
+  "feature": "rust-port",
+  "title": "bee-core D9 lock protocol port + node-rust interop conformance",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "rust-port-1",
+    "rust-port-5"
+  ],
+  "decisions": [
+    "D3",
+    "D9"
+  ],
+  "tier": "ceiling",
+  "files": [
+    "crates/bee-core/*"
+  ],
+  "read_first": [
+    ".bee/bin/lib/lock.mjs",
+    "docs/knowledge/areas/workflow-state/holds-and-the-coordination-lock.md",
+    "docs/history/rust-port/CONTEXT.md"
+  ],
+  "action": "Port the D9 lock-file protocol into bee-core (crate member scaffolded by rust-port-1; fsutil primitives come from rust-port-5): lock path scheme (sanitized name + sha256 first 8 hex under .bee/locks/), body {pid,session,ts,token}, STALE_MS 30s / HARD_STALE_MS 1h, pid-liveness probe takeover verified by pid+token+ts identity, transient-FS retry policy, hooks-never-wait try-once mode (maxAttempts 1), contention.jsonl fail-open telemetry. SCOPE NOTE (validation decision): the sharded lease store (lease-store.mjs — batch acquire, hash-sorted order, rollback, workspace_id scoping) is DEFERRED to Slice 3 where its consumers (claims/reservations) are ported; Slice 0 D9 proof covers the lock-file protocol plan.md names. Conformance tests MUST include cross-runtime interop: a node child process driving the real .bee/bin/lib/lock.mjs (exports are root-parameterized: locksDir(root), acquireStoreLockOnceSync(root, name) returning {acquired, release}/{acquired, holder} — proven by spike .bee/spikes/rust-port/lock_probe.mjs) holding while rust contends, and the reverse; staleness takeover; a two-simultaneous-holders negative test that fails red on protocol violation. The node driver is a FILE under crates/bee-core/tests/ (never `node -e` — the internals-reach guard denies inline evals importing bin/lib), its path to lock.mjs resolved by walking ancestors from CARGO_MANIFEST_DIR. Staleness is controlled by writing a backdated `ts` into the lock body — never by sleeping.",
+  "must_haves": {
+    "truths": [
+      "rust contender never acquires while a live node holder exists (and vice versa)",
+      "stale-holder takeover succeeds only via liveness-probe/hard-stale path with pid+token+ts identity verification",
+      "two-simultaneous-holders negative test fails red when the protocol is deliberately violated"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/",
+        "substantive": "lock module + interop test suite (file-based node driver) covering hold, deny, takeover, try-once, contention log"
+      }
+    ],
+    "key_links": [
+      "interop tests execute the real .bee/bin/lib/lock.mjs in a node child, not a reimplementation"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/lib/lock.mjs (mjs frozen per D1)",
+      "Interop tests never operate on the repo's live .bee/ store — every node driver call receives a per-test temp root as the lock.mjs root argument",
+      "No sleep-based staleness tests — backdated ts only",
+      "No edits to crates/Cargo.toml (members final per rust-port-1)"
+    ]
+  },
+  "verify": "cargo test --manifest-path crates/Cargo.toml -p bee-core lock",
+  "trace": {
+    "worker": "Dave",
+    "outcome": "D9 lock protocol ported to bee-core (crates/bee-core/src/lock.rs): path scheme (sanitized name + sha256 first-8-hex under .bee/locks/), body {pid,session,ts,token} O_EXCL, STALE_MS 30s/HARD_STALE_MS 1h with libc kill(0) pid-liveness probe, rename-based takeover verified by pid+token+ts identity before AND after the rename (settle/restore/never-clobber branches), transient-FS retry (15x20ms EBUSY/EPERM/ENOTEMPTY/EMFILE/ENFILE), hooks-never-wait try-once (LockOptions::try_once, max_attempts 1), fail-open contention.jsonl telemetry with the C3 schema. Cross-runtime conformance: 11 interop tests drive the REAL .bee/bin/lib/lock.mjs in node children via the file-based tests/support/lock_driver.mjs (path resolved by CARGO_MANIFEST_DIR ancestor walk) on per-test temp roots — live node holder denies rust and vice versa, node reads rust bodies and reverse, dead-pid stale takeover both directions, live-holder-below-ceiling never stolen, hard-ceiling steal with foreign-release staying scoped, two-simultaneous-holders detector proven to fail red on a deliberate unlink violation, try-once never waits, telemetry schema + fail-open. Plus 10 unit tests (identity-JS-semantics table, settle branch table, corrupt-stale-never-stolen, ISO-8601 node oracle, transient-retry budget). Staleness via backdated body ts + mtime, never sleep. Deps added to bee-core only: sha2, getrandom, libc(unix). Lease store deferred to Slice 3 per validation decision W3.",
+    "files_changed": [
+      "crates/bee-core/src/lock.rs",
+      "crates/bee-core/src/lib.rs",
+      "crates/bee-core/src/fsutil.rs",
+      "crates/bee-core/tests/lock_interop.rs",
+      "crates/bee-core/tests/support/lock_driver.mjs",
+      "crates/bee-core/Cargo.toml",
+      "crates/Cargo.lock"
+    ],
+    "deviations": [
+      "fsutil.rs: js_trim visibility widened to pub(crate) — the lock module session-id env chain and JS Number() coercion need ECMAScript trim semantics (FEFF included); no behavior change to fsutil itself",
+      "lock_driver.mjs hold op: explicit process.exit(0) after release ack — a flowing stdin listener otherwise keeps the node event loop alive and the Rust child.wait() hangs forever (found during first test run)"
+    ],
+    "friction": null,
+    "capped_at": "2026-07-26T05:51:42.724Z",
+    "behavior_change": false,
+    "verification_evidence": "{\n  \"new_suite_reason\": \"The cell's own must_have artifact is a NEW cross-runtime lock conformance suite (D7c/D9): lock behavior is race-shaped and invisible to output-diff parity, so it needs its own permanent oracle. No existing Rust suite covers locks — the nearest test is tests/fsutil_oracle.rs (rust-port-5), which oracles fsutil read/write primitives only and cannot host node-child lock contention scenarios; lock_interop.rs mirrors its file-based node-driver pattern (lock_driver.mjs is that driver, a support file, not a test). The mjs-side scripts/test_store_lock.mjs stays the mjs oracle per D1/D6 and cannot exercise the Rust implementation.\",\n  \"tests_inspected\": \"crates/bee-core/tests/fsutil_oracle.rs (nearest suite — fsutil primitives only, no lock coverage, pattern reused); scripts/test_store_lock.mjs (mjs-side lock suite — frozen mjs estate, tests lock.mjs itself, cannot drive the Rust port); .bee/spikes/rust-port/lock_probe.mjs (spike proof of the node driver approach)\",\n  \"tests_added\": \"crates/bee-core/tests/lock_interop.rs (11 cross-runtime conformance tests) + 10 unit tests in crates/bee-core/src/lock.rs tests module; support driver crates/bee-core/tests/support/lock_driver.mjs\",\n  \"red_proof\": \"lock_two_simultaneous_holders_detector_fails_red_on_deliberate_violation: the double-hold detector is run against a deliberate protocol violation (unconditional unlink of a live node holder's lock) and MUST fire there — proving the protocol-path assertion can go red\",\n  \"verification_run\": \"cargo test --manifest-path crates/Cargo.toml -p bee-core lock — 21 passed, 0 failed (recorded via cells verify --output-file)\"\n}\n",
+    "verify_output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s\n     Running unittests src/lib.rs (crates/target/debug/deps/bee_core-a3410acb3901a164)\n\nrunning 10 tests\ntest lock::tests::lock_iso8601_millis_matches_node_to_iso_string ... ok\ntest lock::tests::lock_same_holder_identity_js_semantics_table ... ok\ntest lock::tests::lock_path_scheme_distinct_names_never_collide_after_sanitization ... ok\ntest lock::tests::lock_corrupt_stale_lock_is_never_taken_over ... ok\ntest lock::tests::lock_body_shape_matches_protocol ... ok\ntest lock::tests::lock_pre_rename_reverification_declines_changed_content ... ok\ntest lock::tests::lock_is_pid_alive_probe_semantics ... ok\ntest lock::tests::lock_settle_takeover_branch_table ... ok\ntest lock::tests::lock_release_never_removes_someone_elses_lock ... ok\ntest lock::tests::lock_transient_fs_retry_policy ... ok\n\ntest result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.32s\n\n     Running tests/fsutil_oracle.rs (crates/target/debug/deps/fsutil_oracle-e1f15febd4b50aa2)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s\n\n     Running tests/lock_interop.rs (crates/target/debug/deps/lock_interop-500fee44f0e47590)\n\nrunning 11 tests\ntest lock_try_once_mode_returns_busy_without_waiting ... ok\ntest lock_contention_telemetry_schema_and_fail_open ... ok\ntest lock_interop_stale_dead_node_holder_taken_over_by_rust ... ok\ntest lock_interop_stale_live_node_holder_below_ceiling_never_stolen ... ok\ntest lock_with_store_lock_runs_closure_then_node_can_acquire ... ok\ntest lock_two_simultaneous_holders_detector_fails_red_on_deliberate_violation ... ok\ntest lock_interop_hard_stale_live_holder_stolen_and_release_stays_scoped ... ok\ntest lock_interop_node_takes_over_rust_planted_stale_dead_holder ... ok\ntest lock_interop_rust_denied_while_live_node_holder_then_acquires_after_release ... ok\ntest lock_interop_node_denied_while_rust_holder_then_acquires_after_release ... ok\ntest lock_path_scheme_matches_real_mjs_for_tricky_names ... ok\n\ntest result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s\n\n",
+    "verify_passed": true,
+    "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+    "claimed_at": "2026-07-26T05:23:53.323Z",
+    "verify_command": "cargo test --manifest-path crates/Cargo.toml -p bee-core lock",
+    "verified_at": "2026-07-26T05:50:57.759Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T05:50:57.759Z",
+        "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+        "claimed_at": "2026-07-26T05:36:51.443Z",
+        "acquired_at": "2026-07-26T05:23:53.321Z",
+        "worker": "Dave",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

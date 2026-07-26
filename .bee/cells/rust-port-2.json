@@ -1,0 +1,82 @@
+{
+  "id": "rust-port-2",
+  "feature": "rust-port",
+  "title": "D5 benchmark instrument: host-real fixture generator + spawn-inclusive p95 runner",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "rust-port-1"
+  ],
+  "decisions": [
+    "D5"
+  ],
+  "files": [
+    "crates/queen-bench/*"
+  ],
+  "read_first": [
+    "docs/history/rust-port/CONTEXT.md",
+    "docs/history/rust-port/implement-plan.md",
+    "docs/history/rust-port/reports/mjs-inventory.md"
+  ],
+  "action": "Build the D5 acceptance instrument in the crate named exactly `queen-bench` (member already scaffolded by rust-port-1 — do not touch crates/Cargo.toml): (a) fixture generator subcommand producing a host-real .bee store at pinned minimum sizes (decisions.jsonl min 700KB, reservations min 600KB, backlog.jsonl min 250KB, min 250 cell files) — generator REFUSES smaller sizes; (b) bench runner measuring spawn-inclusive wall-time p95 over min 50 runs per command. Budget is a flag: --budget-ms, default 5 (dev gate per D5); CI perf smoke will pass --budget-ms 15 (same command, no second tool). The bench resolves the queen-bee binary from the workspace target dir (crates/target/release/queen-bee), overridable via --bin-path. `--self-test` asserts BOTH directions (advisor note 2): all four sub-pinned-size refusal cases refuse, AND one happy-path generation succeeds, measurably meets every pin, and passes a `node .bee/bin/bee.mjs status --json` sanity read against the generated store (bee.mjs invoked with cwd at the generated root; store must include .bee/onboarding.json so root resolution stays inside it). `--check` runs the p95 floor gate on `queen-bee ping`. Slice-0 scope: prove the floor and record the node baseline (`node -e \"\"`) in the JSON report. Spike evidence: .bee/spikes/rust-port/coldexec measured p95 2.63ms over 100 runs on this WSL2 box (floor exists, 47% headroom).",
+  "must_haves": {
+    "truths": [
+      "--check exits non-zero if no-op p95 is at or above the budget (default 5ms)",
+      "--self-test exits non-zero unless all four sub-pinned-size refusal cases refuse AND a happy-path generation meets every pin AND the generated store passes a bee.mjs status --json sanity read",
+      "JSON report includes node baseline alongside queen-bee percentiles"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/queen-bench/",
+        "substantive": "fixture generator + p95 runner in one crate, no stubs; JSON report emitted"
+      }
+    ],
+    "key_links": [
+      "bench spawns the release queen-bee binary built in the same verify invocation (workspace build precedes the run)",
+      "generated fixture is the input contract for bee-parity (rust-port-4)"
+    ],
+    "prohibitions": [
+      "Never benchmark against a fixture smaller than the D5 pinned sizes",
+      "timings.jsonl is not used as acceptance data (per D5)",
+      "No edits to crates/Cargo.toml (members final per rust-port-1)",
+      "Sanity-read subprocess never runs with cwd inside the repo tree"
+    ]
+  },
+  "verify": "cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p queen-bench -- --self-test && cargo run --release --manifest-path crates/Cargo.toml -p queen-bench -- --check",
+  "trace": {
+    "worker": "Stuart",
+    "outcome": "queen-bench builds a D5 host-real fixture generator (--generate, refuses any of the four pinned sizes below floor: decisions.jsonl>=700KB, reservations.json>=600KB, backlog.jsonl>=250KB, cells>=250) and a spawn-inclusive p95 runner. --self-test proves both directions: all 4 sub-pinned-size refusal cases refuse, and a happy-path generation measurably meets every pin plus passes a real node .bee/bin/bee.mjs status --json sanity read against the generated store (temp-dir root, never cwd inside the repo tree). --check gates queen-bee ping spawn-inclusive p95 over 50 runs against --budget-ms (default 5, CI passes 15), exits non-zero at/above budget, and always prints a JSON report with queen-bee percentiles alongside the node -e \"\" baseline. Binary resolved from the workspace target dir (sibling of queen-bench's own exe), overridable via --bin-path. Measured this run: queen-bee ping p95 ~1.1-1.8ms (47%+ headroom under 5ms), node baseline p95 ~25-28ms.",
+    "files_changed": [
+      "crates/queen-bench/src/main.rs",
+      "crates/queen-bench/src/fixture.rs",
+      "crates/queen-bench/src/bench.rs",
+      "crates/queen-bench/src/selftest.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T05:19:16.416Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "cargo build: Finished release [optimized] (14 crates compiled). --self-test: PASS - 4/4 sub-pinned-size refusal cases refused; happy-path generation met every pin (decisions=700350B reservations=600160B backlog=250425B cells=250); bee.mjs status --json sanity read against the generated store: exit 0. --check: {\"budget_ms\":5,\"runs\":50,\"bin_path\":\".../crates/target/release/queen-bee\",\"pass\":true,\"queen_bee_ping\":{\"p50_ms\":0.886,\"p95_ms\":1.125,\"p99_ms\":2.167,\"max_ms\":2.167,\"samples\":50},\"node_baseline\":{\"command\":\"node -e \\\"\\\"\",\"p50_ms\":22.772,\"p95_ms\":25.264,\"p99_ms\":26.416,\"max_ms\":26.416,\"samples\":50}}. Full chain exit 0.",
+    "verify_passed": true,
+    "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+    "claimed_at": "2026-07-26T05:07:45.650Z",
+    "verify_command": "cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p queen-bench -- --self-test && cargo run --release --manifest-path crates/Cargo.toml -p queen-bench -- --check",
+    "verified_at": "2026-07-26T05:19:09.151Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T05:19:09.151Z",
+        "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+        "claimed_at": "2026-07-26T05:08:14.110Z",
+        "acquired_at": "2026-07-26T05:07:45.648Z",
+        "worker": "Stuart",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}
