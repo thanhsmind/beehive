@@ -1,0 +1,93 @@
+{
+  "id": "rust-port-7",
+  "feature": "rust-port",
+  "title": "queen-bee hook runtime: adapter port + D7b conformance rig + trivial hooks (tools-logger, codex-subagent-audit)",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D7"
+  ],
+  "files": [
+    "crates/queen-bee/*"
+  ],
+  "read_first": [
+    ".bee/bin/hooks/adapter.mjs",
+    ".bee/bin/hooks/bee-tools-logger.mjs",
+    ".bee/bin/hooks/bee-codex-subagent-audit.mjs",
+    "docs/history/rust-port/CONTEXT.md"
+  ],
+  "action": "Add `queen-bee hook NAME` runtime to the bin crate (per D2), --source accepted in both forms (--source=VALUE and --source VALUE; a value outside plugin/repo logs the invalid-source coverage-gap line verbatim per adapter.mjs:349): tolerant stdin JSON read (non-object/parse-error normalizes to {} plus coverage-gap log, matching adapter.mjs readHookContext), root discovery walking .git plus .bee/onboarding.json incl. linked-worktree gitdir pointers and controlRootFor semantics (adapter.mjs resolveRoots), HOOK-ENABLED TOGGLE honored exactly (state.mjs hookEnabled semantics: .bee/config.json hooks map, a disabled hook exits 0 silently before any work — one conformance fixture per hook covers the disabled case), fail-open contract (internal crash gives exit 0 plus .bee/logs/hooks.jsonl crash line {ts,hook,source?,error}; coverage-gap lines {ts,hook,event:\"coverage-gap\",gap,detail max 300,source?}), output encodings exactly: advisory events (ADVISORY_EVENTS = PreCompact, SubagentStop, Stop) give JSON {systemMessage}, block gives JSON {decision:\"block\",reason}, context events give plain stdout; event name from payload.hook_event_name. Port the two trivial hooks: tools-logger (append .bee/logs/tools.jsonl {ts,tool_name,agent_id,agent_type,duration_ms,status}, never blocks, no output) and codex-subagent-audit (bounded audit line to hooks.jsonl, fields capped 120/80 chars). Build the D7b CONFORMANCE RIG as ONE integration-test target hook_conformance in crates/queen-bee/tests/ (verify uses cargo --test hook_conformance; missing target exits 101). RIG DISCIPLINE (panel B3 + advisor notes 1/3/4, inherited by every corpus built on this rig): (i) SEEDING — every temp root seeded with a copy of .bee/bin/lib/ AND .bee/bin/hooks/ AND .bee/onboarding.json AND an enabling config.json; the rig asserts each seeded hook/lib file's sha256 equals the repo source (a doctored oracle copy is a rig failure); (ii) NON-TRIVIALITY BOTH WAYS — every deny fixture asserts the node oracle exited 2 before diffing, and every ALLOW fixture is paired with a twin-deny in the SAME root (one field flipped so node must exit 2) OR asserts an explicit engagement signal, so a mis-seeded root can never read as a genuine allow; (iii) negative-control unseeded-root fixture must be DETECTED as invalid rig setup; (iv) rig output lists fixture names per class so cap evidence can quote class coverage, not just a passed count. Per fixture: run the real node hook (file-based driver, absolute path, cwd at temp root) and queen-bee hook NAME, diff exit code, stdout, stderr class, normalized side-effect files. Crash fixtures assert fail-open parity; rig red-first: a deliberately divergent handler must produce a reported diff. Temp roots only; bee-core fsutil for appends.",
+  "must_haves": {
+    "truths": [
+      "cargo --test hook_conformance runs (missing target exits 101) and reports at least 10 passed, output listing fixture names per class",
+      "queen-bee hook tools-logger and codex-subagent-audit pass conformance vs the real node hooks on all fixtures",
+      "fixture classes present: disabled-hook, malformed stdin, invalid-source coverage-gap, advisory-vs-context encoding, crash fail-open, negative-control unseeded root, allow-with-twin-deny pairing",
+      "rig asserts seeded oracle files sha256-match the repo source",
+      "rig red-first: seeded divergent behavior produces a reported diff and non-zero rig exit"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/queen-bee/",
+        "substantive": "hook runtime module plus hooks (tools-logger, codex-subagent-audit) plus hook_conformance rig with seeded-root fixture corpus, no stubs"
+      }
+    ],
+    "key_links": [
+      "conformance rig executes the real .bee/bin/hooks/*.mjs in node children, sha256-verified verbatim copies",
+      "hook appends go through bee-core fsutil"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No wiring-file edits — flip is a later dedicated slice",
+      "No edits to crates/Cargo.toml members list",
+      "Tests never touch the repo's live .bee/ store"
+    ]
+  },
+  "verify": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test hook_conformance",
+  "trace": {
+    "worker": "Kevin",
+    "outcome": "Ported the queen-bee hook runtime (adapter.mjs + tools-logger + codex-subagent-audit) to crates/queen-bee, plus the D7b hook_conformance rig (11 table-driven test fns) proving both against the real frozen mjs hooks via seeded, sha256-verified temp roots.",
+    "files_changed": [
+      "crates/queen-bee/Cargo.toml",
+      "crates/queen-bee/src/main.rs",
+      "crates/queen-bee/src/lib.rs",
+      "crates/queen-bee/src/adapter.rs",
+      "crates/queen-bee/src/hookconfig.rs",
+      "crates/queen-bee/src/hooks/mod.rs",
+      "crates/queen-bee/src/hooks/tools_logger.rs",
+      "crates/queen-bee/src/hooks/codex_subagent_audit.rs",
+      "crates/queen-bee/tests/hook_conformance.rs",
+      "crates/queen-bee/tests/support/adapter_encoding_oracle.mjs"
+    ],
+    "deviations": [
+      "codex-subagent-audit.mjs (frozen source, read at .bee/bin/hooks/bee-codex-subagent-audit.mjs) never imports state.mjs or calls hookEnabled — it is gated purely by hook_event_name (SubagentStart/SubagentStop vs. unsupported-subagent-event coverage gap). The cell's action text generalizes \"HOOK-ENABLED TOGGLE honored exactly\" across the hook runtime; ported this hook faithfully to the ACTUAL frozen source instead (matching reality over the cell's shorthand, per the read-first/D1-freeze discipline other bee-core files in this feature already document). The disabled_hook fixture for this hook proves PARITY (both runtimes still log when \"disabled\") rather than gating; the real allow/deny pairing for this hook is SubagentStart vs. an unsupported event name, covered by a dedicated twin fixture.",
+      "Added a `[lib]` target to crates/queen-bee/Cargo.toml (queen-bee shipped bin-only before this cell) so crates/queen-bee/tests/hook_conformance.rs can call the ported adapter functions (is_advisory_event/encode_advisory/encode_block/emit_hook_output) directly for the advisory-vs-context-encoding fixture class, in addition to driving the compiled binary as a subprocess for the stdin/exit-code/side-effect fixtures. Stays entirely inside crates/queen-bee/ (in-scope) and does not touch the frozen crates/Cargo.toml workspace members list."
+    ],
+    "friction": null,
+    "capped_at": "2026-07-26T07:06:18.296Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": \"crates/bee-core/tests/fsutil_oracle.rs and tests/support/mjs_oracle.mjs (rust-port-5), and crates/bee-core/tests/lock_interop.rs and tests/support/lock_driver.mjs (rust-port-3) — the established node-oracle-driver pattern this cell's rig follows (file-based driver, never node -e, temp roots only). Neither covers hook conformance (stdin/exit-code/side-effect diffing against .bee/bin/hooks/*.mjs with sha256-seeded roots), so hook_conformance.rs is a genuinely new fixture area, not a duplicate of existing coverage.\",\n  \"tests_added_changed\": \"crates/queen-bee/tests/hook_conformance.rs (new, 11 test fns covering all 7 required fixture classes: disabled-hook, malformed-stdin, invalid-source-coverage-gap, advisory-vs-context-encoding, crash-fail-open, negative-control-unseeded-root, allow-with-twin-deny-pairing) + crates/queen-bee/tests/support/adapter_encoding_oracle.mjs (new node driver, adapter.mjs oracle for the encoding fixture class) + crates/queen-bee/src/{adapter,hookconfig,hooks/*}.rs unit tests (hook_enabled_* in hookconfig.rs).\",\n  \"new_suite_reason\": \"D7b explicitly mandates ONE integration-test target named hook_conformance in crates/queen-bee/tests/ as this cell's own deliverable (must_haves.truths[0]) — the foundational conformance rig later hook-porting cells in Slice 1 build on, not an ad hoc addition.\",\n  \"red_failure_evidence\": \"Scoped red-first proof, run only against this cell's new test target (never the full chain): deliberately inverted hookconfig::hook_enabled's `!matches!(value, Some(Value::Bool(false)))` to `matches!(...)` (flips enabled<->disabled). `cargo test -p queen-bee --test hook_conformance` then reported 3 of 11 tests FAILED with concrete diffs: disabled_hook_tools_logger_... panicked 'rust port must not write when disabled'; malformed_stdin_matches_oracle_for_both_hooks panicked with 'jsonl line count diverged — node=[{tool_name:\\\"\\\",...}] rust=[]' (the empty-stdin/tools-logger case, since inverted logic now treats the default-enabled hook as disabled); and rig_diff_detector_flags_a_seeded_mutation_as_divergent panicked 'the differ failed to flag a deliberately seeded divergence' (its own internal comparison flipped by the same bug). Reverted the one-line inversion; reran the same scoped command — all 11 passed.\",\n  \"verification_run\": \"cargo test --manifest-path crates/Cargo.toml -p queen-bee --test hook_conformance -> 'test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out' (also recorded via `bee.mjs cells verify`).\"\n}\n",
+    "verify_output": "running 11 tests\ntest negative_control_unseeded_root_detected_as_invalid_by_verifier ... ok\ntest crash_fail_open_tools_logger_rust_port_stays_exit_zero_when_logs_path_is_blocked ... ok\ntest rig_self_check_seeded_files_match_repo_sha256 ... ok\ntest negative_control_unseeded_root_both_runtimes_exit_zero_silently ... ok\ntest crash_fail_open_tools_logger_node_oracle_stays_exit_zero_and_logs_crash ... ok\ntest rig_diff_detector_flags_a_seeded_mutation_as_divergent ... ok\ntest codex_subagent_audit_ignores_hook_toggle_and_gates_on_event_name_matches_oracle ... ok\ntest disabled_hook_tools_logger_suppresses_write_and_enabled_twin_writes_matches_oracle ... ok\ntest advisory_vs_context_encoding_matches_adapter_oracle ... ok\ntest source_identity_argv_forms_matches_oracle_for_both_hooks ... ok\ntest malformed_stdin_matches_oracle_for_both_hooks ... ok\n\ntest result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s",
+    "verify_passed": true,
+    "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+    "claimed_at": "2026-07-26T06:48:45.356Z",
+    "verify_command": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test hook_conformance",
+    "verified_at": "2026-07-26T07:04:57.136Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T07:04:57.136Z",
+        "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+        "claimed_at": "2026-07-26T07:04:56.464Z",
+        "acquired_at": "2026-07-26T06:48:45.355Z",
+        "worker": "Kevin",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}

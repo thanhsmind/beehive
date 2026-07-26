@@ -3,9 +3,18 @@ name = "queen-bee"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "queen_bee"
+path = "src/lib.rs"
+
 [[bin]]
 name = "queen-bee"
 path = "src/main.rs"
 
 [dependencies]
 bee-core = { path = "../bee-core" }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
+sha2 = "0.11.0"

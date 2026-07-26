@@ -154,6 +154,9 @@ name = "queen-bee"
 version = "0.1.0"
 dependencies = [
  "bee-core",
+ "serde_json",
+ "sha2",
+ "tempfile",
 ]
 
 [[package]]
