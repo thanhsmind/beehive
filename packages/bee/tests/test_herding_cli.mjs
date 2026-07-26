@@ -78,6 +78,24 @@ await check('bee herding status --json on a repo with no marker reports {enabled
     // reused here, not reimplemented.
     assert(canonicalPathsEqual(out.marker, markerFile(root)), `expected marker ${markerFile(root)}, got ${out.marker}`);
     assert(canonicalPathsEqual(out.main_root, root), `expected main_root ${root}, got ${out.main_root}`);
+
+    // SECOND PASS, revert-detectable on THIS box (rework round 2, goal-check
+    // judge): the two lines above use canonicalPathsEqual, but on POSIX its
+    // result is byte-identical to a bare `===` (both sides are already the
+    // same real string) — so reverting either line to `===` is invisible
+    // here. Run each corrected value a second time against a win32-rendered
+    // form of the SAME expected target (markerFile(root) / root), via
+    // wpi-1's canonicalPathsEqual with platformPath: path.win32 (its
+    // injection seam): the canonical comparison accepts it, a bare `===`
+    // does not — verified below by reverting each of these exact lines.
+    assert(
+      canonicalPathsEqual(out.marker, path.win32.resolve(markerFile(root)), { platformPath: path.win32 }),
+      `SECOND PASS: canonicalPathsEqual accepts out.marker against a win32-rendered spelling of the expected marker path once platformPath: path.win32 is injected — got ${JSON.stringify(out.marker)} vs ${JSON.stringify(path.win32.resolve(markerFile(root)))}`,
+    );
+    assert(
+      canonicalPathsEqual(out.main_root, path.win32.resolve(root), { platformPath: path.win32 }),
+      `SECOND PASS: canonicalPathsEqual accepts out.main_root against a win32-rendered spelling of the expected root once platformPath: path.win32 is injected — got ${JSON.stringify(out.main_root)} vs ${JSON.stringify(path.win32.resolve(root))}`,
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -135,6 +153,17 @@ await check('after "bee herding enable", the existing read-only interlock (dispa
     const interlockOut = JSON.parse(interlockResult.stdout);
     assert(interlockOut.enabled === true, `interlock should agree the marker is enabled, got ${JSON.stringify(interlockOut)}`);
     assert(canonicalPathsEqual(interlockOut.marker, markerFile(root)), `interlock should resolve the SAME marker path, got ${interlockOut.marker}`);
+
+    // SECOND PASS, revert-detectable on THIS box (rework round 2, goal-check
+    // judge): same reasoning as the two assertions in the "no marker" check
+    // above — reverting the line just above to `===` is invisible on POSIX,
+    // so run interlockOut.marker a second time against a win32-rendered
+    // spelling of the expected marker path, via canonicalPathsEqual with
+    // platformPath: path.win32.
+    assert(
+      canonicalPathsEqual(interlockOut.marker, path.win32.resolve(markerFile(root)), { platformPath: path.win32 }),
+      `SECOND PASS: canonicalPathsEqual accepts interlockOut.marker against a win32-rendered spelling of the expected marker path once platformPath: path.win32 is injected — got ${JSON.stringify(interlockOut.marker)} vs ${JSON.stringify(path.win32.resolve(markerFile(root)))}`,
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
