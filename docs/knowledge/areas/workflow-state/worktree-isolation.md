@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: Workflow State — isolated linked worktrees and the transactional merge-back
-description: "The opt-in dispatch mode that removes Git index contention without changing the ownership primitive: validated linked pointers, one main coordination store, canonical containment proved before every write, a concurrency-aware refusal for a shared nested checkout that fails closed on its own detection errors, and a merge-back that verifies committed main or preserves the worker recovery identity."
+description: "The opt-in dispatch mode that removes Git index contention without changing the ownership primitive: validated linked pointers, one main coordination store, canonical containment proved before every write, a concurrency-aware refusal for a shared nested checkout that fails closed on its own detection errors and is scoped to the coordination root rather than the physical checkout, and a merge-back that verifies committed main or preserves the worker recovery identity."
 timestamp: 2026-07-26
 bee:
   id: workflow-state-worktree-isolation
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: [worktree-isolation D1-D4 (docs/history/worktree-isolation/CONTEXT.md; logged 58c56bb6/5de1fd36/8cc1bde1/b24a2efc), worktree-concurrency-guard D1(b)/D2/D3/D4/D5 (docs/history/worktree-concurrency-guard/CONTEXT.md; supersession 0ccc1cf3)]
-  sources: ["worktree-isolation cells worktree-isolation-1..4 (capped traces and reports 2..4, 2026-07-16 — linked-root resolution, contained writes, dispatch attestation, transactional merge-back)", "docs/specs/workflow-state.md#B20", "docs/specs/workflow-state.md#R32", "docs/specs/workflow-state.md#R33", "docs/specs/workflow-state.md#R34", "docs/specs/workflow-state.md#R35", "docs/specs/workflow-state.md#E15", "docs/specs/workflow-state.md#E16", "docs/specs/workflow-state.md#E17", "docs/specs/workflow-state.md#E18", "docs/specs/workflow-state.md#P1", "worktree-concurrency-guard cells wcg-1/wcg-2 (capped traces and reports, 2026-07-24 — shared-nested-checkout detection primitive and write-guard wiring)", "worktree-concurrency-guard cell wcg-fix-2 (capped trace and report, 2026-07-26 — fail-closed-on-detection-error fix, review finding #2)"]
+  decisions: [worktree-isolation D1-D4 (docs/history/worktree-isolation/CONTEXT.md; logged 58c56bb6/5de1fd36/8cc1bde1/b24a2efc), worktree-concurrency-guard D1(b)/D2/D3/D4/D5 (docs/history/worktree-concurrency-guard/CONTEXT.md; supersession 0ccc1cf3), "worktree-concurrency-guard-controlroot-port Port-D4/D5 (docs/history/worktree-concurrency-guard-controlroot-port/CONTEXT.md — coordination-root scoping of the concurrency check, relocation to packages/bee/)"]
+  sources: ["worktree-isolation cells worktree-isolation-1..4 (capped traces and reports 2..4, 2026-07-16 — linked-root resolution, contained writes, dispatch attestation, transactional merge-back)", "docs/specs/workflow-state.md#B20", "docs/specs/workflow-state.md#R32", "docs/specs/workflow-state.md#R33", "docs/specs/workflow-state.md#R34", "docs/specs/workflow-state.md#R35", "docs/specs/workflow-state.md#E15", "docs/specs/workflow-state.md#E16", "docs/specs/workflow-state.md#E17", "docs/specs/workflow-state.md#E18", "docs/specs/workflow-state.md#P1", "worktree-concurrency-guard cells wcg-1/wcg-2 (capped traces and reports, 2026-07-24 — shared-nested-checkout detection primitive and write-guard wiring)", "worktree-concurrency-guard cell wcg-fix-2 (capped trace and report, 2026-07-26 — fail-closed-on-detection-error fix, review finding #2)", "worktree-concurrency-guard-controlroot-port cell port-1 (capped trace and verification_evidence, 2026-07-26 — relocation to packages/bee/, coordination-root scoping of the concurrency check, cross-model semantic judge confirmed)"]
   authoritative_for: "workflow-state: isolated linked-worktree dispatch, containment, and transactional merge-back"
 ---
 
@@ -133,6 +133,14 @@ checkout at all, nothing about this behavior changes today's write.
   the write is denied, not silently allowed — a detection failure is treated
   as evidence of risk, never as evidence of safety, since the error is most
   likely to happen during the exact race this refusal exists to stop.
+- The concurrently-live-session signal behind B21/R36 is scoped to the
+  coordination root, not the physical directory being written into. Several
+  worktrees may share one coordination root; a live session on a sibling
+  worktree counts as "another session" for this refusal even though it never
+  touches the physical checkout the write targets. The containment scan
+  itself — which nested checkout exists, and where — stays scoped to the
+  physical checkout regardless: only the "is anyone else live" question reads
+  the coordination root, never the "what is on disk" question.
 
 ## Pointers (implementation)
 
@@ -146,9 +154,17 @@ checkout at all, nothing about this behavior changes today's write.
   `docs/history/worktree-isolation/reports/`, 333 passing library checks, and
   the green configured repository verify on 2026-07-16.
 - Concurrency-aware shared-checkout refusal (B21/R36): detection primitive
-  `guards.mjs`'s `isSharedNestedCheckoutTarget` (point-check) and its
+  `packages/bee/lib/guards.mjs`'s `isSharedNestedCheckoutTarget` (point-check)
+  and `hasAnySharedNestedCheckout` (directory-scan), plus their shared
   companion-marker verification and submodule-registration exclusion helpers;
-  wired into `hooks/bee-write-guard.mjs`'s dispatch, ahead of `checkWrite`.
-  Evidence: capped cells `.bee/cells/wcg-1.json`, `.bee/cells/wcg-2.json`,
-  reports `docs/history/worktree-concurrency-guard/reports/`, and the green
-  `hooks/test_write_guard.mjs` suite (82 rows) on 2026-07-24.
+  wired into `packages/bee/hooks/bee-write-guard.mjs`'s dispatch, ahead of
+  `checkWrite`, and into `packages/bee/bee.mjs`'s `handleWorktreeNew`. Both
+  detection functions take the coordination root as an `opts.controlRoot`
+  field (falling back to the physical root when omitted) so the concurrency
+  check can consult a coordination root that differs from the physical
+  checkout, while the on-disk scan stays physical-root-scoped. Evidence:
+  capped cells `.bee/cells/wcg-1.json`, `.bee/cells/wcg-2.json`,
+  `.bee/cells/port-1.json` (relocation + controlRoot-scoping), reports
+  `docs/history/worktree-concurrency-guard/reports/`, and the green
+  `packages/bee/hooks/test_write_guard.mjs` suite (87 rows, including the
+  bidirectional controlRoot-vs-root scoping proof) on 2026-07-26.
