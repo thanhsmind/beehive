@@ -7,9 +7,12 @@
 //! the command-registry JSON bridge loader, and the tokenizer port — see
 //! each module's own doc comment for its mjs source of truth.
 
+pub mod backlog;
+pub mod capture;
 pub mod cells;
 pub mod claims;
 pub mod config;
+pub mod decisions;
 pub mod dispatch_guard;
 pub mod fsutil;
 pub mod guards;

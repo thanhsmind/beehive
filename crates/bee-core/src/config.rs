@@ -194,6 +194,54 @@ pub fn read_config(root: &Path) -> Config {
     serde_json::from_value::<Config>(raw).unwrap_or_default()
 }
 
+/// Port of state.mjs `resolveProductRoot` (rust-port-13, backlog-legacy
+/// table lookup): where the host project's PRODUCT docs live
+/// (`docs/backlog.md`, `docs/specs/`). Unset/empty `product_root` (the
+/// ordinary single-root repo — zero behavior change) resolves to `root`
+/// itself; a configured relative/absolute path resolves against `root`; a
+/// non-string value warns to stderr and falls back to `root`, matching the
+/// mjs source's fail-open posture exactly (never a panic, never a silent
+/// wrong path with no trace).
+pub fn resolve_product_root(root: &Path) -> PathBuf {
+    let configured = read_config_value(root).get("product_root").cloned();
+    match configured {
+        None | Some(Value::Null) => root.to_path_buf(),
+        Some(Value::String(s)) if s.is_empty() => root.to_path_buf(),
+        Some(Value::String(s)) => {
+            let resolved = if Path::new(&s).is_absolute() { PathBuf::from(&s) } else { root.join(&s) };
+            if !resolved.is_dir() {
+                eprintln!(
+                    "bee: config product_root \"{s}\" -> \"{}\" is not an existing directory; product-doc reads (docs/backlog.md, docs/specs/) will find nothing until you fix .bee/config.json product_root. (GitHub #14)",
+                    resolved.display()
+                );
+            }
+            resolved
+        }
+        Some(other) => {
+            eprintln!(
+                "bee: .bee/config.json product_root must be a string path (got {}); ignoring it and using the bee root.",
+                json_type_name(&other)
+            );
+            root.to_path_buf()
+        }
+    }
+}
+
+// Mirrors JS `typeof` (not JSON's own type names): `typeof []` and
+// `typeof {}` are both `'object'`, and `typeof null` would be `'object'`
+// too, but the `None | Some(Value::Null)` arm above never reaches this
+// helper for null.
+fn json_type_name(v: &Value) -> &'static str {
+    match v {
+        Value::Null => "object",
+        Value::Bool(_) => "boolean",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "object",
+        Value::Object(_) => "object",
+    }
+}
+
 
 // ─── model-tier resolution (rust-port-10, CONTEXT.md D2/D7) ────────────────
 // Port of state.mjs's `normalizeTierValue`/`normalizeModels`/`resolveTier`/
