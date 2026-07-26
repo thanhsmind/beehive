@@ -208,6 +208,33 @@
       "summary": "The dedicated security reviewer slot failed to produce a report twice (review-security, review-security-2) despite repeated direct pings -- appears to be a systemic dispatch/delivery issue, not findings-related. Security-relevant properties for this change (self-exclusion, fail-closed-on-detection-error, controlRoot as a bypass surface) were nonetheless independently verified via: the reliability reviewer's explicit fail-open/fail-closed analysis (F1-F4), the delta re-review of the F1/F2 fix, and this orchestrator's own cross-model (opus) semantic-judge goal-check performed before this review session. No P1 surfaced in any of these. User was informed and chose to proceed with synthesis rather than a third dispatch attempt.",
       "severity": "P2",
       "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "security",
+      "summary": "Submodule exclusion trusts .gitmodules content -- an agent able to write .gitmodules could register a shared nested checkout as a fake submodule to bypass the guard. By design (D2's registration discriminator); threat model is accidental concurrent clobbering, not a deliberate adversary.",
+      "file": "packages/bee/lib/guards.mjs",
+      "line": 704,
+      "severity": "P3",
+      "autofix_class": "advisory",
+      "outcome": "no_change_needed"
+    },
+    {
+      "reviewer": "security",
+      "summary": "Corrupt/leftover session record can fail-closed a genuinely solo worktree-new/write under strict mode -- intended posture (undetectable state must not read as solo), safe-direction availability edge, not a security regression.",
+      "file": "packages/bee/lib/claims.mjs",
+      "line": 327,
+      "severity": "P3",
+      "autofix_class": "advisory",
+      "outcome": "no_change_needed"
+    },
+    {
+      "reviewer": "security",
+      "summary": "payload.session_id absent weakens self-exclusion in the write-guard (excludeSessionId becomes null) -- can only over-deny (fail-closed), and a sessionless caller typically writes no heartbeat anyway, so isConcurrentMode usually returns false regardless. Informational, not a regression.",
+      "file": "packages/bee/hooks/bee-write-guard.mjs",
+      "line": 786,
+      "severity": "P3",
+      "autofix_class": "advisory",
+      "outcome": "no_change_needed"
     }
   ],
   "uat": [
@@ -222,13 +249,13 @@
     "gate4": {
       "p1_count": 0,
       "p2_count": 2,
-      "p3_count": 16,
+      "p3_count": 19,
       "uat_pass": true,
       "uat_items": 1,
       "auto_approved_by_bypass": true,
-      "note": "gate_bypass_level=total; P1=0 and the single UAT item was confirmed pass by the human, satisfying the bypass merge-approval precondition. Security reviewer slot failed to deliver twice (filed as friction), coverage otherwise substantively complete via reliability review, delta re-review, and a pre-existing semantic-judge goal-check."
+      "note": "Update (2026-07-26, later same session): the security reviewer slot succeeded on a 4th attempt, dispatched synchronously (foreground) rather than as a background/mailbox-relayed agent, after 3 consecutive background dispatches (2x general-purpose 'claude' type, 1x 'bee-review' type) all went idle without ever delivering report text despite repeated direct pings. Security review: 0 P1, 0 P2, 3 P3 (all advisory/no_change_needed -- submodule-registration trust, corrupt-record fail-closed-availability edge, sessionless self-exclusion note). All 7 reviewer lenses (code-quality, architecture, test-coverage, api-contract, reliability, security, plus the delta re-review) now complete with 0 P1 total. gate_bypass_level=total; P1=0 and the sole UAT item was human-confirmed pass, satisfying the bypass merge-approval precondition."
     }
   },
   "created_at": "2026-07-26T13:30:37.105Z",
-  "updated_at": "2026-07-26T14:41:44.480Z"
+  "updated_at": "2026-07-26T14:53:19.041Z"
 }
