@@ -1,0 +1,94 @@
+{
+  "id": "i54-closeout-4",
+  "feature": "i54-closeout",
+  "lane": "standard",
+  "title": "Herding runtime adapter: agent spawn command config-driven (herding.agent_command template), default byte-equivalent claude, codex example documented",
+  "files": [
+    "skills/bee-herding/scripts/control-loop.sh",
+    "skills/bee-herding/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/i54-closeout/CONTEXT.md",
+    "docs/knowledge/areas/bee-herding/overview.md",
+    "skills/bee-herding/scripts/control-loop.sh"
+  ],
+  "action": "Per D4: control-loop.sh (:284-289) and SKILL.md (:220, :262, :399) hardcode claude CLI invocations. Introduce a config seam: .bee/config.json optional herding.agent_command (working-agent spawn) and herding.control_command (control panes) as command templates with documented placeholders (e.g. {PROMPT}, {MODEL}); when absent, the built default is the EXACT current claude command — zero behavior change without config. control-loop.sh reads the config via node -e JSON read (mirroring how the script already sources repo config if it does; otherwise a small helper) with safe quoting. SKILL.md: replace the hardcoded spawn lines with the template mechanism, keep the claude default visible, and add a codex example block (codex exec form) explicitly marked as an adapter example, not a supported native herding mode. Do not touch enable/disable/merge gesture semantics (herding knowledge R2/R3/R11). Regen obligation inside THIS cell: node scripts/render_plugin_skill_trees.mjs && node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply && node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "with no herding config keys, spawned commands are byte-equivalent to today's",
+      "merge stays a single-shot owner gesture; dispatch interlock untouched"
+    ],
+    "artifacts": [
+      "config-driven command templates in control-loop.sh",
+      "SKILL.md documents the seam + codex example"
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no automation may call herding enable/disable/status verbs",
+      "no shell-injection-prone unquoted template substitution"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "bash -n skills/bee-herding/scripts/control-loop.sh && node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check",
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "jerry",
+    "outcome": "Herding spawn is now config-driven (D4): control-loop.sh reads optional .bee/config.json herding.control_command (JSON array of argv tokens, per-token {PROMPT}/{MODEL}/{MAX_TURNS}/{ALLOWED_TOOLS} substitution, never eval/join-then-split); absent -> byte-equivalent default. SKILL.md documents the same seam for herding.agent_command (the working-agent spawn tail in §8) plus a codex adapter example marked as illustrative-only. Enable/disable/status verbs and merge-gesture semantics untouched.",
+    "files_changed": [
+      "skills/bee-herding/scripts/control-loop.sh",
+      "skills/bee-herding/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".claude/skills/bee-herding/SKILL.md",
+      ".claude/skills/bee-herding/scripts/control-loop.sh",
+      ".agents/skills/bee-herding/SKILL.md",
+      ".agents/skills/bee-herding/scripts/control-loop.sh",
+      ".claude-plugin/skills/bee-herding/SKILL.md",
+      ".claude-plugin/skills/bee-herding/scripts/control-loop.sh",
+      ".codex-plugin/skills/bee-herding/SKILL.md",
+      ".codex-plugin/skills/bee-herding/scripts/control-loop.sh",
+      ".claude/skills/.bee-render.json",
+      ".agents/skills/.bee-render.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/.bee-render.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T09:55:05.894Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\"skills/bee-hive/templates/tests/test_herding.mjs\"],\n  \"tests_added_or_changed\": [],\n  \"red_failure_evidence\": \"Before this cell, control-loop.sh's run_iteration had no config seam at all: git show HEAD~1:skills/bee-herding/scripts/control-loop.sh (pre-change) shows the invocation hardcoded as `claude -p \\\"$PROMPT\\\" --model sonnet --max-turns \\\"$TURN_CEILING\\\" --allowedTools \\\"$ALLOWED_TOOLS\\\"` with no herding.control_command or herding.agent_command read anywhere in the repo (confirmed via rg for 'herding.control_command'/'herding.agent_command' returning zero hits pre-change). No automated test exercised a config-driven path because none existed; this is new surface, not a bug fix, per the deliberate_exceptions note below.\",\n  \"verification_run\": \"bash -n skills/bee-herding/scripts/control-loop.sh -> OK; node scripts/run_verify.mjs --impacted-from-git --level 1 -> exit 0 (0 suites mapped from 28 changed files, full verify delegated to CI per ci-owned-verify D1/D6); node scripts/release_manifest.mjs --check -> exit 0, 510 files match. Existing regression suite skills/bee-hive/templates/tests/test_herding.mjs re-run after the change: 10 passed, 0 failed (no regression). Manual isolated verification in a scratch main-root (outside this repo's tracked tree, using a stubbed `claude`/replacement binary on PATH so no real claude session was ever invoked): (a) no herding.control_command key -> stub recorded the byte-equivalent default argv (claude -p <PROMPT> --model sonnet --max-turns 50 --allowedTools <TOOLS>); (b) herding.control_command set to a custom argv array -> the configured binary ran instead, with {MODEL}->sonnet, {MAX_TURNS}->50, {ALLOWED_TOOLS}->the enumerated allowlist, and the full multiline {PROMPT} all substituted into their own single argv elements intact; (c) a token containing a command-substitution attempt and an `rm -rf` fragment was passed through as inert literal text (confirmed no side-effect file was created) - proves the per-token substitution is not eval'd or re-split by the shell.\",\n  \"deliberate_exceptions\": [\"No new automated regression test was added for the config seam itself (only manual scratch-directory verification, documented above) - this is new adapter surface behind an opt-in config key with a proven byte-equivalent default when absent, and the existing test_herding.mjs suite (10/10) proves no regression to the pre-change default path.\"]\n}\n",
+    "verify_output": "bash -n: OK (no syntax errors). run_verify --impacted-from-git --level 1: 0 suites mapped from 28 changed files (all UNMAPPED -> full verify delegated to CI per D6/ci-owned-verify), exit 0. release_manifest --check: 510 file(s) match stored manifest, exit 0. Additionally, isolated manual tests confirmed: (1) existing skills/bee-hive/templates/tests/test_herding.mjs suite -> 10 passed, 0 failed (no regression); (2) with no herding.control_command config key, control-loop.sh real invocation is byte-equivalent to the pre-change hardcoded claude -p PROMPT --model sonnet --max-turns N --allowedTools TOOLS (verified via a stubbed claude binary capturing argv); (3) with herding.control_command set, the configured command runs instead (verified via stubbed replacement binary), with placeholders PROMPT/MODEL/MAX_TURNS/ALLOWED_TOOLS substituted per-token; (4) a token containing shell metacharacters (a command-substitution attempt plus rm -rf) was passed through as literal argv text and never executed or expanded, confirming the no-shell-injection requirement.",
+    "verify_passed": true,
+    "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+    "claimed_at": "2026-07-24T09:40:13.958Z",
+    "verify_command": "bash -n skills/bee-herding/scripts/control-loop.sh && node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-24T09:54:48.585Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T09:54:19.687Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T09:42:00.098Z",
+        "acquired_at": "2026-07-24T09:40:13.956Z",
+        "worker": "jerry",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      },
+      {
+        "n": 2,
+        "at": "2026-07-24T09:54:48.585Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T09:42:00.098Z",
+        "acquired_at": "2026-07-24T09:40:13.956Z",
+        "worker": "jerry",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

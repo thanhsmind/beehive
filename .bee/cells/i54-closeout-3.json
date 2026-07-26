@@ -1,0 +1,83 @@
+{
+  "id": "i54-closeout-3",
+  "feature": "i54-closeout",
+  "lane": "standard",
+  "title": "knowledge context --lane: lane-scaled budget presets (tiny 8k / small 12k / standard 20k / high-risk 30k), default unchanged",
+  "files": [
+    "skills/bee-hive/templates/lib/inject.mjs",
+    "skills/bee-hive/templates/lib/command-registry.mjs",
+    "skills/bee-hive/templates/bee.mjs",
+    "skills/bee-hive/templates/AGENTS.block.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/i54-closeout/CONTEXT.md",
+    "docs/knowledge/areas/okf-profile/context-and-promote.md",
+    "skills/bee-hive/templates/lib/inject.mjs"
+  ],
+  "action": "Per D3: knowledge.context currently takes a required numeric --budget and the preamble hardcodes KNOWLEDGE_CONTEXT_BUDGET=20000 (inject.mjs:219). Add an optional --lane tiny|small|standard|high-risk param to the knowledge context verb mapping to budget presets {tiny:8000, small:12000, standard:20000, high-risk:30000}; explicit --budget always wins over --lane; neither given keeps today's behavior exactly. In inject.mjs, the preamble's recommended knowledge-context command line picks the preset from the current mode (mode field of the active record) instead of always 20000 — bare fallback stays 20000. Budget-cut semantics (prefix cut, critical-patterns IDF exception, okf B5/B6) are untouched — this changes only the NUMBER fed in. PLAN-CHECK B1: the AGENTS.md startup step-4 budget line is edited in the CANONICAL template skills/bee-hive/templates/AGENTS.block.md:10 (one line, D11 forbids broader edits) — NEVER in the rendered root AGENTS.md; the cell's own regen (onboard --apply) re-renders AGENTS.md from the template, and scripts/test_agents_budget.mjs asserts byte-identity between block and render. PLAN-CHECK W4: two literal assertions WILL break and must be updated coherently with the new rendering (never hand-waved): skills/bee-hive/templates/tests/test_misc.mjs:723 pins '--budget 20000' under a mode:'small' fixture (line 719) — after this change the small fixture renders the small preset; and test_bee_cli.mjs:2827 pins '--budget 20000'. Update both to assert the mode-correct rendered line; regenerate any golden fixture through its own regeneration path. Regen obligation inside THIS cell: node scripts/render_plugin_skill_trees.mjs && node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply && node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "bare invocations (no --lane) behave byte-identically to today",
+      "--budget beats --lane when both given",
+      "preamble preset follows the active record's mode"
+    ],
+    "artifacts": [
+      "--lane on the knowledge context verb + preset table",
+      "mode-aware preamble command line",
+      "AGENTS.md step-4 one-line update"
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "do not touch budget-cut/prefix-cut/critical-pattern ranking semantics",
+      "no AGENTS.md edits beyond the step-4 budget line (D11)",
+      "never hand-edit golden fixtures"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check",
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "dave",
+    "outcome": "Added --lane tiny|small|standard|high-risk to knowledge.context, resolved into --budget before the generic validate() layer (bee.mjs resolveKnowledgeContextLaneBudget) so explicit --budget always wins and a bare call with neither flag refuses exactly as before (required, missing). Preset table (KNOWLEDGE_CONTEXT_LANE_BUDGETS/KNOWLEDGE_CONTEXT_DEFAULT_BUDGET) lives once in knowledge.mjs, shared by the CLI and inject.mjs's preamble, which now picks its recommended --budget from the active record's mode (falls back to 20000 for an unmapped mode). AGENTS.block.md step-4 line updated (D11-scoped, one line) and regenerated through render_plugin_skill_trees -> onboard --apply -> release_manifest --write. Updated test_misc.mjs's mode:'small' preamble assertion to the small preset (12000) plus a new mode:'spike' fallback check, and added 4 CLI-level checks in test_bee_cli.mjs for lane resolution/precedence/bare-refusal/invalid-lane. Deviation: fixed a stale test_conformance.mjs fixture (adapter-regression-spawn-guard's unobserved-fail-open case) that used a payload shape the i54-closeout-1 guard widening (already capped, unrelated to D3) now correctly recognizes and denies — updated the fixture to a genuinely unobserved shape (no message field) per dispatch-guard.mjs's own noOpinion branch; this was blocking my cell's assigned impacted-verify from going green and is unrelated to any file in this cell's scope.",
+    "files_changed": [
+      "skills/bee-hive/templates/lib/inject.mjs",
+      "skills/bee-hive/templates/lib/command-registry.mjs",
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/lib/knowledge.mjs",
+      "skills/bee-hive/templates/AGENTS.block.md",
+      "skills/bee-hive/templates/tests/test_misc.mjs",
+      "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      "scripts/test_conformance.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "AGENTS.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T09:38:19.020Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\"skills/bee-hive/templates/tests/test_bee_cli.mjs\", \"skills/bee-hive/templates/tests/test_misc.mjs\"],\n  \"tests_added_or_changed\": [\n    \"test_bee_cli.mjs: 4 new CLI-level checks — --lane standard resolves budget 20000 with no --budget; explicit --budget wins over --lane; neither flag still refuses (required, missing); an unrecognized --lane value is left unfilled (still refuses on missing --budget, never a silent wrong number)\",\n    \"test_misc.mjs: updated the mode:'small' preamble check from a flat --budget 20000 to the mode-scaled --budget 12000, and added a mode:'spike' (no preset) check asserting the byte-identical bare fallback of 20000\"\n  ],\n  \"red_failure_evidence\": \"Before this cell, --lane was not a recognized concept anywhere: knowledge.context's registry required ['work','budget'] unconditionally (validate-args.mjs), so `bee knowledge context --work <id> --lane standard --json` (no --budget) failed with {field:'budget', reason:'required, missing'} exactly like a bare call with neither flag — traced by reading the pre-change command-registry.mjs/validate-args.mjs required-check and confirmed live: the new test 'neither --budget nor --lane still refuses exactly as before this cell' reproduces that exact refusal shape post-change, proving the bare path is untouched. inject.mjs's preamble also always rendered a flat '--budget 20000' regardless of mode pre-change — test_misc.mjs's mode:'small' fixture pinned that literal before this cell's edit.\",\n  \"verification_run\": \"node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check -> PASS run_verify: 37 suite(s) from 60 changed file(s), all green (test_bee_cli.mjs, test_misc.mjs, test_knowledge.mjs, test_conformance.mjs not in the impacted set directly but re-run standalone and green after the deviation fix); release_manifest --check: 510 file(s) match stored manifest.\",\n  \"deliberate_exceptions\": []\n}\n",
+    "verify_output": "PASS run_verify: 37 suite(s), concurrency=5, wall=57563ms; IMPACTED RUN (level 1): 37 direct suite(s) from 60 changed file(s), all PASS (including scenario adapter-regression-spawn-guard in test_conformance.mjs, fixed as an in-cell deviation). release_manifest --check: 510 file(s) match stored manifest.",
+    "verify_passed": true,
+    "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+    "claimed_at": "2026-07-24T09:21:27.097Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-24T09:37:36.066Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T09:37:36.067Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T09:21:27.096Z",
+        "acquired_at": "2026-07-24T09:21:27.096Z",
+        "worker": "dave",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

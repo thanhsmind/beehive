@@ -1,0 +1,115 @@
+{
+  "id": "sqs-b3",
+  "lane": "standard",
+  "title": "state scribing-run --show [--feature]: read-only last-stamp read (no append, no phase advance)",
+  "feature": "state-query-surface",
+  "behavior_change": true,
+  "deps": [
+    "sqs-b2"
+  ],
+  "files": [
+    "skills/bee-hive/templates/bee.mjs",
+    ".bee/bin/bee.mjs",
+    "skills/bee-hive/templates/lib/command-registry.mjs",
+    ".bee/bin/lib/command-registry.mjs",
+    "skills/bee-hive/templates/tests/test_cli_state.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/state-query-surface/plan.md",
+    "docs/history/state-query-surface/reports/feasibility-gather.md"
+  ],
+  "action": "Add --show to state scribing-run: when --show is passed the verb is READ-ONLY (no ledger append, no phase advance) and returns the most-recent stamp overall, or for --feature <slug>. Reuse readScribingLedger/scribingLedgerPath (cells.mjs:2081-2087) and the bestStampMs per-feature max. Register the flag in command-registry.mjs. Then run the regen sequence INSIDE this cell in order: node scripts/render_plugin_skill_trees.mjs, then node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "ledger rows are {ts, feature, areas[]}",
+      "--show never appends and never advances phase"
+    ],
+    "artifacts": [
+      "state scribing-run --show [--feature]",
+      "registry flag",
+      "test in test_cli_state.mjs asserting --show reads last stamp and leaves ledger+phase untouched"
+    ],
+    "key_links": [
+      "feasibility-gather.md Q4"
+    ],
+    "prohibitions": [
+      "INSERT the --show read-only branch BEFORE rejectDryRun/requireFlags (bee.mjs ~2343-2349) — else requireFlags refuses --show for lacking --areas/--next-action",
+      "--show must not write the ledger",
+      "--show must not advance phase to compounding",
+      "no mirror byte drift"
+    ]
+  },
+  "verify": "node skills/bee-hive/templates/tests/test_cli_state.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "sqs-b3-worker",
+    "outcome": "Added a READ-ONLY --show flag to state scribing-run: --show (optionally with --feature <slug>) returns the most-recent scribing stamp -- overall or for one feature -- with no ledger append and no phase advance. The read-only branch returns at the very top of handleStateScribingRun, above rejectDryRun/requireFlags, so --show never needs --areas/--next-action. Reuses readScribingLedger and a newly-extracted bestScribingStampMs (both exported from cells.mjs, the latter factored out of globalScribingDebt's per-feature max-stamp logic) instead of a second reader. Registered --show in command-registry.mjs and FLAG_ALONE_BOOLEANS. Regenerated all skill-tree mirrors, onboarding hash ledger, and the release manifest.",
+    "files_changed": [
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/lib/command-registry.mjs",
+      "skills/bee-hive/templates/lib/cells.mjs",
+      "skills/bee-hive/templates/tests/test_cli_state.mjs",
+      ".bee/bin/bee.mjs",
+      ".bee/bin/lib/command-registry.mjs",
+      ".bee/bin/lib/cells.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json",
+      ".agents/skills/bee-hive/templates/bee.mjs",
+      ".agents/skills/bee-hive/templates/lib/command-registry.mjs",
+      ".agents/skills/bee-hive/templates/lib/cells.mjs",
+      ".agents/skills/bee-hive/templates/tests/test_cli_state.mjs",
+      ".agents/skills/.bee-render.json",
+      ".claude/skills/bee-hive/templates/bee.mjs",
+      ".claude/skills/bee-hive/templates/lib/command-registry.mjs",
+      ".claude/skills/bee-hive/templates/lib/cells.mjs",
+      ".claude/skills/bee-hive/templates/tests/test_cli_state.mjs",
+      ".claude/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/templates/bee.mjs",
+      ".claude-plugin/skills/bee-hive/templates/lib/command-registry.mjs",
+      ".claude-plugin/skills/bee-hive/templates/lib/cells.mjs",
+      ".claude-plugin/skills/bee-hive/templates/tests/test_cli_state.mjs",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/templates/bee.mjs",
+      ".codex-plugin/skills/bee-hive/templates/lib/command-registry.mjs",
+      ".codex-plugin/skills/bee-hive/templates/lib/cells.mjs",
+      ".codex-plugin/skills/bee-hive/templates/tests/test_cli_state.mjs",
+      ".codex-plugin/skills/.bee-render.json"
+    ],
+    "deviations": [
+      {
+        "type": "auto-add",
+        "detail": "Edited skills/bee-hive/templates/lib/cells.mjs (not in the cell's declared `files` list) to (a) export the previously-private `readScribingLedger`, and (b) extract the per-feature max-stamp logic out of `globalScribingDebt`'s local `bestStampMs` closure into a new exported `bestScribingStampMs(root, feature, ctx)`, with `globalScribingDebt` refactored to call it (behavior-identical, covered by the existing test_cells.mjs/test_cli_cells.mjs green run). This was required to satisfy the cell's own must-have: reuse readScribingLedger + the bestStampMs logic instead of a second reader implementation in bee.mjs. Mirrors of cells.mjs were already declared cap targets via the regen sequence."
+      },
+      {
+        "type": "auto-add",
+        "detail": "Added 'show' to bee.mjs's FLAG_ALONE_BOOLEANS set. Without it, `--show` (not followed by `=value`) would consume the NEXT token as its own value -- e.g. `--show --feature demo` would bind 'demo'-adjacent `--feature` as --show's value and leave 'demo' as a stray positional argument (confirmed live in red-first evidence: `unexpected argument \"demo\"`). Same class of fix as the pre-existing dry-run/write/as-lane entries in that same set."
+      }
+    ],
+    "friction": null,
+    "capped_at": "2026-07-24T07:14:54.124Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\"skills/bee-hive/templates/tests/test_cli_state.mjs\"],\n  \"tests_added_or_changed\": [\n    \"bee.mjs CLI: \\\"state scribing-run --show\\\" returns the most-recent stamp overall, across every feature in the ledger\",\n    \"bee.mjs CLI: \\\"state scribing-run --show --feature <slug>\\\" returns that feature's own last stamp, not a different feature's later one\",\n    \"bee.mjs CLI: \\\"state scribing-run --show\\\" is read-only -- it does not append to the ledger and does not advance phase\",\n    \"bee.mjs CLI: \\\"state scribing-run --show\\\" works with NO --areas/--next-action (a bare read never needs write-only flags)\",\n    \"bee.mjs CLI: \\\"--help --json\\\" advertises scribing-run --show\"\n  ],\n  \"red_failure_evidence\": \"Before implementation: `node skills/bee-hive/templates/tests/test_cli_state.mjs` reported `68 passed, 5 failed`. The 4 behavioral checks failed exactly on the trap this cell targets: `--show should succeed, got 1: missing required flag(s): --feature, --areas, --next-action` (rejectDryRun/requireFlags ran before the read-only branch existed) and, once --feature was added to the call, `unexpected argument \\\"demo\\\"` (--show was not yet in FLAG_ALONE_BOOLEANS, so it consumed --feature as its own value). The registry-advertisement check failed with `state.scribing-run's registry entry must declare a --show flag, got [\\\"feature\\\",\\\"areas\\\",\\\"next-action\\\",\\\"lane\\\",\\\"json\\\"]`.\",\n  \"verification_run\": \"After implementation: `node skills/bee-hive/templates/tests/test_cli_state.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check` -> `73 passed, 0 failed`; `release_manifest --check: 510 file(s) match stored manifest`; `ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger`. Also ran test_cells.mjs (107 passed) and test_cli_cells.mjs (40 passed) as a regression check on the cells.mjs refactor (bestScribingStampMs extraction) -- both green, no behavior change to globalScribingDebt.\"\n}\n",
+    "verify_output": "73 passed, 0 failed; release_manifest --check: 510 file(s) match stored manifest; ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger",
+    "verify_passed": true,
+    "claim_session": "fb0da4af-c6ae-43d6-b0e3-1b1a689e161e",
+    "claimed_at": "2026-07-24T07:03:59.460Z",
+    "verify_command": "node skills/bee-hive/templates/tests/test_cli_state.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-24T07:14:08.506Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T07:14:08.507Z",
+        "claim_session": "fb0da4af-c6ae-43d6-b0e3-1b1a689e161e",
+        "claimed_at": "2026-07-24T07:03:59.458Z",
+        "acquired_at": "2026-07-24T07:03:59.458Z",
+        "worker": "sqs-b3-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

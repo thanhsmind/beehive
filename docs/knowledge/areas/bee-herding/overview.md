@@ -2,14 +2,14 @@
 type: bee.area
 title: "Bee Herding — the three-role cockpit, its safety boundaries, and adoption"
 description: "A herdr-driven cockpit that runs several Claude Code sessions in parallel worktrees: a dispatch loop that starts work behind an owner interlock, a merge gesture the owner runs by hand, and the safety boundaries that make unattended dispatch acceptable while keeping every landing in main a human act."
-timestamp: 2026-07-23
+timestamp: 2026-07-24
 bee:
   id: bee-herding-overview
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/worktree-parallelism/overview.md]
-  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision)]
-  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)"]
+  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), i54-closeout D4]
+  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", "i54-closeout cell i54-closeout-4 (herding spawn command config-driven templates; trace in .bee/cells/, 2026-07-24)"]
   authoritative_for: "bee-herding: the three-role cockpit, its safety boundaries, and adoption"
 ---
 
@@ -78,6 +78,22 @@ stop that silently leaves agents running is worse than none.
 **The loop is bounded.** A consecutive-failure ceiling and a default iteration cap ensure a missing
 binary or a transient error cannot produce an infinite retry, and the control invocations carry a
 turn ceiling — iterations were bounded in the original design, spend was not.
+
+**The working-agent and control-pane spawn commands are config-driven templates,
+byte-equivalent to the hardcoded default (i54-closeout D4).** `control-loop.sh`
+reads an optional `.bee/config.json` `herding.control_command` — a JSON array of
+argv-token strings — and, when present, substitutes `{PROMPT}` / `{MODEL}` /
+`{MAX_TURNS}` / `{ALLOWED_TOOLS}` per token and runs the result verbatim: tokens
+are never joined into one string and re-split or shell-`eval`'d, so a
+config-supplied command cannot smuggle shell injection through a placeholder
+value. The working agent's spawn tail has the matching `herding.agent_command`
+seam. When the key is absent, invalid, or empty, the command built is
+byte-equivalent to the pre-existing hardcoded `claude -p ... --model sonnet
+--max-turns ... --allowedTools ...` invocation — a project with no config
+change sees no behavior change at all. A codex adapter example is documented
+purely as an illustration of the seam; full codex-native herding (its own event
+loop and pane protocol) stays out of scope (D4). None of enable/disable/status,
+the dispatch interlock, or the merge owner-gesture change.
 
 ## Actors & Access
 
@@ -152,9 +168,9 @@ turn ceiling — iterations were bounded in the original design, spend was not.
 - The skill and its three roles: `skills/bee-herding/SKILL.md`; the loop driver
   `scripts/control-loop.sh`; the one-shot `scripts/bootstrap-cockpit.sh`; the owner interlock
   `scripts/dispatch-interlock.mjs`; the work classifier `scripts/classify-lane.mjs`.
-- The CLI-verb equivalent of the manual marker gesture: `skills/bee-hive/templates/lib/herding.mjs`,
-  wired into `skills/bee-hive/templates/bee.mjs` as the `herding` command group. Test coverage:
-  `skills/bee-hive/templates/tests/test_herding_cli.mjs`.
-- Regression coverage: `skills/bee-hive/templates/tests/test_herding.mjs`.
+- The CLI-verb equivalent of the manual marker gesture: `packages/bee/lib/herding.mjs`,
+  wired into `packages/bee/bee.mjs` as the `herding` command group. Test coverage:
+  `packages/bee/tests/test_herding_cli.mjs`.
+- Regression coverage: `packages/bee/tests/test_herding.mjs`.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.

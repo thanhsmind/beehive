@@ -89,7 +89,7 @@ EOF
 log()  { printf '%s\n' "$*"; }
 fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 
-can_prompt() { [ -r /dev/tty ] && [ -w /dev/tty ]; }
+can_prompt() { [ -r /dev/tty ] && [ -w /dev/tty ] && ( : < /dev/tty ) 2>/dev/null; }
 
 confirm() {
   # confirm <question> ; returns 0 for yes. --yes always yes; non-interactive without --yes fails safe.
@@ -99,7 +99,7 @@ confirm() {
     fail "$question — no TTY to ask. Re-run with --yes to accept, or run interactively."
   fi
   printf '%s [y/N] ' "$question" > /dev/tty
-  local answer; IFS= read -r answer < /dev/tty
+  local answer; IFS= read -r answer < /dev/tty || answer=''
   case "$answer" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
 
@@ -161,7 +161,7 @@ trap cleanup EXIT
 
 if [ -n "$SOURCE" ]; then
   BEE_SRC="$(cd "$SOURCE" && pwd -P)" || fail "--source path not found: $SOURCE"
-elif [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/../skills/bee-hive/scripts/onboard_bee.mjs" ]; then
+elif [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/../packages/bee/scripts/onboard_bee.mjs" ]; then
   BEE_SRC="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 else
   command -v git >/dev/null 2>&1 || fail "git is required to fetch bee (or pass --source <local-checkout>)."
@@ -172,9 +172,9 @@ else
   BEE_SRC="$CLEANUP_DIR/bee"
 fi
 
-ONBOARD="$BEE_SRC/skills/bee-hive/scripts/onboard_bee.mjs"
-[ -f "$ONBOARD" ] || fail "Not a bee checkout (missing skills/bee-hive/scripts/onboard_bee.mjs): $BEE_SRC"
-DIST_HELPER="$BEE_SRC/skills/bee-hive/scripts/plugin_distribution.mjs"
+ONBOARD="$BEE_SRC/packages/bee/scripts/onboard_bee.mjs"
+[ -f "$ONBOARD" ] || fail "Not a bee checkout (missing packages/bee/scripts/onboard_bee.mjs): $BEE_SRC"
+DIST_HELPER="$BEE_SRC/packages/bee/scripts/plugin_distribution.mjs"
 RELEASE_MANIFEST="$BEE_SRC/docs/history/codex-harness-hardening/release-manifest.json"
 [ -f "$DIST_HELPER" ] || fail "Not a bee release (missing plugin_distribution.mjs): $BEE_SRC"
 [ -f "$RELEASE_MANIFEST" ] || fail "Not a bee release (missing release manifest): $BEE_SRC"
@@ -490,9 +490,24 @@ printf '%s' "$STATUS" | node -e '
   const s = JSON.parse(require("fs").readFileSync(0, "utf8"));
   if (!s.onboarding || s.onboarding.installed !== true) { console.error("bee.mjs status reports not installed"); process.exit(1); }
   const expected = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).version;
-  if (s.onboarding.bee_version !== expected || s.onboarding.plugin_version !== expected || s.onboarding.drift !== false) {
+  if (s.onboarding.bee_version !== expected || s.onboarding.plugin_version !== expected) {
     console.error(`version parity failed: expected ${expected}, got bee=${s.onboarding.bee_version}, plugin=${s.onboarding.plugin_version}, drift=${s.onboarding.drift}`);
     process.exit(1);
+  }
+  // drift_detail entries come in two shapes (computeRuntimeDrift, bee.mjs):
+  // hash-mismatch/missing entries are bare relative paths (optionally suffixed
+  // " (missing)"), extra-file entries are suffixed " (extra)" -- an unmanaged
+  // .mjs sitting in .bee/bin/lib/ that onboarding never recorded. That is a
+  // softer signal than a real hash/missing mismatch, so it is a warning, not a
+  // fatal version-parity failure: any non-"(extra)" entry still hard-fails.
+  if (s.onboarding.drift === true) {
+    const detail = Array.isArray(s.onboarding.drift_detail) ? s.onboarding.drift_detail : [];
+    const extraOnly = detail.length > 0 && detail.every((entry) => entry.endsWith(" (extra)"));
+    if (!extraOnly) {
+      console.error(`version parity failed: expected ${expected}, got bee=${s.onboarding.bee_version}, plugin=${s.onboarding.plugin_version}, drift=${s.onboarding.drift}`);
+      process.exit(1);
+    }
+    console.log(`verify   unmanaged extra file(s) in .bee/bin/lib/ (not fatal — remove them, or they self-heal on the next onboarding refresh): ${detail.join(", ")}`);
   }
   console.log(`verify   onboarding ok (bee ${s.onboarding.bee_version}), phase: ${s.phase}`);
 ' "$BEE_SRC/.claude-plugin/plugin.json" || fail "Verification failed: unexpected bee.mjs status output."

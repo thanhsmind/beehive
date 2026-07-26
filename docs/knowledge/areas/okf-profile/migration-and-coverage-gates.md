@@ -125,7 +125,7 @@ gap visible rather than silent.
   depends on does not (D37; the verified gap was `docs/specs/reading-map.md:101-102` citing
   `workflow-state.md` `B17`/`B18`/`R26`/`R27` and `B33`/`R51`).
 - Migrated legacy files are **not deleted** in this feature (D20) — stubs keep existing consumers
-  (`.bee/bin/lib/inject.mjs:70-95`'s filename-only spec count; `hooks/bee-session-close.mjs:100-140`'s
+  (`.bee/bin/lib/inject.mjs:70-95`'s filename-only spec count; `packages/bee/hooks/bee-session-close.mjs:100-140`'s
   mtime-based staleness nudge) working through the migration without a flag day.
 
 ## Pointers (implementation)

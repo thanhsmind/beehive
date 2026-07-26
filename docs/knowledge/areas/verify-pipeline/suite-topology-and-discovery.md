@@ -1,14 +1,14 @@
 ---
 type: bee.area
 title: Verify Pipeline — suite topology and discovery
-description: "Keeping full-repo verification fast and contention-free by giving every module its own suite file, discovering suites by convention instead of a hand-registry, and failing loudly the moment a curated suite goes missing."
-timestamp: 2026-07-24
+description: "Keeping full-repo verification fast and contention-free by giving every module its own suite file, discovering suites by convention instead of a hand-registry, failing loudly the moment a curated suite goes missing, and capping the transitive impacted run so a hot-file fan-out never quietly balloons back into a full run."
+timestamp: 2026-07-25
 bee:
   id: verify-pipeline-suite-topology-and-discovery
   lifecycle: active
   areas: [verify-pipeline]
-  decisions: [contention-split D1-D6 (decision 1ce777d9), verify-scoping D1/D2 (decisions e39d3f89, 20534ea9), impacted-level1 D1 (decision 4f8295fb)]
-  sources: ["contention-split cells cs-1/cs-2a/cs-2b/cs-3/cs-4 (fixture extraction, monolith split 430-check conservation, monolith deletion, convention-based suite discovery; traces in .bee/cells/, 2026-07-20)", "hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — Windows CI runs the real split suites through the runner's own discovery rather than a hand-maintained list; write-guard-hook-fix wgf-1, 2026-07-21 — the fixture that vendors a module tree copies the tree, never a hand-maintained file list)", "verify-scoping cells vs-1/vs-2 (scoped --only include filter + two-tier verify doctrine; traces in .bee/cells/, 2026-07-23)", "impacted-level1 cells l1-1/l1-2 (registry per-edge depth split + run_verify --level 1 direct-only selection; traces in .bee/cells/, 2026-07-23)", "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", "docs/specs/verify-pipeline.md#R3", "docs/specs/verify-pipeline.md#E1", "docs/specs/verify-pipeline.md#P1", "docs/specs/verify-pipeline.md#P2", "docs/specs/verify-pipeline.md#P3", "docs/specs/verify-pipeline.md#P4"]
+  decisions: [contention-split D1-D6 (decision 1ce777d9), verify-scoping D1/D2 (decisions e39d3f89, 20534ea9), impacted-level1 D1 (decision 4f8295fb), i54-closeout D2, "test-economy D6 (impacted cap over the transitive tail — level-1 direct/self-selected always run, exit reflects only the part actually run, best-effort CI delegation)"]
+  sources: ["contention-split cells cs-1/cs-2a/cs-2b/cs-3/cs-4 (fixture extraction, monolith split 430-check conservation, monolith deletion, convention-based suite discovery; traces in .bee/cells/, 2026-07-20)", "hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — Windows CI runs the real split suites through the runner's own discovery rather than a hand-maintained list; write-guard-hook-fix wgf-1, 2026-07-21 — the fixture that vendors a module tree copies the tree, never a hand-maintained file list)", "verify-scoping cells vs-1/vs-2 (scoped --only include filter + two-tier verify doctrine; traces in .bee/cells/, 2026-07-23)", "impacted-level1 cells l1-1/l1-2 (registry per-edge depth split + run_verify --level 1 direct-only selection; traces in .bee/cells/, 2026-07-23)", "test-economy cell te-3 (impacted cap — transitive tail delegated to CI; docs/history/test-economy/CONTEXT.md, trace in .bee/cells/, 2026-07-25)", "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", "docs/specs/verify-pipeline.md#R3", "docs/specs/verify-pipeline.md#E1", "docs/specs/verify-pipeline.md#P1", "docs/specs/verify-pipeline.md#P2", "docs/specs/verify-pipeline.md#P3", "docs/specs/verify-pipeline.md#P4", "i54-closeout cell i54-closeout-2 (run_verify per-suite wall-clock timeout + heartbeat; trace in .bee/cells/, 2026-07-24)"]
   authoritative_for: "verify-pipeline: suite topology and discovery"
 ---
 
@@ -73,6 +73,42 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   transitive); mid-iteration, `run_verify --impacted-from-git --level 1`
   selects direct edges only (seconds), while the transitive impacted run
   (`commands.test`) stays the wave-close/merge gate (impacted-level1 D1).
+- **The transitive impacted run has a ceiling, and level-1 is exempt from
+  it.** A single hot file (imported almost everywhere) can make the
+  transitive impacted set balloon to nearly the whole suite pool, erasing
+  the point of running "impacted" at all. `run_verify.mjs` reads a `0..1`
+  ratio from `.bee/config.json`'s `verify_impacted_cap` key (a missing file,
+  a parse failure, or a missing key all fail safe to the default `0.30`; a
+  configured `1` is the documented off-switch, since a ratio can never
+  exceed 1). The cap applies ONLY to a transitive selection (bare
+  `--impacted`/`--impacted-from-git`, no `--level` flag) — a caller that
+  already asked for `--level 1` is unaffected: no banner, no cut, today's
+  behavior unchanged. When the transitive selection's share of the full
+  suite pool exceeds the cap, the run re-queries the SAME changed-file set
+  at level 1 instead: every self-selected suite (a changed test file maps
+  directly to itself) and every suite that imports a changed file directly
+  still runs — only the pure-transitive tail is dropped. The run then prints
+  `impacted N/<total> exceeds cap (<cap>) — transitive tail delegated to CI`,
+  and its exit code is the result of the part that actually ran (a red suite
+  inside the capped selection still fails the run) — never the unconditional
+  exit-0 the unrelated zero-impacted/unmapped branch prints for a
+  structurally different reason (that branch ran zero suites; this one runs
+  a real, just-narrowed selection). The delegation itself is a best-effort,
+  client-side `gh workflow run CI` nudge — it never touches a workflow file,
+  and a missing or erroring `gh` just logs a note, since CI already runs on
+  its own cadence and would pick up the deferred tail regardless
+  (test-economy D6).
+
+- **A hung suite is killed and named, never left to hang the whole run.** Every
+  suite the runner launches carries a per-suite wall-clock timeout (default
+  300s, overridable via `BEE_VERIFY_SUITE_TIMEOUT_MS`; `0`/`none` disables it).
+  On expiry the runner kills the suite's whole child process group — not just
+  the direct child, so a grandchild the suite itself spawned cannot outlive it
+  either — and reports a distinct `TIMEOUT` status, never conflated with an
+  ordinary `FAIL`. A stderr heartbeat (default every 30s, overridable via
+  `BEE_VERIFY_HEARTBEAT_MS`) names whichever suites are still in flight, so a
+  long-running full verify never reads as frozen. Hermetic env scrub and
+  non-timeout pass/fail semantics are unaffected (i54-closeout D2).
 
 ## Business Rules
 
@@ -104,6 +140,13 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   one disabled-gate line rather than running anything, and a cell's own
   `verify` may itself be `"none"` there, capped on the diff-backed outcome
   plus a recorded waiver note.
+- **R5** — A transitive impacted run (no `--level` flag) is capped at
+  `verify_impacted_cap` (`.bee/config.json`, default `0.30`, `1` disables the
+  cap) of the full suite pool; level-1 direct edges and self-selected suites
+  always run regardless of the cap, only the pure-transitive tail is ever
+  dropped, and the run's exit code always reflects the part that actually
+  ran — a capped run is never a silent green. An explicit `--level 1` run is
+  never subject to this cap (test-economy D6).
 
 ## Edge Cases Settled
 
@@ -137,6 +180,6 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
 
 - **P1** — `scripts/run_verify.mjs` — discovery roots, EXTRA/EXCLUDE, serial
   convention, pool.
-- **P2** — `scripts/test_verify_manifest.mjs` — floor + existence + membership guard.
+- **P2** — `scripts/tests/test_verify_manifest.mjs` — floor + existence + membership guard.
 - **P3** — `scripts/lib/test-fixture.mjs` — shared fixture/check-runner.
-- **P4** — `skills/bee-hive/templates/tests/` — per-module suites (11 files).
+- **P4** — `packages/bee/tests/` — per-module suites (11 files).

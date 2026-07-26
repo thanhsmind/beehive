@@ -29,10 +29,10 @@ where the orchestrator's goal-check applies).
 Before anything else, run the guard:
 
 ```bash
-test -f skills/bee-hive/templates/lib/feedback.mjs && test -f skills/bee-writing-skills/SKILL.md
+test -f packages/bee/lib/feedback.mjs && test -f skills/bee-writing-skills/SKILL.md
 ```
 
-Only the bee repo — the repo that *develops* bee — has `skills/bee-hive/templates/`. A host repo's
+Only the bee repo — the repo that *develops* bee — has `packages/bee/`. A host repo's
 vendored `.bee/bin/` copy does NOT make it the bee repo. If the guard fails, **REFUSE and stop**:
 
 > bee-evolving runs only in the bee repository. This repo is a bee *host*. I will not rank, patch,
@@ -93,7 +93,7 @@ we're here."
 Run the repo's recorded verify command and require it green before Gate B:
 
 ```bash
-node skills/bee-hive/templates/tests/test_lib.mjs && node skills/bee-hive/scripts/test_onboard_bee.mjs
+node scripts/run_verify.mjs
 ```
 
 A red suite returns the loop to step 3. Never weaken an existing assertion to get green.

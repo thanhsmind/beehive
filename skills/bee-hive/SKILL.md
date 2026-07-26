@@ -37,7 +37,7 @@ The first three rows go straight to the merged shape+execution gate and the one 
 ## Onboarding
 
 1. Run `node --version`. Missing or below 18 → stop; bee requires Node.js 18+.
-2. From this skill directory, run `node scripts/onboard_bee.mjs --repo-root <repo-root> --json`.
+2. From the bee source root (the checkout or installed plugin package), run `node packages/bee/scripts/onboard_bee.mjs --repo-root <repo-root> --json`.
 3. Branch on `status`: `up_to_date` → continue. `changes_needed` → summarize the plan to the user, ask for approval, and only then re-run with `--apply` — never silently, and never over content outside the BEE markers without explicit consent. `blocked_downgrade` / `blocked_no_source` → zero mutations happened; surface the reported `versions` and resolve it with the user before retrying.
 
 If onboarding is not complete, do not continue into the rest of the bee workflow.
@@ -170,8 +170,8 @@ The router restates only what it needs to route. Rules 2, 3, 4 and 13 below are 
 this — and are kept here as one line each so no rule vanishes from the router without a trace.
 
 1. P1 review findings always block.
-2. Context budget always applies; at ~65%, write `.bee/HANDOFF.json` and pause. Full rule: `AGENTS.md` critical rule 6.
-3. `CONTEXT.md` is the source of truth; locked decisions are cited, never reinterpreted. Full rule: `AGENTS.md` critical rule 7.
+2. Context budget always applies; at ~65%, write `.bee/HANDOFF.json` and pause (the number lives here; principle: `AGENTS.md` critical rule 5).
+3. `CONTEXT.md` is the source of truth; locked decisions are cited, never reinterpreted. Full rule: `AGENTS.md` critical rule 6.
 4. Gate 3 is the critical execution approval; no source-editing execution before it. Full rule: `AGENTS.md` critical rule 1.
 5. A failed reality gate or a NO spike halts the pipeline and returns to planning.
 6. Never skip validating — in tiny mode it collapses to a 2-minute reality check, it does not disappear.
@@ -181,7 +181,7 @@ this — and are kept here as one line each so no rule vanishes from the router 
 10. **The agent runs the machinery, not the user** — never "run this and tell me the output". Full rule: `references/routing-and-contracts.md` ("The agent runs the machinery, not the user").
 11. **Silent bookkeeping — work language only (decision 1689af1b).** Bee mechanics are never narrated into chat; the user hears the work itself in their own terms. Full rule: `references/routing-and-contracts.md` ("Silent Bookkeeping").
 12. **Never hand-edit `.bee/*.json(l)`.** Every state mutation goes through its CLI (`bee.mjs state set|gate|worker|scribing-run`, `bee.mjs backlog add`, `bee.mjs cells`, `bee.mjs reservations`, `bee.mjs decisions`). Generic `state set` additionally requires `--owner <selected record's pre-mutation phase>`; the owner is checked, rolls forward with a successful phase transition, and is never persisted. Dedicated `state gate` does not accept ownership. A mutation with no CLI verb is filed as friction via `bee.mjs backlog add`, then (only then) edited by hand.
-13. **The hook is a safety net, not the authority (decision c2c46488).** Hooks catch what you forget; their silence is never permission — an unblocked write is not an approved write. Full rule, with the failure that produced it: `AGENTS.md` critical rule 12.
+13. **The hook is a safety net, not the authority (decision c2c46488).** Hooks catch what you forget; their silence is never permission — an unblocked write is not an approved write. Full rule, with the failure that produced it: `AGENTS.md` critical rule 11.
 
 ## Runtime Files
 
@@ -199,7 +199,7 @@ With `mode:headless`: never ask blocking questions — defer every ambiguity int
 
 ## Red Flags
 
-The list of stop-and-re-route flags lives under **Red flags — stop and re-route** in `AGENTS.md`. Four more belong to the router itself and are here only:
+The stop-and-re-route discipline lives inline in `AGENTS.md`'s 14 Critical rules — each rule states its own violation directly, with no separate flag list. Four more belong to the router itself and are here only:
 
 - a docs-only change routed through the full pipeline · a gate presented as a mechanical table with no plain-language layer · a gate question the user cannot restate in their own words · a bee command handed to the user to run instead of run by the agent
 

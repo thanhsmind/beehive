@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "feature": "multisession-native",
+  "mode": "high-risk",
+  "phase": "compounding-complete",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "multisession-native shipped in v1.17.0: multi-session-native bee — workflow records, control-plane topology, fenced leases, mailboxes, workspace ownership, integration queue; 15/15 invariants green",
+  "next_action": "feature complete; review on request (candidates registered); writeHandoff retirement next release",
+  "created_at": "2026-07-24T14:19:58.834Z",
+  "advisor_ref": {
+    "consulted_at": "2026-07-25T09:42:44.297Z",
+    "feature": "multisession-native",
+    "newest_decision_id": "4d6a185f-5407-4146-8445-e3715bbea554",
+    "plan_sha256": "6e078fa7cae305c60cc431b5eed884aeefff42719d74698c2ad532ebb627aedb",
+    "advisor": "claude/fable ceiling (bee-review dispatch, slice 5)",
+    "digest_head": "# Advisor consult — slice 5 execution (integration queue + invariant closure + release)\n\nAdvisor: claude/fable (ceiling), read-only, 2026-07-25. VERDICT: proceed-with-conditions.\n\nBinding conditions:\n- A (msn-22): queue wraps the `worktree.merge` CLI verb only — never dispatch-interlock.mjs; herding merge (human single-shot gesture, herding.mjs:11-13) untouched.\n- B (msn-22): define the drainer — enqueuer becomes processor when the lease frees, bounded-wait its turn; a position-returned merge NE"
+  },
+  "last_scribing_run": {
+    "feature": "multisession-native",
+    "date": "2026-07-25",
+    "at": "2026-07-25T11:24:56.318Z",
+    "areas_synced": [
+      "workflow-state",
+      "worktree-parallelism"
+    ],
+    "next_action": "close feature"
+  }
+}

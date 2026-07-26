@@ -1,6 +1,6 @@
 {
   "name": "bee",
-  "version": "1.15.0",
+  "version": "1.18.2",
   "description": "bee: validate-first agentic development skills — staged workflow with four human gates, evidence-based validation, bounded swarms over verified cells, and a compounding knowledge loop.",
   "author": {
     "name": "bee"
@@ -15,6 +15,7 @@
     "validate-first"
   ],
   "skills": "./.codex-plugin/skills/",
+  "hooks": "./packages/bee/hooks/hooks.json",
   "interface": {
     "displayName": "Bee",
     "shortDescription": "Validate-first skills for agentic software delivery",

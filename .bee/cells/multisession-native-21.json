@@ -1,0 +1,126 @@
+{
+  "id": "multisession-native-21",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Write guard rewired onto resolveContext + leases + workspace ownership",
+  "action": "guards.mjs checkWrite resolves through resolveContext: hard denies from (a) another workspace's exclusive-path hold (msn-14 policy unchanged), (b) another session's exact-path lease in the SAME workspace, (c) writing without write ownership in a workspace that has a live owner (policy modes msn-20). Advisory warnings unchanged. Remove lane-cache special cases made redundant by workflow-record routing (enumerate removals in report; keep behavior for legacy no-records repos). Hook posture unchanged: try-once, fail-open on crash, never waits. Worktree-topology guard test in --impacted scope (advisor condition 7). Regen inside this cell: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed). Canonical source: skills/bee-hive/templates/.",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-20"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/guards.mjs",
+    "hooks/bee-write-guard.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".bee/bin/lib/lease-store.mjs",
+    ".bee/bin/lib/worktree-holds.mjs",
+    ".bee/bin/lib/workspace-store.mjs",
+    "docs/history/multisession-native/reports/advisor-digest-slice4.md",
+    "docs/history/multisession-native/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "same-workspace foreign exact lease hard-blocks (test)",
+      "non-owner write in owned workspace refuses with ownership message (test)",
+      "legacy no-records repo byte-identical guard behavior (test)",
+      "hook never waits on a store lock (regression)",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no new hard-block class beyond the three enumerated"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D2/D3"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "m",
+    "11": "u",
+    "12": "c",
+    "13": " ",
+    "14": "5",
+    "15": "/",
+    "16": "6",
+    "17": ";",
+    "18": " ",
+    "19": "D",
+    "20": "2",
+    "21": "/",
+    "22": "D",
+    "23": "3",
+    "24": " ",
+    "25": "i",
+    "26": "n",
+    "27": "v",
+    "28": "a",
+    "29": "r",
+    "30": "i",
+    "31": "a",
+    "32": "n",
+    "33": "t",
+    "34": " ",
+    "35": "1",
+    "36": "5",
+    "37": " ",
+    "38": "g",
+    "39": "r",
+    "40": "o",
+    "41": "u",
+    "42": "n",
+    "43": "d",
+    "44": "w",
+    "45": "o",
+    "46": "r",
+    "47": "k",
+    "worker": "msn-w21",
+    "outcome": "checkWrite unified onto one resolveContext resolution; class (b) leases scoped same-workspace; class (c) workspace-ownership deny added, scoped to isolated-mode default-path writes",
+    "files_changed": [
+      "skills/bee-hive/templates/lib/guards.mjs",
+      "hooks/bee-write-guard.mjs",
+      "skills/bee-hive/templates/tests/test_guards.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "scripts/impact-registry.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T09:14:47.659Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"summary\": \"node scripts/run_verify.mjs --impacted: 106 suites, 0 failures; release_manifest.mjs --check and ledger_parity.mjs --check both green. test_guards.mjs: 48 passed (41 pre-existing + 7 new msn-21 rows), 0 failed.\", \"tail\": \"PASS     113ms  skills/bee-hive/templates/tests/test_workflow_store.mjs\\nPASS     155ms  skills/bee-hive/templates/tests/test_workspace_store.mjs\\nPASS     332ms  skills/bee-hive/templates/tests/test_worktree_store.mjs\\nPASS     304ms  skills/bee-hive/templates/tests/test_write_policy.mjs\\n\\nPASS run_verify: 106 suite(s), concurrency=5, wall=63646ms\\nrelease_manifest --check: 547 file(s) match stored manifest\\nledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\\n\", \"red_failure_evidence\": \"BEFORE this cell: checkWrite's cross-session hold check (findSessionConflicts) hard-blocked a foreign session's exact lease regardless of physical workspace (no workspace_id scoping at all) -- the new 'a foreign session's exact lease taken in a DIFFERENT workspace never hard-blocks' assertion in test_guards.mjs would have FAILED red against the pre-cell code (it would have hard-blocked instead of allowing). checkWrite had NO workspace-ownership concept whatsoever pre-cell -- workspace-store.mjs existed from msn-19 but guards.mjs never imported or consulted it; the new 'checkWrite (msn-21, deny class (c))' test asserting kind:'workspace-ownership' would have FAILED red (pre-cell checkWrite has no such kind and would have returned allow:true unconditionally for a non-owner write). checkWrite also called resolveContext(root) (lane path) and resolveRoots(root) (cross-worktree path) as TWO separate topology resolutions pre-cell; post-cell there is exactly one resolveWriteTopology(root, controlRootOverride) call feeding every branch, verified by the msn-21 worktree-topology test resolving the ownership check against MAIN's control store from a linked worktree with no workspace store of its own.\"}",
+    "verify_output": "HEARTBEAT: 5 suite(s) still running after 30.0s: skills/bee-hive/scripts/test_onboard_bee.mjs (15.1s), skills/bee-hive/templates/tests/test_bee_cli.mjs (13.0s), skills/bee-hive/templates/tests/test_cli_state.mjs (6.1s), skills/bee-hive/templates/tests/test_decisions_propagation.mjs (3.2s), skills/bee-hive/templates/tests/test_herding_cli.mjs (0.2s)\nHEARTBEAT: 1 suite(s) still running after 60.0s: scripts/test_installers_e2e.mjs --installer bash (22.6s)\nPASS     119ms  .bee/bin/bee.mjs knowledge check\nPASS     117ms  .bee/bin/bee.mjs knowledge index --check\nPASS    1164ms  hooks/test_bypass_stop_net.mjs\nPASS   12290ms  hooks/test_hook_contracts.mjs\nPASS    4013ms  hooks/test_model_guard.mjs\nPASS    7910ms  hooks/test_write_guard.mjs\nPASS      63ms  scripts/backlog_uniqueness.mjs --check\nPASS      42ms  scripts/census_stale_spawn_syntax.mjs\nPASS      51ms  scripts/ledger_parity.mjs --check\nPASS      73ms  scripts/okf_instructions_fence.mjs\nPASS     155ms  scripts/okf_instructions_fence.mjs --selftest\nPASS     691ms  scripts/okf_migrate.mjs --check advisor-protocol\nPASS     633ms  scripts/okf_migrate.mjs --check decision-memory\nPASS     654ms  scripts/okf_migrate.mjs --check doctrine-layer\nPASS     644ms  scripts/okf_migrate.mjs --check feedback-digest\nPASS     687ms  scripts/okf_migrate.mjs --check hook-runtime\nPASS     649ms  scripts/okf_migrate.mjs --check okf-profile\nPASS     665ms  scripts/okf_migrate.mjs --check onboarding\nPASS     641ms  scripts/okf_migrate.mjs --check performance-log\nPASS     649ms  scripts/okf_migrate.mjs --check verify-pipeline\nPASS     681ms  scripts/okf_migrate.mjs --check workflow-state\nPASS     662ms  scripts/okf_migrate.mjs --check worktree-parallelism\nPASS     685ms  scripts/okf_migrate.mjs --check-patterns\nPASS      56ms  scripts/okf_specs_fence.mjs\nPASS      96ms  scripts/okf_specs_fence.mjs --selftest\nPASS      93ms  scripts/release_manifest.mjs --check\nPASS     103ms  scripts/release_manifest.mjs --selftest\nPASS      38ms  scripts/test_agents_budget.mjs\nPASS     169ms  scripts/test_bump_version.mjs\nPASS      39ms  scripts/test_bypass_matrix.mjs\nPASS      45ms  scripts/test_ci_verify_issue.mjs\nPASS     937ms  scripts/test_claim_race.mjs\nPASS     431ms  scripts/test_compact_capsule.mjs\nPASS     679ms  scripts/test_compact_verbs.mjs\nPASS    1393ms  scripts/test_compaction_advisories.mjs\nPASS     250ms  scripts/test_compaction_module.mjs\nPASS      51ms  scripts/test_config_samples_safe.mjs\nPASS      65ms  scripts/test_config_validate.mjs\nPASS    2340ms  scripts/test_conformance.mjs\nPASS    1997ms  scripts/test_dispatch_prepare.mjs\nPASS     104ms  scripts/test_doctrine_parity.mjs\nPASS      44ms  scripts/test_gate_bypass_doctrine.mjs\nPASS     430ms  scripts/test_heartbeat_touch.mjs\nPASS     611ms  scripts/test_hook_vendor_closure.mjs\nPASS    2036ms  scripts/test_impact_registry.mjs\nPASS     127ms  scripts/test_install_ps1_flow.mjs\nPASS   26215ms  scripts/test_installers_e2e.mjs --installer bash\nPASS      64ms  scripts/test_ledger_parity.mjs\nPASS      66ms  scripts/test_lib_mirror.mjs\nPASS     780ms  scripts/test_native_probe.mjs\nPASS     415ms  scripts/test_nested_clone_isolation.mjs\nPASS   10094ms  scripts/test_okf_pins.mjs\nPASS      48ms  scripts/test_portable_paths.mjs\nPASS      38ms  scripts/test_release_tuple.mjs\nPASS     999ms  scripts/test_render_race.mjs\nPASS     310ms  scripts/test_reservation_race.mjs\nPASS     105ms  scripts/test_resolveroots_p40.mjs\nPASS    1316ms  scripts/test_run_verify_impacted.mjs\nPASS     486ms  scripts/test_run_verify_only.mjs\nPASS     193ms  scripts/test_run_verify_skip_marker.mjs\nPASS      59ms  scripts/test_skill_pointers.mjs\nPASS     369ms  scripts/test_skill_render.mjs\nPASS     406ms  scripts/test_state_write_concurrency.mjs\nPASS   12789ms  scripts/test_store_lock.mjs\nPASS      62ms  scripts/test_verify_manifest.mjs\nPASS    1163ms  scripts/test_verify_timeout.mjs\nPASS   12359ms  scripts/test_worktree_cli.mjs\nPASS    1155ms  scripts/test_worktree_companion.mjs\nPASS     140ms  scripts/test_worktree_grant_resolve.mjs\nPASS     673ms  scripts/test_worktree_holds_race.mjs\nPASS    2157ms  scripts/test_worktree_holds.mjs\nPASS      96ms  scripts/test_worktree_store.mjs\nPASS   41826ms  skills/bee-hive/scripts/test_onboard_bee.mjs\nPASS     523ms  skills/bee-hive/scripts/test_plugin_distribution.mjs\nPASS     410ms  skills/bee-hive/scripts/test_split_brain_regression.mjs\nPASS     886ms  skills/bee-hive/templates/tests/test_backlog_capture.mjs\nPASS   26637ms  skills/bee-hive/templates/tests/test_bee_cli.mjs\nPASS    2309ms  skills/bee-hive/templates/tests/test_bee_write_guard_hook.mjs\nPASS     236ms  skills/bee-hive/templates/tests/test_bundle_mode.mjs\nPASS     866ms  skills/bee-hive/templates/tests/test_cells.mjs\nPASS    9855ms  skills/bee-hive/templates/tests/test_claims.mjs\nPASS    3720ms  skills/bee-hive/templates/tests/test_cli_cells.mjs\nPASS    9833ms  skills/bee-hive/templates/tests/test_cli_state.mjs\nPASS     720ms  skills/bee-hive/templates/tests/test_config_validate.mjs\nPASS     523ms  skills/bee-hive/templates/tests/test_contention_status.mjs\nPASS    6436ms  skills/bee-hive/templates/tests/test_decisions_propagation.mjs\nPASS     246ms  skills/bee-hive/templates/tests/test_feedback.mjs\nPASS      88ms  skills/bee-hive/templates/tests/test_guards_tokenizer.mjs\nPASS     224ms  skills/bee-hive/templates/tests/test_guards.mjs\nPASS     969ms  skills/bee-hive/templates/tests/test_herding_cli.mjs\nPASS    1205ms  skills/bee-hive/templates/tests/test_herding.mjs\nPASS     124ms  skills/bee-hive/templates/tests/test_intent.mjs\nPASS    4825ms  skills/bee-hive/templates/tests/test_knowledge.mjs\nPASS      96ms  skills/bee-hive/templates/tests/test_lease_store.mjs\nPASS    3455ms  skills/bee-hive/templates/tests/test_misc.mjs\nPASS      60ms  skills/bee-hive/templates/tests/test_perf.mjs\nPASS     154ms  skills/bee-hive/templates/tests/test_recovery.mjs\nPASS     107ms  skills/bee-hive/templates/tests/test_reservations.mjs\nPASS    2634ms  skills/bee-hive/templates/tests/test_reviews.mjs\nPASS     425ms  skills/bee-hive/templates/tests/test_scratch.mjs\nPASS     155ms  skills/bee-hive/templates/tests/test_state_projection.mjs\nPASS     207ms  skills/bee-hive/templates/tests/test_state.mjs\nPASS     113ms  skills/bee-hive/templates/tests/test_workflow_store.mjs\nPASS     155ms  skills/bee-hive/templates/tests/test_workspace_store.mjs\nPASS     332ms  skills/bee-hive/templates/tests/test_worktree_store.mjs\nPASS     304ms  skills/bee-hive/templates/tests/test_write_policy.mjs\n\nPASS run_verify: 106 suite(s), concurrency=5, wall=63646ms\nrelease_manifest --check: 547 file(s) match stored manifest\nledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\n",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-25T09:04:03.003Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-25T09:14:40.243Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T09:14:40.243Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T09:04:03.001Z",
+        "acquired_at": "2026-07-25T09:04:03.001Z",
+        "worker": "msn-w21",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

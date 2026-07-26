@@ -39,3 +39,12 @@ authority:
   JSONL is read directly.
 - **R3** — Failures are recorded too (`ok:false`), so slowness and breakage
   in the same command are visible in one place.
+- **R4 — Telemetry is exempt from state-integrity hashes (release-1-15-0
+  rb-2/rb-3, 2026-07-24).** Everything under `.bee/logs/` is fail-open,
+  append-only runtime telemetry — never managed content and never state. Two
+  tree-hash guards (compact-check's mutates-nothing control and the repeat-
+  install byte-idempotence check) went red the day self-timing shipped,
+  because every CLI invocation appends a timing line; both now exempt
+  `.bee/logs/**` as a directory-scoped convention, and the compact-check
+  exemption is paired with a negative control proving a genuine state
+  mutation still turns the check red.

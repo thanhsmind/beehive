@@ -131,7 +131,7 @@ No live checkout is used as a fault-injection target.
 <!-- bee:only codex -->
 | | Codex |
 |---|---|
-| Spawn | `spawn_agent({task_name: "<stable-name>", message: "<WORKER_PROMPT>", fork_turns: "none"})` (ORCH-01) |
+| Spawn | `spawn_agent({task_name: "<stable-name>", message: "<WORKER_PROMPT>", fork_turns: "none"})` (ORCH-01) — the live-probed codex 0.145.0 schema (i54-closeout D1): `task_name` + `message` required, no `agent_type` field; `bee dispatch prepare --runtime codex` emits exactly this shape, and the guard judges the `[bee-tier: <t>]` marker at the START of `message` for every `spawn_agent` payload |
 | Model tier | `config.models.codex[tier]` if set; today Codex cannot select a per-agent model → tier is enforced as a read budget + output cap in the prompt |
 | Result collection | Status tokens arrive in the parent thread; use `wait_agent(..., timeout_ms=60000)` only when a specific result is needed |
 | Follow-up / rescue | `followup_task({target: "<agent id or task name>", message: "..."})` to continue the same agent; a fresh `spawn_agent` only for a genuinely new task — no routine `send_input(...)` mid-flight |

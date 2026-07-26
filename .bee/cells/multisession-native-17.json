@@ -1,0 +1,95 @@
+{
+  "id": "multisession-native-17",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "resolveContext(cwd) replaces resolveRoots",
+  "action": "RECOVERED RECORD — work already landed in commit bd8f755 (resolveContext beside resolveRoots-as-wrapper in lib/state.mjs, two-topology tests, herding/command-registry tracking comments); original cell JSON was lost to a worker git-stash incident before it could be committed. This record exists to restore bookkeeping; verify freshly then cap citing bd8f755. Regen inside this cell: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed). Canonical source: skills/bee-hive/templates/.",
+  "behavior_change": true,
+  "deps": [],
+  "files": [
+    "skills/bee-hive/templates/lib/state.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-hive/templates/lib/state.mjs",
+    "docs/history/multisession-native/reports/advisor-digest-slice4.md",
+    "docs/history/multisession-native/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "resolveContext from main AND linked worktree (tests exist, bd8f755)",
+      "resolveRoots compat wrapper byte-identical",
+      "workspaceId stable",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no store path changes in this cell"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D2/D3"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "r",
+    "1": "e",
+    "2": "c",
+    "3": "o",
+    "4": "v",
+    "5": "e",
+    "6": "r",
+    "7": "e",
+    "8": "d",
+    "9": ";",
+    "10": " ",
+    "11": "w",
+    "12": "o",
+    "13": "r",
+    "14": "k",
+    "15": " ",
+    "16": "i",
+    "17": "n",
+    "18": " ",
+    "19": "b",
+    "20": "d",
+    "21": "8",
+    "22": "f",
+    "23": "7",
+    "24": "5",
+    "25": "5",
+    "worker": "orchestrator-recovery",
+    "outcome": null,
+    "files_changed": [
+      "skills/bee-hive/templates/lib/state.mjs",
+      "skills/bee-hive/templates/tests/test_state.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T08:12:14.279Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"summary\":\"Recovered cell record; implementation landed in commit bd8f755 by worker msn-w17 (resolveContext beside resolveRoots wrapper, two-topology tests, herding/command-registry tracking notes). Fresh re-verify at recovery time: run_verify --impacted PASS 105 suites; release_manifest --check 544 match; ledger_parity match.\",\"red_failure_evidence\":\"Original red-first was recorded at the bd8f755 cap by msn-w17 (brand-new API — deliberate_exceptions door: no prior behavior to regress; negative controls in test_state.mjs). This recovered record cites that commit; the cell JSON itself was lost to a git-stash incident before commit.\",\"deliberate_exceptions\":\"cap-by-recovery: capping a recreated record for work already merged and re-verified green, not fresh implementation.\"}",
+    "verify_output": "RECOVERY re-verify 2026-07-25: run_verify --impacted PASS 105 suites (wall 64s); release_manifest --check 544 files match; ledger_parity --check match. Original work landed in commit bd8f755 (verified green at original cap by worker msn-w17; cell record lost to git-stash incident, recreated).",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-25T08:10:48.254Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-25T08:12:05.505Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T08:12:05.505Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T08:10:48.252Z",
+        "acquired_at": "2026-07-25T08:10:48.252Z",
+        "worker": "orchestrator-recovery",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

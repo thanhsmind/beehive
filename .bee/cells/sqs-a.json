@@ -1,0 +1,87 @@
+{
+  "id": "sqs-a",
+  "lane": "standard",
+  "title": "Guard: block inline-eval reaches into bin/lib internals; FIX names the paved read",
+  "feature": "state-query-surface",
+  "behavior_change": true,
+  "deps": [],
+  "files": [
+    "skills/bee-hive/templates/lib/guards.mjs",
+    ".bee/bin/lib/guards.mjs",
+    "hooks/test_write_guard.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/state-query-surface/plan.md",
+    "docs/history/state-query-surface/reports/feasibility-gather.md"
+  ],
+  "action": "Per D 3fbe2f79: add exported checkBinLibImportBashCommand(command) to lib/guards.mjs that DENIES a Bash command which is an inline eval (node -e / --eval / -p) whose script text imports/requires a bin/lib or templates/lib module; return {allow:false, reason} else null. Wire it into bee-write-guard.mjs Bash branch alongside checkGitBashCommand (~834-848), surfacing an ERROR/WHY/FIX denial whose FIX names 'bee status --json' and 'bee <group> --help --json' as the paved read. Then run the regen sequence INSIDE this cell in order: node scripts/render_plugin_skill_trees.mjs, then node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "Only inline-eval (node -e/--eval/-p) reaches are denied",
+      "globalScribingDebt is already public in status --json.scribing_debt",
+      "the Bash tool_input.command allow/deny scaffold lives in hooks/test_write_guard.mjs (NOT test_hook_contracts.mjs — gather Q5 ref was wrong)"
+    ],
+    "artifacts": [
+      "checkBinLibImportBashCommand in lib/guards.mjs",
+      "wiring in bee-write-guard.mjs Bash branch",
+      "two-direction negative control in hooks/test_write_guard.mjs: inline node -e import(bin/lib) DENIED, file-based node x.mjs import ALLOWED"
+    ],
+    "key_links": [
+      "D 3fbe2f79"
+    ],
+    "prohibitions": [
+      "NEVER block file-based node <path>.mjs runs — tests import lib legitimately",
+      "no byte drift between templates/lib and .bee/bin/lib mirror"
+    ]
+  },
+  "verify": "node hooks/test_write_guard.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "sqs-a-worker",
+    "outcome": "Added checkBinLibImportBashCommand to guards.mjs (canonical skills/bee-hive/templates/lib, propagated to .bee/bin/lib + 4 plugin mirrors); wired into hooks/bee-write-guard.mjs's Bash branch alongside checkGitBashCommand. Denies an inline-eval node -e/--eval/-p Bash command whose script text imports/requires a bin/lib/ or templates/lib/ module; FIX names bee status --json and bee <group> --help --json as the paved read. Never touches file-based node <path>.mjs runs. Two-direction negative control added to hooks/test_write_guard.mjs (row70 deny, row71 allow). Regen sequence run; mirrors byte-identical.",
+    "files_changed": [
+      "skills/bee-hive/templates/lib/guards.mjs",
+      ".bee/bin/lib/guards.mjs",
+      ".agents/skills/bee-hive/templates/lib/guards.mjs",
+      ".claude-plugin/skills/bee-hive/templates/lib/guards.mjs",
+      ".claude/skills/bee-hive/templates/lib/guards.mjs",
+      ".codex-plugin/skills/bee-hive/templates/lib/guards.mjs",
+      "hooks/bee-write-guard.mjs",
+      ".bee/bin/hooks/bee-write-guard.mjs",
+      "hooks/test_write_guard.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".agents/skills/.bee-render.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude/skills/.bee-render.json",
+      ".codex-plugin/skills/.bee-render.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T06:42:51.173Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"tests_inspected\":[\"hooks/test_write_guard.mjs (full suite, rows 1-71, 168 assertions)\"],\"tests_added_or_changed\":[\"hooks/test_write_guard.mjs rows 70-71: two-direction negative control for the internals-reach guard (row70 DENY inline node -e import(bin/lib/*), row71 ALLOW file-based node run importing lib/guards.mjs)\"],\"red_failure_evidence\":\"Before wiring guards.checkBinLibImportBashCommand into hooks/bee-write-guard.mjs Bash branch (function already existed in guards.mjs but was not yet called, and the .bee/bin/lib mirror the test fixture copies from had not been synced): `node hooks/test_write_guard.mjs` -> FAIL row70: inline `node -e` importing bin/lib/cells.mjs is denied (exit 2) :: status=0 stderr= ; FAIL row70: stderr names the paved read bee status --json ; FAIL row70: stderr names the paved read bee <group> --help --json ; ok row71 (file-based node run) already passed pre-fix since nothing yet existed to wrongly block it. Overall tail: `3 FAILURE(S)`.\",\"verification_run\":\"After implementing checkBinLibImportBashCommand in guards.mjs, wiring it into bee-write-guard.mjs Bash branch, and running the regen sequence (render_plugin_skill_trees.mjs -> onboard_bee.mjs --repo-root . --apply -> release_manifest.mjs --write): `node hooks/test_write_guard.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check` -> ALL PASS (168 assertions incl. row70 DENY + row71 ALLOW); release_manifest --check: 510 file(s) match stored manifest; ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger.\"}",
+    "verify_output": "test_write_guard.mjs: ALL PASS (incl. new row70 DENY inline node -e import(bin/lib/cells.mjs) + names bee status --json / bee <group> --help --json; row71 ALLOW file-based node run importing lib/guards.mjs). release_manifest --check: 510 file(s) match stored manifest. ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger.",
+    "verify_passed": true,
+    "claim_session": "fb0da4af-c6ae-43d6-b0e3-1b1a689e161e",
+    "claimed_at": "2026-07-24T06:35:02.217Z",
+    "verify_command": "node hooks/test_write_guard.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-24T06:42:15.775Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T06:42:15.775Z",
+        "claim_session": "fb0da4af-c6ae-43d6-b0e3-1b1a689e161e",
+        "claimed_at": "2026-07-24T06:36:00.721Z",
+        "acquired_at": "2026-07-24T06:35:02.216Z",
+        "worker": "sqs-a-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

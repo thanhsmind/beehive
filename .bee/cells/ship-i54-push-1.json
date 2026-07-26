@@ -1,0 +1,54 @@
+{
+  "id": "ship-i54-push-1",
+  "feature": "ship-i54-push",
+  "lane": "tiny",
+  "title": "Push main (i54-closeout, 12 commits) to origin",
+  "files": [],
+  "read_first": [],
+  "action": "Push local main to origin/main: 12 commits from the i54-closeout feature (cells 1-10, scribing sync, close). Mode-gate record: 0 flags, 0 product files, one direct outward-facing task — tiny. User explicitly requested the push; feature closed unreviewed with a review candidate registered. CI on push runs the full suite and auto-files verify-red if red.",
+  "must_haves": {
+    "truths": [
+      "origin/main equals local HEAD after the push"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no force push",
+      "no tag creation (not a release)"
+    ]
+  },
+  "behavior_change": false,
+  "verify": "git fetch -q origin main && [ \"$(git rev-parse origin/main)\" = \"$(git rev-parse HEAD)\" ] && echo push-verified",
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "orchestrator",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T11:21:37.658Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "git push origin main: 8e26948..2f11cb4 main -> main; origin/main == HEAD; push-verified",
+    "verify_passed": true,
+    "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+    "claimed_at": "2026-07-24T11:20:56.704Z",
+    "verify_command": "git fetch -q origin main && git merge-base --is-ancestor HEAD origin/main && echo push-verified",
+    "verified_at": "2026-07-24T11:21:37.588Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T11:21:37.588Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T11:20:56.703Z",
+        "acquired_at": "2026-07-24T11:20:56.703Z",
+        "worker": "orchestrator",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

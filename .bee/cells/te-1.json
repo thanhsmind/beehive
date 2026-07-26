@@ -1,0 +1,193 @@
+{
+  "id": "te-1",
+  "feature": "test-economy",
+  "lane": "standard",
+  "behavior_change": true,
+  "title": "Proof-tier theo change_class × lane trong capCell + handler diff_stats (test-economy D1/D2/D8)",
+  "action": "Per test-economy D1/D2 (CONTEXT.md — cite, không reinterpret). (1) cells.mjs canonical (skills/bee-hive/templates/lib/cells.mjs): thêm 'refactor' vào CHANGE_CLASSES :85; hàm requiredProofTier(change_class, lane) per bảng D1 đủ 7 nhánh (refactor/formatting = suite sẵn xanh + CẤM file test mới, new_suite_reason không cứu, red-first KHÔNG áp kể cả high-risk — pin plan rev3; bugfix/behavior/api tiny..standard = targeted-green; security/migration mọi lane + high-risk cho class-có-hành-vi = red-first giữ nguyên sàn 80-char + chống trùng; null bc=false = như cũ không matrix; null bc=true = derive behavior). Thu hẹp guard 0009 :1793-1820 và sàn self-correcting-loop :1826-1856 đúng phạm vi trên. Comment dùng id 'test-economy D#'. (2) bee.mjs canonical handler cells cap (caller duy nhất :1361): helper git mới (spawnSync :38; runBacklogGit :3600 local-cho-backlog, không dùng) tính diff_stats={new_test_files[],test_lines_added,source_lines_changed} — numstat cho tracked + đếm dòng untracked ?? qua git status --porcelain; DEDUPE mirror: loại path .bee/bin/, .claude/skills/, .agents/skills/, .claude-plugin/, .codex-plugin/ khỏi cả hai phía; git lỗi/không repo ⇒ diff_stats=undefined (fail-open) + warning vào .bee/logs/hooks.jsonl. capCell nhận diff_stats qua options-object :1704 (undefined ⇒ mọi check mới skip). (3) Mỗi assertion red-first bị nới trong test hiện có kèm row negative-control chiều ngược CÙNG commit (D8). (4) Regen TRONG cell theo thứ tự: node scripts/render_plugin_skill_trees.mjs → node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply → node scripts/release_manifest.mjs --write; files_changed lúc cap gồm đủ mirror + .bee/onboarding.json + release-manifest.json. LƯU Ý meta: sau onboard --apply, cap của CHÍNH cell này chạy dưới luật mới — khai change_class behavior, evidence JSON.",
+  "must_haves": {
+    "truths": [
+      "requiredProofTier phủ đủ 7 nhánh class × lane đúng bảng D1 CONTEXT.md, cite 'test-economy D#' trong comment",
+      "security/migration mọi lane và high-risk (class có hành vi hoặc bc=true) VẪN refuse cap khi thiếu red_failure_evidence ≥80 chars — negative-control table-driven trong test_cells.mjs",
+      "bugfix×small và null×standard bc=true cap PASS với targeted-green evidence, không red proof",
+      "refactor×standard và refactor×high-risk: file test_*.mjs mới trong diff_stats ⇒ refuse, không red-first",
+      "no-git tmpdir fixture: cap pass (fail-open) + warning ghi logs/hooks.jsonl",
+      "diff_stats dedupe mirror: path 5 cây mirror không đóng góp tử/mẫu số",
+      "mirrors byte-identical + manifest khớp (test_lib_mirror, ledger_parity, release_manifest --check xanh)"
+    ],
+    "prohibitions": [
+      "không file test_*.mjs mới (thêm row vào test_cells.mjs/test_bee_cli.mjs)",
+      "không sửa mirror tay",
+      "không nới nhánh security/migration/high-risk"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only test_cells,test_bee_cli && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "docs/history/test-economy/CONTEXT.md",
+    "docs/history/test-economy/plan.md",
+    "skills/bee-hive/templates/lib/cells.mjs",
+    "skills/bee-hive/templates/bee.mjs"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/cells.mjs",
+    "skills/bee-hive/templates/bee.mjs",
+    "skills/bee-hive/templates/tests/test_cells.mjs",
+    "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [],
+  "decisions": [
+    "test-economy D1",
+    "test-economy D2",
+    "test-economy D8"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "te-worker-1",
+    "outcome": "Proof-tier (requiredProofTier) wired into capCell per test-economy D1/D2, plus the bee.mjs cells-cap handler's computeDiffStats (git numstat/status, 5-mirror dedupe, fail-open+warning on no-git) and the D1 refactor/formatting new-test-file refusal. Paired keep/loosen D8 negative-control tables added to test_cells.mjs + 4 real-git e2e rows added to test_bee_cli.mjs.",
+    "files_changed": [
+      "skills/bee-hive/templates/lib/cells.mjs",
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/tests/test_cells.mjs",
+      "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".agents/skills/bee-hive/templates/lib/cells.mjs",
+      ".agents/skills/bee-hive/templates/bee.mjs",
+      ".agents/skills/bee-hive/templates/tests/test_cells.mjs",
+      ".agents/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".agents/skills/.bee-render.json",
+      ".claude/skills/bee-hive/templates/lib/cells.mjs",
+      ".claude/skills/bee-hive/templates/bee.mjs",
+      ".claude/skills/bee-hive/templates/tests/test_cells.mjs",
+      ".claude/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".claude/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/templates/lib/cells.mjs",
+      ".claude-plugin/skills/bee-hive/templates/bee.mjs",
+      ".claude-plugin/skills/bee-hive/templates/tests/test_cells.mjs",
+      ".claude-plugin/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/templates/lib/cells.mjs",
+      ".codex-plugin/skills/bee-hive/templates/bee.mjs",
+      ".codex-plugin/skills/bee-hive/templates/tests/test_cells.mjs",
+      ".codex-plugin/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".codex-plugin/skills/.bee-render.json",
+      ".bee/bin/bee.mjs",
+      ".bee/bin/lib/cells.mjs",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T13:04:12.807Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": \"skills/bee-hive/templates/tests/test_cells.mjs (jsm-missing-1/jsm-short-1/jsm-dup-a/jsm-dup-b/jsm-green-1/jsm-exception-1/jsm-corrupt-check — the D3 red-first cap-teeth rows) and skills/bee-hive/templates/tests/test_bee_cli.mjs (the D3 JUDGE_STANDARD matrix + demo-2 cap rows) were read before any new row was added, per D5.\",\n  \"tests_added_changed\": \"test_cells.mjs: moved 7 existing jsm-* rows (missing-1/short-1/dup-a/dup-b/green-1/exception-1/corrupt-check) to lane:'high-risk' (they were 'small' by makeCell default, which is now targeted-green and would no longer exercise red-first) + added must_haves.truths those lanes require; added 8 new checks - requiredProofTier 18-case table, D2-loosen table (bugfix x small, null-standard bc=true targeted-green pass), D2-keep negative-control table (security x tiny, migration x small, null-high-risk bc=true still refuse), D2 pin regression guard (null x high-risk bc=false unaffected), D1 refactor+new-test-file refuse table (standard + high-risk), D1 refactor high-risk suite-green pass, D1 diff_stats-undefined fail-open pass; updated the stale CHANGE_CLASSES.length===6 assertion to 7. test_bee_cli.mjs: added 4 real-git e2e checks (dedicated git-init tmpdir) - refactor cap clean over tracked-only diff, refactor cap REFUSED over a real untracked new test file (new_suite_reason does not override), mirror-prefix (.bee/bin/) dedupe exempts a new test-shaped file, and a dedicated no-git tmpdir proving the cap still succeeds AND a computeDiffStats warning line lands in .bee/logs/hooks.jsonl. No new test FILES were created - every row lives inside these two existing suites.\",\n  \"red_failure_evidence\": \"Before this cell, capCell's decision-0009 'before' check and the D3 self-correcting-loop 80-char/anti-duplicate floor fired for EVERY behavior_change:true (or change_class:'behavior') cell regardless of lane - confirmed by re-running the pre-edit test_cells.mjs jsm-missing-1/jsm-short-1 rows unmodified at their original lane:'small' (makeCell default) against the OLD capCell: both still threw 'is missing verification_evidence.red_failure_evidence' / 'the D3 judge-standard matrix requires >=80 chars', proving small-lane behavior-class caps used to hard-refuse without red evidence. Under the new proof-tier matrix (test-economy D1/D2) that same small-lane shape is now 'targeted-green' and must PASS without red_failure_evidence - exactly what the new D2-loosen row (bugfix x small, null-standard bc=true) now asserts, while the moved-to-high-risk jsm-* rows keep proving the identical missing/short/duplicate red_failure_evidence throws still fire where D1/D2 actually pin red-first (high-risk lane, or security/migration in any lane) - the paired keep/loosen table-driven rows are the D8 negative control for this exact narrowing.\",\n  \"verification_run\": \"node scripts/run_verify.mjs --only test_cells,test_bee_cli: PASS test_cells.mjs (124 checks, was 117) + PASS test_bee_cli.mjs (294 checks, was 290); node scripts/release_manifest.mjs --check: 560 file(s) match stored manifest. Also spot-ran --only test_lib_mirror,test_ledger_parity green (mirrors byte-identical, ledger consistent) though not part of this cell's own verify command.\"\n}\n",
+    "verify_output": "test_cells.mjs: 124 passed 0 failed (was 117 before te-1: +7 new checks, 7 jsm-* rows moved to lane high-risk). test_bee_cli.mjs: 294 passed 0 failed (was 290: +4 new e2e diff_stats checks). release_manifest --check: 560 file(s) match stored manifest.",
+    "verify_passed": true,
+    "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+    "claimed_at": "2026-07-25T12:39:00.167Z",
+    "verify_command": "node scripts/run_verify.mjs --only test_cells,test_bee_cli && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-25T13:03:09.612Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T13:03:09.612Z",
+        "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+        "claimed_at": "2026-07-25T12:43:29.735Z",
+        "acquired_at": "2026-07-25T12:39:00.165Z",
+        "worker": "te-worker-1",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-matrix-7-branches",
+            "status": "PASS",
+            "evidence": "cells.mjs:124 requiredProofTier covers 7 classes per D1; CHANGE_CLASSES :89 has 7 incl refactor; comments cite test-economy D1/D2/D8; 18-case table-driven unit test"
+          },
+          {
+            "id": "truth2-red-first-keep-80char",
+            "status": "PASS",
+            "evidence": "cells.mjs:1875/:1907 gate on proofTier==='red-first'; RED_EVIDENCE_MIN_CHARS=80 :1730 + anti-dup :1738 unchanged; keep rows te1-sec-tiny/te1-mig-small/te1-null-hr-bc refuse without red evidence"
+          },
+          {
+            "id": "truth3-loosen-bugfix-small-null-standard",
+            "status": "PASS",
+            "evidence": "rows te1-bugfix-small + te1-null-standard-bc cap on targeted-green without red_failure_evidence"
+          },
+          {
+            "id": "truth4-refactor-newtestfile-refuse",
+            "status": "PASS",
+            "evidence": "cells.mjs:1855-1864 refuse refactor/formatting with new_test_files, new_suite_reason no override; unit rows standard+high-risk; e2e test_bee_cli.mjs:4186 real untracked test file"
+          },
+          {
+            "id": "truth5-nogit-failopen-warning",
+            "status": "PASS",
+            "evidence": "bee.mjs computeDiffStats catch :1471-1478 appends warning to .bee/logs/hooks.jsonl, returns undefined; e2e :4244 no-git cap succeeds + warning found"
+          },
+          {
+            "id": "truth6-mirror-dedupe",
+            "status": "PASS",
+            "evidence": "bee.mjs:1365 5 mirror prefixes filtered before numerator+denominator; e2e :4217 .bee/bin/test_mirror_thing.mjs excluded"
+          },
+          {
+            "id": "truth7-mirrors-manifest",
+            "status": "PASS",
+            "evidence": "run_verify --only test_cells,test_bee_cli,test_lib_mirror,test_ledger_parity all PASS; release_manifest --check 560 files match; cmp canonical vs 5 mirrors zero diff"
+          },
+          {
+            "id": "prohibition-no-new-test-files",
+            "status": "PASS",
+            "evidence": "git show df13878 --diff-filter=A --name-only prints only .bee/cells/te-1.json"
+          },
+          {
+            "id": "prohibition-no-hand-edited-mirror",
+            "status": "PASS",
+            "evidence": "cmp zero differences across all mirrors; ledger+manifest updated same commit consistent with regen scripts"
+          },
+          {
+            "id": "prohibition-no-loosening-security-migration-highrisk",
+            "status": "PASS",
+            "evidence": "security/migration red-first unconditional (net tightening: bc=false security previously escaped, now cannot); 80-char floor byte-unchanged on those branches"
+          },
+          {
+            "id": "highrisk-refactor-pin-is-sanctioned",
+            "status": "PASS",
+            "evidence": "plan.md:18 pin quoted verbatim in code comment cells.mjs:106-110; paired D8 rows refuse+pass exist"
+          },
+          {
+            "id": "action-alignment-null-bcfalse-pin",
+            "status": "PASS",
+            "evidence": "fallthrough return null; both guards keyed on red-first; regression row null-high-risk-bc=false caps clean"
+          },
+          {
+            "id": "action-alignment-api-class",
+            "status": "PASS",
+            "evidence": "api grouped with bugfix/behavior :126; table rows api standard=targeted-green, api high-risk=red-first"
+          },
+          {
+            "id": "action-alignment-enforcement-site",
+            "status": "PASS",
+            "evidence": "computeDiffStats in bee.mjs handler :1409, passed to capCell :1505; capCell git-free; runBacklogGit untouched"
+          },
+          {
+            "id": "verify-command-reproduced",
+            "status": "PASS",
+            "evidence": "judge re-ran cell verify read-only: both suites PASS, manifest 560 match — matches trace.verify_output"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-25T13:09:13.818Z"
+      }
+    ]
+  }
+}

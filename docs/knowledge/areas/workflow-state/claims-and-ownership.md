@@ -1,16 +1,16 @@
 ---
 type: bee.area
 title: "Workflow State — atomic claims, typed refusals, and who may mutate a claimed unit"
-description: "The single-winner claim primitive every claim path shares, the typed refusal a loser receives instead of a crash, the gate under which a live claim is adopted or reclaimed, and the ownership check — with its audited rescue door — that guards every mutation of a claimed unit."
-timestamp: 2026-07-22
+description: "The single-winner claim primitive every claim path shares, the typed refusal a loser receives instead of a crash, the gate under which a live claim is adopted or reclaimed, the fencing token that refuses a stale mutation once a claim has been adopted, and the ownership check — with its audited rescue door — that guards every mutation of a claimed unit."
+timestamp: 2026-07-25
 bee:
   id: workflow-state-claims-and-ownership
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["multi-session-hardening D1/D4 with Δ2/Δ5 amendments (docs/history/multi-session-hardening/CONTEXT.md; audit 12f54e88, locked 17a624dc)", fresh-session-handoff D1/D3 (atomic exclusive creation; gate-protected adoption and reclaim)]
-  sources: ["multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", "fresh-session-handoff S1 cells fsh-1/fsh-2 (race proofs on Linux/WSL2 and Windows, 2026-07-13)", "critical pattern 20260710 — never release another agent's holdings on a stall signal alone", "docs/specs/workflow-state.md#B11", "docs/specs/workflow-state.md#B23", "docs/specs/workflow-state.md#R17", "docs/specs/workflow-state.md#R18", "docs/specs/workflow-state.md#R36", "docs/specs/workflow-state.md#R39", "docs/specs/workflow-state.md#R40", "docs/specs/workflow-state.md#E19", "docs/specs/workflow-state.md#E20", "docs/specs/workflow-state.md#E21", "docs/specs/workflow-state.md#P13", "docs/specs/workflow-state.md#P18"]
-  authoritative_for: "workflow-state: claim exclusivity, typed contention refusals, and claimed-unit ownership"
+  decisions: ["multi-session-hardening D1/D4 with Δ2/Δ5 amendments (docs/history/multi-session-hardening/CONTEXT.md; audit 12f54e88, locked 17a624dc)", fresh-session-handoff D1/D3 (atomic exclusive creation; gate-protected adoption and reclaim), "multisession-native D4/D9 invariant 10 (slice 3: claims stamp and bump a fence_epoch on adoption; renew/release may present it and refuse typed CLAIM_FENCE_STALE when stale — docs/history/multisession-native/CONTEXT.md)"]
+  sources: ["multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", "fresh-session-handoff S1 cells fsh-1/fsh-2 (race proofs on Linux/WSL2 and Windows, 2026-07-13)", "critical pattern 20260710 — never release another agent's holdings on a stall signal alone", "docs/specs/workflow-state.md#B11", "docs/specs/workflow-state.md#B23", "docs/specs/workflow-state.md#R17", "docs/specs/workflow-state.md#R18", "docs/specs/workflow-state.md#R36", "docs/specs/workflow-state.md#R39", "docs/specs/workflow-state.md#R40", "docs/specs/workflow-state.md#E19", "docs/specs/workflow-state.md#E20", "docs/specs/workflow-state.md#E21", "docs/specs/workflow-state.md#P13", "docs/specs/workflow-state.md#P18", "multisession-native cell multisession-native-12 (fence_epoch on claims; trace .bee/cells/multisession-native-12.json, commit 8c002a1, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice3.md condition F)"]
+  authoritative_for: "workflow-state: claim exclusivity, typed contention refusals, claim fencing, and claimed-unit ownership"
 ---
 
 # Workflow State — atomic claims, typed refusals, and who may mutate a claimed unit
@@ -74,6 +74,31 @@ observes: normal single-session work is unaffected; a session that tries to
 mutate another live session's claimed work gets a clear refusal instead of
 silently overwriting it; a deliberate rescue always leaves a trace (D4).
 
+**A claim carries a fencing token that only widens on adoption, never
+narrows (multisession-native D4/D9 invariant 10, slice 3).** Trigger: a claim
+is created, adopted, renewed, or released. What happens: every claim stamps
+`fence_epoch: 1` at creation (`claimCellFile`); adopting it to a successor
+session (B15/B16's adoption, or a mailbox handoff's own adopt step) bumps
+`fence_epoch` by exactly 1, in the SAME atomic write as the ownership
+rewrite — never a separate step that could observe a half-adopted claim.
+`renewClaimTTL` and `releaseClaim` accept an optional `presentedEpoch`; given
+one behind the claim's current `fence_epoch`, both refuse typed
+`CLAIM_FENCE_STALE`, naming the current epoch — a takeover already moved
+ownership forward, and the stale caller must re-adopt before writing again.
+Omitted (every production caller today), both verbs stay byte-unchanged from
+before fencing existed — full mandatory presentation arrives only once
+workspace identity lands in a later slice. The name is deliberately
+`fence_epoch`, never bare "epoch" — `cells.mjs`'s own unrelated
+budget-collapse sense of "epoch" already exists elsewhere in the record, and
+the two must never be confused. `sweepExpiredClaims` and `clearClaim` are
+untouched by fencing: a sweeper reclaiming an abandoned claim, or an
+unconditional clear, is never a holder "presenting" a token to be checked
+against. What each actor observes: a session that adopted a claim, then
+tries to renew or release it using a stale epoch it captured before someone
+else's takeover, gets a clear typed refusal instead of silently clobbering
+the new owner's state; every caller that never presents an epoch sees no
+behavior change at all.
+
 ## Business Rules
 
 - R17 — Concurrent ownership is decided by atomic exclusive creation, never by
@@ -99,6 +124,12 @@ silently overwriting it; a deliberate rescue always leaves a trace (D4).
   dispatching orchestrator wins the claim before the worker starts, and the
   worker only validates the ownership it was handed (multi-session-hardening
   D1 worker-execution-contract amendment).
+- R72 — A claim stamps `fence_epoch: 1` at creation and bumps it by exactly 1,
+  atomically with the ownership rewrite, on every adoption; `renewClaimTTL`/
+  `releaseClaim` may optionally present it and are refused typed
+  `CLAIM_FENCE_STALE` when it is behind the claim's current `fence_epoch`,
+  record untouched; omitted, both stay byte-unchanged from before fencing
+  existed (multisession-native D4/D9 invariant 10).
 
 ## Edge Cases Settled
 
@@ -115,36 +146,39 @@ silently overwriting it; a deliberate rescue always leaves a trace (D4).
   from any other audit trail on the unit so a later mutation can never
   overwrite it — and a forced release of the claim leaves the unit claimable
   again, never stuck self-refusing (multi-session-hardening D4, Δ5-amended).
+- A caller presenting no `presentedEpoch` (every production caller today) is
+  wholly unaffected by fencing — the `CLAIM_FENCE_STALE` check never runs
+  for it (multisession-native D4/D9 invariant 10, msn-12).
 
 ## Pointers (implementation)
 
-- Session coordination (B11/R17/R18): `skills/bee-hive/templates/lib/claims.mjs`
+- Session coordination (B11/R17/R18): `packages/bee/lib/claims.mjs`
   (byte-mirrored to `.bee/bin/lib/`) — sessions under `.bee/sessions/`, claims
   under `.bee/claims/`, per-claim gate `<cell>.adopting`; race orchestrator
-  `skills/bee-hive/templates/tests/race_claims_child.mjs` (3 scenarios using
+  `packages/bee/tests/race_claims_child.mjs` (3 scenarios using
   barrier-synchronized isolated Worker racers in `test_lib.mjs`). Evidence:
   traces `.bee/cells/fsh-{1,2}.json` (win32 +
   linux probe PASS lines), commits 0224f6c, edfac87; validation
   `docs/history/fresh-session-handoff/reports/validation-s1.md`.
 - Multi-session hardening (B11/B21-B24, R36-R40): coordination lock primitive
-  `withStoreLock` in `skills/bee-hive/templates/lib/lock.mjs` (byte-mirrored
+  `withStoreLock` in `packages/bee/lib/lock.mjs` (byte-mirrored
   to `.bee/bin/lib/`), O_EXCL acquire with stale-holder takeover by atomic
-  rename, forked-racer suite `scripts/test_store_lock.mjs`; `cells claim --id`
+  rename, forked-racer suite `scripts/tests/test_store_lock.mjs`; `cells claim --id`
   re-backed by the same claim-file gate `claim-next` uses
   (`claimCellCrossSession` in `lib/cells.mjs`), forked-racer suite
-  `scripts/test_claim_race.mjs`; session id self-derivation `resolveSessionId`
+  `scripts/tests/test_claim_race.mjs`; session id self-derivation `resolveSessionId`
   in `lib/claims.mjs`; claim-clearing release on cap/unclaim/block/drop/reopen
   via `clearClaim` in `lib/claims.mjs`; reservation read-modify-write and
   session auto-derive under the lock in `lib/reservations.mjs`
   (`reserve`/`release`/`sweepExpired`), forked-racer suite
-  `scripts/test_reservation_race.mjs`; ownership guard on cell mutators
+  `scripts/tests/test_reservation_race.mjs`; ownership guard on cell mutators
   (`checkClaimOwnership`/`guardClaimOwnership`, `--force-ownership`, the
   `trace.ownership_overrides` audit key kept apart from `trace.deviations`)
   in `lib/cells.mjs`; throttled heartbeat-and-lease renewal
   (`heartbeatTouch`, `renewClaimTTL` in `lib/claims.mjs`,
   `renewHoldsBySession` in `lib/reservations.mjs`) wired into
-  `hooks/bee-prompt-context.mjs` and `hooks/bee-state-sync.mjs` in try-once
-  mode, suite `scripts/test_heartbeat_touch.mjs`; state logical
+  `packages/bee/hooks/bee-prompt-context.mjs` and `packages/bee/hooks/bee-state-sync.mjs` in try-once
+  mode, suite `scripts/tests/test_heartbeat_touch.mjs`; state logical
   read-modify-write verbs (`startFeature` in `lib/state.mjs`;
   `handleStateSet`/`handleStateGate`/`stateWorkerMutate`/
   `handleStateScribingRun` in `bee.mjs`) serialized under the same lock,
@@ -155,3 +189,13 @@ silently overwriting it; a deliberate rescue always leaves a trace (D4).
   `docs/history/multi-session-hardening/CONTEXT.md` (D1-D7, Δ1-Δ6); traces
   `.bee/cells/msh-{1..7}.json`; reports
   `docs/history/multi-session-hardening/reports/msh-{1..7}.md`.
+- Claim fencing (multisession-native D4/D9 invariant 10): `fence_epoch`
+  stamped in `claimCellFile` and bumped in `adoptClaim` (the SAME atomic
+  write as the ownership rewrite); `CLAIM_FENCE_STALE` refusal in
+  `renewClaimTTL`/`releaseClaim`, all in
+  `packages/bee/lib/claims.mjs` (byte-mirrored to
+  `.bee/bin/lib/`). Red-first: new refusal tests captured failing against
+  pristine `claims.mjs`, then green after the implementation. Evidence:
+  trace `.bee/cells/multisession-native-12.json`, commit 8c002a1; advisor
+  digest `docs/history/multisession-native/reports/advisor-digest-slice3.md`
+  condition F.

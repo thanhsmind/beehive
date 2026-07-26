@@ -8,25 +8,27 @@ bee/
   docs/                          ← these design docs
   .claude-plugin/plugin.json     ← Claude Code plugin manifest
   .codex-plugin/plugin.json      ← Codex plugin manifest
-  hooks/
-    hooks.json                   ← shared hook catalog (8 lifecycle events, 9 scripts)
-    bee-session-init.mjs         ← SessionStart: status + gates + handoff + patterns + decisions
-    bee-prompt-context.mjs       ← UserPromptSubmit: phase/gate reminder (injection-deduped)
-    bee-write-guard.mjs          ← PreToolUse: gate guard + reservation guard + privacy/scout + CLI-shape validation
-    bee-state-sync.mjs           ← PostToolUse/SubagentStop/Stop: state snapshot persistence
-    bee-chain-nudge.mjs          ← SubagentStop: advance the chain after workers/reviewers
-    bee-session-close.mjs        ← Stop: warn on mid-phase exit without HANDOFF + decision/capture nudges
+  packages/bee/                  ← vendored payload: CLI + lib + hooks (single source onboarding copies from)
+    hooks/
+      hooks.json                   ← shared hook catalog (8 lifecycle events, 9 scripts)
+      bee-session-init.mjs         ← SessionStart: status + gates + handoff + patterns + decisions
+      bee-prompt-context.mjs       ← UserPromptSubmit: phase/gate reminder (injection-deduped)
+      bee-write-guard.mjs          ← PreToolUse: gate guard + reservation guard + privacy/scout + CLI-shape validation
+      bee-state-sync.mjs           ← PostToolUse/SubagentStop/Stop: state snapshot persistence
+      bee-chain-nudge.mjs          ← SubagentStop: advance the chain after workers/reviewers
+      bee-session-close.mjs        ← Stop: warn on mid-phase exit without HANDOFF + decision/capture nudges
+    bee.mjs                       ← sole shipped CLI: bee.mjs <group> <verb> over all 9 command groups (D1, shim-retire, decision bbc6bcea; supersedes the 9-shim compat net from harness-integration-adopt/decision 30606de4)
+    lib/command-registry.mjs      ← single source of truth for every subcommand's JSON-Schema parameters
+    lib/validate-args.mjs         ← validates parsed CLI args against a registry entry's schema; shared by bee.mjs and bee-write-guard.mjs
+    scripts/
+      onboard_bee.mjs             ← installer: AGENTS.md block, .bee/, bee.mjs + lib
+      test_onboard_bee.mjs
   AGENTS.template.md             ← Codex bootstrap block (installed into repo AGENTS.md, BEE:START/END markers)
   skills/
-    hive/                        ← bootstrap + routing meta-skill
+    hive/                        ← bootstrap + routing meta-skill (instructions only; the onboarding engine lives at packages/bee/scripts/ above)
       SKILL.md
       references/routing-and-contracts.md
       references/go-mode.md
-      scripts/onboard_bee.mjs    ← installer: AGENTS.md block, .bee/, bee.mjs + lib
-      scripts/test_onboard_bee.mjs
-      templates/bee.mjs          ← sole shipped CLI: bee.mjs <group> <verb> over all 9 command groups (D1, shim-retire, decision bbc6bcea; supersedes the 9-shim compat net from harness-integration-adopt/decision 30606de4)
-      templates/lib/command-registry.mjs  ← single source of truth for every subcommand's JSON-Schema parameters
-      templates/lib/validate-args.mjs     ← validates parsed CLI args against a registry entry's schema; shared by bee.mjs and bee-write-guard.mjs
     exploring/     SKILL.md + references/{gray-area-probes.md, context-template.md}
     planning/      SKILL.md + references/{planning-reference.md, edge-dimensions.md}
     validating/    SKILL.md + references/validation-reference.md
@@ -182,11 +184,11 @@ Everything a skill tells an agent to run is `bee.mjs <group> <verb>`, `git`, or 
 
 ### History: from 4 shims to the sole CLI (decision 30606de4 → D1, shim-retire/decision bbc6bcea)
 
-`bee.mjs` began (harness-integration-adopt, decision 30606de4, `docs/decisions/0024`, adopted from vantt's PR #1) as an *additive* dispatcher living alongside 4 legacy per-group shim scripts (status, cells, reservations, decisions), then later extended to cover all 9 groups while the shims stayed a compatibility net (DA6 scope-freeze applied only to that original 4). The shim-retire feature (D1, decision bbc6bcea, owner-directed) superseded that compat-net clause: the 9 shims are deleted from `skills/bee-hive/templates/` and, via an onboarding `RETIRED_HELPERS` removal pass (D2), from every host's `.bee/bin/` too. `bee.mjs` is now the sole canonical *and* sole shipped CLI — no skill instruction names a legacy shim directly any more. Durable pieces of the original design still apply:
+`bee.mjs` began (harness-integration-adopt, decision 30606de4, `docs/decisions/0024`, adopted from vantt's PR #1) as an *additive* dispatcher living alongside 4 legacy per-group shim scripts (status, cells, reservations, decisions), then later extended to cover all 9 groups while the shims stayed a compatibility net (DA6 scope-freeze applied only to that original 4). The shim-retire feature (D1, decision bbc6bcea, owner-directed) superseded that compat-net clause: the 9 shims are deleted from `packages/bee/` and, via an onboarding `RETIRED_HELPERS` removal pass (D2), from every host's `.bee/bin/` too. `bee.mjs` is now the sole canonical *and* sole shipped CLI — no skill instruction names a legacy shim directly any more. Durable pieces of the original design still apply:
 
 - **Manifest shape.** `node .bee/bin/bee.mjs --help --json` emits `{schema_version, commands:[{name, invoke, description, parameters, examples, deprecated}]}`, sourced from `command-registry.mjs` — the single source of truth for every subcommand, one entry per command, `parameters` expressed as JSON-Schema (`{type:"object", properties, required}`) in the exact shape Claude Code's own tool/subagent definitions use. The registry's old `helper` field (which shim used to implement a command) was removed together with the shims (D5) — it never appears in the public manifest.
 - **Manifest drift tracking (DA4).** A sha256 of `{schema_version, COMMAND_REGISTRY}` is persisted to `.bee/manifest-hash.json` (`{hash, checked_at}`, gitignored — it is rewritten on every `bee.mjs` invocation, including read-only ones). When the current hash differs from the last-persisted one, a `manifest_changed: true` hint is written to **stderr only** — stdout's JSON/text shape never changes, so a machine consumer parsing a command's steady-state output never has to special-case a drift call.
-- **CLI-shape enforcement.** `hooks/bee-write-guard.mjs` parses and validates a Bash call shaped like a `bee.mjs` invocation against `command-registry.mjs`'s schema via `validate-args.mjs` before the shell executes it — malformed calls are denied with a structured correction; unrecognized shapes fail open (that classification is the dispatcher's own job, via its Levenshtein nearest-match suggestion, not the guard's). `LEGACY_HELPER_RE` (D3) keeps resolving old `bee_*.mjs` invocation shapes too, as a transition guard for hosts mid-upgrade whose sessions still invoke shim names — its removal is filed as future grooming debt.
+- **CLI-shape enforcement.** `packages/bee/hooks/bee-write-guard.mjs` parses and validates a Bash call shaped like a `bee.mjs` invocation against `command-registry.mjs`'s schema via `validate-args.mjs` before the shell executes it — malformed calls are denied with a structured correction; unrecognized shapes fail open (that classification is the dispatcher's own job, via its Levenshtein nearest-match suggestion, not the guard's). `LEGACY_HELPER_RE` (D3) keeps resolving old `bee_*.mjs` invocation shapes too, as a transition guard for hosts mid-upgrade whose sessions still invoke shim names — its removal is filed as future grooming debt.
 - **Drift enforcement (DA5, re-pointed at runtime).** A standing test derives the live verb list from `bee.mjs <group>`'s own "Unknown command … Use: …" contract line (never from grepping source — pinned syntax can be the bug) and asserts a bijection with the registry's `group.*` entries.
 - **Deferred.** An MCP server wrapper and a mandatory every-session `--help --json` discovery call are out of scope (foundation-add without demonstrated need) — revisit only if dogfood shows real need.
 
@@ -198,7 +200,7 @@ The workflow contract is runtime-neutral; only two seams differ:
 
 | Runtime | Mechanism |
 |---|---|
-| Claude Code | `hooks/bee-session-init.mjs` (SessionStart on startup/resume/clear/compact) injects the routing preamble plus live state: status, gates, HANDOFF surfacing, standard commands + baseline gate, critical-patterns digest, recent decisions (superpowers pattern + claudekit session-init) |
+| Claude Code | `packages/bee/hooks/bee-session-init.mjs` (SessionStart on startup/resume/clear/compact) injects the routing preamble plus live state: status, gates, HANDOFF surfacing, standard commands + baseline gate, critical-patterns digest, recent decisions (superpowers pattern + claudekit session-init) |
 | Codex | The `AGENTS.template.md` block installed into the repo's `AGENTS.md` carries the same instructions (khuym pattern); `bee.mjs status --json` is the first commanded step. Re-read after any compaction. |
 
 Both vectors point at the same skill (`bee-hive`); the preamble content is generated from one shared module (`bin/lib/inject.mjs`) for the hook, the AGENTS.md block, and `bee_status` output, so the runtimes can never drift. The preamble carries, in order: standard commands (host project paths), a Project map section (pointers to `docs/specs/` maps and a specced-area count, or a bootstrap warning when absent) with a PBI counts line when `docs/backlog.md` exists, the critical-patterns digest, and recent decisions.
@@ -212,11 +214,11 @@ The spawn *contract* is identical on both: assigned cell id, CONTEXT.md path, gl
 
 ### Everything else is shared
 
-Skills, artifacts, cells, gates, helpers, templates: one copy of prose/logic in `skills/`. Each plugin manifest routes to its own **committed rendered tree** instead — `.claude-plugin/plugin.json` → `.claude-plugin/skills/` = `render(skills/, "claude")`, `.codex-plugin/plugin.json` → `.codex-plugin/skills/` = `render(skills/, "codex")` — generated only through the D9 renderer (`skills/bee-hive/scripts/onboard_bee.mjs::renderSkillBytes`, regenerated via `scripts/render_plugin_skill_trees.mjs`); with zero runtime markers today both rendered trees stay byte-identical to `skills/` (cnr2-12).
+Skills, artifacts, cells, gates, helpers, templates: one copy of prose/logic in `skills/`. Each plugin manifest routes to its own **committed rendered tree** instead — `.claude-plugin/plugin.json` → `.claude-plugin/skills/` = `render(skills/, "claude")`, `.codex-plugin/plugin.json` → `.codex-plugin/skills/` = `render(skills/, "codex")` — generated only through the D9 renderer (`packages/bee/scripts/onboard_bee.mjs::renderSkillBytes`, regenerated via `scripts/render_plugin_skill_trees.mjs`); with zero runtime markers today both rendered trees stay byte-identical to `skills/` (cnr2-12).
 
 ## Hooks: one automation skeleton, both runtimes + the helper floor underneath
 
-bee ships a coherent **9-script automation skeleton** — session-init, prompt-context (deduped), write-guard (gate + reservation + privacy + CLI-shape in one), state-sync, chain-nudge, session-close, model-guard, tools-logger, codex-subagent-audit — rendered from one shared catalog and wired per runtime: `.codex/hooks.json` carries 8 lifecycle events for Codex, `hooks/claude-hooks.json` carries 7 for Claude Code. It is learned from claudekit's tightly-wired hook system but capped and disciplined: the six core hooks are config-gated in `.bee/config.json` (six toggles, each default-on), every script is fail-open with crash logging, silent on non-onboarded repos, and a thin wrapper over the same `.bee/bin/lib/` modules the CLI helpers use.
+bee ships a coherent **9-script automation skeleton** — session-init, prompt-context (deduped), write-guard (gate + reservation + privacy + CLI-shape in one), state-sync, chain-nudge, session-close, model-guard, tools-logger, codex-subagent-audit — rendered from one shared catalog and wired per runtime: `.codex/hooks.json` carries 8 lifecycle events for Codex, `packages/bee/hooks/claude-hooks.json` carries 7 for Claude Code. It is learned from claudekit's tightly-wired hook system but capped and disciplined: the six core hooks are config-gated in `.bee/config.json` (six toggles, each default-on), every script is fail-open with crash logging, silent on non-onboarded repos, and a thin wrapper over the same `.bee/bin/lib/` modules the CLI helpers use.
 
 The dual-runtime rule: **enforcement lives in the shared helpers first** (cap-requires-verify, reservation conflicts, gate-locked claiming work identically under Codex); the hooks are a second, mechanical belt on both runtimes. Whether an installed Codex CLI actually executes its hooks is unverified, so the helper floor — not the hooks — is what parity rests on. Full design, the Codex parity matrix, and the hook response protocol: [06-runtime-integration.md](06-runtime-integration.md).
 

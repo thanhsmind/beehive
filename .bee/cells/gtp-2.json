@@ -1,0 +1,68 @@
+{
+  "id": "gtp-2",
+  "feature": "groom-test-prune",
+  "lane": "small",
+  "behavior_change": false,
+  "title": "Xoá test_nested_clone_isolation.mjs — tự khai không guard được class lỗi nào",
+  "action": "Xoá scripts/test_nested_clone_isolation.mjs. Bằng chứng: header :30 tự khai 'cannot regression-guard a procedural mistake' + grep toàn repo ZERO code path sinh git remote; các invariant còn lại (resolveRoots không leo parent, worktree sibling, merge không đụng parent) đã có scripts/test_worktree_cli.mjs cover (case sibling directory, zero-mutation refusals). D4: sau xoá chạy xanh cùng batch test_worktree_cli + test_verify_manifest. D8: evidence map như gtp-1.",
+  "must_haves": {
+    "truths": [
+      "file đã xoá",
+      "test_worktree_cli + test_verify_manifest XANH SAU xoá cùng batch",
+      "evidence map case bị xoá sang case cover"
+    ],
+    "prohibitions": [
+      "không xoá file nào khác",
+      "không sửa suite cover"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only test_worktree_cli,test_verify_manifest",
+  "read_first": [
+    "scripts/test_nested_clone_isolation.mjs"
+  ],
+  "files": [
+    "scripts/test_nested_clone_isolation.mjs"
+  ],
+  "deps": [
+    "gtp-1"
+  ],
+  "decisions": [
+    "test-economy D4",
+    "test-economy D8"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "gtp-worker",
+    "outcome": "prune test_nested_clone_isolation - self-admitted non-guard, invariants covered by test_worktree_cli",
+    "files_changed": [
+      "scripts/test_nested_clone_isolation.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T14:26:55.297Z",
+    "behavior_change": false,
+    "verification_evidence": "{\"tests_inspected\":\"sibling-worktree invariant -> test_worktree_cli.mjs L370 (worktree new created sibling); zero-mutation-on-refusal invariant (covers merge-not-touching-parent-on-refusal class) -> test_worktree_cli.mjs L415,434,455,531,798,857,871,883,896; resolveRoots-does-not-walk-past-clone-root is a generic property already covered by ordinary/linked-valid resolution suites (test_worktree_grant_resolve.mjs, test_hook_contracts.mjs); zero git-remote-mutating code path exists anywhere in repo (grep for remote/set-url across scripts/,skills/,.bee/bin/,hooks/ = 0 matches), so no suite needs to pin remote.origin.url specifically\",\"tests_added_changed\":\"0 added; 1 file deleted (test_nested_clone_isolation.mjs, 183 lines)\",\"verification_run\":\"node scripts/run_verify.mjs --only test_worktree_cli,test_verify_manifest -> PASS 2 suites, wall=10199ms\"}\n",
+    "verify_output": "SCOPED RUN (--only): 2 of 107 runnables selected — full verify still required before close\nPASS      44ms  scripts/test_verify_manifest.mjs\nPASS   10195ms  scripts/test_worktree_cli.mjs\n\nPASS run_verify: 2 suite(s), concurrency=5, wall=10199ms\nSCOPED RUN (--only): 2 of 107 runnables selected — full verify still required before close\n",
+    "verify_passed": true,
+    "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+    "claimed_at": "2026-07-25T14:26:10.105Z",
+    "verify_command": "node scripts/run_verify.mjs --only test_worktree_cli,test_verify_manifest",
+    "verified_at": "2026-07-25T14:26:47.262Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T14:26:47.262Z",
+        "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+        "claimed_at": "2026-07-25T14:26:10.103Z",
+        "acquired_at": "2026-07-25T14:26:10.103Z",
+        "worker": "gtp-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": [
+      "capCell: cell \"gtp-2\" test-to-source line ratio is 182.00 (>3) for lane \"small\" — test-economy D3 non-blocking warning."
+    ]
+  }
+}

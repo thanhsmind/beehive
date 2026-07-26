@@ -105,7 +105,7 @@ is made that any of this reduces cost; it makes the tier decision auditable.
 ## Pointers (implementation)
 
 - Claude model-param allowlist advisor fold (B16, "Choice only"):
-  `configuredModelSet` in `skills/bee-hive/templates/lib/dispatch-guard.mjs`
+  `configuredModelSet` in `packages/bee/lib/dispatch-guard.mjs`
   (mirrored in `.bee/bin/lib/dispatch-guard.mjs`), folding
   `resolveAdvisor(root, 'claude')` into the union. Canary rows:
   `hooks/test_model_guard.mjs` rows 21-22. Evidence: `.bee/cells/cnt-7.json`,

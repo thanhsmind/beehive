@@ -24,7 +24,7 @@
 // call from the model at all — it fires at session bootstrap.
 //
 // Fixture install path (cheaper-reliable-path decision): this canary calls
-// skills/bee-hive/scripts/onboard_bee.mjs directly (--apply --repo-hooks)
+// packages/bee/scripts/onboard_bee.mjs directly (--apply --repo-hooks)
 // rather than scripts/install.sh. install.sh's repo-copy mode also probes
 // and (for a real `codex`/`claude` on PATH) *mutates* the runtime's plugin
 // list (`codex plugin remove bee@bee`) as part of its transition step —
@@ -74,7 +74,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
-const ONBOARD_SCRIPT = path.join(REPO_ROOT, "skills", "bee-hive", "scripts", "onboard_bee.mjs");
+const ONBOARD_SCRIPT = path.join(REPO_ROOT, "packages", "bee", "scripts", "onboard_bee.mjs");
 const BEE_CLI = path.join(REPO_ROOT, ".bee", "bin", "bee.mjs");
 
 // The exact D3/D4 unlock TOML (PROBE EVIDENCE FOLD, decision daa01646): the

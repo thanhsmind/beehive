@@ -122,7 +122,7 @@ git commit -m "docs(learnings): <feature> close — <one line> [<feature> close]
 ```
 
 Rules:
-- **One commit, and it is the close's own commit** — never fold the close into a cell's commit, and never leave it for "the next commit to pick up". Per-cell commits (critical rule 8) already landed during execution; this one carries the compounding artifacts.
+- **One commit, and it is the close's own commit** — never fold the close into a cell's commit, and never leave it for "the next commit to pick up". Per-cell commits (critical rule 7) already landed during execution; this one carries the compounding artifacts.
 - **The commit message names the feature and the close**, so the close is findable in the log: `[<feature> close]`.
 - **Nothing outside the close belongs in it.** If `git status` shows unrelated dirty files, commit only the close's paths (`docs/history/learnings/`, `docs/knowledge/` or `docs/specs/`, `docs/backlog.md`, `.bee/`) and report the rest in the run summary rather than sweeping it in.
 - **Warn, never block, on a refusal you cannot resolve** (a hook rejects the commit, the repo is mid-rebase, nothing is dirty because a cell already committed it): one line in the run summary naming the reason, and the close proceeds. What is never acceptable is setting the phase in §11 while silently leaving the close's artifacts uncommitted and unmentioned.
@@ -132,6 +132,16 @@ Rules:
 The phase is set **after** the commit in §10 has landed, never before: `compounding-complete` is the claim that the close is durable, and it is only true once the close's artifacts are in a commit.
 
 Record the completed compounding run: `node .bee/bin/bee.mjs state set --owner compounding --phase compounding-complete --next-action "<next action>" --summary "learnings: <file path>; promoted: <count>"`.
+
+## 12. Suite Census (test-economy D4)
+
+Report three counts in the close's run summary, so suite growth has a visible ledger instead of climbing unnoticed (test-economy D4 — the counterweight to auto-discovery's monotonic growth; no bundle, no test-prune has run yet, is a legitimate delta of zero):
+
+- **suites in registry** — total distinct suites `run_verify.mjs` discovers, e.g. `node -e "import('./scripts/run_verify.mjs').then(m => console.log(m.SUITES.length))"` (adjust to the registry's actual export if the script's shape has moved on)
+- **total test lines** — summed line count across test files, e.g. `fd -e mjs 'test_' | xargs wc -l | tail -1`
+- **delta for the feature just closed** — the same two counts compared against the feature's first commit, e.g. `git diff --stat <feature-first-commit>..HEAD -- '*test_*.mjs'`, so the report shows whether this feature grew, held, or shrank the suite
+
+These are read-only shell one-liners — no new `bee.mjs` CLI verb. Fold the three numbers into the run summary text; they are informational context for the human, not durable evidence and not a gate on the close.
 
 ## Hard Gates
 

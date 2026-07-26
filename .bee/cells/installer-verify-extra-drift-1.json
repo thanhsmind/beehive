@@ -1,0 +1,71 @@
+{
+  "id": "installer-verify-extra-drift-1",
+  "feature": "installer-verify-extra-drift",
+  "lane": "tiny",
+  "pbi": "p-8612ec06",
+  "title": "Fix install.sh false-positive hard-fail: classify drift_detail so extra-file-only drift (versions matching) doesn't abort the installer",
+  "action": "scripts/install.sh's final verify step (~487-498) hard-fails whenever s.onboarding.drift !== false, with no distinction between a real version/hash mismatch and an unmanaged extra .mjs sitting in .bee/bin/lib/ (computeRuntimeDrift's file-set check, skills/bee-hive/templates/bee.mjs:461-508). bee.mjs status --json already exposes per-item detail as s.onboarding.drift_detail (populated whenever drift_detail.length > 0): hash-mismatch/missing entries are bare relative paths (optionally suffixed \" (missing)\"), extra-file entries are suffixed \" (extra)\". Rewrite install.sh's verify node snippet (the block piped after printf '%s' \"$STATUS\" | node -e '...') to: keep the existing bee_version/plugin_version/expected equality check fatal exactly as today; when drift is true, inspect drift_detail -- if every entry ends with \" (extra)\" (and versions already matched expected), do NOT hard-fail on that alone: print an actionable message naming the extra file path(s) and instructing removal (or noting they self-heal on next onboarding refresh), then continue to the up_to_date recheck step below it; if any entry lacks the \" (extra)\" suffix (a real hash mismatch or missing-file entry), keep the existing hard-fail with the existing 'version parity failed' message. Add a regression test to scripts/test_installers_e2e.mjs mirroring the file's existing check()-based style: install a target to a clean up-to-date state, then plant one unmanaged extra .mjs file directly in <target>/.bee/bin/lib/ (a name absent from onboarding.json's managed.lib), re-run the installer's verify path, and assert the run does NOT hard-fail / exits successfully, while the output names the planted extra file. Do not touch skills/bee-hive/templates/bee.mjs -- drift_detail is already exposed; no bee.mjs source change is needed for this fix. Because scripts/install.sh is a release-manifest-hashed root, this cell also carries the regen obligation: after the code+test change, run (in order) node scripts/render_plugin_skill_trees.mjs, node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write, and include the regenerated docs/history/codex-harness-hardening/release-manifest.json in the diff.",
+  "files": [
+    "scripts/install.sh",
+    "scripts/test_installers_e2e.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "scripts/install.sh",
+    "scripts/test_installers_e2e.mjs",
+    "skills/bee-hive/templates/bee.mjs"
+  ],
+  "must_haves": {
+    "truths": [
+      "install.sh's verify step hard-fails on any drift_detail entry that lacks the \" (extra)\" suffix (real hash-mismatch or missing-file drift), or on any bee_version/plugin_version mismatch against expected -- unchanged from today",
+      "when drift is true solely from one or more \" (extra)\"-suffixed drift_detail entries and versions already match expected, verify does not hard-fail on that alone and continues to the up_to_date recheck step",
+      "in that extra-file-only case, the verify step's output names the specific extra file path(s) so a human/agent knows what to clear",
+      "a new regression test in scripts/test_installers_e2e.mjs covers: target already at expected version, one unmanaged extra .mjs planted in .bee/bin/lib/, asserts the run succeeds (no hard-fail) and the output names the planted file",
+      "existing tests in scripts/test_installers_e2e.mjs stay green, including the clean-install \"status must report no drift\" assertion (~line 316) and the malformed-plugin-list/shape-drift tests",
+      "release manifest regenerated via render_plugin_skill_trees.mjs -> onboard_bee.mjs --apply -> release_manifest.mjs --write, and release_manifest.mjs --check passes"
+    ],
+    "prohibitions": [
+      "never silently swallow a real hash-mismatch or missing-file drift entry -- those keep hard-failing exactly as before",
+      "never widen the check to tolerate a bee_version/plugin_version mismatch -- those stay fatal exactly as today",
+      "no change to skills/bee-hive/templates/bee.mjs -- drift_detail already exists, fix is confined to install.sh's consumption of it plus the new test"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "node scripts/test_installers_e2e.mjs && node scripts/release_manifest.mjs --check",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "execution-worker-1",
+    "outcome": "install.sh's final verify step now treats extra-file-only drift (unmanaged .mjs in .bee/bin/lib/, versions already matching) as a named warning instead of a hard-fail, while real hash-mismatch/missing/version drift still hard-fails exactly as before; added a red-first regression test proving this in scripts/test_installers_e2e.mjs; regenerated the release manifest for the two hashed roots.",
+    "files_changed": [
+      "scripts/install.sh",
+      "scripts/test_installers_e2e.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T07:48:25.966Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\n    \"scripts/test_installers_e2e.mjs: existing check() at ~line 316 (assertVersionParity) asserting status.onboarding.drift === false on a clean install\",\n    \"scripts/test_installers_e2e.mjs: existing check() 'package-list shape drift (malformed plugin list) fails loudly pre-confirmation with zero mutation'\",\n    \"scripts/test_installers_e2e.mjs: existing check() 'repeat install reports current without timestamp-only managed rewrites (byte-idempotent target)'\"\n  ],\n  \"tests_added_or_changed\": [\n    \"scripts/test_installers_e2e.mjs: new check() 'extra unmanaged .mjs in .bee/bin/lib/ does not hard-fail install.sh's verify step, and the output names it' -- installs a target to clean up-to-date state, plants an unmanaged .mjs (never recorded in managed.lib) directly in <target>/.bee/bin/lib/, confirms bee.mjs status reports drift:true with a drift_detail entry suffixed '(extra)' naming the planted file, re-runs install.sh and asserts exit 0, output names the planted file, output does NOT contain 'version parity failed', and the planted file itself is left untouched by apply.\"\n  ],\n  \"red_failure_evidence\": \"Ran the new test alone before touching scripts/install.sh: it failed with 'install.sh's verify step must not hard-fail on extra-file-only drift when versions already match: ... version parity failed: expected 1.15.0, got bee=1.15.0, plugin=1.15.0, drift=true'. The pre-fix node -e verify snippet in scripts/install.sh treated any s.onboarding.drift !== false as fatal via the 'version parity failed' message, regardless of drift_detail shape -- confirming the bug the cell describes.\",\n  \"verification_commands\": [\n    \"node scripts/test_installers_e2e.mjs (24 passed, 0 failed, including the new test)\",\n    \"node scripts/release_manifest.mjs --check (510 file(s) match stored manifest)\",\n    \"node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (regen chain per the release-manifest-hashed-root obligation, run in this exact order before the final --check)\"\n  ]\n}\n",
+    "verify_output": "test_installers_e2e (bash): 24 passed, 0 failed\nrelease_manifest --check: 510 file(s) match stored manifest",
+    "verify_passed": true,
+    "claim_session": "a4277cba-1d88-4ce8-b91b-60583d7e1087",
+    "claimed_at": "2026-07-24T07:42:52.370Z",
+    "verify_command": "node scripts/test_installers_e2e.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-24T07:47:56.710Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T07:47:56.710Z",
+        "claim_session": "a4277cba-1d88-4ce8-b91b-60583d7e1087",
+        "claimed_at": "2026-07-24T07:42:52.369Z",
+        "acquired_at": "2026-07-24T07:42:52.369Z",
+        "worker": "execution-worker-1",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

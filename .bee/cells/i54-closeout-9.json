@@ -1,0 +1,82 @@
+{
+  "id": "i54-closeout-9",
+  "feature": "i54-closeout",
+  "lane": "standard",
+  "title": "Fix fresh-install write-guard crash: vendor tokenize-command.mjs (HOOK_FILENAMES) + import-closure regression test",
+  "files": [
+    "skills/bee-hive/scripts/onboard_bee.mjs",
+    "scripts/test_hook_vendor_closure.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/i54-closeout/reports/validation-canary.md",
+    "skills/bee-hive/scripts/onboard_bee.mjs",
+    "hooks/bee-write-guard.mjs"
+  ],
+  "action": "Canary P5 caught a live regression (validation-canary.md §1): hooks/bee-write-guard.mjs:38 imports ./tokenize-command.mjs (added by state-query-surface sqs-a) but HOOK_FILENAMES in skills/bee-hive/scripts/onboard_bee.mjs:177-194 does not vendor it, so EVERY fresh repo-hooks install ships a write guard that crashes ERR_MODULE_NOT_FOUND (fail-open) instead of blocking pre-Gate-3 writes. Fix: add \"tokenize-command.mjs\" to HOOK_FILENAMES with a comment naming the importer (mirroring adapter.mjs's comment style). Then write scripts/test_hook_vendor_closure.mjs so this CLASS of drift cannot recur: statically parse each file named in HOOK_FILENAMES (read the list from onboard_bee.mjs or re-derive) for relative static imports (import ... from \"./x.mjs\") and assert every imported basename is itself in HOOK_FILENAMES (lib/ imports resolve against the vendored lib set if the hook imports ../lib/); fail naming the missing file and its importer. PLAN-CHECK W2: NO manual registry entry — run_verify.mjs auto-discovers scripts/test_*.mjs via DISCOVERY_ROOTS glob; just confirm node scripts/run_verify.mjs --only test_hook_vendor_closure finds it. Regen obligation inside THIS cell: node scripts/render_plugin_skill_trees.mjs && node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply && node scripts/release_manifest.mjs --write. After regen confirm .bee/bin/hooks/tokenize-command.mjs exists in a FRESH onboard (the test may build a temp fixture via onboard_bee.mjs --apply --repo-hooks into .bee/tmp/ and assert the file lands + node --check passes on the vendored bee-write-guard.mjs).",
+  "must_haves": {
+    "truths": [
+      "a fresh repo-hooks onboard vendors every module the vendored hooks import",
+      "the regression test fails if any hook gains a relative import not in the vendored set"
+    ],
+    "artifacts": [
+      "tokenize-command.mjs in HOOK_FILENAMES",
+      "scripts/test_hook_vendor_closure.mjs registered as a suite"
+    ],
+    "key_links": [
+      "docs/history/i54-closeout/reports/validation-canary.md"
+    ],
+    "prohibitions": [
+      "no weakening of the write guard itself",
+      "no hand-edits to vendored .bee/bin — canonical + regen only"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "node scripts/test_hook_vendor_closure.mjs && node scripts/release_manifest.mjs --check",
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "phil",
+    "outcome": "Vendored HOOK_FILENAMES was missing tokenize-command.mjs, so every fresh --repo-hooks install crashed the write guard with ERR_MODULE_NOT_FOUND (canary P5, fail-open). Added it with a provenance comment, wrote scripts/test_hook_vendor_closure.mjs (static import-closure parse of HOOK_FILENAMES + a real fresh-install/subprocess proof that the vendored guard no longer crashes at import), and synced canonical -> vendored trees via render_plugin_skill_trees.mjs + self-onboard --apply + release_manifest.mjs --write.",
+    "files_changed": [
+      "skills/bee-hive/scripts/onboard_bee.mjs",
+      "scripts/test_hook_vendor_closure.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".agents/skills/bee-hive/scripts/onboard_bee.mjs",
+      ".agents/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/scripts/onboard_bee.mjs",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude/skills/bee-hive/scripts/onboard_bee.mjs",
+      ".claude/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/scripts/onboard_bee.mjs",
+      ".codex-plugin/skills/.bee-render.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T10:24:28.382Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\"scripts/test_lib_mirror.mjs\", \"skills/bee-hive/scripts/test_onboard_bee.mjs\", \"hooks/test_write_guard.mjs\"],\n  \"tests_added_or_changed\": [\"scripts/test_hook_vendor_closure.mjs (new, 8 assertions: 2 self-test, 2 static-closure, 4 fresh-install/subprocess)\"],\n  \"red_failure_evidence\": \"git stash of skills/bee-hive/scripts/onboard_bee.mjs's HOOK_FILENAMES fix, then `node scripts/test_hook_vendor_closure.mjs`: 4 of 8 checks FAIL, including 'vendored bee-write-guard.mjs never crashes ERR_MODULE_NOT_FOUND at import' which reproduces the exact canary P5 stack trace (Error [ERR_MODULE_NOT_FOUND]: Cannot find module '.../.bee/bin/hooks/tokenize-command.mjs' imported from '.../.bee/bin/hooks/bee-write-guard.mjs'). Stash popped to restore the fix.\",\n  \"verification_run\": \"node scripts/test_hook_vendor_closure.mjs && node scripts/release_manifest.mjs --check -> all 8 checks PASS, release_manifest --check: 510 file(s) match stored manifest\",\n  \"deliberate_exceptions\": [\"Cell text suggested 'node --check passes on the vendored bee-write-guard.mjs' as sufficient fresh-install proof; verified empirically that node --check is syntax-only and does NOT catch a missing relative-import module (node --check on a file importing a nonexistent sibling exits 0), so it cannot prove this closure. Used a real subprocess run of the vendored guard instead, asserting absence of ERR_MODULE_NOT_FOUND in stderr -- this is what actually reproduces and proves the canary P5 failure mode is fixed.\"]\n}\n",
+    "verify_output": "PASS self-test: closure parser flags an unlisted sibling import\nPASS self-test: closure parser is silent once the import is listed\nPASS HOOK_FILENAMES lists tokenize-command.mjs (i54-closeout-9 fix)\nPASS HOOK_FILENAMES is import-closed: every relative import of a listed hook is itself listed\nPASS fresh --repo-hooks apply succeeds\nPASS fresh install vendors .bee/bin/hooks/tokenize-command.mjs\nPASS fresh install vendors .bee/bin/hooks/bee-write-guard.mjs\nPASS vendored bee-write-guard.mjs never crashes ERR_MODULE_NOT_FOUND at import (canary P5 regression)\nPASS test_hook_vendor_closure: all checks passed\nrelease_manifest --check: 510 file(s) match stored manifest",
+    "verify_passed": true,
+    "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+    "claimed_at": "2026-07-24T10:18:13.757Z",
+    "verify_command": "node scripts/test_hook_vendor_closure.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-24T10:23:59.054Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T10:23:59.054Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T10:20:11.659Z",
+        "acquired_at": "2026-07-24T10:18:13.755Z",
+        "worker": "phil",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

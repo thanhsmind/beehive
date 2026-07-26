@@ -81,14 +81,14 @@ against isolated fixtures, asserting that a denied action changed nothing.
 - `scripts/lib/run-module-worker.mjs` — shared isolated runner for nested test
   entrypoints used by the hook, command, onboarding, and metadata suites.
 
-- `scripts/test_portable_paths.mjs` and `hooks/test_hook_contracts.mjs` — real
+- `scripts/tests/test_portable_paths.mjs` and `hooks/test_hook_contracts.mjs` — real
   external integration remains external; assertions grade concrete exit status,
   stdout, and stderr even when the execution environment adds a launch warning.
 
 - Suites: `hooks/test_hook_contracts.mjs` (modes: default, `--baseline`,
   `--catalog-only`, `--repo-route-only`), `hooks/test_write_guard.mjs`,
   `hooks/test_model_guard.mjs`; parity check in
-  `skills/bee-hive/scripts/test_onboard_bee.mjs`.
+  `packages/bee/scripts/tests/test_onboard_bee.mjs`.
 
 ## Open Gaps
 

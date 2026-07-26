@@ -32,7 +32,13 @@ one owner, generated ids that never collide however many sessions run at once.
   events; `collectFeedback`/the feedback digest skip `kind:"pbi"` lines explicitly.
 - **Id** — a legacy row's `P<n>` carried across verbatim by the one-time migration, or a
   newly-generated `p-<8hex>` from crypto randomness (`pbi add`). No allocator ever reads-then
-  -increments; a duplicate id at add time is refused defensively by the fold.
+  -increments. Since pic-1 (issue #55, 2026-07-26) `addPbi` enforces uniqueness at add time:
+  the fold-read → generate-check-regenerate (bounded at 16 attempts, then a typed error) →
+  append sequence runs as one critical section under the `backlog-pbi` store lock, so two
+  concurrent sessions can never both append the same fresh id. The fold's first-add-wins
+  refusal remains as the defensive backstop, no longer the only line — before pic-1 a genuine
+  32-bit collision silently dropped the second PBI. Ordinary non-id-generating appends
+  (status/amend/friction) stay lock-free.
 - **The fold** — current PBI state, derived fresh from every `kind:"pbi"` event for an id,
   last-event-wins per field. This is the token-cheap read (`backlog pbi list --json`) — never a
   `docs/backlog.md` parse.
@@ -122,11 +128,11 @@ one owner, generated ids that never collide however many sessions run at once.
 ## Pointers (implementation)
 
 - Store and fold: `foldPbis`, `pbiAdd`, `pbiStatus`, `pbiAmend`, `listPbis`, `PBI_STATUSES` in
-  `.bee/bin/lib/backlog.mjs` (mirrored at `skills/bee-hive/templates/lib/backlog.mjs`).
+  `.bee/bin/lib/backlog.mjs` (mirrored at `packages/bee/lib/backlog.mjs`).
 - Generated view: `renderBacklogMd` in the same file; `backlog render --write|--check` in
   `.bee/bin/bee.mjs`.
 - Write-guard: `DIRECT_EDIT_DENY` in `.bee/bin/lib/guards.mjs` (mirrored at
-  `skills/bee-hive/templates/lib/guards.mjs`).
+  `packages/bee/lib/guards.mjs`).
 - One-time migration and its invariant check: `scripts/migrate_backlog_pbis.mjs`,
   `scripts/backlog_uniqueness.mjs`.
 - Verb prose and merge rules: `skills/bee-scribing/references/scribing-reference.md`'s

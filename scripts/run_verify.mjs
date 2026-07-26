@@ -17,7 +17,7 @@
 // Each suite is spawned directly (no shell), stdout/stderr is buffered and
 // only printed when a suite fails, so a green run stays quiet.
 
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -27,6 +27,55 @@ import { buildRegistry, serializeRegistry, queryRegistry, normalizeQueryPath } f
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..");
 const IMPACT_REGISTRY_PATH = path.join(__dirname, "impact-registry.json");
+const BEE_CONFIG_PATH = path.join(REPO_ROOT, ".bee", "config.json");
+
+// test-economy D6: impacted-cap config reader. Key `verify_impacted_cap`
+// (float 0-1) in .bee/config.json — a missing file, a parse failure, or a
+// missing key all fail SAFE to the default 0.30 (measured against this
+// repo's own registry: state.mjs's transitive closure sits at 36/109 ≈ 33%,
+// just over this default, which is the whole point — see plan.md D6). A
+// configured value of 1 is the documented off-switch (a ratio is never > 1).
+const DEFAULT_IMPACTED_CAP = 0.3;
+
+function readImpactedCap() {
+  let raw;
+  try {
+    raw = fs.readFileSync(BEE_CONFIG_PATH, "utf8");
+  } catch {
+    return DEFAULT_IMPACTED_CAP;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return DEFAULT_IMPACTED_CAP;
+  }
+  const value = parsed?.verify_impacted_cap;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_IMPACTED_CAP;
+  }
+  return value;
+}
+
+// test-economy D6: best-effort CI nudge for the delegated transitive tail —
+// client-side only, never touches .github/workflows/*. Missing/erroring `gh`
+// fails open with a one-line note; it must never turn a green run red.
+function triggerCiDelegation() {
+  let result;
+  try {
+    result = spawnSync("gh", ["workflow", "run", "CI"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+  } catch (error) {
+    result = { error };
+  }
+  if (!result || result.error || result.status !== 0) {
+    console.log(
+      "IMPACTED: best-effort `gh workflow run CI` did not succeed (gh missing or errored) — CI still picks up the delegated tail on its own cadence",
+    );
+  }
+}
 
 // ─── suite discovery (cs-4, contention-split) ──────────────────────────────
 // This array used to be a manually maintained list: every feature adding a
@@ -40,10 +89,10 @@ const IMPACT_REGISTRY_PATH = path.join(__dirname, "impact-registry.json");
 // from; nothing is lost (docs/history/contention-split/reports/cs-4.md
 // records the old-vs-discovered set diff captured at flip time).
 const DISCOVERY_ROOTS = [
-  "scripts",
-  "skills/bee-hive/templates/tests",
-  "skills/bee-hive/scripts",
-  "hooks",
+  "scripts/tests",
+  "packages/bee/tests",
+  "packages/bee/scripts",
+  "packages/bee/hooks",
 ];
 
 // `test_*.mjs` files under a discovery root that are NOT independent,
@@ -73,7 +122,7 @@ const EXTRA_SUITES = [
   // idiom as ledger_parity.mjs --check just above.
   ["scripts/backlog_uniqueness.mjs", "--check"],
   ["scripts/census_stale_spawn_syntax.mjs"],
-  ["scripts/test_installers_e2e.mjs", "--installer", "bash"],
+  ["scripts/tests/test_installers_e2e.mjs", "--installer", "bash"],
   // okf-3: joins the chain as a chain-failing suite per D22/D34. Plain check
   // (NEVER --strict here — D8-graduation keeps profile warnings as warnings
   // until F2): docs/knowledge/ OKF errors fail the chain (exit 1), profile
@@ -94,7 +143,7 @@ const EXTRA_SUITES = [
   // blob_sha + scheme + expected_counts, all asserted, with a committed
   // verbatim source copy as the shallow-clone fallback). An empty, failed,
   // unresolvable, or unscheme'd extraction now exits 1 instead of reporting
-  // 0/0 green. scripts/test_okf_pins.mjs (auto-discovered) is what proves it.
+  // 0/0 green. scripts/tests/test_okf_pins.mjs (auto-discovered) is what proves it.
   ["scripts/okf_migrate.mjs", "--check", "advisor-protocol"],
   // okf-6: the D35 coverage gate for critical-patterns.md's migration into
   // docs/knowledge/patterns/ — same coverage law, PATn anchors instead of
@@ -306,11 +355,11 @@ const EXTRA_SUITES = [
   ["scripts/okf_instructions_fence.mjs"],
 ];
 
-// scripts/test_installers_e2e.mjs is discovered by the glob too (it matches
-// `test_*.mjs`); its args variant is supplied via EXTRA_SUITES above, so the
-// bare no-args discovery hit for this one path is dropped to avoid running
-// it twice.
-const ARGS_OVERRIDE = new Set(["scripts/test_installers_e2e.mjs"]);
+// scripts/tests/test_installers_e2e.mjs is discovered by the glob too (it
+// matches `test_*.mjs`); its args variant is supplied via EXTRA_SUITES above,
+// so the bare no-args discovery hit for this one path is dropped to avoid
+// running it twice.
+const ARGS_OVERRIDE = new Set(["scripts/tests/test_installers_e2e.mjs"]);
 
 function discoverSuites() {
   const found = [];
@@ -347,7 +396,7 @@ export const SUITES = discoverSuites();
 // convention; they are listed explicitly below.
 const SERIAL_NAME_PATTERN = /_(race|lock|concurrency)\.mjs$/;
 const SERIAL_EXCEPTIONS = new Set([
-  "scripts/test_heartbeat_touch.mjs",
+  "scripts/tests/test_heartbeat_touch.mjs",
 ]);
 
 const SERIAL_SENSITIVE = new Set(
@@ -368,7 +417,7 @@ function suiteLabel(entry) {
 // its members must not overlap each other because one of them deliberately
 // mutates a file the others read.
 //
-// `scripts/test_okf_pins.mjs` section 22 proves the coverage gate's bundle
+// `scripts/tests/test_okf_pins.mjs` section 22 proves the coverage gate's bundle
 // invariants are actually WIRED, end to end, by writing one deliberately
 // non-canonical concept into the REAL docs/knowledge/ bundle, asserting the
 // real CLI turns red, and removing it again. That is the right test — an
@@ -389,7 +438,7 @@ function suiteLabel(entry) {
 function touchesLiveBundle(entry) {
   const [cmd, ...args] = entry;
   if (cmd === "scripts/okf_migrate.mjs") return true; // every --check <area>
-  if (cmd === "scripts/test_okf_pins.mjs") return true; // the deliberate mutator
+  if (cmd === "scripts/tests/test_okf_pins.mjs") return true; // the deliberate mutator
   if (cmd === ".bee/bin/bee.mjs" && args[0] === "knowledge") return true; // check / index --check
   return false;
 }
@@ -532,16 +581,134 @@ function printScopedBanner(selected, total) {
   );
 }
 
-export function runOne(entry) {
+// ─── per-suite timeout + heartbeat (i54-closeout-2, D2) ────────────────────
+// runOne() used to spawn a suite with no upper bound: a hung child ran
+// forever with zero visible signal beyond "the pool never finished". Two
+// independent behaviors close that gap without touching the hermetic env
+// scrub (childEnv(), unchanged below) or any pass/fail semantics for
+// non-timeout suites: (a) a per-suite wall-clock timeout that kills the
+// WHOLE child process group (not just the direct child — a suite may have
+// spawned its own grandchildren) and reports a distinct TIMEOUT failure,
+// never conflated with an ordinary red, never a silent hang; (b) a
+// heartbeat line to STDERR (never stdout, so machine-readable summary
+// output stays clean) naming whichever suites are still in flight, so a
+// human or agent watching a long run never mistakes progress for a freeze.
+const DEFAULT_SUITE_TIMEOUT_MS = 300000;
+const DEFAULT_HEARTBEAT_MS = 30000;
+
+// BEE_VERIFY_SUITE_TIMEOUT_MS: "0" or "none" (case-insensitive) disables the
+// timeout outright; unset, blank, or unparseable falls back to the 300s
+// default rather than silently running unbounded.
+export function resolveSuiteTimeoutMs() {
+  const raw = process.env.BEE_VERIFY_SUITE_TIMEOUT_MS;
+  if (raw === undefined) return DEFAULT_SUITE_TIMEOUT_MS;
+  const trimmed = raw.trim();
+  if (trimmed === "") return DEFAULT_SUITE_TIMEOUT_MS;
+  const lower = trimmed.toLowerCase();
+  if (lower === "0" || lower === "none") return 0;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_SUITE_TIMEOUT_MS;
+}
+
+// BEE_VERIFY_HEARTBEAT_MS: cadence override, defaulting to ~30s; unset,
+// blank, zero, negative, or unparseable falls back to the default rather
+// than spinning a zero-delay interval.
+export function resolveHeartbeatMs() {
+  const raw = process.env.BEE_VERIFY_HEARTBEAT_MS;
+  if (raw === undefined) return DEFAULT_HEARTBEAT_MS;
+  const trimmed = raw.trim();
+  if (trimmed === "") return DEFAULT_HEARTBEAT_MS;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_HEARTBEAT_MS;
+}
+
+// In-flight tracker: shared between runOne/runSerialGroup (which start/end
+// entries as they actually run) and the heartbeat interval (which only ever
+// reads a snapshot). Kept as its own tiny object — injectable and directly
+// testable without needing the full pool/process.exit machinery of
+// runSelectedSuites.
+export function createInFlightTracker() {
+  const inFlight = new Map();
+  return {
+    start(label) {
+      inFlight.set(label, Date.now());
+    },
+    end(label) {
+      inFlight.delete(label);
+    },
+    snapshot() {
+      return [...inFlight.entries()];
+    },
+  };
+}
+
+// Prints one HEARTBEAT line to stderr per tick naming every suite still in
+// flight plus its own elapsed time and the run's total elapsed time. Silent
+// on a tick where nothing is in flight (e.g. right at pool start) — never a
+// blank/noise line. `intervalMs`/`wallStart`/`log` are all injectable so a
+// test can assert emission on a short interval without an unconditional 30s
+// sleep; `intervalMs <= 0` disables the heartbeat entirely (returns null,
+// nothing to clear). Default `log` is `console.error` — stderr, never
+// stdout, so machine-readable summary output is never corrupted.
+export function startHeartbeat(tracker, { intervalMs = resolveHeartbeatMs(), wallStart = Date.now(), log = console.error } = {}) {
+  if (!(intervalMs > 0)) return null;
+  const timer = setInterval(() => {
+    const active = tracker.snapshot();
+    if (active.length === 0) return;
+    const now = Date.now();
+    const totalS = ((now - wallStart) / 1000).toFixed(1);
+    const names = active
+      .map(([label, startedAt]) => `${label} (${((now - startedAt) / 1000).toFixed(1)}s)`)
+      .join(", ");
+    log(`HEARTBEAT: ${active.length} suite(s) still running after ${totalS}s: ${names}`);
+  }, intervalMs);
+  if (typeof timer.unref === "function") timer.unref();
+  return timer;
+}
+
+export function stopHeartbeat(timer) {
+  if (timer) clearInterval(timer);
+}
+
+export function runOne(entry, opts = {}) {
   const [script, ...args] = entry;
+  const label = suiteLabel(entry);
   const start = Date.now();
+  const timeoutMs = opts.timeoutMs !== undefined ? opts.timeoutMs : resolveSuiteTimeoutMs();
+  const tracker = opts.tracker;
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [script, ...args], {
       cwd: REPO_ROOT,
       env: childEnv(),
+      // detached: true makes this child the leader of its own process group
+      // (POSIX) so a timeout can kill the group — the child plus any
+      // grandchildren it spawned — instead of leaving orphans running past
+      // the kill.
+      detached: true,
     });
+    tracker?.start(label);
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    let timedOut = false;
+    let timer = null;
+
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        timedOut = true;
+        try {
+          // Negative pid = kill the whole process group, not just this pid.
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+            // process already gone; nothing left to kill.
+          }
+        }
+      }, timeoutMs);
+    }
+
     child.stdout.on("data", (d) => {
       stdout += d;
     });
@@ -549,12 +716,23 @@ export function runOne(entry) {
       stderr += d;
     });
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      tracker?.end(label);
+      const ms = Date.now() - start;
+      const finalCode = timedOut ? 124 : code;
+      if (timedOut) {
+        stderr += `\nTIMEOUT after ${timeoutMs}ms — suite killed\n`;
+      }
       resolve({
-        label: suiteLabel(entry),
-        code,
-        ms: Date.now() - start,
+        label,
+        code: finalCode,
+        ms,
         stdout,
         stderr,
+        timedOut,
+        timeoutMs,
       });
     });
   });
@@ -563,12 +741,13 @@ export function runOne(entry) {
 // Run a group of suite entries strictly one after another; return their
 // individual results. Used for the SERIAL_SENSITIVE unit so those suites
 // never overlap each other, even though the group as a whole runs
-// concurrently with other pool units.
-async function runSerialGroup(entries) {
+// concurrently with other pool units. `opts` (tracker, timeoutMs) passes
+// straight through to each runOne() call.
+async function runSerialGroup(entries, opts = {}) {
   const results = [];
   for (const entry of entries) {
     // eslint-disable-next-line no-await-in-loop
-    results.push(await runOne(entry));
+    results.push(await runOne(entry, opts));
   }
   return results;
 }
@@ -766,31 +945,41 @@ async function runSelectedSuites(activeSuites, { concurrency, beforeBanner, afte
   const bundleEntries = rest.filter((entry) => LIVE_BUNDLE_GROUP.has(suiteLabel(entry)));
   const parallelEntries = rest.filter((entry) => !LIVE_BUNDLE_GROUP.has(suiteLabel(entry)));
 
+  const tracker = createInFlightTracker();
+
   const units = [];
   if (serialEntries.length > 0) {
-    units.push(() => runSerialGroup(serialEntries));
+    units.push(() => runSerialGroup(serialEntries, { tracker }));
   }
   if (bundleEntries.length > 0) {
-    units.push(() => runSerialGroup(bundleEntries));
+    units.push(() => runSerialGroup(bundleEntries, { tracker }));
   }
   for (const entry of parallelEntries) {
-    units.push(() => runOne(entry).then((r) => [r]));
+    units.push(() => runOne(entry, { tracker }).then((r) => [r]));
   }
 
   if (beforeBanner) beforeBanner();
 
   const wallStart = Date.now();
+  const heartbeatTimer = startHeartbeat(tracker, { wallStart });
   const results = await runPool(units, concurrency);
+  stopHeartbeat(heartbeatTimer);
   const wallMs = Date.now() - wallStart;
 
   results.sort((a, b) => a.label.localeCompare(b.label));
 
   let anyFail = false;
   for (const r of results) {
-    const status = r.code === 0 ? "PASS" : "FAIL";
+    const status = r.timedOut ? "TIMEOUT" : r.code === 0 ? "PASS" : "FAIL";
     if (r.code !== 0) anyFail = true;
-    const note = status === "PASS" ? skipNote(r.stdout) : null;
-    console.log(`${status}  ${String(r.ms).padStart(6)}ms  ${r.label}${note ? `  [SKIPPED: ${note}]` : ""}`);
+    let note = "";
+    if (status === "PASS") {
+      const skip = skipNote(r.stdout);
+      if (skip) note = `  [SKIPPED: ${skip}]`;
+    } else if (status === "TIMEOUT") {
+      note = `  [after ${r.timeoutMs}ms]`;
+    }
+    console.log(`${status}  ${String(r.ms).padStart(6)}ms  ${r.label}${note}`);
   }
 
   const failed = results.filter((r) => r.code !== 0);
@@ -862,13 +1051,52 @@ async function runImpactedMode(explicitFiles, fromGit, level) {
     return;
   }
 
-  const activeSuites = filterSuitesByLabels(SUITES, new Set(mappedSuites));
+  // test-economy D6: the impacted cap governs ONLY a transitive run — a
+  // caller that already asked for `--level 1` gets today's behavior
+  // unchanged, no banner, no cut (must-have: "--level 1 => no banner, no
+  // cut"). When it does apply and the transitive selection's share of the
+  // full suite pool exceeds the configured cap, the selection narrows to the
+  // level-1 query over the SAME changed-file set — which, per
+  // impact_registry.mjs (a suite's own path is always direct for itself,
+  // :428), already keeps every self-selected suite (a changed test file
+  // maps directly to itself) and every suite that imports a changed file
+  // directly; only the pure-transitive tail is dropped.
+  let selectedSuites = mappedSuites;
+  let capInfo = null;
+  if (level !== 1) {
+    const cap = readImpactedCap();
+    const ratio = mappedSuites.length / SUITES.length;
+    if (cap < 1 && ratio > cap) {
+      const capped = queryRegistry(registry, changedList, { level: 1 });
+      selectedSuites = capped.mappedSuites;
+      capInfo = { total: mappedSuites.length, cap };
+    }
+  }
+
+  const activeSuites = filterSuitesByLabels(SUITES, new Set(selectedSuites));
   printImpactedUnmapped(unmapped);
+  if (capInfo) {
+    console.log(
+      `impacted ${capInfo.total}/${SUITES.length} exceeds cap (${capInfo.cap}) — transitive tail delegated to CI`,
+    );
+  }
+  // Banner reflects what's actually RUNNING: once capped, the selection IS a
+  // level-1 query result, so the per-suite banner says so too, even though
+  // the caller never passed --level 1 itself.
+  const bannerLevel = capInfo ? 1 : level;
 
   await runSelectedSuites(activeSuites, {
     concurrency: impactedConcurrency(),
-    beforeBanner: () => printImpactedBanner(activeSuites.length, changedList.length, level),
-    afterBanner: () => printImpactedBanner(activeSuites.length, changedList.length, level),
+    beforeBanner: () => printImpactedBanner(activeSuites.length, changedList.length, bannerLevel),
+    afterBanner: () => {
+      printImpactedBanner(activeSuites.length, changedList.length, bannerLevel);
+      // exit code is left to the shared execution tail's own anyFail
+      // computation over `activeSuites` — "exit = kết quả phần đã chạy"
+      // (D6): a red suite inside the capped selection stays red, never
+      // silently swallowed the way the unmapped/zero-impacted branch's
+      // unconditional exit-0 is.
+      if (capInfo) triggerCiDelegation();
+    },
   });
 }
 
@@ -959,7 +1187,7 @@ async function main() {
 
 // Only run the suite pool when this file is executed directly (`node
 // scripts/run_verify.mjs`) — NOT when imported, e.g. by
-// scripts/test_verify_manifest.mjs pulling in the exported SUITES list. An
+// scripts/tests/test_verify_manifest.mjs pulling in the exported SUITES list. An
 // unconditional call here would spawn the entire suite as a side effect of
 // a plain `import`.
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;

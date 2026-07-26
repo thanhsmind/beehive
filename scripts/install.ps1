@@ -290,7 +290,7 @@ try {
     # .ProviderPath, not .Path: on UNC paths PS 5.1 returns a provider-qualified
     # string (Microsoft.PowerShell.Core\FileSystem::\\...) that node cannot open.
     $beeSrc = (Resolve-Path $Source).ProviderPath
-  } elseif ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot '..\skills\bee-hive\scripts\onboard_bee.mjs'))) {
+  } elseif ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot '..\packages\bee\scripts\onboard_bee.mjs'))) {
     $beeSrc = (Resolve-Path (Join-Path $PSScriptRoot '..')).ProviderPath
   } else {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -314,18 +314,18 @@ try {
     # sparse-checkout needs git 2.25+; on older git it exits non-zero and the checkout
     # below is simply a full one (which may still trip over an invalid path; the probe
     # is what turns that into an honest error instead of a silent empty source).
-    git -C $clonePath sparse-checkout set skills hooks .claude-plugin .codex-plugin docs/history/codex-harness-hardening
+    git -C $clonePath sparse-checkout set skills packages .claude-plugin .codex-plugin docs/history/codex-harness-hardening
     git -C $clonePath checkout --quiet HEAD
 
     $beeSrc = $clonePath
-    if (-not (Test-Path (Join-Path $beeSrc 'skills\bee-hive\scripts\onboard_bee.mjs'))) {
-      Fail "Checkout of $RepoUrl (ref: $Ref) produced no skills/ tree. Update git to 2.25+ (sparse checkout), or pass -Source <local-checkout>."
+    if (-not (Test-Path (Join-Path $beeSrc 'packages\bee\scripts\onboard_bee.mjs'))) {
+      Fail "Checkout of $RepoUrl (ref: $Ref) produced no packages/ tree. Update git to 2.25+ (sparse checkout), or pass -Source <local-checkout>."
     }
   }
 
-  $onboard = Join-Path $beeSrc 'skills\bee-hive\scripts\onboard_bee.mjs'
-  if (-not (Test-Path $onboard)) { Fail "Not a bee checkout (missing skills/bee-hive/scripts/onboard_bee.mjs): $beeSrc" }
-  $distributionHelper = Join-Path $beeSrc 'skills\bee-hive\scripts\plugin_distribution.mjs'
+  $onboard = Join-Path $beeSrc 'packages\bee\scripts\onboard_bee.mjs'
+  if (-not (Test-Path $onboard)) { Fail "Not a bee checkout (missing packages/bee/scripts/onboard_bee.mjs): $beeSrc" }
+  $distributionHelper = Join-Path $beeSrc 'packages\bee\scripts\plugin_distribution.mjs'
   $releaseManifest = Join-Path $beeSrc 'docs\history\codex-harness-hardening\release-manifest.json'
   if (-not (Test-Path $distributionHelper)) { Fail "Not a bee release (missing plugin_distribution.mjs): $beeSrc" }
   if (-not (Test-Path $releaseManifest)) { Fail "Not a bee release (missing release manifest): $beeSrc" }

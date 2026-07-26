@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [ba5a35f1-981d-4cb5-8a57-234a187f122d (placement rule), "0023 + 6cd34376 (explicit-tier transport rides critical rule 13, B3a)"]
+  decisions: [ba5a35f1-981d-4cb5-8a57-234a187f122d (placement rule), "0023 + 6cd34376 (explicit-tier transport rides critical rule 12, B3a)"]
   sources: ["tier-transport-doctrine (cell tier-transport-doctrine-1, 2026-07-13)", "docs/specs/doctrine-layer.md#B1", "docs/specs/doctrine-layer.md#B2", "docs/specs/doctrine-layer.md#B3a", "docs/specs/doctrine-layer.md#B4", "docs/specs/doctrine-layer.md#R1", "docs/specs/doctrine-layer.md#R2", "docs/specs/doctrine-layer.md#E1", "docs/specs/doctrine-layer.md#P1", "docs/specs/doctrine-layer.md#P2", "docs/specs/doctrine-layer.md#P4"]
   authoritative_for: "doctrine-layer: rule placement, propagation, and anchoring"
 ---
@@ -84,12 +84,12 @@ mechanism that makes deleting or relocating a rule a visible event.
 
 ## Pointers (implementation)
 
-- Master copy of the standing sheet: `skills/bee-hive/templates/AGENTS.block.md`;
+- Master copy of the standing sheet: `packages/bee/AGENTS.block.md`;
   the rendered per-project copy sits between the `<!-- BEE:START -->` /
   `<!-- BEE:END -->` markers in each host's root `AGENTS.md`.
-- B1's copy-into-project step: `skills/bee-hive/scripts/onboard_bee.mjs`
+- B1's copy-into-project step: `packages/bee/scripts/onboard_bee.mjs`
   (`update_agents_block` plan item).
-- Anchor tests (B4/R2): `skills/bee-hive/templates/tests/test_lib.mjs` — the
+- Anchor tests (B4/R2): `packages/bee/tests/test_lib.mjs` — the
   `census:` checks, including the delegation-layer anchor and the on-demand
   review anchors, plus the native Codex empty-wait anchor across the master,
   root, canonical procedure, and writable `.claude` surfaces.

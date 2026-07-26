@@ -76,7 +76,7 @@ impossible to record; pre-existing records are never mutated by the check
 
 ## Pointers (implementation)
 
-- Computed schedule (B17/B18, R26/R27): `skills/bee-hive/templates/lib/schedule.mjs`
+- Computed schedule (B17/B18, R26/R27): `packages/bee/lib/schedule.mjs`
   (`computeSchedule`, `detectCycles` — pure, Kahn layering + greedy `pathsOverlap`
   packing, Tarjan SCC for cycles; byte-mirrored to `.bee/bin/lib/`); cycle refusal
   wired in `cells.mjs` `addCell`/`addCells`/`updateCell` via `assertNoCycle`;

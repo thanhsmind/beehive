@@ -52,6 +52,21 @@
 # see SKILL.md "Accepted risk". If either role gains a new command, its
 # allowlist below must grow with it or that role will silently stall.
 #
+# CONFIG-DRIVEN SPAWN COMMAND (D4, i54-closeout-4). The real claude invocation
+# below is config-driven, not hardcoded: an optional `.bee/config.json`
+# `herding.control_command` (a JSON array of argv-token strings) replaces it
+# when present. Each token may carry the placeholders {PROMPT}, {MODEL},
+# {MAX_TURNS}, {ALLOWED_TOOLS}, substituted per-token (never by concatenating
+# into one string and re-splitting or `eval`-ing it - that is the
+# shell-injection-prone shape this design deliberately avoids). With NO
+# `herding.control_command` key, the built default is BYTE-EQUIVALENT to the
+# pre-D4 hardcoded command - zero behavior change without explicit config.
+# See `read_command_template` and `run_iteration` below, and SKILL.md's
+# "Herding runtime adapter" section for the config shape and a codex example.
+# This key is independent of `herding.agent_command`, which SKILL.md's
+# dispatch role (§8) reads for the WORKING agent's spawn argv - a different
+# process, spawned via `herdr agent start`, not this script.
+#
 # Usage:
 #   control-loop.sh --role dispatch|merge [--main-root PATH] [--interval N]
 #                    [--timeout N] [--max-iterations N]
@@ -231,6 +246,56 @@ resolve_main_root() {
 
 STOP_FILE="$(resolve_main_root)/.bee/tmp/bee-herding.stop"
 
+# read_command_template KEY - reads herding.<KEY> from <main-root>/.bee/config.json
+# as a JSON array of argv-token strings, and prints each token on its OWN
+# line. This is the shell-injection-safe read path: tokens travel as
+# discrete, already-split argv elements from JSON straight into a bash array
+# (one `read` per line in the caller) - never concatenated into one string
+# and re-split by the shell, and never passed through `eval`. A token
+# containing a newline is rejected (the line-per-token protocol cannot carry
+# it) - config authors keep newlines out of individual argv tokens, which
+# every real command name/flag/value already does. A missing config file, a
+# missing `herding.<KEY>` key, a non-array value, or any rejected token all
+# print nothing and exit 0 - the caller then falls back to its own hardcoded
+# default, which is exactly today's behavior (D4: no config keys =>
+# byte-equivalent command).
+read_command_template() {
+  local key="$1"
+  local config_path
+  config_path="$(resolve_main_root)/.bee/config.json"
+  [ -f "$config_path" ] || return 0
+  node -e '
+    var NL = String.fromCharCode(10);
+    var raw;
+    try { raw = require("fs").readFileSync(process.argv[2], "utf8"); } catch (e) { process.exit(0); }
+    var cfg;
+    try { cfg = JSON.parse(raw); } catch (e) { process.exit(0); }
+    var tmpl = cfg && cfg.herding && cfg.herding[process.argv[1]];
+    var ok = Array.isArray(tmpl) && tmpl.length > 0 &&
+      tmpl.every(function (t) { return typeof t === "string" && t.indexOf(NL) === -1; });
+    if (!ok) { process.exit(0); }
+    tmpl.forEach(function (t) { console.log(t); });
+  ' "$key" "$config_path"
+}
+
+# substitute_placeholders CMD_ARRAY_NAME - replaces the {PROMPT}, {MODEL},
+# {MAX_TURNS}, {ALLOWED_TOOLS} placeholders inside EACH element of the named
+# bash array, in place, one token at a time. Per-token substitution (never a
+# join-then-split) means a value containing spaces, quotes, or shell
+# metacharacters (e.g. $PROMPT's free-form text) lands as the literal
+# content of that one argv element and can never spill into, or be
+# re-parsed as, another argument or a shell operator.
+substitute_placeholders() {
+  local -n arr_ref="$1"
+  local i
+  for i in "${!arr_ref[@]}"; do
+    arr_ref[$i]="${arr_ref[$i]//\{PROMPT\}/$PROMPT}"
+    arr_ref[$i]="${arr_ref[$i]//\{MODEL\}/sonnet}"
+    arr_ref[$i]="${arr_ref[$i]//\{MAX_TURNS\}/$TURN_CEILING}"
+    arr_ref[$i]="${arr_ref[$i]//\{ALLOWED_TOOLS\}/$ALLOWED_TOOLS}"
+  done
+}
+
 # allowed_tools_for ROLE - the ENUMERATED control-pane command surface
 # (D7-FINAL). Sized to exactly what each role measurably does; NOT
 # "read-only" (that stalls both roles on their first write every interval),
@@ -281,14 +346,27 @@ run_iteration() {
 
   PROMPT="$(cat "$PROMPT_FILE")"
   ALLOWED_TOOLS="$(allowed_tools_for "$ROLE")"
+
+  # CONFIG-DRIVEN COMMAND (i54-closeout-4/D4). Optional `.bee/config.json`
+  # `herding.control_command` (a JSON array of argv tokens) replaces the
+  # hardcoded invocation below; absent, invalid, or non-array => the default
+  # array is used, which is BYTE-EQUIVALENT to the pre-D4 hardcoded command.
   # NOT bypassPermissions (D7-FINAL): the enumerated --allowedTools surface
   # above is the control-pane posture. --max-turns bounds per-iteration spend
-  # (D12). --model sonnet is D4's fixed control/working model.
-  timeout -k 30s "${TIMEOUT}s" \
-    claude -p "$PROMPT" \
-      --model sonnet \
-      --max-turns "$TURN_CEILING" \
-      --allowedTools "$ALLOWED_TOOLS"
+  # (D12). --model sonnet is D4's fixed control/working model, carried into a
+  # custom template via the {MODEL} placeholder.
+  local -a CMD=()
+  while IFS= read -r _tok; do
+    CMD+=("$_tok")
+  done < <(read_command_template control_command)
+
+  if [ "${#CMD[@]}" -eq 0 ]; then
+    CMD=(claude -p "$PROMPT" --model sonnet --max-turns "$TURN_CEILING" --allowedTools "$ALLOWED_TOOLS")
+  else
+    substitute_placeholders CMD
+  fi
+
+  timeout -k 30s "${TIMEOUT}s" "${CMD[@]}"
   return $?
 }
 

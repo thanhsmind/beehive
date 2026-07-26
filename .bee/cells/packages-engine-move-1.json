@@ -1,0 +1,184 @@
+{
+  "id": "packages-engine-move-1",
+  "feature": "packages-engine-move",
+  "lane": "standard",
+  "title": "Move onboarding/distribution engine skills/bee-hive/scripts -> packages/bee/scripts + full resolution sweep",
+  "files": [
+    "packages/bee/scripts/",
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/cells.mjs",
+    "scripts/install.sh",
+    "scripts/install.ps1",
+    "scripts/run_verify.mjs",
+    "scripts/release_manifest.mjs",
+    "scripts/render_plugin_skill_trees.mjs",
+    "scripts/canary_codex.mjs",
+    "scripts/ledger_parity.mjs",
+    "scripts/bump_version.mjs",
+    "scripts/okf_instructions_fence.mjs",
+    "scripts/tests/",
+    "scripts/impact-registry.json",
+    "LLM.md",
+    "INSTALL.md",
+    ".claude-plugin/",
+    ".codex-plugin/",
+    ".claude/skills/",
+    ".agents/skills/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/packages-engine-move/plan.md",
+    "docs/history/packages-engine-move/reports/validation-slice1.md",
+    "skills/bee-hive/scripts/onboard_bee.mjs:60-95",
+    "skills/bee-hive/scripts/onboard_bee.mjs:1500-1570",
+    "skills/bee-hive/scripts/test_split_brain_regression.mjs:190-270",
+    "skills/bee-hive/scripts/test_onboard_bee.mjs:1915-1960"
+  ],
+  "action": "Per D1/D2/D3/D5 + validation repairs (report). `git mv skills/bee-hive/scripts packages/bee/scripts` (5 files). Fix-forward: (1) ENGINE INTERNALS — imports :65-67 -> '../lib/*.mjs'. HIVE_DIR is THREE semantics, split explicitly (validation C1): [engine geometry] :84-85 -> ENGINE_DIR = dirname(SCRIPTS_DIR), PLUGIN_ROOT = dirname(dirname(ENGINE_DIR)) (arithmetic unchanged: scripts->bee->packages->root); [classifySource input] :497,:3906 -> pass path.join(PLUGIN_ROOT,'skills','bee-hive') — classifySource contract and packages/bee/lib/source-identity.mjs are NOT touched (C3: 5 callers in 2 geometries, projection semantics preserved for free); [skills-root for sync] :1515,:2890,:3195 (+downstream :1556,:3649,:3676,:3755,:3799,:3986) -> SKILLS_ROOT = path.join(PLUGIN_ROOT,'skills') — the tree skill-sync copies; NEVER dirname(HIVE_DIR). (2) identityOk :1541-1548 — NOT the tautology realpath(join(PLUGIN_ROOT,'packages/bee/scripts'))===SCRIPTS_DIR (C2, always true by construction): anchor on realpathSync(path.join(SKILLS_ROOT,'bee-hive')) existing AND contained under realpath(PLUGIN_ROOT) AND payload readable (packages/bee/lib/state.mjs) — falsifiable 'engine and skills tree share one legitimate package root'. blocked_no_source semantics for projections unchanged. (3) TEST FIXTURES are a re-author, not a path swap (B4/C4): makeFakeSkillsRoot (test_onboard_bee.mjs:1921,:1954, 18 call sites) places the launcher at <pluginRoot>/packages/bee/scripts/onboard_bee.mjs with the fake skills tree instruction-only; test_split_brain_regression scenario is DISSOLVED by D3 — rewrite to assert a projection tree carries NO launcher and invoking the engine against a projection-only root yields blocked_no_source (state the expected outcome in the test header). (4) REGEN-TOOL CONSUMERS fixed BEFORE any regen command runs (W1): render_plugin_skill_trees.mjs:30 renderSkillBytes import, scripts/tests/test_skill_render.mjs:22,:27, scripts/tests/test_installers_e2e.mjs:320. (5) CALLERS: install.sh:162-179; install.ps1:293,321,326-328 — includes BACKSLASH forms 'skills\\bee-hive\\scripts' (B3) and :328 $distributionHelper; scripts/canary_codex.mjs:27,:77 (B2 — CI canary spawns the engine); scripts/ledger_parity.mjs:28,:54 FIX_HINT strings; scripts/bump_version.mjs:131 release runbook line; scripts/okf_instructions_fence.mjs:527-528 fixture writes; LLM.md:86-87; INSTALL.md:142,148 (backslash examples). (6) run_verify.mjs DISCOVERY_ROOTS :94 -> 'packages/bee/scripts'. (7) bee.mjs hint strings :5618,:5640,:5788,:5915 + cells.mjs regen strings :192,:201 -> node packages/bee/scripts/onboard_bee.mjs. (8) release_manifest.mjs :45 comment; assert manifest gains the 5 engine records under package_payload and plugin_skill loses them. (9) ACCEPTANCE = verify clause, exit-code-guarded: rg 'bee-hive[/\\\\]scripts' over scripts/ skills/ LLM.md INSTALL.md README.md packages/bee/bee.mjs packages/bee/lib/cells.mjs must return NO MATCH with rg exit 1 (docs/decisions + CREATION-LOG history exempt by scope; deliberate legacy-scenario fixture lines inside packages/bee/scripts tests are exempt and must carry a '// legacy layout fixture' comment). (10) REGEN OBLIGATION in order, only after (1)-(8): node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply (projections shrink by 5 engine files — verify removal in .claude/skills + .agents/skills), then node scripts/release_manifest.mjs --write, then node scripts/impact_registry.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "git log --follow packages/bee/scripts/onboard_bee.mjs shows history through the move",
+      "self-onboard up_to_date after apply; projections carry no scripts/ dir",
+      "a projection dir without sibling packages still classifies project_projection and yields blocked_no_source (test-pinned; classifySource contract untouched)",
+      "identityOk anchor is falsifiable (skills tree + payload presence), never derived from SCRIPTS_DIR alone",
+      "release manifest: 5 engine files under package_payload, absent from plugin_skill",
+      "acceptance rg clause green with exit-1 semantics"
+    ],
+    "artifacts": [
+      "packages/bee/scripts/{onboard_bee.mjs,plugin_distribution.mjs,test_onboard_bee.mjs,test_plugin_distribution.mjs,test_split_brain_regression.mjs}"
+    ],
+    "key_links": [
+      "docs/history/packages-engine-move/plan.md",
+      "docs/history/packages-engine-move/reports/validation-slice1.md",
+      "docs/knowledge/patterns/20260726-migration-tooling-is-a-consumer-of-the-migration.md"
+    ],
+    "prohibitions": [
+      "packages/bee/lib/source-identity.mjs must NOT be edited (C3)",
+      "no hand-edit of scripts/impact-registry.json or .bee/onboarding.json (regen-owned; listed in files for reservation only)",
+      "no HAND-edits under .bee/bin — only onboard --apply writes there",
+      "blocked_no_source semantics for projections must not weaken"
+    ]
+  },
+  "verify": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs && node scripts/release_manifest.mjs --check && bash -c 'rg -n \"bee-hive[/\\\\\\\\]scripts\" scripts/ skills/ LLM.md INSTALL.md README.md packages/bee/bee.mjs packages/bee/lib/cells.mjs; [ $? -eq 1 ]'",
+  "behavior_change": true,
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "jerry",
+    "outcome": "Moved the onboarding/distribution engine (onboard_bee.mjs, plugin_distribution.mjs, 3 test suites) from skills/bee-hive/scripts to packages/bee/scripts; split HIVE_DIR into ENGINE_DIR/PLUGIN_ROOT/SKILLS_ROOT, re-anchored classifySource input and identityOk on a falsifiable skills-tree+payload check, re-authored the test fixtures (launcher moved out of the fake skills tree; split-brain fixture rewritten to assert a projection carries no launcher and a projection-shaped root blocks_no_source), fixed every live caller (installers, canary, ledger/bump/okf scripts, run_verify discovery roots, bee.mjs/cells.mjs hint strings, LLM.md/INSTALL.md/README.md), and completed the regen chain (render_plugin_skill_trees, self-onboard apply, release_manifest --write, impact_registry --write) so all 4 rendered/synced projections lost their 5 engine files automatically. Full verify green (105 suites), manifest --check green, acceptance rg clause clean.",
+    "files_changed": [
+      "packages/bee/scripts/onboard_bee.mjs",
+      "packages/bee/scripts/plugin_distribution.mjs",
+      "packages/bee/scripts/test_onboard_bee.mjs",
+      "packages/bee/scripts/test_plugin_distribution.mjs",
+      "packages/bee/scripts/test_split_brain_regression.mjs",
+      "packages/bee/bee.mjs",
+      "packages/bee/lib/cells.mjs",
+      "scripts/install.sh",
+      "scripts/install.ps1",
+      "scripts/run_verify.mjs",
+      "scripts/release_manifest.mjs",
+      "scripts/render_plugin_skill_trees.mjs",
+      "scripts/canary_codex.mjs",
+      "scripts/ledger_parity.mjs",
+      "scripts/bump_version.mjs",
+      "scripts/okf_instructions_fence.mjs",
+      "scripts/impact-registry.json",
+      "scripts/tests/test_skill_render.mjs",
+      "scripts/tests/test_installers_e2e.mjs",
+      "scripts/tests/test_hook_vendor_closure.mjs",
+      "scripts/tests/test_verify_manifest.mjs",
+      "scripts/tests/test_render_race.mjs",
+      "LLM.md",
+      "INSTALL.md",
+      "README.md",
+      ".claude-plugin/skills",
+      ".codex-plugin/skills",
+      ".claude/skills",
+      ".agents/skills",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T20:01:18.707Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"new_suite_reason\": \"These three files (test_onboard_bee.mjs, test_plugin_distribution.mjs, test_split_brain_regression.mjs) are git-mv relocations of pre-existing suites already part of commands.verify before this cell, not new coverage; git log --follow preserves their history at the new packages/bee/scripts path per this cell's own must_haves.\",\n  \"tests_inspected\": [\n    \"packages/bee/scripts/test_split_brain_regression.mjs (full rewrite, read before and after)\",\n    \"packages/bee/scripts/test_onboard_bee.mjs:1904-1955 (makeFakeSkillsRoot) and :4361-4434 (legacy-refresh sourceHiveDir)\",\n    \"scripts/tests/test_skill_render.mjs:189-229 (buildProjection)\",\n    \"packages/bee/lib/source-identity.mjs (read for classifySource's exact hiveDir contract; file itself untouched per C3 prohibition)\"\n  ],\n  \"tests_added_or_changed\": [\n    \"packages/bee/scripts/test_split_brain_regression.mjs (dissolved-and-replaced per D3: now asserts (A) a synced projection carries no scripts/ launcher and (B) an engine copy invoked from a projection-shaped root reports blocked_no_source)\",\n    \"packages/bee/scripts/test_onboard_bee.mjs (makeFakeSkillsRoot launcher moved to packagesBee/scripts, 18 call sites re-pointed via the single helper; legacy-refresh sourceHiveDir fixed to read the fixture's own skillsRoot instead of deriving from the launcher path)\",\n    \"scripts/tests/test_skill_render.mjs (buildProjection launcher moved to packagesBeeDir/scripts so its own \\\"../lib\\\" import resolves)\",\n    \"scripts/tests/test_verify_manifest.mjs (MANDATORY_SUITES paths repointed)\",\n    \"scripts/tests/test_hook_vendor_closure.mjs (ONBOARD const repointed)\",\n    \"scripts/okf_instructions_fence.mjs (machinery-under-skills/ fixture repointed to a still-real skills/bee-herding/scripts example, since bee-hive/scripts no longer exists)\"\n  ],\n  \"verification_run\": \"BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs -> PASS 105 suite(s), 0 failures, wall~42s; node scripts/release_manifest.mjs --check -> 394 file(s) match stored manifest; acceptance rg clause (bee-hive[/\\\\\\\\]scripts over the declared scope) -> 0 matches / exit 1 (clean)\",\n  \"deliberate_exceptions\": [\n    \"This cell's requiredProofTier resolves to targeted-green (lane standard, derived change_class 'behavior', not high-risk) — no red_failure_evidence is required per test-economy D1/D2; ordinary verification_evidence above is the matrix minimum.\",\n    \"The stored cell verify string's acceptance rg clause omitted a --glob exclusion for the one pre-existing historical reference at skills/bee-evolving/CREATION-LOG.md:98, even though the cell's own action item 9 and validation-slice1.md both declare 'CREATION-LOG history exempt by scope'. Ran the clause with an added --glob '!**/CREATION-LOG.md' to honor that declared exemption (a planning-string gap, not a scope change) — every live-surface path the clause covers is independently clean with or without that glob; only the frozen historical log line needed it.\"\n  ]\n}\n",
+    "verify_output": "run_verify: PASS 105 suite(s) (0 failures) wall~42s. release_manifest --check: 394 file(s) match stored manifest. Acceptance rg clause (bee-hive[/\\\\]scripts over scripts/ skills/ LLM.md INSTALL.md README.md packages/bee/bee.mjs packages/bee/lib/cells.mjs): 0 matches (exit 1), with an added --glob '!**/CREATION-LOG.md' exclusion for the one pre-existing, cell-action-declared-exempt historical reference at skills/bee-evolving/CREATION-LOG.md:98 (docs/decisions + CREATION-LOG history exempt by scope, per cell action item 9 and validation-slice1.md). Without that glob the same clause still exits clean on every live-surface path; only the frozen historical log line is excluded.",
+    "verify_passed": true,
+    "claim_session": "5a8119e3-29eb-43ae-8ada-7bae86f3a20e",
+    "claimed_at": "2026-07-25T19:37:43.051Z",
+    "verify_command": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs && node scripts/release_manifest.mjs --check && bash -c 'rg -n \"bee-hive[/\\\\\\\\]scripts\" scripts/ skills/ LLM.md INSTALL.md README.md packages/bee/bee.mjs packages/bee/lib/cells.mjs --glob \"!**/CREATION-LOG.md\"; [ $? -eq 1 ]'",
+    "verified_at": "2026-07-25T20:00:31.509Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T20:00:31.510Z",
+        "claim_session": "5a8119e3-29eb-43ae-8ada-7bae86f3a20e",
+        "claimed_at": "2026-07-25T19:37:43.048Z",
+        "acquired_at": "2026-07-25T19:37:43.048Z",
+        "worker": "jerry",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "1-rename-history",
+            "status": "PASS",
+            "evidence": "git log --follow packages/bee/scripts/onboard_bee.mjs => 50 commits through 8bff2a8/0a5639c; git show --stat renders true rename (4 of 5 files; test_split_brain_regression.mjs intentional re-author)"
+          },
+          {
+            "id": "2-hive-dir-three-semantics",
+            "status": "PASS",
+            "evidence": "onboard_bee.mjs:96-98 ENGINE_DIR/PLUGIN_ROOT/SKILLS_ROOT split; classifySource sites :510,:3932 pass join(SKILLS_ROOT,'bee-hive'); source-identity.mjs absent from commit (prohibition C3 held)"
+          },
+          {
+            "id": "3-identityok-falsifiable",
+            "status": "PASS",
+            "evidence": "onboard_bee.mjs:1561-1577 skills-tree realpath containment + payload existsSync; no SCRIPTS_DIR tautology; failure -> blocked_no_source"
+          },
+          {
+            "id": "4-projection-semantics",
+            "status": "PASS",
+            "evidence": "test_misc.mjs:2431-2437 pins project_projection (no sibling packages, file untouched); test_split_brain_regression rewritten invariants A/B live-run ok EXIT=0; test_skill_render.mjs:278 second pin"
+          },
+          {
+            "id": "5-self-onboard",
+            "status": "PASS",
+            "evidence": "onboard --json => up_to_date, plan [], exit 0; no bee-hive/scripts dir in any of 4 projections or skills/"
+          },
+          {
+            "id": "6-manifest-roles",
+            "status": "PASS",
+            "evidence": "release-manifest.json: 5 engine records under package_payload at packages/bee/scripts/*; zero skills/bee-hive/scripts records; --check 394 match exit 0"
+          },
+          {
+            "id": "7-acceptance-deviation",
+            "status": "PASS",
+            "evidence": "sole remaining hit skills/bee-evolving/CREATION-LOG.md:98 is a frozen validation-run log (historical); exemption pre-declared. Caveat: stored verify string lacks the CREATION-LOG glob so verbatim replay is red; globbed form green (orchestrator re-ran globbed: exit 0)"
+          },
+          {
+            "id": "8-live-callers",
+            "status": "PASS",
+            "evidence": "canary_codex:77, ledger_parity:54, install.ps1:293/321/326-328 backslash forms, install.sh:164/175/177, LLM.md:86-87, INSTALL.md:142/148 repointed; remaining refs owned by cell 2 + scribing; 4 moved suites run green from new home"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-25T20:09:31.742Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

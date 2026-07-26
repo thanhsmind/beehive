@@ -1,0 +1,100 @@
+{
+  "id": "multisession-native-20",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Policy modes: observe / shared-disjoint / isolated default",
+  "action": "Three write-policy modes resolved per session at write-capable entry points (startFeature, cells claim/claim-next): observe (never claims write ownership, unlimited concurrent), shared-disjoint (opt-in via config guards.write_policy: exact-path leases mandatory before write — slice-3 lease machinery enforces), isolated (DEFAULT when the target workspace already has a LIVE write owner other than the caller). Isolated flow: bee OFFERS/creates a feature worktree via createFeatureWorktree and answers with the new workspace path in work language. Condition 6 BINDING: (a) auto-create only with explicit --isolate flag or config guards.auto_isolate=true, else the refusal NAMES the one-liner (surfaced once per session); (b) loud one-line cost disclosure (full worktree copy + where); (c) register/create writes ride the CLI-owned allowlist (guards.mjs:168-175 pattern) — test proves isolation cannot self-deadlock. Regen inside this cell: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed). Canonical source: skills/bee-hive/templates/.",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-19"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/state.mjs",
+    "skills/bee-hive/templates/bee.mjs",
+    "skills/bee-hive/templates/lib/worktree-store.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".bee/bin/lib/guards.mjs",
+    ".bee/bin/lib/workspace-store.mjs",
+    "docs/history/multisession-native/reports/advisor-digest-slice4.md",
+    "docs/history/multisession-native/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "second write session with live owner + no consent: typed refusal naming the --isolate one-liner (red-first)",
+      "with --isolate/config: worktree created, workspace registered, caller told the path (test)",
+      "observe sessions never blocked by write ownership (test)",
+      "shared-disjoint write without exact lease denied, with lease flows (test)",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no silent default change for solo single-session repos (byte-identical when alone)"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D2/D3"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "m",
+    "11": "u",
+    "12": "c",
+    "13": " ",
+    "14": "6",
+    "15": ";",
+    "16": " ",
+    "17": "D",
+    "18": "3",
+    "worker": "msn-w20",
+    "outcome": "Write-policy resolution (observe/shared-disjoint/isolated) wired at startFeature's default path and cells claim/claim-next, scoped to exempt lanes and swarming per CONTEXT.md Scope boundaries; 11 new lib tests + 2 CLI tests, full impacted verify green (106 suites).",
+    "files_changed": [
+      "skills/bee-hive/templates/lib/state.mjs",
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/tests/test_write_policy.mjs",
+      "skills/bee-hive/templates/tests/test_cli_state.mjs",
+      "skills/bee-hive/templates/tests/test_misc.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "scripts/impact-registry.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T08:48:09.811Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"summary\":\"node scripts/run_verify.mjs --impacted: 106 suites, 0 failures; release_manifest.mjs --check and ledger_parity.mjs --check both green.\",\"tail\":\"PASS     213ms  skills/bee-hive/templates/tests/test_state.mjs\\nPASS     119ms  skills/bee-hive/templates/tests/test_workflow_store.mjs\\nPASS     164ms  skills/bee-hive/templates/tests/test_workspace_store.mjs\\nPASS     339ms  skills/bee-hive/templates/tests/test_worktree_store.mjs\\nPASS     307ms  skills/bee-hive/templates/tests/test_write_policy.mjs\\n\\nPASS run_verify: 106 suite(s), concurrency=5, wall=64309ms\\n\",\"red_failure_evidence\":\"BEFORE this cell: startFeature's default (non-lane) path refused any second live session outright with a bare wait message (lib/state.mjs, pre-cell: \\\"startFeature: refused — N active worker session(s) remain (...). FIX: wait for the session's heartbeat to go stale...\\\" — verifiable via git show HEAD~1:skills/bee-hive/templates/lib/state.mjs around the old  block, now retired and replaced by applyWritePolicy). cells claim/claim-next had ZERO workspace-ownership concept at all pre-cell (workspace-store.mjs existed from msn-19 but was never called from any write-capable entry point until this cell). RED-FIRST proof for the NEW behavior lives in skills/bee-hive/templates/tests/test_write_policy.mjs (11 new tests, e.g. the no-consent-refusal and isolate-create tests) and the rewritten test_cli_state.mjs cases (the old \\\"refuses while ANOTHER session has a live heartbeat\\\" test was replaced with two tests distinguishing the OLD any-heartbeat-blocks behavior — now proven NOT to refuse — from the NEW actually-live-write-owner behavior, which does, naming --isolate).\"}",
+    "verify_output": "HEARTBEAT: 5 suite(s) still running after 30.0s: skills/bee-hive/scripts/test_onboard_bee.mjs (14.7s), skills/bee-hive/templates/tests/test_bee_cli.mjs (12.6s), skills/bee-hive/templates/tests/test_cli_state.mjs (5.7s), skills/bee-hive/templates/tests/test_decisions_propagation.mjs (2.8s), skills/bee-hive/templates/tests/test_herding_cli.mjs (0.0s)\nHEARTBEAT: 1 suite(s) still running after 60.0s: scripts/test_installers_e2e.mjs --installer bash (22.2s)\nPASS     125ms  .bee/bin/bee.mjs knowledge check\nPASS     107ms  .bee/bin/bee.mjs knowledge index --check\nPASS    1161ms  hooks/test_bypass_stop_net.mjs\nPASS   12486ms  hooks/test_hook_contracts.mjs\nPASS    4100ms  hooks/test_model_guard.mjs\nPASS    7955ms  hooks/test_write_guard.mjs\nPASS      65ms  scripts/backlog_uniqueness.mjs --check\nPASS      43ms  scripts/census_stale_spawn_syntax.mjs\nPASS      49ms  scripts/ledger_parity.mjs --check\nPASS      72ms  scripts/okf_instructions_fence.mjs\nPASS     154ms  scripts/okf_instructions_fence.mjs --selftest\nPASS     722ms  scripts/okf_migrate.mjs --check advisor-protocol\nPASS     625ms  scripts/okf_migrate.mjs --check decision-memory\nPASS     637ms  scripts/okf_migrate.mjs --check doctrine-layer\nPASS     703ms  scripts/okf_migrate.mjs --check feedback-digest\nPASS     756ms  scripts/okf_migrate.mjs --check hook-runtime\nPASS     637ms  scripts/okf_migrate.mjs --check okf-profile\nPASS     692ms  scripts/okf_migrate.mjs --check onboarding\nPASS     675ms  scripts/okf_migrate.mjs --check performance-log\nPASS     705ms  scripts/okf_migrate.mjs --check verify-pipeline\nPASS     679ms  scripts/okf_migrate.mjs --check workflow-state\nPASS     701ms  scripts/okf_migrate.mjs --check worktree-parallelism\nPASS     663ms  scripts/okf_migrate.mjs --check-patterns\nPASS      53ms  scripts/okf_specs_fence.mjs\nPASS      92ms  scripts/okf_specs_fence.mjs --selftest\nPASS      94ms  scripts/release_manifest.mjs --check\nPASS      92ms  scripts/release_manifest.mjs --selftest\nPASS      36ms  scripts/test_agents_budget.mjs\nPASS     177ms  scripts/test_bump_version.mjs\nPASS      41ms  scripts/test_bypass_matrix.mjs\nPASS      45ms  scripts/test_ci_verify_issue.mjs\nPASS     918ms  scripts/test_claim_race.mjs\nPASS     455ms  scripts/test_compact_capsule.mjs\nPASS     669ms  scripts/test_compact_verbs.mjs\nPASS    1396ms  scripts/test_compaction_advisories.mjs\nPASS     260ms  scripts/test_compaction_module.mjs\nPASS      54ms  scripts/test_config_samples_safe.mjs\nPASS      70ms  scripts/test_config_validate.mjs\nPASS    2330ms  scripts/test_conformance.mjs\nPASS    2108ms  scripts/test_dispatch_prepare.mjs\nPASS     117ms  scripts/test_doctrine_parity.mjs\nPASS      51ms  scripts/test_gate_bypass_doctrine.mjs\nPASS     398ms  scripts/test_heartbeat_touch.mjs\nPASS     625ms  scripts/test_hook_vendor_closure.mjs\nPASS    2036ms  scripts/test_impact_registry.mjs\nPASS     134ms  scripts/test_install_ps1_flow.mjs\nPASS   26543ms  scripts/test_installers_e2e.mjs --installer bash\nPASS      65ms  scripts/test_ledger_parity.mjs\nPASS      72ms  scripts/test_lib_mirror.mjs\nPASS     773ms  scripts/test_native_probe.mjs\nPASS     393ms  scripts/test_nested_clone_isolation.mjs\nPASS   10045ms  scripts/test_okf_pins.mjs\nPASS      51ms  scripts/test_portable_paths.mjs\nPASS      40ms  scripts/test_release_tuple.mjs\nPASS    1022ms  scripts/test_render_race.mjs\nPASS     380ms  scripts/test_reservation_race.mjs\nPASS     114ms  scripts/test_resolveroots_p40.mjs\nPASS    1417ms  scripts/test_run_verify_impacted.mjs\nPASS     505ms  scripts/test_run_verify_only.mjs\nPASS     213ms  scripts/test_run_verify_skip_marker.mjs\nPASS      55ms  scripts/test_skill_pointers.mjs\nPASS     372ms  scripts/test_skill_render.mjs\nPASS     466ms  scripts/test_state_write_concurrency.mjs\nPASS   12768ms  scripts/test_store_lock.mjs\nPASS      51ms  scripts/test_verify_manifest.mjs\nPASS    1180ms  scripts/test_verify_timeout.mjs\nPASS   12705ms  scripts/test_worktree_cli.mjs\nPASS    1235ms  scripts/test_worktree_companion.mjs\nPASS     145ms  scripts/test_worktree_grant_resolve.mjs\nPASS     841ms  scripts/test_worktree_holds_race.mjs\nPASS    2309ms  scripts/test_worktree_holds.mjs\nPASS     101ms  scripts/test_worktree_store.mjs\nPASS   42160ms  skills/bee-hive/scripts/test_onboard_bee.mjs\nPASS     586ms  skills/bee-hive/scripts/test_plugin_distribution.mjs\nPASS     458ms  skills/bee-hive/scripts/test_split_brain_regression.mjs\nPASS     878ms  skills/bee-hive/templates/tests/test_backlog_capture.mjs\nPASS   26812ms  skills/bee-hive/templates/tests/test_bee_cli.mjs\nPASS    2432ms  skills/bee-hive/templates/tests/test_bee_write_guard_hook.mjs\nPASS     251ms  skills/bee-hive/templates/tests/test_bundle_mode.mjs\nPASS     861ms  skills/bee-hive/templates/tests/test_cells.mjs\nPASS    9873ms  skills/bee-hive/templates/tests/test_claims.mjs\nPASS    3721ms  skills/bee-hive/templates/tests/test_cli_cells.mjs\nPASS    9707ms  skills/bee-hive/templates/tests/test_cli_state.mjs\nPASS     661ms  skills/bee-hive/templates/tests/test_config_validate.mjs\nPASS     492ms  skills/bee-hive/templates/tests/test_contention_status.mjs\nPASS    6419ms  skills/bee-hive/templates/tests/test_decisions_propagation.mjs\nPASS     260ms  skills/bee-hive/templates/tests/test_feedback.mjs\nPASS      80ms  skills/bee-hive/templates/tests/test_guards_tokenizer.mjs\nPASS     177ms  skills/bee-hive/templates/tests/test_guards.mjs\nPASS     945ms  skills/bee-hive/templates/tests/test_herding_cli.mjs\nPASS    1217ms  skills/bee-hive/templates/tests/test_herding.mjs\nPASS     114ms  skills/bee-hive/templates/tests/test_intent.mjs\nPASS    4796ms  skills/bee-hive/templates/tests/test_knowledge.mjs\nPASS     111ms  skills/bee-hive/templates/tests/test_lease_store.mjs\nPASS    3498ms  skills/bee-hive/templates/tests/test_misc.mjs\nPASS      70ms  skills/bee-hive/templates/tests/test_perf.mjs\nPASS     158ms  skills/bee-hive/templates/tests/test_recovery.mjs\nPASS     104ms  skills/bee-hive/templates/tests/test_reservations.mjs\nPASS    2675ms  skills/bee-hive/templates/tests/test_reviews.mjs\nPASS     425ms  skills/bee-hive/templates/tests/test_scratch.mjs\nPASS     151ms  skills/bee-hive/templates/tests/test_state_projection.mjs\nPASS     213ms  skills/bee-hive/templates/tests/test_state.mjs\nPASS     119ms  skills/bee-hive/templates/tests/test_workflow_store.mjs\nPASS     164ms  skills/bee-hive/templates/tests/test_workspace_store.mjs\nPASS     339ms  skills/bee-hive/templates/tests/test_worktree_store.mjs\nPASS     307ms  skills/bee-hive/templates/tests/test_write_policy.mjs\n\nPASS run_verify: 106 suite(s), concurrency=5, wall=64309ms\n",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-25T08:13:05.675Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-25T08:47:36.707Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T08:47:36.707Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T08:43:01.002Z",
+        "acquired_at": "2026-07-25T08:13:05.673Z",
+        "worker": "msn-w20",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

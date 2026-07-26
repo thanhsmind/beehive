@@ -2,14 +2,14 @@
 type: bee.area
 title: "Bee OKF Profile — the context consumer, the promote proposer, and the session preamble"
 description: "The budget-aware manifest a work item's curated context is returned as, the measured relevance ranking that cuts critical patterns without losing one, the propose-never-write loop closer, and the preamble that makes the bundle load-bearing — every section of which resolves through the one bundle predicate."
-timestamp: 2026-07-22
+timestamp: 2026-07-24
 bee:
   id: okf-profile-context-and-promote
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3]
-  sources: ["okf-foundation cell okf-9 (`bee knowledge promote` — the propose-never-write loop closer, B5; trace in `.bee/cells/`, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B5", "docs/specs/okf-profile.md#B6", "docs/specs/okf-profile.md#B6b", "docs/specs/okf-profile.md#B7", "docs/specs/okf-profile.md#P2", "docs/specs/okf-profile.md#P3", "okf-integration-close-f4 cell f4-3 (the preamble stops printing the retired model — bundle-routed digest and project map, both no-bundle branches proven byte-identical; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`]
+  decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3, i54-closeout D3]
+  sources: ["okf-foundation cell okf-9 (`bee knowledge promote` — the propose-never-write loop closer, B5; trace in `.bee/cells/`, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B5", "docs/specs/okf-profile.md#B6", "docs/specs/okf-profile.md#B6b", "docs/specs/okf-profile.md#B7", "docs/specs/okf-profile.md#P2", "docs/specs/okf-profile.md#P3", "okf-integration-close-f4 cell f4-3 (the preamble stops printing the retired model — bundle-routed digest and project map, both no-bundle branches proven byte-identical; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`, "i54-closeout cell i54-closeout-3 (knowledge context --lane budget presets; trace in .bee/cells/, 2026-07-24)"]
   authoritative_for: "okf-profile: the context consumer, the promote proposer, and the session preamble"
 ---
 
@@ -91,6 +91,20 @@ Three properties make the cut safe to trust:
   a two-concept bundle is not a ranking problem.
 
 Ties break by path, so the order is total and two runs over the same bundle are byte-identical.
+
+**`context` accepts a lane shorthand that resolves to a budget preset before the
+explicit flag is validated (i54-closeout D3).** `--lane tiny|small|standard|
+high-risk` maps to a fixed budget preset (8000 / 12000 / 20000 / 30000 tokens
+respectively) resolved before the generic `--budget` flag validator runs, so an
+explicit `--budget` always wins when both are given, and a bare call with
+neither flag refuses exactly as it did before the shorthand existed — nothing
+about the default (20000, unmapped mode falls back to it) changes. The session
+preamble's own recommended `context` command picks its `--budget` from the
+active work item's mode through this same shared preset table, rather than
+hardcoding one number for every lane. The budget-cut semantics themselves — the
+prefix cut, the critical-patterns floor and conservation exception (B6b) — are
+unaffected; the shorthand only changes how the number arrives, never what
+happens once it does.
 
 **B7 — The session preamble makes the bundle load-bearing.** A tool nobody calls is a directory
 rename. When `.bee/state.json`'s active feature has a matching `bee.work-item` concept, the session

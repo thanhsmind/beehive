@@ -1,0 +1,154 @@
+{
+  "id": "te-3",
+  "feature": "test-economy",
+  "lane": "standard",
+  "behavior_change": true,
+  "title": "Trần impacted trong run_verify: đuôi transitive giao CI (test-economy D6)",
+  "action": "Per test-economy D6 (CONTEXT.md) + pin plan rev3. scripts/run_verify.mjs: config reader nhỏ (fs+REPO_ROOT sẵn, chưa tồn tại) đọc .bee/config.json key verify_impacted_cap (float 0-1, missing ⇒ 0.30). Điểm cắm runImpactedMode :970-1013: chỉ khi chạy transitive (KHÔNG --level 1 — caller level 1 ⇒ no-op không banner); khi mappedSuites/SUITES.length > cap: chạy self-selected + level-1 direct (queryRegistry(..., {level: 1}) — level là SỐ, impact_registry.mjs:463,474; suite tự đổi luôn direct :408), in 'impacted N/<total> exceeds cap — transitive tail delegated to CI', exit = KẾT QUẢ PHẦN CHẠY (đỏ vẫn đỏ — khác unmapped exit-0), best-effort gh workflow run CI (gh thiếu/lỗi ⇒ note một dòng, không đỏ). Test: mở rộng scripts/test_run_verify_impacted.mjs + scripts/test_impact_registry.mjs bằng rows (không file mới). Cap của chính cell dưới luật mới: change_class behavior, evidence JSON.",
+  "must_haves": {
+    "truths": [
+      "dưới trần ⇒ selection hôm nay không đổi",
+      "trên trần ⇒ level-1 direct + self-selected VẪN chạy (sibling-suite giữ); suite đỏ trong phần chạy ⇒ exit đỏ",
+      "cap=1 ⇒ tắt máy cắt; config thiếu ⇒ 0.30; --level 1 ⇒ không banner không cắt",
+      "gh thiếu ⇒ note một dòng, exit không đổi"
+    ],
+    "prohibitions": [
+      "không file test mới",
+      "không đụng .github/workflows/*",
+      "không đổi nhánh unmapped hiện có"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only test_run_verify_impacted,test_impact_registry",
+  "read_first": [
+    "docs/history/test-economy/plan.md",
+    "scripts/run_verify.mjs",
+    "scripts/impact_registry.mjs"
+  ],
+  "files": [
+    "scripts/run_verify.mjs",
+    "scripts/test_run_verify_impacted.mjs",
+    "scripts/test_impact_registry.mjs"
+  ],
+  "deps": [
+    "te-2"
+  ],
+  "decisions": [
+    "test-economy D6",
+    "test-economy D8"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "te-worker-3",
+    "outcome": "D6 impacted cap: transitive tail delegated to CI",
+    "files_changed": [
+      "scripts/run_verify.mjs",
+      "scripts/test_run_verify_impacted.mjs",
+      "scripts/test_impact_registry.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T13:51:36.857Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"tests_inspected\":\"Read scripts/run_verify.mjs runImpactedMode :966-1013 (pre-edit) and scripts/impact_registry.mjs queryRegistry :463-478 + buildRegistry :416-443 (direct-includes-self at :428) before implementing; read scripts/test_run_verify_impacted.mjs's existing fixture idiom (buildLevelFixture, runFixtureVerify) and scripts/test_impact_registry.mjs's existing level-1 subset row before extending both.\",\"tests_added_changed\":\"scripts/test_run_verify_impacted.mjs: +9 rows under a new buildCapFixture (below-cap unchanged, default-cap-missing over-cap fallback, red-inside-capped-selection stays red, cap=1 disables, config-key-missing default, malformed-json default, --level-1 no-op, gh-missing note) using a 23-suite fixture (20 hub + 1 direct + 2 narrow) so lib.mjs's ratio clears 0.30 against the fixture's real total (dynamically read via fixtureTotalSuites, not hardcoded, since the copied run_verify.mjs also carries ~24 unconditional EXTRA_SUITES entries). scripts/test_impact_registry.mjs: +1 row pinning the level-1-subset-of-transitive invariant over a multi-file changed set (the property D6's cap fallback structurally relies on).\",\"red_failure_evidence\":\"git stash push -- scripts/run_verify.mjs (keeping the new test rows against the OLD pre-D6 implementation), then node scripts/test_run_verify_impacted.mjs: 5 of the 9 new D6 rows failed red as expected (the other 4 rows describe behavior identical to today so they still passed) -- test_run_verify_impacted: 17 passed, 5 failed, including FAIL test-economy D6: config missing -> default cap 0.30 -> over-cap (lib.mjs) falls back to level-1...: AssertionError expected the D6 cap banner naming the pre-cap total and cap, and FAIL test-economy D6: a red suite inside the capped (level-1) selection still exits red...: AssertionError [ERR_ASSERTION]: expected exit 1 got 0. git stash pop restored the implementation; re-ran green (22 passed, 0 failed).\",\"verification_run\":\"node scripts/run_verify.mjs --only test_run_verify_impacted,test_impact_registry -> PASS run_verify: 2 suite(s) (both test_impact_registry.mjs and test_run_verify_impacted.mjs green, 1899ms wall). node scripts/release_manifest.mjs --check confirmed scripts/run_verify.mjs/test_run_verify_impacted.mjs/test_impact_registry.mjs are outside the manifest's hashed roots (560 files still match, unaffected) so no --write/--check regen was needed for this cell.\"}\n",
+    "verify_output": "SCOPED RUN (--only): 2 of 109 runnables selected — full verify still required before close\nPASS    1817ms  scripts/test_impact_registry.mjs\nPASS    1906ms  scripts/test_run_verify_impacted.mjs\n\nPASS run_verify: 2 suite(s), concurrency=5, wall=1913ms\nSCOPED RUN (--only): 2 of 109 runnables selected — full verify still required before close\n",
+    "verify_passed": true,
+    "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+    "claimed_at": "2026-07-25T13:39:45.660Z",
+    "verify_command": "node scripts/run_verify.mjs --only test_run_verify_impacted,test_impact_registry",
+    "verified_at": "2026-07-25T13:51:24.296Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T13:51:24.297Z",
+        "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+        "claimed_at": "2026-07-25T13:42:50.950Z",
+        "acquired_at": "2026-07-25T13:39:45.659Z",
+        "worker": "te-worker-3",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-below-cap-unchanged",
+            "status": "PASS",
+            "evidence": "narrowing only inside if(cap<1 && ratio>cap); below-cap row asserts no banner + identical selection"
+          },
+          {
+            "id": "truth-over-cap-level1-direct-and-self-selected-run",
+            "status": "PASS",
+            "evidence": "queryRegistry level:1 -> entry.direct; suite own path always direct (:428); direct-importer survival + level-1-subset rows pinned"
+          },
+          {
+            "id": "truth-red-in-run-exits-red",
+            "status": "PASS",
+            "evidence": "anyFail computed over executed suites, exit :1008; failDirect fixture asserts status 1 + banner; red-first proven pre-implementation"
+          },
+          {
+            "id": "truth-cap1-off-switch",
+            "status": "PASS",
+            "evidence": "cap<1 guard short-circuits; cap=1 row asserts full selection, no banner"
+          },
+          {
+            "id": "truth-config-missing-default-030",
+            "status": "PASS",
+            "evidence": "readImpactedCap returns 0.3 on missing file, parse error, bad key — all three branches pinned"
+          },
+          {
+            "id": "truth-level1-noop-no-banner",
+            "status": "PASS",
+            "evidence": "level!==1 gates whole block; adversarial 0.01-cap row asserts plain level-1 banner"
+          },
+          {
+            "id": "truth-gh-missing-note-only",
+            "status": "PASS",
+            "evidence": "triggerCiDelegation try/catch note-only, runs before exit computation; nonexistent-PATH row asserts status 0 + note; no test dispatches real gh"
+          },
+          {
+            "id": "prohibition-no-new-test-files",
+            "status": "PASS",
+            "evidence": "diff-tree -A: only .bee/cells/te-3.json; both suites M not A"
+          },
+          {
+            "id": "prohibition-no-workflow-edits",
+            "status": "PASS",
+            "evidence": "no .github/workflows path in commit; CI nudge is client-side spawnSync gh"
+          },
+          {
+            "id": "prohibition-unmapped-branch-unchanged",
+            "status": "PASS",
+            "evidence": "unmapped early-return block outside every hunk, zero lines changed"
+          },
+          {
+            "id": "alignment-D8-comment-id",
+            "status": "PASS",
+            "evidence": "all comments + row names use full test-economy D6 id"
+          },
+          {
+            "id": "alignment-queryRegistry-api",
+            "status": "PASS",
+            "evidence": "level passed as number 1, matches :463/:474"
+          },
+          {
+            "id": "alignment-banner-text",
+            "status": "PASS",
+            "evidence": "banner interpolates (cap) value — additive vs spec string, more diagnostic; accepted by orchestrator; follow-up noted for cap-fires-with-0-direct quiet exit 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-25T13:58:19.555Z"
+      }
+    ]
+  }
+}

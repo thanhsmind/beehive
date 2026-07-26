@@ -219,6 +219,7 @@ In order, all from the MAIN checkout:
    ```
    herdr agent start <slug> --cwd <worktree_path> --workspace <workspace_id> --tab <runtime_tab_id> --split right|down --no-focus -- claude --model sonnet --permission-mode bypassPermissions
    ```
+   **The trailing `-- claude --model sonnet --permission-mode bypassPermissions` is config-driven (D4, "Herding runtime adapter" below), not hard-fixed prose.** Before building this command, read `.bee/config.json`'s `herding.agent_command` key (from the MAIN checkout). If it is a non-empty JSON array of argv-token strings, substitute `{MODEL}` in each token with D4's fixed model (`sonnet`) and use the resulting tokens verbatim, in order, as everything after `--` in the `herdr agent start` call above — never re-parse or shell-interpret a token's content, each is one argv element exactly as written. **If the key is absent, not an array, or empty — the overwhelmingly common case — use exactly `claude --model sonnet --permission-mode bypassPermissions` as shown above: BYTE-EQUIVALENT to today's command, zero behavior change.** See "Herding runtime adapter" below for the full config shape and a codex adapter example.
    Choose the split direction from the runtime tab's geometry: run `herdr pane layout --pane <any runtime pane_id you listed in §4>` (there is no `--tab` form, and `herdr pane list` carries no `rect`), take the pane with the largest `rect.width * rect.height`, and pass `--split right` if it is wider than tall, otherwise `--split down`. If the runtime tab has no panes yet, use `--split right`.
 
    **The argv must carry the working agent's opening instruction.** A bare `claude` starts with an empty input buffer and simply sits there: it would never self-name, so its pane stays unlabelled, and §4 does not count an unlabelled pane as occupying a slot — so the next iteration sees a free slot and spawns again, every 60 seconds, straight through D5's cap of 4. Pass a positional prompt as the last argv element telling it to (a) run `herdr pane current --current` then `herdr pane rename <pane_id> <slug>` as its very first act, using the **bare slug** as the label, and (b) work `<PBI id>` by routing through `bee-hive`. The label must be the bare slug and nothing else: §4's `cells list --feature <label>` and the merge role's pane lookup both match on it exactly.
@@ -259,7 +260,7 @@ Under `--dry-run`, run every read in §1-§7 exactly as written — self-identif
 | Lane safety (two-key: both required) | Key 1: `node .claude/skills/bee-herding/scripts/classify-lane.mjs <PBI-ID>` → `lane_safe` (fail-open on unmatched keywords). Key 2: your own reading of the full title+cos text — refuse and announce if unsure. |
 | Announce / report | `herdr pane send-text <chat_pane_id> "..."` |
 | Create the worktree | `node .bee/bin/bee.mjs worktree new --feature <slug> --json` |
-| Open the runtime pane + agent | `herdr agent start <slug> --cwd <path> --workspace <ws> --tab <runtime_tab> --split right\|down --no-focus -- claude --model sonnet --permission-mode bypassPermissions "<opening instruction: self-name to <slug>, work <PBI>, route via bee-hive>"` (never split first, never `-p` — §8) |
+| Open the runtime pane + agent | `herdr agent start <slug> --cwd <path> --workspace <ws> --tab <runtime_tab> --split right\|down --no-focus -- claude --model sonnet --permission-mode bypassPermissions "<opening instruction: self-name to <slug>, work <PBI>, route via bee-hive>"` — the `claude ...` tail is `herding.agent_command`-driven; shown here is the default, used verbatim when the config key is absent (never split first, never `-p` — §8) |
 
 ## Merge role
 
@@ -401,6 +402,40 @@ The two halves of this system run under deliberately different permission postur
 > Accepted risk (owner decision D7-FINAL): every working agent this loop spawns runs `claude --permission-mode bypassPermissions` with no tool allowlist. It can run any command, edit any file, and reach anything the machine's user can, unattended and unsupervised. This posture is accepted knowingly, because a narrowed working agent stalls forever the first time it hits a permission prompt with no TTY, which defeats the whole point of unattended dispatch. **Blast radius:** each working agent is confined to its own git worktree and its own branch (`wt/<slug>`), so its edits do not touch main or any other agent's worktree until a merge — but "confined to a worktree" is a filesystem-and-git boundary, not a security sandbox: the agent shares the machine, the network, the user's credentials, and every ambient tool. The lane filter chooses *which item* is picked up; it does **not** constrain *what commands* the agent may run. What actually bounds the damage is the set below, not the filter — and none of it is a sandbox.
 
 **Control panes — enumerated command surface, never `bypassPermissions`, never "read-only" (D7-FINAL).** `control-loop.sh` starts each control pane under an enumerated `--allowedTools` list sized to exactly what that role measurably does. It is not read-only, because both control roles genuinely write: **dispatch** runs `bee worktree new` (creates a worktree and registers a grant); **merge** runs `git merge --abort` on main, writes `.bee/tmp/` markers, and runs `bee worktree merge --cleanup` (deletes a branch, removes a worktree). Taken literally, "read-only" would give a dispatch pane that cannot dispatch and a merge pane that cannot merge — a silent stall every interval, the exact failure this feature exists to kill. The two halves of the posture are **coupled, not separable**: the merge pane runs the project's verify against the just-merged tree, so it **executes code the unsandboxed working agents wrote**. Narrowing the control panes buys one thing honestly — it stops a cold control model at thousands of iterations a day from "helpfully" improvising a command outside its job (e.g. cleaning a dirty main); it does **not** sandbox the agent-authored code that verify runs. The exact allowlist per role, and the note that it must grow if a role gains a command, live in `control-loop.sh`.
+
+## Herding runtime adapter — config-driven spawn commands (D4, i54-closeout-4)
+
+Both spawn points documented above — the working agent's trailing argv in §8, and the control pane's real invocation inside `control-loop.sh` — read from an optional `.bee/config.json` command-template seam instead of a hardcoded string. **With no `herding` config keys at all, every spawned command is BYTE-EQUIVALENT to what this skill has always run — zero behavior change.** This is an adapter seam, not a new runtime: full codex-native herding (its own event loop, its own pane protocol) stays out of scope (CONTEXT.md D4, out of scope).
+
+Two independent keys, each a JSON array of argv-token strings:
+
+- **`herding.agent_command`** — the WORKING agent's spawn argv (the tail of `herdr agent start ... --`, §8 step 2). Placeholder: `{MODEL}` (D4's fixed model, `sonnet`). Default when absent: `["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"]` — exactly today's string.
+- **`herding.control_command`** — the CONTROL pane's real invocation inside `control-loop.sh`'s `run_iteration`. Placeholders: `{PROMPT}`, `{MODEL}`, `{MAX_TURNS}`, `{ALLOWED_TOOLS}`. Default when absent: `["claude", "-p", "{PROMPT}", "--model", "sonnet", "--max-turns", "{MAX_TURNS}", "--allowedTools", "{ALLOWED_TOOLS}"]` — exactly today's invocation.
+
+Example `.bee/config.json` fragment (both keys are optional and independent — set either, both, or neither):
+
+```json
+{
+  "herding": {
+    "agent_command": ["claude", "--model", "{MODEL}", "--permission-mode", "bypassPermissions"],
+    "control_command": ["claude", "-p", "{PROMPT}", "--model", "{MODEL}", "--max-turns", "{MAX_TURNS}", "--allowedTools", "{ALLOWED_TOOLS}"]
+  }
+}
+```
+
+**Substitution is per-token, never a join-then-re-split and never `eval`** — this is the shell-injection-safe shape the design requires. Each array element is substituted and passed as one discrete argv element; a value containing spaces, quotes, or shell metacharacters (the free-form `{PROMPT}` text, in particular) lands as the literal content of that one argument and can never spill into another argument or be reinterpreted as a shell operator. `control-loop.sh`'s `read_command_template`/`substitute_placeholders` functions are the reference implementation for `control_command`; a dispatch-role agent applies the identical per-token substitution itself when building `agent_command` for §8 (there is no script to call — the working-agent spawn line is issued live by whichever agent is running the dispatch role).
+
+**Codex adapter example — illustrative only, not a supported native herding mode:**
+
+```json
+{
+  "herding": {
+    "control_command": ["codex", "exec", "-m", "{MODEL}", "-s", "workspace-write", "{PROMPT}"]
+  }
+}
+```
+
+This shows the shape a codex-backed control pane's command COULD take under the adapter seam. It is not wired into, or validated against, an actual codex control-loop run in this repo — the event loop and pane protocol both still assume a `claude` session underneath (Merge role / Dispatch role sections above). Treat it as a documented starting point for a future adapter, not a claim that codex control panes work today.
 
 ## What actually contains this — and what does not (D6, corrected)
 

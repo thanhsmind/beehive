@@ -9,7 +9,7 @@
 // the old syntax) and will go green once a later slice rewrites that doc.
 //
 // Modeled on the "retired auto-review-trigger phrasing" census
-// (skills/bee-hive/templates/tests/test_lib.mjs, review-od-7): scan only live
+// (packages/bee/tests/test_lib.mjs, review-od-7): scan only live
 // operative prose, exclude build logs and decision archaeology, and never
 // widen the scan into files this script itself lives outside of.
 

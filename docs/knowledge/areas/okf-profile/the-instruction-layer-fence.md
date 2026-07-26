@@ -118,7 +118,7 @@ stopped by another. The logic was migrated and the message was not, and nothing 
 - `scripts/okf_instructions_fence.mjs` — classifier, exemptions with their reasons, `--check`,
   `--selftest`, `--json`.
 - Wired as two chain entries in `scripts/run_verify.mjs` `EXTRA_SUITES`, pinned in
-  `scripts/test_verify_manifest.mjs` (`MANDATORY_SUITES`, `MANDATORY_SUITE_ARGS`).
-- The nudge it caught: `hooks/bee-session-close.mjs`, asserted end-to-end in
+  `scripts/tests/test_verify_manifest.mjs` (`MANDATORY_SUITES`, `MANDATORY_SUITE_ARGS`).
+- The nudge it caught: `packages/bee/hooks/bee-session-close.mjs`, asserted end-to-end in
   `hooks/test_hook_contracts.mjs`.
 - Its sibling: `scripts/okf_specs_fence.mjs` (`specs-read-only-fence.md`).

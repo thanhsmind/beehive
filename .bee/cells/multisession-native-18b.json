@@ -1,0 +1,104 @@
+{
+  "id": "multisession-native-18b",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Call-site sweep: cells, reservations, recovery, compaction, state-projection",
+  "action": "Thread resolveContext.controlRoot through every coordination-store call site in cells.mjs (claimCellCrossSession/claimNextCell/checkClaimOwnership/appendAttempt/releaseClaimFileBestEffort), reservations.mjs (sole lease-store gateway), recovery.mjs, compaction.mjs, state-projection.mjs. Cells/backlog/decisions stay WORKSPACE-LOCAL (declared plane); claim records in the control plane reference cells resolvable in the claiming workspace — same-plane claim-to-cell resolution test. Worktree fixture proves claims/leases land in main's control store from a linked worktree. Regen inside this cell: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed). Canonical source: skills/bee-hive/templates/.",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-18a"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/cells.mjs",
+    "skills/bee-hive/templates/lib/reservations.mjs",
+    "skills/bee-hive/templates/lib/recovery.mjs",
+    "skills/bee-hive/templates/lib/compaction.mjs",
+    "skills/bee-hive/templates/lib/state-projection.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".bee/bin/lib/cells.mjs",
+    ".bee/bin/lib/reservations.mjs",
+    "docs/history/multisession-native/reports/advisor-digest-slice4.md",
+    "docs/history/multisession-native/CONTEXT.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "from a linked worktree, claim + lease writes land in main's control store (topology test, red-first)",
+      "same-plane claim-to-cell resolution proven (test)",
+      "cells/backlog/decisions remain workspace-local (test)",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no coordination store left worktree-local in these modules"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D2; msn-18 re-slice"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "m",
+    "1": "s",
+    "2": "n",
+    "3": "-",
+    "4": "1",
+    "5": "8",
+    "6": " ",
+    "7": "r",
+    "8": "e",
+    "9": "-",
+    "10": "s",
+    "11": "l",
+    "12": "i",
+    "13": "c",
+    "14": "e",
+    "15": " ",
+    "16": "1",
+    "17": "8",
+    "18": "b",
+    "worker": "msn-w18b",
+    "outcome": "Threaded controlRootFor through every coordination-store (claims/sessions/leases) call site in cells.mjs, reservations.mjs, recovery.mjs, compaction.mjs, state-projection.mjs, per the PLANE RULE (claims/sessions/leases control-plane; cells/backlog/decisions workspace-local). reservations.mjs cannot import state.mjs (state.mjs already imports reservations.mjs -> direct cycle), so it carries its own minimal cycle-safe findMainRoot/controlRootFor replica, fail-open on a malformed linked-worktree link (a regression this cell caught and fixed against test_guards.mjs's xwh-4 'unresolvable topology fails OPEN' contract). state-projection.mjs's workflow/lane/handoff-mailbox reads and cells.mjs/recovery.mjs's lane reads are deliberately left workspace-local where the corresponding WRITE path (bee.mjs's own handlers) is not yet re-rooted (msn-18c scope) -- re-rooting only the read side there would desync from an in-flight worktree write, trading a harmless staleness gap for a silently-wrong one. Topology (red-first), same-plane claim-to-cell resolution, and workspace-local proofs added to test_cells.mjs/test_reservations.mjs. Regenerated plugin skill trees, vendored .bee/bin/lib, release manifest, and impact registry.",
+    "files_changed": [
+      "skills/bee-hive/templates/lib/cells.mjs",
+      "skills/bee-hive/templates/lib/reservations.mjs",
+      "skills/bee-hive/templates/lib/recovery.mjs",
+      "skills/bee-hive/templates/lib/compaction.mjs",
+      "skills/bee-hive/templates/lib/state-projection.mjs",
+      "skills/bee-hive/templates/lib/state.mjs",
+      "skills/bee-hive/templates/tests/test_cells.mjs",
+      "skills/bee-hive/templates/tests/test_reservations.mjs",
+      "skills/bee-hive/templates/tests/test_misc.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "scripts/impact-registry.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T06:32:50.541Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\n    \"skills/bee-hive/templates/tests/test_cells.mjs\",\n    \"skills/bee-hive/templates/tests/test_reservations.mjs\",\n    \"skills/bee-hive/templates/tests/test_recovery.mjs\",\n    \"skills/bee-hive/templates/tests/test_state_projection.mjs\",\n    \"skills/bee-hive/templates/tests/test_guards.mjs\",\n    \"skills/bee-hive/templates/tests/test_state.mjs\",\n    \"skills/bee-hive/templates/tests/test_misc.mjs\"\n  ],\n  \"tests_added_or_changed\": [\n    \"test_cells.mjs: 'TOPOLOGY (red-first): claimCellCrossSession from a linked worktree lands the claims-store record in MAIN, while the cell FILE stays in the claiming workspace' -- asserts readClaim(main,...) succeeds, claimPath(work,...) does NOT exist, cell file stays workspace-local, and a second claim attempt from main sees the live claim (CLAIMED refusal)\",\n    \"test_cells.mjs: 'TOPOLOGY: claimNextCell's cross-session hold check sees a reservation made from a DIFFERENT worktree of the same main'\",\n    \"test_cells.mjs: 'solo/main repos byte-identical: claimCellCrossSession behaves exactly as before this cell'\",\n    \"test_reservations.mjs: findMainRoot unit tests (ordinary checkout, linked worktree, no git root, malformed link fails open)\",\n    \"test_reservations.mjs: 'TOPOLOGY: reserve() from a linked worktree lands the lease in MAIN's .bee/runtime/leases' + release/sweep/renew topology + solo/main byte-identical\",\n    \"test_reservations.mjs: 'REGRESSION: a malformed linked-worktree .git marker never throws through listReservations/findConflicts/findSessionConflicts/reserve' (added by this worker after the red-first catch below)\",\n    \"test_misc.mjs: EXPECTED_STATE_EXPORTS now includes 'controlRootFor' (exported as of this cell)\"\n  ],\n  \"red_failure_evidence\": \"Mid-cell, node scripts/run_verify.mjs --impacted surfaced a REAL regression (not a pre-existing baseline fail): skills/bee-hive/templates/tests/test_guards.mjs 'checkWrite (xwh-4): unresolvable topology fails OPEN -- a checkout resolveRoots cannot place never consults the ledger, even a corrupt one' FAILED with 'linked worktree gitdir is missing or malformed (.../.git)' propagating uncaught through checkWrite's swarming-reservation branch (findSessionConflicts -> reservations.mjs's own controlRootFor -> findMainRoot, which at that point mirrored state.mjs's WorktreeLinkInvalidError-throwing design). guards.mjs's xwh-4 contract requires every topology-resolution error path in this position to fail OPEN, never throw (documented in guards.mjs's own resolveHoldTopology comment: 'no error path in this resolution may deny'). Root cause: reservations.mjs's local findMainRoot replica threw on a malformed linked-worktree .git marker, and nothing wrapped its call sites (findConflicts/findSessionConflicts/reserve/etc, all reachable from the write-guard hot path) in try/catch. Fix: findMainRoot now returns null (fail-open) for every malformed shape instead of throwing -- matching this module's own pre-existing hook/guard-reachable 'must never throw' posture (D5) -- and controlRootFor's fallback (?? root) absorbs the null with zero special-casing. Verified via 'node skills/bee-hive/templates/tests/test_guards.mjs' (41/41 pass, was 40/41) before re-running the full impacted suite.\",\n  \"verification_run\": \"node scripts/run_verify.mjs --impacted: PASS, 103 suite(s), concurrency=5, wall=72483ms, 0 failed (includes test_cells.mjs, test_reservations.mjs, test_recovery.mjs, test_state_projection.mjs, test_guards.mjs, test_state.mjs, test_misc.mjs all green). node scripts/release_manifest.mjs --check: 534 file(s) match stored manifest. node scripts/ledger_parity.mjs --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger. All green, recorded on the cell via `cells verify`.\"\n}\n",
+    "verify_output": "run_verify --impacted: PASS run_verify: 103 suite(s), concurrency=5, wall=72483ms (0 failed). release_manifest --check: 534 file(s) match stored manifest. ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger. All three green.",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-25T06:12:16.758Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-25T06:32:08.209Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T06:32:08.209Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T06:14:13.045Z",
+        "acquired_at": "2026-07-25T06:12:16.755Z",
+        "worker": "msn-w18b",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

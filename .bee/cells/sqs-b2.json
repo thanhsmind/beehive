@@ -1,0 +1,82 @@
+{
+  "id": "sqs-b2",
+  "lane": "standard",
+  "title": "backlog findings --feature [--text]: query friction/finding rows (both kind: and type: schemas)",
+  "feature": "state-query-surface",
+  "behavior_change": true,
+  "deps": [
+    "sqs-b1"
+  ],
+  "files": [
+    "skills/bee-hive/templates/bee.mjs",
+    ".bee/bin/bee.mjs",
+    "skills/bee-hive/templates/lib/command-registry.mjs",
+    ".bee/bin/lib/command-registry.mjs",
+    "skills/bee-hive/templates/tests/test_backlog_capture.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/state-query-surface/plan.md",
+    "docs/history/state-query-surface/reports/feasibility-gather.md"
+  ],
+  "action": "Add a read verb backlog findings --feature <slug> [--text <terms>] listing friction/finding rows filtered by feature (word-boundary, not substring) plus optional text, reusing the lib/feedback.mjs read/skip-pbi loop (470-509). MUST accept BOTH legacy kind: and current type: friction/finding rows. Register in command-registry.mjs. Then run the regen sequence INSIDE this cell in order: node scripts/render_plugin_skill_trees.mjs, then node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "two row schemas coexist: legacy kind: and current type: — both must be read",
+      "feature filter is word-boundary, not substring"
+    ],
+    "artifacts": [
+      "backlog findings verb",
+      "registry entry",
+      "test in test_backlog_capture.mjs covering a kind: row AND a type: row"
+    ],
+    "key_links": [
+      "feasibility-gather.md Q3"
+    ],
+    "prohibitions": [
+      "do not read pbi rows (skip kind pbi)",
+      "no substring feature match",
+      "no mirror byte drift"
+    ]
+  },
+  "verify": "node skills/bee-hive/templates/tests/test_backlog_capture.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "sqs-b2-worker",
+    "outcome": "Added read verb 'backlog findings --feature <slug> [--text <terms>]' listing friction/finding rows from .bee/backlog.jsonl, accepting both legacy kind: and current type: schemas, word-boundary --feature match (excludes substring collisions), optional substring --text over title+detail; registered in command-registry.mjs; regen (render_plugin_skill_trees, onboard_bee --apply, release_manifest --write) run; scoped verify green.",
+    "files_changed": [
+      "skills/bee-hive/templates/bee.mjs",
+      ".bee/bin/bee.mjs",
+      "skills/bee-hive/templates/lib/command-registry.mjs",
+      ".bee/bin/lib/command-registry.mjs",
+      "skills/bee-hive/templates/tests/test_backlog_capture.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T07:01:59.649Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\"skills/bee-hive/templates/tests/test_backlog_capture.mjs\"],\n  \"tests_added_or_changed\": [\n    \"bee.mjs CLI: \\\"backlog findings --feature\\\" returns both a legacy kind: row and a current type: row for their feature, excludes a different feature, and skips pbi rows\",\n    \"bee.mjs CLI: \\\"backlog findings --feature --text\\\" further filters by substring over title/detail\",\n    \"bee.mjs CLI: \\\"backlog findings\\\" is advertised in --help --json\"\n  ],\n  \"red_failure_evidence\": \"Before implementation: `node skills/bee-hive/templates/tests/test_backlog_capture.mjs` reported `28 passed, 3 failed` -- the 3 new sqs-b2 checks failed with `backlog findings exited 1 :: [bee] backlog findings 3ms` (unknown command) and `backlog.findings is registered in the command manifest` (missing from --help --json manifest).\",\n  \"verification_run\": \"After implementation: `node skills/bee-hive/templates/tests/test_backlog_capture.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check` -> `31 passed, 0 failed`; `release_manifest --check: 510 file(s) match stored manifest`; `ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger`. Also live-smoke-tested backlog findings --feature demo --json in a scratch repo: returned both a legacy kind:friction row and a current type:finding row for feature demo, and correctly excluded a type:friction row under feature demox (substring-collision guard).\"\n}\n",
+    "verify_output": "31 passed, 0 failed; release_manifest --check: 510 file(s) match stored manifest; ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger",
+    "verify_passed": true,
+    "claim_session": "fb0da4af-c6ae-43d6-b0e3-1b1a689e161e",
+    "claimed_at": "2026-07-24T06:55:06.010Z",
+    "verify_command": "node skills/bee-hive/templates/tests/test_backlog_capture.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-24T07:01:46.867Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T07:01:46.868Z",
+        "claim_session": "fb0da4af-c6ae-43d6-b0e3-1b1a689e161e",
+        "claimed_at": "2026-07-24T06:55:32.177Z",
+        "acquired_at": "2026-07-24T06:55:06.009Z",
+        "worker": "sqs-b2-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

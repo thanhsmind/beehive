@@ -1,0 +1,29 @@
+{
+  "id": "install-tty-fix-1",
+  "feature": "install-tty-fix",
+  "lane": "tiny",
+  "title": "install.sh: can_prompt must fail-safe when /dev/tty exists but cannot open",
+  "files": [
+    "scripts/install.sh",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "scripts/install.sh:92-105"
+  ],
+  "action": "Bug (live repro in this sandbox): can_prompt() tests [ -r /dev/tty ] && [ -w /dev/tty ] which PASS in sandboxed shells where /dev/tty exists but open() fails => confirm() writes to /dev/tty (error), read fails, then 'answer: unbound variable' crash under set -u — instead of the designed fail-safe 'no TTY to ask. Re-run with --yes'. Fix: (1) can_prompt() must attempt a real open: [ -r /dev/tty ] && [ -w /dev/tty ] && ( : </dev/tty ) 2>/dev/null; (2) harden the read: IFS= read -r answer < /dev/tty || answer='' so a mid-read failure can never hit set -u. Mode-gate record: tiny — 1 product file, 0 risk flags, one direct task; red-first evidence = the live crash observed 2026-07-26 (line 101-103 '/dev/tty: No such device or address' + 'answer: unbound variable'). Verify = repro turns into the designed failure message. REGEN OBLIGATION (after the fix): node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "non-tty run WITHOUT --yes exits 1 with the designed 'Re-run with --yes' message, zero 'unbound variable'",
+      "interactive and --yes paths unchanged"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no behavior change beyond the prompt guard",
+      "no edits to install.ps1 (its Confirm-Step has no such bug)"
+    ]
+  },
+  "verify": "bash -c 'cd \"$(mktemp -d)\" && out=$(setsid bash /home/thanhsmind/projects/goglbe/beegog/scripts/install.sh --source /home/thanhsmind/projects/goglbe/beegog --distribution repo-copy 2>&1 </dev/null); rc=$?; echo \"$out\" | tail -3; [ $rc -ne 0 ] && echo \"$out\" | grep -q \"Re-run with --yes\" && ! echo \"$out\" | grep -q \"unbound variable\"' && node scripts/release_manifest.mjs --check",
+  "behavior_change": true,
+  "deps": []
+}

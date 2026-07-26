@@ -1,0 +1,84 @@
+{
+  "id": "te-5",
+  "feature": "test-economy",
+  "lane": "standard",
+  "behavior_change": false,
+  "title": "Grooming test-prune + compounding suite census (test-economy D4)",
+  "action": "Per test-economy D4. skills/bee-grooming/SKILL.md: thêm mũi săn test-prune — agent review-tier quét test trùng lặp/giá trị thấp, hợp nhất table-driven, xoá; verify liên quan xanh SAU prune cùng đợt. skills/bee-compounding/SKILL.md: census suite trong báo cáo (số suite registry, tổng dòng test, delta feature — shell inline, KHÔNG CLI verb mới). Close action: xác nhận PBI p-842955b5 và p-722dfd0a đã tồn tại, không file lại. Regen trong cell: render → onboard --apply → manifest --write.",
+  "must_haves": {
+    "truths": [
+      "grooming có mũi test-prune với điều kiện verify-xanh-sau-prune",
+      "compounding báo cáo census 3 số (suite, dòng, delta)",
+      "doctrine/render/pointer/ledger/mirror suites + manifest check xanh"
+    ],
+    "prohibitions": [
+      "không CLI verb mới",
+      "không tự chạy prune trong cell này (chỉ thêm luật)"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only test_doctrine_parity,test_skill_render,test_skill_pointers,test_ledger_parity,test_lib_mirror && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "docs/history/test-economy/CONTEXT.md",
+    "skills/bee-grooming/SKILL.md",
+    "skills/bee-compounding/SKILL.md"
+  ],
+  "files": [
+    "skills/bee-grooming/SKILL.md",
+    "skills/bee-compounding/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [
+    "te-4"
+  ],
+  "decisions": [
+    "test-economy D4"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "te-worker-5",
+    "outcome": "grooming test-prune hunt + compounding suite census added (test-economy D4); PBIs p-842955b5/p-722dfd0a confirmed existing",
+    "files_changed": [
+      "skills/bee-grooming/SKILL.md",
+      "skills/bee-compounding/SKILL.md",
+      ".claude/skills/bee-grooming/SKILL.md",
+      ".claude/skills/bee-compounding/SKILL.md",
+      ".agents/skills/bee-grooming/SKILL.md",
+      ".agents/skills/bee-compounding/SKILL.md",
+      ".claude-plugin/skills/bee-grooming/SKILL.md",
+      ".claude-plugin/skills/bee-compounding/SKILL.md",
+      ".codex-plugin/skills/bee-grooming/SKILL.md",
+      ".codex-plugin/skills/bee-compounding/SKILL.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/.bee-render.json",
+      ".claude/skills/.bee-render.json",
+      ".agents/skills/.bee-render.json",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T14:03:07.383Z",
+    "behavior_change": false,
+    "verification_evidence": "{\"tests_inspected\":\"docs cell — 5 gate suites (test_doctrine_parity, test_skill_render, test_skill_pointers, test_ledger_parity, test_lib_mirror)\",\"tests_added_changed\":\"none\",\"verification_run\":\"node scripts/run_verify.mjs --only test_doctrine_parity,test_skill_render,test_skill_pointers,test_ledger_parity,test_lib_mirror -> PASS 5/5 (wall=303ms); node scripts/release_manifest.mjs --check -> 560 file(s) match stored manifest\"}\n",
+    "verify_output": null,
+    "verify_passed": true,
+    "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+    "claimed_at": "2026-07-25T13:58:20.147Z",
+    "verify_command": "node scripts/run_verify.mjs --only test_doctrine_parity,test_skill_render,test_skill_pointers,test_ledger_parity,test_lib_mirror && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-25T14:02:59.521Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T14:02:59.521Z",
+        "claim_session": "d9a5ab7f-5679-4478-ab85-bee796b9d7ce",
+        "claimed_at": "2026-07-25T13:58:20.145Z",
+        "acquired_at": "2026-07-25T13:58:20.145Z",
+        "worker": "te-worker-5",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

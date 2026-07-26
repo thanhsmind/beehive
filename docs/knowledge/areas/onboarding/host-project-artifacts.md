@@ -88,5 +88,5 @@ same source bullet.)
 
 - `.bee/config-sample.json` — the annotated, copyable configuration reference
   (`_doc` block per top-level key); `.bee/config-sample-cli-executors.json` —
-  full external-command executor examples; `scripts/test_config_samples_safe.mjs`
+  full external-command executor examples; `scripts/tests/test_config_samples_safe.mjs`
   keeps both inert (never diffs against the live `.bee/config.json`).

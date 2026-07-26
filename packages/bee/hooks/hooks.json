@@ -1,0 +1,133 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-init.mjs\"",
+            "statusMessage": "bee: session bootstrap"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-prompt-context.mjs\"",
+            "statusMessage": "bee: phase reminder"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-write-guard.mjs\"",
+            "statusMessage": "bee: write guard"
+          }
+        ]
+      },
+      {
+        "matcher": "spawn_agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-model-guard.mjs\"",
+            "statusMessage": "bee: model-tier guard"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "update_plan|TaskCreate|TaskUpdate|TodoWrite",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
+            "statusMessage": "bee: state sync"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-tools-logger.mjs\"",
+            "statusMessage": "bee: tools logger"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-codex-subagent-audit.mjs\"",
+            "statusMessage": "bee: subagent start audit"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
+            "statusMessage": "bee: state sync"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-chain-nudge.mjs\"",
+            "statusMessage": "bee: chain nudge"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-codex-subagent-audit.mjs\"",
+            "statusMessage": "bee: subagent stop audit"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-close.mjs\"",
+            "statusMessage": "bee: pre-compact flush check"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
+            "statusMessage": "bee: state sync"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-close.mjs\"",
+            "statusMessage": "bee: session close check"
+          }
+        ]
+      }
+    ]
+  }
+}

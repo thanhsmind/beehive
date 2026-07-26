@@ -117,13 +117,13 @@ is dispatched for unchanged content.
 
 - Review records: `.bee/reviews/<id>.json` (sessions) + `.bee/review-candidates.jsonl`
   (ledger), CLI `bee.mjs reviews` (create/list/show/record/candidate add/
-  candidates/status), lib `skills/bee-hive/templates/lib/reviews.mjs`
+  candidates/status), lib `packages/bee/lib/reviews.mjs`
   (`deriveCandidateStatus`, `readReviewStrict`; byte-mirrored to `.bee/bin/`).
-  Status surface: `review` block in `skills/bee-hive/templates/bee.mjs` (`status` group).
+  Status surface: `review` block in `packages/bee/bee.mjs` (`status` group).
   Coverage derivation uses status-first `git merge-base --is-ancestor` +
   `git rev-list --count`: a concrete Git answer wins over an attached auxiliary
   launch warning, while missing/inconclusive output yields `review stale`.
-  Tests: review-od checks in `skills/bee-hive/templates/tests/test_lib.mjs`
+  Tests: review-od checks in `packages/bee/tests/test_lib.mjs`
   (including codex-sandbox-baseline-6 coverage). Evidence: commits cc1c34d,
   e4f51a2, da2e165; traces
   `.bee/cells/review-od-{1,2,3}.json`; acceptance map

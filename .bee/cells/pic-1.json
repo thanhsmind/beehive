@@ -1,0 +1,77 @@
+{
+  "id": "pic-1",
+  "feature": "pbi-id-collision",
+  "lane": "tiny",
+  "behavior_change": true,
+  "title": "PBI id generation is collision-safe under concurrent sessions: check-regenerate under store lock (issue #55)",
+  "action": "Mode-gate record: tiny — 1 product file + test rows, 0 flags. Per decision 9fd3e59c. (1) packages/bee/lib/backlog.mjs (~:60-84): chỗ sinh `p-${randomBytes(4)}` — thay bằng generate→check→regenerate: đọc tập id `p-*` hiện có từ backlog.jsonl (mọi event mang id), regenerate khi trùng (vòng bounded, ví dụ 16 lần rồi throw typed lỗi), và đưa cả đoạn read+append vào store lock (withStoreLock — theo pattern các store khác trong lib; nếu backlog append hiện cố ý lock-free per comment, dùng lock 'backlog' mới, giữ fail-open cho append event KHÔNG sinh id mới). Fold first-add-wins GIỮ NGUYÊN làm backstop. Không đổi shape id (vẫn p-XXXXXXXX 8 hex — tài liệu/badge đang parse nó). (2) Test rows vào suite backlog sẵn có (packages/bee/tests/test_backlog_capture.mjs hoặc suite đúng chỗ hàm này được test): (a) forced-collision: seed backlog.jsonl với id biết trước + inject rng (tham số injectable hoặc seed toàn bộ 2^32? — dùng dependency injection cho hàm random, mặc định crypto) chứng minh id thứ hai KHÁC và cả hai PBI sống sau fold; (b) negative control: bỏ check (mô phỏng đường cũ qua injected rng trả trùng và skip check) chứng minh fold nuốt bản thứ hai — chứng tỏ check là thứ đang cứu. Không file test mới. (3) Regen: node scripts/render_plugin_skill_trees.mjs → node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply → node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "Hai lần add với rng bị ép trùng cho ra hai id khác nhau, cả hai PBI tồn tại sau fold",
+      "Negative control chứng minh đường cũ mất PBI (fold ignore) — check mới là thứ ngăn nó",
+      "Append event thường (không sinh id) không bị chậm/lock thêm ngoài đường sinh-id",
+      "Id shape p-XXXXXXXX không đổi; mirrors + manifest khớp"
+    ],
+    "prohibitions": [
+      "không file test mới",
+      "không đổi shape id",
+      "không sửa mirror tay",
+      "không xoá fold backstop"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only test_backlog_capture,test_bee_cli && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "packages/bee/lib/backlog.mjs",
+    "packages/bee/tests/test_backlog_capture.mjs",
+    "packages/bee/lib/lock.mjs"
+  ],
+  "files": [
+    "packages/bee/lib/backlog.mjs",
+    "packages/bee/tests/test_backlog_capture.mjs",
+    "packages/bee/tests/test_bee_cli.mjs",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [],
+  "decisions": [
+    "pbi-id-collision 9fd3e59c"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "pic-w1",
+    "outcome": "addPbi's id-generation (fold+check+append) now runs as one critical section under a new backlog-pbi store lock, with a bounded generate-check-regenerate loop (16 attempts, typed PbiIdGenerationExhaustedError) — closing the TOCTOU window where two concurrent writers could each read a stale fold snapshot and race a collision past the fold's silent first-add-wins backstop. Id shape (p-<8hex>) and the fold backstop itself are unchanged.",
+    "files_changed": [
+      "packages/bee/lib/backlog.mjs",
+      "packages/bee/tests/test_backlog_capture.mjs",
+      ".bee/bin/lib/backlog.mjs",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T01:37:37.010Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"change_class\": \"behavior\",\n  \"tests_inspected\": [\n    \"packages/bee/tests/test_backlog_capture.mjs:582-611 (foldPbis duplicate-add-refused test) — nearest existing coverage; extended, not duplicated, because it never exercises addPbi's regenerate branch (it hand-writes raw duplicate events, never calls addPbi with a forced collision)\",\n    \"packages/bee/tests/test_backlog_capture.mjs:613-639 (addPbi id-shape/uniqueness test) — proves uniqueness across two UNFORCED random draws, which never exercises the regenerate loop since two real crypto draws essentially never collide\"\n  ],\n  \"tests_added_or_changed\": [\n    \"packages/bee/tests/test_backlog_capture.mjs: one new check() block (no new file) — 'pic-1/issue #55: addPbi's generate-check-regenerate loop catches a forced rng collision...' — adds a positive case (injectable _randomBytes forces a collision through addPbi; asserts regeneration to a distinct id, both PBIs survive the fold) plus a negative-control case (raw duplicate 'add' events written directly to backlog.jsonl, bypassing addPbi entirely, proving the fold backstop alone silently drops the second PBI)\"\n  ],\n  \"red_failure_evidence\": \"Negative control (packages/bee/tests/test_backlog_capture.mjs, same check block) simulates the OLD unchecked path: two raw 'add' events sharing id p-deadbeef written straight to backlog.jsonl (bypassing addPbi's new lock+check entirely), then folded. A standalone repro of the same scenario (run via a disposable .bee/tmp script, since deleted) produced: 'PBIs survived after fold: 1 (expected 2 if both writers had been preserved)' / 'Surviving item: {\\\"id\\\":\\\"p-deadbeef\\\",\\\"title\\\":\\\"Racer A (writer 1)\\\",\\\"cos\\\":\\\"\\\",\\\"status\\\":\\\"proposed\\\",\\\"feature\\\":null}' / '=> Racer B (writer 2) is GONE -- fold backstop silently ate it, no error raised.' This is the exact hazard decision 9fd3e59c names: the fold's first-add-wins backstop neutralizes the duplicate EVENT but silently DROPS the second PBI's content, proving the backstop alone was never a fix — the write-time generate-check-regenerate loop under the new backlog-pbi store lock is what actually prevents the loss (proven green by the SAME check block's positive case: a forced collision through addPbi regenerates to a distinct id and both PBIs survive).\",\n  \"verification_run\": \"node scripts/run_verify.mjs --only test_backlog_capture,test_bee_cli && node scripts/release_manifest.mjs --check -> PASS run_verify: 2 suite(s) (test_backlog_capture.mjs 760ms, test_bee_cli.mjs 24613ms); release_manifest --check: 394 file(s) match stored manifest\",\n  \"mirrors_regenerated_via\": \"node scripts/render_plugin_skill_trees.mjs (no skill-tree diff — backlog.mjs/tests are not skill files) -> node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply (copy_lib .bee/bin/lib/backlog.mjs) -> node scripts/release_manifest.mjs --write (394 files)\"\n}\n",
+    "verify_output": "SCOPED RUN (--only): 2 of 105 runnables selected — full verify still required before close\nPASS     760ms  packages/bee/tests/test_backlog_capture.mjs\nPASS   24613ms  packages/bee/tests/test_bee_cli.mjs\n\nPASS run_verify: 2 suite(s), concurrency=5, wall=24617ms\nSCOPED RUN (--only): 2 of 105 runnables selected — full verify still required before close\nrelease_manifest --check: 394 file(s) match stored manifest",
+    "verify_passed": true,
+    "claim_session": "e3133e36-4277-45a3-a8eb-87fadbd7181d",
+    "claimed_at": "2026-07-26T01:28:47.629Z",
+    "verify_command": "node scripts/run_verify.mjs --only test_backlog_capture,test_bee_cli && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-26T01:37:00.904Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T01:37:00.904Z",
+        "claim_session": "e3133e36-4277-45a3-a8eb-87fadbd7181d",
+        "claimed_at": "2026-07-26T01:28:47.626Z",
+        "acquired_at": "2026-07-26T01:28:47.626Z",
+        "worker": "pic-w1",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}

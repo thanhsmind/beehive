@@ -1,0 +1,85 @@
+{
+  "id": "i54-closeout-5",
+  "feature": "i54-closeout",
+  "lane": "standard",
+  "title": "Doctor hook_sources: explicitly name the dual-source state (plugin projection + repo fallback both present) with a both-present regression test",
+  "files": [
+    "skills/bee-hive/templates/bee.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/i54-closeout/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/hook-source-exclusivity.md",
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "action": "Per D5+D9: doctorHookSourcesCodex (vendored at .bee/bin/bee.mjs:4779-4791; edit the CANONICAL skills/bee-hive/templates/bee.mjs) currently reports presence with active:unknown and never names the dual-source risk. Extend the row: when BOTH hooks/hooks.json (plugin projection, a conformance-asserted rendered target per test_conformance.mjs:427 — never deleted) AND .codex/hooks.json (repo fallback) are present, the row's message explicitly states that two hook sources exist on disk, that exactly-one-active is the law (hook-source-exclusivity B14), that the current premise is capability-matrix row B1 (plugin hooks not-observed on the probed codex version), and that the premise must be re-proved when the probed version changes. Keep verdict semantics conservative (ok/warn as today — do not invent a blocking row; doctor stays read-only). Also have the row distinguish hooks/claude-hooks.json (the plugin.json-declared manifest) from hooks/hooks.json in its configured listing so the two Claude-shaped renders are named, closing #54 item 8 in the surfaced text. Add a regression test for the both-present scenario asserting the dual-source sentence appears (find doctor's existing test surface via rg 'doctorHookSources|hook_sources' across scripts/ and skills/bee-hive/templates/tests/ and extend it; create a focused test file only if none exists). Regen obligation inside THIS cell: node scripts/render_plugin_skill_trees.mjs && node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply && node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "doctor stays read-only and fail-closed verdict semantics unchanged",
+      "active: unknown honesty preserved — presence never inferred as active",
+      "both-present state is named in the row message with its premise"
+    ],
+    "artifacts": [
+      "extended doctorHookSourcesCodex message",
+      "both-present regression test"
+    ],
+    "key_links": [
+      "hooks/hooks.json",
+      ".codex/hooks.json"
+    ],
+    "prohibitions": [
+      "never delete or rename hooks/hooks.json or hooks/claude-hooks.json (D9)",
+      "no new blocking doctor row"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check",
+  "deps": [
+    "i54-closeout-3"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "mel",
+    "outcome": "Extended doctorHookSourcesCodex (skills/bee-hive/templates/bee.mjs) per D5/D9: when BOTH hooks/hooks.json (plugin projection) and .codex/hooks.json (repo fallback) are present, the row's evidence text now names the dual-source risk explicitly (two hook sources exist, hook-source-exclusivity B14 is the exactly-one-active law, current premise is capability matrix row B1 which must be re-proved when the probed codex version changes). Also distinguishes hooks/claude-hooks.json (plugin.json-declared Claude manifest) from hooks/hooks.json in both the configured listing (new claude_hooks_manifest_checked_in field) and the surfaced text, closing #54 item 8. Verdict semantics (ok/warn from repoPresent alone) and active:unknown honesty are untouched; no blocking flag added. Added a both-present regression test in test_bee_cli.mjs covering single-source baseline (no dual-source sentence) and both-present (dual-source sentence + B14 + row B1 + re-proof language + claude-hooks.json distinction), confirmed red against the pre-change function via git stash. Regenerated vendored trees (render_plugin_skill_trees, onboard --apply, release_manifest --write).",
+    "files_changed": [
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/bin/bee.mjs",
+      ".agents/skills/bee-hive/templates/bee.mjs",
+      ".agents/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".claude/skills/bee-hive/templates/bee.mjs",
+      ".claude/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".claude-plugin/skills/bee-hive/templates/bee.mjs",
+      ".claude-plugin/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".codex-plugin/skills/bee-hive/templates/bee.mjs",
+      ".codex-plugin/skills/bee-hive/templates/tests/test_bee_cli.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T10:01:44.696Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\"skills/bee-hive/templates/tests/test_bee_cli.mjs (doctor section, lines ~2311-2650)\"],\n  \"tests_added_or_changed\": [\"skills/bee-hive/templates/tests/test_bee_cli.mjs: 'doctor: hook_sources names the both-present dual-source risk (D5, #54 item 8) — never blocking, active stays unknown, distinguishes claude-hooks.json from hooks.json' (new, 2 fixture scenarios: single-source baseline asserting absence of the dual-source sentence, and both-present asserting presence of B14/row-B1/re-proof/claude-hooks-distinction language)\"],\n  \"red_failure_evidence\": \"Confirmed via git stash: reverted only skills/bee-hive/templates/bee.mjs to pre-change (old doctorHookSourcesCodex with no dual-source note, no claude_hooks_manifest_checked_in field), re-ran the full test_bee_cli.mjs suite — the new test FAILed (286 passed, 1 failed) because the both-present evidence string lacked 'two hook sources exist' etc. Restored the change via git stash pop; suite went back to 287 passed, 0 failed.\",\n  \"verification_run\": \"node scripts/run_verify.mjs --impacted-from-git --level 1 -> 25 direct suite(s) from 29 changed files, all PASS (test_bee_cli.mjs 25484ms including the new test, test_conformance.mjs, test_worktree_cli.mjs, etc), wall=57368ms. node scripts/release_manifest.mjs --check -> 510 file(s) match stored manifest.\",\n  \"deliberate_exceptions\": []\n}\n",
+    "verify_output": "IMPACTED RUN (level 1): 25 direct suite(s) from 29 changed file(s) — all 25 PASS (test_bee_cli.mjs 25484ms including new hook_sources both-present test, test_conformance.mjs, test_worktree_cli.mjs, etc); PASS run_verify: 25 suite(s), concurrency=5, wall=57368ms. release_manifest --check: 510 file(s) match stored manifest.",
+    "verify_passed": true,
+    "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+    "claimed_at": "2026-07-24T09:56:34.357Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-24T10:00:44.012Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T10:00:44.013Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T09:57:54.477Z",
+        "acquired_at": "2026-07-24T09:56:34.356Z",
+        "worker": "mel",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

@@ -107,10 +107,10 @@ location with a friendly label; a location with no label is labelled by its own 
 
 ## Pointers (implementation)
 
-- **P1** — Collector, boundary, merge, and ranking: `skills/bee-hive/templates/lib/feedback.mjs`
+- **P1** — Collector, boundary, merge, and ranking: `packages/bee/lib/feedback.mjs`
   (`ENTRY_FIELD_SPEC`, `resolveInScope`, `listInScope`, `buildDigest`, `mergeDigests`,
   `normalizeTitle`, `clusterEntries`, `rankClusters`)
 - **P4** — Source-repository list: `.bee/config.json` → `dogfood_repos`, normalized in
-  `skills/bee-hive/templates/lib/state.mjs`
+  `packages/bee/lib/state.mjs`
 - **P5** — Credential / instruction patterns and the neutralizer:
-  `skills/bee-hive/templates/lib/decisions.mjs`
+  `packages/bee/lib/decisions.mjs`

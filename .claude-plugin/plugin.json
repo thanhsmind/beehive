@@ -1,10 +1,10 @@
 {
   "name": "bee",
-  "version": "1.15.0",
+  "version": "1.18.2",
   "description": "bee: validate-first agentic development for Claude Code and Codex — staged workflow with four human gates, evidence-based validation, bounded swarms over verified cells, and a compounding knowledge loop.",
   "author": {
     "name": "bee"
   },
   "skills": "./.claude-plugin/skills/",
-  "hooks": "./hooks/claude-hooks.json"
+  "hooks": "./packages/bee/hooks/claude-hooks.json"
 }

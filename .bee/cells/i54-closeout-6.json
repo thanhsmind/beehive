@@ -1,0 +1,69 @@
+{
+  "id": "i54-closeout-6",
+  "feature": "i54-closeout",
+  "lane": "standard",
+  "title": "Bypass safety matrix consistency suite: README.md and bee-bypass-gate SKILL.md matrices parsed and compared, drift fails verify",
+  "files": [
+    "scripts/test_bypass_matrix.mjs"
+  ],
+  "read_first": [
+    "docs/history/i54-closeout/CONTEXT.md",
+    "README.md",
+    "skills/bee-bypass-gate/SKILL.md"
+  ],
+  "action": "Per D6: README.md (:192-197) and skills/bee-bypass-gate/SKILL.md (:27-31) each hand-maintain an off/normal/full/total bypass matrix with no guard against drift — the exact 'two sources of truth' seam #54 warns about. Write scripts/test_bypass_matrix.mjs: parse both markdown tables (tolerant of prose/formatting differences — normalize each level row to a semantic tuple: which gates auto-approve, whether high-risk/hard-gate is covered, whether secret reads stop, whether Gate 4/P1 stops), assert the two tables agree level-by-level, and fail with a message naming the first divergent level and both readings. Also assert all four levels exist in both files. PLAN-CHECK W2: NO manual registration — run_verify.mjs auto-discovers scripts/test_*.mjs via DISCOVERY_ROOTS glob (:42-47, :315-334); adding an EXTRA_SUITES entry would DOUBLE-RUN the suite; just confirm node scripts/run_verify.mjs --only test_bypass_matrix finds it. No runtime code changes; no README/SKILL.md content changes unless the parse reveals an ACTUAL semantic divergence — if it does, STOP and return [BLOCKED] with both readings instead of silently editing either doc.",
+  "must_haves": {
+    "truths": [
+      "the suite fails on semantic drift between the two matrices",
+      "parser tolerates cosmetic markdown differences"
+    ],
+    "artifacts": [
+      "scripts/test_bypass_matrix.mjs registered as a suite"
+    ],
+    "key_links": [
+      "README.md",
+      "skills/bee-bypass-gate/SKILL.md"
+    ],
+    "prohibitions": [
+      "do not edit README or SKILL.md content in this cell",
+      "no canonical generator this round (D6)"
+    ]
+  },
+  "behavior_change": false,
+  "verify": "node scripts/test_bypass_matrix.mjs && node scripts/run_verify.mjs --only test_bypass_matrix",
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "bob",
+    "outcome": "Wrote scripts/test_bypass_matrix.mjs: parses README.md's per-column bypass matrix and skills/bee-bypass-gate/SKILL.md's combined-prose matrix into a shared {gates13,highRisk,gate4P1,secret} semantic tuple per level (off/normal/full/total), diffs level-by-level, fails naming the first divergent level+flag+both raw rows. Checked: no actual semantic divergence exists between the two matrices today (all 4 levels agree) — nothing to BLOCK on. Auto-discovered by run_verify.mjs (no manual registration, confirmed via --only). Includes sentinel checks proving the differ both catches genuine drift and tolerates cosmetic-only formatting differences.",
+    "files_changed": [
+      "scripts/test_bypass_matrix.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T09:20:18.055Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "ok    level \"off\" agrees across both matrices: gates13=false highRisk=false gate4P1=false secret=false\nok    level \"normal\" agrees across both matrices: gates13=true highRisk=false gate4P1=false secret=false\nok    level \"full\" agrees across both matrices: gates13=true highRisk=true gate4P1=false secret=false\nok    level \"total\" agrees across both matrices: gates13=true highRisk=true gate4P1=true secret=true\nok    sentinel: a genuine high-risk-flag divergence between matrices is correctly caught\nok    sentinel: cosmetic-only formatting differences are correctly tolerated (no false positive)\n\nPASS - bypass matrix consistency: 0 failure(s)\n---run_verify---\nSCOPED RUN (--only): 1 of 98 runnables selected — full verify still required before close\nPASS      37ms  scripts/test_bypass_matrix.mjs\n\nPASS run_verify: 1 suite(s), concurrency=5, wall=37ms\nSCOPED RUN (--only): 1 of 98 runnables selected — full verify still required before close\n",
+    "verify_passed": true,
+    "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+    "claimed_at": "2026-07-24T09:15:26.436Z",
+    "verify_command": "node scripts/test_bypass_matrix.mjs && node scripts/run_verify.mjs --only test_bypass_matrix",
+    "verified_at": "2026-07-24T09:20:12.954Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T09:20:12.954Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T09:16:54.694Z",
+        "acquired_at": "2026-07-24T09:15:26.434Z",
+        "worker": "bob",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

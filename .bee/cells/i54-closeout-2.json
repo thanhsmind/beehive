@@ -1,0 +1,71 @@
+{
+  "id": "i54-closeout-2",
+  "feature": "i54-closeout",
+  "lane": "standard",
+  "title": "run_verify: per-suite timeout (BEE_VERIFY_SUITE_TIMEOUT_MS, default 300s) + periodic heartbeat naming still-running suites",
+  "files": [
+    "scripts/run_verify.mjs",
+    "scripts/test_verify_timeout.mjs"
+  ],
+  "read_first": [
+    "docs/history/i54-closeout/CONTEXT.md",
+    "docs/knowledge/areas/verify-pipeline/concurrency-and-hermetic-runs.md",
+    "scripts/run_verify.mjs"
+  ],
+  "action": "Per D2: runOne() (:535-561) spawns each suite with full buffering, no timeout, no progress. Add (a) a per-suite timeout — default 300000 ms, env override BEE_VERIFY_SUITE_TIMEOUT_MS, 0/'none' disables — that kills the child process group on expiry and reports the suite as a distinct 'TIMEOUT after <n>ms' failure (never a silent hang, never conflated with an ordinary red); (b) a heartbeat line to stderr every ~30 s while suites run, naming the suites still in flight and elapsed time, so a watching agent never reads a long run as frozen. The hermetic env scrub and concurrency semantics are untouched. Add scripts/test_verify_timeout.mjs: a fixture child script that sleeps past a tiny configured timeout must be killed and reported TIMEOUT; a fast suite under the same config passes; heartbeat emission is asserted (cadence configurable/injectable for the test — do not sleep 30s in tests). PLAN-CHECK W2: NO manual registration — run_verify.mjs auto-discovers scripts/test_*.mjs via DISCOVERY_ROOTS glob (:42-47, :315-334); adding an EXTRA_SUITES entry would DOUBLE-RUN the suite. Just confirm discovery picks it up (node scripts/run_verify.mjs --only test_verify_timeout finds it). If the sleeping fixture child must not be discovered as a suite itself, name it so the test_*.mjs glob does not match (e.g. scripts/fixtures/sleep_child.mjs).",
+  "must_haves": {
+    "truths": [
+      "a hung suite ends as a reported TIMEOUT failure, never an infinite silent wait",
+      "default behavior for fast suites is unchanged",
+      "heartbeat goes to stderr and never corrupts machine-readable stdout output"
+    ],
+    "artifacts": [
+      "timeout+heartbeat in run_verify.mjs",
+      "scripts/test_verify_timeout.mjs registered as a suite"
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "do not change the hermetic env scrub",
+      "do not alter suite pass/fail semantics for non-timeout cases",
+      "no unconditional 30s sleeps in the new test"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "node scripts/test_verify_timeout.mjs && node scripts/run_verify.mjs --only test_verify_timeout",
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "stuart",
+    "outcome": "Added per-suite timeout (BEE_VERIFY_SUITE_TIMEOUT_MS, default 300000ms, 0/none disables) and a stderr heartbeat to run_verify.mjs's runOne(); a hung suite is killed via its WHOLE process group (kills grandchildren too) and reported as a distinct TIMEOUT, never conflated with an ordinary FAIL; hermetic env scrub and non-timeout pass/fail semantics untouched. New scripts/test_verify_timeout.mjs (auto-discovered, no manual registration) covers timeout, group-kill, and injectable heartbeat emission with no unconditional 30s sleeps.",
+    "files_changed": [
+      "scripts/run_verify.mjs",
+      "scripts/test_verify_timeout.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T09:13:40.951Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\"scripts/run_verify.mjs (runOne, runSerialGroup, runSelectedSuites)\", \"scripts/test_run_verify_skip_marker.mjs (existing runOne consumer, regression-checked)\"],\n  \"tests_added_or_changed\": [\"scripts/test_verify_timeout.mjs (new, 16 cases: env-var parsing for BEE_VERIFY_SUITE_TIMEOUT_MS and BEE_VERIFY_HEARTBEAT_MS, runOne timeout+process-group-kill integration including a grandchild-kill proof, and heartbeat emission/silence/stderr-only behavior)\"],\n  \"red_failure_evidence\": \"Ran the new test file against the pre-change run_verify.mjs (git stash push -- scripts/run_verify.mjs, run, git stash pop to restore): all 16 cases failed — 'resolveSuiteTimeoutMs is not a function' / 'createInFlightTracker is not a function' for the unit-level checks, and 'expected timedOut: true' / actual undefined for the runOne integration checks, since the old runOne(entry) took no opts and had no timeout, tracker, or heartbeat machinery at all.\",\n  \"verification_run\": \"node scripts/test_verify_timeout.mjs && node scripts/run_verify.mjs --only test_verify_timeout -> 16 passed, 0 failed; SCOPED RUN (--only): 1 of 97 runnables selected; PASS 1143ms scripts/test_verify_timeout.mjs; PASS run_verify: 1 suite(s). Also regression-checked the one pre-existing runOne consumer, scripts/test_run_verify_skip_marker.mjs -> 7 passed, 0 failed (unaffected by the opts-based signature, which stays backward compatible).\",\n  \"deliberate_exceptions\": []\n}\n",
+    "verify_output": "test_verify_timeout: 16 passed, 0 failed. SCOPED RUN (--only): 1 of 97 runnables selected. PASS 1143ms scripts/test_verify_timeout.mjs. PASS run_verify: 1 suite(s), concurrency=5, wall=1143ms.",
+    "verify_passed": true,
+    "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+    "claimed_at": "2026-07-24T09:05:23.481Z",
+    "verify_command": "node scripts/test_verify_timeout.mjs && node scripts/run_verify.mjs --only test_verify_timeout",
+    "verified_at": "2026-07-24T09:13:29.088Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T09:13:29.088Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T09:08:47.019Z",
+        "acquired_at": "2026-07-24T09:05:23.479Z",
+        "worker": "stuart",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

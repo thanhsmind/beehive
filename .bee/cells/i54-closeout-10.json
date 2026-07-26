@@ -1,0 +1,65 @@
+{
+  "id": "i54-closeout-10",
+  "feature": "i54-closeout",
+  "lane": "standard",
+  "title": "Regenerate the impact registry: record the three new suites' edges (test_verify_timeout, test_bypass_matrix, test_hook_vendor_closure) + refreshed edges from the feature's source changes",
+  "files": [
+    "docs/history/codex-harness-hardening/impact-registry.json"
+  ],
+  "read_first": [
+    "scripts/impact_registry.mjs",
+    "scripts/test_impact_registry.mjs"
+  ],
+  "action": "Wave-close impacted run went red on scripts/test_impact_registry.mjs: the stored registry no longer matches a fresh regeneration because this feature added three suites and changed source edges. Run the registry's own regen command (read scripts/impact_registry.mjs usage — expected `node scripts/impact_registry.mjs --write`), confirm `node scripts/impact_registry.mjs --check` exits 0 and `node scripts/test_impact_registry.mjs` is fully green (19/19). The registry file path is wherever --write puts it (verify the actual path from the script; declare-adjust if it differs from files[]). If release_manifest hashes the registry file, also rerun node scripts/release_manifest.mjs --write and include it. NO hand edits to the registry JSON — regen only. One commit with i54-closeout-10 in the message.",
+  "must_haves": {
+    "truths": [
+      "registry --check green after regen",
+      "test_impact_registry 19/19",
+      "no hand-edited registry content"
+    ],
+    "artifacts": [
+      "regenerated impact registry committed"
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "no source-code changes — regen artifacts only"
+    ]
+  },
+  "behavior_change": false,
+  "verify": "node scripts/impact_registry.mjs --check && node scripts/test_impact_registry.mjs && node scripts/release_manifest.mjs --check",
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "otto",
+    "outcome": "Regenerated impact registry with three new test suites (test_verify_timeout, test_bypass_matrix, test_hook_vendor_closure) and refreshed edges. Registry check and full test suite (19/19) pass.",
+    "files_changed": [
+      "scripts/impact-registry.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T10:45:13.667Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "impact_registry --check: scripts/impact-registry.json is up to date\nPASS buildRegistry() run twice produces byte-identical serialized output\nPASS a known static ESM import edge is captured: scripts/test_config_validate.mjs -> .bee/bin/lib/state.mjs\nPASS a known spawn-argv edge is captured: scripts/test_worktree_cli.mjs -> .bee/bin/bee.mjs\nPASS a known runModuleWorker edge is captured: scripts/test_conformance.mjs -> .bee/bin/bee.mjs\nPASS a spawned/worker-run bee.mjs inherits its own static import closure (state.mjs reachable via test_worktree_cli.mjs)\nPASS every discovered suite's own entry file maps to (at least) itself, and directly so\nPASS edge depth: a transitive-only edge (state.mjs via bee.mjs's runModuleWorker closure) is in 'all' but absent from 'direct': scripts/test_conformance.mjs -> .bee/bin/lib/state.mjs\nPASS edge depth: bee.mjs itself is a DIRECT edge for its spawner: scripts/test_worktree_cli.mjs -> .bee/bin/bee.mjs\nPASS determinism/shape: every file's 'direct' suite list is a subset of its 'all' list\nPASS the committed scripts/impact-registry.json matches a freshly-built registry (byte-identical)\nPASS CLI: --write then --check exits 0 (registry matches what it just wrote)\nPASS CLI: --check catches drift (corrupted registry) and names the regen command, exit 1\nPASS CLI: --check catches a missing registry file, exit 1\nPASS query: union of suites for two files, sorted, newline-separated, exit 0\nPASS query: an unmapped file is noted loudly but still exits 0 (never silent)\nPASS CLI: --query prints mapped suites on stdout and an UNMAPPED note on stderr for an unknown file, exit 0\nPASS query: level 1 is strictly narrower than the default (full/transitive) for a hub file (.bee/bin/lib/state.mjs)\nPASS query: a file with zero direct edges but nonzero transitive edges maps to zero suites at level 1, yet is NOT unmapped\nPASS CLI: --query --level 1 prints strictly fewer suites than the default query for the same hub file\n\n19 passed, 0 failed\nrelease_manifest --check: 510 file(s) match stored manifest",
+    "verify_passed": true,
+    "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+    "claimed_at": "2026-07-24T10:44:13.984Z",
+    "verify_command": "node scripts/impact_registry.mjs --check && node scripts/test_impact_registry.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-24T10:45:04.295Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T10:45:04.295Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T10:44:37.444Z",
+        "acquired_at": "2026-07-24T10:44:13.982Z",
+        "worker": "otto",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "extraction"
+}

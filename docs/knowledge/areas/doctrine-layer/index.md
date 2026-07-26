@@ -10,6 +10,7 @@ never a generation timestamp or any other wall-clock value.
 
 ## Concepts
 
+- [Doctrine Layer — agent-facing state query CLI surface](agent-facing-state-query-cli-surface.md) — The three read-only query verbs bee exposes over its own state store, so agents stop grepping .bee/*.jsonl or importing internals — decisions active/search --cell/--feature, backlog findings --feature, and state scribing-run --show — plus the word-boundary discipline that makes the text-matching verbs correct.
 - [Doctrine Layer — the delegation threshold](delegation-threshold.md) — When mechanical gathering is handed to a lower-cost helper, what decide-altitude work never delegates, and why the threshold holds in every lane and every turn.
 - [Doctrine Layer — helper classes and transports](helper-classes-and-transports.md) — The two worker classes the delegation layer names, the read-only capability surface a gathering helper is spawned with, partial-return fan-out, and the gather-only external-command tier.
 - [Doctrine Layer — lane classification and working discipline](lane-and-working-discipline.md) — The standing rules that size a piece of work and govern its by-products: work-packet-first tiny/small shapes, product-file-only caps, test-anchored risk flags, classification before context loading, the one canonical scratch home, and the verify ladder.

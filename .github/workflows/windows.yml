@@ -32,9 +32,9 @@ jobs:
   #     across drives/UNC paths is untested on Windows)
   #   - scripts/test_installers_e2e.mjs (installer E2E — invokes install.sh,
   #     bash-shaped, not install.ps1)
-  #   - hooks/test_hook_contracts.mjs
-  #   - hooks/test_write_guard.mjs
-  #   - hooks/test_model_guard.mjs
+  #   - packages/bee/hooks/test_hook_contracts.mjs
+  #   - packages/bee/hooks/test_write_guard.mjs
+  #   - packages/bee/hooks/test_model_guard.mjs
   #     (hook contract suites — not yet read for Windows path assumptions)
   #   - every other scripts/test_*.mjs and skills/*/scripts/test_*.mjs in
   #     the verify chain not named above
@@ -59,7 +59,7 @@ jobs:
       - name: bee-hive template suites (auto-discovered, windows-portable subset)
         # The former test suite monolith run in this job for a long time (and
         # already vetted portable) was split into per-topic suites under
-        # skills/bee-hive/templates/tests/ (contention-split, cs-1/cs-2). The
+        # packages/bee/tests/ (contention-split, cs-1/cs-2). The
         # split relocated code — it did not rewrite it — so re-auditing every
         # resulting suite for the same two hazards this job has always
         # checked confirms the portability guarantee carries over: every file
@@ -72,7 +72,7 @@ jobs:
         #
         # BEE_VERIFY_ROOT_FILTER reuses run_verify.mjs's own suite discovery,
         # restricted to this one root, so a new suite added under
-        # skills/bee-hive/templates/tests/ is picked up here automatically —
+        # packages/bee/tests/ is picked up here automatically —
         # zero hand-maintained list to fall out of date, same as the
         # unfiltered run. The zero-match guard in run_verify.mjs (refuses a
         # silent trivial-green run if the root filter or the exclude list
@@ -87,12 +87,12 @@ jobs:
         # in exactly these 4 suites — never proven broken before because
         # nothing had ever actually run them on Windows. Each is excluded
         # here ONLY for this job, ONLY these 4, nothing else:
-        #   - skills/bee-hive/templates/tests/test_bee_cli.mjs
+        #   - packages/bee/tests/test_bee_cli.mjs
         #     (linked-worktree reverse gitdir pointer mismatch on C:\ paths,
         #     plus doctor-wording/recovery-window/registry-example failures)
-        #   - skills/bee-hive/templates/tests/test_bee_write_guard_hook.mjs
-        #   - skills/bee-hive/templates/tests/test_cells.mjs
-        #   - skills/bee-hive/templates/tests/test_misc.mjs
+        #   - packages/bee/tests/test_bee_write_guard_hook.mjs
+        #   - packages/bee/tests/test_cells.mjs
+        #   - packages/bee/tests/test_misc.mjs
         # Reference: P1 backlog row filed 2026-07-21 ("4 template suites fail
         # on real Windows: worktree gitdir pointer path, write-guard hook,
         # cells, misc" — .bee/backlog.jsonl, CI run 29799623217). Fix path per
@@ -102,12 +102,12 @@ jobs:
         # extend this list without a matching backlog row.
         # ============================================================
         env:
-          BEE_VERIFY_ROOT_FILTER: skills/bee-hive/templates/tests
+          BEE_VERIFY_ROOT_FILTER: packages/bee/tests
           BEE_VERIFY_EXCLUDE: >-
-            skills/bee-hive/templates/tests/test_bee_cli.mjs,
-            skills/bee-hive/templates/tests/test_bee_write_guard_hook.mjs,
-            skills/bee-hive/templates/tests/test_cells.mjs,
-            skills/bee-hive/templates/tests/test_misc.mjs
+            packages/bee/tests/test_bee_cli.mjs,
+            packages/bee/tests/test_bee_write_guard_hook.mjs,
+            packages/bee/tests/test_cells.mjs,
+            packages/bee/tests/test_misc.mjs
         run: node scripts/run_verify.mjs
 
       - name: portable paths guard

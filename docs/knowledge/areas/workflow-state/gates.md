@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Workflow State — starting a feature, the phase vocabulary, phase-owned routing, and closing"
-description: "The guarded doors of a feature's life: the all-or-nothing start that can never inherit the previous feature's approvals, the closed phase vocabulary, the adviser consult high-risk execution approval demands, the phase-owned generic routing mutation, and the three-step tail that makes declaring a feature closed impossible."
-timestamp: 2026-07-22
+description: "The guarded doors of a feature's life: the all-or-nothing start that can never inherit the previous feature's approvals (now also creating that feature's own workflow record), the closed phase vocabulary, the adviser consult high-risk execution approval demands (the one gate scoped to a plan revision), the phase-owned generic routing mutation, and the three-step tail that makes declaring a feature closed impossible."
+timestamp: 2026-07-25
 bee:
   id: workflow-state-gates
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["chain-integrity D1-REVISED/D2/D3/D4 (the tail of the chain: learning capture is produced not asserted, the sync demands executed work, the close demands zero spec debt, the waiver is audited)", "AO3/AO13 (Gate 3 adviser precondition, event-based staleness, never a TTL — cells ao-4-1/ao-4-2 2026-07-17)", codex-hook-state-parity D4-D6 (pre-phase routing ownership and review isolation), "scribing-integrity D1-D3/D6 (the wall at every door — feature-swap guard, lane-aware close, durable scribing ledger + orphan sweep, pre-ledger amnesty; cells si-1/si-3, 2026-07-24)"]
-  sources: ["chain-integrity cells ci-1/ci-2/ci-3 (traces in .bee/cells/, CONTEXT docs/history/chain-integrity/CONTEXT.md, 2026-07-14 — origin: an owner-supplied post-mortem of a real session in which the chain's tail was bypassed seven times)", "advisor-and-orchestration Slice 4 cells ao-4-1/ao-4-2 (adviser consult record + event-based staleness + high-risk execution precondition, live-throw verified, 2026-07-17)", "codex-hook-state-parity cell codex-hook-state-parity-1 (pre-phase routing ownership and review isolation; report and capped trace, 2026-07-16)", "docs/specs/workflow-state.md#B1", "docs/specs/workflow-state.md#B2", "docs/specs/workflow-state.md#B9a", "docs/specs/workflow-state.md#B19", "docs/specs/workflow-state.md#R1", "docs/specs/workflow-state.md#R2", "docs/specs/workflow-state.md#R3", "docs/specs/workflow-state.md#R19a", "docs/specs/workflow-state.md#R20a", "docs/specs/workflow-state.md#R21a", "docs/specs/workflow-state.md#R22", "docs/specs/workflow-state.md#R23", "docs/specs/workflow-state.md#R25", "docs/specs/workflow-state.md#R29", "docs/specs/workflow-state.md#R30", "docs/specs/workflow-state.md#R31", "docs/specs/workflow-state.md#E1", "docs/specs/workflow-state.md#E2", "docs/specs/workflow-state.md#P2", "docs/specs/workflow-state.md#P3", "docs/specs/workflow-state.md#P4", "docs/specs/workflow-state.md#P5"]
+  decisions: ["chain-integrity D1-REVISED/D2/D3/D4 (the tail of the chain: learning capture is produced not asserted, the sync demands executed work, the close demands zero spec debt, the waiver is audited)", "AO3/AO13 (Gate 3 adviser precondition, event-based staleness, never a TTL — cells ao-4-1/ao-4-2 2026-07-17)", codex-hook-state-parity D4-D6 (pre-phase routing ownership and review isolation), "scribing-integrity D1-D3/D6 (the wall at every door — feature-swap guard, lane-aware close, durable scribing ledger + orphan sweep, pre-ledger amnesty; cells si-1/si-3, 2026-07-24)", multisession-native D1/D7 (starting a feature also creates its own workflow record via three separate lock transactions; the execution gate records approved_for_plan_rev — docs/history/multisession-native/CONTEXT.md)]
+  sources: ["chain-integrity cells ci-1/ci-2/ci-3 (traces in .bee/cells/, CONTEXT docs/history/chain-integrity/CONTEXT.md, 2026-07-14 — origin: an owner-supplied post-mortem of a real session in which the chain's tail was bypassed seven times)", "advisor-and-orchestration Slice 4 cells ao-4-1/ao-4-2 (adviser consult record + event-based staleness + high-risk execution precondition, live-throw verified, 2026-07-17)", "codex-hook-state-parity cell codex-hook-state-parity-1 (pre-phase routing ownership and review isolation; report and capped trace, 2026-07-16)", "docs/specs/workflow-state.md#B1", "docs/specs/workflow-state.md#B2", "docs/specs/workflow-state.md#B9a", "docs/specs/workflow-state.md#B19", "docs/specs/workflow-state.md#R1", "docs/specs/workflow-state.md#R2", "docs/specs/workflow-state.md#R3", "docs/specs/workflow-state.md#R19a", "docs/specs/workflow-state.md#R20a", "docs/specs/workflow-state.md#R21a", "docs/specs/workflow-state.md#R22", "docs/specs/workflow-state.md#R23", "docs/specs/workflow-state.md#R25", "docs/specs/workflow-state.md#R29", "docs/specs/workflow-state.md#R30", "docs/specs/workflow-state.md#R31", "docs/specs/workflow-state.md#E1", "docs/specs/workflow-state.md#E2", "docs/specs/workflow-state.md#P2", "docs/specs/workflow-state.md#P3", "docs/specs/workflow-state.md#P4", "docs/specs/workflow-state.md#P5", "multisession-native cell multisession-native-6 (startFeature creates a workflow record; trace .bee/cells/multisession-native-6.json, commit f4fe163, 2026-07-25)", "multisession-native cell multisession-native-9 (gates scoped to plan revision; trace .bee/cells/multisession-native-9.json, commit 2dd834f, 2026-07-25)"]
   authoritative_for: "workflow-state: feature start, the phase vocabulary, phase-owned routing mutation, and the closing tail"
 ---
 
@@ -36,6 +36,21 @@ four gates to ungranted, and updates the summary/next-action. Observers (the
 next session's preamble, the status command) see either the old record intact
 or the new feature fully reset — never a mixture.
 
+**Since multisession-native slice 2, starting a feature also creates that
+feature's own workflow record (D1), never as a side effect folded into the
+legacy write.** The three writes — an idempotent seed of any live legacy
+pipeline into a workflow record (so a first-ever workflow record in a repo
+never erases mid-flight work), the unchanged legacy `state.json`/lane write,
+and the new workflow-record creation — are three separate lock transactions,
+never nested inside one another. Preconditions widen accordingly: the
+nonterminal-cell and worker checks scope to *live workflows* plus
+same-feature cells (not only the single legacy record), and the handoff
+precondition is scoped per-feature on both the default and lane paths (a
+different feature's pause snapshot never blocks this start). The schema, the
+seeding, and the per-workflow lock this creates are owned by
+`workflow-records-and-projections.md` — this concept keeps the guarded-start
+rule (B1/R1/R2) itself; only *what backs* a successful start changed.
+
 **B2 — Closed phase vocabulary.** Every phase write is validated against the
 closed list; historical skill wording that used other names (e.g.
 "exploring-complete", "validated") is invalid at the record layer.
@@ -57,6 +72,16 @@ untouched. Advice never approves a gate and never overrides a locked decision.
 What each actor observes: the assistant sees either a clean approval or the
 refusal with its fix; the audit trail gains the consult record; a worker's own
 mid-flight consult loop (B9) is unchanged.
+
+**The execution gate this opens is the one gate scoped to a plan revision
+(D7).** Granting it stamps the workflow's *current* `plan_rev` onto the gate's
+`approved_for_plan_rev`; a later `bee state plan-rev bump` on that same
+workflow projects the gate back to ungranted without touching the stored
+`approved` flag or any other workflow's gates. Context, shape, and review stay
+unscoped. The full mechanics — the plan-rev-effective formula, the bump verb,
+and what it does and does not invalidate — are owned by
+`workflow-records-and-projections.md`; this concept keeps ownership of the
+high-risk consult precondition itself.
 
 **B19 — A generic routing mutation is phase-owned.** Trigger: a caller changes
 phase, mode, feature, summary, or next action through the generic state command.
@@ -215,13 +240,18 @@ its knowledge actually landed — the state and the specs can no longer disagree
 
 - Record: `.bee/state.json` (CLI-owned). Verbs: `bee.mjs state`
   (`start-feature` — new; set/gate/worker/scribing-run — existing);
-  `startFeature()` + `isKnownPhase` in `skills/bee-hive/templates/lib/state.mjs`
+  `startFeature()` + `isKnownPhase` in `packages/bee/lib/state.mjs`
   (byte-mirrored to `.bee/bin/lib/state.mjs`).
 - Phase-owned routing: generic `state set --owner <pre-phase>` in
-  `skills/bee-hive/templates/bee.mjs` and `.bee/bin/bee.mjs`; required-owner
+  `packages/bee/bee.mjs` and `.bee/bin/bee.mjs`; required-owner
   metadata in both command registries; phase-aware callers in exploring,
   planning, validating, and compounding. Review stays local to its review
   record. Proof: state/CLI suites, `.bee/cells/codex-hook-state-parity-1.json`,
   and `docs/history/codex-hook-state-parity/reports/codex-hook-state-parity-1.md`.
-- Tests: 15 start-feature rows in `skills/bee-hive/templates/tests/test_lib.mjs`.
+- Tests: 15 start-feature rows in `packages/bee/tests/test_lib.mjs`.
 - Evidence: commit `928abf1`; trace `.bee/cells/codex-parity-5.json`.
+- Workflow-record creation on start (D1) and plan-rev-scoped gates (D7): see
+  `workflow-records-and-projections.md` Pointers — `seedLegacyWorkflows`,
+  `createWorkflow`, `workflowGatesToApprovedGates`, and the `plan-rev bump`
+  verb. Evidence: traces `.bee/cells/multisession-native-{6,9}.json`, commits
+  f4fe163, 2dd834f.

@@ -21,7 +21,7 @@
 //      `spawnSync(...)` / `execFile(...)` / `execFileSync(...)` — any argv
 //      token that resolves (via the same variable tracker) to a real repo
 //      file becomes an edge. This is how a suite that spawns `.bee/bin/
-//      bee.mjs` as a child process (e.g. `scripts/test_worktree_cli.mjs`)
+//      bee.mjs` as a child process (e.g. `scripts/tests/test_worktree_cli.mjs`)
 //      inherits bee.mjs's own closure: bee.mjs becomes reachable, and BFS
 //      then walks bee.mjs's own edges (all four types) from there.
 //   4. `runModuleWorker(<modulePath>, ...)` first-arg targets

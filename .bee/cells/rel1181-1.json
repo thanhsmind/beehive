@@ -1,0 +1,67 @@
+{
+  "id": "rel1181-1",
+  "feature": "release-1-18-1",
+  "lane": "tiny",
+  "behavior_change": false,
+  "title": "Release v1.18.1 (bugfix): bump, self-onboard, full verify green, commit, tag, push",
+  "action": "Release lane (main checkout, agent-run). Mode-gate record: tiny release machinery, 0 flags. Thứ tự: (1) node scripts/bump_version.mjs 1.18.1; (2) node scripts/render_plugin_skill_trees.mjs; (3) node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply; (4) node scripts/release_manifest.mjs --write; (5) FULL verify foreground: node scripts/run_verify.mjs — phải xanh toàn bộ; (6) commit 'release: v1.18.1 — judgement-form critical rules (16→14) + Communication contract' kèm cell id, tag v1.18.1, push origin main --tags; (7) STOP — không propagate host nào (user tự update).",
+  "must_haves": {
+    "truths": [
+      "Version tuple 1.18.1 nhất quán (bump script + onboard + manifest)",
+      "Full verify xanh toàn bộ trước tag",
+      "Tag v1.18.1 nằm trên commit release, push kèm --tags thành công"
+    ],
+    "prohibitions": [
+      "không propagate host repo nào",
+      "không tag khi verify đỏ"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "scripts/bump_version.mjs"
+  ],
+  "files": [
+    "package.json",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [],
+  "decisions": [
+    "release-flow memory"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "rel-w1",
+    "outcome": "v1.18.1 released: bump 4-component tuple, self-onboard, plugin trees re-render, manifest regen, full verify 105/105 green foreground, commit 591f4a6, tag v1.18.1 pushed, CI full run dispatched (30182772154). No host propagation per release flow.",
+    "files_changed": [
+      "package.json",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T01:22:14.405Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "full run_verify: 105 suite(s) PASS wall=63754ms; release_manifest --check: 394 files match; tag v1.18.1 pushed (2a731fa..591f4a6 main)",
+    "verify_passed": true,
+    "claim_session": "e3133e36-4277-45a3-a8eb-87fadbd7181d",
+    "claimed_at": "2026-07-26T01:20:28.562Z",
+    "verify_command": "node scripts/run_verify.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-26T01:22:08.225Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T01:22:08.225Z",
+        "claim_session": "e3133e36-4277-45a3-a8eb-87fadbd7181d",
+        "claimed_at": "2026-07-26T01:20:28.559Z",
+        "acquired_at": "2026-07-26T01:20:28.559Z",
+        "worker": "rel-w1",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

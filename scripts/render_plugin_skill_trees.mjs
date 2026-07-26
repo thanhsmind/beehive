@@ -27,8 +27,8 @@ import {
   RENDER_RUNTIMES,
   RENDER_SIDECAR,
   buildRenderSidecar,
-} from "../skills/bee-hive/scripts/onboard_bee.mjs";
-import { withStoreLock, isPidAlive } from "../skills/bee-hive/templates/lib/lock.mjs";
+} from "../packages/bee/scripts/onboard_bee.mjs";
+import { withStoreLock, isPidAlive } from "../packages/bee/lib/lock.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..");

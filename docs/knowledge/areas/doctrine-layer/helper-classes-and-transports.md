@@ -106,7 +106,7 @@ route to the external path until it earns its own proof (decisions 34398e69,
   event-driven wait, one re-dispatch, partial-return synthesis); RED→GREEN
   record in `skills/bee-compounding/CREATION-LOG.md` amendment 2026-07-17.
 - B8/R12 implementation: `resolveTier(root, slot, runtime, {for:'gather'|'cell'})`
-  in `skills/bee-hive/templates/lib/state.mjs` (default `'cell'`, refusal
+  in `packages/bee/lib/state.mjs` (default `'cell'`, refusal
   `{type:'refused', reason:'cli_tier_gather_only'}`); the cli gather branch +
   `<<<BEE_DIGEST … BEE_DIGEST>>>` delimiter contract in
   `skills/bee-hive/references/routing-and-contracts.md` § Delegation contract,

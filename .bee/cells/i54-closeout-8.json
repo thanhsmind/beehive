@@ -1,0 +1,94 @@
+{
+  "id": "i54-closeout-8",
+  "feature": "i54-closeout",
+  "lane": "standard",
+  "title": "Capability re-probe: PROBED_CODEX_VERSION bumps to live-probed 0.145.0 on canary evidence; capability rows updated only per observation",
+  "files": [
+    "skills/bee-hive/templates/bee.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/i54-closeout/CONTEXT.md",
+    "docs/history/i54-closeout/reports/validation-canary.md",
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "action": "Per D8: PROBED_CODEX_VERSION (vendored .bee/bin/bee.mjs:4505; edit CANONICAL skills/bee-hive/templates/bee.mjs) is pinned to 0.144.4 while the machine runs codex 0.145.0, so doctor reports unprobed_version. The validating canary report (reports/validation-canary.md) carries the live probe results for 0.145.0. Bump PROBED_CODEX_VERSION to the exact probed version string and update ONLY the capability-matrix rows/messages whose behavior the canary actually observed (R18 — rows the probe did not exercise keep their prior verdict WITH the prior version annotation preserved in the message if the code distinguishes per-row provenance; if the matrix is version-global, the bump must be backed by the full canary run being green). Follow any doctor test fixtures that assert the version string (rg '0\\.144\\.4' across canonical + tests) and update them coherently. Regen obligation inside THIS cell: node scripts/render_plugin_skill_trees.mjs && node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply && node scripts/release_manifest.mjs --write. After regen, run node .bee/bin/bee.mjs status --json and confirm doctor no longer reports unprobed_version for the local CLI.",
+  "must_haves": {
+    "truths": [
+      "the pin equals a version a live canary actually ran against, evidenced in the validating report",
+      "unexercised capability rows never silently upgrade their verdict (R18)"
+    ],
+    "artifacts": [
+      "bumped PROBED_CODEX_VERSION + coherent fixtures",
+      "post-regen doctor output free of unprobed_version for 0.145.0"
+    ],
+    "key_links": [
+      "docs/history/i54-closeout/reports/validation-canary.md"
+    ],
+    "prohibitions": [
+      "no version bump without the canary evidence attached",
+      "no capability verdict invented for an unobserved envelope"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "node scripts/canary_codex.mjs --probe-selftest && node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check",
+  "deps": [
+    "i54-closeout-7",
+    "i54-closeout-1",
+    "i54-closeout-9"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "carl",
+    "outcome": "PROBED_CODEX_VERSION bumped 0.144.4 -> 0.145.0 (D8) on the validating canary's post-fix full-green rerun; version-scoped capability rows (F1 trust rows, A1/A2 custom_agents) auto-update via the shared template constant, backed by the full canary green per the version-global-matrix instruction; row C2 (permission_mode, not wired to the constant, not exercised by this canary) left untouched per R18. Regen chain applied (render_plugin_skill_trees, onboard --apply, release_manifest --write); doctor no longer reports unprobed_version for the live 0.145.0 CLI.",
+    "files_changed": [
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      "scripts/test_installers_e2e.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/bin/bee.mjs",
+      ".claude/skills/bee-hive/templates/bee.mjs",
+      ".agents/skills/bee-hive/templates/bee.mjs",
+      ".claude-plugin/skills/bee-hive/templates/bee.mjs",
+      ".codex-plugin/skills/bee-hive/templates/bee.mjs",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T10:39:42.140Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\n    \"skills/bee-hive/templates/tests/test_bee_cli.mjs (doctor version-mismatch wording, custom_agents version-scoped verdict tests)\",\n    \"scripts/test_installers_e2e.mjs (codex-hybrid sandbox doctor trust-row assertions)\"\n  ],\n  \"tests_added_or_changed\": [\n    \"skills/bee-hive/templates/tests/test_bee_cli.mjs:2497 comment example version literal 0.144.4 -> 0.145.0\",\n    \"skills/bee-hive/templates/tests/test_bee_cli.mjs:2510 negative-match literal 0.144.4 -> 0.145.0 (kept in sync with PROBED_CODEX_VERSION though not load-bearing against a stubbed unrelated version)\",\n    \"skills/bee-hive/templates/tests/test_bee_cli.mjs:2581 custom_agents evidence-citation literal 0.144.4 -> 0.145.0 (load-bearing in a codex-absent/CI env where no live-version prefix masks it)\",\n    \"scripts/test_installers_e2e.mjs:619,642 stale version literal in comment/assert-message 0.144.4 -> 0.145.0 (message text only, not a value comparison)\"\n  ],\n  \"red_failure_evidence\": \"Manually reverted PROBED_CODEX_VERSION to 0.144.4 in-place and reran the two edited assertions directly; both still passed on THIS dev machine because its live codex is genuinely 0.145.0 (same as the target pin), so the custom_agents evidence string's independent live-version-detection prefix coincidentally supplied the '0.145.0' substring regardless of the constant. Root-caused via a debug print of the row object showing both the live-detected value and the constant-driven clause side by side. The version-mismatch test (2492) is orthogonal to the constant by design (stubs an unrelated fake '9.9.9' codex, so neither literal ever matches). Confirmed by code inspection that in a codex-absent/CI environment (codexVersionValue null, no live prefix) the pre-edit '0.144.4' literal would fail against a real 0.145.0-pinned build, establishing the edit as substantively necessary despite the inconclusive local re-run. Primary red/green evidence for the bump itself is the external, non-unit-test canary: docs/history/i54-closeout/reports/validation-canary.md section 1 records the pre-fix P5 failure (unrelated vendoring bug, cell i54-closeout-9, now fixed) and section 4 records the full canary rerun all-green on live codex-cli 0.145.0, which is the actual proof gate D8 requires.\",\n  \"verification_run\": \"node scripts/canary_codex.mjs --probe-selftest -> PASS. node scripts/run_verify.mjs --impacted-from-git --level 1 -> 26/26 suites PASS, wall=56341ms. node scripts/release_manifest.mjs --check -> 510 file(s) match. node .bee/bin/bee.mjs doctor --runtime codex --json -> codex_version row ok (codex-cli 0.145.0), zero unprobed_version tokens.\",\n  \"deliberate_exceptions\": [\n    \"capability matrix row C2 (permission_mode) left untouched: hardcoded literal not wired to PROBED_CODEX_VERSION and not exercised by this canary run (R18)\",\n    \"narrative/legacy-shape comments in hooks/catalog.mjs, hooks/bee-model-guard.mjs, skills/bee-hive/templates/lib/dispatch-guard.mjs, skills/bee-swarming/references/swarming-reference.md, and several scripts/test_*.mjs files mentioning '0.144.4' left untouched: they document the D1 schema/model-selection history (a distinct, already-capped cell i54-closeout-1's scope), not the D8 capability-pin scope of this cell\"\n  ]\n}\n",
+    "verify_output": "canary_codex.mjs --probe-selftest: PASS. run_verify --impacted-from-git --level 1: 26/26 suites PASS (incl. skills/bee-hive/templates/tests/test_bee_cli.mjs and scripts/test_installers_e2e.mjs, both edited for the bump), wall=56341ms. release_manifest.mjs --check: 510 file(s) match stored manifest. Post-regen doctor --runtime codex --json: codex_version row status=ok (codex-cli 0.145.0), zero unprobed_version tokens anywhere in output. Scoped red-first note: manually reverted PROBED_CODEX_VERSION to 0.144.4 in-place and reran the two edited assertions directly (not via full suite) — both still passed, but root-caused as environmental coincidence (this dev machine's live codex is 0.145.0, matching the target pin, so the custom_agents evidence string's independent live-version prefix masked the constant's own value); the version-mismatch test is orthogonal to the constant by design (stubs an unrelated 9.9.9 codex). Confirmed via inspection that scripts/test_installers_e2e.mjs's pre-bump literal ('0.144.4') would have failed to describe a 0.145.0 pin in a codex-absent CI env, establishing the edit as necessary. Constant restored to 0.145.0, vendored trees re-synced, full chain rerun green (this recorded run).",
+    "verify_passed": true,
+    "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+    "claimed_at": "2026-07-24T10:27:03.114Z",
+    "verify_command": "node scripts/canary_codex.mjs --probe-selftest && node scripts/run_verify.mjs --impacted-from-git --level 1 && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-24T10:39:21.830Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T10:33:05.081Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T10:27:47.040Z",
+        "acquired_at": "2026-07-24T10:27:03.112Z",
+        "worker": "carl",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      },
+      {
+        "n": 2,
+        "at": "2026-07-24T10:39:21.830Z",
+        "claim_session": "6685af53-5ada-4215-b32e-5a9310322910",
+        "claimed_at": "2026-07-24T10:27:47.040Z",
+        "acquired_at": "2026-07-24T10:27:03.112Z",
+        "worker": "carl",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

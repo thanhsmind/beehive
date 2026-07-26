@@ -139,13 +139,13 @@ This repo's own working copy keeps `approval_policy = "never"` locally (`.codex/
 From any terminal, plan first (dry-run, changes nothing):
 
 ```bash
-node D:\projects\tools\AI\bee\skills\bee-hive\scripts\onboard_bee.mjs --repo-root <your-repo> --json
+node D:\projects\tools\AI\bee\packages\bee\scripts\onboard_bee.mjs --repo-root <your-repo> --json
 ```
 
 Review the reported plan, then apply:
 
 ```bash
-node D:\projects\tools\AI\bee\skills\bee-hive\scripts\onboard_bee.mjs --repo-root <your-repo> --apply
+node D:\projects\tools\AI\bee\packages\bee\scripts\onboard_bee.mjs --repo-root <your-repo> --apply
 ```
 
 Flags:

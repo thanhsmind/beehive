@@ -90,9 +90,9 @@ owner sees the pending-review warning.
 
 ## Pointers (implementation)
 
-- Catalog + renderer: `hooks/catalog.mjs` (exports `ALLOWED_DIFFERENCES`,
+- Catalog + renderer: `packages/bee/hooks/catalog.mjs` (exports `ALLOWED_DIFFERENCES`,
   `TARGETS`, `REPO_TRANSPORT_UNAVAILABLE_DIAGNOSTIC`); `renderProjection`/
   `renderProjectionText` take an explicit `target` (`plugin` default, `repo`)
   so both rendering targets share one function, never forked logic.
-  Projections: `hooks/hooks.json` (Codex, plugin target), `hooks/claude-hooks.json`
+  Projections: `packages/bee/hooks/hooks.json` (Codex, plugin target), `packages/bee/hooks/claude-hooks.json`
   (Claude, plugin target; `.claude-plugin/plugin.json` points here).

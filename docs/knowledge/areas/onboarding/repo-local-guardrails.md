@@ -2,14 +2,14 @@
 type: bee.area
 title: Onboarding — repo-local guardrails and second-runtime lifecycle wiring
 description: "The opt-in that is remembered so a project's local guardrails track the workflow's own version forever, how the second runtime's project hook file is merged without losing owner entries, and the Codex lifecycle capabilities bee participates in."
-timestamp: 2026-07-22
+timestamp: 2026-07-26
 bee:
   id: onboarding-repo-local-guardrails
   lifecycle: active
   areas: [onboarding]
   required_context: [areas/onboarding/overview.md]
-  decisions: [9927fafb (a switch that narrows what an upgrade compares must equally narrow what it claims; repo-hook opt-in is sticky), b7af1bf9 (full compatible Codex lifecycle-hook parity), 73ed41d6 (workspace-scoped Codex executors; blanket bypass forbidden), d7d5f459 (current Codex dispatch contract first; custom profiles deferred), "codex-hook-state-parity D1-D3, D8-D14"]
-  sources: ["sticky-repo-hooks (cell sticky-hooks-1, 2026-07-13; found auditing 8 host projects after the v0.1.30 rollout)", "codex-hook-state-parity cells 2, 3, 5 (paired Codex lifecycle audit, exclusive plugin-first/repo-copy distribution, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity D2 (lifecycle enforcement contract, 2026-07-11)", "codex-runtime-parity D3 (nested-executor safety boundary, 2026-07-11)", "codex-runtime-parity D4 (dispatch-contract scope, 2026-07-11)", "docs/specs/onboarding.md#R6", "docs/specs/onboarding.md#R7", "docs/specs/onboarding.md#R8", "docs/specs/onboarding.md#E9", "docs/specs/onboarding.md#P13"]
+  decisions: [9927fafb (a switch that narrows what an upgrade compares must equally narrow what it claims; repo-hook opt-in is sticky), b7af1bf9 (full compatible Codex lifecycle-hook parity), 73ed41d6 (workspace-scoped Codex executors; blanket bypass forbidden), d7d5f459 (current Codex dispatch contract first; custom profiles deferred), "codex-hook-state-parity D1-D3, D8-D14", "e0f3e40e (packages-restructure D1-D5: vendor payload relocated to packages/bee/, skills instruction-only, PLUGIN_ROOT-relative resolution)"]
+  sources: ["sticky-repo-hooks (cell sticky-hooks-1, 2026-07-13; found auditing 8 host projects after the v0.1.30 rollout)", "codex-hook-state-parity cells 2, 3, 5 (paired Codex lifecycle audit, exclusive plugin-first/repo-copy distribution, and fresh-host handler delivery; capped traces and reports, 2026-07-16)", "codex-runtime-parity D2 (lifecycle enforcement contract, 2026-07-11)", "codex-runtime-parity D3 (nested-executor safety boundary, 2026-07-11)", "codex-runtime-parity D4 (dispatch-contract scope, 2026-07-11)", "docs/specs/onboarding.md#R6", "docs/specs/onboarding.md#R7", "docs/specs/onboarding.md#R8", "docs/specs/onboarding.md#E9", "docs/specs/onboarding.md#P13", "docs/history/packages-restructure/ (cells packages-restructure-1..4, 2026-07-25/26: vendor payload relocation, hook catalog move, distribution-surface roles, prose sweep)"]
   authoritative_for: "onboarding: repo-local guardrails and second-runtime lifecycle wiring"
 ---
 
@@ -79,6 +79,15 @@ runtime, per project — the installer cannot grant it).
   including explicit clean-context spawning and continuation. Bee does not ship
   named Codex agent profiles until swarming can select and verify those profiles;
   unused configuration is not parity (decision d7d5f459).
+- **R9** — The second-runtime hook projection is skipped entirely when the
+  target repository IS the hook catalog's own authority (bee's own source
+  checkout): writing the repo-local projection there would clobber the
+  generated catalog that repository already owns, so the catalog stays
+  authoritative in place instead of being overwritten by a projection of
+  itself. Self-recognition accepts either the catalog's current location or
+  its legacy pre-restructure location, so a checkout still on an older bee
+  release is still correctly self-identified — never forceable, only ever a
+  backward-compatible fallback (packages-restructure D2; decision e0f3e40e).
 
 ## Edge Cases Settled
 
@@ -94,7 +103,12 @@ runtime, per project — the installer cannot grant it).
 
 ## Pointers (implementation)
 
-- `skills/bee-hive/scripts/onboard_bee.mjs` — `renderCodexHookEntries()`,
+- Self-recognition (R9): `repoOwnsHookCatalog()` in
+  `packages/bee/scripts/onboard_bee.mjs`, checked before both the
+  `--repo-hooks` and codex-hybrid Codex-projection branches. Checks
+  `packages/bee/hooks/catalog.mjs` OR the legacy `hooks/catalog.mjs` (repo-root,
+  pre-packages-restructure) — an OR fallback, never a forced migration.
+- `packages/bee/scripts/onboard_bee.mjs` — `renderCodexHookEntries()`,
   `mergeCodexHooks()`, `isBeeCodexHookEntry()` (any-transport bee-entry
   matcher), `merge_codex_hooks` plan/apply action, `.codex/hooks.json`
   pseudo-entry in `buildManagedVersions`; `READING_MAP_STUB`/

@@ -181,8 +181,8 @@ Token vocabulary (the four raw quantities the breakdown is built from):
 ## Pointers (implementation)
 
 - **P2** — CLI surface `bee perf start|stop|section|log|render|report|sync`:
-  handlers + `perfUsageFallback` in `skills/bee-hive/templates/bee.mjs`;
-  registry entries in `skills/bee-hive/templates/lib/command-registry.mjs`.
+  handlers + `perfUsageFallback` in `packages/bee/bee.mjs`;
+  registry entries in `packages/bee/lib/command-registry.mjs`.
   `perf report` reads the log (backfilling once if empty); `perf sync` scans
   transcripts and writes session rows into the log.
 - **P4** — Open-section marker: `.bee/perf-open.json` in the project

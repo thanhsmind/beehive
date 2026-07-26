@@ -1,0 +1,79 @@
+{
+  "id": "sqs-b2-fix",
+  "lane": "standard",
+  "title": "test_bee_cli: exercise backlog.findings registry example (fix wave-close red)",
+  "feature": "state-query-surface",
+  "behavior_change": false,
+  "deps": [],
+  "files": [
+    "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+    ".bee/bin/tests/test_bee_cli.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/state-query-surface/reports/validation-slice1.md"
+  ],
+  "action": "The wave-close run of test_bee_cli.mjs fails: the coverage check at ~line 2863 ('every registry entry had its example executed at least once') reports backlog.findings as never-exercised. sqs-b2 added the backlog.findings registry entry (with examples 'bee backlog findings --feature state-query-surface --json') but no per-entry example-execution assertion. Add one such assertion alongside the other per-entry example checks (e.g. near the backlog add / knowledge.context example checks), executing the backlog.findings example via the same runner the sibling checks use, asserting it runs cleanly (exit 0, structured output). Then the coverage check passes. Edit CANONICAL skills/bee-hive/templates/tests/test_bee_cli.mjs; do NOT hand-edit the mirror. Run regen: node scripts/render_plugin_skill_trees.mjs, then node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "test currently RED: backlog.findings never-exercised at test_bee_cli.mjs:2863",
+      "this is test-coverage completeness, not a behavior change"
+    ],
+    "artifacts": [
+      "a per-entry example-execution assertion for backlog.findings in test_bee_cli.mjs",
+      "coverage check at ~2863 passes"
+    ],
+    "key_links": [
+      "reports/validation-slice1.md"
+    ],
+    "prohibitions": [
+      "do not weaken or delete the coverage check to make it pass — ADD the missing example execution",
+      "no mirror byte drift"
+    ]
+  },
+  "verify": "node skills/bee-hive/templates/tests/test_bee_cli.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "sqs-b2-fix-worker",
+    "outcome": "Added the missing per-entry example-execution assertion for backlog.findings in test_bee_cli.mjs (canonical + all 4 mirrors), seeding a matching friction row in the shared backlog fixture and exercising both registry examples (--json, --text grep). Coverage check at line 2863 flips from FAIL (backlog.findings never-exercised) to PASS. Regenerated mirrors/manifest/onboarding via the mandated scripts.",
+    "files_changed": [
+      "skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".agents/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".claude/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".claude-plugin/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".codex-plugin/skills/bee-hive/templates/tests/test_bee_cli.mjs",
+      ".agents/skills/.bee-render.json",
+      ".claude/skills/.bee-render.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/.bee-render.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-24T07:26:33.108Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "282 passed, 0 failed (coverage check \"every registry entry had its example executed at least once\" now PASS — was FAIL: backlog.findings never-exercised); release_manifest --check: 510 file(s) match stored manifest; ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger",
+    "verify_passed": true,
+    "claim_session": "fb0da4af-c6ae-43d6-b0e3-1b1a689e161e",
+    "claimed_at": "2026-07-24T07:20:56.021Z",
+    "verify_command": "node skills/bee-hive/templates/tests/test_bee_cli.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-24T07:26:26.884Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T07:26:26.884Z",
+        "claim_session": "fb0da4af-c6ae-43d6-b0e3-1b1a689e161e",
+        "claimed_at": "2026-07-24T07:21:22.300Z",
+        "acquired_at": "2026-07-24T07:20:56.019Z",
+        "worker": "sqs-b2-fix-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

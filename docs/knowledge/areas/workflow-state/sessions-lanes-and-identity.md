@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Workflow State — working sessions, self-derived identity, lanes, and the renewing heartbeat"
-description: "Who the acting session is (resolved from its own environment, never handed down), how a feature gets its own pipeline lane that every reader resolves through, and how a live session's heartbeat renews itself and carries its claims and holds forward with it."
-timestamp: 2026-07-22
+description: "Who the acting session is (resolved from its own environment, never handed down), how a feature gets its own pipeline lane that every reader resolves through, how a live session's heartbeat renews itself and carries its claims and holds forward with it, how lane binding now shares the same store lock as the heartbeat so the two writers of one session record can never lose each other's update, and how active workers are always a computed join of live sessions and claims rather than a stored array."
+timestamp: 2026-07-25
 bee:
   id: workflow-state-sessions-lanes-and-identity
   lifecycle: active
   areas: [workflow-state]
-  required_context: [areas/workflow-state/overview.md]
-  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)"]
-  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14"]
+  required_context: [areas/workflow-state/overview.md, areas/worktree-parallelism/control-plane-topology.md]
+  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)", "multisession-native D6 (active workers derived from live-heartbeat sessions + lane/workflow binding + claims, never the stored workers array; advisor condition C3 — startFeature excludes the calling session's own heartbeat)", "multisession-native D2/D3 (slice 4: session creation re-roots onto controlRoot; a session's own record carries workspace_id, auto-looked-up and stamped onto its claims too — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)"]
+  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "multisession-native cell multisession-native-8 (activeWorkers derivation, trace .bee/cells/multisession-native-8.json, commit c435add, 2026-07-25)", "multisession-native cell multisession-native-10 (default-path mutation now also routes through its workflow record; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25)", "multisession-native cell multisession-native-19 (createSession/claimCellFile stamp workspace_id; bee-session-init.mjs re-roots onto resolveContext.controlRoot and lazily auto-registers the workspace; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)"]
   authoritative_for: "workflow-state: session identity, per-feature lanes, and heartbeat/lease renewal"
 ---
 
@@ -51,6 +51,53 @@ zero-lane repo sees exactly the pre-lane behavior of every verb; an agent
 using lanes sees per-feature pipelines whose gates never bleed into each
 other.
 
+**Lane-scoped writes auto-resolve the same way lane reads already do
+(i54-closeout D7).** `resolveMutationTarget` — the shared resolution behind
+`state set`, `state gate`, `state scribing-run`, and `state advisor-ref record`
+— picks its target in one fixed precedence: an explicit `--lane` always wins;
+absent that, the calling session's own bound lane (identity self-resolved at
+the moment of the operation, per B22) is used; absent both, the default record
+is used, exactly as before lanes existed. `--no-lane` forces the default record
+even from a bound session; passing it together with an explicit `--lane` is
+refused. A missing or corrupt bound lane refuses the write loudly, with zero
+writes performed — it never silently falls back to the default record (the
+same never-borrow-the-default's-authority discipline as B13's read path,
+fresh-session-handoff D2). An unbound session sees no behavior change at all:
+every one of the four mutation verbs resolves to the default record exactly as
+it always did. `--owner`, where a verb accepts it, is still checked against
+the *selected* record's own pre-mutation phase, never the default's. **Since
+multisession-native slice 2, the selected record's mutation itself is no
+longer a direct file write:** whichever record `resolveMutationTarget` picks
+— lane or default — its write now routes through that feature's own workflow
+record and its projection, under that workflow's own lock, exactly as
+described in `workflow-records-and-projections.md` (required for both paths as
+of `multisession-native-10`, closing the interim gap where only the lane path
+routed through a workflow record). The precedence, the refusal shapes, and
+everything an unbound or zero-workflow-record session observes are unchanged
+by this — only what backs the write moved.
+
+**"Active workers" is a computed view, never the hand-mutated array
+(multisession-native D6).** Trigger: any read of who is currently working —
+status, the session preamble, a start-feature precondition. What happens: the
+answer is derived, not stored — live-heartbeat sessions (B24) joined with
+their lane/workflow binding and their current cell claim, freshly computed on
+every read. The record's own `workers` array (written and read by `state
+worker add/update/remove/clear/prune`) stays fully commandable for display and
+operator tooling, but it is documented as display-only: no gate or
+precondition anywhere reads it as truth any more. `startFeature`'s worker
+precondition — on both the default path and the lane path (`--as-lane`) —
+checks this derived view and excludes the calling session's own heartbeat from
+it, so a session starting a feature alone is never blocked by the fact that it
+is itself alive (the same `excludeSessionId` pattern `isConcurrentMode`
+already used). A worker with a stale heartbeat simply stops appearing in the
+computed view on the next read — there is no separate "remove" call needed to
+drop it. What each actor observes: `bee status` gains a `workers` line sourced
+from the derived view (previously status reported no worker information at
+all); a hand-written `workers` entry with no live session behind it no longer
+blocks a new feature from starting; a live *other* session holding a claim
+still blocks exactly as before; a solo starter's own heartbeat never
+self-blocks.
+
 **B13 — Readers resolve through the acting session's lane.** Trigger: any
 read of "where does the workflow stand" while lanes exist. What happens, per
 reader: **claim authorization** — a unit of work is claimable only under its
@@ -88,6 +135,24 @@ session by default rather than only when a caller opted in, so cross-session
 holds and claims become visible without any special handling (D3;
 durable-fallback tier: hardening-1-7-10).
 
+**A session's own record now carries its workspace, stamped once and reused
+by its claims (multisession-native D2/D3, msn-19).** Trigger: session
+creation, or claiming a cell file. What happens: `packages/bee/hooks/bee-session-init.mjs`
+creates the session record at `resolveContext.controlRoot` rather than the
+writing checkout's own root — closing the gap the `18c` adapter comment had
+flagged as deferred to a later cell — and lazily auto-registers that
+checkout's workspace (`workspace-store.mjs`) the first time a session touches
+it. `claims.mjs`'s `createSession` and `claimCellFile` both stamp
+`workspace_id` onto the record they write, auto-looked-up from the acting
+session's own already-resolved workspace rather than accepted as a caller-
+supplied value. What each actor observes: a session created inside a linked
+worktree is visible at the same control-plane path any other checkout's
+session list already reads; its claims now carry enough identity for the
+write guard's same-workspace-vs-different-workspace lease check
+(`holds-and-the-coordination-lock.md`) to answer correctly. See
+`areas/worktree-parallelism/control-plane-topology.md` for the workspace
+registry this stamping feeds and the write-policy decision it enables.
+
 **B24 — A live session's heartbeat renews itself, throttled, and carries its
 claims and holds forward with it.** Trigger: a working session performs any
 tracked activity while it is already known to the coordination store. What
@@ -108,6 +173,23 @@ renews — the audited forced door (B23) and release on any claim-clearing
 transition (B11) remain the rescue; the staleness threshold itself is
 unchanged, so real silence that long still genuinely means the session is
 gone (D5).
+
+**Lane binding now serializes under the same lock heartbeat renewal already uses
+(multisession-native D10a).** Trigger: a session's lane binding changes (bind
+or unbind) at or near the same moment its own or another session's heartbeat
+renewal (B24) is in flight. What happens: binding and unbinding a lane now
+read and write the session record inside the identical store lock that
+heartbeat renewal already acquires — a read-modify-write on a session record
+is never performed lock-free, on any of the three paths that touch it.
+Exhausting the lock's bounded-retry budget returns the same typed `LOCK_BUSY`
+refusal (Data Dictionary) every other coordination-store contention already
+answers with, naming the current holder, rather than silently proceeding
+unlocked. What each actor observes: a bind or unbind landing in the same
+instant as a heartbeat can no longer be silently clobbered (a fresh bind
+overwritten by heartbeat's stale in-memory copy of the record) or resurrected
+(an unbind reverted the same way) — the two writers of one session record are
+now mutually exclusive, closing the session store's last lock-free
+read-modify-write (issue #56 3.8).
 
 ### Closing a feature — the tail of the chain
 
@@ -175,6 +257,27 @@ its knowledge actually landed — the state and the specs can no longer disagree
   session in the store is adopted (audited, never silent); two or more refuse
   rather than guess. The chain applies identically at the library level and
   every CLI surface that resolves identity (hardening-1-7-10).
+- R56 — A lane-scoped state mutation (`state set`, `state gate`, `state
+  scribing-run`, `state advisor-ref record`) resolves its target in the order
+  explicit `--lane` > the calling session's own bound lane > the default
+  record, symmetric with the read-path resolution in B13; `--no-lane` forces
+  the default from a bound session, and a missing or corrupt bound lane
+  refuses the write loudly rather than falling back (i54-closeout D7).
+- R57 — Binding and unbinding a session's lane acquire the same `sessions`
+  store lock as heartbeat renewal around their own read-modify-write, with the
+  same bounded-retry / typed `LOCK_BUSY` discipline; no path writes a session
+  record without holding that lock (multisession-native D10a, issue #56 3.8).
+- R60 — Active workers are always a computed join of live-heartbeat sessions
+  with lane/workflow binding and cell claims, never the stored `workers`
+  array; `startFeature`'s worker precondition (default and `--as-lane` paths
+  alike) excludes the calling session's own heartbeat from that computed view
+  (multisession-native D6, advisor condition C3).
+- R76 — A session record is created at `resolveContext.controlRoot`, never
+  the writing checkout's own root, and lazily auto-registers that checkout's
+  workspace on first touch; `createSession`/`claimCellFile` stamp
+  `workspace_id` on the session and every claim it makes, auto-looked-up from
+  the acting session's own resolved workspace, never accepted as a caller-
+  supplied value (multisession-native D2/D3, msn-19).
 
 ## Edge Cases Settled
 
@@ -186,10 +289,40 @@ its knowledge actually landed — the state and the specs can no longer disagree
 ## Pointers (implementation)
 
 - Lanes (B12): lane store + `resolvePipeline` + lane-mode `startFeature` in
-  `skills/bee-hive/templates/lib/state.mjs`; `bindSessionLane`/`unbindSessionLane`
+  `packages/bee/lib/state.mjs`; `bindSessionLane`/`unbindSessionLane`
   in `lib/claims.mjs`; CLI: `--lane` on `state.set/gate/scribing-run`,
   `--as-lane/--session-id/--paths` on `state.start-feature`, `state.lanes`,
   `state.session.list/bind/unbind` (`lib/command-registry.mjs` + `bee.mjs`,
   runExample rows in `test_bee_cli.mjs`). Evidence: traces
   `.bee/cells/fsh-{3,4}.json`, commits 257d6b5, 6fa4f89;
   `docs/history/fresh-session-handoff/reports/validation-s2.md`.
+- Lock-serialized bind/unbind (D10a): `bindSessionLane`/`unbindSessionLane`
+  read-modify-write moved inside `acquireSessionsLock` in
+  `packages/bee/lib/claims.mjs`, same bounded-retry/typed
+  `LOCK_BUSY` shape as `heartbeatSession`'s own lock hold. Two forced-
+  interleaving regression tests (`_raceSeam` hook, same style as
+  `lock.mjs`'s `_takeoverSeam`/`_postRenameSeam`) in
+  `packages/bee/tests/test_claims.mjs`, proven red-first against
+  a reconstructed pre-fix build (10/10 rounds failing both directions).
+  Evidence: trace `.bee/cells/multisession-native-1.json`, commit c794eda.
+- Active workers (D6): `activeWorkers(root, {excludeSessionId})` in
+  `packages/bee/lib/claims.mjs`; `startFeature`'s worker
+  precondition (default and `startLane`) reads it instead of
+  `state.workers`; `buildStatus`/`renderStatusText` in `bee.mjs` gain a
+  `workers` field/line sourced from it. `stateWorkerMutate` and
+  `handleStateWorkerPrune` keep writing/reading the legacy `workers` array,
+  now display-only. Tests: `test_claims.mjs` (unit coverage),
+  `test_cli_state.mjs`/`test_state.mjs` (precondition coverage: hand-written
+  entry no longer blocks, a live other session's claim still does, C3
+  self-exclusion holds). Evidence: trace
+  `.bee/cells/multisession-native-8.json`, commit c435add.
+- Default/lane writes routed through their workflow record: see
+  `workflow-records-and-projections.md` Pointers for `resolveMutationTarget`,
+  `writeLaneRecordThroughProjection`/`writeStateRecordThroughProjection`, and
+  the `workflow:<id>` lock they acquire.
+- Session workspace stamping (R76): `packages/bee/hooks/bee-session-init.mjs`
+  (control-plane session creation + lazy workspace auto-register);
+  `createSession`/`claimCellFile` in `lib/claims.mjs`. Evidence: trace
+  `.bee/cells/multisession-native-19.json`, commit 09e1ed0. Full workspace
+  registry and write-policy mechanics:
+  `areas/worktree-parallelism/control-plane-topology.md`.

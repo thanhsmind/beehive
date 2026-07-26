@@ -1,0 +1,106 @@
+{
+  "id": "sqs-b1",
+  "lane": "standard",
+  "title": "decisions active/search --cell/--feature as word-boundary token match (kills si-1 vs si-10)",
+  "feature": "state-query-surface",
+  "behavior_change": true,
+  "deps": [
+    "sqs-a"
+  ],
+  "files": [
+    "skills/bee-hive/templates/bee.mjs",
+    ".bee/bin/bee.mjs",
+    "skills/bee-hive/templates/lib/command-registry.mjs",
+    ".bee/bin/lib/command-registry.mjs",
+    "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/state-query-surface/plan.md"
+  ],
+  "action": "Per D 5ca69717: add --cell and --feature to decisions active AND decisions search. Match as WHOLE TOKENS via word-boundary regex (reuse the sweepDecisionCitations discipline, decisions.mjs:382) over decision+rationale+alternatives text — NOT a structural field (none exists). Register both params in command-registry.mjs (decisions.active + decisions.search) so --help --json advertises them. Then run the regen sequence INSIDE this cell in order: node scripts/render_plugin_skill_trees.mjs, then node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "decisions have no structural cell/feature field — this is a text word-boundary match",
+      "--cell si-1 must EXCLUDE si-10"
+    ],
+    "artifacts": [
+      "--cell/--feature on decisions active + search",
+      "params in command-registry.mjs",
+      "positive+negative assertion in test_decisions_propagation.mjs"
+    ],
+    "key_links": [
+      "D 5ca69717"
+    ],
+    "prohibitions": [
+      "no substring match (that is the si-1 vs si-10 bug)",
+      "do not add a structural field",
+      "no mirror byte drift"
+    ]
+  },
+  "verify": "node skills/bee-hive/templates/tests/test_decisions_propagation.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "sqs-b1-worker",
+    "outcome": "Added --cell/--feature word-boundary text filters to decisions active and decisions search, registered both params in command-registry.mjs, regenerated mirrors + release manifest",
+    "files_changed": [
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/lib/command-registry.mjs",
+      "skills/bee-hive/templates/lib/decisions.mjs",
+      "skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
+      ".bee/bin/bee.mjs",
+      ".bee/bin/lib/command-registry.mjs",
+      ".bee/bin/lib/decisions.mjs",
+      ".agents/skills/bee-hive/templates/bee.mjs",
+      ".agents/skills/bee-hive/templates/lib/command-registry.mjs",
+      ".agents/skills/bee-hive/templates/lib/decisions.mjs",
+      ".agents/skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
+      ".agents/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/templates/bee.mjs",
+      ".claude-plugin/skills/bee-hive/templates/lib/command-registry.mjs",
+      ".claude-plugin/skills/bee-hive/templates/lib/decisions.mjs",
+      ".claude-plugin/skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude/skills/bee-hive/templates/bee.mjs",
+      ".claude/skills/bee-hive/templates/lib/command-registry.mjs",
+      ".claude/skills/bee-hive/templates/lib/decisions.mjs",
+      ".claude/skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
+      ".claude/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/templates/bee.mjs",
+      ".codex-plugin/skills/bee-hive/templates/lib/command-registry.mjs",
+      ".codex-plugin/skills/bee-hive/templates/lib/decisions.mjs",
+      ".codex-plugin/skills/bee-hive/templates/tests/test_decisions_propagation.mjs",
+      ".codex-plugin/skills/.bee-render.json",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Exported escapeRegExp from skills/bee-hive/templates/lib/decisions.mjs (previously module-private) so bee.mjs's new --cell/--feature word-boundary matcher reuses the SAME escaping helper as sweepDecisionCitations instead of a second copy drifting out of sync. Minor additive export, not an architectural change; propagated to all mirrors."
+    ],
+    "friction": null,
+    "capped_at": "2026-07-24T06:52:23.361Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\"skills/bee-hive/templates/tests/test_decisions_propagation.mjs\"],\n  \"tests_added_or_changed\": [\n    \"skills/bee-hive/templates/tests/test_decisions_propagation.mjs (6 new checks: search --cell si-1/si-10 collision, active --cell si-1/si-10 collision, search --feature billing-export/-v2 hyphen collision, active --feature same, --cell alone satisfies at-least-one-filter, --help --json advertises --cell/--feature on both commands)\"\n  ],\n  \"red_failure_evidence\": \"Before implementation: 6 FAIL / 84 PASS. Failures: 'search --cell si-1 must NOT match si-10 (substring collision)', 'active --cell si-1 must NOT match si-10', 'search --feature billing-export must match the billing-export event', 'active --feature ... must match', 'search --cell alone satisfies the at-least-one-filter requirement' (all threw 'decisions search requires --text, or at least one structured filter' since --cell did not exist), and the --help --json advertise check (assertion failed: 'cell' not in activeCmd.parameters.properties). After adding the flags: 90 passed, 0 failed.\",\n  \"verification_run\": \"node skills/bee-hive/templates/tests/test_decisions_propagation.mjs -> 90 passed, 0 failed; node scripts/release_manifest.mjs --check -> 510 file(s) match stored manifest; node scripts/ledger_parity.mjs --check -> .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\",\n  \"deliberate_exceptions\": []\n}\n",
+    "verify_output": "90 passed, 0 failed; release_manifest --check: 510 file(s) match stored manifest; ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger",
+    "verify_passed": true,
+    "claim_session": "fb0da4af-c6ae-43d6-b0e3-1b1a689e161e",
+    "claimed_at": "2026-07-24T06:45:03.591Z",
+    "verify_command": "node skills/bee-hive/templates/tests/test_decisions_propagation.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-24T06:51:38.202Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T06:51:38.202Z",
+        "claim_session": "fb0da4af-c6ae-43d6-b0e3-1b1a689e161e",
+        "claimed_at": "2026-07-24T06:45:34.051Z",
+        "acquired_at": "2026-07-24T06:45:03.590Z",
+        "worker": "sqs-b1-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "tier": "generation"
+}

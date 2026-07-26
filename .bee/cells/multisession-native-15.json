@@ -1,0 +1,104 @@
+{
+  "id": "multisession-native-15",
+  "feature": "multisession-native",
+  "lane": "standard",
+  "title": "Handoff mailboxes per workflow",
+  "action": "Handoffs move to .bee/runtime/handoffs/<workflow-id>/<seq>.json {id, workflow_id, from_session, target_role, previous_cell, next_cell, claim_epoch, kind, status}. state handoff write/show/adopt route per-workflow (bound session resolves its workflow; --lane names it). Adopt = transfer claim (epoch-checked per msn-12) then idempotent clear. Legacy .bee/HANDOFF.json becomes a projection of the newest open handoff (rebuilt by state-projection) until retirement in slice 5. One workflow pausing never blocks another (invariant 9 test); reviewer handoff never clobbers implementer handoff (distinct seq records, test). Regen inside this cell after the code change: node scripts/render_plugin_skill_trees.mjs; node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write (+ impact_registry --write if suites changed). Canonical source: skills/bee-hive/templates/ (vendored to .bee/bin/ + plugin mirrors).",
+  "behavior_change": true,
+  "deps": [
+    "multisession-native-12"
+  ],
+  "files": [
+    "skills/bee-hive/templates/lib/state.mjs",
+    "skills/bee-hive/templates/bee.mjs",
+    "skills/bee-hive/templates/lib/state-projection.mjs",
+    "tests/",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".bee/bin/lib/state.mjs",
+    ".bee/bin/lib/state-projection.mjs",
+    "docs/history/multisession-native/CONTEXT.md",
+    "docs/history/multisession-native/plan.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "workflow A paused, workflow B starts and adopts freely (test, invariant 9)",
+      "two handoffs for one workflow keep distinct seq, adopt takes newest open (test)",
+      "legacy HANDOFF.json projection stays consistent for old readers",
+      "release manifest + onboarding ledger regenerated"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "no handoff write outside the mailbox except the projection"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+  "decisions": [
+    "CONTEXT.md D4/D5"
+  ],
+  "status": "capped",
+  "trace": {
+    "0": "i",
+    "1": "s",
+    "2": "s",
+    "3": "u",
+    "4": "e",
+    "5": " ",
+    "6": "#",
+    "7": "5",
+    "8": "6",
+    "9": " ",
+    "10": "3",
+    "11": ".",
+    "12": "7",
+    "13": " ",
+    "14": "m",
+    "15": "u",
+    "16": "c",
+    "17": " ",
+    "18": "1",
+    "19": "0",
+    "20": ";",
+    "21": " ",
+    "22": "D",
+    "23": "5",
+    "worker": "msn-w15",
+    "outcome": "Handoff mailboxes per workflow (.bee/runtime/handoffs/<workflow-id>/<seq>.json), target_role-scoped, auto-clearing same-role writes; state handoff write/show/adopt resolve their workflow (bound session/--lane/default-record) and route to the mailbox, falling back to the untouched legacy .bee/HANDOFF.json when none resolves (C1); adopt transfers the claim with msn-12's fence_epoch bump then clears idempotently; state-projection.mjs's new rebuildHandoffProjection mirrors the newest open handoff across workflows into the legacy file for every byte-identical reader, with the documented single-workflow-visible compat limitation until slice 5",
+    "files_changed": [
+      "skills/bee-hive/templates/lib/state.mjs",
+      "skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/lib/state-projection.mjs",
+      "skills/bee-hive/templates/lib/command-registry.mjs",
+      "skills/bee-hive/templates/tests/test_cli_state.mjs",
+      "skills/bee-hive/templates/tests/test_misc.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "scripts/impact-registry.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-25T03:42:55.541Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"red_failure_evidence\": \"Before the mailbox lib functions existed, calling `bee state handoff write/show/adopt` in a repo with a live workflow record had no way to resolve or use a per-workflow mailbox at all — every call fell through to the single legacy .bee/HANDOFF.json regardless of how many workflows existed, so two paused workflows collided on one file (exactly the coupling startFeature's own pre-existing comment at lib/state.mjs:1987-1990 named as a known gap 'until slice 3's per-workflow mailboxes land'). During implementation, a genuine red was hit and fixed: writeMailboxHandoff/adoptMailboxHandoff run their body under lock.mjs's withStoreLock, which is ASYNC — the first handler wiring called them without awaiting, so `bee state handoff write --kind pause ...` returned `{}` (JSON.stringify of an un-awaited Promise) instead of the record; test_bee_cli.mjs's existing state.handoff.write/adopt example rows (which now route through the mailbox because rootState already has a live workflow via msn-6/10's startFeature dual-write) caught this immediately: 3 failing rows ('expected a pause handoff, got {}', 'expected the carried planned-next identifiers, got {}', and adopt exiting 1 with 'state handoff adopt: undefined'). Fixed by making handleStateHandoffWrite/handleStateHandoffAdopt async and awaiting writeMailboxHandoff/adoptMailboxHandoff — all 289 test_bee_cli.mjs rows then passed.\",\n  \"notes\": \"New tests (skills/bee-hive/templates/tests/test_cli_state.mjs, multisession-native-15 section, 8 rows): (1) two handoffs for one workflow keep distinct seq, second same-role write auto-clears the first, adopt picks the newest OPEN record; (2) target_role scoping — a reviewer-role handoff never clobbers the implementer/default-role handoff (distinct seq, independently open); a second reviewer write clears only the first reviewer record; (3) adoptMailboxHandoff bumps fence_epoch by exactly 1 (msn-12's adoptClaim) and a re-run after full clear is a typed NO_HANDOFF no-op (claim byte-unchanged, no re-bump); (4) crash-recovery self-heal (status 'adopted' but not yet 'cleared') completes the clear WITHOUT re-adopting the claim or re-bumping the epoch; (5) C1 legacy fallback — a repo with zero workflow records anywhere never creates .bee/runtime/handoffs/ and keeps writing the single legacy file, byte-identical result shape (no workflow_id/id/status/target_role/seq fields leak into the legacy record); (6) rebuildHandoffProjection mirrors the newest OPEN mailbox record (any workflow) into the legacy shape (writer_session present, mailbox-only fields dropped), removes the legacy file once no workflow has an open handoff, and readHandoff (the byte-identical readers' shared entry point) sees it unchanged; (7) invariant 9 end-to-end through the real CLI dispatcher: workflow A (default pipeline) pauses with an open handoff, workflow B starts as a lane WHILE A is paused (never blocked — F5 per-feature scoping), B writes and adopts its OWN planned-next handoff via --lane, and A's mailbox record is proven completely untouched (same seq, same status) throughout — plus `state handoff show` with no --lane still resolves A's pause (default record's own workflow) while `--lane <B>` shows B's now-cleared (null) state, proving per-session/per-workflow visibility. Byte-identical-reader suites re-run and green with ZERO edits to those files: hooks/test_hook_contracts.mjs (bee-session-close.mjs's readHandoff), scripts/test_compaction_advisories.mjs + scripts/test_compaction_module.mjs (compaction.mjs), and inject.mjs's buildSessionPreamble rows inside test_cli_state.mjs/test_misc.mjs — all pass because rebuildHandoffProjection keeps the legacy file a faithful mirror. Two known-drift tests updated as required maintenance, not scope creep: the lib/state.mjs export allowlist (test_misc.mjs) now lists the 7 new exports, and command-registry.mjs gained optional --lane/--target-role/--session-id properties on state.handoff.write/adopt/show so their --help --json schemas match the new resolution flags.\"\n}\n",
+    "verify_output": "HEARTBEAT: 5 suite(s) still running after 30.0s: skills/bee-hive/scripts/test_onboard_bee.mjs (15.8s), skills/bee-hive/templates/tests/test_bee_cli.mjs (13.5s), skills/bee-hive/templates/tests/test_cli_state.mjs (7.1s), skills/bee-hive/templates/tests/test_decisions_propagation.mjs (4.8s), skills/bee-hive/templates/tests/test_herding.mjs (0.4s)\nHEARTBEAT: 1 suite(s) still running after 60.0s: scripts/test_installers_e2e.mjs --installer bash (24.5s)\nPASS     120ms  .bee/bin/bee.mjs knowledge check\nPASS     117ms  .bee/bin/bee.mjs knowledge index --check\nPASS    1127ms  hooks/test_bypass_stop_net.mjs\nPASS   11697ms  hooks/test_hook_contracts.mjs\nPASS    3889ms  hooks/test_model_guard.mjs\nPASS    7544ms  hooks/test_write_guard.mjs\nPASS      63ms  scripts/backlog_uniqueness.mjs --check\nPASS      46ms  scripts/census_stale_spawn_syntax.mjs\nPASS      57ms  scripts/ledger_parity.mjs --check\nPASS      67ms  scripts/okf_instructions_fence.mjs\nPASS     143ms  scripts/okf_instructions_fence.mjs --selftest\nPASS     653ms  scripts/okf_migrate.mjs --check advisor-protocol\nPASS     622ms  scripts/okf_migrate.mjs --check decision-memory\nPASS     606ms  scripts/okf_migrate.mjs --check doctrine-layer\nPASS     630ms  scripts/okf_migrate.mjs --check feedback-digest\nPASS     600ms  scripts/okf_migrate.mjs --check hook-runtime\nPASS     618ms  scripts/okf_migrate.mjs --check okf-profile\nPASS     625ms  scripts/okf_migrate.mjs --check onboarding\nPASS     599ms  scripts/okf_migrate.mjs --check performance-log\nPASS     616ms  scripts/okf_migrate.mjs --check verify-pipeline\nPASS     682ms  scripts/okf_migrate.mjs --check workflow-state\nPASS     592ms  scripts/okf_migrate.mjs --check worktree-parallelism\nPASS     623ms  scripts/okf_migrate.mjs --check-patterns\nPASS      62ms  scripts/okf_specs_fence.mjs\nPASS      99ms  scripts/okf_specs_fence.mjs --selftest\nPASS      99ms  scripts/release_manifest.mjs --check\nPASS      98ms  scripts/release_manifest.mjs --selftest\nPASS      45ms  scripts/test_agents_budget.mjs\nPASS     177ms  scripts/test_bump_version.mjs\nPASS      39ms  scripts/test_bypass_matrix.mjs\nPASS      41ms  scripts/test_ci_verify_issue.mjs\nPASS     829ms  scripts/test_claim_race.mjs\nPASS     388ms  scripts/test_compact_capsule.mjs\nPASS     653ms  scripts/test_compact_verbs.mjs\nPASS    1347ms  scripts/test_compaction_advisories.mjs\nPASS     215ms  scripts/test_compaction_module.mjs\nPASS      53ms  scripts/test_config_samples_safe.mjs\nPASS      64ms  scripts/test_config_validate.mjs\nPASS    2135ms  scripts/test_conformance.mjs\nPASS    1890ms  scripts/test_dispatch_prepare.mjs\nPASS      95ms  scripts/test_doctrine_parity.mjs\nPASS      41ms  scripts/test_gate_bypass_doctrine.mjs\nPASS     400ms  scripts/test_heartbeat_touch.mjs\nPASS     580ms  scripts/test_hook_vendor_closure.mjs\nPASS    1860ms  scripts/test_impact_registry.mjs\nPASS     121ms  scripts/test_install_ps1_flow.mjs\nPASS   25377ms  scripts/test_installers_e2e.mjs --installer bash\nPASS      65ms  scripts/test_ledger_parity.mjs\nPASS      63ms  scripts/test_lib_mirror.mjs\nPASS     721ms  scripts/test_native_probe.mjs\nPASS     365ms  scripts/test_nested_clone_isolation.mjs\nPASS    9572ms  scripts/test_okf_pins.mjs\nPASS      51ms  scripts/test_portable_paths.mjs\nPASS      34ms  scripts/test_release_tuple.mjs\nPASS     951ms  scripts/test_render_race.mjs\nPASS     498ms  scripts/test_reservation_race.mjs\nPASS     103ms  scripts/test_resolveroots_p40.mjs\nPASS    1268ms  scripts/test_run_verify_impacted.mjs\nPASS     507ms  scripts/test_run_verify_only.mjs\nPASS     204ms  scripts/test_run_verify_skip_marker.mjs\nPASS      54ms  scripts/test_skill_pointers.mjs\nPASS     349ms  scripts/test_skill_render.mjs\nPASS     431ms  scripts/test_state_write_concurrency.mjs\nPASS   12742ms  scripts/test_store_lock.mjs\nPASS      58ms  scripts/test_verify_manifest.mjs\nPASS    1156ms  scripts/test_verify_timeout.mjs\nPASS   11467ms  scripts/test_worktree_cli.mjs\nPASS    1084ms  scripts/test_worktree_companion.mjs\nPASS     124ms  scripts/test_worktree_grant_resolve.mjs\nPASS     603ms  scripts/test_worktree_holds_race.mjs\nPASS    1899ms  scripts/test_worktree_holds.mjs\nPASS      89ms  scripts/test_worktree_store.mjs\nPASS   39156ms  skills/bee-hive/scripts/test_onboard_bee.mjs\nPASS     522ms  skills/bee-hive/scripts/test_plugin_distribution.mjs\nPASS     441ms  skills/bee-hive/scripts/test_split_brain_regression.mjs\nPASS     808ms  skills/bee-hive/templates/tests/test_backlog_capture.mjs\nPASS   25680ms  skills/bee-hive/templates/tests/test_bee_cli.mjs\nPASS    2275ms  skills/bee-hive/templates/tests/test_bee_write_guard_hook.mjs\nPASS     245ms  skills/bee-hive/templates/tests/test_bundle_mode.mjs\nPASS     776ms  skills/bee-hive/templates/tests/test_cells.mjs\nPASS    9836ms  skills/bee-hive/templates/tests/test_claims.mjs\nPASS    3375ms  skills/bee-hive/templates/tests/test_cli_cells.mjs\nPASS    8864ms  skills/bee-hive/templates/tests/test_cli_state.mjs\nPASS     728ms  skills/bee-hive/templates/tests/test_config_validate.mjs\nPASS     485ms  skills/bee-hive/templates/tests/test_contention_status.mjs\nPASS    6333ms  skills/bee-hive/templates/tests/test_decisions_propagation.mjs\nPASS     274ms  skills/bee-hive/templates/tests/test_feedback.mjs\nPASS      90ms  skills/bee-hive/templates/tests/test_guards_tokenizer.mjs\nPASS     178ms  skills/bee-hive/templates/tests/test_guards.mjs\nPASS     910ms  skills/bee-hive/templates/tests/test_herding_cli.mjs\nPASS    1197ms  skills/bee-hive/templates/tests/test_herding.mjs\nPASS     116ms  skills/bee-hive/templates/tests/test_intent.mjs\nPASS    4860ms  skills/bee-hive/templates/tests/test_knowledge.mjs\nPASS     100ms  skills/bee-hive/templates/tests/test_lease_store.mjs\nPASS    3491ms  skills/bee-hive/templates/tests/test_misc.mjs\nPASS      62ms  skills/bee-hive/templates/tests/test_perf.mjs\nPASS     155ms  skills/bee-hive/templates/tests/test_recovery.mjs\nPASS      75ms  skills/bee-hive/templates/tests/test_reservations.mjs\nPASS    2694ms  skills/bee-hive/templates/tests/test_reviews.mjs\nPASS     426ms  skills/bee-hive/templates/tests/test_scratch.mjs\nPASS     130ms  skills/bee-hive/templates/tests/test_state_projection.mjs\nPASS     192ms  skills/bee-hive/templates/tests/test_state.mjs\nPASS     114ms  skills/bee-hive/templates/tests/test_workflow_store.mjs\n\nPASS run_verify: 103 suite(s), concurrency=5, wall=60921ms\nrelease_manifest --check: 534 file(s) match stored manifest\nledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\n",
+    "verify_passed": true,
+    "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+    "claimed_at": "2026-07-25T03:21:18.508Z",
+    "verify_command": "node scripts/run_verify.mjs --impacted && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-25T03:42:17.799Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-25T03:42:17.799Z",
+        "claim_session": "ca1605ed-db28-425d-8ecc-526c8c8ebad4",
+        "claimed_at": "2026-07-25T03:37:00.953Z",
+        "acquired_at": "2026-07-25T03:21:18.506Z",
+        "worker": "msn-w15",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  }
+}

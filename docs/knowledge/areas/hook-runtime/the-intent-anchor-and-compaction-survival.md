@@ -165,20 +165,20 @@ orientation ended with zero edits to that suite.
 
 ## Pointers (implementation)
 
-- Store and renderers: `skills/bee-hive/templates/lib/intent.mjs`
+- Store and renderers: `packages/bee/lib/intent.mjs`
   (`writeIntent`/`readIntent`/`advanceIntent`/`clearIntent`, `precompactBlock`,
   `resumeBlock`), mirrored to `.bee/bin/lib/`.
 - CLI: the `intent` group in `command-registry.mjs` + `bee.mjs`.
-- Checkpoints: `hooks/bee-session-close.mjs` (compaction re-assertion, the
-  survival warning, and the forced anchor nudge), `hooks/bee-prompt-context.mjs`
-  (the deduped anchor nudge on every prompt), and `hooks/bee-session-init.mjs`
+- Checkpoints: `packages/bee/hooks/bee-session-close.mjs` (compaction re-assertion, the
+  survival warning, and the forced anchor nudge), `packages/bee/hooks/bee-prompt-context.mjs`
+  (the deduped anchor nudge on every prompt), and `packages/bee/hooks/bee-session-init.mjs`
   (compact/resume lead — `ANCHOR_LEAD_SOURCES`/`intentLeadBlock`, unchanged by
   the capsule).
 - Nudge predicate and dedup key: `anchorMissing()` in
-  `skills/bee-hive/templates/lib/compaction.mjs` (`key: "anchor-missing-nudge"`,
+  `packages/bee/lib/compaction.mjs` (`key: "anchor-missing-nudge"`,
   `hash: "<sessionId>:<feature>:<cell>"`), reused by both checkpoints and by the
   read-only `state compact-check` verb.
-- Proof: `skills/bee-hive/templates/tests/test_intent.mjs` (incl. the
+- Proof: `packages/bee/tests/test_intent.mjs` (incl. the
   two-boundary simulation), the intent rows in `hooks/test_hook_contracts.mjs`,
-  and `scripts/test_compaction_advisories.mjs` (the nudge and survival-warning
+  and `scripts/tests/test_compaction_advisories.mjs` (the nudge and survival-warning
   rows against the real hooks).

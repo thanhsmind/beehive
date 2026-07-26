@@ -128,16 +128,16 @@ narrower case (regen-obligation-derived D1/D2, cell ro-1, 2026-07-23).
 
 ## Pointers (implementation)
 
-- Batch slice creation: `addCells` in `skills/bee-hive/templates/lib/cells.mjs`,
+- Batch slice creation: `addCells` in `packages/bee/lib/cells.mjs`,
   CLI `bee.mjs cells add --stdin` (JSON array). Evidence: dispatcher-unify
   cells-batch-add suite rows (v0.1.27).
 - Cell revision: `updateCell` + `UPDATE_FIELD_VALIDATORS`/`UPDATE_FROZEN_HINTS`
-  in `skills/bee-hive/templates/lib/cells.mjs`; CLI `bee.mjs cells update --id ID
+  in `packages/bee/lib/cells.mjs`; CLI `bee.mjs cells update --id ID
   --file patch.json | --stdin` (byte-mirrored to `.bee/bin/`). Evidence: cell
   `.bee/cells/cuv-1.json` (commit 127abb0), 7 suite checks.
 - Derived regen obligation: `deriveManifestScope` + `REGEN_ACK_FIELD`
-  (`regen_obligation_ack`) in `skills/bee-hive/templates/lib/cells.mjs`,
+  (`regen_obligation_ack`) in `packages/bee/lib/cells.mjs`,
   enforced in `addCells`/`updateCell`; roots parsed from
   `scripts/release_manifest.mjs` and `scripts/ledger_parity.mjs`. Evidence:
-  12 suite rows in `skills/bee-hive/templates/tests/test_bee_cli.mjs` +
+  12 suite rows in `packages/bee/tests/test_bee_cli.mjs` +
   mutation red, commit e4ae329 (cell ro-1, 2026-07-23).

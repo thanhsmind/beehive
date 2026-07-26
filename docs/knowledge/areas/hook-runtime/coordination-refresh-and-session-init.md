@@ -100,16 +100,16 @@ it did before this behavior existed (hardening-1-7-10).
 ## Pointers (implementation)
 
 - Opportunistic coordination refresh (B20, R19): `heartbeatTouch` (session
-  heartbeat + `renewClaimTTL`) in `skills/bee-hive/templates/lib/claims.mjs`,
-  `renewHoldsBySession` in `skills/bee-hive/templates/lib/reservations.mjs`,
+  heartbeat + `renewClaimTTL`) in `packages/bee/lib/claims.mjs`,
+  `renewHoldsBySession` in `packages/bee/lib/reservations.mjs`,
   composed at the checkpoint call site (not imported by `claims.mjs` itself)
-  in `hooks/bee-prompt-context.mjs` (UserPromptSubmit) and
-  `hooks/bee-state-sync.mjs` (PostToolUse/Stop), each inside its own
+  in `packages/bee/hooks/bee-prompt-context.mjs` (UserPromptSubmit) and
+  `packages/bee/hooks/bee-state-sync.mjs` (PostToolUse/Stop), each inside its own
   try/catch separate from the checkpoint's primary job; both hook copies
   mirrored under `.bee/bin/hooks/`. Coordination lock primitive:
   `withStoreLock` (`options.maxAttempts`/`retryDelayMs` power the checkpoint's
-  try-once mode) in `skills/bee-hive/templates/lib/lock.mjs`. Suite:
-  `scripts/test_heartbeat_touch.mjs` (throttle no-op, real-hook-driven
+  try-once mode) in `packages/bee/lib/lock.mjs`. Suite:
+  `scripts/tests/test_heartbeat_touch.mjs` (throttle no-op, real-hook-driven
   refresh, touch-throw fail-open, `LOCK_BUSY` silent skip, renewal-vs-adopt
   gate skip). Evidence: `.bee/cells/msh-5.json`,
   `docs/history/multi-session-hardening/reports/msh-5.md`.

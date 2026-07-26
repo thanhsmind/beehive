@@ -2,7 +2,7 @@
 // Ledger parity checker (lpsp-1) — the THIRD copy relationship this repo
 // carries, and until now the only unguarded one:
 //
-//   skills/bee-hive/templates/** <-> .bee/bin/**          guarded by scripts/test_lib_mirror.mjs
+//   packages/bee/** <-> .bee/bin/**                        guarded by scripts/tests/test_lib_mirror.mjs
 //   the plugin trees                                       guarded by scripts/release_manifest.mjs --check
 //   .bee/bin/** <-> .bee/onboarding.json managed hashes    guarded by NOTHING  <- this file
 //
@@ -25,7 +25,7 @@
 // re-tag without re-onboarding). The fix is always: re-run self-onboard.
 //
 // Hashing: reuses hashFile from .bee/bin/lib/fsutil.mjs — the SAME function
-// buildManagedVersions (skills/bee-hive/scripts/onboard_bee.mjs) records
+// buildManagedVersions (packages/bee/scripts/onboard_bee.mjs) records
 // with, and the SAME function computeRuntimeDrift (.bee/bin/bee.mjs) reads
 // with. Never a second hashing implementation — recorder and checker can
 // never disagree about what a vendored file's fingerprint is.
@@ -51,7 +51,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_REPO_ROOT = path.join(__dirname, "..");
-const FIX_HINT = "node skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply";
+const FIX_HINT = "node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply";
 
 let cachedHashFile = null;
 // Dynamic import: this file's own .bee/bin/lib/fsutil.mjs, the same module
