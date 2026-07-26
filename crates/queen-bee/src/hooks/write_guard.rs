@@ -12,12 +12,14 @@
 //! never edited to "improve" on it. Deny reasons are copied VERBATIM so a
 //! deny's stderr is byte-identical across runtimes.
 //!
-//! Scope boundary (validation decision 2026-07-26, split 1 of 3):
-//! - Bash-command analysis (`extractBashTargets`, `checkGitBashCommand`,
-//!   CLI-shape check (d), internals-reach) is cell rust-port-11. A Bash
-//!   payload here passes the linked-invalid gate below, then falls open
-//!   (allow) — this port is DARK until the flip slice, so nothing depends
-//!   on the missing branch yet.
+//! Scope boundary (validation decision 2026-07-26): rust-port-9 shipped the
+//! Edit/Write/MultiEdit spine; rust-port-11 (split 2 of 3) adds the Bash
+//! path — `extractBashTargets` write-target extraction, the intake-gate git
+//! exemption (`checkGitBashCommand`, GIT SPAWN PARITY: rust spawns git
+//! exactly where node does), the internals-reach guard, and CLI-shape
+//! check (d) validated against the rust-port-8 registry bridge
+//! (`.bee/cache/command-registry.json`; a stale snapshot skips check (d)
+//! with a visible coverage-gap line — the ACCEPTED rust-only allow window).
 //! - The read side (`checkRead`, read-size guard, privacy/scout),
 //!   `apply_patch` target proving, and `AskUserQuestion` validation are
 //!   cell rust-port-12 — same deliberate fall-open until they land.
@@ -34,8 +36,14 @@ use std::path::{Component, Path, PathBuf};
 
 use serde_json::{json, Value};
 
-use bee_core::guards::{check_write, Verdict, WriteTopology};
+use bee_core::guards::{
+    check_bin_lib_import_bash_command, check_git_bash_command, check_write, extract_bash_targets, Verdict,
+    WriteTopology,
+};
+use bee_core::registry::{load_registry, CommandRegistryEntry, Registry};
 use bee_core::state::read_state;
+use bee_core::tokenize::tokenize_command;
+use bee_core::validate_args::validate;
 
 use crate::adapter::{self, HookContext};
 use crate::hookconfig;
@@ -48,6 +56,10 @@ const APPLY_PATCH_TOOLS: [&str; 2] = ["apply_patch", "ApplyPatch"];
 const GENERIC_CONTAINMENT_MESSAGE: &str =
     "bee write guard denied this target: it could not be canonically contained inside the physical worktree. \
 FIX: use a plain in-worktree path without traversal, outside absolute paths, or symlink escapes.";
+
+const GENERIC_BASH_CONTAINMENT_MESSAGE: &str =
+    "bee write guard denied Bash: one or more extracted targets could not be canonically contained inside the physical worktree. \
+FIX: use plain in-worktree paths without traversal, outside absolute paths, or symlink escapes.";
 
 const WORKTREE_LINK_INVALID_MESSAGE: &str =
     "bee worktree guard denied this write: WORKTREE_LINK_INVALID — linked worktree metadata could not be validated. \
@@ -547,12 +559,11 @@ fn decide(ctx: &HookContext, tool_name: &str, root: &Path, store_root: &Path) ->
         // rust-port-12 scope (read side, AskUserQuestion) — fall open.
         return Outcome::Allow;
     }
-    if tool_name == "Bash" || APPLY_PATCH_TOOLS.contains(&tool_name) {
-        // rust-port-11 (Bash target extraction + git/CLI-shape/internals
-        // checks) and rust-port-12 (apply_patch proving) — fall open.
+    if APPLY_PATCH_TOOLS.contains(&tool_name) {
+        // rust-port-12 scope (apply_patch target proving) — fall open.
         return Outcome::Allow;
     }
-    if !WRITE_TOOLS.contains(&tool_name) {
+    if !WRITE_TOOLS.contains(&tool_name) && tool_name != "Bash" {
         return Outcome::Allow;
     }
 
@@ -567,16 +578,46 @@ fn decide(ctx: &HookContext, tool_name: &str, root: &Path, store_root: &Path) ->
         .filter(|s| !s.is_empty())
         .map(str::to_string);
 
-    let raw_target = tool_input.get("file_path").and_then(Value::as_str).unwrap_or("");
+    let command: String = if tool_name == "Bash" {
+        tool_input.get("command").and_then(Value::as_str).unwrap_or("").to_string()
+    } else {
+        String::new()
+    };
+
     let mut denial: Option<String> = None;
     let mut rel_paths: Vec<String> = Vec::new();
-    match canonical_rel_path(root, cwd, raw_target)
-        .or_else(|| resolve_companion_mounted_rel_path(root, cwd, raw_target))
-    {
-        Some(rel) => rel_paths.push(rel),
-        None => {
-            let enriched = describe_cross_worktree_target(root, cwd, raw_target);
-            denial = Some(enriched.unwrap_or_else(|| GENERIC_CONTAINMENT_MESSAGE.to_string()));
+    if tool_name == "Bash" {
+        if !command.is_empty() {
+            let targets = extract_bash_targets(&command);
+            let canonicalized: Vec<(String, Option<String>)> = targets
+                .paths
+                .iter()
+                .map(|p| {
+                    let rel = canonical_rel_path(root, cwd, p)
+                        .or_else(|| resolve_companion_mounted_rel_path(root, cwd, p));
+                    (p.clone(), rel)
+                })
+                .collect();
+            rel_paths = canonicalized.iter().filter_map(|(_, rel)| rel.clone()).collect();
+            if rel_paths.len() != canonicalized.len() {
+                let first_failing =
+                    canonicalized.iter().find(|(_, rel)| rel.is_none()).map(|(raw, _)| raw.clone());
+                let enriched = first_failing.and_then(|raw| describe_cross_worktree_target(root, cwd, &raw));
+                denial = Some(enriched.unwrap_or_else(|| GENERIC_BASH_CONTAINMENT_MESSAGE.to_string()));
+            } else if rel_paths.is_empty() && targets.broad_write {
+                rel_paths.push("**".to_string());
+            }
+        }
+    } else {
+        let raw_target = tool_input.get("file_path").and_then(Value::as_str).unwrap_or("");
+        match canonical_rel_path(root, cwd, raw_target)
+            .or_else(|| resolve_companion_mounted_rel_path(root, cwd, raw_target))
+        {
+            Some(rel) => rel_paths.push(rel),
+            None => {
+                let enriched = describe_cross_worktree_target(root, cwd, raw_target);
+                denial = Some(enriched.unwrap_or_else(|| GENERIC_CONTAINMENT_MESSAGE.to_string()));
+            }
         }
     }
 
@@ -586,25 +627,80 @@ fn decide(ctx: &HookContext, tool_name: &str, root: &Path, store_root: &Path) ->
     // is built on (see bee_core::guards::WriteTopology).
     let topology = derive_topology(ctx, store_root);
 
-    // Preserve the established diagnostic precedence: the concrete policy
-    // reason remains the user-facing correction, first hit wins.
+    // Preserve the established diagnostic precedence when a mixed request
+    // contains both an unprovable target and a proved policy-denied target:
+    // the whole request is denied either way, and the concrete policy
+    // reason remains the user-facing correction — the loop runs even with a
+    // containment denial already set, and a policy deny replaces it,
+    // exactly like the mjs hook's own loop.
     let mut reservation_warnings: Vec<String> = Vec::new();
-    if denial.is_none() {
-        for rel in &rel_paths {
-            match check_write(
-                store_root,
-                &state,
-                rel,
-                agent_name.as_deref(),
-                session_id.as_deref(),
-                &topology,
-            ) {
-                Verdict::Deny { reason, .. } => {
+    for rel in &rel_paths {
+        match check_write(
+            store_root,
+            &state,
+            rel,
+            agent_name.as_deref(),
+            session_id.as_deref(),
+            &topology,
+        ) {
+            Verdict::Deny { reason, .. } => {
+                denial = Some(reason);
+                break;
+            }
+            Verdict::Allow { warning: Some(w) } => reservation_warnings.push(w),
+            Verdict::Allow { warning: None } => {}
+        }
+    }
+
+    // Intake-gate git exemption (D1/D3/D4, cell ige-2, closes P46 / GH #1):
+    // additive and scoped to Bash only — check_git_bash_command itself
+    // returns None unless the phase is terminal AND the command contains a
+    // recognizable `git` invocation, so it can never override or discard a
+    // denial the checks above already computed.
+    if denial.is_none() && tool_name == "Bash" && !command.is_empty() {
+        if let Some(Verdict::Deny { reason, .. }) = check_git_bash_command(
+            store_root,
+            &state,
+            &command,
+            cwd,
+            session_id.as_deref(),
+            &topology.control_root,
+        ) {
+            denial = Some(reason);
+        }
+    }
+
+    // Internals-reach guard (state-query-surface, cell sqs-a, D 3fbe2f79):
+    // deny an inline-eval `node -e`/`--eval`/`-p` whose script imports a
+    // bin/lib or packages/bee/lib module — never a file-based run. Additive,
+    // Bash only, first-hit-wins like every other check above.
+    if denial.is_none() && tool_name == "Bash" && !command.is_empty() {
+        if let Some(Verdict::Deny { reason, .. }) = check_bin_lib_import_bash_command(&command) {
+            denial = Some(reason);
+        }
+    }
+
+    // Check (d) — CLI-shape validation (additive, D4). Runs unconditionally
+    // for Bash calls but can only ever ASSIGN a denial when none exists yet
+    // (first hit wins). Its containment is deliberately separate from the
+    // shared fail-open boundary: a fault here fails open for THIS check
+    // only (logged), never discarding a denial checks (a)-(c) already
+    // computed — mirroring the mjs hook's dedicated try/catch.
+    if tool_name == "Bash" && !command.is_empty() {
+        match catch_unwind(AssertUnwindSafe(|| cli_shape_denial(ctx, root, store_root, &command))) {
+            Ok(Some(reason)) => {
+                if denial.is_none() {
                     denial = Some(reason);
-                    break;
                 }
-                Verdict::Allow { warning: Some(w) } => reservation_warnings.push(w),
-                Verdict::Allow { warning: None } => {}
+            }
+            Ok(None) => {}
+            Err(panic) => {
+                let message = panic
+                    .downcast_ref::<&str>()
+                    .map(|s| s.to_string())
+                    .or_else(|| panic.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown panic".to_string());
+                adapter::log_crash(Some(root), HOOK_NAME, &message, ctx.source.as_deref());
             }
         }
     }
@@ -628,6 +724,259 @@ fn decide(ctx: &HookContext, tool_name: &str, root: &Path, store_root: &Path) ->
     }
 
     Outcome::Allow
+}
+
+// ─── check (d): CLI-shape validation (harness-integration D4, additive) ────
+// Port of bee-write-guard.mjs's own checkCliShape/resolveCliCommandName/
+// parseCliFlags/splitCliSegments (they live in the HOOK there, not
+// guards.mjs — layout mirrored here). The registry comes from the
+// rust-port-8 JSON bridge (`.bee/cache/command-registry.json`) instead of a
+// dynamic import of command-registry.mjs; `load_registry` re-hashes the
+// live mjs source, and a stale snapshot skips this check with a visible
+// coverage-gap line — the ACCEPTED rust-only allow window (validation
+// decision 2026-07-26, two-fixture stale-registry semantics).
+
+const CLI_SEGMENT_SEPARATORS: [&str; 5] = ["&&", "||", ";", "|", "&"];
+
+fn split_cli_segments(tokens: &[String]) -> Vec<Vec<String>> {
+    let mut segments: Vec<Vec<String>> = Vec::new();
+    let mut current: Vec<String> = Vec::new();
+    for token in tokens {
+        if CLI_SEGMENT_SEPARATORS.contains(&token.as_str()) {
+            if !current.is_empty() {
+                segments.push(std::mem::take(&mut current));
+            }
+        } else {
+            current.push(token.clone());
+        }
+    }
+    if !current.is_empty() {
+        segments.push(current);
+    }
+    segments
+}
+
+/// The mjs `LEGACY_HELPER_RE` (`/^bee_([a-z]+)\.mjs$/i`) — a TRANSITION
+/// GUARD for hosts mid-upgrade (shim-retire, decision bbc6bcea D1/D3); the
+/// captured group keeps its original case, exactly like the JS capture.
+fn legacy_helper_group(base: &str) -> Option<String> {
+    let lower = base.to_ascii_lowercase();
+    if !lower.starts_with("bee_") || !lower.ends_with(".mjs") || base.len() < 9 {
+        return None;
+    }
+    let middle = &base[4..base.len() - 4];
+    if middle.is_empty() || !middle.chars().all(|c| c.is_ascii_alphabetic()) {
+        return None;
+    }
+    Some(middle.to_string())
+}
+
+/// The mjs `DISPATCHER_RE` (`/^bee\.mjs$/i`) — flagged at D7 flip time as an
+/// invocation-string recognizer that must learn the new binary name.
+fn is_dispatcher_basename(base: &str) -> bool {
+    base.eq_ignore_ascii_case("bee.mjs")
+}
+
+/// Port of `resolveCliCommandName(scriptBasename, positionalTokens,
+/// registry)` — longest-prefix match over the registry's own names, the
+/// SAME rule bee.mjs's resolveCommand uses. `None` when the shape is
+/// ambiguous or no prefix length matches — left to fail open, never guessed.
+fn resolve_cli_command_name(
+    script_basename: &str,
+    positional: &[String],
+    names: &std::collections::HashSet<&str>,
+) -> Option<(String, usize)> {
+    let legacy_match = legacy_helper_group(script_basename);
+    let is_dispatcher = legacy_match.is_none() && is_dispatcher_basename(script_basename);
+    if legacy_match.is_none() && !is_dispatcher {
+        return None;
+    }
+
+    let group: Option<String> = match &legacy_match {
+        Some(g) => Some(g.clone()),
+        None => positional.first().cloned(),
+    };
+    if legacy_match.is_some() && group.as_deref() == Some("status") {
+        return Some(("status".to_string(), 0));
+    }
+    if is_dispatcher {
+        match group.as_deref() {
+            None | Some("") => return None,
+            Some(g) if g.starts_with('-') => return None,
+            Some("status") => return Some(("status".to_string(), 1)),
+            _ => {}
+        }
+    }
+    let group = group?;
+
+    // Collect the run of non-flag tokens after the group — the same
+    // "leading tokens" shape bee.mjs's own resolveCommand matches against.
+    let scan_from: &[String] = if is_dispatcher { &positional[1..] } else { positional };
+    let mut verb_tokens: Vec<&str> = Vec::new();
+    for token in scan_from {
+        if token.starts_with('-') {
+            break;
+        }
+        verb_tokens.push(token.as_str());
+    }
+    if verb_tokens.is_empty() {
+        return None; // no verb token at all: ambiguous, fail open
+    }
+
+    let mut name_segments: Vec<&str> = vec![group.as_str()];
+    name_segments.extend(verb_tokens);
+    for n in (2..=name_segments.len()).rev() {
+        let candidate = name_segments[..n].join(".");
+        if names.contains(candidate.as_str()) {
+            // Legacy shape: positional holds ONLY verb tokens (the group
+            // came from the script name), so consumed = n - 1. Dispatcher
+            // shape: positional[0] IS the group, so consumed = n.
+            return Some((candidate, if is_dispatcher { n } else { n - 1 }));
+        }
+    }
+    None
+}
+
+fn upsert_flag(parsed: &mut Vec<(String, Value)>, name: String, value: Value) {
+    if let Some(slot) = parsed.iter_mut().find(|(k, _)| *k == name) {
+        slot.1 = value;
+    } else {
+        parsed.push((name, value));
+    }
+}
+
+/// Port of `parseCliFlags(flagTokens, propertiesSchema)` — the schema is the
+/// parsing contract (a `boolean`-typed flag consumes no value), not a
+/// hardcoded flag list. Insertion order preserved (JS object key order for
+/// string-keyed flags).
+fn parse_cli_flags(flag_tokens: &[String], properties: Option<&Value>) -> Vec<(String, Value)> {
+    let mut parsed: Vec<(String, Value)> = Vec::new();
+    let mut i = 0usize;
+    while i < flag_tokens.len() {
+        let token = &flag_tokens[i];
+        if !token.starts_with("--") {
+            i += 1;
+            continue;
+        }
+        if let Some(eq) = token.find('=') {
+            upsert_flag(&mut parsed, token[2..eq].to_string(), Value::String(token[eq + 1..].to_string()));
+            i += 1;
+            continue;
+        }
+        let name = token[2..].to_string();
+        let is_boolean = properties
+            .and_then(|p| p.get(&name))
+            .and_then(|s| s.get("type"))
+            .and_then(Value::as_str)
+            == Some("boolean");
+        if is_boolean {
+            upsert_flag(&mut parsed, name, Value::Bool(true));
+        } else if let Some(next) = flag_tokens.get(i + 1) {
+            // Consume the next token as the value unconditionally, even if
+            // it starts with "--" — matching bee.mjs's parseFlags exactly.
+            upsert_flag(&mut parsed, name, Value::String(next.clone()));
+            i += 1;
+        } else {
+            upsert_flag(&mut parsed, name, Value::Bool(true));
+        }
+        i += 1;
+    }
+    parsed
+}
+
+/// Port of `checkCliShape(command, registry, validateFn)` — scan every shell
+/// segment for a recognizable bee-cli invocation and validate it against the
+/// registry. `Some(reason)` on the first structural mismatch, else `None`.
+fn check_cli_shape(command: &str, entries: &[CommandRegistryEntry]) -> Option<String> {
+    if command.is_empty() {
+        return None;
+    }
+    let names: std::collections::HashSet<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+    let segments = split_cli_segments(&tokenize_command(command));
+    for segment in &segments {
+        for i in 0..segment.len() {
+            let base = segment[i].replace('\\', "/").rsplit('/').next().unwrap_or("").to_string();
+            if legacy_helper_group(&base).is_none() && !is_dispatcher_basename(&base) {
+                continue;
+            }
+            let positional = &segment[i + 1..];
+            let Some((command_name, consumed)) = resolve_cli_command_name(&base, positional, &names) else {
+                break; // ambiguous shape for this segment: fail open
+            };
+            let Some(entry) = entries.iter().find(|e| e.name == command_name) else {
+                break; // unknown command name: dispatcher's concern, not this guard's
+            };
+            let flag_tokens = &positional[consumed..];
+            let parsed_args = parse_cli_flags(flag_tokens, entry.parameters.get("properties"));
+            let problems = validate(&entry.parameters, &parsed_args);
+            if !problems.is_empty() {
+                // ce-1 (cli-ergonomics D1): render every problem joined; the
+                // pinned substrings stay exactly where the mjs source puts
+                // them — "bee CLI-shape guard" + entry.name in the opening
+                // clause, "field: <first>" naming the FIRST problem's field.
+                let field = problems[0].field.clone().filter(|f| !f.is_empty());
+                let detail = problems
+                    .iter()
+                    .map(|p| {
+                        let flag_suffix = p
+                            .field
+                            .as_ref()
+                            .filter(|f| !f.is_empty())
+                            .map(|f| format!(" (--{f})"))
+                            .unwrap_or_default();
+                        format!("{}{}", p.reason, flag_suffix)
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                let field_suffix = field.map(|f| format!(" (field: {f})")).unwrap_or_default();
+                return Some(format!(
+                    "bee CLI-shape guard: \"{}\" does not match {}'s schema — {detail}{field_suffix}. \
+Correction: run `{}` with the required parameters (see `bee --help --json`).",
+                    command.trim(),
+                    entry.name,
+                    entry.invoke,
+                ));
+            }
+            break; // this segment resolved to one bee-cli call; move to the next segment
+        }
+    }
+    None
+}
+
+/// Loads the registry bridge and runs check (d), or skips it VISIBLY: a
+/// stale snapshot logs a `cli-shape-registry-stale` coverage gap (the
+/// accepted rust-only allow window — node imports the live mjs and cannot
+/// go stale); an unreadable/absent bridge logs a crash line, the rust twin
+/// of the mjs hook's `catch (cliError) { logCrash(...) }` around its
+/// dynamic registry import. Either skip fails open for this check only.
+fn cli_shape_denial(ctx: &HookContext, root: &Path, store_root: &Path, command: &str) -> Option<String> {
+    let dump_path = store_root.join(".bee").join("cache").join("command-registry.json");
+    let source_path = store_root.join(".bee").join("bin").join("lib").join("command-registry.mjs");
+    match load_registry(&dump_path, &source_path) {
+        Ok(Registry::Fresh(dump)) => check_cli_shape(command, &dump.entries),
+        Ok(Registry::Stale { embedded_sha256, live_sha256, .. }) => {
+            adapter::log_coverage_gap(
+                Some(root),
+                HOOK_NAME,
+                "cli-shape-registry-stale",
+                &format!(
+                    "command-registry.json snapshot (source_sha256 {embedded_sha256}) no longer matches the live \
+command-registry.mjs ({live_sha256}) — CLI-shape validation skipped; regenerate with `node scripts/dump_command_registry.mjs`"
+                ),
+                ctx.source.as_deref(),
+            );
+            None
+        }
+        Err(err) => {
+            adapter::log_crash(
+                Some(root),
+                HOOK_NAME,
+                &format!("cli-shape registry bridge unavailable: {err}"),
+                ctx.source.as_deref(),
+            );
+            None
+        }
+    }
 }
 
 fn derive_topology(ctx: &HookContext, store_root: &Path) -> WriteTopology {

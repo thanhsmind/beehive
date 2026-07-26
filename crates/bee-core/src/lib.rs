@@ -20,6 +20,7 @@ pub mod registry;
 pub mod reservations;
 pub mod state;
 pub mod tokenize;
+pub mod validate_args;
 pub mod workspace;
 
 /// Crate version string, re-exported so consumers (e.g. `queen-bee

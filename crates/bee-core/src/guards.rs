@@ -11,10 +11,20 @@
 //! on it. Every deny reason string below is copied VERBATIM from the mjs
 //! source so a deny's stderr is byte-identical across runtimes.
 //!
-//! Scope boundary (cell rust-port-9): Bash-command analysis
-//! (`extractBashTargets`, `checkGitBashCommand`, CLI-shape, internals-reach)
-//! is rust-port-11; the read side (`checkRead`, read-size, privacy/scout),
-//! `apply_patch`, and `AskUserQuestion` are rust-port-12.
+//! Scope boundary: rust-port-9 ported the checkWrite spine; rust-port-11
+//! adds the Bash-command analysis from the same mjs source
+//! (`extractBashTargets`, `checkGitBashCommand`,
+//! `checkBinLibImportBashCommand` — the CLI-shape scan itself lives in the
+//! hook, mirroring bee-write-guard.mjs's own layout). The read side
+//! (`checkRead`, read-size, privacy/scout), `apply_patch`, and
+//! `AskUserQuestion` are rust-port-12.
+//!
+//! GIT SPAWN PARITY (validation decision 2026-07-26): rust spawns `git`
+//! exactly where node does — only inside [`resolve_git_mutation_paths`]'s
+//! `commit` branch, which only runs at a terminal phase, with the idle gate
+//! on, for a git-mutation-shaped command. The common hot path stays
+//! spawn-free (gix revisit noted for the flip slice — D5 tension named in
+//! the validation report, not hidden).
 //!
 //! One deliberate API shape difference from the mjs source, noted so it is
 //! never "fixed" back by accident: [`check_write`] takes an
@@ -38,6 +48,7 @@ use crate::jsdate::parse_iso_ms;
 use crate::lock::iso8601_millis;
 use crate::reservations::{leases_root, reservations_path, LeaseRecord};
 use crate::state::{resolve_pipeline, State};
+use crate::tokenize::tokenize_command;
 use crate::workspace::workspace_path;
 
 /// Paths writable in gated phases even before execution approval
@@ -235,9 +246,12 @@ bee config set --key guards.idle_gate --value false (re-enable with: bee config 
     )
 }
 
-fn intake_refusal(phase: &str, blocked_description: &str) -> String {
+/// guards.mjs `intakeRefusal(phase, blockedDescription, extraSentence = '')`
+/// — `extra_sentence` carries its own trailing space when non-empty, exactly
+/// like the mjs call sites.
+fn intake_refusal(phase: &str, blocked_description: &str, extra_sentence: &str) -> String {
     format!(
-        "bee intake gate: no bee work is active (phase: {phase}) — {blocked_description} is blocked. {}",
+        "bee intake gate: no bee work is active (phase: {phase}) — {blocked_description} is blocked. {extra_sentence}{}",
         intake_fix_line()
     )
 }
@@ -801,7 +815,7 @@ in a fresh worktree instead."
         let idle_gate_on =
             !matches!(config.get("guards").and_then(|g| g.get("idle_gate")), Some(Value::Bool(false)));
         if idle_gate_on && !under_allowed_prefix(&normalized) {
-            return Verdict::deny("intake", intake_refusal(&phase, &format!("writing \"{normalized}\"")));
+            return Verdict::deny("intake", intake_refusal(&phase, &format!("writing \"{normalized}\""), ""));
         }
         return Verdict::allow();
     }
@@ -861,7 +875,573 @@ Reserve the path first or return [BLOCKED] to the orchestrator."
 }
 
 
+// ─── bash write-target extraction (guards.mjs extractBashTargets) ──────────
+
+const WRITE_COMMANDS: [&str; 6] = ["rm", "mv", "cp", "mkdir", "touch", "tee"];
+const BROAD_TARGETS: [&str; 7] = [".", "..", "/", "~", "*", "./*", "/*"];
+
+fn is_separator(token: &str) -> bool {
+    matches!(token, "&&" | "||" | ";" | "|" | "&")
+}
+
+fn is_flag(token: &str) -> bool {
+    token.starts_with('-')
+}
+
+fn token_basename(token: &str) -> String {
+    token.replace('\\', "/").rsplit('/').next().unwrap_or("").to_string()
+}
+
+fn is_broad(target: &str) -> bool {
+    let normalized = normalize_rel(target);
+    BROAD_TARGETS.contains(&target)
+        || BROAD_TARGETS.contains(&normalized.as_str())
+        || normalized.ends_with("/*")
+        || normalized.ends_with("/.")
+        || normalized == "*"
+}
+
+/// guards.mjs `hasGitShortFlag`: a `/^-[a-zA-Z]+$/` token whose letter run
+/// contains `letter` (case-sensitive — `-A` and `-a` are distinct).
+fn has_git_short_flag(tokens: &[String], letter: char) -> bool {
+    tokens.iter().any(|t| {
+        let mut chars = t.chars();
+        chars.next() == Some('-') && {
+            let rest = &t[1..];
+            !rest.is_empty() && rest.chars().all(|c| c.is_ascii_alphabetic()) && rest.contains(letter)
+        }
+    })
+}
+
+/// The mjs redirect regex `/^\d?>{1,2}(.*)$/`: an optional single digit, one
+/// or two `>`, then the (possibly empty) inline target. `None` when the
+/// token is not redirect-shaped at all.
+fn parse_redirect(token: &str) -> Option<&str> {
+    let bytes = token.as_bytes();
+    let mut idx = 0;
+    if bytes.first().map(|b| b.is_ascii_digit()).unwrap_or(false) {
+        idx = 1;
+    }
+    let mut gt = 0;
+    while gt < 2 && bytes.get(idx + gt) == Some(&b'>') {
+        gt += 1;
+    }
+    if gt == 0 {
+        return None;
+    }
+    Some(&token[idx + gt..])
+}
+
+/// The `{ paths, broadWrite }` result of [`extract_bash_targets`].
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BashTargets {
+    pub paths: Vec<String>,
+    pub broad_write: bool,
+}
+
+/// Port of guards.mjs `extractBashTargets(command)` — file targets a bash
+/// command may write to (khuym patterns: `sed -i`, `tee`, `rm`, `mv`, `cp`,
+/// `mkdir`, `touch`, `git add|mv|rm`, redirection `>`), plus the
+/// blanket-staging broad-write flags (`git add -A/-u/--all/--update`,
+/// `git commit -a/--all`) counted as broad writes (bsg-1).
+pub fn extract_bash_targets(command: &str) -> BashTargets {
+    let tokens = tokenize_command(command);
+    let mut paths: Vec<String> = Vec::new();
+    let mut broad_write = false;
+
+    fn add_target(paths: &mut Vec<String>, broad_write: &mut bool, target: &str) {
+        if target.is_empty() || target == "/dev/null" || target == "NUL" {
+            return;
+        }
+        if is_broad(target) {
+            *broad_write = true;
+        }
+        paths.push(target.to_string());
+    }
+
+    let mut i = 0usize;
+    while i < tokens.len() {
+        let token = &tokens[i];
+
+        // Redirection: "> file", ">> file", ">file", "2> file".
+        // NOT a file write: fd-duplication like `2>&1`, `1>&2`, `>&2` — the
+        // target starts with `&` (a file descriptor, not a filename).
+        if let Some(inline) = parse_redirect(token) {
+            if !inline.is_empty() {
+                if !inline.starts_with('&') {
+                    add_target(&mut paths, &mut broad_write, inline);
+                }
+            } else if let Some(next) = tokens.get(i + 1) {
+                if !is_separator(next) && !next.starts_with('&') {
+                    add_target(&mut paths, &mut broad_write, next);
+                    i += 1;
+                }
+            }
+            i += 1;
+            continue;
+        }
+
+        if is_separator(token) {
+            i += 1;
+            continue;
+        }
+
+        let cmd = token_basename(token);
+
+        if cmd == "git" && matches!(tokens.get(i + 1).map(String::as_str), Some("add" | "mv" | "rm")) {
+            // D8: `git add` only STAGES already-written content — staging a
+            // CLI-owned file (DIRECT_EDIT_DENY) is not a direct-edit target.
+            // `git mv`/`git rm` genuinely change what's on disk.
+            let git_verb = tokens[i + 1].clone();
+            let mut end = i + 2;
+            while end < tokens.len() && !is_separator(&tokens[end]) {
+                end += 1;
+            }
+            let segment = &tokens[i + 2..end];
+            // `-A`/`--all`/`-u`/`--update` stage every changed path — the
+            // reservation guard must see this as a broad write.
+            if git_verb == "add"
+                && (segment.iter().any(|t| t == "--all")
+                    || segment.iter().any(|t| t == "--update")
+                    || has_git_short_flag(segment, 'A')
+                    || has_git_short_flag(segment, 'u'))
+            {
+                broad_write = true;
+            }
+            for t in segment {
+                if !is_flag(t) {
+                    let cli_owned_stage_only = git_verb == "add"
+                        && DIRECT_EDIT_DENY.iter().any(|(p, _)| *p == normalize_rel(t));
+                    if !cli_owned_stage_only {
+                        add_target(&mut paths, &mut broad_write, t);
+                    }
+                }
+            }
+            i = end; // mjs: i = end - 1, then the for-loop i++
+            continue;
+        }
+
+        if cmd == "git" && tokens.get(i + 1).map(String::as_str) == Some("commit") {
+            // `-a`/`--all`/`-am` folds tracked-but-unstaged changes into the
+            // commit — blanket staging the guard must see, same as `git add -A`.
+            let mut end = i + 2;
+            while end < tokens.len() && !is_separator(&tokens[end]) {
+                end += 1;
+            }
+            let segment = &tokens[i + 2..end];
+            if segment.iter().any(|t| t == "--all") || has_git_short_flag(segment, 'a') {
+                broad_write = true;
+            }
+            i = end;
+            continue;
+        }
+
+        if cmd == "sed" {
+            let mut in_place = false;
+            let mut last = i;
+            let mut args: Vec<&String> = Vec::new();
+            let mut j = i + 1;
+            while j < tokens.len() && !is_separator(&tokens[j]) {
+                if tokens[j].starts_with("-i") {
+                    in_place = true;
+                } else if !is_flag(&tokens[j]) {
+                    args.push(&tokens[j]);
+                }
+                last = j;
+                j += 1;
+            }
+            if in_place {
+                // First non-flag arg is the script; the rest are files.
+                for file in args.iter().skip(1) {
+                    add_target(&mut paths, &mut broad_write, file);
+                }
+            }
+            i = last + 1;
+            continue;
+        }
+
+        if WRITE_COMMANDS.contains(&cmd.as_str()) {
+            let mut saw_any = false;
+            let mut last = i;
+            let mut j = i + 1;
+            while j < tokens.len() && !is_separator(&tokens[j]) {
+                if !is_flag(&tokens[j]) {
+                    add_target(&mut paths, &mut broad_write, &tokens[j]);
+                    saw_any = true;
+                }
+                last = j;
+                j += 1;
+            }
+            if cmd == "rm" && !saw_any {
+                broad_write = true;
+            }
+            i = last + 1;
+            continue;
+        }
+
+        i += 1;
+    }
+
+    BashTargets { paths, broad_write }
+}
+
+// ─── git write-exemption classification (D1/D3/D4, ige-2 / P46 / GH #1) ────
+
+/// Read-only git subcommands, deliberately enumerated — never inferred.
+const GIT_READONLY_SUBCOMMANDS: [&str; 12] = [
+    "status", "log", "diff", "show", "rev-parse", "ls-files", "check-ignore", "merge-base", "rev-list",
+    "describe", "blame", "cat-file",
+];
+
+/// Read-only ONLY with a specific flag (a bare `git branch <name>` /
+/// `git tag <name>` MUTATES; `git remote` needs -v/--verbose).
+fn git_readonly_flag_gated(subcommand: &str) -> Option<&'static [&'static str]> {
+    match subcommand {
+        "branch" => Some(&["--list"]),
+        "tag" => Some(&["--list"]),
+        "remote" => Some(&["-v", "--verbose"]),
+        _ => None,
+    }
+}
+
+/// Mutating git subcommands this exemption logic recognizes at all (D1).
+/// `push` is deliberately NOT a member — it never gets the bookkeeping-path
+/// exemption and is classified separately.
+const GIT_MUTATING_SUBCOMMANDS: [&str; 15] = [
+    "commit", "add", "rm", "mv", "checkout", "restore", "tag", "merge", "reset", "stash", "clean", "apply",
+    "cherry-pick", "revert", "rebase",
+];
+
+/// Subset whose changed paths can be resolved from real git state (D4); the
+/// rest always fail closed, never inferred safe.
+const GIT_PATH_RESOLVABLE_SUBCOMMANDS: [&str; 6] = ["commit", "add", "rm", "mv", "checkout", "restore"];
+const GIT_BROAD_PATHSPECS: [&str; 4] = [".", ":", ":/", "./"];
+
+fn git_global_flag_takes_value(token: &str) -> bool {
+    token == "-C" || token == "-c" || token == "--git-dir" || token == "--work-tree" || token == "--namespace"
+}
+
+/// guards.mjs `findGitInvocation` — the FIRST top-level `git <subcommand>`
+/// invocation (skipping git's own global flags): `Some((subcommand, rest))`
+/// with `subcommand: None` for a bare `git`, or `None` when `command`
+/// contains no git invocation at all.
+fn find_git_invocation(tokens: &[String]) -> Option<(Option<String>, Vec<String>)> {
+    for i in 0..tokens.len() {
+        if is_separator(&tokens[i]) {
+            continue;
+        }
+        if token_basename(&tokens[i]) != "git" {
+            continue;
+        }
+        let mut end = i + 1;
+        while end < tokens.len() && !is_separator(&tokens[end]) {
+            end += 1;
+        }
+        let invocation = &tokens[i + 1..end];
+        let mut j = 0usize;
+        while j < invocation.len() {
+            let t = &invocation[j];
+            if git_global_flag_takes_value(t) {
+                j += 2;
+                continue;
+            }
+            if t.starts_with('-') {
+                j += 1;
+                continue;
+            }
+            return Some((Some(t.clone()), invocation[j + 1..].to_vec()));
+        }
+        return Some((None, Vec::new()));
+    }
+    None
+}
+
+/// guards.mjs `runGitCapture` — execFileSync('git', args, {cwd}) semantics:
+/// any spawn failure or non-zero exit reads as `None`; stdout otherwise
+/// splits on `\r?\n`, trimmed, empties dropped.
+fn run_git_capture(cwd: &str, args: &[&str]) -> Option<Vec<String>> {
+    let out = std::process::Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    Some(
+        text.split('\n')
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect(),
+    )
+}
+
+/// guards.mjs `extractExplicitPathspecs` — everything after a literal `--`,
+/// or (when no `--` is present) every non-flag token.
+fn extract_explicit_pathspecs(rest_tokens: &[String]) -> Vec<String> {
+    match rest_tokens.iter().position(|t| t == "--") {
+        None => rest_tokens.iter().filter(|t| !t.starts_with('-')).cloned().collect(),
+        Some(idx) => rest_tokens[idx + 1..].to_vec(),
+    }
+}
+
+fn is_broad_or_glob_pathspec(p: &str) -> bool {
+    GIT_BROAD_PATHSPECS.contains(&p) || p.contains('*')
+}
+
+/// Port of guards.mjs `resolveGitMutationPaths(cwd, subcommand, restTokens)`
+/// — the repo-relative paths a mutating git subcommand would actually
+/// change, from REAL git state at check time (D4). `None` when the set
+/// cannot be proved (the caller fails closed on `None`).
+///
+/// GIT SPAWN PARITY: the ONLY `git` spawns in this crate live in the
+/// `commit` branch here, exactly where the node source spawns.
+fn resolve_git_mutation_paths(cwd: &str, subcommand: &str, rest_tokens: &[String]) -> Option<Vec<String>> {
+    if subcommand == "commit" {
+        let dash_dash_idx = rest_tokens.iter().position(|t| t == "--");
+        let explicit_pathspecs: Vec<String> = match dash_dash_idx {
+            None => Vec::new(),
+            Some(idx) => rest_tokens[idx + 1..].to_vec(),
+        };
+        let pre_dash_dash: &[String] = match dash_dash_idx {
+            None => rest_tokens,
+            Some(idx) => &rest_tokens[..idx],
+        };
+        let is_all = has_git_short_flag(pre_dash_dash, 'a') || pre_dash_dash.iter().any(|t| t == "--all");
+
+        let staged = run_git_capture(cwd, &["diff", "--cached", "--name-only"])?;
+
+        if !explicit_pathspecs.is_empty() {
+            if explicit_pathspecs.iter().any(|p| is_broad_or_glob_pathspec(p)) {
+                return None;
+            }
+            return Some(explicit_pathspecs);
+        }
+        if !is_all {
+            return Some(staged);
+        }
+        let unstaged = run_git_capture(cwd, &["diff", "--name-only"])?;
+        // new Set([...staged, ...unstaged]) — insertion order preserved.
+        let mut merged = staged;
+        for p in unstaged {
+            if !merged.contains(&p) {
+                merged.push(p);
+            }
+        }
+        return Some(merged);
+    }
+
+    // add / rm / mv / checkout / restore: resolve to literal pathspec args.
+    let pathspecs = extract_explicit_pathspecs(rest_tokens);
+    if pathspecs.is_empty() {
+        return None; // bare/flags-only invocation: unprovable
+    }
+    if pathspecs.iter().any(|p| is_broad_or_glob_pathspec(p)) {
+        return None; // broad/glob: unprovable
+    }
+    Some(pathspecs)
+}
+
+/// Port of guards.mjs `checkGitBashCommand(root, state, command, {cwd,
+/// sessionId, controlRoot})` — git-command awareness for the intake gate
+/// (D1/D3/D4, ige-2 / P46 / GH #1), scoped ONLY to the terminal-phase intake
+/// gate. `None` = not a git command, phase isn't terminal, or the idle gate
+/// is disabled: caller's existing logic decides. Allow verdicts (read-only
+/// git, bookkeeping-only mutation) carry no warning; the hook only ever
+/// reacts to a deny, matching the mjs `gitVerdict.allow === false` check.
+pub fn check_git_bash_command(
+    root: &Path,
+    state: &State,
+    command: &str,
+    cwd: &str,
+    session_id: Option<&str>,
+    control_root: &Path,
+) -> Option<Verdict> {
+    let session_trimmed = session_id.map(str::trim).filter(|s| !s.is_empty());
+    let record: State = match session_trimmed {
+        Some(sid) => match resolve_pipeline(control_root, Some(sid)) {
+            Ok(resolved) => resolved.record,
+            Err(reason) => return Some(Verdict::deny("lane", format!("bee lane guard: {reason}"))),
+        },
+        None => state.clone(),
+    };
+    let phase = if record.phase.is_empty() { "idle".to_string() } else { record.phase.clone() };
+    if !TERMINAL_PHASES.contains(&phase.as_str()) {
+        return None;
+    }
+
+    let config = read_config_value(root);
+    let idle_gate_on = !matches!(config.get("guards").and_then(|g| g.get("idle_gate")), Some(Value::Bool(false)));
+    if !idle_gate_on {
+        return None;
+    }
+
+    let tokens = tokenize_command(command);
+    let (subcommand, rest) = find_git_invocation(&tokens)?;
+
+    if let Some(sub) = subcommand.as_deref() {
+        if GIT_READONLY_SUBCOMMANDS.contains(&sub) {
+            return Some(Verdict::allow()); // kind git-read-only
+        }
+        if let Some(flags) = git_readonly_flag_gated(sub) {
+            if rest.iter().any(|t| flags.contains(&t.as_str())) {
+                return Some(Verdict::allow()); // kind git-read-only
+            }
+        }
+
+        if sub == "push" {
+            return Some(Verdict::deny(
+                "git-push",
+                intake_refusal(
+                    &phase,
+                    "`git push`",
+                    "git push is outward-facing and is never exempted from this gate, regardless of what it would push. ",
+                ),
+            ));
+        }
+
+        if GIT_MUTATING_SUBCOMMANDS.contains(&sub) {
+            let resolved_paths = if GIT_PATH_RESOLVABLE_SUBCOMMANDS.contains(&sub) {
+                resolve_git_mutation_paths(cwd, sub, &rest)
+            } else {
+                None
+            };
+            let Some(resolved_paths) = resolved_paths else {
+                return Some(Verdict::deny(
+                    "intake",
+                    intake_refusal(
+                        &phase,
+                        &format!("running `git {sub}` (its changed paths could not be proved bookkeeping-only)"),
+                        "",
+                    ),
+                ));
+            };
+            if let Some(offending) = resolved_paths
+                .iter()
+                .map(|p| normalize_rel(p))
+                .find(|p| !under_allowed_prefix(p))
+            {
+                return Some(Verdict::deny(
+                    "intake",
+                    intake_refusal(&phase, &format!("running `git {sub}` — it would change \"{offending}\""), ""),
+                ));
+            }
+            return Some(Verdict::allow()); // kind git-bookkeeping
+        }
+    }
+
+    Some(Verdict::deny(
+        "git-unrecognized",
+        intake_refusal(
+            &phase,
+            &format!(
+                "running `git {}`",
+                subcommand.unwrap_or_else(|| command.trim().to_string())
+            ),
+            "This git subcommand is not recognized as read-only or as a modeled bookkeeping-eligible mutation, so it is refused rather than assumed safe. ",
+        ),
+    ))
+}
+
+// ─── internals-reach guard (state-query-surface, cell sqs-a, D 3fbe2f79) ────
+
+const NODE_INVOCATION_BASENAMES: [&str; 2] = ["node", "nodejs"];
+const INLINE_EVAL_FLAGS: [&str; 3] = ["-e", "--eval", "-p"];
+
+/// guards.mjs `inlineEvalScriptsInSegment` — the token(s) right after a bare
+/// `-e`/`--eval`/`-p` flag, plus the attached `--eval=<script>` form.
+fn inline_eval_scripts_in_segment(segment: &[String]) -> Vec<String> {
+    let mut scripts = Vec::new();
+    for i in 0..segment.len() {
+        let token = &segment[i];
+        if INLINE_EVAL_FLAGS.contains(&token.as_str()) {
+            if let Some(next) = segment.get(i + 1) {
+                scripts.push(next.clone());
+            }
+            continue;
+        }
+        if let Some(attached) = token.strip_prefix("--eval=") {
+            scripts.push(attached.to_string());
+        }
+    }
+    scripts
+}
+
+/// guards.mjs `libImportSpecifierIn` — first `import(...)`/`require(...)`/
+/// `import ... from '...'` specifier resolving into a `bin/lib/` or
+/// `packages/bee/lib/` module, else `None`.
+fn lib_import_specifier_in(script: &str) -> Option<String> {
+    if script.is_empty() {
+        return None;
+    }
+    let import_re = Regex::new(
+        r#"(?:\brequire\s*\(\s*|\bimport\s*\(\s*|\bimport\b[^'"()]*\bfrom\s*)['"`]([^'"`]+)['"`]"#,
+    )
+    .ok()?;
+    let lib_re = Regex::new(r"(^|/)(?:bin/lib|packages/bee/lib)(/|$)").ok()?;
+    for caps in import_re.captures_iter(script) {
+        if let Some(specifier) = caps.get(1).map(|m| m.as_str()) {
+            if !specifier.is_empty() && lib_re.is_match(specifier) {
+                return Some(specifier.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Port of guards.mjs `checkBinLibImportBashCommand(command)` — denies ONLY
+/// the inline-eval reach (`node -e`/`--eval`/`-p` whose script text
+/// imports/requires a `bin/lib/` or `packages/bee/lib/` module), never a
+/// file-based `node <path>.mjs` run. `None` = allow (caller unaffected).
+pub fn check_bin_lib_import_bash_command(command: &str) -> Option<Verdict> {
+    if command.trim().is_empty() {
+        return None;
+    }
+    let tokens = tokenize_command(command);
+
+    let mut i = 0usize;
+    while i < tokens.len() {
+        if is_separator(&tokens[i]) {
+            i += 1;
+            continue;
+        }
+        let mut end = i;
+        while end < tokens.len() && !is_separator(&tokens[end]) {
+            end += 1;
+        }
+        let segment = &tokens[i..end];
+        i = end;
+
+        let cmd = token_basename(segment.first().map(String::as_str).unwrap_or(""));
+        if !NODE_INVOCATION_BASENAMES.contains(&cmd.as_str()) {
+            continue;
+        }
+
+        for script in inline_eval_scripts_in_segment(segment) {
+            if let Some(specifier) = lib_import_specifier_in(&script) {
+                return Some(Verdict::deny(
+                    "internals-reach",
+                    format!(
+                        "bee internals-reach guard: this inline eval imports \"{specifier}\" — a bin/lib/ or \
+packages/bee/lib/ internal module, reached via `node -e`/`--eval`/`-p` rather than the CLI. \
+Internals carry no compatibility promise and this bypasses the CLI's own validation. \
+FIX: use the paved read instead — `bee status --json` for current state, or \
+`bee <group> --help --json` for a command group's full schema. \
+(File-based `node <path>.mjs` runs that import lib modules, e.g. tests, are unaffected.)"
+                    ),
+                ));
+            }
+        }
+    }
+
+    None
+}
+
 // Conformance proof for this module lives in
-// crates/queen-bee/tests/writeguard_core.rs (this cell's single integration
-// target — cargo test -p queen-bee --test writeguard_core), driving the
-// sha256-verified node oracle per the rust-port-7 rig discipline.
+// crates/queen-bee/tests/writeguard_core.rs (rust-port-9's core spine) and
+// crates/queen-bee/tests/writeguard_bash.rs (rust-port-11's Bash path),
+// driving the sha256-verified node oracle per the rust-port-7 rig
+// discipline.
