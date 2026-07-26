@@ -198,6 +198,8 @@
     "gate1",
     "gate2",
     "gate3",
-    "batch2"
+    "batch2",
+    "gate4",
+    "review-close"
   ]
 }

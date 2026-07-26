@@ -2,10 +2,10 @@
 artifact_contract: bee-implement-plan/v1
 feature: worktree-concurrency-guard
 lane: high-risk
-status: Approved
-updated: 2026-07-24
-sources: [CONTEXT.md, approach.md, plan.md, cells/wcg-1.json]
-decisions: [D1, D2, D3, D4, D5, D6]
+status: Shipped
+updated: 2026-07-26
+sources: [CONTEXT.md, approach.md, plan.md, cells/wcg-1.json, cells/wcg-2.json, cells/wcg-3.json, cells/wcg-fix-1.json, cells/wcg-fix-2.json, reports/review-20260724.md, walkthrough.md]
+decisions: [D1, D2, D3, D4, D5, D6, 0ccc1cf3]
 ---
 
 # Implementation Plan: Worktree Concurrency Guard

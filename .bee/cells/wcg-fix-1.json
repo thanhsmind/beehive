@@ -91,6 +91,36 @@
         "failure_signature": null,
         "note": null
       }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "must_haves_truths",
+            "status": "PASS",
+            "evidence": "skills/bee-hive/templates/bee.mjs:3877-3882 resolves sessionId=resolveSessionId({root:mainRoot}) and passes {excludeSessionId:sessionId} to hasAnySharedNestedCheckout; test suite 17/17 incl case10 self-only proceeds and case11 genuine-second still refused"
+          },
+          {
+            "id": "fix_matches_finding",
+            "status": "PASS",
+            "evidence": "resolveSessionId (claims.mjs:108-111) prefers env/flag over lone-record adoption so the TRULY acting session is excluded; opts forward guards.mjs:829 -> isConcurrentMode(claims.mjs:283 excludeSessionId), mirroring write-guard's self-exclusion -- no new gap, second session at case11 still refuses"
+          },
+          {
+            "id": "task_diff_alignment",
+            "status": "PASS",
+            "evidence": "diff touches only handleWorktreeNew call site + scripts/test_worktree_companion.mjs (cases 6/10/11); guards.mjs hasAnySharedNestedCheckout(root, opts={}) signature unchanged (guards.mjs:827), ledger_parity --check passes, no case6-9 regression"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T10:54:11.710Z"
+      }
     ]
   },
   "tier": "ceiling"

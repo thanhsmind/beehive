@@ -86,6 +86,36 @@
         "failure_signature": null,
         "note": null
       }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "must_haves_truths",
+            "status": "PASS",
+            "evidence": "hooks/bee-write-guard.mjs:899-906 catch sets typed deny+break; test rows 83 (throw->DENY exit2) and 85 (real non-throwing/nothing-shared still ALLOWS exit0) both ok in live run"
+          },
+          {
+            "id": "fix_matches_finding_scoped",
+            "status": "PASS",
+            "evidence": "diff wraps ONLY the isSharedNestedCheckoutTarget call at hooks/bee-write-guard.mjs:897-906; outer catch-all and guards.mjs hasGitNode/findNestedCheckoutDir internals absent from diff (untouched)"
+          },
+          {
+            "id": "task_diff_alignment",
+            "status": "PASS",
+            "evidence": "node --test hooks/test_write_guard.mjs -> ALL PASS; rows 65-82 all ok, new 83-85 added only; wcg-fix-1 rows live in scripts/test_worktree_companion.mjs, not in this diff"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T11:07:59.548Z"
+      }
     ]
   }
 }

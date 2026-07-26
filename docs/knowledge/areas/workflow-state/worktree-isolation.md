@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: Workflow State — isolated linked worktrees and the transactional merge-back
-description: "The opt-in dispatch mode that removes Git index contention without changing the ownership primitive: validated linked pointers, one main coordination store, canonical containment proved before every write, a concurrency-aware refusal for a shared nested checkout, and a merge-back that verifies committed main or preserves the worker recovery identity."
-timestamp: 2026-07-24
+description: "The opt-in dispatch mode that removes Git index contention without changing the ownership primitive: validated linked pointers, one main coordination store, canonical containment proved before every write, a concurrency-aware refusal for a shared nested checkout that fails closed on its own detection errors, and a merge-back that verifies committed main or preserves the worker recovery identity."
+timestamp: 2026-07-26
 bee:
   id: workflow-state-worktree-isolation
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
   decisions: [worktree-isolation D1-D4 (docs/history/worktree-isolation/CONTEXT.md; logged 58c56bb6/5de1fd36/8cc1bde1/b24a2efc), worktree-concurrency-guard D1(b)/D2/D3/D4/D5 (docs/history/worktree-concurrency-guard/CONTEXT.md; supersession 0ccc1cf3)]
-  sources: ["worktree-isolation cells worktree-isolation-1..4 (capped traces and reports 2..4, 2026-07-16 — linked-root resolution, contained writes, dispatch attestation, transactional merge-back)", "docs/specs/workflow-state.md#B20", "docs/specs/workflow-state.md#R32", "docs/specs/workflow-state.md#R33", "docs/specs/workflow-state.md#R34", "docs/specs/workflow-state.md#R35", "docs/specs/workflow-state.md#E15", "docs/specs/workflow-state.md#E16", "docs/specs/workflow-state.md#E17", "docs/specs/workflow-state.md#E18", "docs/specs/workflow-state.md#P1", "worktree-concurrency-guard cells wcg-1/wcg-2 (capped traces and reports, 2026-07-24 — shared-nested-checkout detection primitive and write-guard wiring)"]
+  sources: ["worktree-isolation cells worktree-isolation-1..4 (capped traces and reports 2..4, 2026-07-16 — linked-root resolution, contained writes, dispatch attestation, transactional merge-back)", "docs/specs/workflow-state.md#B20", "docs/specs/workflow-state.md#R32", "docs/specs/workflow-state.md#R33", "docs/specs/workflow-state.md#R34", "docs/specs/workflow-state.md#R35", "docs/specs/workflow-state.md#E15", "docs/specs/workflow-state.md#E16", "docs/specs/workflow-state.md#E17", "docs/specs/workflow-state.md#E18", "docs/specs/workflow-state.md#P1", "worktree-concurrency-guard cells wcg-1/wcg-2 (capped traces and reports, 2026-07-24 — shared-nested-checkout detection primitive and write-guard wiring)", "worktree-concurrency-guard cell wcg-fix-2 (capped trace and report, 2026-07-26 — fail-closed-on-detection-error fix, review finding #2)"]
   authoritative_for: "workflow-state: isolated linked-worktree dispatch, containment, and transactional merge-back"
 ---
 
@@ -128,6 +128,11 @@ checkout at all, nothing about this behavior changes today's write.
   qualifies as a nested checkout at all, every write behaves exactly as it did
   before this refusal existed — this is additive protection, not a new
   default posture.
+- If the shared-checkout detection itself errors (an unreadable nested
+  checkout, a broken symlink, a permission failure while resolving a path),
+  the write is denied, not silently allowed — a detection failure is treated
+  as evidence of risk, never as evidence of safety, since the error is most
+  likely to happen during the exact race this refusal exists to stop.
 
 ## Pointers (implementation)
 

@@ -1,0 +1,330 @@
+{
+  "id": "worktree-concurrency-guard-review-20260724",
+  "requested_by": "user",
+  "requested_at": "2026-07-24T09:56:51.985Z",
+  "scope_description": "Independent review of the worktree-concurrency-guard feature: cells wcg-1, wcg-2, wcg-3 (shared-nested-checkout detection, write-guard wiring, worktree-new wiring). High-risk lane, data-loss-prevention content.",
+  "included": [
+    {
+      "type": "cell",
+      "id": "wcg-1",
+      "reason": "shared detection primitive"
+    },
+    {
+      "type": "cell",
+      "id": "wcg-2",
+      "reason": "write-guard hook wiring (behavior_change)"
+    },
+    {
+      "type": "cell",
+      "id": "wcg-3",
+      "reason": "bee worktree new wiring (behavior_change)"
+    }
+  ],
+  "excluded": [
+    {
+      "type": "cell",
+      "id": "wcg-ship-1",
+      "reason": "shipping mechanics only (push + gh pr create), no product code, not behavior_change"
+    }
+  ],
+  "baseline": "da3be1f4f10d8b3fda1d297ec33abb3c697375a9",
+  "head": "9ad353b",
+  "reviewer_manifest": {
+    "reviewers": [
+      {
+        "role": "code-quality",
+        "tier": "review",
+        "model": "opus"
+      },
+      {
+        "role": "architecture",
+        "tier": "review",
+        "model": "opus"
+      },
+      {
+        "role": "security",
+        "tier": "review",
+        "model": "opus"
+      },
+      {
+        "role": "test-coverage",
+        "tier": "review",
+        "model": "opus"
+      },
+      {
+        "role": "api-contract",
+        "tier": "review",
+        "model": "opus",
+        "trigger": "bee.mjs CLI output/error contract changed for worktree new"
+      }
+    ]
+  },
+  "verification_preflight": {
+    "checked_at": "2026-07-24T09:56:51.985Z",
+    "cells_checked": [
+      "wcg-2",
+      "wcg-3"
+    ],
+    "passed": true
+  },
+  "findings": [
+    {
+      "severity": "P1",
+      "title": "bee worktree new's concurrency check omits self-exclusion -- a solo agent's own heartbeat can trip a false-positive refusal",
+      "autofix_class": "manual",
+      "corroborated_by": [
+        "code-quality",
+        "architecture"
+      ],
+      "summary": "handleWorktreeNew calls hasAnySharedNestedCheckout(mainRoot) with no opts, so isConcurrentMode(mainRoot, {}) has no excludeSessionId and can count the ACTING agent's own live heartbeat as \"another\" concurrent session -- breaking D6 and contradicting CONTEXT.md's own definition of concurrent (\"at least one OTHER session's heartbeat is live\").",
+      "what_code_does_today": "bee.mjs:3877 calls `hasAnySharedNestedCheckout(mainRoot)` with no options. hasAnySharedNestedCheckout(root, opts={}) (guards.mjs:827-829) forwards opts straight to isConcurrentMode(root, opts) with no self-exclusion. Contrast: the write-guard surface (bee-write-guard.mjs) correctly calls guards.isSharedNestedCheckoutTarget(root, cand.abs, { excludeSessionId: sessionId }) -- the two D1 surfaces now answer 'is another session live' differently for the same checkout.",
+      "why_problem": "CONTEXT.md D2's Terms table and claims.mjs's own isConcurrentMode docstring both define concurrent as 'another' session, not self. bee.mjs already has resolveSessionId available and uses it elsewhere in the same file (lines 441, 1103, 1333) -- this reads as an oversight, not a design choice. D6 (zero behavior change for a solo session) is violated whenever the acting session's own heartbeat is registered.",
+      "failure_scenario": "A single agent works in the main checkout (the exact flow AGENTS.md rule 14 prescribes), whose session-init hook has registered a live heartbeat. The checkout contains a plain nested .git (STR65's shape). The agent runs `bee worktree new --feature X` (no --with-companion, genuinely solo). isConcurrentMode(mainRoot, {}) sees the agent's own live heartbeat, returns true; the scan finds the nested repo; the command is refused even though no second session exists.",
+      "evidence": [
+        {
+          "file": ".bee/bin/bee.mjs",
+          "line": 3877,
+          "snippet": "if (!withCompanion && hasAnySharedNestedCheckout(mainRoot)) {"
+        },
+        {
+          "file": ".bee/bin/lib/guards.mjs",
+          "line": 827,
+          "snippet": "export function hasAnySharedNestedCheckout(root, opts = {}) {\\n  if (!isConcurrentMode(root, opts)) return false;"
+        }
+      ],
+      "verified_by_orchestrator": "Read both cited files directly this session; confirmed the call site has no excludeSessionId and the function forwards opts unmodified to isConcurrentMode. Matches both reviewers' independent claims exactly.",
+      "proposed_fix": "Resolve the acting session id (resolveSessionId({ root: mainRoot }), already imported in bee.mjs) and pass it: hasAnySharedNestedCheckout(mainRoot, { excludeSessionId: sessionId }), mirroring the write-guard call.",
+      "acceptance_criteria": [
+        "A test where the ONLY live session record matches the acting session's own id (no second session) plants a nested repo and asserts `bee worktree new` (no --with-companion) SUCCEEDS.",
+        "With a genuine second live session present, the refusal still fires."
+      ]
+    },
+    {
+      "severity": "P1",
+      "title": "Detection fails OPEN on every filesystem error path, contradicting plan.md's own stated fail-closed requirement",
+      "autofix_class": "manual",
+      "corroborated_by": [
+        "security",
+        "test-coverage"
+      ],
+      "summary": "Every helper in the detection primitive (hasGitNode, findNestedCheckoutDir's ancestor climb, the hook's top-level catch) swallows filesystem errors and resolves to 'not shared' / 'allow'. plan.md's own Test Matrix explicitly requires the opposite: 'must fail closed on the concurrency+shared-target question... never silently allow because detection itself errored.' The implementation and the plan disagree.",
+      "what_code_does_today": "hasGitNode (guards.mjs:980-987) returns false on any statSync throw. findNestedCheckoutDir (guards.mjs:917-929) 'continue's past any ancestor whose realpath fails, silently skipping it. The write-guard hook's top-level catch (bee-write-guard.mjs:941-943) returns 0 (allow) on any thrown error.",
+      "why_problem": "The feature's stated purpose (CONTEXT.md Feature Boundary, D3) is a fail-closed data-loss guard. plan.md's Test Matrix names this exact dimension as required for the high-risk lane. Every uncertainty currently resolves to 'allow', which silently reopens the exact gap the feature exists to close whenever detection itself errors -- e.g. a transient fs hiccup during a real race.",
+      "failure_scenario": "Two sessions are live; session A is about to write into a plain nested .git shared checkout. At the instant the PreToolUse hook runs, the nested repo's .git (or an ancestor dir) is momentarily unreadable because session B is concurrently rewriting it. hasGitNode/realpathOrNull throw internally, the primitive returns false, checkWrite finds nothing wrong, the write proceeds -- the precise concurrent-overwrite this feature was built to stop, happening at exactly the moment concurrency makes it most likely.",
+      "evidence": [
+        {
+          "file": ".bee/bin/lib/guards.mjs",
+          "line": "980-987",
+          "snippet": "function hasGitNode(dir) { try { fs.statSync(...); return true; } catch { return false; } }"
+        },
+        {
+          "file": ".bee/bin/lib/guards.mjs",
+          "line": "917-929",
+          "snippet": "if (!cursorReal) continue; // dir does not exist yet -- keep climbing"
+        },
+        {
+          "file": ".bee/bin/hooks/bee-write-guard.mjs",
+          "line": "941-943",
+          "snippet": "} catch (error) { logCrash(root, HOOK_NAME, error, ctx.source); return 0; }"
+        }
+      ],
+      "verified_by_orchestrator": "Read all three cited locations directly this session; confirmed each swallows errors toward 'allow' exactly as both reviewers independently described. Note: this fail-open posture matches this file's EXISTING containment-check philosophy elsewhere (documented at bee-write-guard.mjs:304-315) -- so this is not a new regression pattern for the codebase generally, but it does contradict THIS feature's own plan.md requirement, which is the actionable defect.",
+      "proposed_fix": "Either (a) make the write-guard's call to isSharedNestedCheckoutTarget fail closed on a thrown exception specifically (wrap the call so an exception produces a denial, not a silent allow), reconciling the code with the plan's stated intent; or (b) if fail-open-on-error is a deliberate, accepted tradeoff consistent with the rest of this file's containment philosophy, update plan.md's Test Matrix line to say so explicitly with rationale, rather than leaving code and doc contradicting each other.",
+      "acceptance_criteria": [
+        "A write into a plain nested .git shared checkout, concurrency live, where the nested .git stat throws, results in a deny (exit 2) -- not allow. OR: plan.md's fail-closed-on-error line is corrected with an explicit, reviewed rationale for the fail-open choice.",
+        "A corrupt/unparseable companion marker and a broken repo symlink each get an explicit, tested, intentional verdict (not just 'whatever the try/catch happens to produce')."
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "Write-guard's point-check skips no directories, unlike the down-scan -- a concurrent write into an ordinary node_modules dependency's own .git is falsely denied",
+      "autofix_class": "manual",
+      "reviewer": "test-coverage",
+      "summary": "scanForNestedCheckout (used by worktree-new) prunes NESTED_SCAN_SKIP_DIRS (node_modules, dist, vendor, etc). findNestedCheckoutDir (used by the write-guard point-check) has no such skip list, so a write into a git-bearing dependency under node_modules/ gets flagged and denied whenever a second session is live -- a D6 violation on ordinary Node hosts.",
+      "evidence": [
+        {
+          "file": ".bee/bin/lib/guards.mjs",
+          "line": "917-929",
+          "note": "findNestedCheckoutDir: no NESTED_SCAN_SKIP_DIRS check"
+        },
+        {
+          "file": ".bee/bin/lib/guards.mjs",
+          "line": "934-936",
+          "note": "NESTED_SCAN_SKIP_DIRS defined but consulted only by scanForNestedCheckout"
+        }
+      ],
+      "verified_by_orchestrator": "Read findNestedCheckoutDir directly (lines 917-929) -- confirmed no skip-dir consultation exists on that path.",
+      "proposed_fix": "Have findNestedCheckoutDir skip a climbed dir when its basename is in NESTED_SCAN_SKIP_DIRS, same set the down-scan already uses.",
+      "acceptance_criteria": [
+        "A write into a git-bearing dir under node_modules/ while concurrent is ALLOWED, asserted by a test."
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "Companion-marker verification logic duplicated between guards.mjs and bee-write-guard.mjs -- one trust-boundary invariant, two sources",
+      "autofix_class": "manual",
+      "reviewer": "architecture",
+      "summary": "resolveVerifiedCompanionMountReal (guards.mjs) re-implements the same marker-vs-live-symlink verification that resolveCompanionMountedRelPath (bee-write-guard.mjs) already does, instead of the new code calling the existing one. If the marker schema or verification rule changes later, one copy can be fixed and the other left stale, letting the write-guard and the paved-road recognizer disagree about which mounts are verified.",
+      "evidence": [
+        {
+          "file": ".bee/bin/lib/guards.mjs",
+          "line": "~847",
+          "note": "resolveVerifiedCompanionMountReal's own comment says it replicates bee-write-guard.mjs:384-414's verification"
+        }
+      ],
+      "proposed_fix": "Extract one exported helper (in guards.mjs, already imported by the hook) and have bee-write-guard.mjs's resolveCompanionMountedRelPath build on top of it, so both surfaces share a single verification implementation.",
+      "acceptance_criteria": [
+        "The realpath-match/marker-parse verification exists in exactly one function; both the hook and the scan call it.",
+        "Existing companion rows (65-69, 74-77, 82) stay green after the extraction."
+      ]
+    },
+    {
+      "severity": "P3",
+      "title": "Submodule exclusion trusts an unverified .gitmodules text match (spoofable) via a hand-rolled regex (also miss-prone)",
+      "autofix_class": "advisory",
+      "reviewer": "security + code-quality (related concerns on the same function)",
+      "summary": "isRegisteredSubmodule reads .gitmodules and regex-matches 'path =' lines with no check the entry is a real, tracked, initialized submodule (git submodule status / .git/modules/<name>). Within D2's locked allowance (a real .gitmodules entry is an explicitly sanctioned signal) but a hardening gap: a stray/uncommitted/hand-written .gitmodules can silently turn the guard off for that path. Separately, the regex parse can diverge from git's own interpretation on unusual whitespace, failing toward a false-positive deny (safer direction, still worth tightening).",
+      "evidence": [
+        {
+          "file": ".bee/bin/lib/guards.mjs",
+          "line": "994-1008"
+        }
+      ],
+      "proposed_fix": "Corroborate the .gitmodules entry via `git submodule status` or `.git/modules/<name>` existence before trusting it as an exclusion.",
+      "acceptance_criteria": [
+        "A nested repo with a .gitmodules entry that is NOT a genuine initialized/tracked submodule is still flagged when concurrent.",
+        "A genuine tracked submodule stays excluded (row 73 stays green)."
+      ]
+    },
+    {
+      "severity": "P3",
+      "title": "The new worktree-new refusal's distinguishing error code is not regression-pinned by any test",
+      "autofix_class": "advisory",
+      "reviewer": "api-contract",
+      "summary": "The only thing letting a --json caller distinguish this refusal from other worktree-new refusals is the literal [WORKTREE_CONCURRENT_SHARED_NESTED] prefix. Tests assert non-zero exit and a --with-companion substring, never the code itself -- a future rename would silently break any caller keying on it with no test failing.",
+      "evidence": [
+        {
+          "file": "scripts/test_worktree_companion.mjs",
+          "line": "896-897"
+        }
+      ],
+      "proposed_fix": "Assert JSON.parse(stdout).error.startsWith('[WORKTREE_CONCURRENT_SHARED_NESTED]') in case 6.",
+      "acceptance_criteria": [
+        "A test pins the exact error code string for this refusal."
+      ]
+    },
+    {
+      "severity": "P3",
+      "title": "Stale comment in guards.mjs claims the primitive is 'NOT wired into checkWrite or the hook dispatch yet' -- but this same feature wired it",
+      "autofix_class": "gated_auto",
+      "reviewer": "architecture",
+      "summary": "A load-bearing header comment (an Epic-1-only snapshot) misdescribes the shipped state: E2/E3 in this same change wired the primitive into both the write-guard hook and bee.mjs. A maintainer trusting the comment over a grep could remove or reshape a live export.",
+      "evidence": [
+        {
+          "file": ".bee/bin/lib/guards.mjs",
+          "line": "210-211, mirrored 1016-1017"
+        }
+      ],
+      "proposed_fix": "Update the comment to name the real callers (bee-write-guard.mjs point-check, bee.mjs handleWorktreeNew scan) and note it stays out of checkWrite by design.",
+      "acceptance_criteria": [
+        "The guards.mjs header comment matches the actual wiring state."
+      ]
+    },
+    {
+      "severity": "P3",
+      "title": "Verified-companion-mount branch of isSharedNestedCheckoutTarget is unreachable from its only production caller, yet a unit test makes it look covered",
+      "autofix_class": "advisory",
+      "reviewer": "architecture",
+      "summary": "The write-guard only ever feeds isSharedNestedCheckoutTarget physically-contained (canonical) targets; a verified companion mount is reached via a symlink escaping root and never becomes a candidate. Row 74 unit-tests the branch directly with a target the hook can never actually pass it -- giving a false impression of end-to-end coverage for that shape.",
+      "evidence": [
+        {
+          "file": ".bee/bin/hooks/bee-write-guard.mjs",
+          "line": "110-114, 127-129"
+        },
+        {
+          "file": ".bee/bin/lib/guards.mjs",
+          "line": "246, 344-350"
+        }
+      ],
+      "proposed_fix": "Either document shape (a) as reserved-for-a-future-caller and relabel row 74 as a unit test (not a wired-behavior test), or drop the branch from the point-check (YAGNI) since companion detection is only actually used by the down-scan.",
+      "acceptance_criteria": [
+        "Either a real caller reaches shape (a), or it is removed/explicitly documented as unreached-by-design."
+      ]
+    },
+    {
+      "severity": "P3",
+      "title": "Idempotency probe (retry --with-companion after a refusal, on the SAME checkout) not chained in any single test",
+      "autofix_class": "advisory",
+      "reviewer": "test-coverage",
+      "summary": "plan.md's Test Matrix names 're-running worktree new --with-companion after a first refusal succeeds cleanly, no leftover partial state' as a required probe. Case 6 (refusal, zero-mutation) and case 9 (--with-companion succeeds) are proven independently on two different fresh fixtures, never chained on one checkout that was actually just refused.",
+      "evidence": [
+        {
+          "file": "scripts/test_worktree_companion.mjs",
+          "line": "886-898 (case6) vs 933-943 (case9)"
+        }
+      ],
+      "proposed_fix": "Extend case 6 to, after asserting the refusal is zero-mutation, immediately re-run with --with-companion on the same main and assert it mounts cleanly.",
+      "acceptance_criteria": [
+        "On a checkout just refused, worktree new --with-companion succeeds and mounts, asserted in one test."
+      ]
+    },
+    {
+      "severity": "P3",
+      "title": "Case 6's zero-mutation check compares parent-dir entry counts, not sets/content",
+      "autofix_class": "advisory",
+      "reviewer": "test-coverage",
+      "summary": "The zero-mutation assertion is a genuine directory-diff (not exit-code-only, correctly) but uses after.length === before.length -- an entry-count comparison misses a refusal that both created and removed an entry, or wrote inside main/.bee (outside the parent-dir scope).",
+      "evidence": [
+        {
+          "file": "scripts/test_worktree_companion.mjs",
+          "line": "891-896"
+        }
+      ],
+      "proposed_fix": "Compare sorted entry sets of the parent dir, and optionally snapshot main/.bee across the refusal.",
+      "acceptance_criteria": [
+        "Zero-mutation asserts an unchanged entry set, not just count."
+      ]
+    },
+    {
+      "resolves_finding": 1,
+      "status": "resolved",
+      "fix_cell": "wcg-fix-1",
+      "fix_commit": "c4123e321d12f7df816119e4b46f40e9a5090aad",
+      "delta_re_review": "Orchestrator independently re-verified: handleWorktreeNew now resolves resolveSessionId({root:mainRoot}) and passes excludeSessionId to hasAnySharedNestedCheckout (skills/bee-hive/templates/bee.mjs:3877-3882). Fresh test run: scripts/test_worktree_companion.mjs 17/17 pass, including new case10 (self-only live session proceeds) and case11 (genuine second session still refused). Semantic checklist judge (opus, independent of builder model) verdict PASS.",
+      "defect_class_sweep": "Grepped all production call sites of isSharedNestedCheckoutTarget/hasAnySharedNestedCheckout across .bee/bin/bee.mjs and .bee/bin/hooks/bee-write-guard.mjs -- exactly 2 call sites exist, both now pass excludeSessionId (write-guard already did; worktree-new fixed by wcg-fix-1). No other instance of the missing-self-exclusion defect class found in scope.",
+      "boundary_assessment": "Stayed inside its own boundary -- localized fix at one call site, no public-contract change, no destabilized assumption elsewhere in scope. Full panel re-run not required (A12)."
+    },
+    {
+      "resolves_finding": 2,
+      "status": "resolved",
+      "fix_cell": "wcg-fix-2",
+      "fix_commit": "99ed309d646f6425d59e27e9b379ca675f0fb030",
+      "delta_re_review": "Orchestrator independently re-verified: the write-guard's call to guards.isSharedNestedCheckoutTarget is now wrapped in its own try/catch that denies (typed message, error logged) on a thrown exception, distinct from the hook's outer general-purpose fail-open catch-all which is untouched. hasGitNode/findNestedCheckoutDir's existing continue/false-on-nonexistent-path internals are unchanged (a missing path is a legitimate answer, not a detection error). Fresh test run: hooks/test_write_guard.mjs ALL PASS including new rows 83-85 (throw->deny, typed message, non-throwing control still allows); rows 65-82 unregressed. Semantic checklist judge (opus, independent of builder model) verdict PASS.",
+      "defect_class_sweep": "Checked the other production call site (bee.mjs's handleWorktreeNew calling hasAnySharedNestedCheckout, no local try/catch around it): an uncaught exception there propagates to bee.mjs's top-level dispatch catch (line ~6044), which calls emitError and returns a hard non-zero exit -- the worktree is never created (the check runs BEFORE createFeatureWorktree), so a detection error there already fails closed by crashing rather than silently allowing. No second instance of the fail-open-on-error defect class found in scope.",
+      "boundary_assessment": "Stayed inside its own boundary -- localized fix at one call site, explicitly scoped to avoid touching the hook's general containment-check philosophy elsewhere. Full panel re-run not required (A12)."
+    }
+  ],
+  "uat": [
+    {
+      "item": "D1(a)/D1(b)/D3/D4: hard refusal on concurrent write into a shared nested checkout, always pointing to --with-companion, no override",
+      "result": "pass",
+      "verified_by": "live demo against a real throwaway git repo using the actual bee.mjs CLI (refused with typed error + zero mutation when concurrent+shared; proceeded when the acting session's own heartbeat is the only record present, proving the wcg-fix-1 self-exclusion fix)"
+    },
+    {
+      "item": "D6: zero behavior change for a checkout with nothing shared/concurrent",
+      "result": "pass",
+      "verified_by": "live demo: solo session + nested checkout proceeded unchanged"
+    }
+  ],
+  "decision": {
+    "status": "approved",
+    "gate4": {
+      "p1_count": 0,
+      "uat_all_pass": true,
+      "approved_at": "2026-07-26T11:16:00Z",
+      "approval_mode": "bypass-total-auto"
+    }
+  },
+  "created_at": "2026-07-24T09:56:51.985Z",
+  "updated_at": "2026-07-26T11:16:14.043Z"
+}
