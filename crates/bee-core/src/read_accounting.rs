@@ -55,13 +55,53 @@
 //! rust-port-23 removes a redundant call to that primitive, the count
 //! actually drops.
 //!
+//! **"Lowest" is not a synonym for "inside the domain module."** The first
+//! cut of this seam counted `decisions_journal_parses` inside
+//! `decisions.rs`'s own call sites — one level lower than the higher-level
+//! readers, but not the FLOOR. A goal-check judge proved that placement
+//! gameable: it hand-wrote two extra real
+//! `fsutil::read_jsonl(&decisions_path(root))` calls from a brand-new
+//! location outside `decisions.rs` entirely (simulating a rust-port-23
+//! hoist that pre-loads the journal before calling into `decisions.rs`/
+//! `recovery.rs` at all), and the baseline test's count did not move. The
+//! counter now lives inside `fsutil::read_jsonl` itself (see that
+//! function's doc comment), keyed on the path — the true floor, since
+//! `read_jsonl` is the one generic primitive EVERY current and future
+//! decisions-journal reader must funnel through, no matter which module
+//! writes it. `cells_dir_scans` (inside `cells::list_cells`'s
+//! `fs::read_dir`) and `cell_dep_reads` (inside `cells::read_cell`) do not
+//! have this problem in the first place: `bee-core` has no generic,
+//! multi-store "scan a directory of JSON files" primitive the way it has
+//! `read_jsonl` for jsonl files, so `list_cells`/`read_cell` already ARE
+//! the lowest shared primitive for the cells store — a hoist would have to
+//! reimplement their fail-open/archive-fallback logic from scratch to
+//! bypass them, which is a materially different (and easily noticed) thing
+//! from calling an existing generic utility function directly.
+//!
+//! ## BASELINE-ONLY EVIDENCE (must-have truth 8 — read this before trusting
+//! ## a reach-proof against POST-dedup code)
+//!
+//! Every reach-proof in `crates/queen-bee/tests/read_accounting.rs` (and
+//! the printed baseline table it produces) is evidence about TODAY'S
+//! un-deduped code only. Once rust-port-23 lands, a conditional site that
+//! shows as "reached" here can start reporting its count unconditionally
+//! for a reason that has NOTHING to do with the original gate: if the
+//! dedup hoists a read above the conditional consumer that used to gate
+//! it, the hoisted primitive call fires once per invocation regardless of
+//! whether that consumer still runs — the count still says "1", but "1"
+//! no longer means "the gated consumer ran". A rust-port-23 worker reusing
+//! this table must re-derive reachability against the NEW call graph, not
+//! assume last cell's reach-proofs still describe it.
+//!
 //! ## Store classes and their units (validation W1 — DEFINE WHAT YOU COUNT)
 //!
 //! - **`decisions_journal_parses`** — one increment per actual
-//!   `read_jsonl(&decisions_path(root))` call in `crate::decisions` (the
-//!   `.bee/decisions.jsonl` journal only, never the archive file). Unit:
-//!   one file read = one count, unambiguous. Placed at the two real call
-//!   sites inside `decisions.rs` (`build_tag_overlay`'s own read, and
+//!   `read_jsonl(&decisions_path(root))` call ANYWHERE in the crate (the
+//!   `.bee/decisions.jsonl` journal only, never the archive file) —
+//!   counted inside `fsutil::read_jsonl` itself (see the placement note
+//!   above), not inside `crate::decisions`. Unit: one file read = one
+//!   count, unambiguous. Today that fires at the two real call sites
+//!   inside `decisions.rs` (`build_tag_overlay`'s own read, and
 //!   `active_decisions`'s own read in both its `all` and `!all` branches) —
 //!   NOT once per call to `active_decisions` as a whole, because one call
 //!   to `active_decisions` performs TWO real reads today (its own event
