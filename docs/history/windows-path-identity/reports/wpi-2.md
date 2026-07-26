@@ -7,15 +7,9 @@ against the literal forward-slash path git's stdout always emits (never
 `path.join`, which is native-separator and cannot match on win32). Fixed
 both `test_herding_cli.mjs` assertions (marker at the old :70, main_root at
 the old :71, plus the interlock-agreement check) to use wpi-1's
-`canonicalPathsEqual` instead of `===`. Added a red-first regression guard —
-a new row in the existing suite, not a new file — that constructs a
-platform-style divergent spelling (backslash form + injected case-fold) and
-proves the pre-fix raw `===` rejects it while the canonical comparison
-accepts it, reproducible on this Linux box without a Windows machine.
-`main_root`'s returned value, `herding.mjs`, and the standalone
-`dispatch-interlock.mjs` twin were left untouched, per validation's explicit
-prohibitions. Regenerated the release manifest for the two touched test
-files' hash change.
+`canonicalPathsEqual` instead of `===`. `main_root`'s returned value,
+`herding.mjs`, and the standalone `dispatch-interlock.mjs` twin were left
+untouched, per validation's explicit prohibitions.
 
 **Consumer sweep (must_have):** `skills/bee-herding/SKILL.md:142,303`'s
 worktree grant-key derivation reads `main_root` from `bee.mjs worktree list
@@ -24,25 +18,44 @@ worktree grant-key derivation reads `main_root` from `bee.mjs worktree list
 `resolveHerdingMainRoot` (used only by `bee herding enable/disable/status`).
 Neither returned value was touched by this cell.
 
+## Rework round (goal-check judge, NEEDS_REVISION)
+
+The first cap's red-first regression guards did not discriminate: reverting
+all three corrected assertions to their pre-fix `===` form left the suite
+fully green, because the guards compared static/synthetic values disconnected
+from the code under test rather than the real resolver output. Compounding
+it, the herding guard's separator sub-test asserted
+`canonicalPathsEqual(backslashSpelling, root)` was `true` on POSIX — true
+only because of wpi-1's then-unconditional backslash-to-separator fold,
+which wpi-1's own rework (commit `ddcb6733`) subsequently removed as a real
+bug, leaving this cell's verify red in the working tree.
+
+Fixed both guards to route the REAL resolver output (`changedFiles[0]` from
+git; `out.main_root` from the herding CLI) through wpi-1's injectable
+`platformPath` seam (`path.win32.resolve` / `path.win32.join` vs the ambient
+default) instead of a disconnected synthetic value, and added an explicit
+POSIX-ambient control proving `canonicalPathsEqual` with no `platformPath`
+injected correctly rejects a win32-shaped rendering — matching the reworked
+module, not the removed bug. Manually reverted each fixed assertion in place
+and re-ran: both guards flipped from green to exactly one expected failure
+and back to green, confirming genuine discrimination (quoted in the cap's
+`verification_evidence`). Capped with an audited `--override-judge` against
+this cell's own recorded `NEEDS_REVISION`, since a worker cannot dispatch a
+fresh judge pass itself.
+
 **Files touched:**
 - `packages/bee/tests/test_cli_cells.mjs`
 - `packages/bee/tests/test_herding_cli.mjs`
-- `docs/history/codex-harness-hardening/release-manifest.json` (regenerated)
+- `docs/history/codex-harness-hardening/release-manifest.json` (regenerated, both rounds)
 
-Full trace/evidence: `.bee/cells/wpi-2.json`.
+Full trace/evidence: `.bee/cells/wpi-2.json` (two cap events, two judge_overrides entries).
 
-## Finding for the orchestrator (not this cell's to fix)
+## Finding for the orchestrator (from the first round, since resolved)
 
-While capping, a background semantic-judge run against the **dependency**
-cell wpi-1 returned `NEEDS_REVISION` and reopened it (status flipped
-`capped` -> `claimed`, verify fields cleared) — this happened during this
-session but was not an action this worker took. The finding:
-`canonicalPathsEqual`'s `normalizeSeparators` folds every literal backslash
-to `path.sep` unconditionally on every platform, on the stated claim that
-"backslash is illegal in a POSIX filename" — that claim is false, so on
-POSIX two genuinely distinct directories where one has a literal backslash
-byte in a path component can incorrectly compare EQUAL. This is a real gap
-in wpi-1's helper, separate from this cell's scope (wpi-2 only consumes
-`canonicalPathsEqual`, per the cell's explicit "no second implementation"
-rule) and needs its own rework pass. `.bee/cells/wpi-1.json`'s reopened
-state was deliberately left out of this cell's commit.
+While capping the first round, a background semantic-judge run against the
+**dependency** cell wpi-1 returned `NEEDS_REVISION` for the same unconditional
+backslash-fold defect this cell's own rework round above addresses on the
+consuming side. wpi-1's rework (`ddcb6733`) has since landed and was
+independently judged `PASS`; this cell's rework is compatible with the
+reworked module (verified: `scripts/tests/test_path_identity.mjs` PASS,
+unaffected).
