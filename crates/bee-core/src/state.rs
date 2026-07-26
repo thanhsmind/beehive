@@ -12,12 +12,18 @@
 //! scope here — this cell's consumers (rust-port-9..12) are read-only
 //! guard-support checks, never state mutators.
 
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::fsutil::read_json;
+use crate::fsutil::{read_json, write_json_atomic};
+
+/// The four bee gate names, in their canonical output order — mirrors
+/// `state.mjs`'s exported `GATE_NAMES` (rust-port-16, CONTEXT.md D3/D9).
+pub const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
 
 pub fn state_path(root: &Path) -> PathBuf {
     root.join(".bee").join("state.json")
@@ -224,6 +230,111 @@ pub fn resolve_pipeline(root: &Path, session_id: Option<&str>) -> Result<Pipelin
         ));
     };
     Ok(PipelineResolution { source: "lane", record })
+}
+
+/// `writeState(root, state)` — atomic write-through, no locking of its own
+/// (callers that need read-modify-write safety take `workflow:<id>` or a
+/// store lock around the whole cycle; this mirrors `writeState`'s own
+/// unlocked shape in the mjs source).
+pub fn write_state(root: &Path, state: &State) -> io::Result<()> {
+    write_json_atomic(&state_path(root), state)
+}
+
+/// `writeLane(root, lane)` — atomic write-through to
+/// `.bee/lanes/<lane.feature>.json`. `lane.feature` must be set (the mjs
+/// source derives the path from `lane.feature` the same way); an absent
+/// feature is a caller bug, reported as an `InvalidInput` io error rather
+/// than silently writing to a nonsense path.
+pub fn write_lane(root: &Path, lane: &State) -> io::Result<()> {
+    let feature = lane
+        .feature
+        .as_deref()
+        .filter(|f| !f.trim().is_empty())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "writeLane: lane.feature is required."))?;
+    let file = lane_path(root, feature).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+    write_json_atomic(&file, lane)
+}
+
+// ─── handoff (rust-port-16) ──────────────────────────────────────────────
+// Read-only surface `state-projection.mjs`'s `rebuildHandoffProjection`
+// needs: the legacy single-file path/normalization, plus the per-workflow
+// mailbox listing. Mutators (`writeMailboxHandoff`/`adoptMailboxHandoff`)
+// are out of this cell's scope (rust-port-16's action list names only the
+// state-projection.mjs rebuild verbs) and stay unported.
+
+pub fn handoff_path(root: &Path) -> PathBuf {
+    root.join(".bee").join("HANDOFF.json")
+}
+
+/// `normalizeHandoffKind(kind)` — missing/unknown -> `"pause"` (the
+/// fail-safe: surface-and-wait is the safe default), `"planned-next"`
+/// passes through verbatim.
+pub fn normalize_handoff_kind(kind: Option<&str>) -> &'static str {
+    if kind == Some("planned-next") {
+        "planned-next"
+    } else {
+        "pause"
+    }
+}
+
+/// One record from a workflow's handoff mailbox
+/// (`.bee/runtime/handoffs/<workflow-id>/<seq>.json`). `seq` is derived
+/// from the filename (never persisted inside the body) and `fields` is the
+/// record body with `kind` already normalized, matching
+/// `listHandoffMailbox`'s in-memory `{...raw, kind, seq}` shape.
+#[derive(Debug, Clone)]
+pub struct HandoffMailboxRecord {
+    pub seq: i64,
+    pub fields: Map<String, Value>,
+}
+
+pub fn handoff_mailbox_dir(root: &Path, workflow_id: &str) -> PathBuf {
+    root.join(".bee").join("runtime").join("handoffs").join(workflow_id)
+}
+
+/// `Number.parseInt(str, 10)` on a `.json`-stripped filename stem: leading
+/// optional sign, then leading decimal digits; trailing garbage is
+/// ignored; no leading digit at all is `None` (`NaN`, which
+/// `listHandoffMailbox`'s `Number.isFinite` guard then skips).
+fn parse_leading_int(s: &str) -> Option<i64> {
+    let bytes = s.as_bytes();
+    let mut idx = 0;
+    if idx < bytes.len() && (bytes[idx] == b'+' || bytes[idx] == b'-') {
+        idx += 1;
+    }
+    let digits_start = idx;
+    while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+        idx += 1;
+    }
+    if idx == digits_start {
+        return None;
+    }
+    s[..idx].parse::<i64>().ok()
+}
+
+/// `listHandoffMailbox(root, workflowId)` — every record in a workflow's
+/// mailbox, oldest to newest by seq. Fail-open: a missing/unreadable
+/// directory reads as `[]`; a record that is missing, unparseable, or not
+/// a JSON object is skipped rather than failing the whole listing.
+pub fn list_handoff_mailbox(root: &Path, workflow_id: &str) -> Vec<HandoffMailboxRecord> {
+    let dir = handoff_mailbox_dir(root, workflow_id);
+    let entries = match fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+    let mut records = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(stem) = name.strip_suffix(".json") else { continue };
+        let Some(seq) = parse_leading_int(stem) else { continue };
+        let raw: Value = read_json(&entry.path(), Value::Null);
+        let Value::Object(mut fields) = raw else { continue };
+        let kind = fields.get("kind").and_then(Value::as_str);
+        fields.insert("kind".to_string(), Value::String(normalize_handoff_kind(kind).to_string()));
+        records.push(HandoffMailboxRecord { seq, fields });
+    }
+    records.sort_by_key(|r| r.seq);
+    records
 }
 
 /// `gateApproved(state, gateName)` for the four named gates.
