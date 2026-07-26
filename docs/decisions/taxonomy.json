@@ -224,6 +224,7 @@
     "migration",
     "dispatcher",
     "packages-engine-move",
-    "agents-md"
+    "agents-md",
+    "comms"
   ]
 }
