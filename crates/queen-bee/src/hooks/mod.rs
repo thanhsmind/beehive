@@ -8,6 +8,7 @@
 //! hooks land in later slices (per the epic map, Slice 1).
 
 pub mod codex_subagent_audit;
+pub mod model_guard;
 pub mod tools_logger;
 pub mod write_guard;
 
@@ -21,6 +22,7 @@ pub fn run_hook(name: &str, argv: &[String], raw_stdin: &str) -> i32 {
         "tools-logger" => tools_logger::run(argv, raw_stdin),
         "codex-subagent-audit" => codex_subagent_audit::run(argv, raw_stdin),
         "write-guard" => write_guard::run(argv, raw_stdin),
+        "model-guard" => model_guard::run(argv, raw_stdin),
         other => {
             eprintln!("queen-bee: unknown hook \"{other}\"");
             2

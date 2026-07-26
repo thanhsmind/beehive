@@ -10,6 +10,7 @@
 pub mod cells;
 pub mod claims;
 pub mod config;
+pub mod dispatch_guard;
 pub mod fsutil;
 pub mod guards;
 pub mod holds;
