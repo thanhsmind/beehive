@@ -29,19 +29,39 @@
   "decisions": [
     "release-flow memory"
   ],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "rel-w1",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "v1.18.1 released: bump 4-component tuple, self-onboard, plugin trees re-render, manifest regen, full verify 105/105 green foreground, commit 591f4a6, tag v1.18.1 pushed, CI full run dispatched (30182772154). No host propagation per release flow.",
+    "files_changed": [
+      "package.json",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-07-26T01:22:14.405Z",
     "behavior_change": false,
     "verification_evidence": null,
-    "verify_output": null,
-    "verify_passed": null,
+    "verify_output": "full run_verify: 105 suite(s) PASS wall=63754ms; release_manifest --check: 394 files match; tag v1.18.1 pushed (2a731fa..591f4a6 main)",
+    "verify_passed": true,
     "claim_session": "e3133e36-4277-45a3-a8eb-87fadbd7181d",
-    "claimed_at": "2026-07-26T01:20:28.562Z"
+    "claimed_at": "2026-07-26T01:20:28.562Z",
+    "verify_command": "node scripts/run_verify.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-26T01:22:08.225Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T01:22:08.225Z",
+        "claim_session": "e3133e36-4277-45a3-a8eb-87fadbd7181d",
+        "claimed_at": "2026-07-26T01:20:28.559Z",
+        "acquired_at": "2026-07-26T01:20:28.559Z",
+        "worker": "rel-w1",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
   }
 }
