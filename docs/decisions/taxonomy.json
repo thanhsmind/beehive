@@ -225,6 +225,8 @@
     "dispatcher",
     "packages-engine-move",
     "agents-md",
-    "comms"
+    "comms",
+    "guards",
+    "multisession"
   ]
 }

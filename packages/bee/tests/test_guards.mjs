@@ -369,6 +369,31 @@ await check('extractBashTargets flags sed -i and redirection targets', async () 
   assert(realRedir.paths.includes('err.log'), 'a real stderr redirect to a file is still caught');
 });
 
+await check('extractBashTargets: blanket staging flags count as broad writes (bsg-1)', async () => {
+  const addA = extractBashTargets('git add -A');
+  assert(addA.broadWrite === true, 'git add -A is a broad write');
+  const addAll = extractBashTargets('git add --all');
+  assert(addAll.broadWrite === true, 'git add --all is a broad write');
+  const addU = extractBashTargets('git add -u');
+  assert(addU.broadWrite === true, 'git add -u is a broad write');
+  const commitA = extractBashTargets('git commit -a');
+  assert(commitA.broadWrite === true, 'git commit -a is a broad write');
+  const commitAm = extractBashTargets('git commit -am "msg"');
+  assert(commitAm.broadWrite === true, 'git commit -am is a broad write');
+
+  const commitM = extractBashTargets('git commit -m "msg"');
+  assert(commitM.broadWrite === false && commitM.paths.length === 0, `plain git commit -m stays a no-op, got ${JSON.stringify(commitM)}`);
+  const commitAmend = extractBashTargets('git commit --amend');
+  assert(commitAmend.broadWrite === false && commitAmend.paths.length === 0, `--amend must not match --all substring, got ${JSON.stringify(commitAmend)}`);
+  const addFile = extractBashTargets('git add src/file.js');
+  assert(
+    addFile.broadWrite === false && addFile.paths.length === 1 && addFile.paths[0] === 'src/file.js',
+    `git add of an explicit path stays exact, got ${JSON.stringify(addFile)}`,
+  );
+  const logAll = extractBashTargets('git log --all');
+  assert(logAll.broadWrite === false && logAll.paths.length === 0, `git log --all is untouched, got ${JSON.stringify(logAll)}`);
+});
+
 // ─── fsh-5: enforcement readers resolve through the session's lane (D2/D4) ──
 // LIB CAPABILITY ONLY — hooks thread these in S3/S4. claimCell's execution
 // gate comes from the CELL's own feature lane when one exists (the per-feature

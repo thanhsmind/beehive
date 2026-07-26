@@ -1364,13 +1364,35 @@ export function extractBashTargets(command) {
       // not a direct-edit target. `git mv`/`git rm` genuinely change what's
       // on disk, so they stay fully tracked, same as any other target.
       const gitVerb = tokens[i + 1];
-      for (let j = i + 2; j < tokens.length && !SEPARATORS.has(tokens[j]); j += 1) {
-        if (!isFlag(tokens[j])) {
-          const cliOwnedStageOnly = gitVerb === 'add' && Object.prototype.hasOwnProperty.call(DIRECT_EDIT_DENY, normalizeRel(tokens[j]));
-          if (!cliOwnedStageOnly) addTarget(tokens[j]);
-        }
-        i = j;
+      let end = i + 2;
+      while (end < tokens.length && !SEPARATORS.has(tokens[end])) end += 1;
+      const segment = tokens.slice(i + 2, end);
+      // `-A`/`--all`/`-u`/`--update` stage every changed path, not just the
+      // named ones — the reservation guard must see this as a broad write.
+      if (
+        gitVerb === 'add' &&
+        (segment.includes('--all') || segment.includes('--update') || hasGitShortFlag(segment, 'A') || hasGitShortFlag(segment, 'u'))
+      ) {
+        broadWrite = true;
       }
+      for (const t of segment) {
+        if (!isFlag(t)) {
+          const cliOwnedStageOnly = gitVerb === 'add' && Object.prototype.hasOwnProperty.call(DIRECT_EDIT_DENY, normalizeRel(t));
+          if (!cliOwnedStageOnly) addTarget(t);
+        }
+      }
+      i = end - 1;
+      continue;
+    }
+
+    if (cmd === 'git' && tokens[i + 1] === 'commit') {
+      // `-a`/`--all`/`-am` folds tracked-but-unstaged changes into the
+      // commit — blanket staging the guard must see, same as `git add -A`.
+      let end = i + 2;
+      while (end < tokens.length && !SEPARATORS.has(tokens[end])) end += 1;
+      const segment = tokens.slice(i + 2, end);
+      if (segment.includes('--all') || hasGitShortFlag(segment, 'a')) broadWrite = true;
+      i = end - 1;
       continue;
     }
 
