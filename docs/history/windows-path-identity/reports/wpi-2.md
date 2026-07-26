@@ -43,12 +43,39 @@ and back to green, confirming genuine discrimination (quoted in the cap's
 this cell's own recorded `NEEDS_REVISION`, since a worker cannot dispatch a
 fresh judge pass itself.
 
+## Round 3 (goal-check judge, remaining gap named precisely)
+
+Round 2's guards proved the comparison *semantics* were right (site 1's
+expectation is genuinely driven by the real git-observed value; the removed
+universal fold is no longer pinned; no product file moved — three checks the
+judge passed by mutation testing). The remaining gap: reverting all four
+*corrected assertions themselves* to their pre-fix `===` form left both
+suites fully green (8/0, 40/0) — because on a POSIX box `===` and
+`canonicalPathsEqual` genuinely agree when both sides are already the same
+real string, so a plain revert is a true local no-op. Round 2's own red-first
+replay had reverted the *guard rows'* internals, not the assertions the
+guards were meant to protect.
+
+Fix (the judge's own prescribed shape): each of the four corrected
+assertions (the site-1 literal check; and the herding marker, main_root, and
+interlock-marker checks) now runs a **second pass** immediately alongside it,
+comparing the real resolver output against a win32-rendered form of its own
+expected value via `canonicalPathsEqual` with `platformPath: path.win32`.
+That pass accepts; a bare `===` does not — so reverting *that* line is now
+visible on this machine. Reverted and restored each of the four lines in
+turn (the assertion lines themselves, not guard internals): every revert
+named its exact failing check and quoted the real value against its win32
+rendering; every restore returned to green. All four replays are recorded in
+the cap's `verification_evidence`. Capped again with an audited
+`--override-judge` citing the closed gap, since a worker cannot dispatch a
+fresh judge pass itself.
+
 **Files touched:**
 - `packages/bee/tests/test_cli_cells.mjs`
 - `packages/bee/tests/test_herding_cli.mjs`
-- `docs/history/codex-harness-hardening/release-manifest.json` (regenerated, both rounds)
+- `docs/history/codex-harness-hardening/release-manifest.json` (regenerated, all three rounds)
 
-Full trace/evidence: `.bee/cells/wpi-2.json` (two cap events, two judge_overrides entries).
+Full trace/evidence: `.bee/cells/wpi-2.json` (three cap events, three judge_overrides entries).
 
 ## Finding for the orchestrator (from the first round, since resolved)
 
