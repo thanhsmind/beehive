@@ -100,6 +100,84 @@ pub fn time_node_baseline(runs: usize) -> Result<Vec<f64>, String> {
     })
 }
 
+// ─── status bench (rust-port-15, D5 + D3 addendum a7d7b3d5) ──────────────
+
+/// The additive runtime artifact the gix review derivation writes and the
+/// frozen mjs leg never touches (decision a7d7b3d5). Deleting it before a
+/// run is what makes that run COLD.
+pub const REVIEW_GIT_CACHE_REL: [&str; 3] = [".bee", "runtime", "review-git-cache.json"];
+
+pub fn review_git_cache_path(root: &Path) -> std::path::PathBuf {
+    let mut p = root.to_path_buf();
+    for seg in REVIEW_GIT_CACHE_REL {
+        p.push(seg);
+    }
+    p
+}
+
+/// Whether a status series runs against a cold or a warm review-git cache.
+///
+/// This distinction is NOT cosmetic and the report must never collapse it
+/// (decision a7d7b3d5): the measured gix query set costs 12.4–15.2 ms
+/// cold on a real repo versus 1.59–1.82 ms warm, so reporting only the
+/// warm number would be a ~10 ms omission dressed as a result. The 5 ms
+/// D5 gate is defined against the WARM number — the steady state of any
+/// real session, where the cache survives between invocations — and the
+/// cold number rides beside it, always printed, never gated on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheState {
+    Cold,
+    Warm,
+}
+
+impl CacheState {
+    pub fn label(self) -> &'static str {
+        match self {
+            CacheState::Cold => "cold",
+            CacheState::Warm => "warm",
+        }
+    }
+}
+
+/// Time `runs` spawn-inclusive invocations of `<bin> status --json` with
+/// `cwd` set to `root`.
+///
+/// For [`CacheState::Cold`] the review-git cache file is deleted before
+/// each iteration — inside the command BUILDER, which `time_spawns` calls
+/// before starting that iteration's timer, so the delete itself is never
+/// counted as command time. For [`CacheState::Warm`] the caller is
+/// responsible for a warm-up run first (see `run_status_series`).
+pub fn time_queen_bee_status(
+    bin_path: &Path,
+    root: &Path,
+    runs: usize,
+    cache: CacheState,
+) -> Result<Vec<f64>, String> {
+    let cache_file = review_git_cache_path(root);
+    time_spawns(runs, || {
+        if cache == CacheState::Cold {
+            let _ = std::fs::remove_file(&cache_file);
+        }
+        let mut c = Command::new(bin_path);
+        c.arg("status").arg("--json").current_dir(root);
+        c
+    })
+}
+
+/// Time `runs` spawn-inclusive invocations of the SAME command through the
+/// frozen mjs oracle — `node <bee.mjs> status --json` with `cwd` set to
+/// `root`. This is the honest node baseline for the status gate (the
+/// `node -e ""` baseline beside the `ping` gate measures cold start only).
+/// The mjs leg never reads or writes the review-git cache, so it has no
+/// cold/warm distinction.
+pub fn time_node_status(bee_mjs: &Path, root: &Path, runs: usize) -> Result<Vec<f64>, String> {
+    time_spawns(runs, || {
+        let mut c = Command::new("node");
+        c.arg(bee_mjs).arg("status").arg("--json").current_dir(root);
+        c
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

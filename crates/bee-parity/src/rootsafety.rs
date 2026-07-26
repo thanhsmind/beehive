@@ -20,9 +20,29 @@ use std::path::Path;
 
 use crate::differ::RunResult;
 
-/// Structural half of the B5 assertion: onboarding marker present, no
-/// `.git` at the root itself, and the root lives outside the repo's own
-/// working tree (never a subdirectory of `repo_root`).
+/// Structural half of the B5 assertion: onboarding marker present, the
+/// root self-resolves (either via `resolveRootsCore`'s ordinary branch —
+/// no `.git` here — or via its git-root fallback, which lands on this same
+/// directory when `.git` is a real repo DIRECTORY at the root), and the
+/// root lives outside the repo's own working tree.
+///
+/// rust-port-15 (FIX-FIRST): the `.git`-at-root case used to be a hard
+/// refusal, which is what `resolveRootsCore`'s FIRST branch requires. But
+/// rust-port-19 deliberately grew real git ancestry into the D5 fixture,
+/// and `crates/queen-bench/src/fixture.rs`'s own module docs spell out the
+/// consequence: the first branch no longer matches, "but its git-root
+/// fallback branch does, and resolves `storeRoot === workRoot === this
+/// fixture root` either way". The old refusal therefore turned
+/// `--self-check` red the moment rust-port-19 landed (`root-safety: ...
+/// contains a .git`) even though root resolution was still correct. What
+/// B5 actually protects is "this root resolves to ITSELF, never the repo's
+/// live store" — so the check below asserts exactly that instead: a `.git`
+/// is allowed only when it is a plain directory (a MAIN checkout's git
+/// root, which the fallback resolves to its own parent). A `.git` FILE is
+/// still refused: that is the linked-worktree marker, whose resolution
+/// walks out to another checkout's store — precisely the escape B5 exists
+/// to catch. The empirical half ([`assert_resolves_to_fixture`]) remains
+/// the real proof either way.
 pub fn assert_structural_safety(repo_root: &Path, root: &Path) -> Result<(), String> {
     let onboarding = root.join(".bee").join("onboarding.json");
     if !onboarding.exists() {
@@ -32,9 +52,9 @@ pub fn assert_structural_safety(repo_root: &Path, root: &Path) -> Result<(), Str
         ));
     }
     let dot_git = root.join(".git");
-    if dot_git.exists() {
+    if dot_git.exists() && !dot_git.is_dir() {
         return Err(format!(
-            "root-safety: {} contains a .git — resolveRootsCore's ordinary branch would not match here",
+            "root-safety: {} contains a .git FILE (linked-worktree marker) — its root resolution walks out to another checkout's store",
             root.display()
         ));
     }
@@ -115,15 +135,32 @@ mod tests {
     }
 
     #[test]
-    fn rejects_dot_git_at_root() {
+    fn rejects_dot_git_file_marker_at_root() {
+        // A `.git` FILE is a linked-worktree marker: resolution walks out
+        // to another checkout's store, which is the B5 escape.
         let base = std::env::temp_dir().join(format!("bee-parity-rootsafety-test-b-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(base.join(".bee")).unwrap();
+        fs::write(base.join(".bee").join("onboarding.json"), b"{}").unwrap();
+        fs::write(base.join(".git"), b"gitdir: /elsewhere/.git/worktrees/x").unwrap();
+        let repo_root = std::env::temp_dir().join("bee-parity-unused-repo-root");
+        let err = assert_structural_safety(&repo_root, &base).unwrap_err();
+        assert!(err.contains(".git FILE"));
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn accepts_dot_git_directory_at_root() {
+        // rust-port-19's grown D5 fixture: a real git repo AT the fixture
+        // root. `resolveRootsCore`'s git-root fallback resolves it to this
+        // same directory, so it is still self-sufficient.
+        let base = std::env::temp_dir().join(format!("bee-parity-rootsafety-test-d-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(base.join(".bee")).unwrap();
         fs::write(base.join(".bee").join("onboarding.json"), b"{}").unwrap();
         fs::create_dir_all(base.join(".git")).unwrap();
         let repo_root = std::env::temp_dir().join("bee-parity-unused-repo-root");
-        let err = assert_structural_safety(&repo_root, &base).unwrap_err();
-        assert!(err.contains(".git"));
+        assert!(assert_structural_safety(&repo_root, &base).is_ok());
         let _ = fs::remove_dir_all(&base);
     }
 

@@ -16,7 +16,16 @@ use crate::normalize;
 
 /// The fixed whole-path exclusion set (CONTEXT.md D7a). Paths are relative
 /// to a store root, always `.bee`-rooted.
-const EXCLUDED_PREFIXES: [&str; 3] = [".bee/logs", ".bee/cache", ".bee/tmp"];
+///
+/// `.bee/runtime` joined the set in rust-port-15, under the locked D3
+/// addendum (decision a7d7b3d5): the gix review derivation writes ONE
+/// additive runtime artifact, `.bee/runtime/review-git-cache.json`, which
+/// the frozen mjs leg never reads or writes. It is a whole-path EXCLUSION,
+/// deliberately not a normalization — nothing about its content is
+/// rewritten to make two legs agree; the tree comparison simply does not
+/// consider a directory only one runtime is contractually allowed to
+/// touch. Same fail-open carve-out shape as logs/cache/tmp.
+const EXCLUDED_PREFIXES: [&str; 4] = [".bee/logs", ".bee/cache", ".bee/tmp", ".bee/runtime"];
 
 fn is_excluded(rel: &Path) -> bool {
     let rel_str = rel.to_string_lossy().replace('\\', "/");
@@ -187,10 +196,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn excludes_logs_cache_tmp_prefixes() {
+    fn excludes_logs_cache_tmp_runtime_prefixes() {
         assert!(is_excluded(Path::new(".bee/logs/hooks.jsonl")));
         assert!(is_excluded(Path::new(".bee/cache/inject-cache.json")));
         assert!(is_excluded(Path::new(".bee/tmp/scratch.txt")));
+        // D3 addendum a7d7b3d5 — the rust-only review-git cache.
+        assert!(is_excluded(Path::new(".bee/runtime/review-git-cache.json")));
         assert!(!is_excluded(Path::new(".bee/state.json")));
         assert!(!is_excluded(Path::new(".bee/cells/fixture-00001.json")));
     }

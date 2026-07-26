@@ -22,7 +22,19 @@ getrandom = "0.4.3"
 gix = { version = "0.86", default-features = false, features = ["revision", "sha1"] }
 regex-lite = "0.1"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `preserve_order` is LOAD-BEARING for D3 byte-compatibility, not a
+# preference: `JSON.stringify` emits JS INSERTION order, and every reader in
+# this crate is already written to insert keys in the mjs source's literal
+# order (`build_review_block`, `tier_mix`, `archived_totals`, ...). Without
+# this feature `serde_json::Map` is a `BTreeMap`, so both parsed store files
+# and constructed blocks re-emit ALPHABETICALLY — `{candidates,
+# high_risk_unreviewed, open_sessions}` where mjs writes `{candidates,
+# open_sessions, high_risk_unreviewed}`. A `status --json` byte-diff against
+# the frozen oracle is impossible without it. Enabled on the library so a
+# standalone `cargo test -p bee-core` sees the same ordering the workspace
+# release build does (feature unification would otherwise make the two
+# disagree).
+serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.11.0"
 
 [dev-dependencies]

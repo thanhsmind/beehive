@@ -13,7 +13,11 @@ path = "src/main.rs"
 
 [dependencies]
 bee-core = { path = "../bee-core" }
-serde_json = "1"
+# Insertion-order JSON — see the load-bearing note in bee-core/Cargo.toml.
+# Declared here too (not just relied on via feature unification) so this
+# crate's own `json!`/`Map` construction in `status.rs` keeps mjs key order
+# no matter which subset of the workspace a build resolves.
+serde_json = { version = "1", features = ["preserve_order"] }
 
 [dev-dependencies]
 tempfile = "3"

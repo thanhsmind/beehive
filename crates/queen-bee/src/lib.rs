@@ -14,3 +14,4 @@
 pub mod adapter;
 pub mod hookconfig;
 pub mod hooks;
+pub mod status;
