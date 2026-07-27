@@ -108,7 +108,62 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "corrected-not-widened",
+            "status": "PASS",
+            "evidence": "Oracle probe re-run independently against the real packages/bee/lib/intent.mjs confirms the causal claim exactly: sanitize(src) len 120 tail 'aaaaa-', not idempotent, second pass len 119; intentPath(src) base tail 'aaaa-.json' vs intentPath(printedKey) base tail 'aaaaa.json'. writeIntent resolves once (:187), intentPath sanitizes again (:69-71), /-+$/ (:64) eats the dash .slice(0,120) (:65) exposed. The old target was a file no runtime opens. Non-widening is deductively established from the harness stage order at cmdcheck.rs:1431-1487: the recorded RED is the control-stage message (:1477), reachable only after exit-check, positive assertions and the parity+tree diff already passed — so relaxing those cannot be what turned red green. Channel has only Stdout/Stderr (:59-62), no any-channel escape. Drift-back pinned at :1687-1706."
+          },
+          {
+            "id": "port-bug-ruled-out",
+            "status": "PASS",
+            "evidence": "DiffReport::is_clean() includes tree_diffs (differ.rs:66-71) and diff_trees emits a present/missing line for any filename asymmetry (:215-230), so differing filenames between legs would have failed the parity leg before the control ran. Re-sanitization identical: bee-core/src/intent.rs:75-77 mirrors intent.mjs:69-71."
+          },
+          {
+            "id": "utf16-code-unit-semantics",
+            "status": "PASS",
+            "evidence": "js_slice_code_units (intent.rs:93-105) advances by ch.len_utf16(), used at :155; step order matches mjs (:127-155). All three mandated scenarios exist and discriminate: cmdcheck.rs:1113-1135 (truncates onto a seeded key so a wrong cut prints '(no intent anchor)'), :1159-1187 with the straddle proven at :1672-1684, :1193-1207. Honest caveat recorded by the port itself (intent.rs:35-48): the pre-slice ASCII collapse means code units, bytes and scalar values all agree at the slice, so what these discriminate is the collapse plus the -+$-before-slice ordering; the ASCII property is proven at :648-670, not assumed."
+          },
+          {
+            "id": "scenarios-real-not-padding",
+            "status": "PASS",
+            "evidence": "24 registered, matching the run. register() refuses an empty assertion list (cmdcheck.rs:152-156) and a missing mutation target (:142-147). Twelve sampled, all carrying substantive positive content on both legs — e.g. :631-648 verbatim request bytes incl. emoji/tab/umlaut, :872-892 asserting the request is UNCHANGED by advance, :740-756 asserting a non-empty '(no intent anchor)' literal, :1032-1063 asserting the stored feature is the RAW arg while only the filename is sanitized. No empty-vs-empty pair."
+          },
+          {
+            "id": "faithful-mjs-semantics",
+            "status": "PASS",
+            "evidence": "advance is structurally next_action+advanced_at only (intent.rs:485-509, struct-update over the read anchor). Fail-open reads: read_json returns fallback on read or parse error (fsutil.rs:71-90); normalize_anchor returns None for unusable records (intent.rs:246-289). NO_WORK_PHASES = idle/compounding-complete (intent.rs:67, pinned :739-741). NO lock anywhere — write_json_atomic is tmp+rename (fsutil.rs:229-254); the only lock hits are doc prose and a timestamp formatter. CLI layer byte-faithful incl. String(flags.force)==='true' (ledger/intent.rs:125) and literal-null rendering (:76-77, :178-180)."
+          },
+          {
+            "id": "scope-discipline",
+            "status": "PASS",
+            "evidence": "git show f30ff90d --stat: only .bee/cells/rpl-2.json, 10 files under crates/, and the cell report. No packages/bee/, no .bee/bin/, no hook wiring, no crates/queen-bee/src/main.rs. groups.rs gains exactly one registration line; rpl-3..rpl-9 remain comments. fixture.rs +154/-1 where the -1 is a format string; INTENT_KEYS_FLOOR_COUNT is additive and checked against a read_dir of what landed — no existing floor touched."
+          },
+          {
+            "id": "red-evidence-meets-d3-floor-on-merits",
+            "status": "PASS",
+            "evidence": "Floor is non-empty, >=80 chars, not byte-identical to another cell's (cells.mjs:1983-2003, RED_EVIDENCE_MIN_CHARS at :1730). Measured 2000 chars with zero byte-identical duplicates across .bee/cells/. It rode the exception door only because deliberate_exceptions is non-empty (evidenceRidesExceptionDoor, cells.mjs:153-158) — the door skips the floor wholesale, it does not weaken content. Soft spot recorded: it characterizes the harness red rather than the pre-port behavior of the ported surface, since queen-bee had no intent group at all."
+          },
+          {
+            "id": "unparseable-anchor-scope-call",
+            "status": "PASS",
+            "evidence": "Honest for THIS cell and correctly scoped: fsutil.mjs:42 warns with V8 parser text, bee-core/src/fsutil.rs:82-88 with serde_json text — never matchable, and normalize.rs:172-198 rightly refuses any asymmetric stderr strip. The corrupt-anchor scenarios instead use the parseable-but-unusable shape (cmdcheck.rs:430-436) that the module's own D5 defines as corrupt. CARRIED AS A CROSS-CUTTING OBLIGATION, not left in this cell: JSONL reads are unaffected (readJsonl skips corrupt lines silently on both sides), but whole-JSON reads are exposed at reviews.mjs:109,128, feedback.mjs:547,772, decisions.mjs:127 plus state.mjs (11 sites) and cells.mjs (6). Settled by its own decision and cell rpl-11 before rpl-3 registers, so no later group silently omits the unparseable-store shape."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-07-27T04:25:57.464Z"
+      }
+    ]
   },
   "tier": "ceiling"
 }

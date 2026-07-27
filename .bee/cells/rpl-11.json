@@ -92,7 +92,57 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "reconciliation-not-blanket-strip",
+            "status": "PASS",
+            "evidence": "normalize.rs:355 re-emits prefix+path+separator+placeholder+suffix, so prefix, path and suffix all survive into the compared text and only the tail is replaced. Early exit at :304 leaves all other stderr untouched (test :969). A line that merely EMBEDS the sentence is an Err, not a mask (:311-319). The invariant suffix is real (packages/bee/lib/fsutil.mjs:42, mirrored crates/bee-core/src/fsutil.rs:83) and asserted: strip_suffix failure is an Err (:324-329), test at :896."
+          },
+          {
+            "id": "both-failure-directions-real",
+            "status": "PASS",
+            "evidence": "(a) replacement not removal — test :829 asserts warned != silent; a shape Err surfaces as a diff at differ.rs:142-170, never swallowed. (b) wrong dialect refused BOTH ways, verified from the predicates not just the tests: serde text on the mjs leg fails is_v8_json_parse_message (:401) because has_position_clause needs ' at position <digits>' which serde never emits; V8 text on the queen-bee leg fails is_serde_json_parse_message (:424) because it requires rsplit_once(' at line ') and V8 writes '(line 1 column 3)'. Table-tested :872-892."
+          },
+          {
+            "id": "predicates-not-tautological",
+            "status": "PASS",
+            "evidence": "V8 predicate (:401-417) is a closed 3-family set and rejects arbitrary prose, anything lacking a position clause, and serde's dialect. serde predicate (:424-430) requires a non-empty reason plus ' at line <d> column <d>' at the very end and rejects V8's parenthetical form and an empty reason. Both no-position-clause V8 families accepted (:403, :407-409) and covered by :907-935. Empty tail short-circuits false at :369."
+          },
+          {
+            "id": "bee-timing-contract-intact",
+            "status": "PASS",
+            "evidence": "git diff --numstat over normalize.rs shows 428 added / 6 deleted, and the 6 deletions are 5 doc-comment lines plus one call-site rename. strip_runtime_stderr_artifacts (:184-226) is byte-unchanged: ANY [bee] line on the queen-bee leg is an Err, != 1 or misshaped on the mjs leg is an Err. All four rpl-1 tests present and green in the 51-pass run."
+          },
+          {
+            "id": "scenario-exercises-reconciliation",
+            "status": "PASS",
+            "evidence": "Shared primitive read once per leg: packages/bee/bee.mjs:738 -> cells.mjs:818 -> readJson, and queen-bee/src/status.rs:562 -> bee-core/src/cells.rs:292 -> read_json. Assertion is Equals on the FULL normalized stderr (cmdcheck.rs:1580,:1588) applied to both legs (:1520-1522), so no extra line is tolerated. The control makes the store PARSEABLE via replace_exactly_once (mutate.rs:74-91), so the mutated leg emits no warning at all — the worker's sharpest claim holds: a differently-corrupt body would only move a tail already masked to <PARSE_ERROR>, stderr_diff would be None and the control would not fire (:1544-1548). Live run confirms the control fired on stderr."
+          },
+          {
+            "id": "node-version-robustness",
+            "status": "PASS",
+            "evidence": ".github/workflows/ci.yml:28 node-version: [18, 20, 22]. The predicate is not version-pinned: the parenthetical clause is optional (:411-416 falls through to a bare has_position_clause) and both forms are in the accept table (:923-924). A rule pinned to the newer V8 text would have gone red on the oldest matrix leg only."
+          },
+          {
+            "id": "scope-discipline",
+            "status": "PASS",
+            "evidence": "git show e5717c39 --name-only touches only the cell file, decisions.jsonl, cmdcheck.rs, normalize.rs, docs/decisions/taxonomy.json and the cell report. No .bee/bin/, no packages/bee/, no queen-bee/src/main.rs. One seam scenario registered; every ledger group count still 0. The only deliberate_exceptions occurrences in the diff are the cell's own prohibition text and the decision rationale — none added to code."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-07-27T04:49:20.847Z"
+      }
+    ]
   },
   "tier": "ceiling"
 }

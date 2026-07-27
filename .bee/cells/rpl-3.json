@@ -158,7 +158,67 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "oracle-is-honest-not-tuned",
+            "status": "PASS",
+            "evidence": "HONEST ORACLE. tests/support/datamark_oracle.mjs:39-45 dynamically imports the real datamark/logDecision/SECRET_CONTENT_PATTERNS/INJECTION_PATTERNS from .bee/bin/lib/decisions.mjs plus capture.mjs and feedback.mjs, and diff -q against packages/bee/lib confirms all three are IDENTICAL, so the frozen twin is literally the cell's named source. No behavior is reimplemented except opVocabulary :154, which reproduces the non-exported backlogAllowedTypes() body character-for-character against bee.mjs:3695 and reads the real constants. No pre-processing on either side: every op is a bare map straight into the real function (:76,:93,:111,:136), transport is JSON both ways (:170,:197) so controls/BOM/CRLF/astral survive losslessly. Comparison is raw codepoints (datamark_oracle.rs:241,:274); the only flattening is mask_volatile (:336-345) applied IDENTICALLY to both legs for the independently-generated uuid and wall clock. The removed :196 line was a break after process.exit(2) in the default arm — semantically inert, and the driver holds ZERO corpus data (the corpus is built in datamark_oracle.rs:74-212 and shipped over stdin), so it could not have deleted a case; corpus-shrink is separately blocked by the floors at :247 (>150), :288 (>40), :449 (>40 and >100) and the by-name whitespace-family assertion at :603."
+          },
+          {
+            "id": "js-whitespace-class-complete",
+            "status": "PASS",
+            "evidence": "datamark.rs:82-87 JS_WHITESPACE is exactly the ECMAScript set — U+0009-000D, 0020, 00A0, 1680, 2000-200A, 2028, 2029, 202F, 205F, 3000, FEFF, 25 members pinned at :382 and :618. Every ported pattern splices ws() (:218,:235,:240,:244,:248,:268) and every remaining backslash-s hit is inside a js_source message literal or doc prose — zero in a translated pattern. The NBSP bypass is pinned three ways: unit test :396 over all 25 members, integration test datamark_oracle.rs:645 measuring mjs vs naive-\\s vs enumerated side by side, and scenario capture/add-refused-injection-nbsp-bypass at cmdcheck.rs:1120."
+          },
+          {
+            "id": "case-folding-audited",
+            "status": "PASS",
+            "evidence": "Not silently skipped: measurement documented at datamark.rs:29-34 and permanently pinned by corpus cases fold-long-s-not-a-match (U+017F) and fold-kelvin-not-a-match (U+212A) plus three positive folds (datamark_oracle.rs:205-209), all diffed against the real mjs. The BMP-wide sweep itself remains prose; what is pinned is the two long-tail cases, which are exactly the ones a Unicode-folding engine gets wrong."
+          },
+          {
+            "id": "js-trim-feff",
+            "status": "PASS",
+            "evidence": "datamark.rs:99-101 js_trim = trim_matches(is_js_whitespace), and datamark() ends on it at :293. Pinned by js_trim_differs_from_rust_trim_in_both_directions (:386, asserting both directions incl. U+0085), by corpus cases feff-leading/trailing/both/interior and nel-leading-trailing (datamark_oracle.rs:83-89), and end-to-end by capture/add-refused-lone-bom-outcome. fsutil.rs:113 was also corrected from is_whitespace()||FEFF — which carried the U+0085 divergence — to the single authority."
+          },
+          {
+            "id": "js-regex-literal-spelling-both-paths",
+            "status": "PASS",
+            "evidence": "JsPattern.js_source (datamark.rs:174-177) carries the literal and messages interpolate it at :340,:343 (decision) and :355,:358 (capture). datamark_oracle.rs:542 diffs ALL TEN js_source strings against SECRET_CONTENT_PATTERNS.map(String) and INJECTION_PATTERNS.map(String). The two wordings are verified distinct and correct against capture.mjs:17-32 versus decisions.mjs:276-292, with non-interchangeability pinned at :523."
+          },
+          {
+            "id": "shared-constants-in-bee-core",
+            "status": "PASS",
+            "evidence": "bee-core/src/feedback.rs:23-43 KIND_ALIASES (17 pairs, insertion order) matches feedback.mjs:67-87 exactly; normalized_kinds() :48 reproduces new Set(Object.values(...)) first-occurrence order (feedback.mjs:98); backlog_allowed_types() :70 reproduces bee.mjs:3695. All three oracle-diffed at datamark_oracle.rs:562, and no hardcoded copy exists elsewhere."
+          },
+          {
+            "id": "capture-scenarios-real-and-controls-can-fire",
+            "status": "PASS",
+            "evidence": "All 17 sampled (cmdcheck.rs:860-1254); each carries an Equals/Contains assertion on the real payload, e.g. :880-890 pinning the whole sorted fold text incl. last-written/earliest-at ordering, :928 the exact pending count line, and REFUSAL_* at :835-839. The worker's control reasoning is TRUE of the code: capture.mjs:57-78 validates outcome then lane, builds the record, calls assertSafeContent and only then appendJsonl — it never reads the queue, so a queue mutation provably cannot move a refusal's output and the registry-rename control is the only one that CAN fire. All 17 printed 'control fired' in the recorded run."
+          },
+          {
+            "id": "stale-pin-closed-mechanism-corrected",
+            "status": "PASS",
+            "evidence": "The claim is true but the worker's stated mechanism was WRONG and is corrected here: the pin was not aborted past, it was NEVER EXECUTED. git show 0bdab987^:crates/queen-bee/src/groups.rs shows the intent registration already present at rpl-2 while the pin asserted group_names().is_empty() — false since d75651a4 — but rpl-2's verify was cargo build plus a bee-parity run with NO cargo test, and its wider sweep excluded the queen-bee package. Both pins are now exact-set: dispatch.rs assert_eq!(names, vec![\"capture\",\"intent\"]) and cmdcheck.rs:2283 asserting every non-PORTED_GROUPS member has 0 scenarios plus a still-guards-something tripwire. No other stale pin survives: cargo test --workspace --no-fail-fast reports ok on all 23 targets plus doctests, 0 failed. ORCHESTRATOR ACTION TAKEN on the judge's advisory that the corrected pins sat outside every cell's verify: the workspace run is now prepended to the verify of rpl-4 through rpl-10 with a matching truth, so the hazard is closed for the rest of the slice rather than left open."
+          },
+          {
+            "id": "scope-discipline",
+            "status": "PASS",
+            "evidence": "git show 0bdab987 --stat: no .bee/bin/, no packages/bee/ (only the cell's own bookkeeping file), no queen-bee/src/main.rs, no Cargo.toml so no new regex dependency. groups.rs is a one-line registration and no wiring flip. bee-core/src/capture.rs extended in place; queen-bee/src/ledger/capture.rs is the CLI handler mirroring ledger/intent.rs, not a second core module. fixture.rs is purely additive (CAPTURE_PENDING_FLOOR_COUNT added, no existing floor touched, REFUSE-below discipline preserved by re-folding what landed). Tests use mkdtemp/tempdir on both legs. Noted so it is not misread as creep: the seam group went 5 to 6 scenarios, but that scenario came from rpl-11 (257c75b8), not this commit."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-07-27T05:58:14.933Z"
+      }
+    ]
   },
   "tier": "ceiling"
 }

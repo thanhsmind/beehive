@@ -1,0 +1,80 @@
+{
+  "id": "rpl-5",
+  "feature": "rust-port-ledgers",
+  "title": "decisions query side (active, search, archive, tag) — renderer split out to rpl-10",
+  "lane": "high-risk",
+  "deps": [
+    "rpl-4"
+  ],
+  "decisions": [
+    "D3",
+    "D7",
+    "D9"
+  ],
+  "files": [
+    "crates/bee-core/src/*",
+    "crates/queen-bee/src/*",
+    "crates/bee-parity/src/*"
+  ],
+  "read_first": [
+    "docs/history/rust-port/CONTEXT.md",
+    "packages/bee/lib/decisions.mjs",
+    "packages/bee/bee.mjs",
+    "packages/bee/tests/test_decisions_propagation.mjs",
+    "crates/bee-core/src/decisions.rs",
+    "docs/decisions/index.md",
+    "docs/history/rust-port-ledgers/plan.md"
+  ],
+  "action": "Port the decisions QUERY verbs only: active, search, archive, tag (lib at packages/bee/lib/decisions.mjs:739 archiveDecisions, :810 the active projection; handlers in packages/bee/bee.mjs:1924-2229). The index renderer and its --check drift verdict were SPLIT OUT into rpl-10 on review (this cell was over the plan's own reference size). archive and tag are read-modify-write and take the same D9 lock as the write path — consume crates/bee-core/src/lock.rs, never reimplement. search supports --tag / --scope / OR-ranked multi-term --text / --all over the archive; reproduce each ranking comparator at its own call site rather than unifying them. REVIEW-FOUND FIXTURE GAP: `queen-bench --generate` produces monotone filler — every decisions row is type `decide` with an identical date, no tags, and there are no supersede or redact rows (crates/queen-bench/src/fixture.rs:287), and no .bee/decisions-archive.jsonl at all. Every scenario below is therefore non-discriminating unless it SEEDS what it asserts, using the per-scenario seeding rpl-1 provides on top of the baseline store. Register --cmd-check scenarios: search across every filter incl. a multi-term text query whose ranking separates candidates; search --tag over seeded tags; archive with the store at and past its threshold, with a seeded archive sidecar; tag on a missing id; active with seeded superseded AND redacted entries present; and this group's unknown-verb usage fallback line (packages/bee/bee.mjs:6586-6609).",
+  "must_haves": {
+    "truths": [
+      "cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group decisions reports every decisions query scenario clean, mjs vs queen-bee",
+      "each scenario SEEDS the rows it asserts on (superseded, redacted, tagged, archived) rather than relying on the monotone baseline store",
+      "multi-term --text ranking order matches mjs on a query designed to separate candidates",
+      "archive behaves identically at and past the threshold, with the archive sidecar byte-identical",
+      "the decisions unknown-verb usage fallback line is byte-identical to mjs",
+      "the workspace test run at the head of this cell verify is green with --no-fail-fast, so no cross-cutting pin has rotted outside every cell own gate (the rpl-3 goal-check found one that had been false for two cells because it sat outside every verify and was never executed)"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/src/decisions.rs",
+        "substantive": "active projection, search ranking comparators, archive, tag"
+      },
+      {
+        "path": "crates/queen-bee/src/",
+        "substantive": "decisions query verbs behind the rpl-1 seam"
+      },
+      {
+        "path": "crates/bee-parity/src/",
+        "substantive": "decisions query scenarios with their own seeding"
+      }
+    ],
+    "key_links": [
+      "rpl-8's feedback aggregator reads .bee/decisions.jsonl and depends on this projection being byte-right",
+      "the D9 lock consumed here is the same one rpl-4 wired"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No wiring flip",
+      "No unification of the per-call-site ranking comparators",
+      "No index rendering in this cell — that is rpl-10",
+      "No clean-diff acceptance over the unseeded monotone baseline store"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "cargo test --manifest-path crates/Cargo.toml --workspace --no-fail-fast && cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group decisions",
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "id": "rpl-6",
+  "feature": "rust-port-ledgers",
+  "title": "backlog part 1: counts, rank, badges, add, propose, findings + scoped git argv + allowed-type refusal text",
+  "lane": "high-risk",
+  "deps": [
+    "rpl-3"
+  ],
+  "decisions": [
+    "D3",
+    "D7",
+    "D9"
+  ],
+  "files": [
+    "crates/bee-core/src/*",
+    "crates/queen-bee/src/*",
+    "crates/bee-parity/src/*"
+  ],
+  "read_first": [
+    "docs/history/rust-port/CONTEXT.md",
+    "packages/bee/lib/backlog.mjs",
+    "packages/bee/lib/lock.mjs",
+    "packages/bee/bee.mjs",
+    "packages/bee/tests/test_backlog_capture.mjs",
+    "crates/bee-core/src/backlog.rs",
+    "crates/bee-core/src/lock.rs",
+    "docs/backlog.md",
+    "docs/history/rust-port-ledgers/plan.md"
+  ],
+  "action": "Port the backlog group PART 1: counts, rank, badges, add, propose, findings. On review this cell was the largest in the batch and was SPLIT: pbi.*, render/--check and the PBI lock conformance moved to rpl-9. Handlers live in packages/bee/bee.mjs:3670-4007 (REVIEW-CORRECTED range — handleBacklogFindings sits at 3997-4007, entirely outside the old 3670-3944); lib at packages/bee/lib/backlog.mjs. Extend crates/bee-core/src/backlog.rs (today read-only). TWO exact-replication requirements. (1) UNLOCKED APPENDS: plain add/propose/findings appends are bare, unlocked appendJsonl (bee.mjs:3832) — do NOT introduce a lock mjs does not take. (2) GIT SIDE EFFECT: backlog.add shells out via runBacklogGit (bee.mjs:3773-3786) with a pathspec scoped ONLY to .bee/backlog.jsonl; the comment at bee.mjs:3736-3743 records that widening this scope was a past regression. REVIEW-FOUND GAP — the git-argv assertion had no stated mechanism, and the obvious one is a trap: a cross-runtime argv diff cannot see an in-process node seam, so the only route is a PATH `git` shim both legs pick up that logs argv and cwd to a file, and that file MUST land inside the diffed tree and OUTSIDE the exclusion prefixes at crates/bee-parity/src/differ.rs:28 (.bee/logs, .bee/cache, .bee/tmp, .bee/runtime). State the chosen path in the worker block. (3) ALLOWED-TYPE REFUSAL TEXT: bee.mjs:3687 backlogAllowedTypes() = [...Object.keys(KIND_ALIASES), ...NORMALIZED_KINDS].sort() IS the `--type` refusal message. Consume the constants rpl-3 ported into bee-core — hardcoding a second list is a D7 violation. REVIEW-FOUND FIXTURE GAP: every generated backlog row is type `proposal` (crates/queen-bench/src/fixture.rs:296), so counts/rank/badges scenarios must SEED the row variety they assert on via rpl-1's per-scenario seeding. Also assert this group's unknown-verb usage fallback line (packages/bee/bee.mjs:6586-6609).",
+  "must_haves": {
+    "truths": [
+      "cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group backlog reports every part-1 backlog scenario clean",
+      "the git argv and cwd emitted by backlog.add are asserted equal to mjs, scoped to .bee/backlog.jsonl only, via a shim whose log lands outside every exclusion prefix — proven by a negative control that alters the argv and IS caught",
+      "the --type refusal text is byte-identical to mjs and is produced from the bee-core constants, not a hardcoded list",
+      "counts/rank/badges scenarios seed their own row variety rather than reading the monotone all-proposal baseline",
+      "no lock is taken by the plain add/propose/findings path in either runtime",
+      "the backlog unknown-verb usage fallback line is byte-identical to mjs",
+      "the workspace test run at the head of this cell verify is green with --no-fail-fast, so no cross-cutting pin has rotted outside every cell own gate (the rpl-3 goal-check found one that had been false for two cells because it sat outside every verify and was never executed)"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/src/backlog.rs",
+        "substantive": "counts/rank/badges/findings fold plus the unlocked append path"
+      },
+      {
+        "path": "crates/queen-bee/src/",
+        "substantive": "backlog part-1 verbs behind the rpl-1 seam incl. the scoped git side effect"
+      },
+      {
+        "path": "crates/bee-parity/src/",
+        "substantive": "backlog part-1 scenarios with their own seeding and the git shim"
+      }
+    ],
+    "key_links": [
+      "rpl-8's feedback aggregator reads .bee/backlog.jsonl directly (feedback.mjs:106)",
+      "the lock-consolidation follow-up is filed as a PBI, not done here"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No wiring flip",
+      "No widening of the git pathspec",
+      "No hardcoded allowed-type list",
+      "No pbi.* or render work in this cell — that is rpl-9",
+      "Tests never write to the repo real docs/backlog.md or run git in the repo root"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "cargo test --manifest-path crates/Cargo.toml --workspace --no-fail-fast && cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group backlog",
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

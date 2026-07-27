@@ -141,7 +141,62 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "discriminating-verify",
+            "status": "PASS",
+            "evidence": "bee-parity/src/main.rs:537-543 returns Err on an empty selection for a named group; :504-514 maps Err to ExitCode::FAILURE. Measured live without a pipe: --group intent exit=1, bare exit=1, unknown group exit=1, --all exit=0. Pinned by a test at cmdcheck.rs:696-705 asserting every non-seam group is still 0."
+          },
+          {
+            "id": "per-scenario-negative-control",
+            "status": "PASS",
+            "evidence": "cmdcheck.rs:143-148 register() returns Err and never pushes a scenario with no declared mutation target (test :645-653). Target is per-scenario (mutate.rs:55-64, applied cmdcheck.rs:548-571) and the control asserts on the DECLARED CHANNEL (:557-560), not is_clean() — closing the hole where a mutated store makes the tree differ for free. mutate.rs:74-91 refuses an ambiguous needle."
+          },
+          {
+            "id": "mask-plus-shape-deny-by-default",
+            "status": "PASS",
+            "evidence": "normalize.rs:93-125 allowlist; deny-by-default by construction at :304-308, no pattern scrubber remains. Shape gate on the only mask path at :323; a non-matching value falls through to the byte copy at :337-339. is_iso_millis_z :258-268, is_uuid_v4 :272-292. Chrono variants and non-v4 ids proven to survive at :469-481 and :483-493. Same normalizer applied to the store tree at differ.rs:245-246."
+          },
+          {
+            "id": "stderr-two-directional",
+            "status": "PASS",
+            "evidence": "runner.rs:156 captures stderr; differ.rs:145-172 diffs it and stderr_diff is part of is_clean(). Not a blanket ignore: normalize.rs:169-176 makes ANY [bee] line on the queen-bee leg an Err, :179-184 requires EXACTLY ONE on the mjs leg, is_timing_line :213-221 pins its shape, and the Err surfaces as a diff at differ.rs:161-171. Proven live by cmdcheck.rs:373-390 whose stdout is empty on both legs — a stdout-only harness would have called it parity."
+          },
+          {
+            "id": "registry-seeding",
+            "status": "PASS",
+            "evidence": "queen-bench/src/fixture.rs:321 write_command_registry, called unconditionally from generate at :216, copies BOTH .bee/cache/command-registry.json and .bee/bin/lib/command-registry.mjs and returns Err writing nothing if either source is missing. Proof is transitive: the byte-exact registry-derived refusal texts at cmdcheck.rs:387,:406 are unreachable without a resolvable registry, and --cmd-check --all exits 0."
+          },
+          {
+            "id": "per-scenario-seeding",
+            "status": "PASS",
+            "evidence": "cmdcheck.rs:91-93 SeedFn, :102 seed field, applied to all three clones (mjs, rust, mutated) at :501-507 so the mutation lands on top of seeded content. Documented as additive-only at :29-40. Exercised by seed_numeric_string_keys :233-249 writing .bee/lanes/ and .bee/sessions/, which the generated fixture has no directory for. Baseline untouched: golden is still queen-bench --generate (main.rs:551,:594-608), every clone a copy_tree."
+          },
+          {
+            "id": "scope-discipline",
+            "status": "PASS",
+            "evidence": "git show f49ca610 --name-only touches only .bee/cells/rpl-1.json, 7 files under crates/bee-parity/src/, 5 under crates/queen-bee/src/, crates/queen-bench/src/fixture.rs and the cell report. No .bee/bin/, no packages/bee/, no hook wiring. groups.rs:31-38 register_all has a body of six comments and registers nothing. The registration surface is proven by a test at dispatch.rs:877-894, not by a comment."
+          },
+          {
+            "id": "red-first-in-product-code",
+            "status": "PASS",
+            "evidence": "Fix is product code: jsonout.rs:63-89 to_js_key_order, wired into every command stdout JSON path (status.rs:1249, main.rs:96, dispatch.rs:355,366,415). Oracle re-run independently in node: JSON.stringify({\"10\":true,\"2\":false,\"zeta\":true,\"1\":true}) yields {\"1\":true,\"2\":false,\"10\":true,\"zeta\":true}, matching jsonout.rs:123 byte for byte incl. non-canonical \"01\" staying in the string bucket (:151). Live-environment detection ruled out: both legs run over independent copy_tree clones of one golden and runner.rs:133-141 env_removes CLAUDE_CODE_SESSION_ID, leaving the serializer as the only variable; positive-content assertions at cmdcheck.rs:428-429 force the seeded row to reach the payload."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-07-27T03:33:18.381Z"
+      }
+    ]
   },
   "tier": "ceiling"
 }
