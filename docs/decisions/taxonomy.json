@@ -255,6 +255,8 @@
     "concurrency",
     "amendment",
     "vendoring",
-    "superseding"
+    "superseding",
+    "gh-71",
+    "security"
   ]
 }
