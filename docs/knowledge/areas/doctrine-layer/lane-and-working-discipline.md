@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: Doctrine Layer — lane classification and working discipline
-description: "The standing rules that size a piece of work and govern its by-products: work-packet-first tiny/small shapes, product-file-only caps, test-anchored risk flags, classification before context loading, the one canonical scratch home, and the verify ladder."
-timestamp: 2026-07-23
+description: "The standing rules that size a piece of work and govern its by-products: work-packet-first tiny/small shapes, product-file-only caps, test-anchored risk flags, classification before context loading, evidence-based re-lane demotion, diff-scaled validating ceremony, the one canonical scratch home, and the verify ladder."
+timestamp: 2026-07-27
 bee:
   id: doctrine-layer-lane-and-working-discipline
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)"]
-  sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)"]
+  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard validating runs inline; 2026-07-27)]
+  sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)", "lane-lean cells ll-1..ll-2 (traces in .bee/cells/, 2026-07-27 — re-lane demotion default-on + tiny ladder, diff-scaled validating; skill-text cells, verified by skill_lint + release-manifest check)"]
   authoritative_for: "doctrine-layer: lane classification and working discipline"
 ---
 
@@ -55,6 +55,29 @@ govern the working residue of a cell rather than its content.
   critical-patterns digest stays mandatory in every lane (it already rides the
   session preamble at zero extra cost). The lane decision re-runs upward any
   time evidence demands escalation; de-escalation requires cited evidence.
+- **R16a — Evidence demotion is default-on and the ladder reaches tiny (lane-lean
+  D1/D2, 2026-07-27).** The single per-feature re-lane checkpoint, fired after the
+  first evidence pass, demotes to the smallest lane the measured evidence honestly
+  supports: when the counted product-file touch set is within the target lane's
+  threshold (small: at most 3; tiny: at most 2 plus one direct task), zero
+  hard-gate flags sit on that touch set, and no gray area remains open, demotion
+  is the default — staying in the heavier lane requires naming which condition
+  actually failed. High-risk work never demotes, a hard-gate flag is an absolute
+  floor, the checkpoint fires at most once per feature, and promotion on
+  discovered risk stays available always. A demoted lane carries its full target
+  contract (a demoted tiny is a real tiny: one direct task, merged gate, one
+  dispatched worker).
+- **R16b — Validating ceremony scales with the measured diff (lane-lean D3,
+  2026-07-27).** A standard-lane feature whose counted touch set is at most 5
+  product files with zero hard-gate flags runs the validation review wave inline
+  on the session model — the same two mandates (structural adversarial check,
+  cold-pickup cell review), the same finding vocabularies, the same
+  one-shot-then-one-blocker-pass cap — without dispatching a separate reviewer.
+  A hard-gate flag, a sixth product file, or genuine doubt about self-review
+  independence restores the dispatched merged reviewer; high-risk always runs
+  the dispatched persona panel. Rationale on record: the dispatched wave on a
+  4-5-file diff costs more than it catches, and ceremony must never displace
+  the main task (standing user feedback 5794a92a).
 - **R17** — There is one canonical scratch home (`f21efe6e`): every ephemeral
   file bee writes for its own working purposes — judge payloads, evidence/
   deviation files, batch inputs, digests, verify logs, probe/debug scripts,
