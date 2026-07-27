@@ -1,0 +1,46 @@
+[
+  {
+    "id": "fs-3",
+    "feature": "flow-speedup",
+    "lane": "standard",
+    "behavior_change": true,
+    "change_class": "test",
+    "title": "Close the P4 half-guard, and be the flow-speedup slice test cell",
+    "action": "Two jobs, both about the same rule. (1) FIX THE HALF-GUARD. guardTestCellDebt in packages/bee/bee.mjs currently refuses to leave phase swarming only when a change_class 'test' cell exists and is uncapped or red. A feature holding behavior or api cells with NO test cell at all leaves freely - verified live on this very feature, which held two behavior cells, zero test cells, and transitioned swarming to scribing without complaint. Extend the guard so it ALSO refuses when the active feature has at least one CAPPED behavior or api cell and zero change_class 'test' cells. Keep both existing doors guarded (handleStateSet and handleStateScribingRun) and keep the throw unliftable by headless and by every gate_bypass level including total. The refusal message must name what is missing and how to satisfy it, in the same voice as the existing refusals. Mind the bootstrap: a feature whose behavior cells are all still open must not be blocked - the trigger is a CAPPED behavior or api cell. Also make sure the guard cannot deadlock a feature that legitimately has no behavior work (docs, refactor-only, formatting-only): those classes must never demand a test cell. (2) BE THE TEST CELL for slice 1 of flow-speedup, per the very rule fs-1 shipped: author consolidated coverage over this slice's NET behavior - the amended proof-tier matrix including the bugfix row staying put, the 'test' change_class, the swarming red block at both doors including this cell's own new no-test-cell branch, and the validation-cache verbs' staleness and degradation contract. Happy path, edge cases, error paths. Test-economy D5 read-first applies: read the existing suites covering these paths before adding anything, and prefer extending them over new files; D3 new_suite_reason applies if you do add a suite. Ratio ceiling is computed against this slice's aggregate source delta (fs-1 plus fs-2 plus this cell), not per cell.",
+    "must_haves": {
+      "truths": [
+        "Leaving swarming throws when the active feature has a capped behavior or api cell and no test-class cell at all.",
+        "The existing throw for an uncapped or red test cell still fires, at both doors.",
+        "Neither throw is liftable by headless or by any gate_bypass level including total.",
+        "A feature whose behavior cells are all still open is NOT blocked; the trigger is a capped behavior or api cell.",
+        "A feature with only docs, refactor or formatting work never demands a test cell.",
+        "Consolidated coverage exists for slice 1's net behavior: the amended matrix (with bugfix unchanged), the test change_class, both red-block branches, and the validation-cache staleness plus degradation paths.",
+        "The vendored .bee/bin copies carry the change and ledger parity passes.",
+        "This cell caps green, which is what finally lets flow-speedup leave swarming."
+      ],
+      "prohibitions": [
+        "Do NOT weaken or delete any existing test to get green.",
+        "Do NOT let any bypass level or headless mode lift either throw.",
+        "Do NOT demand a test cell from docs, refactor-only or formatting-only features.",
+        "Do NOT add a TTL or any wall-clock rule to the cache staleness while testing it."
+      ]
+    },
+    "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "read_first": [
+      "packages/bee/bee.mjs",
+      "packages/bee/lib/cells.mjs",
+      "packages/bee/tests/test_cells.mjs"
+    ],
+    "files": [
+      "packages/bee/bee.mjs",
+      "packages/bee/tests/test_cells.mjs",
+      "packages/bee/tests/test_cli_state.mjs",
+      ".bee/bin/bee.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deps": [
+      "fs-1",
+      "fs-2"
+    ]
+  }
+]

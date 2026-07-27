@@ -1,0 +1,86 @@
+[
+  {
+    "id": "fs-1",
+    "feature": "flow-speedup",
+    "lane": "standard",
+    "behavior_change": true,
+    "change_class": "behavior",
+    "title": "Slice-tail test batching: cap on existing-green, author tests once per slice, never close red",
+    "action": "Implement spec #80/#85 P1, P2, P4, P5. P3 is a restatement: bugfix repro-first is unchanged and must be shown unchanged. (P1) packages/bee/lib/cells.mjs: add proof tier 'existing-targeted-green' and amend requiredProofTier at line 124 so change_class behavior or api on lanes tiny, small, standard resolves to it instead of 'targeted-green'. bugfix keeps 'targeted-green' with repro-first; security and migration keep 'red-first'; refactor and formatting keep 'suite-green'; high-risk keeps 'red-first' for behavior-bearing classes. 'existing-targeted-green' means capCell accepts the cell's targeted scope of the EXISTING suite green with no new-test authoring obligation; the cell verify field stays a runnable command recorded with output and the cap still proves the cell did not break what exists. (P2) Add 'test' to CHANGE_CLASSES at line 89 as the slice test cell class; its proof tier is 'targeted-green'. (P4) THE LOAD-BEARING PART: a feature cannot leave phase swarming while any cell of the active feature with change_class 'test' is uncapped, or is capped with a failing recorded verify. Enforce as a THROW in the phase-transition path in packages/bee/bee.mjs, same style as the AO3 advisor-consult throw on the execution gate. Not a warning. NOT liftable by headless or by any gate_bypass level including total, because it is a mechanical precondition and not a human gate. Implementer note: there is NO slice record anywhere in this codebase; slices exist only in skill text. Do not invent a slice entity. Scope the block to the active feature's test-class cells, which is the machine-checkable expression of the spec intent. (P5) The done-report contract in skills/bee-swarming gains a 'Test consolidation' line: number of behavior cells, test cell id, suite result. (SKILLS) Update the proof-tier matrix in skills/bee-executing/SKILL.md, and skills/bee-planning/SKILL.md so planning emits exactly one trailing test cell per slice whenever the slice holds at least one behavior or api cell, depending on all implementation cells of that slice; test-economy D3 ratio ceilings compute against the slice aggregate source delta, not per cell; D5 read-first applies at the test cell. Keep skill text thin: these skills are already over-weight per spec 78.",
+    "must_haves": {
+      "truths": [
+        "requiredProofTier returns 'existing-targeted-green' for behavior and api on tiny, small and standard, and is unchanged for every other matrix row including bugfix, security, migration, refactor, formatting and every high-risk row.",
+        "capCell accepts a behavior-class cell on those lanes with existing-suite-green evidence and no newly authored test, and still refuses when the recorded verify is failing or absent.",
+        "'test' is a valid change_class.",
+        "Leaving phase swarming throws while the active feature has an uncapped test-class cell or a test-class cell whose recorded verify failed; the throw fires under headless and under every gate_bypass level including total.",
+        "bugfix repro-first behavior is provably unchanged - demonstrate it, since over-reading the amendment is the whole risk.",
+        "Existing tests covering requiredProofTier and capCell are updated only where the matrix genuinely changed; no test is deleted or weakened to pass.",
+        "The vendored .bee/bin copies carry the change and ledger parity passes."
+      ],
+      "prohibitions": [
+        "Do NOT invent a slice record, slice id, or slice state file.",
+        "Do NOT let any bypass level or headless mode lift the red block.",
+        "Do NOT touch CI-owned full verify, the verify-red flow, or the no-test-repo sentinel.",
+        "Do NOT weaken test-economy D3 new_suite_reason or D5 read-first.",
+        "Do NOT change gate semantics or bypass levels."
+      ]
+    },
+    "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "read_first": [
+      "packages/bee/lib/cells.mjs",
+      "packages/bee/tests/test_cells.mjs",
+      "skills/bee-executing/SKILL.md"
+    ],
+    "files": [
+      "packages/bee/lib/cells.mjs",
+      "packages/bee/bee.mjs",
+      "packages/bee/tests/test_cells.mjs",
+      "skills/bee-executing/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-swarming/SKILL.md",
+      ".bee/bin/lib/cells.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deps": []
+  },
+  {
+    "id": "fs-2",
+    "feature": "flow-speedup",
+    "lane": "standard",
+    "behavior_change": true,
+    "change_class": "behavior",
+    "title": "Delta validation: hash-anchored evidence cache so slice N+1 re-proves only what changed",
+    "action": "Implement spec 77 P1. Feasibility-matrix rows and reality-gate dimensions become cacheable with source-hash staleness, reusing the staleness pattern AO13 already established for advisor_ref: anchored to content hashes and decision ids, NEVER a time-based TTL. (1) Each matrix row records its sources alongside its evidence: file evidence as path plus sha256, command evidence as command plus output_sha. Written into the existing docs/history/<feature>/reports/validation-<slice>.md report AND mirrored to a machine-readable .bee/validation-cache.json keyed by feature. (2) Add the staleness computation to packages/bee/bee.mjs as a state-group verb; design the surface yourself after reading the advisor-ref staleness implementation and mirroring it. A cached row is STALE when any source file sha changed, or the newest active decision id changed, or the sha256 of the feature plan.md changed. Fresh rows carry forward verbatim, marked as cached with the slice they were proven in. (3) Degradation is the safety property and must be explicit: a missing, unreadable, malformed or partially-valid cache degrades to FULL re-validation, never to skipped validation. A cached row with no stored hashes is treated as stale. (4) skills/bee-validating/SKILL.md gains the delta rule: on slice N+1 re-prove only stale rows and new cells, and scope the reviewer to new or changed cells and stale rows rather than the whole frozen plan. Keep the skill text thin. Spec open question 2 is answered: the cache lives in .bee/ because docs/history is markdown-only.",
+    "must_haves": {
+      "truths": [
+        "A cached row whose sources are unchanged carries forward and is marked as cached with the slice it was proven in.",
+        "Touching any cited source file by one line flips the affected rows to stale - demonstrate this.",
+        "A changed newest-active-decision id, or a changed plan.md sha, also flips rows stale.",
+        "A missing, corrupt, or hash-less cache degrades to full re-validation and never to skipped validation - demonstrate each degradation path.",
+        "No time-based TTL exists anywhere in the implementation.",
+        "Cached evidence still obeys accepted-evidence rules: plausibility language still auto-fails.",
+        "The vendored .bee/bin copies carry the change and ledger parity passes."
+      ],
+      "prohibitions": [
+        "Do NOT invent a TTL, an age threshold, or any wall-clock staleness rule.",
+        "Do NOT let a cache problem of any kind result in less validation than today.",
+        "Do NOT change Gate 3 semantics, advisor consult enforcement, or spike discipline - spec 77 P5 was REJECTED by the owner, so runtime spikes remain mandatory on standard lane.",
+        "Do NOT put the cache under docs/history - that tree is markdown-only."
+      ]
+    },
+    "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "read_first": [
+      "skills/bee-validating/SKILL.md",
+      "packages/bee/bee.mjs"
+    ],
+    "files": [
+      "packages/bee/bee.mjs",
+      "skills/bee-validating/SKILL.md",
+      ".bee/bin/bee.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deps": [
+      "fs-1"
+    ]
+  }
+]

@@ -3322,6 +3322,161 @@ await check('slice-tail P4: the guard is scoped to the exit from swarming — it
   }
 });
 
+// ─── fs-3: the OTHER half of P4 — a feature that never scheduled a test cell ──
+//
+// Every check above proves the guard handles a test cell that EXISTS. None of
+// them proved what happens when there is none, and there the guard was silent:
+// flow-speedup itself left swarming with two capped behavior cells and zero
+// test cells. Branch (b) closes that. The three edges it must not break —
+// bootstrap (behavior still open), a feature with no behavior work at all, and
+// the second door — get their own checks, because a guard that walls in honest
+// work is a worse bug than the hole it was closing.
+
+// A capped cell cannot come out of capCell without a passing verify (critical
+// rule 2, untouched), so capped fixtures are written straight to the store —
+// same reason and same idiom as writeCellFile's own note above.
+function cappedCell(id, extra = {}) {
+  return {
+    ...makeCell(id, { feature: 'demo', lane: 'standard', ...extra }),
+    status: 'capped',
+    trace: { worker: 'w', verify_passed: true, verify_output: 'green', ...(extra.trace || {}) },
+  };
+}
+
+await check('fs-3: `state set` refuses to leave swarming when the feature has a CAPPED behavior cell and NO test cell at all, and leaves state.json byte-identical', async () => {
+  const dir = makeSwarmingRepo('bee-fs3-no-test-cell-');
+  try {
+    writeCellFile(dir, cappedCell('fs3-behavior-capped', { change_class: 'behavior' }));
+    const before = fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8');
+    const result = await runBeeState(dir, ['set', '--owner', 'swarming', '--phase', 'reviewing']);
+    assert(result.status !== 0, `a capped behavior cell with no test cell must hold the door, got ${result.status}: ${result.stdout}`);
+    assert(/fs3-behavior-capped/.test(result.stderr), `the refusal names the cell that created the debt, got ${result.stderr}`);
+    assert(
+      /change_class: "test"|--change-class test/.test(result.stderr),
+      `the refusal names WHAT is missing — a test-class cell — got ${result.stderr}`,
+    );
+    assert(/FIX:/.test(result.stderr), `the refusal carries a FIX:, got ${result.stderr}`);
+    const after = fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8');
+    assert(before === after, 'a refused departure never mutates the record — branch (b) runs before any field is written, exactly like branch (a)');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('fs-3: a capped API cell creates the same debt as a capped behavior cell', async () => {
+  const dir = makeSwarmingRepo('bee-fs3-api-capped-');
+  try {
+    writeCellFile(dir, cappedCell('fs3-api-capped', { change_class: 'api' }));
+    const result = await runBeeState(dir, ['set', '--owner', 'swarming', '--phase', 'reviewing']);
+    assert(result.status !== 0, `a capped api cell with no test cell must hold the door too, got ${result.status}`);
+    assert(/fs3-api-capped/.test(result.stderr), `names the api cell, got ${result.stderr}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('fs-3: gate_bypass "total" does NOT lift the no-test-cell block either — both branches are mechanical preconditions', async () => {
+  const dir = makeSwarmingRepo('bee-fs3-bypass-total-', { config: { gate_bypass: 'total' } });
+  try {
+    writeCellFile(dir, cappedCell('fs3-behavior-bypass', { change_class: 'behavior' }));
+    const result = await runBeeState(dir, ['set', '--owner', 'swarming', '--phase', 'reviewing']);
+    assert(
+      result.status !== 0,
+      `bypass level "total" must NOT lift branch (b), got status ${result.status}: ${result.stdout}`,
+    );
+    assert(
+      /gate_bypass|bypass/i.test(result.stderr),
+      `the refusal says out loud that no bypass level lifts it, got ${result.stderr}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('fs-3: `state scribing-run` — the door the chain actually walks — enforces the no-test-cell branch too, and stamps nothing when it refuses', async () => {
+  const dir = makeSwarmingRepo('bee-fs3-scribing-');
+  try {
+    writeCellFile(dir, cappedCell('fs3-behavior-scribe', { change_class: 'behavior' }));
+    const before = fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8');
+    const result = await runBeeState(dir, [
+      'scribing-run', '--feature', 'demo', '--areas', 'alpha', '--next-action', 'next',
+    ]);
+    assert(result.status !== 0, `scribing-run must refuse over a missing test cell, got ${result.status}: ${result.stdout}`);
+    assert(/fs3-behavior-scribe/.test(result.stderr), `names the cell that created the debt, got ${result.stderr}`);
+    const after = fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8');
+    assert(before === after, 'no last_scribing_run stamp and no phase advance survive a refused run');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── The three edges branch (b) must NOT break ────────────────────────────
+
+await check('fs-3 (bootstrap edge): a feature whose behavior cells are ALL STILL OPEN is not blocked — the trigger is a CAPPED cell, not a present one', async () => {
+  const dir = makeSwarmingRepo('bee-fs3-bootstrap-');
+  try {
+    addCell(dir, makeCell('fs3-behavior-open', { feature: 'demo', change_class: 'behavior', lane: 'standard', must_haves: { truths: ['fs3-behavior-open: open behavior work owes no tests yet'] } }));
+    addCell(dir, makeCell('fs3-api-open', { feature: 'demo', change_class: 'api', lane: 'standard', must_haves: { truths: ['fs3-api-open: open api work owes no tests yet'] } }));
+    const result = await runBeeState(dir, ['set', '--owner', 'swarming', '--phase', 'reviewing']);
+    assert(
+      result.status === 0,
+      `a feature that has capped NO behavior yet must not be walled in at its bootstrap, got ${result.status}: ${result.stderr}`,
+    );
+    assert(readStateFile(dir).phase === 'reviewing', 'the phase actually advanced');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('fs-3 (no-behavior edge): a docs-only / refactor-only / formatting-only feature is NEVER asked for a test cell, even with every cell capped', async () => {
+  const dir = makeSwarmingRepo('bee-fs3-no-behavior-');
+  try {
+    writeCellFile(dir, cappedCell('fs3-refactor-capped', { change_class: 'refactor' }));
+    writeCellFile(dir, cappedCell('fs3-formatting-capped', { change_class: 'formatting' }));
+    // Docs work carries no change_class at all and is not behavior_change, so
+    // deriveChangeClass resolves it to null — it must fall through untouched.
+    writeCellFile(dir, cappedCell('fs3-docs-capped', { behavior_change: false }));
+    const result = await runBeeState(dir, ['set', '--owner', 'swarming', '--phase', 'reviewing']);
+    assert(
+      result.status === 0,
+      `refactor/formatting/docs work authored no behavior and must never owe a test cell, got ${result.status}: ${result.stderr}`,
+    );
+    assert(readStateFile(dir).phase === 'reviewing', 'the phase actually advanced');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('fs-3: a capped behavior cell PLUS a capped-green test cell opens the door — the two branches are quiet together, which is how a real slice closes', async () => {
+  const dir = makeSwarmingRepo('bee-fs3-satisfied-');
+  try {
+    writeCellFile(dir, cappedCell('fs3-behavior-done', { change_class: 'behavior' }));
+    writeCellFile(dir, cappedCell('fs3-test-done', { change_class: 'test' }));
+    const result = await runBeeState(dir, ['set', '--owner', 'swarming', '--phase', 'reviewing']);
+    assert(result.status === 0, `a satisfied slice must close, got ${result.status}: ${result.stderr}`);
+    assert(readStateFile(dir).phase === 'reviewing', 'the phase actually advanced');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('fs-3: when a test cell exists but is UNCAPPED, branch (a) reports it — the no-test-cell message never masks the not-green one', async () => {
+  const dir = makeSwarmingRepo('bee-fs3-branch-order-');
+  try {
+    writeCellFile(dir, cappedCell('fs3-behavior-mixed', { change_class: 'behavior' }));
+    addCell(dir, makeCell('fs3-test-open', { feature: 'demo', change_class: 'test', lane: 'standard', must_haves: { truths: ['fs3-test-open: an existing-but-open test cell is branch (a) business'] } }));
+    const result = await runBeeState(dir, ['set', '--owner', 'swarming', '--phase', 'reviewing']);
+    assert(result.status !== 0, `an uncapped test cell still blocks, got ${result.status}`);
+    assert(/fs3-test-open/.test(result.stderr), `branch (a) names the uncapped test cell, got ${result.stderr}`);
+    assert(
+      /not green/.test(result.stderr) && !/NO consolidated test cell/.test(result.stderr),
+      `a feature that HAS a test cell must get the "not green" refusal, never the "no test cell at all" one, got ${result.stderr}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // si-3: the isolation guard itself — run last, over every check above.
 // liveFeatureAtSuiteStart was captured once before the first check ran; this
 // re-reads the SAME live path and asserts byte-identical `feature`. A

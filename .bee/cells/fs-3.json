@@ -1,0 +1,82 @@
+{
+  "id": "fs-3",
+  "feature": "flow-speedup",
+  "lane": "standard",
+  "behavior_change": true,
+  "change_class": "test",
+  "title": "Close the P4 half-guard, and be the flow-speedup slice test cell",
+  "action": "Two jobs, both about the same rule. (1) FIX THE HALF-GUARD. guardTestCellDebt in packages/bee/bee.mjs currently refuses to leave phase swarming only when a change_class 'test' cell exists and is uncapped or red. A feature holding behavior or api cells with NO test cell at all leaves freely - verified live on this very feature, which held two behavior cells, zero test cells, and transitioned swarming to scribing without complaint. Extend the guard so it ALSO refuses when the active feature has at least one CAPPED behavior or api cell and zero change_class 'test' cells. Keep both existing doors guarded (handleStateSet and handleStateScribingRun) and keep the throw unliftable by headless and by every gate_bypass level including total. The refusal message must name what is missing and how to satisfy it, in the same voice as the existing refusals. Mind the bootstrap: a feature whose behavior cells are all still open must not be blocked - the trigger is a CAPPED behavior or api cell. Also make sure the guard cannot deadlock a feature that legitimately has no behavior work (docs, refactor-only, formatting-only): those classes must never demand a test cell. (2) BE THE TEST CELL for slice 1 of flow-speedup, per the very rule fs-1 shipped: author consolidated coverage over this slice's NET behavior - the amended proof-tier matrix including the bugfix row staying put, the 'test' change_class, the swarming red block at both doors including this cell's own new no-test-cell branch, and the validation-cache verbs' staleness and degradation contract. Happy path, edge cases, error paths. Test-economy D5 read-first applies: read the existing suites covering these paths before adding anything, and prefer extending them over new files; D3 new_suite_reason applies if you do add a suite. Ratio ceiling is computed against this slice's aggregate source delta (fs-1 plus fs-2 plus this cell), not per cell.",
+  "must_haves": {
+    "truths": [
+      "Leaving swarming throws when the active feature has a capped behavior or api cell and no test-class cell at all.",
+      "The existing throw for an uncapped or red test cell still fires, at both doors.",
+      "Neither throw is liftable by headless or by any gate_bypass level including total.",
+      "A feature whose behavior cells are all still open is NOT blocked; the trigger is a capped behavior or api cell.",
+      "A feature with only docs, refactor or formatting work never demands a test cell.",
+      "Consolidated coverage exists for slice 1's net behavior: the amended matrix (with bugfix unchanged), the test change_class, both red-block branches, and the validation-cache staleness plus degradation paths.",
+      "The vendored .bee/bin copies carry the change and ledger parity passes.",
+      "This cell caps green, which is what finally lets flow-speedup leave swarming."
+    ],
+    "prohibitions": [
+      "Do NOT weaken or delete any existing test to get green.",
+      "Do NOT let any bypass level or headless mode lift either throw.",
+      "Do NOT demand a test cell from docs, refactor-only or formatting-only features.",
+      "Do NOT add a TTL or any wall-clock rule to the cache staleness while testing it."
+    ]
+  },
+  "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+  "read_first": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/cells.mjs",
+    "packages/bee/tests/test_cells.mjs"
+  ],
+  "files": [
+    "packages/bee/bee.mjs",
+    "packages/bee/tests/test_cells.mjs",
+    "packages/bee/tests/test_cli_state.mjs",
+    ".bee/bin/bee.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [
+    "fs-1",
+    "fs-2"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-fs3",
+    "outcome": "Closed the P4 half-guard: guardTestCellDebt now also refuses to leave swarming when the active feature has >=1 CAPPED behavior/api cell and ZERO change_class test cells, at both doors, unliftable by headless or any gate_bypass level. Trigger is a CAPPED cell so bootstrap features are not walled in, and scoped to behavior/api only so docs/refactor/formatting-only features are never asked for a test cell. Also served as the slice test cell: D5 read-first found fs-1/fs-2 already covered the matrix (bugfix row included), the test change_class, branch (a) at both doors, and every validation-cache staleness and degradation path, so nothing was duplicated; 8 new checks extend test_cli_state.mjs over the genuinely uncovered no-test-cell branch, mutation-tested against 3 deliberate bugs (branch disabled, capped-trigger widened, class scope widened) with each caught by the intended check.",
+    "files_changed": [
+      "packages/bee/bee.mjs",
+      "packages/bee/tests/test_cli_state.mjs",
+      ".bee/bin/bee.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/history/flow-speedup/reports/fs-3-evidence.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T12:17:49.129Z",
+    "behavior_change": true,
+    "verification_evidence": "# fs-3 — Closing the P4 half-guard, and being the slice's own test cell\n\nCell fs-3 · lane standard · change_class `test` · worker exec-fs3\n\nTwo jobs about one rule. The slice that invented \"a slice can never close red\" was\nitself about to close without a test cell, through the exact hole its own guard left.\n\n## Job 1 — the half-guard\n\n`guardTestCellDebt` (`packages/bee/bee.mjs`) refused only when a `change_class: 'test'`\ncell **existed** and was uncapped or red. A feature holding capped `behavior`/`api` cells\nand **no test cell at all** left `swarming` clean — verified live on flow-speedup itself\n(two capped behavior cells, zero test cells, `state set --phase scribing` succeeded with\nno complaint). The guarantee rested on planning *remembering* to emit the cell: prose,\nnot machine, which is the precise gap P4 exists to close.\n\nThe guard now has two branches:\n\n| branch | condition | verdict |\n|---|---|---|\n| (a) *original* | a `test` cell exists, uncapped or capped with `verify_passed: false` | refuse |\n| (b) **fs-3** | **zero** `test`-class cells **and** ≥1 **capped** `behavior`/`api` cell | refuse |\n\nBranch (a) is evaluated first and its message is unchanged, so a feature that *has* a\ntest cell always gets the \"not green\" refusal — (b) can never mask it. Pinned by a test.\n\n### How (b) is scoped, and the three edges\n\n**Bootstrap — `capped`, not merely present.** The trigger is `cell.status === 'capped'`.\nA feature whose behavior cells are all still open has shipped no behavior yet, so it owes\nno tests yet; triggering on presence would wall in every feature at the moment it starts.\nDebt begins exactly when behavior *caps*, which under P1 is the moment a cell is allowed\nto cap **without authoring tests**. Two tests hold this: the new bootstrap-edge check, and\nfs-1's pre-existing \"an uncapped behavior cell is not this guard's business\".\n\n**No-behavior features — `behavior`/`api` only.** Nothing else counts, deliberately.\n`refactor`/`formatting` already cap on `suite-green` (the *existing* suite), and docs work\ncarries no `change_class` and is not `behavior_change`, so `deriveChangeClass` resolves it\nto `null`. All three fall through the collector untouched, and (b) stays silent for a\nfeature that authored no behavior and would have nothing to consolidate.\n\n**Both doors, unliftable.** One function, both call sites untouched: `handleStateSet`\n(inside the mutation lock, before any field write) and `handleStateScribingRun` (before the\n`last_scribing_run` stamp and the ledger append). Branch (b) reads neither `bypassLevel`\nnor any headless flag and has no waiver flag — same shape as branch (a), for the same\nreason: this is a mechanical precondition, not a human gate. Both refusals name what is\nmissing and how to satisfy it, in the existing voice (`WHAT IS MISSING:` + `FIX:` +\nthe standing \"no gate_bypass level (including \\\"total\\\") lifts it\" line).\n\n## Job 2 — the slice test cell\n\n**D5 read-first was the whole story here.** Reading the suites before writing found that\nfs-1 and fs-2 had already landed consolidated coverage for nearly all of this slice's net\nbehavior. Duplicating it would have been ceremony, so this cell **added nothing where\ncoverage already existed** and extended the single suite with a real gap.\n\n### Audit — slice net behavior vs. existing coverage\n\n| Subject | Where | Status |\n|---|---|---|\n| Proof-tier matrix, table-driven (all classes × lanes) | `test_cells.mjs:1968` | pre-existing (fs-1) |\n| **`bugfix` row unchanged** — first-class negative control | `test_cells.mjs:2024` | pre-existing (fs-1) |\n| `existing-targeted-green` caps with no authored test | `test_cells.mjs:2063` | pre-existing (fs-1) |\n| `test` in the 8-member `CHANGE_CLASSES` enum | `test_cells.mjs:1822`, `:1825` | pre-existing (fs-1) |\n| a `test` cell caps on its own targeted green; `new_suite_reason` still governs it | `test_cells.mjs:2083` | pre-existing (fs-1) |\n| branch (a) at both doors, capped-red, capped-green, bypass `total`, non-test cell, outside swarming | `test_cli_state.mjs:3212`–`3320` | pre-existing (fs-1) |\n| staleness: source sha / deleted source / decision id / `plan.md` sha | `test_bee_cli.mjs:2274`, `:2291`, `:2302`, `:2317` | pre-existing (fs-2) |\n| degradation: missing / unreadable / malformed / unknown version / partially-valid (rows **and** anchors) / no entry / hash-less row | `test_bee_cli.mjs:2331`–`2449` | pre-existing (fs-2) |\n| command evidence + `--outputs-file` absent/unreadable/mismatched → re-prove, never fatal | `test_bee_cli.mjs:2420` | pre-existing (fs-2) |\n| **no TTL** — backdated timestamps stay fresh | `test_bee_cli.mjs:2450` | pre-existing (fs-2) |\n| **branch (b): the no-test-cell block** | `test_cli_state.mjs` (this cell) | **8 tests added** |\n\n### What was added — extended, not created\n\n**No new suite file**, so no `new_suite_reason` is owed (D3): all 8 checks extend\n`packages/bee/tests/test_cli_state.mjs`, appended to fs-1's P4 block and ahead of the\nsi-3 isolation guard that must run last. They reuse that block's own fixtures\n(`makeSwarmingRepo`, `writeCellFile`, `addCell`/`makeCell`); one local helper, `cappedCell`,\ncomposes a capped fixture for the same reason `writeCellFile` exists — `capCell` refuses to\nproduce a capped cell without a passing verify (critical rule 2, untouched).\n\n| # | check | proves |\n|---|---|---|\n| 1 | capped behavior + no test cell → `state set` refuses | (b) fires; names the cell; names `change_class: \"test\"`; `state.json` byte-identical |\n| 2 | capped **api** + no test cell → refuses | (b) covers both behavior-bearing classes |\n| 3 | `gate_bypass: \"total\"` | does **not** lift (b) |\n| 4 | `state scribing-run` | second door enforces (b); stamps nothing on refusal |\n| 5 | **bootstrap edge**: behavior + api cells all **open** | not blocked; phase advances |\n| 6 | **no-behavior edge**: capped refactor + formatting + docs | never asked for a test cell; phase advances |\n| 7 | capped behavior + capped-green test cell | door opens — how a real slice closes |\n| 8 | capped behavior + **uncapped** test cell | branch (a)'s \"not green\" message, never (b)'s |\n\n### Falsifiability — mutation-tested, not trusted because green\n\nA guard is only worth its refusals, so each was checked against a deliberate bug:\n\n| mutation | expected catch | result |\n|---|---|---|\n| `if (false && …)` — branch (b) disabled | the 4 blocking checks fail, the 4 negative controls stay green | **exactly that**: 4 failed (#1–#4), #5–#8 passed, 116 passed |\n| trigger on **presence** instead of `capped` (`status !== 'nope'`) | the bootstrap edge fails | #5 failed **plus** fs-1's own \"uncapped behavior cell is not this guard's business\" — 2 failed, double-pinned |\n| widen classes to any non-null (`changeClass !== null`) | the no-behavior edge fails | #6 failed, 1 failed — that edge is held by exactly this check |\n\nAll three reverted; the suite returned green each time. No existing test was weakened,\nloosened, or deleted to reach green — the two pre-existing failures above are fs-1's\ntests correctly catching a mutation, and both pass against the shipped implementation.\n\n## Test economy\n\n- **New suite files: 0** — `new_suite_reason` not owed (D3).\n- Ratio, computed against the slice **aggregate** as the cell requires: 155 test lines\n  added against **580** source lines across fs-1 + fs-2 + fs-3 = **0.27**. The D3 ratio\n  ceiling is in any case scoped to `tiny`/`small` lanes and is a non-blocking warning;\n  fs-3 is `standard`, so it does not fire.\n\n## Verify\n\n`node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs`\n\n```\nledger_parity  --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\nrelease_manifest --check: 396 file(s) match stored manifest\nPASS run_verify: 108 suite(s), concurrency=5, wall=73701ms   EXIT=0\n```\n\nVendored `.bee/bin/bee.mjs` regenerated through `onboard_bee.mjs --apply`; skill trees and\nthe release manifest re-rendered. Ledger parity passes, so the vendored copy carries branch (b).\n\n## Files\n\n- `packages/bee/bee.mjs` — branch (b) in `guardTestCellDebt` (+ vendored `.bee/bin/bee.mjs`)\n- `packages/bee/tests/test_cli_state.mjs` — the 8 consolidated checks\n- `docs/history/codex-harness-hardening/release-manifest.json` — regenerated\n\n## Note for the feature\n\nCapping this cell green is what lets `flow-speedup` leave `swarming` — and it now leaves\nthrough **both** branches rather than past a hole in one. The feature is the first user\nof its own rule, and the first case branch (b) would have caught.\n",
+    "verify_output": "ledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\nrelease_manifest --check: 396 file(s) match stored manifest\nPASS run_verify: 108 suite(s), concurrency=5, wall=73701ms\nEXIT=0",
+    "verify_passed": true,
+    "claim_session": "c0b91d84-165f-4d21-a85d-16b6acd71dd0",
+    "claimed_at": "2026-07-27T12:07:15.390Z",
+    "verify_command": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "verified_at": "2026-07-27T12:17:39.945Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T12:17:39.945Z",
+        "claim_session": "c0b91d84-165f-4d21-a85d-16b6acd71dd0",
+        "claimed_at": "2026-07-27T12:10:21.669Z",
+        "acquired_at": "2026-07-27T12:07:15.388Z",
+        "worker": "exec-fs3",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

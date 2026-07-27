@@ -2858,6 +2858,20 @@ async function handleStateSet(root, flags) {
 // while the active feature holds a `change_class: 'test'` cell that is not
 // capped, or is capped with a FAILING recorded verify.
 //
+// fs-3 closed the half of that rule the first pass left open. Two branches now:
+//
+//   (a) a test cell EXISTS but is uncapped or capped-red  → refuse (original);
+//   (b) NO test cell exists at all, while the feature holds >= 1 CAPPED
+//       behavior/api cell                                  → refuse (fs-3).
+//
+// Without (b) the guarantee was only as good as planning remembering to emit
+// the cell — a feature that never scheduled one sailed through the door that
+// was built to stop exactly it. (b) is deliberately narrow: the trigger is a
+// CAPPED behavior/api cell, so a feature whose behavior work is all still open
+// is not walled in at its bootstrap, and a docs/refactor/formatting-only
+// feature — which authored no behavior and has nothing to consolidate — is
+// never asked for a test cell at all.
+//
 // THERE IS NO SLICE RECORD in this codebase — no id, no state file, no
 // schedule verb; slices live only in skill text. So the machine-checkable
 // expression of "the slice cannot close red" is the ACTIVE FEATURE's
@@ -2886,14 +2900,52 @@ function guardTestCellDebt(root, record, targetPhase) {
     return; // unreadable cell store degrades to today's behavior, never a crash
   }
   const offenders = [];
+  // fs-3 — the OTHER half of the same rule. The original guard only counted
+  // test cells that EXIST, so a feature that never emitted one at all left
+  // swarming clean: the guarantee rested on planning REMEMBERING to schedule
+  // the cell, which is prose, not machine. (Observed live on flow-speedup
+  // itself: two capped behavior cells, zero test cells, swarming → scribing
+  // with no complaint.) These two collect the debt the second branch reads.
+  let testCellCount = 0;
+  const cappedBehaviorBearing = [];
   for (const cell of cells) {
-    if (!cell || deriveChangeClass(cell) !== 'test') continue;
-    const trace = cell.trace || {};
-    if (cell.status !== 'capped') {
-      offenders.push(`${cell.id} (status: ${cell.status || 'unknown'} — not capped)`);
-    } else if (trace.verify_passed === false) {
-      offenders.push(`${cell.id} (capped with a FAILING recorded verify)`);
+    if (!cell) continue;
+    const changeClass = deriveChangeClass(cell);
+    if (changeClass === 'test') {
+      testCellCount += 1;
+      const trace = cell.trace || {};
+      if (cell.status !== 'capped') {
+        offenders.push(`${cell.id} (status: ${cell.status || 'unknown'} — not capped)`);
+      } else if (trace.verify_passed === false) {
+        offenders.push(`${cell.id} (capped with a FAILING recorded verify)`);
+      }
+      continue;
     }
+    // The trigger is a CAPPED behavior/api cell, and ONLY those two classes:
+    //
+    //  · CAPPED, not merely present — bootstrap. A feature whose behavior
+    //    cells are all still open has authored no shipped behavior yet, so it
+    //    owes no tests yet; blocking there would wall in every feature at the
+    //    moment it starts. Debt begins when behavior is capped, which is
+    //    exactly when P1 let that cell cap WITHOUT authoring tests.
+    //  · behavior/api ONLY — a docs-only, refactor-only or formatting-only
+    //    feature never authored behavior, and must never be asked for a test
+    //    cell it has nothing to write. refactor/formatting already cap on
+    //    `suite-green` (the EXISTING suite), and a docs cell resolves to no
+    //    class at all through deriveChangeClass, so all three fall through
+    //    here and the branch below stays silent for them.
+    if ((changeClass === 'behavior' || changeClass === 'api') && cell.status === 'capped') {
+      cappedBehaviorBearing.push(`${cell.id} (${changeClass})`);
+    }
+  }
+  if (offenders.length === 0 && testCellCount === 0 && cappedBehaviorBearing.length > 0) {
+    throw new Error(
+      `set: refusing to leave phase "swarming" for "${targetPhase}" — feature "${feature}" has ${cappedBehaviorBearing.length} capped behavior/api cell(s) and NO consolidated test cell at all: ${cappedBehaviorBearing.join(', ')}.\n` +
+        'Slice-tail test batching (spec #80/#85 P1/P4) let each of those cap on the EXISTING suite staying green, with no new test authored — that trade is only safe because a `change_class: "test"` cell at the slice tail owes the coverage instead. This feature never scheduled one, so that coverage is owed by nobody.\n' +
+        'WHAT IS MISSING: one cell with `change_class: "test"`, in this same feature, authoring consolidated coverage (happy path, edge cases, error paths) over the slice\'s NET behavior — not per-cell internals.\n' +
+        `FIX: \`bee cells add --id <id> --feature ${feature} --change-class test ...\`, then execute it, record a passing verify, and cap it — \`bee cells verify --id <id> ... --passed true\` then \`bee cells cap --id <id> ...\`. A feature that genuinely authored no behavior (docs-only, refactor-only, formatting-only) never reaches this refusal: only a CAPPED behavior/api cell creates the debt.\n` +
+        'This is a mechanical precondition, not a human gate: no gate_bypass level (including "total") and no headless run lifts it, and there is no waiver flag.',
+    );
   }
   if (offenders.length === 0) return;
   throw new Error(

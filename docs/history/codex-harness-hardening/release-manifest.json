@@ -1444,7 +1444,7 @@
     },
     {
       "path": "packages/bee/bee.mjs",
-      "sha256": "11e581f2408595dc675c7b0d53742fd08372bccdcd4fe3877097684dbff5cc5e",
+      "sha256": "ba2cfe8440f49e9d07db5e6b8cff00ac61a7cb73479ebfb4a6fb89f735988ca9",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/bee.mjs"
@@ -1948,7 +1948,7 @@
     },
     {
       "path": "packages/bee/tests/test_cli_state.mjs",
-      "sha256": "417f784ab55a90228cc611f16f872b24e957040ee3a22813ae51f3dc469d5e9d",
+      "sha256": "5857810988bd7c5f7db6dcffbc48dd396b97706bedae7b330c8e8b03cf6ebb94",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_cli_state.mjs"
