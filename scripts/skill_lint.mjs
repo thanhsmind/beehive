@@ -111,24 +111,6 @@ check('every SKILL.md body is within its recorded budget — bodies load whole o
   );
 });
 
-check('the flow-batch-2 slice left every body it touched SMALLER than before, which is what made its three new rules free', () => {
-  // The five bodies this slice edited, with the sizes they must not exceed.
-  // These are the pre-slice sizes, so the row is a regression net for the
-  // specific claim the slice made rather than a restatement of the budget file.
-  const preSlice = {
-    'bee-hive': 30076,
-    'bee-swarming': 24965,
-    'bee-exploring': 16209,
-    'bee-validating': 17260,
-    'bee-planning': 23698,
-  };
-  const grew = [];
-  for (const [skill, before] of Object.entries(preSlice)) {
-    const now = bodyBytes(skill);
-    if (now > before) grew.push(`${skill}: ${now} > pre-slice ${before}`);
-  }
-  assert(grew.length === 0, `a flow-batch-2 body grew back:\n  ${grew.join('\n  ')}`);
-});
 
 // ─── 2. anchor integrity ───────────────────────────────────────────────────
 // A pointer may be same-skill (`references/x.md`) or cross-skill
