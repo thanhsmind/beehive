@@ -1,0 +1,34 @@
+[
+  {
+    "id": "gmr-2",
+    "feature": "guard-memory-roots",
+    "lane": "small",
+    "behavior_change": true,
+    "title": "Close the tilde and HOME-variable write-guard containment bypass (mjs only)",
+    "action": "Deny-outright any Bash write target whose first path segment is a shell home reference, BEFORE containment, so it takes the same deny path and the same deny string as the absolute spelling of the same destination. Deny rather than expand: expanding would make the wall's verdict depend on an environment variable, the tokenizer discards the quoting that decides whether bash expands at all, and deny has no resolution step that can fail open. A bare tilde keeps today's behavior (BROAD_TARGETS owns it). mjs only - the Rust runtime moved to its own dev branch and is not built from this tree.",
+    "must_haves": {
+      "truths": [
+        "All four spellings of one out-of-worktree destination receive the same deny verdict.",
+        "A bare tilde is unchanged.",
+        "In-repo paths are unaffected and every pre-existing guard test passes unedited.",
+        "The vendored .bee/bin copy carries the fix."
+      ],
+      "prohibitions": [
+        "Do NOT expand the home reference - the verdict must not depend on the environment.",
+        "Do NOT weaken any existing guard test."
+      ]
+    },
+    "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "read_first": [
+      "docs/history/guard-memory-roots/CONTEXT.md"
+    ],
+    "files": [
+      "packages/bee/hooks/bee-write-guard.mjs",
+      "packages/bee/hooks/test_write_guard.mjs",
+      "packages/bee/tests/test_bee_write_guard_hook.mjs",
+      ".bee/bin/hooks/bee-write-guard.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deps": []
+  }
+]

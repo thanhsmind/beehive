@@ -62,8 +62,56 @@ function normalizeToolPath(rawPath) {
   return String(rawPath).replace(/\\(?!\s)/g, path.sep);
 }
 
+// ─── home-prefixed target refusal (cell gmr-1, GH #71, CONTEXT
+// guard-memory-roots D8) ──────────────────────────────────────────────────
+// A raw target whose FIRST path segment is a shell home reference — `~/…`,
+// `~someuser/…`, `$HOME/…`, `${HOME}/…` — is refused outright, BEFORE any
+// containment work, and therefore takes the same deny path (and the same
+// deny string) as the absolute spelling of the same destination.
+//
+// THE HOLE THIS CLOSES: a leading `~/` is neither absolute nor does it
+// contain `..`, so canonicalRelPath used to resolve it against cwd as a
+// literal directory named `~` (or `$HOME`), producing an in-repo relative
+// path that PASSED containment and flowed into checkWrite under a
+// repo-relative identity with no relation to where the shell would actually
+// put the bytes. `echo hi > /home/u/.claude/x` denied while
+// `echo hi > ~/.claude/x` — the same file — allowed.
+//
+// DENY-OUTRIGHT, NOT EXPAND-THEN-CONTAIN — and cell gmr-2's declared
+// `guards.memory_root` builds on this choice, so it is stated here:
+//   1. Expanding would make the wall's decision depend on an ENVIRONMENT
+//      VARIABLE. CONTEXT D1 puts the security boundary at declaration
+//      precisely because "a root the guard infers is a root an attacker can
+//      arrange"; reading $HOME to decide containment is inference.
+//   2. We cannot faithfully model the shell anyway. The tokenizer discards
+//      quoting, and bash expands `~/x` and "$HOME/x" but NOT "~/x" and
+//      '$HOME/x'. The destination is genuinely ambiguous, and D4 says an
+//      ambiguity resolves closed.
+//   3. Deny needs no resolution step, so it has no error path that could
+//      fail open, and it is byte-identical across runtimes and machines
+//      without plumbing an environment through the differential rig.
+// CONSEQUENCE FOR gmr-2: a declared memory root is honored on the ABSOLUTE
+// spelling of a target only. If a tilde spelling is ever to be honored, it
+// must be expanded from the declared config value, never from the process
+// environment.
+//
+// A BARE `~` (the whole token, no separator) is deliberately NOT matched:
+// BROAD_TARGETS (lib/guards.mjs) already owns it and its behavior is
+// unchanged. A tilde-prefix bash itself would not expand — anything but a
+// login-name-shaped word before the separator, e.g. `~$Report.docx/x` — is
+// left alone too, so an in-repo file with a tilde-ish name is never
+// false-denied.
+const HOME_PREFIXED_TARGET_RE = /^(?:~[A-Za-z0-9._+-]*|\$HOME|\$\{HOME\})[/\\]/;
+
+function isHomePrefixedTarget(rawTarget) {
+  if (!rawTarget || typeof rawTarget !== "string") return false;
+  return HOME_PREFIXED_TARGET_RE.test(rawTarget);
+}
+
 function canonicalRelPath(workRoot, cwd, rawPath) {
   if (!rawPath || typeof rawPath !== "string") return null;
+  // gmr-1: refuse before containment — never resolve a home reference.
+  if (isHomePrefixedTarget(rawPath)) return null;
   const rootReal = (() => {
     try {
       return fs.realpathSync.native(workRoot);
@@ -224,6 +272,12 @@ function readGrantedWorktreeIds(mainRoot) {
 // failure (unresolvable path, Windows-foreign spelling on a POSIX host, ...).
 function resolveTargetRealpath(cwd, root, rawTarget) {
   if (!rawTarget || typeof rawTarget !== "string") return null;
+  // gmr-1: a home-prefixed spelling resolves to nothing here either, so the
+  // companion-mount escape hatch cannot rescue it and the cross-worktree
+  // message enrichment cannot claim to know where it points. Both callers
+  // treat null as "no match", which keeps the generic containment denial —
+  // byte-identical to the absolute spelling of the same destination.
+  if (isHomePrefixedTarget(rawTarget)) return null;
   const normalized = normalizeToolPath(rawTarget);
   if (path.sep !== "\\" && (/^[A-Za-z]:[\\/]/.test(rawTarget) || /^\\\\/.test(rawTarget))) {
     return null;

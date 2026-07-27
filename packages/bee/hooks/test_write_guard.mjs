@@ -833,6 +833,57 @@ async function main() {
     );
   }
 
+  // --- 34h+ (cell gmr-1, GH #71 / CONTEXT guard-memory-roots D8): the
+  // SPELLING of an out-of-worktree destination must never decide the verdict.
+  // One destination, four spellings — absolute, `~/…`, `$HOME/…`, `${HOME}/…`
+  // — must produce the SAME exit status AND the SAME reason on every
+  // write-capable tool. Before this cell the absolute spelling denied (exit 2)
+  // while all three home spellings silently ALLOWED (exit 0): a leading `~/`
+  // is neither absolute nor contains `..`, so canonicalRelPath resolved it
+  // against cwd into an in-repo relative path under a literal directory named
+  // `~` or `$HOME`, containment passed, and the write flowed on to checkWrite
+  // under a repo-relative identity that has nothing to do with where the
+  // shell would actually put the bytes.
+  const homeSpellings = [
+    ["absolute", path.join(os.homedir(), ".claude", "bee-gmr1-probe.md")],
+    ["tilde", "~/.claude/bee-gmr1-probe.md"],
+    ["env-home", "$HOME/.claude/bee-gmr1-probe.md"],
+    ["braced-env-home", "${HOME}/.claude/bee-gmr1-probe.md"],
+  ];
+  for (const toolName of writeToolClasses) {
+    const verdicts = [];
+    for (const [kind, target] of homeSpellings) {
+      const result = await runHookPayload(writePayloadFor(toolName, target), linked.workRoot);
+      check(
+        result.status === 2,
+        `row34h[${kind}][${toolName}]: an out-of-worktree home destination is denied`,
+        `status=${result.status} stderr=${result.stderr}`,
+      );
+      verdicts.push([kind, result]);
+    }
+    const baseline = verdicts[0][1];
+    for (const [kind, result] of verdicts.slice(1)) {
+      check(
+        result.status === baseline.status && result.stderr === baseline.stderr,
+        `row34h[${kind}][${toolName}]: the home spelling gets the SAME verdict and reason as the absolute spelling`,
+        `absolute: status=${baseline.status} stderr=${JSON.stringify(baseline.stderr)} | ${kind}: status=${result.status} stderr=${JSON.stringify(result.stderr)}`,
+      );
+    }
+  }
+
+  // --- 34i: a BARE `~` is NOT swept into the new deny. It stays exactly what
+  // BROAD_TARGETS (guards.mjs) already made it — this cell closes the
+  // `~<separator>…` bypass, it does not redefine the bare token.
+  const rBareTilde = await runHookPayload(
+    { tool_name: "Bash", tool_input: { command: "rm -rf ~" } },
+    linked.workRoot,
+  );
+  check(
+    !rBareTilde.stderr.includes("could not be canonically contained"),
+    "row34i: a bare `~` keeps today's behavior — never denied by the containment check",
+    `status=${rBareTilde.status} stderr=${rBareTilde.stderr}`,
+  );
+
   // ======================================================================
   // 35+. scratch-shape guard (cell th-6, CONTEXT tree-hygiene D4/D5): a
   // scratch-SHAPED write (.tmp/.log/.bak extension, a dotfile whose name

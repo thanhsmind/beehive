@@ -62,7 +62,7 @@
   },
   "behavior_change": true,
   "verify": "cargo test --manifest-path crates/Cargo.toml --workspace --no-fail-fast && cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group decisions",
-  "status": "open",
+  "status": "dropped",
   "trace": {
     "worker": null,
     "outcome": null,
@@ -74,6 +74,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": null,
+    "dropped_reason": "Rust runtime moved to its own dev branch; not built from this tree until merge-back"
   }
 }

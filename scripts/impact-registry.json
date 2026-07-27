@@ -3457,14 +3457,6 @@
         "scripts/tests/test_run_verify_impacted.mjs"
       ]
     },
-    "scripts/tests/test_rust_workspace.mjs": {
-      "direct": [
-        "scripts/tests/test_rust_workspace.mjs"
-      ],
-      "all": [
-        "scripts/tests/test_rust_workspace.mjs"
-      ]
-    },
     "scripts/tests/test_skill_pointers.mjs": {
       "direct": [
         "scripts/tests/test_skill_pointers.mjs"

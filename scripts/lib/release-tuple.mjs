@@ -49,16 +49,11 @@ export const COMPONENTS = [
     path: path.join(REPO_ROOT, ".codex-plugin", "plugin.json"),
     kind: "json-version",
   },
-  {
-    // The Rust port carries its own copy of the constant (its
-    // `compute_runtime_drift` compares onboarding's recorded version against
-    // it, exactly as the mjs reader does). It used to be hand-synced, so every
-    // bump left it a release behind and the mjs/Rust parity suite went red on
-    // the version-drift case. It is a tuple member like any other.
-    name: "crates/bee-core/src/state.rs (BEE_VERSION)",
-    path: path.join(REPO_ROOT, "crates", "bee-core", "src", "state.rs"),
-    kind: "rust-const",
-  },
+  // The Rust port used to be a tuple member here (crates/bee-core/src/state.rs
+  // carries its own BEE_VERSION const). The Rust runtime now lives on its own
+  // branch and is not built from this tree, so the component is gone with it.
+  // The `rust-const` kind below is kept — read and write both still handle it —
+  // so restoring the component on merge-back is one entry, not a rewrite.
 ];
 
 export const BEE_VERSION_RE = /export\s+const\s+BEE_VERSION\s*=\s*['"]([^'"]+)['"]/;

@@ -257,6 +257,7 @@
     "vendoring",
     "superseding",
     "gh-71",
-    "security"
+    "security",
+    "freeze"
   ]
 }

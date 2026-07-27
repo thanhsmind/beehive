@@ -57,6 +57,21 @@ canonically contained inside the physical worktree.
 | D6 | An extra-root target is allowed and **short-circuits** — it is not passed to `checkWrite`, so the intake gate, gates, reservations, and holds do not apply to it | Those semantics are repo-scoped and have no meaning for a path with no repo-relative form. It is also the point: a learning must be recordable at phase `idle`, which is exactly when the intake gate is shut |
 | D7 | Lands in **both runtimes** as a critical bugfix under the rust-port D1 freeze, with the mandated mirror artifact (a `rust-port`-tagged item naming the delta, plus any affected parity fixture updated in the same change). The mjs and Rust denial strings and allow decisions stay byte-identical, checked by the existing differential harness | The user chose this over Rust-only (which would ship nothing, since the running hook is `.mjs`) and over a local symlink workaround (which fixes one machine, not the product) |
 
+| D8 | **Fix-first, in scope:** the `~/` and `$HOME/` containment bypass closes BEFORE the allowlist. Verified against the live vendored hook: `echo hi > /home/<user>/.claude/lesson.md` denies exit 2 with the containment message, while `echo hi > ~/.claude/lesson.md` and `echo hi > $HOME/.claude/lesson.md` both exit 0 — the same destination file. `extractBashTargets` emits the token verbatim; a leading `~/` is neither absolute nor contains `..`, so `canonicalRelPath` resolves it against cwd into an in-repo relative path and containment passes. `BROAD_TARGETS` catches a bare `~` only (`guards.mjs:1533`), not `~/x` | Memory paths are conventionally written `~/.claude/…`, so this feature paves exactly the spelling that already bypasses the wall. Shipping a declared-root mechanism next to an undeclared bypass would be theatre. User's call, 2026-07-27 |
+| D9 | A declared root is honored **only while a bee marker file inside it verifies**, checked on every hit — the discipline `resolveCompanionMountedRelPath` already uses (`bee-write-guard.mjs:384-414`). And the key is **singular** (`guards.memory_root`, one path), not an open list | This is what makes D1's "a human declared it" true rather than aspirational. Verified: an agent can edit `.bee/config.local.json` at phase `idle` in one unblocked call, because `.bee/` is in `GATE_ALLOWED_PREFIXES` (`guards.mjs:48`) — so config alone is self-service. A marker cannot be forged, because every out-of-worktree write is denied until the root is honored, and the root is not honored until the marker exists. A singular key also refuses scope nobody has asked for. User's call, 2026-07-27 |
+| D10 | Refusals (D5) are evaluated on the **realpathed** root, the root must already exist as a directory, `..` is rejected on the extra-root branch regardless of absoluteness, and the extra-root evaluation traps its own exceptions — a throw becomes "no match", never reaching the hook's outer catch at `bee-write-guard.mjs:1022`, which returns exit 0 and would fail the whole hook open | A refusal list checked on the raw spelling is evadable by a symlinked root. And a fail-open on error in the one branch that grants access is the opposite of D4 |
+| D11 | Extra roots are **not honored on the `apply_patch` leg** in this version, and that is documented rather than left undefined | That leg denies any unproved target (`bee-write-guard.mjs:813-837`) and does not consult the companion mount either; keeping it consistent with the existing escape hatch is the conservative choice |
+
+## Accepted residual risks (documented, not fixed)
+
+All pre-existing and unchanged by this feature: TOCTOU within a single Bash
+command (a `ln -s` and a redirect in one command line); hardlinks inside a
+declared root; and `extractBashTargets`' known blind spots (`dd of=`, `install`,
+`rsync`, `truncate`, `ln`, `>|`, redirects inside a quoted `bash -c`,
+interpreter one-liners, command substitution, `eval`). The guard is an advisory
+wall around a cooperating agent, not a sandbox against a hostile one — that is
+its documented posture, and this feature does not change it.
+
 ## Out of scope
 
 - Configuring where Claude Code puts its memory. bee honors a declared root; it

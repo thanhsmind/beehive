@@ -630,6 +630,61 @@ check('a session rooted in a worktree denies a target inside the MAIN checkout w
   );
 });
 
+// ─── (e) home-prefixed containment bypass (cell gmr-1, GH #71, CONTEXT
+// guard-memory-roots D8) ────────────────────────────────────────────────────
+// A destination outside the worktree must be denied whichever way it is
+// SPELLED. Before this cell the absolute spelling denied while `~/…`,
+// `$HOME/…` and `${HOME}/…` — the same destination — silently allowed,
+// because neither is absolute and neither contains `..`, so canonicalRelPath
+// resolved them against cwd into an in-repo relative path.
+
+const HOME_DEST = path.join(os.homedir(), '.claude', 'bee-gmr1-probe.md');
+const HOME_SPELLINGS = [
+  '~/.claude/bee-gmr1-probe.md',
+  '$HOME/.claude/bee-gmr1-probe.md',
+  '${HOME}/.claude/bee-gmr1-probe.md',
+];
+
+check('Write: every home spelling of one out-of-worktree destination gets the SAME verdict and reason as the absolute spelling', () => {
+  const root = makeFixtureRoot();
+  const baseline = runHook(root, { tool_name: 'Write', tool_input: { file_path: HOME_DEST, content: 'x' } });
+  assert(baseline.status === 2, `absolute baseline must deny, got ${baseline.status} (stderr: ${baseline.stderr})`);
+  for (const spelling of HOME_SPELLINGS) {
+    const result = runHook(root, { tool_name: 'Write', tool_input: { file_path: spelling, content: 'x' } });
+    assert(
+      result.status === baseline.status && result.stderr === baseline.stderr,
+      `spelling ${spelling} diverged — absolute: status=${baseline.status} stderr=${JSON.stringify(baseline.stderr)}; spelled: status=${result.status} stderr=${JSON.stringify(result.stderr)}`,
+    );
+  }
+});
+
+check('Bash: a redirect to a home-prefixed target is denied exactly like its absolute twin', () => {
+  const root = makeFixtureRoot();
+  const baseline = runHook(root, { tool_name: 'Bash', tool_input: { command: `echo hi > ${HOME_DEST}` } });
+  assert(baseline.status === 2, `absolute baseline must deny, got ${baseline.status} (stderr: ${baseline.stderr})`);
+  for (const spelling of HOME_SPELLINGS) {
+    const result = runHook(root, { tool_name: 'Bash', tool_input: { command: `echo hi > ${spelling}` } });
+    assert(
+      result.status === baseline.status && result.stderr === baseline.stderr,
+      `spelling ${spelling} diverged — absolute: status=${baseline.status} stderr=${JSON.stringify(baseline.stderr)}; spelled: status=${result.status} stderr=${JSON.stringify(result.stderr)}`,
+    );
+  }
+});
+
+check('a home-prefixed target is denied even at phase idle, and never allowed by a fallback path', () => {
+  const root = makeFixtureRoot({ phase: 'idle', approvedGates: { context: false, shape: false, execution: false, review: false } });
+  for (const spelling of HOME_SPELLINGS) {
+    const result = runHook(root, { tool_name: 'Edit', tool_input: { file_path: spelling } });
+    assert(result.status === 2, `expected exit 2 for ${spelling}, got ${result.status} (stderr: ${result.stderr})`);
+  }
+});
+
+check('an in-repo path whose basename merely starts with a tilde is untouched (no false deny)', () => {
+  const root = makeFixtureRoot();
+  const result = runHook(root, { tool_name: 'Write', tool_input: { file_path: 'src/~$Report.docx', content: 'x' } });
+  assert(result.status === 0, `expected exit 0 for an in-repo tilde-named file, got ${result.status} (stderr: ${result.stderr})`);
+});
+
 // ─── summary ────────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

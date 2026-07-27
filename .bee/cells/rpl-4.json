@@ -69,7 +69,7 @@
   },
   "behavior_change": true,
   "verify": "cargo test --manifest-path crates/Cargo.toml --workspace --no-fail-fast && cargo test --manifest-path crates/Cargo.toml -p bee-core --test decisions_lock_conformance && cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group decisions",
-  "status": "claimed",
+  "status": "dropped",
   "trace": {
     "worker": "Eli",
     "outcome": null,
@@ -82,7 +82,8 @@
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "2ec01700-0ce3-40de-85b2-954a0b2a270b",
-    "claimed_at": "2026-07-27T05:59:14.539Z"
+    "claimed_at": "2026-07-27T05:59:14.539Z",
+    "dropped_reason": "Rust runtime moved to its own dev branch; not built from this tree until merge-back"
   },
   "tier": "ceiling"
 }
