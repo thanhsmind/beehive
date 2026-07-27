@@ -2717,6 +2717,10 @@ async function handleStateSet(root, flags) {
       const targetPhase = String(flags.phase);
       const transition = checkPhaseTransition(state.phase, targetPhase);
       if (!transition.ok) throw new Error(transition.reason);
+      // slice-tail-test-batching P4 — the first of the two doors out of
+      // `swarming`. Runs BEFORE any field is mutated and inside the mutation
+      // lock, so a refusal leaves the record byte-identical.
+      guardTestCellDebt(root, state, targetPhase);
       if (targetPhase === 'compounding-complete') {
         // scribing-integrity si-1 (D2): a lane close checks the LANE's own
         // feature debt (thresholded on the lane's own last_scribing_run) —
@@ -2839,6 +2843,60 @@ async function handleStateSet(root, flags) {
     result: state,
     text: `Updated state: ${changed.join(' ')}.${targetLane ? ` (lane "${targetLane}")` : ''}${waiverNote}`,
   };
+}
+
+// ─── slice-tail-test-batching P4 (spec #80/#85) — a slice can never close red ──
+//
+// Test AUTHORING moved to one consolidated cell at the slice tail (P1/P2). The
+// only thing that makes that safe is this: the work cannot walk past execution
+// while that cell is unwritten or red. So leaving phase `swarming` REFUSES
+// while the active feature holds a `change_class: 'test'` cell that is not
+// capped, or is capped with a FAILING recorded verify.
+//
+// THERE IS NO SLICE RECORD in this codebase — no id, no state file, no
+// schedule verb; slices live only in skill text. So the machine-checkable
+// expression of "the slice cannot close red" is the ACTIVE FEATURE's
+// test-class cells at the phase boundary. No slice entity is invented here.
+//
+// It lives at this bee.mjs choke point for the same reason closeGuardScribingDebt
+// does (below): the reader is in cells.mjs, and cells.mjs already imports
+// state.mjs, so checkPhaseTransition must stay pure.
+//
+// NOT A GATE. `gate_bypass` (any level, `total` included) and headless runs
+// approve HUMAN questions; this is a mechanical precondition, the same shape as
+// the AO3 advisor-consult throw on the execution gate. It therefore reads
+// neither bypassLevel nor any headless flag — deliberately, and the tests pin
+// that. There is no waiver flag either: the fix is to cap the test cell green,
+// or (when its suite exposed a regression) to open fix cells and cap it after.
+function guardTestCellDebt(root, record, targetPhase) {
+  const from = record && record.phase;
+  if (from !== 'swarming') return; // only the exit from execution is guarded
+  if (targetPhase === 'swarming') return; // a no-op re-set is not a departure
+  const feature = record && record.feature;
+  if (!feature) return; // no active feature ⇒ nothing to hold open
+  let cells = [];
+  try {
+    cells = listCells(root, { feature });
+  } catch {
+    return; // unreadable cell store degrades to today's behavior, never a crash
+  }
+  const offenders = [];
+  for (const cell of cells) {
+    if (!cell || deriveChangeClass(cell) !== 'test') continue;
+    const trace = cell.trace || {};
+    if (cell.status !== 'capped') {
+      offenders.push(`${cell.id} (status: ${cell.status || 'unknown'} — not capped)`);
+    } else if (trace.verify_passed === false) {
+      offenders.push(`${cell.id} (capped with a FAILING recorded verify)`);
+    }
+  }
+  if (offenders.length === 0) return;
+  throw new Error(
+    `set: refusing to leave phase "swarming" for "${targetPhase}" — feature "${feature}" has ${offenders.length} consolidated test cell(s) not green: ${offenders.join(', ')}.\n` +
+      'Slice-tail test batching (spec #80/#85 P4) deferred this slice\'s test AUTHORING to that cell; leaving swarming now would ship behavior whose tests were never written or never passed.\n' +
+      'FIX: execute the test cell (happy path, edge cases, error paths over the slice\'s net behavior), record a passing verify, and cap it — `bee cells verify --id <id> ... --passed true` then `bee cells cap --id <id> ...`. If its suite exposed a regression in an already-capped cell, open fix cells in this same feature and cap the test cell green after; capped cells are never un-capped.\n' +
+      'This is a mechanical precondition, not a human gate: no gate_bypass level (including "total") and no headless run lifts it, and there is no waiver flag.',
+  );
 }
 
 // chain-integrity D2/D4 — the close boundary is the ONE place scribing debt is a
@@ -3372,6 +3430,13 @@ async function handleStateScribingRun(root, flags) {
     if (stampedActive) {
       const phaseCheck = checkScribingRunPhase(state.phase);
       if (!phaseCheck.ok) throw new Error(phaseCheck.reason);
+      // slice-tail-test-batching P4 — the SECOND door out of `swarming`, and
+      // the one the chain actually walks (scribing-run is the sole producer
+      // of phase=compounding). Guarding only `state set` would leave the
+      // normal path wide open. Refuses before last_scribing_run is stamped
+      // and before the ledger append, so nothing records a run that the
+      // refusal then undid.
+      guardTestCellDebt(root, state, 'compounding');
       state.last_scribing_run = { feature, date, at, areas_synced: areas, next_action: nextAction };
       // "plus top-level phase/next_action" (bee-scribing SKILL.md:112).
       state.phase = 'compounding';

@@ -1817,7 +1817,9 @@ await check('deriveChangeClass resolves explicit change_class, the sole behavior
   assert(deriveChangeClass(null) === null, 'null cell tolerated, never throws');
   assert(deriveChangeClass(undefined) === null, 'undefined cell tolerated, never throws');
   // test-economy D1: 'refactor' extends the enum to 7 members.
-  assert(CHANGE_CLASSES.includes('behavior') && CHANGE_CLASSES.includes('refactor') && CHANGE_CLASSES.length === 7, `expected the 7-member enum (D1 adds 'refactor'), got ${JSON.stringify(CHANGE_CLASSES)}`);
+  // slice-tail-test-batching P2 (spec #80/#85): 'test' extends it to 8 — the
+  // slice's one consolidated test-authoring cell.
+  assert(CHANGE_CLASSES.includes('behavior') && CHANGE_CLASSES.includes('refactor') && CHANGE_CLASSES.includes('test') && CHANGE_CLASSES.length === 8, `expected the 8-member enum (D1 adds 'refactor', slice-tail-test-batching P2 adds 'test'), got ${JSON.stringify(CHANGE_CLASSES)}`);
 });
 
 await check('addCell validates optional change_class against the enum, naming CHANGE_CLASSES on refusal (D3)', async () => {
@@ -1973,13 +1975,33 @@ await check('requiredProofTier resolves the test-economy D1 proof-tier matrix, t
     ['refactor', 'high-risk', 'suite-green'], // plan.md pin: refactor never red-first, even high-risk
     ['formatting', 'tiny', 'suite-green'],
     ['formatting', 'high-risk', 'suite-green'],
+    // slice-tail-test-batching P3 — the bugfix row is UNCHANGED by P1. These
+    // three rows are the negative control for the whole amendment: the one
+    // way to get this change wrong is to over-read P1 as "every
+    // behavior-bearing class moved" and take repro-first away from bugfix.
     ['bugfix', 'tiny', 'targeted-green'],
     ['bugfix', 'small', 'targeted-green'],
-    ['behavior', 'standard', 'targeted-green'],
-    ['api', 'standard', 'targeted-green'],
+    ['bugfix', 'standard', 'targeted-green'],
+    // slice-tail-test-batching P1 — behavior/api outside high-risk cap on the
+    // EXISTING suite green; authoring moves to the slice's 'test' cell.
+    ['behavior', 'tiny', 'existing-targeted-green'],
+    ['behavior', 'small', 'existing-targeted-green'],
+    ['behavior', 'standard', 'existing-targeted-green'],
+    ['api', 'tiny', 'existing-targeted-green'],
+    ['api', 'small', 'existing-targeted-green'],
+    ['api', 'standard', 'existing-targeted-green'],
+    // High-risk keeps per-cell red-first for every behavior-bearing class,
+    // bugfix included — untouched by P1.
     ['bugfix', 'high-risk', 'red-first'],
     ['behavior', 'high-risk', 'red-first'],
     ['api', 'high-risk', 'red-first'],
+    // slice-tail-test-batching P2 — the consolidated test cell caps on its own
+    // targeted suite passing, in every lane. Never red-first: it has no
+    // production change to characterize a "before" for.
+    ['test', 'tiny', 'targeted-green'],
+    ['test', 'small', 'targeted-green'],
+    ['test', 'standard', 'targeted-green'],
+    ['test', 'high-risk', 'targeted-green'],
     [null, 'small', null],
     [null, 'high-risk', null],
     [undefined, 'standard', null],
@@ -1991,6 +2013,99 @@ await check('requiredProofTier resolves the test-economy D1 proof-tier matrix, t
       `requiredProofTier(${JSON.stringify(changeClass)}, ${JSON.stringify(lane)}) expected ${JSON.stringify(expected)}, got ${JSON.stringify(got)}`,
     );
   }
+});
+
+// slice-tail-test-batching P3 (spec #80/#85) — bugfix repro-first, pinned as a
+// FIRST-CLASS row, not a side effect of the table above. P1 moved behavior/api
+// off 'targeted-green'; the single most likely way to get P1 wrong is to sweep
+// bugfix along with them, which would silently retire repro-first — the proof
+// that a bug was diagnosed rather than merely patched. This row exists to fail
+// loudly the moment that happens.
+await check('requiredProofTier: bugfix is UNCHANGED by the slice-tail P1 amendment — repro-first survives (P3 negative control)', () => {
+  for (const lane of ['tiny', 'small', 'standard']) {
+    const got = requiredProofTier('bugfix', lane);
+    assert(
+      got === 'targeted-green',
+      `bugfix x ${lane} must stay 'targeted-green' (the tier repro-first rides) — got ${JSON.stringify(got)}. P1 amended behavior/api ONLY.`,
+    );
+    assert(
+      got !== 'existing-targeted-green',
+      `bugfix x ${lane} must NOT have been swept into the P1 'existing-targeted-green' row — that would drop repro-first, which spec #85 P3 restates as unchanged.`,
+    );
+  }
+  assert(
+    requiredProofTier('bugfix', 'high-risk') === 'red-first',
+    'bugfix x high-risk stays red-first, exactly as before the amendment',
+  );
+});
+
+// slice-tail-test-batching P1 — the tier is only half the contract; the other
+// half is that capCell ACCEPTS it with no newly authored test, and still
+// refuses on a missing/failing verify record. 'existing-targeted-green' is not
+// 'red-first', so none of the red-first teeth fire on it.
+await check("capCell (slice-tail P1): a behavior cell on standard caps on EXISTING-suite-green evidence with no new test and no red_failure_evidence", async () => {
+  addCell(root, makeCell('stb-behavior-standard', { change_class: 'behavior', lane: 'standard', behavior_change: true, must_haves: { truths: ['stb-behavior-standard: the existing targeted suite stays green'] } }));
+  await claimCell(root, 'stb-behavior-standard', 'worker-stb');
+  await recordVerify(root, 'stb-behavior-standard', {
+    command: 'node scripts/run_verify.mjs --only test_cells',
+    output: 'existing suite green',
+    passed: true,
+  });
+  const capped = await capCell(root, 'stb-behavior-standard', {
+    files_changed: ['src/a.js'],
+    outcome: 'done',
+    // No new test files at all, and no red_failure_evidence — the whole point.
+    diff_stats: { new_test_files: [], test_lines_added: 0, source_lines_changed: 40 },
+    verification_evidence: { existing_suite: 'the cell\'s targeted scope of the existing suite stayed green' },
+  });
+  assert(capped.status === 'capped', 'existing-targeted-green caps with no authored test');
+  assert(
+    requiredProofTier('behavior', 'standard') === 'existing-targeted-green',
+    'the row this cap exercises really is the amended one',
+  );
+});
+
+await check("capCell (slice-tail P1): the amended tier does NOT relax decision 0004 — an absent verify record still refuses the cap", async () => {
+  addCell(root, makeCell('stb-behavior-noverify', { change_class: 'behavior', lane: 'standard', behavior_change: true, must_haves: { truths: ['stb-behavior-noverify: a cap without a recorded verify is refused'] } }));
+  await claimCell(root, 'stb-behavior-noverify', 'worker-stb');
+  await assertRejects(
+    () =>
+      capCell(root, 'stb-behavior-noverify', {
+        files_changed: ['src/a.js'],
+        outcome: 'done',
+        verification_evidence: { existing_suite: 'asserted green, never run' },
+      }),
+    'verify',
+    'existing-targeted-green still caps only on RECORDED proof — the tier moved authoring, never the proof requirement',
+  );
+});
+
+await check("capCell (slice-tail P2): a 'test' cell is a normal cell — it caps on its own targeted green, and D3's new_suite_reason still governs its new files", async () => {
+  addCell(root, makeCell('stb-test-cell', { change_class: 'test', lane: 'standard', must_haves: { truths: ['stb-test-cell: the slice consolidated suite passes'] } }));
+  await claimCell(root, 'stb-test-cell', 'worker-stb');
+  await recordVerify(root, 'stb-test-cell', { command: 'node scripts/run_verify.mjs --only test_new', output: 'green', passed: true });
+  // D5/D3 unchanged: a brand-new suite still owes new_suite_reason at the test
+  // cell — the economy rules RELOCATED here, they did not soften.
+  await assertRejects(
+    () =>
+      capCell(root, 'stb-test-cell', {
+        files_changed: ['tests/test_new.mjs'],
+        outcome: 'done',
+        diff_stats: { new_test_files: ['tests/test_new.mjs'], test_lines_added: 60, source_lines_changed: 0 },
+      }),
+    'new_suite_reason',
+    'the slice test cell inherits D3 unchanged — a new permanent CI suite still needs its stated reason',
+  );
+  const capped = await capCell(root, 'stb-test-cell', {
+    files_changed: ['tests/test_new.mjs'],
+    outcome: 'done',
+    diff_stats: { new_test_files: ['tests/test_new.mjs'], test_lines_added: 60, source_lines_changed: 0 },
+    verification_evidence: {
+      new_suite_reason: 'the slice introduced a surface with no existing suite covering it, so its consolidated cases need a home',
+      ratio_waiver: 'a consolidated test cell has near-zero source delta by construction; the ratio is measured against the slice aggregate',
+    },
+  });
+  assert(capped.status === 'capped', "a 'test' cell caps on targeted-green once D3 is satisfied");
 });
 
 await check('capCell (D2 loosen): bugfix x small and null-unclassified x standard bc=true cap on targeted-green — ordinary evidence, no red_failure_evidence required — table-driven (D2/D8)', async () => {

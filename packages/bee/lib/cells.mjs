@@ -86,7 +86,13 @@ export const LANES = ['tiny', 'small', 'standard', 'high-risk', 'spike'];
 // behavior to prove, distinct from 'formatting' (both share the same proof
 // tier below, but are named separately since CONTEXT.md and downstream
 // classification prose treat them as distinct authoring choices).
-export const CHANGE_CLASSES = ['formatting', 'bugfix', 'behavior', 'api', 'security', 'migration', 'refactor'];
+// slice-tail-test-batching P2 (spec #80/#85): 'test' joins the enum as the
+// slice's ONE consolidated test-authoring cell — the class the implementation
+// cells' deferred authoring obligation lands in. It is a normal cell in every
+// other respect (no new worker type, no slice record: slices exist only in
+// skill text, so the machine-checkable scope is the active feature's
+// test-class cells — see the P4 guard in bee.mjs).
+export const CHANGE_CLASSES = ['formatting', 'bugfix', 'behavior', 'api', 'security', 'migration', 'refactor', 'test'];
 
 export function deriveChangeClass(cell) {
   if (!cell || typeof cell !== 'object') return null;
@@ -105,9 +111,28 @@ export function deriveChangeClass(cell) {
 //                       self-correcting-loop 80-char/anti-duplicate floor
 //                       both stay enforced ONLY where this tier applies —
 //                       CONTEXT test-economy D2's named supersession.
-//   'targeted-green'  — bugfix/behavior/api outside high-risk: a single
-//                       targeted test passing (ordinary verification_evidence)
-//                       is proof enough, no red_failure_evidence required.
+//   'targeted-green'  — bugfix outside high-risk, and the slice 'test' cell
+//                       in every lane: a single targeted test passing
+//                       (ordinary verification_evidence) is proof enough, no
+//                       red_failure_evidence required. bugfix keeps its
+//                       repro-first discipline (the failing repro test IS the
+//                       diagnosis evidence) — slice-tail-test-batching P3
+//                       restates that row as UNCHANGED, and the 'test' cell
+//                       sits here because authoring is its whole mandate.
+//   'existing-targeted-green'
+//                     — behavior/api outside high-risk (slice-tail-test-
+//                       batching P1, spec #80/#85). Same targeted scope the
+//                       worker ran before; what changes is the suite's
+//                       CONTENT: the EXISTING suite (plus prior slices'
+//                       tests) staying green, with NO new-test authoring
+//                       obligation at this cell — that obligation moves to
+//                       the slice's one trailing 'test' cell. The cell's
+//                       `verify` is still a runnable command recorded with
+//                       output (decision 0004 is untouched), so every cap
+//                       still proves the cell did not break what exists.
+//                       Downstream it behaves exactly like 'targeted-green':
+//                       every teeth-bearing check below keys on
+//                       'red-first', which this tier is not.
 //   'suite-green'     — refactor/formatting, in EVERY lane including
 //                       high-risk (test-economy plan.md "Pin refactor/
 //                       formatting × high-risk": a refactor has no new
@@ -124,8 +149,24 @@ export function deriveChangeClass(cell) {
 export function requiredProofTier(change_class, lane) {
   if (change_class === 'security' || change_class === 'migration') return 'red-first';
   if (change_class === 'refactor' || change_class === 'formatting') return 'suite-green';
-  if (change_class === 'bugfix' || change_class === 'behavior' || change_class === 'api') {
+  // slice-tail-test-batching P2: the slice's consolidated test cell — its
+  // whole mandate IS authoring, so it caps on its own new targeted suite
+  // passing, in every lane. Never red-first: a test cell has no production
+  // change to characterize a "before" for.
+  if (change_class === 'test') return 'targeted-green';
+  // slice-tail-test-batching P3 — bugfix is SPLIT OUT and left EXACTLY as it
+  // was: 'targeted-green' outside high-risk, 'red-first' on high-risk. The
+  // repro-first discipline riding this row is diagnosis evidence, not
+  // coverage ceremony, and P1 deliberately does not touch it. Reading the P1
+  // amendment as "behavior-bearing classes all moved" would silently drop it
+  // — hence two statements instead of one shared branch.
+  if (change_class === 'bugfix') {
     return lane === 'high-risk' ? 'red-first' : 'targeted-green';
+  }
+  // slice-tail-test-batching P1: behavior/api outside high-risk now cap on
+  // the EXISTING suite green; high-risk keeps red-first, unchanged.
+  if (change_class === 'behavior' || change_class === 'api') {
+    return lane === 'high-risk' ? 'red-first' : 'existing-targeted-green';
   }
   return null;
 }
