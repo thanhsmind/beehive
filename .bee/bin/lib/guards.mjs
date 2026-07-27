@@ -457,7 +457,7 @@ export function checkGitBashCommand(root, state, command, { cwd = root, sessionI
   const phase = recordResolution.record?.phase || 'idle';
   if (!TERMINAL_PHASES.has(phase)) return null;
 
-  const config = readConfig(root);
+  const config = readConfig(controlRoot);
   const idleGateOn = !(config.guards && config.guards.idle_gate === false);
   if (!idleGateOn) return null;
 
@@ -1009,7 +1009,7 @@ export function checkWrite(root, state, relPath, agentName = null, { sessionId =
     sessionId.trim() &&
     recordResolution.source === 'default' &&
     phase !== 'swarming' &&
-    resolveWritePolicyMode(readConfig(root)) === 'isolated'
+    resolveWritePolicyMode(readConfig(controlRoot)) === 'isolated'
   ) {
     const ownership = checkWorkspaceOwnership(controlRoot, ctx, sessionId.trim());
     if (ownership.blocked) {
@@ -1038,7 +1038,7 @@ export function checkWrite(root, state, relPath, agentName = null, { sessionId =
   }
 
   if (TERMINAL_PHASES.has(phase)) {
-    const config = readConfig(root);
+    const config = readConfig(controlRoot);
     const idleGateOn = !(config.guards && config.guards.idle_gate === false);
     if (idleGateOn && !underAllowedPrefix(normalized)) {
       return {

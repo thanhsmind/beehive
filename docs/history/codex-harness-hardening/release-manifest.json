@@ -75,7 +75,7 @@
     },
     {
       "path": ".bee/bin/lib/guards.mjs",
-      "sha256": "0a31cab392fb5b10d943fdf62ae4aec79deace7ab3c2a9fd7fcbec5a13da0520",
+      "sha256": "f7c99fae32c88e189e4dfb1e220895976d4a22d2a020ac2b383df3ee1cdc3fe1",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -1703,7 +1703,7 @@
     },
     {
       "path": "packages/bee/lib/guards.mjs",
-      "sha256": "0a31cab392fb5b10d943fdf62ae4aec79deace7ab3c2a9fd7fcbec5a13da0520",
+      "sha256": "f7c99fae32c88e189e4dfb1e220895976d4a22d2a020ac2b383df3ee1cdc3fe1",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/guards.mjs"
@@ -2032,7 +2032,7 @@
     },
     {
       "path": "packages/bee/tests/test_guards.mjs",
-      "sha256": "d5f9d5ecda458fa9034facb37579f211cfbe6302bdc4c759e0c3c4380a9fce73",
+      "sha256": "8720a823af7e957646307c257192d8273b1fcabce80594cdd4f3f9a4c866b667",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_guards.mjs"

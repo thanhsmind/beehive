@@ -134,6 +134,37 @@ await check('checkWrite blocks source writes while idle (intake gate); config ca
   writeJsonAtomic(configPath, before || {});
 });
 
+await check('checkWrite terminal-phase idle gate reads the resolved controlRoot\'s config, not root\'s own (GH #83)', async () => {
+  // Companion-mounted path: root and controlRoot name DIFFERENT
+  // .bee/config.json files. sessionId MUST stay null so phase comes from the
+  // passed state and the call actually reaches the terminal-phase branch
+  // (a sessionId routes through resolvePipeline and can short-circuit
+  // earlier).
+  const rootA = makeStateRepo('bee-idle-gate-root-');
+  const rootB = makeStateRepo('bee-idle-gate-control-');
+  const state = { ...defaultState(), phase: 'compounding-complete' };
+
+  // Direction 1: controlRoot (rootB) disables idle_gate; root's (rootA) own
+  // config leaves it default-enabled. The decision must follow controlRoot.
+  writeJsonAtomic(path.join(rootB, '.bee', 'config.json'), { guards: { idle_gate: false } });
+  const allowed = checkWrite(rootA, state, 'src/x.js', null, { controlRoot: rootB });
+  assert(
+    allowed.allow === true,
+    "idle gate must follow controlRoot's config (disabled) even though root's own config leaves it enabled"
+  );
+
+  // Direction 2: controlRoot (rootB) is back to default-enabled; root's
+  // (rootA) own config disables it. The decision must still follow
+  // controlRoot — deny.
+  fs.rmSync(path.join(rootB, '.bee', 'config.json'), { force: true });
+  writeJsonAtomic(path.join(rootA, '.bee', 'config.json'), { guards: { idle_gate: false } });
+  const denied = checkWrite(rootA, state, 'src/x.js', null, { controlRoot: rootB });
+  assert(
+    denied.allow === false && denied.kind === 'intake',
+    "idle gate must follow controlRoot's config (enabled) even though root's own config disables it"
+  );
+});
+
 await check('checkAskUserQuestion turns opaque "Invalid tool parameters" into a clear, specific deny; fail-open on odd shapes', async () => {
   // Valid question is allowed.
   const ok = { questions: [{ question: 'Which approach?', header: 'Approach', multiSelect: false, options: [{ label: 'A', description: 'do A' }, { label: 'B', description: 'do B' }] }] };
