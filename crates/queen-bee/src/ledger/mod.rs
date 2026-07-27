@@ -6,6 +6,7 @@
 //! `main.rs` and `dispatch.rs` do not change per group, so a red in a group
 //! is a red in that group and never in the dispatcher.
 
+pub mod capture;
 pub mod intent;
 
 use serde_json::Value;

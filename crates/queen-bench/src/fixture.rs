@@ -76,6 +76,20 @@ pub const TRANSCRIPT_TAIL_FLOOR_BYTES: u64 = 300_000;
 /// rather than a quietly smaller store.
 pub const INTENT_KEYS_FLOOR_COUNT: usize = 4;
 
+/// Pinned minimum added by rpl-3 (validation-slice4 matrix row 7), for the
+/// same reason and with the same REFUSE-below discipline as
+/// [`INTENT_KEYS_FLOOR_COUNT`]: the generator wrote NO capture queue at all —
+/// zero references to `capture-queue` anywhere in this file — so every
+/// `--cmd-check --group capture` scenario would have diffed two ABSENT queues
+/// and reported a meaningless clean.
+///
+/// The floor counts PENDING stubs (stubs minus flushed), not written rows,
+/// because "pending" is the number every capture verb actually surfaces. It is
+/// checked by re-folding what landed on disk, so a seeding regression — or a
+/// flush record that silently swallowed the wrong stub — is a refusal rather
+/// than a quietly smaller store.
+pub const CAPTURE_PENDING_FLOOR_COUNT: usize = 3;
+
 #[derive(Debug, Clone)]
 pub struct FixtureRequest {
     pub out_dir: PathBuf,
@@ -123,6 +137,10 @@ pub struct FixtureReport {
     /// seeded keys", and a bare count would not prove the unicode or the
     /// 120-character key is there.
     pub intent_keys: Vec<String>,
+    /// PENDING capture stubs actually folded back out of the written
+    /// `.bee/capture-queue.jsonl` (rpl-3) — see
+    /// [`CAPTURE_PENDING_FLOOR_COUNT`].
+    pub capture_pending_count: usize,
 }
 
 impl FixtureReport {
@@ -134,7 +152,7 @@ impl FixtureReport {
             .collect::<Vec<_>>()
             .join(",");
         format!(
-            "{{\"root\":\"{}\",\"decisions_bytes\":{},\"reservations_bytes\":{},\"backlog_bytes\":{},\"cells_count\":{},\"git_commits_count\":{},\"review_candidates_count\":{},\"transcript_tail_bytes\":{},\"transcript_file\":\"{}\",\"crash_session_id\":\"{}\",\"intent_keys_count\":{},\"intent_keys\":[{}]}}",
+            "{{\"root\":\"{}\",\"decisions_bytes\":{},\"reservations_bytes\":{},\"backlog_bytes\":{},\"cells_count\":{},\"git_commits_count\":{},\"review_candidates_count\":{},\"transcript_tail_bytes\":{},\"transcript_file\":\"{}\",\"crash_session_id\":\"{}\",\"intent_keys_count\":{},\"intent_keys\":[{}],\"capture_pending_count\":{}}}",
             json_escape(&self.root.display().to_string()),
             self.decisions_bytes,
             self.reservations_bytes,
@@ -147,6 +165,7 @@ impl FixtureReport {
             json_escape(&self.crash_session_id),
             self.intent_keys.len(),
             intent_keys,
+            self.capture_pending_count,
         )
     }
 }
@@ -267,6 +286,12 @@ pub fn generate(req: &FixtureRequest) -> Result<FixtureReport, String> {
     // intent parity scenario would have compared two absent directories.
     let intent_keys = write_intent_store(&bee_dir)?;
 
+    // rpl-3: the capture queue. Same story as the intent store one line up —
+    // `.bee/capture-queue.jsonl` did not exist in a generated fixture at all,
+    // so `capture list`/`count`/`flush` scenarios would have compared two
+    // absent files.
+    let capture_pending_count = write_capture_queue(&bee_dir)?;
+
     Ok(FixtureReport {
         root: req.out_dir.clone(),
         decisions_bytes,
@@ -279,7 +304,97 @@ pub fn generate(req: &FixtureRequest) -> Result<FixtureReport, String> {
         transcript_file,
         crash_session_id,
         intent_keys,
+        capture_pending_count,
     })
+}
+
+// ─── the capture queue (rpl-3) ─────────────────────────────────────────────
+
+/// The FIXED seeded rows, in the EXACT bytes `appendJsonl` produces:
+/// compact `JSON.stringify(record)` plus `\n`, with the key order of
+/// `addCaptureStub`'s / `flushCaptureStub`'s object literals
+/// (`capture.mjs:66-77, 118-123`). Written as literal bytes rather than
+/// through a serializer so the fixture cannot drift from the frozen writer's
+/// shape without this literal being edited.
+///
+/// Every row exists for a SHAPE the capture verbs render differently:
+///
+/// * stub `1111…` — the fully-populated stub: non-ASCII, an embedded quote,
+///   an astral scalar, and all three of `dids`/`area`/`files` non-empty, so
+///   every optional line of `formatCaptureStub` is exercised.
+/// * stub `2222…` — `source: "mined"`, the ONE value that also earns the
+///   ` [mined]` marker (`bee.mjs:4022`, a strict equality).
+/// * stub `3333…` plus a `flush` row naming it — the fold. Without a flush
+///   record, `pendingCaptureStubs` would be a plain identity over the file
+///   and `list`/`count` would prove nothing about stubs-minus-flushed.
+/// * stub `4444…` — written LAST but stamped with the EARLIEST `at`, so the
+///   `localeCompare` sort is load-bearing: a runtime that returned file order
+///   would put it third. It also carries a NON-`mined` `source`, the shape
+///   that prints the `source:` line WITHOUT the marker.
+///
+/// `at` is a FIXED timestamp on every row, never `now`: each clone of the
+/// golden fixture must carry identical bytes, and each `id` is UUID-v4 shaped
+/// so the parity normalizer's `id`/`at` masks apply to it exactly as they do
+/// to a row a real run appends.
+const CAPTURE_QUEUE_ROWS: &[&str] = &[
+    "{\"kind\":\"stub\",\"id\":\"11111111-1111-4111-8111-111111111111\",\"at\":\"2026-07-26T00:00:01.000Z\",\"outcome\":\"Chốt: fixture stub một — \\\"quoted\\\" · 🐝\",\"dids\":[\"0017\",\"0023\"],\"area\":\"docs/specs/capture.md\",\"files\":[\"packages/bee/lib/capture.mjs\",\"crates/bee-core/src/capture.rs\"],\"lane\":\"tiny\"}",
+    "{\"kind\":\"stub\",\"id\":\"22222222-2222-4222-8222-222222222222\",\"at\":\"2026-07-26T00:00:02.000Z\",\"outcome\":\"fixture stub hai — mined provenance\",\"dids\":[],\"area\":null,\"files\":[],\"lane\":\"small\",\"source\":\"mined\"}",
+    "{\"kind\":\"stub\",\"id\":\"33333333-3333-4333-8333-333333333333\",\"at\":\"2026-07-26T00:00:03.000Z\",\"outcome\":\"fixture stub ba — flushed, never pending\",\"dids\":[],\"area\":null,\"files\":[],\"lane\":\"standard\"}",
+    "{\"kind\":\"flush\",\"id\":\"33333333-3333-4333-8333-333333333333\",\"at\":\"2026-07-26T00:00:04.000Z\",\"into\":\"docs/specs/capture.md\"}",
+    "{\"kind\":\"stub\",\"id\":\"44444444-4444-4444-8444-444444444444\",\"at\":\"2026-07-26T00:00:00.500Z\",\"outcome\":\"fixture stub bốn — sorts FIRST despite being written LAST\",\"dids\":[\"0009\"],\"area\":null,\"files\":[],\"lane\":null,\"source\":\"transcript-recovery\"}",
+];
+
+/// Seed `.bee/capture-queue.jsonl` and REFUSE if fewer than
+/// [`CAPTURE_PENDING_FLOOR_COUNT`] stubs are PENDING once the file is read
+/// back and re-folded. Re-folding rather than counting the input list is the
+/// point: a floor checked against the same constant that produced the writes
+/// would prove nothing about what a runtime will actually find on disk.
+fn write_capture_queue(bee_dir: &Path) -> Result<usize, String> {
+    let path = bee_dir.join("capture-queue.jsonl");
+    let body: String = CAPTURE_QUEUE_ROWS.iter().map(|row| format!("{row}\n")).collect();
+    fs::write(&path, &body).map_err(|e| format!("write {}: {e}", path.display()))?;
+
+    let pending = fold_pending_stub_ids(&path)?;
+    if pending < CAPTURE_PENDING_FLOOR_COUNT {
+        return Err(format!(
+            "capture queue folded to {pending} pending stub(s) < pinned floor {CAPTURE_PENDING_FLOOR_COUNT} (rpl-3, validation-slice4 matrix row 7) — refusing to generate a fixture whose capture scenarios would diff two near-empty queues and report a meaningless clean"
+        ));
+    }
+    Ok(pending)
+}
+
+/// `pendingCaptureStubs`'s fold (`capture.mjs:85-97`), reduced to a count and
+/// done with plain string scanning — `queen-bench` carries no JSON dependency,
+/// and the rows above are fixed literals this file owns, so a scan over them
+/// is exact rather than a parser approximation.
+fn fold_pending_stub_ids(path: &Path) -> Result<usize, String> {
+    let text = fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let mut stub_ids: Vec<&str> = Vec::new();
+    let mut flushed_ids: Vec<&str> = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Some(id) = json_string_field(line, "id") else { continue };
+        if line.contains("\"kind\":\"flush\"") {
+            flushed_ids.push(id);
+        } else if line.contains("\"kind\":\"stub\"") {
+            stub_ids.push(id);
+        }
+    }
+    Ok(stub_ids.iter().filter(|id| !flushed_ids.contains(*id)).count())
+}
+
+/// The value of `"<key>":"…"` in one compact JSON line. Good enough for the
+/// literals above (no escaped quotes inside any `id`), and it is only ever
+/// pointed at them.
+fn json_string_field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    let needle = format!("\"{key}\":\"");
+    let start = line.find(&needle)? + needle.len();
+    let rest = &line[start..];
+    let end = rest.find('"')?;
+    Some(&rest[..end])
 }
 
 // ─── the intent store (rpl-2) ──────────────────────────────────────────────

@@ -33,7 +33,7 @@ pub fn dispatcher() -> Dispatcher {
 /// Every ported group, in registration order. ONE LINE PER GROUP.
 pub fn register_all(d: &mut Dispatcher) {
     d.register(crate::ledger::intent::group()).expect("intent group");
-    // rpl-3: capture
+    d.register(crate::ledger::capture::group()).expect("capture group");
     // rpl-4/rpl-5: decisions
     // rpl-6/rpl-9: backlog
     // rpl-7: reviews

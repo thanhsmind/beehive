@@ -917,10 +917,19 @@ mod tests {
         );
     }
 
+    /// rpl-1 shipped the seam with NO group registered, and pinned that fact
+    /// so every later cell has to update this expectation deliberately rather
+    /// than drift into it. It is now cashed one group at a time: `intent`
+    /// (rpl-2) and `capture` (rpl-3).
+    ///
+    /// Kept as an EXACT set, not a `contains`: the point of the pin is that a
+    /// group cannot appear in the shipped binary without someone saying so
+    /// here, and a `contains` check would let an unintended registration
+    /// through.
     #[test]
-    fn the_shipped_table_registers_no_ledger_group_yet() {
-        // rpl-1 is the seam ONLY. This pins that fact so a later cell that
-        // registers a group also has to update this expectation deliberately.
-        assert!(crate::groups::dispatcher().group_names().is_empty());
+    fn the_shipped_table_registers_exactly_the_ported_ledger_groups() {
+        let mut names = crate::groups::dispatcher().group_names();
+        names.sort();
+        assert_eq!(names, vec!["capture", "intent"]);
     }
 }
