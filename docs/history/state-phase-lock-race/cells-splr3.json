@@ -1,0 +1,45 @@
+[
+  {
+    "id": "splr-3",
+    "feature": "state-phase-lock-race",
+    "lane": "high-risk",
+    "behavior_change": true,
+    "title": "Scope the projection lock to the record actually written — lane mutations off the 'state' lock",
+    "action": "FIX-FIRST for the red splr-1 left behind. splr-1 wrapped ALL of withMutationLock's workflow branch in withStoreLock(root,'state',...). That is over-broad: the LANE path (writeLaneRecordThroughProjection -> rebuildLaneProjection -> writeLane) writes ONLY lanePath(root, feature) (state.mjs:1704) and never .bee/state.json, so forcing it through 'state' made a correct, live invariant go red — packages/bee/tests/test_cli_state.mjs 'multisession-native-10 (invariant 1/2, C4): a lane mutation with a live workflow record never needs the shared state lock' went from near-instant to 4995ms (the lock timeout), cascading 4 more rows red in packages/bee/tests/test_msn_invariants.mjs. (1) Narrow the lock to the record actually written: default-record mutations keep 'state'; lane-routed mutations take a lane-scoped store lock instead (name it consistently, e.g. lane:<feature>), never 'state'. Decide the seam yourself — resolveMutationLockFeature already peeks at whether the target is a lane, so the lock name can be chosen at the same place the workflow lock is chosen (bee.mjs withMutationLock). (2) Apply the SAME record-scoping to the other two seams splr-1 changed: handleStateStartFeature (bee.mjs, its lane branch rebuilds a lane projection, its default branch rebuilds state.json) and handleStatePlanRevBump (lane-only by refusal, so it must take lane:<feature>, not 'state' — but KEEP its repaired workflow:<id>-before-projection-lock order, which is the whole point of the advisor's required change). handleStateRebuildProjections rebuilds state.json AND every lane, so it needs 'state' plus each lane's lock, or a documented reason it is safe with 'state' alone. (3) The global lock order must remain single and acyclic: workflow:<id> -> {state | lane:<feature>}. Never the reverse, and never lane:<feature> -> state or state -> lane:<feature> unless you take them in one fixed documented order and say so. (4) Extend scripts/tests/test_state_projection_race.mjs so it proves BOTH halves: a default-record writer still serializes on 'state', AND a lane mutation is NOT blocked by an externally-held 'state' lock (the invariant splr-1 broke) — the second assertion must fail against splr-1's code. (5) Re-vendor and regen in order: node scripts/render_plugin_skill_trees.mjs, node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, node scripts/impact_registry.mjs --write, node scripts/release_manifest.mjs --write. (6) The verify for this cell is the FULL suite, not an impacted run — splr-1 capped false-green precisely because --impacted-from-git selected 0 suites after its commit.",
+    "must_haves": {
+      "truths": [
+        "packages/bee/tests/test_cli_state.mjs passes in full, including 'a lane mutation with a live workflow record never needs the shared state lock', with no edit to that test.",
+        "packages/bee/tests/test_msn_invariants.mjs passes in full.",
+        "Default-record mutations still serialize on 'state' — the GH #70 proof in scripts/tests/test_state_projection_race.mjs still passes and still fails against pre-splr-1 code.",
+        "The race suite gains an assertion that a lane mutation is not blocked by an externally-held 'state' lock, and that assertion fails against splr-1's committed code (report that red output).",
+        "handleStatePlanRevBump still acquires workflow:<id> BEFORE its projection lock — the advisor-required order repair from splr-1 is preserved.",
+        "The global lock order is single and acyclic and is stated in a comment at the seam.",
+        "node scripts/run_verify.mjs (FULL, not impacted) exits 0, and its summary line is reported verbatim.",
+        "md5sum of .bee/bin/bee.mjs equals packages/bee/bee.mjs after re-vendoring."
+      ],
+      "prohibitions": [
+        "Do NOT edit, weaken, skip, or delete packages/bee/tests/test_cli_state.mjs or test_msn_invariants.mjs — they encode correct behavior; the code is what was wrong.",
+        "Do NOT revert splr-1 wholesale — its state.json serialization and its plan-rev-bump order repair are both correct and must survive.",
+        "Do NOT acquire a lock inside rebuildStateProjection or rebuildLaneProjection.",
+        "Do NOT cap on an impacted run; this cell's verify is the full suite."
+      ]
+    },
+    "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "read_first": [
+      "docs/history/state-phase-lock-race/CONTEXT.md",
+      "docs/history/state-phase-lock-race/reports/advisor-consult.md",
+      "packages/bee/tests/test_cli_state.mjs",
+      "scripts/tests/test_state_projection_race.mjs"
+    ],
+    "files": [
+      "packages/bee/bee.mjs",
+      "scripts/tests/test_state_projection_race.mjs",
+      ".bee/bin/bee.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "scripts/impact-registry.json"
+    ],
+    "deps": [
+      "splr-1"
+    ]
+  }
+]

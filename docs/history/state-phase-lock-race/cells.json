@@ -1,0 +1,76 @@
+[
+  {
+    "id": "splr-1",
+    "feature": "state-phase-lock-race",
+    "lane": "high-risk",
+    "behavior_change": true,
+    "title": "Every writer of .bee/state.json holds the 'state' lock, on one global lock order",
+    "action": "RED-FIRST, then fix, then vendor. (1) PROOF FIRST: create scripts/tests/test_state_projection_race.mjs modeled on scripts/tests/test_store_lock.mjs's shape — real OS child processes re-execing the same file with a --role flag (never in-process async: the writes are synchronous, an async 'race' never exercises them), a temp-repo fixture the test creates itself (nothing read from the live checkout, so no assertion can be satisfied by the ambient environment), a shared active.json mutual-exclusion detector writing violations.jsonl, and an exact final-count assertion over a counter driven through the same read-modify-write path. Role A = the state-sync shape: withStoreLock(root,'state', ... rebuildStateProjection). Role B = the CLI shape: withWorkflowLock(ctrlRoot, wf.id, ... rebuildStateProjection). Include a NEGATIVE CONTROL scenario running role B with the workflow lock ONLY (the pre-fix arrangement) which MUST produce violations — without it the suite can pass vacuously. Run this suite against unmodified bee.mjs and capture the RED output into the done-report before touching any source. (2) FIX packages/bee/bee.mjs at four seams: bee.mjs:2552 withMutationLock's `if (wf)` branch becomes withWorkflowLock(ctrlRoot, wf.id, () => withStoreLock(root, 'state', fn)) — the C1 'state' fallback branch at :2555 is deliberately NOT wrapped (lock.mjs is non-reentrant; double-wrapping self-deadlocks into LockBusyError); bee.mjs:3284 handleStateStartFeature's rebuildLaneProjection/rebuildStateProjection call wrapped in withStoreLock(root,'state', ...); bee.mjs:3304 handleStateRebuildProjections' rebuildAllProjections(root) wrapped in withStoreLock(root,'state', ...); and bee.mjs:2918-2950 handleStatePlanRevBump RESTRUCTURED from its current 'state'-outer/updateWorkflow-inner inversion to the canonical order — resolve the lane and workflow FIRST (outside both locks), then withWorkflowLock(ctrlRoot, wf.id, () => withStoreLock(root, 'state', body)) with updateWorkflowAssumingLock (NOT the self-locking updateWorkflow) inside. (3) Do NOT change rebuildStateProjection or rebuildLaneProjection in state-projection.mjs — they stay caller-serialized and acquire nothing, because bee-state-sync.mjs already holds 'state' when calling them. (4) VENDOR + REGEN, in this exact order, inside this cell: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write. This repo executes the VENDORED copy, so md5sum of .bee/bin/bee.mjs must equal packages/bee/bee.mjs when done — report both sums in the done-report. An un-vendored fix ships nothing and the suite would still be exercising only the canonical source.",
+    "must_haves": {
+      "truths": [
+        "scripts/tests/test_state_projection_race.mjs spawns real OS child processes and was proven RED against unmodified bee.mjs before any source edit, with that output captured in the done-report.",
+        "The suite carries a negative control (role B under the workflow lock only) that produces violations, proving the detector actually bites.",
+        "The suite's fixture is a temp repo the test creates; no assertion can be satisfied by the live checkout's ambient state.",
+        "The suite asserts the invariant 'every production writeState runs under the state lock', not a fixed enumeration of call sites.",
+        "withMutationLock's workflow branch nests 'state' inside workflow:<id>; the C1 'state' fallback branch is untouched.",
+        "bee.mjs:3284 and bee.mjs:3304 both write their projections under the 'state' lock.",
+        "handleStatePlanRevBump acquires workflow:<id> BEFORE 'state' and uses updateWorkflowAssumingLock inside, so workflow:<id> -> 'state' is the single global lock order in the repo.",
+        "state-projection.mjs is unchanged.",
+        "md5sum of .bee/bin/bee.mjs equals packages/bee/bee.mjs after the change, both sums reported."
+      ],
+      "prohibitions": [
+        "Do NOT acquire a lock inside rebuildStateProjection or rebuildLaneProjection — bee-state-sync.mjs already holds 'state' at that call and lock.mjs is non-reentrant, so it would throw LockBusyError on every hook tick.",
+        "Do NOT wrap withMutationLock's C1 'state' fallback branch — that is a same-name re-acquire from the same process.",
+        "Do NOT leave handleStatePlanRevBump on the old order; shipping the new edge without repairing that one is a deterministic ~5s dual LockBusyError, not a race.",
+        "Do NOT use setTimeout/Promise.all in one process to simulate concurrency; the race does not exist there.",
+        "Do NOT weaken, delete, or skip any existing test to make the suite green."
+      ]
+    },
+    "verify": "node scripts/tests/test_state_projection_race.mjs && node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs --impacted-from-git",
+    "read_first": [
+      "docs/history/state-phase-lock-race/CONTEXT.md",
+      "docs/history/state-phase-lock-race/plan.md",
+      "docs/history/state-phase-lock-race/reports/advisor-consult.md",
+      "scripts/tests/test_store_lock.mjs",
+      "packages/bee/lib/lock.mjs"
+    ],
+    "files": [
+      "packages/bee/bee.mjs",
+      "scripts/tests/test_state_projection_race.mjs",
+      ".bee/bin/bee.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deps": []
+  },
+  {
+    "id": "splr-2",
+    "feature": "state-phase-lock-race",
+    "lane": "high-risk",
+    "behavior_change": false,
+    "title": "rust-port mirror artifact for the mjs bugfix (freeze D1)",
+    "action": "rust-port D1 requires every mjs bugfix landed under the feature freeze to carry a mechanical mirror artifact: (a) a rust-port-tagged backlog item naming the behavior delta, and (b) any affected parity fixture updated in the same change. Do both. (1) File the PBI via `node .bee/bin/bee.mjs backlog add` (never by hand-editing backlog.jsonl) naming the delta: bee.mjs's state-mutation and projection-rebuild paths now acquire the 'state' store lock under a single global workflow:<id> -> 'state' order; crates/queen-bee/src/hooks/state_sync.rs:131 already takes 'state' and needs no change today, but no Rust CLI `state` group exists yet (crates/queen-bee/src/groups.rs:34), so the future port of that group must land with this order already satisfied. (2) Determine whether any parity fixture covers the affected verbs' output — check crates/bee-core/tests/projection_parity.rs and the parity fixture corpus. Locking changes no stdout, so the expected answer is that no fixture content changes; if that holds, state it with the evidence rather than editing anything. If any fixture DOES shift, update it in this change. (3) Also file the advisor's follow-up as its own backlog item: have the write-guard read workflow records instead of the state.json projection, removing its dependency on projection freshness — explicitly a complement to this fix, not a replacement.",
+    "must_haves": {
+      "truths": [
+        "A rust-port-tagged backlog item exists naming the behavior delta and the constraint on the future Rust state-group port, filed through the backlog CLI.",
+        "The parity-fixture question is answered with evidence: either no fixture covers this output (stated with what was checked) or the affected fixtures are updated here.",
+        "The write-guard-reads-records follow-up is filed as its own backlog item, marked as a complement to this fix."
+      ],
+      "prohibitions": [
+        "Do NOT hand-edit .bee/backlog.jsonl.",
+        "Do NOT change Rust production code — D6 says the Rust binary needs no fix today; this cell records the constraint, it does not pre-implement it."
+      ]
+    },
+    "verify": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs --impacted-from-git",
+    "read_first": [
+      "docs/history/rust-port/CONTEXT.md",
+      "docs/history/state-phase-lock-race/CONTEXT.md"
+    ],
+    "files": [
+      ".bee/backlog.jsonl",
+      "docs/backlog.md"
+    ],
+    "deps": [
+      "splr-1"
+    ]
+  }
+]
