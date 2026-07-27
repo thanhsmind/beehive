@@ -673,7 +673,7 @@ export const COMMAND_REGISTRY = [
     name: 'state.set',
     invoke: 'bee state set',
     description:
-      'Set one or more top-level routing fields; only the flags given are written and every other field is preserved. Every call requires explicit --owner equal to the selected default/lane record\'s valid pre-mutation phase; missing/mismatched ownership or a corrupt phase refuses before write, and a successful phase change rolls ownership forward without persisting an owner field. --phase is validated against the known-phase enum AND against the tail guard (chain-integrity D1-REVISED): "compounding" is never settable directly (only `state scribing-run` produces it), and "compounding-complete" is legal only from "compounding" and only with zero scribing debt. Every other transition, including all backward moves and --phase idle, stays permissive. Target resolution (i54-closeout D7, symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted (identity self-resolved at operation moment) > the default state.json for an unbound session. --no-lane forces the default record from a bound session. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes, never a silent fall-back to the default. --feature is rejected whenever the selected target is a lane record.',
+      'Set one or more top-level routing fields; only the flags given are written and every other field is preserved. Every call requires explicit --owner equal to the selected default/lane record\'s valid pre-mutation phase; missing/mismatched ownership or a corrupt phase refuses before write, and a successful phase change rolls ownership forward without persisting an owner field. --phase is validated against the known-phase enum AND against the tail guard (chain-integrity D1-REVISED): "compounding" is never settable directly (only `state scribing-run` produces it), and "compounding-complete" is legal only from "compounding", only with zero scribing debt, and only with a FRESH recorded compounding run (compounding-gate D2: `state compounding-run`, matching feature, at >= last_scribing_run.at) — --waive-compounding permits the close without one, logging a decision. Every other transition, including all backward moves and --phase idle, stays permissive. Target resolution (i54-closeout D7, symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted (identity self-resolved at operation moment) > the default state.json for an unbound session. --no-lane forces the default record from a bound session. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes, never a silent fall-back to the default. --feature is rejected whenever the selected target is a lane record.',
     parameters: {
       type: 'object',
       properties: {
@@ -686,6 +686,7 @@ export const COMMAND_REGISTRY = [
         lane: { type: 'string', description: 'Route the mutation to this lane record instead of the default state.json. Refuses if the lane is missing or corrupt. Omitted: the calling session\'s bound lane is targeted automatically; unbound sessions target the default record.' },
         'no-lane': { type: 'boolean', description: 'Force the default state.json even when the calling session is bound to a lane. Cannot be combined with --lane.' },
         'waive-scribing-debt': { type: 'boolean', description: 'Permit --phase compounding-complete while capped behavior_change cells are still unsynced to docs/specs/. Never silent: it logs a decision naming every waived cell (chain-integrity D4).' },
+        'waive-compounding': { type: 'boolean', description: 'Permit --phase compounding-complete without a fresh recorded `state compounding-run` (matching the last scribing run, same feature). Never silent: it logs a decision naming the feature (compounding-gate D2).' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: [],
@@ -836,6 +837,28 @@ export const COMMAND_REGISTRY = [
       'bee state scribing-run --lane demo-lane --feature demo-lane --areas auth --next-action bee-compounding --json',
       'bee state scribing-run --show --json',
       'bee state scribing-run --show --feature newf --json',
+    ],
+    deprecated: null,
+  },
+  {
+    name: 'state.compounding-run',
+    invoke: 'bee state compounding-run',
+    description: 'Stamp last_compounding_run (feature, date, ISO-precise at, learnings path, optional next-action) on the selected record. Legal ONLY from phase "compounding" (checkCompoundingRunPhase, compounding-gate D1) — refused from any other phase. Unlike scribing-run, this verb does NOT advance phase: bee-compounding runs entirely inside phase "compounding", produced earlier by `state scribing-run`. What it DOES do is satisfy a precondition `state set --phase compounding-complete` now enforces (compounding-gate D2): that transition refuses unless last_compounding_run exists, names the SAME feature as last_scribing_run, and was stamped at or after it. Target resolution (i54-closeout D7, symmetric with scribing-run): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        feature: { type: 'string', description: 'Feature slug the compounding run covers.' },
+        learnings: { type: 'string', description: 'Path to the durable learnings this run captured.' },
+        'next-action': { type: 'string', description: 'Optional next action after compounding; mirrored to the top-level next_action when given.' },
+        lane: { type: 'string', description: 'Route the mutation to this lane record instead of the default state.json. Refuses if the lane is missing or corrupt. Omitted: the calling session\'s bound lane is targeted automatically; unbound sessions target the default record.' },
+        'no-lane': { type: 'boolean', description: 'Force the default state.json even when the calling session is bound to a lane. Cannot be combined with --lane.' },
+        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
+      },
+      required: [],
+    },
+    examples: [
+      'bee state compounding-run --feature newf --learnings docs/history/newf/reports/learnings.md --json',
+      'bee state compounding-run --lane demo-lane --feature demo-lane --learnings docs/history/demo-lane/reports/learnings.md --next-action bee-hive --json',
     ],
     deprecated: null,
   },

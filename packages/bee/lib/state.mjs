@@ -66,16 +66,32 @@ export function isKnownPhase(phase) {
 // made `compounding` unreachable. So instead:
 //   - `compounding` is not settable at all; only a real scribing run yields it
 //   - `scribing-run` demands a phase where execution has actually happened
-//   - `compounding-complete` demands `compounding` (and, in bee.mjs, zero debt)
+//   - `compounding-complete` demands `compounding`, a FRESH recorded
+//     compounding run (compounding-gate D2, checked right here — no
+//     cells.mjs needed, see below), and (in bee.mjs) zero scribing debt
 // Everything else stays permissive: every backward move (hive law 5 needs them)
 // and `idle`, the de-facto abandon verb.
 //
 // PURE by necessity: cells.mjs already imports this file, so the scribing-debt
-// half of the rule cannot live here — it lives at the bee.mjs choke point.
+// half of the rule cannot live here — it lives at the bee.mjs choke point. The
+// compounding-run freshness half (compounding-gate D2, cell cg-1) reads only
+// fields already present on the record passed in (last_compounding_run,
+// last_scribing_run) — no cells.mjs access needed — so unlike scribing debt it
+// stays right here, pure, alongside the phase-name check it complements.
 export const SCRIBING_RUN_FROM = ['swarming', 'reviewing', 'scribing'];
 
-export function checkPhaseTransition(from, to) {
+// compounding-gate D1 (cell cg-1) — the compounding-run recorder's own phase
+// door, same shape as SCRIBING_RUN_FROM/checkScribingRunPhase below but for
+// the sibling verb `state compounding-run`. Unlike scribing-run, a
+// compounding run does NOT produce a phase transition — bee-compounding runs
+// entirely INSIDE phase "compounding" (stamped by the prior scribing run), so
+// the only legal phase to record from is that one phase itself, not a set of
+// predecessors.
+export const COMPOUNDING_RUN_FROM = ['compounding'];
+
+export function checkPhaseTransition(from, to, record, opts = {}) {
   const current = from || 'idle';
+  const waiveCompounding = opts && opts.waiveCompounding === true;
   if (to === 'compounding') {
     return {
       ok: false,
@@ -87,10 +103,42 @@ export function checkPhaseTransition(from, to) {
     return {
       ok: false,
       reason:
-        `set: phase "compounding-complete" may only be entered from "compounding" (current: "${current}"). That name asserts BOTH scribing and compounding ran; setting it from "${current}" claims work that did not happen and shuts the intake gate on a feature that never closed. FIX: close the chain in order — bee-scribing (\`state scribing-run\`), then bee-compounding.`,
+        `set: phase "compounding-complete" may only be entered from "compounding" (current: "${current}"). That name asserts scribing ran, compounding ran, AND the compounding run was RECORDED — not merely asserted; setting it from "${current}" claims work that did not happen and shuts the intake gate on a feature that never closed. FIX: close the chain in order — bee-scribing (\`state scribing-run\`), then bee-compounding (\`state compounding-run\`).`,
     };
   }
-  return { ok: true };
+  if (to === 'compounding-complete') {
+    // compounding-gate D2 (cell cg-1) — the tail guard's SECOND half. The
+    // check above only catches a hand-typed close asserting a PHASE that
+    // never happened; this one catches a hand-typed close asserting a
+    // COMPOUNDING RUN that never happened, even from the correct phase.
+    // "Fresh" means a last_compounding_run exists, names the SAME feature as
+    // last_scribing_run, and was stamped at or after it — a compounding run
+    // left over from a previous scribing pass on this same feature does not
+    // count.
+    const rec = record || {};
+    const run = rec.last_compounding_run;
+    const scribing = rec.last_scribing_run;
+    const runAtMs = run && typeof run.at === 'string' ? Date.parse(run.at) : NaN;
+    const scribingAtMs = scribing && typeof scribing.at === 'string' ? Date.parse(scribing.at) : NaN;
+    const fresh = Boolean(
+      run &&
+        scribing &&
+        Number.isFinite(runAtMs) &&
+        Number.isFinite(scribingAtMs) &&
+        runAtMs >= scribingAtMs &&
+        run.feature === scribing.feature,
+    );
+    if (!fresh && !waiveCompounding) {
+      const featureName = (scribing && scribing.feature) || rec.feature || '<f>';
+      return {
+        ok: false,
+        reason:
+          `set: phase "compounding-complete" refused — no fresh compounding run recorded for feature "${featureName}" (last_compounding_run must exist, with an "at" timestamp at or after last_scribing_run.at, for the same feature). FIX: run \`bee state compounding-run --feature ${featureName} --learnings <path>\`, then retry. If compounding genuinely needs no separate recorded run here, retry with --waive-compounding — it is permitted, but it logs a decision naming the feature.`,
+      };
+    }
+    return { ok: true, waivedCompounding: !fresh && waiveCompounding };
+  }
+  return { ok: true, waivedCompounding: false };
 }
 
 export function checkScribingRunPhase(from) {
@@ -100,6 +148,19 @@ export function checkScribingRunPhase(from) {
     ok: false,
     reason:
       `scribing-run: refused from phase "${current}" — a scribing run records the spec sync for work that has been EXECUTED. Legal from: ${SCRIBING_RUN_FROM.join(', ')}. FIX: if execution really is done, the phase should say so; if it is not, there is nothing to scribe yet.`,
+  };
+}
+
+// compounding-gate D1 (cell cg-1) — mirrors checkScribingRunPhase exactly,
+// for the compounding-run recorder's own phase door (COMPOUNDING_RUN_FROM
+// above).
+export function checkCompoundingRunPhase(from) {
+  const current = from || 'idle';
+  if (COMPOUNDING_RUN_FROM.includes(current)) return { ok: true };
+  return {
+    ok: false,
+    reason:
+      `compounding-run: refused from phase "${current}" — a compounding run records the durable-learnings sync for a feature whose scribing has already run. Legal from: ${COMPOUNDING_RUN_FROM.join(', ')}. FIX: if compounding really is underway, the phase should already say so (\`state scribing-run\` is what produces it); if it is not, there is nothing to compound yet.`,
   };
 }
 

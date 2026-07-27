@@ -964,6 +964,22 @@ await check('state.scribing-run example runs through the real dispatcher (from a
   assert(JSON.parse(result.stdout).phase === 'compounding', `expected phase compounding, got ${result.stdout}`);
 });
 
+// compounding-gate D1 (cell cg-1): the registry-completeness invariant
+// ("every registry entry had its example executed at least once") demands at
+// least this much for the new verb — deeper coverage (wrong-phase refusal,
+// --waive-compounding audit logging, freshness edge cases) is cg-2's own cell.
+await check('state.compounding-run example runs through the real dispatcher — does NOT advance phase (compounding-gate D1)', async () => {
+  // rootState is now `compounding` (feature "newf") after the scribing-run
+  // example above — the ONLY phase compounding-run is legal from.
+  const result = await assertExampleOk('state.compounding-run', { cwd: rootState });
+  const after = JSON.parse(result.stdout);
+  assert(after.phase === 'compounding', `compounding-run must not advance phase, got ${result.stdout}`);
+  assert(
+    after.last_compounding_run && after.last_compounding_run.feature === 'newf',
+    `expected last_compounding_run stamped for "newf", got ${result.stdout}`,
+  );
+});
+
 await check('state.scribing-run is REFUSED from a phase where nothing was executed (chain-integrity D3)', async () => {
   const refused = await runBee(
     ['state', 'scribing-run', '--feature', 'newf', '--areas', 'x', '--next-action', 'n', '--json'],
@@ -1467,7 +1483,20 @@ function makeDebtRepo() {
   writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
   // At `compounding`, so the tail-guard predecessor check passes and the DEBT
   // check is the only thing left standing between here and the terminal phase.
-  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'compounding', feature: 'demo' });
+  // compounding-gate D2 (cell cg-1): stamp a prior last_scribing_run/
+  // last_compounding_run pair too — real usage never reaches phase
+  // "compounding" without a genuine `state scribing-run`, and the tail guard
+  // now ALSO requires a matching, at-or-after last_compounding_run. Both are
+  // stamped well BEFORE the cells below, so scribingDebt's own threshold math
+  // (cappedAt > threshold) is untouched — these tests exist to prove the DEBT
+  // wall, not this orthogonal precondition.
+  const priorRunAt = new Date(Date.now() - 60000).toISOString();
+  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+    phase: 'compounding',
+    feature: 'demo',
+    last_scribing_run: { feature: 'demo', at: priorRunAt },
+    last_compounding_run: { feature: 'demo', at: priorRunAt },
+  });
   for (const id of ['d-1', 'd-2']) {
     writeJsonAtomic(path.join(dir, '.bee', 'cells', `${id}.json`), {
       id,
@@ -1576,6 +1605,9 @@ await check('a close with ZERO scribing debt passes and writes no waiver decisio
     // Stamp a scribing run that post-dates both cells: debt cleared honestly.
     const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
     state.last_scribing_run = { feature: 'demo', at: new Date(Date.now() + 60_000).toISOString() };
+    // compounding-gate D2 (cell cg-1): the tail guard's own precondition
+    // needs a last_compounding_run at/after the just-updated scribing run.
+    state.last_compounding_run = { feature: 'demo', at: new Date(Date.now() + 120_000).toISOString() };
     writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
     const ok = await runBee(['state', 'set', '--owner', 'compounding', '--phase', 'compounding-complete', '--json'], dir);
     assert(ok.status === 0, `a debt-free close must pass, got: ${ok.stdout}${ok.stderr}`);

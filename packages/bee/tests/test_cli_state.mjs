@@ -204,7 +204,16 @@ await check('bee.mjs state set accepts the compounding-complete terminal alias (
     // chain-integrity: this fixture used to start at the `idle` default and walk
     // straight to the terminal alias — the very transition the tail guard now
     // refuses. The alias is still accepted; it just has to be reached honestly.
-    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'compounding' });
+    // compounding-gate D2 (cell cg-1): "honestly" now also means a fresh
+    // last_compounding_run (>= last_scribing_run.at, same feature) — stamped
+    // here so this row still proves the ALIAS is accepted, not the
+    // compounding-run precondition.
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+      phase: 'compounding',
+      feature: 'demo',
+      last_scribing_run: { feature: 'demo', at: new Date(Date.now() - 60000).toISOString() },
+      last_compounding_run: { feature: 'demo', at: new Date(Date.now() - 30000).toISOString() },
+    });
     const result = await runBeeState(dir, ['set', '--owner', 'compounding', '--phase', 'compounding-complete']);
     assert(result.status === 0, `terminal alias should be accepted, got ${result.status}: ${result.stderr}`);
     const state = readStateFile(dir);
@@ -2625,11 +2634,25 @@ function makeLaneDebtRepo(prefix) {
   // The default record sits on a totally different, clean feature — proof
   // the lane close computes the LANE's own feature debt, not the default's.
   writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'idle', feature: null });
+  // compounding-gate D2 (cell cg-1): a lane close now ALSO requires a fresh
+  // last_compounding_run (>= last_scribing_run.at, same feature) — a
+  // precondition orthogonal to the scribing-DEBT this fixture exists to
+  // exercise. In real usage phase "compounding" is reachable only through
+  // `state scribing-run`, which always stamps last_scribing_run on the SAME
+  // record; a hand-written fixture that skips straight to phase:'compounding'
+  // has to fabricate that co-occurrence itself, so both fields are stamped
+  // here, well in the PAST relative to the cells created below — this keeps
+  // scribingDebt's own threshold math (cappedAt > threshold) exactly as
+  // before this cell: ln-1/ln-2 still land after the threshold and still
+  // count as debt.
+  const priorRunAt = new Date(Date.now() - 60000).toISOString();
   writeJsonAtomic(path.join(dir, '.bee', 'lanes', 'lane-feat.json'), {
     schema_version: '1.0',
     feature: 'lane-feat',
     phase: 'compounding',
     approved_gates: { context: true, shape: true, execution: true, review: false },
+    last_scribing_run: { feature: 'lane-feat', at: priorRunAt },
+    last_compounding_run: { feature: 'lane-feat', at: priorRunAt },
   });
   for (const id of ['ln-1', 'ln-2']) {
     writeJsonAtomic(path.join(dir, '.bee', 'cells', `${id}.json`), {
@@ -2681,6 +2704,9 @@ await check('si-1: a lane close with a scribing run stamped AFTER the lane cells
     const laneFile = path.join(dir, '.bee', 'lanes', 'lane-feat.json');
     const lane = JSON.parse(fs.readFileSync(laneFile, 'utf8'));
     lane.last_scribing_run = { feature: 'lane-feat', at: new Date(Date.now() + 60000).toISOString() };
+    // compounding-gate D2 (cell cg-1): the close now ALSO needs a fresh
+    // last_compounding_run at/after the just-updated last_scribing_run.
+    lane.last_compounding_run = { feature: 'lane-feat', at: new Date(Date.now() + 120000).toISOString() };
     writeJsonAtomic(laneFile, lane);
     const ok = await runBeeState(dir, ['set', '--lane', 'lane-feat', '--owner', 'compounding', '--phase', 'compounding-complete', '--json']);
     assert(ok.status === 0, `a lane synced after its caps must close cleanly with no waiver needed, got: ${ok.stdout}${ok.stderr}`);
@@ -2779,6 +2805,14 @@ await check('sss-1: a workflow-backed feature closes cleanly with no waiver afte
       'GH #86: the record stamp must now survive the workflow-projection rebuild',
     );
 
+    // compounding-gate D2 (cell cg-1): the close now ALSO requires a fresh
+    // recorded compounding run — a precondition orthogonal to the scribing-
+    // debt seam this row exists to prove closed.
+    const compound = await runBeeState(dir, [
+      'compounding-run', '--feature', 'sss1-seam', '--learnings', 'docs/history/sss1-seam/reports/learnings.md', '--json',
+    ]);
+    assert(compound.status === 0, `compounding-run should succeed, got ${compound.status}: ${compound.stderr}`);
+
     const close = await runBeeState(dir, ['set', '--owner', 'compounding', '--phase', 'compounding-complete', '--json']);
     assert(
       close.status === 0,
@@ -2808,6 +2842,14 @@ await check('sss-1 (negative control): a cell capped AFTER the last scribing-run
       'scribing-run', '--feature', 'sss1-seam-neg', '--areas', 'a', '--next-action', 'bee-compounding', '--json',
     ]);
     assert(scribe.status === 0, `scribing-run should succeed, got ${scribe.status}: ${scribe.stderr}`);
+
+    // compounding-gate D2 (cell cg-1): the close now ALSO requires a fresh
+    // recorded compounding run — a precondition orthogonal to the scribing-
+    // debt negative control this row exists to prove still blocks.
+    const compound = await runBeeState(dir, [
+      'compounding-run', '--feature', 'sss1-seam-neg', '--learnings', 'docs/history/sss1-seam-neg/reports/learnings.md', '--json',
+    ]);
+    assert(compound.status === 0, `compounding-run should succeed, got ${compound.status}: ${compound.stderr}`);
 
     // A cell capped AFTER the sync — genuinely unsynced; must still count.
     await new Promise((resolve) => setTimeout(resolve, 5));

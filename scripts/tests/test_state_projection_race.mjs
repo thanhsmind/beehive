@@ -620,6 +620,7 @@ const STATE_WRITING_VERBS = [
   'state.worker.clear',
   'state.worker.prune',
   'state.scribing-run',
+  'state.compounding-run',
   'state.start-feature',
   'state.rebuild-projections',
   'state.advisor-ref.record',

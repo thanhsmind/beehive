@@ -1052,6 +1052,12 @@ const EXPECTED_STATE_EXPORTS = [
   'SCRIBING_RUN_FROM',
   'checkPhaseTransition',
   'checkScribingRunPhase',
+  // compounding-gate D1/D2 (cell cg-1): the compounding-run recorder's own
+  // phase door, sibling to SCRIBING_RUN_FROM/checkScribingRunPhase above —
+  // pure and cells-free for the same reason (its freshness check only reads
+  // fields already on the record passed in, no cells.mjs needed).
+  'COMPOUNDING_RUN_FROM',
+  'checkCompoundingRunPhase',
   // fsh-3 (fresh-session-handoff): the lane store — deliberate additions,
   // covered by the lane rows further down.
   'lanesDir',

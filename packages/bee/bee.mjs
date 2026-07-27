@@ -58,6 +58,7 @@ import {
   isKnownPhase,
   checkPhaseTransition,
   checkScribingRunPhase,
+  checkCompoundingRunPhase,
   startFeature,
   hasStaleAdvisorKey,
   STALE_ADVISOR_KEY_WARNING,
@@ -2623,8 +2624,9 @@ function withStoreLocks(root, names, fn) {
   return withStoreLock(root, head, () => withStoreLocks(root, rest, fn));
 }
 
-// withMutationLock — C4-safe lock routing for the four record-mutating state
-// verbs (set/gate/scribing-run/advisor-ref record; multisession-native-10).
+// withMutationLock — C4-safe lock routing for the record-mutating state
+// verbs (set/gate/scribing-run/advisor-ref record/compounding-run; cell cg-1
+// added the last of these, multisession-native-10 the wrapper itself).
 // Replaces the blanket `withStoreLock(root, 'state', fn)` every one of these
 // verbs used through msn-9: a workflow-record-routed target (lane, OR
 // default once msn-10 keeps it in sync) now locks on `workflow:<id>` ONLY —
@@ -2724,7 +2726,7 @@ async function handleStateSet(root, flags) {
     );
   }
 
-  const { state, changed, waivedClose, waivedSwap, swapFromFeature, targetLane } = await withMutationLock(root, laneFeature, noLane, async () => {
+  const { state, changed, waivedClose, waivedSwap, swapFromFeature, waivedCompoundingFeature, targetLane } = await withMutationLock(root, laneFeature, noLane, async () => {
     const target = resolveMutationTarget(root, laneFeature, 'set', { noLane });
     const { record: state, write } = target;
     // i54-closeout-7 (D7): the fsh-4 identity guard above only sees an
@@ -2740,10 +2742,18 @@ async function handleStateSet(root, flags) {
     // chain-integrity D1-REVISED / D2 — read `from` off the record actually being
     // mutated (lanes included), never off global state.
     let waivedClose = null;
+    // compounding-gate D2 (cell cg-1) — the feature named in the LOGGED
+    // decision when --waive-compounding actually bypassed a missing/stale
+    // last_compounding_run (never set when the check was satisfied on its
+    // own, exact mirror of how waivedClose/waivedSwap only populate when
+    // real debt stood).
+    let waivedCompoundingFeature = null;
     if (flags.phase !== undefined) {
       const targetPhase = String(flags.phase);
-      const transition = checkPhaseTransition(state.phase, targetPhase);
+      const waiveCompounding = flags['waive-compounding'] === true;
+      const transition = checkPhaseTransition(state.phase, targetPhase, state, { waiveCompounding });
       if (!transition.ok) throw new Error(transition.reason);
+      if (transition.waivedCompounding) waivedCompoundingFeature = state.feature || null;
       // slice-tail-test-batching P4 — the first of the two doors out of
       // `swarming`. Runs BEFORE any field is mutated and inside the mutation
       // lock, so a refusal leaves the record byte-identical.
@@ -2809,7 +2819,7 @@ async function handleStateSet(root, flags) {
       changed.push('summary');
     }
     await write(state);
-    return { state, changed, waivedClose, waivedSwap, swapFromFeature, targetLane: target.lane };
+    return { state, changed, waivedClose, waivedSwap, swapFromFeature, waivedCompoundingFeature, targetLane: target.lane };
   });
 
   // D4 — the waiver is loud and attributable. Logged AFTER the write succeeds so
@@ -2862,13 +2872,31 @@ async function handleStateSet(root, flags) {
       tags: ['scribing', 'state'],
     });
   }
+  // compounding-gate D2 (cell cg-1) — exact mirror of the waivedClose/
+  // waivedSwap blocks above: logged AFTER the write succeeds (same reason —
+  // decisions.jsonl is outside the 'state' lock's scope), only when the
+  // waiver was actually NEEDED (transition.waivedCompounding, set above only
+  // when the freshness check would otherwise have refused).
+  if (waivedCompoundingFeature) {
+    logDecision(root, {
+      decision: `Closed feature "${waivedCompoundingFeature}" with the compounding-run freshness check WAIVED — no fresh recorded \`state compounding-run\` (matching the last scribing run) was found.`,
+      rationale:
+        'Explicitly waived via `state set --phase compounding-complete --waive-compounding`. bee refuses this close by default (compounding-gate D2); the waiver is the sanctioned door, and this record is its price.',
+      scope: 'repo',
+      source: 'agent',
+      tags: ['scribing', 'state'],
+    });
+  }
   const allWaived = [...(waivedClose || []), ...(waivedSwap || [])];
   const waiverNote = allWaived.length > 0
     ? ` — SCRIBING DEBT WAIVED for ${allWaived.length} cell(s): ${allWaived.join(', ')} (decision logged)`
     : '';
+  const compoundingWaiverNote = waivedCompoundingFeature
+    ? ` — COMPOUNDING-RUN FRESHNESS WAIVED for feature "${waivedCompoundingFeature}" (decision logged)`
+    : '';
   return {
     result: state,
-    text: `Updated state: ${changed.join(' ')}.${targetLane ? ` (lane "${targetLane}")` : ''}${waiverNote}`,
+    text: `Updated state: ${changed.join(' ')}.${targetLane ? ` (lane "${targetLane}")` : ''}${waiverNote}${compoundingWaiverNote}`,
   };
 }
 
@@ -3554,6 +3582,54 @@ async function handleStateScribingRun(root, flags) {
   return {
     result: state,
     text: `Recorded scribing run for "${feature}" at ${at}.${targetLane ? ` (lane "${targetLane}")` : ''}${repairNote}`,
+  };
+}
+
+// compounding-gate D1 (cell cg-1) — the compounding-run recorder. Mirrors
+// handleStateScribingRun's SHAPE (lane target resolution, a phase-door check,
+// a stamped field, one write, all inside withMutationLock) but is far
+// smaller: this verb does NOT drive phase — bee-compounding runs entirely
+// INSIDE phase "compounding" (produced by the prior scribing run), so there
+// is no repair-path/stampedActive ambiguity to mirror (that machinery exists
+// in scribing-run only because IT is the sole producer of phase=compounding
+// and has to handle a default-record call naming some OTHER active feature).
+// There is also no durable ledger here: nothing else in bee reads a
+// "compounding debt" the way scribingDebt (cells.mjs) reads the scribing
+// ledger, so none is appended — last_compounding_run on the selected record
+// is the entire record of this run, exactly what checkPhaseTransition's
+// compounding-complete tail guard (state.mjs) reads back.
+// D6 — async: record-read through write() runs inside withStoreLock('state').
+async function handleStateCompoundingRun(root, flags) {
+  rejectDryRun(flags);
+  const { feature, learnings } = requireFlags(
+    flags,
+    [{ name: 'feature' }, { name: 'learnings' }],
+    exampleFor('state.compounding-run'),
+  );
+  const nextAction = flags['next-action'] !== undefined ? String(flags['next-action']) : null;
+  const now = new Date();
+  const at = now.toISOString();
+  const date = at.slice(0, 10);
+  const { laneFeature, noLane } = mutationLaneSelector(flags, 'compounding-run');
+
+  const { state, targetLane } = await withMutationLock(root, laneFeature, noLane, async () => {
+    const target = resolveMutationTarget(root, laneFeature, 'compounding-run', { noLane });
+    const { record: state, write } = target;
+    const phaseCheck = checkCompoundingRunPhase(state.phase);
+    if (!phaseCheck.ok) throw new Error(phaseCheck.reason);
+    // Does NOT advance phase (compounding-gate D1) — state.phase stays
+    // "compounding"; only last_compounding_run (and, when given, the
+    // top-level next_action — same "plus top-level next_action" mirror as
+    // scribing-run) are written.
+    state.last_compounding_run = { feature, date, at, learnings, next_action: nextAction };
+    if (nextAction !== null) state.next_action = nextAction;
+    await write(state);
+    return { state, targetLane: target.lane };
+  });
+
+  return {
+    result: state,
+    text: `Recorded compounding run for "${feature}" at ${at}.${targetLane ? ` (lane "${targetLane}")` : ''}`,
   };
 }
 
@@ -6995,7 +7071,7 @@ function stateUsageFallback(leading) {
     const sub = leading[2];
     return `Unknown plan-rev action "${sub || '(missing)'}". Use: bump.`;
   }
-  return `Unknown command "${verb || '(missing)'}". Use: set, gate, plan-rev bump, worker, scribing-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, validation-cache, compact-log, compact-check, compact-capsule.`;
+  return `Unknown command "${verb || '(missing)'}". Use: set, gate, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, validation-cache, compact-log, compact-check, compact-capsule.`;
 }
 
 function backlogUsageFallback(leading) {
@@ -7165,6 +7241,7 @@ const HANDLERS = {
   'state.worker.clear': handleStateWorkerClear,
   'state.worker.prune': handleStateWorkerPrune,
   'state.scribing-run': handleStateScribingRun,
+  'state.compounding-run': handleStateCompoundingRun,
   'state.start-feature': handleStateStartFeature,
   'state.lanes': handleStateLanes,
   'state.rebuild-projections': handleStateRebuildProjections,
@@ -7265,7 +7342,7 @@ const HANDLERS = {
 // here or `state scribing-run --show --feature X` would consume `--feature`
 // as --show's own value, same class of bug dry-run/write/as-lane guard
 // against above.
-export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate']);
+export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate']);
 
 export function splitCommandTokens(argv) {
   const leading = [];
