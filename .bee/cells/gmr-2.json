@@ -29,17 +29,23 @@
     "docs/history/codex-harness-hardening/release-manifest.json"
   ],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "decisions": [],
   "trace": {
     "worker": "exec-gmr2",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Shell home-reference write targets are denied before containment; all four spellings of one out-of-worktree destination now share a verdict; bare tilde and in-repo paths unchanged",
+    "files_changed": [
+      "packages/bee/hooks/bee-write-guard.mjs",
+      "packages/bee/hooks/test_write_guard.mjs",
+      "packages/bee/tests/test_bee_write_guard_hook.mjs",
+      ".bee/bin/hooks/bee-write-guard.mjs",
+      "scripts/lib/release-tuple.mjs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
-    "verification_evidence": null,
+    "capped_at": "2026-07-27T10:47:13.948Z",
+    "behavior_change": true,
+    "verification_evidence": "# gmr-2 evidence — home-prefix containment bypass closed\n\n## The hole, before the fix\n\nLive probes against the vendored hook (`.bee/bin/hooks/bee-write-guard.mjs`),\none payload per spelling on stdin, cwd = repo root. All four name the **same\ndestination file**:\n\n```\necho hi > /home/<user>/.claude/lesson.md   exit=2   denied (containment)\necho hi > ~/.claude/lesson.md              exit=0   ALLOWED\necho hi > $HOME/.claude/lesson.md          exit=0   ALLOWED\n```\n\nA leading home reference is neither absolute nor contains `..`, so\n`canonicalRelPath` resolved it against cwd as a literal `~` / `$HOME` directory\nand produced an in-repo relative path that passed containment and flowed into\n`checkWrite`.\n\n## After the fix\n\n```\nexit=2  <- ~/.claude/lesson.md\nexit=2  <- $HOME/.claude/lesson.md\nexit=2  <- ${HOME}/.claude/lesson.md\nexit=2  <- /home/<user>/.claude/lesson.md\n```\n\nNon-regression, same run:\n\n```\nexit=0  <- bare ~            (BROAD_TARGETS still owns it, behavior unchanged)\nexit=0  <- docs/note.md      (in-repo path unaffected)\n```\n\n## Suite\n\n```\nPASS run_verify: 108 suite(s), concurrency=5, wall=75947ms\nEXIT=0\n```\n\n108 rather than 109: `scripts/tests/test_rust_workspace.mjs` was removed with\nthe Rust runtime. No guard test was edited to reach green.\n\n## Design note\n\nDeny-outright, not expand-then-contain:\n\n- expanding would make the wall's verdict depend on an environment variable,\n  while the security boundary is meant to be declaration;\n- the tokenizer has already discarded the quoting that decides whether bash\n  would expand at all, so expansion would be guessing;\n- deny has no resolution step that can fail open.\n\nThe consequence for the follow-up work: a declared `guards.memory_root` will\nhonor **absolute** spellings only.\n",
     "verify_output": null,
     "verify_passed": true,
     "claim_session": "c0b91d84-165f-4d21-a85d-16b6acd71dd0",
@@ -58,6 +64,7 @@
         "failure_signature": null,
         "note": null
       }
-    ]
+    ],
+    "warnings": []
   }
 }
