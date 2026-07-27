@@ -1,0 +1,67 @@
+{
+  "id": "cg-3",
+  "feature": "compounding-gate",
+  "lane": "tiny",
+  "behavior_change": false,
+  "change_class": "bugfix",
+  "title": "Fix-first: restore two census anchors the skill diet trimmed out of bodies",
+  "action": "Pre-existing red (predates this feature, introduced by the sd2-1 skill diet): packages/bee/tests/test_misc.mjs census requires (1) the literal phrase 'candidate add' in skills/bee-compounding/SKILL.md (the review-candidate step at feature close, SPEC 7.1 step 6) and (2) the literal command 'git merge-base --is-ancestor' in skills/bee-swarming/SKILL.md's worktree-integration text (integration must prove the candidate descends from the attested base). Both were moved to references by the diet; the census pins them to the bodies. Restore each with ONE minimal line in the body (byte budget is advisory): bee-compounding gets the close step registering the feature as a review candidate via `bee.mjs reviews candidate add`; bee-swarming's integration paragraph names the `git merge-base --is-ancestor <baseCommit> <candidate>` ancestry proof. No other prose changes. Regen stays deferred to cg-2.",
+  "must_haves": {
+    "truths": [
+      "packages/bee/tests/test_misc.mjs passes: both census checks green, no other check regressed",
+      "each restoration is one line, consistent with the surrounding body text"
+    ],
+    "prohibitions": [
+      "Do NOT weaken or edit the census test itself",
+      "Do NOT touch reference files or any other skill"
+    ]
+  },
+  "verify": "node packages/bee/tests/test_misc.mjs",
+  "read_first": [
+    "skills/bee-compounding/SKILL.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "files": [
+    "skills/bee-compounding/SKILL.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "deps": [
+    "cg-1"
+  ],
+  "regen_obligation_ack": "regen deferred to cg-2, the slice tail — one regen covers the slice (lane-lean pattern)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "worker-cg",
+    "outcome": "Census anchors restored after sd2-1 diet: bee-compounding close step registers the feature via reviews candidate add (SPEC 7.1 step 6); bee-swarming worktree integration names the three-check gate with all four typed halts and the merge-base ancestry proof inline. test_misc 117/0",
+    "files_changed": [
+      "skills/bee-compounding/SKILL.md",
+      "skills/bee-swarming/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T16:15:55.924Z",
+    "behavior_change": false,
+    "verification_evidence": "{\"verify\":\"node packages/bee/tests/test_misc.mjs\",\"verify_result\":\"117 passed, 0 failed — orchestrator re-run\",\"note\":\"deviation: scope widened mid-cell by orchestrator from two one-liners to the full three-check-gate paragraph — the census turned out to pin the whole checklist, its sequential asserts had masked the depth; byte-budget advisory grows recorded (bee-swarming +498, bee-compounding +237)\"}\n",
+    "verify_output": null,
+    "verify_passed": true,
+    "claim_session": "03f90719-9f7c-4acc-8698-2b879eb80f50",
+    "claimed_at": "2026-07-27T16:09:20.287Z",
+    "verify_command": "node packages/bee/tests/test_misc.mjs",
+    "verified_at": "2026-07-27T16:15:44.851Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T16:15:44.852Z",
+        "claim_session": "03f90719-9f7c-4acc-8698-2b879eb80f50",
+        "claimed_at": "2026-07-27T16:15:31.158Z",
+        "acquired_at": "2026-07-27T16:09:20.286Z",
+        "worker": "worker-cg",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

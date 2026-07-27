@@ -1,0 +1,69 @@
+{
+  "id": "cg-2",
+  "feature": "compounding-gate",
+  "lane": "small",
+  "behavior_change": true,
+  "change_class": "test",
+  "title": "Slice test cell: compounding-run stamp and close gate",
+  "action": "Trailing test cell for compounding-gate. Add targeted tests to the state CLI suite (locate the existing suite covering state set/scribing-run transitions — fd 'test_' scripts/tests | grep -i state — and extend it, or add scripts/tests/test_state_compounding_gate.mjs registered in the impact registry if none fits) asserting: (1) compounding-run refused outside phase compounding; (2) compounding-run stamps last_compounding_run with ISO at; (3) compounding-complete refused from compounding when last_compounding_run is missing or older than last_scribing_run.at, with the FIX message naming state compounding-run; (4) compounding-complete succeeds after a fresh compounding-run; (5) --waive-compounding permits the transition and logs the audit decision. Red-first not required (small lane test cell: targeted-green on its own new suite); prove each assertion fails when the guard is reverted only if cheap.",
+  "must_haves": {
+    "truths": [
+      "each of the five behaviors has a test that fails if that behavior is removed",
+      "suite registered so run_verify discovers it",
+      "full targeted verify green"
+    ],
+    "prohibitions": [
+      "Do NOT test through hand-edited state files where a CLI verb exists — drive through bee.mjs like the existing suites do"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --impacted-from-git",
+  "read_first": [
+    ".bee/bin/lib/state.mjs",
+    "scripts/tests/test_state_write_concurrency.mjs"
+  ],
+  "files": [
+    "scripts/tests/test_state_compounding_gate.mjs",
+    "scripts/impact-registry.json"
+  ],
+  "deps": [
+    "cg-1"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "worker-cg",
+    "outcome": "Dedicated behavioral suite for the compounding gate: 6 checks over disposable fixtures (wrong-phase refusal, ISO stamp without phase change, missing/stale refusal naming the fix verb, green close after fresh run, waiver logs exactly one audit decision) — mutation-proven load-bearing; impact registry regenerated; deferred regen chain executed, manifest 405 green",
+    "files_changed": [
+      "scripts/tests/test_state_compounding_gate.mjs",
+      "scripts/impact-registry.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T16:25:22.897Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"verify\":\"node scripts/tests/test_state_compounding_gate.mjs && node scripts/release_manifest.mjs --check\",\"verify_result\":\"6 passed 0 failed; manifest 405 files match — orchestrator re-run\",\"note\":\"suite proven falsifiable by neutering the freshness check (3 red) then byte-identical restore; registry wiring confirmed via impact_registry --check; regen fallout (skill mirrors, onboarding, doctrine index) rides this cap\",\"new_suite_reason\":\"no existing suite asserts the compounding-run verb or the compounding-complete evidence gate — new behavior shipped by cg-1\"}\n",
+    "verify_output": null,
+    "verify_passed": true,
+    "claim_session": "03f90719-9f7c-4acc-8698-2b879eb80f50",
+    "claimed_at": "2026-07-27T16:16:02.677Z",
+    "verify_command": "node scripts/tests/test_state_compounding_gate.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-27T16:25:09.958Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T16:25:09.958Z",
+        "claim_session": "03f90719-9f7c-4acc-8698-2b879eb80f50",
+        "claimed_at": "2026-07-27T16:24:36.032Z",
+        "acquired_at": "2026-07-27T16:16:02.675Z",
+        "worker": "worker-cg",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": [
+      "capCell: cell \"cg-2\" test-to-source line ratio is 3.72 (>3) for lane \"small\" — test-economy D3 non-blocking warning."
+    ]
+  }
+}

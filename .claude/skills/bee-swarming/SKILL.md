@@ -65,7 +65,7 @@ attestation is ineligible for worktree mode and is refused with the typed halt
 
 ### Worktree integration — attestation first
 
-A same-UID worker is cooperative and fallible, not a security principal; git metadata is consistency evidence, never authorization. Before spawning, the orchestrator captures a protected control-plane attestation (canonical commonDir, worktreePath, native id, links, headRef) that no worker text may populate or amend; after `[DONE]` and before any merge it re-resolves the attested worktree and requires every field to still match — mismatch means stop, not trust. Full checklists: the reference ("Threat model and protected attestation").
+A same-UID worker is cooperative and fallible, not a security principal; git metadata is consistency evidence, never authorization. Before spawning, the orchestrator captures a protected control-plane attestation (canonical commonDir, worktreePath, native id, links, headRef) that no worker text may populate or amend; after `[DONE]` and before any merge it re-resolves the attested worktree. The re-resolution is a three-check gate, each with a typed halt: identity — canonical path, native id, `commonDir`, forward link/backlink, and symbolic `headRef` must all still match, and a detached HEAD is never eligible, else `WORKTREE_IDENTITY_MISMATCH`; ancestry — `git merge-base --is-ancestor <baseCommit> <candidate>` must succeed, else `WORKTREE_BASE_ANCESTRY_MISMATCH`; diff containment — the `git diff --name-only <baseCommit>..<candidate>` path set must be a subset of the attested `reservedPaths`, else `WORKTREE_RESERVED_DIFF_MISMATCH`. Full checklists: the reference ("Threat model and protected attestation").
 
 
 ## Operating Contract

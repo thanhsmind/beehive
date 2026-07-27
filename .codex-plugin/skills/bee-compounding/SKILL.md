@@ -108,6 +108,7 @@ Rules:
 - **The commit message names the feature and the close**, so the close is findable in the log: `[<feature> close]`.
 - **Nothing outside the close belongs in it.** If `git status` shows unrelated dirty files, commit only the close's paths (`docs/history/learnings/`, `docs/knowledge/` or `docs/specs/`, `docs/backlog.md`, `.bee/`) and report the rest in the run summary rather than sweeping it in.
 - **Warn, never block, on a refusal you cannot resolve** (a hook rejects the commit, the repo is mid-rebase, nothing is dirty because a cell already committed it): one line in the run summary naming the reason, and the close proceeds. What is never acceptable is setting the phase in §11 while silently leaving the close's artifacts uncommitted and unmentioned.
+- **Register the close as a review candidate** (SPEC 7.1 step 6): `node .bee/bin/bee.mjs reviews candidate add --feature <feature> --head "$(git rev-parse HEAD)" --mode <lane>` so an on-demand review session can find this feature later.
 
 ## 11. Update State
 

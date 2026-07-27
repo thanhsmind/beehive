@@ -1,0 +1,76 @@
+{
+  "id": "cg-1",
+  "feature": "compounding-gate",
+  "lane": "small",
+  "behavior_change": true,
+  "change_class": "behavior",
+  "title": "state compounding-run verb + compounding-complete evidence gate",
+  "action": "Mirror the scribing-run mechanism for compounding (decision compounding-gate D1). In .bee/bin/lib/state.mjs: (1) add a compounding-run recorder that stamps last_compounding_run {feature, date, at ISO-precise, learnings, next_action?} — legal only from phase compounding (same shape as SCRIBING_RUN_FROM discipline); it does NOT advance phase. (2) Tighten the compounding-complete tail guard: entering compounding-complete (already legal only from compounding + zero scribing debt) now ALSO requires last_compounding_run with at >= last_scribing_run.at and matching feature — refused otherwise with a FIX message naming `bee state compounding-run`; add --waive-compounding override that logs an audit decision naming the feature (exact mirror of --waive-scribing-debt semantics). In .bee/bin/bee.mjs: register the CLI verb `state compounding-run --feature <f> --learnings <path> [--next-action <n>] [--json]` and the --waive-compounding flag on state set; update the state group --help schema entries and the line-90-region error message that says the name 'asserts BOTH scribing and compounding ran' so it names the new machine check. Run existing state suites green (existing-targeted-green: author NO new tests in this cell — the trailing test cell cg-2 owns them).",
+  "must_haves": {
+    "truths": [
+      "state compounding-run stamps last_compounding_run with ISO-precise at, legal only from phase compounding",
+      "compounding-complete refuses without a fresh (>= last_scribing_run.at, same feature) last_compounding_run, message names the fix verb",
+      "--waive-compounding exists, logs an audit decision, and is the only bypass",
+      "existing state suites pass unchanged"
+    ],
+    "prohibitions": [
+      "Do NOT advance phase from compounding-run (state set stays the only phase writer besides scribing-run)",
+      "Do NOT weaken the existing scribing-debt check or any other transition rule",
+      "Do NOT author new test files in this cell (cg-2 owns tests)"
+    ]
+  },
+  "verify": "node scripts/tests/test_state_write_concurrency.mjs && node scripts/run_verify.mjs --impacted-from-git",
+  "read_first": [
+    ".bee/bin/lib/state.mjs",
+    ".bee/bin/bee.mjs"
+  ],
+  "files": [
+    ".bee/bin/lib/state.mjs",
+    ".bee/bin/bee.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "regen deferred to cg-2, the slice tail — manifest write runs once after tests land (lane-lean learned pattern)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "worker-cg",
+    "outcome": "state compounding-run verb added (stamps last_compounding_run, legal only from compounding, no phase advance) and compounding-complete now machine-requires fresh compounding evidence (at >= last_scribing_run.at, same feature) with --waive-compounding as the only, decision-logged bypass — vendored mirrors kept byte-identical, 12 existing fixtures updated to satisfy the new orthogonal precondition",
+    "files_changed": [
+      ".bee/bin/lib/state.mjs",
+      ".bee/bin/bee.mjs",
+      ".bee/bin/lib/command-registry.mjs",
+      "packages/bee/lib/state.mjs",
+      "packages/bee/bee.mjs",
+      "packages/bee/lib/command-registry.mjs",
+      "packages/bee/tests/test_cli_state.mjs",
+      "packages/bee/tests/test_bee_cli.mjs",
+      "packages/bee/tests/test_misc.mjs",
+      "scripts/tests/test_state_projection_race.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T16:09:13.137Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"verify\":\"node scripts/tests/test_state_write_concurrency.mjs && node packages/bee/tests/test_cli_state.mjs && node packages/bee/tests/test_bee_cli.mjs\",\"verify_result\":\"PASS concurrency (18 procs, 0 corruption); 120 passed 0 failed; 313 passed 0 failed — orchestrator re-run, not worker's word\",\"note\":\"deviation: touch set widened to vendored mirrors (packages/bee/*) and existing test fixtures — mirror parity is machine-enforced (test_lib_mirror) so the widening is obligatory, recorded here; smoke-tested full chain in disposable dirs, repo state untouched\"}\n",
+    "verify_output": null,
+    "verify_passed": true,
+    "claim_session": "03f90719-9f7c-4acc-8698-2b879eb80f50",
+    "claimed_at": "2026-07-27T15:35:42.357Z",
+    "verify_command": "node scripts/tests/test_state_write_concurrency.mjs && node packages/bee/tests/test_cli_state.mjs && node packages/bee/tests/test_bee_cli.mjs",
+    "verified_at": "2026-07-27T16:09:13.043Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T16:09:13.043Z",
+        "claim_session": "03f90719-9f7c-4acc-8698-2b879eb80f50",
+        "claimed_at": "2026-07-27T16:06:12.790Z",
+        "acquired_at": "2026-07-27T15:35:42.355Z",
+        "worker": "worker-cg",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}
