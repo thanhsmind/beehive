@@ -39,7 +39,16 @@
 //! - the JSON keys named in [`VOLATILE_FIELDS`], each with its required
 //!   shape;
 //! - on STDERR only, the mjs runtime's own `[bee] <cmd> <n>ms` work-
-//!   visibility line — see [`strip_runtime_stderr_artifacts`].
+//!   visibility line — see [`strip_runtime_stderr_artifacts`];
+//! - on STDERR only, the PARSER TAIL (and only the tail) of the shared
+//!   `readJson` parse-failure warning — see [`reconcile_parse_warnings`].
+//!   This is the one artifact whose text genuinely cannot be identical on
+//!   the two legs, because each runtime quotes its OWN JSON parser. The
+//!   sentence's invariant prefix (`bee: could not parse JSON at <path> — `,
+//!   including the path) and its invariant suffix (`. Using fallback; fix
+//!   the file.`) are still compared byte-for-byte; only the parser text
+//!   between them is replaced, and only when it matches that leg's parser
+//!   dialect.
 
 use crate::runner::Runtime;
 
@@ -48,6 +57,7 @@ const UUID_PLACEHOLDER: &str = "<UUID>";
 const PID_PLACEHOLDER: &str = "<PID>";
 const TOKEN_PLACEHOLDER: &str = "<TOKEN>";
 pub const ROOT_PLACEHOLDER: &str = "<ROOT>";
+pub const PARSE_ERROR_PLACEHOLDER: &str = "<PARSE_ERROR>";
 
 /// How a declared key name is matched.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -141,13 +151,15 @@ pub fn normalize(text: &str, own_root: &str) -> String {
 
 /// Normalize a leg's STDERR.
 ///
-/// Same allowlist as [`normalize`], plus the one runtime-specific artifact
-/// on this channel — see [`strip_runtime_stderr_artifacts`]. Returns `Err`
-/// when that artifact violates its declared shape; callers surface the error
-/// as a diff rather than swallowing it.
+/// Same allowlist as [`normalize`], plus the two runtime-specific artifacts
+/// on this channel — see [`strip_runtime_stderr_artifacts`] and
+/// [`reconcile_parse_warnings`]. Returns `Err` when either artifact violates
+/// its declared shape; callers surface the error as a diff rather than
+/// swallowing it.
 pub fn normalize_stderr(text: &str, own_root: &str, runtime: Runtime) -> Result<String, String> {
     let stripped = strip_runtime_stderr_artifacts(text, runtime)?;
-    Ok(normalize(&stripped, own_root))
+    let reconciled = reconcile_parse_warnings(&stripped, runtime)?;
+    Ok(normalize(&reconciled, own_root))
 }
 
 /// The ONE runtime-specific stderr artifact, declared and shape-asserted.
@@ -224,6 +236,214 @@ fn is_timing_line(line: &str) -> bool {
         return false;
     }
     cmd.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b' ')
+}
+
+// ─── the readJson parse-failure warning (rpl-11) ───────────────────────────
+//
+// The invariant head of the sentence, verbatim from the frozen oracle
+// `packages/bee/lib/fsutil.mjs` `readJson`. MEASURED, not transcribed: a node
+// child (v24.14.1) was run over a deliberately unparseable file and its
+// stderr hexdumped, so the separator is known to be U+2014 EM DASH with one
+// ASCII space on each side (`342 200 224`), and the sentence is known to end
+// with a literal `.` and a single `\n` from `console.warn`:
+//
+//   bee: could not parse JSON at .bee/tmp/rpl-11/bad.json — Expected property
+//   name or '}' in JSON at position 2 (line 1 column 3). Using fallback; fix
+//   the file.
+//
+const PARSE_WARN_PREFIX: &str = "bee: could not parse JSON at ";
+const PARSE_WARN_SEP: &str = " — ";
+const PARSE_WARN_SUFFIX: &str = ". Using fallback; fix the file.";
+
+/// The SECOND declared stderr artifact, and the only one whose text is
+/// genuinely allowed to differ between the two legs.
+///
+/// `packages/bee/lib/fsutil.mjs:42` warns
+/// `` `bee: could not parse JSON at ${file} — ${err.message}. Using fallback;
+/// fix the file.` `` where `err.message` is **V8's** JSON parser text;
+/// `crates/bee-core/src/fsutil.rs:82-88` emits the same sentence with
+/// **serde_json's** text. Neither is wrong and neither can be changed (D1
+/// freezes the mjs leg), so the two can never match byte-for-byte. Without
+/// this reconciliation there is nowhere to account for that, and every ledger
+/// group would have to omit unparseable-store reads from its scenarios
+/// entirely — silently shipping zero coverage of the exposed surface
+/// (`reviews.mjs:109,128`, `feedback.mjs:547,772`, `decisions.mjs:127`, plus
+/// the `state.mjs`/`cells.mjs` reads nearly every command transits). JSONL
+/// reads are unaffected: `readJsonl`/`read_jsonl` skip corrupt lines silently
+/// on both sides.
+///
+/// The fix follows the `[bee] <cmd> <n>ms` precedent
+/// ([`strip_runtime_stderr_artifacts`]) exactly — a DECLARED artifact,
+/// shape-asserted in both directions, never a blanket ignore. The warning is
+/// split into an **invariant prefix**, a **parser tail**, and an **invariant
+/// suffix**:
+///
+/// - the prefix `bee: could not parse JSON at <path> — ` **including the
+///   path** is preserved verbatim into the normalized text, so it is still
+///   compared byte-for-byte between the legs. Two legs blaming two different
+///   files stay a diff;
+/// - the suffix `. Using fallback; fix the file.` is likewise preserved, and
+///   a warning that does not carry it is an ERROR — the frozen sentence
+///   moved, so this normalization no longer describes reality;
+/// - only the tail between them is replaced with
+///   [`PARSE_ERROR_PLACEHOLDER`], and only when it matches the JSON-parser
+///   dialect **of the runtime that produced it** ([`is_parser_tail`]). An
+///   empty tail, prose, or the *other* runtime's dialect is an error, not a
+///   pass.
+///
+/// Two consequences that are the whole point:
+///
+/// 1. The warning is REPLACED, never removed. A leg that emits no warning
+///    where the other does still differs, because the placeholder line is
+///    present on one side and absent on the other.
+/// 2. There is no blanket stderr strip. Everything that is not this exact
+///    declared sentence is left untouched and compared literally, and
+///    [`strip_runtime_stderr_artifacts`]'s refusal of asymmetric strips is
+///    unchanged.
+pub fn reconcile_parse_warnings(text: &str, runtime: Runtime) -> Result<String, String> {
+    if !text.contains(PARSE_WARN_PREFIX) {
+        return Ok(text.to_string());
+    }
+    let trailing_newline = text.ends_with('\n');
+    let mut out: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let Some(body) = line.strip_prefix(PARSE_WARN_PREFIX) else {
+            if line.contains(PARSE_WARN_PREFIX) {
+                // The declared artifact occupies a WHOLE line (`console.warn`
+                // / `eprintln!` both terminate it). Finding it mid-line means
+                // something interleaved with it, and a mask applied to a line
+                // whose framing is not the asserted one is exactly the
+                // blanket-strip mistake this module exists to prevent.
+                return Err(format!(
+                    "stderr line {line:?} embeds the readJson parse-failure warning mid-line — the declared artifact is a whole line (fsutil.mjs:42 `console.warn`); refusing to reconcile a sentence whose framing is not the one that was asserted"
+                ));
+            }
+            out.push(line.to_string());
+            continue;
+        };
+        let Some(body) = body.strip_suffix(PARSE_WARN_SUFFIX) else {
+            return Err(format!(
+                "{} stderr's readJson parse-failure warning {line:?} does not match the declared shape `{PARSE_WARN_PREFIX}<path>{PARSE_WARN_SEP}<parser message>{PARSE_WARN_SUFFIX}` (fsutil.mjs:42 / bee-core fsutil.rs:82-88) — the frozen sentence moved, so this reconciliation is no longer valid",
+                runtime.label()
+            ));
+        };
+        // `rsplit_once`, not `split_once`: a PATH may legitimately contain an
+        // em dash, a parser message never does, so the LAST separator is the
+        // real one.
+        let Some((path, tail)) = body.rsplit_once(PARSE_WARN_SEP) else {
+            return Err(format!(
+                "{} stderr's readJson parse-failure warning {line:?} carries no `{PARSE_WARN_SEP}` separator — the declared shape (fsutil.mjs:42) moved",
+                runtime.label()
+            ));
+        };
+        if path.is_empty() {
+            return Err(format!(
+                "{} stderr's readJson parse-failure warning {line:?} names no file — the path is part of the INVARIANT prefix and is compared byte-for-byte, so an empty one cannot be reconciled",
+                runtime.label()
+            ));
+        }
+        if !is_parser_tail(tail, runtime) {
+            return Err(format!(
+                "{} stderr's readJson parse-failure warning has parser tail {tail:?}, which is not a {} JSON-parser message — the tail is the ONLY part permitted to differ between the legs and it is never accepted unconditionally; an empty, prose, or wrong-dialect tail is a divergence, not a pass. Full line: {line:?}",
+                runtime.label(),
+                match runtime {
+                    Runtime::Mjs => "V8",
+                    Runtime::QueenBee => "serde_json",
+                },
+            ));
+        }
+        out.push(format!("{PARSE_WARN_PREFIX}{path}{PARSE_WARN_SEP}{PARSE_ERROR_PLACEHOLDER}{PARSE_WARN_SUFFIX}"));
+    }
+    let mut joined = out.join("\n");
+    if trailing_newline && !joined.is_empty() {
+        joined.push('\n');
+    }
+    Ok(joined)
+}
+
+/// Does `tail` look like a JSON parser message produced by `runtime`'s OWN
+/// parser? Asserted per leg, never symmetrically: the mjs leg quoting
+/// serde_json's dialect (or vice versa) means one runtime is reporting the
+/// other's failure, which is a divergence worth failing on.
+fn is_parser_tail(tail: &str, runtime: Runtime) -> bool {
+    if tail.is_empty() {
+        return false;
+    }
+    match runtime {
+        Runtime::Mjs => is_v8_json_parse_message(tail),
+        Runtime::QueenBee => is_serde_json_parse_message(tail),
+    }
+}
+
+/// V8's `SyntaxError.message` for `JSON.parse`, in the three families a real
+/// node child was MEASURED to produce over 15 deliberately corrupt files
+/// (node v24.14.1):
+///
+/// 1. `<reason> at position <n> (line <n> column <n>)` — e.g. `Expected
+///    property name or '}' in JSON at position 2 (line 1 column 3)`,
+///    `Unterminated string in JSON at position 10 (line 1 column 11)`,
+///    `Unexpected non-whitespace character after JSON at position 8 (line 1
+///    column 9)`. The trailing `(line … column …)` clause is a node-20+
+///    addition: node 18, which this repo's CI matrix still builds against
+///    (`.github/workflows/ci.yml` `node-version: [18, 20, 22]`), emits the
+///    same message WITHOUT it (`Unexpected token o in JSON at position 24`),
+///    so the parenthetical is optional and the position clause is what is
+///    actually asserted;
+/// 2. `Unexpected end of JSON input` — the one message with no position at
+///    all (empty file, truncated array);
+/// 3. `Unexpected token '<c>', <snippet> is not valid JSON` — V8's
+///    snippet-quoting form for a short top-level failure (node 20+ only).
+///
+/// Deliberately a CLOSED set. A message outside it means either the node
+/// runtime's parser text changed or something other than a JSON parse error
+/// reached this sentence; both are worth a loud diff, which is the safe
+/// failure mode — a false refusal is visible, a false acceptance is not.
+fn is_v8_json_parse_message(tail: &str) -> bool {
+    // family 2
+    if tail == "Unexpected end of JSON input" {
+        return true;
+    }
+    // family 3
+    if let Some(head) = tail.strip_suffix(" is not valid JSON") {
+        return head.starts_with("Unexpected token '") && head.contains("', ");
+    }
+    // family 1, node 20+: `… at position <n> (line <n> column <n>)`
+    if let Some(rest) = tail.strip_suffix(')') {
+        let Some((head, paren)) = rest.rsplit_once(" (") else { return false };
+        return is_line_column(paren) && has_position_clause(head);
+    }
+    // family 1, node 18: `… at position <n>`, no parenthetical
+    has_position_clause(tail)
+}
+
+/// `serde_json::Error`'s `Display`: every syntax/EOF/data error it can raise
+/// from `from_str` ends with ` at line <n> column <n>` (the io category is
+/// unreachable here — `read_json` reads the file to a `String` first, so the
+/// parse never sees an io error). The reason text in front of it is free-
+/// form, which is exactly why the position clause is what gets asserted.
+fn is_serde_json_parse_message(tail: &str) -> bool {
+    let Some((reason, rest)) = tail.rsplit_once(" at line ") else { return false };
+    if reason.is_empty() {
+        return false;
+    }
+    is_line_column(&format!("line {rest}"))
+}
+
+/// `line <digits> column <digits>`, exactly.
+fn is_line_column(s: &str) -> bool {
+    let Some(rest) = s.strip_prefix("line ") else { return false };
+    let Some((line, column)) = rest.split_once(" column ") else { return false };
+    is_ascii_digits(line) && is_ascii_digits(column)
+}
+
+/// `<reason> at position <digits>`, with a non-empty reason.
+fn has_position_clause(head: &str) -> bool {
+    let Some((reason, position)) = head.rsplit_once(" at position ") else { return false };
+    !reason.is_empty() && is_ascii_digits(position)
+}
+
+fn is_ascii_digits(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
 }
 
 /// Replace every occurrence of `own_root` (a leg's own absolute temp-root
@@ -555,6 +775,208 @@ mod tests {
     fn refuses_a_misshaped_timing_line_instead_of_stripping_it() {
         let err = strip_runtime_stderr_artifacts("[bee] cells show FASTms\n", Runtime::Mjs).unwrap_err();
         assert!(err.contains("does not match the declared"), "{err}");
+    }
+
+    // ── the readJson parse-failure warning (rpl-11) ──────────────────────
+    //
+    // The mjs sentences below are VERBATIM output of the frozen oracle
+    // (`packages/bee/lib/fsutil.mjs` `readJson`) executed over deliberately
+    // unparseable files on node v24.14.1 — measured, never transcribed from
+    // the source text. Only the leading path was swapped for this leg's
+    // temp root.
+    const MJS_WARN_TAIL: &str = "Expected property name or '}' in JSON at position 2 (line 1 column 3)";
+
+    /// The queen-bee tail, in `serde_json`'s dialect. This crate has zero
+    /// dependencies by design (`enrich.rs`), so the port's parser cannot be
+    /// linked in here to generate one — which is exactly why the cmd-check
+    /// scenario `seam/unparseable-whole-json-store` exists: it runs the REAL
+    /// `queen-bee` binary over a corrupt store and puts its actual stderr
+    /// through this predicate. If the serde dialect ever stops matching,
+    /// that scenario fails; these unit tests pin the rule, the scenario pins
+    /// the reality.
+    /// MEASURED from the real `target/release/queen-bee status --json` over
+    /// the same corrupt `.bee/cells/archive/summary.json` body the cmd-check
+    /// scenario seeds. The mjs leg answered the SAME read with `Unexpected
+    /// token 'o', ..."seable": not json at"... is not valid JSON` — two
+    /// texts with nothing in common, which is the whole problem.
+    const RUST_WARN_TAIL: &str = "expected ident at line 1 column 26";
+
+    fn mjs_warn(root: &str, tail: &str) -> String {
+        format!("bee: could not parse JSON at {root}/.bee/config.json — {tail}. Using fallback; fix the file.\n[bee] status 12ms\n")
+    }
+
+    fn rust_warn(root: &str, tail: &str) -> String {
+        format!("bee: could not parse JSON at {root}/.bee/config.json — {tail}. Using fallback; fix the file.\n")
+    }
+
+    #[test]
+    fn the_two_runtimes_parser_texts_reconcile_to_one_normalized_sentence() {
+        // THE POINT OF THE CELL. V8's text and serde_json's text can never
+        // match byte-for-byte, so without this reconciliation no scenario
+        // could ever cover an unparseable whole-JSON store.
+        let a = normalize_stderr(&mjs_warn("/tmp/leg-a", MJS_WARN_TAIL), "/tmp/leg-a", Runtime::Mjs).unwrap();
+        let b = normalize_stderr(&rust_warn("/tmp/leg-b", RUST_WARN_TAIL), "/tmp/leg-b", Runtime::QueenBee)
+            .unwrap();
+        assert_eq!(a, b, "the two legs' parse warnings must reconcile");
+        assert_eq!(
+            a,
+            "bee: could not parse JSON at <ROOT>/.bee/config.json — <PARSE_ERROR>. Using fallback; fix the file.\n",
+            "the invariant prefix, the path and the invariant suffix must all survive normalization"
+        );
+    }
+
+    #[test]
+    fn a_leg_that_emits_no_warning_still_differs_from_one_that_does() {
+        // No blanket strip: the warning is REPLACED, never removed, so a
+        // port that silently swallowed the parse failure is a diff.
+        let warned =
+            normalize_stderr(&mjs_warn("/tmp/leg-a", MJS_WARN_TAIL), "/tmp/leg-a", Runtime::Mjs).unwrap();
+        let silent = normalize_stderr("", "/tmp/leg-b", Runtime::QueenBee).unwrap();
+        assert_ne!(warned, silent, "a leg that emitted no warning must not normalize into agreement");
+        assert!(warned.contains(PARSE_ERROR_PLACEHOLDER), "{warned}");
+    }
+
+    #[test]
+    fn a_differing_path_inside_the_invariant_prefix_is_still_a_diff() {
+        // Only the tail is masked. The path is part of the asserted
+        // invariant prefix and is compared byte-for-byte.
+        let a = normalize_stderr(&mjs_warn("/tmp/leg-a", MJS_WARN_TAIL), "/tmp/leg-a", Runtime::Mjs).unwrap();
+        let b = normalize_stderr(
+            &format!(
+                "bee: could not parse JSON at /tmp/leg-b/.bee/state.json — {RUST_WARN_TAIL}. Using fallback; fix the file.\n"
+            ),
+            "/tmp/leg-b",
+            Runtime::QueenBee,
+        )
+        .unwrap();
+        assert_ne!(a, b, "config.json vs state.json must survive as a diff");
+    }
+
+    #[test]
+    fn an_empty_parser_tail_is_refused_on_either_leg() {
+        for (rt, label) in [(Runtime::Mjs, "mjs"), (Runtime::QueenBee, "queen-bee")] {
+            let text = if rt == Runtime::Mjs {
+                "bee: could not parse JSON at /r/.bee/config.json — . Using fallback; fix the file.\n[bee] status 1ms\n".to_string()
+            } else {
+                "bee: could not parse JSON at /r/.bee/config.json — . Using fallback; fix the file.\n".to_string()
+            };
+            let err = normalize_stderr(&text, "/r", rt).unwrap_err();
+            assert!(err.contains("parser tail"), "{label}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_non_parser_shaped_tail_is_refused_on_either_leg() {
+        // The tail is never accepted unconditionally: it must look like the
+        // JSON parser message of the runtime that produced it.
+        let cases: [(Runtime, &str, &str); 4] = [
+            (Runtime::Mjs, "boom", "arbitrary prose"),
+            // serde_json's own dialect, coming out of the mjs leg: wrong.
+            (Runtime::Mjs, "key must be a string at line 1 column 3", "serde text on the mjs leg"),
+            (Runtime::QueenBee, "boom", "arbitrary prose"),
+            // V8's dialect, coming out of the rust leg: wrong.
+            (
+                Runtime::QueenBee,
+                "Expected property name or '}' in JSON at position 2 (line 1 column 3)",
+                "V8 text on the queen-bee leg",
+            ),
+        ];
+        for (rt, tail, why) in cases {
+            let text = if rt == Runtime::Mjs {
+                format!("bee: could not parse JSON at /r/x.json — {tail}. Using fallback; fix the file.\n[bee] status 1ms\n")
+            } else {
+                format!("bee: could not parse JSON at /r/x.json — {tail}. Using fallback; fix the file.\n")
+            };
+            let err = normalize_stderr(&text, "/r", rt).unwrap_err();
+            assert!(err.contains("parser tail"), "{why}: expected a refusal, got: {err}");
+        }
+    }
+
+    #[test]
+    fn a_warning_whose_invariant_suffix_moved_is_refused_not_masked() {
+        let err = normalize_stderr(
+            "bee: could not parse JSON at /r/x.json — Unexpected end of JSON input\n",
+            "/r",
+            Runtime::QueenBee,
+        )
+        .unwrap_err();
+        assert!(err.contains("declared shape"), "{err}");
+    }
+
+    #[test]
+    fn every_measured_v8_parse_message_is_accepted_on_the_mjs_leg() {
+        // Every one of these is VERBATIM node v24.14.1 output through the
+        // frozen `readJson`, measured over 15 deliberately corrupt files.
+        for tail in [
+            "Unexpected end of JSON input",
+            "Expected property name or '}' in JSON at position 1 (line 1 column 2)",
+            "Expected double-quoted property name in JSON at position 7 (line 1 column 8)",
+            "Unterminated string in JSON at position 10 (line 1 column 11)",
+            "Bad escaped character in JSON at position 8 (line 1 column 9)",
+            "Bad control character in string literal in JSON at position 8 (line 1 column 9)",
+            "Unexpected token 'h', \"hello\" is not valid JSON",
+            "Unexpected token 'o', ...\"seable\": not json at\"... is not valid JSON",
+            "Unexpected non-whitespace character after JSON at position 8 (line 1 column 9)",
+            "No number after minus sign in JSON at position 7 (line 1 column 8)",
+            "Bad Unicode escape in JSON at position 9 (line 1 column 10)",
+            // node 18 (still in the CI matrix): same family, no parenthetical.
+            "Unexpected token o in JSON at position 24",
+            "Unexpected string in JSON at position 12",
+        ] {
+            let text = format!(
+                "bee: could not parse JSON at /r/x.json — {tail}. Using fallback; fix the file.\n[bee] status 1ms\n"
+            );
+            let out = normalize_stderr(&text, "/r", Runtime::Mjs)
+                .unwrap_or_else(|e| panic!("measured V8 message must be accepted: {tail:?} -> {e}"));
+            assert_eq!(
+                out,
+                "bee: could not parse JSON at <ROOT>/x.json — <PARSE_ERROR>. Using fallback; fix the file.\n"
+            );
+        }
+    }
+
+    #[test]
+    fn the_serde_json_dialect_is_accepted_on_the_queen_bee_leg() {
+        // `serde_json::Error`'s `Display` always appends ` at line <n>
+        // column <n>` for a syntax/EOF/data error, whatever the reason text
+        // is (the io category is unreachable — `read_json` reads the file to
+        // a String first). The first entry is MEASURED from the real
+        // `queen-bee` binary; the live proof that the dialect still
+        // describes reality is the `seam/unparseable-whole-json-store`
+        // cmd-check scenario, which puts the port's ACTUAL stderr through
+        // this predicate on every run.
+        for tail in [
+            RUST_WARN_TAIL,
+            "key must be a string at line 1 column 3",
+            "EOF while parsing a value at line 1 column 0",
+            "expected value at line 1 column 1",
+            "expected `,` or `}` at line 1 column 8",
+            "control character (\\u0000-\\u001F) found while parsing a string at line 1 column 9",
+            "trailing characters at line 1 column 9",
+        ] {
+            let text =
+                format!("bee: could not parse JSON at /r/x.json — {tail}. Using fallback; fix the file.\n");
+            let out = normalize_stderr(&text, "/r", Runtime::QueenBee)
+                .unwrap_or_else(|e| panic!("serde_json message must be accepted: {tail:?} -> {e}"));
+            assert_eq!(
+                out,
+                "bee: could not parse JSON at <ROOT>/x.json — <PARSE_ERROR>. Using fallback; fix the file.\n"
+            );
+        }
+    }
+
+    #[test]
+    fn unrelated_stderr_lines_are_untouched_by_the_reconciliation() {
+        let out = normalize_stderr(
+            "cells show: unknown flag --x.\nbee: could not parse JSON at /r/x.json — Unexpected end of JSON input. Using fallback; fix the file.\n[bee] cells show 3ms\n",
+            "/r",
+            Runtime::Mjs,
+        )
+        .unwrap();
+        assert_eq!(
+            out,
+            "cells show: unknown flag --x.\nbee: could not parse JSON at <ROOT>/x.json — <PARSE_ERROR>. Using fallback; fix the file.\n"
+        );
     }
 
     #[test]

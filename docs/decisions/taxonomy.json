@@ -246,6 +246,10 @@
     "status",
     "read-dedup",
     "windows-path-identity",
-    "correction"
+    "correction",
+    "gate-bypass-audit",
+    "advisor-consult",
+    "parity",
+    "fsutil"
   ]
 }

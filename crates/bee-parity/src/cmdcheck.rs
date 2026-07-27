@@ -314,6 +314,48 @@ fn mutate_registry_example(root: &Path) -> Result<(), String> {
     )
 }
 
+// ─── rpl-11: an UNPARSEABLE whole-JSON store ───────────────────────────────
+//
+// The end-to-end proof of [`crate::normalize::reconcile_parse_warnings`].
+// Without it, the reconciliation would rest entirely on unit tests holding
+// hand-written strings, and the two things it has to be right about — that
+// V8's real text is accepted on the mjs leg and serde_json's real text is
+// accepted on the queen-bee leg — are exactly the two things a hand-written
+// string cannot prove.
+//
+// `.bee/cells/archive/summary.json` is the store, chosen because it is read
+// through the shared `readJson` primitive EXACTLY ONCE per invocation on
+// both legs — `bee.mjs:738` -> `cells.mjs:809 archivedSummary` -> `readJson`,
+// and `queen-bee status.rs:562` -> `bee-core cells.rs:279 archived_summary`
+// -> `read_json` — so each leg emits exactly one warning. (Ordinary
+// `.bee/cells/*.json` records would NOT work: `bee-core cells.rs list_cells`
+// parses them with a bare `serde_json::from_str` and skips a corrupt one
+// silently, with no warning at all.) Its fallback is `{}` on both legs, so
+// the archived totals stay `0` and STDOUT is unaffected — which makes this
+// scenario a pure stderr proof.
+const CORRUPT_ARCHIVE_SUMMARY: &str = ".bee/cells/archive/summary.json";
+
+/// The corrupt body. Its V8 message was MEASURED through the frozen oracle
+/// before this scenario was written (`Unexpected token 'o',
+/// ..."seable": not json at"... is not valid JSON`), so the seed is known to
+/// exercise V8's snippet-quoting family rather than only its positional one.
+const CORRUPT_ARCHIVE_BODY: &str = "{ \"rpl-11-unparseable\": not json at all }";
+
+fn seed_unparseable_archive_summary(root: &Path) -> Result<(), String> {
+    write_file(&root.join(".bee").join("cells").join("archive").join("summary.json"), CORRUPT_ARCHIVE_BODY)
+}
+
+/// THE NEGATIVE CONTROL, and the reason it is the right one: it makes the
+/// store PARSEABLE again, so the mutated `queen-bee` leg emits no warning at
+/// all where the mjs baseline emits one. A control that merely changed the
+/// corrupt bytes would move only the parser tail — which is masked — and
+/// would therefore prove nothing. This one fires precisely on the property
+/// the reconciliation must never lose: the warning is replaced, never
+/// removed, so its ABSENCE on one leg is still a diff.
+fn mutate_archive_summary_into_valid_json(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, CORRUPT_ARCHIVE_SUMMARY, CORRUPT_ARCHIVE_BODY, "{}")
+}
+
 fn argv(tokens: &[&str]) -> Vec<String> {
     tokens.iter().map(|s| (*s).to_string()).collect()
 }
@@ -1344,6 +1386,38 @@ pub fn all_scenarios() -> Result<ScenarioSet, String> {
                 text: "\"feature\": \"rpl1-numeric-keys\"",
             },
             Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // ── rpl-11: an unparseable whole-JSON store, on STDERR ───────────────
+    //
+    // Both legs must warn, with the SAME invariant prefix (including the
+    // path) and the SAME invariant suffix, differing only in the parser
+    // text each runtime's own JSON parser produced. The `Equals` assertion
+    // below pins all three parts: any drift in the prefix, the path or the
+    // suffix fails it, and the tail is only ever seen as `<PARSE_ERROR>`
+    // because it passed its leg's dialect check.
+    set.register(Scenario {
+        group: "seam",
+        name: "unparseable-whole-json-store",
+        argv: argv(&["status", "--json"]),
+        session_id: None,
+        seed: Some(seed_unparseable_archive_summary),
+        mutation: Some(MutationTarget {
+            store: CORRUPT_ARCHIVE_SUMMARY,
+            apply: mutate_archive_summary_into_valid_json,
+        }),
+        control_channel: Channel::Stderr,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "bee: could not parse JSON at <ROOT>/.bee/cells/archive/summary.json — <PARSE_ERROR>. Using fallback; fix the file.\n",
+            },
+            // The fallback is `{}` on both legs, so the corrupt store must
+            // NOT have moved stdout — this is a pure stderr proof.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"archived\"" },
         ],
     })?;
 
