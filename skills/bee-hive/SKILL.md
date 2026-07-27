@@ -124,7 +124,7 @@ The last two flags are narrowed (D7): a covered bugfix that keeps existing tests
 
 Use the least workflow that honestly protects the work. A tiny fix wearing epic ceremony is a red flag; a hard-gate change routed as `small` is a worse one.
 
-**One re-lane checkpoint, after the first evidence pass** (exploring's scout, else planning's orient): measured evidence may demote `standard` → `small` once — a counted touch set within the target threshold, zero hard-gate flags, zero open gray areas, all three required. Never into `tiny`, never twice, never with a hard-gate flag; promotion stays available always. Full rule: `references/routing-and-contracts.md` ("Re-lane checkpoint").
+**One re-lane checkpoint, after the first evidence pass** (exploring's scout, else planning's orient): measured evidence demotes to the smallest honest lane — `standard` → `small` (touch set ≤3), on to `tiny` (≤2 files, one direct task) — zero hard-gate flags, zero open gray areas, all conditions measured; when they all hold, demotion is the default and staying heavy must name the failing condition. Never twice, never with a hard-gate flag; promotion stays available always. Full rule: `references/routing-and-contracts.md` ("Re-lane checkpoint").
 
 **Ceremony scales with the lane (lanes scale ceremony, never memory):**
 
