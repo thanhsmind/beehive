@@ -87,21 +87,7 @@ Three paths, and the choice between the first two is gated on `bee.authoritative
 
 **A new concept may NOT claim a subject an existing concept already owns.** This is the anti-fork gate, and it carries the weight the one-file-per-area rule used to carry alone: two concepts claiming one subject both parse, both list in the index, and no reader can tell which is true — the `-v2` failure in a new costume. Ownership is checked bundle-wide, not per area: a subject owned by a concept in another area still routes there. When a subject genuinely splits, the owning concept is rewritten and the split is declared in it (see `docs/knowledge/areas/doctrine-layer/overview.md` §"How this area is split") — never by quietly authoring a rival.
 
-**The gate has three layers, because exact string matching on free text can never be sufficient.** An independent judge broke the single-layer version four ways in one sitting:
-
-1. **The match is a skeleton, not a string.** Subjects are compared after NFKC, lowercasing, accent stripping, a cross-script confusable fold, and punctuation/whitespace collapse. A trailing period and a Cyrillic `е` each bought a rival concept before this existed; neither can now.
-2. **Malformed input fails closed** — the three refusals and the throw in §2 above. A silently skipped claim is a fork with extra steps.
-3. **The bundle-wide backstop bites.** `duplicate_authoritative_for` is a chain-**failing** finding in `bee knowledge check` (no `--strict` needed), grouped by the same skeleton. Layer 1 cannot catch a genuine word-order paraphrase (`refunds and reversals` vs `reversals and refunds`) — nothing that compares strings can — so the bundle-wide check is what refuses to let two authorities coexist. `malformed_authoritative_for` fails the chain the same way.
-
-Do not soften any layer to get a write through. A refused write means the bundle is wrong, not the gate.
-
-**Frontmatter is ALWAYS produced by `emitFrontmatter`, never typed by hand** — hand-written blocks are caught `not_canonical` by the round-trip guard, repeatedly and including by orchestrators who knew the rule. Build the data object, emit, then write body under it:
-
-```
-node -e "import('./.bee/bin/lib/knowledge.mjs').then(m=>process.stdout.write(m.emitFrontmatter({type:'bee.area',title:'...',description:'...',tags:['...'],timestamp:'YYYY-MM-DD',bee:{id:'...',lifecycle:'active',areas:['<area>'],required_context:[],decisions:[],sources:[],authoritative_for:'<area>: <subject>'}})))"
-```
-
-Body sections, the rebuild bar, and the `bee.areas` vs `bee.authoritative_for` distinction: the `bee.area` template in `docs/knowledge/areas/okf-profile/concept-model-and-authoring.md` §Templates. After any new concept or new area, regenerate the indexes — `node .bee/bin/bee.mjs knowledge index` — and confirm the bundle still grades clean: `node .bee/bin/bee.mjs knowledge check`.
+**The anti-fork gate has three layers** — skeleton matching (NFKC, casefold, confusable fold), malformed-input fail-closed, and the bundle-wide `duplicate_authoritative_for` chain-fail — and none may be softened to get a write through: a refused write means the bundle is wrong, not the gate. **Frontmatter is always produced by `emitFrontmatter`, never typed by hand** (the round-trip guard catches hand-written blocks `not_canonical`). Layer detail, the emit command, and the post-write index/check steps: the reference ("Bundle-mode gate and frontmatter").
 
 ### 2b. No bundle — the area's spec file
 
@@ -111,16 +97,7 @@ Body sections, the rebuild bar, and the `bee.areas` vs `bee.authoritative_for` d
 
 Sections (full template + per-section rules in the reference): **Purpose → Entry Points & Triggers → Data Dictionary → Behaviors & Operations → Actors & Access → Business Rules → Edge Cases Settled → Open Gaps → Pointers (implementation)**. The same sections fit every area shape — for a UI area the triggers are links and clicks and the data is form fields; for a backend area the triggers are schedules, events, and calls, and the data is inputs, outputs, and stored elements. **The same nine, in the same order, are the body contract for a `bee.area` concept** (§2a): a concept covers the sections its subject has content for and says nothing where it has nothing, but it never invents a different set of headings. Splitting an area into concepts must not quietly downgrade body quality to whatever the author felt like — format-green is not quality-green.
 
-Merge rules:
-
-- Present tense only. "Was", "previously", "changed from" are banned — history lives in git and `docs/history/`.
-- A delta that contradicts an existing line **replaces** it; never keep both.
-- Every enum value in the Data Dictionary carries its business meaning ("`paused` — hidden from applicants, still editable by the owner"). A value without a meaning is an Open Gap, not a table row.
-- Every Behavior block answers: what triggers it, what blocks it, what changes, what side effects fire, and **what each actor or consuming system observes afterwards**.
-- Business Rules are numbered (R1, R2…) and cite the active D-ID that decided them.
-- UI areas: refresh the settled snapshot when the screen visibly changed (ask the user for one if you cannot produce it); a UI area with no current snapshot records that as an Open Gap, never silently (decision 0003). **With no bundle** the snapshot lives under `docs/specs/visuals/<area>/`, unchanged. **With a bundle there is no snapshot home yet, and this skill does not invent one:** the compatibility surface is read-only for new content (`scripts/okf_specs_fence.mjs` fails the chain, G2) and the bundle profile defines no visuals location. Until one is decided, record the missing snapshot as an **Open Gap** in the area's concept — naming the screen and stating that the bundle has no visuals home — and never write the image into the retired tree. The gap itself is tracked in `docs/knowledge/areas/okf-profile/concept-model-and-authoring.md` §Open Gaps.
-- If the feature added or removed an area, or changed shared entities, the role model, or a cross-area flow: sync `docs/specs/system-overview.md` in the same pass (template in the reference). In bundle mode the same duty falls on the area's `overview` concept and the area index.
-- Update frontmatter: `updated`, append to `sources`, reconcile `decisions`, set `coverage: full | partial` honestly. In bundle mode this means re-emitting the whole block through `emitFrontmatter` with `timestamp` refreshed and `bee.sources`/`bee.decisions` extended — never hand-editing a line of it.
+Merge rules — present tense only, contradictions replace, enums carry business meaning, behaviors answer the five questions, rules are numbered and cite D-IDs, UI snapshots and system-overview sync, frontmatter re-emitted whole: the reference ("Merge rules").
 
 ## 4. Capture Mode — Settled Outcomes from the Vibe Loop
 
@@ -141,11 +118,9 @@ Litmus: if the session ended right now, would this outcome exist anywhere but th
 
 Flush points, whichever comes first: **wrap-up** (the working session is ending), the **PreCompact/close warning** (the hook fires when the queue is non-empty), or the **session-start offer** (bee-hive surfaces a non-empty queue before new work). At flush: `node .bee/bin/bee.mjs capture list`, then oldest-first give each stub the full capture treatment — merge into its area's spec per the section-3 rules, `bee.mjs capture flush --id <id> --into <spec>` — and record the scribing run in state (section 8). A stub is never dropped, summarized away, or flushed without its merge; if a stub's meaning is no longer reconstructable, ask the user rather than invent — that cost is the signal to flush earlier next time.
 
-### Deferred requests → product-backlog rows (D8, decision 0007 pattern)
+### Deferred requests
 
-The same unprompted-capture duty covers **deferred work**, not just settled truths. When the user pushes work out of the current scope — "để sau", "phase 2", "later", "not now" — or a Deferred Idea leaves exploring, the agent appends a `proposed` PBI **in the same turn, announce-then-do**: "ghi vào backlog: <story> (proposed)", then `node .bee/bin/bee.mjs backlog pbi add --title "<story>" --cos "<CoS>"` followed by `node .bee/bin/bee.mjs backlog render --write` so `docs/backlog.md` stays current. A user having to say "ghi vào backlog" means detection already failed once. `backlog pbi add`/`backlog render` are `.bee/`-layer writes through the CLI — allowed in every phase, no gate; `docs/backlog.md` itself is never hand-edited (it is CLI-owned, exact-path write-guard deny). The id/columns/verbs live in the reference's Product Backlog section; do not duplicate the table schema here. This is prose-ruled, never hook-enforced (D7).
-
-At sync, close the loop the other way: when this scribing run closes a feature that matches a backlog row, check the flip against the row's CoS before writing anything — enumerate every CoS clause and cite the delivered evidence per clause (D1, decision `b9b9fee3`). Only when every clause has cited evidence does the row flip via `node .bee/bin/bee.mjs backlog pbi status --id <id> --to done` and link `docs/history/<feature>/` (added via `pbi amend --id <id> --cos "..."` if the link belongs in the CoS text) (D11b) — the sync pass owns the done-flip. Any clause without evidence means the row does NOT flip: run `node .bee/bin/bee.mjs backlog pbi amend --id <id> --cos "<original CoS> — Delivered: <subset shipped>; Remaining: <subset owed>"` instead, leaving status `in-flight`; when the delivered subset is independently shippable, split the remainder into a new `pbi add` row rather than stranding it. Silent full-flip on partial delivery is never allowed. After any row flip, run `node .bee/bin/bee.mjs backlog render --write` so the generated view stays honest, and, when README carries the badge block, `node .bee/bin/bee.mjs backlog badges --write` (P3).
+A request the user parks ("để sau", "not now") becomes a product-backlog row in the same turn — never a silent drop. Protocol: the reference ("Deferred requests").
 
 ## 5. Harvest Mode — Backfill Without Inventing
 
@@ -215,4 +190,4 @@ Scribing complete: <N> area specs synced (<coverage>), <M> open gaps, reading ma
 
 | Reference | When to Load |
 |---|---|
-| `references/scribing-reference.md` | full spec template, per-section rules, field-dictionary and visibility-matrix formats, harvest interview protocol, bootstrap rules and skeleton shapes, rebuild checklist |
+| `references/scribing-reference.md` | full spec template, per-section rules, merge rules, bundle-mode gate + emitFrontmatter, deferred-requests protocol, field-dictionary and visibility-matrix formats, harvest interview protocol, bootstrap rules, rebuild checklist |

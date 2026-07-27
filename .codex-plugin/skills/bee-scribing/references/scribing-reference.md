@@ -335,3 +335,41 @@ At sync time: add lines for locations the feature created or repurposed, fix lin
 ```
 
 `bee-compounding` checks this record as its state-layer guard; if scribing has not run for the feature, compounding invokes it rather than syncing inline.
+
+## Bundle-mode gate and frontmatter
+
+**The gate has three layers, because exact string matching on free text can never be sufficient.** An independent judge broke the single-layer version four ways in one sitting:
+
+1. **The match is a skeleton, not a string.** Subjects are compared after NFKC, lowercasing, accent stripping, a cross-script confusable fold, and punctuation/whitespace collapse. A trailing period and a Cyrillic `е` each bought a rival concept before this existed; neither can now.
+2. **Malformed input fails closed** — the three refusals and the throw in §2 above. A silently skipped claim is a fork with extra steps.
+3. **The bundle-wide backstop bites.** `duplicate_authoritative_for` is a chain-**failing** finding in `bee knowledge check` (no `--strict` needed), grouped by the same skeleton. Layer 1 cannot catch a genuine word-order paraphrase (`refunds and reversals` vs `reversals and refunds`) — nothing that compares strings can — so the bundle-wide check is what refuses to let two authorities coexist. `malformed_authoritative_for` fails the chain the same way.
+
+Do not soften any layer to get a write through. A refused write means the bundle is wrong, not the gate.
+
+**Frontmatter is ALWAYS produced by `emitFrontmatter`, never typed by hand** — hand-written blocks are caught `not_canonical` by the round-trip guard, repeatedly and including by orchestrators who knew the rule. Build the data object, emit, then write body under it:
+
+```
+node -e "import('./.bee/bin/lib/knowledge.mjs').then(m=>process.stdout.write(m.emitFrontmatter({type:'bee.area',title:'...',description:'...',tags:['...'],timestamp:'YYYY-MM-DD',bee:{id:'...',lifecycle:'active',areas:['<area>'],required_context:[],decisions:[],sources:[],authoritative_for:'<area>: <subject>'}})))"
+```
+
+Body sections, the rebuild bar, and the `bee.areas` vs `bee.authoritative_for` distinction: the `bee.area` template in `docs/knowledge/areas/okf-profile/concept-model-and-authoring.md` §Templates. After any new concept or new area, regenerate the indexes — `node .bee/bin/bee.mjs knowledge index` — and confirm the bundle still grades clean: `node .bee/bin/bee.mjs knowledge check`.
+
+## Merge rules
+
+
+- Present tense only. "Was", "previously", "changed from" are banned — history lives in git and `docs/history/`.
+- A delta that contradicts an existing line **replaces** it; never keep both.
+- Every enum value in the Data Dictionary carries its business meaning ("`paused` — hidden from applicants, still editable by the owner"). A value without a meaning is an Open Gap, not a table row.
+- Every Behavior block answers: what triggers it, what blocks it, what changes, what side effects fire, and **what each actor or consuming system observes afterwards**.
+- Business Rules are numbered (R1, R2…) and cite the active D-ID that decided them.
+- UI areas: refresh the settled snapshot when the screen visibly changed (ask the user for one if you cannot produce it); a UI area with no current snapshot records that as an Open Gap, never silently (decision 0003). **With no bundle** the snapshot lives under `docs/specs/visuals/<area>/`, unchanged. **With a bundle there is no snapshot home yet, and this skill does not invent one:** the compatibility surface is read-only for new content (`scripts/okf_specs_fence.mjs` fails the chain, G2) and the bundle profile defines no visuals location. Until one is decided, record the missing snapshot as an **Open Gap** in the area's concept — naming the screen and stating that the bundle has no visuals home — and never write the image into the retired tree. The gap itself is tracked in `docs/knowledge/areas/okf-profile/concept-model-and-authoring.md` §Open Gaps.
+- If the feature added or removed an area, or changed shared entities, the role model, or a cross-area flow: sync `docs/specs/system-overview.md` in the same pass (template in the reference). In bundle mode the same duty falls on the area's `overview` concept and the area index.
+- Update frontmatter: `updated`, append to `sources`, reconcile `decisions`, set `coverage: full | partial` honestly. In bundle mode this means re-emitting the whole block through `emitFrontmatter` with `timestamp` refreshed and `bee.sources`/`bee.decisions` extended — never hand-editing a line of it.
+
+## Deferred requests
+
+
+The same unprompted-capture duty covers **deferred work**, not just settled truths. When the user pushes work out of the current scope — "để sau", "phase 2", "later", "not now" — or a Deferred Idea leaves exploring, the agent appends a `proposed` PBI **in the same turn, announce-then-do**: "ghi vào backlog: <story> (proposed)", then `node .bee/bin/bee.mjs backlog pbi add --title "<story>" --cos "<CoS>"` followed by `node .bee/bin/bee.mjs backlog render --write` so `docs/backlog.md` stays current. A user having to say "ghi vào backlog" means detection already failed once. `backlog pbi add`/`backlog render` are `.bee/`-layer writes through the CLI — allowed in every phase, no gate; `docs/backlog.md` itself is never hand-edited (it is CLI-owned, exact-path write-guard deny). The id/columns/verbs live in the reference's Product Backlog section; do not duplicate the table schema here. This is prose-ruled, never hook-enforced (D7).
+
+At sync, close the loop the other way: when this scribing run closes a feature that matches a backlog row, check the flip against the row's CoS before writing anything — enumerate every CoS clause and cite the delivered evidence per clause (D1, decision `b9b9fee3`). Only when every clause has cited evidence does the row flip via `node .bee/bin/bee.mjs backlog pbi status --id <id> --to done` and link `docs/history/<feature>/` (added via `pbi amend --id <id> --cos "..."` if the link belongs in the CoS text) (D11b) — the sync pass owns the done-flip. Any clause without evidence means the row does NOT flip: run `node .bee/bin/bee.mjs backlog pbi amend --id <id> --cos "<original CoS> — Delivered: <subset shipped>; Remaining: <subset owed>"` instead, leaving status `in-flight`; when the delivered subset is independently shippable, split the remainder into a new `pbi add` row rather than stranding it. Silent full-flip on partial delivery is never allowed. After any row flip, run `node .bee/bin/bee.mjs backlog render --write` so the generated view stays honest, and, when README carries the badge block, `node .bee/bin/bee.mjs backlog badges --write` (P3).
+
