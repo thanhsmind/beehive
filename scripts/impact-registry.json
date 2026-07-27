@@ -1572,7 +1572,8 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/command-registry.mjs": {
@@ -1670,7 +1671,8 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/dispatch-guard.mjs": {
@@ -1807,6 +1809,7 @@
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs",
         "scripts/tests/test_worktree_holds.mjs"
       ]
     },
@@ -2020,7 +2023,8 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/lock.mjs": {
@@ -2031,7 +2035,8 @@
         "packages/bee/tests/test_guards.mjs",
         "packages/bee/tests/test_integration_queue.mjs",
         "packages/bee/tests/test_state.mjs",
-        "packages/bee/tests/test_workflow_store.mjs"
+        "packages/bee/tests/test_workflow_store.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ],
       "all": [
         "packages/bee/scripts/test_plugin_distribution.mjs",
@@ -2078,7 +2083,8 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/path-identity.mjs": {
@@ -2126,7 +2132,8 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/perf.mjs": {
@@ -2211,7 +2218,8 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/reviews.mjs": {
@@ -2290,7 +2298,8 @@
     "packages/bee/lib/state-projection.mjs": {
       "direct": [
         "packages/bee/tests/test_cli_state.mjs",
-        "packages/bee/tests/test_state_projection.mjs"
+        "packages/bee/tests/test_state_projection.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ],
       "all": [
         "packages/bee/tests/test_bee_cli.mjs",
@@ -2300,7 +2309,8 @@
         "packages/bee/tests/test_scratch.mjs",
         "packages/bee/tests/test_state_projection.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/state.mjs": {
@@ -2323,7 +2333,8 @@
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_specs_fence.mjs",
         "scripts/okf_specs_fence.mjs --selftest",
-        "scripts/tests/test_compact_capsule.mjs"
+        "scripts/tests/test_compact_capsule.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ],
       "all": [
         "packages/bee/scripts/test_plugin_distribution.mjs",
@@ -2361,7 +2372,8 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/validate-args.mjs": {
@@ -2383,7 +2395,8 @@
         "packages/bee/tests/test_cli_state.mjs",
         "packages/bee/tests/test_state.mjs",
         "packages/bee/tests/test_state_projection.mjs",
-        "packages/bee/tests/test_workflow_store.mjs"
+        "packages/bee/tests/test_workflow_store.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ],
       "all": [
         "packages/bee/scripts/test_plugin_distribution.mjs",
@@ -2422,7 +2435,8 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/workspace-store.mjs": {
@@ -2471,7 +2485,8 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/worktree-holds.mjs": {
@@ -2518,7 +2533,8 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/lib/worktree-store.mjs": {
@@ -2566,7 +2582,8 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
-        "scripts/tests/test_skill_render.mjs"
+        "scripts/tests/test_skill_render.mjs",
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "packages/bee/scripts/onboard_bee.mjs": {
@@ -3462,6 +3479,14 @@
       ],
       "all": [
         "scripts/tests/test_skill_render.mjs"
+      ]
+    },
+    "scripts/tests/test_state_projection_race.mjs": {
+      "direct": [
+        "scripts/tests/test_state_projection_race.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_state_projection_race.mjs"
       ]
     },
     "scripts/tests/test_state_write_concurrency.mjs": {

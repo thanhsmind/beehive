@@ -111,7 +111,14 @@ import {
 // updateWorkflow's own self-locking form would nest a second acquire of the
 // SAME lock name and deadlock (see updateWorkflowAssumingLock's own comment
 // in workflow-store.mjs).
-import { listWorkflows, updateWorkflow, withWorkflowLock, updateWorkflowAssumingLock } from './lib/workflow-store.mjs';
+//
+// state-phase-lock-race (GH #70): the self-locking `updateWorkflow` is no
+// longer imported here at all. handleStatePlanRevBump was its last call site
+// in this file, and it was exactly the 'state' -> workflow:<id> inverse edge
+// that had to go; every workflow mutation in bee.mjs now runs under a lock
+// this file acquired itself, so the ASSUMING-LOCK form is the only correct
+// one and the import list now says so.
+import { listWorkflows, withWorkflowLock, updateWorkflowAssumingLock } from './lib/workflow-store.mjs';
 import { rebuildLaneProjection, rebuildStateProjection, rebuildAllProjections, rebuildHandoffProjection } from './lib/state-projection.mjs';
 // Lane + session CLI surface (fresh-session-handoff fsh-4, D2/D4): claims.mjs
 // stays out of this cell's file scope — these are already-exported read/
@@ -2550,7 +2557,26 @@ async function withMutationLock(root, laneFeature, noLane, fn) {
   const ctrlRoot = controlRootFor(root);
   const wf = feature ? listWorkflows(ctrlRoot).workflows.find((w) => w.feature === feature && w.status !== 'closed') : null;
   if (wf) {
-    return withWorkflowLock(ctrlRoot, wf.id, fn);
+    // state-phase-lock-race (GH #70, D1): the workflow branch also ends in a
+    // write of the ONE shared .bee/state.json / lane projection (fn calls
+    // writeStateRecordThroughProjection / writeLaneRecordThroughProjection,
+    // and those call rebuildStateProjection / rebuildLaneProjection, a bare
+    // read-modify-write that takes no lock of its own). 'state' and
+    // workflow:<id> are DIFFERENT lock names and do not exclude each other,
+    // so with only the workflow lock held this write raced the state-sync
+    // hook's 'state'-locked write and lost updates — the write-guard then
+    // read a stale phase and falsely denied. Nesting 'state' INSIDE
+    // workflow:<id> closes that while keeping msn-10's win: two sessions on
+    // two DIFFERENT workflows still never contend on the workflow lock, and
+    // only the genuinely shared projection write is serialized (D2).
+    //
+    // Order matters and is global: workflow:<id> -> 'state', never the
+    // reverse (handleStatePlanRevBump was the one inverse edge in the repo
+    // and is restructured to match — see its own comment). lock.mjs is
+    // non-reentrant, which is exactly why the C1 fallback below stays a
+    // plain single 'state' acquire and is NOT wrapped: re-acquiring the same
+    // name from the same process is a self-deadlock (~5s, then LockBusyError).
+    return withWorkflowLock(ctrlRoot, wf.id, () => withStoreLock(root, 'state', fn));
   }
   return withStoreLock(root, 'state', fn);
 }
@@ -2915,10 +2941,38 @@ async function handleStateGate(root, flags) {
 // record — cross-workflow isolation (invariant 3) falls out of updateWorkflow
 // only ever touching the single `wf.id` resolved here, under nothing but
 // that workflow's own `workflow:<id>` lock.
+// state-phase-lock-race (GH #70, advisor consult required change 1): this
+// verb used to be the ONE inverse lock edge in the repo — it held 'state'
+// and then called the SELF-LOCKING updateWorkflow, i.e. 'state' ->
+// workflow:<id>. Once withMutationLock started nesting the other way
+// (workflow:<id> -> 'state', above), leaving this one alone would have
+// traded a race for a deterministic lock-order inversion: session A holding
+// workflow:W waiting on 'state', session B holding 'state' waiting on
+// workflow:W — ~5s of dual LockBusyError, in exactly the concurrent-session
+// scenario this feature exists to fix.
+//
+// Restructured to the canonical order: PEEK at the target workflow outside
+// both locks, acquire workflow:<id> first, then 'state' inside it, and use
+// updateWorkflowAssumingLock (never the self-locking updateWorkflow) in the
+// body. After this, workflow:<id> -> 'state' is the single global lock order
+// in the repo.
 async function handleStatePlanRevBump(root, flags) {
   rejectDryRun(flags);
   const { laneFeature, noLane } = mutationLaneSelector(flags, 'plan-rev bump');
-  const { feature, planRev, lane } = await withStoreLock(root, 'state', async () => {
+  // msn-18c: workflow records are control-plane, so both the peek and the
+  // body must re-root to the SAME control root, or they would lock/write a
+  // DIFFERENT workflow file than the one `wf` was resolved from.
+  const ctrlRoot = controlRootFor(root);
+  // Read-only PEEK, outside both locks — mirrors withMutationLock's own
+  // resolveMutationLockFeature: a fail-open NAME lookup whose only job is
+  // choosing which workflow lock to take first. Every strict read,
+  // validation, and refusal still happens inside the locks below.
+  const peekedLane = resolveMutationLockFeature(root, laneFeature, noLane);
+  const peekedWf = peekedLane
+    ? listWorkflows(ctrlRoot).workflows.find((w) => w.feature === peekedLane && w.status !== 'closed')
+    : null;
+
+  const bumpBody = () => {
     const target = resolveMutationTarget(root, laneFeature, 'plan-rev bump', { noLane });
     if (!target.lane) {
       throw new Error(
@@ -2929,11 +2983,6 @@ async function handleStatePlanRevBump(root, flags) {
           '("state session bind --session-id <id> --lane <feature>").',
       );
     }
-    // msn-18c: workflow records are control-plane; `updateWorkflow` below is
-    // self-locking (workflow-store.mjs), so it must re-root to the SAME
-    // control root the lookup just used, or it would lock/write a DIFFERENT
-    // workflow file than the one `wf` was resolved from.
-    const ctrlRoot = controlRootFor(root);
     const wf = listWorkflows(ctrlRoot).workflows.find((w) => w.feature === target.lane && w.status !== 'closed');
     if (!wf) {
       throw new Error(
@@ -2941,10 +2990,27 @@ async function handleStatePlanRevBump(root, flags) {
           `FIX: start the lane first ("state start-feature --feature ${target.lane} --as-lane").`,
       );
     }
-    const updated = await updateWorkflow(ctrlRoot, wf.id, (current) => ({ plan_rev: (current.plan_rev || 0) + 1 }));
+    // The peek picked which workflow lock is held right now. If the strict
+    // resolution inside the lock lands on a DIFFERENT workflow, that lock
+    // protects the wrong record — refuse rather than write unprotected via
+    // updateWorkflowAssumingLock.
+    if (!peekedWf || peekedWf.id !== wf.id) {
+      throw new Error(
+        `plan-rev bump: the target lane's workflow changed while this call was starting (expected ` +
+          `"${peekedWf ? peekedWf.id : 'none'}", resolved "${wf.id}"), so the workflow lock this call holds does ` +
+          'not protect it. Nothing was written. FIX: re-run the bump.',
+      );
+    }
+    const updated = updateWorkflowAssumingLock(ctrlRoot, wf.id, (current) => ({ plan_rev: (current.plan_rev || 0) + 1 }));
     const rebuilt = rebuildLaneProjection(root, target.lane);
     return { feature: target.lane, planRev: updated.plan_rev, lane: rebuilt.lane };
-  });
+  };
+
+  // No live workflow to lock (the refusal paths above): take 'state' alone,
+  // exactly as before — never a bare workflow lock on a guessed id.
+  const { feature, planRev, lane } = peekedWf
+    ? await withWorkflowLock(ctrlRoot, peekedWf.id, () => withStoreLock(root, 'state', bumpBody))
+    : await withStoreLock(root, 'state', bumpBody);
   return {
     result: { feature, plan_rev: planRev, lane },
     text: `Bumped plan_rev to ${planRev} for lane "${feature}" (workflow); lane projection rebuilt.`,
@@ -3280,11 +3346,21 @@ async function handleStateStartFeature(root, flags) {
   // (same feature name, freshly created, nothing else could have raced
   // ahead of it), so it can only reproduce byte-identical D1 fields here —
   // a true self-heal, never a surprise.
-  if (lane) {
-    rebuildLaneProjection(root, state.feature);
-  } else {
-    rebuildStateProjection(root);
-  }
+  // state-phase-lock-race (GH #70, D1/D4): this rebuild is a write of the
+  // shared projection record and used to run with NO lock at all —
+  // startFeature's own 'state' hold is already RELEASED by the time we get
+  // here (state.mjs releases it before createWorkflow), so this needs its own
+  // acquire. Wrapped, never pushed down into rebuild*Projection itself (D3):
+  // bee-state-sync.mjs already holds 'state' when it calls those, and
+  // lock.mjs is non-reentrant, so an internal acquire would throw
+  // LockBusyError on every hook tick.
+  await withStoreLock(root, 'state', () => {
+    if (lane) {
+      rebuildLaneProjection(root, state.feature);
+    } else {
+      rebuildStateProjection(root);
+    }
+  });
   return {
     result: state,
     text: `Started feature "${state.feature}"${lane ? ' as a lane' : ''} at phase "${state.phase}" (mode ${state.mode ?? 'null'}); all four gates reset.`,
@@ -3300,8 +3376,12 @@ async function handleStateStartFeature(root, flags) {
 // workflow record, or — for state.json specifically — a LIVE non-idle
 // default feature (C5's safety gate; see rebuildStateProjection's own
 // comment in state-projection.mjs for why).
-function handleStateRebuildProjections(root) {
-  const result = rebuildAllProjections(root);
+// state-phase-lock-race (GH #70, D1/D4): async now, because the rebuild —
+// another unlocked writer of the shared projection record — runs under the
+// 'state' lock. main() awaits every handler uniformly, so widening this one
+// from sync to async is transparent to the dispatcher.
+async function handleStateRebuildProjections(root) {
+  const result = await withStoreLock(root, 'state', () => rebuildAllProjections(root));
   const laneCount = result.lanes.filter((l) => l.authoritative).length;
   const stateNote = result.state.authoritative
     ? `rebuilt .bee/state.json from workflow ${result.state.source}`
