@@ -318,6 +318,917 @@ fn argv(tokens: &[&str]) -> Vec<String> {
     tokens.iter().map(|s| (*s).to_string()).collect()
 }
 
+// ─── rpl-2: the `intent` group ─────────────────────────────────────────────
+//
+// The first ported group's scenarios. Three properties they are built to
+// have, over and above "the argv runs":
+//
+// 1. They read a NON-EMPTY store. `queen-bench --generate` seeds
+//    `.bee/intent/` with five keys (`queen-bench/src/fixture.rs`
+//    `intent_seed_keys`), which it did not before this cell — every scenario
+//    below would otherwise have diffed two absent directories.
+// 2. Each one's negative control perturbs the store IT reads. For most that
+//    is the anchor file itself; for the phase scenarios it is `state.json`,
+//    because `NO_WORK_PHASES` is what decides the key those runs land on.
+// 3. The key-sanitization scenarios assert the RESOLVED KEY, not just "some
+//    output". A scenario that merely ran `intent show` with a weird
+//    `--feature` would fall through to `default` and pass without ever
+//    proving the sanitizer agreed across runtimes.
+
+/// `sanitizeIntentKey`'s 120-code-unit cap, and the key the fixture seeds at
+/// exactly that length. Built the same way `queen-bench` builds it (rather
+/// than transcribed) so the two cannot drift apart silently; the length is
+/// asserted in this module's own tests.
+fn long_intent_key() -> String {
+    let prefix = "queen-bench-fixture-long-intent-key-";
+    format!("{prefix}{}", "x".repeat(120 - prefix.len()))
+}
+
+/// U+1F600, a single scalar value that is a SURROGATE PAIR in UTF-16 — two
+/// code units. Placed at code-unit offset 119 by the scenario below, so
+/// `.slice(0, 120)`'s cut lands strictly INSIDE it.
+const ASTRAL_SMILE: char = '\u{1f600}';
+const ASTRAL_BEE: char = '\u{1f41d}';
+
+/// Scenario names and assertion texts are `&'static str` by rpl-1's
+/// `Scenario`/`Assertion` shape, but three of this group's keys have to be
+/// COMPUTED (120 characters, an astral code point at a chosen code-unit
+/// offset) rather than typed as literals — typing them out is exactly how a
+/// 119-vs-120 transcription error would slip in and make the scenario assert
+/// the wrong thing while still passing. Leaking them is the honest trade for
+/// a process that builds this table once and exits.
+fn leak(s: String) -> &'static str {
+    Box::leak(s.into_boxed_str())
+}
+
+const INTENT_DIR: &str = ".bee/intent";
+const INTENT_DEFAULT: &str = ".bee/intent/default.json";
+
+/// A valid, normalizable anchor in compact JSON — what a mutation writes
+/// when the perturbation it needs is "this key now HOLDS an anchor".
+fn mutation_anchor_body(key: &str) -> String {
+    format!(
+        "{{\"schema_version\":\"1.0\",\"key\":\"{key}\",\"written_at\":\"2026-07-26T00:00:00.000Z\",\"request\":\"rpl2 mutation-created anchor\",\"acceptance\":\"the negative control fires\",\"next_action\":null,\"feature\":null,\"lane\":null,\"cell\":null,\"do_not_reverse\":[],\"stop_conditions\":[]}}"
+    )
+}
+
+/// Create a file that must NOT already exist. Same discipline as
+/// [`mutate::replace_exactly_once`]: a mutation that lands on unexpected
+/// content proves nothing, so an already-present target is a loud refusal
+/// rather than a silent overwrite.
+fn create_absent(root: &Path, rel: &str, body: &str) -> Result<(), String> {
+    let path = root.join(rel);
+    if path.exists() {
+        return Err(format!(
+            "create_absent: {} already exists — refusing to overwrite it (a mutation over unexpected content proves nothing)",
+            path.display()
+        ));
+    }
+    write_file(&path, body)
+}
+
+/// Delete a file that MUST already exist — the inverse refusal.
+fn remove_present(root: &Path, rel: &str) -> Result<(), String> {
+    let path = root.join(rel);
+    if !path.is_file() {
+        return Err(format!(
+            "remove_present: {} is not a present file — refusing to seed a no-op mutation",
+            path.display()
+        ));
+    }
+    std::fs::remove_file(&path).map_err(|e| format!("remove {}: {e}", path.display()))
+}
+
+// ── seeds ──────────────────────────────────────────────────────────────────
+
+/// Remove the whole intent store, so a scenario runs against a genuinely
+/// ABSENT one. Refuses if the generator did not seed it — which is the
+/// guard that makes this seed a subtraction from something real rather than
+/// a no-op over a fixture that never had the store in the first place.
+fn seed_absent_intent_store(root: &Path) -> Result<(), String> {
+    let dir = root.join(INTENT_DIR);
+    if !dir.is_dir() {
+        return Err(format!(
+            "seed_absent_intent_store: {} does not exist — the fixture generator is supposed to seed it (queen-bench fixture.rs write_intent_store); removing nothing would make this scenario prove nothing",
+            dir.display()
+        ));
+    }
+    std::fs::remove_dir_all(&dir).map_err(|e| format!("remove_dir_all {}: {e}", dir.display()))
+}
+
+/// Overwrite `default.json` with a CORRUPT anchor: valid JSON, but `request`
+/// is a number, so `normalizeAnchor` reads it as absent (`intent.mjs:122`).
+///
+/// Deliberately parseable. An UNPARSEABLE file would exercise `readJson`'s
+/// warn-and-fall-open path instead (`fsutil.mjs:36-44`), whose stderr text
+/// embeds the runtime's own parser message — V8's for mjs, serde_json's for
+/// Rust — and no port of `intent` can reconcile those. That divergence lives
+/// in the shared `readJson` primitive, not in this group; see the rpl-2
+/// report. What "corrupt" means for the INTENT contract is exactly this
+/// shape: the module's own doc calls it "corrupt, half-written, or
+/// hand-mangled files read as absent (D5)".
+fn seed_corrupt_default_anchor(root: &Path) -> Result<(), String> {
+    let path = root.join(INTENT_DEFAULT);
+    if !path.is_file() {
+        return Err(format!("seed_corrupt_default_anchor: {} is missing from the fixture", path.display()));
+    }
+    write_file(&path, "{\"request\": 42, \"acceptance\": \"unusable\"}\n")
+}
+
+const ACTIVE_FEATURE: &str = "rpl2-active-feature";
+
+fn state_body(phase: &str) -> String {
+    format!(
+        "{{\"schema_version\":\"1.0\",\"phase\":\"{phase}\",\"feature\":\"{ACTIVE_FEATURE}\",\"mode\":\"tiny\",\"approved_gates\":{{\"context\":false,\"shape\":false,\"execution\":false,\"review\":false}},\"workers\":[],\"summary\":\"\",\"next_action\":\"No active bee work.\"}}"
+    )
+}
+
+/// A phase OUTSIDE `NO_WORK_PHASES`, with a real feature — so `activeFeature`
+/// resolves and the anchor key comes from state rather than from `default`.
+fn seed_working_phase(root: &Path) -> Result<(), String> {
+    write_file(&root.join(".bee/state.json"), &state_body("executing"))
+}
+
+/// The SECOND `NO_WORK_PHASES` member. Seeded with a feature present on
+/// purpose: a stale `feature` string outlives the phase, which is exactly why
+/// `intent.mjs:49` keys the predicate off the PHASE and not off the feature.
+fn seed_compounding_complete_phase(root: &Path) -> Result<(), String> {
+    write_file(&root.join(".bee/state.json"), &state_body("compounding-complete"))
+}
+
+// ── mutations ──────────────────────────────────────────────────────────────
+
+fn mutate_default_anchor_next_action(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, INTENT_DEFAULT, "\"next_action\": \"", "\"next_action\": \"rpl2-mutated ")
+}
+
+fn mutate_default_anchor_lane(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, INTENT_DEFAULT, "\"lane\": \"tiny\"", "\"lane\": \"rpl2-mutated-lane\"")
+}
+
+fn mutate_default_anchor_request(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, INTENT_DEFAULT, "\"request\": \"Yêu cầu", "\"request\": \"rpl2-mutated cầu")
+}
+
+/// Repair the CORRUPT anchor seeded by [`seed_corrupt_default_anchor`]: the
+/// numeric `request` becomes a real string, so `normalizeAnchor` accepts it.
+/// The scenario flips from "reads as absent" to "reads as an anchor", which
+/// is the only perturbation of that store that can move either channel.
+fn mutate_corrupt_anchor_into_a_real_one(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        INTENT_DEFAULT,
+        "\"request\": 42",
+        "\"request\": \"rpl2 repaired-by-mutation anchor\"",
+    )
+}
+
+fn mutate_feature_anchor_lane(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        ".bee/intent/queen-bench-fixture.json",
+        "\"lane\": \"tiny\"",
+        "\"lane\": \"rpl2-mutated-lane\"",
+    )
+}
+
+/// Break the `queen-bench-fixture` anchor's `request` field so
+/// `normalizeAnchor` rejects it — `locateIntentKey` then walks PAST that key
+/// to `default`, and `clear` reports a different key.
+fn mutate_feature_anchor_unusable(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        ".bee/intent/queen-bench-fixture.json",
+        "\"request\": \"Yêu",
+        "\"reqest\": \"Yêu",
+    )
+}
+
+fn mutate_long_anchor_lane(root: &Path) -> Result<(), String> {
+    let rel = format!("{INTENT_DIR}/{}.json", long_intent_key());
+    mutate::replace_exactly_once(root, &rel, "\"lane\": \"tiny\"", "\"lane\": \"rpl2-mutated-lane\"")
+}
+
+/// Make the seeded `etc-passwd` anchor's request EQUAL the one the scenario
+/// passes on argv. The clean run is refused by the D1 immutability rule; the
+/// mutated run becomes an idempotent re-write and succeeds — so the control
+/// fires on stdout AND the mutation exercises the idempotence branch.
+const TRAVERSAL_REQUEST: &str = "rpl2 traversal-shaped key request";
+
+fn mutate_etc_passwd_request_to_match(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        ".bee/intent/etc-passwd.json",
+        "\"request\": \"Yêu cầu số 3",
+        &format!("\"request\": \"{TRAVERSAL_REQUEST}\", \"unused\": \"3"),
+    )
+}
+
+fn mutate_create_default_anchor(root: &Path) -> Result<(), String> {
+    create_absent(root, INTENT_DEFAULT, &mutation_anchor_body("default"))
+}
+
+fn mutate_remove_default_anchor(root: &Path) -> Result<(), String> {
+    remove_present(root, INTENT_DEFAULT)
+}
+
+const ABSENT_KEY: &str = "zzz-absent-anchor";
+
+fn mutate_create_absent_key_anchor(root: &Path) -> Result<(), String> {
+    create_absent(root, &format!("{INTENT_DIR}/{ABSENT_KEY}.json"), &mutation_anchor_body(ABSENT_KEY))
+}
+
+const FRESH_KEY: &str = "rpl2-fresh-anchor";
+
+fn mutate_create_fresh_key_anchor(root: &Path) -> Result<(), String> {
+    create_absent(root, &format!("{INTENT_DIR}/{FRESH_KEY}.json"), &mutation_anchor_body(FRESH_KEY))
+}
+
+const TRAVERSAL_WRITE_KEY: &str = "zzz-traversal";
+
+fn mutate_create_traversal_write_anchor(root: &Path) -> Result<(), String> {
+    create_absent(
+        root,
+        &format!("{INTENT_DIR}/{TRAVERSAL_WRITE_KEY}.json"),
+        &mutation_anchor_body(TRAVERSAL_WRITE_KEY),
+    )
+}
+
+/// The RESOLVED KEY of the surrogate-boundary scenario: 119 `a`s plus the
+/// single dash the astral scalar collapsed into, cut at code unit 120. This
+/// is the string both runtimes PRINT in the anchor's `"key"` field.
+fn surrogate_resolved_key() -> String {
+    format!("{}-", "a".repeat(119))
+}
+
+/// The FILENAME that same anchor is STORED under: 119 `a`s, no dash.
+///
+/// These two strings are deliberately different, and the difference is the
+/// trap this scenario exists to pin. `writeIntent` resolves the key ONCE
+/// (`intent.mjs:187` — `intentKeyCandidates` already sanitized it), then
+/// hands that key to `intentPath`, which sanitizes it AGAIN
+/// (`intent.mjs:69-71`). `sanitizeIntentKey` is not idempotent: `/-+$/`
+/// strips the trailing dash that the 120-code-unit truncation had just
+/// exposed. So the anchor whose `"key"` reads `<119 a's>-` lives on disk at
+/// `<119 a's>.json` — one character shorter than the key it announces.
+///
+/// The mutation below MUST target this name. Targeting the printed key
+/// instead perturbs a file neither runtime ever opens, which is precisely
+/// the zero-diff hole the negative control caught (see the rpl-2 report).
+fn surrogate_disk_key() -> String {
+    "a".repeat(119)
+}
+
+fn mutate_create_surrogate_key_anchor(root: &Path) -> Result<(), String> {
+    create_absent(
+        root,
+        &format!("{INTENT_DIR}/{}.json", surrogate_disk_key()),
+        &mutation_anchor_body(&surrogate_resolved_key()),
+    )
+}
+
+/// Flip the fixture's `idle` phase to a WORKING one with a feature, so the
+/// key resolution moves off `default`.
+fn mutate_state_into_working_phase(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        ".bee/state.json",
+        "\"phase\":\"idle\",\"feature\":null",
+        &format!("\"phase\":\"executing\",\"feature\":\"{ACTIVE_FEATURE}\""),
+    )
+}
+
+/// Flip a WORKING phase to the other `NO_WORK_PHASES` member. The feature
+/// string is left in place deliberately — if a port keyed off `feature`
+/// instead of `phase`, this mutation would produce no diff at all.
+fn mutate_state_into_compounding_complete(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, ".bee/state.json", "\"phase\":\"executing\"", "\"phase\":\"compounding-complete\"")
+}
+
+fn mutate_state_out_of_compounding_complete(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, ".bee/state.json", "\"phase\":\"compounding-complete\"", "\"phase\":\"executing\"")
+}
+
+/// Rename the `intent.show` registry entry to the verb the unknown-verb
+/// scenario types. The group's usage fallback then no longer fires (the
+/// command RESOLVES), and queen-bee's own unported-verb refusal takes its
+/// place — a stderr-only change, which is the channel that scenario declares.
+fn mutate_registry_intent_verb(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, REGISTRY_DUMP, "\"name\": \"intent.show\"", "\"name\": \"intent.bogusverb\"")
+}
+
+/// Register every `intent` scenario. Split out of [`all_scenarios`] so the
+/// group's table is one readable unit and the seam's own smoke tests stay
+/// where rpl-1 left them.
+fn register_intent_scenarios(set: &mut ScenarioSet) -> Result<(), String> {
+    let long_key = long_intent_key();
+    let surrogate_source = format!("{}{ASTRAL_SMILE}{}", "a".repeat(119), "b".repeat(10));
+    let surrogate_key = format!("{}-", "a".repeat(119));
+    let over_120_source = format!("{long_key}yyyyyyyyyy");
+    let astral_source = format!("{ASTRAL_BEE}{ASTRAL_BEE}{ASTRAL_BEE}");
+
+    // ── show, over the SEEDED store ──────────────────────────────────────
+    set.register(Scenario {
+        group: "intent",
+        name: "show-seeded-default",
+        argv: argv(&["intent", "show"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: INTENT_DEFAULT, apply: mutate_default_anchor_next_action }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "Intent anchor \"default\" (written 2026-07-26T00:00:00.000Z)" },
+            // The VERBATIM request, non-ASCII and quoting intact.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"don't paraphrase me\" · 🐝 · tab\\there · ümlaut." },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "DO NOT REVERSE: đừng đảo ngược 1 | second rule" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "STOP IF: dừng nếu 1" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    set.register(Scenario {
+        group: "intent",
+        name: "show-json-seeded-default",
+        argv: argv(&["intent", "show", "--json"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: INTENT_DEFAULT, apply: mutate_default_anchor_lane }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"key\": \"default\"" },
+            // `written_at` IS a declared volatile field, so both legs mask to
+            // <TS>. Asserting the MASKED form keeps the assertion honest
+            // about what the comparison actually checks.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"written_at\":\"<TS>\"" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"do_not_reverse\": [" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // The candidate WALK: an unknown --feature is not an error, it falls
+    // through to the shared default key (intent.mjs:91-100).
+    set.register(Scenario {
+        group: "intent",
+        name: "show-falls-through-to-default",
+        argv: argv(&["intent", "show", "--feature", "zzz-no-such-intent-key", "--json"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: INTENT_DEFAULT, apply: mutate_default_anchor_request }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"key\": \"default\"" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    set.register(Scenario {
+        group: "intent",
+        name: "show-explicit-feature-key",
+        argv: argv(&["intent", "show", "--feature", "queen-bench-fixture", "--json"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget {
+            store: ".bee/intent/queen-bench-fixture.json",
+            apply: mutate_feature_anchor_lane,
+        }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"key\": \"queen-bench-fixture\"" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // ── the renderers (intent.mjs D3/D4 blocks) ──────────────────────────
+    set.register(Scenario {
+        group: "intent",
+        name: "show-render-precompact",
+        argv: argv(&["intent", "show", "--render", "precompact"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: INTENT_DEFAULT, apply: mutate_default_anchor_request }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "=== BEE INTENT ANCHOR — VERBATIM · DO NOT SUMMARIZE · DO NOT PARAPHRASE ===" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "=== END BEE INTENT ANCHOR ===" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "CONTEXT: feature=queen-bench-fixture lane=tiny cell=fixture-cell-00001" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    set.register(Scenario {
+        group: "intent",
+        name: "show-render-resume-json",
+        argv: argv(&["intent", "show", "--render", "resume", "--json"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: INTENT_DEFAULT, apply: mutate_default_anchor_next_action }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            // The {anchor, render, block} result shape, in mjs key order.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"render\": \"resume\"" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "## INTENT ANCHOR — read this FIRST" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // ── every verb over an ABSENT store ──────────────────────────────────
+    set.register(Scenario {
+        group: "intent",
+        name: "show-absent-store",
+        argv: argv(&["intent", "show"]),
+        session_id: None,
+        seed: Some(seed_absent_intent_store),
+        mutation: Some(MutationTarget { store: INTENT_DIR, apply: mutate_create_default_anchor }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "(no intent anchor)\n" },
+            // FAIL-OPEN: an absent store is silence, never a warning.
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    set.register(Scenario {
+        group: "intent",
+        name: "advance-absent-store",
+        argv: argv(&["intent", "advance", "--next-action", "bước kế tiếp"]),
+        session_id: None,
+        seed: Some(seed_absent_intent_store),
+        mutation: Some(MutationTarget { store: INTENT_DIR, apply: mutate_create_default_anchor }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "intent advance: no intent anchor exists to advance — run `bee intent set` first.\n",
+            },
+        ],
+    })?;
+
+    set.register(Scenario {
+        group: "intent",
+        name: "clear-absent-key-on-absent-store",
+        argv: argv(&["intent", "clear", "--feature", ABSENT_KEY]),
+        session_id: None,
+        seed: Some(seed_absent_intent_store),
+        mutation: Some(MutationTarget { store: INTENT_DIR, apply: mutate_create_absent_key_anchor }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            // Idempotent: clearing when none exists reports cleared:false and
+            // never errors, and the key it names is candidates[0].
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "No intent anchor at \"zzz-absent-anchor\" to clear.\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    set.register(Scenario {
+        group: "intent",
+        name: "set-on-absent-store",
+        argv: argv(&[
+            "intent",
+            "set",
+            "--request",
+            "yêu cầu mới trên kho trống",
+            "--acceptance",
+            "the store directory is created",
+            "--json",
+        ]),
+        session_id: None,
+        seed: Some(seed_absent_intent_store),
+        mutation: Some(MutationTarget { store: INTENT_DIR, apply: mutate_create_default_anchor }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"key\": \"default\"" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"request\": \"yêu cầu mới trên kho trống\"" },
+            // NO_WORK_PHASES is TRUE here (the fixture's phase is `idle`), so
+            // `feature` resolves to null rather than to the state's feature.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"feature\": null" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // ── set → show round trip, on a fresh key ────────────────────────────
+    set.register(Scenario {
+        group: "intent",
+        name: "set-then-show-roundtrip",
+        argv: argv(&[
+            "intent",
+            "set",
+            "--feature",
+            FRESH_KEY,
+            "--request",
+            "giữ nguyên từng byte: \"quoted\", tab\there, ünïcode 🐝",
+            "--acceptance",
+            "the stored file and the emitted payload are the same record",
+            "--next-action",
+            "  bước một  ",
+            "--lane",
+            "high-risk",
+            "--cell",
+            "rpl-2",
+            "--do-not-reverse",
+            "a, b, ,c",
+            "--stop-conditions",
+            " x ,y",
+            "--json",
+        ]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget {
+            store: ".bee/intent/rpl2-fresh-anchor.json",
+            apply: mutate_create_fresh_key_anchor,
+        }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"key\": \"rpl2-fresh-anchor\"" },
+            // VERBATIM: the request keeps its own bytes, embedded quotes and
+            // tab included — `set --json` emits exactly what `show --json`
+            // would read back, which is what makes this a round trip.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"request\": \"giữ nguyên từng byte: \\\"quoted\\\", tab\\there, ünïcode 🐝\"" },
+            // normalizeList: entries trimmed, empties dropped.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"do_not_reverse\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"stop_conditions\": [\n    \"x\",\n    \"y\"\n  ]" },
+            // optionalString TRIMS the scalar fields (unlike `request`).
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"next_action\": \"bước một\"" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // ── advance: only next_action moves (the D1 structural invariant) ────
+    set.register(Scenario {
+        group: "intent",
+        name: "advance-seeded-default",
+        argv: argv(&["intent", "advance", "--next-action", "bước kế tiếp 🐝", "--json"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: INTENT_DEFAULT, apply: mutate_default_anchor_request }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"next_action\": \"bước kế tiếp 🐝\"" },
+            // The through-line is UNTOUCHED — this is the assertion that
+            // would catch an `advance` that let a new request in.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"request\": \"Yêu cầu số 1 —" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"advanced_at\":\"<TS>\"" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // ── clear over the seeded store ──────────────────────────────────────
+    set.register(Scenario {
+        group: "intent",
+        name: "clear-seeded-feature-key",
+        argv: argv(&["intent", "clear", "--feature", "queen-bench-fixture", "--json"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget {
+            store: ".bee/intent/queen-bench-fixture.json",
+            apply: mutate_feature_anchor_unusable,
+        }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"cleared\": true" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"key\": \"queen-bench-fixture\"" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // ── a CORRUPT anchor, fed to show AND to advance ─────────────────────
+    set.register(Scenario {
+        group: "intent",
+        name: "corrupt-anchor-show-fails-open",
+        argv: argv(&["intent", "show"]),
+        session_id: None,
+        seed: Some(seed_corrupt_default_anchor),
+        mutation: Some(MutationTarget { store: INTENT_DEFAULT, apply: mutate_corrupt_anchor_into_a_real_one }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            // Reads as ABSENT, exits 0, and says nothing on stderr — neither
+            // runtime throws.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "(no intent anchor)\n" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    set.register(Scenario {
+        group: "intent",
+        name: "corrupt-anchor-advance-refuses",
+        argv: argv(&["intent", "advance", "--next-action", "x"]),
+        session_id: None,
+        seed: Some(seed_corrupt_default_anchor),
+        mutation: Some(MutationTarget { store: INTENT_DEFAULT, apply: mutate_corrupt_anchor_into_a_real_one }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "intent advance: no intent anchor exists to advance — run `bee intent set` first.\n",
+            },
+        ],
+    })?;
+
+    // ── NO_WORK_PHASES, both polarities, both members ────────────────────
+    //
+    // TRUE (the fixture's own `idle`): the key resolves to `default`, where a
+    // seeded anchor with a DIFFERENT request already lives, so the D1
+    // immutability refusal fires and names the key it landed on. The control
+    // flips the phase OUT of the no-work set, moving the key entirely.
+    set.register(Scenario {
+        group: "intent",
+        name: "no-work-phase-true-lands-on-default",
+        argv: argv(&[
+            "intent",
+            "set",
+            "--request",
+            "a different objective",
+            "--acceptance",
+            "the immutability refusal names the resolved key",
+        ]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: ".bee/state.json", apply: mutate_state_into_working_phase }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Contains,
+                text: "writeIntent: an anchor already exists at \"default\" with a different request — request is immutable once set (D1).",
+            },
+        ],
+    })?;
+
+    // FALSE: a working phase with a feature — the key comes from state.
+    set.register(Scenario {
+        group: "intent",
+        name: "no-work-phase-false-uses-active-feature",
+        argv: argv(&[
+            "intent",
+            "set",
+            "--request",
+            "objective under an active feature",
+            "--acceptance",
+            "the key and the feature both come from state.json",
+            "--json",
+        ]),
+        session_id: None,
+        seed: Some(seed_working_phase),
+        mutation: Some(MutationTarget {
+            store: ".bee/state.json",
+            apply: mutate_state_into_compounding_complete,
+        }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"key\": \"rpl2-active-feature\"" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"feature\": \"rpl2-active-feature\"" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // The SECOND no-work member, with a live `feature` string still present:
+    // a port that keyed the predicate off `feature` instead of `phase` would
+    // land on `rpl2-active-feature` here and fail this scenario outright.
+    set.register(Scenario {
+        group: "intent",
+        name: "no-work-phase-compounding-complete-ignores-stale-feature",
+        argv: argv(&[
+            "intent",
+            "set",
+            "--request",
+            "a different objective",
+            "--acceptance",
+            "a stale feature string does not survive the phase",
+        ]),
+        session_id: None,
+        seed: Some(seed_compounding_complete_phase),
+        mutation: Some(MutationTarget {
+            store: ".bee/state.json",
+            apply: mutate_state_out_of_compounding_complete,
+        }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Contains,
+                text: "writeIntent: an anchor already exists at \"default\" with a different request",
+            },
+        ],
+    })?;
+
+    // ── key sanitization ─────────────────────────────────────────────────
+    //
+    // A traversal-shaped key that WRITES: this is the one that proves the
+    // on-disk PATH is byte-identical, because the store-tree diff compares
+    // the created file by its relative path under each leg's root.
+    set.register(Scenario {
+        group: "intent",
+        name: "key-traversal-writes-identical-path",
+        argv: argv(&[
+            "intent",
+            "set",
+            "--feature",
+            "..\\..\\zzz/traversal",
+            "--request",
+            "a traversal-shaped key must not escape .bee/intent",
+            "--acceptance",
+            "both runtimes create the same relative path",
+            "--json",
+        ]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget {
+            store: ".bee/intent/zzz-traversal.json",
+            apply: mutate_create_traversal_write_anchor,
+        }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"key\": \"zzz-traversal\"" },
+            // The stored `feature` is the RAW argument, not the sanitized
+            // key — only the FILENAME is sanitized (intent.mjs:70 vs :210).
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"feature\": \"..\\\\..\\\\zzz/traversal\"" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // The same shape against a key that ALREADY holds an anchor: the D1
+    // refusal names `etc-passwd`, which is the sanitizer's answer for
+    // `../../etc/passwd` on both runtimes.
+    set.register(Scenario {
+        group: "intent",
+        name: "key-traversal-resolves-to-etc-passwd",
+        argv: argv(&[
+            "intent",
+            "set",
+            "--feature",
+            "../../etc/passwd",
+            "--request",
+            TRAVERSAL_REQUEST,
+            "--acceptance",
+            "the refusal names the sanitized key",
+        ]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget {
+            store: ".bee/intent/etc-passwd.json",
+            apply: mutate_etc_passwd_request_to_match,
+        }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Contains,
+                text: "writeIntent: an anchor already exists at \"etc-passwd\" with a different request",
+            },
+        ],
+    })?;
+
+    // A key LONGER than 120 UTF-16 code units. It truncates onto the seeded
+    // 120-character key, so a runtime that truncated at a different point
+    // would miss the file entirely and print "(no intent anchor)".
+    set.register(Scenario {
+        group: "intent",
+        name: "key-over-120-code-units-truncates-onto-seeded-key",
+        argv: vec![
+            "intent".into(),
+            "show".into(),
+            "--feature".into(),
+            over_120_source,
+            "--json".into(),
+        ],
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget {
+            store: ".bee/intent/queen-bench-fixture-long-intent-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.json",
+            apply: mutate_long_anchor_lane,
+        }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: leak(format!("\"key\": \"{long_key}\"")) },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // THE SURROGATE-PAIR BOUNDARY. 119 ASCII characters, then one astral
+    // scalar occupying UTF-16 code units 119 and 120 — so `.slice(0, 120)`
+    // cuts strictly inside the pair. What makes all three candidate
+    // semantics (code units / bytes / scalar values) agree is that the
+    // `[^A-Za-z0-9._-]+` collapse runs FIRST and leaves pure ASCII: the
+    // astral scalar is already a single `-` by the time the slice happens.
+    //
+    // The expected key ends in `-` at exactly 120 characters, which is also
+    // the ORDERING proof: `/-+$/` strips trailing dashes BEFORE the slice, so
+    // the dash the truncation exposes legitimately survives. A port that
+    // slid those two steps past each other emits 119 characters here.
+    //
+    // The KEY IS NOT THE FILENAME here — see [`surrogate_disk_key`]. `set` is
+    // a write verb, but it is not a blind one: `writeIntent` READS the anchor
+    // at its target path first and refuses an existing one whose `request`
+    // differs (`intent.mjs:188-195`). That read is what makes a stdout
+    // control legitimate for a write verb — the mutation plants an anchor at
+    // the path the write actually opens, the write refuses, and the JSON this
+    // scenario asserts disappears from stdout. Aim the same mutation one
+    // character wide and NOTHING moves, which is what the control reported
+    // before this was corrected.
+    set.register(Scenario {
+        group: "intent",
+        name: "key-surrogate-pair-boundary",
+        argv: vec![
+            "intent".into(),
+            "set".into(),
+            "--feature".into(),
+            surrogate_source,
+            "--request".into(),
+            "a key whose 120th UTF-16 code unit falls inside a surrogate pair".into(),
+            "--acceptance".into(),
+            "both runtimes cut at the same place".into(),
+            "--json".into(),
+        ],
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget {
+            // 119 a's and NO dash: the printed key is `<119 a's>-`, but
+            // `intentPath` re-sanitizes it and `/-+$/` eats that dash.
+            store: ".bee/intent/<119 a's, no dash — the printed key re-sanitized by intentPath>.json",
+            apply: mutate_create_surrogate_key_anchor,
+        }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: leak(format!("\"key\": \"{surrogate_key}\"")) },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // An ASTRAL-PLANE-only key. Every character is outside the safe class, so
+    // the collapse produces a single `-`, `/^[-.]+/` eats it, and the empty
+    // result degrades to DEFAULT_INTENT_KEY — never a crash, never an empty
+    // filename.
+    set.register(Scenario {
+        group: "intent",
+        name: "key-astral-plane-degrades-to-default",
+        argv: vec!["intent".into(), "clear".into(), "--feature".into(), astral_source, "--json".into()],
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: INTENT_DEFAULT, apply: mutate_remove_default_anchor }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"cleared\": true" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"key\": \"default\"" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // ── this group's own unknown-VERB usage fallback (bee.mjs:6503) ──────
+    set.register(Scenario {
+        group: "intent",
+        name: "unknown-verb-usage-fallback",
+        argv: argv(&["intent", "bogusverb"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: REGISTRY_DUMP, apply: mutate_registry_intent_verb }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "Unknown command \"bogusverb\". Use: set, show, advance, clear.\n",
+            },
+        ],
+    })?;
+
+    Ok(())
+}
+
 /// Build the full scenario table. Later cells add their group's scenarios
 /// here; `rpl-1` registers only the `seam` group.
 pub fn all_scenarios() -> Result<ScenarioSet, String> {
@@ -435,6 +1346,9 @@ pub fn all_scenarios() -> Result<ScenarioSet, String> {
             Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
         ],
     })?;
+
+    // rpl-2: the first ported group.
+    register_intent_scenarios(&mut set)?;
 
     Ok(set)
 }
@@ -692,16 +1606,103 @@ mod tests {
         assert!(parse_selector(&argv(&["--all", "--group", "seam"])).is_err());
     }
 
+    /// rpl-1 pinned EVERY ledger group at zero — that pin is what made
+    /// `--cmd-check --group intent` red before rpl-2 existed, and it has now
+    /// been cashed for `intent` and only for `intent`. The unported groups
+    /// keep the pin, so each later cell inherits the same red floor.
     #[test]
-    fn every_ledger_group_still_has_zero_scenarios_registered() {
-        // rpl-1 is the seam only. This is also the pin that makes
-        // `--cmd-check --group intent` (rpl-2's verify) fail TODAY, which is
-        // the whole point of obligation (A).
+    fn unported_ledger_groups_still_have_zero_scenarios_registered() {
         let set = all_scenarios().expect("the shipped scenario table registers cleanly");
-        for group in KNOWN_GROUPS.iter().filter(|g| **g != "seam") {
+        for group in KNOWN_GROUPS.iter().filter(|g| **g != "seam" && **g != "intent") {
             assert_eq!(set.count_for(group), 0, "group {group} should have no scenarios yet");
         }
         assert!(set.count_for("seam") >= 5, "the seam must carry its own smoke scenarios");
+    }
+
+    #[test]
+    fn the_intent_group_is_registered_and_covers_its_declared_obligations() {
+        let set = all_scenarios().expect("the shipped scenario table registers cleanly");
+        assert!(
+            set.count_for("intent") >= 20,
+            "intent registered only {} scenario(s)",
+            set.count_for("intent")
+        );
+        let names: Vec<&str> = set.select(Some("intent")).iter().map(|s| s.name).collect();
+        // The cell's own scenario list, checked as a list rather than
+        // trusted: a later edit that drops one of these silently would
+        // otherwise still leave the group "non-empty" and green.
+        for required in [
+            "show-absent-store",
+            "advance-absent-store",
+            "clear-absent-key-on-absent-store",
+            "set-on-absent-store",
+            "set-then-show-roundtrip",
+            "corrupt-anchor-show-fails-open",
+            "corrupt-anchor-advance-refuses",
+            "no-work-phase-true-lands-on-default",
+            "no-work-phase-false-uses-active-feature",
+            "no-work-phase-compounding-complete-ignores-stale-feature",
+            "key-traversal-writes-identical-path",
+            "key-traversal-resolves-to-etc-passwd",
+            "key-over-120-code-units-truncates-onto-seeded-key",
+            "key-surrogate-pair-boundary",
+            "key-astral-plane-degrades-to-default",
+            "unknown-verb-usage-fallback",
+        ] {
+            assert!(names.contains(&required), "intent scenario `{required}` is missing: {names:?}");
+        }
+        // Every one of the four verbs is actually exercised.
+        for verb in ["set", "show", "advance", "clear"] {
+            assert!(
+                set.select(Some("intent")).iter().any(|s| s.argv.get(1).map(String::as_str) == Some(verb)),
+                "no intent scenario runs the `{verb}` verb"
+            );
+        }
+    }
+
+    #[test]
+    fn the_long_key_is_exactly_at_the_slice_cap() {
+        // 120 is `sanitizeIntentKey`'s own cap. If this drifts, the
+        // over-120 scenario stops testing truncation at the boundary and
+        // starts testing something else while still passing.
+        assert_eq!(long_intent_key().chars().count(), 120);
+        assert!(long_intent_key().is_ascii());
+    }
+
+    #[test]
+    fn the_surrogate_scenario_really_straddles_the_boundary() {
+        // The whole point of that scenario: code unit 119 (0-based) is the
+        // FIRST half of a surrogate pair, so a UTF-16 `.slice(0, 120)` cuts
+        // inside the character.
+        let source: Vec<u16> = format!("{}{ASTRAL_SMILE}{}", "a".repeat(119), "b".repeat(10))
+            .encode_utf16()
+            .collect();
+        assert!(source.len() > 120, "the source must exceed the cap");
+        let unit_119 = source[119];
+        assert!((0xd800..0xdc00).contains(&unit_119), "code unit 119 must be a HIGH surrogate, got {unit_119:#x}");
+        assert!((0xdc00..0xe000).contains(&source[120]), "code unit 120 must be its LOW surrogate");
+    }
+
+    #[test]
+    fn the_surrogate_anchor_is_stored_under_a_shorter_name_than_it_prints() {
+        // The trap that made this scenario's negative control silent once:
+        // the RESOLVED key and the FILENAME are not the same string, because
+        // `intentPath` sanitizes a key `writeIntent` already sanitized and
+        // `/-+$/` is not idempotent against the dash the 120-code-unit cut
+        // exposed. If a future edit ever makes these two converge, the
+        // mutation is aimed at a file the runtimes never open and the control
+        // silently stops proving anything — so pin the divergence here rather
+        // than rediscovering it from a zero-diff failure.
+        let printed = surrogate_resolved_key();
+        let on_disk = surrogate_disk_key();
+        assert_eq!(printed.chars().count(), 120, "the resolved key sits exactly at the 120-code-unit cap");
+        assert!(printed.ends_with('-'), "the truncation must expose a trailing dash");
+        assert_eq!(
+            on_disk,
+            printed.trim_end_matches('-'),
+            "the on-disk key is the printed key with its trailing dash stripped"
+        );
+        assert_ne!(on_disk, printed, "if these converge the scenario's mutation stops targeting the read path");
     }
 
     #[test]

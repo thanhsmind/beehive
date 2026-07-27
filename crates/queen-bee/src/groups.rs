@@ -13,8 +13,11 @@
 //!
 //! Slice 4 (`rust-port-ledgers`) lands `intent`, `capture`, `decisions`,
 //! `backlog`, `reviews` and `feedback` through here, one cell each. `rpl-1`
-//! deliberately registers NONE of them: the seam is proven on its own first,
-//! so the first group's parity run cannot be confused with a harness fault.
+//! deliberately registered NONE of them: the seam was proven on its own
+//! first, so the first group's parity run could not be confused with a
+//! harness fault. `rpl-2` is that first group — `intent`, added below as
+//! exactly one line, with no edit to `main.rs` or `dispatch.rs`'s dispatch
+//! logic, which is the seam's whole claim being cashed.
 
 use crate::dispatch::Dispatcher;
 
@@ -28,8 +31,8 @@ pub fn dispatcher() -> Dispatcher {
 }
 
 /// Every ported group, in registration order. ONE LINE PER GROUP.
-pub fn register_all(_d: &mut Dispatcher) {
-    // rpl-2: intent
+pub fn register_all(d: &mut Dispatcher) {
+    d.register(crate::ledger::intent::group()).expect("intent group");
     // rpl-3: capture
     // rpl-4/rpl-5: decisions
     // rpl-6/rpl-9: backlog

@@ -350,7 +350,12 @@ pub fn nearest_command_name(name: &str, names: &[String]) -> Option<String> {
 /// `emit({result, text, exitCode}, useJson)`: `--json` puts the RESULT on
 /// stdout; the text path puts `text` on stdout. Drift is never emitted here
 /// (see the module doc).
-fn emit(result: &Value, text: &str, exit_code: u8, use_json: bool) -> ExitCode {
+/// `pub(crate)` since rpl-2: a registered group's handler is the one place
+/// outside this module that has to emit a response, and it MUST reuse this
+/// exact function rather than growing its own. Re-implementing it at a group
+/// call site would mean a bare `serde_json::to_string_pretty` escaping
+/// [`jsonout`] — precisely the JS-key-order break rpl-1 measured and closed.
+pub(crate) fn emit(result: &Value, text: &str, exit_code: u8, use_json: bool) -> ExitCode {
     if use_json {
         print!("{}\n", jsonout::stringify_pretty(result));
     } else {
@@ -361,7 +366,7 @@ fn emit(result: &Value, text: &str, exit_code: u8, use_json: bool) -> ExitCode {
 
 /// `emitError(message, useJson)`: `--json` puts `{"error": …}` on stdout as
 /// COMPACT JSON; the text path writes to STDERR. Exit 1 either way.
-fn emit_error(message: &str, use_json: bool) -> ExitCode {
+pub(crate) fn emit_error(message: &str, use_json: bool) -> ExitCode {
     if use_json {
         println!("{}", jsonout::stringify_compact(&json!({ "error": message })));
     } else {

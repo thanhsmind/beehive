@@ -1,0 +1,114 @@
+{
+  "id": "rpl-2",
+  "feature": "rust-port-ledgers",
+  "title": "intent group (set, show, advance, clear) -- first group through the dispatch seam",
+  "lane": "high-risk",
+  "deps": [
+    "rpl-1"
+  ],
+  "decisions": [
+    "D3",
+    "D7"
+  ],
+  "files": [
+    "crates/bee-core/src/*",
+    "crates/queen-bee/src/*",
+    "crates/bee-parity/src/*"
+  ],
+  "read_first": [
+    "docs/history/rust-port/CONTEXT.md",
+    "packages/bee/lib/intent.mjs",
+    "packages/bee/bee.mjs",
+    "packages/bee/tests/test_intent.mjs",
+    "crates/bee-core/src/fsutil.rs",
+    "crates/bee-core/src/state.rs",
+    "docs/history/rust-port-ledgers/plan.md"
+  ],
+  "action": "Port the intent group end to end: lib logic into a new crates/bee-core/src/intent.rs, CLI handlers (packages/bee/bee.mjs:4059-4134 (REVIEW-CORRECTED range — the block closes at 4134, not 4132)) into the queen-bee group registered behind the rpl-1 seam. Store is one JSON file per sanitized key at .bee/intent/<key>.json (intent.mjs:52,69-70) -- NOT jsonl. Preserve exactly: writeJsonAtomic read-modify-write with no lock (intent.mjs:216,238); advanceIntent structurally able to touch only next_action (the design invariant at intent.mjs:23-24); fail-open reads where a missing or corrupt anchor never throws (intent.mjs:25-28); the NO_WORK_PHASES predicate (idle, compounding-complete) resolved by reading state via bee-core::state, matching intent.mjs:33,49. Key sanitization must match byte-for-byte including its behavior on empty, unicode, path-separator and traversal-shaped keys. VALIDATION-FOUND OBLIGATION (feasibility matrix row 7): crates/queen-bench/src/fixture.rs today writes NO intent store -- it contains zero references to `intent` (verified by grep during validation). Extend fixture::generate to seed .bee/intent/ with several keys, at least one of them unicode and one long, BEFORE writing the scenarios; without this every intent scenario would diff two empty directories and report a meaningless clean. Register --cmd-check scenarios covering: every verb on an absent store; set then show round-trip; advance on a missing anchor; clear on an absent key; a traversal-shaped key; a corrupt anchor file fed to both show and advance; and NO_WORK_PHASES both true and false. REVIEW-FOUND TRAP, named so it is not rediscovered the hard way: sanitizeIntentKey ends in .slice(0, 120) (packages/bee/lib/intent.mjs:66) and JS slice counts UTF-16 CODE UNITS. Rust &s[..120] counts bytes and .chars().take(120) counts scalar values; all three disagree on non-ASCII, and the JS form can split a surrogate pair mid-character. Port the code-unit semantics exactly, and put in the scenarios a key longer than 120 code units, a key whose 120th boundary falls inside a surrogate pair, and an astral-plane key. Also assert this group's own unknown-verb usage fallback line (packages/bee/bee.mjs:6586-6609).",
+  "must_haves": {
+    "truths": [
+      "crates/queen-bench/src/fixture.rs seeds a non-empty .bee/intent/ store, proven by the generator's own output listing the seeded keys",
+      "cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group intent reports every intent scenario clean, mjs vs queen-bee, over that non-empty fixture",
+      "the negative control fires on every intent scenario",
+      "a traversal-shaped key produces byte-identical output and byte-identical on-disk paths in both runtimes",
+      "a corrupt anchor file makes neither runtime throw on show, and both behave identically on advance",
+      "a key longer than 120 UTF-16 code units, a key whose 120th boundary splits a surrogate pair, and an astral-plane key all sanitize byte-identically to mjs",
+      "the intent unknown-verb usage fallback line is byte-identical to mjs"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/src/intent.rs",
+        "substantive": "intent store: sanitization, atomic per-key write, fail-open read, next_action-only advance"
+      },
+      {
+        "path": "crates/queen-bench/src/fixture.rs",
+        "substantive": "intent store seeded into the generated fixture"
+      },
+      {
+        "path": "crates/queen-bee/src/",
+        "substantive": "intent group registered behind the rpl-1 seam with the four verbs"
+      },
+      {
+        "path": "crates/bee-parity/src/",
+        "substantive": "intent scenarios registered in --cmd-check"
+      }
+    ],
+    "key_links": [
+      "packages/bee/tests/test_intent.mjs is the behavioral oracle for edge cases worth turning into scenarios",
+      "the seam registration site established by rpl-1",
+      "fixture floors and the REFUSED-on-shrunk-fixture contract at crates/queen-bench/src/fixture.rs:60 must not be weakened by the addition"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No wiring flip",
+      "No lock introduced where mjs has none",
+      "No lowering of any existing fixture floor to make room for the new store",
+      "Tests never touch the live .bee/ store"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group intent",
+  "status": "capped",
+  "trace": {
+    "worker": "Ada",
+    "outcome": "intent group (set/show/advance/clear) ported end to end behind the rpl-1 seam: bee-core/src/intent.rs (UTF-16-code-unit sanitizer, per-key atomic write, fail-open read, next_action-only advance), queen-bee/src/ledger/ handlers, queen-bench fixture now seeds a 5-key .bee/intent/ store with a pinned floor, and 24 --cmd-check scenarios run mjs vs queen-bee with a per-scenario negative control that fires on the declared channel. The last red was a real harness finding, not a flake: the surrogate-pair scenario aimed its mutation at .bee/intent/<119 a's>-.json, the key the runtimes PRINT, while the anchor is stored at <119 a's>.json because intentPath re-sanitizes an already-sanitized key and /-+$/ eats the dash the 120-code-unit cut exposed. Mutation corrected onto the path the write actually reads, plus a unit test pinning the printed-key/on-disk-name divergence. Port parity was never in question: mjs and queen-bee wrote byte-identical paths throughout.",
+    "files_changed": [
+      "crates/bee-core/src/intent.rs",
+      "crates/bee-core/src/lib.rs",
+      "crates/queen-bee/src/ledger/mod.rs",
+      "crates/queen-bee/src/ledger/intent.rs",
+      "crates/queen-bee/src/dispatch.rs",
+      "crates/queen-bee/src/groups.rs",
+      "crates/queen-bee/src/lib.rs",
+      "crates/bee-parity/src/cmdcheck.rs",
+      "crates/bee-parity/src/normalize.rs",
+      "crates/queen-bench/src/fixture.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T04:16:33.070Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"change_class\": \"behavior\",\n  \"tests_inspected\": [\n    \"packages/bee/tests/test_intent.mjs (the mjs behavioral oracle — edge cases lifted into scenarios rather than duplicated as a Rust suite)\",\n    \"crates/bee-parity/src/cmdcheck.rs seam scenarios from rpl-1 (the existing --cmd-check table; intent scenarios were added as ROWS in it, not as a new suite)\",\n    \"crates/queen-bench/src/fixture.rs existing floor assertions (INTENT_KEYS_FLOOR_COUNT modelled on the pinned floors already there, none lowered)\"\n  ],\n  \"tests_added_or_changed\": [\n    \"crates/bee-parity/src/cmdcheck.rs: 24 intent --cmd-check scenarios registered in the existing ScenarioSet table (no new test file)\",\n    \"crates/bee-parity/src/cmdcheck.rs::tests::the_surrogate_anchor_is_stored_under_a_shorter_name_than_it_prints (new row in the existing #[cfg(test)] module) — pins that the printed key <119 a's>- and the on-disk filename <119 a's> must stay different, so the corrected mutation can never silently drift back onto a file no runtime opens\",\n    \"crates/bee-parity/src/cmdcheck.rs: mutate_create_surrogate_key_anchor corrected to target the path intent set actually reads\"\n  ],\n  \"red_failure_evidence\": \"RED, verbatim from the cell verify before the fix (exit 1): 'bee-parity --cmd-check: FAIL — [intent/key-surrogate-pair-boundary] argv `intent set --feature aaaa…(119 a's)…😀bbbbbbbbbb …` — seeded-mutation check FAILED: perturbing .bee/intent/<119 a's then a dash>.json produced ZERO stdout diff (channels that DID move: neither stdout nor stderr) … Full mutation diff: .bee/intent/aaaa…a-.json present under leg B but missing under leg A'. Diagnosis, evidence-first: the mjs oracle itself was probed (.bee/tmp/rpl-2/probe.mjs against packages/bee/lib/intent.mjs) and printed 'key length = 120 tail = \\\"aaaa-\\\"', 'intentPath(key) basename length = 124 tail = \\\"aaaaa.json\\\"', 'sanitize(sanitize(src)) === sanitize(src) ? false' — writeIntent resolves the key ONCE (intent.mjs:187) and then hands it to intentPath, which sanitizes AGAIN (intent.mjs:69-71), and /-+$/ strips the trailing dash the 120-code-unit slice had exposed. So the anchor printing \\\"key\\\": \\\"<119 a's>-\\\" is stored at <119 a's>.json. The mutation was planted one character wide, on a file neither runtime ever opens, so nothing could move. The third candidate cause — a genuine port bug where the two legs sanitize to DIFFERENT filenames — was ruled out with evidence, not assumption: DiffReport::is_clean() includes tree_diffs (crates/bee-parity/src/differ.rs:66-71, 215-230), and the mjs-vs-queen-bee parity leg was clean for this scenario, which means both runtimes produced byte-identical file SETS and contents; crates/bee-core/src/intent.rs:75-77 re-sanitizes in intent_path exactly as intent.mjs:69-71 does. The single tree-diff line was the mutation's own orphan file, present only in the mutated leg. The scenario was corrected, not widened: the control now fires on the DECLARED stdout channel because writeIntent reads the anchor at its target path and refuses a differing request (intent.mjs:188-195) — strictly more detection than before, none removed, no assertion relaxed, expect_exit and every positive assertion unchanged.\",\n  \"verification_run\": \"cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group intent -> 'bee-parity --cmd-check: PASS', 'running 24 of 29 registered scenario(s)', every line 'zero diff … control fired on <declared channel> via <store>', exit 0. Full output recorded in trace.verify_output. Additionally cargo test --release -p bee-parity -p bee-core -p queen-bench -> 231 passed (11 suites, 5.10s).\",\n  \"new_suite_reason\": \"not applicable — no new test file was created; the 24 scenarios and the new unit test are rows added to the existing cmdcheck ScenarioSet table and its existing #[cfg(test)] module\",\n  \"deliberate_exceptions\": [\n    \"An UNPARSEABLE anchor is deliberately NOT a scenario: readJson's warn-and-fall-open stderr embeds the runtime's own JSON parser message (V8 vs serde_json), which no port of `intent` can reconcile. That divergence lives in the shared readJson primitive, not in this group; the corrupt-anchor scenarios use the parseable-but-unusable shape the module's own D5 doc defines as corrupt.\",\n    \"No Rust unit-test mirror of packages/bee/tests/test_intent.mjs was written: the --cmd-check scenarios run BOTH runtimes over the same fixture, which is a stronger oracle than re-asserting the mjs expectations a second time in Rust, and duplicating them would be the near-duplicate suite test-economy D3/D5 forbid.\"\n  ]\n}\n",
+    "verify_output": "   Compiling bee-parity v0.1.0 (/home/thanhsmind/projects/goglbe/beegog/crates/bee-parity)\n    Finished `release` profile [optimized] target(s) in 4.65s\n    Finished `release` profile [optimized] target(s) in 0.03s\n     Running `crates/target/release/bee-parity --cmd-check --group intent`\nbee-parity --cmd-check: PASS\nregistered scenarios by group:\n  seam       5\n  intent     24\n  capture    0\n  decisions  0\n  backlog    0\n  reviews    0\n  feedback   0\nrunning 24 of 29 registered scenario(s):\n  [intent/show-seeded-default] argv `intent show` — zero diff (stdout 418 B, stderr 22 B, exit 0); control fired on stdout via .bee/intent/default.json\n  [intent/show-json-seeded-default] argv `intent show --json` — zero diff (stdout 590 B, stderr 22 B, exit 0); control fired on stdout via .bee/intent/default.json\n  [intent/show-falls-through-to-default] argv `intent show --feature zzz-no-such-intent-key --json` — zero diff (stdout 590 B, stderr 22 B, exit 0); control fired on stdout via .bee/intent/default.json\n  [intent/show-explicit-feature-key] argv `intent show --feature queen-bench-fixture --json` — zero diff (stdout 602 B, stderr 22 B, exit 0); control fired on stdout via .bee/intent/queen-bench-fixture.json\n  [intent/show-render-precompact] argv `intent show --render precompact` — zero diff (stdout 689 B, stderr 22 B, exit 0); control fired on stdout via .bee/intent/default.json\n  [intent/show-render-resume-json] argv `intent show --render resume --json` — zero diff (stdout 1294 B, stderr 22 B, exit 0); control fired on stdout via .bee/intent/default.json\n  [intent/show-absent-store] argv `intent show` — zero diff (stdout 19 B, stderr 22 B, exit 0); control fired on stdout via .bee/intent\n  [intent/advance-absent-store] argv `intent advance --next-action bước kế tiếp` — zero diff (stdout 0 B, stderr 108 B, exit 1); control fired on stderr via .bee/intent\n  [intent/clear-absent-key-on-absent-store] argv `intent clear --feature zzz-absent-anchor` — zero diff (stdout 50 B, stderr 23 B, exit 0); control fired on stdout via .bee/intent\n  [intent/set-on-absent-store] argv `intent set --request yêu cầu mới trên kho trống --acceptance the store directory is created --json` — zero diff (stdout 318 B, stderr 21 B, exit 0); control fired on stdout via .bee/intent\n  [intent/set-then-show-roundtrip] argv `intent set --feature rpl2-fresh-anchor --request giữ nguyên từng byte: \"quoted\", tab\there, ünïcode 🐝 --acceptance the stored file and the emitted payload are the same record --next-action   bước một   --lane high-risk --cell rpl-2 --do-not-reverse a, b, ,c --stop-conditions  x ,y --json` — zero diff (stdout 472 B, stderr 21 B, exit 0); control fired on stdout via .bee/intent/rpl2-fresh-anchor.json\n  [intent/advance-seeded-default] argv `intent advance --next-action bước kế tiếp 🐝 --json` — zero diff (stdout 638 B, stderr 25 B, exit 0); control fired on stdout via .bee/intent/default.json\n  [intent/clear-seeded-feature-key] argv `intent clear --feature queen-bench-fixture --json` — zero diff (stdout 54 B, stderr 23 B, exit 0); control fired on stdout via .bee/intent/queen-bench-fixture.json\n  [intent/corrupt-anchor-show-fails-open] argv `intent show` — zero diff (stdout 19 B, stderr 22 B, exit 0); control fired on stdout via .bee/intent/default.json\n  [intent/corrupt-anchor-advance-refuses] argv `intent advance --next-action x` — zero diff (stdout 0 B, stderr 108 B, exit 1); control fired on stderr via .bee/intent/default.json\n  [intent/no-work-phase-true-lands-on-default] argv `intent set --request a different objective --acceptance the immutability refusal names the resolved key` — zero diff (stdout 0 B, stderr 258 B, exit 1); control fired on stderr via .bee/state.json\n  [intent/no-work-phase-false-uses-active-feature] argv `intent set --request objective under an active feature --acceptance the key and the feature both come from state.json --json` — zero diff (stdout 365 B, stderr 21 B, exit 0); control fired on stdout via .bee/state.json\n  [intent/no-work-phase-compounding-complete-ignores-stale-feature] argv `intent set --request a different objective --acceptance a stale feature string does not survive the phase` — zero diff (stdout 0 B, stderr 258 B, exit 1); control fired on stderr via .bee/state.json\n  [intent/key-traversal-writes-identical-path] argv `intent set --feature ..\\..\\zzz/traversal --request a traversal-shaped key must not escape .bee/intent --acceptance both runtimes create the same relative path --json` — zero diff (stdout 372 B, stderr 21 B, exit 0); control fired on stdout via .bee/intent/zzz-traversal.json\n  [intent/key-traversal-resolves-to-etc-passwd] argv `intent set --feature ../../etc/passwd --request rpl2 traversal-shaped key request --acceptance the refusal names the sanitized key` — zero diff (stdout 0 B, stderr 261 B, exit 1); control fired on stderr via .bee/intent/etc-passwd.json\n  [intent/key-over-120-code-units-truncates-onto-seeded-key] argv `intent show --feature queen-bench-fixture-long-intent-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxyyyyyyyyyy --json` — zero diff (stdout 703 B, stderr 22 B, exit 0); control fired on stdout via .bee/intent/queen-bench-fixture-long-intent-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.json\n  [intent/key-surrogate-pair-boundary] argv `intent set --feature aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀bbbbbbbbbb --request a key whose 120th UTF-16 code unit falls inside a surrogate pair --acceptance both runtimes cut at the same place --json` — zero diff (stdout 597 B, stderr 21 B, exit 0); control fired on stdout via .bee/intent/<119 a's, no dash — the printed key re-sanitized by intentPath>.json\n  [intent/key-astral-plane-degrades-to-default] argv `intent clear --feature 🐝🐝🐝 --json` — zero diff (stdout 42 B, stderr 23 B, exit 0); control fired on stdout via .bee/intent/default.json\n  [intent/unknown-verb-usage-fallback] argv `intent bogusverb` — zero diff (stdout 0 B, stderr 88 B, exit 1); control fired on stderr via .bee/cache/command-registry.json\nEXIT=0\n",
+    "verify_passed": true,
+    "claim_session": "2ec01700-0ce3-40de-85b2-954a0b2a270b",
+    "claimed_at": "2026-07-27T03:33:40.881Z",
+    "verify_command": "cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group intent",
+    "verified_at": "2026-07-27T04:15:58.910Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T04:15:58.911Z",
+        "claim_session": "2ec01700-0ce3-40de-85b2-954a0b2a270b",
+        "claimed_at": "2026-07-27T04:07:36.302Z",
+        "acquired_at": "2026-07-27T03:33:40.879Z",
+        "worker": "Ada",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "ceiling"
+}

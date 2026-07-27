@@ -112,6 +112,12 @@ pub const VOLATILE_FIELDS: &[VolatileField] = &[
     VolatileField { key: "started_at", key_match: KeyMatch::Exact, shape: Shape::IsoMillisZ, placeholder: TS_PLACEHOLDER },
     VolatileField { key: "last_heartbeat", key_match: KeyMatch::Exact, shape: Shape::IsoMillisZ, placeholder: TS_PLACEHOLDER },
     VolatileField { key: "written_at", key_match: KeyMatch::Exact, shape: Shape::IsoMillisZ, placeholder: TS_PLACEHOLDER },
+    // `intent.mjs:236` — `advanceIntent`'s own `new Date().toISOString()`
+    // stamp, the ONE key on the intent anchor that `written_at` does not
+    // already cover (rpl-2). Declared with the same IsoMillisZ shape gate:
+    // a Rust port emitting second- or micro-precision here still fails the
+    // diff rather than being masked into agreement.
+    VolatileField { key: "advanced_at", key_match: KeyMatch::Exact, shape: Shape::IsoMillisZ, placeholder: TS_PLACEHOLDER },
     VolatileField { key: "timestamp", key_match: KeyMatch::Exact, shape: Shape::IsoMillisZ, placeholder: TS_PLACEHOLDER },
     // `decisions.mjs:320` / `reviews.mjs:348` — `crypto.randomUUID()`. The
     // shape gate is what makes this safe to declare at all: the vast

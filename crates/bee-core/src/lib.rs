@@ -17,6 +17,7 @@ pub mod dispatch_guard;
 pub mod fsutil;
 pub mod guards;
 pub mod holds;
+pub mod intent;
 pub mod jsdate;
 pub mod lock;
 pub mod read_accounting;

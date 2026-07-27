@@ -63,6 +63,19 @@ pub const REVIEW_CANDIDATES_FLOOR_COUNT: usize = 60;
 pub const GIT_COMMITS_FLOOR_COUNT: usize = 50;
 pub const TRANSCRIPT_TAIL_FLOOR_BYTES: u64 = 300_000;
 
+/// Pinned minimum added by rpl-2 (validation-slice4 matrix row 7): the
+/// generator wrote NO intent store at all, so every `--cmd-check --group
+/// intent` scenario would have diffed two EMPTY directories and reported a
+/// meaningless clean. Same REFUSE-below discipline as the seven floors above
+/// — never shrunk to make generation succeed, and additive to all of them.
+///
+/// Unlike those, this one is not request-driven: the seeded key set is fixed
+/// (see [`INTENT_SEED_KEYS`]) because each key exists to exercise a specific
+/// shape, not to reach a size. The floor is checked against what actually
+/// landed on disk after the write, so a seeding regression is a refusal
+/// rather than a quietly smaller store.
+pub const INTENT_KEYS_FLOOR_COUNT: usize = 4;
+
 #[derive(Debug, Clone)]
 pub struct FixtureRequest {
     pub out_dir: PathBuf,
@@ -103,12 +116,25 @@ pub struct FixtureReport {
     pub transcript_tail_bytes: u64,
     pub transcript_file: PathBuf,
     pub crash_session_id: String,
+    /// The intent-anchor keys actually written under `.bee/intent/`
+    /// (rpl-2). Reported rather than merely counted so a reader of
+    /// `--generate`'s own output can SEE which shapes the store carries —
+    /// the must_have is "proven by the generator's own output listing the
+    /// seeded keys", and a bare count would not prove the unicode or the
+    /// 120-character key is there.
+    pub intent_keys: Vec<String>,
 }
 
 impl FixtureReport {
     pub fn to_json(&self) -> String {
+        let intent_keys = self
+            .intent_keys
+            .iter()
+            .map(|k| format!("\"{}\"", json_escape(k)))
+            .collect::<Vec<_>>()
+            .join(",");
         format!(
-            "{{\"root\":\"{}\",\"decisions_bytes\":{},\"reservations_bytes\":{},\"backlog_bytes\":{},\"cells_count\":{},\"git_commits_count\":{},\"review_candidates_count\":{},\"transcript_tail_bytes\":{},\"transcript_file\":\"{}\",\"crash_session_id\":\"{}\"}}",
+            "{{\"root\":\"{}\",\"decisions_bytes\":{},\"reservations_bytes\":{},\"backlog_bytes\":{},\"cells_count\":{},\"git_commits_count\":{},\"review_candidates_count\":{},\"transcript_tail_bytes\":{},\"transcript_file\":\"{}\",\"crash_session_id\":\"{}\",\"intent_keys_count\":{},\"intent_keys\":[{}]}}",
             json_escape(&self.root.display().to_string()),
             self.decisions_bytes,
             self.reservations_bytes,
@@ -119,6 +145,8 @@ impl FixtureReport {
             self.transcript_tail_bytes,
             json_escape(&self.transcript_file.display().to_string()),
             json_escape(&self.crash_session_id),
+            self.intent_keys.len(),
+            intent_keys,
         )
     }
 }
@@ -234,6 +262,11 @@ pub fn generate(req: &FixtureRequest) -> Result<FixtureReport, String> {
     let (transcript_tail_bytes, transcript_file, crash_session_id) =
         write_crash_candidate(&canonical_root, &bee_dir, &transcript_root, req.transcript_tail_bytes)?;
 
+    // rpl-2: the intent store. Before this, `.bee/intent/` did not exist at
+    // all in a generated fixture (validation-slice4 matrix row 7), so an
+    // intent parity scenario would have compared two absent directories.
+    let intent_keys = write_intent_store(&bee_dir)?;
+
     Ok(FixtureReport {
         root: req.out_dir.clone(),
         decisions_bytes,
@@ -245,7 +278,92 @@ pub fn generate(req: &FixtureRequest) -> Result<FixtureReport, String> {
         transcript_tail_bytes,
         transcript_file,
         crash_session_id,
+        intent_keys,
     })
+}
+
+// ─── the intent store (rpl-2) ──────────────────────────────────────────────
+
+/// The FIXED seeded key set. Each entry is here for a shape, not for a size:
+///
+/// * `default` — the shared last-resort key (`intent.mjs:43`), the one every
+///   candidate walk ends at, so every no-flag read lands on a real record.
+/// * `queen-bench-fixture` — feature-shaped, matching the `feature` slug the
+///   generated cells already carry, so a state-driven key resolution has a
+///   record to find.
+/// * `etc-passwd` — the SANITIZED form of the traversal-shaped key
+///   `../../etc/passwd`. Seeded under the sanitized name deliberately: that
+///   is the only name either runtime can ever produce for that input, so a
+///   traversal scenario reads a real anchor instead of an absent one.
+/// * a 120-character key — exactly at `.slice(0, 120)`'s cap, so a store
+///   already holding a key at the boundary is the baseline the long-key
+///   scenarios run against.
+/// * a genuinely NON-ASCII filename — `sanitizeIntentKey` can never produce
+///   one, which is exactly why it belongs in the fixture: a real store can
+///   hold hand-placed or foreign-tool files, and both runtimes must walk
+///   past it without touching it, reading it, or failing on it.
+///
+/// Returned (not just counted) so `--generate`'s own JSON output lists them.
+fn intent_seed_keys() -> Vec<String> {
+    let long_prefix = "queen-bench-fixture-long-intent-key-";
+    let long_key = format!("{long_prefix}{}", "x".repeat(120 - long_prefix.len()));
+    vec![
+        "default".to_string(),
+        "queen-bench-fixture".to_string(),
+        "etc-passwd".to_string(),
+        long_key,
+        // U+1F41D HONEY BEE plus Vietnamese diacritics — multi-byte in UTF-8
+        // and, for the bee, a surrogate PAIR in UTF-16.
+        "ý-định-\u{1f41d}-neo".to_string(),
+    ]
+}
+
+/// One seeded anchor, in the EXACT bytes `writeJsonAtomic` produces:
+/// `JSON.stringify(obj, null, 2)` plus a trailing newline
+/// (`packages/bee/lib/fsutil.mjs:95`), with the key order of the
+/// `writeIntent` object literal (`intent.mjs:203-215`). Written as bytes
+/// rather than through a serializer so the fixture cannot drift from the
+/// frozen writer's shape without this literal being edited.
+///
+/// `written_at` is a FIXED timestamp, never `now`: every clone of the golden
+/// fixture must carry identical bytes, or the tree diff of a file neither
+/// runtime touched would depend on when the fixture was generated.
+fn intent_anchor_json(key: &str, index: usize) -> String {
+    let request = format!(
+        "Yêu cầu số {index} — the user's VERBATIM words, kept byte for byte: \"don't paraphrase me\" · 🐝 · tab\\there · ümlaut."
+    );
+    let acceptance = format!("Xong khi: fixture anchor {index} round-trips byte-identically through both runtimes.");
+    format!(
+        "{{\n  \"schema_version\": \"1.0\",\n  \"key\": \"{key}\",\n  \"written_at\": \"2026-07-26T00:00:00.000Z\",\n  \"request\": \"{request}\",\n  \"acceptance\": \"{acceptance}\",\n  \"next_action\": \"Bước {index}: keep going\",\n  \"feature\": \"queen-bench-fixture\",\n  \"lane\": \"tiny\",\n  \"cell\": \"fixture-cell-{index:05}\",\n  \"do_not_reverse\": [\n    \"đừng đảo ngược {index}\",\n    \"second rule\"\n  ],\n  \"stop_conditions\": [\n    \"dừng nếu {index}\"\n  ]\n}}\n",
+        key = json_escape(key),
+        request = json_escape(&request),
+        acceptance = json_escape(&acceptance),
+    )
+}
+
+/// Seed `.bee/intent/` and REFUSE if fewer than [`INTENT_KEYS_FLOOR_COUNT`]
+/// files actually landed. The count is taken by reading the directory back,
+/// not from the input list — a floor checked against the same list that
+/// produced the writes would prove nothing about what is on disk.
+fn write_intent_store(bee_dir: &Path) -> Result<Vec<String>, String> {
+    let dir = bee_dir.join("intent");
+    fs::create_dir_all(&dir).map_err(|e| format!("mkdir {}: {e}", dir.display()))?;
+    let keys = intent_seed_keys();
+    for (i, key) in keys.iter().enumerate() {
+        let path = dir.join(format!("{key}.json"));
+        fs::write(&path, intent_anchor_json(key, i + 1))
+            .map_err(|e| format!("write {}: {e}", path.display()))?;
+    }
+    let written = fs::read_dir(&dir)
+        .map_err(|e| format!("read_dir {}: {e}", dir.display()))?
+        .filter(|e| e.as_ref().map(|e| e.path().is_file()).unwrap_or(false))
+        .count();
+    if written < INTENT_KEYS_FLOOR_COUNT {
+        return Err(format!(
+            "intent store wrote {written} anchor file(s) < pinned floor {INTENT_KEYS_FLOOR_COUNT} (rpl-2, validation-slice4 matrix row 7) — refusing to generate a fixture whose intent scenarios would diff two near-empty directories and report a meaningless clean"
+        ));
+    }
+    Ok(keys)
 }
 
 fn write_onboarding(bee_dir: &Path) -> Result<(), String> {
@@ -708,6 +826,41 @@ mod tests {
         assert!(check_floors(&tt).is_err());
 
         assert!(check_floors(&base).is_ok());
+    }
+
+    #[test]
+    fn intent_seed_covers_the_shapes_the_floor_exists_for() {
+        let keys = intent_seed_keys();
+        assert!(
+            keys.len() >= INTENT_KEYS_FLOOR_COUNT,
+            "the fixed seed set must satisfy its own floor: {keys:?}"
+        );
+        assert!(keys.iter().any(|k| k == "default"), "the shared default key must be seeded");
+        assert!(
+            keys.iter().any(|k| k == "etc-passwd"),
+            "the sanitized form of the traversal key must be seeded"
+        );
+        assert!(
+            keys.iter().any(|k| k.chars().count() == 120),
+            "a key at the .slice(0, 120) cap must be seeded: {keys:?}"
+        );
+        assert!(
+            keys.iter().any(|k| !k.is_ascii()),
+            "a non-ASCII filename must be seeded — sanitizeIntentKey can never produce one, which is why the store has to carry one anyway"
+        );
+    }
+
+    #[test]
+    fn seeded_anchor_bytes_are_a_valid_normalizable_anchor() {
+        // The seeded record must PASS normalizeAnchor (a `request` that is a
+        // non-blank string), or every scenario reading it would render "(no
+        // intent anchor)" and prove nothing about the anchor path.
+        let body = intent_anchor_json("default", 1);
+        let parsed: serde_json::Value = serde_json::from_str(&body).expect("seeded anchor must be valid JSON");
+        assert!(parsed["request"].as_str().is_some_and(|s| !s.trim().is_empty()));
+        assert_eq!(parsed["key"], "default");
+        assert!(body.ends_with("}\n"), "writeJsonAtomic appends exactly one trailing newline");
+        assert!(body.contains("\n  \"schema_version\""), "two-space indent, JSON.stringify(obj, null, 2)");
     }
 
     #[test]

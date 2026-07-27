@@ -17,4 +17,7 @@ pub mod groups;
 pub mod hookconfig;
 pub mod hooks;
 pub mod jsonout;
+/// The ported registry command groups (slice 4). One module per group,
+/// registered through [`groups::register_all`].
+pub mod ledger;
 pub mod status;
