@@ -213,7 +213,7 @@
     },
     {
       "path": ".bee/bin/lib/worktree-store.mjs",
-      "sha256": "3bf58926db0144e6466996effbc1bcba70da2d711d007db9a9a0c3aa98ab6580",
+      "sha256": "fba5062d249c39c41c52ee4bb1ee91a958ae12d6021b61c380c129c153fb0d11",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -1864,7 +1864,7 @@
     },
     {
       "path": "packages/bee/lib/worktree-store.mjs",
-      "sha256": "3bf58926db0144e6466996effbc1bcba70da2d711d007db9a9a0c3aa98ab6580",
+      "sha256": "fba5062d249c39c41c52ee4bb1ee91a958ae12d6021b61c380c129c153fb0d11",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/worktree-store.mjs"
@@ -2158,7 +2158,7 @@
     },
     {
       "path": "packages/bee/tests/test_worktree_store.mjs",
-      "sha256": "5e25ff8652aa59d61b243ccb39b94f4bb335f285e6c9cedfb9d7a957829a90cc",
+      "sha256": "f6153094914ceea9f590fe4e2a4a882ea983d39c9c2458e1851a0f58bf82888f",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_worktree_store.mjs"

@@ -33,6 +33,50 @@ function gitText(cwd, args) {
   return git(cwd, args).stdout.trim();
 }
 
+// lstat-based existence check (unlike fs.existsSync, this reports a broken
+// symlink as PRESENT rather than absent — exactly what the companion-mount
+// tests below need: they're distinguishing "the symlink entry itself is
+// still there" from "it's gone", not whether its target resolves).
+function lstatExists(p) {
+  try {
+    fs.lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Builds a `commands.worktree_companion_start`-shaped shell command that
+// prints `payload` (as JSON) to stdout, WITHOUT embedding the JSON in the
+// shell command string itself — the payload is written to a fixture file and
+// a tiny script reads + echoes it back. Embedding JSON with nested quotes
+// directly in a `spawnSync(..., { shell: true })` command string is fragile
+// across POSIX shells and cmd.exe alike (see the existing plain `node -e
+// "process.exit(0)"` commands elsewhere in this file for the ceiling on what
+// stays portable inline); routing through a file sidesteps all of that.
+function makeCompanionStartCommand(payload) {
+  const scriptDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-companion-script-'));
+  const payloadPath = path.join(scriptDir, 'payload.json');
+  fs.writeFileSync(payloadPath, JSON.stringify(payload));
+  const scriptPath = path.join(scriptDir, 'start.mjs');
+  fs.writeFileSync(scriptPath, `import fs from 'node:fs';\nprocess.stdout.write(fs.readFileSync(${JSON.stringify(payloadPath)}, 'utf8'));\n`);
+  return `node ${JSON.stringify(scriptPath)}`;
+}
+
+// companionWorktreeFixture — like mergeableWorktreeFixture (below) but
+// created `--with-companion`: `companionStartCommand` is wired directly via
+// createFeatureWorktree's own options (bypassing config.json resolution,
+// which is the CLI handler's job, not worktree-store.mjs's), pointing at a
+// real target directory so the symlink it creates resolves to something.
+async function companionWorktreeFixture(feature, { mountPath = 'companion' } = {}) {
+  const mainRoot = makeOrdinaryRepoFixture();
+  const targetDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-companion-target-'));
+  fs.writeFileSync(path.join(targetDir, 'marker.txt'), 'companion\n');
+  const companionStartCommand = makeCompanionStartCommand({ worktreePath: targetDir, sessionId: 'sess-companion-1' });
+  const created = await createFeatureWorktree(mainRoot, { feature, companionStartCommand, companionMountPath: mountPath });
+  return { mainRoot, targetDir, created };
+}
+
 function makeOrdinaryRepoFixture() {
   // realpath the fixture root — on Windows os.tmpdir() gives the 8.3 short form
   // while every resolver speaks the long form, so a raw mkdtemp root makes this
@@ -249,6 +293,105 @@ await check('a merge with NO onVerifyTick/checkProcessorLease given at all (ever
   } finally {
     git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
     fs.rmSync(mainRoot, { recursive: true, force: true });
+  }
+});
+
+// ─── gfb-3 (GH #84): companion teardown must run only AFTER the merge's
+// zero-mutation refusal checks pass — a merge refused for any reason must
+// leave a --with-companion worktree's mount (symlink + marker) fully intact,
+// and the worktree dirty-check must never falsely trip on the mount itself
+// (a git pathspec exclusion, not text-filtering of porcelain output). ──────
+
+await check('a merge refused by the worktree dirty-check (a genuinely dirty file, unrelated to the companion mount) preserves the companion mount — marker + symlink survive the refusal untouched', async () => {
+  const { mainRoot, targetDir, created } = await companionWorktreeFixture('demo-companion-dirty-refuse');
+  try {
+    const markerPath = path.join(created.worktreeRoot, '.bee', 'companion-session.json');
+    const mountFullPath = path.join(created.worktreeRoot, 'companion');
+    assert(lstatExists(markerPath), 'sanity: companion marker exists before merge');
+    assert(lstatExists(mountFullPath), 'sanity: companion mount symlink exists before merge');
+
+    // A genuinely dirty file OTHER than the mount must still refuse the
+    // merge — the exclusion is scoped to the mount path alone.
+    fs.writeFileSync(path.join(created.worktreeRoot, 'dirty.txt'), 'oops\n');
+
+    let threw = null;
+    try {
+      await mergeFeatureWorktree(mainRoot, { id: created.id, companionEndCommand: 'node -e "process.exit(0)"' });
+    } catch (err) {
+      threw = err;
+    }
+    assert(threw && threw.code === 'WORKTREE_MERGE_WORKTREE_DIRTY', `expected WORKTREE_MERGE_WORKTREE_DIRTY, got ${threw ? threw.code || threw.message : '(no throw)'}`);
+    assert(lstatExists(markerPath), 'the companion marker must survive a refused merge');
+    assert(lstatExists(mountFullPath), 'the companion mount symlink must survive a refused merge');
+  } finally {
+    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
+    fs.rmSync(mainRoot, { recursive: true, force: true });
+    fs.rmSync(created.worktreeRoot, { recursive: true, force: true });
+    fs.rmSync(targetDir, { recursive: true, force: true });
+  }
+});
+
+await check('a clean --with-companion merge with a NESTED mountPath ("vendor/companion") succeeds and tears down the marker + symlink — proves the dirty-check uses a git pathspec exclusion, not text-filtering of porcelain output (a nested mount collapses to "?? vendor/" in porcelain, which text-filtering for the exact mount path would never match)', async () => {
+  const { mainRoot, targetDir, created } = await companionWorktreeFixture('demo-companion-nested-clean', { mountPath: 'vendor/companion' });
+  try {
+    // Give the branch something new to merge so this isn't ALREADY_UP_TO_DATE
+    // (which skips verify and takes a different result shape entirely).
+    fs.writeFileSync(path.join(created.worktreeRoot, 'work.txt'), 'x\n');
+    git(created.worktreeRoot, ['add', 'work.txt']);
+    git(created.worktreeRoot, ['commit', '-m', 'fixture work']);
+
+    const markerPath = path.join(created.worktreeRoot, '.bee', 'companion-session.json');
+    const mountFullPath = path.join(created.worktreeRoot, 'vendor', 'companion');
+    assert(lstatExists(markerPath), 'sanity: companion marker exists before merge');
+    assert(lstatExists(mountFullPath), 'sanity: nested companion mount symlink exists before merge');
+
+    const merged = await mergeFeatureWorktree(mainRoot, { id: created.id, companionEndCommand: 'node -e "process.exit(0)"' });
+    assert(merged.ok === true && merged.merged === true, `expected a clean merge, got ${JSON.stringify(merged)}`);
+    assert(merged.companion && merged.companion.ended === true, `expected companion.ended === true (no warning), got ${JSON.stringify(merged.companion)}`);
+    assert(!lstatExists(markerPath), 'the companion marker must be torn down after a clean merge');
+    assert(!lstatExists(mountFullPath), 'the nested companion mount symlink must be torn down after a clean merge');
+  } finally {
+    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
+    fs.rmSync(mainRoot, { recursive: true, force: true });
+    fs.rmSync(created.worktreeRoot, { recursive: true, force: true });
+    fs.rmSync(targetDir, { recursive: true, force: true });
+  }
+});
+
+await check('a worktree with no companion marker merges exactly as before — no "companion" field on the result at all, byte-identical to pre-companion behavior', async () => {
+  const { mainRoot, created } = await mergeableWorktreeFixture('demo-no-companion-marker');
+  try {
+    const merged = await mergeFeatureWorktree(mainRoot, { id: created.id, companionEndCommand: 'node -e "process.exit(0)"' });
+    assert(merged.ok === true && merged.merged === true, `expected a clean merge, got ${JSON.stringify(merged)}`);
+    assert(!('companion' in merged), 'no companion marker present -> no "companion" field on the result at all');
+  } finally {
+    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
+    fs.rmSync(mainRoot, { recursive: true, force: true });
+  }
+});
+
+await check('a merge refused for a DETACHED HEAD worktree preserves the companion mount too — the fix covers every zero-mutation refusal, not just the dirty-check', async () => {
+  const { mainRoot, targetDir, created } = await companionWorktreeFixture('demo-companion-detached');
+  try {
+    const markerPath = path.join(created.worktreeRoot, '.bee', 'companion-session.json');
+    const mountFullPath = path.join(created.worktreeRoot, 'companion');
+
+    git(created.worktreeRoot, ['checkout', '--detach', 'HEAD']);
+
+    let threw = null;
+    try {
+      await mergeFeatureWorktree(mainRoot, { id: created.id, companionEndCommand: 'node -e "process.exit(0)"' });
+    } catch (err) {
+      threw = err;
+    }
+    assert(threw && threw.code === 'WORKTREE_MERGE_DETACHED_HEAD', `expected WORKTREE_MERGE_DETACHED_HEAD, got ${threw ? threw.code || threw.message : '(no throw)'}`);
+    assert(lstatExists(markerPath), 'the companion marker must survive a detached-HEAD refusal');
+    assert(lstatExists(mountFullPath), 'the companion mount symlink must survive a detached-HEAD refusal');
+  } finally {
+    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
+    fs.rmSync(mainRoot, { recursive: true, force: true });
+    fs.rmSync(created.worktreeRoot, { recursive: true, force: true });
+    fs.rmSync(targetDir, { recursive: true, force: true });
   }
 });
 

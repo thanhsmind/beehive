@@ -43,7 +43,7 @@
       "workflow-store.mjs": "c5460cd0cd9b5cb9d49f2b7f5d4d4113e1bd3e790b0c8670c716f9ba50628c12",
       "workspace-store.mjs": "aa8017d71df1e3d35f40503b47bbe1aa1a2e110623b4a480fe66eb5bb1f3c3c1",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
-      "worktree-store.mjs": "3bf58926db0144e6466996effbc1bcba70da2d711d007db9a9a0c3aa98ab6580"
+      "worktree-store.mjs": "fba5062d249c39c41c52ee4bb1ee91a958ae12d6021b61c380c129c153fb0d11"
     },
     "repo_hooks": {
       "adapter.mjs": "e21c39e993390600cb2fe352078ae7554c74db0ee6ffd5bdb443c49192689dca",
@@ -82,5 +82,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-27T17:42:45.407Z"
+  "updated_at": "2026-07-27T17:53:51.151Z"
 }

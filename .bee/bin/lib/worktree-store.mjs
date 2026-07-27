@@ -287,8 +287,10 @@ const FRESH_STATE_SCHEMA_VERSION = '1.0';
 // The path is under `.bee/runtime/` deliberately: that prefix is gitignored
 // both in this repo and in every host repo onboarding sets up, so this record
 // can never make a worktree read "dirty" to the `git status --porcelain`
-// pre-check mergeFeatureWorktree runs — the same constraint that forces
-// `.bee/companion-session.json` to be torn down before that check.
+// pre-check mergeFeatureWorktree runs. `.bee/companion-session.json`
+// (COMPANION_MARKER_REL below) is NOT under this prefix and so has no such
+// free ride — it is excluded from that same pre-check by git pathspec
+// instead (see gitStatusPorcelainExcluding and mergeFeatureWorktreeStage).
 const WORKTREE_IDENTITY_REL = path.join('runtime', 'worktree-identity.json');
 
 /**
@@ -662,6 +664,17 @@ function validateCompanionMountPath(mountPath) {
   return normalized;
 }
 
+// The companion marker's path, relative to a worktree root — referenced by
+// runCompanionStart (write), readCompanionMarker (read),
+// teardownCompanionIfPresent (delete), AND mergeFeatureWorktreeStage's
+// worktree dirty-check (exclude) below. One constant keeps all four in sync.
+// Deliberately NOT under `.bee/runtime/` (see the WORKTREE_IDENTITY_REL
+// comment above for why that prefix is gitignored everywhere) — which means
+// this marker is itself untracked-and-NOT-gitignored in every host repo, so
+// (same as the mounted symlink) it must be excluded from the worktree
+// dirty-check by pathspec, not merely relied on to already be gone.
+const COMPANION_MARKER_REL = path.join('.bee', 'companion-session.json');
+
 /**
  * Runs the project-configured `commands.worktree_companion_start` (worktree-
  * companion-hook) and wires its result into the freshly created worktree.
@@ -712,7 +725,7 @@ function runCompanionStart(mainRoot, worktreeRoot, companionStartCommand, mountP
   const mountFullPath = path.join(worktreeRoot, mountPath);
   fs.mkdirSync(path.dirname(mountFullPath), { recursive: true });
   fs.symlinkSync(parsed.worktreePath, mountFullPath, 'dir');
-  const markerPath = path.join(worktreeRoot, '.bee', 'companion-session.json');
+  const markerPath = path.join(worktreeRoot, COMPANION_MARKER_REL);
   fs.mkdirSync(path.dirname(markerPath), { recursive: true });
   fs.writeFileSync(markerPath, `${JSON.stringify({ sessionId, worktreePath: parsed.worktreePath, mountPath }, null, 2)}\n`);
   return { sessionId, worktreePath: parsed.worktreePath, mountPath };
@@ -974,6 +987,43 @@ function gitStatusPorcelain(cwd) {
 
 function isTreeDirty(cwd) {
   return gitStatusPorcelain(cwd).trim().length > 0;
+}
+
+/** `git status --porcelain` with one or more paths EXCLUDED via git pathspecs
+ * (`:(exclude)<path>`, one per entry) — used by the worktree merge dirty-check
+ * when a companion mount is present, so its untracked mounted symlink AND its
+ * marker file (COMPANION_MARKER_REL, also untracked and — unlike the rest of
+ * a bootstrapped `.bee` store — NOT gitignored in any host repo; see that
+ * constant's own comment) never trip WORKTREE_MERGE_WORKTREE_DIRTY.
+ * Deliberately NOT implemented as post-hoc text-filtering of plain `git
+ * status --porcelain` output: porcelain COLLAPSES an untracked directory (or
+ * a symlink-to-directory, which is what a companion mount is) to one summary
+ * line for its top-level name — e.g. a mount at `vendor/companion` shows only
+ * as `?? vendor/`, never `?? vendor/companion` — so text-filtering for the
+ * exact mount path would never match a nested mount and the merge would
+ * refuse forever (empirically confirmed against git 2.43.0; a spaced or
+ * otherwise-quoted path has the same porcelain-quoting problem). The pathspec
+ * exclusion instead asks git itself to never report those paths as changed,
+ * at the source, regardless of how deep they are or how their names would be
+ * quoted — and passing MULTIPLE `:(exclude)` pathspecs with no positive
+ * pathspec among them still defaults to "everything else in the tree"
+ * (git's own pathspec-magic contract), so excluding two paths at once is not
+ * a narrowing. `excludePaths` (a string or array of strings) is expected
+ * relative to `cwd` (a worktree root) with `\` already normalized to `/` —
+ * pathspecs are `/`-only even on Windows. `isTreeDirty` itself (above) is
+ * left unchanged — every other caller keeps the plain, unexcluded check. */
+function gitStatusPorcelainExcluding(cwd, excludePaths) {
+  const paths = Array.isArray(excludePaths) ? excludePaths : [excludePaths];
+  const pathspecs = paths.map((p) => `:(exclude)${p.replace(/\\/g, '/')}`);
+  const r = runGit(cwd, ['status', '--porcelain', '--', ...pathspecs]);
+  if (r.status !== 0) {
+    throw new Error(`"git status --porcelain -- ${pathspecs.join(' ')}" failed in ${cwd}: ${(r.stderr || r.stdout || '').trim() || `exit ${r.status}`}`);
+  }
+  return r.stdout;
+}
+
+function isTreeDirtyExcluding(cwd, excludePaths) {
+  return gitStatusPorcelainExcluding(cwd, excludePaths).trim().length > 0;
 }
 
 /**
@@ -1582,41 +1632,72 @@ function checkMergeFence(mainRoot, { id, preMergeHead, mergeHeadFile, stagedTree
 }
 
 /**
- * Best-effort companion teardown (worktree-companion-hook), run
- * unconditionally at the very START of a merge attempt — before either
- * dirty-tree pre-check, and regardless of `--cleanup` or of how the merge
- * attempt itself ultimately resolves (conflict, red verify, or success
- * alike). Two independent reasons this can't wait until after a successful
- * merge the way `attachCleanupOutcome`'s bee-worktree removal does:
+ * Reads (WITHOUT deleting) the `.bee/companion-session.json` marker on a
+ * worktree, if one exists — used ahead of every zero-mutation merge refusal
+ * so `marker.mountPath` can be excluded from the worktree dirty-check
+ * (`gitStatusPorcelainExcluding`/`isTreeDirtyExcluding` above) before any
+ * check runs, and read again (redundantly, harmlessly — this is a plain
+ * read) by `teardownCompanionIfPresent` below once every refusal has
+ * cleared. Returns `null` when no marker exists (or it fails to parse) —
+ * same "no companion here" contract `teardownCompanionIfPresent` itself used
+ * to implement inline before this read was split out.
+ */
+function readCompanionMarker(worktreeRoot) {
+  const markerPath = path.join(worktreeRoot, COMPANION_MARKER_REL);
+  try {
+    return JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort companion teardown (worktree-companion-hook), run in
+ * `mergeFeatureWorktreeStage` only AFTER every zero-mutation refusal has
+ * cleared (both dirty-tree pre-checks, the detached-HEAD check, and the
+ * branch-mismatch check) — immediately before the first real mutation
+ * (staging the merge itself). This ordering is deliberate and was NOT the
+ * original ordering: running teardown first meant ANY merge invocation
+ * against a `--with-companion` worktree destroyed the mount — the symlink,
+ * the marker, and the best-effort session-end call — even when the merge
+ * was then refused for a reason having nothing to do with the companion (a
+ * genuinely dirty unrelated file, a detached HEAD, a branch mismatch). A
+ * refused merge must leave the worktree exactly as the caller left it, so
+ * teardown now waits until the merge is actually going to proceed.
  *
- *   1. A companion's mounted symlink (`commands.worktree_companion_mount`)
- *      is untracked, and `isTreeDirty(worktreeRoot)` below (`git status
- *      --porcelain`, deliberately without `--ignored`) sees it regardless of
- *      whether a same-named path is gitignored elsewhere in the project — a
- *      directory-only pattern like "repo/" does NOT match a symlink of the
- *      same name (confirmed empirically against a real git worktree, not
- *      assumed). Left in place, every merge of a `--with-companion` worktree
- *      would refuse WORKTREE_MERGE_WORKTREE_DIRTY, cleanup or not.
- *   2. The companion session itself has no reason to keep living past the
- *      moment its worktree is being merged back — `--cleanup` only controls
- *      whether the BEE worktree infrastructure is also removed afterward, a
- *      separate, later concern this function does not touch.
+ * The worktree dirty-check itself no longer depends on teardown having
+ * already run: `mergeFeatureWorktreeStage` reads the marker up front via
+ * `readCompanionMarker` (before this function is ever called) and, when one
+ * exists, checks the worktree with `isTreeDirtyExcluding(worktreeRoot,
+ * marker.mountPath)` instead of `isTreeDirty(worktreeRoot)` — the mounted
+ * symlink is excluded from the check by git pathspec rather than by being
+ * deleted first. See `gitStatusPorcelainExcluding`'s own doc comment for why
+ * that has to be a pathspec exclusion and not text-filtering.
+ *
+ * Once the merge is past every zero-mutation refusal, teardown still can't
+ * simply be skipped: the companion session has no reason to keep living past
+ * the moment its worktree is being merged back — `--cleanup` only controls
+ * whether the BEE worktree infrastructure is also removed afterward, a
+ * separate, later concern this function does not touch. So this still runs
+ * regardless of `--cleanup` and regardless of how the merge attempt itself
+ * ultimately resolves (textual conflict, red verify, or success alike) —
+ * those are all POST-staging outcomes on a merge that was never refused
+ * outright, and the companion session must not outlive a merge attempt that
+ * is actually proceeding (state in trace: this is the accepted residual —
+ * tearing down on a later conflict/red-verify outcome is unavoidable without
+ * leaving a session alive past a merge that already mutated main).
  *
  * No flag gates this — the marker file's mere presence on the worktree being
  * merged is the only signal needed; a worktree created without
  * `--with-companion` has no marker and this is a silent no-op (returns
  * `null`). A missing/failed end command is never fatal to the merge itself:
  * this always returns (never throws), and the symlink + marker are removed
- * best-effort either way so the dirty-check that follows is never blocked by
- * a companion problem — a failure is carried as `.warning` on the returned
- * object for the caller to surface, not swallowed.
+ * best-effort either way — a failure is carried as `.warning` on the
+ * returned object for the caller to surface, not swallowed.
  */
 function teardownCompanionIfPresent(mainRoot, worktreeRoot, companionEndCommand) {
-  const markerPath = path.join(worktreeRoot, '.bee', 'companion-session.json');
-  let marker;
-  try {
-    marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
-  } catch {
+  const marker = readCompanionMarker(worktreeRoot);
+  if (!marker) {
     return null; // no companion on this worktree — nothing to do.
   }
 
@@ -1642,7 +1723,7 @@ function teardownCompanionIfPresent(mainRoot, worktreeRoot, companionEndCommand)
     // this cleanup attempt.
   }
   try {
-    fs.unlinkSync(markerPath);
+    fs.unlinkSync(path.join(worktreeRoot, COMPANION_MARKER_REL));
   } catch {
     // best-effort, same reasoning.
   }
@@ -1693,15 +1774,26 @@ async function mergeFeatureWorktreeStage(mainRoot, options = {}) {
   }
   const { worktreeRoot } = resolved;
 
-  // worktree-companion-hook: must run BEFORE the worktree-dirty check right
-  // below — see teardownCompanionIfPresent's own doc comment for why this
-  // can't wait until after a successful merge like bee-worktree cleanup can.
-  const companion = teardownCompanionIfPresent(mainRoot, worktreeRoot, companionEndCommand);
+  // worktree-companion-hook: read (never delete) the marker up front so its
+  // mountPath, when present, can be excluded from the worktree dirty-check
+  // right below via a git pathspec — actual teardown (teardownCompanionIfPresent)
+  // is deferred until every zero-mutation refusal in this function has
+  // cleared; see that function's own doc comment for the full ordering
+  // rationale.
+  const companionMarker = readCompanionMarker(worktreeRoot);
 
   if (isTreeDirty(mainRoot)) {
     refuseMerge('WORKTREE_MERGE_MAIN_DIRTY', `the MAIN checkout at ${mainRoot} has uncommitted changes ("git status --porcelain" is non-empty) — commit or stash before merging.`);
   }
-  if (isTreeDirty(worktreeRoot)) {
+  // A present companion mount AND its marker file are both untracked (and
+  // the marker, unlike the rest of a bootstrapped .bee store, is not
+  // gitignored either — see COMPANION_MARKER_REL) — either alone would trip
+  // this check (see gitStatusPorcelainExcluding's doc comment), so both are
+  // excluded by git pathspec rather than relying on deletion-before-check.
+  const worktreeDirty = companionMarker
+    ? isTreeDirtyExcluding(worktreeRoot, [companionMarker.mountPath, COMPANION_MARKER_REL])
+    : isTreeDirty(worktreeRoot);
+  if (worktreeDirty) {
     refuseMerge(
       'WORKTREE_MERGE_WORKTREE_DIRTY',
       `the worktree at ${worktreeRoot} has uncommitted changes ("git status --porcelain" is non-empty) — commit or stash before merging. (A bootstrapped, gitignored .bee store alone is NOT dirty, per decision D8a.)`,
@@ -1738,6 +1830,14 @@ async function mergeFeatureWorktreeStage(mainRoot, options = {}) {
       `the worktree at ${worktreeRoot} is checked out to "${branch}", not its expected ${expectedBranch ? `"${expectedBranch}"` : '"wt/<slug>"-style'} branch — merge refuses to guess which branch to consume.${drift}`,
     );
   }
+
+  // worktree-companion-hook: every zero-mutation refusal above (both
+  // dirty-tree checks, detached-HEAD, branch-mismatch) has now cleared, so
+  // it's safe to tear the companion down — see teardownCompanionIfPresent's
+  // own doc comment for why this can't run any earlier (it would destroy the
+  // mount even for a merge about to be refused) or any later (the companion
+  // session must not outlive a merge attempt that's actually proceeding).
+  const companion = teardownCompanionIfPresent(mainRoot, worktreeRoot, companionEndCommand);
 
   // ── everything above is zero-mutation; the staged merge below is the
   // first real write. It is deliberately staged with `--no-commit` so verify
