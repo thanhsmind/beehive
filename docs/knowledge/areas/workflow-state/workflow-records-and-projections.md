@@ -1,16 +1,16 @@
 ---
 type: bee.area
 title: "Workflow State — the workflow record, its rebuildable projections, and plan-revision-scoped gates"
-description: "The durable per-feature workflow record that is now the real unit of pipeline state, the three-transaction creation that seeds live legacy work into it, the legacy state.json/lane files (and the legacy handoff file) as mechanically rebuildable projections that never outrank the record and whose writer set is enforced by a grep audit rather than convention, the plan-revision-scoped execution gate, and the per-workflow lock every state-mutation write now routes through instead of one blanket lock."
-timestamp: 2026-07-25
+description: "The durable per-feature workflow record that is now the real unit of pipeline state, the three-transaction creation that seeds live legacy work into it, the legacy state.json/lane files (and the legacy handoff file) as mechanically rebuildable projections that never outrank the record and whose writer set is enforced by a grep audit rather than convention, the plan-revision-scoped execution gate, and the per-record projection lock — one lock per record actually written (workflow:<id>, 'state' for state.json, lane:<feature> for a lane projection), under a single global acyclic acquisition order, that every writer of a projection record now shares instead of a lock scoped to whichever code path happens to be nearby."
+timestamp: 2026-07-27
 bee:
   id: workflow-state-workflow-records-and-projections
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/workflow-state/sessions-lanes-and-identity.md, areas/workflow-state/holds-and-the-coordination-lock.md, areas/worktree-parallelism/control-plane-topology.md]
-  decisions: ["multisession-native D1 (workflow-first state: the workflow record becomes the unit of state; state.json/lanes become read-only compatibility projections; startFeature's lock becomes workflow:<id>, ending cross-feature contention on the single state lock — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D2 (control plane / data plane split: the workflow record and every store it seeds from — sessions, claims — resolve through controlRoot, i.e. main, from any linked worktree; docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D7 (gates scoped to plan revision: gate approval records approved_for_plan_rev; a plan_rev bump invalidates only that workflow's execution gate)", "multisession-native advisor-digest-slice2 conditions C1-C5/F5/F7/F8 (docs/history/multisession-native/reports/advisor-digest-slice2.md — idempotent seed before any rebuild treats state.json as derived, plan-rev-effective gate formula, startFeature worker-precondition self-exclusion, one global lock order with sessions and workflow:<id> never held together, the default-path residual seam scoped and later closed)", "multisession-native D5 amendment (msn-24, advisor-digest-slice5 condition E: the projection-writer discipline this concept states for state.json/lanes is generalized and enforced for the legacy handoff projection too — rebuildHandoffProjection is the sole sanctioned writer, a grep-audit test proves the exact production writer set rather than trusting a header comment; full detail in areas/workflow-state/handoff.md)"]
-  sources: ["multisession-native cells multisession-native-5..10 (workflow-store.mjs, startFeature workflow creation, state-projection.mjs, activeWorkers, plan-rev gate scoping, default-path routing; traces .bee/cells/multisession-native-{5,6,7,8,9,10}.json, commits 1e7b538, f4fe163, 1c4d45d, c435add, 2dd834f, e7f365a, 2026-07-25)", "docs/history/multisession-native/CONTEXT.md (D1, D6, D7, D8 stage 2)", "docs/history/multisession-native/reports/advisor-digest-slice2.md (conditions C1-C5, findings F5/F7/F8)", "multisession-native cells multisession-native-18a/18b/18c (state.mjs's own workflow-record call sites, then bee.mjs's dispatcher, re-rooted onto controlRootFor(root); traces .bee/cells/multisession-native-{18a,18b,18c}.json, commits 5d0ec3c, a1431448, d69d81e, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "multisession-native cell multisession-native-24 (rebuildHandoffProjection reclassified as sole sanctioned writer of the legacy handoff projection; grep-audit test in test_state.mjs; trace .bee/cells/multisession-native-24.json, commit cee2d5f, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice5.md condition E; full detail in areas/workflow-state/handoff.md)"]
-  authoritative_for: "workflow-state: the workflow record schema and module, its creation at feature start, the rebuildable state.json/lane/handoff projections and their audited writer sets, plan-revision-scoped gates, and the per-workflow write lock"
+  decisions: ["multisession-native D1 (workflow-first state: the workflow record becomes the unit of state; state.json/lanes become read-only compatibility projections; startFeature's lock becomes workflow:<id>, ending cross-feature contention on the single state lock — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D2 (control plane / data plane split: the workflow record and every store it seeds from — sessions, claims — resolve through controlRoot, i.e. main, from any linked worktree; docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D7 (gates scoped to plan revision: gate approval records approved_for_plan_rev; a plan_rev bump invalidates only that workflow's execution gate)", "multisession-native advisor-digest-slice2 conditions C1-C5/F5/F7/F8 (docs/history/multisession-native/reports/advisor-digest-slice2.md — idempotent seed before any rebuild treats state.json as derived, plan-rev-effective gate formula, startFeature worker-precondition self-exclusion, one global lock order with sessions and workflow:<id> never held together, the default-path residual seam scoped and later closed)", "multisession-native D5 amendment (msn-24, advisor-digest-slice5 condition E: the projection-writer discipline this concept states for state.json/lanes is generalized and enforced for the legacy handoff projection too — rebuildHandoffProjection is the sole sanctioned writer, a grep-audit test proves the exact production writer set rather than trusting a header comment; full detail in areas/workflow-state/handoff.md)", "state-phase-lock-race D1-D4/D9-D13 (GH #70: the lost-update race between the state-sync hook's 'state' hold and the CLI's workflow:<id>-only hold is closed by making every writer of a projection record share the lock scoped to that exact record, under one global acyclic order workflow:<id> -> 'state' -> lane:<feature>; D13 supersedes D1/D2's blanket 'state' wrap of the whole workflow branch, which mis-scoped lane mutations onto a lock they never needed and turned a live invariant red — docs/history/state-phase-lock-race/CONTEXT.md, decision 61e21a42-39b2-4f8a-bcb8-2a4d99f00154)", "state-phase-lock-race D9 (advisor-found pre-existing inversion: handleStatePlanRevBump held 'state' then called the self-locking updateWorkflow, violating the canonical order; repaired to resolve the workflow first and use updateWorkflowAssumingLock inside the ordered locks — decision cde492e3-800e-4a29-b574-b65cb06aabd7)"]
+  sources: ["multisession-native cells multisession-native-5..10 (workflow-store.mjs, startFeature workflow creation, state-projection.mjs, activeWorkers, plan-rev gate scoping, default-path routing; traces .bee/cells/multisession-native-{5,6,7,8,9,10}.json, commits 1e7b538, f4fe163, 1c4d45d, c435add, 2dd834f, e7f365a, 2026-07-25)", "docs/history/multisession-native/CONTEXT.md (D1, D6, D7, D8 stage 2)", "docs/history/multisession-native/reports/advisor-digest-slice2.md (conditions C1-C5, findings F5/F7/F8)", "multisession-native cells multisession-native-18a/18b/18c (state.mjs's own workflow-record call sites, then bee.mjs's dispatcher, re-rooted onto controlRootFor(root); traces .bee/cells/multisession-native-{18a,18b,18c}.json, commits 5d0ec3c, a1431448, d69d81e, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "multisession-native cell multisession-native-24 (rebuildHandoffProjection reclassified as sole sanctioned writer of the legacy handoff projection; grep-audit test in test_state.mjs; trace .bee/cells/multisession-native-24.json, commit cee2d5f, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice5.md condition E; full detail in areas/workflow-state/handoff.md)", "state-phase-lock-race cells splr-1/splr-2/splr-3 (per-record lock scoping, the handleStatePlanRevBump order repair, re-vendoring into .bee/bin/, and the multi-process proof in test_state_projection_race.mjs; commits e787819a, 73eadc5f, ebc68f04, 2026-07-27; full suite verified green independently by the orchestrator, 109 suites)", "docs/history/state-phase-lock-race/CONTEXT.md (root cause: the state-sync hook holds 'state', CLI mutation verbs with a live workflow record hold workflow:<id> ONLY, and two more writers held nothing at all)", "docs/history/state-phase-lock-race/reports/advisor-consult.md (fable, 2026-07-27, PROCEED WITH CHANGES: refuted the plan's own claim that no 'state' -> workflow:<id> edge existed)"]
+  authoritative_for: "workflow-state: the workflow record schema and module, its creation at feature start, the rebuildable state.json/lane/handoff projections and their audited writer sets, plan-revision-scoped gates, and the per-record write lock order"
 ---
 
 # Workflow State — the workflow record, its rebuildable projections, and plan-revision-scoped gates
@@ -192,6 +192,73 @@ workflow lock); a missing or corrupt target workflow record refuses loudly
 (the same typed refusal as any other read), never a silent fallback to an
 unlocked write.
 
+**The projection lock is scoped per record, not per code path, under one
+global acyclic order (state-phase-lock-race D1-D4/D9-D13, GH #70).** Trigger:
+any write of `.bee/state.json` or of a lane projection
+(`.bee/lanes/<feature>.json`), from any of the writers that can reach one:
+the `bee-state-sync` hook's opportunistic rebuild, every CLI mutation verb
+routed through `withMutationLock`, `start-feature`'s post-`startFeature`
+projection rebuild, `state rebuild-projections`
+(`rebuildAllProjections`), and `state plan-rev bump`. What happens: `'state'`
+guards `.bee/state.json` and nothing else; `lane:<feature>` guards
+`.bee/lanes/<feature>.json` and nothing else — each writer of a record
+acquires the lock for the record it actually writes, never a lock scoped to
+"the branch this write happens to sit inside." The single global order is
+`workflow:<id>` → `'state'` → `lane:<feature>`; a given call takes only a
+prefix of that chain (e.g. the hook takes `'state'` alone with no workflow
+lock at all), and no production path anywhere takes any two of these names in
+the reverse order. This closes GH #70's root cause — the hook holding
+`'state'` while a live-workflow CLI mutation held `workflow:<id>` only, so
+neither writer's read-modify-write of `.bee/state.json` excluded the other —
+and it closes the two writers the original audit found holding nothing at
+all (`start-feature`'s post-write rebuild, `rebuild-projections`). It
+supersedes `splr-1`'s first attempt, which wrapped the *entire* `if (wf)`
+branch of `withMutationLock` — default-record **and** lane mutations alike —
+in `'state'`: a lane mutation never writes `.bee/state.json`
+(`state.mjs:1704` writes only `lanePath`), so that wrap protected nothing for
+lanes while it forced every lane mutation to queue behind unrelated
+default-record work, turning `test_cli_state.mjs`'s live invariant — a lane
+mutation with a live workflow record never needs the shared `'state'`
+lock — from near-instant to the ~5 s lock timeout (D12/D13; see
+`pattern-20260727-a-lock-scoped-to-the-wrong-record-buys-nothing`).
+`rebuildStateProjection`/`rebuildLaneProjection` themselves stay
+caller-serialized and acquire nothing internally — unchanged from D3's
+original rule — because `lock.mjs` is non-reentrant and the hook already
+holds `'state'` when it calls `rebuildStateProjection`. What each actor
+observes: a session mutating `.bee/state.json` is excluded from every other
+writer of `.bee/state.json`, including the hook, with no lost update
+possible; a session mutating lane F's projection is excluded from every
+other writer of lane F's projection, and is never blocked by, nor blocks,
+an unrelated default-record write; two sessions on two different lanes still
+never contend on either lock at all.
+
+**A pre-existing lock-order inversion in `handleStatePlanRevBump` is repaired
+to the same canonical order (state-phase-lock-race D9, advisor-found).**
+Trigger: `state plan-rev bump` against a lane with a live workflow record.
+What happens: this handler previously held `withStoreLock(root, 'state', …)`
+and, inside that closure, called the self-locking `updateWorkflow` — which
+itself acquires `workflow:<id>` — producing the one live `'state'` →
+`workflow:<id>` edge the plan's own feasibility claim had said did not exist
+anywhere in the repo (refuted by the `fable` advisor consult, verified
+independently against `bee.mjs:2915-2950` and
+`workflow-store.mjs:385-390`). Left unrepaired, adding this feature's new
+`workflow:<id>` → `'state'` edge elsewhere would have produced a genuine
+lock-order inversion the moment `plan-rev bump` on lane F raced a `state
+set`/`state gate` on the same lane F: session A holds `workflow:F`, waits on
+`'state'`; session B holds `'state'`, waits on `workflow:F` — not a
+permanent hang (`lock.mjs` is timeout-bounded and neither holder is
+stale-eligible) but a deterministic ~5 s dual `LOCK_BUSY` refusal on both
+sides. The handler now resolves the target lane's workflow record *first*,
+outside any lock, then acquires `withWorkflowLock(ctrlRoot, wf.id, () =>
+withStoreLock(root, 'state', body))` and uses `updateWorkflowAssumingLock`
+inside that nested hold instead of the self-locking `updateWorkflow` — the
+same canonical `workflow:<id>` → `'state'` order every other writer now
+uses, with no self-deadlock because the workflow lock is acquired exactly
+once. What each actor observes: `plan-rev bump` behaves identically from the
+caller's side (same refusals, same bumped `plan_rev`, same rebuilt
+projection); the inversion that would have reintroduced GH #70-shaped
+contention under this feature's own fix is gone before the fix ships.
+
 **A workflow record and every store it seeds from resolve through main's
 control plane, not the writing checkout (multisession-native D2, msn-18a-c).**
 Trigger: any read or write of a workflow record, session record, or claim
@@ -245,11 +312,29 @@ workspace-local).
   `plan_rev`, gates, or claims (multisession-native D7, advisor condition C2).
 - R67 — Every state-mutation write path — default and lane alike — locks and
   routes through its own feature's workflow record via `withMutationLock`,
-  never the blanket `state` lock; the sole standing exceptions are a
-  `--feature` swap on the default record (writes `state.json` directly,
-  because identity is immutable on a workflow record) and a repo with zero
-  workflow records (multisession-native D1, advisor condition C5, closed by
-  `multisession-native-10`).
+  never a single lock scoped to the whole workflow branch regardless of which
+  record it actually writes; the sole standing exceptions are a `--feature`
+  swap on the default record (writes `state.json` directly, because identity
+  is immutable on a workflow record) and a repo with zero workflow records
+  (multisession-native D1, advisor condition C5, closed by
+  `multisession-native-10`; per-record scoping finalized by
+  state-phase-lock-race D13 — see R79).
+- R79 — Every writer of `.bee/state.json` or of a lane projection acquires the
+  lock scoped to the exact record it writes — `'state'` for `.bee/state.json`,
+  `lane:<feature>` for `.bee/lanes/<feature>.json` — never a lock scoped to a
+  code path that happens to write near several records; the single global
+  acquisition order is `workflow:<id>` → `'state'` → `lane:<feature>`, most
+  paths take only a prefix, and no path takes any two of these names in the
+  reverse order. `rebuildStateProjection`/`rebuildLaneProjection` acquire
+  nothing themselves and stay caller-serialized, unchanged from D3
+  (state-phase-lock-race D1-D4/D13, GH #70).
+- R80 — `handleStatePlanRevBump` resolves its target workflow before taking
+  any lock, then acquires `withWorkflowLock(ctrlRoot, wf.id, () =>
+  withStoreLock(root, 'state', body))` with `updateWorkflowAssumingLock`
+  inside — the canonical `workflow:<id>` → `'state'` order — rather than
+  holding `'state'` and calling the self-locking `updateWorkflow`, which was
+  the repo's one live inverse-order edge (state-phase-lock-race D9,
+  advisor-found).
 - R74 — Every workflow-record and session/claim call site `state.mjs` and
   `bee.mjs` make resolves through `controlRootFor(root)`, never the writing
   checkout's own root; a linked worktree's workflow record therefore always
@@ -273,6 +358,12 @@ workspace-local).
 - `bee state plan-rev bump` targeting the default (non-lane) record, or a
   named lane with no live workflow record, refuses outright rather than
   silently bumping something adjacent (multisession-native D7).
+- A lock scoped to a code path rather than to the record it writes can be
+  worse than no lock at all: `splr-1`'s blanket `'state'` wrap over the whole
+  workflow branch left the lane record with no lock of its own, while
+  forcing every lane mutation to wait out an unrelated default-record hold —
+  turning a near-instant, correct invariant into a ~5 s timeout
+  (state-phase-lock-race D12/D13; `test_cli_state.mjs`).
 
 ## Pointers (implementation)
 
@@ -326,3 +417,25 @@ workspace-local).
   grep-audit test itself lives in
   `packages/bee/tests/test_state.mjs`. Evidence: trace
   `.bee/cells/multisession-native-24.json`, commit cee2d5f.
+- Per-record lock order (R79/R80, GH #70): `withMutationLock`'s `if (wf)`
+  branch nests `withStoreLock(root, 'state', fn)` inside
+  `withWorkflowLock(ctrlRoot, wf.id, …)` for default-record mutations, and a
+  sibling `lane:<feature>`-scoped wrap for lane mutations, both in
+  `packages/bee/bee.mjs`; the two previously-unlocked writers
+  (`handleStateStartFeature`'s post-rebuild at `bee.mjs:3284`,
+  `handleStateRebuildProjections` at `bee.mjs:3304`) are each wrapped in
+  `withStoreLock(root, 'state', …)`; `handleStatePlanRevBump`
+  (`bee.mjs:2921`) restructured to resolve its workflow first, then
+  `withWorkflowLock(…, () => withStoreLock(root, 'state', body))` with
+  `updateWorkflowAssumingLock` inside, closing the one live inverse-order
+  edge (D9). Fix vendored byte-identical into `.bee/bin/bee.mjs` (D10, `md5sum`
+  parity with `packages/bee/bee.mjs`). Proof: `scripts/tests/test_state_projection_race.mjs`
+  — real OS child processes (never in-process async) asserting mutual
+  exclusion between a `'state'`-locked writer and a `workflow:<id>`-locked
+  writer, an exact-count lost-update assertion, and a negative control (the
+  pre-fix workflow-lock-only arrangement) that must itself produce
+  violations, so the suite cannot pass vacuously; red-first against
+  unmodified `bee.mjs`. Evidence: cells `splr-1`/`splr-2`/`splr-3`, commits
+  `e787819a`/`73eadc5f`/`ebc68f04`, 2026-07-27; full 109-suite verify green,
+  verified independently by the orchestrator. Advisor consult:
+  `docs/history/state-phase-lock-race/reports/advisor-consult.md`.

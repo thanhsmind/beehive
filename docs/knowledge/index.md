@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 91 concept(s)
-- [patterns/](patterns/index.md) — 73 concept(s)
+- [patterns/](patterns/index.md) — 75 concept(s)
 - [work/](work/index.md) — 4 concept(s)
 
 ## Critical patterns
@@ -83,3 +83,5 @@ never a generation timestamp or any other wall-clock value.
 - [A fresh worktree inherits every other feature's stale claimed cells because .bee/cells/ is git-tracked](patterns/20260724-worktree-inherits-stale-cells.md) — A fresh worktree inherits every other feature's stale claimed cells because .bee/cells/ is git-tracked
 - [A resolver added beside the old one is dead code until every call site is swept — the seam ships when the LAST consumer moves, not when the new function lands](patterns/20260725-a-resolver-added-beside-the-old-one-is-dead-code.md) — A cell that adds a new function beside an old one and calls the migration started ships nothing observable; an honest worker block that names the real sweep size beats a false-green cap that hides it.
 - [A shim that preserves a CLI surface can still drop a side-effect that surface never named](patterns/20260725-a-shim-can-drop-an-unnamed-side-effect.md) — The cross-worktree mirror write lived beside the reservation store's write, not inside it — a neighbor, not a return value. Retiring the store's own implementation without deliberately carrying that neighbor along would have lost cross-worktree coordination silently, because every visible test of the shim's own contract (reserve/release/renew) would still pass.
+- [A lock that guards the wrong record buys nothing and costs an invariant](patterns/20260727-a-lock-scoped-to-the-wrong-record-buys-nothing.md) — Serializing a lane mutation on the shared 'state' lock closed nothing for lanes — the write it guards (lanePath) is never touched by that lock's other holders — and it turned a correct, live invariant red by forcing an unrelated writer to wait out the lock's own timeout.
+- [An impacted-test run computed after the commit selects nothing, and caps false-green](patterns/20260727-an-impacted-run-computed-after-the-commit-selects-nothing.md) — A worker committed its change, then ran run_verify.mjs --impacted-from-git, which diffed against the now-clean tree and saw only leftover uncommitted bookkeeping files — reporting 0 suites and capping the cell verify_passed:true while the change was in fact red.
