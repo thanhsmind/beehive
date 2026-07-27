@@ -264,6 +264,8 @@
     "owner-decision",
     "spec-80",
     "enforcement",
-    "gap"
+    "gap",
+    "user-feedback",
+    "flow"
   ]
 }

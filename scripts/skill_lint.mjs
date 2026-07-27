@@ -1,4 +1,7 @@
-// test_skill_body_budget — the slice test cell for flow-batch-2 (fb2-3).
+// skill_lint — ADVISORY skill-tree lint. Not a test, deliberately (user law,
+// 2026-07-27: tests are for code; instruction text gets a lint, not a suite).
+// Always exits 0: budget deltas are information, anchor/numbering problems are
+// warnings. A human decides; nothing blocks, nothing runs in the verify estate.
 //
 // The slice's net behavior is instruction text: three rules (progress ticks,
 // the re-lane checkpoint, the merged review wave) moved into references with
@@ -31,18 +34,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.resolve(HERE, '..', '..');
+const REPO = path.resolve(HERE, '..');
 const SKILLS = path.join(REPO, 'skills');
 const BASELINE = path.join(HERE, 'skill-body-budget.json');
 
-let failures = 0;
+let warnings = 0;
 function check(name, fn) {
   try {
     fn();
-    console.log(`PASS  ${name}`);
+    console.log(`ok    ${name}`);
   } catch (error) {
-    failures += 1;
-    console.log(`FAIL  ${name}`);
+    warnings += 1;
+    console.log(`WARN  ${name}`);
     console.log(`      ${error && error.message ? error.message : error}`);
   }
 }
@@ -80,7 +83,7 @@ if (process.argv.includes('--update-baseline')) {
   }
   fs.writeFileSync(
     BASELINE,
-    `${JSON.stringify({ note: 'Per-skill SKILL.md body budget in bytes. Ratchet: may only go down. See scripts/tests/test_skill_body_budget.mjs.', budgets }, null, 2)}\n`,
+    `${JSON.stringify({ note: 'Per-skill SKILL.md body budget in bytes. Ratchet: may only go down. See scripts/skill_lint.mjs.', budgets }, null, 2)}\n`,
     'utf8',
   );
   console.log(lowered.length ? lowered.join('\n') : 'nothing to lower');
@@ -215,5 +218,5 @@ check('no SKILL.md body repeats a number within one ordered list — inserting a
   assert(dupes.length === 0, `duplicate step number:\n  ${dupes.join('\n  ')}`);
 });
 
-console.log(failures === 0 ? `\nOK — skill body budget and reference integrity hold` : `\n${failures} failed`);
-process.exit(failures === 0 ? 0 : 1);
+console.log(warnings === 0 ? `\nOK — skill tree clean` : `\n${warnings} advisory warning(s) — nothing blocks`);
+process.exit(0);

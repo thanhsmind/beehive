@@ -2956,8 +2956,23 @@ function guardTestCellDebt(root, record, targetPhase) {
     //    `suite-green` (the EXISTING suite), and a docs cell resolves to no
     //    class at all through deriveChangeClass, so all three fall through
     //    here and the branch below stays silent for them.
+    //  · and only when the cell TOUCHED CODE (user law, 2026-07-27: "test chỉ
+    //    dành cho code"). A behavior cell whose entire recorded file set is
+    //    instruction/knowledge text — skills/, docs/, plans/, .bee/, or bare
+    //    .md — changed what the agent reads, not what the machine runs; a test
+    //    cell has nothing executable to cover there. An empty or missing file
+    //    list stays CONSERVATIVE (counts as code) so an unrecorded diff can
+    //    never launder real behavior past the debt.
     if ((changeClass === 'behavior' || changeClass === 'api') && cell.status === 'capped') {
-      cappedBehaviorBearing.push(`${cell.id} (${changeClass})`);
+      const recorded = [
+        ...(Array.isArray(cell.files) ? cell.files : []),
+        ...(Array.isArray(cell.trace && cell.trace.files_changed) ? cell.trace.files_changed : []),
+      ];
+      const nonCode = (f) =>
+        typeof f === 'string' &&
+        (f.startsWith('skills/') || f.startsWith('docs/') || f.startsWith('plans/') || f.startsWith('.bee/') || f.endsWith('.md'));
+      const touchedCode = recorded.length === 0 || recorded.some((f) => !nonCode(f));
+      if (touchedCode) cappedBehaviorBearing.push(`${cell.id} (${changeClass})`);
     }
   }
   if (offenders.length === 0 && testCellCount === 0 && cappedBehaviorBearing.length > 0) {
