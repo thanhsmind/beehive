@@ -78,6 +78,18 @@ govern the working residue of a cell rather than its content.
   the dispatched persona panel. Rationale on record: the dispatched wave on a
   4-5-file diff costs more than it catches, and ceremony must never displace
   the main task (standing user feedback 5794a92a).
+- **R16c — Test runs are the scarce resource (test-runs-lean D1/D2,
+  2026-07-27).** Verify-once: in a serial tiny/small dispatch the worker's
+  recorded verify output is the cap evidence — the orchestrator repeats the
+  command only when the report smells, the wave ran parallel workers, or the
+  cell is high-risk/hard-gate; proof stays recorded output, it just is not paid
+  for twice. Proving a new suite load-bearing by mutation is owed only when it
+  guards high-risk/hard-gate behavior, at most one cycle, optional elsewhere.
+  A cell's verify field carrying the impacted or full chain is a planning
+  defect the worker refuses — the impacted run belongs to the slice close,
+  never inside a cell. Origin: one session paid five broad suite runs and a
+  test-heavy diff for a ~40-line guard (standing user feedback, strengthens
+  5794a92a).
 - **R17** — There is one canonical scratch home (`f21efe6e`): every ephemeral
   file bee writes for its own working purposes — judge payloads, evidence/
   deviation files, batch inputs, digests, verify logs, probe/debug scripts,
