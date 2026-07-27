@@ -237,6 +237,15 @@
     "gate1",
     "gate2",
     "gate3",
-    "gate4"
+    "gate4",
+    "rust-port",
+    "d5",
+    "proof-discipline",
+    "port",
+    "slice3",
+    "status",
+    "read-dedup",
+    "windows-path-identity",
+    "correction"
   ]
 }

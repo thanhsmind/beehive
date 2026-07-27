@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { runModuleWorker } from '../../../scripts/lib/run-module-worker.mjs';
 import { check, assert, printSummaryAndExit } from '../../../scripts/lib/test-fixture.mjs';
 import { writeJsonAtomic } from '../lib/fsutil.mjs';
+import { canonicalPathsEqual } from '../lib/path-identity.mjs';
 
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(TESTS_DIR, '..', '..', '..');
@@ -67,8 +68,34 @@ await check('bee herding status --json on a repo with no marker reports {enabled
     assert(result.status === 0, `status should succeed, got ${result.status}: ${result.stderr}`);
     const out = JSON.parse(result.stdout);
     assert(out.enabled === false, `expected enabled:false, got ${JSON.stringify(out)}`);
-    assert(out.marker === markerFile(root), `expected marker ${markerFile(root)}, got ${out.marker}`);
-    assert(out.main_root === root, `expected main_root ${root}, got ${out.main_root}`);
+    // Canonical comparison (windows-path-identity wpi-2), not `===`: main_root
+    // is `path.dirname(<git stdout>)` (herding.mjs), never normalized by the
+    // product on purpose (SKILL.md derives the worktree grant key from its
+    // exact basename — see the module header there). A raw `===` against
+    // `fs.realpathSync` output asserts a POSIX-only contract the product
+    // never promised; canonicalPathsEqual tolerates the platform divergence
+    // instead of demanding a spelling match. wpi-1 owns this comparison —
+    // reused here, not reimplemented.
+    assert(canonicalPathsEqual(out.marker, markerFile(root)), `expected marker ${markerFile(root)}, got ${out.marker}`);
+    assert(canonicalPathsEqual(out.main_root, root), `expected main_root ${root}, got ${out.main_root}`);
+
+    // SECOND PASS, revert-detectable on THIS box (rework round 2, goal-check
+    // judge): the two lines above use canonicalPathsEqual, but on POSIX its
+    // result is byte-identical to a bare `===` (both sides are already the
+    // same real string) — so reverting either line to `===` is invisible
+    // here. Run each corrected value a second time against a win32-rendered
+    // form of the SAME expected target (markerFile(root) / root), via
+    // wpi-1's canonicalPathsEqual with platformPath: path.win32 (its
+    // injection seam): the canonical comparison accepts it, a bare `===`
+    // does not — verified below by reverting each of these exact lines.
+    assert(
+      canonicalPathsEqual(out.marker, path.win32.resolve(markerFile(root)), { platformPath: path.win32 }),
+      `SECOND PASS: canonicalPathsEqual accepts out.marker against a win32-rendered spelling of the expected marker path once platformPath: path.win32 is injected — got ${JSON.stringify(out.marker)} vs ${JSON.stringify(path.win32.resolve(markerFile(root)))}`,
+    );
+    assert(
+      canonicalPathsEqual(out.main_root, path.win32.resolve(root), { platformPath: path.win32 }),
+      `SECOND PASS: canonicalPathsEqual accepts out.main_root against a win32-rendered spelling of the expected root once platformPath: path.win32 is injected — got ${JSON.stringify(out.main_root)} vs ${JSON.stringify(path.win32.resolve(root))}`,
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -125,7 +152,18 @@ await check('after "bee herding enable", the existing read-only interlock (dispa
     assert(interlockResult.status === 0, `interlock should report enabled (exit 0), got ${interlockResult.status}: ${interlockResult.stderr}`);
     const interlockOut = JSON.parse(interlockResult.stdout);
     assert(interlockOut.enabled === true, `interlock should agree the marker is enabled, got ${JSON.stringify(interlockOut)}`);
-    assert(interlockOut.marker === markerFile(root), `interlock should resolve the SAME marker path, got ${interlockOut.marker}`);
+    assert(canonicalPathsEqual(interlockOut.marker, markerFile(root)), `interlock should resolve the SAME marker path, got ${interlockOut.marker}`);
+
+    // SECOND PASS, revert-detectable on THIS box (rework round 2, goal-check
+    // judge): same reasoning as the two assertions in the "no marker" check
+    // above — reverting the line just above to `===` is invisible on POSIX,
+    // so run interlockOut.marker a second time against a win32-rendered
+    // spelling of the expected marker path, via canonicalPathsEqual with
+    // platformPath: path.win32.
+    assert(
+      canonicalPathsEqual(interlockOut.marker, path.win32.resolve(markerFile(root)), { platformPath: path.win32 }),
+      `SECOND PASS: canonicalPathsEqual accepts interlockOut.marker against a win32-rendered spelling of the expected marker path once platformPath: path.win32 is injected — got ${JSON.stringify(interlockOut.marker)} vs ${JSON.stringify(path.win32.resolve(markerFile(root)))}`,
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -154,6 +192,61 @@ await check('bee herding with no verb prints a Use: line listing enable/disable/
     assert(
       /enable/.test(result.stderr) && /disable/.test(result.stderr) && /status/.test(result.stderr),
       `Use: line should list all three verbs, got ${result.stderr}`,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('RED-FIRST REGRESSION GUARD, separator (windows-path-identity wpi-2, rework round): a genuine win32-shaped rendering of the REAL main_root this suite just observed from the CLI is rejected by the pre-fix raw `===`, rejected too by canonicalPathsEqual with NO platformPath injected (the POSIX-ambient control — a bare backslash is DATA on this platform, per wpi-1 rework commit ddcb6733, never a separator), and accepted ONLY once canonicalPathsEqual is given platformPath: path.win32 (wpi-1\'s injection seam) — the one way to prove separator handling without a real Windows box', async () => {
+  const root = makeHerdingRepo('bee-herding-redfirst-sep-');
+  try {
+    const result = await runBeeHerding(root, ['status', '--json']);
+    assert(result.status === 0, `status should succeed, got ${result.status}: ${result.stderr}`);
+    const out = JSON.parse(result.stdout);
+
+    // A genuine win32-shaped rendering of the SAME real main_root this test
+    // just observed — Node's OWN win32 path semantics (path.win32.resolve),
+    // not a hand-rolled regex, produce the backslash-separated form. This
+    // routes the ACTUAL resolver output (out.main_root) through the
+    // divergence, rather than a value disconnected from the code under test.
+    const win32Rendering = path.win32.resolve(out.main_root);
+    assert(win32Rendering !== out.main_root, 'fixture precondition: the win32 rendering must actually differ in spelling from the real POSIX output, or this proves nothing');
+
+    assert(
+      out.main_root !== win32Rendering,
+      'RED: the pre-fix raw `===` this suite used to assert with rejects the win32-shaped rendering of the SAME real main_root',
+    );
+    assert(
+      canonicalPathsEqual(out.main_root, win32Rendering) === false,
+      'POSIX CONTROL: with NO platformPath injected (the ambient default), canonicalPathsEqual must ALSO reject the win32-shaped rendering — a bare backslash is data on this platform, never a separator (the exact false-equal wpi-1\'s rework round removed); ambiently folding it here would silently reintroduce that bug',
+    );
+    assert(
+      canonicalPathsEqual(out.main_root, win32Rendering, { platformPath: path.win32 }),
+      'GREEN: canonicalPathsEqual accepts the SAME real main_root rendered win32-style once platformPath: path.win32 is injected — separator handling is platform-determined, proven here without a real Windows box',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('RED-FIRST REGRESSION GUARD, case (windows-path-identity wpi-2): case sensitivity is per-VOLUME, not per-platform (plan.md CORRECTION 2) — this dev box\'s real filesystem is case-sensitive, so a case-flipped spelling of a NON-EXISTENT path (forcing the string-fallback branch, same technique scripts/tests/test_path_identity.mjs uses) genuinely stays unequal without pinning, and genuinely folds equal once a case-insensitive volume is (here, simulated via injection since none is available) detected', async () => {
+  const root = makeHerdingRepo('bee-herding-redfirst-case-');
+  try {
+    const nonExistent = path.join(root, 'NotYetCreated');
+    const caseFlipped = path.join(root, 'notyetcreated');
+    assert(!fs.existsSync(nonExistent) && !fs.existsSync(caseFlipped), 'fixture precondition: neither path exists, forcing the string-fallback branch');
+    assert(
+      nonExistent !== caseFlipped,
+      'RED: the pre-fix raw `===` comparison rejects the case-divergent spelling',
+    );
+    assert(
+      canonicalPathsEqual(nonExistent, caseFlipped, { detectCaseFold: () => true }),
+      'GREEN: canonicalPathsEqual folds the case-divergent spelling once the volume is (here, pinned) case-insensitive',
+    );
+    assert(
+      canonicalPathsEqual(nonExistent, caseFlipped, { detectCaseFold: () => false }) === false,
+      'negative control: the same pair stays UNEQUAL when the volume is (correctly, for this box) detected as case-sensitive — the fold is conditional, never automatic',
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

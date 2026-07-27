@@ -28,3 +28,14 @@
 .bee/tmp_*
 .bee/patch-*.json
 # BEE:END
+
+# rust-port (crates/): compiled artifacts only — Rust source is never
+# excluded from the host onboarding payload, this is build output.
+crates/target/
+
+# rust-port-8: scripts/dump_command_registry.mjs writes its JSON bridge
+# output here. Already covered by the managed BEE:START/BEE:END fence above
+# (.bee/cache/ is listed there too) — restated as its own line outside the
+# fence, deliberately, because this line is owned by this feature and must
+# never be edited/removed by the fence's own regeneration tooling.
+.bee/cache/

@@ -1,0 +1,89 @@
+{
+  "id": "rust-port-18",
+  "feature": "rust-port",
+  "title": "FIX-FIRST: release-profile fail-open — panic=abort defeats catch_unwind, re-prove crash fixtures against a release binary",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D7"
+  ],
+  "files": [
+    "crates/Cargo.toml",
+    "crates/queen-bee/*"
+  ],
+  "read_first": [
+    "crates/Cargo.toml",
+    "crates/queen-bee/src/hooks/write_guard.rs",
+    "crates/queen-bee/tests/hook_conformance.rs",
+    "docs/history/rust-port/CONTEXT.md"
+  ],
+  "action": "P1 repair (validation decision 2026-07-26). crates/Cargo.toml:17 sets `panic = \"abort\"` on [profile.release], while the hook fail-open contract is implemented with std::panic::catch_unwind (crates/queen-bee/src/hooks/write_guard.rs:684 and :950, plus the run_fail_open wrapper). Cargo test targets build with the test/dev profile (panic=unwind), so every existing fail-open green — rust-port-7/9/10/11/12 crash fixtures — proves a profile the host never ships: in a real release binary a panic ABORTS (SIGABRT / exit 134) instead of exiting 0 with a hooks.jsonl crash line, so the guard would kill the turn it exists to protect. Same failure class as the vendoring-drift pattern: the test ran a different artifact than production. CRASH-TRIGGER SEAM (advisor note 1 — read this before designing the proof): the existing Rust crash fixture (crates/queen-bee/tests/hook_conformance.rs:568-586) is a HANDLED I/O fault absorbed via Result — it never unwinds, exits 0 under BOTH profiles, and therefore can neither satisfy red-first nor exercise catch_unwind. This cell must establish a real unwind trigger, and the choice is named here rather than improvised: add an INERT, env-gated deliberate-panic seam to the shipped binary (e.g. a fixture-only env var the hook runtime checks and panics on, documented in the source as test-only, never reachable without that env var), or find a genuinely panicking input and document it. FIX: make the release artifact honor the fail-open contract — remove `panic = \"abort\"` from [profile.release] (members list untouched; note the cold-start/size cost in the report and measure it), OR keep abort and make every hook path panic-free by construction; whichever is chosen, the proof requirement below is the same. PROOF (the load-bearing half): add a release-profile crash conformance target that spawns the ACTUAL crates/target/release/queen-bee binary (built with the release profile, not a test-profile harness), triggers the seam, and asserts exit code 0 plus the hooks.jsonl crash line — one per hook that owns a crash contract. RED-FIRST is mandatory and environment-independent: with the pre-fix profile the same target must FAIL (non-zero/abort observed), recorded verbatim in the trace, before the fix makes it pass.",
+  "must_haves": {
+    "truths": [
+      "cargo --test release_failopen runs and reports at least 4 passed, spawning the real crates/target/release/queen-bee binary (not a test-profile harness)",
+      "the crash trigger genuinely unwinds (a handled Result-absorbed fault does not satisfy this cell) and is inert without its fixture-only env gate",
+      "each crash fixture: release binary exits 0 and appends a hooks.jsonl crash line",
+      "red-first recorded: the same target fails against the pre-fix release profile, with the observed abort/exit status quoted in the trace",
+      "existing suites (hook_conformance, writeguard_core/bash/read, modelguard_conformance) stay green after the profile change"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/Cargo.toml",
+        "substantive": "release profile fail-open-safe; members list untouched"
+      },
+      {
+        "path": "crates/queen-bee/",
+        "substantive": "release_failopen conformance target spawning the release binary, plus the documented inert crash seam"
+      }
+    ],
+    "key_links": [
+      "the target under test is the built release binary, the same artifact D8 ships"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No edits to the crates/Cargo.toml members list (profile section only)",
+      "Never satisfy this cell with a test-profile-only proof — the whole point is the shipped profile",
+      "The crash seam is never reachable without its explicit fixture-only env gate",
+      "Tests never touch the live .bee/ store"
+    ]
+  },
+  "verify": "cargo build --release --manifest-path crates/Cargo.toml && cargo test --manifest-path crates/Cargo.toml -p queen-bee --test release_failopen",
+  "trace": {
+    "worker": "Kevin",
+    "outcome": "release-profile fail-open fix: dropped panic=abort from [profile.release] (panic=unwind, members untouched), added a fixture-only crash_seam_panic_if_armed env-gated panic seam in write_guard.rs (called from both write-guard and model-guard run() closures), and a new release_failopen conformance target that spawns the real target/release/queen-bee binary — red-first proved the pre-fix binary aborts (no exit code, no crash line) instead of failing open, green post-fix (7/7); existing hook_conformance/writeguard_core/writeguard_bash/writeguard_read/modelguard_conformance suites stay green (84 passed).",
+    "files_changed": [
+      "crates/Cargo.toml",
+      "crates/queen-bee/src/hooks/write_guard.rs",
+      "crates/queen-bee/src/hooks/model_guard.rs",
+      "crates/queen-bee/tests/release_failopen.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T10:56:18.239Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\n    \"crates/queen-bee/tests/hook_conformance.rs (seed_crash_root / crash_fail_open_tools_logger_* fixtures — confirmed they inject a HANDLED Result-level I/O fault that never unwinds, so they cannot exercise the panic=abort question)\",\n    \"crates/queen-bee/src/hooks/write_guard.rs (run_fail_open, the catch_unwind boundary at line 684 and the second boundary at line 950)\"\n  ],\n  \"tests_added_or_changed\": [\n    \"crates/queen-bee/tests/release_failopen.rs (new, 7 cases): write_guard_release_binary_fails_open_on_armed_crash_seam, write_guard_release_binary_crash_seam_logs_hooks_jsonl_crash_line, model_guard_release_binary_fails_open_on_armed_crash_seam, model_guard_release_binary_crash_seam_logs_hooks_jsonl_crash_line, write_guard_release_binary_crash_seam_stays_inert_without_env_gate, model_guard_release_binary_crash_seam_stays_inert_without_env_gate, crash_seam_env_set_for_a_different_hook_name_does_not_arm\"\n  ],\n  \"new_suite_reason\": \"genuinely new proof surface: the actual release-profile binary under a real panic, which none of hook_conformance/writeguard_core/modelguard_conformance can express since they all run under cargo test's dev/test profile or CARGO_BIN_EXE_queen-bee, never target/release/queen-bee\",\n  \"ratio_waiver\": \"source diff is deliberately minimal (Cargo.toml: one flag flip + a documenting comment block; write_guard.rs: one small inert env-gated fn + a one-line call site x2) while the cell's must_haves demand per-hook breadth (write-guard AND model-guard each need an armed-exit-zero case and an armed-crash-line case) plus proof the seam is genuinely gated (two inert-without-env cases, one mismatched-name case) — shrinking below that would weaken exactly the proof this P1 fix-first cell exists to deliver; the extensive doc comments mirror this crate's own established style in hook_conformance.rs/writeguard_core.rs's rig-discipline headers\",\n  \"red_failure_evidence\": \"Pre-fix (panic=\\\"abort\\\" still in crates/Cargo.toml [profile.release]), cargo test -p queen-bee --test release_failopen against the freshly built target/release/queen-bee binary: test result: FAILED. 3 passed; 4 failed. The 4 failures were exactly the crash-seam-armed fixtures: write_guard_release_binary_fails_open_on_armed_crash_seam and model_guard_release_binary_fails_open_on_armed_crash_seam both failed with `assertion left==right failed ... left: None right: Some(0)` (the child process had NO exit code — killed by SIGABRT, not exit(0)); write_guard_release_binary_crash_seam_logs_hooks_jsonl_crash_line and model_guard_release_binary_crash_seam_logs_hooks_jsonl_crash_line both failed with 'expected a crash log line naming the armed seam, got []' (log_crash never ran because the process aborted before catch_unwind's Err arm could execute). The 3 unrelated fixtures (inert-without-gate x2, mismatched-hook-name) passed both before and after, isolating the failures to the abort defect.\",\n  \"verification_run\": \"post-fix: cargo build --release --manifest-path crates/Cargo.toml && cargo test --manifest-path crates/Cargo.toml -p queen-bee --test release_failopen -> test result: ok. 7 passed; 0 failed. Regression sanity (not the recorded cap verify): cargo test -p queen-bee --test hook_conformance --test writeguard_core --test writeguard_bash --test writeguard_read --test modelguard_conformance -> cargo test: 84 passed (5 suites).\",\n  \"deliberate_exceptions\": []\n}\n",
+    "verify_output": "RED-FIRST (pre-fix, panic=\"abort\" still in [profile.release]):\n`cargo build --release --manifest-path crates/Cargo.toml -p queen-bee` succeeded (build itself doesn't fail under abort).\n`cargo test --manifest-path crates/Cargo.toml -p queen-bee --test release_failopen` => test result: FAILED. 3 passed; 4 failed.\nThe 4 failures were exactly the crash-seam-armed fixtures:\n  write_guard_release_binary_fails_open_on_armed_crash_seam: assertion left==right failed: left: None right: Some(0)\n    (stderr showed the panic message, then the child process had NO exit code at all -- killed by SIGABRT, not a clean exit(0))\n  write_guard_release_binary_crash_seam_logs_hooks_jsonl_crash_line: \"expected a crash log line naming the armed seam, got []\"\n    (log_crash never ran -- the process aborted before catch_unwind's Err arm could execute)\n  model_guard_release_binary_fails_open_on_armed_crash_seam: same left:None/right:Some(0) shape\n  model_guard_release_binary_crash_seam_logs_hooks_jsonl_crash_line: same \"got []\" shape\nThe 3 passing tests (inert-without-env-gate x2, mismatched-hook-name) were unaffected by the defect, confirming the failures are specific to the abort behavior, not test-harness noise.\n\nFIX: crates/Cargo.toml [profile.release] panic=\"abort\" -> panic=\"unwind\" (members list untouched).\nBinary size cost: 934544 bytes (abort) -> 1031064 bytes (unwind), +96520 bytes (~+10.3%).\n\nPOST-FIX (green), exact cell verify command:\n$ cargo build --release --manifest-path crates/Cargo.toml && cargo test --manifest-path crates/Cargo.toml -p queen-bee --test release_failopen\nFinished `release` profile [optimized] target(s)\nFinished `test` profile [unoptimized + debuginfo] target(s)\nrunning 7 tests\ntest crash_seam_env_set_for_a_different_hook_name_does_not_arm ... ok\ntest model_guard_release_binary_crash_seam_stays_inert_without_env_gate ... ok\ntest model_guard_release_binary_crash_seam_logs_hooks_jsonl_crash_line ... ok\ntest model_guard_release_binary_fails_open_on_armed_crash_seam ... ok\ntest write_guard_release_binary_crash_seam_stays_inert_without_env_gate ... ok\ntest write_guard_release_binary_crash_seam_logs_hooks_jsonl_crash_line ... ok\ntest write_guard_release_binary_fails_open_on_armed_crash_seam ... ok\ntest result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\nREGRESSION CHECK (not the recorded cap verify, extra sanity per must_haves):\ncargo test --manifest-path crates/Cargo.toml -p queen-bee --test hook_conformance --test writeguard_core --test writeguard_bash --test writeguard_read --test modelguard_conformance\n=> cargo test: 84 passed (5 suites, 3.33s) -- all green, no regressions from the profile change or the crash-seam call sites.\n",
+    "verify_passed": true,
+    "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+    "claimed_at": "2026-07-26T10:46:49.894Z",
+    "verify_command": "cargo build --release --manifest-path crates/Cargo.toml && cargo test --manifest-path crates/Cargo.toml -p queen-bee --test release_failopen",
+    "verified_at": "2026-07-26T10:55:05.866Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T10:55:05.866Z",
+        "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+        "claimed_at": "2026-07-26T10:47:46.672Z",
+        "acquired_at": "2026-07-26T10:46:49.892Z",
+        "worker": "Kevin",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}

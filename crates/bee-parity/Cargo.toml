@@ -1,0 +1,10 @@
+[package]
+name = "bee-parity"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "bee-parity"
+path = "src/main.rs"
+
+[dependencies]

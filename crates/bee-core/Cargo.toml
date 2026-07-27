@@ -1,0 +1,44 @@
+[package]
+name = "bee-core"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "bee_core"
+path = "src/lib.rs"
+
+[dependencies]
+getrandom = "0.4.3"
+# rust-port-14 (D5 headline: ZERO subprocess on the status path).
+# `default-features = false` is load-bearing, not tidiness: gix's default set
+# pulls `extras` (worktree mutation, status, dirwalk, credentials) and the
+# network transports drag curl/openssl — a C dependency that is exactly what
+# approach.md:19 rejected libgit2 for (musl static builds, D8). The two
+# features below are the minimum for the only two git questions the review
+# derivation asks: `revision` supplies gix-revision/merge_base (the
+# `merge-base --is-ancestor` answer) and `sha1` supplies the object-hash
+# backend every read needs. No network feature is enabled at all — this crate
+# can never open a connection.
+gix = { version = "0.86", default-features = false, features = ["revision", "sha1"] }
+regex-lite = "0.1"
+serde = { version = "1", features = ["derive"] }
+# `preserve_order` is LOAD-BEARING for D3 byte-compatibility, not a
+# preference: `JSON.stringify` emits JS INSERTION order, and every reader in
+# this crate is already written to insert keys in the mjs source's literal
+# order (`build_review_block`, `tier_mix`, `archived_totals`, ...). Without
+# this feature `serde_json::Map` is a `BTreeMap`, so both parsed store files
+# and constructed blocks re-emit ALPHABETICALLY — `{candidates,
+# high_risk_unreviewed, open_sessions}` where mjs writes `{candidates,
+# open_sessions, high_risk_unreviewed}`. A `status --json` byte-diff against
+# the frozen oracle is impossible without it. Enabled on the library so a
+# standalone `cargo test -p bee-core` sees the same ordering the workspace
+# release build does (feature unification would otherwise make the two
+# disagree).
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.11.0"
+
+[dev-dependencies]
+tempfile = "3"
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.189"

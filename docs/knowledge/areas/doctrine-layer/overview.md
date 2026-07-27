@@ -47,6 +47,8 @@ The split follows what each rule *governs*, not the section it was written in:
 - The native Codex empty-wait discipline: `native-wait-discipline.md`.
 - Lane classification, work-packet shapes, product-file caps, the canonical
   scratch home and the verify ladder: `lane-and-working-discipline.md`.
+- What the acting side reports to the person being served, and in what shape:
+  `the-communication-contract.md`.
 
 ## Entry Points & Triggers
 

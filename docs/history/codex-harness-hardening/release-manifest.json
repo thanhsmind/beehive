@@ -1717,6 +1717,13 @@
       "packagePath": "packages/bee/lib/lock.mjs"
     },
     {
+      "path": "packages/bee/lib/path-identity.mjs",
+      "sha256": "695073bd84bb473c900219bd792ec5a62a121f638df8503c6d1c2ca38ce0ecbb",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/lib/path-identity.mjs"
+    },
+    {
       "path": "packages/bee/lib/perf.mjs",
       "sha256": "57dedfbd53cfce7a35ddb1e2cae1cc9c86533bdfa4df45965fcca0fc8497e5fc",
       "mode": "644",
@@ -1809,7 +1816,7 @@
     },
     {
       "path": "packages/bee/lib/worktree-store.mjs",
-      "sha256": "99802ffb7dd382a2c7e069f308cddaa44901fd66c637165e67c58c9041de5e89",
+      "sha256": "3bf58926db0144e6466996effbc1bcba70da2d711d007db9a9a0c3aa98ab6580",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/worktree-store.mjs"
@@ -1928,7 +1935,7 @@
     },
     {
       "path": "packages/bee/tests/test_cli_cells.mjs",
-      "sha256": "5e5e0a9f2ddfe2aea81ff33dc7a335d026607e6e24dd2b43320700cb8fa0db2e",
+      "sha256": "a06b76fff6da4eae893a9e42f280db3a4aebd3dc2d6cb34592776e52084452a3",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_cli_cells.mjs"
@@ -1984,7 +1991,7 @@
     },
     {
       "path": "packages/bee/tests/test_herding_cli.mjs",
-      "sha256": "230c15880072d40b1853a512b895b5bbb90e53a4ac62b355edb6703257610955",
+      "sha256": "e644d46c9875018dfae28b4f984c148cb40aa3e4ee9b0ca5e86a1ace080a1930",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_herding_cli.mjs"

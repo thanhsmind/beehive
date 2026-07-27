@@ -1,0 +1,17 @@
+# rust-port-16 — workflow-store + state-projection port (enables the state-sync hook)
+
+**Status:** [DONE]
+
+**Outcome:** Ported `workflow-store.mjs` (per-workflow record CRUD — create/read/update/list — and the `workflow:<id>` per-workflow locking wrapper, reusing `lock.rs`'s `with_store_lock` and `workspace.rs`'s `runtime_dir`) and `state-projection.mjs`'s five rebuild verbs (`projectionsAuthoritative`, `workflowGatesToApprovedGates` incl. the plan_rev-effectiveness rule, `pickNewestActiveWorkflow`, `rebuildStateProjection`, `rebuildLaneProjection` incl. ad-hoc field pass-through, `rebuildHandoffProjection`, `rebuildAllProjections`) into `bee-core`. Added `write_state`/`write_lane`/handoff-mailbox reading (`handoff_path`, `normalize_handoff_kind`, `list_handoff_mailbox`) to `state.rs` to support the rebuild write paths. All 17 tests in the mandated single `projection_parity` target pass: node-oracle-vs-rust structural-JSON parity for every rebuild verb (feature-matched, idle-bootstrap, no-live-workflow no-op, zero-workflow-records true no-op, overrides, ad-hoc-field passthrough, handoff tie-break, legacy-file removal, composite `rebuild_all`), an unknown-top-level-and-gate-field workflow-record round-trip, and two cross-runtime `workflow:<id>` lock-interop tests (node holds/rust denied-then-succeeds, and the reverse) reusing the existing D9 `lock_driver.mjs`.
+
+**Deviation (disclosed):** the cell's `read_first` named `crates/bee-core/src/workspace.rs` as already hosting `controlRootFor`; it does not — that function (`control_root_for`/`resolve_roots`, the git-linked-worktree topology walk) lives in `crates/queen-bee/src/adapter.rs`, a binary-crate concern outside `bee-core`'s dependency direction (`queen-bee -> bee-core`, never the reverse) and outside this cell's `crates/bee-core/*` file scope. Every rebuild function here therefore takes an already-resolved `control_root: &Path` parameter instead of resolving it internally — the same "topology resolved once by the caller" shape `guards.rs`'s `WriteTopology` already established for exactly this reason. For every ordinary (non-worktree) checkout `control_root == root`, matching the mjs source's own documented invariant; every fixture in this cell's suite uses that identity. Separately, `rebuild_all_projections` does not yet rebuild `.bee/reservations.json` (mjs's `rebuildReservationsProjection` lives in `reservations.mjs`, not `state-projection.mjs`, and needs a lease-to-reservation translation layer `reservations.rs` doesn't have yet) — left for the cell that ports `reservations.mjs`'s write side.
+
+**Files:**
+- `crates/bee-core/src/workflow_store.rs` (new — `WorkflowRecord`, `create_workflow`/`read_workflow`/`update_workflow`/`update_workflow_assuming_lock`/`list_workflows`, `with_workflow_lock`, gate merge)
+- `crates/bee-core/src/state_projection.rs` (new — the five rebuild verbs + `StateOverrides`/result types)
+- `crates/bee-core/src/state.rs` (extended — `write_state`, `write_lane`, `handoff_path`, `normalize_handoff_kind`, `list_handoff_mailbox`, `GATE_NAMES`)
+- `crates/bee-core/src/lib.rs` (module registration)
+- `crates/bee-core/tests/projection_parity.rs` (new — this cell's mandated single integration target, 17 tests)
+- `crates/bee-core/tests/support/projection_oracle.mjs` (new — node oracle driver for the rebuild verbs)
+
+**Verify:** `cargo test --manifest-path crates/Cargo.toml -p bee-core --test projection_parity` — 17 passed, 0 failed. Full trace + verification evidence: `.bee/cells/rust-port-16.json`.

@@ -1,0 +1,89 @@
+{
+  "id": "rust-port-13",
+  "feature": "rust-port",
+  "title": "status readers A: backlog counts, capture queue, decisions active, cells-derived status helpers",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "D5"
+  ],
+  "files": [
+    "crates/bee-core/*"
+  ],
+  "read_first": [
+    ".bee/bin/lib/backlog.mjs",
+    ".bee/bin/lib/capture.mjs",
+    ".bee/bin/lib/decisions.mjs",
+    ".bee/bin/lib/cells.mjs",
+    "crates/bee-core/tests/fsutil_oracle.rs",
+    "docs/history/rust-port/CONTEXT.md"
+  ],
+  "action": "Port the first half of the status read spine into bee-core (read-only, zero subprocess): readBacklogCounts (backlog.mjs:543), captureQueue (capture.mjs:100), activeDecisions (decisions.mjs:810 — the active-decision projection incl. supersession and redaction semantics, READ path only, no writes), and the cells-derived status helpers from cells.mjs: archivedTotals, readyCells, scribingDebt, globalScribingDebt, tierMix, ceilingScarcityWarning. Every struct round-trips unknown fields (D3, serde flatten pattern). ORACLE DISCIPLINE — the bee-core-side pattern of record is crates/bee-core/tests/fsutil_oracle.rs (file-based node driver executing the REAL frozen mjs module over the same fixture, diffing results): each ported reader is diffed that way, over a host-real-shaped fixture (queen-bench --generate) plus edge fixtures (empty store, corrupt/truncated jsonl tail, unknown extra fields). ALL tests live in ONE integration target status_readers_a (verify uses cargo --test status_readers_a; a missing target exits 101 — the target name is load-bearing).",
+  "must_haves": {
+    "truths": [
+      "cargo --test status_readers_a runs and reports at least 15 passed, output listing fixture names per reader",
+      "every ported reader's output equals the real mjs module's output on the same fixture (oracle-diffed), including the host-real fixture and the corrupt-tail fixture",
+      "unknown fields survive on every struct (no field loss)",
+      "no subprocess spawn inside any reader"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/",
+        "substantive": "backlog/capture/decisions-active readers plus cells status helpers, status_readers_a oracle test target"
+      }
+    ],
+    "key_links": [
+      "oracle drivers execute the real .bee/bin/lib/*.mjs in node children, per the crates/bee-core/tests/fsutil_oracle.rs pattern",
+      "rust-port-15 consumes these for the status command"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "Read paths only — no decision/capture/backlog writes in this cell",
+      "Tests never touch the live .bee/ store",
+      "No edits to crates/Cargo.toml members list"
+    ]
+  },
+  "verify": "cargo test --manifest-path crates/Cargo.toml -p bee-core --test status_readers_a",
+  "trace": {
+    "worker": "Bob",
+    "outcome": "Ported the first half of the status read spine into bee-core: readBacklogCounts (fold-first PBI layer + legacy docs/backlog.md table, product_root-aware), captureQueue (pending-stub fold), activeDecisions (supersession/redaction exclusion, decision-propagation tag overlay, archive-union), and the cells.mjs status helpers archivedTotals/readyCells/scribingDebt/globalScribingDebt/tierMix/ceilingScarcityWarning — all zero-subprocess, all oracle-diffed against the real frozen mjs modules over a host-real queen-bench fixture plus edge fixtures (empty store, 7-shape corrupt jsonl tails, unknown-field round-trips). Oracle diffing caught and fixed two real divergences: fold_pbis's hand-rolled trim didn't strip a leading BOM the way JS's String.trim does (now reuses fsutil::read_jsonl), and tierMix's ceilingShare rendered 0.0 instead of JS's unified-number 0 (added a js_number JSON-shape helper).",
+    "files_changed": [
+      "crates/bee-core/src/backlog.rs",
+      "crates/bee-core/src/capture.rs",
+      "crates/bee-core/src/decisions.rs",
+      "crates/bee-core/src/cells.rs",
+      "crates/bee-core/src/config.rs",
+      "crates/bee-core/src/lib.rs",
+      "crates/bee-core/tests/status_readers_a.rs",
+      "crates/bee-core/tests/support/status_readers_a_oracle.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T11:05:02.774Z",
+    "behavior_change": false,
+    "verification_evidence": "{\"new_suite_reason\": \"New permanent CI suite for the cells rust-port-13 must-have: cargo --test status_readers_a is the cells own required verify target (the cell mandates ALL tests live in ONE integration target named status_readers_a, oracle-diffed against the real frozen mjs backlog/capture/decisions/cells readers) — no existing suite covers these new bee-core readers, so a new file is the only shape that satisfies the must-have.\"}\n",
+    "verify_output": "running 23 tests ... test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s (host-real fixture via prebuilt queen-bench --generate + empty-store + 7-shape corrupt-jsonl-tail tables for backlog/decisions/capture + unknown-field round-trips + supersession/redaction/tag-overlay/archive-union logic + deps-gating + tier-mix/ceiling-scarcity + scribing-debt orphan sweep, every case oracle-diffed against the real frozen mjs modules via tests/support/status_readers_a_oracle.mjs)",
+    "verify_passed": true,
+    "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+    "claimed_at": "2026-07-26T10:46:50.410Z",
+    "verify_command": "cargo test --manifest-path crates/Cargo.toml -p bee-core --test status_readers_a",
+    "verified_at": "2026-07-26T11:04:44.171Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T11:04:44.171Z",
+        "claim_session": "d5476d93-d2c1-4805-acaa-441d371690f6",
+        "claimed_at": "2026-07-26T11:03:11.021Z",
+        "acquired_at": "2026-07-26T10:46:50.408Z",
+        "worker": "Bob",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}

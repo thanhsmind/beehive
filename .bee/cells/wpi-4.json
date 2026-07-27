@@ -1,0 +1,73 @@
+{
+  "id": "wpi-4",
+  "feature": "windows-path-identity",
+  "title": "publish the branch and record what the Windows workflow actually says",
+  "lane": "tiny",
+  "status": "capped",
+  "deps": [
+    "wpi-1",
+    "wpi-2",
+    "wpi-3"
+  ],
+  "decisions": [],
+  "files": [
+    "docs/history/windows-path-identity/*"
+  ],
+  "read_first": [
+    "docs/history/windows-path-identity/reports/wpi-3.md"
+  ],
+  "action": "The three preceding cells fixed what could be fixed and proved what could be proved on a POSIX machine. The one claim none of them can make is about Windows. This cell obtains that evidence: push the branch so the Windows workflow runs against the fix, then record what it actually reports — not what it was hoped to report. Capture, per suite: which of the previously-failing three now pass, which still fail, and for anything still failing, the actual error rather than a restatement of the earlier diagnosis. The four standing exclusions are still in place, so this run says nothing about them; what it can say is whether the gitdir identity fix cleared the merge-queue timeout chain and whether the two repaired workflow steps now execute. If the run is still red, that is the result — record it with the failing output and file what it reveals, since a wrong prediction recorded honestly is worth more than a green claimed early.",
+  "must_haves": {
+    "truths": [
+      "the branch is pushed and the Windows workflow run triggered by it is identified by id",
+      "the run's outcome is recorded per suite, with actual failing output quoted for anything still red",
+      "the report distinguishes what this run proves (the diagnosed cause, the repaired steps) from what it cannot (the four still-excluded suites)"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/history/windows-path-identity/reports/",
+        "substantive": "the Windows CI acceptance record"
+      }
+    ],
+    "key_links": [
+      "wpi-1 fixed the one diagnosed cause; this run is its only real proof"
+    ],
+    "prohibitions": [
+      "Never report a green that the run did not produce",
+      "Never remove an exclusion on the strength of this run without the suite itself passing"
+    ]
+  },
+  "verify": "gh run list --branch main --workflow Windows --limit 1 --json conclusion,databaseId",
+  "behavior_change": false,
+  "tier": "extraction",
+  "trace": {
+    "worker": "orchestrator",
+    "outcome": "Windows evidence obtained and recorded: one claim confirmed, one refuted, two new causes filed",
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T00:10:17.613Z",
+    "behavior_change": false,
+    "verification_evidence": "{\n  \"verify_command\": \"gh run list --branch main --workflow Windows --limit 1 --json conclusion,databaseId\",\n  \"verify_output\": \"run 30226423174, head d41dfd40, conclusion=failure; jobs: install-ps1-syntax success, portable-suites (20) failure, portable-suites (22) failure\",\n  \"verify_passed\": true,\n  \"notes\": \"The cell's job was to obtain and record the Windows evidence, not to obtain a green. The run is red and that is the recorded result. Confirmed: test_cli_cells.mjs no longer appears in the failed list (it failed on 2026-07-24, -25 and -26), so wpi-2's site-1 correction is proven on the platform it was written for. Refuted: the gitdir identity fix did NOT clear the merge-queue chain — invariant 12 still fails with the identical waitForFile timeout, so that cause is now undiagnosed and the earlier confidence was misplaced. Newly exposed, both filed P1: canonicalPathsEqual cannot fold 8.3 short-name aliasing when the path does not exist yet (it falls back to string equality, and RUNNER~1 vs runneradmin cannot be folded there), and wpi-2's own red-first guard asserts a POSIX-only truth — that the ambient comparison rejects a win32 rendering — which is false on Windows, making it an instance of the very bug class it was written to prove fixed. The four standing exclusions were not removed and were not exercised; test_worktree_store.mjs fails as it did before and is untouched by this feature. Full per-suite scorecard: docs/history/windows-path-identity/reports/wpi-4.md\"\n}\n",
+    "verify_output": "run 30226423174, head d41dfd40, conclusion=failure; install-ps1-syntax success, portable-suites (20) failure, portable-suites (22) failure — the run was obtained and read, which is what this cell's verify asserts",
+    "verify_passed": true,
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T23:59:27.373Z",
+    "verify_command": "gh run list --branch main --workflow Windows --limit 1 --json conclusion,databaseId",
+    "verified_at": "2026-07-27T00:10:17.533Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T00:10:17.534Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-27T00:07:19.115Z",
+        "acquired_at": "2026-07-26T23:59:27.370Z",
+        "worker": "orchestrator",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

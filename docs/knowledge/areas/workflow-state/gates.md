@@ -2,14 +2,14 @@
 type: bee.area
 title: "Workflow State — starting a feature, the phase vocabulary, phase-owned routing, and closing"
 description: "The guarded doors of a feature's life: the all-or-nothing start that can never inherit the previous feature's approvals (now also creating that feature's own workflow record), the closed phase vocabulary, the adviser consult high-risk execution approval demands (the one gate scoped to a plan revision), the phase-owned generic routing mutation, and the three-step tail that makes declaring a feature closed impossible."
-timestamp: 2026-07-25
+timestamp: 2026-07-26
 bee:
   id: workflow-state-gates
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["chain-integrity D1-REVISED/D2/D3/D4 (the tail of the chain: learning capture is produced not asserted, the sync demands executed work, the close demands zero spec debt, the waiver is audited)", "AO3/AO13 (Gate 3 adviser precondition, event-based staleness, never a TTL — cells ao-4-1/ao-4-2 2026-07-17)", codex-hook-state-parity D4-D6 (pre-phase routing ownership and review isolation), "scribing-integrity D1-D3/D6 (the wall at every door — feature-swap guard, lane-aware close, durable scribing ledger + orphan sweep, pre-ledger amnesty; cells si-1/si-3, 2026-07-24)", multisession-native D1/D7 (starting a feature also creates its own workflow record via three separate lock transactions; the execution gate records approved_for_plan_rev — docs/history/multisession-native/CONTEXT.md)]
-  sources: ["chain-integrity cells ci-1/ci-2/ci-3 (traces in .bee/cells/, CONTEXT docs/history/chain-integrity/CONTEXT.md, 2026-07-14 — origin: an owner-supplied post-mortem of a real session in which the chain's tail was bypassed seven times)", "advisor-and-orchestration Slice 4 cells ao-4-1/ao-4-2 (adviser consult record + event-based staleness + high-risk execution precondition, live-throw verified, 2026-07-17)", "codex-hook-state-parity cell codex-hook-state-parity-1 (pre-phase routing ownership and review isolation; report and capped trace, 2026-07-16)", "docs/specs/workflow-state.md#B1", "docs/specs/workflow-state.md#B2", "docs/specs/workflow-state.md#B9a", "docs/specs/workflow-state.md#B19", "docs/specs/workflow-state.md#R1", "docs/specs/workflow-state.md#R2", "docs/specs/workflow-state.md#R3", "docs/specs/workflow-state.md#R19a", "docs/specs/workflow-state.md#R20a", "docs/specs/workflow-state.md#R21a", "docs/specs/workflow-state.md#R22", "docs/specs/workflow-state.md#R23", "docs/specs/workflow-state.md#R25", "docs/specs/workflow-state.md#R29", "docs/specs/workflow-state.md#R30", "docs/specs/workflow-state.md#R31", "docs/specs/workflow-state.md#E1", "docs/specs/workflow-state.md#E2", "docs/specs/workflow-state.md#P2", "docs/specs/workflow-state.md#P3", "docs/specs/workflow-state.md#P4", "docs/specs/workflow-state.md#P5", "multisession-native cell multisession-native-6 (startFeature creates a workflow record; trace .bee/cells/multisession-native-6.json, commit f4fe163, 2026-07-25)", "multisession-native cell multisession-native-9 (gates scoped to plan revision; trace .bee/cells/multisession-native-9.json, commit 2dd834f, 2026-07-25)"]
+  decisions: ["chain-integrity D1-REVISED/D2/D3/D4 (the tail of the chain: learning capture is produced not asserted, the sync demands executed work, the close demands zero spec debt, the waiver is audited)", "AO3/AO13 (Gate 3 adviser precondition, event-based staleness, never a TTL — cells ao-4-1/ao-4-2 2026-07-17)", codex-hook-state-parity D4-D6 (pre-phase routing ownership and review isolation), "scribing-integrity D1-D3/D6 (the wall at every door — feature-swap guard, lane-aware close, durable scribing ledger + orphan sweep, pre-ledger amnesty; cells si-1/si-3, 2026-07-24)", multisession-native D1/D7 (starting a feature also creates its own workflow record via three separate lock transactions; the execution gate records approved_for_plan_rev — docs/history/multisession-native/CONTEXT.md), "scribing-stamp-seam 5b2f963d (sss-1 — the close-door threshold folds in the durable ledger as fallback/max, not the record stamp alone)"]
+  sources: ["chain-integrity cells ci-1/ci-2/ci-3 (traces in .bee/cells/, CONTEXT docs/history/chain-integrity/CONTEXT.md, 2026-07-14 — origin: an owner-supplied post-mortem of a real session in which the chain's tail was bypassed seven times)", "advisor-and-orchestration Slice 4 cells ao-4-1/ao-4-2 (adviser consult record + event-based staleness + high-risk execution precondition, live-throw verified, 2026-07-17)", "codex-hook-state-parity cell codex-hook-state-parity-1 (pre-phase routing ownership and review isolation; report and capped trace, 2026-07-16)", "docs/specs/workflow-state.md#B1", "docs/specs/workflow-state.md#B2", "docs/specs/workflow-state.md#B9a", "docs/specs/workflow-state.md#B19", "docs/specs/workflow-state.md#R1", "docs/specs/workflow-state.md#R2", "docs/specs/workflow-state.md#R3", "docs/specs/workflow-state.md#R19a", "docs/specs/workflow-state.md#R20a", "docs/specs/workflow-state.md#R21a", "docs/specs/workflow-state.md#R22", "docs/specs/workflow-state.md#R23", "docs/specs/workflow-state.md#R25", "docs/specs/workflow-state.md#R29", "docs/specs/workflow-state.md#R30", "docs/specs/workflow-state.md#R31", "docs/specs/workflow-state.md#E1", "docs/specs/workflow-state.md#E2", "docs/specs/workflow-state.md#P2", "docs/specs/workflow-state.md#P3", "docs/specs/workflow-state.md#P4", "docs/specs/workflow-state.md#P5", "multisession-native cell multisession-native-6 (startFeature creates a workflow record; trace .bee/cells/multisession-native-6.json, commit f4fe163, 2026-07-25)", "multisession-native cell multisession-native-9 (gates scoped to plan revision; trace .bee/cells/multisession-native-9.json, commit 2dd834f, 2026-07-25)", "scribing-stamp-seam cell sss-1 (trace .bee/cells/sss-1.json, capped 2026-07-26)"]
   authoritative_for: "workflow-state: feature start, the phase vocabulary, phase-owned routing mutation, and the closing tail"
 ---
 
@@ -156,6 +156,21 @@ session-start line. Historical pre-ledger features received one audited
 backfill stamp (amnesty decision): the alarm starts at zero real debt, because
 an alarm born crying 119 teaches everyone to ignore the 120th.
 
+**The close door's own threshold now trusts the same ledger the sweep already
+reads (scribing-stamp-seam, decision 5b2f963d).** Before this, the front
+door's threshold came only from the record's own sync-stamp field, and that
+field's write does not always survive a workflow-record-backed feature's next
+rebuild (`workflow-records-and-projections.md` — the rebuild spreads a fresh
+read of the record over the in-memory mutation, so an in-flight stamp can
+vanish before it is ever read back). A feature whose sync had genuinely run
+could therefore still be refused at the close door and pushed into the
+audited waiver for no real reason. The threshold is now the later of the
+record's own stamp and the durable ledger's newest entry for that same
+feature — exactly the source the orphan sweep already trusts — so a sync that
+reached the ledger clears the close door even when the record-field write did
+not. A cell capped after the true sync still counts as debt, and a ledger
+entry belonging to a different feature never clears this feature's own debt.
+
 **What each actor observes.** The agent attempting a dishonest close gets a
 refusal that says which step was skipped and how to perform it, and the record is
 untouched. The human sees a feature that cannot be reported as finished until
@@ -228,6 +243,11 @@ its knowledge actually landed — the state and the specs can no longer disagree
   change transfers authority to the new phase for the next mutation.
 - R31 — Gate mutation is a dedicated operation; review owns no active pipeline
   state, and validation alone decides execution readiness.
+- R78 — The close-door and feature-swap threshold is the later of the
+  record's own sync stamp and the durable ledger's newest entry for that
+  feature — never the record stamp alone. This closes the seam where a
+  workflow-record rebuild could drop an in-flight stamp write and force a
+  genuine sync into the waiver path (scribing-stamp-seam decision 5b2f963d).
 
 ## Edge Cases Settled
 
@@ -235,6 +255,18 @@ its knowledge actually landed — the state and the specs can no longer disagree
   reservation never blocks a new start (only active ones do).
 - Refused starts are proven side-effect-free: the record is byte-identical
   after a refusal.
+
+## Open Gaps
+
+- **The record-field stamp can still be dropped by the workflow-record
+  projection rebuild.** The ledger fallback (R78) means a dropped stamp no
+  longer blocks the close, but the drop itself is unrepaired: a
+  workflow-backed feature's sync-stamp field can still project as empty even
+  though the sync genuinely ran and is durably recorded in the ledger.
+  Repairing the projection itself — so the field survives the rebuild — was
+  explicitly left out of scope when the ledger fallback shipped: the ledger
+  fallback was judged the required fix, and the field-level repair a
+  separate, larger change to the workflow-record write path.
 
 ## Pointers (implementation)
 
@@ -255,3 +287,7 @@ its knowledge actually landed — the state and the specs can no longer disagree
   `createWorkflow`, `workflowGatesToApprovedGates`, and the `plan-rev bump`
   verb. Evidence: traces `.bee/cells/multisession-native-{6,9}.json`, commits
   f4fe163, 2dd834f.
+- Close-door threshold + ledger fallback: `scribingDebt`,
+  `bestScribingStampMs`, `readScribingLedger` in `packages/bee/lib/cells.mjs`
+  (mirrored `.bee/bin/lib/cells.mjs`). Evidence: trace
+  `.bee/cells/sss-1.json`, decision `5b2f963d`.

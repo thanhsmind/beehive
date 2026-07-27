@@ -1,0 +1,235 @@
+{
+  "id": "rust-port-22",
+  "feature": "rust-port",
+  "title": "read-accounting seam + today's baseline: prove the status path reads decisions 4x, cells 6x, transcript roots 2x",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "D5",
+    "e119fc8b"
+  ],
+  "files": [
+    "crates/bee-core/*",
+    "crates/queen-bee/*",
+    "docs/history/rust-port/reports/*"
+  ],
+  "read_first": [
+    "crates/bee-core/src/decisions.rs",
+    "crates/bee-core/src/cells.rs",
+    "crates/bee-core/src/recovery.rs",
+    "crates/queen-bee/src/status.rs",
+    "crates/bee-core/src/reviews.rs",
+    "docs/history/rust-port/plan-slice3.md"
+  ],
+  "action": "MECHANISM RISK, ISOLATED AND FIRST. Build the instrument the dedup cell will be judged by, and characterise the CURRENT (un-deduped) code with it, so rust-port-23's proof is a real red-to-green transition rather than an assertion written after the change. Nothing in the suite counts reads today; every parity and oracle test compares final output only, which is exactly why the duplicate reads survived. THE BASELINE IS DERIVED, NOT DICTATED (validation B1/B2 — the earlier draft of this cell hardcoded 4/6/2 and forbade correcting it; that anchor set was wrong, and the prohibition would have sent you hunting a phantom instrument bug). What you must produce is a baseline TABLE: for each named fixture, the measured count per store, and beside each count the call sites that produced it, WITH each site marked unconditional or conditional-on-what. Validation already established the ground truth you are reconciling against, and your table must either match it or explain the difference: cells-directory scans are 5 unconditional (status.rs:539 — a site the earlier draft omitted entirely; status.rs:640 via cells.rs:218 ready_cells; status.rs:708 via cells.rs:415 tier_mix; status.rs:712 via cells.rs:442 ceiling_scarcity_warning which calls tier_mix again; status.rs:742 via cells.rs:347 global_scribing_debt) plus 2 conditional (cells.rs:332 scribing_debt, which returns early at cells.rs:319-324 when no feature resolves — the bench fixture writes feature null at queen-bench/src/fixture.rs:262, while bee-parity's enriched fixture sets a feature, so this site fires on one fixture and not the other; and recovery.rs:522, gated on a crash candidate surviving the filter chain at recovery.rs:453/:466/:469/:509/:512). Decisions-journal parses are 2 unconditional (status.rs:790 reaching decisions.rs:56 and :120) plus 2 more only when that same crash-candidate branch is entered (recovery.rs:518-524). Transcript-root scans are 1 unconditional (recovery.rs:586) plus 1 gated by the early return at recovery.rs:453-455. DEFINE WHAT YOU COUNT, EXPLICITLY (validation W1): scan_transcript_roots performs a config read plus one metadata stat per root, not a directory read — so state in the cell trace whether each counter counts filesystem operations or function invocations, and make the counter's name say which. A counter whose meaning is ambiguous cannot support the 1/1/1 claim rust-port-23 will make. MECHANISM REALITY (validation W2): #[cfg(test)] cannot work — bee-core's cfg(test) is inactive when queen-bee's integration test links it as a dependency. The mechanism decision itself is settled below; record it in the trace with its trade-off and state plainly that it is present in release builds. REACH-PROOF IS MANDATORY (house rule af2b0d2a rule 3): every conditional site your table names must have a fixture that provably reaches it — proven by removal, i.e. neutralize the seeding and show the count drop — or be recorded as unreached with the reason. Also note (validation W6) that ready_cells issues one read_cell per dep plus an archive directory read on each miss (cells.rs:172, :211); state whether those land inside your cells-scan bucket or a separate counter, because rust-port-23's dedup can move that cost without moving your headline number. COUNTER PLACEMENT IS PART OF THE CONTRACT, NOT AN IMPLEMENTATION DETAIL (advisor note 2): put the counters at the LOWEST shared read primitives — the file/jsonl read and directory-scan layer, keyed by store class — never at today's reader-function entries. A counter at the reader entries is gameable by the very refactor it judges: rust-port-23 introduces a new load point, and a counter that only watches the old entries would report 1 while real reads differ. Any code path that touches a store must increment. THE HOOK PATHS ARE IN SCOPE FOR THE BASELINE (advisor note 1, the sixth blocker): the signature change in rust-port-23 lands on two live hook entry points — chain_nudge.rs:133 (scribing_debt) and state_sync.rs (list_cells via its cell_counts loop) — which run per lifecycle event under a tighter latency expectation than status, and today scribing_debt early-returns WITHOUT any cells scan when no feature resolves. Baseline both hook entry points too, not just build_status: chain-nudge with no active feature must show zero cells scans, and with a feature exactly one. Without those baselines, rust-port-23 can turn a conditional scan of 250+ cell files into an unconditional one on every hook event with every verify leg green. THE MECHANISM IS DECIDED, NOT DELEGATED (cold-pickup C3): use an ALWAYS-COMPILED relaxed atomic counter. cfg(test) cannot work (bee-core's cfg(test) is inactive when queen-bee's integration test links it), and a non-default cargo feature is ruled out by this cell's own proof surface — bee-parity spawns the sibling RELEASE binary (bee-parity/src/main.rs:269), so a seam behind a non-default feature would be absent from exactly the build the parity legs measure. The counter ships in release; that is the accepted trade, and the cell's job is to prove its cost is negligible rather than to pretend it has an off state. THE PLAN FILE IS STALE ON THESE POINTS (cold-pickup C1): docs/history/rust-port/plan-slice3.md is frozen at Gate 2 and still carries the superseded material at :33 (a Discovery table omitting status.rs:539 and listing cells.rs:332 as unconditional), :52 ('reproduces today's 4/6/2 exactly') and :65 ('a test-only counting seam, inert unless armed'). Read the plan for approach and rationale; THIS CELL supersedes it on the baseline numbers and the seam mechanism. RECONCILE, DO NOT CONTRADICT (cold-pickup minor): decision e119fc8b's 4x/6x/2x are correct FOR THE BENCH FIXTURE — 4 = 2 unconditional + 2 crash-candidate-gated, 2 = 1 + 1 gated, and 6 = 5 unconditional + recovery.rs:522, with cells.rs:332 early-returning there because queen-bench/src/fixture.rs:262 writes a null feature. What was wrong was treating those totals as fixture-independent and omitting status.rs:539; say that in the table rather than reporting a contradiction. NOTE: no existing test calls build_status (rg over crates/*/tests finds none) — you are writing the first one; StatusContext has public fields and a from_process constructor, so an integration test can drive it directly. DO NOT dedup anything in this cell.",
+  "must_haves": {
+    "truths": [
+      "a baseline table exists naming, per fixture, the measured count per store AND per call site — the counters are site-labelled so the table is the test's own output rather than prose beside it — each site marked unconditional or conditional-on-what, reconciling with the validated ground truth (cells 5 unconditional including status.rs:539 plus 2 conditional; decisions 2 unconditional plus 2 crash-candidate-gated; transcript roots 1 unconditional plus 1 gated) and explaining how those totals produce e119fc8b's fixture-specific 4/6/2",
+      "every conditional site in the table is either reach-proven by removal on a named fixture (neutralize the seeding, show the count drop) or recorded as unreached with its reason",
+      "each counter's unit is stated and reflected in its name — filesystem operations or function invocations — and the per-dep read_cell reads plus the archive directory read are either counted in a named bucket or explicitly excluded with the reason",
+      "the seam mechanism is recorded in the trace with its trade-off and an explicit statement of whether it is compiled into release builds; if it is, a measurement shows its cost is negligible against the status budget",
+      "a negative control proves the counters do not alter behaviour: the six bee-parity status legs stay zero-diff and bee-parity --self-check stays green with the seam present",
+      "the counters sit at the lowest shared read primitives (file/jsonl read and directory scan, keyed by store class), not at reader-function entries — stated in the trace and demonstrated by a test showing a direct primitive call increments the same counter a reader call does",
+      "the two hook entry points are baselined alongside build_status: chain-nudge with no active feature shows zero cells scans, chain-nudge with a feature shows exactly one, and state-sync's own counts are recorded — these are the per-event paths rust-port-23's signature change lands on",
+      "reach-proofs for the conditional sites are labelled baseline-only evidence in the table, since a hoisted read reports one count whether or not the conditional consumer still consumes",
+      "the always-compiled counter's cost is measured, not asserted: queen-bench --check runs with the seam present and the status gate stays green against its current budget"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/",
+        "substantive": "the read-accounting seam"
+      },
+      {
+        "path": "crates/queen-bee/tests/",
+        "substantive": "baseline table test, reach-proofs for conditional sites, behaviour-unchanged control"
+      }
+    ],
+    "key_links": [
+      "rust-port-18's env-gated crash seam is the in-repo precedent for a test seam, but it is a once-per-process branch while this is a per-read one — the precedent informs the shape, it does not settle the mechanism",
+      "rust-port-23 consumes this instrument to prove the dedup"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No dedup, memoization or call-site reordering in this cell — instrument only",
+      "The seam must not change any observable output, field order, or degraded-block behaviour",
+      "Never adjust a measured count to match an expectation: when the instrument and the validated ground truth disagree, report the discrepancy with the call graph that explains it",
+      "Tests never touch the live .bee/ store",
+      "No edits to crates/Cargo.toml members list",
+      "Never gate the seam behind a non-default cargo feature — bee-parity measures the release binary, so a feature-gated seam would be absent from the very build the parity legs prove"
+    ]
+  },
+  "verify": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test read_accounting && cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --status-check && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --self-check && cargo run --release --manifest-path crates/Cargo.toml -p queen-bench -- --check",
+  "behavior_change": true,
+  "tier": "generation",
+  "trace": {
+    "worker": "Phil",
+    "outcome": "Rework round (goal-check NEEDS_REVISION, 6/9 passed, fixability: automatic) addressed. THE BLOCKER: decisions_journal_parses was counted at decisions.rs's own call sites, not the true shared primitive -- the judge proved it gameable by injecting two real read_jsonl calls plus one real cells fs::read_dir from a new location outside decisions.rs/cells.rs entirely (simulating a rust-port-23 hoist) and the baseline count didn't move. FIX: moved the counter into fsutil::read_jsonl itself, keyed on the path (.bee/decisions.jsonl only, never the archive or other jsonl stores sharing that generic function), so any call site anywhere in the crate is counted; removed the three now-redundant decisions.rs call-site increments. Added a permanent regression test (injected_reads_at_a_build_status_level_load_point_are_still_counted_for_both_stores) reproducing the judge's experiment for BOTH stores, plus an fsutil.rs unit test proving the path filter is narrow. Two smaller findings also fixed: the baseline-only-evidence caveat (must-have truth 8) is now in the test file's header, the seam module's doc comment, AND the printed table's own stdout output (not just the cell record); queen_bench_bin() now self-builds queen-bench when missing (verified by deleting the debug binary and re-running -- self-healed, 13/13 green) instead of requiring a prebuilt artifact. A second genuine red-to-green transition was captured for this specific fix via git stash (see verification_evidence). Full verify chain re-run green: 13 tests, release build, bee-parity --status-check (6/6 zero-diff), --self-check (PASS), queen-bench --check (pass:true, status warm p95 ~52.6ms).",
+    "files_changed": [
+      "crates/bee-core/src/read_accounting.rs",
+      "crates/bee-core/src/lib.rs",
+      "crates/bee-core/src/decisions.rs",
+      "crates/bee-core/src/cells.rs",
+      "crates/bee-core/src/recovery.rs",
+      "crates/bee-core/src/fsutil.rs",
+      "crates/queen-bee/tests/read_accounting.rs",
+      "docs/history/rust-port/reports/rust-port-22.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-26T17:49:17.055Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\n    \"crates/bee-core/tests/status_readers_a.rs (its host_real_fixture()/queen_bench_bin() helpers are the precedent this cell's own bench-fixture helper mirrors)\",\n    \"crates/queen-bee/tests/heavyhooks_conformance.rs (fixture-writing conventions reused, not re-invented)\",\n    \"crates/bee-core/src/fsutil.rs's own existing #[cfg(test)] mod tests (read_json/read_jsonl/write_json_atomic coverage) -- the new placement-proof tests were added alongside these, in the same file, rather than a new file\"\n  ],\n  \"tests_added\": [\n    \"crates/queen-bee/tests/read_accounting.rs: injected_reads_at_a_build_status_level_load_point_are_still_counted_for_both_stores -- reproduces the judge's own hoist experiment as a permanent regression test, for the decisions store AND the cells store\",\n    \"crates/bee-core/src/fsutil.rs: is_decisions_journal_path_matches_only_the_journal_not_the_archive and read_jsonl_against_the_decisions_journal_path_increments_the_counter_from_any_call_site -- unit-level proof that the new placement counts from any call site and never miscounts a different jsonl store\"\n  ],\n  \"new_suite_reason\": \"This rework round's new test (injected_reads_at_a_build_status_level_load_point_are_still_counted_for_both_stores) lives in the already-registered rust-port-22 suite (crates/queen-bee/tests/read_accounting.rs) -- no new file. The two new fsutil.rs unit tests live in that module's own pre-existing #[cfg(test)] block, likewise no new file; both additions are proof for the specific rework fix, required because the prior placement was proven gameable by the judge and no existing test caught it.\",\n  \"red_failure_evidence\": \"REWORK-SPECIFIC red-first, reproducing the judge's exact finding: git stash push -- crates/bee-core/src/fsutil.rs crates/bee-core/src/decisions.rs (reverting ONLY the placement fix, keeping the new regression test and read_accounting.rs module intact), then `cargo test -p queen-bee --test read_accounting -- --test-threads=1` FAILED at injected_reads_at_a_build_status_level_load_point_are_still_counted_for_both_stores: \\\"assertion `left == right` failed: two extra real decisions-journal reads injected from OUTSIDE decisions.rs must still show up in the total -- a counter placed at decisions.rs's own call sites (the pre-rework placement) would have stayed at 4 / left: 4 / right: 6\\\" (12 passed, 1 failed) -- the cells-store half of the same test passed even in this reverted state, correctly isolating the bug to the decisions counter exactly as the judge found. git stash pop restored the fix and the same command went back to 13/13 green. This is IN ADDITION to (does not replace) the original mechanism's red-first evidence already on file: reverting all three original counter call-sites (cells.rs/decisions.rs/recovery.rs) still reproduces 10-of-12 red as before.\",\n  \"verification_run\": \"cargo test -p queen-bee --test read_accounting: 13 passed. cargo build --release: ok. bee-parity --status-check: PASS, all 6 legs zero-diff. bee-parity --self-check: PASS. queen-bench --check: pass:true, status warm p95 ~52.6ms (budget 70ms), ping p95 ~1.3ms (budget 5ms). Separately verified the self-containment fix: deleted crates/target/debug/queen-bench and reran the test target -- it rebuilt the binary itself via `cargo build -p queen-bench` and passed 13/13, confirming the cold-target-dir fragility the judge found is fixed.\"\n}\n",
+    "verify_output": "REWORK ROUND (goal-check NEEDS_REVISION addressed). cargo test -p queen-bee --test read_accounting: 13 passed (added injected_reads_at_a_build_status_level_load_point_are_still_counted_for_both_stores, reproducing the judge's hoist experiment as a permanent regression test for both stores). cargo build --release: ok. bee-parity --status-check: PASS, all 6 legs zero-diff. bee-parity --self-check: PASS. queen-bench --check: pass:true, status warm p95 ~52.6ms (budget 70ms), ping p95 ~1.3ms (budget 5ms). Also verified leg 1 self-containment: deleted target/debug/queen-bench and reran -- the leg rebuilt it automatically and still passed (13/13), confirming the cold-CI-target fragility finding is fixed.",
+    "verify_passed": true,
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T17:39:11.846Z",
+    "verify_command": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test read_accounting && cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --status-check && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --self-check && cargo run --release --manifest-path crates/Cargo.toml -p queen-bench -- --check",
+    "verified_at": "2026-07-26T17:48:01.523Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T17:24:08.261Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T17:06:19.745Z",
+        "acquired_at": "2026-07-26T17:04:47.961Z",
+        "worker": "Phil",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      },
+      {
+        "n": 2,
+        "at": "2026-07-26T17:48:01.523Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T17:39:58.220Z",
+        "acquired_at": "2026-07-26T17:39:11.844Z",
+        "worker": "Phil",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "counter-placement",
+            "status": "FAIL",
+            "evidence": "EXECUTED hoist experiment in scratch: injecting two real read_jsonl calls on the decisions path plus one real fs::read_dir of .bee/cells immediately above the active_decisions call at status.rs:790 left the baseline table at decisions 4 / cells 6 and the test PASSED — three extra real store reads at a build_status-level load point were completely invisible. Cause: decisions.rs:61/:126/:157 place the increment beside each read_jsonl CALL SITE inside decisions.rs, not inside the shared primitive fsutil.rs:119 keyed by store class. Under rust-port-23's stated hoist, cells_dir_scans, cell_dep_reads and both transcript counters SURVIVE (the natural hoist still calls list_cells / read_cell / scan_transcript_roots); decisions_journal_parses does NOT — a hoisted loader reading the journal directly reports 0. A concrete silent-green path exists: the hoisted status read goes uncounted while recovery's self-loading branch keeps one counted read, so the instrument reports exactly the target 1 while two real reads happen. Fix is ~3 lines: increment inside fsutil::read_jsonl when the path is the decisions journal, or funnel all journal reads through one decisions::read_journal."
+          },
+          {
+            "id": "baseline-derived-not-dictated",
+            "status": "PASS",
+            "evidence": "The test generates the fixture with the real queen-bench --generate binary and prints the site-labelled table as its own stdout (4 / 6 / 0 / 2 / 4). Reconciliation verified against source: fixture.rs:262 writes a null feature so scribing_debt early-returns (6 = 5 unconditional + recovery.rs:522), and fixture.rs:275 configures one extra transcript root (2 invocations x 2 roots = 4 stat ops). No number was bent — the asserts come from e119fc8b/validation and the measurement matched them unaided; re-run from a clean scratch copy gave 12/12 green with the same table."
+          },
+          {
+            "id": "reach-proofs",
+            "status": "PASS",
+            "evidence": "Every conditional site has a removal proof that discriminates 0-vs-N rather than merely 'result changed': scribing_debt's feature gate, recovery's three tiers (no session / fresh heartbeat / stale with open transcript), the transcript invocation gate, cell_dep_reads with and without deps, and the archive fallback at the real feature-subdirectory layout. All five failed in the judge's counter-reverted run, so none passes with seeding intact but counters dead."
+          },
+          {
+            "id": "hook-baselines",
+            "status": "PASS",
+            "evidence": "The tests drive the real hook entry points (the hook's systemMessage JSON appeared in the judge's run, so the path really executed). Both the chain-nudge one-scan-with-feature and the state-sync unconditional-scan tests FAILED in the counter-reverted run. Noted: the zero-scan-with-no-feature test is vacuous in isolation (one of only two that stayed green with counters removed); its discriminating power comes from its 0-vs-1 sibling, which is present."
+          },
+          {
+            "id": "unit-honesty",
+            "status": "PASS",
+            "evidence": "The split is real in code (invocation counter at function entry, stat-op counter inside the per-root metadata loop) and named accordingly. Conflation would be caught: the tests assert 1 invocation vs 3 stat ops for one call and 2 vs 6 for two, which a single merged counter cannot satisfy. The per-dep read bucket is separate with its reason stated."
+          },
+          {
+            "id": "inertness-and-cost",
+            "status": "PASS",
+            "evidence": "Judge re-ran the full chain in the tracked tree, exit 0: six parity legs zero-diff with per-leg mutation detected, self-check PASS, bench pass with status warm p95 53.9 ms against the 70 ms budget and ping 1.36 ms. On cost the judge established the stronger claim by measurement rather than accepting budget headroom: a release-profile micro-benchmark of the counter primitive gave 1.65 ns per increment, and the fixture's status invocation performs 16 increments (~26 ns against a ~53 ms p95, about 5e-7 of runtime). Negligible is established. The in-test negative control only proves output is independent of prior counter state; the six zero-diff parity legs are what actually carry behaviour-unchanged."
+          },
+          {
+            "id": "red-first-honesty",
+            "status": "PASS",
+            "evidence": "Reproduced in scratch: stripping exactly the seven record_* lines COMPILED and produced assertion failures rather than a build error — 2 passed, 10 failed, with the identical panic the trace records (decisions total left 0 right 4) and the table printing zeros. The recorded red_failure_evidence is accurate to the count and the message; the two survivors are the vacuous zero-assert hook test and the output-identity control, as expected."
+          },
+          {
+            "id": "scope-instrument-only",
+            "status": "PASS",
+            "evidence": "The commit touches only the cell record, five bee-core sources, the new test target and the report. No .bee/bin/, no packages/bee/, no members-list change. The only non-additive edits are read-order-preserving rebinds around the two filesystem calls; no dedup, no memoization, no call-site reordering."
+          },
+          {
+            "id": "baseline-only-labelling",
+            "status": "FAIL",
+            "evidence": "Must-have truth 8 requires the reach-proofs to be labelled baseline-only evidence, since a hoisted read reports one count whether or not the conditional consumer still consumes. A search for that phrasing across the test target, the seam module, the report and the trace finds only the must-have text itself in the cell record — the caveat appears nowhere rust-port-23's worker would read it. The nearest text states the spirit ('every test below runs against today's un-deduped code') but not the caveat."
+          },
+          {
+            "id": "verify-command-self-containment",
+            "status": "FAIL",
+            "evidence": "The centerpiece baseline test depends on a prebuilt DEBUG queen-bench binary that the cell's own first verify leg does not build. Proved by removing that binary in scratch and running the leg unchanged: exit 101, 'could not locate a prebuilt queen-bench binary'. On a cold CI target directory the leg is red for an environmental reason. It fails loudly with a fix hint and follows an existing precedent, so this is fragility rather than a proof hole — fix is adding the bench package to the build leg or declaring an artifact dependency."
+          }
+        ],
+        "failure_signature": "counter-placement: the decisions-journal counter sits at decisions.rs's call sites rather than the shared read primitive, so injected real reads at a build_status-level load point stayed invisible and the 1/1/1 claim rust-port-23 will rest on can be moved out from under by the very hoist it judges.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T17:39:11.747Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "counter-placement-fixed",
+            "status": "PASS",
+            "evidence": "The increment is inside fsutil::read_jsonl itself (fsutil.rs:141), guarded by a component-wise path predicate; all three call-site increments are gone from decisions.rs. Round 1's experiment re-run in scratch: injecting two real read_jsonl calls on the decisions path plus a raw fs::read_dir of .bee/cells above the active_decisions call now turns the baseline test RED (left 6 / right 4, table showing 6). Keying probed from the other side: an archive-only read gives 0, a backlog.jsonl read through the same generic primitive gives 0, and active_decisions(all=true) — journal plus archive in one call — gives 2 not 3, so the archive is genuinely excluded and there is no over-count. Honest nuance: a read of a MISSING journal still counts 1 (the increment precedes the file read), so the unit is 'attempted read', matching the convention already documented for the cells counter. The whole workspace reaches the journal only through this primitive."
+          },
+          {
+            "id": "regression-test-is-load-bearing",
+            "status": "PASS",
+            "evidence": "Reverting ONLY the placement fix in scratch (restoring the call-site increments, removing the primitive one) while leaving the new test intact produced 12 passed, 1 FAILED — exactly the new regression test, panicking left 4 / right 6. Restoring the fix returned 13/13, and nothing else in the suite discriminates. Noted asymmetry for rust-port-23: the test's CELLS half injects list_cells (the counted reader) rather than a raw fs::read_dir, so that half passed even in the reverted state and would only catch a cells counter moved ABOVE list_cells; the decisions half is what carries the regression."
+          },
+          {
+            "id": "hoist-survivability",
+            "status": "PASS",
+            "evidence": "Every store touch in the workspace was enumerated: the journal only through fsutil::read_jsonl; the cells directory only through cells::list_cells; per-dep reads only through cells::read_cell (archive fallback folded into the same bucket); transcript roots only through recovery::scan_transcript_roots. So rust-port-23's stated hoist — load each store once through those functions and pass the results down — is fully counted for all four counters. Residual blind spots, named and measured: a raw fs::read_dir of .bee/cells leaves the counter at 0 while list_cells gives 1, so a hoisted loader that REIMPLEMENTS a reader rather than calling it goes uncounted, and a silent-green 1/1/1 remains possible in principle for the cells store (uncounted hoisted scan plus one surviving recovery scan reads as 1). Unlike round 1's hole this cannot be reached by calling an existing generic utility — it requires re-implementing a reader, a visible act. Also flagged: cell_dep_reads bundles read_cell's archive fallback, so losing that fallback moves no counter at all."
+          },
+          {
+            "id": "caveat-placement",
+            "status": "PASS",
+            "evidence": "The baseline-only caveat appears in the test file header, the seam module's doc, the printed table's own stdout (the judge saw the line in its own run) and the report. Its wording says what the must-have requires: after the dedup a hoisted read reports its count once per invocation whether or not the conditional consumer still runs, so reachability must be re-derived against the new call graph. rust-port-23's read_first does not list the seam or test directly, but the reader sources carry comments pointing at the seam module's doc and that cell must consume the instrument to prove its dedup."
+          },
+          {
+            "id": "verify-self-containment",
+            "status": "PASS",
+            "evidence": "Deleting the debug queen-bench binary in scratch (with the tracked tree's copy verified untouched and no ancestor target dir able to satisfy the search) and running the cell's first verify leg unchanged now self-heals: the nested build fires, the binary reappears, and the suite passes 13/13 with no manual intervention. Round 1's exit-101 failure is gone."
+          },
+          {
+            "id": "no-regression",
+            "status": "PASS",
+            "evidence": "The rework touches six files and nothing beyond what the three findings required; the seam module's own change is doc-only (filtering comment lines from the diff yields zero changed lines). No .bee/bin/, no packages/bee/, no members-list change. Judge's own runs: read_accounting 13 passed, whole workspace 335 passed across 22 targets, release build ok, six parity legs zero-diff with per-leg mutation detected, self-check PASS, bench pass with status warm p95 50.7 ms against the 70 ms budget and ping 1.72 ms. Scratch removed and git status byte-identical to the pre-run snapshot."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T17:59:30.925Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-07-26T17:39:11.748Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-07-26T17:49:17.019Z",
+        "reason": "Coordinator relayed the goal-check NEEDS_REVISION verdict (counter-placement FAIL, baseline-only-labelling FAIL, verify-command-self-containment FAIL) and instructed rework + capping directly -- a worker cannot itself dispatch a fresh judge pass (same precedent as rust-port-20's rework cap). All three FAIL checks addressed with fresh, judge-reproducible red-first evidence below; the six PASS checks (baseline-derived-not-dictated, reach-proofs, hook-baselines, unit-honesty, inertness-and-cost, scope-instrument-only) are unaffected by this change.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
+  }
+}

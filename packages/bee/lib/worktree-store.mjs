@@ -42,6 +42,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { releaseAllForHolder } from './worktree-holds.mjs';
 import { withStoreLock } from './lock.mjs';
 import { registerWorkspace, unregisterWorkspace } from './workspace-store.mjs';
+import { canonicalPathsEqual } from './path-identity.mjs';
 
 // ---------------------------------------------------------------------------
 // readGrants — load the MAIN store's grant registry.
@@ -1077,8 +1078,25 @@ const WT_BRANCH_RE = /^wt\/[a-z0-9][a-z0-9-]*$/;
  * ANY mismatch, missing file, or unreadable content — never throws, so the
  * caller can fold "no such id" and "id's link is broken" into the same typed
  * WORKTREE_MERGE_UNKNOWN_ID refusal.
+ *
+ * windows-path-identity wpi-1: the reverse-pointer check below used to be a
+ * raw `path.resolve(...) !== path.resolve(...)` — byte-for-byte, so a
+ * genuinely-the-same directory reported with different case or 8.3
+ * short-name aliasing (real on Windows; separators were already handled
+ * here before this cell) would fail to resolve, cascading into
+ * `bee worktree merge` never reaching its verify child. It now goes through
+ * `canonicalPathsEqual` (path-identity.mjs), which is the shared fix.
+ * `pathsEqual` is an injectable third argument — this function has no other
+ * caller and is not itself exported, so the only way to prove the FIX at
+ * this exact call site (rather than only the helper in isolation) is to
+ * thread the injection through the one real path that reaches it:
+ * `mergeFeatureWorktree(mainRoot, options)` -> `mergeFeatureWorktreeStage` ->
+ * here. Every real caller omits it and gets the default, real
+ * `canonicalPathsEqual`; scripts/tests/test_path_identity.mjs is the only
+ * caller that supplies an override, to simulate a case-insensitive volume
+ * (or the pre-fix raw comparison) without needing an actual one on disk.
  */
-function resolveWorktreeById(mainRoot, id) {
+function resolveWorktreeById(mainRoot, id, { pathsEqual = canonicalPathsEqual } = {}) {
   const gitWorktreeDir = path.join(mainRoot, '.git', 'worktrees', id);
   let stat;
   try {
@@ -1107,7 +1125,7 @@ function resolveWorktreeById(mainRoot, id) {
   const match = reverseRaw.match(/^gitdir:\s*(.+)$/);
   if (!match) return null;
   const reverseResolved = path.resolve(worktreeRoot, match[1].trim().replace(/\\/g, path.sep));
-  if (path.resolve(reverseResolved) !== path.resolve(gitWorktreeDir)) return null;
+  if (!pathsEqual(reverseResolved, gitWorktreeDir)) return null;
 
   return { worktreeRoot };
 }
@@ -1400,6 +1418,13 @@ async function attachCleanupOutcome(result, { mainRoot, worktreeRoot, branch, id
  *     never interprets what the string means (own header: worktree-store.mjs
  *     has zero lease-store knowledge) — integration-queue.mjs's
  *     `checkProcessorLeaseEpoch` is what supplies it in production.
+ *   - `pathsEqual` (optional, TEST-ONLY, windows-path-identity wpi-1): passed
+ *     straight through to `resolveWorktreeById`'s own injectable comparison
+ *     (default `canonicalPathsEqual`, path-identity.mjs). No production
+ *     caller supplies this; scripts/tests/test_path_identity.mjs is the only
+ *     caller that does, to drive the real `resolveWorktreeById` through this
+ *     real entrypoint with a pinned comparison, without needing an actual
+ *     case-insensitive or no-file-index volume on hand.
  *
  * "Own worktree" refusal: running merge from inside a linked worktree —
  * including the very worktree named by `id` — is caught by the SAME
@@ -1640,7 +1665,7 @@ function teardownCompanionIfPresent(mainRoot, worktreeRoot, companionEndCommand)
 //     nothing yet committed); `state` carries everything P3 needs to
 //     re-check the fence and finish.
 async function mergeFeatureWorktreeStage(mainRoot, options = {}) {
-  const { id, cleanup = false, companionEndCommand } = options;
+  const { id, cleanup = false, companionEndCommand, pathsEqual } = options;
 
   if (typeof id !== 'string' || !id) {
     refuseMerge('WORKTREE_MERGE_INVALID_ID', `id ${JSON.stringify(id)} must be a non-empty string.`);
@@ -1659,7 +1684,7 @@ async function mergeFeatureWorktreeStage(mainRoot, options = {}) {
     refuseMerge('WORKTREE_MERGE_UNKNOWN_ID', `no granted worktree found for id ${JSON.stringify(id)} — run "bee worktree list" to see granted ids.`);
   }
 
-  const resolved = resolveWorktreeById(mainRoot, id);
+  const resolved = resolveWorktreeById(mainRoot, id, { pathsEqual });
   if (!resolved || !fs.existsSync(resolved.worktreeRoot)) {
     refuseMerge(
       'WORKTREE_MERGE_UNKNOWN_ID',

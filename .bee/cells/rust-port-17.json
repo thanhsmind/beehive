@@ -1,0 +1,291 @@
+{
+  "id": "rust-port-17",
+  "feature": "rust-port",
+  "title": "bee-chain-nudge + bee-state-sync hooks incl. worktree-holds renewal, conformance",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "rust-port-16",
+    "rust-port-20"
+  ],
+  "decisions": [
+    "D2",
+    "D7"
+  ],
+  "files": [
+    "crates/bee-core/*",
+    "crates/queen-bee/*"
+  ],
+  "read_first": [
+    ".bee/bin/hooks/bee-chain-nudge.mjs",
+    ".bee/bin/hooks/bee-state-sync.mjs",
+    ".bee/bin/lib/worktree-holds.mjs",
+    "crates/queen-bee/tests/hook_conformance.rs",
+    "crates/queen-bee/tests/modelguard_conformance.rs",
+    "docs/history/rust-port/CONTEXT.md"
+  ],
+  "action": "Port the two heavy hooks whose dependencies are now all in Rust, onto the rust-port-7 hook runtime: (1) bee-chain-nudge — SubagentStop advisory JSON (worker-collect nudge when a bee worker or swarming phase, review-synthesis nudge, scribing-debt warning) built on the already-ported state/cells readers; silent when nothing applies. (2) bee-state-sync — throttled heartbeat touch, reservation lease renewal, cross-worktree hold renewal (port the remaining worktree-holds renewal path), and the locked rebuildStateProjection call from rust-port-16 with LOCK_BUSY skipping silently (msn-7 F8: never writes workflow records); completely silent, always exit 0. RIG NOTE (the rig is NOT a shared module): the conformance discipline lives duplicated in-file — copy the seeded-root, sha256-oracle-verification, node-verdict-non-triviality, twin-pairing and negative-control helpers from crates/queen-bee/tests/hook_conformance.rs (the rig of record), exactly as crates/queen-bee/tests/modelguard_conformance.rs did. Build ONE target heavyhooks_conformance: advisory-text parity for chain-nudge across its trigger classes and silence classes; for state-sync, side-effect parity — the state.json rebuild result, heartbeat/lease/hold renewals, and the LOCK_BUSY skip — plus crash fail-open on both.",
+  "must_haves": {
+    "truths": [
+      "cargo --test heavyhooks_conformance runs and reports at least 12 passed, fixture names listed per class",
+      "chain-nudge advisory JSON matches node byte-for-byte across trigger classes, and both runtimes stay silent on the silence classes",
+      "state-sync side effects (state.json rebuild, heartbeat, lease and hold renewals) match node on the same fixtures; LOCK_BUSY skips silently on both",
+      "crash fixtures exit 0 with a hooks.jsonl crash line on both runtimes"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/",
+        "substantive": "worktree-holds renewal path"
+      },
+      {
+        "path": "crates/queen-bee/",
+        "substantive": "chain-nudge and state-sync hooks plus heavyhooks_conformance corpus"
+      }
+    ],
+    "key_links": [
+      "rig helpers copied from crates/queen-bee/tests/hook_conformance.rs (no shared test module exists)",
+      "rig drives the real bee-chain-nudge.mjs and bee-state-sync.mjs as sha256-verified oracles",
+      "state-sync uses rust-port-16 rebuildStateProjection under the D9 lock"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1)",
+      "No wiring-file edits — ported hooks stay dark until the flip slice",
+      "state-sync never writes workflow records (msn-7 F8)",
+      "Tests never touch the live .bee/ store",
+      "No edits to crates/Cargo.toml members list"
+    ]
+  },
+  "verify": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test heavyhooks_conformance",
+  "trace": {
+    "worker": "Tim",
+    "outcome": "Rework round (goal-check judge NEEDS_REVISION, 4 findings, all fixed with red-first proof): (1) run_fail_open now threads the caller's real hook name instead of a hardcoded file-level constant, fixing a genuine cross-hook crash-log divergence (also fixed model_guard.rs's pre-existing instance of the same bug per the coordinator's note); crash tests now assert hook-field equality cross-runtime. (2) added a real workflow-record fixture + a new test proving state-sync's AUTHORITATIVE rebuild branch (not just the no-op fall-through) matches the mjs oracle; renamed the old mis-scoped test. (3) added the missing cross-runtime hold-ledger comparison. (4) replaced every store-file parsed-Value comparison with a byte-level (key-order-sensitive) comparator, since IndexMap's PartialEq ignores order under this workspace's preserve_order feature -- added a permanent meta-test proving it. heavyhooks_conformance.rs stays at 16 tests, now materially stronger.",
+    "files_changed": [
+      "crates/queen-bee/src/hooks/write_guard.rs",
+      "crates/queen-bee/src/hooks/model_guard.rs",
+      "crates/queen-bee/src/hooks/chain_nudge.rs",
+      "crates/queen-bee/src/hooks/state_sync.rs",
+      "crates/queen-bee/tests/heavyhooks_conformance.rs",
+      "crates/queen-bee/tests/support/heavyhooks_fixture.mjs",
+      "crates/queen-bee/tests/writeguard_core.rs",
+      "crates/queen-bee/tests/writeguard_read.rs",
+      "crates/queen-bee/tests/writeguard_bash.rs",
+      "crates/queen-bee/tests/modelguard_conformance.rs"
+    ],
+    "deviations": [
+      "Rework round (independent goal-check judge: NEEDS_REVISION, fixability automatic). Four findings, all fixed:",
+      "1. Crash-log hook-name divergence (real behavior bug, not just a coverage",
+      "   gap): `run_fail_open` (write_guard.rs) hardcoded `adapter::log_crash`'s",
+      "   hook-name argument to this file's own `HOOK_NAME` constant",
+      "   (\"write-guard\"), so a chain-nudge or state-sync panic logged",
+      "   `\"hook\":\"write-guard\"` in `.bee/logs/hooks.jsonl` instead of the real",
+      "   crashing hook's name — the node oracle's `logCrash(root, hookName, ...)`",
+      "   never has this problem, since it takes the calling hook's name as a",
+      "   parameter. Fixed by threading `hook_name: &str` through `run_fail_open`",
+      "   and updating every caller (write_guard, model_guard, chain_nudge,",
+      "   state_sync) plus 4 pre-existing direct-call test sites that previously",
+      "   passed no hook name at all (writeguard_core.rs, writeguard_read.rs,",
+      "   writeguard_bash.rs, modelguard_conformance.rs — the last of these was",
+      "   itself silently asserting the wrong hook name for a model-guard crash",
+      "   test before this fix, though no prior assertion actually checked the",
+      "   `hook` field value to notice). Both crash tests in",
+      "   heavyhooks_conformance.rs now assert the `hook` field cross-runtime,",
+      "   not merely an `error` substring.",
+      "2. State-sync's authoritative rebuild was never proved — only the",
+      "   no-workflow-records fall-through was. The original \"idle_bootstrap\" test",
+      "   named a branch (state_projection.rs's authoritative idle-bootstrap path)",
+      "   it never actually constructed: with zero workflow records seeded, every",
+      "   fixture always took the `apply_overrides_only` fall-through. Fixed by:",
+      "   (a) renaming that test to",
+      "   `state_sync_no_workflow_records_only_refreshes_overrides_matches_oracle`",
+      "   and adding an explicit \"phase stays idle, feature stays unset\" assertion",
+      "   proving it really is the fall-through; (b) adding a new `workflow`",
+      "   fixture op (`tests/support/heavyhooks_fixture.mjs`, via the real",
+      "   `workflow-store.mjs` `createWorkflow`) and a new test,",
+      "   `state_sync_authoritative_idle_bootstrap_adopts_active_workflow_matches_oracle`,",
+      "   that seeds a genuine active workflow record and asserts",
+      "   phase/feature/mode/summary/next_action/approved_gates are adopted from",
+      "   it — cross-runtime, byte-level — proving the authoritative branch this",
+      "   cell's hook exists to route through.",
+      "3. The hold row was the only one of the four renewed records (session,",
+      "   claim, lease, hold) with no cross-runtime comparison at all — only prose",
+      "   guarded `holds.rs`'s typed `Hold` round-trip against the exact",
+      "   null-injection risk the session write path was fixed for in the prior",
+      "   pass. Fixed by adding a cross-runtime byte-level assertion on the hold",
+      "   ledger file in the renewal test.",
+      "4. All four store-file comparisons (state.json, session.json, claim.json,",
+      "   lease file, hold ledger) previously compared PARSED `serde_json::Value`s.",
+      "   This workspace's `preserve_order` feature backs `Value`'s `Map` with an",
+      "   `IndexMap`, and `IndexMap`'s `PartialEq` compares as a SET — it",
+      "   deliberately ignores key order — so a key-order (or formatting)",
+      "   divergence in a written store file was invisible to every prior",
+      "   assertion in this suite, exactly the class of bug D3 (byte",
+      "   compatibility) exists to catch (and the exact thing rust-port-15's own",
+      "   rework found two real instances of). Fixed by replacing every such",
+      "   comparison with a new `assert_files_byte_equal_redacted` helper that",
+      "   redacts a field's VALUE directly in the RAW file text (never a parsed",
+      "   Value) and compares the resulting strings byte-for-byte. A new permanent",
+      "   test, `byte_level_comparison_catches_key_order_divergence_that_value_equality_misses`,",
+      "   proves both halves of the finding: parsed-Value equality really is",
+      "   order-blind on this build, and the new byte-level comparator correctly",
+      "   flags the same pair as divergent.",
+      "Red-first evidence for all four fixes (bug reintroduced, test run, failure",
+      "quoted, reverted, re-run green) is in this cap's `verification_evidence`",
+      "(`red_failure_evidence` field) and the report."
+    ],
+    "friction": null,
+    "capped_at": "2026-07-26T15:41:50.016Z",
+    "behavior_change": false,
+    "verification_evidence": "{\n  \"ratio_waiver\": \"This rework round's diff is overwhelmingly test-side by design: 3 of the 4 judge findings (2, 3, 4) are entirely about proof rigor -- a missing cross-runtime comparison, an untested branch, and a comparison technique blind to key order -- none of which require production code changes to fix; only finding 1 touched src/ (run_fail_open's signature plus its 4 call sites in write_guard.rs/model_guard.rs/chain_nudge.rs/state_sync.rs, a few lines each). The cumulative cell diff across both passes (this cap's --files plus the first cap's already-recorded files_changed) carries far more test/fixture code than production code because this cell's own job -- proving byte-for-byte parity against a frozen oracle -- is inherently test-heavy; the first pass's own cap already established this same ratio shape for the identical reason.\",\n  \"new_suite_reason\": \"Rework round on an already-established new suite (heavyhooks_conformance, first capped in this cell's prior pass): no new file added this round -- all four judge findings are fixed as additional rows/helpers inside the EXISTING target (test-economy D3: a new scenario for behavior the suite already covers is a new row, never a new file). This field is included because the cell already carries a permanent new-suite declaration and capCell re-validates it on every cap.\",\n  \"tests_inspected\": [\n    \"crates/queen-bee/tests/heavyhooks_conformance.rs (own prior pass) -- re-read in full before this round's edits to scope exactly which fixtures needed a cross-runtime crash-line comparison (finding 1), which branch of rebuild_state_projection each fixture actually exercised (finding 2), which of the four renewed records lacked a cross-runtime assertion (finding 3), and which comparisons were parsed-Value rather than byte-level (finding 4) -- confirming none of the four gaps the judge named were already covered elsewhere in the file before adding new code.\",\n    \"crates/bee-core/src/state_projection.rs -- re-read rebuild_state_projection's three branches (feature-matched / idle-bootstrap / apply_overrides_only fall-through) to confirm the cell's original 'idle-bootstrap' test actually exercised the fall-through (zero workflow records never reaches either authoritative branch), matching the judge's finding 2 verbatim.\",\n    \".bee/bin/lib/workflow-store.mjs -- read createWorkflow/workflowStatePath (and confirmed createWorkflow, though not declared async, returns withWorkflowLock's promise since withStoreLock underneath is async -- must be awaited) before adding the new 'workflow' fixture op, so the seeded record is authentic (real hashing/locking/defaults) rather than hand-guessed.\"\n  ],\n  \"tests_added_changed\": [\n    \"crates/queen-bee/src/hooks/write_guard.rs -- run_fail_open now takes the caller's own hook_name instead of reading this file's own file-level HOOK_NAME constant; write_guard::run/model_guard::run/chain_nudge::run/state_sync::run and 4 pre-existing direct-call test sites (writeguard_core.rs, writeguard_read.rs, writeguard_bash.rs, modelguard_conformance.rs) updated to pass their own hook name (finding 1).\",\n    \"crates/queen-bee/tests/heavyhooks_conformance.rs -- chain_nudge/state_sync crash tests merged into two single tests each running BOTH runtimes and asserting `hook` field equality cross-runtime, not just an `error` substring (finding 1); the old 'idle_bootstrap' test (which never seeded a workflow record) renamed to state_sync_no_workflow_records_only_refreshes_overrides_matches_oracle with an explicit phase-untouched assertion proving it is the fall-through; a NEW state_sync_authoritative_idle_bootstrap_adopts_active_workflow_matches_oracle test seeds a real active workflow via the new 'workflow' fixture op and asserts phase/feature/mode/summary/next_action/approved_gates are adopted from it, cross-runtime, byte-level (finding 2); the renewal test's session/claim/lease/hold comparisons converted from parsed-Value assert_eq! to a new assert_files_byte_equal_redacted helper (redacts a field's VALUE directly in the raw file text, never via parsed Value), and a hold-ledger byte comparison added (previously the only one of the four renewed records with none) (findings 3 and 4); a new permanent meta-test, byte_level_comparison_catches_key_order_divergence_that_value_equality_misses, proves both that parsed-Value equality really is key-order-blind under this workspace's preserve_order feature AND that the new byte-level comparator catches it (finding 4).\",\n    \"crates/queen-bee/tests/support/heavyhooks_fixture.mjs -- new 'workflow' op seeding a real active workflow record via workflow-store.mjs's createWorkflow (awaited -- it returns a promise even though not declared async, since it delegates to the async withStoreLock).\"\n  ],\n  \"red_failure_evidence\": \"All four findings were red-first proved by deliberately reintroducing the exact bug class, running the affected test, and reverting: (1) FINDING 1 -- temporarily made run_fail_open ignore its new hook_name parameter and log the literal \\\"write-guard\\\" instead; both chain_nudge_crash_fail_open_both_runtimes_log_the_correct_hook_name and state_sync_crash_fail_open_both_runtimes_log_the_correct_hook_name failed with 'assertion left == right failed: rust port crash line hook field, got ... \\\"hook\\\": String(\\\"write-guard\\\") ... left: Some(String(\\\"write-guard\\\")) right: Some(String(\\\"chain-nudge\\\"))' (and the state-sync analog) -- reverted, both green. (2) FINDING 2 -- temporarily commented out the seed_workflow() call in the new authoritative test; it failed with 'assertion left == right failed: node: phase must be adopted from the active workflow left: Some(String(\\\"idle\\\")) right: Some(String(\\\"executing\\\"))' -- proving the test is not vacuous -- reverted, green. (3)+(4) FINDING 3/4 -- temporarily swapped the declaration order of Hold's `feature`/`session` fields in crates/bee-core/src/holds.rs (a typed-struct round-trip reordering, the exact regression class finding 3 warns about); state_sync_heartbeat_claim_lease_hold_renewal_matches_oracle failed with 'assertion left == right failed: state-sync/renewal cross-worktree-holds.json: byte-level (key-order-sensitive) file comparison diverged left: ...\\\\\\\"feature\\\\\\\": null,\\\\\\\\n      \\\\\\\"session\\\\\\\": \\\\\\\"sess-stale\\\\\\\"... right: ...\\\\\\\"session\\\\\\\": \\\\\\\"sess-stale\\\\\\\",\\\\\\\\n      \\\\\\\"feature\\\\\\\": null...' -- proving the new hold comparison has teeth against exactly the bug class this rework closes -- reverted, green.\",\n  \"verification_run\": \"cargo test --manifest-path crates/Cargo.toml -p queen-bee --test heavyhooks_conformance -> test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s. Also ran (no regressions): cargo test --manifest-path crates/Cargo.toml -p bee-core (172 passed across 9 suites) and cargo test --manifest-path crates/Cargo.toml -p queen-bee (117 passed across 10 suites, incl. this cell's 16) and cargo build --manifest-path crates/Cargo.toml --workspace (clean, no warnings).\"\n}\n",
+    "verify_output": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s\n     Running tests/heavyhooks_conformance.rs (crates/target/debug/deps/heavyhooks_conformance-8c872bbe6800488d)\n\nrunning 16 tests\ntest byte_level_comparison_catches_key_order_divergence_that_value_equality_misses ... ok\ntest rig_self_check_seeded_files_match_repo_sha256 ... ok\ntest negative_control_unseeded_root_detected_as_invalid_and_both_hooks_silent ... ok\ntest chain_nudge_crash_fail_open_both_runtimes_log_the_correct_hook_name ... ok\ntest state_sync_crash_fail_open_both_runtimes_log_the_correct_hook_name ... ok\ntest chain_nudge_reviewing_phase_message_matches_oracle ... ok\ntest rig_diff_detector_flags_a_seeded_mutation_as_divergent ... ok\ntest state_sync_lock_busy_skips_state_rebuild_silently_on_both_runtimes ... ok\ntest state_sync_no_workflow_records_only_refreshes_overrides_matches_oracle ... ok\ntest state_sync_disabled_hook_makes_no_writes_on_either_runtime ... ok\ntest state_sync_authoritative_idle_bootstrap_adopts_active_workflow_matches_oracle ... ok\ntest chain_nudge_disabled_hook_silences_both_and_enabled_twin_matches_oracle ... ok\ntest chain_nudge_silent_when_idle_and_worker_nudge_twin_when_swarming_matches_oracle ... ok\ntest chain_nudge_scribing_debt_suffix_present_and_absent_twin_matches_oracle ... ok\ntest state_sync_throttled_no_op_when_heartbeat_fresh_matches_oracle ... ok\ntest state_sync_heartbeat_claim_lease_hold_renewal_matches_oracle ... ok\n\ntest result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s\n\n",
+    "verify_passed": true,
+    "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+    "claimed_at": "2026-07-26T15:26:18.574Z",
+    "verify_command": "cargo test --manifest-path crates/Cargo.toml -p queen-bee --test heavyhooks_conformance",
+    "verified_at": "2026-07-26T15:40:04.932Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-26T14:54:55.027Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T14:42:08.755Z",
+        "acquired_at": "2026-07-26T14:27:19.639Z",
+        "worker": "Tim",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      },
+      {
+        "n": 2,
+        "at": "2026-07-26T15:40:04.932Z",
+        "claim_session": "49ac100f-59b6-4408-9ef7-2f4b2a6d16f7",
+        "claimed_at": "2026-07-26T15:26:58.824Z",
+        "acquired_at": "2026-07-26T15:26:18.573Z",
+        "worker": "Tim",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "rig-discipline-real",
+            "status": "PASS",
+            "evidence": "All five rig elements real, not comment-only. seed_root() copies .bee/bin/lib + hooks + onboarding.json into a tempdir then asserts sha256 equality over 13 paths (both hooks, adapter.mjs, every lib module the hooks dynamically import); the runner executes the seeded, sha256-verified copy. Node-leg non-triviality: every silence fixture's twin makes a positive assertion on node's own stdout, so a silently no-opping node leg fails. Negative control: an independent is_seeded_valid() verifier, with an unseeded tempdir asserted DETECTED invalid. Twin pairing on 4 of 6 behavioural tests. Meta-proof wraps assert_process_conformant in catch_unwind and requires it to panic on a deliberately divergent pair. seed_crash_root doctors a dependency but re-asserts the sha256 of adapter.mjs and both hook files afterwards, so the unit under diff is never doctored."
+          },
+          {
+            "id": "chain-nudge-parity",
+            "status": "FAIL",
+            "evidence": "Silence classes are genuinely proven on BOTH runtimes (assert_process_conformant compares node.status==rust.status and trimmed stdout, so explicit empties bind both legs), and covered trigger classes are compared byte-for-byte as strings, not parsed JSON. GAP: the cell action names the worker-collect nudge as firing 'when a bee worker OR swarming phase', but no fixture ever seeds state.workers (rg for 'workers' in the rig returns nothing). Every nudge fixture triggers via phase=swarming only, so chain_nudge.rs:124 is_registered_worker and the whole ported worker_name() fallback ladder (chain_nudge.rs:62-77, mirroring bee-chain-nudge.mjs:36-47) is never diffed against the oracle. Related: no chain-nudge fixture passes session_id, so state::resolve_pipeline is never exercised — the phase always comes from the readState fallback."
+          },
+          {
+            "id": "state-sync-side-effect-parity",
+            "status": "FAIL",
+            "evidence": "LOCK_BUSY is genuine: a real background thread takes bee_core::lock::with_store_lock(root,'state') on the same named lock file the mjs hook contends with maxAttempts:1 — no flag, no stub — and it is load-bearing because the identical seeded shape WITHOUT a holder does rebuild. Silence and exit 0 asserted on both legs. msn-7 F8 holds by construction (no workflow writer exists in state_projection.rs). THREE gaps: (a) no workflow record is ever seeded, so list_workflows() is always empty and every state-sync fixture lands in the workflows.is_empty() apply_overrides_only fall-through — the authoritative rebuild branches this cell exists to route through are never diffed against node, and state_sync_idle_bootstrap_rebuild_matches_oracle does not construct the branch its name claims. (b) The hold row is the only one of the four renewed records with no cross-runtime comparison; holds.rs renew_holds round-trips through the typed Hold struct (eight Option fields, no skip_serializing_if) — exactly the shape of the bug this cell caught elsewhere, guarded only by prose. (c) Side-effect parity compares parsed serde_json::Values; with preserve_order on, Value equality is IndexMap equality, which is order-INSENSITIVE — key-order and formatting divergence in written store files is invisible to this rig, despite D3 being a byte-compatibility decision. Only stdout is truly byte-compared."
+          },
+          {
+            "id": "crash-fail-open",
+            "status": "PASS",
+            "evidence": "Both legs crash for real. Node: the seeded state.mjs is overwritten with a hookEnabled() that throws, and both hooks' first in-try call is stateLib.hookEnabled, so a real Error is thrown inside the try and caught by logCrash. Rust: BEE_QUEEN_BEE_CRASH_SEAM arms a genuine panic!() unwinding through catch_unwind in run_fail_open, reached from both new hooks. Tests assert exit 0, empty stdout, no partial state.json, and a hooks.jsonl line naming the fault on all four combinations. Judge re-ran the target: 16 passed."
+          },
+          {
+            "id": "crash-line-hook-field-diverges",
+            "status": "FAIL",
+            "evidence": "The crash line's CONTENT is not node-conformant and the rig cannot see it. run_fail_open (crates/queen-bee/src/hooks/write_guard.rs:692) logs adapter::log_crash(root, HOOK_NAME, ..) where HOOK_NAME is the file-level const 'write-guard' (write_guard.rs:56). chain_nudge.rs:40 and state_sync.rs:51 both call that same helper, so a chain-nudge or state-sync panic writes \"hook\":\"write-guard\" into .bee/logs/hooks.jsonl while the node oracle writes the real hook name (adapter.mjs logCrash emits hook: hookName). The two crash tests only assert on the error substring and never compare the node and rust log lines to each other, so the divergence passes green. Pre-existing from rust-port-10 (model_guard.rs has the same call) but newly extended to two more hooks by this cell; fix is to thread the caller's hook name into run_fail_open."
+          },
+          {
+            "id": "test-count-and-honesty",
+            "status": "PASS",
+            "evidence": "Judge's own run: 16 passed (1 suite, 0.53s); --list confirms 16 tests named per class across chain-nudge silence/trigger/crash, state-sync throttle/disabled/lock-busy/renewal/rebuild/crash, plus rig self-check, diff-detector and negative control. No test is vacuous in the asserts-nothing sense: the disabled-hook and throttled-no-op fixtures seed a genuinely stale (120s) / genuinely fresh (5s) session against a real 60s throttle and assert byte-equal before/after on both legs. One honesty defect: state_sync_idle_bootstrap_rebuild_matches_oracle names a branch it does not construct. METHOD LIMIT, disclosed by the judge: the mandated out-of-tree mutation experiment could not be run because this environment's bee-write-guard denied every Bash command with a write target outside the worktree (reproduced on a bare mkdir), so the two load-bearing proofs are static-deterministic rather than executed."
+          },
+          {
+            "id": "claimed-bug-find",
+            "status": "PASS",
+            "evidence": "The fix is real and its regression guard is genuine for the session record: heartbeat_session reads the raw Value, inserts last_heartbeat and writes it back with no typed struct in the write path; renew_claim_ttl does the same on the raw claim value. The hazard was real (Session declares lane/transcript_path as Option with no skip_serializing_if, while claims.mjs createSession never emits lane and conditionally spreads transcript_path). The guard asserts full-object equality of node and rust session.json with only last_heartbeat and started_at redacted, and serde_json Map equality requires equal length, so a revert to the typed round-trip fails deterministically. Weaker by construction: the claim-side assert (its fixture writes all three struct-named fields, so a typed round-trip would inject no null), and the hold record — the remaining typed round-trip — has no cross-runtime assert at all."
+          },
+          {
+            "id": "preserve-order-hazard",
+            "status": "PASS",
+            "evidence": "No .remove( / swap_remove / Map::remove appears in the added lines of ab27bef, nor anywhere in the new hooks, the new bee-core write paths, or the rig. Every mutation on the new write paths is either Map::insert on an already-present key (position-preserving under IndexMap) or an in-place struct field assignment. One order-adjacent observation, not a remove hazard: HoldsStore serializes `holds` before its flattened extras, so a ledger whose on-disk order placed an unknown top-level key first would be rewritten with holds first — unreachable via the current writers, and invisible to the rig anyway because its comparisons are order-insensitive parsed Values."
+          },
+          {
+            "id": "prohibitions",
+            "status": "PASS",
+            "evidence": "The commit touches no packages/bee, no crates/Cargo.toml members edit, no .bee/bin edit; the only .bee path is the cell record. Hooks stay dark: nothing in .codex/hooks.json, .bee/bin/hooks/*.mjs or .bee/config.json references queen-bee — registration is confined to the in-crate dispatcher. Live store untouched: every fixture root is a tempfile::tempdir(), the negative control runs with cwd in a tempdir where root discovery finds no .bee, and git status on .bee/state.json is empty after the judge's own suite run."
+          }
+        ],
+        "failure_signature": "state-sync side-effect parity never seeds a workflow record (rebuild proven only on the empty-workflow fall-through) and never compares the hold row across runtimes; chain-nudge's registered-worker trigger branch has no fixture; rust crash lines log hook=\"write-guard\" where node logs the real hook name; and store-file parity is compared as order-insensitive parsed Values under a byte-compatibility decision.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T15:06:45.724Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "crash-hook-name-fixed",
+            "status": "PASS",
+            "evidence": "run_fail_open now takes hook_name and logs it; all four production callers pass their own const, none passes write_guard's HOOK_NAME. The two crash tests compare the log lines' hook field on both legs and to each other, keeping every prior assertion (find_crash_line still panics if the error-substring line is absent). The four pre-existing test files were adapted by a single added argument each and nothing else — 4 one-line hunks, every assert untouched. EXECUTED falsification in a scratch copy under .bee/tmp: reverting to the hardcoded name turned both crash tests red with the expected hook-field mismatch. RESIDUAL: model_guard::run's own argument is fixed but unasserted — modelguard_conformance.rs calls run_fail_open directly with a literal, so a regression at model_guard.rs:57 would not be caught."
+          },
+          {
+            "id": "authoritative-rebuild-proven",
+            "status": "PASS",
+            "evidence": "The new workflow op awaits the real createWorkflow from the seeded sha256-verified workflow-store.mjs — no hand-written record. Branch proof from state_projection.rs:159-219: the new test seeds ONLY a workflow (no write_state_json), so current has no feature and phase idle with one active workflow, which routes to the authoritative idle-bootstrap branch, not apply_overrides_only. It asserts phase/feature/mode/summary/next_action/approved_gates adopted on BOTH runtimes plus a byte-equal state.json comparison. EXECUTED falsification: neutering seed_workflow turned it red exactly as quoted. The renamed fall-through test now positively asserts phase stays idle and feature stays unset on both legs — precisely what apply_overrides_only does."
+          },
+          {
+            "id": "hold-row-compared",
+            "status": "PASS",
+            "evidence": "A whole-file cross-runtime byte comparison of cross-worktree-holds.json with only the volatile mirrored_at masked. Teeth proven by EXECUTION: swapping two field declarations in bee-core's Hold struct turned it red with the expected key-order divergence. The oracle side is real — worktree-holds.mjs insertHold emits the eight fields in exactly the Rust struct's declaration order, so the typed round-trip is held to the mjs key order byte-for-byte. Nuance: because mjs emits all eight fields including nulls, a null-injection cannot manifest on this fixture; what the assertion catches is reordering, added/dropped keys and formatting — the live regression class for this store."
+          },
+          {
+            "id": "byte-comparison-load-bearing",
+            "status": "PASS",
+            "evidence": "assert_files_byte_equal_redacted reads both files as raw text, applies a per-field textual redaction, and asserts String equality — no parse anywhere. The judge compiled the redactor VERBATIM standalone with rustc and probed it: key-order divergence -> caught; injected key -> caught; redacted field string-vs-null type change -> caught; a differing neighbour field next to a redacted one -> caught; escaped quotes inside a redacted value -> under-redacts and still diverges (never over-redacts); a compact no-space key form -> needle misses so redaction silently does not apply and the raw values then diverge, i.e. it fails CLOSED. What it cannot see: the string value of an explicitly named wall-clock field. Everything else including key order, indentation and key presence is visible. The meta-test is genuine on both halves: it asserts two reordered texts parse Value-EQUAL (proving the old blind spot on this build, with a loud message if the premise stops holding) then catch_unwinds the new comparator on the same files and requires a panic."
+          },
+          {
+            "id": "red-first-evidence-honest",
+            "status": "PASS",
+            "evidence": "The judge independently reproduced THREE of the worker's quotes in a scratch copy of crates/ (never the tracked tree): the hook-name quote verbatim including message prefix and left/right ordering; the workflow quote verbatim matching the node-first loop label; the hold/byte quote verbatim including the redacted mirrored_at and each side's field ordering. All three are consistent with the code as it stands — node is the LEFT argument and its ordering matches insertHold's literal, so the quoted sides are the only ones the mutation could have produced. No quote flagged."
+          },
+          {
+            "id": "test-count-unchanged-question",
+            "status": "PASS",
+            "evidence": "Current inventory (16, from the judge's own --list) vs round 1's inventory recovered from git: identical except round 1 had FOUR one-runtime crash tests and the mis-scoped idle_bootstrap test. So -2 (four one-runtime crash tests folded into two cross-runtime ones), +2 (authoritative workflow test, byte-level meta-test), 1 rename. Net 16 -> 16, and coverage did rise. Nothing was lost in the fold: diffing the old crash tests' bodies against the merged ones shows every prior assertion survives, now alongside the new hook-field equality. The report's sentence says '2 crash tests merged into 2' where it should read 4 merged into 2 — imprecise wording, not a false count."
+          },
+          {
+            "id": "no-regression-and-scope",
+            "status": "PASS",
+            "evidence": "git show --stat b63427ce: 12 files, +443/-136 — four src one-liners, the conformance target, the fixture mjs (one new op), four pre-existing test files at +1/-1 each, the cell record and the report. No .bee/bin, no packages/bee, no crates/Cargo.toml, no wiring files. Judge's own runs: heavyhooks 16 passed, queen-bee 117 passed (10 suites), bee-core 172 passed (9 suites). Scratch experiments ran under .bee/tmp/judge-rust-port-17/ and were deleted; git status after cleanup is byte-identical to the pre-run status. Two residuals, neither a regression from this round: (a) three same-runtime before/after no-op assertions still compare parsed Values, and one of their messages claims 'byte-identical' while being key-order-blind; (b) round 1's separate chain-nudge finding is unchanged — no fixture seeds state.workers, so the registered-worker trigger branch remains undiffed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-26T15:51:55.287Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-07-26T15:06:45.725Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-07-26T15:41:50.014Z",
+        "reason": "Rework round directly targets all 4 NEEDS_REVISION findings the coordinator relayed verbatim from the goal-check judge (crash-log hook-name divergence, untested authoritative rebuild branch, missing hold cross-runtime comparison, parsed-Value key-order blind spot) -- each fixed with red-first proof (bug reintroduced, test run to failure, reverted, re-run green), quoted in verification_evidence. Overriding here because a worker cannot itself dispatch a fresh judge pass (orchestrator/swarming-owned per AO14); the coordinator explicitly instructed capping after this rework.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
+  },
+  "tier": "generation"
+}
