@@ -1,0 +1,23 @@
+{
+  "note": "Per-skill SKILL.md body budget in bytes. Ratchet: may only go down. See scripts/tests/test_skill_body_budget.mjs.",
+  "budgets": {
+    "bee-briefing": 14549,
+    "bee-bypass-gate": 6096,
+    "bee-compounding": 18521,
+    "bee-context-locking": 6454,
+    "bee-evolving": 8850,
+    "bee-executing": 20436,
+    "bee-exploring": 15915,
+    "bee-grooming": 9185,
+    "bee-herding": 56077,
+    "bee-hive": 29808,
+    "bee-planning": 23681,
+    "bee-qualifying": 9383,
+    "bee-reviewing": 22303,
+    "bee-scribing": 29864,
+    "bee-swarming": 24937,
+    "bee-validating": 17243,
+    "bee-writing-skills": 9154,
+    "bee-xia": 6385
+  }
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "fb2-3",
+    "feature": "flow-batch-2",
+    "lane": "standard",
+    "behavior_change": true,
+    "change_class": "test",
+    "title": "Slice test cell: skill body budget and reference integrity",
+    "action": "The consolidated test cell for this slice, per the rule fs-1 shipped. The slice's net behavior is instruction text - three rules moved into references with routing lines left in the bodies - so what is mechanically testable is the two properties that make the thin-body doctrine real, plus the ordered-list integrity that moving steps around breaks. All three were violated at least once while authoring this very slice, which is why they earn a suite rather than a promise. scripts/tests/test_skill_body_budget.mjs asserts: a per-skill body byte budget as a RATCHET (recorded baseline, may only shrink; --update-baseline lowers, never raises), that every flow-batch-2 body stayed at or below its pre-slice size, that every references/<file>.md (\"Heading\") pointer in any body resolves to a real file and a real heading (same-skill or cross-skill), that the three moved rules are reachable from a body pointer, that bee-validating routes to the merged reviewer prompt while the retired split prompts are gone and all four finding classes survive, and that no body repeats a number within one ordered list. This also lands spec #78 P2's byte-budget fence as a ratchet rather than an absolute cap.",
+    "must_haves": {
+      "truths": [
+        "Every check is falsifiable: growing a body, breaking an anchor, and duplicating a step number each fail the intended check and only that check.",
+        "The baseline is a ratchet - --update-baseline lowers a budget but never raises one.",
+        "Cross-skill pointers (bee-hive/references/...) resolve, not just same-skill ones.",
+        "The suite is registered in the impact registry and runs in the full verify."
+      ],
+      "prohibitions": [
+        "Do NOT raise a recorded budget to make a body fit.",
+        "Do NOT weaken a check to accommodate a body that grew."
+      ]
+    },
+    "verify": "node scripts/tests/test_skill_body_budget.mjs && node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "read_first": [
+      "skills/bee-hive/SKILL.md"
+    ],
+    "files": [
+      "scripts/tests/test_skill_body_budget.mjs",
+      "scripts/tests/skill-body-budget.json",
+      "scripts/impact-registry.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deps": [
+      "fb2-1",
+      "fb2-2"
+    ],
+    "new_suite_reason": "No existing suite asserts anything about SKILL.md bodies: the thin-body doctrine, reference-anchor resolution and ordered-list integrity are file-shape properties of the skills tree, with no home in the CLI, guards, state or worktree suites that cover module behavior."
+  }
+]

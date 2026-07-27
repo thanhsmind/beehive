@@ -1,0 +1,14 @@
+{
+  "new_suite_reason": "No existing suite asserts anything about SKILL.md bodies. The thin-body doctrine, reference-anchor resolution, and ordered-list integrity are file-shape properties of the skills tree, with no home in the CLI, guards, state, or worktree suites — all of which cover module behavior. This suite is also spec #78 P2's byte-budget fence, which has to be a permanent CI-registered check or the ratchet is only a promise.",
+  "report": "docs/history/flow-batch-2/reports/fb2-evidence.md",
+  "verify": "node scripts/tests/test_skill_body_budget.mjs && node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+  "verify_result": "PASS run_verify: 109 suite(s), concurrency=5, wall=73115ms — exit 0",
+  "falsifiability": [
+    "grew a body by 50 bytes -> only the budget check failed (bee-xia: 6435 exceeds budget 6385 by 50)",
+    "renamed a reference heading -> the anchor check failed (no such heading)",
+    "duplicated an ordered-list number -> only the list check failed (bee-exploring/SKILL.md:57 repeats step 3.)",
+    "all three reverted -> suite green again"
+  ],
+  "note": "This cell was first capped with placeholder outcome/files while probing the refusal chain. That cap dodged this very guard by supplying a file list with no test file in it. It was reopened and re-capped with the real file list so the guard evaluates the actual diff.",
+  "ratio_waiver": "Slice-tail batching makes this ratio structurally meaningless per cell: the slice's source delta lives in fb2-1 and fb2-2, and the trailing test cell is by design almost pure test lines, so its own ratio is ~infinite. Spec #80/#85 P2 says the ceiling is computed against the SLICE aggregate, not per cell; the implementation still computes per cell, and that gap is filed as its own backlog item. Against the slice aggregate this suite is well under the ceiling."
+}
