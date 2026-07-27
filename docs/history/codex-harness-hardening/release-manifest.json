@@ -2497,14 +2497,14 @@
     },
     {
       "path": "skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "2b3804e045d988eb756430a30f0a2820aa7a63417df2639bc12d3a3c39fa2807",
+      "sha256": "efd9cef630e59e0d2ea20c2e8a976c61237a7b5d93c2606d13ef32f11658b8bf",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/references/routing-and-contracts.md"
     },
     {
       "path": "skills/bee-hive/SKILL.md",
-      "sha256": "22caa5ec8aae281c9f7b51e61c4c0fb8a704f8f5f895abfb6448cb9b2f0370d6",
+      "sha256": "7a3a2f7ca31d6115bac212810ac212f567df0dba6ad5548293f6724549a3737d",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/SKILL.md"
@@ -2658,14 +2658,14 @@
     },
     {
       "path": "skills/bee-validating/references/validation-reference.md",
-      "sha256": "5ee28ff2bbfddc267617fcf89ce322e2676fddf1b61f8179624e769f41670e34",
+      "sha256": "0b98ba64020701e3ed439be8ea8ab28fa427e984c976e29a73d07e0b740101d6",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-validating/references/validation-reference.md"
     },
     {
       "path": "skills/bee-validating/SKILL.md",
-      "sha256": "e0f7af843f9356bdd74e5097db19a7e3f2c0a7bf3b89b86912d8fb465c5010c6",
+      "sha256": "358dffdc041022d20d0ef7dbdd6d61a784617c5f704ea3bd2c269b38789ae36f",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-validating/SKILL.md"
