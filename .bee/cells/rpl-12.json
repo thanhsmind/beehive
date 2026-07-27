@@ -1,0 +1,77 @@
+{
+  "id": "rpl-12",
+  "feature": "rust-port-ledgers",
+  "title": "FIX-FIRST: an offset-less date-time is read as UTC and silently over-archives — make it fail closed, and pin the documented date-only form cross-runtime",
+  "lane": "high-risk",
+  "deps": [
+    "rpl-5"
+  ],
+  "decisions": [
+    "D3",
+    "D7"
+  ],
+  "files": [
+    "crates/bee-core/src/*",
+    "crates/bee-parity/src/*",
+    "crates/queen-bee/src/*"
+  ],
+  "read_first": [
+    "docs/history/rust-port/CONTEXT.md",
+    "crates/bee-core/src/jsdate.rs",
+    "crates/bee-core/src/decisions.rs",
+    "crates/queen-bee/src/ledger/decisions.rs",
+    "crates/bee-parity/src/cmdcheck.rs",
+    "packages/bee/lib/decisions.mjs",
+    "docs/history/rust-port-ledgers/reports/rpl-5.md"
+  ],
+  "action": "FIX-FIRST, opened because the rpl-5 goal-check returned NEEDS_REVISION with a REPRODUCED silent divergence. THE BUG, measured by the judge on identical store clones with host TZ=Asia/Bangkok and identical argv `decisions archive --before 2026-07-26T00:00:00 --json`: mjs archived [..001] and kept 2; queen-bee archived [..001, ..003] and kept 1. BOTH exited 0 with no warning. queen-bee pruned an extra row from .bee/decisions.jsonl because it read the offset-less cutoff as ...T00:00:00Z while V8 read it as +07:00, i.e. 17:00Z the previous day. The read side diverges the same way: `search --since 2026-07-26T00:00:00` gives mjs [bbbb, cccc] versus queen-bee [bbbb]. Root cause: crates/bee-core/src/jsdate.rs:224, where the None-or-empty designator arm silently means UTC; consumed at crates/bee-core/src/decisions.rs:1073 (the archive cutoff) and crates/queen-bee/src/ledger/decisions.rs:560,613. On a negative-offset host the error inverts into UNDER-archiving. This matters because `archive` DELETES rows from the active store, has no inverse verb, and the pruned store is what `decisions active` and rpl-8's feedback aggregator read. THE FIX, and it is deliberately the small fail-closed one: make the None offset arm return None so an offset-less date-time becomes the same LOUD REFUSAL the V8 legacy-fallback forms already produce, rather than a silent wrong cut. Do NOT try to reproduce ECMA-262 local time — that needs a local-offset source std does not have, and guessing it would trade a detectable divergence for an undetectable one. The documented surface is unaffected: date-only forms ARE UTC in ECMA-262 and the judge's 77-candidate fuzz through the real binaries found zero divergence there, so `--before 2099-01-01` keeps working. THEN close the coverage gap that let this through: every --since/--before in the harness today is either a full toISOString() value or an obviously-invalid string, so the registry's own documented `--before 2099-01-01` — the exact call that motivated writing date_parse_ms — has NO --cmd-check scenario. Add one. ALSO widen the declared non-reproduction list in jsdate.rs, which the judge found INCOMPLETE: lowercase `z`, a space separator instead of `T`, `+HHmm` without a colon, and expanded-year `+00YYYY` forms are all the same fail-closed class and are currently undeclared. FINALLY, record but do not necessarily fix: for `2026/01/01`-shaped input both runtimes exit 1 with DIFFERENT error text, a stderr divergence no scenario covers — either pin it as a declared artifact the way rpl-11 did for the readJson warning, or state in the worker block why it is acceptable to leave unpinned.",
+  "must_haves": {
+    "truths": [
+      "an offset-less date-time (e.g. 2026-07-26T00:00:00) is REFUSED by the port with a non-zero exit and a byte-untouched store, proven by a test that would fail against the pre-fix code",
+      "the judge's exact reproduction no longer diverges: the same argv on identical clones leaves both runtimes in states that a --cmd-check scenario reports as zero diff, or the port refuses loudly where mjs succeeds and that refusal is itself asserted",
+      "a --cmd-check scenario covers the documented date-only form --before 2099-01-01 cross-runtime, with a control that fires",
+      "the declared non-reproduction list in jsdate.rs names lowercase z, the space separator, +HHmm and expanded-year forms",
+      "the 2026/01/01 stderr text divergence is either pinned as a declared artifact or explicitly justified in the worker block",
+      "the workspace test run at the head of the verify is green with --no-fail-fast"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/bee-core/src/jsdate.rs",
+        "substantive": "offset-less date-times fail closed; the declared non-reproduction list widened to every measured same-class form"
+      },
+      {
+        "path": "crates/bee-parity/src/cmdcheck.rs",
+        "substantive": "a scenario for the documented date-only --before form, with a firing control"
+      }
+    ],
+    "key_links": [
+      "rpl-5 introduced date_parse_ms and logged decision a6c73472; this cell narrows it rather than widening the narrow parse_iso_ms that holds/claims/recovery depend on",
+      "rpl-10 inherits this read path for the index renderer"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No wiring flip",
+      "No attempt to reproduce ECMA-262 local time by guessing a host offset — fail closed instead",
+      "No widening of parse_iso_ms, which holds/claims/recovery depend on staying narrow",
+      "Tests never touch the live .bee/ store"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "cargo test --manifest-path crates/Cargo.toml --workspace --no-fail-fast && cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group decisions",
+  "status": "dropped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "folded into rpl-5, which the NEEDS_REVISION verdict reopened — the rework belongs in the cell that owns the code, not beside it"
+  },
+  "tier": "ceiling"
+}

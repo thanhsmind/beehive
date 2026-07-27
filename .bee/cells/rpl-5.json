@@ -184,6 +184,59 @@
         "judge_model": "opus",
         "model_independence": "unverified",
         "recorded_at": "2026-07-27T08:22:30.514Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "fix-is-fail-closed-and-narrow",
+            "status": "PASS",
+            "evidence": "jsdate.rs:257-265 splits the arm: Some(\"\") means UTC, None returns None. Some(\"\") is constructed at exactly one place (:211-212, strip_suffix('Z')), so only an uppercase Z reaches it and lowercase z falls through to refusal, consistent with the declared list. The whole match sits inside `if let Some(rest)` opened at :208, and rest is None whenever s.find('T') is None (:178-181), so date-only forms skip it entirely and keep offset_minutes = 0. --before 2099-01-01 proven untouched two ways: unit test refusing_offsetless_datetimes_leaves_date_only_forms_intact (:405-410) and the live scenario archive-text-date-only-documented-2099-form (zero diff, exit 0, control fired)."
+          },
+          {
+            "id": "red-floor-real-and-not-vacuous",
+            "status": "PASS",
+            "evidence": "MEASURED, not reasoned. TZ=Asia/Bangkok is pinned inside run_cutoff_leg (decisions_composed_oracle.rs:482) and BOTH legs go through it (:597 node, :598-602 queen-bee), so no leg inherits the host zone — the exact property whose absence let this survive round 1's green suite. The judge reverted the single arm in a scratch copy with a separate CARGO_TARGET_DIR and got the identical round-1 reproduction: 'the port must refuse, not guess', stdout 'Archived 2 ... kept 1', left 0 right 1, 3 passed 1 failed. Post-fix on the real repo: 4 passed, 0 failed."
+          },
+          {
+            "id": "call-sites-safe",
+            "status": "PASS",
+            "evidence": "PARTIAL per the judge, carried forward rather than waived. The two named user-supplied sites do refuse loudly: decisions.rs:1073-1078 and ledger/decisions.rs:611-619, with `since` reaching the filter only via shared_filters (:630) which propagates the Err, so the `_ => false` arm at :561-564 can never mean 'no filter'. BUT date_parse_ms has two further consumptions on EVENT dates that fail OPEN into a filtering decision: decisions.rs:1114 and ledger/decisions.rs:561. Measured with real binaries at TZ=Asia/Bangkok over a store row dated 2026-07-25T20:00:00: mjs archived [aaaa-1, bbbb-2] keeping 1, queen-bee archived [bbbb-2] keeping 2, both exit 0, stores differ — the round-1 shape moved from the argument to the row. Reachability is far lower (every bee writer uses toISOString()), and the path already diverged pre-fix, so this is not a regression introduced here; filed as P2 and carried into rpl-10."
+          },
+          {
+            "id": "new-scenarios-discriminate",
+            "status": "PASS",
+            "evidence": "Live run: PASS, decisions 38, every scenario zero diff and every control fired, with both new scenario names appearing in the binary's own registry output so the binary demonstrably carries the committed source. The control is a 1 ms move (cmdcheck.rs:2707-2724, fixture-decision-000000 to 2026-07-25T23:59:59.999Z) against a `kept: 1154` assertion, so it can only fire if the resolved INSTANT is right, not merely the parse. Boundary is strict < on both sides: decisions.rs:1116 and decisions.mjs:764."
+          },
+          {
+            "id": "declared-list-and-invariant",
+            "status": "PASS",
+            "evidence": "Parser-level invariant HOLDS, measured by a 6053-candidate fuzz through date_parse_ms and real node Date.parse at three zones: Asia/Bangkok, America/New_York and UTC each gave bothFinite=296, agree=296, DISAGREE=0, with 950 fail-closed and ZERO cases where the port accepts more than V8. The corpus is not vacuous — the same 6053 against the reverted parser gave bothFinite=344 with 48 disagreements, headed by 2026-07-26T00:00 (v8 1784998800000 vs rust 1785024000000). The module note at jsdate.rs:79-83 nonetheless OVERCLAIMS: it says call sites refuse with a non-zero exit and leave the store byte-untouched, which is false for the two event-date sites above. Filed as P2 with the fix being either to narrow the sentence to the user-supplied --before/--since sites or to cover the store-row path."
+          },
+          {
+            "id": "legacy-form-pinned-as-artifact",
+            "status": "PASS",
+            "evidence": "Pinned as an executed assertion, not prose: decisions_composed_oracle.rs:577-585 asserts mjs_exit 1 with its exact stderr and the port's own refusal text, plus byte-untouched-journal and no-sidecar assertions at :615-625, with the unit list at jsdate.rs:363-372."
+          },
+          {
+            "id": "incidental-findings-verified",
+            "status": "PASS",
+            "evidence": "(a) decisions.mjs:835 is a literal .reverse() in the !all branch while the --all union branch sorts by date at :873-877; the oracle assertion at decisions_composed_oracle.rs:675-679 expects [ROW_3, ROW_2] where row 3 is older than row 2 and still comes first, so the fixture genuinely discriminates reverse-file-order from date-order. (b) decisions_composed_oracle.rs:501-522 shape-checks the digits AND counts stripped == 1, mirroring normalize.rs:192-231, so a real [bee]-prefixed diagnostic panics rather than vanishing; the only gap is the cosmetic non-empty-cmd check, not load-bearing."
+          },
+          {
+            "id": "scope-and-branch",
+            "status": "PASS",
+            "evidence": "3ef92e3e is on dev only. git diff c041c9b8..3ef92e3e over packages/, .bee/bin/, main.rs, normalize.rs, decisions.rs and ledger/decisions.rs is EMPTY — no wiring flip, no main.rs, parse_iso_ms unwidened, normalize.rs unmasked. cmdcheck.rs is +91/-0, purely additive. Round-1 work intact: workspace run 25 suites, 461 passed, 0 failed, and all 36 pre-existing parity scenarios still zero-diff with controls firing."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-07-27T08:50:50.972Z"
       }
     ],
     "reopened_for_rework": {

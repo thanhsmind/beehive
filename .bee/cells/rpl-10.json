@@ -25,7 +25,7 @@
     "crates/queen-bench/src/fixture.rs",
     "docs/decisions/index.md"
   ],
-  "action": "Split out of rpl-5 on review, which was over the plan's own reference size for a single cell. This cell carries the single highest byte-exactness risk in the slice on its own: renderDecisionIndex and decisionIndexDrift (packages/bee/lib/decisions.mjs:1013-1044) plus the `decisions render` handler and its --check refusal (packages/bee/bee.mjs:2208 handleDecisionsRender). The drift check compares the rendered text against the on-disk file with a bare inequality (onDisk !== content), so grouping, heading levels, ordering, blank lines and the trailing newline must ALL match — a semantically equal but byte-different render is a red, not a rounding. REVIEW-FOUND FIXTURE GAP, and it is the whole difficulty of this cell: `queen-bench --generate` writes decisions rows that are monotone filler — every row type `decide`, an identical date, `scope: repo`, no tags key, no supersede rows and no redact rows (crates/queen-bench/src/fixture.rs:287) — and it writes no docs/decisions/index.md at all. A clean byte-diff over that store proves only the easiest branch of the renderer. Before writing any scenario, widen the corpus: seed superseded entries, redacted entries, non-ASCII decision text, tagged entries, and at least one entry per distinct scope/tag grouping the renderer branches on — either in fixture::generate itself or through rpl-1's per-scenario seeding, stating which in the worker block. Register --cmd-check scenarios: render into an empty repo; re-render for idempotence with the second run byte-unchanged and --check clean; --check against a hand-drifted index where both runtimes must produce the SAME non-clean verdict AND the same message; and a render over the widened corpus with every grouping branch exercised.",
+  "action": "Split out of rpl-5 on review, which was over the plan's own reference size for a single cell. This cell carries the single highest byte-exactness risk in the slice on its own: renderDecisionIndex and decisionIndexDrift (packages/bee/lib/decisions.mjs:1013-1044) plus the `decisions render` handler and its --check refusal (packages/bee/bee.mjs:2208 handleDecisionsRender). The drift check compares the rendered text against the on-disk file with a bare inequality (onDisk !== content), so grouping, heading levels, ordering, blank lines and the trailing newline must ALL match — a semantically equal but byte-different render is a red, not a rounding. REVIEW-FOUND FIXTURE GAP, and it is the whole difficulty of this cell: `queen-bench --generate` writes decisions rows that are monotone filler — every row type `decide`, an identical date, `scope: repo`, no tags key, no supersede rows and no redact rows (crates/queen-bench/src/fixture.rs:287) — and it writes no docs/decisions/index.md at all. A clean byte-diff over that store proves only the easiest branch of the renderer. Before writing any scenario, widen the corpus: seed superseded entries, redacted entries, non-ASCII decision text, tagged entries, and at least one entry per distinct scope/tag grouping the renderer branches on — either in fixture::generate itself or through rpl-1's per-scenario seeding, stating which in the worker block. Register --cmd-check scenarios: render into an empty repo; re-render for idempotence with the second run byte-unchanged and --check clean; --check against a hand-drifted index where both runtimes must produce the SAME non-clean verdict AND the same message; and a render over the widened corpus with every grouping branch exercised. CARRIED FROM THE rpl-5 ROUND-2 GOAL-CHECK (filed P2, owed here because this cell inherits the same read path). The module note at crates/bee-core/src/jsdate.rs:79-83 claims that when the parser returns None its call sites 'refuse with a non-zero exit, and the store is left byte-untouched'. That is TRUE for the two user-supplied --before/--since sites (crates/bee-core/src/decisions.rs:1073-1078 and crates/queen-bee/src/ledger/decisions.rs:611-619) and FALSE for two further consumptions on EVENT dates, which fail OPEN into a filtering decision: crates/bee-core/src/decisions.rs:1114 and crates/queen-bee/src/ledger/decisions.rs:561. The judge measured it with the real binaries at TZ=Asia/Bangkok over a store row dated 2026-07-25T20:00:00 with argv `decisions archive --before 2026-07-26T00:00:00.000Z --json`: mjs archived [aaaa-1, bbbb-2] keeping 1, queen-bee archived [bbbb-2] keeping 2 — both exit 0, no warning, stores differ. It is the round-1 failure shape moved from the ARGUMENT to the ROW. Reachability is much lower (every bee writer stamps dates with toISOString(), so it needs a hand-edited or foreign store) and the path already diverged before the rpl-5 fix, so it is not a regression — but it is uncovered, and this cell reads the same dates to render the index. Close it one of two ways and say which in the worker block: either NARROW the module note to the user-supplied call sites and add a test pinning that the event-date path is knowingly permissive, or COVER the store-row path so an offset-less row date behaves identically in both runtimes. Do not leave the sentence claiming a property the code does not have.",
   "must_haves": {
     "truths": [
       "cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group decisions reports every render scenario clean, with docs/decisions/index.md byte-identical between runtimes",
@@ -33,7 +33,8 @@
       "render is idempotent in both runtimes: the second run leaves the file byte-unchanged and --check reports clean",
       "a hand-drifted index produces the same non-clean --check verdict and the same message in both runtimes",
       "the worker block states whether the corpus was widened in fixture::generate or per-scenario, and why",
-      "the workspace test run at the head of this cell verify is green with --no-fail-fast, so no cross-cutting pin has rotted outside every cell own gate (the rpl-3 goal-check found one that had been false for two cells because it sat outside every verify and was never executed)"
+      "the workspace test run at the head of this cell verify is green with --no-fail-fast, so no cross-cutting pin has rotted outside every cell own gate (the rpl-3 goal-check found one that had been false for two cells because it sat outside every verify and was never executed)",
+      "the jsdate module note no longer claims a property the event-date call sites lack — either narrowed to the user-supplied sites with the permissive path pinned by a test, or the store-row path covered so an offset-less row date behaves identically in both runtimes"
     ],
     "artifacts": [
       {
@@ -62,9 +63,9 @@
   },
   "behavior_change": true,
   "verify": "cargo test --manifest-path crates/Cargo.toml --workspace --no-fail-fast && cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --group decisions",
-  "status": "open",
+  "status": "claimed",
   "trace": {
-    "worker": null,
+    "worker": "Hal",
     "outcome": null,
     "files_changed": [],
     "deviations": [],
@@ -74,6 +75,8 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
-  }
+    "claim_session": "2ec01700-0ce3-40de-85b2-954a0b2a270b",
+    "claimed_at": "2026-07-27T08:51:31.488Z"
+  },
+  "tier": "ceiling"
 }
