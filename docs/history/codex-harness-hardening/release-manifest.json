@@ -1444,7 +1444,7 @@
     },
     {
       "path": "packages/bee/bee.mjs",
-      "sha256": "2d644f6ceb59862305f259bda0df0d479cf2a03adf34e221c91cf86f6440ebdf",
+      "sha256": "ad4d7cfa81eccbd2a22c3469f4f7775dfab393368a87d43a3619308cbcbfe68e",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/bee.mjs"

@@ -1,9 +1,22 @@
 #!/usr/bin/env node
-// test_state_projection_race.mjs — proves that EVERY writer of the shared
-// .bee/state.json / .bee/lanes/<f>.json projection serializes on the SAME
-// 'state' store lock, and that they all acquire it in the SAME global order
-// (workflow:<id> -> 'state'). Feature state-phase-lock-race, cell splr-1,
-// GH #70; CONTEXT.md D1-D5.
+// test_state_projection_race.mjs — proves that EVERY writer of a projection
+// record serializes on the lock for THAT RECORD, and that they all acquire
+// locks in the SAME global order. Feature state-phase-lock-race, cells
+// splr-1/splr-3, GH #70; CONTEXT.md D1-D5.
+//
+//   .bee/state.json      -> 'state'
+//   .bee/lanes/<f>.json  -> `lane:<f>`
+//   global order:  workflow:<id>  ->  'state'  ->  lane:<feature>
+//
+// BOTH halves are load-bearing and this suite bites on both. Under-locking
+// loses updates (GH #70, the reported bug: a default-record writer that skips
+// 'state' races the state-sync hook). OVER-locking is equally a defect, not a
+// safe default: splr-1 put lane mutations under 'state' too, which serialized
+// two sessions that share no record at all and turned msn-10's live invariant
+// 1/2 red (test_cli_state.mjs — a lane mutation with 'state' held externally
+// went from near-instant to 4995ms, the lock timeout). Scenario (c) below
+// therefore asserts in both directions: blocked where the record IS shared,
+// NOT blocked where it is not.
 //
 // The defect this suite bites on: .bee/state.json is a bare read-modify-write
 // (state-projection.mjs) whose callers did NOT agree on what to serialize
@@ -36,19 +49,25 @@
 //   (b) FIXED ARRANGEMENT — role B nests 'state' inside workflow:<id>.
 //       Zero violations AND an exact final count of roles x iters.
 //   (c) HELD-LOCK INVARIANT — the real production CLI, run against a temp
-//       repo while ANOTHER process holds 'state'. A verb that respects the
-//       lock cannot write state.json/lanes during that hold. This is the
-//       invariant ("every production write of this record happens under the
-//       'state' lock"), applied uniformly to whatever verbs are probed —
-//       not a claim about specific source lines.
+//       repo while ANOTHER process holds a named lock. Each probe declares
+//       which lock is held and whether the verb MUST be blocked by it:
+//         - default-record verbs vs 'state'      -> blocked   (GH #70)
+//         - `state set --lane L` vs 'state'      -> NOT blocked (splr-3;
+//           the lane record is not the default record, and this assertion is
+//           what fails against splr-1's over-broad wrap)
+//         - `state set --lane L` vs `lane:L`     -> blocked   (positive
+//           control: the lane lock is real, so "not blocked by 'state'" can
+//           never be satisfied by simply dropping the lock)
 //   (d) PROJECTION-REBUILD HOLD — start-feature's post-startFeature
-//       projection rebuild runs under its OWN 'state' hold (startFeature's
-//       internal hold has already been released by then), read off the
-//       lock's own contention telemetry.
-//   (e) LOCK ORDER — workflow:<id> is always acquired BEFORE 'state', never
-//       after. Asserted twice: from acquisition telemetry, and under real
+//       projection rebuild runs under its OWN hold on the record it writes
+//       ('state' on the default path, `lane:<f>` on the lane path;
+//       startFeature's internal 'state' hold has already been released by
+//       then), read off the lock's own contention telemetry.
+//   (e) LOCK ORDER — workflow:<id> is always acquired BEFORE the projection
+//       lock, never after; and a lane-only verb never touches 'state' at
+//       all. Asserted twice: from acquisition telemetry, and under real
 //       contention (a process holding workflow:<id> must never see the
-//       'state' lock taken by the blocked verb).
+//       projection lock taken by the blocked verb).
 //   (f) STALENESS GUARD — every verb the CLI's own `state --help --json`
 //       manifest reports must be classified below, so a newly added writer
 //       cannot silently escape this suite.
@@ -149,7 +168,9 @@ function readViolations(root) {
 
 async function runWorker(kind) {
   if (kind === 'racer') return runRacer();
-  if (kind === 'hold-state') return runHolder('state');
+  // splr-3: the store-lock holder is named by --lock now (was hard-wired to
+  // 'state'), because a lane's projection lock is `lane:<feature>`.
+  if (kind === 'hold-lock') return runHolder('store');
   if (kind === 'hold-workflow') return runHolder('workflow');
   process.stderr.write(`unknown --role=${kind}\n`);
   process.exit(2);
@@ -241,8 +262,8 @@ async function runHolder(which) {
     fs.writeFileSync(ready, String(Date.now()));
     await sleep(ms);
   };
-  if (which === 'state') {
-    await withStoreLock(root, 'state', body, { maxAttempts: 200 });
+  if (which === 'store') {
+    await withStoreLock(root, argVal('--lock'), body, { maxAttempts: 200 });
   } else {
     await withWorkflowLock(controlRootFor(root), argVal('--wf'), body, { maxAttempts: 200 });
   }
@@ -408,11 +429,16 @@ async function runArrangementScenario(label, arrangementB) {
 
 /**
  * Runs one production CLI invocation against a temp repo while a SEPARATE
- * process holds the 'state' lock, and reports whether the shared projection
- * changed during that hold. A writer that serializes on 'state' cannot
+ * process holds `holdLock`, and reports whether the projection records
+ * changed during that hold. A writer that serializes on that lock cannot
  * write; a writer that takes a different lock (or none) writes immediately.
+ *
+ * splr-3: `holdLock` is a parameter now. Holding 'state' proves the shared
+ * default record is serialized (GH #70); holding it while a LANE verb runs
+ * proves the opposite direction — that the lane's own record was never part
+ * of that shared critical section.
  */
-async function probeHeldLock(cli, label, buildFixture, argsFor) {
+async function probeHeldLock(cli, label, buildFixture, argsFor, { holdLock = 'state' } = {}) {
   const root = makeRepo(`bee-splr-held-${label}-`);
   const ctx = buildFixture(cli, root);
   const readyFile = path.join(root, 'holder.ready');
@@ -420,14 +446,15 @@ async function probeHeldLock(cli, label, buildFixture, argsFor) {
 
   const holder = spawnChild([
     __filename,
-    '--role=hold-state',
+    '--role=hold-lock',
     `--root=${root}`,
+    `--lock=${holdLock}`,
     `--ms=${LOCK_HOLD_MS}`,
     `--ready=${readyFile}`,
   ]);
   if (!(await waitForFile(readyFile, 5000))) {
     fs.rmSync(root, { recursive: true, force: true });
-    return { label, error: 'holder never acquired the state lock' };
+    return { label, holdLock, error: `holder never acquired the "${holdLock}" lock` };
   }
   const holdStart = Date.now();
   const before = projectionFingerprint(root);
@@ -451,6 +478,7 @@ async function probeHeldLock(cli, label, buildFixture, argsFor) {
   fs.rmSync(root, { recursive: true, force: true });
   return {
     label,
+    holdLock,
     wroteDuringHold,
     firstChangeAtMs,
     changedEventually: after !== before,
@@ -459,15 +487,22 @@ async function probeHeldLock(cli, label, buildFixture, argsFor) {
   };
 }
 
-// ─── scenario (d): the projection rebuild has its own 'state' hold ─────────
+// ─── scenario (d): the projection rebuild has its own hold ────────────────
 
 /**
  * start-feature writes twice: the legacy record inside startFeature's own
  * 'state' hold, and then the projection rebuild AFTER that hold has already
  * been released (state.mjs releases before createWorkflow). An external
  * holder therefore cannot separate them — but the lock primitive's own
- * contention telemetry can: the rebuild running under the lock means a
- * SECOND 'state' acquisition is recorded for the same invocation.
+ * contention telemetry can: the rebuild running under a lock at all means a
+ * SECOND acquisition is recorded for the same invocation.
+ *
+ * splr-3: WHICH second acquisition depends on the record the rebuild writes.
+ * On the default path both are 'state' (>= 2 'state' acquisitions). On the
+ * lane path startFeature's legacy write is still 'state' (state.mjs, out of
+ * scope) but the rebuild writes .bee/lanes/probe-feat.json, so its own hold
+ * is `lane:probe-feat` — and 'state' stays at exactly one, which is what
+ * proves the lane rebuild is no longer riding the shared lock.
  */
 async function probeStartFeatureRebuild(cli, { lane }) {
   const root = makeRepo(`bee-splr-sf-${lane ? 'lane' : 'default'}-`);
@@ -477,18 +512,25 @@ async function probeStartFeatureRebuild(cli, { lane }) {
   const res = runCli(cli, root, args);
   const acqs = acquisitions(root);
   const stateAcqs = acqs.filter((a) => a.lock_name === 'state').length;
+  const laneAcqs = acqs.filter((a) => a.lock_name === 'lane:probe-feat').length;
   fs.rmSync(root, { recursive: true, force: true });
   return {
     label: `state start-feature${lane ? ' --as-lane' : ''}`,
+    lane,
     ok: res.status === 0,
     stateAcqs,
+    laneAcqs,
     out: `${res.stdout}${res.stderr}`.trim().split('\n').slice(-2).join(' | '),
   };
 }
 
-// ─── scenario (e): one global lock order, workflow:<id> -> 'state' ─────────
+// ─── scenario (e): one global lock order, workflow:<id> -> projection ──────
 
-/** Acquisition ORDER, read off the lock primitive's own telemetry. */
+/**
+ * Acquisition ORDER, read off the lock primitive's own telemetry.
+ * `state plan-rev bump` is lane-only by refusal, so its projection lock is
+ * `lane:<feature>` (splr-3) and 'state' must not appear at all.
+ */
 async function probeLockOrderTelemetry(cli) {
   const root = makeRepo('bee-splr-order-');
   const feature = 'lane-feat';
@@ -497,22 +539,24 @@ async function probeLockOrderTelemetry(cli) {
   const res = runCli(cli, root, ['state', 'plan-rev', 'bump', '--lane', feature]);
   const acqs = acquisitions(root);
   const names = acqs.map((a) => a.lock_name);
-  const firstState = names.indexOf('state');
+  const firstProjection = names.indexOf(`lane:${feature}`);
   const firstWorkflow = names.findIndex((n) => n.startsWith('workflow:'));
   fs.rmSync(root, { recursive: true, force: true });
   return {
     ok: res.status === 0,
+    feature,
     names,
-    firstState,
+    firstProjection,
     firstWorkflow,
+    tookState: names.includes('state'),
     out: `${res.stdout}${res.stderr}`.trim().split('\n').slice(-2).join(' | '),
   };
 }
 
 /**
  * The same inversion under real contention: while a process holds
- * workflow:<id>, a blocked `plan-rev bump` must not be sitting on the
- * 'state' lock. If the 'state' lock file ever appears during that hold, the
+ * workflow:<id>, a blocked `plan-rev bump` must not be sitting on EITHER
+ * projection lock. If a projection lock file appears during that hold, the
  * two locks are being taken in opposite orders by two sessions — the
  * deterministic dual-LockBusyError the advisor consult flagged.
  */
@@ -522,7 +566,9 @@ async function probeLockOrderContention(cli) {
   bootstrapFeature(cli, root, feature, { lane: true });
   const wfId = await workflowIdFor(root, feature);
   const { lockFilePath } = await import(LOCK_LIB);
-  const stateLockFile = lockFilePath(root, 'state');
+  // splr-3: watch BOTH projection lock names — 'state' (the pre-splr-1
+  // inverse edge) and the lane lock this verb actually takes now.
+  const projectionLockFiles = [lockFilePath(root, 'state'), lockFilePath(root, `lane:${feature}`)];
   const readyFile = path.join(root, 'holder.ready');
 
   const holder = spawnChild([
@@ -542,7 +588,7 @@ async function probeLockOrderContention(cli) {
 
   let stateHeldWhileBlocked = false;
   while (Date.now() - holdStart < LOCK_HOLD_MS - OBSERVE_MARGIN_MS) {
-    if (fs.existsSync(stateLockFile)) {
+    if (projectionLockFiles.some((f) => fs.existsSync(f))) {
       stateHeldWhileBlocked = true;
       break;
     }
@@ -562,7 +608,8 @@ async function probeLockOrderContention(cli) {
 // ─── scenario (f): staleness guard over the CLI's own manifest ─────────────
 
 // Verbs that write .bee/state.json or a lane projection. Each must serialize
-// on 'state'; the ones marked probed are exercised by scenario (c)/(d)/(e).
+// on the lock for the record IT writes — 'state' for .bee/state.json,
+// `lane:<f>` for a lane (splr-3). Exercised by scenario (c)/(d)/(e).
 const STATE_WRITING_VERBS = [
   'state.set',
   'state.gate',
@@ -617,7 +664,7 @@ async function runOrchestrator() {
   const failures = [];
   const note = (line) => process.stdout.write(`${line}\n`);
 
-  note('test_state_projection_race — every state.json writer holds the same lock');
+  note('test_state_projection_race — every projection writer holds the lock for the record it writes');
   note('');
 
   // (a) negative control
@@ -665,59 +712,94 @@ async function runOrchestrator() {
     note('');
     note(`── production CLI: ${cliLabel}`);
 
-    // (c) held-lock invariant
+    // (c) held-lock invariant, in BOTH directions (splr-3). `blocked` is the
+    // expectation: true where the held lock guards the record the verb
+    // writes, false where the verb writes a DIFFERENT record and must not be
+    // made to wait for it.
+    const defaultFixture = (c, root) => {
+      bootstrapFeature(c, root, 'race-feat');
+      return { root };
+    };
+    const laneFixture = (c, root) => {
+      bootstrapFeature(c, root, 'lane-feat', { lane: true });
+      return { root };
+    };
+    const laneSet = () => ['state', 'set', '--lane', 'lane-feat', '--phase', 'planning', '--owner', 'exploring'];
     const probes = [
-      await probeHeldLock(
-        cli,
-        'state-set',
-        (c, root) => {
-          bootstrapFeature(c, root, 'race-feat');
-          return { root };
-        },
-        () => ['state', 'set', '--phase', 'planning', '--owner', 'exploring'],
-      ),
-      await probeHeldLock(
-        cli,
-        'state-gate',
-        (c, root) => {
-          bootstrapFeature(c, root, 'race-feat');
-          return { root };
-        },
-        () => ['state', 'gate', '--name', 'context', '--approved', 'true'],
-      ),
-      await probeHeldLock(
-        cli,
-        'rebuild-projections',
-        (c, root) => {
-          bootstrapFeature(c, root, 'race-feat');
-          return { root };
-        },
-        () => ['state', 'rebuild-projections'],
-      ),
-      await probeHeldLock(
-        cli,
-        'worker-add',
-        (c, root) => {
-          bootstrapFeature(c, root, 'race-feat');
-          return { root };
-        },
-        () => ['state', 'worker', 'add', '--nickname', 'w1', '--cell', 'c-1'],
-      ),
+      {
+        blocked: true,
+        probe: await probeHeldLock(cli, 'state-set', defaultFixture, () => [
+          'state',
+          'set',
+          '--phase',
+          'planning',
+          '--owner',
+          'exploring',
+        ]),
+      },
+      {
+        blocked: true,
+        probe: await probeHeldLock(cli, 'state-gate', defaultFixture, () => [
+          'state',
+          'gate',
+          '--name',
+          'context',
+          '--approved',
+          'true',
+        ]),
+      },
+      {
+        blocked: true,
+        probe: await probeHeldLock(cli, 'rebuild-projections', defaultFixture, () => ['state', 'rebuild-projections']),
+      },
+      {
+        blocked: true,
+        probe: await probeHeldLock(cli, 'worker-add', defaultFixture, () => [
+          'state',
+          'worker',
+          'add',
+          '--nickname',
+          'w1',
+          '--cell',
+          'c-1',
+        ]),
+      },
+      // The invariant splr-1 broke: a lane mutation shares NO record with
+      // .bee/state.json, so an externally-held 'state' must not delay it by
+      // so much as one retry tick.
+      { blocked: false, probe: await probeHeldLock(cli, 'lane-set-vs-state', laneFixture, laneSet) },
+      // Positive control for the row above: the lane's OWN lock does block
+      // it. Without this, "not blocked by 'state'" would also be satisfied by
+      // a lane path that takes no projection lock at all.
+      {
+        blocked: true,
+        probe: await probeHeldLock(cli, 'lane-set-vs-lane', laneFixture, laneSet, { holdLock: 'lane:lane-feat' }),
+      },
     ];
-    for (const p of probes) {
+    for (const { blocked, probe: p } of probes) {
       if (p.error) {
         failures.push(`(c) ${cliLabel} ${p.label}: ${p.error}`);
         continue;
       }
       note(
-        `(c) HELD-LOCK  ${p.label.padEnd(20)} wrote-during-hold=${String(p.wroteDuringHold).padEnd(5)} ` +
-          `at=${p.firstChangeAtMs === null ? '-' : `${p.firstChangeAtMs}ms`} verb-exit=${p.verbCode}`,
+        `(c) HELD-LOCK  ${p.label.padEnd(20)} held=${p.holdLock.padEnd(15)} ` +
+          `wrote-during-hold=${String(p.wroteDuringHold).padEnd(5)} ` +
+          `at=${p.firstChangeAtMs === null ? '-' : `${p.firstChangeAtMs}ms`} ` +
+          `expect-blocked=${String(blocked).padEnd(5)} verb-exit=${p.verbCode}`,
       );
-      if (p.wroteDuringHold) {
+      if (blocked && p.wroteDuringHold) {
         failures.push(
-          `(c) ${cliLabel}: "${p.label}" wrote the shared projection ${p.firstChangeAtMs}ms into another ` +
-            "process's 'state' lock hold — it does not serialize on 'state', so a concurrent writer's update " +
-            'is lost (GH #70).',
+          `(c) ${cliLabel}: "${p.label}" wrote the projection ${p.firstChangeAtMs}ms into another process's ` +
+            `"${p.holdLock}" hold — it does not serialize on the lock guarding the record it writes, so a ` +
+            "concurrent writer's update is lost (GH #70).",
+        );
+      }
+      if (!blocked && !p.wroteDuringHold) {
+        failures.push(
+          `(c) ${cliLabel}: "${p.label}" did NOT write during another process's "${p.holdLock}" hold — it is ` +
+            `waiting on a lock for a record it never writes. A lane mutation writes .bee/lanes/<f>.json only; ` +
+            `serializing it against .bee/state.json manufactures contention between sessions that share no ` +
+            `record, and is exactly the over-broad wrap that turned msn-10's invariant 1/2 red (splr-3).`,
         );
       }
       if (p.verbCode !== 0) {
@@ -730,17 +812,32 @@ async function runOrchestrator() {
       }
     }
 
-    // (d) the post-startFeature rebuild holds 'state' itself
+    // (d) the post-startFeature rebuild holds the lock for the record it writes
     for (const lane of [false, true]) {
       const sf = await probeStartFeatureRebuild(cli, { lane });
-      note(`(d) REBUILD-HOLD ${sf.label.padEnd(28)} 'state' acquisitions=${sf.stateAcqs}`);
+      note(
+        `(d) REBUILD-HOLD ${sf.label.padEnd(28)} 'state' acquisitions=${sf.stateAcqs} ` +
+          `'lane:probe-feat' acquisitions=${sf.laneAcqs}`,
+      );
       if (!sf.ok) {
         failures.push(`(d) ${cliLabel}: "${sf.label}" failed: ${sf.out}`);
-      } else if (sf.stateAcqs < 2) {
+      } else if (!lane && sf.stateAcqs < 2) {
         failures.push(
           `(d) ${cliLabel}: "${sf.label}" recorded ${sf.stateAcqs} 'state' acquisition(s). startFeature's own ` +
             'hold accounts for one and is released before the projection rebuild runs, so a second acquisition ' +
             'is what proves the rebuild is itself under the lock. It is currently unlocked.',
+        );
+      } else if (lane && sf.laneAcqs < 1) {
+        failures.push(
+          `(d) ${cliLabel}: "${sf.label}" recorded ${sf.laneAcqs} 'lane:probe-feat' acquisition(s). The lane ` +
+            'projection rebuild runs after startFeature has released its own hold, so it must take the lane ' +
+            "record's OWN lock — it is currently unlocked, or still riding the shared 'state' lock (splr-3).",
+        );
+      } else if (lane && sf.stateAcqs !== 1) {
+        failures.push(
+          `(d) ${cliLabel}: "${sf.label}" recorded ${sf.stateAcqs} 'state' acquisition(s), expected exactly 1 ` +
+            "(startFeature's own legacy write, state.mjs). Anything more means the lane projection rebuild is " +
+            'also taking the shared default-record lock, which it has no record in common with.',
         );
       }
     }
@@ -750,15 +847,25 @@ async function runOrchestrator() {
     note(`(e) LOCK-ORDER  plan-rev bump acquisitions: ${order.names.join(' -> ') || '(none)'}`);
     if (!order.ok) {
       failures.push(`(e) ${cliLabel}: "state plan-rev bump" failed: ${order.out}`);
-    } else if (order.firstState === -1) {
-      failures.push(`(e) ${cliLabel}: "state plan-rev bump" rebuilt a lane projection without ever holding 'state'.`);
+    } else if (order.firstProjection === -1) {
+      failures.push(
+        `(e) ${cliLabel}: "state plan-rev bump" rebuilt lane "${order.feature}" without ever holding ` +
+          `lane:${order.feature} (acquisitions: ${order.names.join(' -> ') || '(none)'}).`,
+      );
     } else if (order.firstWorkflow === -1) {
       failures.push(`(e) ${cliLabel}: "state plan-rev bump" never acquired workflow:<id> — fixture is wrong.`);
-    } else if (order.firstState < order.firstWorkflow) {
+    } else if (order.firstProjection < order.firstWorkflow) {
       failures.push(
-        `(e) ${cliLabel}: "state plan-rev bump" acquires 'state' BEFORE workflow:<id> (${order.names.join(' -> ')}). ` +
-          "The rest of the repo takes workflow:<id> -> 'state', so this is a lock-order inversion: two sessions " +
-          'deadlock into a dual LockBusyError.',
+        `(e) ${cliLabel}: "state plan-rev bump" acquires its projection lock BEFORE workflow:<id> ` +
+          `(${order.names.join(' -> ')}). The rest of the repo takes workflow:<id> -> projection, so this is a ` +
+          'lock-order inversion: two sessions deadlock into a dual LockBusyError.',
+      );
+    }
+    if (order.ok && order.tookState) {
+      failures.push(
+        `(e) ${cliLabel}: "state plan-rev bump" acquired 'state' (${order.names.join(' -> ')}). It is lane-only ` +
+          'by refusal and writes exactly one lane projection, so taking the shared default-record lock only ' +
+          'serializes it against writers it can never conflict with (splr-3).',
       );
     }
 
@@ -767,13 +874,13 @@ async function runOrchestrator() {
       failures.push(`(e) ${cliLabel}: ${inversion.error}`);
     } else {
       note(
-        `(e) LOCK-ORDER  under contention: 'state' taken while blocked on workflow:<id> = ` +
+        `(e) LOCK-ORDER  under contention: a projection lock taken while blocked on workflow:<id> = ` +
           `${inversion.stateHeldWhileBlocked}, bump exit=${inversion.bumpCode}`,
       );
       if (inversion.stateHeldWhileBlocked) {
         failures.push(
           `(e) ${cliLabel}: while another process held workflow:<id>, "state plan-rev bump" was blocked while ` +
-            "HOLDING 'state' — the exact inverse of the order every other writer uses.",
+            'HOLDING a projection lock — the exact inverse of the order every other writer uses.',
         );
       }
       if (inversion.bumpCode !== 0) {
@@ -808,8 +915,9 @@ async function runOrchestrator() {
     for (const f of failures) note(`  ✗ ${f}`);
     process.exit(1);
   }
-  note('PASS — every production writer of .bee/state.json serializes on the "state" lock,');
-  note('       in one global order (workflow:<id> -> state), in both the canonical and vendored CLI.');
+  note('PASS — every production writer serializes on the lock for the record it writes');
+  note('       (state.json -> "state", lanes/<f>.json -> "lane:<f>"), in one global order');
+  note('       (workflow:<id> -> state -> lane:<f>), in both the canonical and vendored CLI.');
   process.exit(0);
 }
 
