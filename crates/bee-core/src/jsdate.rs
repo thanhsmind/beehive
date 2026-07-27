@@ -76,28 +76,62 @@ pub fn parse_iso_ms(s: &str) -> Option<i64> {
 // the narrow reader for those flags would have refused the one call the
 // manifest advertises.
 //
-// DECLARED, NOT MASKED — the two things this does NOT reproduce:
+// DECLARED, NOT MASKED — and every declared form below is FAIL-CLOSED:
+// this parser returns `None`, its call sites refuse with a non-zero exit,
+// and the store is left byte-untouched. There is no form on which it
+// silently produces a DIFFERENT instant from V8, which matters because
+// `decisions archive` DELETES rows and has no inverse verb.
 //
 // 1. **A date-time with no timezone designator is LOCAL in ECMA-262**
-//    (`2026-07-26T00:00:00`), and there is no local-offset source in `std`.
-//    It is treated as UTC here. Every timestamp bee's own stores hold is
-//    `Z`-suffixed, so this is reachable only by a hand-typed `--before` /
-//    `--since` that omits both `Z` and an offset, and only on a host whose
-//    local offset is non-zero. `date_parse_no_offset_is_treated_as_utc`
-//    pins the choice so it can never drift silently into something nobody
-//    wrote down.
-// 2. **V8's legacy fallback parser.** A string that fails the ES grammar is
-//    handed to an implementation-specific parser that ES leaves entirely
-//    unconstrained. It is more reachable than it looks — MEASURED against
-//    the frozen oracle, not assumed: `Date.parse("2026/01/01")`,
-//    `Date.parse("2026-1-1")`, `Date.parse("Jan 1 2099")` and even
-//    `Date.parse("2026-02-30")` (which ROLLS OVER to March 2nd rather than
-//    refusing) are all finite in V8, while every one of them is `None`
-//    here. Reproducing an undocumented parser is not something a port can
-//    do faithfully, so it is declared instead: both flags document their
-//    argument as an "ISO date", and the ES-grammar refusals both runtimes
-//    DO share (`2026-13-01`, `2026-00-01`, `2026-01-00`, `T25:00:00Z`,
-//    `T00:60:00Z`, `""`, `"true"`) are pinned below.
+//    (`2026-07-26T00:00:00`) and is REFUSED here.
+//
+//    This started life the other way round — read as UTC — and rpl-5's
+//    goal-check reproduced what that cost. On a host at `TZ=Asia/Bangkok`,
+//    `decisions archive --before 2026-07-26T00:00:00 --json` made mjs
+//    archive one row and this port archive two, BOTH exiting 0 with no
+//    warning, because V8 read the cutoff as `+07:00` (17:00Z the previous
+//    day) and this read it as `00:00Z`. On a negative-offset host the same
+//    error inverts into keeping a row mjs would have deleted.
+//
+//    Refusing is deliberate and is NOT a lesser fix. Reproducing ECMA-262
+//    local time needs a local-offset source `std` does not have; guessing
+//    one (an env `TZ` read, a fixed offset) would trade a divergence a
+//    cross-runtime harness can SEE for one it cannot. A refusal is loud, is
+//    asserted, and costs nothing on the documented surface — date-only
+//    forms ARE UTC in ECMA-262, so `--before 2099-01-01` is unaffected.
+//    Pinned by `date_parse_offsetless_datetime_is_refused` here and, end to
+//    end through both real binaries, by
+//    `queen-bee/tests/decisions_composed_oracle.rs`.
+// 2. **V8's legacy fallback parser, plus the ES-grammar corners this
+//    deliberately does not implement.** A string that fails the ES grammar
+//    is handed to an implementation-specific parser ES leaves entirely
+//    unconstrained. It is more reachable than it looks — every value here
+//    was MEASURED against the frozen oracle, not assumed. All are finite in
+//    V8 and `None` here:
+//
+//    - `2026/01/01`, `2026-1-1`, `Jan 1 2099` — legacy date spellings
+//    - `2026-02-30` — legacy ROLL-OVER to March 2nd rather than a refusal
+//    - `2026-07-26 00:00:00` — a SPACE where the format requires `T`
+//    - `2026-07-26T00:00:00z` — a LOWERCASE designator
+//    - `2026-07-26T00:00:00+0700` — an offset with no `:` separator
+//    - `+002026-07-26`, `+002026-07-26T00:00:00Z` — EXPANDED (six-digit,
+//      signed) years
+//
+//    The last four are the same fail-closed class as the first four and are
+//    listed for that reason: not implementing them is a choice, and an
+//    undeclared choice is indistinguishable from an oversight. Reproducing
+//    an undocumented parser is not something a port can do faithfully, so
+//    all of it is declared instead — both flags document their argument as
+//    an "ISO date" — and the ES-grammar refusals both runtimes DO share
+//    (`2026-13-01`, `2026-00-01`, `2026-01-00`, `T25:00:00Z`, `T00:60:00Z`,
+//    `""`, `"true"`) are pinned below.
+//
+//    One consequence is recorded rather than removed: for a legacy form
+//    like `2026/01/01` both runtimes exit 1 and leave the store untouched,
+//    but with DIFFERENT wording — mjs accepts the cutoff and then finds
+//    nothing qualifying, while this refuses the cutoff itself. That text
+//    divergence is pinned as a declared artifact in
+//    `decisions_composed_oracle.rs` rather than being chased into parity.
 
 fn days_in_month(year: i64, month: i64) -> i64 {
     match month {
@@ -221,7 +255,14 @@ pub fn date_parse_ms(s: &str) -> Option<i64> {
         }
 
         match offset {
-            None | Some("") => {} // no designator (declared as UTC above) or `Z`
+            // `Z` — the one designator that unambiguously means UTC.
+            Some("") => {}
+            // NO designator at all. ECMA-262 reads this as LOCAL time, and
+            // there is no local-offset source in `std` — so this REFUSES
+            // rather than silently picking a reading. See DECLARED
+            // DIVERGENCE 1 above for why refusing is the only safe answer
+            // here and why the date-only forms above are unaffected.
+            None => return None,
             Some(raw) => {
                 let sign = if raw.starts_with('-') { -1 } else { 1 };
                 let body = &raw[1..];
@@ -302,24 +343,71 @@ mod date_parse_tests {
         assert_eq!(date_parse_ms("2026-12-31T23:59:59.9999Z"), Some(1798761599999));
     }
 
-    /// DECLARED DIVERGENCE 2 (see the module note above): each of these is
-    /// FINITE in V8 via its legacy fallback parser — `2026-02-30` even rolls
-    /// over to March 2nd — and `None` here. Pinned as the explicit boundary
-    /// of what this parser claims, so the list can never quietly grow.
+    /// DECLARED DIVERGENCE 2 (see the module note above): every one of these
+    /// is FINITE in V8 — `2026-02-30` even rolls over to March 2nd — and
+    /// `None` here. The list is the parser's declared boundary, so it is
+    /// spelled out in full rather than sampled: the rpl-5 goal-check found
+    /// the previous version INCOMPLETE, with four measured same-class forms
+    /// (lowercase designator, space separator, colon-less offset, expanded
+    /// year) fail-closed in practice but undeclared on paper.
     #[test]
     fn date_parse_does_not_reproduce_the_v8_legacy_fallback() {
-        for s in ["2026-02-30", "2026-1-1", "2026/01/01", "Jan 1 2099"] {
+        for s in [
+            // legacy date spellings
+            "2026-02-30",
+            "2026-1-1",
+            "2026/01/01",
+            "Jan 1 2099",
+            // a SPACE where the ES format requires `T`
+            "2026-07-26 00:00:00",
+            // a LOWERCASE UTC designator
+            "2026-07-26T00:00:00z",
+            // an offset with no `:` separator
+            "2026-07-26T00:00:00+0700",
+            // EXPANDED (six-digit, signed) years, with and without a time
+            "+002026-07-26",
+            "+002026-07-26T00:00:00Z",
+        ] {
             assert_eq!(date_parse_ms(s), None, "{s:?} is a declared divergence, not a supported form");
         }
     }
 
     /// DECLARED DIVERGENCE 1 (see the module note above): ECMA-262 reads an
-    /// offset-less date-TIME as local; there is no local-offset source in
-    /// `std`, so it is UTC here. Pinned so the choice stays a written-down
-    /// decision rather than an accident.
+    /// offset-less date-TIME as LOCAL, and there is no local-offset source in
+    /// `std` — so this refuses instead of guessing a reading.
+    ///
+    /// The `assert_ne!` is the point of the test, not decoration: the
+    /// previous behaviour was exactly `date_parse_ms(x) ==
+    /// date_parse_ms(format!("{x}Z"))`, and that equality is what silently
+    /// over-archived a row on a `+07:00` host.
     #[test]
-    fn date_parse_no_offset_is_treated_as_utc() {
-        assert_eq!(date_parse_ms("2026-07-26T00:00:00"), date_parse_ms("2026-07-26T00:00:00Z"));
+    fn date_parse_offsetless_datetime_is_refused() {
+        for s in [
+            "2026-07-26T00:00",
+            "2026-07-26T00:00:00",
+            "2026-07-26T00:00:00.000",
+            "2026-07-26T24:00:00.000",
+        ] {
+            assert_eq!(date_parse_ms(s), None, "{s:?} has no designator and must be refused, not assumed UTC");
+            assert_ne!(
+                date_parse_ms(s),
+                date_parse_ms(&format!("{s}Z")),
+                "{s:?} must NOT resolve to the same instant as its Z-suffixed form"
+            );
+        }
+    }
+
+    /// The other side of the same boundary: a DATE-ONLY string carries no
+    /// time and IS UTC in ECMA-262, so refusing the offset-less date-TIME
+    /// above must not touch it. This is the registry's own documented
+    /// `bee decisions archive --before 2099-01-01`, so a regression here
+    /// would break a manifest-as-tested contract.
+    #[test]
+    fn refusing_offsetless_datetimes_leaves_date_only_forms_intact() {
+        assert_eq!(date_parse_ms("2099-01-01"), Some(4070908800000));
+        assert_eq!(date_parse_ms("2099-01-01"), date_parse_ms("2099-01-01T00:00:00.000Z"));
+        assert_eq!(date_parse_ms("2026-07"), Some(1782864000000));
+        assert_eq!(date_parse_ms("2026"), Some(1767225600000));
     }
 }
 

@@ -2704,6 +2704,36 @@ fn mutate_decisions_supersede_becomes_decide(root: &Path) -> Result<(), String> 
     )
 }
 
+/// Move ONE generated filler row one millisecond BEFORE the fixture's shared
+/// `2026-07-26T00:00:00.000Z` date, so it — and only it — ages out at a
+/// cutoff of exactly that instant.
+///
+/// This is the control for the DATE-ONLY `--before` scenarios, and it is
+/// deliberately a one-millisecond move: it fires only if the comparison can
+/// see the cutoff INSTANT, which is the single thing a date-only argument
+/// has to resolve correctly. A mutation that edited a row's prose would move
+/// stdout too, and would prove nothing about the parse.
+fn mutate_decisions_backdate_one_filler_row(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        DECISIONS_JOURNAL,
+        "\"id\":\"fixture-decision-000000\",\"type\":\"decide\",\"date\":\"2026-07-26T00:00:00.000Z\"",
+        "\"id\":\"fixture-decision-000000\",\"type\":\"decide\",\"date\":\"2026-07-25T23:59:59.999Z\"",
+    )
+}
+
+/// The same probe from the other side: push ONE filler row past a far-future
+/// cutoff so it stops ageing out, dropping the archived count by one and
+/// raising `kept` by one.
+fn mutate_decisions_postdate_one_filler_row(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        DECISIONS_JOURNAL,
+        "\"id\":\"fixture-decision-000001\",\"type\":\"decide\",\"date\":\"2026-07-26T00:00:00.000Z\"",
+        "\"id\":\"fixture-decision-000001\",\"type\":\"decide\",\"date\":\"2099-06-01T00:00:00.000Z\"",
+    )
+}
+
 /// Retype the retro-tag event so `buildTagOverlay` stops seeing it at all —
 /// `rpl5-live-a` reverts to genuinely untagged and reappears in an
 /// `--untagged` answer.
@@ -3134,6 +3164,67 @@ fn register_decisions_query_scenarios(set: &mut ScenarioSet) -> Result<(), Strin
                 text: " decision(s) to .bee/decisions-archive.jsonl (kept 3 active, cutoff 2026-07-27T00:00:00.000Z).\n",
             },
             Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "Archived 1153 " },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // ── the DATE-ONLY `--before`, which had no scenario at all ────────────
+    //
+    // Every `--since`/`--before` above is a full `toISOString()` value or an
+    // obviously-invalid string. The registry's OWN documented example —
+    // `bee decisions archive --before 2099-01-01` (`command-registry.mjs:618`)
+    // — is a DATE-ONLY string, is the exact call that motivated writing
+    // `date_parse_ms` at all, and had no cross-runtime scenario. That gap is
+    // what let rpl-5's cutoff bug reach a cap, so it is closed from both
+    // ends: the documented far-future form here, and the AT-the-threshold
+    // form below where the resolved instant is observable to the millisecond.
+    set.register(Scenario {
+        group: "decisions",
+        name: "archive-text-date-only-documented-2099-form",
+        argv: argv(&["decisions", "archive", "--before", "2099-01-01"]),
+        session_id: None,
+        seed: Some(seed_decisions_archive_fixture),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_postdate_one_filler_row }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            // Identical counts to the full-`toISOString()` scenario two
+            // registrations up: a date-only cutoff far in the future must
+            // age out exactly the same rows, and the cutoff is echoed back
+            // VERBATIM (never re-serialized into some canonical spelling).
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Contains,
+                text: " decision(s) to .bee/decisions-archive.jsonl (kept 3 active, cutoff 2099-01-01).\n",
+            },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "Archived 1153 " },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // The DISCRIMINATING half. `2026-07-26` is date-only, and ECMA-262 says a
+    // date-only string is UTC midnight — the same instant as the
+    // `2026-07-26T00:00:00.000Z` scenario above, which archives only the two
+    // rule-1 rows because `<` is strict. So a port that resolved a bare date
+    // to end-of-day would archive all ~1150 filler rows here, and one that
+    // resolved it through a local offset would move the boundary too. The
+    // control moves a single filler row one millisecond across that exact
+    // line.
+    set.register(Scenario {
+        group: "decisions",
+        name: "archive-json-date-only-is-utc-midnight-not-end-of-day",
+        argv: argv(&["decisions", "archive", "--before", "2026-07-26", "--json"]),
+        session_id: None,
+        seed: Some(seed_decisions_archive_fixture),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_backdate_one_filler_row }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"rpl5-gone-superseded\"" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"rpl5-gone-redacted\"" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"before\": \"2026-07-26\"" },
+            // The whole point: NOT ONE filler row aged out.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"kept\": 1154" },
             Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
         ],
     })?;

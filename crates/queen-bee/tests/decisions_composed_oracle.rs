@@ -1,5 +1,9 @@
-//! decisions_composed_oracle — rpl-5, closing the COMPOSED-HANDLER GAP the
-//! rpl-4 goal-check filed.
+//! decisions_composed_oracle — the `decisions` two-runtime oracle: the
+//! comparisons `--cmd-check` structurally cannot make. It opened closing the
+//! COMPOSED-HANDLER GAP the rpl-4 goal-check filed, and rpl-5's own
+//! goal-check added a second kind at the bottom of the file: a DECLARED
+//! divergence, where the two runtimes must NOT produce the same bytes and
+//! `--cmd-check`'s zero-diff contract therefore has nothing to say.
 //!
 //! # What was missing, exactly
 //!
@@ -94,6 +98,20 @@ fn seed_root(repo: &Path) -> tempfile::TempDir {
 }
 
 fn seed_root_with(repo: &Path, target_id: &str, docs: &[(&str, &str)]) -> tempfile::TempDir {
+    let escaped = serde_json::to_string(target_id).expect("the target id is a JSON string");
+    seed_root_journal(
+        repo,
+        &format!(
+            "{{\"id\":{escaped},\"type\":\"decide\",\"date\":\"2026-07-26T00:00:00.000Z\",\"decision\":\"oracle target\",\"rationale\":\"oracle seed\",\"alternatives\":null,\"scope\":\"repo\",\"source\":\"fixture\",\"confidence\":0}}\n"
+        ),
+        docs,
+    )
+}
+
+/// The same root, with `.bee/decisions.jsonl` supplied verbatim — the shape
+/// the cutoff cases below need, where the JOURNAL is the fixture and the
+/// docs tree is irrelevant.
+fn seed_root_journal(repo: &Path, journal: &str, docs: &[(&str, &str)]) -> tempfile::TempDir {
     let dir = tempfile::tempdir().expect("tempdir");
     let root = dir.path();
     fs::create_dir_all(root.join(".bee/cache")).expect("mkdir .bee/cache");
@@ -109,14 +127,7 @@ fn seed_root_with(repo: &Path, target_id: &str, docs: &[(&str, &str)]) -> tempfi
     for rel in [".bee/cache/command-registry.json", ".bee/bin/lib/command-registry.mjs"] {
         fs::copy(repo.join(rel), root.join(rel)).unwrap_or_else(|e| panic!("copy {rel}: {e}"));
     }
-    let escaped = serde_json::to_string(target_id).expect("the target id is a JSON string");
-    fs::write(
-        root.join(".bee/decisions.jsonl"),
-        format!(
-            "{{\"id\":{escaped},\"type\":\"decide\",\"date\":\"2026-07-26T00:00:00.000Z\",\"decision\":\"oracle target\",\"rationale\":\"oracle seed\",\"alternatives\":null,\"scope\":\"repo\",\"source\":\"fixture\",\"confidence\":0}}\n"
-        ),
-    )
-    .expect("write decisions.jsonl");
+    fs::write(root.join(".bee/decisions.jsonl"), journal).expect("write decisions.jsonl");
 
     for (rel, body) in docs {
         fs::write(root.join(rel), body).unwrap_or_else(|e| panic!("write {rel}: {e}"));
@@ -398,5 +409,272 @@ fn short8_is_a_utf16_slice_not_a_scalar_take() {
         substitute(&mjs, &mjs.capture_queue),
         substitute(&rust, &rust.capture_queue),
         "the astral-id capture stub diverged"
+    );
+}
+
+// ── the `--before` / `--since` cutoff, and why it is pinned HERE ────────────
+//
+// rpl-5's goal-check REPRODUCED a silent divergence: on a host at
+// `TZ=Asia/Bangkok`, `decisions archive --before 2026-07-26T00:00:00 --json`
+// made mjs archive one row and queen-bee archive two, BOTH exiting 0 with no
+// warning, because `date_parse_ms` read the offset-less date-time as UTC
+// while V8 reads it as LOCAL. `archive` deletes rows from the active store
+// and has no inverse verb, so the port was quietly destroying an extra row —
+// and on a negative-offset host the same error inverts into keeping a row
+// mjs would have removed.
+//
+// The fix is fail-closed, not local-time emulation: `bee_core::jsdate`
+// refuses an offset-less date-time outright, so the port now stops where it
+// used to guess. See that module's DECLARED DIVERGENCES note for why
+// reproducing ECMA-262 local time is not on the table (no local-offset
+// source in `std`; guessing one trades a detectable divergence for an
+// undetectable one).
+//
+// That refusal is a DELIBERATE, declared divergence, which is exactly why it
+// cannot live in `--cmd-check`: that harness's whole contract is "these two
+// runtimes produced the same bytes", and here they must not. Same reasoning
+// as the composed-handler tests above — a comparison that cannot be made
+// where it is gets moved somewhere it CAN be, never masked into silence. So
+// each case below asserts BOTH halves: the exact V8 reading on the mjs leg
+// (which is what makes the divergence real rather than theoretical) and the
+// port's loud refusal over a byte-untouched store.
+
+const CUTOFF_ROW_1: &str = "aaaaaaaa-1111-4aaa-8bbb-000000000001";
+const CUTOFF_ROW_2: &str = "bbbbbbbb-2222-4aaa-8bbb-000000000002";
+const CUTOFF_ROW_3: &str = "cccccccc-3333-4aaa-8bbb-000000000003";
+
+/// The judge's own three-row clone. The dates are chosen so the UTC and the
+/// `+07:00` readings of `2026-07-26T00:00:00` fall on OPPOSITE sides of row
+/// 3 — that row is the whole experiment:
+///
+/// * row 1 `2026-07-25T00:00:00Z` — older than either reading
+/// * row 2 `2026-07-26T12:00:00Z` — newer than either reading
+/// * row 3 `2026-07-25T20:00:00Z` — newer than the local reading
+///   (`2026-07-25T17:00:00Z`), older than the UTC one (`2026-07-26T00:00:00Z`)
+fn cutoff_journal() -> String {
+    [
+        (CUTOFF_ROW_1, "2026-07-25T00:00:00.000Z", "rpl5 cutoff row one"),
+        (CUTOFF_ROW_2, "2026-07-26T12:00:00.000Z", "rpl5 cutoff row two"),
+        (CUTOFF_ROW_3, "2026-07-25T20:00:00.000Z", "rpl5 cutoff row three"),
+    ]
+    .iter()
+    .map(|(id, date, decision)| {
+        format!(
+            "{{\"id\":\"{id}\",\"type\":\"decide\",\"date\":\"{date}\",\"decision\":\"{decision}\",\"rationale\":\"rpl5 cutoff seed\",\"alternatives\":null,\"scope\":\"rpl5-cutoff\",\"source\":\"fixture\",\"confidence\":0}}\n"
+        )
+    })
+    .collect()
+}
+
+struct Run {
+    stdout: String,
+    stderr: String,
+    exit_code: i32,
+}
+
+/// One leg, one argv, at a FIXED non-zero local offset. `TZ` is pinned so the
+/// V8 reading below is a constant rather than a property of whoever runs the
+/// suite — a UTC test host would make every assertion here vacuously true,
+/// which is precisely how the bug survived a green suite the first time.
+fn run_cutoff_leg(mut command: Command, root: &Path, argv: &[&str]) -> Run {
+    let output = command
+        .args(argv)
+        .env("TZ", "Asia/Bangkok")
+        .env_remove("BEE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .current_dir(root)
+        .output()
+        .expect("failed to spawn a cutoff leg");
+    Run {
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        exit_code: output.status.code().unwrap_or(-1),
+    }
+}
+
+/// mjs writes exactly one `[bee] <cmd> <n>ms` work-visibility line to stderr
+/// on every direct run (`bee.mjs:7298`) and queen-bee writes none, so the two
+/// legs' stderr is only comparable with it removed. Removed the way
+/// `bee_parity::normalize::strip_runtime_stderr_artifacts` removes it —
+/// SHAPE-CHECKED and counted, never "drop anything starting with `[bee]`",
+/// so a real diagnostic that happened to use the prefix cannot vanish here.
+fn strip_mjs_timing_line(stderr: &str) -> String {
+    let mut kept: Vec<&str> = Vec::new();
+    let mut stripped = 0usize;
+    for line in stderr.lines() {
+        if let Some(rest) = line.strip_prefix("[bee] ") {
+            let digits = rest.strip_suffix("ms").and_then(|r| r.rsplit(' ').next().map(str::to_string));
+            assert!(
+                digits.is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit())),
+                "not a well-shaped mjs timing line: {line:?}"
+            );
+            stripped += 1;
+            continue;
+        }
+        kept.push(line);
+    }
+    assert_eq!(stripped, 1, "mjs stderr must carry exactly one `[bee] …` timing line, got {stderr:?}");
+    if kept.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", kept.join("\n"))
+    }
+}
+
+struct CutoffCase {
+    name: &'static str,
+    argv: &'static [&'static str],
+    /// The port's refusal, byte for byte, on stderr.
+    rust_stderr: &'static str,
+    mjs_exit: i32,
+    mjs_stdout: &'static str,
+    mjs_stderr: &'static str,
+    /// The ids left in `.bee/decisions.jsonl` on the MJS leg afterwards, or
+    /// `None` when the verb is read-only / refused and must not touch it.
+    mjs_journal_ids_after: Option<&'static [&'static str]>,
+}
+
+/// The three forms the goal-check measured, each fail-closed in the port and
+/// each FINITE in V8 — verified against the real `node` here, not assumed.
+#[test]
+fn offsetless_and_legacy_cutoffs_fail_closed_where_v8_reads_them() {
+    let cases: &[CutoffCase] = &[
+        // 1. THE REPRODUCTION. mjs's local reading archives only row 1 and
+        //    keeps 2; the pre-fix port's UTC reading also swept row 3 away.
+        CutoffCase {
+            name: "archive --before <offset-less date-time>",
+            argv: &["decisions", "archive", "--before", "2026-07-26T00:00:00"],
+            rust_stderr: "archiveDecisions: --before must be a valid ISO date, got \"2026-07-26T00:00:00\".\n",
+            mjs_exit: 0,
+            mjs_stdout: "Archived 1 decision(s) to .bee/decisions-archive.jsonl (kept 2 active, cutoff 2026-07-26T00:00:00).\n",
+            mjs_stderr: "",
+            // The identity of the survivors, not just their count: row 3 is
+            // the one the port used to delete and mjs keeps.
+            mjs_journal_ids_after: Some(&[CUTOFF_ROW_2, CUTOFF_ROW_3]),
+        },
+        // 2. The READ side of the same parse, which diverged identically.
+        CutoffCase {
+            name: "search --since <offset-less date-time>",
+            // TEXT mode deliberately: with `--json`, `emitError` routes the
+            // payload to STDOUT, and this table's contract is a refusal on
+            // STDERR. The `--json` answer set is pinned by the companion
+            // test below instead.
+            argv: &["decisions", "search", "--since", "2026-07-26T00:00:00"],
+            rust_stderr: "--since must be a valid ISO date, got \"2026-07-26T00:00:00\".\n",
+            mjs_exit: 0,
+            mjs_stdout: "",
+            mjs_stderr: "",
+            mjs_journal_ids_after: Some(&[CUTOFF_ROW_1, CUTOFF_ROW_2, CUTOFF_ROW_3]),
+        },
+        // 3. THE DECLARED ARTIFACT the goal-check asked to pin rather than
+        //    fix: a V8 legacy-fallback form. Both runtimes exit 1 and leave
+        //    the store untouched — they fail closed TOGETHER — but they say
+        //    different things, because mjs gets far enough to run the age
+        //    rule and find nothing qualifying while the port never accepts
+        //    the cutoff at all. Pinned here (not in `--cmd-check`, which
+        //    demands identical bytes) so the wording divergence is a
+        //    recorded, bounded artifact instead of an unnoticed one.
+        CutoffCase {
+            name: "archive --before <V8 legacy-fallback form>",
+            argv: &["decisions", "archive", "--before", "2026/01/01"],
+            rust_stderr: "archiveDecisions: --before must be a valid ISO date, got \"2026/01/01\".\n",
+            mjs_exit: 1,
+            mjs_stdout: "",
+            mjs_stderr: "archiveDecisions: nothing qualifies for archiving — no superseded/redacted events and no decide events strictly older than 2026/01/01 (decision-propagation D4c: --before is explicit or the verb refuses; there is never a default age-based purge).\n",
+            mjs_journal_ids_after: Some(&[CUTOFF_ROW_1, CUTOFF_ROW_2, CUTOFF_ROW_3]),
+        },
+    ];
+
+    let repo = repo_root();
+    let journal = cutoff_journal();
+
+    for case in cases {
+        let mjs_root = seed_root_journal(&repo, &journal, &[]);
+        let rust_root = seed_root_journal(&repo, &journal, &[]);
+
+        let mut node = Command::new("node");
+        node.arg(repo.join(".bee").join("bin").join("bee.mjs"));
+        let mjs = run_cutoff_leg(node, mjs_root.path(), case.argv);
+        let rust = run_cutoff_leg(
+            Command::new(env!("CARGO_BIN_EXE_queen-bee")),
+            rust_root.path(),
+            case.argv,
+        );
+
+        // ── the V8 half: the divergence is real, measured, and non-vacuous ──
+        assert_eq!(mjs.exit_code, case.mjs_exit, "[{}] mjs exit\nstderr: {}", case.name, mjs.stderr);
+        assert_eq!(strip_mjs_timing_line(&mjs.stderr), case.mjs_stderr, "[{}] mjs stderr", case.name);
+        if !case.mjs_stdout.is_empty() {
+            assert_eq!(mjs.stdout, case.mjs_stdout, "[{}] mjs stdout", case.name);
+        }
+
+        // ── the port half: a LOUD refusal over a byte-untouched store ───────
+        assert_eq!(rust.exit_code, 1, "[{}] the port must refuse, not guess\nstdout: {}", case.name, rust.stdout);
+        assert_eq!(rust.stderr, case.rust_stderr, "[{}] queen-bee stderr", case.name);
+        assert_eq!(rust.stdout, "", "[{}] a refusal prints nothing on stdout", case.name);
+        assert_eq!(
+            fs::read_to_string(rust_root.path().join(".bee/decisions.jsonl")).expect("read the port's journal"),
+            journal,
+            "[{}] the port refused but still wrote to .bee/decisions.jsonl",
+            case.name
+        );
+        assert!(
+            !rust_root.path().join(".bee/decisions-archive.jsonl").exists(),
+            "[{}] the port refused but still created an archive sidecar",
+            case.name
+        );
+
+        // ── and what mjs actually did to ITS store, by id ───────────────────
+        if let Some(expected) = case.mjs_journal_ids_after {
+            let after = fs::read_to_string(mjs_root.path().join(".bee/decisions.jsonl")).expect("read the mjs journal");
+            let ids: Vec<String> = after
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .map(|l| {
+                    let row: Value = serde_json::from_str(l).expect("a journal row parses");
+                    field(&row, "id").to_string()
+                })
+                .collect();
+            assert_eq!(ids, expected, "[{}] the mjs leg's surviving rows", case.name);
+        }
+    }
+}
+
+/// The `--since` answer itself, which case 2 above deliberately leaves to
+/// this assertion: under V8's LOCAL reading the offset-less cutoff selects
+/// rows 2 AND 3, where a UTC reading selects row 2 alone. Without this the
+/// case-2 refusal would be pinned against a V8 side nobody had checked was
+/// on the other reading at all.
+#[test]
+fn the_offsetless_since_v8_reads_as_local_selects_the_boundary_row() {
+    let repo = repo_root();
+    let root = seed_root_journal(&repo, &cutoff_journal(), &[]);
+    let mut node = Command::new("node");
+    node.arg(repo.join(".bee").join("bin").join("bee.mjs"));
+    let mjs = run_cutoff_leg(
+        node,
+        root.path(),
+        &["decisions", "search", "--since", "2026-07-26T00:00:00", "--json"],
+    );
+    assert_eq!(mjs.exit_code, 0, "mjs leg failed:\n{}", mjs.stderr);
+
+    let payload: Value = serde_json::from_str(&mjs.stdout).expect("the --json payload parses");
+    let ids: Vec<&str> = payload
+        .get("decisions")
+        .and_then(Value::as_array)
+        .expect("the payload carries a decisions array")
+        .iter()
+        .map(|row| field(row, "id"))
+        .collect();
+    // Order is REVERSE FILE ORDER, not date order: `activeDecisions`'s
+    // default (no `--all`) branch is a literal `.reverse()`
+    // (`decisions.mjs:832`), and only the `--all` union branch sorts by date.
+    // This fixture is the first one whose dates are NOT monotonic with file
+    // order, so it is the first that can tell those two apart — row 3 is
+    // OLDER than row 2 and still comes out first.
+    assert_eq!(
+        ids,
+        vec![CUTOFF_ROW_3, CUTOFF_ROW_2],
+        "V8 must read the offset-less cutoff as LOCAL (+07:00 here); a UTC reading would return only {CUTOFF_ROW_2}"
     );
 }
