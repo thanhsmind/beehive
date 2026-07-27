@@ -341,3 +341,31 @@ node .bee/bin/bee.mjs reservations list --active-only
 - conflict resolution by optimism ("they'll probably touch different lines")
 - results collected but state.json / cells not updated
 - session history in a worker prompt
+
+## Threat model and protected attestation
+
+A same-UID worker is cooperative and fallible, not a security principal. Git
+metadata is consistency evidence, never independent authorization or a security
+boundary against that worker. Worker-reported id, branch, base, path, and commit
+are informational only; the orchestrator derives the candidate from the protected
+attestation and freshly read Git metadata.
+
+After `[DONE]` and before any merge, re-resolve the attested worktree and require:
+
+1. canonical path, native id, `commonDir`, forward link/backlink, and symbolic
+   `headRef` still match the attestation. A detached HEAD returns
+   `WORKTREE_IDENTITY_MISMATCH`; any path/id/common-dir/ref/backlink mismatch also
+   returns `WORKTREE_IDENTITY_MISMATCH`.
+2. the candidate is the freshly read worktree HEAD and
+   `git merge-base --is-ancestor <baseCommit> <candidate>` succeeds. A
+   non-descendant returns `WORKTREE_BASE_ANCESTRY_MISMATCH`.
+3. the NUL-delimited `git diff --name-only <baseCommit>..<candidate>` is a subset
+   of attested `reservedPaths` after the same logical normalization used by
+   reservations. Any extra path returns `WORKTREE_RESERVED_DIFF_MISMATCH`.
+
+These are typed identity halts: stop integration, preserve the worktree and
+branch, and never reinterpret worker result wording as authority. Transactional
+merge, verification, revert, cleanup, and destructive-drop disposition remain the
+acceptance procedure owned by `worktree-isolation-4` and the swarming reference.
+<!-- bee:end -->
+
