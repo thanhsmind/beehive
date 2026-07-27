@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: Workflow State — isolated linked worktrees and the transactional merge-back
-description: "The opt-in dispatch mode that removes Git index contention without changing the ownership primitive: validated linked pointers, one main coordination store, canonical containment proved before every write, and a merge-back that verifies committed main or preserves the worker's recovery identity."
-timestamp: 2026-07-22
+description: "The opt-in dispatch mode that removes Git index contention without changing the ownership primitive: validated linked pointers, one main coordination store, canonical containment proved before every write, a concurrency-aware refusal for a shared nested checkout that fails closed on its own detection errors and is scoped to the coordination root rather than the physical checkout, and a merge-back that verifies committed main or preserves the worker recovery identity."
+timestamp: 2026-07-26
 bee:
   id: workflow-state-worktree-isolation
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: [worktree-isolation D1-D4 (docs/history/worktree-isolation/CONTEXT.md; logged 58c56bb6/5de1fd36/8cc1bde1/b24a2efc)]
-  sources: ["worktree-isolation cells worktree-isolation-1..4 (capped traces and reports 2..4, 2026-07-16 — linked-root resolution, contained writes, dispatch attestation, transactional merge-back)", "docs/specs/workflow-state.md#B20", "docs/specs/workflow-state.md#R32", "docs/specs/workflow-state.md#R33", "docs/specs/workflow-state.md#R34", "docs/specs/workflow-state.md#R35", "docs/specs/workflow-state.md#E15", "docs/specs/workflow-state.md#E16", "docs/specs/workflow-state.md#E17", "docs/specs/workflow-state.md#E18", "docs/specs/workflow-state.md#P1"]
+  decisions: [worktree-isolation D1-D4 (docs/history/worktree-isolation/CONTEXT.md; logged 58c56bb6/5de1fd36/8cc1bde1/b24a2efc), worktree-concurrency-guard D1(b)/D2/D3/D4/D5 (docs/history/worktree-concurrency-guard/CONTEXT.md; supersession 0ccc1cf3), "worktree-concurrency-guard-controlroot-port Port-D4/D5 (docs/history/worktree-concurrency-guard-controlroot-port/CONTEXT.md — coordination-root scoping of the concurrency check, relocation to packages/bee/)"]
+  sources: ["worktree-isolation cells worktree-isolation-1..4 (capped traces and reports 2..4, 2026-07-16 — linked-root resolution, contained writes, dispatch attestation, transactional merge-back)", "docs/specs/workflow-state.md#B20", "docs/specs/workflow-state.md#R32", "docs/specs/workflow-state.md#R33", "docs/specs/workflow-state.md#R34", "docs/specs/workflow-state.md#R35", "docs/specs/workflow-state.md#E15", "docs/specs/workflow-state.md#E16", "docs/specs/workflow-state.md#E17", "docs/specs/workflow-state.md#E18", "docs/specs/workflow-state.md#P1", "worktree-concurrency-guard cells wcg-1/wcg-2 (capped traces and reports, 2026-07-24 — shared-nested-checkout detection primitive and write-guard wiring)", "worktree-concurrency-guard cell wcg-fix-2 (capped trace and report, 2026-07-26 — fail-closed-on-detection-error fix, review finding #2)", "worktree-concurrency-guard-controlroot-port cell port-1 (capped trace and verification_evidence, 2026-07-26 — relocation to packages/bee/, coordination-root scoping of the concurrency check, cross-model semantic judge confirmed)"]
   authoritative_for: "workflow-state: isolated linked-worktree dispatch, containment, and transactional merge-back"
 ---
 
@@ -54,6 +54,26 @@ preserves recovery identity. Destructive disposal requires explicit operator
 authorization plus captured status, diff, revision, reachability, and a
 recovery reference or patch.
 
+**B21 — A live write into a shared nested checkout is refused while another
+session is concurrently active.** Trigger: a session attempts to write (Edit,
+Write, or a Bash command) into a target that resolves inside a nested checkout
+— a distinct git repository living inside the current one — while at least one
+other session's heartbeat is live for this checkout. The write is denied,
+hard and fail-closed, with no override, whenever the nested checkout is either
+(a) a companion mount reached through a symlink that has never been verified
+against a matching mount record, or (b) an ordinary nested checkout sitting
+directly inside the current one's own directory tree (not reached through any
+symlink) — unless that nested checkout is a registered git submodule of the
+current checkout, which is never refused. A companion mount whose symlink has
+been verified against a matching, unstale mount record is never refused by
+this behavior regardless of concurrency — the verification itself is what
+distinguishes a deliberately shared checkout from an unmanaged one. The
+refusal names re-entering through a freshly created, dedicated worktree as the
+fix; it is never worded as upgrading the current worktree in place, because
+the current worktree cannot be converted to hold a verified mount after the
+fact. When no other session is live, or the target is not inside any nested
+checkout at all, nothing about this behavior changes today's write.
+
 ## Business Rules
 
 - R32 — Worktree isolation removes Git index contention only; reservations
@@ -69,6 +89,13 @@ recovery reference or patch.
 - R35 — Canonical physical containment always precedes logical path
   normalization and authorization. When safe resolution is impossible,
   worktree mode is refused rather than run unguarded (worktree-isolation D4).
+- R36 — A write into a nested checkout that another concurrently-live session
+  can also reach is refused unless that nested checkout is either a verified
+  companion mount or a registered git submodule (worktree-concurrency-guard
+  D1(b)/D2). The refusal never depends on a configurable bypass switch — it is
+  a permanent safety check, not an approval gate (worktree-concurrency-guard
+  D5). There is no override flag; the only recovery is opening a fresh,
+  properly mounted worktree (worktree-concurrency-guard D3/D4).
 
 ## Edge Cases Settled
 
@@ -86,6 +113,34 @@ recovery reference or patch.
 - Transaction behavior is proven in deterministic temporary Git repositories
   because the live checkout's Git metadata is read-only; no live-checkout
   commit is claimed by that acceptance evidence.
+- An unrecognized symlink escaping the checkout's own tree — one that matches
+  no verified companion mount and no known sibling/main checkout — is already
+  denied by ordinary containment, regardless of whether any other session is
+  live. The concurrency-aware refusal (B21/R36) only adds coverage for the two
+  shapes containment alone does not catch: an unverified companion mount, and
+  a nested checkout sitting in plain sight inside the current tree.
+- A registered git submodule of the current checkout is never treated as a
+  shared nested checkout, even while another session is live and even though
+  it is structurally indistinguishable from an unmanaged nested checkout by
+  "has its own git history" alone — the distinguishing signal is the
+  submodule's own registration, not its shape.
+- With no other session live, or with nothing sitting inside the checkout that
+  qualifies as a nested checkout at all, every write behaves exactly as it did
+  before this refusal existed — this is additive protection, not a new
+  default posture.
+- If the shared-checkout detection itself errors (an unreadable nested
+  checkout, a broken symlink, a permission failure while resolving a path),
+  the write is denied, not silently allowed — a detection failure is treated
+  as evidence of risk, never as evidence of safety, since the error is most
+  likely to happen during the exact race this refusal exists to stop.
+- The concurrently-live-session signal behind B21/R36 is scoped to the
+  coordination root, not the physical directory being written into. Several
+  worktrees may share one coordination root; a live session on a sibling
+  worktree counts as "another session" for this refusal even though it never
+  touches the physical checkout the write targets. The containment scan
+  itself — which nested checkout exists, and where — stays scoped to the
+  physical checkout regardless: only the "is anyone else live" question reads
+  the coordination root, never the "what is on disk" question.
 
 ## Pointers (implementation)
 
@@ -98,3 +153,18 @@ recovery reference or patch.
   `.bee/cells/worktree-isolation-{1..4}.json`, reports
   `docs/history/worktree-isolation/reports/`, 333 passing library checks, and
   the green configured repository verify on 2026-07-16.
+- Concurrency-aware shared-checkout refusal (B21/R36): detection primitive
+  `packages/bee/lib/guards.mjs`'s `isSharedNestedCheckoutTarget` (point-check)
+  and `hasAnySharedNestedCheckout` (directory-scan), plus their shared
+  companion-marker verification and submodule-registration exclusion helpers;
+  wired into `packages/bee/hooks/bee-write-guard.mjs`'s dispatch, ahead of
+  `checkWrite`, and into `packages/bee/bee.mjs`'s `handleWorktreeNew`. Both
+  detection functions take the coordination root as an `opts.controlRoot`
+  field (falling back to the physical root when omitted) so the concurrency
+  check can consult a coordination root that differs from the physical
+  checkout, while the on-disk scan stays physical-root-scoped. Evidence:
+  capped cells `.bee/cells/wcg-1.json`, `.bee/cells/wcg-2.json`,
+  `.bee/cells/port-1.json` (relocation + controlRoot-scoping), reports
+  `docs/history/worktree-concurrency-guard/reports/`, and the green
+  `packages/bee/hooks/test_write_guard.mjs` suite (87 rows, including the
+  bidirectional controlRoot-vs-root scoping proof) on 2026-07-26.

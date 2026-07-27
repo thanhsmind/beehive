@@ -75,7 +75,7 @@
     },
     {
       "path": ".bee/bin/lib/guards.mjs",
-      "sha256": "a00a8c14a5ddea13115918d966ea22cb5e32031d7bbe3c93a136b8175fc4ae61",
+      "sha256": "34b3744373ea342a99378269f4c0f30303f9a09aeac3e454091f6bf2b7130424",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -1438,7 +1438,7 @@
     },
     {
       "path": "packages/bee/bee.mjs",
-      "sha256": "cf46b1b6edaa9e372395bf06f157841a63384f443e1969a0790e80bacdabea76",
+      "sha256": "578e35b5ce85daa7bb516aa6e55c0e687bd054a50620502e090ed3225323a4d5",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/bee.mjs"
@@ -1508,7 +1508,7 @@
     },
     {
       "path": "packages/bee/hooks/bee-write-guard.mjs",
-      "sha256": "c6a9dbdc6910d7ca1fef7b5afb44c840321765f65b60948340cf22acdc374a78",
+      "sha256": "8fce65d65a1ffd852a0e3f7e5b799ea41ebe69f20421716cbeac8990eb98973b",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/bee-write-guard.mjs"
@@ -1557,7 +1557,7 @@
     },
     {
       "path": "packages/bee/hooks/test_write_guard.mjs",
-      "sha256": "7163c3a1e2124aad11c27b8917051f14312fd8d9e940b996da96b2f81e5a6697",
+      "sha256": "fc5f699970061dd64d06baf46b137849c676b2b6741383fe11382dfef7d8840f",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/test_write_guard.mjs"
@@ -1655,7 +1655,7 @@
     },
     {
       "path": "packages/bee/lib/guards.mjs",
-      "sha256": "a00a8c14a5ddea13115918d966ea22cb5e32031d7bbe3c93a136b8175fc4ae61",
+      "sha256": "34b3744373ea342a99378269f4c0f30303f9a09aeac3e454091f6bf2b7130424",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/guards.mjs"

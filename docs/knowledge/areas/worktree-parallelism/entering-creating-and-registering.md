@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Worktree Parallelism — entering: creating a feature worktree and registering it"
-description: "The paved road that creates and grants a feature worktree in one move, the adoption command that registers a hand-made one, the fresh lifecycle state a bootstrap writes, and the typed zero-mutation refusals and best-effort rollback that guard both."
-timestamp: 2026-07-23
+description: "The paved road that creates and grants a feature worktree in one move, the adoption command that registers a hand-made one, the fresh lifecycle state a bootstrap writes, a concurrency-aware refusal when the source checkout holds a shared nested checkout without a declared companion mount, and the typed zero-mutation refusals and best-effort rollback that guard all of it."
+timestamp: 2026-07-26
 bee:
   id: worktree-parallelism-entering-creating-and-registering
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/the-trust-model.md]
-  decisions: ["worktree-session-routing D7 (worktree new is the paved road for STARTING a feature worktree, GH #21)", worktree-feature-parallelism (register/list/unregister and the bootstrap contract), I46 (issues-46-53 — immutable creation slug)]
-  sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-registering-a-worktree-the-cli", "docs/specs/worktree-parallelism.md#S-entering-worktree-new-feature-slug-d7-gh-21", "issues-46-53 cell i-2 (GH #46 — the creation slug is recorded immutably because the feature name is not; the refusal names the drifted field instead of the branch; trace in `.bee/cells/`, 2026-07-23)"]
+  decisions: ["worktree-session-routing D7 (worktree new is the paved road for STARTING a feature worktree, GH #21)", worktree-feature-parallelism (register/list/unregister and the bootstrap contract), I46 (issues-46-53 — immutable creation slug), worktree-concurrency-guard D1(a)/D3/D4/D6 (docs/history/worktree-concurrency-guard/CONTEXT.md; supersession 0ccc1cf3)]
+  sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-registering-a-worktree-the-cli", "docs/specs/worktree-parallelism.md#S-entering-worktree-new-feature-slug-d7-gh-21", "issues-46-53 cell i-2 (GH #46 — the creation slug is recorded immutably because the feature name is not; the refusal names the drifted field instead of the branch; trace in .bee/cells/, 2026-07-23)", "worktree-concurrency-guard cell wcg-3 (capped trace and report, 2026-07-24 — worktree-new concurrency-aware refusal)", "worktree-concurrency-guard cell wcg-fix-1 (capped trace and report, 2026-07-26 — acting-session self-exclusion fix, review finding #1)"]
   authoritative_for: "worktree-parallelism: creating, granting and bootstrapping a feature worktree"
 ---
 
@@ -63,9 +63,21 @@ the ordinary main checkout:
   refused by naming the **branch** — which is correct, fixed at creation, and the one thing the
   operator must not change. A refusal that names the only unchangeable thing is a dead end, so the
   refusal now names the field that actually drifted and says outright not to rename the branch.
+- **A live concurrent session and an undeclared shared nested checkout together refuse the
+  creation.** When another session's heartbeat is live for the source checkout, and that
+  checkout holds a nested checkout another session could also reach, `worktree new` refuses
+  — typed, zero-mutation, no override — unless the call declares its own companion mount for
+  that nested checkout. The refusal names declaring a companion mount as the fix. With no other
+  session live, or with no such nested checkout present in the source checkout, creation
+  proceeds exactly as it always has; declaring a companion mount is likewise never refused by
+  this check regardless of concurrency, since a declared mount is itself the fix.
+  The concurrency check excludes the acting session's own heartbeat when deciding whether
+  another session is live — a solo agent whose own session record is the only one present is
+  never mistaken for its own concurrent peer.
 - Every refusal is **typed and zero-mutation**: invalid slug/base-ref, caller not an ordinary
-  checkout, target path / branch / grant already exists, and git's own `worktree add` failure
-  (the pre-checks are advisory; git's atomic failure is authoritative). A failure AFTER the
-  worktree was created rolls back best-effort (worktree, branch, grant) and reports typed; if
-  even rollback fails, the error names `worktree register` as the adoption path.
+  checkout, target path / branch / grant already exists, the live-concurrent-and-undeclared-
+  shared-checkout condition above, and git's own `worktree add` failure (the pre-checks are
+  advisory; git's atomic failure is authoritative). A failure AFTER the worktree was created
+  rolls back best-effort (worktree, branch, grant) and reports typed; if even rollback fails,
+  the error names `worktree register` as the adoption path.
 - `register` remains for adopting a hand-made worktree; `new` is the paved road.

@@ -1,0 +1,94 @@
+{
+  "id": "wcg-1",
+  "feature": "worktree-concurrency-guard",
+  "title": "Build and prove the shared detection primitive for a concurrency-reachable companion/nested checkout",
+  "lane": "high-risk",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3"
+  ],
+  "files": [
+    ".bee/bin/lib/guards.mjs",
+    "hooks/test_write_guard.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    ".bee/bin/lib/claims.mjs",
+    ".bee/bin/hooks/bee-write-guard.mjs",
+    "docs/history/worktree-concurrency-guard/CONTEXT.md",
+    "docs/history/worktree-concurrency-guard/approach.md"
+  ],
+  "action": "Per D2, add one exported helper (in guards.mjs, alongside checkWrite -- the existing shared home for write-checking logic used by both the hook and other callers) that answers: given a root and a resolved target path, is this target inside a nested/companion-shaped checkout (has its own .git) that another concurrently-live session could also reach? Do NOT wire it into bee-write-guard.mjs or bee.mjs yet (per D1) -- that is Epic 2/3, a later slice. VALIDATING already proved the baseline behavior with a disposable spike (.bee/spikes/worktree-concurrency-guard/probe-nested-checkout-baseline.mjs, results in docs/history/worktree-concurrency-guard/reports/validation-e1.md) -- treat these as GIVEN facts to write regression tests against, not things to rediscover: (1) an UNRECOGNIZED symlink escape (no companion marker) is ALREADY denied today by existing containment (canonicalRelPath/describeCrossWorktreeTarget, bee-write-guard.mjs:263-297), independent of concurrency -- confirmed status=2, 'could not be canonically contained'. So the new helper's job for the symlink-mount shape is narrower than originally scoped: only a VERIFIED companion mount (resolveCompanionMountedRelPath succeeds, bee-write-guard.mjs:384-414) needs a NEW concurrency check: it is currently allowed unconditionally. (2) A PLAIN, non-symlinked nested .git inside the SAME checkout is confirmed ALLOWED today (status=0) -- completely unguarded, the exact STR65 incident shape. This is the primary gap the helper must close. (3) A git repo registered as a REAL submodule (present in .gitmodules, added via `git submodule add`) is confirmed to behave IDENTICALLY to case (2) -- also ALLOWED, status=0 -- proving bee's write-guard cannot structurally distinguish a submodule from an accidental shared nested repo by 'has its own .git' alone. Therefore D2's submodule exclusion MUST use an actual registration signal (read .gitmodules / `git submodule status`, or equivalent) as its detection mechanism -- NOT bare has-own-.git structural detection, which is provably identical for both shapes. Write the fixture tests first (in hooks/test_write_guard.mjs, a new describe block, reusing the fixture patterns in the spike script) encoding all 3 confirmed baselines as regression assertions PLUS the new helper's intended behavior (verified companion mount + concurrent -> new helper flags it; plain nested + concurrent -> new helper flags it; registered submodule + concurrent -> new helper does NOT flag it), then implement the helper to make them pass.",
+  "must_haves": {
+    "truths": [
+      "The new helper correctly flags a VERIFIED companion mount and a plain nested .git in a shared checkout as shared/companion targets, and correctly EXCLUDES a real, .gitmodules-registered git submodule",
+      "A regression test locks in today's confirmed baseline: an unrecognized (unverified) symlink escape is denied by EXISTING containment logic alone, independent of this new helper"
+    ],
+    "artifacts": [
+      {
+        "path": ".bee/bin/lib/guards.mjs",
+        "substantive": "new exported helper function with a doc comment stating the exact trigger condition it resolves (citing this cell, D2 as widened by supersession 0ccc1cf3, and the validating spike), including the .gitmodules-registration check that distinguishes a submodule from a shared target -- handling BOTH a directory-.git submodule shape and a file-.git (absorbed gitdir) submodule shape, per the Gate-3 advisor's finding"
+      },
+      {
+        "path": "hooks/test_write_guard.mjs",
+        "substantive": "new test cases covering all 3 confirmed baseline shapes plus the new helper's intended flag/no-flag behavior for each"
+      }
+    ],
+    "key_links": [],
+    "prohibitions": [
+      "Do not wire this helper into bee-write-guard.mjs's dispatch or bee.mjs handleWorktreeNew in this cell -- that is Epic 2/3, later slices",
+      "Do not flag a real, .gitmodules-registered git submodule as a shared/companion target (check both directory-.git and file-.git/absorbed-gitdir submodule shapes)",
+      "Do not re-litigate the 3 confirmed baseline behaviors from scratch -- they are proven evidence, cited in docs/history/worktree-concurrency-guard/reports/validation-e1.md"
+    ]
+  },
+  "verify": "node --test hooks/test_write_guard.mjs && node scripts/ledger_parity.mjs --check",
+  "behavior_change": false,
+  "status": "capped",
+  "trace": {
+    "worker": "wcg-worker-1",
+    "outcome": "Added the shared detection primitive isSharedNestedCheckoutTarget(root,targetPath) to guards.mjs (canonical across all 5 plugin trees + vendored .bee/bin): concurrency-gated structural detection that flags a verified companion mount and a plain nested .git in a shared checkout, excludes a .gitmodules-registered submodule (both dir-.git and file-.git shapes). Unwired per D1 (Epic 2/3 later). 8 regression+behavior rows in hooks/test_write_guard.mjs lock the 3 spike baselines + intended flag/no-flag. Verify green.",
+    "files_changed": [
+      ".bee/bin/lib/guards.mjs",
+      "skills/bee-hive/templates/lib/guards.mjs",
+      ".agents/skills/bee-hive/templates/lib/guards.mjs",
+      ".claude/skills/bee-hive/templates/lib/guards.mjs",
+      ".claude-plugin/skills/bee-hive/templates/lib/guards.mjs",
+      ".codex-plugin/skills/bee-hive/templates/lib/guards.mjs",
+      "hooks/test_write_guard.mjs",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Vendoring scope: the cell named the vendored artifact .bee/bin/lib/guards.mjs, but guards.mjs is canonical across 5 plugin trees (skills/, .agents/, .claude/, .claude-plugin/, .codex-plugin/) plus the vendored .bee/bin copy, and the onboarding ledger (ledger_parity --check, part of verify) tracks the canonical hash. Editing only the vendored copy could not pass verify and would be reverted by the next render. Fix (auto, deviation rule 2/3): applied the helper to canonical skills/bee-hive/templates/lib/guards.mjs and propagated via the repo's sanctioned regen — scripts/render_plugin_skill_trees.mjs (.claude-plugin, .codex-plugin) and skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply (host mirrors .claude/.agents skills + vendored .bee/bin + .bee/onboarding.json ledger). Repo-scoped only, no --global-skills. All 6 guards.mjs copies now byte-identical to canonical.",
+      "release-manifest regen: ran scripts/release_manifest.mjs --write per the action's regen chain, but --write also captured ~500 lines of pre-existing 644->664 umask-dependent file-mode drift (the exact drift documented in this cell's regen_obligation_ack as unrelated, present on main too, already filed as friction 2026-07-23). Isolated the manifest change to only the 4 guards.mjs content-hash entries (26da8e59->c3c24914) and reverted the mode-drift lines, keeping the cell commit scoped. release_manifest --check remains red on the pre-existing mode drift exactly as the ack states; it was correctly dropped from this cell's verify.",
+      "Scope hygiene: staged only this cell's files for the commit. Left untouched the orchestrator's pre-existing uncommitted feature-setup bookkeeping present in the same checkout (.bee/decisions.jsonl, .bee/cells/rel1150-1.json, docs/decisions/taxonomy.json, docs/backlog.md, .bee/backlog.jsonl) and the feature's untracked history docs (CONTEXT.md, approach.md, reports/validation-e1.md)."
+    ],
+    "friction": "Cell file list undercounted the vendoring architecture: it named the vendored .bee/bin/lib/guards.mjs but guards.mjs is canonical across 5 plugin trees + the onboarding ledger (ledger_parity, in verify). A guards.mjs cell must own skills/bee-hive/templates/lib/guards.mjs (canonical) + render/onboard regen targets, else verify cannot pass and the edit is reverted on next render. Planning should scope lib cells to the canonical template + regen chain.",
+    "capped_at": "2026-07-24T08:42:44.018Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "node --test: tests 1, pass 1, fail 0 (all 8 new wcg-1 rows 70-77 pass: baseline symlink-escape still denied by containment [row70]; plain nested+concurrent flagged [71]; plain nested solo not flagged [72,D6]; registered submodule+concurrent NOT flagged [73]; verified companion mount+concurrent flagged [74]; companion solo not flagged [75,D6]; marker mismatch not flagged [76]; no-marker symlink not flagged [77]). Red-first proven: before the primitive existed the import failed with SyntaxError \"does not provide an export named isSharedNestedCheckoutTarget\". ledger_parity --check: .bee/bin/** matches the onboarding managed-hash ledger. Combined exit 0.",
+    "verify_passed": true,
+    "claim_session": "346c5e4d-65e6-40c1-b07c-57cca160d2e3",
+    "claimed_at": "2026-07-24T08:21:08.116Z",
+    "verify_command": "node --test hooks/test_write_guard.mjs && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-24T08:41:59.852Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T08:41:59.852Z",
+        "claim_session": "346c5e4d-65e6-40c1-b07c-57cca160d2e3",
+        "claimed_at": "2026-07-24T08:21:46.841Z",
+        "acquired_at": "2026-07-24T08:21:08.115Z",
+        "worker": "wcg-worker-1",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ]
+  },
+  "regen_obligation_ack": "release_manifest.mjs --check is dropped from this cell's verify because it is ALREADY red for reasons entirely unrelated to this cell: a pre-existing file-mode drift (664 vs recorded 644) across 499-510 tracked files, confirmed present on the main checkout too (not caused by this worktree or this feature) and already filed as friction on 2026-07-23 ('release_manifest --check baseline red: mode differ on 499 files (main + fresh worktree both)'). The action still runs release_manifest.mjs --write for real content-hash regen after the code change; gating this cell's cap on --check would block indefinitely on unrelated, already-tracked debt. Confirmed by direct run this session (2026-07-24) before this ack was set.",
+  "tier": "ceiling"
+}

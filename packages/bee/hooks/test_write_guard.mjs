@@ -14,9 +14,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { runModuleWorker } from "../../../scripts/lib/run-module-worker.mjs";
+// wcg-1: isSharedNestedCheckoutTarget imported from the SAME vendored
+// location (`.bee/bin/lib`) as acquireLeases below, matching this file's
+// existing convention of testing against whatever is actually vendored there.
+import { isSharedNestedCheckoutTarget } from "../../../.bee/bin/lib/guards.mjs";
 // multisession-native-16: a fixture reservation must be seeded as a REAL
 // lease-store lease, not written to `.bee/reservations.json` (which is now
 // only a rebuildable projection — see reservations.mjs's own module header;
@@ -125,6 +129,26 @@ function buildThrowingGuardsFixture() {
   fs.writeFileSync(
     path.join(root, ".bee", "bin", "lib", "guards.mjs"),
     "throw new Error('boom: fixture guards.mjs deliberately throws on import');\n",
+  );
+  return root;
+}
+
+// A working fixture whose vendored guards.mjs imports cleanly but whose
+// isSharedNestedCheckoutTarget THROWS WHEN CALLED (not on import — that is
+// buildThrowingGuardsFixture / row7's outer-catch fail-open path). It
+// re-exports the real guards module verbatim and shadows only the one
+// primitive with a throwing stub, so checkWrite and every other guard still
+// behave exactly as in production. Models a real filesystem error raised from
+// inside the detection primitive (unreadable nested .git, EACCES realpath).
+function buildCallThrowingGuardsFixture(prefix) {
+  const root = buildFixture(prefix, { phase: "swarming" });
+  const realGuardsUrl = pathToFileURL(path.join(REAL_LIB_DIR, "guards.mjs")).href;
+  fs.writeFileSync(
+    path.join(root, ".bee", "bin", "lib", "guards.mjs"),
+    `export * from ${JSON.stringify(realGuardsUrl)};\n` +
+      "export function isSharedNestedCheckoutTarget() {\n" +
+      "  throw new Error('boom: forced detection error inside isSharedNestedCheckoutTarget');\n" +
+      "}\n",
   );
   return root;
 }
@@ -1175,6 +1199,312 @@ async function main() {
   );
   check(r69.status === 0, "row69: a companion-mounted Read stays allowed regardless of the marker (read tools are untouched)", `status=${r69.status} stderr=${r69.stderr}`);
 
+  // --- 70-77. worktree-concurrency-guard, cell wcg-1: the shared detection
+  // primitive isSharedNestedCheckoutTarget (guards.mjs). This is Epic 1's
+  // UNWIRED primitive — tested directly (imported, in-process) rather than
+  // through the hook, since it is not yet consulted by checkWrite/the hook
+  // dispatch. D2 (widened by supersession 0ccc1cf3) fixes the shapes; the
+  // three confirmed baselines from the validating spike (reports/
+  // validation-e1.md) are locked here as regression assertions alongside the
+  // primitive's intended flag/no-flag behavior.
+
+  // Row 70 regression (existing containment, NOT this primitive): an
+  // unrecognized symlink escape (a real external git repo symlinked in, no
+  // companion marker) is denied TODAY by canonicalRelPath/
+  // describeCrossWorktreeTarget alone, independent of concurrency — spike
+  // case A, status 2. Locks the baseline this feature must not regress.
+  {
+    const root = buildFixture("bee-wcg1-baseline-symlink-");
+    const external = mkFixture("bee-wcg1-baseline-external-");
+    execFileSync("git", ["init", "-q"], { cwd: external, stdio: ["ignore", "pipe", "pipe"] });
+    fs.writeFileSync(path.join(external, "foo.js"), "// external\n");
+    fs.symlinkSync(external, path.join(root, "repo"));
+    const r70 = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "repo/foo.js", old_string: "x", new_string: "y" } },
+      root,
+    );
+    check(r70.status === 2, "row70: unverified symlink escape denied by EXISTING containment, independent of the new primitive", `status=${r70.status} stderr=${r70.stderr}`);
+  }
+
+  // Row 71-72: PLAIN nested `.git` physically inside the checkout's own tree
+  // (spike case B, status 0 — unguarded today, STR65's incident shape).
+  //   71: concurrent + plain nested  -> primitive FLAGS it (true).
+  //   72: solo (no live session) + plain nested -> NOT flagged (D6 no-op).
+  {
+    const root = mkWcgRoot("bee-wcg1-plain-nested-");
+    const nested = path.join(root, "repo");
+    fs.mkdirSync(nested, { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: nested, stdio: ["ignore", "pipe", "pipe"] });
+    fs.writeFileSync(path.join(nested, "foo.js"), "// nested plain\n");
+    const target = path.join(nested, "foo.js");
+
+    check(isSharedNestedCheckoutTarget(root, target) === false, "row72: plain nested .git with NO concurrent session is NOT flagged (D6 backward-compat no-op)", `solo`);
+    addLiveSession(root);
+    check(isSharedNestedCheckoutTarget(root, target) === true, "row71: plain nested .git + concurrent session IS flagged (STR65's unguarded incident shape)", `concurrent`);
+  }
+
+  // Row 73: registered git submodule (spike case C, status 0 — structurally
+  // identical to case B). Even concurrent, the primitive must NOT flag it —
+  // the exclusion keys off `.gitmodules` registration, not the `.git` shape.
+  {
+    const root = mkWcgRoot("bee-wcg1-submodule-");
+    const gitOpts = { cwd: root, stdio: ["ignore", "pipe", "pipe"] };
+    execFileSync("git", ["init", "-q"], gitOpts);
+    execFileSync("git", ["config", "user.email", "wcg@example.com"], gitOpts);
+    execFileSync("git", ["config", "user.name", "wcg fixture"], gitOpts);
+    fs.writeFileSync(path.join(root, "README.md"), "root\n");
+    execFileSync("git", ["add", "README.md"], gitOpts);
+    execFileSync("git", ["commit", "-q", "-m", "root init"], gitOpts);
+    const subRemote = mkFixture("bee-wcg1-submodule-remote-");
+    execFileSync("git", ["init", "-q", "--bare"], { cwd: subRemote, stdio: ["ignore", "pipe", "pipe"] });
+    const seed = mkFixture("bee-wcg1-submodule-seed-");
+    const seedOpts = { cwd: seed, stdio: ["ignore", "pipe", "pipe"] };
+    execFileSync("git", ["init", "-q"], seedOpts);
+    execFileSync("git", ["config", "user.email", "wcg@example.com"], seedOpts);
+    execFileSync("git", ["config", "user.name", "wcg fixture"], seedOpts);
+    fs.writeFileSync(path.join(seed, "foo.js"), "// seed\n");
+    execFileSync("git", ["add", "foo.js"], seedOpts);
+    execFileSync("git", ["commit", "-q", "-m", "seed"], seedOpts);
+    execFileSync("git", ["push", "-q", subRemote, "HEAD:refs/heads/main"], seedOpts);
+    execFileSync("git", ["symbolic-ref", "HEAD", "refs/heads/main"], { cwd: subRemote, stdio: ["ignore", "pipe", "pipe"] });
+    execFileSync("git", ["-c", "protocol.file.allow=always", "submodule", "add", "-q", subRemote, "repo"], gitOpts);
+    addLiveSession(root);
+    const target = path.join(root, "repo", "foo.js");
+    check(isSharedNestedCheckoutTarget(root, target) === false, "row73: a real .gitmodules-registered submodule is NOT flagged even when concurrent (registration-based exclusion)", `submodule`);
+  }
+
+  // Row 74-77: VERIFIED companion mount (spike case A's positive sibling) — a
+  // `.bee/companion-session.json` marker whose declared worktreePath realpath
+  // matches the live mount symlink. Allowed unconditionally today
+  // (resolveCompanionMountedRelPath); the primitive flags it so a concurrency
+  // check can gate it.
+  //   74: concurrent + verified mount -> FLAGGED (true).
+  //   75: solo + verified mount       -> NOT flagged (D6 no-op).
+  //   76: concurrent + marker whose worktreePath MISMATCHES the live symlink
+  //       -> NOT flagged (verification fails, same posture as row68).
+  //   77: concurrent + symlink mount with NO marker at all -> NOT flagged
+  //       (the primitive stays narrow; containment, not this primitive,
+  //       denies an unverified escape).
+  {
+    const mountTarget = mkFixture("bee-wcg1-companion-mount-");
+    execFileSync("git", ["init", "-q"], { cwd: mountTarget, stdio: ["ignore", "pipe", "pipe"] });
+    fs.writeFileSync(path.join(mountTarget, "foo.js"), "// companion file\n");
+    const target = "repo/foo.js";
+
+    const verifiedRoot = mkWcgRoot("bee-wcg1-companion-verified-");
+    fs.symlinkSync(mountTarget, path.join(verifiedRoot, "repo"));
+    fs.writeFileSync(
+      path.join(verifiedRoot, ".bee", "companion-session.json"),
+      `${JSON.stringify({ sessionId: "s1", worktreePath: mountTarget, mountPath: "repo" }, null, 2)}\n`,
+    );
+    check(isSharedNestedCheckoutTarget(verifiedRoot, path.join(verifiedRoot, target)) === false, "row75: verified companion mount with NO concurrent session is NOT flagged (D6 no-op)", `solo`);
+    addLiveSession(verifiedRoot);
+    check(isSharedNestedCheckoutTarget(verifiedRoot, path.join(verifiedRoot, target)) === true, "row74: verified companion mount + concurrent session IS flagged", `concurrent`);
+
+    const mismatchRoot = mkWcgRoot("bee-wcg1-companion-mismatch-");
+    const otherReal = mkFixture("bee-wcg1-companion-other-");
+    fs.symlinkSync(mountTarget, path.join(mismatchRoot, "repo"));
+    fs.writeFileSync(
+      path.join(mismatchRoot, ".bee", "companion-session.json"),
+      `${JSON.stringify({ sessionId: "s1", worktreePath: otherReal, mountPath: "repo" }, null, 2)}\n`,
+    );
+    addLiveSession(mismatchRoot);
+    check(isSharedNestedCheckoutTarget(mismatchRoot, path.join(mismatchRoot, target)) === false, "row76: a marker whose worktreePath does NOT match the live symlink is NOT flagged (verification fails)", `mismatch`);
+
+    const noMarkerRoot = mkWcgRoot("bee-wcg1-companion-no-marker-");
+    fs.symlinkSync(mountTarget, path.join(noMarkerRoot, "repo"));
+    addLiveSession(noMarkerRoot);
+    check(isSharedNestedCheckoutTarget(noMarkerRoot, path.join(noMarkerRoot, target)) === false, "row77: a symlink mount with NO marker is NOT flagged by the primitive (containment's job, not this primitive's)", `no-marker`);
+  }
+
+  // --- 78-82. worktree-concurrency-guard, cell wcg-2: isSharedNestedCheckoutTarget
+  // WIRED into the write-guard hook's Edit/Write and Bash dispatch (D1b/D3/D5).
+  // Exercised through the real hook child process (not in-process), because
+  // this is the behavior change: a write that used to succeed is now refused.
+  // The guard fires BEFORE checkWrite, only for a physically-contained
+  // (canonicalRelPath-resolved) target that is a genuinely shared nested
+  // checkout AND is NOT covered by a verified companion marker; a verified
+  // companion mount reached through its sanctioned symlink stays exempt (D1b:
+  // "no verified companion marker covers it"). Concurrency excludes the acting
+  // session, so a solo session is a pure no-op (D6).
+
+  // Row 78 (RED-FIRST, behavior_change): an Edit into a plain nested `.git`
+  // inside a shared checkout, with another live session, is DENIED. Pre-wiring
+  // this write SUCCEEDED (status 0) — STR65's exact unguarded incident shape.
+  {
+    const root = buildFixture("bee-wcg2-edit-plain-nested-concurrent-");
+    const nested = path.join(root, "repo");
+    fs.mkdirSync(nested, { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: nested, stdio: ["ignore", "pipe", "pipe"] });
+    fs.writeFileSync(path.join(nested, "foo.js"), "// nested plain\n");
+    addLiveSession(root); // another session is live -> concurrent
+    const r78 = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "repo/foo.js", old_string: "x", new_string: "y" }, session_id: "me" },
+      root,
+    );
+    check(r78.status === 2, "row78: an Edit into a plain nested .git while another session is live is DENIED (was allowed pre-wiring — STR65 shape)", `status=${r78.status} stderr=${r78.stderr}`);
+    // Row 79: the denial teaches the paved-road escape (D3/D4): a FRESH
+    // `bee worktree new --with-companion`, never an in-place conversion.
+    check(/bee worktree new --with-companion/.test(r78.stderr), "row79: the denial names `bee worktree new --with-companion` as the fix", r78.stderr);
+    check(/fresh|new (companion )?worktree/i.test(r78.stderr), "row79: the fix is worded as opening a FRESH/new worktree, not upgrading the current one in place", r78.stderr);
+  }
+
+  // Row 80 (D6 backward-compat + session exclusion): the SAME Edit, but the
+  // only live session is the acting session itself — isConcurrentMode excludes
+  // it, so the guard is a pure no-op and the write is ALLOWED.
+  {
+    const root = buildFixture("bee-wcg2-edit-plain-nested-solo-");
+    const nested = path.join(root, "repo");
+    fs.mkdirSync(nested, { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: nested, stdio: ["ignore", "pipe", "pipe"] });
+    fs.writeFileSync(path.join(nested, "foo.js"), "// nested plain\n");
+    addLiveSession(root, "me"); // only the acting session is live -> solo
+    const r80 = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "repo/foo.js", old_string: "x", new_string: "y" }, session_id: "me" },
+      root,
+    );
+    check(r80.status === 0, "row80: the same plain-nested Edit is ALLOWED when the only live session is the acting one (D6 no-op / session exclusion)", `status=${r80.status} stderr=${r80.stderr}`);
+  }
+
+  // Row 81 (Bash dispatch branch): a Bash-extracted write target into a plain
+  // nested `.git` while concurrent is DENIED too — proves the guard covers the
+  // Bash branch, not only Edit/Write.
+  {
+    const root = buildFixture("bee-wcg2-bash-plain-nested-concurrent-");
+    const nested = path.join(root, "repo");
+    fs.mkdirSync(nested, { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: nested, stdio: ["ignore", "pipe", "pipe"] });
+    fs.writeFileSync(path.join(nested, "foo.js"), "// nested plain\n");
+    addLiveSession(root);
+    const r81 = await runHookPayload(
+      { tool_name: "Bash", tool_input: { command: "cp new.js repo/foo.js" }, session_id: "me" },
+      root,
+    );
+    check(r81.status === 2, "row81: a Bash write into a plain nested .git while concurrent is DENIED (Bash branch wired)", `status=${r81.status} stderr=${r81.stderr}`);
+  }
+
+  // Row 82 (paved-road preserved, D1b exemption): a write into a VERIFIED
+  // companion mount reached through its declared symlink stays ALLOWED even
+  // when concurrent — the verified marker covers it, so the new guard never
+  // fires (the whole point of `--with-companion`). This is the exemption that
+  // separates a sanctioned companion write from an unguarded shared-checkout
+  // write; without it the guard would break its own paved road.
+  {
+    const mountTarget = mkFixture("bee-wcg2-companion-mount-");
+    execFileSync("git", ["init", "-q"], { cwd: mountTarget, stdio: ["ignore", "pipe", "pipe"] });
+    fs.writeFileSync(path.join(mountTarget, "foo.js"), "// companion file\n");
+    const root = buildFixture("bee-wcg2-companion-verified-concurrent-");
+    fs.symlinkSync(mountTarget, path.join(root, "repo"));
+    fs.writeFileSync(
+      path.join(root, ".bee", "companion-session.json"),
+      `${JSON.stringify({ sessionId: "s1", worktreePath: mountTarget, mountPath: "repo" }, null, 2)}\n`,
+    );
+    addLiveSession(root);
+    const r82 = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "repo/foo.js", old_string: "x", new_string: "y" }, session_id: "me" },
+      root,
+    );
+    check(r82.status === 0, "row82: a write into a verified companion mount stays ALLOWED even when concurrent (verified marker covers it — paved road preserved)", `status=${r82.status} stderr=${r82.stderr}`);
+  }
+
+  // --- 83-85. worktree-concurrency-guard, cell wcg-fix-2 (P1 review finding
+  // #2): the shared-checkout detection primitive FAILING must fail CLOSED, not
+  // open. plan.md's Test Matrix requires the "failure mode of the check itself"
+  // (a corrupt marker / broken symlink / unreadable nested .git) to deny, not
+  // silently allow because detection errored — most likely exactly during a
+  // real race. Before this fix a thrown isSharedNestedCheckoutTarget propagated
+  // to the hook's outer catch-all and returned 0 (allow); now the call site
+  // wraps it so a genuine exception denies with a typed message.
+
+  // Row 83 (RED-FIRST, behavior_change): an Edit into a physically-contained
+  // target for which isSharedNestedCheckoutTarget THROWS is DENIED (exit 2).
+  // Pre-fix this write was ALLOWED (exit 0) — the outer catch-all swallowed the
+  // throw and failed open, the exact fail-open bug this cell closes.
+  {
+    const root = buildCallThrowingGuardsFixture("bee-wcgfix2-detect-throw-");
+    const r83 = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "src/foo.js", old_string: "x", new_string: "y" }, session_id: "me" },
+      root,
+    );
+    check(r83.status === 2, "row83: an Edit whose shared-checkout detection THROWS is DENIED (was allowed pre-fix — detection now fails CLOSED)", `status=${r83.status} stderr=${r83.stderr}`);
+    // Row 84: the deny is the typed detection-error refusal, distinct from the
+    // ordinary shared-checkout refusal — it names the errored check and the fix.
+    check(/detection/i.test(r83.stderr), "row84: the deny message identifies a detection error (typed, not a silent allow)", r83.stderr);
+    check(/fail(s|ed)? closed/i.test(r83.stderr), "row84: the deny message states the check fails CLOSED on error", r83.stderr);
+    check(/bee worktree new --with-companion/.test(r83.stderr), "row84: the deny still points at the paved-road fix", r83.stderr);
+    // The underlying error is still logged (diagnosable), same as row7's path,
+    // even though the verdict is now a deny rather than a fail-open allow.
+    const crashLog = path.join(root, ".bee", "logs", "hooks.jsonl");
+    const crashEvent = readLastJsonl(crashLog);
+    check(
+      crashEvent && typeof crashEvent.error === "string" && crashEvent.error.includes("boom"),
+      "row84: the underlying detection error is logged for diagnosis",
+      JSON.stringify(crashEvent),
+    );
+  }
+
+  // Row 85 (negative control — proves teeth): the SAME contained target, but
+  // with the REAL (non-throwing) guards and no shared nested checkout, still
+  // ALLOWS (exit 0). Only an actual thrown exception flips the verdict; a
+  // legitimate "nothing shared here" answer is unchanged.
+  {
+    const root = buildFixture("bee-wcgfix2-detect-ok-control-");
+    const r85 = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "src/foo.js", old_string: "x", new_string: "y" }, session_id: "me" },
+      root,
+    );
+    check(r85.status === 0, "row85: the same contained Edit with real, non-throwing detection and nothing shared still ALLOWS (only a thrown error denies)", `status=${r85.status} stderr=${r85.stderr}`);
+  }
+
+  // --- 86-87. worktree-concurrency-guard-controlroot-port (Port-D4): the
+  // concurrency check must consult opts.controlRoot, NOT the physical `root`
+  // that the filesystem scan itself uses — the two can differ when a linked
+  // worktree shares one coordination root. Proved DIFFERENTIALLY (both
+  // directions), not by a single assertion: a live session record under
+  // controlRoot alone must flag it, and the SAME live session sitting under
+  // root alone (controlRoot has none) must NOT — the verdict must flip
+  // depending on which root the concurrency check actually reads, or a bug
+  // that silently kept reading `root` would still pass a one-sided test.
+  {
+    const physicalRoot = mkWcgRoot("bee-portd4-diff-controlroot-");
+    const controlRootDir = mkWcgRoot("bee-portd4-diff-sibling-controlroot-");
+    const nested = path.join(physicalRoot, "repo");
+    fs.mkdirSync(nested, { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: nested, stdio: ["ignore", "pipe", "pipe"] });
+    fs.writeFileSync(path.join(nested, "foo.js"), "// nested plain\n");
+    const target = path.join(nested, "foo.js");
+
+    // Row 86: a live session under controlRootDir ONLY (physicalRoot has
+    // none of its own) still flags the target — proves the check reads
+    // controlRoot, not root.
+    addLiveSession(controlRootDir);
+    check(
+      isSharedNestedCheckoutTarget(physicalRoot, target, { controlRoot: controlRootDir }) === true,
+      "row86: a live session under controlRoot alone (root has none) IS flagged (concurrency reads controlRoot)",
+      `controlRoot=${controlRootDir} root=${physicalRoot}`,
+    );
+  }
+  {
+    const physicalRoot = mkWcgRoot("bee-portd4-diff-root-only-");
+    const controlRootDir = mkWcgRoot("bee-portd4-diff-sibling-empty-");
+    const nested = path.join(physicalRoot, "repo");
+    fs.mkdirSync(nested, { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: nested, stdio: ["ignore", "pipe", "pipe"] });
+    fs.writeFileSync(path.join(nested, "foo.js"), "// nested plain\n");
+    const target = path.join(nested, "foo.js");
+
+    // Row 87: the SAME live session, but planted under physicalRoot instead
+    // (controlRootDir has none) — the target is NOT flagged. If the code
+    // silently read `root` instead of `opts.controlRoot`, this would flag
+    // (false positive) and expose the exact bug Port-D4 exists to prevent.
+    addLiveSession(physicalRoot);
+    check(
+      isSharedNestedCheckoutTarget(physicalRoot, target, { controlRoot: controlRootDir }) === false,
+      "row87: the SAME live session planted under root alone (controlRoot has none) is NOT flagged (concurrency ignores root)",
+      `controlRoot=${controlRootDir} root=${physicalRoot}`,
+    );
+  }
+
   // --- 70-71. internals-reach guard (state-query-surface, cell sqs-a, D
   // 3fbe2f79): two-direction negative control. An inline `node -e` reach that
   // imports a bin/lib/ module is DENIED; a file-based `node <path>.mjs` run
@@ -1200,6 +1530,27 @@ async function main() {
 
   process.stdout.write(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}\n`);
   process.exitCode = failures === 0 ? 0 : 1;
+}
+
+// worktree-concurrency-guard (cell wcg-1) in-process fixture helpers: a
+// minimal checkout root (no state.json / copied lib needed — the primitive
+// reads only .bee/sessions, .bee/companion-session.json, .gitmodules, and
+// nested `.git` nodes), plus a single live concurrent session record so
+// isConcurrentMode(root) returns true.
+function mkWcgRoot(prefix) {
+  const root = mkFixture(prefix);
+  fs.mkdirSync(path.join(root, ".bee"), { recursive: true });
+  return root;
+}
+
+function addLiveSession(root, id = "other-live") {
+  const dir = path.join(root, ".bee", "sessions");
+  fs.mkdirSync(dir, { recursive: true });
+  const nowIso = new Date().toISOString();
+  fs.writeFileSync(
+    path.join(dir, `${id}.json`),
+    `${JSON.stringify({ id, started_at: nowIso, last_heartbeat: nowIso }, null, 2)}\n`,
+  );
 }
 
 await main();

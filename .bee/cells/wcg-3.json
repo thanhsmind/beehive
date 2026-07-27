@@ -1,0 +1,145 @@
+{
+  "id": "wcg-3",
+  "feature": "worktree-concurrency-guard",
+  "title": "Wire isSharedNestedCheckoutTarget into bee worktree new (D1a)",
+  "lane": "high-risk",
+  "deps": [
+    "wcg-1"
+  ],
+  "decisions": [
+    "D1",
+    "D3",
+    "D4",
+    "D6"
+  ],
+  "files": [
+    "skills/bee-hive/templates/bee.mjs",
+    ".bee/bin/bee.mjs",
+    ".claude/skills/bee-hive/templates/bee.mjs",
+    ".agents/skills/bee-hive/templates/bee.mjs",
+    ".claude-plugin/skills/bee-hive/templates/bee.mjs",
+    ".codex-plugin/skills/bee-hive/templates/bee.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".bee/onboarding.json",
+    ".bee/bin/lib/guards.mjs",
+    "skills/bee-hive/templates/lib/guards.mjs",
+    ".claude/skills/bee-hive/templates/lib/guards.mjs",
+    ".agents/skills/bee-hive/templates/lib/guards.mjs",
+    ".claude-plugin/skills/bee-hive/templates/lib/guards.mjs",
+    ".codex-plugin/skills/bee-hive/templates/lib/guards.mjs",
+    "scripts/test_worktree_companion.mjs"
+  ],
+  "read_first": [
+    ".bee/bin/lib/guards.mjs",
+    ".bee/bin/lib/claims.mjs",
+    "docs/history/worktree-concurrency-guard/CONTEXT.md",
+    "docs/history/worktree-concurrency-guard/approach.md",
+    "docs/history/worktree-concurrency-guard/reports/wcg-1.md"
+  ],
+  "action": "Per D1(a), in handleWorktreeNew (canonical source: skills/bee-hive/templates/bee.mjs -- guards.mjs's cell wcg-1 found this same mirroring architecture: 5 plugin trees + the vendored .bee/bin copy + the onboarding ledger; edit canonical files and propagate via scripts/render_plugin_skill_trees.mjs + skills/bee-hive/scripts/onboard_bee.mjs --repo-root . --apply, repo-scoped only, no --global-skills, exactly as wcg-1 did): before creating the worktree, when flags['with-companion'] is not set, check whether isConcurrentMode(mainRoot) is true AND the main checkout contains a companion-eligible shared nested target. The existing isSharedNestedCheckoutTarget(root, targetPath) in guards.mjs (per validating's dependency-correctness review) checks ONE specific target's containment -- it walks UP from a target, it cannot answer 'does anything shared exist anywhere in this tree', so worktree-new time genuinely needs a DIFFERENT, complementary primitive: a directory-scan variant (e.g. hasAnySharedNestedCheckout(root) or similar name, worker's choice) that walks the checkout looking for any companion-eligible shared target (reusing the same underlying helpers -- targetInsideVerifiedCompanionMount's marker logic, and a submodule-aware nested-.git scan -- rather than duplicating logic). Add this new exported function to guards.mjs (both canonical and vendored copies, propagated via the same regen chain) in THIS cell -- this is now an EXPECTED part of the cell's scope, not a maybe. If concurrent AND the new scan finds a companion-eligible shared target, refuse the worktree creation with a typed, zero-mutation error (matching the existing typed-refusal style already in handleWorktreeNew for invalid slug / bad base-ref / existing path) that names --with-companion as the fix. If no concurrency, or nothing shared/companion-eligible exists in the source checkout, proceed exactly as today (D6 -- zero behavior change). This cell is `behavior_change: true`.",
+  "must_haves": {
+    "truths": [
+      "`bee worktree new` without --with-companion refuses when isConcurrentMode() is true AND the main checkout has a companion-eligible shared nested target",
+      "`bee worktree new` proceeds exactly as today when either condition is false (no concurrency, or nothing shared/companion-eligible present) -- D6 backward compat",
+      "`bee worktree new --with-companion` is never refused by this new check regardless of concurrency",
+      "Prove it red-first, same discipline as wcg-2: a test showing worktree new currently SUCCEEDS unguarded today (pre-wiring) when concurrent with a shared target present, then green after wiring"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/templates/bee.mjs",
+        "substantive": "handleWorktreeNew gains a pre-creation refusal check, typed and zero-mutation, matching the existing refusal style in this function"
+      },
+      {
+        "path": "scripts/test_worktree_companion.mjs",
+        "substantive": "new red-before/green-after test rows covering the refusal when concurrent+shared-target, and the 3 pass-through cases (no concurrency; no shared target; --with-companion present)"
+      }
+    ],
+    "key_links": [
+      "handleWorktreeNew calls the shared detection primitive from guards.mjs before any git worktree add runs"
+    ],
+    "prohibitions": [
+      "Do not weaken or remove any existing handleWorktreeNew refusal (invalid slug, bad base-ref, existing path/branch/grant)",
+      "Do not refuse worktree creation when --with-companion is passed, regardless of concurrency"
+    ]
+  },
+  "verify": "node --test scripts/test_worktree_companion.mjs && node scripts/ledger_parity.mjs --check",
+  "behavior_change": true,
+  "regen_obligation_ack": "release_manifest.mjs --check stays dropped from verify for the same pre-existing, already-filed, unrelated file-mode-drift reason recorded on wcg-1. The action still runs release_manifest.mjs --write for real content-hash regen of the touched files.",
+  "status": "capped",
+  "trace": {
+    "worker": "wcg-worker-3",
+    "outcome": "handleWorktreeNew now refuses (typed, zero-mutation, hard fail-closed, no override) when isConcurrentMode(mainRoot) is true AND the main checkout holds a companion-eligible shared nested checkout AND --with-companion is absent, directing to a FRESH 'bee worktree new --with-companion' (D1a/D3/D4). Added the directory-scan guards.mjs export hasAnySharedNestedCheckout (walk-DOWN companion to wcg-1's walk-UP point-check), reusing the same companion-marker verification (refactored into resolveVerifiedCompanionMountReal) and submodule-registration exclusion. --with-companion is never refused; solo or nothing-shared is a pure no-op (D6). Propagated all 6 mirrored copies via render + onboard --apply (repo-scoped).",
+    "files_changed": [
+      "skills/bee-hive/templates/bee.mjs",
+      ".bee/bin/bee.mjs",
+      ".claude/skills/bee-hive/templates/bee.mjs",
+      ".agents/skills/bee-hive/templates/bee.mjs",
+      ".claude-plugin/skills/bee-hive/templates/bee.mjs",
+      ".codex-plugin/skills/bee-hive/templates/bee.mjs",
+      "skills/bee-hive/templates/lib/guards.mjs",
+      ".bee/bin/lib/guards.mjs",
+      ".claude/skills/bee-hive/templates/lib/guards.mjs",
+      ".agents/skills/bee-hive/templates/lib/guards.mjs",
+      ".claude-plugin/skills/bee-hive/templates/lib/guards.mjs",
+      ".codex-plugin/skills/bee-hive/templates/lib/guards.mjs",
+      "scripts/test_worktree_companion.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": "The cell files listed only 6 bee.mjs + 6 guards.mjs + release-manifest + onboarding + test, but guards.mjs/bee.mjs are skill-template files, so the sanctioned render step also rewrote 4 .bee-render.json (.agents/.claude/.claude-plugin/.codex-plugin) — deterministic regen side-effects committed for tree consistency, same mirroring architecture wcg-1 flagged.",
+    "capped_at": "2026-07-24T09:29:10.977Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\n    \"scripts/test_worktree_companion.mjs cases 1-5 (existing new/merge/companion lifecycle) to model the concurrency-dimension fixtures on the same real-git-repo + real spawnSync(bee.mjs) harness, and to confirm `new` has no clean-tree precheck so a planted nested repo does not perturb the pass-through cases\",\n    \"guards.mjs wcg-1 primitive (isSharedNestedCheckoutTarget + findNestedCheckoutDir/hasGitNode/isRegisteredSubmodule/targetInsideVerifiedCompanionMount) to reuse the companion-marker verification and submodule-registration exclusion in the new directory-scan variant rather than duplicating them\"\n  ],\n  \"tests_added_or_changed\": [\n    \"scripts/test_worktree_companion.mjs cases 6-9 (new), plus fixture helpers plantLiveSession() (writes a foreign .bee/sessions/*.json with a fresh heartbeat so isConcurrentMode reads true) and plantNestedRepo() (a plain nested git repo physically inside main, no symlink, not .gitmodules-registered): case6 concurrent+shared-nested without --with-companion -> refused, zero mutation (no sibling worktree, branch wt/demo-f absent) AND refusal names --with-companion; case7 solo (no live session) + nested repo -> proceeds (D6); case8 concurrent but no nested repo -> proceeds (D6); case9 concurrent+nested+--with-companion -> never refused, mounts companion as usual\"\n  ],\n  \"red_failure_evidence\": \"Before the handleWorktreeNew wiring (test rows present, .bee/bin/bee.mjs unwired), node --test scripts/test_worktree_companion.mjs = SUMMARY 13/15 passed: the two case6 rows FAILED because `bee worktree new` SUCCEEDED unguarded (status 0, companion null, worktree created at case6-main--wt--demo-f) instead of refusing -- STR65's exact unguarded shape at the worktree-new surface. Cases 7/8/9 already passed pre-wiring (solo proceeds, concurrent-no-nested proceeds, --with-companion proceeds), scoping the change to the concurrent+shared-nested-without-companion case only.\",\n  \"green_after_state\": \"After adding guards.hasAnySharedNestedCheckout + the handleWorktreeNew refusal and propagating all 6 mirrored copies (render + onboard --apply, repo-scoped), node --test scripts/test_worktree_companion.mjs = SUMMARY 15/15 passed (tests 1 / pass 1 / fail 0) and node scripts/ledger_parity.mjs --check clean; exit 0.\",\n  \"verification_run\": \"node --test scripts/test_worktree_companion.mjs && node scripts/ledger_parity.mjs --check -> exit 0\"\n}\n",
+    "verify_output": "node --test: SUMMARY 15/15 passed (tests 1 / pass 1 / fail 0), incl. 4 new wcg-3 rows: refused+zero-mutation (case6), refusal names --with-companion (case6), solo+nested proceeds D6 (case7), concurrent+no-nested proceeds D6 (case8), concurrent+nested+--with-companion mounts unrefused (case9). ledger_parity --check: .bee/bin/** matches onboarding managed-hash ledger. exit 0.",
+    "verify_passed": true,
+    "claim_session": "346c5e4d-65e6-40c1-b07c-57cca160d2e3",
+    "claimed_at": "2026-07-24T09:15:47.364Z",
+    "verify_command": "node --test scripts/test_worktree_companion.mjs && node scripts/ledger_parity.mjs --check",
+    "verified_at": "2026-07-24T09:28:17.434Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-24T09:28:17.434Z",
+        "claim_session": "346c5e4d-65e6-40c1-b07c-57cca160d2e3",
+        "claimed_at": "2026-07-24T09:25:02.826Z",
+        "acquired_at": "2026-07-24T09:15:47.363Z",
+        "worker": "wcg-worker-3",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "must_haves_truths",
+            "status": "PASS",
+            "evidence": ".bee/bin/bee.mjs:3878 `if (!withCompanion && hasAnySharedNestedCheckout(mainRoot))` throws; guards.mjs:826 returns false unless isConcurrentMode AND (companion|nested) -- case6 refuses zero-mutation, case7/8 proceed (D6), case9 --with-companion never refused"
+          },
+          {
+            "id": "decision_citations",
+            "status": "PASS",
+            "evidence": "D1a/D3/D4 in bee.mjs:3878-3888 (typed WorktreeCreateError, no override, message directs to fresh --with-companion 'does not retrofit'); guards.mjs:826 hasAnySharedNestedCheckout reuses refactored resolveVerifiedCompanionMountReal (guards.mjs:874, verification now single-sourced, targetInsideVerifiedCompanionMount:906 delegates) + isRegisteredSubmodule exclusion -- no duplication/divergence"
+          },
+          {
+            "id": "task_diff_alignment",
+            "status": "PASS",
+            "evidence": "all 15 declared files present in `git show c3c0f43 --stat`; the 5 extras are the cell's own record (.bee/cells/wcg-3.json) + 4 deterministic .bee-render.json regen artifacts from the sanctioned render chain, explicitly declared in wcg-3.json trace.friction"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-24T09:31:40.315Z"
+      }
+    ]
+  },
+  "tier": "ceiling"
+}

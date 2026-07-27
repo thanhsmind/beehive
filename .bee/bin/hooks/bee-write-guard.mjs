@@ -423,6 +423,55 @@ function getNestedString(obj, keys) {
   return "";
 }
 
+// wcg-2 (worktree-concurrency-guard, D1b): the lexical absolute spelling of a
+// raw tool target, derived exactly as canonicalRelPath/resolveTargetRealpath
+// derive theirs (cwd-relative unless already absolute). guards.
+// isSharedNestedCheckoutTarget realpaths it itself, so a lexical spelling is
+// all it needs.
+function lexicalAbsTarget(root, cwd, rawTarget) {
+  const normalized = normalizeToolPath(rawTarget);
+  const cwdBase = path.isAbsolute(cwd || "") ? cwd : root;
+  return path.isAbsolute(normalized) ? path.resolve(normalized) : path.resolve(cwdBase, normalized);
+}
+
+// wcg-2 (D3/D4): the typed, actionable refusal when a write targets a shared
+// nested checkout that no verified companion marker covers while another
+// session is live. Per D4 it directs to opening a FRESH companion worktree —
+// never an in-place conversion of the current one, which `bee worktree new`
+// cannot do.
+function sharedNestedCheckoutRefusal(rel) {
+  return (
+    `bee shared-checkout guard: "${rel}" is inside a nested checkout that another ` +
+    "live session can also reach, and no verified companion mount covers it. " +
+    "Writing here can silently overwrite the other session's work — the exact " +
+    "failure this guard exists to prevent. " +
+    "FIX: open a FRESH companion worktree — run `bee worktree new --with-companion` " +
+    "to create a new worktree that mounts this shared checkout under a verified " +
+    "marker, then do this work there. The current worktree cannot be converted " +
+    "into a companion mount; you must create a new one."
+  );
+}
+
+// A DISTINCT, typed refusal for when the shared-checkout detection primitive
+// itself throws (an unreadable nested `.git`, a broken symlink, an EACCES
+// realpath). plan.md's Test Matrix requires this exact surface to fail CLOSED
+// — an error is not a "nothing shared here" answer, and it is most likely to
+// happen during the very concurrent race this guard exists to catch, so we
+// deny rather than let the hook's outer catch-all fail open.
+function sharedNestedDetectionErrorRefusal(rel) {
+  return (
+    `bee shared-checkout guard: could not determine whether "${rel}" is inside a ` +
+    "nested checkout another live session can reach — the detection check itself " +
+    "errored. This guard fails CLOSED on a detection error and never silently " +
+    "allows the write, because an error here most likely means exactly the " +
+    "concurrent race this guard exists to prevent. " +
+    "FIX: resolve the underlying filesystem error (a broken symlink, an unreadable " +
+    "nested `.git`, or a permission problem), then retry — or open a FRESH " +
+    "companion worktree with `bee worktree new --with-companion` and do this work " +
+    "there under a verified marker."
+  );
+}
+
 function inferAgentName(payload, toolInput) {
   const fromPayload = getNestedString(payload, [
     "agent_name",
@@ -739,6 +788,11 @@ async function main() {
           ? payload.session_id.trim()
           : null;
       let relPaths = [];
+      // wcg-2 (D1b): raw absolute targets that resolved as physically inside
+      // this checkout (canonicalRelPath) — the only ones that can be an
+      // unverified shared nested checkout. A companion-marker-resolved target
+      // is verified-covered and never a candidate.
+      const sharedNestedCandidates = [];
 
       if (APPLY_PATCH_TOOLS.has(toolName)) {
         // D2 / approach.md §2: an intercepted apply_patch runs the existing
@@ -787,11 +841,20 @@ async function main() {
         if (command) {
           const targets = guards.extractBashTargets(command);
           const paths = (targets && targets.paths) || [];
-          const canonicalized = paths.map((p) => ({
-            raw: p,
-            rel: canonicalRelPath(root, cwd, p) || resolveCompanionMountedRelPath(root, cwd, p),
-          }));
+          const canonicalized = paths.map((p) => {
+            const canonical = canonicalRelPath(root, cwd, p);
+            return {
+              raw: p,
+              canonical,
+              rel: canonical || resolveCompanionMountedRelPath(root, cwd, p),
+            };
+          });
           relPaths = canonicalized.filter((c) => c.rel).map((c) => c.rel);
+          for (const c of canonicalized) {
+            if (c.canonical) {
+              sharedNestedCandidates.push({ rel: c.canonical, abs: lexicalAbsTarget(root, cwd, c.raw) });
+            }
+          }
           if (relPaths.length !== paths.length) {
             const firstFailing = canonicalized.find((c) => !c.rel);
             const enriched = firstFailing ? describeCrossWorktreeTarget(root, cwd, firstFailing.raw) : null;
@@ -802,12 +865,57 @@ async function main() {
         }
       } else {
         const rawTarget = toolInput.file_path || "";
-        const rel = canonicalRelPath(root, cwd, rawTarget) || resolveCompanionMountedRelPath(root, cwd, rawTarget);
+        const canonicalRel = canonicalRelPath(root, cwd, rawTarget);
+        const rel = canonicalRel || resolveCompanionMountedRelPath(root, cwd, rawTarget);
         if (rel) {
           relPaths = [rel];
+          if (canonicalRel) {
+            sharedNestedCandidates.push({ rel: canonicalRel, abs: lexicalAbsTarget(root, cwd, rawTarget) });
+          }
         } else {
           const enriched = describeCrossWorktreeTarget(root, cwd, rawTarget);
           denial = { reason: enriched || GENERIC_CONTAINMENT_MESSAGE };
+        }
+      }
+
+      // wcg-2 (worktree-concurrency-guard, D1b/D3/D5): a hard fail-closed
+      // refusal, BEFORE checkWrite, of a write into a genuinely shared nested
+      // checkout another live session can also reach and no verified companion
+      // marker covers. Never consults gate_bypass (D5) — it lives in the hook
+      // like every other guard here. isSharedNestedCheckoutTarget is a pure
+      // no-op unless a second session is concurrently live (D6), and the
+      // acting session is excluded so a solo session never trips it. Its own
+      // typed, paved-road refusal (D4) is the message the human sees, so it
+      // short-circuits checkWrite when it fires.
+      let sharedNestedDenied = false;
+      if (!denial) {
+        for (const cand of sharedNestedCandidates) {
+          // wcg-fix-2 (P1 review finding #2): scope a try/catch to THIS call
+          // only. If the detection primitive throws, the write is DENIED with a
+          // typed message — a detection error is not a "nothing shared here"
+          // answer and must fail closed (plan.md Test Matrix). Without this the
+          // throw would propagate to the hook's outer catch-all and return 0
+          // (fail open). The catch is deliberately NOT the outer general one:
+          // unrelated checks keep their established fail-open philosophy.
+          let isShared;
+          try {
+            // Port-D5: reuse ctx.controlRoot exactly as the checkWrite call
+            // below does — no new topology resolution.
+            isShared = guards.isSharedNestedCheckoutTarget(root, cand.abs, {
+              excludeSessionId: sessionId,
+              controlRoot: ctx.controlRoot,
+            });
+          } catch (sharedNestedError) {
+            logCrash(root, HOOK_NAME, sharedNestedError, ctx.source);
+            denial = { reason: sharedNestedDetectionErrorRefusal(cand.rel) };
+            sharedNestedDenied = true;
+            break;
+          }
+          if (isShared) {
+            denial = { reason: sharedNestedCheckoutRefusal(cand.rel) };
+            sharedNestedDenied = true;
+            break;
+          }
         }
       }
 
@@ -815,30 +923,32 @@ async function main() {
       // contains both an unprovable target and a proved policy-denied target:
       // the whole request is denied either way, and the concrete policy
       // reason (for example direct-edit) remains the user-facing correction.
-      for (const rel of relPaths) {
-        const verdict = guards.checkWrite(storeRoot, state, rel, agentName, {
-          sessionId,
-          // msn-21: the adapter already resolved topology once
-          // (readHookContext's own resolveRoots walk, exposed as
-          // ctx.controlRoot since d69d81e) — pass it through so
-          // guards.checkWrite's own resolveWriteTopology reuses it instead
-          // of re-deriving controlRoot from scratch a second time.
-          controlRoot: ctx.controlRoot,
-        });
-        if (verdict && verdict.allow === false) {
-          denial = {
-            reason:
-              verdict.reason || `bee ${verdict.kind || "write"} guard denied write to: ${rel}`,
-          };
-          break;
-        }
-        // multisession-native-13 (D4): an ALLOWED write can still carry a
-        // non-blocking `warning` (a declared 'intent' reservation whose
-        // broad/glob scope covers this path — advisory only, never a deny).
-        // Collected across every relPath, never breaks the loop — a warning
-        // is not a denial and must never suppress a LATER path's real deny.
-        if (verdict && verdict.allow === true && verdict.warning) {
-          reservationWarnings.push(verdict.warning);
+      if (!sharedNestedDenied) {
+        for (const rel of relPaths) {
+          const verdict = guards.checkWrite(storeRoot, state, rel, agentName, {
+            sessionId,
+            // msn-21: the adapter already resolved topology once
+            // (readHookContext's own resolveRoots walk, exposed as
+            // ctx.controlRoot since d69d81e) — pass it through so
+            // guards.checkWrite's own resolveWriteTopology reuses it instead
+            // of re-deriving controlRoot from scratch a second time.
+            controlRoot: ctx.controlRoot,
+          });
+          if (verdict && verdict.allow === false) {
+            denial = {
+              reason:
+                verdict.reason || `bee ${verdict.kind || "write"} guard denied write to: ${rel}`,
+            };
+            break;
+          }
+          // multisession-native-13 (D4): an ALLOWED write can still carry a
+          // non-blocking `warning` (a declared 'intent' reservation whose
+          // broad/glob scope covers this path — advisory only, never a deny).
+          // Collected across every relPath, never breaks the loop — a warning
+          // is not a denial and must never suppress a LATER path's real deny.
+          if (verdict && verdict.allow === true && verdict.warning) {
+            reservationWarnings.push(verdict.warning);
+          }
         }
       }
 

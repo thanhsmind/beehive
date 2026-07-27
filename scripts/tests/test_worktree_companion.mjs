@@ -12,6 +12,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+// worktree-concurrency-guard-controlroot-port (Port-D4): hasAnySharedNestedCheckout
+// imported directly (in-process), from the SAME vendored location every other
+// fixture in this file exercises the real bee CLI against, so the
+// controlRoot-vs-root differential test below (Cases 12/13) can pass an
+// opts.controlRoot that is a genuinely different directory than root — a
+// scenario handleWorktreeNew's own controlRootFor(mainRoot) can never
+// construct through the CLI itself (it only ever runs from an "ordinary"
+// checkout, where controlRootFor(mainRoot) === mainRoot by construction), so
+// this is the only way to prove the primitive's own controlRoot-vs-root
+// scoping end to end rather than asserting it only indirectly through wiring
+// that happens to never exercise the differing-root case.
+import { hasAnySharedNestedCheckout } from '../../.bee/bin/lib/guards.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, '..', '..');
@@ -29,8 +41,34 @@ function git(cwd, args) {
   return r.stdout;
 }
 
-function bee(cwd, args) {
-  return spawnSync('node', [BEE_MJS, ...args], { cwd, encoding: 'utf8' });
+function bee(cwd, args, { env } = {}) {
+  return spawnSync('node', [BEE_MJS, ...args], {
+    cwd,
+    encoding: 'utf8',
+    env: env ? { ...process.env, ...env } : process.env,
+  });
+}
+
+// Plants a foreign session record with a fresh heartbeat so isConcurrentMode()
+// reads TRUE for `main` — the concurrency half of the worktree-new refusal
+// (wcg-3). The bee CLI never registers a session itself (only the session-init
+// hook does), so a fixture fully controls concurrency by planting/omitting this.
+function plantLiveSession(main, id = 'other-live-session') {
+  const dir = path.join(main, '.bee', 'sessions');
+  fs.mkdirSync(dir, { recursive: true });
+  const now = new Date().toISOString();
+  fs.writeFileSync(path.join(dir, `${id}.json`), `${JSON.stringify({ id, started_at: now, last_heartbeat: now }, null, 2)}\n`);
+}
+
+// Plants a PLAIN nested git repo physically inside `main` (its own `.git` dir,
+// not a symlink, not a .gitmodules-registered submodule) — STR65's exact
+// unguarded incident shape (D2 shape (b)), the structural half of the refusal.
+function plantNestedRepo(main, name = 'repo') {
+  const nested = path.join(main, name);
+  fs.mkdirSync(nested, { recursive: true });
+  git(nested, ['init', '-q', '-b', 'main']);
+  fs.writeFileSync(path.join(nested, 'nested-file'), 'nested');
+  return nested;
 }
 
 // A fixture "companion tool": `start` creates its own throwaway directory
@@ -229,6 +267,175 @@ try {
     const branchGone = git(main, ['branch', '--list', 'wt/demo-e']).trim() === '';
     const rolledBack = r.status !== 0 && after.length === before.length && branchGone;
     record('a failing companion start rolls the worktree + branch back (no half-configured leftover)', rolledBack, `status=${r.status} before=${before} after=${after} branchGone=${branchGone} stdout=${r.stdout} stderr=${r.stderr}`);
+  }
+  // -------------------------------------------------------------------
+  // Case 6 (wcg-3): concurrent + a shared nested checkout present, WITHOUT
+  // --with-companion → hard fail-closed refusal, zero mutation (D1a/D3). This
+  // is STR65's exact unguarded shape; red-first this row SUCCEEDS (worktree
+  // created) before the handleWorktreeNew wiring lands.
+  // -------------------------------------------------------------------
+  {
+    const main = path.join(tmp, 'case6-main');
+    initMain(main, { withCompanion: false });
+    plantLiveSession(main, 'other-live-session');
+    plantNestedRepo(main, 'repo');
+    const before = fs.readdirSync(path.join(main, '..'));
+    // Acting session is a DISTINCT id from the planted foreign session, so the
+    // self-exclusion in handleWorktreeNew leaves the foreign session genuinely
+    // "other" — the refusal is the real second-session defense, not the acting
+    // session tripping itself.
+    const r = bee(main, ['worktree', 'new', '--feature', 'demo-f', '--json'], { env: { BEE_SESSION_ID: 'acting-session-6' } });
+    const after = fs.readdirSync(path.join(main, '..'));
+    const branchGone = git(main, ['branch', '--list', 'wt/demo-f']).trim() === '';
+    const refused = r.status !== 0 && after.length === before.length && branchGone;
+    record('concurrent + shared nested checkout, no --with-companion: refused, zero mutation', refused, `status=${r.status} stdout=${r.stdout} stderr=${r.stderr}`);
+    record('refusal names --with-companion as the fix (paved road)', r.status !== 0 && /--with-companion/.test(r.stdout + r.stderr), r.stdout + r.stderr);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 7 (wcg-3): a shared nested checkout is present but NO other session
+  // is live → isConcurrentMode() false → proceeds exactly as today (D6). The
+  // structural half alone never trips the refusal.
+  // -------------------------------------------------------------------
+  {
+    const main = path.join(tmp, 'case7-main');
+    initMain(main, { withCompanion: false });
+    plantNestedRepo(main, 'repo');
+    const r = bee(main, ['worktree', 'new', '--feature', 'demo-g', '--json']);
+    const created = r.status === 0 ? JSON.parse(r.stdout) : null;
+    record('solo (no live session) + nested checkout: proceeds unchanged (D6)', r.status === 0 && !!created && created.companion === null, r.status === 0 ? JSON.stringify(created) : r.stderr);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 8 (wcg-3): another session is live but the checkout has NO shared
+  // nested target → proceeds exactly as today (D6). The concurrency half alone
+  // never trips the refusal either.
+  // -------------------------------------------------------------------
+  {
+    const main = path.join(tmp, 'case8-main');
+    initMain(main, { withCompanion: false });
+    plantLiveSession(main);
+    const r = bee(main, ['worktree', 'new', '--feature', 'demo-h', '--json']);
+    const created = r.status === 0 ? JSON.parse(r.stdout) : null;
+    record('concurrent but no shared nested checkout: proceeds unchanged (D6)', r.status === 0 && !!created && created.companion === null, r.status === 0 ? JSON.stringify(created) : r.stderr);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 9 (wcg-3): concurrent AND a shared nested checkout present, but the
+  // session declared --with-companion → the new check must NEVER refuse it; the
+  // full companion path runs and mounts as usual (the paved road).
+  // -------------------------------------------------------------------
+  {
+    const main = path.join(tmp, 'case9-main');
+    initMain(main);
+    plantLiveSession(main);
+    plantNestedRepo(main, 'repo');
+    const r = bee(main, ['worktree', 'new', '--feature', 'demo-i', '--with-companion', '--json']);
+    const created = r.status === 0 ? JSON.parse(r.stdout) : null;
+    const ok = r.status === 0 && !!created && !!created.companion && created.companion.mountPath === 'companion';
+    record('concurrent + nested checkout + --with-companion: never refused, mounts as usual', ok, r.status === 0 ? JSON.stringify(created) : `status=${r.status} stdout=${r.stdout} stderr=${r.stderr}`);
+    if (r.status === 0 && created) git(main, ['worktree', 'remove', '--force', '--', created.worktreeRoot]);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 10 (wcg-fix-1, P1 self-exclusion): the ONLY live session record is
+  // the acting session's own — no genuine second session — yet a companion-
+  // eligible nested checkout is present. handleWorktreeNew must exclude the
+  // acting session from its own concurrency check, so this is NOT concurrency
+  // and the worktree proceeds. Red-first this row REFUSES (false positive)
+  // before the excludeSessionId wiring lands; green after.
+  // -------------------------------------------------------------------
+  {
+    const main = path.join(tmp, 'case10-main');
+    initMain(main, { withCompanion: false });
+    plantLiveSession(main, 'self-session');
+    plantNestedRepo(main, 'repo');
+    const r = bee(main, ['worktree', 'new', '--feature', 'demo-j', '--json'], { env: { BEE_SESSION_ID: 'self-session' } });
+    const created = r.status === 0 ? JSON.parse(r.stdout) : null;
+    record('self-only live session (no genuine second session) + nested checkout: proceeds, not a false-positive refusal', r.status === 0 && !!created && created.companion === null, r.status === 0 ? JSON.stringify(created) : `status=${r.status} stdout=${r.stdout} stderr=${r.stderr}`);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 11 (wcg-fix-1, P1 regression guard): the acting session is excluded,
+  // but a GENUINE second session is also live alongside the nested checkout —
+  // self-exclusion must NOT disable the real defense. Still a hard refusal.
+  // Green both before and after the fix (proves the fix narrows, not removes).
+  // -------------------------------------------------------------------
+  {
+    const main = path.join(tmp, 'case11-main');
+    initMain(main, { withCompanion: false });
+    plantLiveSession(main, 'self-session');
+    plantLiveSession(main, 'genuine-other-session');
+    plantNestedRepo(main, 'repo');
+    const before = fs.readdirSync(path.join(main, '..'));
+    const r = bee(main, ['worktree', 'new', '--feature', 'demo-k', '--json'], { env: { BEE_SESSION_ID: 'self-session' } });
+    const after = fs.readdirSync(path.join(main, '..'));
+    const branchGone = git(main, ['branch', '--list', 'wt/demo-k']).trim() === '';
+    const refused = r.status !== 0 && after.length === before.length && branchGone;
+    record('acting session excluded but a genuine second session live: still refused (self-exclusion never disables the check)', refused, `status=${r.status} stdout=${r.stdout} stderr=${r.stderr}`);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 12/13 (worktree-concurrency-guard-controlroot-port, Port-D4):
+  // hasAnySharedNestedCheckout's concurrency check must consult
+  // opts.controlRoot, NOT the physical root the directory scan itself walks
+  // — proved DIFFERENTIALLY (both directions), in-process (see the top-of-
+  // file import note: handleWorktreeNew's own controlRootFor(mainRoot) is
+  // architecturally pinned to mainRoot for every CLI-reachable call, so a
+  // genuinely differing root/controlRoot pair can only be constructed by
+  // calling the primitive directly).
+  // -------------------------------------------------------------------
+  {
+    const physicalRoot = path.join(tmp, 'case12-root');
+    const controlRootDir = path.join(tmp, 'case12-controlroot');
+    fs.mkdirSync(physicalRoot, { recursive: true });
+    fs.mkdirSync(controlRootDir, { recursive: true });
+    plantNestedRepo(physicalRoot, 'repo');
+    // Live session under controlRootDir ONLY — physicalRoot has none of its own.
+    plantLiveSession(controlRootDir, 'other-live');
+    const flagged = hasAnySharedNestedCheckout(physicalRoot, { controlRoot: controlRootDir });
+    record('Case 12: a live session under controlRoot alone (root has none) IS flagged by hasAnySharedNestedCheckout (concurrency reads controlRoot)', flagged === true, `flagged=${flagged}`);
+  }
+  {
+    const physicalRoot = path.join(tmp, 'case13-root');
+    const controlRootDir = path.join(tmp, 'case13-controlroot');
+    fs.mkdirSync(physicalRoot, { recursive: true });
+    fs.mkdirSync(controlRootDir, { recursive: true });
+    plantNestedRepo(physicalRoot, 'repo');
+    // The SAME live session, but planted under physicalRoot instead —
+    // controlRootDir has none. A bug that silently read `root` instead of
+    // `opts.controlRoot` would flag this (false positive); the real code must not.
+    plantLiveSession(physicalRoot, 'other-live');
+    const flagged = hasAnySharedNestedCheckout(physicalRoot, { controlRoot: controlRootDir });
+    record('Case 13: the SAME live session planted under root alone (controlRoot has none) is NOT flagged by hasAnySharedNestedCheckout (concurrency ignores root)', flagged === false, `flagged=${flagged}`);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 14 (review finding F1, worktree-concurrency-guard-controlroot-port):
+  // a REAL hard fs error reading the controlRoot's session records (not a
+  // synthetic stub) must propagate out of hasAnySharedNestedCheckout, not
+  // silently read as "nobody else is live". `.bee/sessions` is made a FILE
+  // instead of a directory — a genuine, portable (root-safe) ENOTDIR, the
+  // exact shape F1 flagged as fail-open before this fix.
+  // -------------------------------------------------------------------
+  {
+    const physicalRoot = path.join(tmp, 'case14-root');
+    const controlRootDir = path.join(tmp, 'case14-controlroot');
+    fs.mkdirSync(physicalRoot, { recursive: true });
+    fs.mkdirSync(path.join(controlRootDir, '.bee'), { recursive: true });
+    plantNestedRepo(physicalRoot, 'repo');
+    fs.writeFileSync(path.join(controlRootDir, '.bee', 'sessions'), 'not a directory\n');
+    let threw = null;
+    try {
+      hasAnySharedNestedCheckout(physicalRoot, { controlRoot: controlRootDir });
+    } catch (err) {
+      threw = err;
+    }
+    record(
+      'Case 14: a real hard error reading controlRoot session records (ENOTDIR) propagates out of hasAnySharedNestedCheckout instead of silently returning false',
+      threw !== null && /ENOTDIR/.test(threw.message || String(threw)),
+      threw ? `threw: ${threw.message}` : 'did not throw',
+    );
   }
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

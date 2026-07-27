@@ -1,0 +1,261 @@
+{
+  "id": "worktree-concurrency-guard-controlroot-port-review-20260726",
+  "requested_by": "user (Vietnamese: \"Chạy review độc lập đi\")",
+  "requested_at": "2026-07-26T13:30:37.105Z",
+  "scope_description": "Everything since the last approved review point (56b437aa, the worktree-concurrency-guard independent review's own close commit, 2 P1s fixed and delta-reviewed) through the current HEAD (56d9f8ad): the bee 1.18.2 merge/port (cell port-1, feature worktree-concurrency-guard-controlroot-port) that relocated the shared-nested-checkout concurrency guard to packages/bee/ and threaded controlRoot scoping through it, plus its scribing sync commit.",
+  "included": [
+    {
+      "type": "feature",
+      "id": "worktree-concurrency-guard-controlroot-port"
+    },
+    {
+      "type": "cell",
+      "id": "port-1"
+    },
+    {
+      "type": "commit",
+      "id": "02993a7d",
+      "reason": "the merge commit itself"
+    },
+    {
+      "type": "commit",
+      "id": "56d9f8ad",
+      "reason": "scribing sync following the merge"
+    }
+  ],
+  "excluded": [],
+  "baseline": "56b437aa30e14f6fde8c03f6148256ea864455e3",
+  "head": "56d9f8ad",
+  "reviewer_manifest": {
+    "reviewers": [
+      {
+        "role": "code-quality",
+        "model": "opus"
+      },
+      {
+        "role": "architecture",
+        "model": "opus"
+      },
+      {
+        "role": "security",
+        "model": "opus"
+      },
+      {
+        "role": "test-coverage",
+        "model": "opus"
+      },
+      {
+        "role": "api-contract",
+        "model": "opus",
+        "trigger": "packages/bee/bee.mjs is a public CLI surface (handleWorktreeNew)"
+      },
+      {
+        "role": "reliability",
+        "model": "opus",
+        "trigger": "live-session/concurrency detection across worktrees, external git state reads"
+      }
+    ]
+  },
+  "verification_preflight": {
+    "checked_at": "2026-07-26T13:30:37.105Z",
+    "cells_checked": [
+      "port-1"
+    ],
+    "passed": true
+  },
+  "findings": [
+    {
+      "reviewer": "architecture",
+      "summary": "Hardcoded 'AGENTS.md rule 14' reference in the user-facing refusal is a stable-looking anchor that will drift on renumber.",
+      "file": "packages/bee/bee.mjs",
+      "line": 4956,
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "architecture",
+      "summary": "controlRoot plumbing in handleWorktreeNew is inert on every CLI-reachable path (ctrlRoot===mainRoot always); correct by design, flagged for documentation only.",
+      "file": "packages/bee/bee.mjs",
+      "line": 4950,
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "architecture",
+      "summary": "Duplicate test-row numbering (70-71 reused) in test_write_guard.mjs.",
+      "file": "packages/bee/hooks/test_write_guard.mjs",
+      "severity": "P3",
+      "autofix_class": "gated_auto"
+    },
+    {
+      "reviewer": "architecture",
+      "summary": "Tests import the guard primitives from the vendored copy, not source; correct existing convention, flagged as a standing property.",
+      "file": "scripts/tests/test_worktree_companion.mjs",
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "code-quality",
+      "summary": "Stale comment at guards.mjs claiming the shared-nested-checkout primitive is 'deliberately NOT wired into checkWrite or the hook dispatch yet' -- it is now wired; a maintainer could misread this as unenforced and remove the wiring.",
+      "file": "packages/bee/lib/guards.mjs",
+      "line": 1125,
+      "severity": "P3",
+      "autofix_class": "gated_auto"
+    },
+    {
+      "reviewer": "code-quality",
+      "summary": "Duplicate row-number labels (70/71) reused across two distinct test blocks in test_write_guard.mjs.",
+      "file": "packages/bee/hooks/test_write_guard.mjs",
+      "severity": "P3",
+      "autofix_class": "gated_auto"
+    },
+    {
+      "reviewer": "test-coverage",
+      "summary": "hasAnySharedNestedCheckout's shape-(a) verified-companion-mount branch is never exercised via the directory-scan entry point.",
+      "file": "packages/bee/lib/guards.mjs",
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "test-coverage",
+      "summary": "Directory-scan submodule exclusion + skip-dirs (node_modules etc.) + max-depth bound are untested at the scan-path invocation.",
+      "file": "packages/bee/lib/guards.mjs",
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "test-coverage",
+      "summary": "apply_patch writes are not fed to the shared-nested check -- confirmed pre-existing (not a port regression), already scoped out in wcg-2's own report; no test documents the boundary.",
+      "file": "packages/bee/hooks/bee-write-guard.mjs",
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "test-coverage",
+      "summary": "controlRoot === '' collapses to root via the || fallback, untested at the primitive level; low risk today since callers never pass empty string.",
+      "file": "packages/bee/lib/guards.mjs",
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "test-coverage",
+      "summary": "Duplicate row-number labels (cosmetic, same as architecture/code-quality's finding).",
+      "file": "packages/bee/hooks/test_write_guard.mjs",
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "api-contract",
+      "summary": "docs/history walkthrough.md for the original feature still documents the dropped typed [WORKTREE_CONCURRENT_SHARED_NESTED] error-code prefix, which Port-D7 replaced with a plain Error -- a manual repro following the doc would see mismatched output.",
+      "file": "docs/history/worktree-concurrency-guard/walkthrough.md",
+      "line": 43,
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "api-contract",
+      "summary": "bee.mjs header comment slightly overstates the WorktreeCreateError situation -- true only scoped to handleWorktreeNew, but createFeatureWorktree still emits [CODE]-prefixed refusals via that class.",
+      "file": "packages/bee/bee.mjs",
+      "line": 176,
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "reliability",
+      "summary": "F1: isConcurrentMode/listSessionRecords swallowed every fs error identically to a legitimately-missing sessions directory, so a transient hard error (EACCES/EIO/EMFILE) during the concurrency check silently read as 'nobody else is live' and ALLOWED the write -- fail-open regression of the guard's own documented fail-closed contract, widened by controlRoot potentially pointing at a shared/remote coordination root.",
+      "file": "packages/bee/lib/claims.mjs",
+      "line": 251,
+      "severity": "P2",
+      "autofix_class": "manual",
+      "outcome": "fixed",
+      "fix_commit": "e71cda35"
+    },
+    {
+      "reviewer": "reliability",
+      "summary": "F2: the structural filesystem helpers (realpathOrNull, hasGitNode, scanForNestedCheckout's readdir, resolveVerifiedCompanionMountReal, isRegisteredSubmodule) had the same swallow-everything pattern; pre-existing from the original (non-port) feature, out of this port's declared scope per the reviewer's own note, but fixed anyway per user request.",
+      "file": "packages/bee/lib/guards.mjs",
+      "severity": "P3",
+      "autofix_class": "advisory",
+      "outcome": "fixed",
+      "fix_commit": "e71cda35"
+    },
+    {
+      "reviewer": "reliability",
+      "summary": "F3: controlRoot resolution failure fails closed in bee.mjs (throw before any mutation) but falls back to root (mild narrowing, not a new bug) in the hook via the existing || root fallback.",
+      "file": "packages/bee/bee.mjs",
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "reliability",
+      "summary": "F4: vendor drift is only caught in the source-to-vendored direction by onboard_bee.mjs's status check; currently verified clean (sha256 match), residual risk is a future hand-edit of the vendored copy going unnoticed.",
+      "file": "packages/bee/scripts/onboard_bee.mjs",
+      "severity": "P3",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "delta-re-review-f1f2",
+      "summary": "Residual same-defect-class gap the F1 fix did not reach: listSessionRecords' per-record read (readSession -> readJson) still swallowed a hard error on ONE specific session file even under strict mode -- narrower window than F1 (needs readdir-success + specific-file-failure) but same fail-open shape.",
+      "file": "packages/bee/lib/claims.mjs",
+      "line": 238,
+      "severity": "P3",
+      "autofix_class": "manual",
+      "outcome": "fixed",
+      "fix_commit": "2ab9dd59"
+    },
+    {
+      "reviewer": "process-note",
+      "summary": "The dedicated security reviewer slot failed to produce a report twice (review-security, review-security-2) despite repeated direct pings -- appears to be a systemic dispatch/delivery issue, not findings-related. Security-relevant properties for this change (self-exclusion, fail-closed-on-detection-error, controlRoot as a bypass surface) were nonetheless independently verified via: the reliability reviewer's explicit fail-open/fail-closed analysis (F1-F4), the delta re-review of the F1/F2 fix, and this orchestrator's own cross-model (opus) semantic-judge goal-check performed before this review session. No P1 surfaced in any of these. User was informed and chose to proceed with synthesis rather than a third dispatch attempt.",
+      "severity": "P2",
+      "autofix_class": "advisory"
+    },
+    {
+      "reviewer": "security",
+      "summary": "Submodule exclusion trusts .gitmodules content -- an agent able to write .gitmodules could register a shared nested checkout as a fake submodule to bypass the guard. By design (D2's registration discriminator); threat model is accidental concurrent clobbering, not a deliberate adversary.",
+      "file": "packages/bee/lib/guards.mjs",
+      "line": 704,
+      "severity": "P3",
+      "autofix_class": "advisory",
+      "outcome": "no_change_needed"
+    },
+    {
+      "reviewer": "security",
+      "summary": "Corrupt/leftover session record can fail-closed a genuinely solo worktree-new/write under strict mode -- intended posture (undetectable state must not read as solo), safe-direction availability edge, not a security regression.",
+      "file": "packages/bee/lib/claims.mjs",
+      "line": 327,
+      "severity": "P3",
+      "autofix_class": "advisory",
+      "outcome": "no_change_needed"
+    },
+    {
+      "reviewer": "security",
+      "summary": "payload.session_id absent weakens self-exclusion in the write-guard (excludeSessionId becomes null) -- can only over-deny (fail-closed), and a sessionless caller typically writes no heartbeat anyway, so isConcurrentMode usually returns false regardless. Informational, not a regression.",
+      "file": "packages/bee/hooks/bee-write-guard.mjs",
+      "line": 786,
+      "severity": "P3",
+      "autofix_class": "advisory",
+      "outcome": "no_change_needed"
+    }
+  ],
+  "uat": [
+    {
+      "item": "bee worktree new --feature x (no --with-companion) refuses with a clear message naming --with-companion as the fix, zero mutation, while another session is concurrently live over a shared nested checkout; re-running with --with-companion succeeds.",
+      "outcome": "pass",
+      "note": "User accepted based on automated evidence (87+20 test rows incl. both original P1 regression guards, 6 independent reviewers) rather than a manual repro."
+    }
+  ],
+  "decision": {
+    "status": "approved",
+    "gate4": {
+      "p1_count": 0,
+      "p2_count": 2,
+      "p3_count": 19,
+      "uat_pass": true,
+      "uat_items": 1,
+      "auto_approved_by_bypass": true,
+      "note": "Update (2026-07-26, later same session): the security reviewer slot succeeded on a 4th attempt, dispatched synchronously (foreground) rather than as a background/mailbox-relayed agent, after 3 consecutive background dispatches (2x general-purpose 'claude' type, 1x 'bee-review' type) all went idle without ever delivering report text despite repeated direct pings. Security review: 0 P1, 0 P2, 3 P3 (all advisory/no_change_needed -- submodule-registration trust, corrupt-record fail-closed-availability edge, sessionless self-exclusion note). All 7 reviewer lenses (code-quality, architecture, test-coverage, api-contract, reliability, security, plus the delta re-review) now complete with 0 P1 total. gate_bypass_level=total; P1=0 and the sole UAT item was human-confirmed pass, satisfying the bypass merge-approval precondition."
+    }
+  },
+  "created_at": "2026-07-26T13:30:37.105Z",
+  "updated_at": "2026-07-26T14:53:19.041Z"
+}
