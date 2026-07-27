@@ -2158,7 +2158,7 @@
     },
     {
       "path": "packages/bee/tests/test_worktree_store.mjs",
-      "sha256": "f6153094914ceea9f590fe4e2a4a882ea983d39c9c2458e1851a0f58bf82888f",
+      "sha256": "089e07011f527257872ab01f422eb7cd1ec5a2b7e5cedfc1335b5bda8778b39d",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_worktree_store.mjs"

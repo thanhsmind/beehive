@@ -395,4 +395,55 @@ await check('a merge refused for a DETACHED HEAD worktree preserves the companio
   }
 });
 
+// GH #84 incident replay: the old code tore the companion mount down BEFORE
+// the dirty-check refusal, so a refused merge destroyed the mount, and any
+// retry (after the caller cleaned the dirt) found no marker left to tear
+// down again — the incident's exact complaint. gfb-3's fix reorders teardown
+// to run only after every zero-mutation refusal clears (see
+// mergeFeatureWorktreeStage above); this is the end-to-end proof that a
+// refused-then-retried merge actually recovers.
+await check('refused companion merge is retryable: refusal preserves the mount, and the retry after cleaning the dirt merges clean with companion teardown', async () => {
+  const { mainRoot, targetDir, created } = await companionWorktreeFixture('demo-companion-retry');
+  try {
+    const markerPath = path.join(created.worktreeRoot, '.bee', 'companion-session.json');
+    const mountFullPath = path.join(created.worktreeRoot, 'companion');
+    assert(lstatExists(markerPath), 'sanity: companion marker exists before merge');
+    assert(lstatExists(mountFullPath), 'sanity: companion mount symlink exists before merge');
+
+    // (1) A genuinely dirty, uncommitted file refuses the merge.
+    fs.writeFileSync(path.join(created.worktreeRoot, 'dirty.txt'), 'oops\n');
+
+    let threw = null;
+    try {
+      await mergeFeatureWorktree(mainRoot, { id: created.id, companionEndCommand: 'node -e "process.exit(0)"' });
+    } catch (err) {
+      threw = err;
+    }
+    assert(threw && threw.code === 'WORKTREE_MERGE_WORKTREE_DIRTY', `expected WORKTREE_MERGE_WORKTREE_DIRTY on the first attempt, got ${threw ? threw.code || threw.message : '(no throw)'}`);
+    assert(lstatExists(markerPath), 'the companion marker must survive the refused merge — the old bug destroyed it here');
+    assert(lstatExists(mountFullPath), 'the companion mount symlink must survive the refused merge — the old bug destroyed it here');
+
+    // (2) Clean the refusal cause: commit the dirty file in the worktree.
+    git(created.worktreeRoot, ['add', 'dirty.txt']);
+    git(created.worktreeRoot, ['commit', '-m', 'clean the dirt that blocked the first merge attempt']);
+
+    // (3) Retry the SAME merge id — must now succeed, tear the companion
+    // down, and land the merge commit on main. The old code could not reach
+    // this: the mount was already gone from step (1), and teardownCompanionIfPresent
+    // would have blown up (or silently no-op'd) trying to tear down a marker
+    // that no longer existed.
+    const merged = await mergeFeatureWorktree(mainRoot, { id: created.id, companionEndCommand: 'node -e "process.exit(0)"' });
+    assert(merged.ok === true && merged.merged === true, `expected the retry to merge cleanly, got ${JSON.stringify(merged)}`);
+    assert(merged.companion && merged.companion.ended === true, `expected companion.ended === true on the successful retry, got ${JSON.stringify(merged.companion)}`);
+    assert(!lstatExists(markerPath), 'the companion marker must be torn down after the successful retry');
+    assert(!lstatExists(mountFullPath), 'the companion mount symlink must be torn down after the successful retry');
+    assert(fs.existsSync(path.join(mainRoot, 'dirty.txt')), 'the retried merge commit must actually be on main — the file that blocked the first attempt is now present');
+  } finally {
+    git(mainRoot, ['worktree', 'prune'], { allowFailure: true });
+    fs.rmSync(mainRoot, { recursive: true, force: true });
+    fs.rmSync(created.worktreeRoot, { recursive: true, force: true });
+    fs.rmSync(targetDir, { recursive: true, force: true });
+  }
+});
+
 printSummaryAndExit();
