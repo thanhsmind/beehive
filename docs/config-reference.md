@@ -143,10 +143,41 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | `commands` | the host project's `setup` / `start` / `test` (scoped, dev loop) / `verify` (full, CI-owned) commands — full section above | none — captured at onboarding |
 | `gate_bypass` | opt-in autopilot with levels `false` · `"normal"` · `"full"` · `"total"` (legacy `true` = normal); set via the `bee-bypass-gate` skill | `false` |
 | `hooks` | per-hook kill switch — nine hooks: `session-init`, `prompt-context`, `write-guard`, `model-guard`, `state-sync`, `chain-nudge`, `session-close`, `tools-logger`, `codex-subagent-audit` | all `true` (an absent key also reads `true`) |
-| `guards` | `idle_gate` (`false` disables the idle intake gate) · `max_read_lines` (line cap a single inbound file read may pull before the read guard trims it; number > 0) | idle gate on · `800` |
+| `guards` | `idle_gate` (`false` disables the idle intake gate) · `max_read_lines` (line cap a single inbound file read may pull before the read guard trims it; number > 0) · `memory_root` (one absolute path the write guard will let the agent write — see below) | idle gate on · `800` · no memory root |
 | `lanes`, `capabilities` | advanced per-repo overrides | `{}` |
 | `dogfood_repos` | foreign repos whose feedback digest `bee.mjs feedback collect`/`rank` (and `bee-evolving`) fold in — see below | `null` (local digest only) |
 | `product_root` | where the project's PRODUCT docs live (`docs/backlog.md`, `docs/specs/`, the product README) when they are NOT beside `.bee/` — a path relative to the bee root, or absolute. For the "workshop + nested product repo" (repo-divorce) topology where `.bee/` sits one level above the product's own git repo. Unset ⇒ the bee root (every ordinary single-root repo is unaffected). A set-but-missing path warns loudly to stderr rather than silently reading nothing. `.bee/*` runtime state and `docs/history/` (bee's own workshop trail) are never affected — only the product's own docs. | unset ⇒ bee root |
+
+### `guards.memory_root` (GH #71) — letting the agent keep its own memory
+
+The write guard contains every write to the worktree, so the agent's persistent memory at
+`~/.claude/projects/<slug>/memory/` is unreachable and durable learnings are lost. Declaring a
+memory root is the one escape hatch — and **it takes two steps, on purpose**, because an agent can
+edit `.bee/config.local.json` by itself but cannot create the marker file:
+
+```bash
+mkdir -p ~/.claude/projects/<slug>/memory
+touch ~/.claude/projects/<slug>/memory/.bee-write-root
+```
+
+```jsonc
+// .bee/config.local.json  (gitignored — never the tracked .bee/config.json)
+{ "guards": { "memory_root": "~/.claude/projects/<slug>/memory" } }
+```
+
+**Understand what you are granting.** A declared root is a place bee will let the agent write **at
+any phase, with no gate, no reservation and no hold** — writes there skip those checks entirely,
+which is the point: a learning must be recordable even at phase `idle`, when the intake gate is
+shut. Declare a directory that holds nothing but memory.
+
+The root is honored only while the `.bee-write-root` file is there — delete it and the grant is off
+immediately, with no config edit. Everything else stays denied exactly as before: traversal out of
+the root, a symlink inside it that resolves outside it, and `~/…`/`$HOME/…` *target* spellings (only
+absolute target paths are honored; the leading `~` is expanded in the **config value** alone). A
+root is refused outright — after resolving symlinks — if it is the filesystem root, a bare home
+directory, a directory that contains this worktree, anything inside or containing a `.git`/`.bee`
+directory, or not an existing directory. Refused, malformed, or unset means today's behavior,
+unchanged. The `apply_patch` tool path never honors a memory root.
 
 ### `dogfood_repos` (P18, evolving loop)
 

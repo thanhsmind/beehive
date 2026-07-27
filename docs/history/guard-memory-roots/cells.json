@@ -1,31 +1,36 @@
 [
   {
-    "id": "gmr-2",
+    "id": "gmr-3",
     "feature": "guard-memory-roots",
     "lane": "small",
     "behavior_change": true,
-    "title": "Close the tilde and HOME-variable write-guard containment bypass (mjs only)",
-    "action": "Deny-outright any Bash write target whose first path segment is a shell home reference, BEFORE containment, so it takes the same deny path and the same deny string as the absolute spelling of the same destination. Deny rather than expand: expanding would make the wall's verdict depend on an environment variable, the tokenizer discards the quoting that decides whether bash expands at all, and deny has no resolution step that can fail open. A bare tilde keeps today's behavior (BROAD_TARGETS owns it). mjs only - the Rust runtime moved to its own dev branch and is not built from this tree.",
+    "title": "Declared guards.memory_root, gated on a marker file, lets the agent write its memory",
+    "action": "Add a single declared out-of-worktree write root to the write guard. Config key guards.memory_root (one absolute path; a leading tilde is expanded here because this is a config value we read ourselves, not a shell token) read through the readConfig(storeRoot) the hook already calls. A declared root is honored ONLY while a marker file named .bee-write-root exists directly inside its realpathed directory, re-checked on every hit, exactly the live-marker discipline resolveCompanionMountedRelPath already uses. A hit is a real ALLOW that short-circuits: the target is never passed to checkWrite, so intake gate, gates, reservations and holds do not apply - that is deliberate, a learning must be recordable at phase idle. mjs only; the Rust runtime is gone from this tree. Not honored on the apply_patch leg - leave that branch untouched.",
     "must_haves": {
       "truths": [
-        "All four spellings of one out-of-worktree destination receive the same deny verdict.",
-        "A bare tilde is unchanged.",
-        "In-repo paths are unaffected and every pre-existing guard test passes unedited.",
-        "The vendored .bee/bin copy carries the fix."
+        "With no guards.memory_root declared, behavior is byte-identical to today and every existing guard test still passes unedited.",
+        "With a declared root holding the marker file, a Write/Edit and a Bash redirect to a path inside it are ALLOWED, at any phase including idle.",
+        "With the root declared but the marker absent, the same writes are denied exactly as today.",
+        "Traversal out of the declared root, and a symlink inside it resolving outside it, are denied.",
+        "Refusals are evaluated on the REALPATHED root: filesystem root, a root containing the worktree, a bare home directory, a root that is or contains a .git or .bee directory, and a root that is not an existing directory all contribute nothing.",
+        "Only absolute target spellings are honored - a tilde-spelled target stays denied by gmr-2's rule.",
+        "Every error path denies: a malformed config value, an unresolvable root, or any thrown exception inside the new check becomes no-match, trapped locally, never reaching the hook's outer catch which returns exit 0.",
+        "The vendored .bee/bin copy carries the change."
       ],
       "prohibitions": [
-        "Do NOT expand the home reference - the verdict must not depend on the environment.",
-        "Do NOT weaken any existing guard test."
+        "Do NOT write new test files or add test cases - the user asked for none. Verify by live hook probes and by the existing suite staying green.",
+        "Do NOT edit or weaken any existing test.",
+        "Do NOT touch the apply_patch branch.",
+        "Do NOT let a declared root bypass gmr-2's home-prefix denial for shell-spelled targets."
       ]
     },
     "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
     "read_first": [
-      "docs/history/guard-memory-roots/CONTEXT.md"
+      "docs/history/guard-memory-roots/CONTEXT.md",
+      "packages/bee/hooks/bee-write-guard.mjs"
     ],
     "files": [
       "packages/bee/hooks/bee-write-guard.mjs",
-      "packages/bee/hooks/test_write_guard.mjs",
-      "packages/bee/tests/test_bee_write_guard_hook.mjs",
       ".bee/bin/hooks/bee-write-guard.mjs",
       "docs/history/codex-harness-hardening/release-manifest.json"
     ],

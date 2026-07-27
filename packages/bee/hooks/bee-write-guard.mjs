@@ -33,6 +33,7 @@
 // Everything else is fail-open: exit 0 (crashes logged to .bee/logs/hooks.jsonl).
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { readHookContext, logCrash, logCoverageGap, libModuleUrl } from "./adapter.mjs";
 import { tokenizeCommand } from "./tokenize-command.mjs";
@@ -467,6 +468,166 @@ function resolveCompanionMountedRelPath(root, cwd, rawTarget) {
   }
 }
 
+// ─── declared memory root (cell gmr-3, GH #71, CONTEXT guard-memory-roots
+// D1/D3/D4/D5/D6/D9/D10/D11) ──────────────────────────────────────────────
+// The write guard contains every write to the physical worktree, which makes
+// the agent's own persistent memory (conventionally
+// `~/.claude/projects/<slug>/memory/`) unreachable and silently loses durable
+// learnings. This is the ONE declared escape hatch for it.
+//
+// THE SECURITY ARGUMENT, in two parts — neither is sufficient alone:
+//   1. DECLARATION (D1). The path comes from `guards.memory_root` in config,
+//      read through the same `readConfig(storeRoot)` this hook already calls,
+//      which overlays the gitignored `.bee/config.local.json`. Never
+//      auto-discovered, never read from the environment: "a root the guard
+//      infers is a root an attacker can arrange".
+//   2. A LIVE MARKER (D9). Config alone is self-service — an agent CAN write
+//      `.bee/config.local.json` at phase `idle`, because `.bee/` sits in
+//      GATE_ALLOWED_PREFIXES. So the declared root is honored only while a
+//      file named `.bee-write-root` exists directly inside its REALPATHED
+//      directory, re-checked on every hit. An agent cannot forge that marker,
+//      because every out-of-worktree write is denied until the root is
+//      honored, and the root is not honored until the marker exists. This is
+//      the same live-marker discipline resolveCompanionMountedRelPath uses.
+//
+// A HIT IS A REAL ALLOW THAT SHORT-CIRCUITS (D6): the target never reaches
+// guards.checkWrite, so the intake gate, Gate 3, reservations and holds do not
+// apply to it. That is deliberate and is the whole point — a learning must be
+// recordable at phase `idle`, which is exactly when the intake gate is shut.
+// Those semantics are repo-scoped and have no meaning for a path with no
+// repo-relative form.
+//
+// SCOPE LIMITS, stated so they are not mistaken for oversights:
+//   - Absolute target spellings only. `isHomePrefixedTarget` (cell gmr-1, D8)
+//     refuses `~/…`/`$HOME/…` BEFORE any containment work and this branch does
+//     not weaken that: a tilde-spelled target stays denied even when it names
+//     the declared root. Expanding a target would put the wall's decision in
+//     an environment variable. Expanding the CONFIG VALUE's leading `~` is a
+//     different thing and is safe — that is a value we read ourselves, not a
+//     shell token we are guessing the expansion of.
+//   - Not honored on the apply_patch leg (D11): that leg denies any unproved
+//     target and does not consult the companion mount either.
+//   - Everything here fails CLOSED (D4/D10). Every path returns "no match",
+//     and the whole evaluation traps its own exceptions so a throw can never
+//     reach this hook's outer catch, which returns exit 0 and would fail the
+//     ENTIRE hook open rather than just this check.
+const MEMORY_ROOT_MARKER = ".bee-write-root";
+
+// Expands a leading `~` in a CONFIG VALUE only (see the scope note above).
+// A `~user` spelling is NOT expanded — we do not resolve other users' homes.
+function expandConfigHomePrefix(value) {
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/") || value.startsWith("~\\")) {
+    return path.join(os.homedir(), value.slice(2));
+  }
+  return value;
+}
+
+// True when the realpathed root is, or directly contains, a `.git` or `.bee`
+// directory. "Is" is checked over every path SEGMENT (so a root anywhere
+// inside a `.git`/`.bee` tree is refused, not just one whose basename
+// matches); "contains" is a bounded depth-1 child check — a deep recursive
+// scan on every hook invocation would be a real cost for a sanity refusal, and
+// the marker file still has to be placed by a human at the root itself.
+function rootTouchesRepoControlDir(rootReal) {
+  const banned = new Set([".git", ".bee"]);
+  for (const segment of rootReal.split(path.sep)) {
+    if (banned.has(segment)) return true;
+  }
+  for (const name of banned) {
+    try {
+      if (fs.statSync(path.join(rootReal, name)).isDirectory()) return true;
+    } catch {
+      // ENOENT (the common case) and any other stat error both mean "not a
+      // directory we can see here" — keep checking the remaining names.
+    }
+  }
+  return false;
+}
+
+// Resolves `guards.memory_root` to a REALPATHED, marker-verified, sanity-
+// checked absolute directory, or null. Every refusal in D5/D10 is evaluated on
+// the realpathed root, never the raw spelling: a refusal list checked on the
+// raw spelling is trivially evaded by pointing a symlink at `/`.
+function resolveDeclaredMemoryRoot(workRoot, config) {
+  const raw = config && config.guards ? config.guards.memory_root : undefined;
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const expanded = expandConfigHomePrefix(raw.trim());
+  if (!path.isAbsolute(expanded)) return null;
+
+  // Must already exist as a directory (D10) — realpath proves both.
+  const rootReal = realpathOrNull(expanded);
+  if (!rootReal) return null;
+  let rootStat;
+  try {
+    rootStat = fs.statSync(rootReal);
+  } catch {
+    return null;
+  }
+  if (!rootStat.isDirectory()) return null;
+
+  // D5 refusals, on the realpathed root.
+  if (path.dirname(rootReal) === rootReal) return null; // the filesystem root
+  const homeReal = realpathOrNull(os.homedir());
+  if (homeReal && rootReal === homeReal) return null; // a bare home directory
+  const worktreeReal = realpathOrNull(workRoot);
+  if (!worktreeReal) return null; // cannot prove non-containment -> refuse
+  if (isUnderRoot(rootReal, worktreeReal)) return null; // a root containing the worktree
+  if (rootTouchesRepoControlDir(rootReal)) return null; // is/contains .git or .bee
+
+  // D9: the live marker, re-read on every hit. A directory named
+  // `.bee-write-root` is not a marker.
+  try {
+    if (!fs.statSync(path.join(rootReal, MEMORY_ROOT_MARKER)).isFile()) return null;
+  } catch {
+    return null;
+  }
+
+  return rootReal;
+}
+
+// True when `rawTarget` is a write into the declared, marker-verified memory
+// root. `config` is the already-read config object (or null). Containment
+// reuses exactly the discipline the worktree wall itself uses —
+// resolveTargetRealpath (realpath-walk through not-yet-existing segments) plus
+// isUnderRoot — so traversal out of the root, and a symlink INSIDE the root
+// that resolves outside it, both come back false and are denied as today.
+// Returns false on absolutely every failure, and traps its own throws.
+function isDeclaredMemoryRootTarget(workRoot, cwd, config, rawTarget) {
+  try {
+    if (!rawTarget || typeof rawTarget !== "string") return false;
+    // gmr-1/D8: a home-prefixed spelling is refused here too. A declared root
+    // is honored on the ABSOLUTE spelling of a target only.
+    if (isHomePrefixedTarget(rawTarget)) return false;
+    const normalized = normalizeToolPath(rawTarget);
+    if (!path.isAbsolute(normalized)) return false;
+    // D10: `..` is rejected on this branch regardless of absoluteness. The
+    // realpath containment below would catch a genuine escape anyway; this
+    // refuses the spelling outright so there is nothing subtle to reason about.
+    if (normalized.split(path.sep).includes("..")) return false;
+
+    const rootReal = resolveDeclaredMemoryRoot(workRoot, config);
+    if (!rootReal) return false;
+
+    const targetReal = resolveTargetRealpath(cwd, workRoot, rawTarget);
+    if (!targetReal) return false;
+    if (targetReal === rootReal) return false; // the directory itself is not a write target
+    return isUnderRoot(rootReal, targetReal);
+  } catch {
+    return false;
+  }
+}
+
+// The subset of guards.mjs `isBroad`'s shape test an ABSOLUTE target can
+// match (`<dir>/*`, `<dir>/.`). Used only to tell a broad-write signal that
+// came from a memory-root target's own spelling apart from one that came from
+// a pathless trigger like `git add --all` — see the Bash branch below.
+function isBroadTargetSpelling(rawTarget) {
+  if (!rawTarget || typeof rawTarget !== "string") return false;
+  const normalized = rawTarget.replace(/\\/g, "/");
+  return normalized.endsWith("/*") || normalized.endsWith("/.");
+}
+
 function getNestedString(obj, keys) {
   for (const key of keys) {
     const value = obj && typeof obj === "object" ? obj[key] : undefined;
@@ -848,6 +1009,24 @@ async function main() {
       // is verified-covered and never a candidate.
       const sharedNestedCandidates = [];
 
+      // gmr-3: the config behind `guards.memory_root` is read lazily and at
+      // most ONCE per hook invocation — a repo that never declares a root
+      // pays nothing here, and nothing at all until a target has already
+      // failed the worktree wall. The ROOT itself (marker included) is
+      // re-resolved per target inside isDeclaredMemoryRootTarget, which is
+      // what D9's "re-checked on every hit" requires.
+      let memoryRootConfig; // undefined = not read yet
+      const isMemoryRootHit = (rawTarget) => {
+        if (memoryRootConfig === undefined) {
+          try {
+            memoryRootConfig = stateLib.readConfig(storeRoot);
+          } catch {
+            memoryRootConfig = null;
+          }
+        }
+        return isDeclaredMemoryRootTarget(root, cwd, memoryRootConfig, rawTarget);
+      };
+
       if (APPLY_PATCH_TOOLS.has(toolName)) {
         // D2 / approach.md §2: an intercepted apply_patch runs the existing
         // gate/direct-edit/reservation decisions on every proved target.
@@ -897,23 +1076,52 @@ async function main() {
           const paths = (targets && targets.paths) || [];
           const canonicalized = paths.map((p) => {
             const canonical = canonicalRelPath(root, cwd, p);
+            const rel = canonical || resolveCompanionMountedRelPath(root, cwd, p);
             return {
               raw: p,
               canonical,
-              rel: canonical || resolveCompanionMountedRelPath(root, cwd, p),
+              rel,
+              // gmr-3 (D6): consulted ONLY for a target the worktree wall has
+              // already refused, so an in-worktree write can never be
+              // re-routed through this branch and lose its gate/reservation
+              // checks. A declared root can never contain the worktree (D5),
+              // so the two sets are disjoint by construction anyway.
+              memoryRoot: rel ? false : isMemoryRootHit(p),
             };
           });
           relPaths = canonicalized.filter((c) => c.rel).map((c) => c.rel);
+          const memoryRootTargets = canonicalized.filter((c) => c.memoryRoot);
           for (const c of canonicalized) {
             if (c.canonical) {
               sharedNestedCandidates.push({ rel: c.canonical, abs: lexicalAbsTarget(root, cwd, c.raw) });
             }
           }
-          if (relPaths.length !== paths.length) {
-            const firstFailing = canonicalized.find((c) => !c.rel);
+          // gmr-3 (D6): a memory-root target is PRE-APPROVED — it is kept out
+          // of relPaths so it never reaches checkWrite, and it must equally
+          // not trip the containment denial below, which counts targets.
+          if (relPaths.length + memoryRootTargets.length !== paths.length) {
+            const firstFailing = canonicalized.find((c) => !c.rel && !c.memoryRoot);
             const enriched = firstFailing ? describeCrossWorktreeTarget(root, cwd, firstFailing.raw) : null;
             denial = { reason: enriched || GENERIC_BASH_CONTAINMENT_MESSAGE };
-          } else if (relPaths.length === 0 && targets && targets.broadWrite) {
+          } else if (
+            relPaths.length === 0 &&
+            targets &&
+            targets.broadWrite &&
+            // gmr-3: do NOT fall through to the blanket "**" when the broad
+            // signal is a memory-root target's own broad SPELLING (`rm -rf
+            // <root>/*`) and every extracted target is a memory-root hit —
+            // that command writes only inside the declared root, and "**"
+            // would route it back into checkWrite, undoing the short-circuit.
+            // When broadWrite instead came from a PATHLESS trigger (`git add
+            // --all`, `git commit -a`, a bare `rm`) no memory target is
+            // broad-shaped, so "**" still applies and that blanket write is
+            // still fully checked — this narrows nothing but the case D6
+            // exists for.
+            !(
+              memoryRootTargets.length === paths.length &&
+              memoryRootTargets.some((c) => isBroadTargetSpelling(c.raw))
+            )
+          ) {
             relPaths = ["**"];
           }
         }
@@ -926,6 +1134,11 @@ async function main() {
           if (canonicalRel) {
             sharedNestedCandidates.push({ rel: canonicalRel, abs: lexicalAbsTarget(root, cwd, rawTarget) });
           }
+        } else if (isMemoryRootHit(rawTarget)) {
+          // gmr-3 (D6): a declared-memory-root hit is a real ALLOW that
+          // short-circuits. relPaths stays empty, so this target never enters
+          // checkWrite — no intake gate, no Gate 3, no reservations, no
+          // holds. Deliberate: a learning must be recordable at phase `idle`.
         } else {
           const enriched = describeCrossWorktreeTarget(root, cwd, rawTarget);
           denial = { reason: enriched || GENERIC_CONTAINMENT_MESSAGE };

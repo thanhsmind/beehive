@@ -1,0 +1,75 @@
+{
+  "id": "gmr-3",
+  "feature": "guard-memory-roots",
+  "lane": "small",
+  "behavior_change": true,
+  "title": "Declared guards.memory_root, gated on a marker file, lets the agent write its memory",
+  "action": "Add a single declared out-of-worktree write root to the write guard. Config key guards.memory_root (one absolute path; a leading tilde is expanded here because this is a config value we read ourselves, not a shell token) read through the readConfig(storeRoot) the hook already calls. A declared root is honored ONLY while a marker file named .bee-write-root exists directly inside its realpathed directory, re-checked on every hit, exactly the live-marker discipline resolveCompanionMountedRelPath already uses. A hit is a real ALLOW that short-circuits: the target is never passed to checkWrite, so intake gate, gates, reservations and holds do not apply - that is deliberate, a learning must be recordable at phase idle. mjs only; the Rust runtime is gone from this tree. Not honored on the apply_patch leg - leave that branch untouched.",
+  "must_haves": {
+    "truths": [
+      "With no guards.memory_root declared, behavior is byte-identical to today and every existing guard test still passes unedited.",
+      "With a declared root holding the marker file, a Write/Edit and a Bash redirect to a path inside it are ALLOWED, at any phase including idle.",
+      "With the root declared but the marker absent, the same writes are denied exactly as today.",
+      "Traversal out of the declared root, and a symlink inside it resolving outside it, are denied.",
+      "Refusals are evaluated on the REALPATHED root: filesystem root, a root containing the worktree, a bare home directory, a root that is or contains a .git or .bee directory, and a root that is not an existing directory all contribute nothing.",
+      "Only absolute target spellings are honored - a tilde-spelled target stays denied by gmr-2's rule.",
+      "Every error path denies: a malformed config value, an unresolvable root, or any thrown exception inside the new check becomes no-match, trapped locally, never reaching the hook's outer catch which returns exit 0.",
+      "The vendored .bee/bin copy carries the change."
+    ],
+    "prohibitions": [
+      "Do NOT write new test files or add test cases - the user asked for none. Verify by live hook probes and by the existing suite staying green.",
+      "Do NOT edit or weaken any existing test.",
+      "Do NOT touch the apply_patch branch.",
+      "Do NOT let a declared root bypass gmr-2's home-prefix denial for shell-spelled targets."
+    ]
+  },
+  "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+  "read_first": [
+    "docs/history/guard-memory-roots/CONTEXT.md",
+    "packages/bee/hooks/bee-write-guard.mjs"
+  ],
+  "files": [
+    "packages/bee/hooks/bee-write-guard.mjs",
+    ".bee/bin/hooks/bee-write-guard.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-gmr3",
+    "outcome": "Declared guards.memory_root, gated on a live .bee-write-root marker, now lets the agent write its own memory at any phase. Marker-gated so an agent cannot self-grant it: config alone is self-service, the marker is not. Hits short-circuit checkWrite (D6) on the Write/Edit and Bash legs only; apply_patch untouched (D11). Refusals evaluated on the realpathed root; every error path denies inside a local try/catch so a throw cannot fail the whole hook open. 30/30 live hook probes, no new tests, 108 suites green unedited.",
+    "files_changed": [
+      "packages/bee/hooks/bee-write-guard.mjs",
+      ".bee/bin/hooks/bee-write-guard.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/config-reference.md",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T10:58:50.538Z",
+    "behavior_change": true,
+    "verification_evidence": "# gmr-3 — evidence\n\nCell **gmr-3** (`guard-memory-roots`, lane small, GH #71): a declared\n`guards.memory_root`, gated on a live `.bee-write-root` marker, lets the agent\nwrite its own memory. Worker `exec-gmr3`.\n\n**No new tests were written and no existing test was edited** (user's explicit\ninstruction). Verification is (a) a live probe matrix against the vendored hook\nand (b) the whole existing suite staying green unmodified.\n\n## What changed\n\n- `packages/bee/hooks/bee-write-guard.mjs` — new `resolveDeclaredMemoryRoot` /\n  `isDeclaredMemoryRootTarget` / `expandConfigHomePrefix` /\n  `rootTouchesRepoControlDir` / `isBroadTargetSpelling`, plus wiring in the\n  Bash branch and the Write/Edit/MultiEdit branch. The `apply_patch` branch is\n  untouched (D11).\n- `.bee/bin/hooks/bee-write-guard.mjs` — vendored copy.\n- `docs/history/codex-harness-hardening/release-manifest.json` — regenerated.\n- `docs/config-reference.md` — the two operator steps and what the grant means.\n\nContainment reuses the existing `realpathOrNull` / `resolveTargetRealpath` /\n`isUnderRoot` helpers — the same discipline the worktree wall itself uses. The\nwhole check is wrapped in its own try/catch returning \"no match\", so a throw\ncan never reach the hook's outer catch (which returns exit 0 and would fail the\nENTIRE hook open).\n\n## Probe matrix — 30/30\n\nDriven against the **vendored** hook `.bee/bin/hooks/bee-write-guard.mjs` with\nreal JSON payloads on stdin, exit codes captured. `2` = deny, `0` = allow.\nEvery allow row below was taken at **phase `idle`** — the intake gate shut —\nwhich is precisely the moment D6 exists for.\n\nThe fixture is an isolated onboarded non-git directory (adapter `resolveRoots`\nfirst branch ⇒ `root === storeRoot === fixture`), with its own\n`config.local.json` and `state.json` and a symlinked `.bee/bin`. This repo's\nown config and state were never touched, and no declared root was left behind.\n\n| # | Case | Expect | Exit |\n|---|---|---|---|\n| 1 | no root declared → Write into memory dir | deny | 2 |\n| 2 | no root declared → Bash redirect into memory dir | deny | 2 |\n| 3 | declared + marker → Write into root | allow | 0 |\n| 4 | declared + marker → Edit into root | allow | 0 |\n| 5 | declared + marker → Bash redirect into root | allow | 0 |\n| 6 | declared + marker → Bash `mkdir -p` nested in root | allow | 0 |\n| 7 | declared as `~/…` (config-value expansion) → Write | allow | 0 |\n| 8 | declared, NO marker → Write | deny | 2 |\n| 9 | declared, NO marker → Bash redirect | deny | 2 |\n| 10 | traversal out of root → Write | deny | 2 |\n| 11 | traversal out of root → Bash redirect | deny | 2 |\n| 12 | symlink inside root resolving outside → Write | deny | 2 |\n| 13 | refused shape: root contains the worktree | deny | 2 |\n| 14 | refused shape: bare home directory | deny | 2 |\n| 15 | refused shape: root contains a `.git` dir | deny | 2 |\n| 16 | refused shape: root has a `.bee` path segment | deny | 2 |\n| 17 | refused shape: filesystem root | deny | 2 |\n| 18 | refused shape: root is not an existing directory | deny | 2 |\n| 19 | malformed config: number | deny | 2 |\n| 20 | malformed config: relative path | deny | 2 |\n| 21 | malformed config: empty string | deny | 2 |\n| 22 | tilde-spelled target naming the declared root → Bash | deny | 2 |\n| 23 | `$HOME`-spelled target naming the declared root → Bash | deny | 2 |\n| 24 | ordinary in-repo `docs/` path at idle | allow | 0 |\n| 25 | ordinary in-repo SOURCE path at idle → still gate-denied | deny | 2 |\n| 26 | in-repo source path, no root declared → still gate-denied | deny | 2 |\n| 27 | mixed Bash: memory root + in-repo source → still denied | deny | 2 |\n| 28 | broad spelling inside root (`rm -rf <root>/*`) | allow | 0 |\n| 29 | memory write + pathless broad (`git add --all`) → still checked | deny | 2 |\n| 30 | `apply_patch` naming a memory-root path → still denied (D11) | deny | 2 |\n\nRows 13-16 each had a **valid marker present**, so only the shape refusal can\nbe producing the denial. Row 17 (`/`) could not be given a marker, so it is\ndenied by both the filesystem-root refusal (which runs first in code) and the\nmissing marker. Rows 25-27 prove the short-circuit did not disable the intake\ngate for ordinary paths, and row 29 proves a blanket `git add --all` riding\nalong with a memory write still reaches `checkWrite` as `**`.\n\n## Verify\n\n```\nnode scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs\n```\n\n`PASS run_verify: 108 suite(s), concurrency=5, wall=78249ms` — every existing\nsuite unedited, including the blanket out-of-worktree denial invariants\n(`escapeRows` in `test_write_guard.mjs`) that D2 requires to keep passing\nunchanged.\n\nVendor parity (`md5sum`), after\n`render_plugin_skill_trees.mjs` → `onboard_bee.mjs --apply` →\n`release_manifest.mjs --write`:\n\n```\na92610a9aba277caea1e5f7d02b70ac3  .bee/bin/hooks/bee-write-guard.mjs\na92610a9aba277caea1e5f7d02b70ac3  packages/bee/hooks/bee-write-guard.mjs\n```\n\n## Deviations\n\n1. **Probe roots live in a system temp dir, not `.bee/tmp/gmr-3/`.** They\n   cannot live there: a path with a `.bee` segment is itself a refused root\n   shape (row 16), so a probe root under `.bee/` would be refused and prove\n   nothing. The disposable harness itself was written to `.bee/tmp/gmr-3/` as\n   instructed and deleted after the run.\n2. **`.git`/`.bee` refusal is read strictly**: refused when any path SEGMENT of\n   the realpathed root is `.git`/`.bee` (not just the basename), plus a\n   bounded depth-1 child check for a `.git`/`.bee` directory inside it. A\n   deeper recursive scan on every hook invocation would be real cost for a\n   sanity refusal, and a human still has to place the marker at the root\n   itself. Erring toward refusal is the fail-closed direction (D4).\n3. **The broad-write fallthrough is narrowed precisely, not bluntly.** A\n   command whose extracted targets are all memory-root hits and whose broad\n   signal comes from a memory-root target's own spelling (`rm -rf <root>/*`)\n   does not fall through to `relPaths = [\"**\"]` (row 28). When `broadWrite`\n   instead came from a PATHLESS trigger (`git add --all`, `git commit -a`, a\n   bare `rm`), `\"**\"` still applies and the blanket write is still fully\n   checked (row 29).\n",
+    "verify_output": null,
+    "verify_passed": true,
+    "claim_session": "c0b91d84-165f-4d21-a85d-16b6acd71dd0",
+    "claimed_at": "2026-07-27T10:49:07.872Z",
+    "verify_command": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "verified_at": "2026-07-27T10:58:43.652Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T10:58:43.653Z",
+        "claim_session": "c0b91d84-165f-4d21-a85d-16b6acd71dd0",
+        "claimed_at": "2026-07-27T10:51:50.525Z",
+        "acquired_at": "2026-07-27T10:49:07.870Z",
+        "worker": "exec-gmr3",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

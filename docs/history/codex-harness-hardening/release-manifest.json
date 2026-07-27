@@ -1514,7 +1514,7 @@
     },
     {
       "path": "packages/bee/hooks/bee-write-guard.mjs",
-      "sha256": "0eceb273300de772b53a12da739bb1c92ba2d15aa231119b528c42c666bf93e6",
+      "sha256": "fbc259df0675b612b9b85bdfa9aeac2141a011c96b697828fa96135dccbf01ce",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/bee-write-guard.mjs"
