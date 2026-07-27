@@ -4904,6 +4904,87 @@ await check(
   },
 );
 
+// ─── gfb-1 (GH #87 bug 1): hold release scopes by {holder, cell, session} ──
+// handleReservationsRelease's xwh-2 affected-cells derivation used to map
+// active local reservations to bare cell ids and call
+// releaseHolds(mainRoot, { holder, cell }) per cell — never passing session,
+// even though a cell id is not unique to one session (two different agents,
+// each in their own session, can both hold a reservation on the SAME cell
+// id) and releaseHolds/insertHold both already support/mirror a session
+// filter. One session's release therefore cleared a DIFFERENT session's
+// still-active mirrored hold on that cell.
+
+await check(
+  "bee reservations release (gfb-1, GH #87): releasing one session's reservation on a cell never clears a DIFFERENT session's mirrored hold on the same cell id",
+  async () => {
+    const reserveA = await runBee([
+      'reservations', 'reserve', '--agent', 'gfb1-agent-a', '--cell', 'gfb1-shared-cell',
+      '--path', 'src/gfb1/a.ts', '--session', 'gfb1-session-a', '--json',
+    ]);
+    assert(JSON.parse(reserveA.stdout).ok === true, `agent-a reserve should succeed: ${reserveA.stdout}`);
+
+    const reserveB = await runBee([
+      'reservations', 'reserve', '--agent', 'gfb1-agent-b', '--cell', 'gfb1-shared-cell',
+      '--path', 'src/gfb1/b.ts', '--session', 'gfb1-session-b', '--json',
+    ]);
+    assert(JSON.parse(reserveB.stdout).ok === true, `agent-b reserve should succeed: ${reserveB.stdout}`);
+
+    const before = findForeignHolds(root2, 'gfb1-checker', ['src/gfb1/a.ts', 'src/gfb1/b.ts']);
+    assert(before.length === 2, `expected both mirrored holds present before release, got ${JSON.stringify(before)}`);
+
+    const releaseA = await runBee(['reservations', 'release', '--agent', 'gfb1-agent-a', '--cell', 'gfb1-shared-cell', '--json']);
+    assert(JSON.parse(releaseA.stdout).released >= 1, `agent-a release should succeed: ${releaseA.stdout}`);
+
+    const after = findForeignHolds(root2, 'gfb1-checker', ['src/gfb1/a.ts', 'src/gfb1/b.ts']);
+    assert(
+      after.length === 1 && after[0].session === 'gfb1-session-b' && after[0].path === 'src/gfb1/b.ts',
+      `expected only session B's hold on src/gfb1/b.ts to survive untouched after releasing session A's reservation, got ${JSON.stringify(after)}`,
+    );
+  },
+);
+
+await check(
+  'bee reservations release (gfb-1): a sessionless (legacy) reservation row still falls back to today\'s exact cell-only hold scoping',
+  async () => {
+    // runModuleWorker inherits process.env by default (same hazard documented
+    // above at the lanes fixture, ~line 837): when THIS test process is
+    // itself running inside a bee session, BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID
+    // would reach these spawned reserve calls and win over the "no session"
+    // fallback in resolveSessionId's own precedence chain, turning what
+    // should be sessionless rows into session-bearing ones. Strip both so the
+    // fixture's rows resolve to the sessionless sentinel, exactly as a
+    // genuinely solo/legacy caller would.
+    const strippedEnv = { ...process.env };
+    delete strippedEnv.BEE_SESSION_ID;
+    delete strippedEnv.CLAUDE_CODE_SESSION_ID;
+    const noSession = (args) => runModuleWorker(BEE_MJS, { args, cwd: root2, env: strippedEnv });
+
+    const reserveC = await noSession([
+      'reservations', 'reserve', '--agent', 'gfb1-agent-c', '--cell', 'gfb1-sessionless-cell',
+      '--path', 'src/gfb1/c.ts', '--json',
+    ]);
+    assert(JSON.parse(reserveC.stdout).ok === true, `agent-c reserve should succeed: ${reserveC.stdout}`);
+
+    const reserveD = await noSession([
+      'reservations', 'reserve', '--agent', 'gfb1-agent-d', '--cell', 'gfb1-sessionless-cell',
+      '--path', 'src/gfb1/d.ts', '--json',
+    ]);
+    assert(JSON.parse(reserveD.stdout).ok === true, `agent-d reserve should succeed: ${reserveD.stdout}`);
+
+    const before = findForeignHolds(root2, 'gfb1-checker2', ['src/gfb1/c.ts', 'src/gfb1/d.ts']);
+    assert(before.length === 2, `expected both sessionless mirrored holds present before release, got ${JSON.stringify(before)}`);
+
+    const releaseC = await noSession(['reservations', 'release', '--agent', 'gfb1-agent-c', '--cell', 'gfb1-sessionless-cell', '--json']);
+    assert(JSON.parse(releaseC.stdout).released >= 1, `agent-c release should succeed: ${releaseC.stdout}`);
+
+    const after = findForeignHolds(root2, 'gfb1-checker2', ['src/gfb1/c.ts', 'src/gfb1/d.ts']);
+    assert(
+      after.length === 0,
+      `sessionless rows must keep today's exact cell-only scoping (byte-identical to pre-fix behavior) — expected both holds cleared, got ${JSON.stringify(after)}`,
+    );
+  },
+);
+
 // ─── decisions, through the dispatcher ─────────────────────────────────────
 
 await check('bee decisions log/active/search round-trip through the dispatcher', async () => {

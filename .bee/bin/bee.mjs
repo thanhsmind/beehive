@@ -1861,13 +1861,26 @@ async function handleReservationsRelease(root, flags) {
   // reservations.json rows already carry `agent`, so it can never touch
   // another agent's row; the ledger has no such field, so it needs the
   // narrower, derived scope instead).
-  const affectedCells = [
-    ...new Set(
+  // gfb-1 (GH #87): a cell id is not unique to one session — two different
+  // sessions can each hold a reservation on the SAME cell id — so scoping the
+  // ledger release by cell alone (the xwh-2 fix above) still lets one
+  // session's release clear a DIFFERENT session's still-active hold on that
+  // cell. Derive {cell, session} PAIRS from the matched rows instead (deduped
+  // on `${cell}::${session}`) and pass session into releaseHolds only when
+  // the row actually has one — reservations.mjs's leaseToReservation only
+  // sets `.session` when the underlying lease's session_id isn't the
+  // sessionless sentinel, so a legacy/sessionless row falls back to r.session
+  // undefined here, which keeps today's exact cell-only scoping (byte
+  // unchanged). ACCEPTED RESIDUAL: an agent holding both a sessionless row
+  // and a session-bearing row on one cell still clears every session's hold
+  // for that cell via the {cell, session:null} pair — inherent to the
+  // mandated env/live-session fallback in resolveSessionId, not fixed here.
+  const affectedCellSessionPairs = [
+    ...new Map(
       listReservations(root, { activeOnly: true })
-        .filter((r) => r.agent === agent && (!cell || r.cell === cell))
-        .map((r) => r.cell)
-        .filter(Boolean),
-    ),
+        .filter((r) => r.agent === agent && (!cell || r.cell === cell) && r.cell)
+        .map((r) => [`${r.cell}::${r.session || ''}`, { cell: r.cell, session: r.session || null }]),
+    ).values(),
   ];
 
   const result = await release(root, { agent, cell });
@@ -1878,8 +1891,12 @@ async function handleReservationsRelease(root, flags) {
   const topology = resolveHoldTopology(root);
   let holdsReleased = 0;
   if (topology) {
-    for (const affectedCell of affectedCells) {
-      const holdsResult = await releaseHolds(topology.mainRoot, { holder: topology.holder, cell: affectedCell });
+    for (const { cell: affectedCell, session: affectedSession } of affectedCellSessionPairs) {
+      const holdsResult = await releaseHolds(topology.mainRoot, {
+        holder: topology.holder,
+        cell: affectedCell,
+        ...(affectedSession ? { session: affectedSession } : {}),
+      });
       holdsReleased += holdsResult.released;
     }
   }
