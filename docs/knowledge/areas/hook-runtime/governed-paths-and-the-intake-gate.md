@@ -80,6 +80,16 @@ states alike, never one but not the other (decision c2c46488).
   it; the active state, not the recorded approvals, decides whether the door is
   open (decision c2c46488).
 
+- R13 — Every idle-gate/write-policy config read inside the guard follows the
+  **resolved controlRoot**, never the raw `root` parameter: on a
+  companion-mounted path the two name different projects' `.bee/config.json`,
+  and reading `root`'s made the idle gate judge a different project's phase
+  than the containment check had just resolved in the same call (GH #83, live
+  incident 2026-07-27). All three call sites — the terminal-phase idle-gate
+  branch, the write-policy-mode read, and the bash-command guard's own idle
+  read — were aligned in one pass; half-fixing recreates the bug on the
+  remaining path (gh-fix-batch cell gfb-2, 2026-07-28).
+
 ## Pointers (implementation)
 
 - Always-writable set: `GATE_ALLOWED_PREFIXES` in

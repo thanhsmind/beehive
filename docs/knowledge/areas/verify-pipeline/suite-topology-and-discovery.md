@@ -108,7 +108,14 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   ordinary `FAIL`. A stderr heartbeat (default every 30s, overridable via
   `BEE_VERIFY_HEARTBEAT_MS`) names whichever suites are still in flight, so a
   long-running full verify never reads as frozen. Hermetic env scrub and
-  non-timeout pass/fail semantics are unaffected (i54-closeout D2).
+  non-timeout pass/fail semantics are unaffected (i54-closeout D2). One
+  platform override exists: the Windows portable-suites CI job sets
+  `BEE_VERIFY_SUITE_TIMEOUT_MS=600000` (600s) because Node-20-on-windows-latest
+  runs the spawn-heavy git suites 2-4x slower than Linux (test_worktree_store
+  was killed at exactly 300000ms while the Node-22 job on the same commit ran
+  green — slowness, not logic); the 300s default stays everywhere else, and the
+  job-level `timeout-minutes: 30` still bounds the whole run (win-ci-timeout
+  D1, decision e2373374).
 
 ## Business Rules
 

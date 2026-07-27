@@ -28,6 +28,17 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   tree, detached HEAD or branch mismatch in the worktree. **Dirty** (D8a) =
   `git status --porcelain` without `--ignored`: the worktree's gitignored `.bee` store never
   counts as dirt.
+- **A `--with-companion` mount survives every zero-mutation refusal** (GH #84, gh-fix-batch
+  cell gfb-3, 2026-07-28 — two prior live incidents where a refused merge destroyed a
+  healthy, in-use mount): the companion teardown (symlink + marker removal + best-effort
+  session end) runs only AFTER all four refusal checks pass, immediately before the first
+  mutation. The worktree dirty check stays honest without pre-deleting the mount by
+  excluding the companion's `mountPath` AND the marker file via git pathspec
+  `:(exclude)…` — never by text-filtering porcelain output, which collapses a nested
+  mount to its parent directory line (`?? vendor/`) and would refuse forever. Dirt other
+  than the mount still refuses. Residual, accepted: post-staging outcomes (textual
+  conflict, red verify) still tear the companion down — a session must not outlive a
+  merge that genuinely proceeded.
 - The merge itself is a **staged transaction** (D2-REVISED, user review P1-2): `git merge
   --no-ff --no-commit <branch>` stages the merge WITHOUT committing it. Already up to date
   (nothing staged) returns a typed no-op result and never touches `git commit`. A textual

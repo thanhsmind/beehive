@@ -85,11 +85,16 @@ shared holds ledger closes that gap at WRITE time:
   genuinely new, scoped to same-workspace and same-checkout situations respectively, and
   never touch this cross-worktree tap's own exclusive-resource-list branch. Full three-class
   breakdown and the resolver itself: `areas/worktree-parallelism/control-plane-topology.md`.
-- **Release is scoped by cell, never by holder alone.** All agents in the main checkout share
-  `holder:"main"`; an early cut that released by holder wiped a concurrent worker's mirrored
-  holds (live incident, same day, decision a0ab91b6). Release derives the acting agent's own
-  active cell ids and clears exactly those rows. Worktree merge `--cleanup` releases every
-  row for the removed worktree id, best-effort after the grant is removed.
+- **Release is scoped by cell AND session, never by holder alone.** All agents in the main
+  checkout share `holder:"main"`; an early cut that released by holder wiped a concurrent
+  worker's mirrored holds (live incident, same day, decision a0ab91b6). A second live
+  incident (GH #87, gh-fix-batch cell gfb-1, 2026-07-28) showed cell-only scoping still
+  wipes a *different session's* active hold on the same cell id: release now derives
+  `{cell, session}` pairs from the acting agent's own active reservation rows and passes
+  the session filter into `releaseHolds` whenever the row carries one; a sessionless
+  (legacy) row falls back to the exact cell-only scoping — strictly narrowing, byte-identical
+  for the single-session case. Worktree merge `--cleanup` releases every row for the
+  removed worktree id, best-effort after the grant is removed.
 - **Failure discipline:** missing ledger = empty (byte-identical to pre-ledger behavior);
   unparseable ledger = typed deny (`worktree-holds-unreadable`, mirroring the reservation
   corrupt-store rule); unresolvable topology = fail-open with crash-log. Both runtime files

@@ -266,6 +266,8 @@
     "enforcement",
     "gap",
     "user-feedback",
-    "flow"
+    "flow",
+    "workflow-state",
+    "worktree-parallelism"
   ]
 }
