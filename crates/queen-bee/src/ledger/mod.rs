@@ -7,6 +7,7 @@
 //! is a red in that group and never in the dispatcher.
 
 pub mod capture;
+pub mod decisions;
 pub mod intent;
 
 use serde_json::Value;

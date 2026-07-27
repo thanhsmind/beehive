@@ -161,13 +161,86 @@ pub fn add_capture_stub(
     id: &str,
     at: &str,
 ) -> Result<Value, String> {
-    let outcome_raw = fields.outcome.unwrap_or("");
+    append_stub(
+        root,
+        fields.outcome.unwrap_or(""),
+        fields.lane,
+        normalize_list(fields.dids),
+        fields.area,
+        normalize_list(fields.files),
+        fields.source,
+        id,
+        at,
+    )
+}
+
+/// `normalizeList`'s ARRAY branch (`capture.mjs:36-38`): `String(v).trim()`
+/// per member, then drop the falsy ones. Deliberately NOT a comma split —
+/// an array member containing a comma stays one entry, which is exactly why
+/// this cannot be spelled by joining and reusing the string branch.
+fn normalize_list_items(items: &[String]) -> Vec<String> {
+    items
+        .iter()
+        .map(|v| js_trim(v).to_string())
+        .filter(|v| !v.is_empty())
+        .collect()
+}
+
+/// `addCaptureStub` for the ARRAY call shape (rpl-4).
+///
+/// The CLI flag path can only ever hand `normalizeList` a string, which is
+/// why rpl-3 ported that branch alone. `handleDecisionsSupersede`
+/// (`bee.mjs:1977`) is the caller that always passes real ARRAYS —
+/// `dids: [event.supersedes, event.id]` and `files: [hit.file]` — and a
+/// `hit.file` path containing a comma would be silently split into two
+/// entries by the string branch. Same builder, same refusal order, same key
+/// order; only the list coercion differs.
+///
+/// `area` and `lane` are absent on this path (mjs defaults both to `null`),
+/// so the high-risk refusal is unreachable here and the `area` guard never
+/// runs — matching the call site exactly rather than generalizing.
+pub fn add_capture_stub_lists(
+    root: &Path,
+    outcome: &str,
+    dids: &[String],
+    files: &[String],
+    source: Option<&str>,
+    id: &str,
+    at: &str,
+) -> Result<Value, String> {
+    append_stub(
+        root,
+        outcome,
+        None,
+        normalize_list_items(dids),
+        None,
+        normalize_list_items(files),
+        source,
+        id,
+        at,
+    )
+}
+
+/// The shared body of `addCaptureStub`, taking each list ALREADY normalized
+/// by whichever `normalizeList` branch the caller's shape selects.
+#[allow(clippy::too_many_arguments)]
+fn append_stub(
+    root: &Path,
+    outcome_raw: &str,
+    lane_raw: Option<&str>,
+    dids: Vec<String>,
+    area_raw: Option<&str>,
+    files: Vec<String>,
+    source_raw: Option<&str>,
+    id: &str,
+    at: &str,
+) -> Result<Value, String> {
     if js_trim(outcome_raw).is_empty() {
         return Err("addCaptureStub: outcome text is required.".to_string());
     }
     // `lane === 'high-risk'` — strict equality against the RAW flag value,
     // before any trimming, so `--lane " high-risk "` does NOT trip it.
-    if fields.lane == Some("high-risk") {
+    if lane_raw == Some("high-risk") {
         return Err(
             "addCaptureStub: high-risk settlements never queue — run the full bee-scribing sync inline (decision 0017)."
                 .to_string(),
@@ -179,17 +252,17 @@ pub fn add_capture_stub(
     // dids, area, files, lane — then `source` APPENDED only when present,
     // so a stub written without it stays byte-shape-identical to today's.
     let outcome = js_trim(outcome_raw).to_string();
-    let area = optional_trimmed(fields.area);
+    let area = optional_trimmed(area_raw);
     let mut stub = Map::new();
     stub.insert("kind".to_string(), Value::String("stub".to_string()));
     stub.insert("id".to_string(), Value::String(id.to_string()));
     stub.insert("at".to_string(), Value::String(at.to_string()));
     stub.insert("outcome".to_string(), Value::String(outcome.clone()));
-    stub.insert("dids".to_string(), string_array(normalize_list(fields.dids)));
+    stub.insert("dids".to_string(), string_array(dids));
     stub.insert("area".to_string(), opt_string(area.clone()));
-    stub.insert("files".to_string(), string_array(normalize_list(fields.files)));
-    stub.insert("lane".to_string(), opt_string(optional_trimmed(fields.lane)));
-    if let Some(source) = optional_trimmed(fields.source) {
+    stub.insert("files".to_string(), string_array(files));
+    stub.insert("lane".to_string(), opt_string(optional_trimmed(lane_raw)));
+    if let Some(source) = optional_trimmed(source_raw) {
         stub.insert("source".to_string(), Value::String(source));
     }
 

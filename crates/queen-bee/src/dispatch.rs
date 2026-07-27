@@ -920,16 +920,22 @@ mod tests {
     /// rpl-1 shipped the seam with NO group registered, and pinned that fact
     /// so every later cell has to update this expectation deliberately rather
     /// than drift into it. It is now cashed one group at a time: `intent`
-    /// (rpl-2) and `capture` (rpl-3).
+    /// (rpl-2), `capture` (rpl-3) and `decisions` (rpl-4).
     ///
     /// Kept as an EXACT set, not a `contains`: the point of the pin is that a
     /// group cannot appear in the shipped binary without someone saying so
     /// here, and a `contains` check would let an unintended registration
     /// through.
+    ///
+    /// rpl-4 note: `decisions` appears here having registered only its three
+    /// WRITE verbs. Group registration and verb coverage are separate facts —
+    /// `decisions active` still takes the unported-command refusal until
+    /// rpl-5 lands the read side, which the `decisions` group's own test
+    /// module pins from the other side.
     #[test]
     fn the_shipped_table_registers_exactly_the_ported_ledger_groups() {
         let mut names = crate::groups::dispatcher().group_names();
         names.sort();
-        assert_eq!(names, vec!["capture", "intent"]);
+        assert_eq!(names, vec!["capture", "decisions", "intent"]);
     }
 }

@@ -128,6 +128,14 @@ pub const VOLATILE_FIELDS: &[VolatileField] = &[
     // a Rust port emitting second- or micro-precision here still fails the
     // diff rather than being masked into agreement.
     VolatileField { key: "advanced_at", key_match: KeyMatch::Exact, shape: Shape::IsoMillisZ, placeholder: TS_PLACEHOLDER },
+    // `decisions.mjs:404` — `sweepDecisionCitations`'s own
+    // `new Date().toISOString()`, a SECOND clock read inside `supersede`
+    // that is distinct from the event's `date` and lands nested inside the
+    // written event as `sweep.scanned_at` (rpl-4). Declared with the same
+    // IsoMillisZ shape gate as every stamp above, for the same reason: a
+    // Rust port emitting second- or micro-precision here fails the diff
+    // rather than being masked into agreement.
+    VolatileField { key: "scanned_at", key_match: KeyMatch::Exact, shape: Shape::IsoMillisZ, placeholder: TS_PLACEHOLDER },
     VolatileField { key: "timestamp", key_match: KeyMatch::Exact, shape: Shape::IsoMillisZ, placeholder: TS_PLACEHOLDER },
     // `decisions.mjs:320` / `reviews.mjs:348` — `crypto.randomUUID()`. The
     // shape gate is what makes this safe to declare at all: the vast

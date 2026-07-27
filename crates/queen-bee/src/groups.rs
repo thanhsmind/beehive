@@ -34,7 +34,7 @@ pub fn dispatcher() -> Dispatcher {
 pub fn register_all(d: &mut Dispatcher) {
     d.register(crate::ledger::intent::group()).expect("intent group");
     d.register(crate::ledger::capture::group()).expect("capture group");
-    // rpl-4/rpl-5: decisions
+    d.register(crate::ledger::decisions::group()).expect("decisions group");
     // rpl-6/rpl-9: backlog
     // rpl-7: reviews
     // rpl-8: feedback
