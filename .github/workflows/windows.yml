@@ -132,6 +132,11 @@ jobs:
         # backlog row and, for a removal, a green Windows run to cite.
         # ============================================================
         env:
+          # Windows spawn overhead runs the git-heavy suites 2-4x slower than
+          # Linux (run 30270865821: test_worktree_store killed at the 300s
+          # default while green on Node 22; test_reviews 265s). 600s per suite;
+          # the job-level timeout-minutes still bounds the whole run.
+          BEE_VERIFY_SUITE_TIMEOUT_MS: "600000"
           BEE_VERIFY_ROOT_FILTER: packages/bee/tests
           BEE_VERIFY_EXCLUDE: >-
             packages/bee/tests/test_bee_cli.mjs,

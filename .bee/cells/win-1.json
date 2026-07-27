@@ -1,0 +1,62 @@
+{
+  "id": "win-1",
+  "feature": "win-ci-timeout",
+  "lane": "tiny",
+  "behavior_change": true,
+  "change_class": "bugfix",
+  "title": "Windows CI red: raise per-suite timeout to 600s for the spawn-slow Windows job",
+  "action": "Run 30270865821 (Node-20, windows-latest): test_worktree_store.mjs killed by run_verify's 300s per-suite timeout (exit 124, TIMEOUT at exactly 300000ms) while every executed check inside it passed; test_reviews finished at 265s, just under the wire; the Node-22 job on the same commit was green. Windows process spawn makes the git-heavy suites 2-4x slower — this is environment speed, not logic. Fix: add BEE_VERIFY_SUITE_TIMEOUT_MS: \"600000\" to the portable-suites step env in .github/workflows/windows.yml (run_verify already honors the variable; job-level timeout-minutes: 30 still bounds the run). One env line + a one-line comment naming the evidence run.",
+  "must_haves": {
+    "truths": [
+      "portable-suites step env carries BEE_VERIFY_SUITE_TIMEOUT_MS 600000",
+      "yaml still parses",
+      "no other workflow or default timeout changed"
+    ],
+    "prohibitions": [
+      "Do NOT touch BEE_VERIFY_EXCLUDE or its guarded comment block",
+      "Do NOT change the 300s default in run_verify.mjs"
+    ]
+  },
+  "verify": "python3 -c \"import yaml;yaml.safe_load(open('.github/workflows/windows.yml'));print('yaml ok')\"",
+  "read_first": [
+    ".github/workflows/windows.yml"
+  ],
+  "files": [
+    ".github/workflows/windows.yml"
+  ],
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "worker-win",
+    "outcome": "Windows portable-suites job now runs with BEE_VERIFY_SUITE_TIMEOUT_MS=600000 — Node-20 spawn-slow worktree/review suites get headroom; 300s default untouched elsewhere; evidence run 30270865821 cited in the workflow comment",
+    "files_changed": [
+      ".github/workflows/windows.yml"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T17:07:35.559Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"verify\":\"python3 .bee/tmp/yaml_check.py\",\"verify_result\":\"yaml ok — worker-recorded per verify-once D1 (serial tiny, no smell)\",\"note\":\"one env line + evidence comment; live proof is the dispatched Windows run\"}\n",
+    "verify_output": "yaml ok (worker-recorded, verify-once D1)",
+    "verify_passed": true,
+    "claim_session": "03f90719-9f7c-4acc-8698-2b879eb80f50",
+    "claimed_at": "2026-07-27T17:06:08.585Z",
+    "verify_command": "python3 .bee/tmp/yaml_check.py",
+    "verified_at": "2026-07-27T17:07:29.042Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T17:07:29.042Z",
+        "claim_session": "03f90719-9f7c-4acc-8698-2b879eb80f50",
+        "claimed_at": "2026-07-27T17:06:35.917Z",
+        "acquired_at": "2026-07-27T17:06:08.584Z",
+        "worker": "worker-win",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}
