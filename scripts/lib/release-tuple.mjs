@@ -1,10 +1,11 @@
 // release-tuple.mjs — the single registry of WHERE the release version lives.
 //
-// The bee release version is physically duplicated across four "tuple"
+// The bee release version is physically duplicated across five "tuple"
 // components: the packages/bee/lib source constant, its byte-identical .bee/bin
-// runtime mirror, and the two plugin manifests (Claude + Codex) that external
-// plugin systems read as raw JSON and therefore cannot import a JS const from.
-// One canonical value, four physical homes.
+// runtime mirror, the two plugin manifests (Claude + Codex) that external
+// plugin systems read as raw JSON and therefore cannot import a JS const from,
+// and the Rust port's own const (a compiled binary cannot import the mjs one
+// either). One canonical value, five physical homes.
 //
 // This module is the ONE place those locations are enumerated. It is
 // side-effect free (no top-level checks, no process.exit) so both the checker
@@ -48,9 +49,20 @@ export const COMPONENTS = [
     path: path.join(REPO_ROOT, ".codex-plugin", "plugin.json"),
     kind: "json-version",
   },
+  {
+    // The Rust port carries its own copy of the constant (its
+    // `compute_runtime_drift` compares onboarding's recorded version against
+    // it, exactly as the mjs reader does). It used to be hand-synced, so every
+    // bump left it a release behind and the mjs/Rust parity suite went red on
+    // the version-drift case. It is a tuple member like any other.
+    name: "crates/bee-core/src/state.rs (BEE_VERSION)",
+    path: path.join(REPO_ROOT, "crates", "bee-core", "src", "state.rs"),
+    kind: "rust-const",
+  },
 ];
 
 export const BEE_VERSION_RE = /export\s+const\s+BEE_VERSION\s*=\s*['"]([^'"]+)['"]/;
+export const RUST_BEE_VERSION_RE = /pub\s+const\s+BEE_VERSION\s*:\s*&str\s*=\s*"([^"]+)"/;
 
 /**
  * Extracts BEE_VERSION from a state.mjs source string. Returns null if not
@@ -79,6 +91,14 @@ export function readComponentVersion(component, readFileFn = fs.readFileSync) {
       throw new Error(`${component.name}: no BEE_VERSION export found in ${component.path}`);
     }
     return version;
+  }
+
+  if (component.kind === "rust-const") {
+    const match = raw.match(RUST_BEE_VERSION_RE);
+    if (!match) {
+      throw new Error(`${component.name}: no BEE_VERSION const found in ${component.path}`);
+    }
+    return match[1];
   }
 
   if (component.kind === "json-version") {
@@ -120,6 +140,17 @@ export function writeComponentVersion(component, version, io = fs) {
     }
     const previous = match[1];
     const next = raw.replace(BEE_VERSION_RE, `export const BEE_VERSION = '${version}'`);
+    io.writeFileSync(component.path, next, "utf8");
+    return previous;
+  }
+
+  if (component.kind === "rust-const") {
+    const match = raw.match(RUST_BEE_VERSION_RE);
+    if (!match) {
+      throw new Error(`${component.name}: no BEE_VERSION const to rewrite in ${component.path}`);
+    }
+    const previous = match[1];
+    const next = raw.replace(RUST_BEE_VERSION_RE, `pub const BEE_VERSION: &str = "${version}"`);
     io.writeFileSync(component.path, next, "utf8");
     return previous;
   }

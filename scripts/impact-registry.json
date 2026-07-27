@@ -175,6 +175,7 @@
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
         "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -277,6 +278,7 @@
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
         "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -450,6 +452,40 @@
         "scripts/tests/test_worktree_holds_race.mjs",
         "scripts/tests/test_worktree_merge_queue.mjs",
         "scripts/tests/test_worktree_store.mjs"
+      ]
+    },
+    ".bee/bin/lib/guards.mjs": {
+      "direct": [
+        ".bee/bin/bee.mjs knowledge check",
+        ".bee/bin/bee.mjs knowledge index --check",
+        "packages/bee/hooks/test_write_guard.mjs",
+        "scripts/tests/test_worktree_companion.mjs"
+      ],
+      "all": [
+        ".bee/bin/bee.mjs knowledge check",
+        ".bee/bin/bee.mjs knowledge index --check",
+        "packages/bee/hooks/test_write_guard.mjs",
+        "scripts/okf_migrate.mjs --check advisor-protocol",
+        "scripts/okf_migrate.mjs --check decision-memory",
+        "scripts/okf_migrate.mjs --check doctrine-layer",
+        "scripts/okf_migrate.mjs --check feedback-digest",
+        "scripts/okf_migrate.mjs --check hook-runtime",
+        "scripts/okf_migrate.mjs --check okf-profile",
+        "scripts/okf_migrate.mjs --check onboarding",
+        "scripts/okf_migrate.mjs --check performance-log",
+        "scripts/okf_migrate.mjs --check verify-pipeline",
+        "scripts/okf_migrate.mjs --check workflow-state",
+        "scripts/okf_migrate.mjs --check worktree-parallelism",
+        "scripts/okf_migrate.mjs --check-patterns",
+        "scripts/tests/test_compact_verbs.mjs",
+        "scripts/tests/test_conformance.mjs",
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_okf_pins.mjs",
+        "scripts/tests/test_run_verify_impacted.mjs",
+        "scripts/tests/test_worktree_cli.mjs",
+        "scripts/tests/test_worktree_companion.mjs",
+        "scripts/tests/test_worktree_holds.mjs",
+        "scripts/tests/test_worktree_merge_queue.mjs"
       ]
     },
     ".bee/bin/lib/herding.mjs": {
@@ -729,6 +765,42 @@
         "scripts/tests/test_worktree_store.mjs"
       ]
     },
+    ".bee/bin/lib/path-identity.mjs": {
+      "direct": [],
+      "all": [
+        ".bee/bin/bee.mjs knowledge check",
+        ".bee/bin/bee.mjs knowledge index --check",
+        "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
+        "scripts/backlog_uniqueness.mjs --check",
+        "scripts/okf_migrate.mjs --check advisor-protocol",
+        "scripts/okf_migrate.mjs --check decision-memory",
+        "scripts/okf_migrate.mjs --check doctrine-layer",
+        "scripts/okf_migrate.mjs --check feedback-digest",
+        "scripts/okf_migrate.mjs --check hook-runtime",
+        "scripts/okf_migrate.mjs --check okf-profile",
+        "scripts/okf_migrate.mjs --check onboarding",
+        "scripts/okf_migrate.mjs --check performance-log",
+        "scripts/okf_migrate.mjs --check verify-pipeline",
+        "scripts/okf_migrate.mjs --check workflow-state",
+        "scripts/okf_migrate.mjs --check worktree-parallelism",
+        "scripts/okf_migrate.mjs --check-patterns",
+        "scripts/tests/test_claim_race.mjs",
+        "scripts/tests/test_compact_verbs.mjs",
+        "scripts/tests/test_config_samples_safe.mjs",
+        "scripts/tests/test_config_validate.mjs",
+        "scripts/tests/test_conformance.mjs",
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_okf_pins.mjs",
+        "scripts/tests/test_run_verify_impacted.mjs",
+        "scripts/tests/test_worktree_cli.mjs",
+        "scripts/tests/test_worktree_companion.mjs",
+        "scripts/tests/test_worktree_grant_resolve.mjs",
+        "scripts/tests/test_worktree_holds.mjs",
+        "scripts/tests/test_worktree_merge_queue.mjs",
+        "scripts/tests/test_worktree_store.mjs"
+      ]
+    },
     ".bee/bin/lib/perf.mjs": {
       "direct": [
         ".bee/bin/bee.mjs knowledge check",
@@ -802,6 +874,7 @@
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
         "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1003,6 +1076,7 @@
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
         "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1071,6 +1145,7 @@
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
         "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1105,6 +1180,7 @@
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
         "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1144,6 +1220,7 @@
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
         "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1185,6 +1262,7 @@
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
         "packages/bee/hooks/test_model_guard.mjs",
+        "packages/bee/hooks/test_write_guard.mjs",
         "scripts/backlog_uniqueness.mjs --check",
         "scripts/okf_migrate.mjs --check advisor-protocol",
         "scripts/okf_migrate.mjs --check decision-memory",
@@ -1492,6 +1570,7 @@
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs"
       ]
@@ -1589,6 +1668,7 @@
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs"
       ]
@@ -1724,6 +1804,7 @@
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_worktree_holds.mjs"
@@ -1737,10 +1818,16 @@
         "packages/bee/tests/test_msn_invariants.mjs"
       ],
       "all": [
+        "packages/bee/tests/test_bee_cli.mjs",
+        "packages/bee/tests/test_contention_status.mjs",
         "packages/bee/tests/test_guards.mjs",
         "packages/bee/tests/test_guards_tokenizer.mjs",
+        "packages/bee/tests/test_knowledge.mjs",
         "packages/bee/tests/test_misc.mjs",
-        "packages/bee/tests/test_msn_invariants.mjs"
+        "packages/bee/tests/test_msn_invariants.mjs",
+        "packages/bee/tests/test_scratch.mjs",
+        "scripts/tests/test_dispatch_prepare.mjs",
+        "scripts/tests/test_native_probe.mjs"
       ]
     },
     "packages/bee/lib/herding.mjs": {
@@ -1931,6 +2018,7 @@
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs"
       ]
@@ -1988,6 +2076,55 @@
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_path_identity.mjs",
+        "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_skill_render.mjs"
+      ]
+    },
+    "packages/bee/lib/path-identity.mjs": {
+      "direct": [
+        "packages/bee/tests/test_cli_cells.mjs",
+        "packages/bee/tests/test_herding_cli.mjs",
+        "scripts/tests/test_path_identity.mjs"
+      ],
+      "all": [
+        "packages/bee/scripts/test_plugin_distribution.mjs",
+        "packages/bee/tests/test_backlog_capture.mjs",
+        "packages/bee/tests/test_bee_cli.mjs",
+        "packages/bee/tests/test_bundle_mode.mjs",
+        "packages/bee/tests/test_cells.mjs",
+        "packages/bee/tests/test_cli_cells.mjs",
+        "packages/bee/tests/test_cli_state.mjs",
+        "packages/bee/tests/test_config_validate.mjs",
+        "packages/bee/tests/test_contention_status.mjs",
+        "packages/bee/tests/test_feedback.mjs",
+        "packages/bee/tests/test_guards.mjs",
+        "packages/bee/tests/test_guards_tokenizer.mjs",
+        "packages/bee/tests/test_herding_cli.mjs",
+        "packages/bee/tests/test_intent.mjs",
+        "packages/bee/tests/test_knowledge.mjs",
+        "packages/bee/tests/test_misc.mjs",
+        "packages/bee/tests/test_msn_invariants.mjs",
+        "packages/bee/tests/test_recovery.mjs",
+        "packages/bee/tests/test_reviews.mjs",
+        "packages/bee/tests/test_scratch.mjs",
+        "packages/bee/tests/test_state.mjs",
+        "packages/bee/tests/test_state_projection.mjs",
+        "packages/bee/tests/test_workspace_store.mjs",
+        "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_write_policy.mjs",
+        "scripts/okf_instructions_fence.mjs",
+        "scripts/okf_instructions_fence.mjs --selftest",
+        "scripts/okf_specs_fence.mjs",
+        "scripts/okf_specs_fence.mjs --selftest",
+        "scripts/tests/test_compact_capsule.mjs",
+        "scripts/tests/test_compact_verbs.mjs",
+        "scripts/tests/test_compaction_advisories.mjs",
+        "scripts/tests/test_compaction_module.mjs",
+        "scripts/tests/test_dispatch_prepare.mjs",
+        "scripts/tests/test_hook_vendor_closure.mjs",
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs"
       ]
@@ -2072,6 +2209,7 @@
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs"
       ]
@@ -2331,6 +2469,7 @@
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs"
       ]
@@ -2377,6 +2516,7 @@
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs"
       ]
@@ -2385,7 +2525,8 @@
       "direct": [
         "packages/bee/tests/test_msn_invariants.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
-        "packages/bee/tests/test_worktree_store.mjs"
+        "packages/bee/tests/test_worktree_store.mjs",
+        "scripts/tests/test_path_identity.mjs"
       ],
       "all": [
         "packages/bee/scripts/test_plugin_distribution.mjs",
@@ -2423,6 +2564,7 @@
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_skill_render.mjs"
       ]
@@ -2939,6 +3081,7 @@
         "scripts/tests/test_compact_capsule.mjs",
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_worktree_holds.mjs"
       ],
       "all": [
@@ -2968,6 +3111,7 @@
         "scripts/tests/test_compact_capsule.mjs",
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
+        "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_worktree_holds.mjs"
       ]
     },
@@ -3248,6 +3392,14 @@
         "scripts/tests/test_okf_pins.mjs"
       ]
     },
+    "scripts/tests/test_path_identity.mjs": {
+      "direct": [
+        "scripts/tests/test_path_identity.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_path_identity.mjs"
+      ]
+    },
     "scripts/tests/test_portable_paths.mjs": {
       "direct": [
         "scripts/tests/test_portable_paths.mjs"
@@ -3286,6 +3438,14 @@
       ],
       "all": [
         "scripts/tests/test_run_verify_impacted.mjs"
+      ]
+    },
+    "scripts/tests/test_rust_workspace.mjs": {
+      "direct": [
+        "scripts/tests/test_rust_workspace.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_rust_workspace.mjs"
       ]
     },
     "scripts/tests/test_skill_pointers.mjs": {
@@ -3334,6 +3494,14 @@
       ],
       "all": [
         "scripts/tests/test_verify_timeout.mjs"
+      ]
+    },
+    "scripts/tests/test_workflow_step_paths.mjs": {
+      "direct": [
+        "scripts/tests/test_workflow_step_paths.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_workflow_step_paths.mjs"
       ]
     },
     "scripts/tests/test_worktree_cli.mjs": {

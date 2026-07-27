@@ -21,7 +21,7 @@
     },
     {
       "path": ".bee/bin/lib/claims.mjs",
-      "sha256": "8869e1ed8f4efe89adf69f2f3b566f295665f42965964ad5e8839eeee957102b",
+      "sha256": "de7726a26b2354b65ee598d00f9179f04f71fe3d53f39a865b749da49e03623d",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -75,7 +75,7 @@
     },
     {
       "path": ".bee/bin/lib/guards.mjs",
-      "sha256": "34b3744373ea342a99378269f4c0f30303f9a09aeac3e454091f6bf2b7130424",
+      "sha256": "0a31cab392fb5b10d943fdf62ae4aec79deace7ab3c2a9fd7fcbec5a13da0520",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -124,6 +124,12 @@
     {
       "path": ".bee/bin/lib/lock.mjs",
       "sha256": "2c80c3738ce0f70c69cf45164c30a078a7e7c9c02d9feb702415900f41d4e9c9",
+      "mode": "644",
+      "role": "runtime_lib"
+    },
+    {
+      "path": ".bee/bin/lib/path-identity.mjs",
+      "sha256": "695073bd84bb473c900219bd792ec5a62a121f638df8503c6d1c2ca38ce0ecbb",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -177,7 +183,7 @@
     },
     {
       "path": ".bee/bin/lib/state.mjs",
-      "sha256": "3d13cc125219908584dfd3b324fdcbae41c605e8e263354695141920e1b1b62d",
+      "sha256": "42aeca98dc553e9fa446d922c89e25714fd3197ad143d581ca1725299afffbba",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -207,7 +213,7 @@
     },
     {
       "path": ".bee/bin/lib/worktree-store.mjs",
-      "sha256": "99802ffb7dd382a2c7e069f308cddaa44901fd66c637165e67c58c9041de5e89",
+      "sha256": "3bf58926db0144e6466996effbc1bcba70da2d711d007db9a9a0c3aa98ab6580",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -220,7 +226,7 @@
     },
     {
       "path": ".claude-plugin/plugin.json",
-      "sha256": "1e3ae05e96f7047fd3f9c34b1f5fdb0248f82b6a89fc9385950cedf54198915e",
+      "sha256": "845d2003457a6244effb26285276080e0b5ccb0be567134ab7b16a24699c49a1",
       "mode": "644",
       "role": "plugin_manifest",
       "packagePath": ".claude-plugin/plugin.json"
@@ -815,7 +821,7 @@
     },
     {
       "path": ".codex-plugin/plugin.json",
-      "sha256": "85530971d35378d5da12faab23bb1e2b59eef999cae9e9b571782e09d41cb1a2",
+      "sha256": "1a477c3e35dd797fb872a987e176273045c3208657f55ec721f62541b96634d0",
       "mode": "644",
       "role": "plugin_manifest",
       "packagePath": ".codex-plugin/plugin.json"
@@ -1438,7 +1444,7 @@
     },
     {
       "path": "packages/bee/bee.mjs",
-      "sha256": "578e35b5ce85daa7bb516aa6e55c0e687bd054a50620502e090ed3225323a4d5",
+      "sha256": "ec62c79e5e1b689260ea5226d8fffe7e7514364b53d628b75a922dc4dafec4d2",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/bee.mjs"
@@ -1592,7 +1598,7 @@
     },
     {
       "path": "packages/bee/lib/claims.mjs",
-      "sha256": "8869e1ed8f4efe89adf69f2f3b566f295665f42965964ad5e8839eeee957102b",
+      "sha256": "de7726a26b2354b65ee598d00f9179f04f71fe3d53f39a865b749da49e03623d",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/claims.mjs"
@@ -1655,7 +1661,7 @@
     },
     {
       "path": "packages/bee/lib/guards.mjs",
-      "sha256": "34b3744373ea342a99378269f4c0f30303f9a09aeac3e454091f6bf2b7130424",
+      "sha256": "0a31cab392fb5b10d943fdf62ae4aec79deace7ab3c2a9fd7fcbec5a13da0520",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/guards.mjs"
@@ -1781,7 +1787,7 @@
     },
     {
       "path": "packages/bee/lib/state.mjs",
-      "sha256": "3d13cc125219908584dfd3b324fdcbae41c605e8e263354695141920e1b1b62d",
+      "sha256": "42aeca98dc553e9fa446d922c89e25714fd3197ad143d581ca1725299afffbba",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/state.mjs"
@@ -1928,7 +1934,7 @@
     },
     {
       "path": "packages/bee/tests/test_claims.mjs",
-      "sha256": "b9e5c1a63aeea2525999f7e029df79ba33ea473118cc1cc46280ae64e3e8a4c1",
+      "sha256": "698567280f8461ab95727c697ac691d11263ebacab78e1d7d844c9d6b1856df8",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_claims.mjs"

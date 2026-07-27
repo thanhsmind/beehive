@@ -26,10 +26,14 @@ use crate::fsutil::{read_json, write_json_atomic};
 /// `state.mjs`'s exported `GATE_NAMES` (rust-port-16, CONTEXT.md D3/D9).
 pub const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
 
-/// state.mjs `BEE_VERSION` — kept in sync BY HAND at port time (D1 freeze:
-/// the mjs source is the oracle for this value, never the other way
-/// around). Read by [`compute_runtime_drift`]'s version-drift check.
-pub const BEE_VERSION: &str = "1.18.2";
+/// state.mjs `BEE_VERSION` — the mjs source stays the oracle for this value
+/// (D1 freeze), but the sync is no longer BY HAND: this line is a registered
+/// member of the release tuple (`scripts/lib/release-tuple.mjs`, kind
+/// `rust-const`), so `bump_version.mjs` rewrites it together with every other
+/// physical home of the version. Read by [`compute_runtime_drift`]'s
+/// version-drift check, which is why a hand-sync miss turned the mjs/Rust
+/// parity suite red on the first release after the port.
+pub const BEE_VERSION: &str = "1.18.3";
 
 /// state.mjs `PHASES` — the phase enum's non-terminal members, in the
 /// mjs source's own declared order (used verbatim in the
