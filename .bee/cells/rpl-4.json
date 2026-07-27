@@ -109,7 +109,57 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "oracle-is-honest-not-tuned",
+            "status": "PASS",
+            "evidence": "HONEST ORACLE. decisions_driver.mjs:63 imports the real module and every op calls an exported symbol only (logDecision, archiveDecisions, sweepDecisionCitations, addCaptureStub); the only local logic is argv parsing, a spinUntil barrier and JSON emission. Frozen-copy byte identity confirmed by md5sum for both decisions.mjs and lock.mjs copies. Comparisons are assert_eq! on whole Values or on RAW LINES; the only substitutions are key-targeted and shape-asserted first (scanned_at after asserting len==24, id/at in the stub test). Key order asserted separately (rust_keys == mjs_keys, test:832-835). normalize_refusal elides pid= and the since stamp only after asserting digits-only and 24-char ISO forms. The driver refuses any root containing .bee/bin/lib/decisions.mjs so it cannot touch the live store."
+          },
+          {
+            "id": "discarded-red-floor-rebuilt-correctly",
+            "status": "PASS",
+            "evidence": "REPRODUCED INDEPENDENTLY by the judge, not merely read. decisions.mjs:39-47 states exactly the claimed contract (archiveDecisions prunes and rewrites, so every appender must serialize against that rewrite; a bare appendJsonl is only safe while nobody rewrites underneath). The current test races the real frozen archiver (decisions_lock_conformance.rs:240-250 spawns archive-until) against 1 node plus 2 Rust loggers, and pre-seeds 40 backdated events asserting archived_count == SEED_COUNT (:379-383) so a NOTHING_QUALIFIES archiver cannot fake it. The judge copied bee-core to a scratch tree, bypassed with_decisions_lock_sync's acquire, rebuilt and got the red: '4 of 90 reported appends were LOST — clobbered by the mjs archiver read-prune-rename'; the unmodified baseline in the same tree was 6 passed. The detector is sound: strict per-line parse (deliberately not the fail-open read_jsonl), each id exactly once across active+archive, with duplicated/stranded catching half-completed transactions."
+          },
+          {
+            "id": "readdir-ordering-bug-real-and-reaches-the-store",
+            "status": "PASS",
+            "evidence": "Sort exists at decisions.rs:557-559, byte-wise on the encoded file name, pre-recursion. libuv byte order confirmed empirically by the judge: files created zeta/Beta/alpha/_under/0num came back as 0num, Beta, _under, alpha, zeta — strcmp order, not case-folded, not creation order. It reaches the persisted store: decisions.mjs:466 computes the sweep, :476 inserts it into the event literal, :484 appends that event to .bee/decisions.jsonl, mirrored in Rust at decisions.rs:870,882; that store is NOT in differ.rs:28's exclusion set. Invisible to --cmd-check because only the zero-hit sweep has a scenario, which is exactly why the oracle test pins the order (files_in_order first/last, test:524-528)."
+          },
+          {
+            "id": "capture-list-deviation-justified",
+            "status": "PASS",
+            "evidence": "capture.mjs:35-46 array branch is map(String.trim).filter(Boolean) while the string branch splits on comma; normalize_list_items is the array branch verbatim. bee.mjs:1977-1982 passes real arrays (dids: [supersedes, id], files: [hit.file]), so a join-then-split port would split docs/a,b.md — pinned by an oracle assertion on exactly that path. add_capture_stub's signature is unchanged and now delegates to a private append_stub; the only reordering evaluates the pure infallible normalize_list before the outcome/lane guards, so nothing observable changed. ledger/capture.rs is not in the commit at all."
+          },
+          {
+            "id": "declared-non-assertions",
+            "status": "PASS",
+            "evidence": "PARTIAL per the judge, carried forward rather than waived. (a) The sweep-with-hits obstacle is REAL: normalize.rs:531-560 rewrites only key-colon-value pairs so array ELEMENTS are never candidates, and neither dids nor outcome is a declared volatile field — the fresh uuid is unreachable. Its two components ARE oracle-compared, but the COMPOSED handler path (ledger/decisions.rs:272-293 stub loop and :295-313 sweep header and hit lines) has no oracle test and no scenario; the judge read it against bee.mjs:1975-1992 and it matches textually, but that is a read, not an executed assertion. Low risk, genuine gap — carried into rpl-5 as an explicit obligation. (b) contention.jsonl is fully MET: differ.rs:28 excludes .bee/logs, and the conformance test reads the file directly on both legs, pinning the 9-key set IN ORDER, the ISO-millis shape and the typed refusal text across a real mjs and a real Rust leg. Retry budget confirmed 16 acquires but the SOURCE is decisions.mjs:64 (RETRY_ATTEMPTS=15 plus one acquire before the loop), not lock.mjs — the dispatch premise pointed at the wrong file; lock.mjs's 100/50 govern the async withStoreLock, a different path."
+          },
+          {
+            "id": "key-order-and-jsonl-bytes",
+            "status": "PASS",
+            "evidence": "preserve_order still declared load-bearing in bee-core/Cargo.toml with its rationale comment intact and untouched by the commit. Field order matches per event kind: decide decisions.rs:760-778 vs decisions.mjs:319-330; supersede :874-888 vs :468-478; redact :911-915 vs :495-501. The appended line does NOT go through jsonout.rs — it is written by fsutil.rs:270-280 append_jsonl via plain to_string; jsonout is the stdout path and exists to reproduce JSON.stringify's integer-like-key hoisting, which cannot apply here since every event key is a fixed non-numeric literal, pinned by a test named event_keys_are_never_integer_like. Enforced end to end by a byte-for-byte line comparison after key-targeted value substitution — a structural compare would have forgiven order."
+          },
+          {
+            "id": "scope-and-branch",
+            "status": "PASS",
+            "evidence": "The commit touches no packages/bee/ and no .bee/bin/ file (only its own cell record), no queen-bee/src/main.rs. Wiring is one line in groups.rs behind the rpl-1 seam; dispatch.rs only widens the exact-set pin to [capture, decisions, intent], kept exact. decisions.rs extended in place, deletions limited to the stale READ-side module header. lock.rs consumed via acquire_store_lock_once/OnceOutcome/StoreLockGuard — no second lock. No fixture floor lowered; PORTED_GROUPS gains exactly one member, the self-retirement guard is intact, and a new floor names all 15 scenarios. normalize.rs's single addition is a shape-gated IsoMillisZ field. Branch verified: abbd6e62 is on dev only, main head predates it. Independent live run: 15/15 zero diff with every negative control firing on its declared channel, binaries verified newer than their sources."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-07-27T07:20:58.137Z"
+      }
+    ]
   },
   "tier": "ceiling"
 }

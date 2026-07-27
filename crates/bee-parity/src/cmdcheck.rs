@@ -2496,9 +2496,10 @@ fn register_decisions_scenarios(set: &mut ScenarioSet) -> Result<(), String> {
 
     // ── the group's unknown-VERB usage fallback ───────────────────────────
     //
-    // It names all EIGHT verbs, including the five rpl-5 has not ported —
-    // the line describes the bee CLI, not this binary's progress, so a port
-    // that listed only what it implements would diverge.
+    // It names all EIGHT verbs, including `render`, which rpl-5 still has
+    // not ported (it was split out into rpl-10) — the line describes the bee
+    // CLI, not this binary's progress, so a port that listed only what it
+    // implements would diverge.
     set.register(Scenario {
         group: "decisions",
         name: "unknown-verb-usage-fallback",
@@ -2514,6 +2515,787 @@ fn register_decisions_scenarios(set: &mut ScenarioSet) -> Result<(), String> {
                 channel: Channel::Stderr,
                 kind: AssertKind::Equals,
                 text: "Unknown command \"frobnicate\". Use: log, supersede, redact, active, search, archive, tag, render.\n",
+            },
+        ],
+    })?;
+
+    register_decisions_query_scenarios(set)?;
+
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// rpl-5: the decisions QUERY verbs (active, search, archive, tag)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// WHY EVERY ONE OF THESE SEEDS. `queen-bench --generate` writes monotone
+// filler into `.bee/decisions.jsonl`: every row is `type: "decide"`, every
+// row carries the SAME `date` (`2026-07-26T00:00:00.000Z`), every row has
+// `scope: "repo"`, NO row has a `tags` key, there is not one `supersede`,
+// `redact` or `tag` event anywhere, and there is no
+// `.bee/decisions-archive.jsonl` at all (`queen-bench/src/fixture.rs:287`).
+//
+// Run against that store, EVERY assertion this section owes is vacuous. A
+// projection that forgot to exclude superseded events is green, because
+// nothing is superseded. A `--tag` filter that ignored its argument is
+// green, because nothing is tagged. A `--text` ranking comparator that
+// returned its input untouched is green, because filler text makes every row
+// score identically. An `--all` union that never opened the archive is
+// green, because there is no archive. `archive` itself would refuse on every
+// call, since nothing qualifies under either rule.
+//
+// So each scenario below SEEDS the rows it asserts on, additively, on top of
+// `--generate` (never instead of it — obligation 3 in this module's doc).
+// The three corpora are shaped so that the ANSWER differs from every naive
+// implementation's answer, not merely from the empty set:
+//
+// - the projection corpus orders its rows so the surviving pair is neither
+//   the first nor the last rows of the file;
+// - the ranking corpus is built so the correct order (A, D, B, C) differs
+//   from BOTH file order (A, B, D, C) and reverse-file order (C, D, B, A),
+//   and so that D and B tie on hit count — which is what makes the sort's
+//   STABILITY observable rather than assumed;
+// - the token corpus contains `si-1`, `si-10` and `si-1-extra` together, so
+//   a substring match and a bare `\b` match both produce a WRONG answer.
+
+const DECISIONS_ARCHIVE: &str = ".bee/decisions-archive.jsonl";
+
+/// The projection corpus (`active`, and every structured `search` filter).
+///
+/// Row order in the file is deliberate: the two events that must SURVIVE
+/// (`rpl5-live-a`, `rpl5-seeded-supersede`) sit at positions 1 and 4 of the
+/// six, with the two that must VANISH between them — so "returned the whole
+/// seeded block" and "returned a contiguous slice of it" are both wrong
+/// answers, not just "returned nothing".
+///
+/// `rpl5-live-a` carries NO `tags` key and is retro-tagged by
+/// `rpl5-seeded-tag`, so the dp-5 overlay is observable as a `tags` array
+/// appearing on an event whose own stored line has none.
+fn seed_decisions_projection(root: &Path) -> Result<(), String> {
+    for (row, marker) in [
+        (r#"{"id":"rpl5-live-a","type":"decide","date":"2026-07-26T00:00:01.000Z","decision":"rpl5 projection live alpha","rationale":"rpl5 projection seed","alternatives":null,"scope":"rpl5-projection","source":"fixture","confidence":0}"#, "rpl5-live-a"),
+        (r#"{"id":"rpl5-gone-superseded","type":"decide","date":"2026-07-26T00:00:02.000Z","decision":"rpl5 projection superseded target","rationale":"rpl5 projection seed","alternatives":null,"scope":"rpl5-projection","source":"fixture","confidence":0}"#, "rpl5-gone-superseded"),
+        (r#"{"id":"rpl5-gone-redacted","type":"decide","date":"2026-07-26T00:00:03.000Z","decision":"rpl5 projection redacted target","rationale":"rpl5 projection seed","alternatives":"rpl5 alternative prose","scope":"rpl5-projection","source":"fixture","confidence":0}"#, "rpl5-gone-redacted"),
+        (r#"{"id":"rpl5-seeded-supersede","type":"supersede","date":"2026-07-26T00:00:04.000Z","supersedes":"rpl5-gone-superseded","decision":"rpl5 projection replacement","rationale":"rpl5 projection seed","scope":"rpl5-projection","sweep":{"scanned_at":"2026-07-26T00:00:04.000Z","hit_count":0,"files":[]}}"#, "rpl5-seeded-supersede"),
+        (r#"{"id":"rpl5-seeded-redact","type":"redact","date":"2026-07-26T00:00:05.000Z","redacts":"rpl5-gone-redacted","reason":"rpl5 projection seed"}"#, "rpl5-seeded-redact"),
+        (r#"{"id":"rpl5-seeded-tag","type":"tag","date":"2026-07-26T00:00:06.000Z","target":"rpl5-live-a","tags":["rpl5-overlay"],"scope":"rpl5-projection"}"#, "rpl5-seeded-tag"),
+    ] {
+        append_journal_row(root, row, marker)?;
+    }
+    Ok(())
+}
+
+/// The ranking + token corpus (`search --text`, `--tag`, `--cell`).
+///
+/// The four `rank` rows are appended A, B, D, C and score 3, 2, 2, 1 against
+/// `--text "zorble quibnix frimlat"`. Reverse-file order (what `active`
+/// hands the filter) is therefore C, D, B, A, and the correct ranked answer
+/// is A, D, B, C — a permutation of BOTH. `D` and `B` tie at 2 and must come
+/// out D-before-B, which is the incoming order: that is the stable-sort
+/// property, and the only reason "hit count desc, then date desc" needs no
+/// date comparison at all.
+///
+/// The three `tok` rows exist so `--cell si-1` has something to get WRONG:
+/// a substring match would also return `si-10` and `si-1-extra`, and a plain
+/// `\b` match would also return `si-1-extra` (because `-` is itself a
+/// non-word character, which is exactly why mjs uses the `[\w-]`
+/// lookarounds).
+fn seed_decisions_search_corpus(root: &Path) -> Result<(), String> {
+    for (row, marker) in [
+        (r#"{"id":"rpl5-rank-a","type":"decide","date":"2026-07-26T00:00:01.000Z","decision":"rpl5 rank zorble quibnix frimlat","rationale":"rpl5 rank seed","alternatives":null,"scope":"rpl5-rank","source":"fixture","confidence":0,"tags":["rpl5-alpha"]}"#, "rpl5-rank-a"),
+        (r#"{"id":"rpl5-rank-b","type":"decide","date":"2026-07-26T00:00:02.000Z","decision":"rpl5 rank zorble quibnix","rationale":"rpl5 rank seed","alternatives":null,"scope":"rpl5-rank","source":"fixture","confidence":0,"tags":["rpl5-beta"]}"#, "rpl5-rank-b"),
+        (r#"{"id":"rpl5-rank-d","type":"decide","date":"2026-07-26T00:00:03.000Z","decision":"rpl5 rank zorble frimlat","rationale":"rpl5 rank seed","alternatives":null,"scope":"rpl5-rank","source":"fixture","confidence":0,"tags":["rpl5-beta"]}"#, "rpl5-rank-d"),
+        (r#"{"id":"rpl5-rank-c","type":"decide","date":"2026-07-26T00:00:04.000Z","decision":"rpl5 rank zorble","rationale":"rpl5 rank seed","alternatives":null,"scope":"rpl5-rank","source":"fixture","confidence":0}"#, "rpl5-rank-c"),
+        (r#"{"id":"rpl5-tok-exact","type":"decide","date":"2026-07-26T00:00:05.000Z","decision":"rpl5 token si-1 exact","rationale":"rpl5 token seed","alternatives":null,"scope":"rpl5-token","source":"fixture","confidence":0}"#, "rpl5-tok-exact"),
+        (r#"{"id":"rpl5-tok-longer","type":"decide","date":"2026-07-26T00:00:06.000Z","decision":"rpl5 token si-10 longer","rationale":"rpl5 token seed","alternatives":null,"scope":"rpl5-token","source":"fixture","confidence":0}"#, "rpl5-tok-longer"),
+        (r#"{"id":"rpl5-tok-suffixed","type":"decide","date":"2026-07-26T00:00:07.000Z","decision":"rpl5 token si-1-extra suffixed","rationale":"rpl5 token seed","alternatives":null,"scope":"rpl5-token","source":"fixture","confidence":0}"#, "rpl5-tok-suffixed"),
+    ] {
+        append_journal_row(root, row, marker)?;
+    }
+    Ok(())
+}
+
+/// The projection corpus PLUS a pre-existing `.bee/decisions-archive.jsonl`.
+///
+/// The sidecar matters twice over. For `search --all` it is the only thing
+/// that makes the union branch observable at all (`--generate` writes no
+/// archive). For `archive` it means the verb APPENDS to a non-empty file
+/// rather than creating one — which is the shape the crash-ordering
+/// contract actually runs in, and the one where a writer that truncated
+/// instead of appending would still look green against an absent file.
+fn seed_decisions_archive_fixture(root: &Path) -> Result<(), String> {
+    seed_decisions_projection(root)?;
+    let path = root.join(DECISIONS_ARCHIVE);
+    if path.exists() {
+        return Err(format!(
+            "seed_decisions_archive_fixture: {} already exists — the generated fixture is supposed to carry NO archive sidecar, and seeding over one would prove the wrong branch",
+            path.display()
+        ));
+    }
+    write_file(
+        &path,
+        "{\"id\":\"rpl5-archived-row\",\"type\":\"decide\",\"date\":\"2025-01-01T00:00:00.000Z\",\"decision\":\"rpl5 previously archived row\",\"rationale\":\"rpl5 archive seed\",\"alternatives\":null,\"scope\":\"rpl5-archive\",\"source\":\"fixture\",\"confidence\":0,\"tags\":[\"rpl5-archived\"]}\n",
+    )
+}
+
+/// Two ids sharing the same first eight hex characters — the ONLY shape in
+/// which `resolveTagTarget`'s ambiguity refusal can fire, and one no fixture
+/// row has (fixture ids are `fixture-decision-NNNNNN`, which is not even
+/// short8-shaped).
+fn seed_decisions_short8_twins(root: &Path) -> Result<(), String> {
+    for (row, marker) in [
+        (r#"{"id":"deadbeef-1111-4aaa-8bbb-000000000001","type":"decide","date":"2026-07-26T00:00:07.000Z","decision":"rpl5 short8 twin one","rationale":"rpl5 short8 seed","alternatives":null,"scope":"rpl5-short8","source":"fixture","confidence":0}"#, "deadbeef-1111"),
+        (r#"{"id":"deadbeef-2222-4aaa-8bbb-000000000002","type":"decide","date":"2026-07-26T00:00:08.000Z","decision":"rpl5 short8 twin two","rationale":"rpl5 short8 seed","alternatives":null,"scope":"rpl5-short8","source":"fixture","confidence":0}"#, "deadbeef-2222"),
+    ] {
+        append_journal_row(root, row, marker)?;
+    }
+    Ok(())
+}
+
+// ── mutations (rpl-5) ──────────────────────────────────────────────────────
+
+/// Point the seeded `redact` event at an id nobody carries, so the row it
+/// was hiding becomes ACTIVE again. The control fires precisely on the
+/// projection rule the scenario exists to prove — a mutation that merely
+/// edited some unrelated row would move stdout too, but would not
+/// demonstrate that THIS comparison can see a redaction failure.
+fn mutate_decisions_unredact(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        DECISIONS_JOURNAL,
+        "\"redacts\":\"rpl5-gone-redacted\"",
+        "\"redacts\":\"rpl5-never-existed\"",
+    )
+}
+
+/// Point the seeded `supersede` event at an id nobody carries: its target
+/// comes back into the active set, AND (for the archive scenarios) stops
+/// qualifying under rule 1.
+fn mutate_decisions_unsupersede(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        DECISIONS_JOURNAL,
+        "\"supersedes\":\"rpl5-gone-superseded\"",
+        "\"supersedes\":\"rpl5-never-existed\"",
+    )
+}
+
+/// Replace the retro-tag event's tags, so the OVERLAY changes rather than
+/// the underlying row — the only mutation that can prove the overlay is
+/// really being applied at read time.
+fn mutate_decisions_overlay_tags(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, DECISIONS_JOURNAL, "[\"rpl5-overlay\"]", "[\"rpl5-mutated\"]")
+}
+
+/// Turn the seeded `supersede` ACTION record into an ordinary `decide`, so
+/// it stops being exempt from the age rule and ages out with everything
+/// else: `kept` drops from 3 to 2.
+///
+/// The harness refused the first control tried here — un-superseding the
+/// hidden row — because PAST the threshold that row ages out anyway, so
+/// neither count moved. This one probes the rule the scenario actually
+/// asserts: action records never age out.
+fn mutate_decisions_supersede_becomes_decide(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        DECISIONS_JOURNAL,
+        "\"id\":\"rpl5-seeded-supersede\",\"type\":\"supersede\"",
+        "\"id\":\"rpl5-seeded-supersede\",\"type\":\"decide\"",
+    )
+}
+
+/// Retype the retro-tag event so `buildTagOverlay` stops seeing it at all —
+/// `rpl5-live-a` reverts to genuinely untagged and reappears in an
+/// `--untagged` answer.
+///
+/// The harness refused the first control tried here — swapping the overlay's
+/// tag VALUES — because a row with different tags is still a row with tags,
+/// so `--untagged`'s answer never moved. Only removing the overlay
+/// altogether can prove this filter runs after it.
+fn mutate_decisions_disable_tag_event(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        DECISIONS_JOURNAL,
+        "\"id\":\"rpl5-seeded-tag\",\"type\":\"tag\"",
+        "\"id\":\"rpl5-seeded-tag\",\"type\":\"tug\"",
+    )
+}
+
+/// Take one term away from the top-ranked row, dropping it from 3 hits to
+/// 2 and moving it BELOW the other two-hit rows in the stable order. A
+/// control that only changed a row's text would move stdout without ever
+/// exercising the comparator; this one moves the ORDER.
+fn mutate_decisions_rank_order(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        DECISIONS_JOURNAL,
+        "\"rpl5 rank zorble quibnix frimlat\"",
+        "\"rpl5 rank zorble quibnix\"",
+    )
+}
+
+/// Retag ONE of the two `rpl5-beta` rows, so the `--tag` filter's answer
+/// shrinks by exactly one row. Anchored on that row's own decision text
+/// because `["rpl5-beta"]` alone appears twice, and a mutation that cannot
+/// name its target uniquely is refused by [`mutate::replace_exactly_once`].
+///
+/// The harness refused the first control tried here — the ranking mutation
+/// — because it edits `rpl5-rank-a`, which is tagged `rpl5-alpha` and is not
+/// in this scenario's answer at all.
+fn mutate_decisions_beta_tag(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        DECISIONS_JOURNAL,
+        "\"rpl5 rank zorble frimlat\",\"rationale\":\"rpl5 rank seed\",\"alternatives\":null,\"scope\":\"rpl5-rank\",\"source\":\"fixture\",\"confidence\":0,\"tags\":[\"rpl5-beta\"]",
+        "\"rpl5 rank zorble frimlat\",\"rationale\":\"rpl5 rank seed\",\"alternatives\":null,\"scope\":\"rpl5-rank\",\"source\":\"fixture\",\"confidence\":0,\"tags\":[\"rpl5-gamma\"]",
+    )
+}
+
+/// Suffix the exact-token row so `si-1` no longer matches it — the same
+/// edit that makes a substring implementation still return it.
+fn mutate_decisions_token_match(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, DECISIONS_JOURNAL, "\"rpl5 token si-1 exact\"", "\"rpl5 token si-1x exact\"")
+}
+
+/// Redact the seeded SUPERSEDE event itself, so the head of the projection
+/// drops out and the row behind it becomes `--recent 1`'s answer.
+///
+/// The harness refused the first control tried here — un-superseding the
+/// hidden row — because that row sorts BELOW the head and `--recent 1`
+/// printed the same line either way: a real store change that the scenario's
+/// own output could not see. This one moves the head, which is the only
+/// thing a one-row slice can observe.
+fn mutate_decisions_redact_the_supersede(root: &Path) -> Result<(), String> {
+    append_journal_row(
+        root,
+        r#"{"id":"rpl5-mutation-redact","type":"redact","date":"2026-07-26T00:00:09.000Z","redacts":"rpl5-seeded-supersede","reason":"rpl5 mutation"}"#,
+        "rpl5-mutation-redact",
+    )
+}
+
+/// Rename one short8 twin so the prefix resolves UNIQUELY and the ambiguity
+/// refusal turns into a successful tag.
+fn mutate_decisions_short8_twin(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, DECISIONS_JOURNAL, "deadbeef-2222", "beadfeed-2222")
+}
+
+/// Rename the retro-tag TARGET so a resolvable target becomes unresolvable.
+fn mutate_decisions_tag_target(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, DECISIONS_JOURNAL, "\"id\":\"rpl5-live-a\"", "\"id\":\"rpl5-live-z\"")
+}
+
+/// Retag the archived row, so the `--all` union read finds nothing. Targets
+/// the ARCHIVE sidecar specifically: a mutation of the active journal could
+/// not prove that the union branch really opened the second file.
+fn mutate_decisions_archived_row_tag(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, DECISIONS_ARCHIVE, "[\"rpl5-archived\"]", "[\"rpl5-mutated\"]")
+}
+
+/// Make something qualify for archiving on the UNSEEDED fixture, so the
+/// nothing-qualifies refusal turns into a successful archive. The inverse
+/// control for a refusal that is otherwise identical no matter what the
+/// journal holds.
+fn mutate_decisions_create_supersede_row(root: &Path) -> Result<(), String> {
+    append_journal_row(
+        root,
+        &format!(
+            "{{\"id\":\"rpl5-mutation-supersede\",\"type\":\"supersede\",\"date\":\"2026-07-26T00:00:09.000Z\",\"supersedes\":\"{DECISION_TARGET}\",\"decision\":\"rpl5 mutation replacement\",\"rationale\":\"rpl5 mutation\",\"scope\":\"repo\",\"sweep\":{{\"scanned_at\":\"2026-07-26T00:00:09.000Z\",\"hit_count\":0,\"files\":[]}}}}"
+        ),
+        "rpl5-mutation-supersede",
+    )
+}
+
+// The registry controls for refusals that never reach the store at all
+// (`--recent 0`, a filter-less `search`, a blank `--before`). Renaming the
+// verb's own registry entry makes the command stop resolving, so the group
+// usage fallback takes the refusal's place — a stderr-only change, and the
+// only control available to a scenario whose output does not depend on the
+// journal.
+
+fn mutate_registry_decisions_active(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, REGISTRY_DUMP, "\"name\": \"decisions.active\"", "\"name\": \"decisions.zctive\"")
+}
+
+fn mutate_registry_decisions_search(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(root, REGISTRY_DUMP, "\"name\": \"decisions.search\"", "\"name\": \"decisions.zearch\"")
+}
+
+fn mutate_registry_decisions_archive(root: &Path) -> Result<(), String> {
+    mutate::replace_exactly_once(
+        root,
+        REGISTRY_DUMP,
+        "\"name\": \"decisions.archive\"",
+        "\"name\": \"decisions.zrchive\"",
+    )
+}
+
+/// Every expected render below was MEASURED by running the frozen
+/// `.bee/bin/bee.mjs` over the seeded fixture, never hand-composed.
+fn register_decisions_query_scenarios(set: &mut ScenarioSet) -> Result<(), String> {
+    // ── active: the projection ────────────────────────────────────────────
+    //
+    // Two events survive out of six seeded, and BOTH exclusion rules are
+    // load-bearing for that answer: `rpl5-gone-superseded` is named by a
+    // supersede event and `rpl5-gone-redacted` by a redact event. The
+    // supersede event ITSELF survives (it is a decide-or-supersede that
+    // nothing supersedes), which is the part a port that filtered by type
+    // alone would get wrong.
+    set.register(Scenario {
+        group: "decisions",
+        name: "active-text-excludes-superseded-and-redacted",
+        argv: argv(&["decisions", "active", "--scope", "rpl5-projection"]),
+        session_id: None,
+        seed: Some(seed_decisions_projection),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_unredact }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "[2026-07-26T00:00:04.000Z] «rpl5 projection replacement» (id rpl5-seeded-supersede, supersede)\n  why: «rpl5 projection seed»\n[2026-07-26T00:00:01.000Z] «rpl5 projection live alpha» (id rpl5-live-a, decide)\n  why: «rpl5 projection seed»\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // The dp-5 OVERLAY, visible only in `--json`: `rpl5-live-a`'s stored
+    // line carries no `tags` key at all, and the retro-tag event supplies
+    // one at read time.
+    set.register(Scenario {
+        group: "decisions",
+        name: "active-json-applies-the-retro-tag-overlay",
+        argv: argv(&["decisions", "active", "--scope", "rpl5-projection", "--json"]),
+        session_id: None,
+        seed: Some(seed_decisions_projection),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_overlay_tags }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"id\": \"rpl5-live-a\"" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"rpl5-overlay\"" },
+            // The supersede's own nested sweep object rides through the
+            // projection untouched, key order included.
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"hit_count\": 0" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // `--recent` slices AFTER the filters, not before: with the filter
+    // applied first, `--recent 1` is the supersede event. A port that handed
+    // `recent` down to `activeDecisions` would slice the unfiltered list and
+    // return a fixture row instead.
+    set.register(Scenario {
+        group: "decisions",
+        name: "active-recent-slices-after-filtering",
+        argv: argv(&["decisions", "active", "--scope", "rpl5-projection", "--recent", "1"]),
+        session_id: None,
+        seed: Some(seed_decisions_projection),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_redact_the_supersede }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "[2026-07-26T00:00:04.000Z] «rpl5 projection replacement» (id rpl5-seeded-supersede, supersede)\n  why: «rpl5 projection seed»\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    set.register(Scenario {
+        group: "decisions",
+        name: "active-recent-zero-refused",
+        argv: argv(&["decisions", "active", "--recent", "0"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: REGISTRY_DUMP, apply: mutate_registry_decisions_active }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "--recent must be a positive integer.\n",
+            },
+        ],
+    })?;
+
+    // ── search: the ranking comparator ────────────────────────────────────
+    set.register(Scenario {
+        group: "decisions",
+        name: "search-multi-term-text-ranking",
+        argv: argv(&["decisions", "search", "--text", "zorble quibnix frimlat"]),
+        session_id: None,
+        seed: Some(seed_decisions_search_corpus),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_rank_order }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "[2026-07-26T00:00:01.000Z] «rpl5 rank zorble quibnix frimlat» (id rpl5-rank-a, decide)\n  why: «rpl5 rank seed»\n[2026-07-26T00:00:03.000Z] «rpl5 rank zorble frimlat» (id rpl5-rank-d, decide)\n  why: «rpl5 rank seed»\n[2026-07-26T00:00:02.000Z] «rpl5 rank zorble quibnix» (id rpl5-rank-b, decide)\n  why: «rpl5 rank seed»\n[2026-07-26T00:00:04.000Z] «rpl5 rank zorble» (id rpl5-rank-c, decide)\n  why: «rpl5 rank seed»\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // `--tag` is exact and case-insensitive, and the two matching rows come
+    // back in the projection's own newest-first order (no re-ranking
+    // happens without `--text`).
+    set.register(Scenario {
+        group: "decisions",
+        name: "search-tag-over-seeded-tags",
+        argv: argv(&["decisions", "search", "--tag", "RPL5-Beta"]),
+        session_id: None,
+        seed: Some(seed_decisions_search_corpus),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_beta_tag }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "[2026-07-26T00:00:03.000Z] «rpl5 rank zorble frimlat» (id rpl5-rank-d, decide)\n  why: «rpl5 rank seed»\n[2026-07-26T00:00:02.000Z] «rpl5 rank zorble quibnix» (id rpl5-rank-b, decide)\n  why: «rpl5 rank seed»\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    set.register(Scenario {
+        group: "decisions",
+        name: "search-cell-token-excludes-longer-and-suffixed",
+        argv: argv(&["decisions", "search", "--cell", "si-1"]),
+        session_id: None,
+        seed: Some(seed_decisions_search_corpus),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_token_match }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "[2026-07-26T00:00:05.000Z] «rpl5 token si-1 exact» (id rpl5-tok-exact, decide)\n  why: «rpl5 token seed»\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // `--untagged` is evaluated AFTER the overlay: `rpl5-live-a` has no
+    // stored `tags` key and is still excluded, because the retro-tag event
+    // gave it one at read time (dp-6 D7d).
+    set.register(Scenario {
+        group: "decisions",
+        name: "search-untagged-is-post-overlay",
+        argv: argv(&["decisions", "search", "--untagged", "--scope", "rpl5-projection"]),
+        session_id: None,
+        seed: Some(seed_decisions_projection),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_disable_tag_event }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "[2026-07-26T00:00:04.000Z] «rpl5 projection replacement» (id rpl5-seeded-supersede, supersede)\n  why: «rpl5 projection seed»\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // `--since` is an INCLUSIVE lower bound: `rpl5-live-a` is dated exactly
+    // the cutoff and is kept. An exclusive `>` would return one row.
+    set.register(Scenario {
+        group: "decisions",
+        name: "search-since-lower-bound-is-inclusive",
+        argv: argv(&["decisions", "search", "--since", "2026-07-26T00:00:01.000Z", "--scope", "rpl5-projection"]),
+        session_id: None,
+        seed: Some(seed_decisions_projection),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_unredact }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "[2026-07-26T00:00:04.000Z] «rpl5 projection replacement» (id rpl5-seeded-supersede, supersede)\n  why: «rpl5 projection seed»\n[2026-07-26T00:00:01.000Z] «rpl5 projection live alpha» (id rpl5-live-a, decide)\n  why: «rpl5 projection seed»\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // `--all` unions in the archive sidecar. The mutation edits the SIDECAR,
+    // so a port that never opened the second file cannot pass this control.
+    set.register(Scenario {
+        group: "decisions",
+        name: "search-all-unions-the-archive-sidecar",
+        argv: argv(&["decisions", "search", "--tag", "rpl5-archived", "--all"]),
+        session_id: None,
+        seed: Some(seed_decisions_archive_fixture),
+        mutation: Some(MutationTarget { store: DECISIONS_ARCHIVE, apply: mutate_decisions_archived_row_tag }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "[2025-01-01T00:00:00.000Z] «rpl5 previously archived row» (id rpl5-archived-row, decide)\n  why: «rpl5 archive seed»\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    set.register(Scenario {
+        group: "decisions",
+        name: "search-without-any-filter-refused",
+        argv: argv(&["decisions", "search"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: REGISTRY_DUMP, apply: mutate_registry_decisions_search }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "decisions search requires --text, or at least one structured filter (--tag/--scope/--area/--since/--untagged/--cell/--feature).\n",
+            },
+        ],
+    })?;
+
+    // The `--since` guard runs BEFORE the truthiness fold, so an
+    // unparseable value refuses rather than reading as "no filter".
+    set.register(Scenario {
+        group: "decisions",
+        name: "search-invalid-since-refused",
+        argv: argv(&["decisions", "search", "--since", "nope"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: REGISTRY_DUMP, apply: mutate_registry_decisions_search }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "--since must be a valid ISO date, got \"nope\".\n",
+            },
+        ],
+    })?;
+
+    // ── archive: AT the threshold, and PAST it ────────────────────────────
+    //
+    // AT the threshold, the cutoff equals the fixture rows' own date. `<` is
+    // STRICT, so not one of the ~1150 filler rows ages out, and the only
+    // events that move are the two that qualify under rule 1 (superseded /
+    // redacted, regardless of age). A port using `<=` would archive the
+    // whole store here.
+    set.register(Scenario {
+        group: "decisions",
+        name: "archive-json-at-threshold-moves-only-superseded-and-redacted",
+        argv: argv(&["decisions", "archive", "--before", "2026-07-26T00:00:00.000Z", "--json"]),
+        session_id: None,
+        seed: Some(seed_decisions_archive_fixture),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_unsupersede }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"rpl5-gone-superseded\"" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"rpl5-gone-redacted\"" },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "\"before\": \"2026-07-26T00:00:00.000Z\"" },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // PAST the threshold, every `decide` event in the store ages out and
+    // exactly THREE events survive — the supersede, the redact and the tag.
+    // That number is the age rule's own contract ("action records never age
+    // out") and, unlike the archived count, it does not move with the
+    // generator's row count. The ~1153-row archive sidecar the two legs
+    // write is compared in full by the tree diff.
+    set.register(Scenario {
+        group: "decisions",
+        name: "archive-text-past-threshold-keeps-only-action-records",
+        argv: argv(&["decisions", "archive", "--before", "2026-07-27T00:00:00.000Z"]),
+        session_id: None,
+        seed: Some(seed_decisions_archive_fixture),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_supersede_becomes_decide }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Contains,
+                text: " decision(s) to .bee/decisions-archive.jsonl (kept 3 active, cutoff 2026-07-27T00:00:00.000Z).\n",
+            },
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Contains, text: "Archived 1153 " },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // NO seed: on the monotone fixture nothing is superseded, nothing is
+    // redacted, and nothing predates the cutoff — so the verb refuses rather
+    // than succeeding with an empty move. `--json` puts `emitError`'s
+    // payload on STDOUT, which is why this scenario's control fires there.
+    set.register(Scenario {
+        group: "decisions",
+        name: "archive-nothing-qualifies-refused",
+        argv: argv(&["decisions", "archive", "--before", "1999-01-01T00:00:00.000Z", "--json"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_create_supersede_row }),
+        control_channel: Channel::Stdout,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "{\"error\":\"archiveDecisions: nothing qualifies for archiving — no superseded/redacted events and no decide events strictly older than 1999-01-01T00:00:00.000Z (decision-propagation D4c: --before is explicit or the verb refuses; there is never a default age-based purge).\"}\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // A present-but-BLANK `--before` takes the required-flag refusal, not
+    // the invalid-date one: mjs guards on `!String(before).trim()` first.
+    set.register(Scenario {
+        group: "decisions",
+        name: "archive-blank-before-refused",
+        argv: argv(&["decisions", "archive", "--before", "  "]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: REGISTRY_DUMP, apply: mutate_registry_decisions_archive }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "archiveDecisions: --before <ISO date> is required — decisions archive never runs a default age-based purge (decision-propagation D4c).\n",
+            },
+        ],
+    })?;
+
+    // An unparseable cutoff, reported with `JSON.stringify`'s quoting.
+    set.register(Scenario {
+        group: "decisions",
+        name: "archive-invalid-before-refused",
+        argv: argv(&["decisions", "archive", "--before", "2026-13-99"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: REGISTRY_DUMP, apply: mutate_registry_decisions_archive }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "archiveDecisions: --before must be a valid ISO date, got \"2026-13-99\".\n",
+            },
+        ],
+    })?;
+
+    // ── tag ───────────────────────────────────────────────────────────────
+    //
+    // The happy path is provable in TEXT mode because the summary line
+    // echoes the argv, never the fresh event uuid — the appended store row
+    // (which does carry one) is compared by the tree diff, where `id` and
+    // `date` are declared volatile fields.
+    set.register(Scenario {
+        group: "decisions",
+        name: "tag-text-existing-target-with-scope",
+        argv: argv(&[
+            "decisions",
+            "tag",
+            "--target",
+            "rpl5-live-a",
+            "--tags",
+            "rpl5-new, rpl5-second ,,",
+            "--scope",
+            "rpl5-retagged",
+        ]),
+        session_id: None,
+        seed: Some(seed_decisions_projection),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_tag_target }),
+        control_channel: Channel::Stdout,
+        expect_exit: 0,
+        assertions: vec![
+            Assertion {
+                channel: Channel::Stdout,
+                kind: AssertKind::Equals,
+                text: "Tagged rpl5-live-a with [rpl5-new, rpl5-second] scope=rpl5-retagged.\n",
+            },
+            Assertion { channel: Channel::Stderr, kind: AssertKind::Equals, text: "" },
+        ],
+    })?;
+
+    // A target no decide/supersede event carries. The INVERSE control makes
+    // the id exist, so the refusal becomes a successful tag.
+    set.register(Scenario {
+        group: "decisions",
+        name: "tag-unresolved-target-refused",
+        argv: argv(&["decisions", "tag", "--target", DECISIONS_ABSENT_ID, "--tags", "rpl5-new"]),
+        session_id: None,
+        seed: None,
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_create_absent_target }),
+        control_channel: Channel::Stdout,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "decisions tag: target \"khong-ton-tai\" does not resolve to any decide/supersede event in the active+archive union.\n",
+            },
+        ],
+    })?;
+
+    // The short8 PREFIX path, and its refusal to guess. The matches are
+    // listed in candidate order, which is the union's own insertion order.
+    set.register(Scenario {
+        group: "decisions",
+        name: "tag-ambiguous-short8-refused",
+        argv: argv(&["decisions", "tag", "--target", "DeadBeef", "--tags", "rpl5-new"]),
+        session_id: None,
+        seed: Some(seed_decisions_short8_twins),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_short8_twin }),
+        control_channel: Channel::Stdout,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "decisions tag: short id \"DeadBeef\" is ambiguous — matches 2 events (deadbeef-1111-4aaa-8bbb-000000000001, deadbeef-2222-4aaa-8bbb-000000000002); use the full id.\n",
+            },
+        ],
+    })?;
+
+    // Target resolution runs BEFORE tag validation, so this refusal proves
+    // the ORDER as much as the message: renaming the target turns it into
+    // the unresolved refusal instead.
+    set.register(Scenario {
+        group: "decisions",
+        name: "tag-invalid-slug-refused",
+        argv: argv(&["decisions", "tag", "--target", "rpl5-live-a", "--tags", "Bad Tag"]),
+        session_id: None,
+        seed: Some(seed_decisions_projection),
+        mutation: Some(MutationTarget { store: DECISIONS_JOURNAL, apply: mutate_decisions_tag_target }),
+        control_channel: Channel::Stderr,
+        expect_exit: 1,
+        assertions: vec![
+            Assertion { channel: Channel::Stdout, kind: AssertKind::Equals, text: "" },
+            Assertion {
+                channel: Channel::Stderr,
+                kind: AssertKind::Equals,
+                text: "decisions tag: tag \"Bad Tag\" is not a valid lowercase slug (must match /^[a-z0-9][a-z0-9-]*$/).\n",
             },
         ],
     })?;

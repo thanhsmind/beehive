@@ -588,7 +588,13 @@ fn is_boundary(before: Option<char>, at: Option<char>) -> bool {
 /// `toUpperCase()`, keep the original when that is not exactly one scalar,
 /// and keep the original when a non-ASCII input canonicalizes to ASCII (the
 /// rule that stops U+212A KELVIN SIGN matching a literal `k`).
-fn canonicalize(c: char) -> char {
+///
+/// `pub` since rpl-5: `queen_bee::ledger::decisions`'s `matchesWholeToken`
+/// (`bee.mjs:2046`) is a second case-insensitive literal match over the same
+/// ECMA rule. Re-deriving it there would put two hand-written copies of a
+/// subtle spec clause in two crates, free to drift; the copy pinned by
+/// `citation_word_boundary_follows_js_semantics` is exported instead.
+pub fn canonicalize(c: char) -> char {
     let mut upper = c.to_uppercase();
     let Some(u) = upper.next() else { return c };
     if upper.next().is_some() {
@@ -639,6 +645,28 @@ fn js_excerpt(trimmed: &str) -> String {
         return trimmed.to_string();
     }
     format!("{}...", String::from_utf16_lossy(&units[..SWEEP_EXCERPT_MAX - 3]))
+}
+
+/// `str.slice(0, n)` — the SAME UTF-16 code-unit measurement [`js_excerpt`]
+/// uses, extracted so the two spellings of "a JS prefix" cannot drift apart.
+///
+/// rpl-5 fix: `supersede_decision` computed its `short8` as
+/// `target_id.chars().take(8)` — eight SCALAR VALUES — while
+/// `decisions.mjs:465` uses `targetId.slice(0, 8)`, eight UTF-16 CODE UNITS.
+/// The two agree on every uuid, and disagree the moment the id's first eight
+/// units contain an astral character: `chars().take(8)` would take eight
+/// astral scalars (sixteen units) and search `docs/**` for a needle mjs never
+/// searched for. `supersede` accepts an ARBITRARY id — the parity fixture's
+/// own `fixture-decision-000000` is not a uuid — so the divergent input is
+/// reachable, not hypothetical. Same lone-surrogate note as [`js_excerpt`]:
+/// a cut that splits a pair leaves mjs a lone surrogate and yields U+FFFD
+/// here.
+fn js_slice_prefix(s: &str, n: usize) -> String {
+    let units: Vec<u16> = s.encode_utf16().collect();
+    if units.len() <= n {
+        return s.to_string();
+    }
+    String::from_utf16_lossy(&units[..n])
 }
 
 /// `text.split(/\r?\n/)`.
@@ -867,7 +895,7 @@ pub fn supersede_decision(
     // dp-2 lock doctrine: the sweep is computed BEFORE the append, so the
     // event is written to the store exactly once, already carrying its
     // result inline. Never a post-append rewrite of a written jsonl line.
-    let short8: String = target_id.chars().take(8).collect();
+    let short8: String = js_slice_prefix(&target_id, 8);
     let sweep = sweep_decision_citations(root, &target_id, &short8, scanned_at);
 
     // Key order is the mjs object literal's (`decisions.mjs:468`): id, type,
@@ -927,6 +955,428 @@ fn append_event(root: &Path, event: &Value) -> Result<(), String> {
         let path = decisions_path(root);
         append_jsonl(&path, event).map_err(|e| format!("append {}: {e}", path.display()))
     })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE QUERY-SIDE WRITERS (rpl-5): `archive` and `tag`
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Both are READ-MODIFY-WRITE, and both therefore take the SAME
+// [`with_decisions_lock_sync`] the three write verbs above already take —
+// never a second lock, never an unlocked fall-through. `archive` is the
+// reason the lock is unscoped at all (`DECISIONS_LOCK_NAME`'s note): it
+// rewrites the WHOLE journal, so every appender has to serialize against it.
+
+/// `decisions.mjs:217` `writeJsonlAtomic`, local to this module for the same
+/// reason it is local in mjs — [`crate::fsutil`] has no jsonl-atomic-rewrite
+/// primitive, and this cell does not widen it.
+///
+/// Body shape is mjs's exactly: compact lines joined by `\n`, then a single
+/// trailing `\n` — and the EMPTY string (not `"\n"`) when there is nothing
+/// left to keep. Temp-name scheme and the cleanup-then-rethrow-the-original
+/// discipline follow [`crate::fsutil::write_json_atomic`].
+fn write_jsonl_atomic(file: &Path, events: &[Value]) -> std::io::Result<()> {
+    if let Some(dir) = file.parent() {
+        if !dir.as_os_str().is_empty() {
+            ensure_dir(dir)?;
+        }
+    }
+    let mut body = String::new();
+    for (i, event) in events.iter().enumerate() {
+        if i > 0 {
+            body.push('\n');
+        }
+        body.push_str(
+            &serde_json::to_string(event)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?,
+        );
+    }
+    if !body.is_empty() {
+        body.push('\n');
+    }
+
+    let pid = std::process::id();
+    let seq = WRITE_JSONL_ATOMIC_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let mut tmp_name = file.as_os_str().to_owned();
+    tmp_name.push(format!(".{pid:x}-{seq:x}-{nanos:x}.tmp"));
+    let tmp = PathBuf::from(tmp_name);
+
+    let result = std::fs::write(&tmp, body.as_bytes()).and_then(|()| std::fs::rename(&tmp, file));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
+static WRITE_JSONL_ATOMIC_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// `decisions.mjs:243` `appendJsonlBatch`: every validated event lands in ONE
+/// append call, so a crash can never leave a partial batch.
+fn append_jsonl_batch(file: &Path, events: &[Value]) -> std::io::Result<()> {
+    use std::io::Write as _;
+    if let Some(dir) = file.parent() {
+        if !dir.as_os_str().is_empty() {
+            ensure_dir(dir)?;
+        }
+    }
+    let mut body = String::new();
+    for (i, event) in events.iter().enumerate() {
+        if i > 0 {
+            body.push('\n');
+        }
+        body.push_str(
+            &serde_json::to_string(event)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?,
+        );
+    }
+    body.push('\n');
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(file)?;
+    f.write_all(body.as_bytes())
+}
+
+/// `decisions.mjs:689` `DecisionsArchiveNothingQualifiesError`'s message.
+pub fn decisions_archive_nothing_qualifies_message(before: &str) -> String {
+    format!(
+        "archiveDecisions: nothing qualifies for archiving — no superseded/redacted events and no decide events strictly older than {before} (decision-propagation D4c: --before is explicit or the verb refuses; there is never a default age-based purge)."
+    )
+}
+
+/// `decisions.mjs:727` `archiveDecisions`.
+///
+/// `before` is `Option<&str>` for mjs's `undefined`; a present-but-blank
+/// value takes the SAME first refusal, because mjs's guard is
+/// `!String(before).trim()`.
+///
+/// Two rules, in mjs's order: every superseded/redacted event moves
+/// REGARDLESS of age, then every plain `decide` event strictly older than the
+/// cutoff. A `supersede`/`redact` ACTION record is never moved by the age
+/// rule, so the active file keeps its audit trail of what superseded what.
+///
+/// Crash ordering is load-bearing and preserved: the archive append happens
+/// FIRST, then the pruned active file is replaced by temp-write+rename. A
+/// crash between them leaves an id in both files, which
+/// [`active_decisions`]'s `all` branch de-duplicates with the active copy
+/// winning — so recovery is automatic and no journal is needed.
+pub fn archive_decisions(root: &Path, before: Option<&str>) -> Result<Value, String> {
+    let raw = before.unwrap_or("");
+    if js_trim(raw).is_empty() {
+        return Err(
+            "archiveDecisions: --before <ISO date> is required — decisions archive never runs a default age-based purge (decision-propagation D4c)."
+                .to_string(),
+        );
+    }
+    let before_str = js_trim(raw).to_string();
+    let Some(before_ms) = crate::jsdate::date_parse_ms(&before_str) else {
+        return Err(format!(
+            "archiveDecisions: --before must be a valid ISO date, got {}.",
+            json_quote(&before_str)
+        ));
+    };
+
+    with_decisions_lock_sync(root, || {
+        let active_path = decisions_path(root);
+        let archive_path = decisions_archive_path(root);
+        let events: Vec<Value> = read_jsonl(&active_path);
+
+        let mut superseded: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut redacted: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for event in &events {
+            if event.get("type").and_then(Value::as_str) == Some("supersede") {
+                if let Some(s) = truthy_str(event.get("supersedes")) {
+                    superseded.insert(s.to_string());
+                }
+            }
+            if event.get("type").and_then(Value::as_str) == Some("redact") {
+                if let Some(r) = truthy_str(event.get("redacts")) {
+                    redacted.insert(r.to_string());
+                }
+            }
+        }
+
+        let mut to_archive: Vec<Value> = Vec::new();
+        let mut to_keep: Vec<Value> = Vec::new();
+        for event in events {
+            // `!event || typeof event !== 'object' || typeof event.id !== 'string'`
+            // — a malformed-but-parsed line is never dropped.
+            let Some(id) = event.get("id").and_then(Value::as_str).map(str::to_string) else {
+                to_keep.push(event);
+                continue;
+            };
+            if superseded.contains(&id) || redacted.contains(&id) {
+                to_archive.push(event);
+                continue;
+            }
+            if event.get("type").and_then(Value::as_str) == Some("decide") {
+                if let Some(event_ms) = event.get("date").and_then(Value::as_str).and_then(crate::jsdate::date_parse_ms)
+                {
+                    if event_ms < before_ms {
+                        to_archive.push(event);
+                        continue;
+                    }
+                }
+            }
+            to_keep.push(event);
+        }
+
+        if to_archive.is_empty() {
+            return Err(decisions_archive_nothing_qualifies_message(&before_str));
+        }
+
+        // Archive-append FIRST (see the crash-ordering note above).
+        if let Some(dir) = archive_path.parent() {
+            ensure_dir(dir).map_err(|e| format!("ensure_dir {}: {e}", dir.display()))?;
+        }
+        {
+            use std::io::Write as _;
+            let mut body = String::new();
+            for (i, event) in to_archive.iter().enumerate() {
+                if i > 0 {
+                    body.push('\n');
+                }
+                body.push_str(&serde_json::to_string(event).map_err(|e| format!("serialize archived event: {e}"))?);
+            }
+            body.push('\n');
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&archive_path)
+                .map_err(|e| format!("append {}: {e}", archive_path.display()))?;
+            f.write_all(body.as_bytes())
+                .map_err(|e| format!("append {}: {e}", archive_path.display()))?;
+        }
+
+        write_jsonl_atomic(&active_path, &to_keep)
+            .map_err(|e| format!("write {}: {e}", active_path.display()))?;
+
+        // Key order is the mjs literal's: archived, kept, before.
+        let mut result = Map::new();
+        result.insert(
+            "archived".to_string(),
+            Value::Array(
+                to_archive
+                    .iter()
+                    .map(|e| e.get("id").cloned().unwrap_or(Value::Null))
+                    .collect(),
+            ),
+        );
+        result.insert("kept".to_string(), Value::from(to_keep.len()));
+        result.insert("before".to_string(), Value::String(before_str.clone()));
+        Ok(Value::Object(result))
+    })
+}
+
+// ─── the retro-tag verb (dp-5, CONTEXT D7c) ────────────────────────────────
+
+/// `decisions.mjs:545` `SHORT8_PATTERN` = `/^[0-9a-f]{8}$/i`.
+fn is_short8(raw: &str) -> bool {
+    raw.len() == 8 && raw.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// `decisions.mjs:521` `DecisionsTagTargetUnresolvedError`'s message.
+pub fn decisions_tag_target_unresolved_message(target: &str) -> String {
+    format!(
+        "decisions tag: target {} does not resolve to any decide/supersede event in the active+archive union.",
+        json_quote(target)
+    )
+}
+
+/// `decisions.mjs:533` `DecisionsTagTargetAmbiguousError`'s message.
+pub fn decisions_tag_target_ambiguous_message(target: &str, matches: &[String]) -> String {
+    format!(
+        "decisions tag: short id {} is ambiguous — matches {} events ({}); use the full id.",
+        json_quote(target),
+        matches.len(),
+        matches.join(", ")
+    )
+}
+
+/// `decisions.mjs:551` `decisionTargetCandidates`: the SAME active+archive
+/// union `activeDecisions({all:true})` reads (de-dup by id, active copy
+/// wins), narrowed to decide/supersede — a `redact` or `tag` event id is
+/// never a valid retro-tag target.
+fn decision_target_candidates(root: &Path) -> Vec<Value> {
+    let active_events: Vec<Value> = read_jsonl(&decisions_path(root));
+    let archived_events: Vec<Value> = read_jsonl(&decisions_archive_path(root));
+    let mut order: Vec<String> = Vec::new();
+    let mut by_id: HashMap<String, Value> = HashMap::new();
+    for event in &active_events {
+        if let Some(id) = event.get("id").and_then(Value::as_str) {
+            if !by_id.contains_key(id) {
+                order.push(id.to_string());
+            }
+            by_id.insert(id.to_string(), event.clone());
+        }
+    }
+    for event in &archived_events {
+        if let Some(id) = event.get("id").and_then(Value::as_str) {
+            if !by_id.contains_key(id) {
+                order.push(id.to_string());
+                by_id.insert(id.to_string(), event.clone());
+            }
+        }
+    }
+    order
+        .into_iter()
+        .map(|id| by_id.remove(&id).unwrap())
+        .filter(is_decide_or_supersede)
+        .collect()
+}
+
+/// `decisions.mjs:564` `resolveTagTarget`. An exact id wins outright; only
+/// then is a short8 PREFIX considered, and only when it is unambiguous —
+/// two matches refuse rather than guess.
+fn resolve_tag_target(candidates: &[Value], target: Option<&Value>) -> Result<String, String> {
+    // `typeof target === 'string' ? target.trim() : ''`.
+    let raw = target.and_then(Value::as_str).map(js_trim).unwrap_or("");
+    if raw.is_empty() {
+        return Err("decisions tag: target id (full id or short8) is required.".to_string());
+    }
+    if candidates
+        .iter()
+        .any(|e| e.get("id").and_then(Value::as_str) == Some(raw))
+    {
+        return Ok(raw.to_string());
+    }
+    if is_short8(raw) {
+        let needle = raw.to_lowercase();
+        let matches: Vec<String> = candidates
+            .iter()
+            .filter_map(|e| e.get("id").and_then(Value::as_str))
+            .filter(|id| id.to_lowercase().starts_with(&needle))
+            .map(str::to_string)
+            .collect();
+        if matches.len() == 1 {
+            return Ok(matches.into_iter().next().unwrap());
+        }
+        if matches.len() > 1 {
+            return Err(decisions_tag_target_ambiguous_message(raw, &matches));
+        }
+    }
+    Err(decisions_tag_target_unresolved_message(raw))
+}
+
+/// `decisions.mjs:582` `normalizeTagEventTags`. Unlike [`normalize_tags`],
+/// tags are REQUIRED here: the overlay replaces the whole array, so a
+/// zero-tag tag event has no meaning.
+fn normalize_tag_event_tags(tags: Option<&Value>) -> Result<Vec<String>, String> {
+    let arr = match tags.and_then(Value::as_array) {
+        Some(a) if !a.is_empty() => a,
+        _ => {
+            return Err(
+                "decisions tag: --tags is required (at least one lowercase slug, e.g. \"billing,nightly-job\")."
+                    .to_string(),
+            )
+        }
+    };
+    let cleaned: Vec<String> = arr.iter().map(|t| js_trim(&js_string_value(t)).to_string()).collect();
+    for tag in &cleaned {
+        if !tag_pattern_matches(tag) {
+            return Err(format!(
+                "decisions tag: tag {} is not a valid lowercase slug (must match {TAG_PATTERN_SOURCE}).",
+                json_quote(tag)
+            ));
+        }
+    }
+    Ok(cleaned)
+}
+
+/// `decisions.mjs:607` `tagDecisionsBatch`.
+///
+/// ALL-OR-NOTHING: every entry is resolved and validated BEFORE anything is
+/// written, so one unresolvable target anywhere in the array means the whole
+/// batch refuses and the store is byte-untouched. Once validated, every event
+/// lands in exactly ONE locked [`append_jsonl_batch`] — never N sequential
+/// appends, which a crash could tear.
+///
+/// `ids` and `date` are threaded in from the CLI edge, the same determinism
+/// discipline the three write verbs use. `ids` must carry one fresh uuid per
+/// entry; mjs takes ONE `new Date().toISOString()` for the whole batch, which
+/// is why `date` is a single value rather than a list.
+pub fn tag_decisions_batch(
+    root: &Path,
+    entries: &[Value],
+    ids: &[String],
+    date: &str,
+) -> Result<Vec<Value>, String> {
+    if entries.is_empty() {
+        return Err("decisions tag: at least one entry ({target, tags, scope?}) is required.".to_string());
+    }
+    if ids.len() < entries.len() {
+        return Err("tagDecisionsBatch: one fresh id per entry is required.".to_string());
+    }
+    let candidates = decision_target_candidates(root);
+
+    let mut events: Vec<Value> = Vec::with_capacity(entries.len());
+    for (entry, id) in entries.iter().zip(ids) {
+        // `!entry || typeof entry !== 'object' || Array.isArray(entry)`.
+        if !entry.is_object() {
+            return Err(format!(
+                "decisions tag: batch entry must be an object {{target, tags, scope?}}, got {}.",
+                js_json_stringify(entry)
+            ));
+        }
+        let target_id = resolve_tag_target(&candidates, entry.get("target"))?;
+        let tags = normalize_tag_event_tags(entry.get("tags"))?;
+        // `entry.scope !== undefined && entry.scope !== null && String(entry.scope).trim()`.
+        let scope: Option<String> = match entry.get("scope") {
+            None | Some(Value::Null) => None,
+            Some(v) => {
+                let s = js_string_value(v);
+                let trimmed = js_trim(&s);
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            }
+        };
+        if let Some(scope) = &scope {
+            assert_safe_decision_content("scope", scope)?;
+        }
+
+        // Key order is the mjs object literal's: id, type, date, target,
+        // tags [, scope].
+        let mut event = Map::new();
+        event.insert("id".to_string(), Value::String(id.clone()));
+        event.insert("type".to_string(), Value::String("tag".to_string()));
+        event.insert("date".to_string(), Value::String(date.to_string()));
+        event.insert("target".to_string(), Value::String(target_id));
+        event.insert(
+            "tags".to_string(),
+            Value::Array(tags.into_iter().map(Value::String).collect()),
+        );
+        if let Some(scope) = scope {
+            event.insert("scope".to_string(), Value::String(scope));
+        }
+        events.push(Value::Object(event));
+    }
+
+    // dp-3 lock doctrine: every event is fully built before the lock is
+    // taken — the critical section is exactly the one batch append.
+    with_decisions_lock_sync(root, || {
+        let path = decisions_path(root);
+        append_jsonl_batch(&path, &events).map_err(|e| format!("append {}: {e}", path.display()))
+    })?;
+    Ok(events)
+}
+
+/// `JSON.stringify(value)` for the batch-entry refusal's `${…}` slot. `serde_json`'s
+/// compact form is JS's, and `undefined` is unreachable here (a parsed JSON
+/// array member is always a value).
+fn js_json_stringify(value: &Value) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "null".to_string())
+}
+
+/// `decisions.mjs:643` `tagDecision` — the single-entry wrapper over
+/// [`tag_decisions_batch`], same validate-then-append shape, one entry.
+pub fn tag_decision(root: &Path, entry: &Value, id: &str, date: &str) -> Result<Value, String> {
+    let ids = [id.to_string()];
+    let events = tag_decisions_batch(root, std::slice::from_ref(entry), &ids, date)?;
+    Ok(events.into_iter().next().expect("one entry yields one event"))
 }
 
 #[cfg(test)]
@@ -1006,6 +1456,27 @@ mod write_tests {
         // 160 ASTRAL scalars are 320 UTF-16 units, so they ARE cut.
         let astral = "🐝".repeat(SWEEP_EXCERPT_MAX);
         assert!(js_excerpt(&astral).ends_with("..."));
+    }
+
+    /// rpl-5: the helper `supersede_decision`'s `short8` now shares with
+    /// `js_excerpt`. The end-to-end oracle pin (a real `supersede` over an
+    /// astral id, diffed against the frozen mjs) lives in
+    /// `crates/queen-bee/tests/decisions_composed_oracle.rs`; this is the
+    /// unit-level statement of the same rule.
+    #[test]
+    fn slice_prefix_counts_utf16_code_units() {
+        assert_eq!(js_slice_prefix("1178cfce-aaaa", 8), "1178cfce");
+        // Shorter than the prefix: returned whole, never padded.
+        assert_eq!(js_slice_prefix("abc", 8), "abc");
+        assert_eq!(js_slice_prefix("", 8), "");
+        // THE CASE `chars().take(8)` GETS WRONG: three astral scalars are
+        // six UTF-16 units, so `slice(0, 8)` reaches only the third bee —
+        // a scalar take would swallow `cd` as well.
+        assert_eq!(js_slice_prefix("ab🐝🐝🐝cd-4aaa", 8), "ab🐝🐝🐝");
+        assert_ne!(js_slice_prefix("ab🐝🐝🐝cd-4aaa", 8), "ab🐝🐝🐝cd-".chars().take(8).collect::<String>());
+        // A BMP scalar is ONE unit, so it counts exactly like an ASCII one —
+        // nine é in, eight é out.
+        assert_eq!(js_slice_prefix("ééééééééé", 8), "éééééééé");
     }
 
     #[test]
