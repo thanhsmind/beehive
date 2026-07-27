@@ -28,10 +28,10 @@ fn main() -> ExitCode {
         }
         Some("hook") => run_hook_command(&args[1..]),
         Some("status") => run_status_command(&args[1..], entered_at),
-        _ => {
-            eprintln!("usage: queen-bee <ping|--version|status|hook NAME>");
-            ExitCode::FAILURE
-        }
+        // Everything the flat match above did not claim goes through the
+        // group/verb seam (rpl-1). `queen_bee::groups::register_all` is the
+        // one file a ported group edits — this arm never changes again.
+        _ => queen_bee::dispatch::run(&args),
     }
 }
 
@@ -90,7 +90,10 @@ fn run_status_command(rest: &[String], entered_at: std::time::Instant) -> ExitCo
 /// `{"error": ...}`; the text path writes to stderr. Exit 1 either way.
 fn status_error(message: &str, use_json: bool) -> ExitCode {
     if use_json {
-        println!("{}", serde_json::json!({ "error": message }));
+        // Every JSON payload this binary writes goes through `jsonout` so
+        // the JS key-order rule can never be applied at one call site and
+        // forgotten at another (rpl-1).
+        println!("{}", queen_bee::jsonout::stringify_compact(&serde_json::json!({ "error": message })));
     } else {
         eprintln!("{message}");
     }

@@ -1,4 +1,4 @@
-//! Spawns one `status` invocation against a given root and captures a
+//! Spawns one command invocation against a given root and captures a
 //! [`crate::differ::RunResult`]. One shared spawn path so the root-safety
 //! sanity read and the actual diffed run never drift apart — same command,
 //! same capture shape, every time (CONTEXT.md D7a: "run the same command
@@ -7,8 +7,24 @@
 //! rust-port-15 generalized this along two axes without changing what
 //! `--self-check` does: WHICH runtime executes (`node bee.mjs` vs the
 //! compiled `queen-bee`) and WHICH leg is captured (`--json` vs the human
-//! text render). Both legs must be diffable, since D3 byte-compatibility
-//! covers the text renderer too, not only the JSON payload.
+//! text render).
+//!
+//! rpl-1 generalized it along two more:
+//!
+//! - **arbitrary argv.** [`run_argv`] takes the token list directly, so the
+//!   harness is no longer `status`-shaped. [`run_status`] is now a thin
+//!   wrapper over it and behaves exactly as before.
+//! - **stderr is captured.** [`crate::differ::RunResult`] carried stdout and
+//!   the exit code only, which made a whole class of contract invisible.
+//!   Several behaviors later ledger cells must prove are stderr-ONLY: the
+//!   reviews fail-open warning (`packages/bee/lib/reviews.mjs:130`
+//!   `console.warn`), the `assertSafeContent` rejection text whose JS
+//!   regex-literal spelling rpl-3 must reproduce
+//!   (`packages/bee/lib/decisions.mjs:280-283`), every per-group unknown-VERB
+//!   usage fallback and every unknown-FLAG refusal (`bee.mjs:6985`
+//!   `emitError` writes to stderr whenever `--json` was not requested).
+//!   Diffing stdout alone would have declared all of those "parity" without
+//!   ever comparing the bytes that carry them.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -18,10 +34,19 @@ use crate::differ::RunResult;
 /// Which runtime executes the command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Runtime {
-    /// `node <bee.mjs> status ...` — the frozen mjs oracle (D1).
+    /// `node <bee.mjs> …` — the frozen mjs oracle (D1).
     Mjs,
-    /// `<queen-bee> status ...` — the ported Rust command.
+    /// `<queen-bee> …` — the ported Rust command.
     QueenBee,
+}
+
+impl Runtime {
+    pub fn label(self) -> &'static str {
+        match self {
+            Runtime::Mjs => "mjs",
+            Runtime::QueenBee => "queen-bee",
+        }
+    }
 }
 
 /// Which output leg is captured.
@@ -70,7 +95,7 @@ pub struct Binaries {
     pub queen_bee: PathBuf,
 }
 
-/// Run one leg of `status` under one runtime, with `cwd` set to `root`.
+/// Run ANY argv under one runtime, with `cwd` set to `root`.
 ///
 /// `session_id` pins `resolveSessionId`'s env chain (claims.mjs:139) for
 /// BOTH runtimes. This is not a convenience — it is COVERAGE CONTROL
@@ -85,10 +110,10 @@ pub struct Binaries {
 /// Both runtimes read the same env so parity itself was never at risk, but
 /// the PROOF quietly shrank. Every leg now runs under an explicitly
 /// controlled environment instead.
-pub fn run_status(
+pub fn run_argv(
     bins: &Binaries,
     runtime: Runtime,
-    leg: Leg,
+    argv: &[String],
     root: &Path,
     session_id: Option<&str>,
 ) -> Result<RunResult, String> {
@@ -100,7 +125,7 @@ pub fn run_status(
         }
         Runtime::QueenBee => Command::new(&bins.queen_bee),
     };
-    for arg in leg.args() {
+    for arg in argv {
         command.arg(arg);
     }
     // Always cleared, then set only when the scenario asks for it — an
@@ -114,16 +139,36 @@ pub fn run_status(
             command.env_remove("BEE_SESSION_ID");
         }
     }
-    let output = command
-        .current_dir(root)
-        .output()
-        .map_err(|e| format!("failed to spawn {} {} with cwd {}: {e}", describe(bins, runtime), leg.args().join(" "), root.display()))?;
+    let output = command.current_dir(root).output().map_err(|e| {
+        format!(
+            "failed to spawn {} {} with cwd {}: {e}",
+            describe(bins, runtime),
+            argv.join(" "),
+            root.display()
+        )
+    })?;
 
     Ok(RunResult {
         root: root.to_path_buf(),
+        runtime,
+        argv: argv.to_vec(),
         stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
         exit_code: output.status.code().unwrap_or(-1),
     })
+}
+
+/// Run one leg of `status` under one runtime — the rust-port-15 shape,
+/// unchanged, now expressed over [`run_argv`].
+pub fn run_status(
+    bins: &Binaries,
+    runtime: Runtime,
+    leg: Leg,
+    root: &Path,
+    session_id: Option<&str>,
+) -> Result<RunResult, String> {
+    let argv: Vec<String> = leg.args().iter().map(|s| (*s).to_string()).collect();
+    run_argv(bins, runtime, &argv, root, session_id)
 }
 
 fn describe(bins: &Binaries, runtime: Runtime) -> String {

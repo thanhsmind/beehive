@@ -34,11 +34,23 @@ fn is_excluded(rel: &Path) -> bool {
         .any(|p| rel_str == *p || rel_str.starts_with(&format!("{p}/")))
 }
 
-/// One captured leg: the run's own root, its stdout, and its exit code.
+/// One captured leg: the run's own root, which runtime produced it, the argv
+/// it ran, its stdout, its STDERR, and its exit code.
+///
+/// rpl-1 added `stderr`, `runtime` and `argv`. `stderr` is not cosmetic: it
+/// is where `bee.mjs`'s `emitError` (`:6985`) puts every refusal that was not
+/// asked for as `--json`, where `reviews.mjs:130`'s fail-open warning goes,
+/// and where `decisions.mjs:280-283`'s rejection text surfaces. `runtime` is
+/// carried because ONE stderr artifact is legitimately runtime-specific and
+/// must be asserted rather than assumed (see
+/// [`crate::normalize::strip_runtime_stderr_artifacts`]).
 #[derive(Debug, Clone)]
 pub struct RunResult {
     pub root: PathBuf,
+    pub runtime: crate::runner::Runtime,
+    pub argv: Vec<String>,
     pub stdout: String,
+    pub stderr: String,
     pub exit_code: i32,
 }
 
@@ -46,12 +58,36 @@ pub struct RunResult {
 pub struct DiffReport {
     pub exit_diff: Option<String>,
     pub stdout_diff: Option<String>,
+    pub stderr_diff: Option<String>,
     pub tree_diffs: Vec<String>,
 }
 
 impl DiffReport {
     pub fn is_clean(&self) -> bool {
-        self.exit_diff.is_none() && self.stdout_diff.is_none() && self.tree_diffs.is_empty()
+        self.exit_diff.is_none()
+            && self.stdout_diff.is_none()
+            && self.stderr_diff.is_none()
+            && self.tree_diffs.is_empty()
+    }
+
+    /// Which OUTPUT channels differ, as a human label. The negative control
+    /// asserts on a SPECIFIC channel rather than on `is_clean()`: a mutated
+    /// store makes the TREE differ almost for free, which would mask a leg
+    /// whose output comparison had been normalized into silence. This is the
+    /// diagnostic that tells a reader whether the control moved the other
+    /// channel instead of none at all.
+    pub fn output_channels_differing(&self) -> String {
+        let mut which = Vec::new();
+        if self.stdout_diff.is_some() {
+            which.push("stdout");
+        }
+        if self.stderr_diff.is_some() {
+            which.push("stderr");
+        }
+        if which.is_empty() {
+            return "neither stdout nor stderr".to_string();
+        }
+        which.join(" and ")
     }
 
     pub fn describe(&self) -> String {
@@ -65,13 +101,16 @@ impl DiffReport {
         if let Some(s) = &self.stdout_diff {
             parts.push(s.clone());
         }
+        if let Some(s) = &self.stderr_diff {
+            parts.push(s.clone());
+        }
         parts.extend(self.tree_diffs.iter().cloned());
         parts.join(" | ")
     }
 }
 
-/// Diff two legs: stdout (normalized per-leg), exit code, and the post-run
-/// store tree under each root (excluding the fixed exclusion set,
+/// Diff two legs: stdout and stderr (normalized per-leg), exit code, and the
+/// post-run store tree under each root (excluding the fixed exclusion set,
 /// normalized per-leg before comparison).
 pub fn diff_legs(a: &RunResult, b: &RunResult) -> Result<DiffReport, String> {
     let mut report = DiffReport::default();
@@ -98,6 +137,38 @@ pub fn diff_legs(a: &RunResult, b: &RunResult) -> Result<DiffReport, String> {
             b.root.display(),
             b_stdout_norm
         ));
+    }
+
+    // A stderr-artifact shape violation is reported AS A DIFF, never
+    // swallowed: it means the declared normalization no longer describes
+    // reality, which must fail loudly on the channel it applies to.
+    match (
+        normalize::normalize_stderr(&a.stderr, &a_root_str, a.runtime),
+        normalize::normalize_stderr(&b.stderr, &b_root_str, b.runtime),
+    ) {
+        (Ok(a_norm), Ok(b_norm)) => {
+            if a_norm != b_norm {
+                report.stderr_diff = Some(format!(
+                    "stderr differs after normalization:\n--- leg A ({}, {})\n{}\n--- leg B ({}, {})\n{}",
+                    a.root.display(),
+                    a.runtime.label(),
+                    a_norm,
+                    b.root.display(),
+                    b.runtime.label(),
+                    b_norm
+                ));
+            }
+        }
+        (a_res, b_res) => {
+            let mut msgs = Vec::new();
+            if let Err(e) = a_res {
+                msgs.push(format!("leg A ({}): {e}", a.runtime.label()));
+            }
+            if let Err(e) = b_res {
+                msgs.push(format!("leg B ({}): {e}", b.runtime.label()));
+            }
+            report.stderr_diff = Some(format!("stderr normalization contract violated: {}", msgs.join(" | ")));
+        }
     }
 
     report.tree_diffs = diff_trees(&a.root, &b.root)?;

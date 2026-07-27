@@ -1235,7 +1235,18 @@ fn js_math_round(v: f64) -> i64 {
 
 /// `emit()`'s `--json` branch: 2-space pretty print, trailing newline.
 pub fn to_json_stdout(status: &Value) -> String {
-    let mut text = serde_json::to_string_pretty(status).unwrap_or_else(|_| "null".to_string());
+    // rpl-1: `JSON.stringify` — which is the frozen oracle here — enumerates
+    // INTEGER-LIKE object keys first, in ascending numeric order, ahead of
+    // every other key (ECMA-262 `OrdinaryOwnPropertyKeys`). `serde_json` with
+    // `preserve_order` emits insertion order and therefore diverges the
+    // moment any object carries such a key. That is reachable from a real
+    // store: a lane record's `approved_gates` is passed through verbatim, and
+    // a lane seeded with `{"10":…,"2":…,"zeta":…,"1":…}` produced
+    // `1,2,10,context,shape,execution,review,zeta` from mjs against
+    // `context,shape,execution,review,10,2,zeta,1` from this binary — proven
+    // red by the `seam/numeric-string-keys` scenario before this call went
+    // through `jsonout`.
+    let mut text = crate::jsonout::stringify_pretty(status);
     text.push('\n');
     text
 }

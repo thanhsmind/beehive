@@ -65,7 +65,7 @@ fn write(path: &Path, body: &str) -> Result<(), String> {
     fs::write(path, body).map_err(|e| format!("write {}: {e}", path.display()))
 }
 
-fn iso_now_millis() -> String {
+pub(crate) fn iso_now_millis() -> String {
     // A plain UTC ISO-8601 with millisecond precision — the shape
     // `heartbeatStale`'s `Date.parse` accepts and the allowlist's
     // timestamp matcher normalizes.

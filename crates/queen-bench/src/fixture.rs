@@ -213,6 +213,7 @@ pub fn generate(req: &FixtureRequest) -> Result<FixtureReport, String> {
     write_onboarding(&bee_dir)?;
     write_state(&bee_dir)?;
     write_config(&bee_dir, &transcript_root)?;
+    write_command_registry(&bee_dir)?;
 
     let decisions_bytes = write_jsonl_padded(&bee_dir.join("decisions.jsonl"), req.decisions_bytes, decision_line)?;
     let backlog_bytes = write_jsonl_padded(&bee_dir.join("backlog.jsonl"), req.backlog_bytes, backlog_line)?;
@@ -276,6 +277,72 @@ fn write_config(bee_dir: &Path, transcript_root: &Path) -> Result<(), String> {
         json_escape(&transcript_root.display().to_string())
     );
     fs::write(&path, body).map_err(|e| format!("write {}: {e}", path.display()))
+}
+
+/// `crates/queen-bench` at compile time -> repo root two levels up. Same
+/// technique as `queen-bench::repo_root` in `main.rs` and
+/// `bee-parity::repo_root` (rust-port-2 precedent) — robust to the process's
+/// actual cwd at run time. Resolved HERE rather than threaded through
+/// [`FixtureRequest`] so the generator's public request shape (and every
+/// caller of it) is unchanged by this addition.
+fn repo_root() -> PathBuf {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+        .unwrap_or(manifest_dir)
+}
+
+/// Seed the COMMAND REGISTRY BRIDGE into the fixture (rpl-1 obligation (B)).
+///
+/// `bee-core::registry::load_registry` resolves two store-root-relative
+/// paths — `.bee/cache/command-registry.json` (the dump) and
+/// `.bee/bin/lib/command-registry.mjs` (the staleness anchor it re-hashes),
+/// per `crates/queen-bee/src/hooks/write_guard.rs:1254-1255`. Before this,
+/// `generate` wrote NEITHER, so every `queen-bee` invocation against a
+/// generated fixture failed to resolve a registry at all — which makes the
+/// registry-derived refusal texts (`bee.mjs:7186-7188`, built from the
+/// entry's `parameters.properties`) unreachable, and with them every
+/// `--cmd-check` scenario that asserts one.
+///
+/// Both files are copied VERBATIM from this repo, which is the point: the
+/// mjs leg imports the repo's own `command-registry.mjs` directly (it is
+/// spawned as `node <repo>/.bee/bin/bee.mjs` with only its cwd moved), so
+/// copying the same bytes is what makes the two legs resolve the SAME
+/// registry. This is safe for the parity TREE diff because `.bee/cache` is
+/// already a whole-path exclusion (`crates/bee-parity/src/differ.rs:28`) and
+/// because the `.mjs` copy is byte-identical in every clone — the goal is
+/// agreement between the legs, never diffing the registry itself.
+///
+/// REFUSES loudly (writes nothing, returns `Err`) when either source file is
+/// missing: a fixture that silently lacks the bridge is exactly the failure
+/// this exists to end.
+fn write_command_registry(bee_dir: &Path) -> Result<(), String> {
+    let root = repo_root();
+    let sources = [
+        (
+            root.join(".bee").join("cache").join("command-registry.json"),
+            bee_dir.join("cache").join("command-registry.json"),
+        ),
+        (
+            root.join(".bee").join("bin").join("lib").join("command-registry.mjs"),
+            bee_dir.join("bin").join("lib").join("command-registry.mjs"),
+        ),
+    ];
+    for (src, dest) in &sources {
+        if !src.exists() {
+            return Err(format!(
+                "command registry bridge source {} is missing — refusing to generate a fixture without it (queen-bee cannot resolve a registry against such a store, so every registry-derived parity scenario would be unprovable); regenerate with `node scripts/dump_command_registry.mjs`",
+                src.display()
+            ));
+        }
+        let parent = dest.parent().ok_or_else(|| format!("no parent dir for {}", dest.display()))?;
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
+        let bytes = fs::read(src).map_err(|e| format!("read {}: {e}", src.display()))?;
+        fs::write(dest, &bytes).map_err(|e| format!("write {}: {e}", dest.display()))?;
+    }
+    Ok(())
 }
 
 /// Deterministic filler text so each decisions.jsonl line lands in the same

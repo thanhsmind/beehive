@@ -12,6 +12,9 @@
 //! hook runtime needs. `hooks` holds the individual ported hook handlers.
 
 pub mod adapter;
+pub mod dispatch;
+pub mod groups;
 pub mod hookconfig;
 pub mod hooks;
+pub mod jsonout;
 pub mod status;

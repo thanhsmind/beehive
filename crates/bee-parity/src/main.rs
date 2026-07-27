@@ -22,6 +22,7 @@
 //! never reads or writes the repo's live `.bee/`.
 
 mod clone;
+mod cmdcheck;
 mod differ;
 mod enrich;
 mod mutate;
@@ -37,8 +38,9 @@ fn main() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("--self-check") => cmd_self_check(),
         Some("--status-check") => cmd_status_check(),
+        Some("--cmd-check") => cmd_cmd_check(&args[1..]),
         _ => {
-            eprintln!("usage: bee-parity <--self-check|--status-check>");
+            eprintln!("usage: bee-parity <--self-check|--status-check|--cmd-check (--all|--group NAME)>");
             ExitCode::FAILURE
         }
     }
@@ -490,6 +492,73 @@ fn assert_enriched_signature(
         }
     }
     Ok(())
+}
+
+// ─── --cmd-check (rpl-1, D7a): the GENERIC command-parity arm ─────────────
+//
+// `--status-check` above proves ONE command. This arm proves any command, and
+// is the shared verify surface every ledger cell in this slice hangs its own
+// group's scenarios on. See `cmdcheck.rs` for the four properties it has to
+// have and why each exists.
+
+fn cmd_cmd_check(args: &[String]) -> ExitCode {
+    match run_cmd_check(args) {
+        Ok(summary) => {
+            println!("bee-parity --cmd-check: PASS\n{summary}");
+            ExitCode::SUCCESS
+        }
+        Err(msg) => {
+            eprintln!("bee-parity --cmd-check: FAIL — {msg}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_cmd_check(args: &[String]) -> Result<String, String> {
+    let selector = cmdcheck::parse_selector(args)?;
+    let repo_root = repo_root();
+    let bee_mjs = repo_root.join(".bee").join("bin").join("bee.mjs");
+    if !bee_mjs.exists() {
+        return Err(format!("bee.mjs not found at {}", bee_mjs.display()));
+    }
+    let queen_bench = queen_bench_bin()?;
+    let bins = runner::Binaries { bee_mjs, queen_bee: sibling_bin("queen-bee")? };
+
+    let set = cmdcheck::all_scenarios()?;
+    if set.is_empty() {
+        return Err("no scenarios are registered at all — `--cmd-check` cannot pass on an empty table".to_string());
+    }
+    // The registered count per group is printed FIRST and unconditionally —
+    // the number a verify actually exercised has to be visible in its own
+    // output, not inferred from the absence of failures.
+    let counts = set.render_counts();
+
+    let selected = set.select(selector.group.as_deref());
+    if let Some(group) = &selector.group {
+        if selected.is_empty() {
+            return Err(format!(
+                "{counts}\ngroup `{group}` has ZERO registered scenarios — a verify that exercises nothing is not a verify. Register this group's scenarios in cmdcheck::all_scenarios() before capping it."
+            ));
+        }
+    }
+    if selected.is_empty() {
+        return Err(format!("{counts}\nno scenarios selected"));
+    }
+
+    let mut ws = Workspace::new();
+    let golden = ws.track(fresh_temp_dir("cmd-golden"));
+    assert_temp_outside_repo(&repo_root, &golden)?;
+    generate_fixture(&queen_bench, &golden)?;
+
+    let mut lines = vec![
+        counts,
+        format!("running {} of {} registered scenario(s):", selected.len(), set.len()),
+    ];
+    for scenario in selected {
+        let mut track = |dir: PathBuf| ws.track(dir);
+        lines.push(format!("  {}", cmdcheck::check_one_scenario(&repo_root, &bins, &golden, scenario, &mut track)?));
+    }
+    Ok(lines.join("\n"))
 }
 
 fn truncate(s: &str) -> String {

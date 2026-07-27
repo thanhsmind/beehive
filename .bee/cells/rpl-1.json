@@ -1,0 +1,147 @@
+{
+  "id": "rpl-1",
+  "feature": "rust-port-ledgers",
+  "title": "group/verb dispatch seam in queen-bee + generic bee-parity --cmd-check arm (arbitrary command, stdout+exit+tree diff)",
+  "lane": "high-risk",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "D7"
+  ],
+  "files": [
+    "crates/queen-bee/src/*",
+    "crates/bee-parity/src/*"
+  ],
+  "read_first": [
+    "docs/history/rust-port/CONTEXT.md",
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/validate-args.mjs",
+    "crates/bee-parity/src/mutate.rs",
+    "crates/queen-bee/src/main.rs",
+    "crates/queen-bee/src/lib.rs",
+    "crates/bee-parity/src/main.rs",
+    "crates/bee-parity/src/runner.rs",
+    "crates/bee-parity/src/differ.rs",
+    "crates/bee-core/src/validate_args.rs",
+    "crates/bee-core/src/registry.rs",
+    "docs/history/rust-port-ledgers/plan.md"
+  ],
+  "action": "Build the two seams every later ledger cell depends on, and NOTHING else -- no ledger group is ported here. (1) DISPATCH: crates/queen-bee/src/main.rs today is a flat single-word match (main.rs:20-36). Add a group/verb layer beside it: `queen-bee <group> <verb> [flags]` resolves through a registration table so a new group is one registration, not a main.rs rewrite. Flag parsing, unknown-flag refusal text, and missing-required-flag refusal text must reproduce the mjs wording byte-for-byte -- REVIEW CORRECTION -- the oracle is NOT bee-core/src/validate_args.rs. packages/bee/lib/validate-args.mjs:90 disclaims it in its own comment (`if (!propSchema) continue; // unknown-flag rejection is the dispatcher's own concern`). The real producer is packages/bee/bee.mjs:7186-7188, `${commandName.split('.').join(' ')}: unknown flag --${flagName} (known: ${known}).`, built from the REGISTRY entry's parameters.properties -- so the refusal text cannot be produced at all without a resolvable registry (see obligation B). The quoted string was independently reproduced from that generator over command-registry.mjs:501-509 and is byte-exact. Reuse bee-core::registry for the command-def bridge rather than hardcoding a second list (D7 names command-registry.mjs as the enumeration authority). (2) PARITY: crates/bee-parity today only knows --status-check. Add a generic --cmd-check arm following the check_one_leg shape at bee-parity/src/main.rs:343-438: it takes an argv scenario list, runs the SAME argv on both runtimes over cloned golden fixtures (runner::Runtime::Mjs spawns node <bee.mjs>, Runtime::QueenBee spawns the binary), and diffs the outputs plus the resulting .bee/ + docs/ file tree via differ::diff_legs. Every scenario also runs the seeded-mutation negative control (main.rs:427-432) -- a rig reporting zero diff on real divergence is untrusted and this cell is red. Fixtures come from queen-bench --generate, never hand-authored. THREE ADVISOR-FOUND OBLIGATIONS, all mandatory, all in THIS cell because every later cell inherits the surface. (a) STDERR IS IN THE DIFF SURFACE. runner::RunResult today captures stdout + exit code only (crates/bee-parity/src/runner.rs:118-124). Several contracts later cells must prove are stderr-ONLY: the reviews fail-open warning (packages/bee/lib/reviews.mjs:130) and the rejection text whose JS regex-literal spelling rpl-3 is obligated to reproduce (packages/bee/lib/decisions.mjs:280-283). Capture stderr in RunResult and diff it, or rpl-3's and rpl-7's obligations are unprovable and the proof is theater. (b) NONDETERMINISM NORMALIZATION MUST ASSERT FORMAT, NOT JUST MASK. Every write verb stamps wall-clock and randomness with no injection seam -- crypto.randomUUID()/toISOString() at packages/bee/lib/decisions.mjs:320-322, reviews.mjs:46,348, backlog.mjs:284, and tempfile suffixes at decisions.mjs:220 -- so a raw byte-diff can NEVER match on a write verb. Extend crates/bee-parity/src/normalize.rs so each volatile field is masked AND its shape asserted on BOTH sides: the ISO timestamp must be the 3-digit-millisecond Z form JS toISOString() emits (chrono has RFC3339 variants that differ), and the id must be UUID-v4 shaped. A mask without a shape assertion silently hides real drift and is itself a red. Document the volatile-field list as a deny-by-default allowlist: a field is masked only if it is named, so a new unmasked volatile field fails loudly instead of passing quietly. (c) NUMERIC-STRING KEY ORDER. JS JSON.stringify reorders integer-like object keys ascending while serde_json preserve_order keeps insertion order; any ledger object carrying numeric-string keys diverges despite preserve_order. Add one scenario whose payload has numeric-string keys and prove the two runtimes still agree, or record in the worker block that no ledger object can carry such keys, with the evidence. Register at least two smoke scenarios that pass today (--help --json, an unknown-group refusal) so the arm is proven live, not merely compiled. FOUR REVIEW-FOUND OBLIGATIONS, all mandatory, all here because every later cell inherits this surface. (A) THE VERIFY MUST DISCRIMINATE. A bare --cmd-check exits 0 on this cell's own smoke scenarios alone, so a later worker who registers nothing still gets green. Add `--cmd-check --group <name>`, which runs only that group's scenarios and EXITS NON-ZERO when the group has registered zero, plus `--cmd-check --all`. Print the registered-scenario count per group so the number is visible in the verify output. (B) THE REGISTRY IS ABSENT FROM THE FIXTURE, WHICH BREAKS THIS CELL'S OWN MUST-HAVE. bee-core's load_registry (crates/bee-core/src/registry.rs:112) resolves store-root-relative paths -- `.bee/cache/command-registry.json` and `.bee/bin/lib/command-registry.mjs` (crates/queen-bee/src/hooks/write_guard.rs:1254-1255) -- and crates/queen-bench/src/fixture.rs writes NEITHER, so load_registry errors on every scenario and both smoke scenarios plus the refusal-text truth are unachievable. Seed both files into the cmd-check fixture. This is safe for the tree diff precisely because `.bee/cache` is already in EXCLUDED_PREFIXES (crates/bee-parity/src/differ.rs:28) -- the point is to make the two legs resolve the SAME registry, not to diff it. (C) THE NEGATIVE CONTROL CANNOT FIRE FOR ANY LEDGER COMMAND AS BUILT. crates/bee-parity/src/mutate.rs:25-34 seed_mutation flips `.bee/state.json`'s phase and refuses unless that file byte-equals FIXTURE_STATE_BODY (mutate.rs:16); main.rs:428-432 then errors if the flip produced no stdout diff. No ledger verb -- intent show, capture count, decisions active, backlog counts, reviews list, feedback rank -- prints phase, so EVERY ledger scenario would fail its own negative control. Make the mutation target per-scenario: each scenario declares the store it actually reads, and seed_mutation perturbs THAT. A scenario with no declared mutation target is refused at registration, not silently skipped. (D) SCOPE THE FIXTURE PROHIBITION HONESTLY. `queen-bench --generate` produces only what `status` needed and its ledger content is monotone filler: every decisions row is type `decide` with an identical date, no tags and no supersede/redact rows (fixture.rs:287); every backlog row is type `proposal` (fixture.rs:296); ids are zero-padded so byte order equals numeric order; and there is no capture queue, no intent store, no decisions-archive, no docs/decisions/index.md, no docs/backlog.md and no learnings tree. Keep `--generate` as the authority for the BASELINE store -- never hand-author that -- but explicitly permit and require PER-SCENARIO SEEDING on the clone, so a scenario can add the superseded, redacted, non-ASCII, tagged, dual-schema and non-zero-padded rows its assertion actually needs. Say this in the arm's own docs; without it every later cell's edge scenarios are non-discriminating against a monotone store. ALSO IN SCOPE HERE: the per-group unknown-VERB usage fallback (packages/bee/bee.mjs:6586-6609 GROUP_USAGE_FALLBACKS) -- this cell owns the shared mechanism; each group cell asserts its own fallback line.",
+  "must_haves": {
+    "truths": [
+      "cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --all runs and reports every registered scenario clean, with the scenario argv printed per line",
+      "the seeded-mutation negative control fires for every scenario: a deliberately corrupted rust output IS reported as a diff, and the control covers stderr as well as stdout",
+      "runner::RunResult captures stderr and differ::diff_legs diffs it, proven by a scenario whose only difference would be on stderr",
+      "every masked volatile field also has its SHAPE asserted on both sides (ISO 3-digit-ms Z form, UUID-v4 form), proven by a negative control that changes only the shape and is still caught",
+      "the volatile-field list is deny-by-default: an unnamed volatile field fails the diff rather than passing quietly, proven by a test adding one",
+      "the numeric-string-key question is settled either by a passing scenario or by a worker-block statement with evidence that no ledger object can carry such keys",
+      "the group registration surface is proven by a TEST, not a comment: a test registers a throwaway group and asserts it is dispatchable and enumerable with no edit to main.rs",
+      "unknown-flag and missing-required-flag refusal text is byte-identical to mjs for at least one real command, proven by a --cmd-check scenario",
+      "`--cmd-check --group <name>` exits NON-ZERO for a group with zero registered scenarios, and prints the registered count per group",
+      "the command registry is seeded into the fixture so both legs resolve the same one; without it this cell's refusal-text truth cannot pass, so this is proven by that truth passing",
+      "the seeded-mutation negative control is per-scenario: each scenario declares the store it reads, the control perturbs THAT store, and a scenario registered with no mutation target is REFUSED at registration",
+      "the arm supports per-scenario seeding on the cloned fixture, proven by one scenario whose assertion depends on a row `--generate` never produces"
+    ],
+    "artifacts": [
+      {
+        "path": "crates/queen-bee/src/",
+        "substantive": "group/verb dispatch layer with a registration table and mjs-identical flag refusal text"
+      },
+      {
+        "path": "crates/bee-parity/src/runner.rs",
+        "substantive": "stderr captured into RunResult"
+      },
+      {
+        "path": "crates/bee-parity/src/normalize.rs",
+        "substantive": "deny-by-default volatile-field list with per-field shape assertions"
+      },
+      {
+        "path": "crates/bee-parity/src/",
+        "substantive": "generic --cmd-check arm with argv scenarios, tree diff, and per-scenario negative control"
+      },
+      {
+        "path": "crates/bee-parity/src/runner.rs",
+        "substantive": "RunResult carries stderr; run_status generalized to arbitrary argv"
+      },
+      {
+        "path": "crates/bee-parity/src/mutate.rs",
+        "substantive": "per-scenario mutation target replacing the state.json-phase-only flip"
+      },
+      {
+        "path": "crates/queen-bench/src/fixture.rs",
+        "substantive": "command registry seeded so both legs resolve the same one"
+      }
+    ],
+    "key_links": [
+      "rpl-2..rpl-8 each register their group behind this seam and add scenarios to --cmd-check",
+      "rpl-3's JS-regex-literal refusal text and rpl-7's fail-open warning are stderr-only and depend on obligation (a)",
+      "every write-verb cell (rpl-3..rpl-8) depends on obligation (b): without shape assertions their tree diffs prove nothing",
+      "differ::diff_legs and the exclusion list at bee-parity/src/differ.rs:17-28 are reused unchanged"
+    ],
+    "prohibitions": [
+      "No edits to .bee/bin/ or packages/bee/ (D1 freeze)",
+      "No wiring flip -- nothing in .codex/hooks.json or .claude/settings.json changes",
+      "No masking a volatile field without also asserting its shape",
+      "No widening the volatile-field mask to make a red go away",
+      "Tests never touch the live .bee/ store",
+      "No ledger group logic in this cell",
+      "No scenario registered without a declared mutation target",
+      "No hand-authored BASELINE store — per-scenario seeding rides on top of `--generate`, it does not replace it"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --all",
+  "status": "capped",
+  "trace": {
+    "worker": "Bob",
+    "outcome": "Group/verb dispatch seam in queen-bee + generic bee-parity --cmd-check arm. Dispatch: crates/queen-bee/src/dispatch.rs ports bee.mjs main()s argv path (splitCommandTokens, resolveCommand, parseFlags/FLAG_ALONE_BOOLEANS, nearest-match, group usage fallbacks, emit/emitError channel split, --help and group-scoped --help) over a registration table; landing a group is ONE line in crates/queen-bee/src/groups.rs and main.rs never changes again. Unknown-flag and missing-required-flag refusal text is built from the REGISTRY entrys parameters.properties (bee.mjs:7186-7188), not from validate-args.mjs which disclaims that job, and is proven byte-identical by live --cmd-check scenarios. Parity: --cmd-check runs arbitrary argv through both runtimes over clones of one queen-bench --generate fixture, diffing stdout, STDERR, exit and store tree. All four review/advisor obligations landed: --group <name> exits non-zero on zero registered scenarios and prints per-group counts; the command registry bridge is seeded into the fixture so both legs resolve the SAME registry; the negative control is per-scenario with a declared store and a declared channel, and registration REFUSES a scenario with no mutation target; per-scenario seeding on the clone is supported and used. normalize.rs is now key-gated AND shape-gated deny-by-default: nothing is masked unless its key is named AND its value matches the declared mjs shape (toISOString 3-digit-ms Z, UUID-v4), so a chrono RFC3339 variant or a non-v4 id survives into the diff. Found and fixed a real parity bug on the way: queen-bee emitted integer-like object keys in insertion order where JSON.stringify hoists them ascending — proven red on the real binaries, fixed via crates/queen-bee/src/jsonout.rs.",
+    "files_changed": [
+      "crates/queen-bee/src/dispatch.rs",
+      "crates/queen-bee/src/groups.rs",
+      "crates/queen-bee/src/jsonout.rs",
+      "crates/queen-bee/src/lib.rs",
+      "crates/queen-bee/src/main.rs",
+      "crates/queen-bee/src/status.rs",
+      "crates/bee-parity/src/cmdcheck.rs",
+      "crates/bee-parity/src/runner.rs",
+      "crates/bee-parity/src/differ.rs",
+      "crates/bee-parity/src/normalize.rs",
+      "crates/bee-parity/src/mutate.rs",
+      "crates/bee-parity/src/enrich.rs",
+      "crates/bee-parity/src/main.rs",
+      "crates/queen-bench/src/fixture.rs"
+    ],
+    "deviations": [
+      "AUTO-FIX (deviation rule 1, bug found in touched code): queen-bee's JSON stdout emitter diverged from the frozen mjs oracle on integer-like object keys. `JSON.stringify` enumerates array-index keys ascending BEFORE every string key (ECMA-262 OrdinaryOwnPropertyKeys); serde_json with preserve_order emits insertion order. Measured red on the real binaries via the new seam/numeric-string-keys scenario, then fixed by routing every queen-bee JSON payload through the new crates/queen-bee/src/jsonout.rs. This was in scope because obligation (c) demands the two runtimes agree on numeric-string keys, and because the seam owns the shared output emission every later ledger cell inherits.",
+      "REFUTED the cell's alternative escape for obligation (c). The cell allowed 'record that no ledger object can carry such keys, with the evidence'. The evidence says the opposite: `bee reviews record --kind manifest|preflight|decision|finding|uat` writes caller-supplied JSON into .bee/reviews/<id>.json with NO key sanitization (packages/bee/lib/reviews.mjs:283-327 via bee.mjs:4315-4322 and :4398-4404), so a numeric-string key is reachable in a real ledger store. Settled by the passing scenario instead, which is the option the cell preferred.",
+      "ADDED (deviation rule 2, missing functionality the outcome depends on): a declared, shape-asserted stderr normalization for the mjs `[bee] <cmd> <n>ms` work-visibility line (bee.mjs:7246). stderr could not be diffed at all without accounting for it, and 'ignore anything starting with [bee]' would have been exactly the blanket mask obligation (b) forbids. It is asserted in both directions instead: the mjs leg must carry exactly one well-shaped line, the queen-bee leg must carry none.",
+      "SCOPED DIVERGENCE, documented in crates/queen-bee/src/dispatch.rs: manifest drift (bee.mjs:7053 checkManifestDrift) is not ported. It is a stderr-only advisory that fires only when a PRIOR .bee/cache/manifest-hash.json disagrees; every parity leg runs once against a fresh clone that has none, so the mjs leg never emits it either.",
+      "SCOPED DIVERGENCE, documented: a registry-known command with no registered Rust handler, and a stale registry snapshot, are both REFUSED with a queen-bee-specific stderr message rather than answered with an mjs-shaped output. Impersonating mjs for an unported verb is the one failure mode that would make a parity green meaningless."
+    ],
+    "friction": null,
+    "capped_at": "2026-07-27T03:25:56.270Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"change_class\": \"behavior\",\n  \"tests_inspected\": [\n    \"crates/bee-parity/src/normalize.rs tests (7 cases) — the nearest existing coverage of the volatile allowlist. Read first; they pinned only that SOME masking happened (rewrites_own_root_only, normalizes_iso8601_timestamp, normalizes_pid_key_exact_match_only, ...). None of them asserted a SHAPE, so none could have caught a mask that hides a real drift; the new rows extend that same suite in place rather than starting a new file.\",\n    \"crates/bee-parity/src/mutate.rs tests (refuses_over_unexpected_content, flips_the_expected_fixture_body) — the existing pinning discipline for a seeded mutation. replace_exactly_once generalizes exactly that discipline; the existing rows still cover the state.json flip.\",\n    \"crates/bee-parity/src/differ.rs tests (excludes_logs_cache_tmp_runtime_prefixes, exclusion_is_prefix_scoped_not_substring) — confirmed .bee/cache is already a whole-path exclusion, which is what makes seeding the registry dump into the fixture safe for the tree diff.\",\n    \"crates/queen-bench/src/fixture.rs tests (refuses_each_pin_independently, encode_project_dir_mirrors_mjs) — the existing refuse-loudly convention the new registry-bridge seeding follows.\",\n    \"crates/bee-parity/src/main.rs check_one_leg (:343-438) — the existing per-leg parity+control shape that check_one_scenario is modeled on.\",\n    \"crates/bee-core/src/validate_args.rs — already a complete port of validate-args.mjs; reused rather than re-implemented, so the dispatcher only had to add the unknown-flag check that validate-args.mjs explicitly disclaims (its own comment at :90).\"\n  ],\n  \"tests_added\": [\n    \"crates/queen-bee/src/jsonout.rs: 7 rows covering the JS array-index predicate, ascending-integer-key ordering, insertion order among string keys, recursion through objects and arrays, non-canonical numeric keys staying in the string bucket, and JSON.stringify's 2-space pretty shape incl. empty containers.\",\n    \"crates/queen-bee/src/dispatch.rs: 12 rows covering splitCommandTokens/resolveCommand/parseFlags/nearestCommandName ports, the --json-swallowed-by-a-value-flag hazard (bee.mjs:7121-7127), duplicate group/verb registration refusals, and THE REGISTRATION-SURFACE PROOF (a_throwaway_group_is_dispatchable_and_enumerable_without_touching_main) which registers a throwaway group, asserts group_names/verb_names/command_names enumerate it, and drives it through the same run_with the binary uses — with no edit to main.rs or groups.rs.\",\n    \"crates/bee-parity/src/cmdcheck.rs: 8 rows covering registration refusals (no mutation target, unknown group, no positive assertion, duplicate), selector refusals (bare --cmd-check, unknown group, --all+--group), and the pins that every ledger group still has zero scenarios and the counts table names every group.\",\n    \"crates/bee-parity/src/normalize.rs: 9 new rows, notably an_undeclared_key_holding_a_volatile_value_is_never_masked (deny-by-default), a_bare_timestamp_outside_any_key_is_never_masked, a_declared_key_holding_the_wrong_timestamp_shape_is_left_alone (the chrono trap: Secs/Micros/offset forms), a_declared_key_holding_a_non_v4_uuid_is_left_alone, slug_ids_are_compared_literally_not_masked, iso_millis_z_predicate_is_exact, and 4 rows for the mjs stderr timing-line contract in both directions.\"\n  ],\n  \"tests_changed\": [\n    \"crates/bee-parity/src/normalize.rs: the blanket-timestamp rows (normalizes_iso8601_timestamp, does_not_touch_plain_dates_without_time_skeleton) were replaced by key-gated equivalents, because the blanket pattern scrubber they pinned is exactly what obligation (b) removes.\"\n  ],\n  \"red_failure_evidence\": \"RED FIRST, on the real binaries, against the frozen mjs oracle — not against the environment. Before crates/queen-bee/src/jsonout.rs was wired into status's emitter, `cargo run --release -p bee-parity -- --cmd-check --all` FAILED with: 'bee-parity --cmd-check: FAIL — [seam/numeric-string-keys] mjs vs queen-bee reported a diff: stdout differs after normalization', exit 1. The first differing line was isolated programmatically and was the ONLY divergence in 3985 bytes of stdout: under the seeded lane record's approved_gates, mjs emitted [\\\"1\\\", \\\"2\\\", \\\"10\\\", \\\"context\\\", \\\"shape\\\", \\\"execution\\\", \\\"review\\\", \\\"zeta\\\"] and queen-bee emitted [\\\"context\\\", \\\"shape\\\", \\\"execution\\\", \\\"review\\\", \\\"10\\\", \\\"2\\\", \\\"zeta\\\", \\\"1\\\"]. The oracle here is `node .bee/bin/bee.mjs status --json` run over a clone of the SAME generated fixture, so the red cannot be satisfied by anything in the ambient environment: both legs read identical bytes and only the serializer differed. Two earlier reds in the same run were also genuine and were fixed rather than weakened: (1) the mutation anchor '\\\"description\\\": \\\"Cell id, e.g. auth-3.\\\"' occurred twice in the registry dump, so replace_exactly_once REFUSED to seed a mutation over ambiguous content (the pinning discipline firing as designed) — repaired with a unique multi-line anchor; (2) the numeric-key lane was not resolving as the ACTIVE lane, so the scenario's positive-content assertion failed with 'mjs: stdout did not contain the declared content: \\\"zeta\\\": true' — i.e. the scenario refused to pass over a payload the seeded row had never reached. After the fix all 5 scenarios pass and every negative control fires on its declared channel.\",\n  \"verification_run\": \"cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --all => PASS, exit 0, 5 of 5 scenarios clean, per-group counts printed (seam 5, intent/capture/decisions/backlog/reviews/feedback 0 each). Discrimination proven separately: --cmd-check --group intent exits 1 ('group `intent` has ZERO registered scenarios'); bare --cmd-check exits 1 (selector mandatory); --group nosuch exits 1. No regression: --self-check exit 0 and --status-check PASS (all 6 legs) still green after the normalize rewrite and the fixture change. cargo test --release across the workspace: 376 tests, 0 failed. Impacted mjs run (BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs --impacted-from-git --level 1) selected 0 suites from 28 changed files — the change is Rust-only and no mjs suite maps to crates/; full verify stays CI-owned.\",\n  \"notes\": \"Obligation (c) is settled by a PASSING live scenario, not by the alternative 'no ledger object can carry such keys' statement — a gather over all six groups refuted that statement (see deviations).\"\n}\n",
+    "verify_output": "Finished `release` profile [optimized] target(s) in 0.08s\nFinished `release` profile [optimized] target(s) in 0.02s\n     Running `crates/target/release/bee-parity --cmd-check --all`\nbee-parity --cmd-check: PASS\nregistered scenarios by group:\n  seam       5\n  intent     0\n  capture    0\n  decisions  0\n  backlog    0\n  reviews    0\n  feedback   0\nrunning 5 of 5 registered scenario(s):\n  [seam/help-json] argv `--help --json` — zero diff (stdout 168509 B, stderr 18 B, exit 0); control fired on stdout via .bee/cache/command-registry.json\n  [seam/unknown-group-refusal] argv `zzznotagroup list` — zero diff (stdout 71 B, stderr 28 B, exit 1); control fired on stdout via .bee/cache/command-registry.json\n  [seam/unknown-flag-refusal-stderr] argv `cells show --id foo --bogus x` — zero diff (stdout 0 B, stderr 79 B, exit 1); control fired on stderr via .bee/cache/command-registry.json\n  [seam/missing-required-flag-refusal] argv `cells show` — zero diff (stdout 99 B, stderr 21 B, exit 1); control fired on stdout via .bee/cache/command-registry.json\n  [seam/numeric-string-keys] argv `status --json` — zero diff (stdout 3985 B, stderr 18 B, exit 0); control fired on stdout via .bee/lanes/rpl1-numeric-keys.json\nEXIT=0",
+    "verify_passed": true,
+    "claim_session": "2ec01700-0ce3-40de-85b2-954a0b2a270b",
+    "claimed_at": "2026-07-27T02:52:06.485Z",
+    "verify_command": "cargo build --release --manifest-path crates/Cargo.toml && cargo run --release --manifest-path crates/Cargo.toml -p bee-parity -- --cmd-check --all",
+    "verified_at": "2026-07-27T03:24:27.044Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T03:24:27.044Z",
+        "claim_session": "2ec01700-0ce3-40de-85b2-954a0b2a270b",
+        "claimed_at": "2026-07-27T03:01:07.661Z",
+        "acquired_at": "2026-07-27T02:52:06.483Z",
+        "worker": "Bob",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "ceiling"
+}

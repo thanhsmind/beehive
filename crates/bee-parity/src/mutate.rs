@@ -34,6 +34,62 @@ pub fn seed_mutation(root: &Path) -> Result<(), String> {
     fs::write(&state_path, MUTATED_STATE_BODY).map_err(|e| format!("write {}: {e}", state_path.display()))
 }
 
+// ─── rpl-1: per-scenario mutation targets ──────────────────────────────────
+//
+// The `state.json` phase flip above is the RIGHT control for `status`, and
+// the WRONG control for everything else. `phase` appears in `status`'s output
+// and in nothing else: no ledger verb — `intent show`, `capture count`,
+// `decisions active`, `backlog counts`, `reviews list`, `feedback rank` —
+// ever prints it. A generic `--cmd-check` arm that reused this flip would
+// therefore hand every ledger scenario a negative control that CANNOT fire,
+// and a control that cannot fire is worse than none: it converts "the differ
+// caught nothing" from a red into a green.
+//
+// So the control becomes per-scenario. Each scenario declares the store IT
+// actually reads and how to perturb it; a scenario with no declared target is
+// refused at registration (`cmdcheck::ScenarioSet::register`), never silently
+// skipped.
+
+/// The store a scenario reads, and the precise perturbation that proves the
+/// comparison can see a change in it.
+#[derive(Clone, Copy)]
+pub struct MutationTarget {
+    /// The store-root-relative path this scenario actually reads. Recorded
+    /// so the verify output names it and a reviewer can check the claim.
+    pub store: &'static str,
+    /// Applies the perturbation to a cloned root. MUST refuse (return `Err`)
+    /// when the target content is not what it expected — a blind
+    /// substitution proves nothing about detection power.
+    pub apply: fn(&Path) -> Result<(), String>,
+}
+
+/// Replace `needle` with `replacement` in `rel_path` under `root`, refusing
+/// unless `needle` occurs EXACTLY once.
+///
+/// This is the generalization of [`seed_mutation`]'s discipline: the flip is
+/// pinned to content the caller has already asserted, so a fixture change
+/// that moves the target surfaces as a loud refusal instead of a mutation
+/// that silently did nothing (which would read as "the differ failed to
+/// detect a divergence" — a red for the wrong reason).
+pub fn replace_exactly_once(
+    root: &Path,
+    rel_path: &str,
+    needle: &str,
+    replacement: &str,
+) -> Result<(), String> {
+    let path = root.join(rel_path);
+    let current = fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let occurrences = current.matches(needle).count();
+    if occurrences != 1 {
+        return Err(format!(
+            "replace_exactly_once: {needle:?} occurs {occurrences} time(s) in {} (expected exactly 1) — refusing to seed a mutation over unexpected content (this would prove nothing)",
+            path.display()
+        ));
+    }
+    let mutated = current.replacen(needle, replacement, 1);
+    fs::write(&path, mutated).map_err(|e| format!("write {}: {e}", path.display()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
