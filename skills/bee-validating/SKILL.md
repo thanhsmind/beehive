@@ -32,13 +32,14 @@ If `plan.md` is absent, unapproved, or the current-slice cells do not exist, sto
 
 ## Operating Contract
 
-1. **Orient** on state, mode/lane, the approved shape, and the current-work cells. The orient read (CONTEXT.md, plan.md, discovery/approach, cells) delegates as an extraction-tier I/O worker per the Delegation contract (D2/D3, `bee-hive/references/routing-and-contracts.md`) when the D2 rubric fires; judgment (mode fit, reality-gate scoring) stays on the session model.
-2. **Reality gate:** MODE FIT / REPO FIT / ASSUMPTIONS / SMALLER PATH / PROOF SURFACE — each scored PASS|FAIL with file/command evidence. Fail on nonexistent code paths, unsupported commands, stale versions, missing credentials, hidden architecture work, or excess ceremony. A failed reality gate halts the pipeline and returns to bee-planning.
-3. **Feasibility matrix:** every blocking assumption gets a row — assumption | risk | proof required | evidence | result. Accepted evidence only (below). Plausibility language is an automatic NOT READY. For multi-cell slices, the matrix includes a schedule row: `bee cells schedule` reports zero cycles and the expected wave shape — required evidence, not optional.
-4. **Spikes** for unproven assumptions that can invalidate the current work.
-5. **Plan-checker subagent** (adversarial) until structurally clean or escalated.
-6. **Cold-pickup cell review**; fix every CRITICAL flag.
-7. **Decide** using the decision vocabulary, then ask Gate 3.
+1. **Orient** on state, mode/lane, the approved shape, and the current-work cells. The orient read (CONTEXT.md, plan.md, discovery/approach, cells) delegates as an extraction-tier I/O worker per the Delegation contract (D2/D3, `bee-hive/references/routing-and-contracts.md`) when the D2 rubric fires; judgment (mode fit, reality-gate scoring) stays on the session model. **On slice 2+, first run `node .bee/bin/bee.mjs state validation-cache check --json`** — it names which rows are still hash-fresh and which moved.
+2. **Reality gate:** MODE FIT / REPO FIT / ASSUMPTIONS / SMALLER PATH / PROOF SURFACE — each scored PASS|FAIL with file/command evidence. Fail on nonexistent code paths, unsupported commands, stale versions, missing credentials, hidden architecture work, or excess ceremony. A failed reality gate halts the pipeline and returns to bee-planning. Dimensions are cacheable on the same terms as matrix rows.
+3. **Feasibility matrix:** every blocking assumption gets a row — assumption | risk | proof required | evidence | result | **sources**. Sources are what the row was proven from: `{path, sha256}` for file evidence, `{command, output_sha}` for command evidence. Record them with `bee.mjs state validation-cache record --slice <n> --rows-file <f>` (the verb hashes each path itself). Accepted evidence only (below). Plausibility language is an automatic NOT READY. For multi-cell slices, the matrix includes a schedule row: `bee cells schedule` reports zero cycles and the expected wave shape — required evidence, not optional.
+4. **Delta rule (slice 2+).** Re-prove only **stale rows and cells that are new**; carry fresh rows forward verbatim as `evidence: cached (slice N, sources unchanged)`. A row is stale when any source sha256 changed, the newest active decision id changed, or `sha256(plan.md)` changed — the same anchors, and the same "never a TTL" law, as `advisor_ref` under Gate 3 below. **A missing, unreadable, malformed, or partially-valid cache re-proves everything** (`degraded`/`revalidate: full`), as does any row storing no hashes: a cache problem always buys more validation, never less. Cached evidence is still Accepted Evidence and still auto-fails on plausibility language.
+5. **Spikes** for unproven assumptions that can invalidate the current work.
+6. **Plan-checker subagent** (adversarial) until structurally clean or escalated — on slice 2+, scoped to the new/changed cells and stale rows, not the whole frozen plan.
+7. **Cold-pickup cell review** of the new or changed cells; fix every CRITICAL flag.
+8. **Decide** using the decision vocabulary, then ask Gate 3.
 
 Load `references/validation-reference.md` for report formats, repair routing, and the subagent prompts.
 
@@ -130,6 +131,7 @@ With `mode:headless`: run every check, apply unambiguous cell repairs, and defer
 - skipping the reality gate or feasibility matrix
 - spawning the plan-checker or cell reviewer for a tiny/small lane (their reality check lives inline in planning)
 - accepting plausibility language as evidence
+- carrying a row forward without hash-verified sources, or reading a degraded cache as permission to skip a proof rather than to re-prove it
 - continuing after a NO spike because a workaround "probably works"
 - running a 4th plan-checker iteration instead of escalating
 - approving (or letting approval cover) future slices

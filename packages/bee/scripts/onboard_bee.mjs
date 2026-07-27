@@ -170,6 +170,12 @@ const GITIGNORE_BLOCK_PATTERNS = [
   // — never doctor-attest.json, never tracked (see bee.mjs's
   // readNativeTransportClassification/writeNativeTransportProbe).
   ".bee/native-transport-probe.json",
+  // Delta-validation evidence cache (spec #77 P1): sha256-anchored records of
+  // what each validation slice already proved, so slice N+1 re-proves only
+  // what moved. Derived, machine-local, and re-earnable — its absence
+  // degrades to full re-validation by design, so it must never be tracked or
+  // merged (someone else's cached hashes are not evidence in this checkout).
+  ".bee/validation-cache.json",
   // Machine-local config overlay (hardening-8, config-overlay D-local-config):
   // deep-merged OVER the tracked .bee/config.json by readConfig (overlay
   // wins, arrays replace) so a single contributor's machine-local values

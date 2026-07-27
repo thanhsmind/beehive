@@ -35,10 +35,12 @@ Required whenever blocking assumptions remain; always for the high-risk lane.
 
 ```text
 FEASIBILITY MATRIX
-Assumption | Risk | Proof Required | Evidence | Result
+Assumption | Risk | Proof Required | Evidence | Result | Sources
 ```
 
-Accepted evidence: existing implementation, file/API/type inspection, command output, build/typecheck/test result, official version/doc proof, runtime/API probe, or `.bee/spikes/<feature>/` proof. "Should work", "likely", "expected", or model knowledge → the row (and the matrix) is **NOT READY**.
+`Sources` is what the row was proven from, and it is what makes the row cacheable: `path@sha256[:12]` for file evidence, `command@output_sha[:12]` for command evidence. Mirror the same rows into the machine cache with `bee.mjs state validation-cache record --slice <n> --rows-file <f>`; on the next slice, `bee.mjs state validation-cache check --json` reports which rows are still hash-fresh. A carried-forward row keeps its original Evidence text and reads `Result: cached (slice N, sources unchanged)`. Rows with no Sources are never cacheable — they re-prove every slice.
+
+Accepted evidence: existing implementation, file/API/type inspection, command output, build/typecheck/test result, official version/doc proof, runtime/API probe, or `.bee/spikes/<feature>/` proof. "Should work", "likely", "expected", or model knowledge → the row (and the matrix) is **NOT READY**. A cached row is Accepted Evidence — it was proven once and its sources are hash-verified unchanged — but it is held to the identical bar: plausibility language in a cached row auto-fails exactly as it does in a fresh one.
 
 ## Spike / Probe Rules
 

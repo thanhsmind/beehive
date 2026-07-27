@@ -2181,6 +2181,317 @@ export function advisorRefStale(root, ref, state) {
   return { stale: reasons.length > 0, reasons };
 }
 
+// ─── validation evidence cache (spec #77 P1) — hash-anchored delta validation ─
+// bee-validating re-proves the entire feasibility matrix on every slice even
+// though plan.md is frozen at Gate 2 (D1) and most rows' evidence sources have
+// not moved since they were proven. This cache lets slice N+1 carry a row
+// forward ONLY when the exact bytes it was proven from are still the exact
+// bytes on disk right now.
+//
+// The staleness contract is deliberately NOT a new invention: it reuses
+// advisorRefAnchors above verbatim, because AO13 already settled which anchors
+// a cached proof binds to — the feature, the newest active decision id, and
+// sha256 of that feature's plan.md. Mirroring rather than paralleling it is the
+// point; a second, subtly different staleness rule in the same repo is how
+// these two surfaces would drift apart.
+//
+// There is NO TTL, no age threshold, no "expires after", and no wall-clock
+// input anywhere in this block. `recorded_at`/`updated_at` are written for
+// audit only and are never read by any staleness predicate — AO13 burned this
+// repo once on an invented interval and the same law binds here.
+//
+// DEGRADATION IS THE SAFETY PROPERTY. Every failure mode below — missing file,
+// unreadable file, malformed JSON, unknown version, a feature entry of the
+// wrong shape, a row carrying no stored hashes — resolves to MORE validation,
+// never less: the reader reports `degraded` with a reason and the caller
+// re-proves everything from scratch. No path through this code turns a cache
+// problem into a skipped proof, which is why every helper here fails toward
+// 'stale'/'full' instead of throwing.
+
+export const VALIDATION_CACHE_VERSION = 1;
+// A source that does not exist hashes to this sentinel rather than throwing, so
+// a deleted file reads as "changed" (sentinel ≠ recorded hash) instead of
+// crashing the check. Same trick as ADVISOR_PLAN_ABSENT_SENTINEL above.
+export const VALIDATION_SOURCE_ABSENT_SENTINEL = 'absent';
+
+function validationCachePath(root) {
+  return path.join(root, '.bee', 'validation-cache.json');
+}
+
+function isCacheObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+// Hash one FILE source's current bytes. Never throws: an unreadable or absent
+// path yields the absent sentinel, which can only ever make a row stale.
+function hashValidationSource(root, relPath) {
+  try {
+    const file = path.isAbsolute(String(relPath)) ? String(relPath) : path.join(root, String(relPath));
+    if (!fs.existsSync(file)) return VALIDATION_SOURCE_ABSENT_SENTINEL;
+    const stat = fs.statSync(file);
+    if (!stat.isFile()) return VALIDATION_SOURCE_ABSENT_SENTINEL;
+    return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  } catch {
+    return VALIDATION_SOURCE_ABSENT_SENTINEL;
+  }
+}
+
+// Normalize one caller-supplied source descriptor at RECORD time.
+//   file    -> {type:'file', path, sha256}      sha256 stamped by us, never by the caller
+//   command -> {type:'command', command, output_sha}  output_sha MUST come from the
+//              caller (recording may not execute anything); a missing one is kept
+//              as null so the row is permanently stale until it is re-proven.
+// An unrecognizable descriptor is preserved as {type:'unknown'} — kept rather
+// than dropped, precisely so it keeps forcing its row stale instead of
+// silently shrinking the row's source list to something that looks clean.
+function normalizeValidationSource(root, source) {
+  if (!isCacheObject(source)) return { type: 'unknown' };
+  if (typeof source.path === 'string' && source.path.trim()) {
+    const rel = source.path.trim();
+    return { type: 'file', path: rel, sha256: hashValidationSource(root, rel) };
+  }
+  if (typeof source.command === 'string' && source.command.trim()) {
+    const outputSha =
+      typeof source.output_sha === 'string' && source.output_sha.trim() ? source.output_sha.trim() : null;
+    return { type: 'command', command: source.command.trim(), output_sha: outputSha };
+  }
+  return { type: 'unknown' };
+}
+
+// Normalize one caller-supplied row at RECORD time. `proven_in_slice` is what a
+// carried-forward row reports later ("cached, proven in slice N"), so it is
+// stamped here from the recording slice and never re-derived afterwards.
+function normalizeValidationRow(root, row, slice) {
+  const base = isCacheObject(row) ? row : {};
+  const sources = Array.isArray(base.sources) ? base.sources.map((s) => normalizeValidationSource(root, s)) : [];
+  return {
+    id: typeof base.id === 'string' && base.id.trim() ? base.id.trim() : null,
+    kind: typeof base.kind === 'string' && base.kind.trim() ? base.kind.trim() : 'matrix',
+    claim: typeof base.claim === 'string' ? base.claim : '',
+    verdict: typeof base.verdict === 'string' ? base.verdict : '',
+    evidence: typeof base.evidence === 'string' ? base.evidence : '',
+    proven_in_slice: slice,
+    recorded_at: new Date().toISOString(), // audit only — never read by a staleness check
+    sources,
+  };
+}
+
+// Read the cache file. Returns {cache, degraded, degrade_reason}; `degraded`
+// true ALWAYS means "re-prove everything", and cache is null in that case.
+function readValidationCache(root) {
+  const file = validationCachePath(root);
+  let raw;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    const code = err && err.code ? err.code : String(err);
+    return {
+      cache: null,
+      degraded: true,
+      degrade_reason:
+        code === 'ENOENT'
+          ? 'no validation cache recorded yet (.bee/validation-cache.json absent)'
+          : `validation cache is unreadable (${code})`,
+    };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { cache: null, degraded: true, degrade_reason: 'validation cache is malformed (not valid JSON)' };
+  }
+  if (!isCacheObject(parsed)) {
+    return { cache: null, degraded: true, degrade_reason: 'validation cache is malformed (not a JSON object)' };
+  }
+  if (parsed.version !== VALIDATION_CACHE_VERSION) {
+    return {
+      cache: null,
+      degraded: true,
+      degrade_reason: `validation cache version ${JSON.stringify(parsed.version)} is not the supported version ${VALIDATION_CACHE_VERSION}`,
+    };
+  }
+  if (!isCacheObject(parsed.features)) {
+    return { cache: null, degraded: true, degrade_reason: 'validation cache is malformed (no features map)' };
+  }
+  return { cache: parsed, degraded: false, degrade_reason: null };
+}
+
+// Staleness for ONE cached row, given the live feature anchors and the set of
+// freshly-observed command output hashes the caller supplied this slice.
+// Returns {stale, reasons} — reasons is the falsifiability surface: a row that
+// went stale always says which source moved.
+function validationRowStale(root, row, anchorDriftReasons, commandOutputs) {
+  const reasons = [...(anchorDriftReasons || [])];
+  if (!isCacheObject(row)) return { stale: true, reasons: [...reasons, 'malformed cache row'] };
+  const sources = Array.isArray(row.sources) ? row.sources : [];
+  if (sources.length === 0) {
+    // Hive law for this cache: a row with no stored hashes was never anchored
+    // to anything, so it can never be shown unchanged. Always re-prove it.
+    reasons.push('row records no sources — nothing to hash-verify, so it can never be carried forward');
+    return { stale: true, reasons };
+  }
+  for (const source of sources) {
+    if (!isCacheObject(source) || source.type === 'unknown') {
+      reasons.push('row carries an unrecognizable source descriptor');
+      continue;
+    }
+    if (source.type === 'file') {
+      if (typeof source.sha256 !== 'string' || !source.sha256) {
+        reasons.push(`source "${source.path}" has no stored sha256`);
+        continue;
+      }
+      const current = hashValidationSource(root, source.path);
+      if (current !== source.sha256) {
+        reasons.push(
+          current === VALIDATION_SOURCE_ABSENT_SENTINEL
+            ? `source "${source.path}" no longer exists`
+            : `source "${source.path}" changed (sha256 mismatch)`,
+        );
+      }
+      continue;
+    }
+    if (source.type === 'command') {
+      if (typeof source.output_sha !== 'string' || !source.output_sha) {
+        reasons.push(`command source "${source.command}" has no stored output_sha`);
+        continue;
+      }
+      // A command's current output cannot be observed by a read-only check —
+      // running it would make this verb a mutation. So a command-backed row is
+      // carried forward ONLY when the caller re-ran it this slice and supplied
+      // the fresh hash. No supplied hash => stale => re-proven. Fails toward
+      // more validation, exactly as the degradation law requires.
+      const observed = commandOutputs && Object.prototype.hasOwnProperty.call(commandOutputs, source.command)
+        ? commandOutputs[source.command]
+        : undefined;
+      if (typeof observed !== 'string' || !observed) {
+        reasons.push(`command source "${source.command}" was not re-run this slice (no fresh output hash supplied)`);
+        continue;
+      }
+      if (observed !== source.output_sha) {
+        reasons.push(`command source "${source.command}" produced different output (output_sha mismatch)`);
+      }
+      continue;
+    }
+    reasons.push(`row carries an unsupported source type "${source.type}"`);
+  }
+  return { stale: reasons.length > 0, reasons };
+}
+
+// The whole verdict for one feature: which cached rows survive, which are
+// stale and why, and whether the cache degraded to full re-validation.
+// Pure read — never writes, never executes a command, never throws.
+export function validationCacheCheck(root, feature, { commandOutputs = null } = {}) {
+  const anchors = advisorRefAnchors(root, feature);
+  const empty = {
+    feature: feature ?? null,
+    anchors,
+    recorded_anchors: null,
+    anchor_drift: [],
+    slice: null,
+    cached: [],
+    stale: [],
+    counts: { total: 0, cached: 0, stale: 0 },
+  };
+  const read = readValidationCache(root);
+  if (read.degraded) {
+    return { ...empty, degraded: true, degrade_reason: read.degrade_reason, revalidate: 'full' };
+  }
+  const entry = read.cache.features[String(feature ?? '')];
+  if (entry === undefined) {
+    return {
+      ...empty,
+      degraded: true,
+      degrade_reason: `no cached validation rows for feature "${feature ?? ''}"`,
+      revalidate: 'full',
+    };
+  }
+  // Partially-valid cache: the file parsed, but THIS feature's entry is not
+  // usable. Same answer as a missing file — full re-validation for this
+  // feature. Never a partial trust of a half-readable entry.
+  if (!isCacheObject(entry) || !Array.isArray(entry.rows)) {
+    return {
+      ...empty,
+      degraded: true,
+      degrade_reason: `cached entry for feature "${feature ?? ''}" is malformed (no rows array)`,
+      revalidate: 'full',
+    };
+  }
+  if (!isCacheObject(entry.anchors)) {
+    return {
+      ...empty,
+      degraded: true,
+      degrade_reason: `cached entry for feature "${feature ?? ''}" records no staleness anchors`,
+      revalidate: 'full',
+    };
+  }
+  // Feature-level anchor drift invalidates EVERY row at once: a new decision or
+  // a re-shaped (unfrozen and rewritten) plan.md can change what any row was
+  // supposed to prove, whether or not that row's own files moved.
+  const anchorDrift = [];
+  if (entry.anchors.newest_decision_id !== anchors.newest_decision_id) {
+    anchorDrift.push(
+      `the newest active decision changed since this row was proven (cached "${entry.anchors.newest_decision_id}" ≠ current "${anchors.newest_decision_id}")`,
+    );
+  }
+  if (entry.anchors.plan_sha256 !== anchors.plan_sha256) {
+    anchorDrift.push('plan.md changed since this row was proven (sha256 mismatch)');
+  }
+  const cached = [];
+  const stale = [];
+  for (const row of entry.rows) {
+    const verdict = validationRowStale(root, row, anchorDrift, commandOutputs);
+    const id = isCacheObject(row) && typeof row.id === 'string' ? row.id : null;
+    if (verdict.stale) {
+      stale.push({ id, claim: isCacheObject(row) ? row.claim ?? '' : '', reasons: verdict.reasons });
+    } else {
+      cached.push({
+        id,
+        claim: row.claim ?? '',
+        verdict: row.verdict ?? '',
+        evidence: row.evidence ?? '',
+        proven_in_slice: row.proven_in_slice ?? entry.slice ?? null,
+        sources: Array.isArray(row.sources) ? row.sources : [],
+      });
+    }
+  }
+  return {
+    feature: feature ?? null,
+    degraded: false,
+    degrade_reason: null,
+    // 'delta' only when at least one row genuinely survived; a cache whose rows
+    // all went stale is reported as a full re-validation, because that is what
+    // it is.
+    revalidate: cached.length > 0 ? 'delta' : 'full',
+    anchors,
+    recorded_anchors: entry.anchors,
+    anchor_drift: anchorDrift,
+    slice: entry.slice ?? null,
+    cached,
+    stale,
+    counts: { total: entry.rows.length, cached: cached.length, stale: stale.length },
+  };
+}
+
+// Record (replace) one feature's cached rows. Whole-feature replacement, not a
+// merge: a slice re-proves a row set and that set becomes the new truth, so a
+// row silently vanishing from the input must not linger as a stale-but-fresh
+// looking survivor. Other features' entries are preserved untouched.
+export function writeValidationCache(root, feature, { slice, rows }) {
+  const read = readValidationCache(root);
+  // A degraded (missing/corrupt) cache is simply rebuilt from scratch here —
+  // recording is the one operation that legitimately repairs the file.
+  const base = read.degraded ? { version: VALIDATION_CACHE_VERSION, features: {} } : read.cache;
+  const normalized = (Array.isArray(rows) ? rows : []).map((row) => normalizeValidationRow(root, row, slice));
+  base.features[String(feature ?? '')] = {
+    slice,
+    updated_at: new Date().toISOString(), // audit only — never read by a staleness check
+    anchors: advisorRefAnchors(root, feature),
+    rows: normalized,
+  };
+  writeJsonAtomic(validationCachePath(root), base);
+  return base.features[String(feature ?? '')];
+}
+
 // ─── startFeature: guarded atomic feature start (decision D2, plan.md test ──
 // matrix row 5 / codex-runtime-parity). ONE atomic operation for beginning a
 // new feature so a new feature can never inherit approvals or silently step

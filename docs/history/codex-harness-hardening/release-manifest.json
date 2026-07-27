@@ -27,7 +27,7 @@
     },
     {
       "path": ".bee/bin/lib/command-registry.mjs",
-      "sha256": "1a64f7a777c45f93a596bd064e26b5c80a87a87e5af1b461c2d09b9d3383d837",
+      "sha256": "3b8b3dd08be1c3723023e86b9c9c9e9855242d3a1406fe4aefd61543bc2efdf2",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -183,7 +183,7 @@
     },
     {
       "path": ".bee/bin/lib/state.mjs",
-      "sha256": "42aeca98dc553e9fa446d922c89e25714fd3197ad143d581ca1725299afffbba",
+      "sha256": "8b5f5d637fc868b0446323bdd42e3bfad0c04eb6a859c2d3df6c4628b5f18191",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -233,7 +233,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "5d766b9a458a489e2c058e8a6a4d525031e1ee41bf2f05f1f176f63cc503180f",
+      "sha256": "41f262cd8b60f68b2d501955f4a80bd14298efc4afcfdbb0853beee255c96354",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -723,14 +723,14 @@
     },
     {
       "path": ".claude-plugin/skills/bee-validating/references/validation-reference.md",
-      "sha256": "ca5de92f4b0ffbed680b61afac1b7303e2fd8ed9ca67baa0e77a8dc31ad3d2b8",
+      "sha256": "a1e873e8528bfcf5bdc208f098538425f89150e49fa05532d0000f5113aafad0",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-validating/references/validation-reference.md"
     },
     {
       "path": ".claude-plugin/skills/bee-validating/SKILL.md",
-      "sha256": "85084d041cef55543ade336dc14d8b1d7e583ad74da966923e20641b62bf6d22",
+      "sha256": "8be7cb3c6d27685d5b2c6edad30546ef4f00563d74b7ea53feace44eb9161530",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-validating/SKILL.md"
@@ -828,7 +828,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "ab124c5f8ef91a40d22d2d695a0d743a42094fa339855975348dd8ade67b2a3b",
+      "sha256": "42ac2527a91a38c31352303bf3ae16638e8e6f82c9d671a8a288fced722e75de",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1318,14 +1318,14 @@
     },
     {
       "path": ".codex-plugin/skills/bee-validating/references/validation-reference.md",
-      "sha256": "ca5de92f4b0ffbed680b61afac1b7303e2fd8ed9ca67baa0e77a8dc31ad3d2b8",
+      "sha256": "a1e873e8528bfcf5bdc208f098538425f89150e49fa05532d0000f5113aafad0",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-validating/references/validation-reference.md"
     },
     {
       "path": ".codex-plugin/skills/bee-validating/SKILL.md",
-      "sha256": "9f75c4dd314d7464985b659e0385044a78577e6f0c9aa8143a0b8c3075962ab9",
+      "sha256": "286e30cd557d3d4ad5a55fe25a5055fa5d25ea937e80c3b6f32d243831c4c5ca",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-validating/SKILL.md"
@@ -1444,7 +1444,7 @@
     },
     {
       "path": "packages/bee/bee.mjs",
-      "sha256": "e3129758e47821545fce38918852c5becd5b2d9b60e08b7c9dd157f94acee16a",
+      "sha256": "11e581f2408595dc675c7b0d53742fd08372bccdcd4fe3877097684dbff5cc5e",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/bee.mjs"
@@ -1605,7 +1605,7 @@
     },
     {
       "path": "packages/bee/lib/command-registry.mjs",
-      "sha256": "1a64f7a777c45f93a596bd064e26b5c80a87a87e5af1b461c2d09b9d3383d837",
+      "sha256": "3b8b3dd08be1c3723023e86b9c9c9e9855242d3a1406fe4aefd61543bc2efdf2",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/command-registry.mjs"
@@ -1787,7 +1787,7 @@
     },
     {
       "path": "packages/bee/lib/state.mjs",
-      "sha256": "42aeca98dc553e9fa446d922c89e25714fd3197ad143d581ca1725299afffbba",
+      "sha256": "8b5f5d637fc868b0446323bdd42e3bfad0c04eb6a859c2d3df6c4628b5f18191",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/state.mjs"
@@ -1829,7 +1829,7 @@
     },
     {
       "path": "packages/bee/scripts/onboard_bee.mjs",
-      "sha256": "c339a47c7a8ab00a6d394f941f3982095f0e105e45a11d06378b97c84ce04204",
+      "sha256": "b1df339901b0e84c2d4f64ee878538ae82e2374ce9a5db5458687bee78b33c37",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/scripts/onboard_bee.mjs"
@@ -1843,7 +1843,7 @@
     },
     {
       "path": "packages/bee/scripts/test_onboard_bee.mjs",
-      "sha256": "a0eb1dc4d2274df07a71d357926fb34224ddf38c13b7ae20793d5037d5e407f6",
+      "sha256": "cd54cb73c85f1615f0e8737a6483248ad961034272ee83d17a7e590a6a1ceac0",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/scripts/test_onboard_bee.mjs"
@@ -1906,7 +1906,7 @@
     },
     {
       "path": "packages/bee/tests/test_bee_cli.mjs",
-      "sha256": "824d5829180c4bf0fc65b3148d285911d0164424cab3ce3972a0788aee478208",
+      "sha256": "5774e740ee744175534d0c177a41818feed8ac3b1da69d6bd28f542564c78dfb",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_bee_cli.mjs"
@@ -2039,7 +2039,7 @@
     },
     {
       "path": "packages/bee/tests/test_misc.mjs",
-      "sha256": "63e3b0383de5c30662b965fb0eb70ac8fa0c82b5cd4a7c2123d7c2b4aa95fe07",
+      "sha256": "9b570ab8905a00b9529ae87c4cd44fbb0a2f3fc7272a797701a9f97d4c59fc5f",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_misc.mjs"
@@ -2637,14 +2637,14 @@
     },
     {
       "path": "skills/bee-validating/references/validation-reference.md",
-      "sha256": "ca5de92f4b0ffbed680b61afac1b7303e2fd8ed9ca67baa0e77a8dc31ad3d2b8",
+      "sha256": "a1e873e8528bfcf5bdc208f098538425f89150e49fa05532d0000f5113aafad0",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-validating/references/validation-reference.md"
     },
     {
       "path": "skills/bee-validating/SKILL.md",
-      "sha256": "45184fbc22e8d76ae0b7dbdecbf6c4e6b0e350bffb9f80e24ab109616d344db2",
+      "sha256": "1185c3c4c8cd4e41eab6fe8192ec9434695f63a4b2dde988a457198b28f22cc4",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-validating/SKILL.md"
