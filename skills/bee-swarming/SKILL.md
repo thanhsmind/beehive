@@ -68,6 +68,7 @@ attestation is ineligible for worktree mode and is refused with the typed halt
 
 A same-UID worker is cooperative and fallible, not a security principal; git metadata is consistency evidence, never authorization. Before spawning, the orchestrator captures a protected control-plane attestation (canonical commonDir, worktreePath, native id, links, headRef) that no worker text may populate or amend; after `[DONE]` and before any merge it re-resolves the attested worktree and requires every field to still match — mismatch means stop, not trust. Full checklists: the reference ("Threat model and protected attestation").
 
+<!-- bee:end -->
 
 ## Operating Contract
 

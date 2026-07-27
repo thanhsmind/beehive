@@ -1,0 +1,75 @@
+{
+  "id": "ll-2",
+  "feature": "lane-lean",
+  "lane": "small",
+  "behavior_change": true,
+  "change_class": "behavior",
+  "title": "Small-diff standard validating: inline self-review replaces the dispatched wave",
+  "action": "Amend bee-validating per decision lane-lean D3: a standard-lane feature whose counted touch set is <=5 product files with zero hard-gate flags does NOT dispatch the merged reviewer — the session model runs the same two mandates itself (Structure over the 5 dimensions; Cells as cold-pickup) with the same finding vocabularies, recorded in the validation report, same sync point and one-blocker-pass cap. A hard-gate flag, a 6th product file, or genuine doubt restores the dispatch; high-risk always keeps the persona panel. Edit skills/bee-validating/SKILL.md (Lane scaling line + Review Wave section), add a one-line mirror in skills/bee-validating/references/validation-reference.md near the 5-dimensions block, and update the standard row's Validate cell in bee-hive SKILL.md's ceremony table (currently the stale 'plan-checker + cell reviewer'). Exact replacement text supplied in the worker dispatch. Skill-text only — no test cell owed (USER LAW 6d9b9afc). Then run the regen chain in order: node scripts/render_plugin_skill_trees.mjs; node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "bee-validating SKILL.md gates the dispatch on measured diff size: <=5 product files + 0 hard-gate flags = inline self-review, else merged reviewer",
+      "the inline path keeps both mandates, both vocabularies, the sync point, and the one-blocker-pass cap",
+      "high-risk always dispatches the persona panel — no inline path",
+      "bee-hive ceremony table standard/Validate row matches the new doctrine",
+      "skill_lint stays green: no dangling reference pointers, no stale merged-reviewer routing break"
+    ],
+    "prohibitions": [
+      "Do NOT weaken high-risk validating in any way",
+      "Do NOT remove the merged reviewer path for >5-file standard diffs",
+      "Do NOT touch Gate 3 semantics or the finding vocabularies"
+    ]
+  },
+  "verify": "node scripts/skill_lint.mjs && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "skills/bee-validating/SKILL.md",
+    "skills/bee-validating/references/validation-reference.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "files": [
+    "skills/bee-validating/SKILL.md",
+    "skills/bee-validating/references/validation-reference.md",
+    "skills/bee-hive/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [
+    "ll-1"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "worker-ll",
+    "outcome": "Standard-lane validating now scales by measured diff: <=5 product files + 0 hard-gate flags runs the review wave inline on the session model (same two mandates, same vocabularies, same one-blocker-pass cap) instead of dispatching the merged reviewer; >5 files keeps the dispatch, high-risk keeps the persona panel (lane-lean D3). Regen chain steps 1-2 blocked by pre-existing bee-swarming marker defect — filed fix-first as ll-3; manifest written+checked green",
+    "files_changed": [
+      "skills/bee-validating/SKILL.md",
+      "skills/bee-validating/references/validation-reference.md",
+      "skills/bee-hive/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T15:09:44.189Z",
+    "behavior_change": true,
+    "verification_evidence": "{\"verify\":\"node scripts/skill_lint.mjs && node scripts/release_manifest.mjs --check\",\"verify_result\":\"exit 0 both — lint ok on all blocking checks (advisory: bee-hive +173, bee-validating +789 bytes over budget, advisory per USER LAW 6d9b9afc); manifest 399 files match\",\"note\":\"render_plugin_skill_trees + onboard --apply refused on PRE-EXISTING malformed bee:only markers in bee-swarming (untouched by this cell) — fix-first tiny cell ll-3 created; propagation to installed skills completes there\"}\n",
+    "verify_output": null,
+    "verify_passed": true,
+    "claim_session": "03f90719-9f7c-4acc-8698-2b879eb80f50",
+    "claimed_at": "2026-07-27T15:06:27.024Z",
+    "verify_command": "node scripts/skill_lint.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-27T15:09:35.083Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T15:09:35.083Z",
+        "claim_session": "03f90719-9f7c-4acc-8698-2b879eb80f50",
+        "claimed_at": "2026-07-27T15:08:39.939Z",
+        "acquired_at": "2026-07-27T15:06:27.023Z",
+        "worker": "worker-ll",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

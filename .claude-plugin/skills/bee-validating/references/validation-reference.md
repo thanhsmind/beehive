@@ -83,6 +83,11 @@ MANDATE 1 — STRUCTURE. Verify exactly 5 dimensions:
 Report every structural finding as BLOCKER (structurally unsound) or WARNING
 (survivable, note it).
 
+Small-diff `standard` (≤5 product files, zero hard-gate flags) runs these same
+dimensions as an inline self-review on the session model — no dispatch (SKILL.md,
+"Review Wave", lane-lean D3). Both finding vocabularies and the one-blocker-pass cap
+apply unchanged.
+
 MANDATE 2 — CELLS, COLD PICKUP. You have NO session history. For each cell, answer:
 could a worker who has read only CONTEXT.md, plan.md, and this cell implement and
 verify it without guessing?

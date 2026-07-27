@@ -342,6 +342,8 @@ node .bee/bin/bee.mjs reservations list --active-only
 - results collected but state.json / cells not updated
 - session history in a worker prompt
 
+<!-- bee:only claude -->
+
 ## Threat model and protected attestation
 
 A same-UID worker is cooperative and fallible, not a security principal. Git

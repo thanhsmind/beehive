@@ -216,3 +216,5 @@ node .bee/bin/bee.mjs reservations list --active-only
 - conflict resolution by optimism ("they'll probably touch different lines")
 - results collected but state.json / cells not updated
 - session history in a worker prompt
+
+

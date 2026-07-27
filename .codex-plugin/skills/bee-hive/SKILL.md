@@ -124,7 +124,7 @@ The last two flags are narrowed (D7): a covered bugfix that keeps existing tests
 
 Use the least workflow that honestly protects the work. A tiny fix wearing epic ceremony is a red flag; a hard-gate change routed as `small` is a worse one.
 
-**One re-lane checkpoint, after the first evidence pass** (exploring's scout, else planning's orient): measured evidence may demote `standard` → `small` once — a counted touch set within the target threshold, zero hard-gate flags, zero open gray areas, all three required. Never into `tiny`, never twice, never with a hard-gate flag; promotion stays available always. Full rule: `references/routing-and-contracts.md` ("Re-lane checkpoint").
+**One re-lane checkpoint, after the first evidence pass** (exploring's scout, else planning's orient): measured evidence demotes to the smallest honest lane — `standard` → `small` (touch set ≤3), on to `tiny` (≤2 files, one direct task) — zero hard-gate flags, zero open gray areas, all conditions measured; when they all hold, demotion is the default and staying heavy must name the failing condition. Never twice, never with a hard-gate flag; promotion stays available always. Full rule: `references/routing-and-contracts.md` ("Re-lane checkpoint").
 
 **Ceremony scales with the lane (lanes scale ceremony, never memory):**
 
@@ -135,7 +135,7 @@ Review is on demand (SPEC R1/R3/R8, decision 565e68d0): no lane auto-dispatches 
 | `docs` | none — announce one line | format check (parse/lint if applicable) | direct, in-session | none | 0 |
 | `tiny` | none — the cell is the micro-plan (D3) | 2-minute reality check inline, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract) | one dispatched execution worker (AO14 — param-carrying dispatch, model param or pinned type, never a bare marker; standard worker prompt template, no reviewers/panels/waves) | orchestrator-authored done-report (worker's verbatim diff + orchestrator's own fresh verify re-run) — unchanged, this is verification, not independent review | 1 — the merged shape+execution gate |
 | `small` | logged scoping synthesis; plan.md is opt-in (D4) | inline reality gate + matrix, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract); spike only if a blocking assumption demands it | one dispatched execution worker (AO14 — same contract as `tiny`'s Execute column), its 1-3 cells processed SERIALLY (see small-lane serial doctrine below) | orchestrator-authored done-report, self-checks only, no auto reviewer (the correctness reviewer moves inside an on-demand review session) | 2 — merged shape+execution gate, self-checks close-out |
-| `standard` | full `plan.md` | plan-checker + cell reviewer | swarm workers | on user request only: session panel scaled to scope risk (4 core reviewers) | 3 — Gates 1-3 |
+| `standard` | full `plan.md` | merged reviewer; ≤5-file diff (0 hard-gate flags): inline self-review, no dispatch | swarm workers | on user request only: session panel scaled to scope risk (4 core reviewers) | 3 — Gates 1-3 |
 | `high-risk` | `plan.md` + brief | persona panel | swarm workers | on user request only: session panel scaled to scope risk (full wave + conditionals) | 3 — Gates 1-3 |
 
 **Gate 4 is additive, not counted above:** it is asked once, whenever a review session actually runs for that scope — never automatically at the end of a lane's default chain.

@@ -146,13 +146,15 @@ It fires on whichever path came first, and a feature that passed through explori
 
 **Demotion requires all three conditions, measured. One missing means no demotion:**
 
-1. **A counted product-file touch set within the target lane's threshold** (`small`: ≤3). Product files only, per the lane file-cap rule — `.bee/**`, `docs/**`, plans, reports, and generated projections never count. The number comes from counting the scouted file list; an estimate is not a count.
+1. **A counted product-file touch set within the target lane's threshold** (`small`: ≤3, `tiny`: ≤2). Product files only, per the lane file-cap rule — `.bee/**`, `docs/**`, plans, reports, and generated projections never count. The number comes from counting the scouted file list; an estimate is not a count.
 2. **Zero hard-gate flags on that touch set** (auth · authorization · data loss · audit/security · external provider · validation removal · database migration/schema change).
 3. **No unresolved gray areas left in scope** — every gray area is locked in `CONTEXT.md`, or was resolved as immaterial. An open question is a no.
 
+**When all three measure true, demotion is the default, not an option (lane-lean D1).** Staying in `standard` at that point requires naming which condition actually failed — "it feels standard-sized" is not a condition. The lane that ships is the smallest lane the evidence honestly supports (USER FEEDBACK 5794a92a: ceremony must not displace the main task).
+
 **The limits are absolute:**
 
-- **At most one step, `standard` → `small`, and nothing else.** **Never into `tiny`** — `tiny` stays a triage-only lane, reachable from the request alone and never by demotion. **`high-risk` never demotes here at all**, and a `high-risk` lane carrying any hard-gate flag can never demote regardless of file count — condition 2 is the floor, not a threshold to get under.
+- **Downward only, along the triage ladder (lane-lean D2):** `standard` → `small`, and on to `tiny` when the measured touch set is ≤2 product files AND the work is one direct task — both read from the same single evidence pass, never a second checkpoint. A demoted `tiny` keeps `tiny`'s whole contract: one direct task, merged shape+execution gate, one dispatched worker. **`high-risk` never demotes here at all**, and a lane carrying any hard-gate flag can never demote regardless of file count — condition 2 is the floor, not a threshold to get under.
 - **At most once per feature.** Not once per path, not once per slice, not once per lane change.
 - **It uses the scouted touch set.** "Re-counting flags to land under a threshold means you are already in `standard`" is the triage rule's existing prohibition; a checkpoint that re-argues flag counts is that prohibition wearing a new name, and the answer is still `standard`. The checkpoint reads the scout's evidence — it never re-litigates it.
 
@@ -160,7 +162,7 @@ It fires on whichever path came first, and a feature that passed through explori
 
 ```bash
 node .bee/bin/bee.mjs decisions log \
-  --decision "re-laned standard → small (evidence checkpoint): <feature>" \
+  --decision "re-laned <from> → <to> (evidence checkpoint): <feature>" \
   --rationale "<n> product files scouted, 0 hard-gate flags, 0 open gray areas"
 ```
 

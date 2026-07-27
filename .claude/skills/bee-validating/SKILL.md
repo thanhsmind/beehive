@@ -17,7 +17,7 @@ metadata:
 
 Validating is the hard gate between planning and execution. It rejects beautiful fantasy plans by demanding repo/system evidence, feasibility proof, and cells a stranger could pick up cold. Never skip validating — it scales down, it does not disappear.
 
-**Lane scaling.** For `tiny` and `small`, this skill is **not separately invoked**: the reality check runs inline inside bee-planning before the merged shape+execution gate (see bee-planning §5), and no validating subagents are spawned. This skill's full protocol below applies from `standard` upward — `standard` runs the merged review wave; `high-risk` scales it to a persona panel. A `spike` runs whatever single proof its question demands, nothing more.
+**Lane scaling.** For `tiny` and `small`, this skill is **not separately invoked**: the reality check runs inline inside bee-planning before the merged shape+execution gate (see bee-planning §5), and no validating subagents are spawned. This skill's full protocol below applies from `standard` upward — a small-diff `standard` (counted touch set ≤5 product files, zero hard-gate flags) runs the review wave **inline on the session model** instead of dispatching it (lane-lean D3, Review Wave below); a larger `standard` dispatches the merged reviewer; `high-risk` always scales it to a persona panel. A `spike` runs whatever single proof its question demands, nothing more.
 
 Start with `node .bee/bin/bee.mjs status --json`. If onboarding is missing or stale, stop and invoke bee-hive.
 
@@ -68,6 +68,8 @@ On Claude Code, spawn `subagent_type: "bee-review"` when `.claude/agents/bee-rev
 It is a **read-only gather**, never a cell: a cli-shaped review slot resolves with the purpose-scoped `resolveTier(root, 'review', runtime, {for:'gather'})` — a bare 3-arg resolve of one now refuses (AO12/B1); a model-shaped slot is unaffected by purpose.
 
 **One shot, then at most one blocker pass.** The merged reviewer runs **once**. WARNING-level and mechanically fixable findings (a missing link, a vague verify command, a dependency typo) the orchestrator applies **directly to the cells** — legal because cells are mutable before Gate 3 (D2). Only **unresolved BLOCKERs** trigger a **second and final** pass, scoped to those blockers. No third pass: a BLOCKER open after pass 2 escalates to the user with both positions.
+
+**Small-diff standard: same mandates, no dispatch (lane-lean D3).** When the counted touch set is ≤5 product files with zero hard-gate flags, the merged reviewer is not dispatched — the session model runs both mandates itself: Structure over the same 5 dimensions, Cells as a cold-pickup pass, findings in the same vocabularies, recorded in the validation report. Same sync point, same one-shot-then-one-blocker-pass cap. A hard-gate flag, a 6th product file, or genuine doubt about self-review independence restores the dispatch. `high-risk` never takes this path.
 
 **High-risk lane:** scale this same merged dispatch to a persona panel — coherence + feasibility lenses always, plus conditional lenses (security, product, scope-guardian) chosen by the diff of concerns. Dedupe findings, then synthesize into auto-fix vs present-for-decision buckets.
 
