@@ -34,7 +34,11 @@ function gitText(cwd, args) {
 }
 
 function makeOrdinaryRepoFixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-worktree-store-main-'));
+  // realpath the fixture root — on Windows os.tmpdir() gives the 8.3 short form
+  // while every resolver speaks the long form, so a raw mkdtemp root makes this
+  // suite compare two spellings of one directory (see the same repair in
+  // scripts/tests/test_worktree_merge_queue.mjs, whose marker wait it reuses).
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'bee-worktree-store-main-')));
   git(root, ['init', '-b', 'main']);
   git(root, ['config', 'user.email', 'bee@example.invalid']);
   git(root, ['config', 'user.name', 'Bee Test']);

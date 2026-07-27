@@ -42,7 +42,14 @@ function git(cwd, args) {
 // and dispatch-interlock.mjs both run `git rev-parse --git-common-dir`, which
 // fails against a synthetic `.git` directory with no real repository state.
 function makeHerdingRepo(prefix) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  // realpath the fixture root, or every expectation built from it speaks a
+  // different spelling than the CLI's own output on Windows: os.tmpdir() there
+  // yields the 8.3 short form (C:\Users\RUNNER~1\…) while the CLI resolves to
+  // the long form (C:\Users\runneradmin\…). canonicalPathsEqual cannot fold
+  // those two — for a path that does not exist yet (the no-marker case) it has
+  // nothing to resolve and falls back to a string compare, so the difference
+  // must be removed at the source rather than papered over in the comparison.
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
   git(root, ['init', '-q', '-b', 'main']);
   git(root, ['config', 'user.email', 's@e']);
   git(root, ['config', 'user.name', 's']);
@@ -199,6 +206,16 @@ await check('bee herding with no verb prints a Use: line listing enable/disable/
 });
 
 await check('RED-FIRST REGRESSION GUARD, separator (windows-path-identity wpi-2, rework round): a genuine win32-shaped rendering of the REAL main_root this suite just observed from the CLI is rejected by the pre-fix raw `===`, rejected too by canonicalPathsEqual with NO platformPath injected (the POSIX-ambient control — a bare backslash is DATA on this platform, per wpi-1 rework commit ddcb6733, never a separator), and accepted ONLY once canonicalPathsEqual is given platformPath: path.win32 (wpi-1\'s injection seam) — the one way to prove separator handling without a real Windows box', async () => {
+  // POSIX-only by construction, and the title says so: this proves separator
+  // handling "without a real Windows box" by rendering a win32 spelling and
+  // asserting the ambient (POSIX) comparison rejects it. On a real Windows box
+  // the ambient IS win32, so the fixture precondition cannot hold — path.win32
+  // .resolve() returns the input unchanged — and the POSIX control asserts the
+  // opposite of the truth there. Windows exercises the real separator handling
+  // through every other row in this suite; simulating it is a POSIX job.
+  if (path.sep === '\\') {
+    return;
+  }
   const root = makeHerdingRepo('bee-herding-redfirst-sep-');
   try {
     const result = await runBeeHerding(root, ['status', '--json']);

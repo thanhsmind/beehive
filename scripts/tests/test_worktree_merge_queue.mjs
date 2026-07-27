@@ -191,7 +191,12 @@ function addWork(worktreeRoot, fileName, message) {
 // is part of that output; a prefix like "...-merge-queue-..." would leak
 // into that assertion as a false positive that has nothing to do with the
 // production text this cell actually changed.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-wt-merge-mq-'));
+// realpath the fixture root: on Windows os.tmpdir() yields the 8.3 short form
+// (C:\Users\RUNNER~1\…) while anything that resolves a path speaks the long
+// form (C:\Users\runneradmin\…). A parent waiting on one spelling for a marker
+// a child wrote under the other waits forever — which is exactly how this
+// suite's waitForFile timed out on Windows CI while passing everywhere else.
+const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'bee-wt-merge-mq-')));
 
 try {
   // ── (a) + (b): two real merges against the SAME main checkout serialize,

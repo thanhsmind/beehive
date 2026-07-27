@@ -1997,7 +1997,7 @@
     },
     {
       "path": "packages/bee/tests/test_herding_cli.mjs",
-      "sha256": "e644d46c9875018dfae28b4f984c148cb40aa3e4ee9b0ca5e86a1ace080a1930",
+      "sha256": "d5459a96038d7887d5065201cb7c01b04a898da64de689aea65c1e943e0656ef",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_herding_cli.mjs"
@@ -2116,7 +2116,7 @@
     },
     {
       "path": "packages/bee/tests/test_worktree_store.mjs",
-      "sha256": "64af47eea29b9e7fd2387aaa84c21f74747f9ea160600fdd24fc533052323845",
+      "sha256": "5e25ff8652aa59d61b243ccb39b94f4bb335f285e6c9cedfb9d7a957829a90cc",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_worktree_store.mjs"
