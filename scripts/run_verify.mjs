@@ -353,6 +353,23 @@ const EXTRA_SUITES = [
   // which no suite in the chain mutates.
   ["scripts/okf_instructions_fence.mjs", "--selftest"],
   ["scripts/okf_instructions_fence.mjs"],
+  // skill-token-diet cell diet-1 (D6): the skill body byte-budget ratchet plus
+  // the D8 provenance grep, promoted from skill_lint.mjs (always-advisory) to
+  // a BLOCKING chain-fail fence — the one narrow supersession of the
+  // 2026-07-27 "instruction text gets a lint, not a suite" law (decision
+  // 6d9b9afc), approved 2026-07-28 for this check only. Same selftest+bare
+  // pair as the okf fences above.
+  //   --selftest  proves the fence BITES: an over-budget body fails; a
+  //               provenance citation in a skill LISTED in the baseline's
+  //               migrated[] array fails; the same citation in an UNLISTED
+  //               skill passes (migrated status is never inferred from
+  //               budget size — validation D2); a grandfathered skill
+  //               (budget>8192, notes.<skill> present) passes; a missing
+  //               baseline file and a skill with no recorded entry both
+  //               fail loud, never silently.
+  //   (bare)      runs the fence against THIS repo's live skills/ tree.
+  ["scripts/skill_budget_fence.mjs", "--selftest"],
+  ["scripts/skill_budget_fence.mjs"],
 ];
 
 // scripts/tests/test_installers_e2e.mjs is discovered by the glob too (it

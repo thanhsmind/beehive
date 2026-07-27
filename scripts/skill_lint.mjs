@@ -1,7 +1,13 @@
 // skill_lint — ADVISORY skill-tree lint. Not a test, deliberately (user law,
 // 2026-07-27: tests are for code; instruction text gets a lint, not a suite).
-// Always exits 0: budget deltas are information, anchor/numbering problems are
-// warnings. A human decides; nothing blocks, nothing runs in the verify estate.
+// Always exits 0: anchor/numbering problems are warnings. A human decides;
+// nothing here blocks, nothing here runs in the verify estate.
+//
+// BODY BUDGET moved OUT to scripts/skill_budget_fence.mjs (skill-token-diet
+// D6, cell diet-1): the byte-budget ratchet plus the D8 provenance grep are
+// now a BLOCKING chain-fail fence, narrowly superseding the advisory-lint law
+// for that one check. `--update-baseline` moved there too. This file keeps
+// only the two properties below, both still advisory.
 //
 // The slice's net behavior is instruction text: three rules (progress ticks,
 // the re-lane checkpoint, the merged review wave) moved into references with
@@ -10,24 +16,15 @@
 // violated at least once while authoring this very slice, which is why they are
 // worth a suite rather than a promise:
 //
-//   1. BODY BUDGET (a ratchet). A SKILL.md body is injected whole on every
-//      invoke, so a body that grows taxes every future session forever. The
-//      baseline is recorded per skill and may only shrink. Adding a rule means
-//      paying for it by removing text, not by appending. Spec #78 P2.
-//
-//   2. ANCHOR INTEGRITY. Moving text to a reference is only safe if the pointer
+//   1. ANCHOR INTEGRITY. Moving text to a reference is only safe if the pointer
 //      resolves. A body line reading `references/x.md` ("Some Heading") must
 //      find that file AND that heading. During this slice a body pointed at a
 //      "merged reviewer prompt" section that did not exist yet — a dangling
 //      pointer costs the reader the whole rule, silently.
 //
-//   3. ORDERED-LIST INTEGRITY. Inserting a numbered step without renumbering
+//   2. ORDERED-LIST INTEGRITY. Inserting a numbered step without renumbering
 //      its successors produces two steps with the same number; this slice did
 //      exactly that in bee-exploring before it was caught by eye.
-//
-// The baseline lives beside this file. To lower a budget after a genuine trim,
-// run this suite with --update-baseline; it refuses to RAISE one, which is the
-// whole point.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,7 +33,6 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
 const SKILLS = path.join(REPO, 'skills');
-const BASELINE = path.join(HERE, 'skill-body-budget.json');
 
 let warnings = 0;
 function check(name, fn) {
@@ -61,58 +57,11 @@ function skillDirs() {
     .sort();
 }
 
-function bodyBytes(skill) {
-  return fs.statSync(path.join(SKILLS, skill, 'SKILL.md')).size;
-}
+// Body budget + --update-baseline live in scripts/skill_budget_fence.mjs now
+// (skill-token-diet D6, cell diet-1) — that script is the blocking half and
+// the single source of the ratchet; this file no longer touches it.
 
-// ─── --update-baseline: lower recorded budgets only, never raise ────────────
-if (process.argv.includes('--update-baseline')) {
-  const current = fs.existsSync(BASELINE) ? JSON.parse(fs.readFileSync(BASELINE, 'utf8')) : { budgets: {} };
-  const budgets = current.budgets || {};
-  const lowered = [];
-  for (const skill of skillDirs()) {
-    const size = bodyBytes(skill);
-    const recorded = budgets[skill];
-    if (recorded === undefined) {
-      budgets[skill] = size;
-      lowered.push(`${skill}: seeded at ${size}`);
-    } else if (size < recorded) {
-      budgets[skill] = size;
-      lowered.push(`${skill}: ${recorded} -> ${size}`);
-    }
-  }
-  fs.writeFileSync(
-    BASELINE,
-    `${JSON.stringify({ note: 'Per-skill SKILL.md body budget in bytes. Ratchet: may only go down. See scripts/skill_lint.mjs.', budgets }, null, 2)}\n`,
-    'utf8',
-  );
-  console.log(lowered.length ? lowered.join('\n') : 'nothing to lower');
-  process.exit(0);
-}
-
-assert(fs.existsSync(BASELINE), `missing baseline ${BASELINE} — seed it with --update-baseline`);
-const { budgets } = JSON.parse(fs.readFileSync(BASELINE, 'utf8'));
-
-// ─── 1. body budget ────────────────────────────────────────────────────────
-check('every SKILL.md body is within its recorded budget — bodies load whole on every invoke, so they may shrink but never grow', () => {
-  const over = [];
-  for (const skill of skillDirs()) {
-    const budget = budgets[skill];
-    if (budget === undefined) {
-      over.push(`${skill}: no recorded budget (new skill — seed it with --update-baseline)`);
-      continue;
-    }
-    const size = bodyBytes(skill);
-    if (size > budget) over.push(`${skill}: ${size} bytes exceeds budget ${budget} by ${size - budget}`);
-  }
-  assert(
-    over.length === 0,
-    `body budget exceeded — pay for new text by removing text, do not append:\n  ${over.join('\n  ')}`,
-  );
-});
-
-
-// ─── 2. anchor integrity ───────────────────────────────────────────────────
+// ─── 1. anchor integrity ───────────────────────────────────────────────────
 // A pointer may be same-skill (`references/x.md`) or cross-skill
 // (`bee-hive/references/x.md`) — bee-exploring, bee-planning and bee-swarming
 // all route into bee-hive's reference, so resolving only the same-skill shape
@@ -174,7 +123,7 @@ check('bee-validating routes to the MERGED reviewer prompt and no longer names t
   }
 });
 
-// ─── 3. ordered-list integrity ─────────────────────────────────────────────
+// ─── 2. ordered-list integrity ─────────────────────────────────────────────
 check('no SKILL.md body repeats a number within one ordered list — inserting a step without renumbering its successors is silent', () => {
   const dupes = [];
   for (const skill of skillDirs()) {
