@@ -61,57 +61,73 @@ Accepted evidence: existing implementation, file/API/type inspection, command ou
 | Unreachable exit / integration hole | `plan.md` (key links) then cells |
 | Scope reduction of a locked decision | prohibited — SPLIT the work instead, via planning |
 
-## Plan-Checker Subagent Prompt
+## Merged Reviewer Subagent Prompt
 
-Dispatch at the **generation** tier; name the model explicitly (fallback: read budget + output cap). Verify, do not redesign.
+One dispatch on the **review** slot replaces the former plan-checker and cell-reviewer
+pair (spec #77 P3). Two mandates, two finding vocabularies, one report. Verify, do not
+redesign. On slice 2+ the scope is the new/changed cells and stale rows only — the plan
+is frozen and was checked on slice 1.
 
 ```text
-You are an adversarial plan checker. Assume the plan is flawed until proven otherwise.
-Inputs: docs/history/<feature>/CONTEXT.md, approach.md, plan.md, and the current-work cells
-(node .bee/bin/bee.mjs cells list --feature <feature>).
-Verify exactly 5 dimensions:
+You are a merged plan reviewer. Two mandates. Assume the work is flawed until proven so.
+Inputs: docs/history/<feature>/CONTEXT.md, approach.md, plan.md, and the current-work
+cells (node .bee/bin/bee.mjs cells list --feature <feature>).
+
+MANDATE 1 — STRUCTURE. Verify exactly 5 dimensions:
 1. Requirement/decision coverage — every locked D-ID lands in at least one cell.
 2. Cell completeness — each cell has files, read_first, directive action, must_haves
    (per lane tier), and a runnable verify.
 3. Dependency correctness — deps form a DAG; no cell depends on a future slice.
 4. Key links — integration points named in plan.md are owned by a specific cell.
 5. Scope sanity — no cell is doing hidden architecture work or exceeds its lane.
-Report every finding as BLOCKER (structurally unsound) or WARNING (survivable, note it).
-Do not propose redesigns. Do not soften findings. Quote file/cell evidence per finding.
-```
+Report every structural finding as BLOCKER (structurally unsound) or WARNING
+(survivable, note it).
 
-Max 3 structural iterations (check → repair → re-check). An open BLOCKER after iteration 3 escalates to the user with both positions. Never run iteration 4.
-
-### High-Risk Persona Panel
-
-For the high-risk lane, replace the single checker with a small panel: **coherence** and **feasibility** personas always; add conditional lenses — **security**, **product**, **scope-guardian** — chosen by the diff of concerns (auth/data → security; user-visible behavior → product; growing surface → scope-guardian). Each persona gets the same inputs and the BLOCKER/WARNING vocabulary. Dedupe overlapping findings, then synthesize into two buckets: **auto-fix** (apply, record) and **present-for-decision** (user judgment required).
-
-## Cell-Reviewer Subagent Prompt
-
-Dispatch at the **generation** tier. Stress-test whether each cell can be picked up cold.
-
-```text
-You are a fresh-eyes cell reviewer with NO session history. For each current-work cell
-(node .bee/bin/bee.mjs cells show --id <id>), answer: could a worker who has read only
-CONTEXT.md, plan.md, and this cell implement and verify it without guessing?
+MANDATE 2 — CELLS, COLD PICKUP. You have NO session history. For each cell, answer:
+could a worker who has read only CONTEXT.md, plan.md, and this cell implement and
+verify it without guessing?
 Flag CRITICAL: assumed context, vague acceptance, scope overload, unproven feasibility,
 broken verify command.
 Flag MINOR: missing rationale, implicit file assumption, fuzzy boundary, known tradeoff
 not recorded.
+
+Return ONE report with both sections below. Never merge the two vocabularies: structure
+findings are BLOCKER/WARNING, cell findings are CRITICAL/MINOR.
+Do not propose redesigns. Do not soften findings. Quote file/cell evidence per finding.
 ```
 
 ```text
-CELL REVIEW REPORT
+REVIEW REPORT
 Work: <current slice / direct task>
-Cells reviewed: <N>
+
+STRUCTURE
+BLOCKERS: <dimension> problem / evidence / fix
+WARNINGS: <dimension> problem / evidence / note
+
+CELLS  (reviewed: <N>)
 CRITICAL FLAGS: <cell-id> problem / evidence / fix
 MINOR FLAGS: <cell-id> problem / evidence / suggestion
 CLEAN CELLS: <cell-id>, <cell-id>
-REVISIONS MADE: <cell-id> change / why
+
 SUMMARY: <2-3 sentences>
 ```
 
-All CRITICAL flags must be fixed before Gate 3. MINOR flags ship with a recorded note.
+**One shot, then at most one blocker pass.** WARNING-level and mechanically fixable
+findings — a missing link, a vague verify command, a dependency typo — the orchestrator
+applies directly to the cells, which is legal because cells are mutable before Gate 3.
+Only unresolved BLOCKERs earn a second and final pass, scoped to those blockers. There
+is no third pass: a BLOCKER still open after pass 2 escalates to the user with both
+positions. All CRITICAL cell flags are fixed before Gate 3; MINOR flags ship with a
+recorded note.
+
+### High-Risk Persona Panel
+
+For the high-risk lane, scale this same merged dispatch to a small panel: **coherence**
+and **feasibility** personas always; add conditional lenses — **security**, **product**,
+**scope-guardian** — chosen by the diff of concerns (auth/data → security; user-visible
+behavior → product; growing surface → scope-guardian). Each persona gets the same inputs
+and both vocabularies. Dedupe overlapping findings, then synthesize into two buckets:
+**auto-fix** (apply, record) and **present-for-decision** (user judgment required).
 
 ## Approval Gate Block
 

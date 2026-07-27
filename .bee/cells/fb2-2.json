@@ -1,0 +1,73 @@
+{
+  "id": "fb2-2",
+  "feature": "flow-batch-2",
+  "lane": "standard",
+  "behavior_change": true,
+  "change_class": "behavior",
+  "title": "One review wave, one merged reviewer, one checker pass (spec #77 P2 + P3 + P4)",
+  "action": "Spec #77, P2 P3 P4 together - they touch one dispatch path and the spec's own rollout order ships them as one batch. Today a standard slice pays a serial chain: orient worker, then plan-checker, then cell reviewer, each a separate dispatch over largely the same inputs, with the checker looping up to three iterations. (P2 ONE WAVE) Dispatch simultaneously at stage start: the merged reviewer, and the orient/extraction worker when the delegation rubric fires. The orchestrator runs the reality gate and feasibility matrix on the session model WHILE the wave runs. Sync point unchanged: Gate 3 presentation, or its bypass self-approval, still cannot happen while any wave member is outstanding. (P3 MERGED REVIEWER) One bee-review-class dispatch with a two-part mandate: the adversarial structural check over its existing five dimensions, and the cold-pickup cell review with its existing flags. Findings keep BOTH existing vocabularies - BLOCKER and WARNING for structure, CRITICAL and MINOR for cells - in two sections of one report. High-risk persona-panel scaling applies to this merged dispatch unchanged. Same review slot, same tier resolution, same read-only gather contract. (P4 ONE-SHOT CHECKER) The merged reviewer runs ONCE. WARNING-level and mechanically fixable findings (a missing link, a vague verify command, a dependency typo) are applied directly by the orchestrator to the cells, which is legal because cells are mutable before Gate 3. Only unresolved BLOCKERs trigger a second and final pass scoped to those blockers. There is no third iteration; open BLOCKERs after pass two escalate to the user exactly as iteration-three escalation does today. (WEIGHT) bee-validating is 17KB and spec #78 exists because these skills are over-weight: every line you add must replace one, and the merged reviewer's prompt belongs in the reference, not the body. Note fs-2 already added the delta-validation rule to this skill - read it first so the wave and the delta rule compose rather than contradict.",
+  "must_haves": {
+    "truths": [
+      "The reviewer and the orient worker are dispatched together at stage start, and the orchestrator's own matrix work is stated as running concurrently with them.",
+      "Gate 3 still cannot be presented or self-approved while any wave member is outstanding.",
+      "One reviewer dispatch replaces two, carrying both mandates and both finding vocabularies in one report with two sections.",
+      "The checker runs once; WARNING-level and mechanically fixable findings are orchestrator-applied to the cells; only unresolved BLOCKERs get a second and final pass.",
+      "There is never a third iteration, and the existing escalation path is unchanged.",
+      "The merged reviewer prompt lives in the reference, not the body; report bee-validating's before and after byte count.",
+      "The new wave text composes with fs-2's delta-validation rule rather than contradicting it."
+    ],
+    "prohibitions": [
+      "Do NOT change Gate 3 semantics, the advisor consult enforcement, or spike discipline - spec #77 P5 was rejected, so runtime spikes stay mandatory on standard lane.",
+      "Do NOT drop a finding class when merging the two reviewers; both vocabularies survive.",
+      "Do NOT allow a third verification iteration.",
+      "Do NOT write new tests.",
+      "Do NOT grow the bee-validating body."
+    ]
+  },
+  "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+  "read_first": [
+    "skills/bee-validating/SKILL.md",
+    "skills/bee-validating/references/validation-reference.md"
+  ],
+  "files": [
+    "skills/bee-validating/SKILL.md",
+    "skills/bee-validating/references/validation-reference.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-fb22",
+    "outcome": "One review wave: merged reviewer replaces the plan-checker/cell-reviewer pair, both finding vocabularies preserved, one shot plus at most one blocker pass; bee-validating body shrank",
+    "files_changed": [
+      "skills/bee-validating/SKILL.md",
+      "skills/bee-validating/references/validation-reference.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T14:08:15.087Z",
+    "behavior_change": true,
+    "verification_evidence": "# flow-batch-2 evidence — specs #81 P4/P3 and #77 P2/P3/P4\n\nBoth dispatched workers died mid-edit on an API session limit, not on the work.\nTheir partial output was inspected, judged sound, and finished in-session rather\nthan discarded: the re-lane reference section and the `bee-validating` body\nrestructure were already complete and coherent.\n\n## Byte budget — the constraint most likely to be quietly broken\n\nSpec #78 exists because these bodies are injected whole on every invoke, so a\nspec that improves flow by fattening them trades one cost for another. Every\nline added here was paid for by a line removed.\n\n| Skill body | Before | After | Δ |\n|---|---|---|---|\n| bee-hive | 30076 | 29808 | −268 |\n| bee-swarming | 24965 | 24937 | −28 |\n| bee-exploring | 16209 | 15915 | −294 |\n| bee-validating | 17260 | 17243 | −17 |\n| bee-planning | 23698 | 23681 | −17 |\n\nFive bodies carrying three new rules, all five smaller than before. The\nmechanics live in references, which are lazy-loaded.\n\n## #81 P4 — progress ticks\n\nContract in `bee-hive/references/routing-and-contracts.md` (\"Progress ticks\"):\none line per event, never a question — cell cap, slice close, wave completion,\nre-lane, draft PR, demo. Ticks are chat output the agent writes as it goes, not\nan emitter subsystem: nothing to build, nothing to poll. Silence has exactly two\nswitches, `quiet: true` and `ship_visibility: \"off\"`.\n\nWired at the cap seam in `bee-swarming` and routed from `bee-hive`'s\nsilent-bookkeeping rule, which is the rule ticks could otherwise be read as\ncontradicting — hence the explicit \"silent is not invisible\" clause.\n\n## #81 P3 — evidence-based lane demotion\n\nOne checkpoint per feature, after the first evidence pass: `bee-exploring` step\n3 when exploring runs, `bee-planning` §2 step 7 only when it was skipped. All\nthree conditions required and measured — counted product-file touch set within\nthreshold, zero hard-gate flags, zero open gray areas. One step only, `standard`\n→ `small`, never into `tiny`, never twice, never with a hard-gate flag.\nPromotion stays available always. A demotion logs a one-line audit decision\nnaming the counts, and emits the re-lane tick.\n\nThe prohibition that mattered most: the checkpoint reads the scout's evidence\nand never re-litigates it. Triage's existing rule already says that re-counting\nflags to land under a threshold means you are already in `standard`; a\ncheckpoint that re-argues counts is that prohibition wearing a new name.\n\n## #77 P2/P3/P4 — one wave, one reviewer, one pass\n\n- **P2** — the merged reviewer and the orient worker dispatch together at stage\n  start while the orchestrator runs the reality gate and matrix on the session\n  model: the stage costs max(reviewer, matrix), not their sum. Sync point widened\n  from the checker to the whole wave — Gate 3, or its bypass self-approval, never\n  happens with any member outstanding.\n- **P3** — one `bee-review` dispatch replaces the plan-checker/cell-reviewer\n  pair, returning one report with two sections. **Both vocabularies survive**:\n  BLOCKER/WARNING for structure, CRITICAL/MINOR for cells. Merging the dispatches\n  never merges the finding classes — stated in the body, in the reference prompt,\n  and as a red flag.\n- **P4** — one shot, then at most one blocker-scoped pass. WARNING-level and\n  mechanically fixable findings are orchestrator-applied directly to the cells,\n  legal because cells are mutable before Gate 3. No third pass; escalation\n  unchanged.\n\nThe two reviewer prompts in `validation-reference.md` were merged into one\ntwo-mandate prompt with a single report template, so the body's pointer to \"the\nmerged reviewer prompt\" resolves. The high-risk persona panel now scales that\nsame merged dispatch.\n\nComposes with `fs-2`'s delta rule rather than contradicting it: on slice 2+ the\nwave's scope is the new/changed cells and stale rows, not the frozen plan.\n\n## Verify\n\n```\nledger_parity --check: .bee/bin/** matches the .bee/onboarding.json managed-hash ledger\nPASS run_verify: 108 suite(s), concurrency=5, wall=72488ms\nEXIT=0\n```\n\nNo new test authored — behavior cells cap on `existing-targeted-green` since\n`fs-1`, and the user asked for none.\n",
+    "verify_output": null,
+    "verify_passed": true,
+    "claim_session": "c0b91d84-165f-4d21-a85d-16b6acd71dd0",
+    "claimed_at": "2026-07-27T13:47:36.630Z",
+    "verify_command": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "verified_at": "2026-07-27T14:07:35.273Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T14:07:35.273Z",
+        "claim_session": "c0b91d84-165f-4d21-a85d-16b6acd71dd0",
+        "claimed_at": "2026-07-27T13:59:18.245Z",
+        "acquired_at": "2026-07-27T13:47:36.628Z",
+        "worker": "exec-fb22",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

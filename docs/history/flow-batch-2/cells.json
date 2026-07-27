@@ -1,0 +1,75 @@
+[
+  {
+    "id": "fb2-1",
+    "feature": "flow-batch-2",
+    "lane": "standard",
+    "behavior_change": true,
+    "change_class": "behavior",
+    "title": "Progress ticks under bypass, and an evidence-based lane demotion checkpoint (spec #81 P4 + P3)",
+    "action": "Spec #81, P4 then P3. (P4 TICKS) Under gate bypass the chat is silent between start and final report except the gate auto-approve lines, so perceived latency is the whole pipeline even when cells finish in minutes. Emit ONE line, never a question, at each of: cell cap, slice close, wave completion, a re-lane decision, and (when they exist) draft-PR creation and demo comments. Shape them like the examples in the spec: a check mark, the unit, and the outcome - cell id plus verify summary; slice number plus cell count plus test result. Add a config key `quiet` (boolean, default false) that suppresses the tick stream; `ship_visibility: off` also suppresses it. Ticks are agent chat output, so this is instruction text plus the config read - no new emitter machinery. (P3 RE-LANE) Lane is fixed at triage from the request text alone, uncertainty resolves upward, and nothing re-examines it once evidence exists, so an ambiguous request for a two-file change pays the full standard pipeline. Add ONE re-lane checkpoint immediately after the first evidence pass: exploring's scout for standard and above, or planning's orient when exploring was skipped. Demotion requires ALL THREE measured conditions: a counted product-file touch set within the target lane's threshold (small is three or fewer), zero hard-gate flags on that touch set, and no unresolved gray areas left in scope. Demotion is at most ONE step (standard to small; never into tiny, which stays triage-only), happens at most ONCE per feature, and is logged as a one-line audit decision naming the evidence counts. Promotion on discovered risk stays available at any time, unchanged. High-risk with any hard-gate flag can never demote regardless of file count. The triage guessing rule and its resolve-upward discipline are unchanged: this checkpoint converts measured evidence into a smaller lane, never optimism. (WEIGHT) These four skills total 96KB and spec #78 exists because they are already over-weight. Every line you add must replace one; put the re-lane mechanics in a reference and leave ONE routing line in bee-hive's body. Do not grow any body.",
+    "must_haves": {
+      "truths": [
+        "The tick contract is stated once, names every event that emits one, and is honored from bee-swarming's orchestration text.",
+        "A `quiet` config key suppresses ticks, and so does ship_visibility off; the default is a live tick stream under bypass.",
+        "The re-lane checkpoint exists at exactly one place per path (exploring's scout, or planning's orient when exploring was skipped), fires at most once per feature, and demotes at most one step.",
+        "All three demotion conditions are required and are stated as measured, not argued; the hard-gate floor and the never-into-tiny rule are explicit.",
+        "A demotion logs a one-line audit decision naming the evidence counts.",
+        "Promotion on discovered risk is explicitly still available at any time.",
+        "No skill body grew: report the before and after byte count of every SKILL.md you touched."
+      ],
+      "prohibitions": [
+        "Do NOT change gate semantics, bypass levels, proof-tier or evidence law.",
+        "Do NOT let the checkpoint re-argue flag counts - it uses the scouted touch set.",
+        "Do NOT allow a demotion into tiny, a second demotion, or any demotion of high-risk work carrying a hard-gate flag.",
+        "Do NOT write new tests.",
+        "Do NOT grow any SKILL.md body; move text to references instead."
+      ]
+    },
+    "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "read_first": ["skills/bee-hive/SKILL.md", "skills/bee-swarming/SKILL.md"],
+    "files": [
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-exploring/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      ".bee/bin/bee.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deps": []
+  },
+  {
+    "id": "fb2-2",
+    "feature": "flow-batch-2",
+    "lane": "standard",
+    "behavior_change": true,
+    "change_class": "behavior",
+    "title": "One review wave, one merged reviewer, one checker pass (spec #77 P2 + P3 + P4)",
+    "action": "Spec #77, P2 P3 P4 together - they touch one dispatch path and the spec's own rollout order ships them as one batch. Today a standard slice pays a serial chain: orient worker, then plan-checker, then cell reviewer, each a separate dispatch over largely the same inputs, with the checker looping up to three iterations. (P2 ONE WAVE) Dispatch simultaneously at stage start: the merged reviewer, and the orient/extraction worker when the delegation rubric fires. The orchestrator runs the reality gate and feasibility matrix on the session model WHILE the wave runs. Sync point unchanged: Gate 3 presentation, or its bypass self-approval, still cannot happen while any wave member is outstanding. (P3 MERGED REVIEWER) One bee-review-class dispatch with a two-part mandate: the adversarial structural check over its existing five dimensions, and the cold-pickup cell review with its existing flags. Findings keep BOTH existing vocabularies - BLOCKER and WARNING for structure, CRITICAL and MINOR for cells - in two sections of one report. High-risk persona-panel scaling applies to this merged dispatch unchanged. Same review slot, same tier resolution, same read-only gather contract. (P4 ONE-SHOT CHECKER) The merged reviewer runs ONCE. WARNING-level and mechanically fixable findings (a missing link, a vague verify command, a dependency typo) are applied directly by the orchestrator to the cells, which is legal because cells are mutable before Gate 3. Only unresolved BLOCKERs trigger a second and final pass scoped to those blockers. There is no third iteration; open BLOCKERs after pass two escalate to the user exactly as iteration-three escalation does today. (WEIGHT) bee-validating is 17KB and spec #78 exists because these skills are over-weight: every line you add must replace one, and the merged reviewer's prompt belongs in the reference, not the body. Note fs-2 already added the delta-validation rule to this skill - read it first so the wave and the delta rule compose rather than contradict.",
+    "must_haves": {
+      "truths": [
+        "The reviewer and the orient worker are dispatched together at stage start, and the orchestrator's own matrix work is stated as running concurrently with them.",
+        "Gate 3 still cannot be presented or self-approved while any wave member is outstanding.",
+        "One reviewer dispatch replaces two, carrying both mandates and both finding vocabularies in one report with two sections.",
+        "The checker runs once; WARNING-level and mechanically fixable findings are orchestrator-applied to the cells; only unresolved BLOCKERs get a second and final pass.",
+        "There is never a third iteration, and the existing escalation path is unchanged.",
+        "The merged reviewer prompt lives in the reference, not the body; report bee-validating's before and after byte count.",
+        "The new wave text composes with fs-2's delta-validation rule rather than contradicting it."
+      ],
+      "prohibitions": [
+        "Do NOT change Gate 3 semantics, the advisor consult enforcement, or spike discipline - spec #77 P5 was rejected, so runtime spikes stay mandatory on standard lane.",
+        "Do NOT drop a finding class when merging the two reviewers; both vocabularies survive.",
+        "Do NOT allow a third verification iteration.",
+        "Do NOT write new tests.",
+        "Do NOT grow the bee-validating body."
+      ]
+    },
+    "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "read_first": ["skills/bee-validating/SKILL.md", "skills/bee-validating/references/validation-reference.md"],
+    "files": [
+      "skills/bee-validating/SKILL.md",
+      "skills/bee-validating/references/validation-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deps": []
+  }
+]
