@@ -2743,7 +2743,7 @@ await check('si-1: state scribing-run can stamp a NON-active feature — writes 
 // against `scribingDebt`'s behavior at the CLI door, not a duplicate of the
 // projection-plumbing assertions already above.
 
-await check('sss-1: a workflow-backed feature closes cleanly with no waiver after scribing-run, even though the record stamp itself never reaches disk (the durable ledger carries the proof instead)', async () => {
+await check('sss-1: a workflow-backed feature closes cleanly with no waiver after scribing-run — and since GH #86 the record stamp reaches disk too, so the durable ledger is corroboration rather than the only proof', async () => {
   const dir = makeStateRepo('bee-sss1-seam-green-');
   try {
     const started = await runBeeState(dir, ['start-feature', '--feature', 'sss1-seam', '--mode', 'tiny', '--json']);
@@ -2764,12 +2764,19 @@ await check('sss-1: a workflow-backed feature closes cleanly with no waiver afte
     ]);
     assert(scribe.status === 0, `scribing-run should succeed, got ${scribe.status}: ${scribe.stderr}`);
 
-    // Live evidence of the seam itself (decision 5b2f963d): the workflow-
-    // routed write never persisted the mutated last_scribing_run to disk.
+    // The seam this row used to document (decision 5b2f963d) is CLOSED as of
+    // GH #86: writeStateRecordThroughProjection now lands the caller's full
+    // record before the rebuild re-reads it, so ad hoc fields outside the
+    // five-field workflow patch — last_scribing_run here, advisor_ref in the
+    // bug that surfaced it — survive the workflow-routed write. This row
+    // asserted `=== undefined` while the seam was open; it now asserts the
+    // repair, and the close assertions below are unchanged: the durable ledger
+    // still carries the proof, so sss-1's fallback became belt-and-braces
+    // rather than the only evidence.
     const afterScribe = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
     assert(
-      afterScribe.last_scribing_run === undefined,
-      'documents the seam this cell works around: the record stamp does not survive the workflow-projection rebuild',
+      afterScribe.last_scribing_run !== undefined,
+      'GH #86: the record stamp must now survive the workflow-projection rebuild',
     );
 
     const close = await runBeeState(dir, ['set', '--owner', 'compounding', '--phase', 'compounding-complete', '--json']);

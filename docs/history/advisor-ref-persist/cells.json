@@ -1,0 +1,30 @@
+[
+  {
+    "id": "arp-1",
+    "feature": "advisor-ref-persist",
+    "lane": "tiny",
+    "behavior_change": true,
+    "change_class": "bugfix",
+    "title": "advisor-ref record actually persists when a live workflow record exists (GH #86)",
+    "action": "writeStateRecordThroughProjection and writeLaneRecordThroughProjection patched the workflow record with a five-field allowlist (phase, mode, summary, next_action, gates) and then rebuilt the projection by RE-READING it from disk, so any ad hoc field the caller set on the updated object (advisor_ref, last_scribing_run, gate_revoked_at) was discarded before ever reaching a file. advisor-ref record was the only verb that sets a field outside that list, so the gap stayed invisible until it: record reported success, show reported nothing, and state gate --name execution refused forever on every high-risk feature with a live workflow record. Fix: land the caller's full record with writeState/writeLane BEFORE the rebuild, so the rebuild's disk read sees the fresh fields and the passthrough rebuildLaneProjection already documents becomes true rather than aspirational. The D1 fields this write lays down are re-derived from the workflow record moments later, so the record stays authoritative for everything it owns.",
+    "must_haves": {
+      "truths": [
+        "advisor-ref record then show round-trips on a repo with a live workflow record, on both the default record and a lane.",
+        "state gate --name execution on high-risk work approves after a recorded consult instead of refusing forever.",
+        "Full suite green with no test weakened; the single updated assertion is the sss-1 row whose own comment declared it was documenting this seam as a known bug."
+      ],
+      "prohibitions": [
+        "Do NOT weaken the sss-1 close assertions or its negative control - only the characterization line changes."
+      ]
+    },
+    "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "read_first": ["packages/bee/bee.mjs"],
+    "files": [
+      "packages/bee/bee.mjs",
+      "packages/bee/tests/test_cli_state.mjs",
+      ".bee/bin/bee.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deps": []
+  }
+]

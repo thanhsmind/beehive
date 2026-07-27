@@ -1,0 +1,66 @@
+{
+  "id": "arp-1",
+  "feature": "advisor-ref-persist",
+  "lane": "tiny",
+  "behavior_change": true,
+  "change_class": "bugfix",
+  "title": "advisor-ref record actually persists when a live workflow record exists (GH #86)",
+  "action": "writeStateRecordThroughProjection and writeLaneRecordThroughProjection patched the workflow record with a five-field allowlist (phase, mode, summary, next_action, gates) and then rebuilt the projection by RE-READING it from disk, so any ad hoc field the caller set on the updated object (advisor_ref, last_scribing_run, gate_revoked_at) was discarded before ever reaching a file. advisor-ref record was the only verb that sets a field outside that list, so the gap stayed invisible until it: record reported success, show reported nothing, and state gate --name execution refused forever on every high-risk feature with a live workflow record. Fix: land the caller's full record with writeState/writeLane BEFORE the rebuild, so the rebuild's disk read sees the fresh fields and the passthrough rebuildLaneProjection already documents becomes true rather than aspirational. The D1 fields this write lays down are re-derived from the workflow record moments later, so the record stays authoritative for everything it owns.",
+  "must_haves": {
+    "truths": [
+      "advisor-ref record then show round-trips on a repo with a live workflow record, on both the default record and a lane.",
+      "state gate --name execution on high-risk work approves after a recorded consult instead of refusing forever.",
+      "Full suite green with no test weakened; the single updated assertion is the sss-1 row whose own comment declared it was documenting this seam as a known bug."
+    ],
+    "prohibitions": [
+      "Do NOT weaken the sss-1 close assertions or its negative control - only the characterization line changes."
+    ]
+  },
+  "verify": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+  "read_first": [
+    "packages/bee/bee.mjs"
+  ],
+  "files": [
+    "packages/bee/bee.mjs",
+    "packages/bee/tests/test_cli_state.mjs",
+    ".bee/bin/bee.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "orch",
+    "outcome": "advisor-ref record now persists on the workflow-routed write path, on both the default record and a lane; Gate 3 approves after a recorded consult instead of refusing forever",
+    "files_changed": [
+      "packages/bee/bee.mjs",
+      "packages/bee/tests/test_cli_state.mjs",
+      ".bee/bin/bee.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T13:27:44.879Z",
+    "behavior_change": true,
+    "verification_evidence": "# arp-1 evidence — GH #86, advisor-ref record never persisted\n\n## Why it was invisible in this repo\n\nThis checkout has **zero live workflow records**, so every mutation took the\n`!wf` fallback branch, which writes the caller's full object directly. That is\nwhy `advisor_ref` persisted here twice today while the reporter's repo lost it\nevery time. The bug needs a live workflow record — the normal state of any\nactively-worked msn-10 feature.\n\n## Reproduced, on a fixture with one live workflow record\n\n```\n$ bee state start-feature --feature repro86 --mode high-risk\nworkflow records: 1\n\n$ bee state advisor-ref record --advisor fable --digest-file digest.txt\nRecorded advisor_ref (advisor \"fable\", feature \"repro86\").\n\n$ bee state advisor-ref show\nNo advisor_ref recorded.\n\n$ python3 -c \"print(list(json.load(open('.bee/state.json')).keys()))\"\n['schema_version','phase','feature','mode','approved_gates','workers','summary','next_action']\n\n$ bee state gate --name execution --approved true\ngate: execution approval refused for high-risk work — the advisor consult is\nmissing or stale (AO3/AO13). Reason(s): no advisor_ref recorded.\n```\n\nSuccess reported, nothing written, Gate 3 shut forever.\n\n## After the fix, same fixture shape\n\n```\n$ bee state advisor-ref record --advisor fable --digest-file digest.txt\nRecorded advisor_ref (advisor \"fable\", feature \"repro86\").\n\n$ bee state advisor-ref show\nadvisor=\"fable\" feature=\"repro86\" consulted_at=… stale=false\n\nadvisor_ref present: True\n\n$ bee state gate --name execution --approved true\nGate \"execution\" set to true.\n```\n\nLane path, separately:\n\n```\n$ bee state advisor-ref record --advisor fable --digest-file digest.txt --lane lane86\n$ bee state advisor-ref show --lane lane86\nadvisor=\"fable\" feature=\"lane86\" consulted_at=… stale=false\nlane advisor_ref present: True\n```\n\n## The fix\n\n`writeStateRecordThroughProjection` and `writeLaneRecordThroughProjection`\npatched the workflow record with a five-field allowlist and then rebuilt the\nprojection by **re-reading it from disk**, so any ad hoc field the caller set on\n`updated` was discarded before reaching a file. Both now land the caller's full\nrecord (`writeState` / `writeLane`) **before** the rebuild. The D1 fields that\nwrite lays down are re-derived from the workflow record moments later, so the\nrecord stays authoritative for everything it owns; only the fields it does not\nown survive from the caller.\n\n## One test row updated, and why that is not a weakening\n\n`sss-1` asserted `afterScribe.last_scribing_run === undefined`. Its own comment\nsays what it was: *\"documents the seam this cell works around: the record stamp\ndoes not survive the workflow-projection rebuild\"* — a characterization of a\nknown bug, not a contract. Fixing the seam makes that line false. It now asserts\nthe stamp **does** reach disk, and the row's real assertions are untouched: the\nclose still succeeds with no waiver, and the negative control still blocks a\ncell capped after the last scribing-run. `sss-1`'s durable-ledger fallback\nbecomes corroboration rather than the only proof.\n\nThe other four red rows were cascade — `test_msn_invariants` reuses\n`test_cli_state.mjs` and fails loud when that suite is red as a whole.\n\n## Suite\n\n```\nPASS run_verify: 108 suite(s), concurrency=5, wall=86603ms\nEXIT=0\n```\n\nNo new test authored (behavior cells cap on `existing-targeted-green` since\n`fs-1`); the live reproduction above is the evidence.\n",
+    "verify_output": null,
+    "verify_passed": true,
+    "claim_session": "c0b91d84-165f-4d21-a85d-16b6acd71dd0",
+    "claimed_at": "2026-07-27T13:27:02.061Z",
+    "verify_command": "node scripts/ledger_parity.mjs --check && node scripts/release_manifest.mjs --check && node scripts/run_verify.mjs",
+    "verified_at": "2026-07-27T13:27:02.151Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T13:27:02.152Z",
+        "claim_session": "c0b91d84-165f-4d21-a85d-16b6acd71dd0",
+        "claimed_at": "2026-07-27T13:27:02.045Z",
+        "acquired_at": "2026-07-27T13:27:02.045Z",
+        "worker": "orch",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

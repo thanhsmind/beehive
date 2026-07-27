@@ -2443,6 +2443,20 @@ async function writeLaneRecordThroughProjection(root, laneFeature, updated, gate
       }),
     ),
   });
+  // GH #86: land the caller's FULL record before the rebuild. The
+  // updateWorkflowAssumingLock patch above carries only the five D1 fields
+  // (phase/mode/summary/next_action/gates), and rebuildLaneProjection re-reads
+  // the record from DISK rather than using `updated` — so any ad hoc field a
+  // verb sets outside that allowlist (advisor_ref, last_scribing_run,
+  // gate_revoked_at) was discarded before it ever reached a file. The rebuild's
+  // documented passthrough of those fields only protects what is already on
+  // disk; it cannot preserve a field being written for the FIRST time, which is
+  // advisor-ref record's only real call shape (a feature always has a live
+  // workflow by the time Gate 3 is approved). Writing first makes that
+  // passthrough true instead of aspirational: the D1 fields this write lays
+  // down are re-derived from the workflow record moments later, so the record
+  // stays authoritative for everything it owns.
+  writeLane(root, updated);
   const rebuilt = rebuildLaneProjection(root, laneFeature);
   return rebuilt.lane;
 }
@@ -2497,6 +2511,14 @@ async function writeStateRecordThroughProjection(root, targetFeature, updated, g
   // record even while non-idle, precisely because this call just kept that
   // record in sync — see rebuildStateProjection's own comment for the full
   // two-branch contract this depends on.
+  //
+  // GH #86: same first-write repair as writeLaneRecordThroughProjection above —
+  // land the caller's full record before the rebuild re-reads it from disk, or
+  // every ad hoc field outside the five-field workflow patch is silently
+  // dropped. This is the default-record half of the bug that left
+  // `advisor-ref record` reporting success while writing nothing, which blocked
+  // Gate 3 for every high-risk feature with a live workflow record.
+  writeState(root, updated);
   const rebuilt = rebuildStateProjection(root);
   return rebuilt.state;
 }
