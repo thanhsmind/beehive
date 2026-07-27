@@ -1,0 +1,65 @@
+{
+  "id": "diet-2",
+  "feature": "skill-token-diet",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "test",
+  "title": "S1 slice test: fence edge-dimension fixtures",
+  "action": "One trailing test cell for slice S1 (slice-tail-test-batching): extend skill_budget_fence.mjs --selftest fixtures (or a scripts/tests/test_skill_budget_fence.mjs suite if selftest grows past ~150 lines — new_suite_reason: fence edge matrix exceeds inline selftest scope) to cover the plan's test matrix: body exactly 8192 passes / 8193 fails; budget exactly 8192 => provenance grep applies; skill with no baseline entry fails loud; missing baseline file fails loud; body grown over recorded budget fails with byte delta; --update-baseline twice => second run reports nothing to lower and never raises an entry; grandfathered skill (budget>8192, note present) passes; budget>8192 with no note fails. Net slice behavior only — no per-line internals.",
+  "must_haves": {
+    "truths": [
+      "Every test-matrix row above is exercised by a fixture and the run is green.",
+      "Fixtures build in a temp dir; the live skills/ tree and baseline JSON are never mutated by tests."
+    ],
+    "prohibitions": [
+      "Do NOT weaken or delete any diet-1 check to make a fixture pass.",
+      "Do NOT run the full verify chain — targeted fence runs only (CI owns the suite)."
+    ]
+  },
+  "verify": "node scripts/skill_budget_fence.mjs --selftest && node scripts/skill_budget_fence.mjs",
+  "read_first": [
+    "docs/history/skill-token-diet/plan.md",
+    "scripts/skill_budget_fence.mjs"
+  ],
+  "files": [
+    "scripts/skill_budget_fence.mjs"
+  ],
+  "deps": [
+    "diet-1"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-diet2",
+    "outcome": "Extended skill_budget_fence.mjs selftest from diet-1's 9 bite-proving fixtures to the plan's full test matrix: added boundary-exact(8192 pass)/boundary-over(8193 fail delta=1)/budget-exactly-ceiling-with-migrated-provenance/idempotent-second-update-baseline-run/never-raise-across-two-runs fixtures (5 new, 14 total), all green; live fence run stays 0 findings.",
+    "files_changed": [
+      "scripts/skill_budget_fence.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-27T23:55:40.004Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "$ node scripts/skill_budget_fence.mjs --selftest\nPASS  a repo with no baseline file FAILS loud, never silently\nPASS  a skill with no recorded budget entry FAILS\nPASS  an over-budget body FAILS, naming skill, size, budget and delta\nPASS  a budget over 8192 with NO notes justification FAILS\nPASS  a grandfathered skill (budget>8192, note present) PASSES\nPASS  a provenance citation in a skill LISTED in migrated[] FAILS\nPASS  the SAME provenance citation in a skill NOT LISTED in migrated[] PASSES\ngrown: 300 bytes > recorded 250 — NOT raised (ratchet refuses to raise); trim the body or the fence stays red\nnewskill: seeded at 200\ntrimmed: 100 -> 50\nPASS  --update-baseline seeds a new entry and lowers a trimmed one, never raises\nPASS  bee's own re-seeded baseline produces ZERO findings\nPASS  a body EXACTLY at its recorded budget (8192) PASSES\nPASS  a body ONE BYTE over its recorded budget (8193) FAILS with delta 1\nPASS  a budget of EXACTLY 8192 needs no note, but provenance grep still applies when migrated\nPASS  a second --update-baseline run on a stable baseline reports \"nothing to lower\"\nPASS  --update-baseline run twice never raises a grown entry either time\n\nPASS skill_budget_fence --selftest: 14 passed, 0 failed\n\n$ node scripts/skill_budget_fence.mjs\nPASS skill_budget_fence: 18 skill(s) checked, 0 findings",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-27T23:53:09.458Z",
+    "verify_command": "node scripts/skill_budget_fence.mjs --selftest && node scripts/skill_budget_fence.mjs",
+    "verified_at": "2026-07-27T23:55:35.141Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-27T23:55:35.142Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-27T23:53:26.331Z",
+        "acquired_at": "2026-07-27T23:53:09.456Z",
+        "worker": "exec-diet2",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}

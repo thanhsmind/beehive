@@ -233,6 +233,19 @@ function findingTypes(result) {
   return (result.findings || []).map((f) => `${f.type}:${f.skill ?? ''}`).sort();
 }
 
+/** Runs fn with console.log captured (not printed); returns the captured lines. Used to assert on --update-baseline's own report text without polluting selftest output. */
+function captureLog(fn) {
+  const lines = [];
+  const original = console.log;
+  console.log = (...args) => lines.push(args.join(' '));
+  try {
+    fn();
+  } finally {
+    console.log = original;
+  }
+  return lines;
+}
+
 function runSelftest() {
   let passed = 0;
   let failed = 0;
@@ -349,6 +362,78 @@ function runSelftest() {
       result.findings.length === 0,
       `the live tree must be silent, got:\n${result.findings.map((f) => `  ${f.reason}`).join('\n')}`,
     );
+  });
+
+  // diet-2: extends diet-1's bite-proving fixtures (A-I above, untouched) to
+  // the plan's full test matrix (docs/history/skill-token-diet/plan.md
+  // "Test Matrix") — net slice behavior only, no fence-logic changes.
+
+  // (J) boundary: a body at EXACTLY the recorded budget passes (size > budget
+  // is the only over-budget trigger — equality is not a violation).
+  check('a body EXACTLY at its recorded budget (8192) PASSES', () => {
+    const root = makeRepo('boundary-exact');
+    writeFile(root, 'skills/demo/SKILL.md', 'a'.repeat(BUDGET_CEILING));
+    writeBaseline(root, { budgets: { demo: BUDGET_CEILING }, migrated: [], notes: {} });
+    const result = fenceFindings(root);
+    assert(result.findings.length === 0, `exact-budget body must pass, got ${JSON.stringify(findingTypes(result))}`);
+    assert(result.entries[0].verdict === 'ok', 'classified ok at the exact boundary');
+  });
+
+  // (K) boundary: one byte over the recorded budget fails, with the byte
+  // delta named (the state-drift row of the test matrix).
+  check('a body ONE BYTE over its recorded budget (8193) FAILS with delta 1', () => {
+    const root = makeRepo('boundary-over');
+    writeFile(root, 'skills/demo/SKILL.md', 'a'.repeat(BUDGET_CEILING + 1));
+    writeBaseline(root, { budgets: { demo: BUDGET_CEILING }, migrated: [], notes: {} });
+    const result = fenceFindings(root);
+    assert(findingTypes(result).join(',') === 'over-budget:demo', `got ${JSON.stringify(findingTypes(result))}`);
+    const finding = result.findings[0];
+    assert(finding.delta === 1, `delta must be 1, got ${JSON.stringify(finding)}`);
+    assert(finding.size === BUDGET_CEILING + 1 && finding.budget === BUDGET_CEILING, 'size/budget recorded at the boundary');
+  });
+
+  // (L) budget entry EXACTLY at the ceiling: not > BUDGET_CEILING, so no
+  // missing-note is required — but explicit migrated[] membership still
+  // turns the provenance grep on at that same boundary (D8/D2: migrated
+  // status is structural, never inferred from the budget number).
+  check('a budget of EXACTLY 8192 needs no note, but provenance grep still applies when migrated', () => {
+    const root = makeRepo('boundary-migrated');
+    const body = '# demo\n\nSome rule stated bare, cited here (D3) for audit.\n';
+    const padded = body + 'a'.repeat(BUDGET_CEILING - Buffer.byteLength(body, 'utf8'));
+    writeFile(root, 'skills/demo/SKILL.md', padded);
+    writeBaseline(root, { budgets: { demo: BUDGET_CEILING }, migrated: ['demo'], notes: {} });
+    const result = fenceFindings(root);
+    assert(findingTypes(result).join(',') === 'provenance-violation:demo', `got ${JSON.stringify(findingTypes(result))}`);
+    assert(!result.findings.some((f) => f.type === 'missing-note'), 'a budget of exactly the ceiling never needs a note');
+  });
+
+  // (M) idempotence: once a baseline is stable, a second --update-baseline
+  // run reports "nothing to lower" verbatim (no seed, no lower, nothing to
+  // print) — the plan's idempotence row.
+  check('a second --update-baseline run on a stable baseline reports "nothing to lower"', () => {
+    const root = makeRepo('idempotent');
+    writeFile(root, 'skills/demo/SKILL.md', 'a'.repeat(200));
+    writeBaseline(root, { budgets: {}, migrated: [], notes: {} });
+    captureLog(() => runUpdateBaseline(root)); // first run: seeds demo at 200
+    const secondRunLines = captureLog(() => runUpdateBaseline(root));
+    assert(secondRunLines.join('\n') === 'nothing to lower', `second run must be silent, got ${JSON.stringify(secondRunLines)}`);
+    const after = JSON.parse(fs.readFileSync(baselinePath(root), 'utf8'));
+    assert(after.budgets.demo === 200, `budget stays at 200, got ${after.budgets.demo}`);
+  });
+
+  // (N) ratchet holds across repeated runs: a grown skill's recorded budget
+  // is never raised, not on the first --update-baseline run and not on a
+  // second one either (the "never raises an entry" row, run twice).
+  check('--update-baseline run twice never raises a grown entry either time', () => {
+    const root = makeRepo('never-raise-twice');
+    writeFile(root, 'skills/grown/SKILL.md', 'a'.repeat(300));
+    writeBaseline(root, { budgets: { grown: 250 }, migrated: [], notes: {} });
+    captureLog(() => runUpdateBaseline(root));
+    const afterFirst = JSON.parse(fs.readFileSync(baselinePath(root), 'utf8'));
+    assert(afterFirst.budgets.grown === 250, `first run must not raise, got ${afterFirst.budgets.grown}`);
+    captureLog(() => runUpdateBaseline(root));
+    const afterSecond = JSON.parse(fs.readFileSync(baselinePath(root), 'utf8'));
+    assert(afterSecond.budgets.grown === 250, `second run must not raise either, got ${afterSecond.budgets.grown}`);
   });
 
   console.log(`\n${failed === 0 ? 'PASS' : 'FAIL'} skill_budget_fence --selftest: ${passed} passed, ${failed} failed`);
