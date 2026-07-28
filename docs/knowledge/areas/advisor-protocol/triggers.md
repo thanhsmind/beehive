@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [advisor-protocol]
   required_context: [areas/advisor-protocol/overview.md]
-  decisions: ["AO2(b)/AO3/AO13 (one orchestrator trigger; Gate 3 precondition; event-based staleness, never a TTL)", AO4 (call paths split by trigger class), AO14 (execution-worker class), "126412b9 (precondition keys on the selected record's mode)"]
+  decisions: ["AO2(b)/AO3/AO13 (one orchestrator trigger; execution-gate precondition, folded from the old standalone Gate 3 into Gate 2 by validation-diet D2/D14; event-based staleness, never a TTL)", AO4 (call paths split by trigger class), AO14 (execution-worker class), "126412b9 (precondition keys on the selected record's mode)"]
   sources: ["advisor-and-orchestration Slices 2A-i..2A-iv, 2B, 3A, 3B, 4, 5 (cells ao-2ai-1..ao-5-1, traces in .bee/cells/, reports docs/history/advisor-and-orchestration/reports/, 2026-07-17)", first live orchestrator consult digest .bee/spikes/advisor-and-orchestration/slice5-advisor-digest.txt, "docs/specs/advisor-protocol.md#B1", "docs/specs/advisor-protocol.md#B3", "docs/specs/advisor-protocol.md#E3", "docs/specs/advisor-protocol.md#P2", "docs/specs/advisor-protocol.md#P6"]
   authoritative_for: "advisor-protocol: consult triggers"
 ---
@@ -59,8 +59,12 @@ dependency on configuration.
 
 ## Pointers (implementation)
 
-- **P2 —** Orchestrator consult + throw: `skills/bee-validating/SKILL.md`
-  (Gate 3); `handleStateGate` + `state advisor-ref record/show` in
+- **P2 —** Orchestrator consult + throw: `handleStateGate`'s
+  `requireFreshAdvisorForHighRisk` (shared by the standalone `--name execution`
+  path and the merged `--merge` path) + `state advisor-ref record/show` in
   `packages/bee/bee.mjs`; helpers `advisorRefAnchors` /
-  `advisorRefStale` in `packages/bee/lib/state.mjs`.
+  `advisorRefStale` in `packages/bee/lib/state.mjs`. There is no
+  `skills/bee-validating/` (deleted, validation-diet D1) — the consult now
+  has to happen during planning/briefing, before Gate 2's execution component
+  is approved (validation-diet D14).
 - **P6 —** Gate precondition spec detail: `docs/specs/workflow-state.md` B9/B9a.

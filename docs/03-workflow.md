@@ -2,15 +2,14 @@
 
 The bee chain, stage by stage: what each skill reads, writes, and must never do. This is the normative spec that the SKILL.md files implement.
 
-## The chain and the four gates
+## The chain and the three gates
 
 ```
 bee-hive
   -> bee-exploring                          [GATE 1] approve CONTEXT.md
-  -> bee-planning (shape)
-  -> bee-briefing (render implement-plan)   [GATE 2] approve work shape (reviews the brief)
+  -> bee-planning (shape + reality check + review wave)
+  -> bee-briefing (render implement-plan)   [GATE 2] approve shape AND execution together (reviews the brief)
   -> bee-planning (current-work prep) + bee-briefing (refresh)
-  -> bee-validating + bee-briefing (patch validation) [GATE 3] approve execution (reviews the brief)
   -> bee-swarming (+ bee-executing × N)
   -> more approved work remains? -> back to planning for the next slice
   -> bee-scribing                           (BA spec sync — state layer; feature closes unreviewed)
@@ -24,31 +23,32 @@ bee-hive
 
 Independent review is never a default pipeline stage (decision 565e68d0): execution always closes through scribing and compounding, verified but `unreviewed`, and further development is not blocked on it. `bee-reviewing` runs only when the user explicitly asks, over a scope of their choosing — this feature, a named batch, or a commit range.
 
+There is no standalone `bee-validating` stage and no `validating` phase (validation-diet D1/D3): its one reality-check survivor (SMALLER PATH) and its review wave folded into `bee-planning`, the feasibility matrix and delta rule were deleted with no replacement, and its old Gate 3 merged into Gate 2 (validation-diet D2, D5, D6).
+
 Gate wording (fixed, from khuym):
 
 - **Gate 1:** "Decisions locked. Approve CONTEXT.md before planning?"
-- **Gate 2:** "Work shape is ready. Approve before current-work preparation?"
-- **Gate 3:** "Feasibility validated. Approve execution?"
+- **Gate 2:** "Work shape is ready. Approve before current-work preparation?" — now also the execution approval: the old standalone Gate 3 ("Feasibility validated. Approve execution?") folded into this same gate, flipping `approved_gates.shape` and `approved_gates.execution` together (`bee state gate --merge`; validation-diet D2).
 - **Gate 4:** P1 > 0 → "P1 findings block merge. Fix before proceeding?" ; P1 = 0 → "Review complete. Approve merge?" — asked only inside a user-invoked `bee-reviewing` session (SPEC R8, decision 565e68d0), never automatically after any lane's execution completes.
 
-Lane exceptions (lane scaling v2, decision d02a6bc6): the `docs` lane has no gates; `tiny`/`small` merge Gates 2+3 into one shape+execution question. Every lane — `tiny` through `high-risk` — closes through Gates 1-3 by default and ends `unreviewed`; Gate 4 is never part of that default chain for any lane, it exists only inside an on-demand review session. A defect found in any review session still stops for the human.
+Lane exceptions (lane scaling v2, decision d02a6bc6): the `docs` lane has no gates; every lane merges the old Gate 2 and Gate 3 into one shape+execution question — tiny/small ask it inline before cells persist, standard/high-risk ask it once shape and the brief are ready. Every lane — `tiny` through `high-risk` — closes through Gates 1-2 by default and ends `unreviewed`; Gate 4 is never part of that default chain for any lane, it exists only inside an on-demand review session. A defect found in any review session still stops for the human.
 
 **Gate Presentation Contract** (owner feedback, dogfood): a gate is presented in two layers. The chat message is the plain-language layer only, in the user's language — *what I'm about to do / why it's trustworthy / if it goes wrong / what you are deciding* — followed by the fixed question. The full mechanical material (reality-gate tables, matrices, plan-checker findings, cell lists) goes to `docs/history/<feature>/reports/` and is linked, never pasted. Litmus: the user can restate what they are approving in their own words — a gate the user cannot restate is a dead gate that manufactures false confidence. Normative text in `bee-hive/references/routing-and-contracts.md`.
 
-Optional at Gates 2–4: a **cross-model second opinion** (gstack). If the other runtime's model is available, ask it to challenge the artifact. Agreement → mention it. Disagreement → quote both positions to the user. Never auto-resolve.
+Optional at Gates 2 and 4: a **cross-model second opinion** (gstack). If the other runtime's model is available, ask it to challenge the artifact. Agreement → mention it. Disagreement → quote both positions to the user. Never auto-resolve.
 
 ## Priority rules (hive law)
 
 1. P1 review findings always block.
 2. Context budget always applies; at ~65%, write `.bee/HANDOFF.json` and pause.
 3. `CONTEXT.md` is the source of truth; locked decisions are cited, never reinterpreted.
-4. Gate 3 is the critical execution approval; no source-editing execution before it.
+4. Gate 2's execution approval (the old Gate 3, now folded in) is the critical one; no source-editing execution before it.
 5. A failed reality gate or a NO spike halts the pipeline and returns to planning.
-6. Never skip validating — including in tiny mode (it collapses to a 2-minute reality check, it does not disappear).
+6. Never skip the reality check (SMALLER PATH) — including in tiny mode (it collapses to a one-line inline question, it does not disappear).
 7. `docs/history/learnings/critical-patterns.md` and recent active decisions (`bee.mjs decisions active --recent 3`) are mandatory context before planning or executing.
 8. Evidence before claims: any "done/passing/fixed" statement requires fresh command output in the same message.
 9. Lanes scale ceremony, never memory: a capped `behavior_change` cell obliges a `bee-scribing` sync in every lane, and a settled discussion outcome is captured the moment it settles (vision principle 11). An explicit user settlement signal — "chốt", "final", "ok ship it" — is a mandatory same-turn capture trigger, never deferred to feature close (decision 0003). What same-turn capture *costs* is lane-scaled (decision 0017): `high-risk` = full spec sync inline; every other lane = decision log + a one-line stub in `.bee/capture-queue.jsonl`, with the full merge at a flush point (wrap-up, PreCompact warning, next session's offer) — durability is never deferred, only elaboration.
-10. Critique passes (fresh-eyes review in exploring, plan-checker in validating) run in the background where the runtime supports it (decision 0017): the main loop keeps working; the pass blocks only the gate it feeds, and that gate is never presented with the pass still outstanding.
+10. Critique passes (fresh-eyes review in exploring, the merged reviewer's review wave in planning) run in the background where the runtime supports it (decision 0017): the main loop keeps working; the pass blocks only the gate it feeds, and that gate is never presented with the pass still outstanding.
 
 ## Modes and lanes (the mode gate)
 
@@ -61,9 +61,9 @@ Every planning pass starts by classifying the work. Classification is **mechanic
 | `docs` | every touched file is knowledge, not runtime: `docs/`, specs, README, sample/example configs, plans | announce one line → write → format check → capture stub/decision if an outcome settled. No cells, no gates, no reviewers (lane scaling v2, decision d02a6bc6) |
 | `tiny` | 0–1 flags, ≤2 files, no API/data change, one direct task | short plan note → inline 2-min reality check → **one merged shape+execution gate** → solo in-session execution (one cell, no worker) → self-review + done-report (diff + fresh verify output; no merge question) → scribing sync if behavior changed → compound only if a lesson emerged |
 | `spike` | one yes/no proof decides whether the plan is real | spike cell in `.spikes/` → answer → return to planning |
-| `small` | 0–1 flags, ≤3 files, no gray areas | light plan → inline reality gate (no validating subagents) → merged shape+execution gate → solo in-session execution → self-checks (no auto reviewer — the correctness reviewer moves inside an on-demand review session) → scribing sync if behavior changed |
+| `small` | 0–1 flags, ≤3 files, no gray areas | light plan → inline reality gate (SMALLER PATH check only, no subagent dispatch) → merged shape+execution gate → solo in-session execution → self-checks (no auto reviewer — the correctness reviewer moves inside an on-demand review session) → scribing sync if behavior changed |
 | `standard` | 2–3 flags, or story-sized behavior | full chain; phase plan or epic map, whichever explains the work honestly |
-| `high-risk` | 4+ flags **or any hard-gate flag** (auth, authorization, data loss, audit/security, external provider, validation removal) | epic map → current-story pack → mandatory feasibility spikes → slower Gate 3 → detailed traces |
+| `high-risk` | 4+ flags **or any hard-gate flag** (auth, authorization, data loss, audit/security, external provider, validation removal) | epic map → current-story pack → opt-in feasibility spikes (only migration/security/external-side-effect/no-precedent, validation-diet D8) → the merged shape+execution gate → detailed traces |
 
 Rule of use: **the least workflow that honestly protects the work**. A tiny fix that spawns epic ceremony is a red flag; a hard-gate change routed as `small` is a worse one.
 
@@ -74,7 +74,7 @@ Rule of use: **the least workflow that honestly protects the work**. A tiny fix 
 ### bee-hive (bootstrap & routing)
 
 - **On every session start / after compaction:** verify onboarding (`.bee/onboarding.json`), run `node .bee/bin/bee.mjs status --json`, surface `HANDOFF.json` if present and **wait**, read `critical-patterns.md`, surface recent active decisions.
-- **Routing:** vague/new feature → exploring; clear-scope research → planning; small fix → planning in tiny/small mode; review request → reviewing; "clean up / debt / audit" → grooming; capture learnings → compounding; improve bee → bee-writing-skills; `/go` → go mode (full chain with the four gates).
+- **Routing:** vague/new feature → exploring; clear-scope research → planning; small fix → planning in tiny/small mode; review request → reviewing; "clean up / debt / audit" → grooming; capture learnings → compounding; improve bee → bee-writing-skills; `/go` → go mode (full chain with the three gates).
 - **Surface scope earlier** (compound-engineering): if the request already contains concrete acceptance criteria *and* references to existing patterns, offer to skip exploring — "Found clear requirements. Jump straight to planning, or explore alternatives first?" — and on approval route to planning with a one-paragraph scoping synthesis in place of CONTEXT.md gray-area work (the decisions still get D-IDs).
 - **Scout contract (just-enough reading):** phase × lane matrix with token budgets — tiny ≈ 2K tokens of harness context, standard ≈ 5K, high-risk ≈ 10K. Retrieval triggers, not reading lists: "touching schema → read schema decisions first", "touching auth → read auth decisions + high-risk template".
 - **Never:** auto-resume a handoff, skip a gate, or let a stage start with stale onboarding.
@@ -93,35 +93,26 @@ Rule of use: **the least workflow that honestly protects the work**. A tiny fix 
 - **Does:**
   1. **Discovery** at the right research level (gsd): L0 skip / L1 quick verify / L2 standard (2–3 options) / L3 deep dive — using the three-layers framing (tried-and-true, new-and-popular, first-principles).
   2. **Mode gate** (mechanical flags, above).
-  3. **Synthesis:** `approach.md` — chosen path, risks, proof needs, files, questions for validating.
-  4. **Shape:** write `plan.md` (`artifact_readiness: requirements-only`) — direct note / spike question / small plan / phase plan / epic map. **Stop at Gate 2.**
+  3. **Synthesis:** `approach.md` — chosen path, risks, proof needs, files, open questions still owed by the time the reality check runs.
+  4. **Shape:** write `plan.md` (`artifact_readiness: requirements-only`) — direct note / spike question / small plan / phase plan / epic map. At the moment the shape is drafted: the **SMALLER PATH check** (validation-diet D1, the sole reality-gate survivor — one inline question, one line of file/command evidence, never a report: is there a cheaper shape that still honors every locked decision?), and, standard/high-risk, the **review wave** (validation-diet D5 — a merged reviewer covering structure and cold-pickup, findings held until the gate). **Stop at Gate 2.**
   5. **Prep (after approval):** enrich the *same* `plan.md` to `artifact_readiness: implementation-ready` and create cells for the *current* slice only. Cells are executable prompts: files, read-first, directive action citing D-IDs, `must_haves`, verify command. Every cell that changes observable behavior is marked `behavior_change: true`. Future-slice cells are prohibited.
 - **Quality rules:** no scope reduction of locked decisions (SPLIT instead); no pseudo-cells in markdown; every cell has a testable exit; test matrix informed by the 12 edge dimensions (claudekit) at a depth matching the lane.
-- **Handoff:** invoke `bee-briefing` to render the implement plan (`small`+), then "Invoke bee-validating."
+- **Spikes:** opt-in by change class, not a default gate step (validation-diet D8) — owed only when the change is `migration`, `security`, or reaches an external system with a side effect, or uses an API/library/technique with no in-repo precedent. One spike = one yes/no question; disposable code in `.bee/spikes/<feature>/`; NO → return to planning with the failed assumption; YES → record constraints. Spike code never silently becomes production code. The feasibility matrix and delta rule that used to gate this are deleted outright, no replacement (validation-diet D6).
+- **Handoff:** invoke `bee-briefing` to render the implement plan (`small`+), then "Invoke bee-swarming" once Gate 2 (shape + execution) is approved.
 
 ### bee-briefing (the beekeeper's brief) — decision 0008
 
-- **Reads:** CONTEXT.md decisions, approach.md, plan.md, current-slice cells, validating reports, `state.json` gates.
-- **Does:** render **one** `docs/history/<feature>/implement-plan.md` per feature — a human-legible consolidation of the truth artifacts that Gates 2–3 link as the review object. It **projects** every section from a named source and **authors only two**: the Technical Design narrative and the Rollback Plan (bee's only rollback discipline). Lane-scaled: no brief for `tiny`/`spike`, a ~15-line mini-brief for `small`, the full template with empty sections dropped for `standard`, Rollback + Security mandatory for `high-risk`. Three modes: **render** (before Gate 2), **refresh** (after prep, and after validating patches the Validation Plan with evidence), **walkthrough** (after Gate 4 on `standard`/`high-risk`: `docs/history/<feature>/walkthrough.md` reconstructed from execution records — capped cell traces, review findings, UAT — never from the plan; sets the implement plan `status: Shipped`), **on-demand** (any phase). Status frontmatter mirrors the gates (`Draft → Ready for Review → Approved → Needs Revision → Shipped`); a source change after approval flips `Needs Revision`.
+- **Reads:** CONTEXT.md decisions, approach.md, plan.md, current-slice cells, planning's reality-check evidence (SMALLER PATH + review wave), `state.json` gates.
+- **Does:** render **one** `docs/history/<feature>/implement-plan.md` per feature — a human-legible consolidation of the truth artifacts that Gate 2 links as the review object. It **projects** every section from a named source and **authors only two**: the Technical Design narrative and the Rollback Plan (bee's only rollback discipline). Lane-scaled: no brief for `tiny`/`spike`, a ~15-line mini-brief for `small`, the full template with empty sections dropped for `standard`, Rollback + Security mandatory for `high-risk`. Three modes: **render** (before prep), **refresh** (after prep patches the Validation Plan with the reality-check evidence), **walkthrough** (after Gate 4 on `standard`/`high-risk`: `docs/history/<feature>/walkthrough.md` reconstructed from execution records — capped cell traces, review findings, UAT — never from the plan; sets the implement plan `status: Shipped`), **on-demand** (any phase). Status frontmatter mirrors the gates (`Draft → Ready for Review → Approved → Needs Revision → Shipped`); a source change after approval flips `Needs Revision`.
 - **Truth model (extends D12):** the brief is the human-layer projection of the truth artifacts, never their master. Human feedback on the brief flows back into `CONTEXT.md`/`plan.md` (a locked decision is superseded by D-ID) and the brief re-renders — it is never hand-edited as the sole change site.
 - **Never:** originate a decision/scope/approach/cell; invent content to fill a section (source silent → Open Question); assert a validation result that has not run; in walkthrough mode, summarize the plan instead of reconstructing from execution records, claim verification broader than the evidence, or omit deferred findings/deviations; fork a `-v2`/dated brief; paste the whole brief into a gate chat message (link it).
-- **Handoff:** render/refresh → return to the caller (`bee-planning` for Gate 2, `bee-validating` for Gate 3); walkthrough → "Invoke bee-scribing." Briefing presents no gate itself.
+- **Handoff:** render/refresh → return to the caller (`bee-planning`, for Gate 2 — shape and execution together); walkthrough → "Invoke bee-scribing." Briefing presents no gate itself.
 
-### bee-validating (guard bees)
-
-- **Reads:** CONTEXT.md, discovery, approach, approved shape, current-work cells.
-- **Does:**
-  1. **Reality gate:** MODE FIT / REPO FIT / ASSUMPTIONS / SMALLER PATH / PROOF SURFACE, each PASS|FAIL with file/command evidence. Fails on nonexistent code paths, unsupported commands, stale versions, missing credentials, hidden architecture work, or excess ceremony.
-  2. **Feasibility matrix:** every blocking assumption → proof required → evidence → result. Accepted evidence: existing code, inspection, command output, build/test result, official version proof, runtime probe, or `.spikes/` result. "Should work", "likely", model knowledge → NOT READY.
-  3. **Spikes:** one spike = one yes/no question; disposable code in `.spikes/<feature>/`; NO → back to planning with the failed assumption; YES → record constraints. Spike code never silently becomes production code.
-  4. **Plan-checker subagent** (adversarial, gsd; background where the runtime supports it — blocks only Gate 3's presentation, decision 0017): assume the plan is flawed; verify 5 dimensions — requirement/decision coverage, cell completeness, dependency correctness, key links, scope sanity. Every finding carries BLOCKER or WARNING. Max 3 structural iterations, then escalate. In the high-risk lane, scale to a small persona panel (compound-engineering): coherence + feasibility always, plus conditional lenses (security, product, scope-guardian) chosen by the diff of concerns — findings deduped and synthesized into auto-fix vs present-for-decision buckets.
-  5. **Cell review:** can each cell be picked up cold? CRITICAL flags (assumed context, vague acceptance, scope overload, unproven feasibility, broken verify) must be fixed.
-- **Decision vocabulary:** READY / READY WITH CONSTRAINTS / NOT READY – RUN SPIKE / NOT READY – RETURN TO PLANNING.
-- **Handoff:** Gate 3 → "Invoke bee-swarming." Approval covers the current work only.
+There is no `bee-validating` stage (validation-diet D1) — its reality gate, feasibility matrix, delta rule, and spikes are gone or folded into `bee-planning` above: the SMALLER PATH check and the review wave moved in (D1/D5), the feasibility matrix and delta rule were deleted with no replacement (D6), and opt-in-by-change-class spikes replaced the old mandatory-for-high-risk spike step (D8). The decision vocabulary it used to speak (READY / READY WITH CONSTRAINTS / NOT READY – RUN SPIKE / NOT READY – RETURN TO PLANNING) goes with it — a failed SMALLER PATH check or spike simply returns to planning.
 
 ### bee-swarming (orchestrator)
 
-- **Preconditions:** Gate 3 approved; cells open and validated; reservations swept.
+- **Preconditions:** Gate 2's execution component approved (`approved_gates.execution: true` — the old standalone Gate 3, folded into Gate 2); current-slice cells open; reservations swept.
 - **Does:** wave analysis over the cell dependency graph (parallel within a wave, sequential across waves); assign exactly one cell per worker; spawn with the isolation contract — cell id, CONTEXT.md path, global constraints, reservation identity, status-token protocol, **nothing else, never session history**; pick the worker model by declared tier (compound-engineering): `extraction` = cheapest capable (retrieval, mechanical edits), `generation` = mid (implementation, test writing), `ceiling` = the orchestrator's own model (integration, architecture, final review) — state the model explicitly, and where the runtime can't select per-agent models, fall back to read budgets and output caps; record workers in `state.json`; tend results; rescue or re-dispatch `[BLOCKED]` with more context or a stronger tier; write HANDOFF at ~65% context.
 - **Never:** implement cells itself; let workers self-select; resolve file conflicts by "being careful" (fix reservations or cell scope instead); send routine mid-flight pings (silence is not failure).
 - **Handoff:** phase clean → next planning slice, or final slice done → "Invoke bee-scribing." `bee-reviewing` is never part of this handoff (SPEC R1/R3, decision 565e68d0) — it is a separate flow the user invokes on demand, over whatever scope they choose, at any later point.
@@ -179,4 +170,4 @@ Carried from khuym/superpowers nearly verbatim — see [04-skills-spec.md](04-sk
 
 ## Red flags (chain-wide)
 
-- jumping from exploring to swarming · code before CONTEXT.md exists · skipping validating · ignoring locked decisions · workers self-selecting cells · capping without verification · commits without cell ids · continuing past open P1s · reservation leaks · stale state.json after a phase transition · resuming without surfacing HANDOFF.json · plausibility language ("should work") accepted as evidence · a tiny fix wearing epic ceremony · a hard-gate change routed below high-risk · session history pasted into a worker dispatch
+- jumping from exploring to swarming · code before CONTEXT.md exists · skipping the reality check (SMALLER PATH) · ignoring locked decisions · workers self-selecting cells · capping without verification · commits without cell ids · continuing past open P1s · reservation leaks · stale state.json after a phase transition · resuming without surfacing HANDOFF.json · plausibility language ("should work") accepted as evidence · a tiny fix wearing epic ceremony · a hard-gate change routed below high-risk · session history pasted into a worker dispatch

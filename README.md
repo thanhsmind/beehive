@@ -54,10 +54,9 @@ A hive is a staged, self-regulating system — each bee role maps to a workflow 
 | The hive itself | `bee-hive` | Bootstrap, routing, state, gates — load first in every session |
 | Scout bees | `bee-exploring` | Lock fuzzy intent into decisions; scout *just enough* |
 | Forager bees | `bee-xia` | Range beyond the hive: evidence-labeled research, reuse-first recommendations |
-| Waggle dance | `bee-planning` | Communicate the found path precisely enough for workers to fly it |
+| Waggle dance | `bee-planning` | Communicate the found path precisely enough for workers to fly it; nothing enters the hive unproven — the reality check and review wave run inline before the merged gate |
 | The beekeeper's brief | `bee-briefing` | Translate the dance for the human: one reviewable implement plan |
-| Guard bees | `bee-validating` | Nothing enters the hive unproven: reality gate, feasibility evidence |
-| The swarm | `bee-swarming` | Orchestrate bounded workers over validated cells |
+| The swarm | `bee-swarming` | Orchestrate bounded workers over open cells, once the merged gate approves execution |
 | Worker bees | `bee-executing` | One worker, one cell: implement, verify, **cap the cell** |
 | Inspector bees | `bee-reviewing` | Multi-agent review, artifact verification, UAT |
 | Scribe bees | `bee-scribing` | The hive's BA: tech-agnostic specs of every area |
@@ -79,17 +78,16 @@ You describe what you want. bee routes it by size and risk, then walks it throug
            ▼
    ▶ GATE 1  "Are these the right decisions?"        ← you approve
            │
-        bee-planning           shapes the work: the plan, the approach
+        bee-planning           shapes the work: the plan, the approach,
+                                the reality check (SMALLER PATH) + review wave
         bee-briefing           writes a human-readable implement plan
                                 (standard: on-demand; high-risk: always)
            ▼
-   ▶ GATE 2  "Is this the right thing, at the right size?"   ← you approve
+   ▶ GATE 2  "Is this the right thing, and may I start editing real files?"
+             ← you approve (shape + execution together, most critical)
            │
         bee-planning (prep)    cuts the work into cells for the current slice
-        bee-validating         proves it's actually feasible against the real repo
            ▼
-   ▶ GATE 3  "May I start editing real files?"        ← you approve  (most critical)
-           │
         bee-swarming           spawns bounded workers
         bee-executing          one worker per cell: implement → verify → CAP
            │
@@ -170,18 +168,19 @@ The rules that make a cell trustworthy:
 
 ---
 
-## The four gates
+## The three gates
 
-Gates are **human** approvals, and three of them are enforced by code — the agent physically cannot proceed past Gate 3 without it being recorded.
+Gates are **human** approvals, and two of them are enforced by code — the agent physically cannot proceed past Gate 2's execution component without it being recorded.
 
 | Gate | Asked after | What you're really deciding | If you get it wrong |
 |---|---|---|---|
 | **Gate 1** | exploring | Are these the decisions I meant? | Everything downstream builds on them — cheap to fix now, costly later |
-| **Gate 2** | planning shape | Is this the right thing, at the right size? | Preparation gets built against the wrong shape |
-| **Gate 3** | validating | May the agent start editing real files (this slice only)? | The most irreversible step — this is where code starts changing |
+| **Gate 2** | planning shape + the reality check | Is this the right thing, at the right size, and may the agent start editing real files (this slice only)? | The most irreversible step — this is where code starts changing |
 | **Gate 4** | a user-invoked review session only — never automatic (decision 565e68d0) | Does this go into the main branch? | P1 findings ship broken code to users |
 
-Enforcement, not etiquette: until Gate 3 is approved, `bee.mjs cells claim` throws and the write-guard hook **denies source edits** (while keeping `.bee/`, `docs/`, `.spikes/`, and `AGENTS.md` writable). Gate 4 never auto-merges past an open P1.
+Gate 2 used to be two separate approvals ("Is this the right thing" then "may I start editing") — validation-diet merged them into one call (`bee state gate --merge`) that flips `approved_gates.shape` and `approved_gates.execution` together; there is no standalone `bee-validating` stage or `validating` phase left to earn a third gate.
+
+Enforcement, not etiquette: until Gate 2's execution component is approved, `bee.mjs cells claim` throws and the write-guard hook **denies source edits** (while keeping `.bee/`, `docs/`, `.spikes/`, and `AGENTS.md` writable). Gate 4 never auto-merges past an open P1.
 
 ### Gate bypass (opt-in autopilot)
 
@@ -189,7 +188,7 @@ If you trust bee in a given repo and want speed, turn on **`bee-bypass-gate`**. 
 
 **The safety floor is real at `normal` — and you can deliberately lift it.** Earlier wording here called the floor "absolute and not configurable", which was wrong: `full` and `total` exist precisely to remove it, and saying otherwise made a safety promise the code does not keep.
 
-| Level | Gates 1–3 | High-risk / hard-gate | Gate 4 UAT & P1 | Secret reads |
+| Level | Gates 1–2 | High-risk / hard-gate | Gate 4 UAT & P1 | Secret reads |
 |---|---|---|---|---|
 | `off` | you approve | you approve | you approve | asks |
 | `normal` | auto (normal lanes) | **stops** | **stops** | **asks** |
@@ -229,7 +228,7 @@ Every planning pass counts mechanical **risk flags** (auth · authorization · d
 | `tiny` | 0–1 flags, ≤2 product files, one direct task | one cell — the cell is the micro-plan, no `plan.md` — one-line trace, self-review + done-report (no auto reviewer) |
 | `small` | 0–1 flags, ≤3 product files, no gray areas | logged scoping synthesis + a cell or two; plan.md is opt-in, only when a durable multi-slice doc is genuinely needed; self-checks only (no auto reviewer) |
 | `standard` | 2–3 flags, or story-sized behavior | full cells + must_haves; a review session runs only if you ask for one |
-| `high-risk` | 4+ flags, or any hard-gate flag | mandatory spikes/feasibility proof, strict trace, slower Gate 3; a review session runs only if you ask for one |
+| `high-risk` | 4+ flags, or any hard-gate flag | opt-in-by-change-class spikes (migration/security/external-side-effect/no-precedent), strict trace, slower merged Gate 2; a review session runs only if you ask for one |
 | `spike` | one yes/no question decides if the plan is real | a disposable experiment under `.spikes/`, answers then discards |
 
 The rule that never bends: **lanes scale ceremony, never memory.** Even a `tiny` cell that changed behavior obliges a spec sync, and a settled decision is logged the moment it settles — in every lane.
@@ -284,9 +283,9 @@ you approve GATE 1      →
                                                                 tiny/spike none — the cell is the micro-plan)
                             bee-briefing renders the brief     implement-plan.md (standard: on-demand;
                                                                 high-risk: always)
-you approve GATE 2      →
-                            bee-validating proves feasibility  reality gate, spikes, cells
-you approve GATE 3      →   ← before this, source writes are DENIED by the write-guard
+                            bee-planning proves feasibility    reality gate, spikes, cells
+                            (reality check + review wave)
+you approve GATE 2      →   ← before this, source writes are DENIED by the write-guard
                             bee-swarming spawns workers
                             bee-executing: implement → verify  .bee/cells/<id>.json capped
                             → cap (refuses without proof +        (verify output + before-state
@@ -397,7 +396,7 @@ node .bee/bin/bee.mjs status --json            # where am I? phase, gates, cells
 node .bee/bin/bee.mjs cells list               # all cells; `ready` = open cells with deps capped
 node .bee/bin/bee.mjs decisions active         # decisions currently in force
 
-# verify the enforcement is armed (expected to refuse before Gate 3):
+# verify the enforcement is armed (expected to refuse before Gate 2's execution approval):
 node .bee/bin/bee.mjs cells claim --id anything --worker w1
 # → error: gate "execution" is not approved   ✔
 ```
@@ -413,7 +412,7 @@ Everything is Node 18+ ESM, **zero npm dependencies**, atomic writes, Windows-sa
 Copied into every onboarded repo, so enforcement works even for agents that ignore instructions. `bee.mjs <group> <verb>` is the sole shipped CLI, covering all 9 command groups:
 
 - **`status`** — one-shot situational scout: onboarding health, phase/mode/feature, gate states, **gate-bypass state**, cell counts, **scribing debt** (uncaptured behavior changes), **model-tier map**, reservations, recent decisions, staleness warnings, recommended next action. First command of every session.
-- **`cells`** — the cell lifecycle: `list` / `ready` / `show` / `add` / `claim` (throws unless Gate 3 approved + deps capped) / `verify` / `cap` (refuses without recorded proof; `behavior_change` cells also require a before-state) / `block` / `drop`.
+- **`cells`** — the cell lifecycle: `list` / `ready` / `show` / `add` / `claim` (throws unless Gate 2's execution component is approved + deps capped) / `verify` / `cap` (refuses without recorded proof; `behavior_change` cells also require a before-state) / `block` / `drop`.
 - **`reservations`** — file-level conflict prevention between parallel workers: `reserve` / `release` / `list` / `sweep` (release expired TTLs). On overlap → `{ok:false, conflicts}`; the caller must return `[BLOCKED]`.
 - **`decisions`** — append-only decision log (rejects secrets and injection patterns): `log` / `supersede` / `redact` / `active` / `search`.
 - plus **`state`**, **`backlog`**, **`capture`**, **`reviews`**, **`feedback`** — see `node .bee/bin/bee.mjs --help --json` for the full manifest.

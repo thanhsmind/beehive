@@ -20,12 +20,16 @@ for a clear-scope task that needs a mode decision. The mode gate runs **first**.
 
 ## Gate
 **Gate 2** — "Work shape is ready. Approve before current-work preparation?"
-For tiny/small this is the **merged** gate: "Work shape + execution: I'm about to
-do X via Y, verified by Z. Approve?"
+The old standalone Gate 3 is folded into Gate 2: there is no `validating`
+phase to hand off to, so Gate 2 also covers execution, approved via `bee
+state gate --merge` (flips `approved_gates.shape` and `approved_gates.execution`
+together in one call). Tiny/small ask this as the **merged** gate: "Work
+shape + execution: I'm about to do X via Y, verified by Z. Approve?" No
+source edits happen until `approved_gates.execution` is true.
 
 ## State touched
-`cells add/tier`, `state set --owner planning --phase validating|swarming`,
-`state gate --name shape`, [`decisions`](../register.md#beedecisionsjsonl)
+`cells add/tier`, `state set --owner planning --phase swarming`,
+`state gate --name shape` / `--merge`, [`decisions`](../register.md#beedecisionsjsonl)
 (scoping synthesis).
 
 ## Key rules

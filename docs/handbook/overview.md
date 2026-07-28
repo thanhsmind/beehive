@@ -58,9 +58,11 @@ count + product-file count) and runs the *least* workflow that honestly protects
 work. What never scales down is memory: a rule, behavior, or value that just settled
 is captured the moment it settles, in every lane.
 
-**Gates are the human checkpoints.** Four approval gates fence the irreversible
-transitions. They are never self-approved — except when the opt-in `gate_bypass`
-switch is deliberately set by the human (levels: `normal` / `full` / `total`).
+**Gates are the human checkpoints.** Three approval gates fence the irreversible
+transitions — Gate 2 now approves shape and execution together in one call
+(`bee state gate --merge`), folding the old standalone Gate 3 into it. They are
+never self-approved — except when the opt-in `gate_bypass` switch is
+deliberately set by the human (levels: `normal` / `full` / `total`).
 
 **Knowledge over history.** The state layer an agent reads *first* is the knowledge
 bundle (`docs/knowledge/`) when the repo has one, or `docs/specs/` otherwise.
@@ -89,8 +91,7 @@ and a red CI run files a `verify-red` issue — never build on red.
 skills/                     the workflow, one SKILL.md per phase (instructions only)
   bee-hive/                 router + gate keeper + onboarding  → stages/hive.md
   bee-exploring/            fuzzy request → locked CONTEXT.md   → stages/exploring.md
-  bee-planning/             mode + executable work shape        → stages/planning.md
-  bee-validating/           prove the plan against reality      → stages/validating.md
+  bee-planning/             mode + shape + reality check + cells → stages/planning.md
   bee-swarming/             orchestrate bounded workers         → stages/swarming.md
   bee-executing/            implement + verify + cap one cell   → stages/executing.md
   bee-scribing/             sync durable knowledge              → stages/scribing.md
@@ -128,23 +129,22 @@ docs/
 ## The chain (stages)
 
 ```
-bee-hive  ─ route ─▶  exploring  ─[Gate 1]─▶  planning  ─[Gate 2]─▶  validating
+bee-hive  ─ route ─▶  exploring  ─[Gate 1]─▶  planning  ─[Gate 2]─▶  swarming
                                                                           │
-                                                                       [Gate 3]
-                                                                          ▼
-   compounding  ◀─  scribing  ◀─  executing  ◀─  swarming  ◀────────────┘
+   compounding  ◀─  scribing  ◀─  executing  ◀───────────────────────────┘
 
    on user request only:  reviewing  ─[Gate 4]─▶  merge
 ```
 
 - **Gate 1** — "Decisions locked. Approve CONTEXT.md before planning?"
-- **Gate 2** — "Work shape is ready. Approve before current-work preparation?"
-- **Gate 3** — "Feasibility validated. Approve execution?" *(no source edits before this)*
+- **Gate 2** — approves shape and execution together (`bee state gate --merge`,
+  folding the old standalone Gate 3 into this one call) *(no source edits before
+  this)*
 - **Gate 4** — merge approval, and it lives **only** inside a review session the user
   explicitly asked for. It is never an automatic end-of-chain step.
 
-Tiny and small lanes merge Gates 2+3 into one shape+execution question; the docs
-lane has no gates at all. See each stage page for its lane behavior.
+Every lane merges the old Gate 2 and Gate 3 into one shape+execution question;
+the docs lane has no gates at all. See each stage page for its lane behavior.
 
 ## How to read this handbook
 

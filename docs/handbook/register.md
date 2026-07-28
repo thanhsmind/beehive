@@ -38,7 +38,7 @@ record, kept for compatibility. Same keys as before:
 | Key | Holds |
 |-----|-------|
 | `schema_version` | state-file format version |
-| `phase` | current chain phase (`idle` · `exploring` · `planning` · `validating` · `swarming` · `scribing` · `compounding` · `compounding-complete`) |
+| `phase` | current chain phase (`idle` · `exploring` · `planning` · `swarming` · `reviewing` · `scribing` · `compounding` · `grooming` · `compounding-complete`) |
 | `feature` | active feature slug |
 | `mode` | lane (`tiny` · `small` · `standard` · `high-risk` · `docs`) |
 | `approved_gates` | `{context, shape, execution, review}` booleans — the four gates |

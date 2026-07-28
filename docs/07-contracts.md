@@ -22,7 +22,7 @@ carries three elements:
 
 A refusal that ends at "not allowed" with no stated next step violates this contract.
 Guard denials follow the same shape (`reason` names the gate/conflict, why, and the route:
-surface Gate 3, reserve first, or return `[BLOCKED]`). Tests assert the FIX element (the
+surface Gate 2, reserve first, or return `[BLOCKED]`). Tests assert the FIX element (the
 stated next action) for the three highest-traffic paths: cap-refusal, gate-block,
 reservation-conflict.
 
@@ -96,7 +96,7 @@ All functions are sync unless noted. `root` = absolute repo root path.
 - `GATE_ALLOWED_PREFIXES`: `.bee/`, `docs/` (covers `docs/history/`), `.spikes/`, `plans/`, `AGENTS.md`.
 - `checkWrite(root, state, relPath, agentName=null)` → `{allow:true}` or `{allow:false, kind:'intake'|'gate'|'reservation', reason}`.
   - intake (v0.1.1, repository-harness lesson): when `state.phase` is `idle` AND path not under GATE_ALLOWED_PREFIXES → deny with `kind:'intake'` pointing at bee-hive routing. Default-on; disable per repo via `config.guards.idle_gate: false`. This closes the "first ad-hoc edit slips through before any workflow starts" hole.
-  - gate: block only when `state.phase` ∈ {`exploring`,`planning`,`validating`} AND path not under GATE_ALLOWED_PREFIXES AND `approved_gates.execution` is false. During `swarming`: reservation check via `findConflicts` when `agentName`/`BEE_AGENT_NAME` provided; unreserved-but-conflicting → deny.
+  - gate: block only when `state.phase` ∈ {`exploring`,`planning`} (`GATED_PHASES` — validation-diet D3 retired the standalone `validating` phase; Gate 3 folded into Gate 2, both carried by `planning`) AND path not under GATE_ALLOWED_PREFIXES AND `approved_gates.execution` is false. During `swarming`: reservation check via `findConflicts` when `agentName`/`BEE_AGENT_NAME` provided; unreserved-but-conflicting → deny.
 - `checkRead(relPath)` → `{allow:true}` or `{allow:false, kind:'privacy'|'scout', reason, marker}` where privacy marker = `@@BEE_PRIVACY@@{json}@@END@@` containing `{file, question}`.
 - `extractBashTargets(command)` → `{paths:[], broadWrite:boolean}` (khuym patterns: `sed -i`, `tee`, `rm`, `mv`, `cp`, `mkdir`, `touch`, `git add|mv|rm`, redirection `>`).
 

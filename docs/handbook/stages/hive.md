@@ -2,7 +2,7 @@
 
 **Purpose** — The bootstrap meta-skill and router. It verifies onboarding, reads
 runtime state, classifies the request into a lane/mode, routes to the next skill,
-and presents and protects the four human approval gates.
+and presents and protects the three human approval gates.
 
 **When it runs** — First, in every bee session, and again after any context
 compaction. Re-entered whenever a routing or mode-gate decision is needed.
@@ -21,11 +21,12 @@ compaction. Re-entered whenever a routing or mode-gate decision is needed.
 - Gate presentations. hive owns no feature artifacts of its own.
 
 ## Gate
-Presents all four verbatim but structurally owns none — it is the presenter and
+Presents all three verbatim but structurally owns none — it is the presenter and
 enforcer. Gate 1 "Decisions locked. Approve CONTEXT.md before planning?" · Gate 2
-"Work shape is ready. Approve before current-work preparation?" · Gate 3
-"Feasibility validated. Approve execution?" · Gate 4 (P1>0) "P1 findings block
-merge. Fix before proceeding?" / (P1=0) "Review complete. Approve merge?".
+"Work shape is ready. Approve before current-work preparation?" — folding the old
+standalone Gate 3 into the same approval, shape and execution together via
+`bee state gate --merge` · Gate 4 (P1>0) "P1 findings block merge. Fix before
+proceeding?" / (P1=0) "Review complete. Approve merge?".
 
 ## State touched
 Reads [`state.json`](../register.md#beestatejson),

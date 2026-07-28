@@ -96,9 +96,10 @@ impossible to record; pre-existing records are never mutated by the check
   wired in `cells.mjs` `addCell`/`addCells`/`updateCell` via `assertNoCycle`;
   CLI verb `bee cells schedule` (`command-registry.mjs` `cells.schedule`,
   `handleCellsSchedule` in both dispatcher copies); consumer prose in
-  `skills/bee-swarming/SKILL.md` (wave analysis), `skills/bee-validating/SKILL.md`
-  (feasibility matrix), `skills/bee-planning/references/planning-reference.md`
-  (files-authoring note). Tests: schedule + cycle-refusal rows in
+  `skills/bee-swarming/SKILL.md` (wave analysis),
+  `skills/bee-planning/references/planning-reference.md`
+  (files-authoring note; `skills/bee-validating/` is deleted — validation-diet
+  D1 — its feasibility matrix retired with no replacement, D6). Tests: schedule + cycle-refusal rows in
   `templates/tests/test_lib.mjs` (321 passing), verb example in
   `templates/tests/test_bee_cli.mjs` (132 passing). Evidence: commits 390165a,
   9e2156e, 5003503, 79217ae; traces `.bee/cells/parallel-scheduler-{1..4}.json`.

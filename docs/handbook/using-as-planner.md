@@ -82,7 +82,8 @@ The EDIT plan is not a green light to write. Route it:
 - Enter through **[hive](stages/hive.md)** → the chain. The EDIT plan becomes the
   raw material for `CONTEXT.md` (if gray areas remain) or the cells' `action` /
   `files` (if scope is clear).
-- **No source edit happens before Gate 3.** The planner's completeness check is
+- **No source edit happens before Gate 2's execution approval** (the old
+  standalone Gate 3 is folded into Gate 2). The planner's completeness check is
   what makes the cells' `files` lists correct, so nothing is missed at execution.
 
 ### 5. Resync after the change lands
@@ -99,5 +100,5 @@ forward — the same discipline bee applies to `docs/knowledge/`:
 - **Read-only.** The planner reads and routes; it emits a plan and empty diff.
 - **Not authoritative for truth.** On any disagreement, the source wins and the
   handbook is flagged stale.
-- **Not a bypass.** The plan still flows through hive, the mode gate, and Gates 1–3.
+- **Not a bypass.** The plan still flows through hive, the mode gate, and Gates 1–2.
   Localizing an edit is never approving it.

@@ -22,7 +22,7 @@ Goal: a tiny fix can flow bootstrap → plan(tiny) → validate(light) → one w
 1. Shared `bin/lib/` modules (state, cells, reservations, guards, inject) + vendored per-group helper scripts (status, cells, reservations; + test scripts, following khuym's `test_onboard_khuym.mjs` pattern) — later unified into and retired in favor of `bee.mjs <group> <verb>` (D1, shim-retire).
 2. `onboard_bee.mjs`: installs AGENTS.md block (BEE:START/END), `.bee/` runtime files, helpers + lib; `--apply` gated on approval.
 3. First half of the hook skeleton, as thin wrappers over `lib/`: `bee-session-init`, `bee-write-guard` (gate + privacy checks), `bee-session-close` — with the AGENTS.md preamble generated from the same `inject.mjs` source so the runtimes cannot drift.
-4. Skills (each RED → GREEN → REFACTOR with pressure tests, in this order): **hive**, **planning** (mode gate + tiny/small paths first), **validating** (reality gate only), **executing**, **reviewing** (lightweight path).
+4. Skills (each RED → GREEN → REFACTOR with pressure tests, in this order): **hive**, **planning** (mode gate + tiny/small paths first), **validating** (reality gate only; later removed and folded into **planning**, validation-diet D1), **executing**, **reviewing** (lightweight path).
 5. Dogfood: run three real tiny fixes in a real repo. Capture friction verbatim — it is Phase 2's input.
 
 Exit: the three fixes shipped through bee with zero hand-editing of `.bee/` files.
@@ -31,7 +31,7 @@ Exit: the three fixes shipped through bee with zero hand-editing of `.bee/` file
 
 1. **exploring** (Socratic locking, CONTEXT.md template, gray-area probes).
 2. **planning** full: research levels, shapes (phase plan / epic map), cell prep with `must_haves`.
-3. **validating** full: feasibility matrix, spikes, adversarial plan-checker, cell review.
+3. **validating** full: feasibility matrix, spikes, adversarial plan-checker, cell review. (Skill later deleted — feasibility matrix retired with no replacement, spikes and cell review folded into **planning**, validation-diet D1/D5/D6.)
 4. **swarming**: wave analysis, spawn contracts for both runtimes, tend loop, HANDOFF.
 5. **reviewing** full: specialist roster, EXISTS/SUBSTANTIVE/WIRED, UAT, Gate 4.
 6. Second half of the hook skeleton: `bee-prompt-context` (injection dedup), `bee-state-sync`, `bee-chain-nudge` (reservation guard added to `bee-write-guard`) — plus the two-belt parity test (every guards/cells rule exercised by both a hook test and a helper test).

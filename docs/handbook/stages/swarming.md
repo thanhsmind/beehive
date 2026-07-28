@@ -1,11 +1,12 @@
 # Stage: swarming (`bee-swarming`)
 
-**Purpose** — Orchestrate bounded workers over validated cells (standard/high-risk
+**Purpose** — Orchestrate bounded workers over open cells (standard/high-risk
 waves) or dispatch one execution worker (tiny/small). The orchestrator never
 implements directly.
 
-**When it runs** — After Gate 3 approval, with current-slice cells open and
-validated.
+**When it runs** — After Gate 2's execution approval (the old standalone Gate 3
+is folded into Gate 2 — there is no separate `validating` phase), with
+current-slice cells open.
 
 ## Inputs
 - `cells schedule --json`, [`state.json`](../register.md#beestatejson),
@@ -18,7 +19,8 @@ validated.
 - Orchestrator-authored done-report (tiny/small).
 
 ## Gate
-None directly — it relies on Gate 3 already being approved.
+None directly — it relies on Gate 2's execution component (`approved_gates.execution`)
+already being approved.
 
 ## State touched
 [`cells claim/claim-next/show/tier/judge/judge-record/cap`](../register.md#beecellsfeature-njson),

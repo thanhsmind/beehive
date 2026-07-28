@@ -30,8 +30,7 @@ bee/
       references/routing-and-contracts.md
       references/go-mode.md
     exploring/     SKILL.md + references/{gray-area-probes.md, context-template.md}
-    planning/      SKILL.md + references/{planning-reference.md, edge-dimensions.md}
-    validating/    SKILL.md + references/validation-reference.md
+    planning/      SKILL.md + references/{planning-reference.md, edge-dimensions.md} — also owns the reality check (SMALLER PATH) and review wave folded in from the deleted `validating` skill (validation-diet D1/D5)
     swarming/      SKILL.md + references/swarming-reference.md
     executing/     SKILL.md + references/worker-details.md
     reviewing/     SKILL.md + references/reviewing-reference.md
@@ -41,7 +40,7 @@ bee/
     bee-writing-skills/  SKILL.md + references/{pressure-test-template.md, creation-log-template.md}
 ```
 
-Eleven skills; additions are decision-gated (a decision record naming the uncovered workflow gap — decision 0002), never casual. Every SKILL.md stays lean (< ~200 lines); depth lives in one `references/` file per skill, never nested deeper than one level (khuym/superpowers rule).
+Ten skills; additions are decision-gated (a decision record naming the uncovered workflow gap — decision 0002), never casual. Every SKILL.md stays lean (< ~200 lines); depth lives in one `references/` file per skill, never nested deeper than one level (khuym/superpowers rule).
 
 ## Target-repo layout (what onboarding installs)
 
@@ -92,7 +91,7 @@ artifact_readiness: requirements-only | implementation-ready
 mode: tiny | small | standard | high-risk | spike
 ```
 
-The shape pass writes it as `requirements-only` and stops at Gate 2; the post-approval prep pass enriches the *same file* to `implementation-ready` and creates the current-slice cells. Downstream skills (validating, swarming, reviewing, compounding) all receive one canonical plan path — no doc-discovery ambiguity, and the readiness field is machine-checkable (`bee.mjs status` reports it).
+The shape pass writes it as `requirements-only` and stops at Gate 2; the post-approval prep pass enriches the *same file* to `implementation-ready` and creates the current-slice cells. Downstream skills (swarming, reviewing, compounding) all receive one canonical plan path — no doc-discovery ambiguity, and the readiness field is machine-checkable (`bee.mjs status` reports it).
 
 ## The state layer: area specs + reading map (decisions 0001, 0002)
 
@@ -124,7 +123,7 @@ Every bee skill supports two invocation modes (compound-engineering):
 - **Interactive (default):** ask at decision points, using the standard question format.
 - **Headless (`mode:headless`):** never block on a question. Apply only unambiguous actions, classify ambiguous cases as deferred, and end with a structured report containing an `Outstanding Questions` section. Terminal output is JSON or structured markdown so an orchestrator (go mode, a pipeline, another skill) can consume it deterministically.
 
-Hard limit: headless mode defers *within-stage* ambiguity only and never self-approves a gate. The one mode that self-approves gates is the opt-in gate-bypass switch (`.bee/config.json` `gate_bypass`, toggled by `bee-bypass-gate`, decision 0010): it auto-approves Gates 1-3 for `tiny`/`small`/`standard` work, never for high-risk/hard-gate work, and never Gate 4 UAT/P1 or secret reads. Off by default; surfaced loudly in the preamble and `bee_status` when on.
+Hard limit: headless mode defers *within-stage* ambiguity only and never self-approves a gate. The one mode that self-approves gates is the opt-in gate-bypass switch (`.bee/config.json` `gate_bypass`, toggled by `bee-bypass-gate`, decision 0010): it auto-approves Gates 1-2 for `tiny`/`small`/`standard` work, never for high-risk/hard-gate work, and never Gate 4 UAT/P1 or secret reads. Off by default; surfaced loudly in the preamble and `bee_status` when on.
 
 ## The cell (task unit)
 
@@ -231,7 +230,7 @@ Any proposed tenth hook must name which of the nine it replaces — claudekit's 
 ```json
 {
   "schema_version": "1.0",
-  "phase": "idle | exploring | planning | validating | swarming | reviewing | scribing | compounding | grooming",
+  "phase": "idle | exploring | planning | swarming | reviewing | scribing | compounding | grooming",
   "feature": "<slug> | null",
   "mode": "tiny | small | standard | high-risk | spike | null",
   "approved_gates": { "context": false, "shape": false, "execution": false, "review": false },
