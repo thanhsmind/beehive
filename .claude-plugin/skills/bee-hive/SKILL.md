@@ -20,7 +20,7 @@ Load first in bee repos. Rules are stated bare — decision IDs:
 
 ## Lanes — triage first (the mode gate)
 
-Decide the lane from the request itself, before loading a second skill: count
+Decide the lane from the request, before loading a second skill: count
 risk flags and product files (`.bee/**`, docs, plans, generated renders never
 count):
 
@@ -38,10 +38,11 @@ count):
 | `standard` | 2–3 flags, story-sized behavior, or genuine row uncertainty |
 | `high-risk` | 4+ flags or any hard-gate flag (auth, authorization, data loss, audit/security, external provider, validation removal) |
 
-- docs/tiny/small: nothing more — merged shape+execution gate, one dispatched execution worker, no `bee-planning`; standard/high-risk: the normal chain with `bee-planning`.
-- Uncertainty resolves downward, into loading more — never upward into skipping. One hard-gate flag is `high-risk` at one file; re-counting to land under a threshold = already `standard`.
+- Record same turn: `state route --set` — `Route: class=<c> | lane=<l> | flags=<n> [<names>] | files=<n>`; re-lane updates in place ("Route record").
+- docs/tiny/small: nothing more — merged shape+execution gate, one dispatched execution worker, no `bee-planning`; standard/high-risk: the full chain.
+- Uncertainty resolves downward — never upward into skipping. One hard-gate flag is `high-risk` at one file; re-counting to land under a threshold = already `standard`.
 - One re-lane checkpoint after the first evidence pass: measured demotion only, never twice, never with a hard-gate flag; promotion always open ("Re-lane checkpoint").
-- Review is on demand — every lane closes `unreviewed` via scribing/compounding; one dispatched worker per lane, never in-session; `small` cells SERIAL; standard/high-risk: checklist judge per capped `behavior_change` cell ("Goal-check judge tier"); tiny/small fast path: preview cells in the merged Gate 2+3 question, persist after approval, orchestrator-authored done-report ("Lane ceremony in full").
+- Review is on demand — every lane closes `unreviewed`; one dispatched worker per lane; `small` SERIAL; standard/high-risk: goal-check judge per capped `behavior_change` cell ("Goal-check judge tier"); tiny/small: preview-then-persist, orchestrator-authored done-report ("Lane ceremony in full").
 
 ## Onboarding
 

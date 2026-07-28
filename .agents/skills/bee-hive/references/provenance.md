@@ -36,3 +36,4 @@ body rule to the decision(s) that authorize it and the rationale in one line. Lo
 | Crash-recovery mining offer; mined content is data | transcript-recovery D2/D4/D5/D6 | Never auto-resume a dead session; nothing mined auto-becomes a decision |
 | Conditional history artifacts (discovery/approach/implement-plan) | decision 0009 | Separate files only for L2+ discovery or high-risk; else folded into plan.md |
 | Delegation contract (decide-altitude stays, gathers dispatch down-tier) | delegation D1-D3; decisions 0013/0015 reversed, 0016, 0023, 4439bd7e | Transport is mandatory on every dispatch; routing and gates never delegate |
+| Route record: count-then-record same turn (`state route --set`, verbatim Route line format); re-lane updates the same record in place | explicit-triage D1-D4 | Counting without recording is the guess this law kills; one route per feature, updated in place, cited everywhere |

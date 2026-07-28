@@ -434,6 +434,17 @@ export function buildSessionPreamble(root, { sessionId = null, handoffOutcome = 
       '- Ship visibility: draft-pr — first cap opens a draft PR, every cap pushes (routing-and-contracts "Ship visibility")',
     );
   }
+  // explicit-triage D2: zero preamble cost when absent — only a recorded
+  // route (bee state route --set) adds a line, same "omit entirely when
+  // nothing to report" convention as the ship_visibility line just above.
+  // `pipelineRecord` is already the resolved lane-or-default record `state
+  // route --set` writes onto, so no extra I/O is needed here.
+  if (pipelineRecord.route) {
+    const r = pipelineRecord.route;
+    lines.push(
+      `- Route: class=${r.class} | lane=${r.lane} | flags=${r.flags.length} [${r.flags.join(',')}] | files=${r.product_files}`,
+    );
+  }
   if (handoffOutcome && handoffOutcome.ok === true) {
     // fsh-10 (D1): adoption succeeded — start-now, no confirmation needed.
     // NOTE: adoptHandoff already cleared .bee/HANDOFF.json as part of the

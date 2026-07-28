@@ -5,14 +5,14 @@
     "agents_block": "8be11c89dddc18a4c32a4d72a6287afa473d83e62694a6f52b13cddd358243d4",
     "gitignore_block": "8940e45de24b9d602166dec022b11038bb9f71caa98e25ba60363bef9adaca42",
     "helpers": {
-      "bee.mjs": "c2dea069ec177f7f4d8cce23138c0ed900bc8864fa681b160d99038d58a726c8"
+      "bee.mjs": "8da7f4c22cc8b39858f4d5b673face1bedc58b4b30686b703258e82f3ea5763d"
     },
     "lib": {
       "backlog.mjs": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "74f5717cf4eab81b8eb5772730c7912bf97a5324e09e7ce1a052451d62d4893c",
       "claims.mjs": "de7726a26b2354b65ee598d00f9179f04f71fe3d53f39a865b749da49e03623d",
-      "command-registry.mjs": "4abe212daf10c502dbb79220cce12d9d07e0980139c8c02e9522c3d4d0be53b9",
+      "command-registry.mjs": "07e0997e3f6d90313d676085fc281a3d36ccdba7c0455e764bc461c852492c10",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
@@ -22,7 +22,7 @@
       "fsutil.mjs": "c0a65d8aebfca7f7423f10cc9e13fa8ca43234c4a7b7e7ea1f05619b18e06af0",
       "guards.mjs": "f7c99fae32c88e189e4dfb1e220895976d4a22d2a020ac2b383df3ee1cdc3fe1",
       "herding.mjs": "95a81c8f17a84e2b57a1f8081f5f4a3ec7703432e81b2741c8795bd30a181433",
-      "inject.mjs": "36a2733575e7f39dbbaeb86947e36651e4e0b4a46fda4c95e5d61964e3ea6b55",
+      "inject.mjs": "a31ef42107ccf358d7828944b730dea19cc43be7265f715804f69718493ac102",
       "integration-queue.mjs": "149a03dfb4723a18008e3b0f3890e8dcd7b6fb660a2cf7dda3874e08fb8e172d",
       "intent.mjs": "acb9a427caf2e1aae106407a96a9fc0a2c16a087d31af057f704afa2619255e8",
       "judge.mjs": "5057e17a6bcd3dacff21fe479e13570620cfe1b9c821c0ff5c8254f39e3c6ed1",
@@ -40,7 +40,7 @@
       "state-projection.mjs": "2986c53ffc013f519c69a122db47a02470472dbdddcd5d558d1f062e5cde959e",
       "state.mjs": "65bab4f1f59645e0b9f134f7c8c0c18564256f44b1d1333e2b0fbbc3d3d37d71",
       "validate-args.mjs": "99a28f221deb373ee128a821a1463acafdf91413c377c04d56cbda5137c81b17",
-      "workflow-store.mjs": "c5460cd0cd9b5cb9d49f2b7f5d4d4113e1bd3e790b0c8670c716f9ba50628c12",
+      "workflow-store.mjs": "7170ae479055bd3d69614934e3b78b936ce896b8467f37903d1ae6ff82f48df7",
       "workspace-store.mjs": "aa8017d71df1e3d35f40503b47bbe1aa1a2e110623b4a480fe66eb5bb1f3c3c1",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
       "worktree-store.mjs": "fba5062d249c39c41c52ee4bb1ee91a958ae12d6021b61c380c129c153fb0d11"
@@ -82,5 +82,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-28T05:04:03.805Z"
+  "updated_at": "2026-07-28T05:34:03.309Z"
 }

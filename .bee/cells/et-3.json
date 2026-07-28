@@ -1,0 +1,48 @@
+{
+  "id": "et-3",
+  "feature": "explicit-triage",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "test",
+  "title": "Slice test: route record net behavior (D5)",
+  "action": "One trailing test cell, net slice behavior, in the OWNING suites (locate first; expected: packages/bee/tests/test_bee_cli.mjs for verb/refusals/claim-warn, test_state_projection.mjs or inject-owning suite for the preamble line): (a) valid --set round-trips (record on active workflow, --show, status --json); (b) bad class, bad lane, bad flag, negative files each typed-refused with nothing written; (c) claim on route-less feature warns once on stderr and still claims; with route, silent; (d) preamble line exact format when present, absent otherwise; (e) a second --set (re-lane demotion) rewrites the SAME record (lane changes, one record, updated_at moves). All green.",
+  "must_haves": {
+    "truths": [
+      "Assertions a-e green in owning suites (extend, never fork).",
+      "Full targeted verify green."
+    ],
+    "prohibitions": [
+      "Do NOT weaken et-1 validation.",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs && node packages/bee/tests/test_state.mjs",
+  "read_first": [
+    "packages/bee/lib/state.mjs",
+    "packages/bee/bee.mjs",
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "files": [
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "deps": [
+    "et-1",
+    "et-2"
+  ],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at wave close (parallel-default D2)",
+  "status": "open",
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
