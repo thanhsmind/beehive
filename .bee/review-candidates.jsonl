@@ -70,3 +70,4 @@
 {"id":"371bb84f-16d4-42f9-946c-68c37eddcfb5","type":"candidate","date":"2026-07-28T04:25:47.762Z","feature":"parallel-default","head":"0908a8988849fe52a66369092d3b1abdda6415c3","mode":"standard","baseline":null,"cells":["pd-1","pd-2","pd-3"]}
 {"id":"fb9038e5-0944-43a7-a68d-6aea757f6cfb","type":"candidate","date":"2026-07-28T05:05:39.392Z","feature":"foundation-fixes","head":"c0353fbced5e44d586a4159b561cdfd7e28cdc31","mode":"standard","baseline":null,"cells":["fx-1","fx-2","fx-3"]}
 {"id":"b2e66216-da55-4732-b29b-6b44899f0aad","type":"candidate","date":"2026-07-28T06:03:32.846Z","feature":"explicit-triage","head":"6a8ec605bd0a8fd755cfb566cde4a7d3dc074218","mode":"standard","baseline":null,"cells":["et-1","et-2","et-3","et-4"]}
+{"id":"a769b92a-99b3-4dc0-8397-459fd49fb8e7","type":"candidate","date":"2026-07-28T06:45:49.323Z","feature":"status-diet","head":"0cbabcaf16c05f8375e8675d077ee7ad42070b9d","mode":"standard","baseline":null,"cells":["st-1","st-2","st-3"]}
