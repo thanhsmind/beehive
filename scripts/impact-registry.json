@@ -1345,7 +1345,8 @@
         "packages/bee/tests/test_knowledge.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ],
       "all": [
         "packages/bee/tests/test_bee_cli.mjs",
@@ -1353,7 +1354,8 @@
         "packages/bee/tests/test_knowledge.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/hooks/adapter.mjs": {
@@ -1489,7 +1491,8 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/capture.mjs": {
@@ -1516,7 +1519,8 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/cells.mjs": {
@@ -1551,7 +1555,8 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/claims.mjs": {
@@ -1610,6 +1615,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -1624,7 +1630,8 @@
         "packages/bee/tests/test_knowledge.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/commands_detect.mjs": {
@@ -1657,7 +1664,8 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/decisions.mjs": {
@@ -1709,6 +1717,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -1739,7 +1748,8 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/dispatch-prepare.mjs": {
@@ -1752,7 +1762,8 @@
         "packages/bee/tests/test_knowledge.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/feedback.mjs": {
@@ -1770,7 +1781,8 @@
         "packages/bee/tests/test_knowledge.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/fsutil.mjs": {
@@ -1797,7 +1809,8 @@
         "packages/bee/tests/test_state.mjs",
         "packages/bee/tests/test_state_projection.mjs",
         "packages/bee/tests/test_workflow_store.mjs",
-        "packages/bee/tests/test_write_policy.mjs"
+        "packages/bee/tests/test_write_policy.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ],
       "all": [
         "packages/bee/scripts/test_plugin_distribution.mjs",
@@ -1846,6 +1859,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_state_projection_race.mjs",
@@ -1869,7 +1883,8 @@
         "packages/bee/tests/test_msn_invariants.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/herding.mjs": {
@@ -1880,7 +1895,8 @@
         "packages/bee/tests/test_knowledge.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/inject.mjs": {
@@ -1892,7 +1908,8 @@
         "packages/bee/tests/test_misc.mjs",
         "packages/bee/tests/test_state.mjs",
         "scripts/tests/test_compact_capsule.mjs",
-        "scripts/tests/test_compaction_advisories.mjs"
+        "scripts/tests/test_compaction_advisories.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ],
       "all": [
         "packages/bee/tests/test_backlog_capture.mjs",
@@ -1910,7 +1927,8 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/integration-queue.mjs": {
@@ -1924,7 +1942,8 @@
         "packages/bee/tests/test_knowledge.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/intent.mjs": {
@@ -1943,7 +1962,8 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/judge.mjs": {
@@ -1971,7 +1991,8 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/knowledge.mjs": {
@@ -2005,7 +2026,8 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/lease-store.mjs": {
@@ -2062,6 +2084,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -2122,6 +2145,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -2171,6 +2195,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -2189,7 +2214,8 @@
         "packages/bee/tests/test_recovery.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/recovery.mjs": {
@@ -2203,7 +2229,8 @@
         "packages/bee/tests/test_recovery.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/reservations.mjs": {
@@ -2257,6 +2284,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -2272,7 +2300,8 @@
         "packages/bee/tests/test_reviews.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/schedule.mjs": {
@@ -2299,7 +2328,8 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/scratch.mjs": {
@@ -2312,7 +2342,8 @@
         "packages/bee/tests/test_knowledge.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/source-identity.mjs": {
@@ -2331,6 +2362,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs"
       ]
     },
@@ -2349,6 +2381,7 @@
         "packages/bee/tests/test_state_projection.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
     },
@@ -2411,6 +2444,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -2425,7 +2459,8 @@
         "packages/bee/tests/test_knowledge.mjs",
         "packages/bee/tests/test_scratch.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
-        "scripts/tests/test_native_probe.mjs"
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "packages/bee/lib/workflow-store.mjs": {
@@ -2474,6 +2509,7 @@
         "scripts/tests/test_hook_vendor_closure.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -2524,6 +2560,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -2572,6 +2609,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -2621,6 +2659,7 @@
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_path_identity.mjs",
         "scripts/tests/test_render_race.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_projection_race.mjs"
       ]
@@ -3075,7 +3114,8 @@
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_heartbeat_touch.mjs",
-        "scripts/tests/test_hook_vendor_closure.mjs"
+        "scripts/tests/test_hook_vendor_closure.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ],
       "all": [
         "packages/bee/hooks/test_bypass_stop_net.mjs",
@@ -3106,7 +3146,8 @@
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_heartbeat_touch.mjs",
-        "scripts/tests/test_hook_vendor_closure.mjs"
+        "scripts/tests/test_hook_vendor_closure.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "scripts/lib/test-fixture.mjs": {
@@ -3138,6 +3179,7 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_path_identity.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_worktree_holds.mjs"
       ],
@@ -3169,6 +3211,7 @@
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
         "scripts/tests/test_path_identity.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_worktree_holds.mjs"
       ]
@@ -3506,6 +3549,14 @@
       ],
       "all": [
         "scripts/tests/test_run_verify_impacted.mjs"
+      ]
+    },
+    "scripts/tests/test_ship_visibility.mjs": {
+      "direct": [
+        "scripts/tests/test_ship_visibility.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_ship_visibility.mjs"
       ]
     },
     "scripts/tests/test_skill_pointers.mjs": {

@@ -1,0 +1,67 @@
+{
+  "id": "sv-2",
+  "feature": "ship-visibility-config",
+  "lane": "small",
+  "behavior_change": false,
+  "change_class": "test",
+  "title": "Slice test: ship_visibility config surfacing",
+  "action": "New suite scripts/tests/test_ship_visibility.mjs (new_suite_reason: new config surface, no existing suite owns status-payload config fields). Temp-dir fixture repo (copy minimal .bee skeleton or use existing fixture helpers from sibling tests): default absent -> status ship_visibility 'off'; 'draft-pr' -> surfaced + preamble line present; junk value -> 'off' + warning on stderr; 'off' explicit -> no preamble line. Register in impact registry (node scripts/impact_registry.mjs --write) if --check flags drift; include diff in commit. For sv-1's verify to be runnable at its cap, coordinate: sv-1 caps on this suite — you are dispatched AFTER sv-1's implementation lands uncommitted? NO: serial doctrine — sv-1 commits first with verify run against this suite; therefore THIS cell is dispatched first? Resolution recorded by orchestrator: sv-1's verify at cap time may use inline node -e probes if this suite does not exist yet; this suite is the durable proof. End green.",
+  "must_haves": {
+    "truths": [
+      "All 4 behaviors asserted green; suite hermetic (temp dirs, live .bee untouched).",
+      "impact-registry drift resolved in-commit if flagged."
+    ],
+    "prohibitions": [
+      "Do NOT weaken sv-1 normalization to pass.",
+      "Do NOT touch live .bee/config.json."
+    ]
+  },
+  "verify": "node scripts/tests/test_ship_visibility.mjs && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "packages/bee/bee.mjs",
+    "scripts/tests/test_verify_cache.mjs"
+  ],
+  "files": [
+    "scripts/tests/test_ship_visibility.mjs",
+    "scripts/impact-registry.json"
+  ],
+  "deps": [
+    "sv-1"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-sv2",
+    "outcome": "New hermetic suite scripts/tests/test_ship_visibility.mjs proves ship_visibility config surfacing (sv-1): absent key -> off/no line/no warn, draft-pr -> surfaced+preamble line, junk value -> off+stderr warning, explicit off -> same silent shape as absent. All fixtures are disposable temp-dir repos; live .bee/config.json never touched. impact-registry.json regenerated (--write) after drift was flagged by --check; diff is purely additive (new suite reaches packages/bee/bee.mjs + lib/inject.mjs + lib/fsutil.mjs).",
+    "files_changed": [
+      "scripts/tests/test_ship_visibility.mjs",
+      "scripts/impact-registry.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T04:03:56.170Z",
+    "behavior_change": false,
+    "verification_evidence": "{\"new_suite_reason\": \"new config surface, no existing suite owns status-payload config fields — matches cell sv-2 new_suite_reason verbatim\"}\n",
+    "verify_output": "4 passed, 0 failed (test_ship_visibility.mjs); release_manifest --check: 423 file(s) match stored manifest; impact_registry --check: up to date after --write regen (additive diff only)",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T03:59:18.656Z",
+    "verify_command": "node scripts/tests/test_ship_visibility.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-28T04:03:45.710Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T04:03:45.710Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-28T03:59:18.654Z",
+        "acquired_at": "2026-07-28T03:59:18.654Z",
+        "worker": "exec-sv2",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}
