@@ -554,3 +554,4 @@
 {"ts":"2026-07-28T03:17:35.586Z","kind":"pbi","event":"status","id":"p-e8a153e2","status":"done"}
 {"ts":"2026-07-28T03:17:35.822Z","kind":"pbi","event":"status","id":"p-8afb88a4","status":"in-flight","feature":"test-batching-finish"}
 {"ts":"2026-07-28T03:47:29.479Z","kind":"pbi","event":"status","id":"p-8afb88a4","status":"done"}
+{"ts":"2026-07-28T03:48:03.701Z","kind":"pbi","event":"status","id":"p-50de38d7","status":"in-flight","feature":"ship-visibility-config"}

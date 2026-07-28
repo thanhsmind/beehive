@@ -87,7 +87,7 @@
     },
     {
       "path": ".bee/bin/lib/inject.mjs",
-      "sha256": "4df920d3d430c1e0aba2d41f09d764396e2f030bd525b78aa0ab68163703c7cb",
+      "sha256": "36a2733575e7f39dbbaeb86947e36651e4e0b4a46fda4c95e5d61964e3ea6b55",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -183,7 +183,7 @@
     },
     {
       "path": ".bee/bin/lib/state.mjs",
-      "sha256": "343d7513172d3772d14a9912b82bdc6a7a969e22614a41f37711477f88d477d7",
+      "sha256": "16272cdd8f0bba9b2e392bc1c669e70e806a199da7b4f8917e76422cc7fac4a0",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -1570,7 +1570,7 @@
     },
     {
       "path": "packages/bee/bee.mjs",
-      "sha256": "1d6cefa7dc6c947648ec003127092638ba4a11835aee6cfa45782e9827f474d1",
+      "sha256": "c2dea069ec177f7f4d8cce23138c0ed900bc8864fa681b160d99038d58a726c8",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/bee.mjs"
@@ -1801,7 +1801,7 @@
     },
     {
       "path": "packages/bee/lib/inject.mjs",
-      "sha256": "4df920d3d430c1e0aba2d41f09d764396e2f030bd525b78aa0ab68163703c7cb",
+      "sha256": "36a2733575e7f39dbbaeb86947e36651e4e0b4a46fda4c95e5d61964e3ea6b55",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/inject.mjs"
@@ -1913,7 +1913,7 @@
     },
     {
       "path": "packages/bee/lib/state.mjs",
-      "sha256": "343d7513172d3772d14a9912b82bdc6a7a969e22614a41f37711477f88d477d7",
+      "sha256": "16272cdd8f0bba9b2e392bc1c669e70e806a199da7b4f8917e76422cc7fac4a0",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/state.mjs"
@@ -2165,7 +2165,7 @@
     },
     {
       "path": "packages/bee/tests/test_misc.mjs",
-      "sha256": "a422980baf0fe3342c4f467cbed2e8ef249621d0176353d075ddaf6172a3a4be",
+      "sha256": "198e75071ae4242bde665ae630d5f64c1f58428bf87176f36e9d69b864d72149",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_misc.mjs"

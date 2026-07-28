@@ -15,6 +15,7 @@ import {
   cacheFilePath,
   bypassLevel,
   bypassBanner,
+  shipVisibility,
   readState,
   readHandoff,
   readOnboarding,
@@ -425,6 +426,14 @@ export function buildSessionPreamble(root, { sessionId = null, handoffOutcome = 
     }
   }
   for (const line of bypassBannerLines(bypassLevel(root))) lines.push(line);
+  // spec #81 P1 (sv-1): zero preamble cost when off — only 'draft-pr' adds a
+  // line, matching bypassBannerLines' own "omit entirely when nothing to
+  // report" convention just above.
+  if (shipVisibility(root) === 'draft-pr') {
+    lines.push(
+      '- Ship visibility: draft-pr — first cap opens a draft PR, every cap pushes (routing-and-contracts "Ship visibility")',
+    );
+  }
   if (handoffOutcome && handoffOutcome.ok === true) {
     // fsh-10 (D1): adoption succeeded — start-now, no confirmation needed.
     // NOTE: adoptHandoff already cleared .bee/HANDOFF.json as part of the

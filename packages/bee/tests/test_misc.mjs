@@ -1030,6 +1030,10 @@ const EXPECTED_STATE_EXPORTS = [
   'BYPASS_LEVELS',
   'bypassLevel',
   'bypassBanner',
+  // spec #81 P1 (sv-1): ship_visibility config surfacer — same normalize-
+  // with-stderr-warning discipline as bypassLevel above.
+  'SHIP_VISIBILITY_VALUES',
+  'shipVisibility',
   'STALE_ADVISOR_KEY_WARNING',
   'hasStaleAdvisorKey',
   'modelForTier',

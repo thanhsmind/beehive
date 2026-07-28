@@ -2003,6 +2003,28 @@ export function bypassBanner(level) {
   }
 }
 
+// ── Ship visibility (spec #81 P1, sv-1 scope) ───────────────────────────────
+// `.bee/config.json` `ship_visibility` surfaces cap-time visibility behavior
+// (routing-and-contracts.md "Ship visibility"). This cell (sv-1) only wires
+// the config key through to `status --json` and the session preamble; the
+// full contract's three-value default (draft-pr/push-only/off with remote
+// detection) is out of scope here — sv-1 recognizes exactly 'off' (default,
+// absent) and 'draft-pr'. An unrecognized value normalizes to 'off' with a
+// one-line stderr warning, never a crash — same discipline as bypassLevel
+// above, plus the warn-don't-throw precedent at STALE_ADVISOR_KEY_WARNING
+// below.
+export const SHIP_VISIBILITY_VALUES = ['off', 'draft-pr'];
+
+export function shipVisibility(root) {
+  const raw = readConfig(root).ship_visibility;
+  if (raw === undefined || raw === null) return 'off';
+  if (SHIP_VISIBILITY_VALUES.includes(raw)) return raw;
+  process.stderr.write(
+    `config: unrecognized ship_visibility "${raw}" in .bee/config.json — normalized to "off". Allowed: ${SHIP_VISIBILITY_VALUES.join(', ')}.\n`,
+  );
+  return 'off';
+}
+
 // D1 — one shared warning line for both surfacers (`bee.mjs status` and
 // onboard_bee.mjs) so a stale `advisor` key reads identically wherever it is
 // noticed. Warn only, never error: readConfig above already tolerates the key.
