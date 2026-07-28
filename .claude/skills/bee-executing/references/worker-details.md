@@ -124,6 +124,20 @@ authority, and do not ask the orchestrator to trust a worker-supplied value.
 
 Ambiguities you deferred go in an `Outstanding Questions` section of the report.
 
+## Evidence Report Budget
+
+A worker's per-cell report in `docs/history/<feature>/reports/<cell-id>.md` targets **<=40 lines**. Structure:
+
+- **Outcome** (1-3 lines) — status token + what changed, in plain language.
+- **Verify** — the exact command, plus its decisive output lines, quoted, **<=10 lines**.
+- **Files + commit** (<=5 lines) — files touched and the commit hash.
+- **Deviations** (<=5 lines) — one line each, only if any fired.
+- **Side-by-side excerpts** — only when the cell explicitly demands them (e.g. a before/after diff the reviewer can't get any other way).
+
+Raw full output (verify logs, evidence JSON) never goes inline — point to `.bee/cells/<cell-id>.json` (the `trace`) instead, per decision 0009.
+
+**Soft budget:** going over 40 lines is allowed but requires a one-line reason at the top of the report (e.g. "high-risk cell, full trace required").
+
 ## Post-Compaction Recovery
 
 Reread, in order:

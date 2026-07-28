@@ -233,7 +233,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "a00c1db7aead4d68ffa7cbb0d1e3e2f6bd12f8dabb74f7a663c874266189de25",
+      "sha256": "1ad14db00369e74e0d7988d9feb30d59dfcdf3c691d79604d855574e3cdf53f5",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -387,7 +387,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-executing/references/worker-details.md",
-      "sha256": "2929237a15763bc98e4a59551d72bfe978107365b5ac85772855317f9dfff4f3",
+      "sha256": "2faf637d45ba4a01fd84718b06067795f7c4fcee34696031a091a0c0c0c8b6a3",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-executing/references/worker-details.md"
@@ -891,7 +891,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "65d629275fc787b9f14a1a504a45e4aa9beb8c216c5987cc440a972f7fc266f6",
+      "sha256": "1014841285938c31b4599c9716c300798a9d303958425ec8f5f713ecc9d182cc",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1045,7 +1045,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-executing/references/worker-details.md",
-      "sha256": "08bad36c3f3b9c7962514a6f1548cdd1b9949aace6b63c585a3d4398a21f57c2",
+      "sha256": "be728300ea72249b207d536bd2a283ba4139998546a1aed362674698f08aff66",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-executing/references/worker-details.md"
@@ -2427,7 +2427,7 @@
     },
     {
       "path": "skills/bee-executing/references/worker-details.md",
-      "sha256": "12f7954fee251b1cc2e230783416e65b247c338439ae51d828b2cbc1dbdaae27",
+      "sha256": "976bc5168c418e7e149ec7349dc3156d1f39c23ec3095da76dd12fec79bec818",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-executing/references/worker-details.md"
