@@ -88,8 +88,12 @@ Scout bees find the flowers; they do not build the comb.
      then the dependents it gates. Each question stays concise,
      single-choice where possible, outcome-framed, CONTEXT / QUESTION /
      RECOMMENDATION / options format.
-   - Materiality test, gate-bypass refinement (approval vs information),
-     blindspot pass, SEE mock:
+   - Materiality test; under `gate_bypass_level` `full`/`total`, apply the
+     info-vs-approval litmus to each surviving candidate before asking —
+     *do I already have a confident best answer?* Yes → it is an approval
+     question, lock it as a decision from that recommendation and do not
+     ask. No, and only the user can supply it → it is a genuine information
+     question, still ask, even under `total`. Blindspot pass, SEE mock:
      `references/exploring-reference.md` ("Materiality test",
      "Gate-bypass refinement", "Blindspot pass", "SEE mock").
    - After each answer, confirm it back and assign a stable ID: `D1`, `D2`…
@@ -113,9 +117,11 @@ Scout bees find the flowers; they do not build the comb.
 
 7. **State And Handoff**
    - `node .bee/bin/bee.mjs state set --owner exploring --phase exploring --feature "<feature>" --summary "Exploring complete. CONTEXT.md is ready for planning." --next-action "Gate 1, then invoke bee-planning."`
-   - Gate-bypass check FIRST — read the level before presenting anything;
-     when it covers Gate 1 for this lane, skip the question and continue
-     straight to `bee-planning`:
+   - Gate-bypass check FIRST — read the active `gate_bypass_level` before
+     presenting anything; `full`/`total` lift the high-risk floor and cover
+     **every** lane including high-risk/hard-gate (the human already
+     approved it), so when the level covers Gate 1 for this lane, skip the
+     question and continue straight to `bee-planning`:
      `references/exploring-reference.md` ("Gate 1 bypass mechanics").
    - Else present **Gate 1** per the Gate Presentation Contract: plain-
      language layer in chat (what we decided / why trustworthy / cost if

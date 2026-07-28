@@ -31,7 +31,7 @@ A hard-gate flag, a 6th file, or doubt about self-review independence restores t
 
 ## Required Inputs
 
-`CONTEXT.md`; `plan.md` (frozen at Gate 2 — byte-identical to what was approved); discovery/approach content (files or `plan.md` sections); current-slice cells. Missing/unapproved `plan.md`, or no current-slice cells → stop, return to bee-planning. Fallback rules: `references/validation-reference.md` ("Required Inputs in full").
+`CONTEXT.md`; `plan.md` (frozen at Gate 2 — byte-identical to what was approved); discovery/approach content (files or `plan.md` sections); current-slice cells exist (cells are the slice, not a plan section). Missing/unapproved `plan.md`, or current-slice cells do not exist → stop and return to bee-planning. Fallback rules: `references/validation-reference.md` ("Required Inputs in full").
 
 ## Operating Contract
 
@@ -74,7 +74,7 @@ Write the full machine report to `docs/history/<feature>/reports/validation-<sli
 
 On approval: `state gate --name execution --approved true`, then `state set --owner validating --phase swarming --summary "<summary>" --next-action "Invoke bee-swarming for the validated work."` (`validated` is not a phase — the approved gate records that).
 
-**Gate bypass (opt-in), level-aware:** `normal` self-approves tiny/small/standard with no hard-gate flag; `full`/`total` also self-approve high-risk/hard-gate. When covered: don't ask, set the gate, still write the report, log an audit line, post `⚡ auto-approved Gate 3 (bypass)`, hand off. Level table: `bee-hive/references/routing-and-contracts.md` ("Gate bypass mode").
+**Gate bypass (opt-in), level-aware:** read the active `gate_bypass_level` before presenting anything — `normal` self-approves tiny/small/standard with no hard-gate flag; `full`/`total` lift the high-risk floor and also self-approve high-risk/hard-gate. When covered: don't ask, set the gate, still write the report, log an audit line, post `⚡ auto-approved Gate 3 (bypass)`, hand off. Level table: `bee-hive/references/routing-and-contracts.md` ("Gate bypass mode").
 
 ## Headless
 

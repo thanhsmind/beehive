@@ -20,9 +20,9 @@ Waggle dance: turns locked `CONTEXT.md` into mode, lane-scaled shape, and (post-
 - Cells for the **current slice only** — future-slice cells prohibited.
 - Handoff only to `bee-validating` (standard/high-risk) or `bee-swarming` (tiny/small).
 
-## 1. Mode Gate (mechanical, first — per D8)
+## 1. Mode Gate — intake classification (mechanical, first — per D8)
 
-Classify from the request text + at most 2 targeted reads, before any lane-scaled bootstrap — tiny work must not pay full context reads before it knows it's tiny (critical-patterns digest stays mandatory every lane; D8 rescopes only *additional* reads).
+Cheap intake classification runs before the lane-scaled bootstrap: classify from the request text + at most 2 targeted reads — tiny work must not pay full context reads before it knows it's tiny (critical-patterns digest stays mandatory every lane; D8 rescopes only *additional* reads).
 
 Count risk flags — do not vibe it:
 
@@ -51,15 +51,15 @@ Bootstrap scales to the lane: `tiny` = ≤2 reads only; `small` = bounded (`CONT
 
 | Lane | Shape |
 |---|---|
-| `tiny` | no plan.md — the cell *is* the micro-plan |
-| `small` | no plan.md by default — scoping synthesis + 1–3 cells; opt-in for a durable doc |
+| `tiny` | request + one cell — no plan.md, the cell *is* the micro-plan |
+| `small` | scoping synthesis + 1–3 cells; plan.md is opt-in — never written by default |
 | `standard`/`high-risk` | one `docs/history/<feature>/plan.md`, phase plan or epic map — `references/planning-reference.md` ("Artifact: plan.md", "Phase plan vs epic map") |
 
 `implement-plan.md` via `bee-briefing`: high-risk always, standard on-demand, small on request, tiny/spike none.
 
-**Gate 2** (standard/high-risk; small only if plan.md exists): bypass check first — a covering level auto-approves (stamp + audit line, straight to §4); else plain-language layer + verbatim "Work shape is ready. Approve before current-work preparation?", then stop. Bypass: `bee-hive/references/routing-and-contracts.md` ("Gate bypass mode", "Gate Presentation Contract"); stamp/audit steps: `references/planning-reference.md` ("Gate 2 bypass mechanics").
+**Gate 2** (standard/high-risk; small only if plan.md exists): bypass check first — read the active `gate_bypass_level`; `full`/`total` lift the high-risk floor and cover every lane, auto-approving (stamp + audit line, straight to §4); else plain-language layer + verbatim "Work shape is ready. Approve before current-work preparation?", then stop. Bypass: `bee-hive/references/routing-and-contracts.md` ("Gate bypass mode", "Gate Presentation Contract"); stamp/audit steps: `references/planning-reference.md` ("Gate 2 bypass mechanics").
 
-**Tiny/small merged gate:** draft the cell(s) + reality check (MODE FIT / REPO FIT / ASSUMPTIONS / SMALLER PATH / PROOF SURFACE) FIRST, previewed in the gate message — never persist-then-preview. One question covers both approval gates; `cells add` only after approval. Bypass covers tiny/small: check still runs, FAIL always surfaces, PASS auto-approves both with one audit line. Protocol: `references/planning-reference.md` ("Tiny/small merged gate").
+**Tiny/small merged gate:** draft the cell(s) + reality check (MODE FIT / REPO FIT / ASSUMPTIONS / SMALLER PATH / PROOF SURFACE) FIRST, previewed in the gate message — never persist-then-preview. One question covers both approval gates; `cells add` only after approval. Bypass covers tiny/small: `gate_bypass_level` check still runs, FAIL always surfaces, PASS auto-approves both with one audit line. Protocol: `references/planning-reference.md` ("Tiny/small merged gate").
 
 ## 4. Prep (after Gate 2 approval only)
 

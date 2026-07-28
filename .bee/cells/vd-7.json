@@ -1,0 +1,73 @@
+{
+  "id": "vd-7",
+  "feature": "validation-diet",
+  "title": "Fix-first: restore the level-aware gate-bypass tokens the doctrine suite requires",
+  "lane": "small",
+  "status": "capped",
+  "change_class": "bugfix",
+  "regen_obligation_ack": "skills-only change; the render chain is pinned by the cell's own verify via render_plugin_skill_trees plus the doctrine suite",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "skills/bee-exploring/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-validating/SKILL.md",
+    "scripts/tests/test_gate_bypass_doctrine.mjs"
+  ],
+  "read_first": [
+    "scripts/tests/test_gate_bypass_doctrine.mjs",
+    "skills/bee-exploring/SKILL.md",
+    "skills/bee-planning/SKILL.md"
+  ],
+  "action": "PRE-EXISTING RED, not caused by validation-diet: 22 FAIL lines reproduce on baseline commit 33d58a7e. The suite requires each gate-presenting skill's gate step to carry level-aware tokens (gate_bypass_level, full) so the full/total floor-lift is honored, and requires bee-exploring to carry the info-vs-approval litmus ('confident best answer') per decision a93994d3 -- under full/total, approval questions are suppressed but genuine information questions must still be asked. Run the suite yourself and derive the complete required-token set from its own assertions; do not work from this list. Then add the missing tokens to the skill bodies where they belong semantically -- inside the gate step that actually presents the gate, not bolted on as a keyword line. A token added somewhere the reader will not act on it satisfies the grep and fails the purpose. After editing skills/, regenerate the four mirror roots: node scripts/render_plugin_skill_trees.mjs. NOTE for the orchestrator's benefit: skills/bee-validating/SKILL.md is deleted later by slice 2 cell vd-9, which also removes this suite's fixture row for it -- fix it here anyway so main is green now.",
+  "must_haves": {
+    "truths": [
+      "node scripts/tests/test_gate_bypass_doctrine.mjs exits 0",
+      "Each added token sits inside the step that presents the gate, where a reader acts on it",
+      "The four rendered skill mirrors are regenerated and consistent"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-exploring/SKILL.md",
+        "substantive": "gate step carries the level-aware tokens and the info-vs-approval litmus"
+      }
+    ],
+    "key_links": [
+      "the required token set is derived from the suite's own assertions, not copied from this cell"
+    ],
+    "prohibitions": [
+      "No weakening or deleting an assertion in test_gate_bypass_doctrine.mjs to make it pass",
+      "No keyword-stuffing a token outside the gate step it governs",
+      "No hand-editing a rendered mirror"
+    ]
+  },
+  "verify": "node scripts/tests/test_gate_bypass_doctrine.mjs && node scripts/skill_lint.mjs",
+  "trace": {
+    "worker": "vd7-worker",
+    "outcome": "Restored the 10 level-aware gate-bypass + lane-ceremony-v3 tokens in the 3 scoped skills (bee-exploring, bee-planning, bee-validating), each placed inside the step it governs. Ran the exact recorded verify: all 15 assertions for these 3 files now pass (0 residual); the combined command still exits 1 solely from 11 pre-existing FAILs in skills/bee-hive/SKILL.md, skills/bee-swarming/SKILL.md, and packages/bee/AGENTS.block.md -- out of this cell's file scope, explicitly assigned to not-yet-created slice-2/3 cells vd-9/vd-10 per plan.md. skill_lint.mjs passes standalone (1 pre-existing advisory, unrelated). Mirrors regenerated via render_plugin_skill_trees.mjs.",
+    "files_changed": [
+      "skills/bee-exploring/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-validating/SKILL.md",
+      ".claude-plugin/skills/bee-exploring/SKILL.md",
+      ".claude-plugin/skills/bee-planning/SKILL.md",
+      ".claude-plugin/skills/bee-validating/SKILL.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-exploring/SKILL.md",
+      ".codex-plugin/skills/bee-planning/SKILL.md",
+      ".codex-plugin/skills/bee-validating/SKILL.md",
+      ".codex-plugin/skills/.bee-render.json"
+    ],
+    "deviations": [],
+    "friction": "Cell's must_haves.truth ('suite exits 0') is unreachable from this cell's file scope alone -- residual FAILs are in files explicitly owned by not-yet-created slice-2/3 cells vd-9/vd-10; capped via feature-verify-pending instead of a false passing record.",
+    "capped_at": "2026-07-28T21:37:00.680Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "175d1343-db84-4593-8e3e-42e79c3e3d73",
+    "claimed_at": "2026-07-28T21:28:22.724Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  }
+}
