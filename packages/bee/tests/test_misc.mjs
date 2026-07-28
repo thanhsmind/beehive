@@ -2194,13 +2194,23 @@ await check('census: AO14 execution-worker class — the Delegation contract, be
 
   const swarmingPath = path.join(repoRoot, 'skills', 'bee-swarming', 'SKILL.md');
   const swarmingText = fs.readFileSync(swarmingPath, 'utf8');
+  // skill-token-diet diet-4 thinned bee-swarming/SKILL.md's body: the old
+  // "## Single execution worker (tiny/small lanes)" section moved into
+  // swarming-reference.md (renamed "Single execution worker in full"),
+  // leaving SKILL.md a table row + a pointer. Re-anchor to that new home.
+  const swarmingReferencePath = path.join(repoRoot, 'skills', 'bee-swarming', 'references', 'swarming-reference.md');
+  const swarmingReferenceText = fs.readFileSync(swarmingReferencePath, 'utf8');
   assert(
-    /Single execution worker \(tiny\/small lanes\)/.test(swarmingText),
-    'bee-swarming/SKILL.md must carry the Single execution worker section replacing the old Solo execution section',
+    /## Single execution worker in full/.test(swarmingReferenceText),
+    'swarming-reference.md must carry the Single execution worker section (thin-body home) replacing the old Solo execution section',
   );
   assert(
-    !/no workers are spawned/.test(swarmingText),
-    'bee-swarming/SKILL.md must not still claim no workers are spawned for tiny/small (AO14)',
+    /Single execution worker in full/.test(swarmingText),
+    'bee-swarming/SKILL.md must point to the Single execution worker section in swarming-reference.md',
+  );
+  assert(
+    !/no workers are spawned/.test(swarmingText) && !/no workers are spawned/.test(swarmingReferenceText),
+    'bee-swarming/SKILL.md and its reference must not still claim no workers are spawned for tiny/small (AO14)',
   );
 
   const agentsBlockPath = path.join(repoRoot, 'packages', 'bee', 'AGENTS.block.md');
@@ -2219,8 +2229,13 @@ await check('census: native Codex empty waits use one localized, ordered, mutati
   // judgement-rules D2/D3: the full ordered-wait contract no longer rides
   // AGENTS.block.md / root AGENTS.md — the standing sheet carries only an
   // unnumbered pointer line naming the rule and its home (asserted below,
-  // with its own negative control); the contract itself stays census-pinned
-  // on routing-and-contracts.md and the two bee-swarming copies.
+  // with its own negative control). skill-token-diet diet-4 later thinned
+  // bee-swarming/SKILL.md's body too: the "For native Codex agents, ..."
+  // paragraph that used to live there was consolidated into the single
+  // swarming-reference.md copy (no SKILL.md duplicate, no SKILL.md pointer
+  // either — its own doctrine-layer pointer via AGENTS.md is enough reach).
+  // The contract itself now stays census-pinned on routing-and-contracts.md
+  // (canonical) and swarming-reference.md (bee-swarming's operational copy).
   const writableContractSurfaces = [
     // D1 (packages-restructure): skills are instruction-only now - the
     // installed .claude/skills/bee-hive projection no longer carries a
@@ -2234,26 +2249,22 @@ await check('census: native Codex empty waits use one localized, ordered, mutati
       block: /### Native Codex subagent tending[\s\S]+?<!-- bee:end -->/,
     },
     {
-      path: path.join(repoRoot, 'skills', 'bee-swarming', 'SKILL.md'),
-      block: /<!-- bee:only codex -->\n\s+For native Codex agents,[\s\S]+?<!-- bee:end -->/,
-    },
-    {
       path: path.join(repoRoot, 'skills', 'bee-swarming', 'references', 'swarming-reference.md'),
       block: /### Native Codex timeout interval[\s\S]+?<!-- bee:end -->/,
     },
   ];
-  // `.agents/**` is a checked-in Codex projection but is scope-locked read-only
-  // for this repair. Keep its existing D1-D5 contract pinned locally without
-  // claiming the D6/D7 repair has synchronized there; canonical skills are the
-  // next-sync payload and root AGENTS.md is the live deployment boundary.
+  // `.agents/**` is a checked-in Codex projection, regenerated from canonical
+  // skills/ at wave close — diet-4's regen chain already synced it, so it now
+  // mirrors canonical shape exactly rather than lagging behind it. Its
+  // bee-swarming/SKILL.md mirror therefore carries no Codex wait text either
+  // (canonical dropped that copy in the same migration; see
+  // writableContractSurfaces above) — nothing to pin here anymore for that
+  // surface. The two surfaces that still carry the full contract canonically
+  // stay checked.
   const readOnlyCodexProjectionSurfaces = [
     {
       path: path.join(repoRoot, '.agents', 'skills', 'bee-hive', 'references', 'routing-and-contracts.md'),
       block: /### Native Codex subagent tending[\s\S]+?(?=\n## Question Format|$)/,
-    },
-    {
-      path: path.join(repoRoot, '.agents', 'skills', 'bee-swarming', 'SKILL.md'),
-      block: /For native Codex agents,[^\n]+/,
     },
     {
       path: path.join(repoRoot, '.agents', 'skills', 'bee-swarming', 'references', 'swarming-reference.md'),
@@ -2763,32 +2774,76 @@ await check('worktree dispatch contract: eligibility, protected attestation, con
   if (!repoRoot) return;
 
   const swarming = fs.readFileSync(path.join(repoRoot, 'skills', 'bee-swarming', 'SKILL.md'), 'utf8');
+  const swarmingReferencePath = path.join(repoRoot, 'skills', 'bee-swarming', 'references', 'swarming-reference.md');
+  const swarmingReference = fs.readFileSync(swarmingReferencePath, 'utf8');
   const workerDetails = fs.readFileSync(
     path.join(repoRoot, 'skills', 'bee-executing', 'references', 'worker-details.md'),
     'utf8',
   );
 
-  assert(/worktree-isolation-1\s*→\s*worktree-isolation-2\s*→\s*worktree-isolation-3/.test(swarming), 'the enabling sequence must be serialized in the shared checkout');
-  assert(/Claude Code[\s\S]{0,80}wave[\s\S]{0,80}(?:at\s+least\s+two|>=\s*2|≥\s*2)/i.test(swarming), 'normal native isolation must require a Claude Code wave with at least two workers');
-  assert(/worktree-isolation-4[\s\S]{0,100}(?:sole|only)[\s\S]{0,80}(?:one-worker|single-worker)[\s\S]{0,80}(?:exception|acceptance)/i.test(swarming), 'wt-4 must be the sole one-worker validation exception');
+  // skill-token-diet diet-4 thinned bee-swarming/SKILL.md's body: the full
+  // worktree dispatch contract (eligibility, protected attestation, typed
+  // integration halts) moved into swarming-reference.md's "Native Worktree
+  // Integration Transaction" and "Threat model and protected attestation"
+  // sections; SKILL.md now carries only a condensed pointer paragraph.
+  // Re-anchor the detailed assertions to that new home.
+  const extractSection = (text, heading, rel) => {
+    const match = text.match(new RegExp(`## ${heading}[\\s\\S]*?(?=\\n## |$)`));
+    assert(match, `${rel} must carry a "${heading}" section`);
+    return match[0];
+  };
+  const referenceRel = path.relative(repoRoot, swarmingReferencePath);
+  const transactionSection = extractSection(swarmingReference, 'Native Worktree Integration Transaction', referenceRel);
+  const threatModelSection = extractSection(swarmingReference, 'Threat model and protected attestation', referenceRel);
+  // The eligibility/sequencing/exception prose lives in the transaction
+  // section's opening paragraph, before its first `### ` subsection.
+  const transactionIntro = transactionSection.split(/\n### /)[0];
+  // The protected pre-dispatch attestation prose is that section's first
+  // `### ` subsection.
+  const predispatchMatch = transactionSection.match(/### Protected pre-dispatch record\n[\s\S]*?(?=\n### |$)/);
+  assert(predispatchMatch, `${referenceRel} must carry a "Protected pre-dispatch record" subsection`);
+  const predispatch = predispatchMatch[0];
+
+  // Enabling sequence must be serialized in this exact order.
+  const seqIndex = (label) => transactionIntro.toLowerCase().indexOf(label);
+  const i1 = seqIndex('worktree-isolation-1');
+  const i2 = seqIndex('worktree-isolation-2');
+  const i3 = seqIndex('worktree-isolation-3');
+  assert(i1 >= 0 && i2 > i1 && i3 > i2, 'the enabling sequence must be serialized worktree-isolation-1 -> worktree-isolation-2 -> worktree-isolation-3 in the shared checkout');
+
+  // Normal eligibility: an enabled Claude Code wave with at least two workers.
+  assert(/Claude Code[\s\S]{0,300}wave[\s\S]{0,300}(?:at\s+least\s+two|>=\s*2|≥\s*2)/i.test(transactionIntro), 'normal native isolation must require a Claude Code wave with at least two workers');
+
+  // worktree-isolation-4 is the sole one-worker validation exception
+  // (order-agnostic: the migrated prose states "sole ... exception" ahead
+  // of naming worktree-isolation-4).
+  assert(/worktree-isolation-4/.test(transactionIntro), 'worktree-isolation-4 must be named as the validation exception');
+  assert(/\b(?:sole|only)\b/i.test(transactionIntro), 'wt-4 must be described as the sole/only exception');
+  assert(/one-worker|single-worker/i.test(transactionIntro), 'wt-4 must be scoped to one-worker validation');
+  assert(/exception|acceptance/i.test(transactionIntro), 'wt-4 must be framed as an exception/acceptance');
 
   for (const field of ['commonDir', 'worktreePath', 'worktreeId', 'headRef', 'baseCommit', 'declaredPaths', 'reservedPaths']) {
-    assert(swarming.includes(`\`${field}\``), `protected pre-dispatch attestation must name ${field}`);
+    assert(predispatch.includes(`\`${field}\``), `protected pre-dispatch attestation must name ${field}`);
   }
-  assert(/before[\s\S]{0,100}(?:worker output|worker result)/i.test(swarming), 'attestation must be captured before worker output exists');
-  assert(/(?:cannot|unable to)[\s\S]{0,80}(?:capture|retain)[\s\S]{0,80}attestation[\s\S]{0,100}(?:ineligible|refus)/i.test(swarming), 'worktree mode must refuse runtimes that cannot capture and retain the attestation');
-  assert(/same-UID[\s\S]{0,80}(?:cooperative|fallible)[\s\S]{0,80}not[\s\S]{0,80}security principal/i.test(swarming), 'the same-UID worker threat model must be explicit');
-  assert(/Git\s+metadata[\s\S]{0,100}consistency\s+evidence[\s\S]{0,100}(?:not|never)[\s\S]{0,100}(?:authorization|security)/i.test(swarming), 'Git metadata must be consistency evidence rather than authorization');
-  assert(/merge-base --is-ancestor/.test(swarming), 'integration must prove the candidate commit descends from the attested base');
-  assert(/diff[\s\S]{0,160}(?:subset|contained)[\s\S]{0,100}reservedPaths/i.test(swarming), 'integration must constrain the base-to-candidate diff to attested reservations');
+  assert(/before[\s\S]{0,100}(?:worker output|worker result)/i.test(predispatch), 'attestation must be captured before worker output exists');
+  assert(/(?:cannot|unable to)[\s\S]{0,80}(?:capture|retain)[\s\S]{0,120}(?:attestation|record)[\s\S]{0,100}(?:ineligible|refus)/i.test(predispatch), 'worktree mode must refuse runtimes that cannot capture and retain the attestation');
 
+  assert(/same-UID[\s\S]{0,80}(?:cooperative|fallible)[\s\S]{0,80}not[\s\S]{0,80}security principal/i.test(threatModelSection), 'the same-UID worker threat model must be explicit');
+  assert(/Git\s+metadata[\s\S]{0,100}consistency\s+evidence[\s\S]{0,100}(?:not|never)[\s\S]{0,100}(?:authorization|security)/i.test(threatModelSection), 'Git metadata must be consistency evidence rather than authorization');
+  assert(/merge-base --is-ancestor/.test(threatModelSection), 'integration must prove the candidate commit descends from the attested base');
+  assert(/diff[\s\S]{0,160}(?:subset|contained)[\s\S]{0,100}reservedPaths/i.test(threatModelSection), 'integration must constrain the base-to-candidate diff to attested reservations');
+
+  const combinedContract = `${transactionSection}\n${threatModelSection}`;
   for (const code of ['WORKTREE_ATTESTATION_UNAVAILABLE', 'WORKTREE_IDENTITY_MISMATCH', 'WORKTREE_BASE_ANCESTRY_MISMATCH', 'WORKTREE_RESERVED_DIFF_MISMATCH']) {
-    assert(swarming.includes(`\`${code}\``), `typed worktree halt missing: ${code}`);
+    assert(combinedContract.includes(`\`${code}\``), `typed worktree halt missing: ${code}`);
   }
-  assert(/detached HEAD[\s\S]{0,100}WORKTREE_IDENTITY_MISMATCH/i.test(swarming), 'detached HEAD must halt as a typed identity mismatch');
-  assert(/backlink[\s\S]{0,100}WORKTREE_IDENTITY_MISMATCH/i.test(swarming), 'backlink mismatch must halt as a typed identity mismatch');
+  assert(/detached HEAD[\s\S]{0,100}WORKTREE_IDENTITY_MISMATCH/i.test(threatModelSection), 'detached HEAD must halt as a typed identity mismatch');
+  assert(/backlink[\s\S]{0,100}WORKTREE_IDENTITY_MISMATCH/i.test(threatModelSection), 'backlink mismatch must halt as a typed identity mismatch');
   assert(/informational[\s\S]{0,100}(?:not|never)[\s\S]{0,100}(?:authority|authoritative)/i.test(workerDetails), 'worker-reported worktree identity must be explicitly non-authoritative');
   assert(/orchestrator[\s\S]{0,120}(?:derive|recheck)[\s\S]{0,120}(?:attestation|Git metadata)/i.test(workerDetails), 'worker result handling must defer identity derivation to the orchestrator');
+
+  // SKILL.md must still point readers to the reference for the full mechanics.
+  assert(/swarming-reference\.md/.test(swarming), 'bee-swarming/SKILL.md must still point to swarming-reference.md for the full worktree dispatch mechanics');
 });
 
 // worktree-isolation-4: transactional integration/disposition acceptance (D3)
