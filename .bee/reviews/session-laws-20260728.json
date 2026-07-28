@@ -1,0 +1,157 @@
+{
+  "id": "session-laws-20260728",
+  "requested_by": "user",
+  "requested_at": "2026-07-28T09:31:08.179Z",
+  "scope_description": "All 16 features closed in the 2026-07-28 session: eight core law changes (parallel-by-default, explicit triage route record, brief worker orientation, main-verifies feature-level verification, feature-close scribing/compounding, mandatory step ticks, always-loaded communication contract, shared-checkout git safety) plus the thin-body skill migration completing to zero grandfather exceptions, the workflow-record lifecycle fix, and the BEE_CHECK_ONLY scoped-verify filter. Focus: the laws and the code that enforces them.",
+  "included": [
+    {
+      "type": "feature",
+      "id": "skill-token-diet"
+    },
+    {
+      "type": "feature",
+      "id": "test-batching-finish"
+    },
+    {
+      "type": "feature",
+      "id": "ship-visibility-config"
+    },
+    {
+      "type": "feature",
+      "id": "parallel-default"
+    },
+    {
+      "type": "feature",
+      "id": "foundation-fixes"
+    },
+    {
+      "type": "feature",
+      "id": "explicit-triage"
+    },
+    {
+      "type": "feature",
+      "id": "status-diet"
+    },
+    {
+      "type": "feature",
+      "id": "main-verifies"
+    },
+    {
+      "type": "feature",
+      "id": "feature-close-events"
+    },
+    {
+      "type": "feature",
+      "id": "step-ticks"
+    },
+    {
+      "type": "feature",
+      "id": "comms-always-loaded"
+    },
+    {
+      "type": "feature",
+      "id": "verify-owner-signal"
+    },
+    {
+      "type": "feature",
+      "id": "concurrency-first"
+    },
+    {
+      "type": "feature",
+      "id": "skill-diet-wave2"
+    },
+    {
+      "type": "feature",
+      "id": "workflow-lifecycle"
+    },
+    {
+      "type": "feature",
+      "id": "check-filter"
+    }
+  ],
+  "excluded": [],
+  "baseline": "0c824ad7f75789c537e05472c84ec08ba7dfd694",
+  "head": "a6fcf5467786df0edfe41d87b2b13a55e120cf11",
+  "reviewer_manifest": [],
+  "verification_preflight": {
+    "checked_at": "2026-07-28T09:31:08.179Z",
+    "cells_checked": [],
+    "passed": true
+  },
+  "findings": [
+    {
+      "kind": "finding",
+      "session": "session-laws-20260728",
+      "summary": "4 reviewers (code-quality, architecture, security, test-coverage), 16 features, 78 commits. 5 P1 (2 corroborated across reviewers), 12 P2, 9 P3. Every P1 concerns the verification path itself — the layer this session rewrote.",
+      "findings": [
+        {
+          "severity": "P1",
+          "id": "F1",
+          "title": "test_verify_cache.mjs is red on any CI runner",
+          "where": "scripts/tests/test_verify_cache.mjs:85",
+          "detail": "The fixture spawns run_verify children with the parent env, so CI=1 makes isCacheDisabled() true and every cache assertion fails. Measured: CI=true -> 0 passed, 8 failed; env -u CI -> 8 passed. The suite is in SUITES and ci.yml runs the full chain, so the first push turns the base branch red and critical rule 14 then blocks every subsequent claim.",
+          "reviewer": "code-quality",
+          "fix": "delete env.CI in the fixture run() except for the deliberate CI-disabled case"
+        },
+        {
+          "severity": "P1",
+          "id": "F2",
+          "title": "The verify cache can report green for checks it never ran",
+          "where": "scripts/run_verify.mjs:1032-1090",
+          "detail": "Three vectors, two reviewers. (a) BEE_CHECK_ONLY is not in the cache key and is passed to children: a filtered run exits 0 and is written green under the FULL closure sha, so later unfiltered runs print CACHED green without executing the skipped checks. (b) The closure comes from the impact registry, which contains zero prose files - a skill/AGENTS.md edit leaves closure_sha unchanged, so test_misc prints CACHED green without running (exactly the defect class that broke three times today). (c) The registry is blind to readFileSync'd data: skill_budget_fence's closure is itself alone though it reads the budget ledger and every skill body, so after one green run an over-budget skill still reports CACHED green. Under main-verifies this cache sits on the only remaining local proof event.",
+          "reviewer": "security + test-coverage + code-quality",
+          "fix": "never read/write the cache when BEE_CHECK_ONLY is set; extend the key with declared extra inputs for prose/data-reading suites; opt-out marker for suites whose inputs cannot be declared"
+        },
+        {
+          "severity": "P1",
+          "id": "F3",
+          "title": "The feature-swap door is unguarded for feature-verify debt",
+          "where": "packages/bee/bee.mjs:2877-2913",
+          "detail": "guardFeatureVerifyDebt is called only inside the `if (flags.phase !== undefined)` branch, so `state set --feature <other> --owner swarming` walks away from a feature holding pending caps with no green record. The guard keys on record.feature, so after the swap those pending cells are read by no path again. The scribing twin guards exactly this door (featureSwapGuardScribingDebt); main-verifies never mirrored it.",
+          "reviewer": "architecture + security",
+          "fix": "mirror featureSwapGuardScribingDebt for feature-verify debt on the swap path"
+        },
+        {
+          "severity": "P1",
+          "id": "F4",
+          "title": "BEE_CHECK_ONLY ships with zero tests",
+          "where": "scripts/lib/test-fixture.mjs:96-190",
+          "detail": "rg BEE_CHECK_ONLY across every suite hits only the implementation; the cell's own verify named three suites, none of which exercise it. The three safety properties (unfiltered byte-identical, skips counted and named, zero-match exits non-zero) were verified by hand and pinned by nothing. A regression that counts skips as passes turns 31 shared-fixture suites trivially green.",
+          "reviewer": "test-coverage",
+          "fix": "a suite covering all three properties plus the regex form"
+        },
+        {
+          "severity": "P1",
+          "id": "F5",
+          "title": "workflows close --all-but-active can close everything including the active feature",
+          "where": "packages/bee/bee.mjs:4584,4659",
+          "detail": "resolveActiveFeatureForWorkflowsClose swallows every error into null, and the caller then passes keepFeature: null to closeWorkflowsForFeature, which closes all live records. A corrupt lane file turns a routine --all-but-active into a full wind-down of in-flight work, contradicting the verb's own documented contract. Promoted from the reporting reviewer's P2 on the conservative route: a resolution failure must refuse, never widen the blast radius.",
+          "reviewer": "code-quality (+ security on the --id variant)",
+          "fix": "a null resolution refuses typed; --id keeps its explicit-name exception"
+        }
+      ],
+      "p2": [
+        "guardFeatureVerifyDebt returns unless phase === swarming, but SCRIBING_RUN_FROM admits reviewing/scribing: cells capped pending in those phases skip both doors (security, architecture)",
+        "feature-verify record accepts any --command/--output-file: nothing checks the command ran, matched commands.test, or that the output is non-empty (security)",
+        "ensureWorkflowRecordForFeature has zero call sites outside state.mjs, so the swap path the wl-1 audit named as the drift cause still writes state without a record (architecture)",
+        "a default start-feature closes every other live workflow record including live lanes, which then hard-refuses handoff write for that lane - collides with the same-day lanes-first-class rule (architecture)",
+        "feature-verify record has no --lane/--no-lane while state set and scribing-run both do: an orchestrator running two lanes stamps the default record while the door reads the lane record (architecture)",
+        "AGENTS.md critical rule 2 still states the retired law (cap refuses without a passing verify) and never names the feature-verify boundary - the always-loaded layer contradicts the shipped default (architecture)",
+        "lane --paths is checked only against reservations and other sessions' claims and is never persisted, so two lanes over identical paths both succeed before any claim - the doc calls this refusal the computed proof of disjointness (architecture)",
+        "cell wl-3, the slice test for the workflow-lifecycle fix, was never dispatched and remains open although the feature closed (test-coverage)",
+        "workflows close has five refusal paths; only the happy --feature example is exercised and --all-but-active is never invoked (test-coverage)",
+        "verify_owner rendering has no test: it can silently disappear and workers resume running verify (test-coverage)",
+        "the wt-4 census was re-anchored from one ordered proximity regex to four independent whole-section regexes, so prose stating the opposite of the rule now passes (test-coverage)",
+        "whole-tree git verbs are unguarded during swarming: checkGitBashCommand only fires in terminal phases, so nothing mechanically stops a subagent running git reset --hard in a shared checkout (security, residual risk high)"
+      ],
+      "p3_count": 9
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "pending",
+    "gate4": null
+  },
+  "created_at": "2026-07-28T09:31:08.179Z",
+  "updated_at": "2026-07-28T09:39:30.042Z"
+}

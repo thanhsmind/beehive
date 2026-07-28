@@ -1,0 +1,54 @@
+{
+  "id": "p3-1",
+  "feature": "review-p1-fixes",
+  "lane": "standard",
+  "change_class": "bugfix",
+  "behavior_change": true,
+  "title": "The swap door must ask every debt question, not two of three",
+  "action": "P1 from the second delta re-review, reproduced live by the reviewer: the feature-swap door calls featureSwapGuardFeatureVerifyDebt and featureSwapGuardScribingDebt but never asks testCellDebt (packages/bee/bee.mjs ~:2918-2928). REPRO (reproduce it yourself first, scratch repo, CLI-only writes): feature `alpha` with a capped change_class 'behavior' cell and NO test cell at all -> `bee state set --feature beta --owner swarming --waive-scribing-debt` returns EXIT 0 and the feature becomes beta; the identical state refuses via `state set --phase scribing` (EXIT 1) and via `start-feature` (EXIT 1). So the previous round's principle — every door asks the same question — holds for feature-verify debt and not for test-cell debt. FIX: the swap door asks the SAME debt set as every other door. Do not add a third hand-written call next to the two existing ones if that leaves a fourth to forget later: give the doors one shared entry point that answers 'does this feature owe anything?' and have every door — phase departure, swap, and startFeature — call exactly that. The waiver flags keep their existing scope (a --waive-scribing-debt must not waive an unwaivable debt, which is already the established rule). Add the test that pairs swap with test-cell debt, and while you are there make the coverage derive from the debt set rather than a hand-listed pair, so a future debt kind inherits the test. You MAY run packages/bee/tests/test_bee_cli.mjs, packages/bee/tests/test_cli_state.mjs and packages/bee/tests/test_state.mjs, and must quote all three. GIT SAFETY (shared checkout): commit through your OWN temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref); NEVER plain git add, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "The reviewer's repro now refuses; quote the before/after exit codes and the refusal text.",
+      "Every door (phase departure, feature swap, startFeature) asks the same debt set through one shared entry point.",
+      "A waiver still waives only what it was always allowed to waive.",
+      "Tests pair the swap door with test-cell debt and derive from the debt set rather than a hand-listed pair; all three suites green (quote them)."
+    ],
+    "prohibitions": [
+      "Do NOT add a third hand-written guard call and leave the doors free to diverge again.",
+      "Do NOT widen any waiver.",
+      "Do NOT weaken an existing refusal.",
+      "Do NOT run other suites."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs && node packages/bee/tests/test_cli_state.mjs && node packages/bee/tests/test_state.mjs",
+  "read_first": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/state.mjs"
+  ],
+  "files": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/state.mjs",
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "open",
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "verify_command": null,
+    "verified_at": null
+  },
+  "tier": "ceiling"
+}

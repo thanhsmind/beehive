@@ -1,0 +1,55 @@
+{
+  "id": "p1-4",
+  "feature": "review-p1-fixes",
+  "lane": "standard",
+  "change_class": "bugfix",
+  "behavior_change": false,
+  "title": "P2: the always-loaded layer still states the retired verification law",
+  "action": "P2 FINDING (architecture reviewer), fixed in this wave because it is the always-loaded layer contradicting the shipped default — the exact failure class this session already paid for once. AGENTS.md critical rule 2 still reads that `cells cap` refuses unless a passing verify result is recorded, and never names the feature-verify boundary; mv-2 changed only the skills/ surface. FIX: restate rule 2 to the shipped law — a cell caps against the delegator's feature-boundary verification (the pending path exists and is the default for dispatched workers), the classic per-cell evidence path remains available, and leaving execution is refused while pending caps lack a fresh green record. Keep it to the same one-paragraph shape as its neighbours. Edit BOTH the rendered root AGENTS.md and the template packages/bee/AGENTS.block.md so they stay byte-identical (scripts/tests/test_agents_budget.mjs asserts exactly that and names both paths — read it first). Root is ~15.9KB against an 18KB warn / 20KB hard budget; stay well under. If a census check in packages/bee/tests/test_misc.mjs pins the old wording, re-anchor it to the new wording in the same commit rather than leaving it red — but never weaken what it asserts. You MAY run scripts/tests/test_agents_budget.mjs and packages/bee/tests/test_misc.mjs and must quote both; run nothing else. GIT SAFETY (shared checkout): commit through your own temp index; NEVER plain git add, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "AGENTS.md critical rule 2 states the feature-verify law; template and root are byte-identical; both under the warn threshold.",
+      "test_agents_budget green and test_misc green (quote both).",
+      "No other rule renumbered or reworded."
+    ],
+    "prohibitions": [
+      "Do NOT weaken any census check.",
+      "Do NOT touch packages/bee/bee.mjs or scripts/run_verify.mjs (sibling cells own them).",
+      "Do NOT run other suites."
+    ]
+  },
+  "verify": "node scripts/tests/test_agents_budget.mjs && node packages/bee/tests/test_misc.mjs",
+  "read_first": [
+    "AGENTS.md",
+    "scripts/tests/test_agents_budget.mjs",
+    "skills/bee-executing/SKILL.md"
+  ],
+  "files": [
+    "AGENTS.md",
+    "packages/bee/AGENTS.block.md",
+    "packages/bee/tests/test_misc.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-p14",
+    "outcome": "Restated AGENTS.md critical rule 2 (root + template) from the retired per-cell verify law to the shipped R82 feature-verify-pending default with close-door gate; both suites named in the cell verified green; no census check pinned the old wording.",
+    "files_changed": [
+      "AGENTS.md",
+      "packages/bee/AGENTS.block.md"
+    ],
+    "deviations": [],
+    "friction": "Advisor fable was directed but unreachable both attempts (hard usage-limit error, not transient); cell is lane=standard/behavior_change=false/change_class=bugfix so the skill's advisor-consult requirement (high-risk/hard-gate only) does not mandate it — proceeded without.",
+    "capped_at": "2026-07-28T09:45:44.301Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T09:42:36.125Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  }
+}

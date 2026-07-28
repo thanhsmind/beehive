@@ -2,10 +2,10 @@
   "schema_version": "1.0",
   "bee_version": "1.19.2",
   "managed": {
-    "agents_block": "7c3519ba342ec9b8f2dd8f45c4d900200b4d27122d78368bac83ca8a54057e52",
+    "agents_block": "812592836a062d51b2dcd7fdea3fd50f867a45883137620b34c791f25d454680",
     "gitignore_block": "8940e45de24b9d602166dec022b11038bb9f71caa98e25ba60363bef9adaca42",
     "helpers": {
-      "bee.mjs": "6e8ec70cc8ecdbc1ad596153ee81310074a5bf8a7921347e78c5819b758ecd84"
+      "bee.mjs": "ba901d2f33acea0b51e13ff305424cecf5609a438878215db975bdb1fdf0c91e"
     },
     "lib": {
       "backlog.mjs": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
@@ -38,7 +38,7 @@
       "scratch.mjs": "3b7ab2e104b3f4cee240a43fac49ee630df7ca2ed995eb71f403d25eae17afb0",
       "source-identity.mjs": "716740641e1f6bfbb5ccc5b4fe7827f1165c2a1f1127ee3800f52a47ac09fc7a",
       "state-projection.mjs": "2986c53ffc013f519c69a122db47a02470472dbdddcd5d558d1f062e5cde959e",
-      "state.mjs": "e4e3ce52ecc5c4dde19a4d3c0c24a86c02aa8050203854734c8ddf9eda0e11f9",
+      "state.mjs": "005b1c1fbdb394d95c29933a6913418368027740c1ead7925ce7a792cd22eb58",
       "validate-args.mjs": "99a28f221deb373ee128a821a1463acafdf91413c377c04d56cbda5137c81b17",
       "workflow-store.mjs": "f2e4988b7ecd278f220e7dfcd8d15f2e06a28312871f9291f1d890a1f669ad29",
       "workspace-store.mjs": "aa8017d71df1e3d35f40503b47bbe1aa1a2e110623b4a480fe66eb5bb1f3c3c1",
@@ -82,5 +82,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-28T09:27:42.929Z"
+  "updated_at": "2026-07-28T10:46:03.924Z"
 }

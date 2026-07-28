@@ -1,0 +1,62 @@
+{
+  "id": "p2-1",
+  "feature": "review-p1-fixes",
+  "lane": "standard",
+  "change_class": "bugfix",
+  "behavior_change": true,
+  "title": "Debt guards: guard every departure, and an unreadable store means DEBT not clear",
+  "action": "DELTA RE-REVIEW says F3 is NOT CLOSED, with a live repro, plus two new findings of the same class. Do not patch doors one at a time — invert the default. (1) REPRO, verbatim from the reviewer (reproduce it yourself first, CLI-only writes in a scratch repo): cap a cell `--feature-verify-pending` while phase is `compounding`, then `state set --phase compounding-complete --owner compounding` succeeds, the cell is still `feature_verify: pending`, then `state start-feature --feature beta` succeeds — guardFeatureVerifyDebt never runs because `from` is `compounding`, outside SCRIBING_RUN_FROM, and startFeature (packages/bee/lib/state.mjs) has no feature-verify guard at all. The relocated proof is destroyed. (2) NEW P1, same class: `guardTestCellDebt` (packages/bee/bee.mjs ~:3082) still reads `if (from !== 'swarming') return;` while its own call site (~:3826) runs from every SCRIBING_RUN_FROM phase — a test cell left open or capped red in `reviewing`/`scribing` lets `state scribing-run` through, shipping behavior whose tests never passed. (3) NEW P2, the F5 class again: `catch { return; }` / `catch { return null; }` around listCells (~:3090, ~:3200-3203) makes an UNREADABLE cell store mean 'no debt' and opens both doors. FIX, one principle applied to both guards: debt is cleared only by evidence, never by absence of evidence. Concretely — (a) both guards run on EVERY departure from a phase in which cells can still hold debt, not an allowlist of origins: derive the guarded set from where debt can exist rather than hardcoding phase names, and cover the `compounding -> compounding-complete` transition the repro exploits; (b) `startFeature` refuses to start a new feature while the OUTGOING feature holds debt (it already closes records — closing must not be the thing that erases the obligation); (c) a listCells failure is a REFUSAL naming the unreadable store, never a silent pass. No bypass level lifts any of it. Keep every existing refusal intact and keep the refusal messages naming the pending cells and a runnable FIX. Add tests for: the exact repro above now refused; scribing-run refused with an open/red test cell from `reviewing` and from `scribing`; start-feature refused over outgoing debt; an unreadable cell store refusing both doors. You MAY run packages/bee/tests/test_bee_cli.mjs and packages/bee/tests/test_state.mjs and must quote both. GIT SAFETY (shared checkout): commit through your OWN temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref); NEVER plain git add, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "The reviewer's repro is refused at the first door it reaches; quote the refusal.",
+      "guardTestCellDebt is guarded from every SCRIBING_RUN_FROM origin, not only swarming.",
+      "startFeature refuses while the outgoing feature holds feature-verify or test-cell debt.",
+      "An unreadable cell store refuses both doors instead of passing.",
+      "No bypass level lifts any of these; tests cover each case; both suites green (quote them)."
+    ],
+    "prohibitions": [
+      "Do NOT hardcode a new phase allowlist that the next phase escapes — derive the guarded set.",
+      "Do NOT remove or weaken an existing refusal.",
+      "Do NOT touch scripts/run_verify.mjs (sibling cell owns it).",
+      "Do NOT run other suites."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs && node packages/bee/tests/test_state.mjs",
+  "read_first": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/state.mjs"
+  ],
+  "files": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/state.mjs",
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-p21",
+    "outcome": "Inverted the debt guards: the origin-phase allowlist is replaced by a derived guarded set (isDebtGuardedDeparture — every phase change asks), one shared debt core in lib/state.mjs serves all four doors, startFeature refuses over the OUTGOING feature's feature-verify and test-cell debt, and an unreadable cell store is a refusal naming the store instead of a silent 'no debt'. Reviewer's repro reproduced red before the fix (state set --phase compounding-complete exit 0 with alpha-1 still pending, then state start-feature exit 0) and refused after (exit 1 at the first door, naming alpha-1 and the runnable FIX). Findings F2 (scribing-run from reviewing/scribing over an open/red test cell) and F3-class (unreadable store) likewise flipped from exit 0 to exit 1. No bypass level or waiver lifts any of it; every existing refusal and FIX text preserved. Both allowed suites green: test_bee_cli.mjs 377 passed/0 failed, test_state.mjs 44 passed/0 failed.",
+    "files_changed": [
+      "packages/bee/bee.mjs",
+      "packages/bee/lib/state.mjs",
+      "packages/bee/tests/test_bee_cli.mjs",
+      "packages/bee/tests/test_cli_state.mjs"
+    ],
+    "deviations": [
+      "Inverted packages/bee/tests/test_cli_state.mjs:3362 (\"slice-tail P4: the guard is scoped to the exit from swarming — it never fires on a feature that is not in swarming\"). That check asserted, as intended behavior, the exact escape this cell was dispatched to remove: an open test cell letting a planning->validating departure through. Under the derived guarded set it must refuse. Rewritten to assert the refusal (naming the open cell, phase untouched) plus the one surviving exemption, a literal no-op re-set. The file was reserved before editing; it is outside the cell's `files` list, so it is recorded here rather than assumed. Scenario verified by hand through the CLI (refused exit 1 naming p4-test-elsewhere; no-op re-set exit 0); the suite itself was NOT run, per the cell's \"do not run other suites\" prohibition — MAIN's feature-level verify covers it."
+    ],
+    "friction": null,
+    "capped_at": "2026-07-28T10:25:38.442Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T10:05:05.200Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}

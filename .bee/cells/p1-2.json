@@ -1,0 +1,54 @@
+{
+  "id": "p1-2",
+  "feature": "review-p1-fixes",
+  "lane": "standard",
+  "change_class": "test",
+  "behavior_change": false,
+  "title": "F4: pin the three safety properties of BEE_CHECK_ONLY",
+  "action": "P1 FINDING (test-coverage reviewer): `rg BEE_CHECK_ONLY` across every suite hits only the implementation at scripts/lib/test-fixture.mjs:96-190 — the filter shipped with zero tests. Its three safety properties were verified by hand and pinned by nothing, so a regression that counts skips as passes, or that lets a zero-match filter exit 0, would silently turn all 31 shared-fixture suites trivially green. FIX: add a suite (new file under scripts/tests/, e.g. test_check_filter.mjs — new_suite_reason: the filter is a harness-level mechanism with no owning suite) that pins, using a throwaway fixture suite it writes into a temp dir and runs as a child process: (1) with BEE_CHECK_ONLY unset the output and exit code are byte-identical to the pre-filter behaviour — no skip counter, no extra text; (2) with a substring value only matching checks execute, non-matching are counted as skipped and the summary names the filter; (3) a value wrapped in slashes is honoured as a regex, including flags; (4) a filter matching zero checks exits NON-ZERO with the typed refusal, never a trivial green; (5) an INVALID regex (e.g. `/[/`) does not crash every suite at module load — assert the current behaviour and, if it throws, make it a typed refusal instead (that is a real P3 the code-quality reviewer also raised; fixing it here is in scope). Do not modify the filter's semantics beyond point (5). You MAY run your new suite and must quote it; run nothing else. GIT SAFETY (shared checkout): commit through your own temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref); NEVER plain git add, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "A new suite pins all five properties and is green (quote its final line).",
+      "The unfiltered path is asserted byte-identical, not merely 'works'.",
+      "Zero-match exits non-zero; an invalid regex is a typed refusal rather than a module-load crash."
+    ],
+    "prohibitions": [
+      "Do NOT change the filter's matching semantics (except the invalid-regex refusal).",
+      "Do NOT touch scripts/run_verify.mjs (sibling cell owns it).",
+      "Do NOT run other suites."
+    ]
+  },
+  "verify": "node scripts/tests/test_check_filter.mjs",
+  "read_first": [
+    "scripts/lib/test-fixture.mjs"
+  ],
+  "files": [
+    "scripts/lib/test-fixture.mjs",
+    "scripts/tests/test_check_filter.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-p12",
+    "outcome": "Added scripts/tests/test_check_filter.mjs pinning BEE_CHECK_ONLY's 5 safety properties via a throwaway fixture suite run as a child process (unfiltered byte-identical, substring/regex filtering with body-execution sentinel, regex flags, zero-match refusal); also fixed the unguarded new RegExp() at module load in checkOnlyPredicate (scripts/lib/test-fixture.mjs) to be a typed refusal instead of an uncaught SyntaxError crash. Suite green: 6 passed, 0 failed.",
+    "files_changed": [
+      "scripts/lib/test-fixture.mjs",
+      "scripts/tests/test_check_filter.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T09:48:40.344Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T09:42:35.964Z",
+    "warnings": [
+      "capCell: cell \"p1-2\" test-to-source line ratio is 264.00 (>4) for lane \"standard\" — recorded as a warning on the feature-verify-pending path (main-verifies D1; test-economy D3's waiver channel is per-cell evidence, which this path defers)."
+    ],
+    "feature_verify": "pending"
+  }
+}

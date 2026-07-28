@@ -1,0 +1,50 @@
+{
+  "id": "p2-4",
+  "feature": "review-p1-fixes",
+  "lane": "small",
+  "change_class": "bugfix",
+  "behavior_change": false,
+  "title": "Declare p2-1's six new state.mjs exports in the census allowlist",
+  "action": "MAIN-PRODUCED REPRO (red at the feature-boundary verify): `node packages/bee/tests/test_misc.mjs` -> 117 passed, 1 failed, 'lib/state.mjs export surface drifted from the allowlist'. Cause: p2-1's debt-core refactor added six exports that were never declared — FEATURE_VERIFY_FIX_TAIL, featureVerifyDebt, isDebtGuardedDeparture, readFeatureCellsStrict, testCellDebt, testCellDebtFixTail. This is the same declared-act pattern that already required wl-4 earlier today. FIX: add exactly those six names to EXPECTED_STATE_EXPORTS in packages/bee/tests/test_misc.mjs, each in the list's existing alphabetical position, changing nothing else. End: test_misc 0 failed. NOTE for your report, not for you to fix: this is the second time in one session that an export-adding cell forgot the allowlist — worth MAIN filing as friction toward making the allowlist derive from an explicit declaration rather than a hand-maintained list. You MAY run `node packages/bee/tests/test_misc.mjs` (this cell's repro) and must quote its final line; run nothing else. GIT SAFETY (shared checkout): commit through your OWN temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref); NEVER plain git add, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "node packages/bee/tests/test_misc.mjs => 0 failed (quote the final line).",
+      "Exactly the six names were added; no other entry or assertion changed."
+    ],
+    "prohibitions": [
+      "Do NOT weaken or delete the allowlist check.",
+      "Do NOT touch packages/bee/lib/state.mjs.",
+      "Do NOT run other suites."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_misc.mjs",
+  "read_first": [
+    "packages/bee/tests/test_misc.mjs"
+  ],
+  "files": [
+    "packages/bee/tests/test_misc.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-p24",
+    "outcome": "Added six exports (FEATURE_VERIFY_FIX_TAIL, featureVerifyDebt, isDebtGuardedDeparture, readFeatureCellsStrict, testCellDebt, testCellDebtFixTail) to EXPECTED_STATE_EXPORTS allowlist in alphabetical order. Test now passes: 118 passed, 0 failed",
+    "files_changed": [
+      "packages/bee/tests/test_misc.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T10:45:35.221Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T10:42:15.378Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "extraction"
+}

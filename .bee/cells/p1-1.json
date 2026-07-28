@@ -1,0 +1,60 @@
+{
+  "id": "p1-1",
+  "feature": "review-p1-fixes",
+  "lane": "standard",
+  "change_class": "bugfix",
+  "behavior_change": true,
+  "title": "F1+F2: verify cache must never report green for checks it did not run",
+  "action": "TWO P1 FINDINGS, one subsystem. Independent reviewers, evidence quoted from their reports. F1 (measured live): `CI=true node scripts/tests/test_verify_cache.mjs` -> 0 passed, 8 failed; `env -u CI` -> 8 passed. Cause: the fixture at scripts/tests/test_verify_cache.mjs:85 spawns run_verify children with the parent env, so CI makes isCacheDisabled() true and every cache assertion fails. The suite is in SUITES and ci.yml runs the full chain, so the first push turns the base branch red and critical rule 14 then blocks every claim. FIX F1: in that fixture's run(), delete env.CI (and any other cache-disabling env) for every case EXCEPT the deliberate cache-disabled-on-CI case, which must set it explicitly and keep asserting the disable. F2 (three vectors, three reviewers): the cache can serve green for checks it never executed. (a) BEE_CHECK_ONLY is not part of the cache key and childEnv() forwards it, so a filtered run exits 0 and is written green under the FULL closure sha; every later unfiltered run then prints CACHED green while the skipped checks never run. (b) closureShaFor keys on the impact-registry transitive closure, which contains ZERO prose files — a skills/ or AGENTS.md edit leaves the sha unchanged, so test_misc reports CACHED green without running, which is exactly the defect class that broke three times in this session. (c) the registry is blind to readFileSync'd data: scripts/skill_budget_fence.mjs has a closure of itself alone yet reads scripts/skill-body-budget.json and every skill body, so after one green run an over-budget skill still reports CACHED green. FIX F2, all three, in scripts/run_verify.mjs: (a) when BEE_CHECK_ONLY (or any check-scoping env you honour) is set, NEVER read and NEVER write the cache — treat it exactly like --no-cache; state it in the summary line so a filtered run is visibly uncached. (b)+(c) give the cache an explicit extra-inputs concept: a suite may declare additional input paths/globs that are hashed into its key, and seed it for the known offenders (at minimum: skill_budget_fence -> scripts/skill-body-budget.json + skills/*/SKILL.md; test_misc + okf_instructions_fence + skill_lint -> the instruction surfaces they read, AGENTS.md and skills/**/*.md). A suite whose real inputs cannot be declared must opt OUT of caching rather than be cached wrongly — make the opt-out explicit and default to opt-out when in doubt: a cache that is merely slower is fine, a cache that lies is a P1. Add or extend tests in scripts/tests/test_verify_cache.mjs proving: a filtered run neither reads nor writes the cache; editing a declared extra input invalidates that suite's entry; an opted-out suite is never cached; and the CI-disable case still holds. You MAY run scripts/tests/test_verify_cache.mjs and scripts/tests/test_run_verify_impacted.mjs (this cell's own repro and its neighbour) and must quote both; run nothing else. GIT SAFETY (shared checkout): commit through your own temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref); NEVER plain git add, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "CI=true node scripts/tests/test_verify_cache.mjs passes (quote it), and env -u CI still passes.",
+      "A filtered run (BEE_CHECK_ONLY set) neither reads nor writes the cache, and says so; proven by a test.",
+      "Editing a declared extra input (e.g. a SKILL.md for skill_budget_fence) invalidates that suite's cache entry; proven by a test.",
+      "Suites whose inputs cannot be declared are opted out of caching, and the opt-out is the default when in doubt.",
+      "scripts/tests/test_run_verify_impacted.mjs still green."
+    ],
+    "prohibitions": [
+      "Do NOT delete the cache feature to make this pass.",
+      "Do NOT weaken any existing cache test.",
+      "Do NOT touch scripts/lib/test-fixture.mjs (sibling cell owns it).",
+      "Do NOT run other suites."
+    ]
+  },
+  "verify": "CI=true node scripts/tests/test_verify_cache.mjs && node scripts/tests/test_verify_cache.mjs && node scripts/tests/test_run_verify_impacted.mjs",
+  "read_first": [
+    "scripts/run_verify.mjs",
+    "scripts/tests/test_verify_cache.mjs",
+    "scripts/impact-registry.json"
+  ],
+  "files": [
+    "scripts/run_verify.mjs",
+    "scripts/tests/test_verify_cache.mjs",
+    "scripts/impact-registry.json"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-p11",
+    "outcome": "F1: test_verify_cache fixture no longer leaks the parent's cache-disabling env into spawned run_verify children (CI=true went 0-passed/8-failed -> 12 passed). F2: BEE_CHECK_ONLY now disables the cache outright (never read, never written, cache=disabled printed in the summary); suites can declare extra non-import input paths/globs hashed into their cache key (seeded for skill_budget_fence, okf_instructions_fence, test_misc); broad repo scanners are explicitly opted out; and any suite naming a live repo surface it has not declared is auto-opted-out, making opt-out the default when in doubt. Suite grew 8 -> 12 cases, none weakened.",
+    "files_changed": [
+      "scripts/run_verify.mjs",
+      "scripts/tests/test_verify_cache.mjs",
+      "docs/history/review-p1-fixes/reports/p1-1.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T09:53:13.195Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T09:42:35.882Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}

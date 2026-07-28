@@ -1,0 +1,62 @@
+{
+  "id": "p2-2",
+  "feature": "review-p1-fixes",
+  "lane": "standard",
+  "change_class": "bugfix",
+  "behavior_change": true,
+  "title": "Cache: allowlist proven-complete closures instead of guessing at incomplete ones",
+  "action": "DELTA RE-REVIEW says F2 vector (b) is NOT CLOSED and found a P1 instance that is darkly funny: the regression suite pinning the filter's safety properties is ITSELF cache-skippable. The previous fix auto-opts-out a suite when literal tokens (AGENTS.md, skills/, docs/...) appear in the suite's own source — a heuristic over text, so anything that reaches a surface indirectly escapes it. Reviewer-named escapees: scripts/tests/test_check_filter.mjs (loads scripts/lib/test-fixture.mjs at RUNTIME through a generated fixture, closure = itself alone — edit test-fixture.mjs to break BEE_CHECK_ONLY and the suite prints CACHED green without running); scripts/tests/test_workflow_step_paths.mjs (reads .github/workflows/*.yml); packages/bee/tests/test_herding.mjs (reads skills/bee-herding/scripts/, escaping the token check only because the path is built with path.join segments). FIX — invert the default, do not extend the heuristic: a suite is cached ONLY when its complete input set is DECLARED (registry closure plus any declared extra inputs); every other suite is never cached. In other words replace 'guess whether it is unsafe' with 'require proof that it is safe'. Declare the extra inputs for the suites that legitimately read beyond their import closure — at minimum the three named above plus the ones the earlier fix already declared — and let everything undeclared fall through to uncached. Keep the existing BEE_CHECK_ONLY/CI/--no-cache disables. State the count of cached vs uncached suites in the run summary so the shrinkage is visible rather than silent. Add tests: an undeclared suite is never cached; a declared suite is cached and is invalidated by editing any declared input (including one reached only at runtime, e.g. the test-fixture case); the summary reports the split. You MAY run scripts/tests/test_verify_cache.mjs (with and without CI), scripts/tests/test_check_filter.mjs and scripts/tests/test_run_verify_impacted.mjs, and must quote them. GIT SAFETY (shared checkout): commit through your OWN temp index; NEVER plain git add, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "Caching is opt-IN by declaration; an undeclared suite is never cached (test proves it).",
+      "test_check_filter, test_workflow_step_paths and test_herding are either declared with their real inputs or uncached — and editing a runtime-loaded input invalidates a declared suite (test proves it).",
+      "The run summary reports how many suites are cacheable vs uncached.",
+      "All three named suites green with and without CI (quote them)."
+    ],
+    "prohibitions": [
+      "Do NOT keep the source-token heuristic as the safety mechanism.",
+      "Do NOT weaken any existing cache test.",
+      "Do NOT touch packages/bee/** (sibling cell owns it).",
+      "Do NOT run other suites."
+    ]
+  },
+  "verify": "CI=true node scripts/tests/test_verify_cache.mjs && node scripts/tests/test_verify_cache.mjs && node scripts/tests/test_check_filter.mjs && node scripts/tests/test_run_verify_impacted.mjs",
+  "read_first": [
+    "scripts/run_verify.mjs",
+    "scripts/tests/test_verify_cache.mjs"
+  ],
+  "files": [
+    "scripts/run_verify.mjs",
+    "scripts/tests/test_verify_cache.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-p22",
+    "outcome": "Verify-cache caching inverted to opt-IN by declaration: a suite is cacheable only when its entry file is declared in the new scripts/verify-cache-inputs.json (import closure + declared runtime inputs); every undeclared suite is never read from or written to the cache. Removed the source-token heuristic (UNDECLARED_INPUT_TOKENS/mentionsUndeclaredInput) and the CACHE_OPT_OUT set. The declaration table is read fail-CLOSED (missing/corrupt/wrong-shape => nothing cacheable). Run summary now prints 'cacheable=<n>/<total> declared (<n> uncached)'; live split is 6/115 suite entries. Four new cases in test_verify_cache (16 total, all green): an undeclared suite is never cached; a declared suite is invalidated by editing an input it loads only at runtime; the summary reports the split; the table fails closed.",
+    "files_changed": [
+      "scripts/run_verify.mjs",
+      "scripts/tests/test_verify_cache.mjs",
+      "scripts/verify-cache-inputs.json",
+      "docs/history/review-p1-fixes/reports/p2-2.md"
+    ],
+    "deviations": [
+      "Added a third source file, scripts/verify-cache-inputs.json (cell listed two): the declaration table has to be repo DATA, not a constant inside run_verify.mjs, so the fixture mini-repos in test_verify_cache can declare their own fake suites without test paths leaking into production code.",
+      "Left scripts/tests/test_workflow_step_paths.mjs and packages/bee/tests/test_herding.mjs UNDECLARED (=> uncached) rather than declaring them. test_workflow_step_paths asserts the EXISTENCE of every script path named in .github/workflows/*.yml, so its true input set includes deletions anywhere in the repo and cannot be honestly declared. test_herding lives under packages/bee/** which the concurrent sibling cell owns, so it was neither read nor declared. The must-have permits \"declared with their real inputs OR uncached\".",
+      "Declared scripts/tests/test_check_filter.mjs with [\"scripts/lib/**\", \"packages/bee/lib/**\"]: it dynamic-loads scripts/lib/test-fixture.mjs at runtime, which in turn imports packages/bee/lib/fsutil.mjs. Deliberately coarse — over-declaring only costs extra re-runs, under-declaring costs a false green."
+    ],
+    "friction": "The cache now serves 6 of 115 suite entries on this repo, so its wall-time value is near zero until suites are audited and declared one at a time. Intended trade (a small honest cache over a large lying one) and visible in every summary line, but worth a follow-up backlog item to widen the declaration table deliberately.",
+    "capped_at": "2026-07-28T10:15:42.167Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T10:05:05.295Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}

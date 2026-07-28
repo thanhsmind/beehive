@@ -3357,6 +3357,14 @@
         "scripts/tests/test_bypass_matrix.mjs"
       ]
     },
+    "scripts/tests/test_check_filter.mjs": {
+      "direct": [
+        "scripts/tests/test_check_filter.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_check_filter.mjs"
+      ]
+    },
     "scripts/tests/test_ci_verify_issue.mjs": {
       "direct": [
         "scripts/tests/test_ci_verify_issue.mjs"

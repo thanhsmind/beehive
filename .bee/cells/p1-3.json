@@ -1,0 +1,55 @@
+{
+  "id": "p1-3",
+  "feature": "review-p1-fixes",
+  "lane": "standard",
+  "change_class": "bugfix",
+  "behavior_change": true,
+  "title": "F3+F5: close the feature-swap door and the close-everything blast radius",
+  "action": "TWO P1 FINDINGS in packages/bee/bee.mjs. F3 (architecture + security, corroborated): guardFeatureVerifyDebt is invoked only inside the `if (flags.phase !== undefined)` branch at ~:2877-2913, so `state set --feature <other> --owner swarming` walks away from a feature holding `trace.feature_verify: \"pending\"` cells with no green record; because the guard keys on record.feature, those cells are then read by no path ever again. The scribing twin already guards exactly this door (featureSwapGuardScribingDebt, ~:2911/:3254) — mirror it for feature-verify debt so a swap refuses typed, naming the pending cells and the FIX, with no bypass level lifting it. ALSO in scope for F3: the guard currently returns unless the record's phase is 'swarming' (~:3180) while SCRIBING_RUN_FROM admits reviewing/scribing, so cells capped pending in those phases skip both doors — widen the phase condition to cover every phase from which the feature can leave execution. F5 (code-quality, promoted to P1 on the conservative route): resolveActiveFeatureForWorkflowsClose (~:4584) swallows every error into null and the caller (~:4659) then passes keepFeature: null to closeWorkflowsForFeature, which closes ALL live records including the active feature's — a corrupt lane file turns a routine `--all-but-active` into a full wind-down of in-flight work, contradicting the verb's own registry contract. FIX F5: a failed/ambiguous active-feature resolution REFUSES typed and closes nothing; only an explicit --id keeps its documented right to name the active record. Keep every existing refusal path intact. You MAY run packages/bee/tests/test_bee_cli.mjs and packages/bee/tests/test_state.mjs (the owning suites) and must quote them; run nothing else. Add the tests these fixes need to those suites: swap-door refusal with pending caps, refusal under gate_bypass total, a pending cap in a non-swarming phase still guarded, and --all-but-active refusing when resolution fails. GIT SAFETY (shared checkout): commit through your own temp index; NEVER plain git add, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "state set --feature <other> refuses typed while the outgoing feature has pending caps and no fresh green record; no bypass level lifts it.",
+      "A pending cap is still guarded when the feature leaves execution from a non-swarming phase.",
+      "workflows close --all-but-active refuses typed when the active feature cannot be resolved, closing nothing; --id keeps its explicit exception.",
+      "Tests for all three land in the owning suites and are green (quote the suite lines)."
+    ],
+    "prohibitions": [
+      "Do NOT remove or weaken any existing refusal path.",
+      "Do NOT touch packages/bee/lib/state.mjs (sibling cell owns it).",
+      "Do NOT run other suites."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs && node packages/bee/tests/test_state.mjs",
+  "read_first": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/state.mjs"
+  ],
+  "files": [
+    "packages/bee/bee.mjs",
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-p13",
+    "outcome": "F3: added featureSwapGuardFeatureVerifyDebt (the feature-swap door for feature-verify debt, no waiver, no bypass) and widened guardFeatureVerifyDebt's phase condition from the literal 'swarming' to SCRIBING_RUN_FROM (swarming/reviewing/scribing); debt computation extracted into a shared featureVerifyDebtState so both doors read one rule. F5: resolveActiveFeatureForWorkflowsClose now returns {ok,feature|reason} instead of swallowing every failure into null — --all-but-active and --feature refuse typed and close nothing on an unresolved active feature, --id keeps its explicit exception. 9 new tests in test_bee_cli.mjs. Both owning suites green: test_bee_cli.mjs 354 passed / 0 failed, test_state.mjs 44 passed / 0 failed.",
+    "files_changed": [
+      "packages/bee/bee.mjs",
+      "packages/bee/tests/test_bee_cli.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T09:54:22.759Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T09:42:36.044Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}
