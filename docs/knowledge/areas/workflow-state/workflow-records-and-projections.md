@@ -1,14 +1,14 @@
 ---
 type: bee.area
 title: "Workflow State — the workflow record, its rebuildable projections, and plan-revision-scoped gates"
-description: "The durable per-feature workflow record that is now the real unit of pipeline state, the three-transaction creation that seeds live legacy work into it, the legacy state.json/lane files (and the legacy handoff file) as mechanically rebuildable projections that never outrank the record and whose writer set is enforced by a grep audit rather than convention, the plan-revision-scoped execution gate, and the per-record projection lock — one lock per record actually written (workflow:<id>, 'state' for state.json, lane:<feature> for a lane projection), under a single global acyclic acquisition order, that every writer of a projection record now shares instead of a lock scoped to whichever code path happens to be nearby."
-timestamp: 2026-07-27
+description: "The durable per-feature workflow record that is now the real unit of pipeline state, the three-transaction creation that seeds live legacy work into it, the legacy state.json/lane files (and the legacy handoff file) as mechanically rebuildable projections that never outrank the record and whose writer set is enforced by a grep audit rather than convention, the plan-revision-scoped shape and execution gates (widened from execution alone once the two approve together), and the per-record projection lock — one lock per record actually written (workflow:<id>, 'state' for state.json, lane:<feature> for a lane projection), under a single global acyclic acquisition order, that every writer of a projection record now shares instead of a lock scoped to whichever code path happens to be nearby."
+timestamp: 2026-07-29
 bee:
   id: workflow-state-workflow-records-and-projections
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/workflow-state/sessions-lanes-and-identity.md, areas/workflow-state/holds-and-the-coordination-lock.md, areas/worktree-parallelism/control-plane-topology.md]
-  decisions: ["multisession-native D1 (workflow-first state: the workflow record becomes the unit of state; state.json/lanes become read-only compatibility projections; startFeature's lock becomes workflow:<id>, ending cross-feature contention on the single state lock — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D2 (control plane / data plane split: the workflow record and every store it seeds from — sessions, claims — resolve through controlRoot, i.e. main, from any linked worktree; docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D7 (gates scoped to plan revision: gate approval records approved_for_plan_rev; a plan_rev bump invalidates only that workflow's execution gate)", "multisession-native advisor-digest-slice2 conditions C1-C5/F5/F7/F8 (docs/history/multisession-native/reports/advisor-digest-slice2.md — idempotent seed before any rebuild treats state.json as derived, plan-rev-effective gate formula, startFeature worker-precondition self-exclusion, one global lock order with sessions and workflow:<id> never held together, the default-path residual seam scoped and later closed)", "multisession-native D5 amendment (msn-24, advisor-digest-slice5 condition E: the projection-writer discipline this concept states for state.json/lanes is generalized and enforced for the legacy handoff projection too — rebuildHandoffProjection is the sole sanctioned writer, a grep-audit test proves the exact production writer set rather than trusting a header comment; full detail in areas/workflow-state/handoff.md)", "state-phase-lock-race D1-D4/D9-D13 (GH #70: the lost-update race between the state-sync hook's 'state' hold and the CLI's workflow:<id>-only hold is closed by making every writer of a projection record share the lock scoped to that exact record, under one global acyclic order workflow:<id> -> 'state' -> lane:<feature>; D13 supersedes D1/D2's blanket 'state' wrap of the whole workflow branch, which mis-scoped lane mutations onto a lock they never needed and turned a live invariant red — docs/history/state-phase-lock-race/CONTEXT.md, decision 61e21a42-39b2-4f8a-bcb8-2a4d99f00154)", "state-phase-lock-race D9 (advisor-found pre-existing inversion: handleStatePlanRevBump held 'state' then called the self-locking updateWorkflow, violating the canonical order; repaired to resolve the workflow first and use updateWorkflowAssumingLock inside the ordered locks — decision cde492e3-800e-4a29-b574-b65cb06aabd7)"]
+  decisions: ["multisession-native D1 (workflow-first state: the workflow record becomes the unit of state; state.json/lanes become read-only compatibility projections; startFeature's lock becomes workflow:<id>, ending cross-feature contention on the single state lock — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D2 (control plane / data plane split: the workflow record and every store it seeds from — sessions, claims — resolve through controlRoot, i.e. main, from any linked worktree; docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D7 (gates scoped to plan revision: gate approval records approved_for_plan_rev; a plan_rev bump invalidates only that workflow's execution gate — scope later widened by validation-diet D15)", "validation-diet D2/D14/D15 (Gate 3 folds into Gate 2 as one merged approval via `bee state gate --merge`, flipping `shape` and `execution` together; the merge inherits the high-risk advisor-consult precondition D14 previously guarding execution alone; the merge also stamps `approved_for_plan_rev` on both fields together so a later bump can never leave the merged approval half-revoked — docs/history/validation-diet/CONTEXT.md, cell vd-3, 2026-07-28)", "multisession-native advisor-digest-slice2 conditions C1-C5/F5/F7/F8 (docs/history/multisession-native/reports/advisor-digest-slice2.md — idempotent seed before any rebuild treats state.json as derived, plan-rev-effective gate formula, startFeature worker-precondition self-exclusion, one global lock order with sessions and workflow:<id> never held together, the default-path residual seam scoped and later closed)", "multisession-native D5 amendment (msn-24, advisor-digest-slice5 condition E: the projection-writer discipline this concept states for state.json/lanes is generalized and enforced for the legacy handoff projection too — rebuildHandoffProjection is the sole sanctioned writer, a grep-audit test proves the exact production writer set rather than trusting a header comment; full detail in areas/workflow-state/handoff.md)", "state-phase-lock-race D1-D4/D9-D13 (GH #70: the lost-update race between the state-sync hook's 'state' hold and the CLI's workflow:<id>-only hold is closed by making every writer of a projection record share the lock scoped to that exact record, under one global acyclic order workflow:<id> -> 'state' -> lane:<feature>; D13 supersedes D1/D2's blanket 'state' wrap of the whole workflow branch, which mis-scoped lane mutations onto a lock they never needed and turned a live invariant red — docs/history/state-phase-lock-race/CONTEXT.md, decision 61e21a42-39b2-4f8a-bcb8-2a4d99f00154)", "state-phase-lock-race D9 (advisor-found pre-existing inversion: handleStatePlanRevBump held 'state' then called the self-locking updateWorkflow, violating the canonical order; repaired to resolve the workflow first and use updateWorkflowAssumingLock inside the ordered locks — decision cde492e3-800e-4a29-b574-b65cb06aabd7)"]
   sources: ["multisession-native cells multisession-native-5..10 (workflow-store.mjs, startFeature workflow creation, state-projection.mjs, activeWorkers, plan-rev gate scoping, default-path routing; traces .bee/cells/multisession-native-{5,6,7,8,9,10}.json, commits 1e7b538, f4fe163, 1c4d45d, c435add, 2dd834f, e7f365a, 2026-07-25)", "docs/history/multisession-native/CONTEXT.md (D1, D6, D7, D8 stage 2)", "docs/history/multisession-native/reports/advisor-digest-slice2.md (conditions C1-C5, findings F5/F7/F8)", "multisession-native cells multisession-native-18a/18b/18c (state.mjs's own workflow-record call sites, then bee.mjs's dispatcher, re-rooted onto controlRootFor(root); traces .bee/cells/multisession-native-{18a,18b,18c}.json, commits 5d0ec3c, a1431448, d69d81e, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "multisession-native cell multisession-native-24 (rebuildHandoffProjection reclassified as sole sanctioned writer of the legacy handoff projection; grep-audit test in test_state.mjs; trace .bee/cells/multisession-native-24.json, commit cee2d5f, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice5.md condition E; full detail in areas/workflow-state/handoff.md)", "state-phase-lock-race cells splr-1/splr-2/splr-3 (per-record lock scoping, the handleStatePlanRevBump order repair, re-vendoring into .bee/bin/, and the multi-process proof in test_state_projection_race.mjs; commits e787819a, 73eadc5f, ebc68f04, 2026-07-27; full suite verified green independently by the orchestrator, 109 suites)", "docs/history/state-phase-lock-race/CONTEXT.md (root cause: the state-sync hook holds 'state', CLI mutation verbs with a live workflow record hold workflow:<id> ONLY, and two more writers held nothing at all)", "docs/history/state-phase-lock-race/reports/advisor-consult.md (fable, 2026-07-27, PROCEED WITH CHANGES: refuted the plan's own claim that no 'state' -> workflow:<id> edge existed)"]
   authoritative_for: "workflow-state: the workflow record schema and module, its creation at feature start, the rebuildable state.json/lane/handoff projections and their audited writer sets, plan-revision-scoped gates, and the per-record write lock order"
 ---
@@ -136,28 +136,45 @@ derived, never authoritative" contract R65 states for `state.json`/lanes,
 proven here by a structural test rather than asserted in prose.
 
 **A granted gate's effective approval is scoped to the plan revision it was
-granted under (multisession-native D7, advisor condition C2).** Trigger: any
-read of a projected gate boolean, or a `bee state plan-rev bump` against a
-workflow. What happens: `workflowGatesToApprovedGates(gates, planRev)`
-renders the boolean a reader actually sees as `approved && (approved_for_plan_rev
-== null || approved_for_plan_rev === planRev)` — never the bare stored
-`approved` flag. `null` (every legacy/seeded gate, and every gate D7 never
-rev-scopes) stays always-effective by construction. Approving the execution
-gate stamps *only* that gate's `approved_for_plan_rev` to the target
-workflow's *current* `plan_rev` at the moment of approval; every other write
-path that round-trips `approved_gates` through the same projection function
-(`state set`, `scribing-run`) leaves `approved_for_plan_rev` on every gate it
-was not asked to stamp untouched. `bee state plan-rev bump --lane <feature>`
-bumps a single workflow's `plan_rev` by exactly 1 and immediately rebuilds
-that lane's projection, so a `cells claim` against that lane's cells refuses
-right away, citing the execution gate. The verb is lane-scoped by
+granted under, and the merged approval extends that scope to both its fields
+together (multisession-native D7, advisor condition C2; scope widened by
+validation-diet D2/D15, cell vd-3).** Trigger: any read of a projected gate
+boolean, or a `bee state plan-rev bump` against a workflow. What happens:
+`workflowGatesToApprovedGates(gates, planRev)` renders the boolean a reader
+actually sees as `approved && (approved_for_plan_rev == null ||
+approved_for_plan_rev === planRev)` — never the bare stored `approved` flag —
+applied generically to every gate, with no per-gate exception in the
+function itself. `null` (every legacy/seeded gate, and every gate no
+approval path ever rev-scopes) stays always-effective by construction.
+Context and review are never rev-scoped by any approval path that exists
+today, so they stay always-effective once granted. Shape and execution are
+the two fields a plan revision can scope, and which of them actually gets
+stamped depends on which door approved them: the standalone `--name <gate>`
+path — still the only way to approve context or review, and still available
+for shape or execution individually — stamps *only* the one gate it names,
+exactly as it did before the merge existed. The merged `--merge` path
+(validation-diet D2) — the way `planning`'s Gate 2 is now approved as one
+question — stamps `approved_for_plan_rev` on BOTH `shape` and `execution`
+together at the moment of approval (validation-diet D15), so the two fields
+one merged question covers can never end up half-revoked: a later bump
+always finds them either both still current or both stale, never one of
+each. Every other write path that round-trips `approved_gates` through the
+same projection function (`state set`, `scribing-run`) leaves
+`approved_for_plan_rev` on every gate it was not asked to stamp untouched.
+`bee state plan-rev bump --lane <feature>` bumps a single workflow's
+`plan_rev` by exactly 1 and immediately rebuilds that lane's projection, so a
+`cells claim` against that lane's cells refuses right away, citing whichever
+of shape/execution the bump just invalidated. The verb is lane-scoped by
 construction: it refuses outright when resolution would land on the default
 (non-lane) record, or when the named lane has no live workflow record. What
-each actor observes: bumping workflow W1's `plan_rev` flips W1's projected
-execution boolean to false and a subsequent claim against W1's cells refuses
-— while a completely different workflow W2's `plan_rev`, gates, and claims
-are untouched; context, shape, and review gates on either workflow are
-untouched by any bump, on either workflow, ever.
+each actor observes: bumping workflow W1's `plan_rev` flips every gate on W1
+that was stamped for the pre-bump revision to projected-ungranted — both
+shape and execution together when W1's Gate 2 was approved via `--merge`,
+execution alone when it was approved through the standalone path — and a
+subsequent claim against W1's cells refuses either way; a completely
+different workflow W2's `plan_rev`, gates, and claims are untouched; context
+and review on either workflow are untouched by any bump, on either workflow,
+ever.
 
 **Every state-mutation write locks and routes through its own feature's
 workflow record — default path included (multisession-native D1, closing
@@ -306,10 +323,16 @@ workspace-local).
   byte-identical; where a workflow record and its projection diverge, the
   record wins (multisession-native D1, advisor condition F8).
 - R66 — A gate's effective (projected) boolean is `approved && (approved_for_plan_rev
-  == null || approved_for_plan_rev === plan_rev)`; only the execution gate is
-  ever stamped with a `plan_rev` on approval; `bee state plan-rev bump` bumps
-  and rebuilds exactly one named lane's workflow, touching no other workflow's
-  `plan_rev`, gates, or claims (multisession-native D7, advisor condition C2).
+  == null || approved_for_plan_rev === plan_rev)`, applied generically to
+  every gate. Context and review are never stamped with a `plan_rev` by any
+  approval path. Shape and execution are stamped by whichever path approved
+  them: the standalone `--name` path stamps only the one gate it names; the
+  merged `--merge` path stamps both together, so the two can never end up
+  half-revoked after a later bump (multisession-native D7, advisor condition
+  C2; scope widened from execution-only to both merge-approved fields by
+  validation-diet D2/D15, cell vd-3). `bee state plan-rev bump` bumps and
+  rebuilds exactly one named lane's workflow, touching no other workflow's
+  `plan_rev`, gates, or claims.
 - R67 — Every state-mutation write path — default and lane alike — locks and
   routes through its own feature's workflow record via `withMutationLock`,
   never a single lock scoped to the whole workflow branch regardless of which
@@ -389,13 +412,20 @@ workspace-local).
   byte-identical) in `test_state_projection.mjs`. Evidence: trace
   `.bee/cells/multisession-native-7.json`, commit 1c4d45d.
 - Plan-rev-scoped gates: `workflowGatesToApprovedGates` in
-  `state-projection.mjs`; `handleStateGate`'s execution-gate stamping and
-  `writeLaneRecordThroughProjection`'s optional `gateStamp` param, and the new
+  `state-projection.mjs`; `handleStateGate`'s gate stamping (standalone
+  `--name` and merged `--merge`, `findGateStamp` normalizing the stamp array)
+  and `writeLaneRecordThroughProjection`'s optional `gateStamp` param, and the
   `state plan-rev bump` verb, in `packages/bee/bee.mjs` +
   `lib/command-registry.mjs`. Proved red-first (a `plan_rev` bump flips only
   the targeted workflow's projected execution boolean; a sibling workflow is
   untouched). Evidence: trace `.bee/cells/multisession-native-9.json`, commit
-  2dd834f.
+  2dd834f. Widened so `--merge` stamps both `shape` and `execution` together
+  (validation-diet D2/D15): `bee state gate --merge --approved true` flips
+  both fields in one call, mutually exclusive with `--name`; a plain `--name`
+  approval is byte-for-byte unchanged. Evidence: trace `.bee/cells/vd-3.json`;
+  6 new tests in `packages/bee/tests/test_state_projection.mjs` proving one
+  `--merge` call flips both gates, `--merge --name` refuses together, and
+  `plan-rev bump` revokes both gates when approved via `--merge`.
 - Default-path routing through the workflow record: `writeStateRecordThroughProjection`,
   the extended `rebuildStateProjection` feature-matched idle-gate, and
   `withMutationLock` in `state.mjs`/`state-projection.mjs`; `updateWorkflowAssumingLock`

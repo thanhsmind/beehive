@@ -2,13 +2,13 @@
 type: bee.area
 title: "Workflow State — starting a feature, the phase vocabulary, phase-owned routing, and closing"
 description: "The guarded doors of a feature's life: the all-or-nothing start that can never inherit the previous feature's approvals (now also creating that feature's own workflow record), the closed phase vocabulary, the adviser consult high-risk execution approval demands (the one gate scoped to a plan revision), the phase-owned generic routing mutation, and the four-step tail that makes declaring a feature closed impossible."
-timestamp: 2026-07-27
+timestamp: 2026-07-29
 bee:
   id: workflow-state-gates
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["chain-integrity D1-REVISED/D2/D3/D4 (the tail of the chain: learning capture is produced not asserted, the sync demands executed work, the close demands zero spec debt, the waiver is audited)", "AO3/AO13 (execution-gate adviser precondition — folded from the old standalone Gate 3 into Gate 2, validation-diet D2/D14 — event-based staleness, never a TTL — cells ao-4-1/ao-4-2 2026-07-17)", codex-hook-state-parity D4-D6 (pre-phase routing ownership and review isolation), "scribing-integrity D1-D3/D6 (the wall at every door — feature-swap guard, lane-aware close, durable scribing ledger + orphan sweep, pre-ledger amnesty; cells si-1/si-3, 2026-07-24)", multisession-native D1/D7 (starting a feature also creates its own workflow record via three separate lock transactions; the execution gate records approved_for_plan_rev — docs/history/multisession-native/CONTEXT.md), "scribing-stamp-seam 5b2f963d (sss-1 — the close-door threshold folds in the durable ledger as fallback/max, not the record stamp alone)", "compounding-gate D1 (the close also demands recorded learning-capture evidence, fresh against the knowledge-sync stamp, waivable only with a logged decision; cells cg-1/cg-2, 2026-07-27)"]
+  decisions: ["chain-integrity D1-REVISED/D2/D3/D4 (the tail of the chain: learning capture is produced not asserted, the sync demands executed work, the close demands zero spec debt, the waiver is audited)", "AO3/AO13 (execution-gate adviser precondition — folded from the old standalone Gate 3 into Gate 2, validation-diet D2/D14 — event-based staleness, never a TTL — cells ao-4-1/ao-4-2 2026-07-17)", codex-hook-state-parity D4-D6 (pre-phase routing ownership and review isolation), "scribing-integrity D1-D3/D6 (the wall at every door — feature-swap guard, lane-aware close, durable scribing ledger + orphan sweep, pre-ledger amnesty; cells si-1/si-3, 2026-07-24)", multisession-native D1/D7 (starting a feature also creates its own workflow record via three separate lock transactions; the execution gate records approved_for_plan_rev — docs/history/multisession-native/CONTEXT.md), "scribing-stamp-seam 5b2f963d (sss-1 — the close-door threshold folds in the durable ledger as fallback/max, not the record stamp alone)", "validation-diet D2/D14/D15 (the merged approval flips `shape` and `execution` together via `bee state gate --merge`, inherits the high-risk advisor-consult precondition D14 previously guarding execution alone, and stamps `approved_for_plan_rev` on both fields together so a later bump can never leave the merged approval half-revoked — docs/history/validation-diet/CONTEXT.md, cell vd-3, 2026-07-28)", "compounding-gate D1 (the close also demands recorded learning-capture evidence, fresh against the knowledge-sync stamp, waivable only with a logged decision; cells cg-1/cg-2, 2026-07-27)"]
   sources: ["chain-integrity cells ci-1/ci-2/ci-3 (traces in .bee/cells/, CONTEXT docs/history/chain-integrity/CONTEXT.md, 2026-07-14 — origin: an owner-supplied post-mortem of a real session in which the chain's tail was bypassed seven times)", "advisor-and-orchestration Slice 4 cells ao-4-1/ao-4-2 (adviser consult record + event-based staleness + high-risk execution precondition, live-throw verified, 2026-07-17)", "codex-hook-state-parity cell codex-hook-state-parity-1 (pre-phase routing ownership and review isolation; report and capped trace, 2026-07-16)", "docs/specs/workflow-state.md#B1", "docs/specs/workflow-state.md#B2", "docs/specs/workflow-state.md#B9a", "docs/specs/workflow-state.md#B19", "docs/specs/workflow-state.md#R1", "docs/specs/workflow-state.md#R2", "docs/specs/workflow-state.md#R3", "docs/specs/workflow-state.md#R19a", "docs/specs/workflow-state.md#R20a", "docs/specs/workflow-state.md#R21a", "docs/specs/workflow-state.md#R22", "docs/specs/workflow-state.md#R23", "docs/specs/workflow-state.md#R25", "docs/specs/workflow-state.md#R29", "docs/specs/workflow-state.md#R30", "docs/specs/workflow-state.md#R31", "docs/specs/workflow-state.md#E1", "docs/specs/workflow-state.md#E2", "docs/specs/workflow-state.md#P2", "docs/specs/workflow-state.md#P3", "docs/specs/workflow-state.md#P4", "docs/specs/workflow-state.md#P5", "multisession-native cell multisession-native-6 (startFeature creates a workflow record; trace .bee/cells/multisession-native-6.json, commit f4fe163, 2026-07-25)", "multisession-native cell multisession-native-9 (gates scoped to plan revision; trace .bee/cells/multisession-native-9.json, commit 2dd834f, 2026-07-25)", "scribing-stamp-seam cell sss-1 (trace .bee/cells/sss-1.json, capped 2026-07-26)", "compounding-gate cells cg-1/cg-2 (state compounding-run verb + close gate + mutation-proven suite; traces .bee/cells/cg-1.json/cg-2.json, 2026-07-27)"]
   authoritative_for: "workflow-state: feature start, the phase vocabulary, phase-owned routing mutation, and the closing tail"
 ---
@@ -55,32 +55,44 @@ rule (B1/R1/R2) itself; only *what backs* a successful start changed.
 closed list; historical skill wording that used other names (e.g.
 "exploring-complete", "validated") is invalid at the record layer.
 
-**B9a — High-risk execution approval requires a live adviser consult.** Opening
-the execution gate on a record in the high-risk mode refuses — typed error,
-zero mutation, the corrective message naming every failed condition and the
-exact consult flow — unless a non-stale adviser consult record exists. The
-consult itself is orchestrator machinery, not a human checkpoint: it runs under
-every autopilot level (autopilot lifts human stops, never mechanical
-preconditions). The orchestrator resolves the configured adviser, runs it
-**read-only** with an evidence bundle (plan summary, risk map, validation
-findings — never session history, never secrets), and records the consult; a
-workspace with no adviser configured records that fact and proceeds — the rule
-adds one trigger, not a dependency on configuration. Revoking the execution
-gate stamps the revocation moment, which makes any earlier consult stale.
-Non-high-risk modes, the other three gates, and revocation writes are
-untouched. Advice never approves a gate and never overrides a locked decision.
-What each actor observes: the assistant sees either a clean approval or the
-refusal with its fix; the audit trail gains the consult record; a worker's own
-mid-flight consult loop (B9) is unchanged.
+**B9a — High-risk execution approval requires a live adviser consult, on
+whichever door opens it.** Opening the execution gate on a record in the
+high-risk mode refuses — typed error, zero mutation, the corrective message
+naming every failed condition and the exact consult flow — unless a
+non-stale adviser consult record exists. The same precondition guards the
+merged shape+execution approval (`bee state gate --merge`, validation-diet
+D2/D14): a high-risk record cannot flip `shape` and `execution` together
+through the merged path without that same live consult either — the merge
+*inherits* the precondition rather than relaxing it, which is what moves the
+check earlier in the chain, onto planning's single merged question, instead
+of only a later standalone execution approval. The consult itself is
+orchestrator machinery, not a human checkpoint: it runs under every autopilot
+level (autopilot lifts human stops, never mechanical preconditions). The
+orchestrator resolves the configured adviser, runs it **read-only** with an
+evidence bundle (plan summary, risk map, validation findings — never session
+history, never secrets), and records the consult; a workspace with no
+adviser configured records that fact and proceeds — the rule adds one
+trigger, not a dependency on configuration. Revoking the execution gate
+stamps the revocation moment, which makes any earlier consult stale.
+Non-high-risk modes, the context and review gates, and revocation writes are
+untouched. Advice never approves a gate and never overrides a locked
+decision. What each actor observes: the assistant sees either a clean
+approval or the refusal with its fix, on either door; the audit trail gains
+the consult record; a worker's own mid-flight consult loop (B9) is unchanged.
 
-**The execution gate this opens is the one gate scoped to a plan revision
-(D7).** Granting it stamps the workflow's *current* `plan_rev` onto the gate's
-`approved_for_plan_rev`; a later `bee state plan-rev bump` on that same
-workflow projects the gate back to ungranted without touching the stored
-`approved` flag or any other workflow's gates. Context, shape, and review stay
-unscoped. The full mechanics — the plan-rev-effective formula, the bump verb,
-and what it does and does not invalidate — are owned by
-`workflow-records-and-projections.md`; this concept keeps ownership of the
+**Approving shape and execution together now scopes both to the plan
+revision; approving either alone still scopes only itself (validation-diet
+D2/D15, widening multisession-native D7's execution-only scope).** Granting
+the merged approval stamps the workflow's *current* `plan_rev` onto BOTH the
+`shape` and `execution` fields' `approved_for_plan_rev`; a later `bee state
+plan-rev bump` on that same workflow projects both back to ungranted
+together — never a half-revoked merged gate — without touching the stored
+`approved` flags or any other workflow's gates. Approving `shape` or
+`execution` individually through the standalone `--name` path stamps only
+that one field, exactly as before the merge existed. Context and review are
+never plan-rev-scoped by any path. The full mechanics — the plan-rev-effective
+formula, the bump verb, and what it does and does not invalidate — are owned
+by `workflow-records-and-projections.md`; this concept keeps ownership of the
 high-risk consult precondition itself.
 
 **B19 — A generic routing mutation is phase-owned.** Trigger: a caller changes
@@ -295,11 +307,22 @@ its knowledge actually landed — the state and the specs can no longer disagree
   and `docs/history/codex-hook-state-parity/reports/codex-hook-state-parity-1.md`.
 - Tests: 15 start-feature rows in `packages/bee/tests/test_lib.mjs`.
 - Evidence: commit `928abf1`; trace `.bee/cells/codex-parity-5.json`.
-- Workflow-record creation on start (D1) and plan-rev-scoped gates (D7): see
-  `workflow-records-and-projections.md` Pointers — `seedLegacyWorkflows`,
-  `createWorkflow`, `workflowGatesToApprovedGates`, and the `plan-rev bump`
-  verb. Evidence: traces `.bee/cells/multisession-native-{6,9}.json`, commits
-  f4fe163, 2dd834f.
+- Workflow-record creation on start (D1) and plan-rev-scoped gates (D7,
+  widened by validation-diet D15): see `workflow-records-and-projections.md`
+  Pointers — `seedLegacyWorkflows`, `createWorkflow`,
+  `workflowGatesToApprovedGates`, and the `plan-rev bump` verb. Evidence:
+  traces `.bee/cells/multisession-native-{6,9}.json`, commits f4fe163,
+  2dd834f.
+- Merged approval (validation-diet D2/D14/D15): `bee state gate --merge
+  --approved true` flips `approved_gates.shape` and `approved_gates.execution`
+  together in one call (mutually exclusive with `--name`, refused together);
+  `requireFreshAdvisorForHighRisk` is shared by the standalone `--name
+  execution` path and the `--merge` path (D14); `--merge` stamps
+  `approved_for_plan_rev` on both fields via `findGateStamp` (D15); a plain
+  `--name` approval is byte-for-byte unchanged. `handleStateGate` in
+  `packages/bee/bee.mjs` + `.bee/bin/bee.mjs`. Evidence: trace
+  `.bee/cells/vd-3.json`; `test_cli_state.mjs`, `test_state_projection.mjs`,
+  `test_bee_cli.mjs` all green.
 - Close-door threshold + ledger fallback: `scribingDebt`,
   `bestScribingStampMs`, `readScribingLedger` in `packages/bee/lib/cells.mjs`
   (mirrored `.bee/bin/lib/cells.mjs`). Evidence: trace
