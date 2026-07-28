@@ -1853,6 +1853,7 @@
         "scripts/okf_instructions_fence.mjs --selftest",
         "scripts/okf_specs_fence.mjs",
         "scripts/okf_specs_fence.mjs --selftest",
+        "scripts/tests/test_check_filter.mjs",
         "scripts/tests/test_compact_capsule.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_compaction_advisories.mjs",
@@ -3062,6 +3063,7 @@
         "scripts/tests/test_impact_registry.mjs"
       ],
       "all": [
+        "scripts/tests/test_check_filter.mjs",
         "scripts/tests/test_impact_registry.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
         "scripts/tests/test_verify_manifest.mjs",
@@ -3196,6 +3198,7 @@
         "packages/bee/tests/test_worktree_store.mjs",
         "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
+        "scripts/tests/test_check_filter.mjs",
         "scripts/tests/test_compact_capsule.mjs",
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
@@ -3229,6 +3232,7 @@
         "packages/bee/tests/test_worktree_store.mjs",
         "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
+        "scripts/tests/test_check_filter.mjs",
         "scripts/tests/test_compact_capsule.mjs",
         "scripts/tests/test_compaction_advisories.mjs",
         "scripts/tests/test_compaction_module.mjs",
@@ -3311,12 +3315,14 @@
     },
     "scripts/run_verify.mjs": {
       "direct": [
+        "scripts/tests/test_check_filter.mjs",
         "scripts/tests/test_impact_registry.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
         "scripts/tests/test_verify_manifest.mjs",
         "scripts/tests/test_verify_timeout.mjs"
       ],
       "all": [
+        "scripts/tests/test_check_filter.mjs",
         "scripts/tests/test_impact_registry.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
         "scripts/tests/test_verify_manifest.mjs",
