@@ -624,6 +624,13 @@ const STATE_WRITING_VERBS = [
   'state.start-feature',
   'state.rebuild-projections',
   'state.advisor-ref.record',
+  // vd-6: both go through the same withMutationLock -> target.write(state)
+  // path as state.set/worker.add (bee.mjs handleStateRoute/
+  // handleStateFeatureVerifyRecord) — a bare read-modify-write of
+  // .bee/state.json (or the active lane file) exactly like every other
+  // entry above. Probed below alongside state-set/worker-add.
+  'state.route',
+  'state.feature-verify.record',
 ];
 
 // Verbs that never write the shared projection record (read-only listings,
@@ -646,6 +653,23 @@ const NON_PROJECTION_VERBS = [
   'state.compact-log',
   'state.compact-check',
   'state.compact-capsule',
+  // vd-6: a SEPARATE manifest entry from state.feature-verify.record —
+  // handleStateFeatureVerifyShow (bee.mjs) only calls resolveMutationTarget
+  // and reads target.record.feature_verify; target.write() is never called,
+  // so it can never race the projection it reads.
+  'state.feature-verify.show',
+  // vd-6: handleStateWorkflowsList (bee.mjs) is listWorkflowRecords(root) ->
+  // a plain read of .bee/runtime/workflows/*/state.json. Never calls
+  // target.write() and never touches .bee/state.json or a lane file.
+  'state.workflows.list',
+  // vd-6: handleStateWorkflowsClose (bee.mjs) writes, but only the
+  // workflow-store record via updateWorkflow/updateWorkflowAssumingLock
+  // under that record's OWN `workflow:<id>` lock (closeWorkflowRecordById /
+  // closeWorkflowsForFeature, lib/state.mjs) — a completely different file
+  // and lock domain than the projection this suite polices. It never calls
+  // resolveMutationTarget(...).write() and never touches .bee/state.json or
+  // .bee/lanes/<f>.json.
+  'state.workflows.close',
 ];
 
 function probeManifestCoverage(cli) {
@@ -732,6 +756,15 @@ async function runOrchestrator() {
       return { root };
     };
     const laneSet = () => ['state', 'set', '--lane', 'lane-feat', '--phase', 'planning', '--owner', 'exploring'];
+    // vd-6: feature-verify record needs a real --output-file to hash, so its
+    // fixture extends defaultFixture with one alongside the bootstrapped
+    // feature.
+    const featureVerifyFixture = (c, root) => {
+      bootstrapFeature(c, root, 'race-feat');
+      const outputFile = path.join(root, 'verify-output.txt');
+      fs.writeFileSync(outputFile, 'suite: 1/1 green\n');
+      return { root, outputFile };
+    };
     const probes = [
       {
         blocked: true,
@@ -769,6 +802,40 @@ async function runOrchestrator() {
           'w1',
           '--cell',
           'c-1',
+        ]),
+      },
+      // vd-6: state.route --set — handleStateRoute (bee.mjs) takes the same
+      // withMutationLock('state') hold as state-set/worker-add above.
+      {
+        blocked: true,
+        probe: await probeHeldLock(cli, 'route-set', defaultFixture, () => [
+          'state',
+          'route',
+          '--set',
+          '--class',
+          'refactor',
+          '--lane',
+          'tiny',
+          '--flags',
+          '',
+          '--files',
+          '1',
+        ]),
+      },
+      // vd-6: state.feature-verify.record — handleStateFeatureVerifyRecord
+      // (bee.mjs) takes the same withMutationLock('state') hold too.
+      {
+        blocked: true,
+        probe: await probeHeldLock(cli, 'feature-verify-record', featureVerifyFixture, (ctx) => [
+          'state',
+          'feature-verify',
+          'record',
+          '--command',
+          'node run_verify.mjs --impacted',
+          '--output-file',
+          ctx.outputFile,
+          '--result',
+          'green',
         ]),
       },
       // The invariant splr-1 broke: a lane mutation shares NO record with
