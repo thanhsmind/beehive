@@ -71,3 +71,4 @@
 {"id":"fb9038e5-0944-43a7-a68d-6aea757f6cfb","type":"candidate","date":"2026-07-28T05:05:39.392Z","feature":"foundation-fixes","head":"c0353fbced5e44d586a4159b561cdfd7e28cdc31","mode":"standard","baseline":null,"cells":["fx-1","fx-2","fx-3"]}
 {"id":"b2e66216-da55-4732-b29b-6b44899f0aad","type":"candidate","date":"2026-07-28T06:03:32.846Z","feature":"explicit-triage","head":"6a8ec605bd0a8fd755cfb566cde4a7d3dc074218","mode":"standard","baseline":null,"cells":["et-1","et-2","et-3","et-4"]}
 {"id":"a769b92a-99b3-4dc0-8397-459fd49fb8e7","type":"candidate","date":"2026-07-28T06:45:49.323Z","feature":"status-diet","head":"0cbabcaf16c05f8375e8675d077ee7ad42070b9d","mode":"standard","baseline":null,"cells":["st-1","st-2","st-3"]}
+{"id":"9a7047d0-3125-4c68-a92f-dd5ffcf28809","type":"candidate","date":"2026-07-28T07:33:49.879Z","feature":"main-verifies","head":"b708d8c670f84ca041ffc9b20764c5119f66a5b3","mode":"standard","baseline":null,"cells":["mv-1","mv-2","mv-3","mv-4"]}
