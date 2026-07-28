@@ -1015,6 +1015,29 @@ await check('state.route example runs through the real dispatcher (registry-comp
   );
 });
 
+// main-verifies D2 (cell mv-1): the registry-completeness invariant ("every
+// registry entry had its example executed at least once") demands at least
+// this much for the new feature-verify family — deeper coverage (the pending
+// cap path, both close-door refusals, red-never-satisfies, staleness, bypass
+// immunity) is mv-3's own cell. The record example's --output-file is seeded
+// here first: the verb computes output_sha256 from real captured bytes,
+// never a caller-supplied hash.
+await check('state.feature-verify.record example runs through the real dispatcher (registry-completeness — deeper coverage is mv-3\'s own cell)', async () => {
+  fs.writeFileSync(path.join(rootState, 'feature-verify-output.txt'), 'suites 25/25 green\n');
+  const result = await assertExampleOk('state.feature-verify.record', { cwd: rootState });
+  const rec = JSON.parse(result.stdout);
+  assert(
+    rec.result === 'green' && rec.feature === 'newf' && typeof rec.output_sha256 === 'string' && rec.output_sha256.length === 64,
+    `expected a green feature-verify record with a computed sha256, got ${result.stdout}`,
+  );
+});
+
+await check('state.feature-verify.show example round-trips the recorded feature-verify', async () => {
+  const result = await assertExampleOk('state.feature-verify.show', { cwd: rootState });
+  const rec = JSON.parse(result.stdout);
+  assert(rec && rec.result === 'green' && rec.feature === 'newf', `expected the recorded green feature-verify back, got ${result.stdout}`);
+});
+
 // ─── explicit-triage et-3: deep behavioral net for `state route` (D1-D4) ───
 // Assertions a-e per docs/history/explicit-triage/CONTEXT.md and cell et-3.
 // Every fixture below is its own hermetic temp repo built through the REAL

@@ -1816,6 +1816,10 @@ export async function capCell(
     // means every diff_stats-driven check below skips outright: fail-open,
     // never a false refusal for a repo/handler that couldn't compute it.
     diff_stats = undefined,
+    // main-verifies D1: cap through the feature-verify-pending path — no
+    // per-cell verify evidence demanded, trace.feature_verify stamped
+    // "pending". Default false keeps the classic evidence path byte-unchanged.
+    feature_verify_pending = false,
   } = {},
 ) {
   const overrideReason = typeof overrideJudge === 'string' ? overrideJudge.trim() : '';
@@ -1833,6 +1837,33 @@ export async function capCell(
     if (cell.status === 'dropped') throw new Error(`capCell: cell "${id}" was dropped.`);
     let trace = { ...defaultTrace(), ...(cell.trace || {}) };
     trace = guardClaimOwnership(root, id, trace, 'capCell', { sessionId, forceOwnership }); // D4
+    // main-verifies D1: the sanctioned feature-verify-pending cap path. The
+    // cell caps with NO per-cell verify evidence at all, stamping
+    // trace.feature_verify: "pending" — its proof event is deliberately
+    // relocated to ONE feature-level verify (recorded via `bee state
+    // feature-verify record`), and the close-door guard in bee.mjs
+    // (guardFeatureVerifyDebt, D3) is what keeps that relocation honest: no
+    // departure from phase "swarming" while any pending marker lacks a
+    // fresh GREEN feature-verify record. Combining the flag with per-cell
+    // evidence claims is REFUSED — the two proof paths are exclusive, and a
+    // cap must never be ambiguous about which one vouched for it. The
+    // classic evidence path below is byte-unchanged when the flag is off.
+    const pendingFeatureVerify = feature_verify_pending === true;
+    if (pendingFeatureVerify) {
+      const evidenceSupplied =
+        verification_evidence != null &&
+        (typeof verification_evidence !== 'string' || verification_evidence.trim().length > 0);
+      if (evidenceSupplied) {
+        throw new Error(
+          `capCell: cell "${id}" cannot combine --feature-verify-pending with verification_evidence — the pending path defers ALL per-cell proof to the feature-level verify (main-verifies D1), so attaching per-cell evidence contradicts the deferral. FIX: drop --evidence-file/--evidence-stdin, or cap through the classic evidence path without --feature-verify-pending.`,
+        );
+      }
+      if (trace.verify_passed === true) {
+        throw new Error(
+          `capCell: cell "${id}" cannot combine --feature-verify-pending with a recorded PASSING verify — a green per-cell verify IS the classic evidence path (main-verifies D1); the pending marker would falsely defer proof this cell already holds. FIX: cap without --feature-verify-pending.`,
+        );
+      }
+    }
     // no-test-repos D2 (decision 55b951e1): a verify-none cell in a
     // repo that has declared itself no-test skips the passing-verify-result
     // requirement below outright — there is no verify command that could
@@ -1841,10 +1872,10 @@ export async function capCell(
     // otherwise expect one; an explicitly supplied verification_evidence
     // still wins over the auto note.
     const noTestWaiver = cell.verify === NO_TEST_SENTINEL && isNoTestRepo(readConfig(root));
-    if (noTestWaiver && !verification_evidence) {
+    if (noTestWaiver && !verification_evidence && !pendingFeatureVerify) {
       verification_evidence = `no-test repo: verification waived by repo declaration (commands.verify: ${NO_TEST_SENTINEL})`;
     }
-    if (trace.verify_passed !== true && !noTestWaiver) {
+    if (!pendingFeatureVerify && trace.verify_passed !== true && !noTestWaiver) {
       throw new Error(
         `capCell: cell "${id}" has no passing verify result — run the cell's verify command and record it (bee.mjs cells verify --id ${id} --command CMD --passed true) before capping.`,
       );
@@ -1888,7 +1919,7 @@ export async function capCell(
       });
       trace = { ...trace, judge_overrides: [...overrides, overrideEntry] };
     }
-    if (bc && !verification_evidence) {
+    if (bc && !verification_evidence && !pendingFeatureVerify) {
       throw new Error(
         `capCell: cell "${id}" declares behavior_change but provides no verification_evidence — attach evidence (--evidence-file) or drop the behavior_change flag.`,
       );
@@ -1926,7 +1957,12 @@ export async function capCell(
     // decision to add one needs a stated reason, not silence. Gated on
     // diff_stats the same way D1 is (undefined — no git, or a legacy caller —
     // skips this check entirely, fail-open).
+    // main-verifies D1: the pending path skips this check — its justification
+    // channel IS verification_evidence, which the pending path refuses by
+    // construction; the feature-level verify (and the slice-tail test cell's
+    // own review) owns that scrutiny instead.
     if (
+      !pendingFeatureVerify &&
       effectiveClass !== 'refactor' &&
       effectiveClass !== 'formatting' &&
       diff_stats &&
@@ -1959,6 +1995,12 @@ export async function capCell(
       const ratio = diff_stats.test_lines_added / Math.max(diff_stats.source_lines_changed, 1);
       if ((cell.lane === 'tiny' || cell.lane === 'small') && ratio > RATIO_WARN_CEILING) {
         ratioWarning = `capCell: cell "${id}" test-to-source line ratio is ${ratio.toFixed(2)} (>${RATIO_WARN_CEILING}) for lane "${cell.lane}" — test-economy D3 non-blocking warning.`;
+      } else if (pendingFeatureVerify && (cell.lane === 'standard' || cell.lane === 'high-risk') && ratio > RATIO_REFUSE_CEILING) {
+        // main-verifies D1: the pending path cannot carry a ratio_waiver (its
+        // waiver channel is verification_evidence, refused by construction),
+        // so past-ceiling stays VISIBLE as a recorded warning instead of an
+        // unsatisfiable refusal — the feature-level verify owns the proof.
+        ratioWarning = `capCell: cell "${id}" test-to-source line ratio is ${ratio.toFixed(2)} (>${RATIO_REFUSE_CEILING}) for lane "${cell.lane}" — recorded as a warning on the feature-verify-pending path (main-verifies D1; test-economy D3's waiver channel is per-cell evidence, which this path defers).`;
       } else if ((cell.lane === 'standard' || cell.lane === 'high-risk') && ratio > RATIO_REFUSE_CEILING) {
         const ratioEvidence = parseVerificationEvidence(verification_evidence);
         const ratioWaiver =
@@ -2023,7 +2065,7 @@ export async function capCell(
     // untouched — no length/duplicate floor; the STDERR advisory noting that
     // lives in bee.mjs's handler layer (F4 precedent), recomputed from the
     // returned cell post-cap.
-    if (proofTier === 'red-first') {
+    if (proofTier === 'red-first' && !pendingFeatureVerify) {
       const evidence = parseVerificationEvidence(verification_evidence);
       if (!evidenceRidesExceptionDoor(evidence)) {
         const before = typeof evidence.red_failure_evidence === 'string' ? evidence.red_failure_evidence.trim() : '';
@@ -2052,7 +2094,7 @@ export async function capCell(
       const hasEvidence =
         verification_evidence != null &&
         (typeof verification_evidence !== 'string' || verification_evidence.trim().length > 0);
-      if (!hasOutput && !hasEvidence) {
+      if (!hasOutput && !hasEvidence && !pendingFeatureVerify) {
         throw new Error(
           `capCell: lane "${cell.lane}" cell "${id}" has a passing verify flag but no recorded proof — re-record the verify with its output (bee.mjs cells verify --id ${id} --command CMD --output "..." --passed true) or attach verification_evidence (--evidence-file). An assertion is not evidence.`,
         );
@@ -2083,6 +2125,10 @@ export async function capCell(
       // diff_stats is absent or the ratio is within bounds, so existing
       // consumers of trace see no schema break.
       warnings: ratioWarning ? [ratioWarning] : [],
+      // main-verifies D1: the pending marker guardFeatureVerifyDebt (bee.mjs)
+      // reads at both swarming exits. Stamped ONLY on the pending path — the
+      // classic evidence path's trace stays byte-identical to before.
+      ...(pendingFeatureVerify ? { feature_verify: 'pending' } : {}),
     };
     return writeCell(root, cell);
   });

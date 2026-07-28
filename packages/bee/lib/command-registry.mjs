@@ -193,13 +193,14 @@ export const COMMAND_REGISTRY = [
   {
     name: 'cells.cap',
     invoke: 'bee cells cap',
-    description: 'Cap a cell — refuses without a recorded passing verify (and, for small+ lanes, recorded output/evidence plus non-empty files_changed).',
+    description: 'Cap a cell — refuses without a recorded passing verify (and, for small+ lanes, recorded output/evidence plus non-empty files_changed). Exception (main-verifies D1): --feature-verify-pending caps with NO per-cell verify evidence, stamping trace.feature_verify: "pending" — the proof is deliberately relocated to ONE feature-level verify (`bee state feature-verify record`), and leaving phase "swarming" is refused until a fresh green record covers every pending cap (D3, no bypass level lifts it). Combining the flag with per-cell evidence claims (--evidence-file/--evidence-stdin, or an already-recorded passing verify) is refused — the two proof paths are exclusive.',
     parameters: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Cell id, e.g. auth-3.' },
         outcome: { type: 'string', description: 'One-line outcome summary.' },
         files: { type: 'string', description: 'Comma-separated list of files the worker changed.' },
+        'feature-verify-pending': { type: 'boolean', description: 'Cap through the feature-verify-pending path (main-verifies D1): no per-cell verify evidence demanded, trace.feature_verify stamped "pending". Refused when combined with per-cell evidence claims. The feature-level verify record (state feature-verify record --result green) is what later satisfies the close door.' },
         'behavior-change': { type: 'boolean', description: 'Force behavior_change true (a cell-declared true cannot be unset by omitting this flag).' },
         'evidence-stdin': { type: 'boolean', description: 'Read verification_evidence JSON from stdin (preferred — no evidence file is persisted).' },
         'evidence-file': { type: 'string', description: 'Path to a verification_evidence JSON file (back-compat; prefer --evidence-stdin).' },
@@ -890,6 +891,43 @@ export const COMMAND_REGISTRY = [
       'bee state route --set --class feature --lane standard --flags multi-domain --files 7 --json',
       'bee state route --show --json',
     ],
+    deprecated: null,
+  },
+  {
+    name: 'state.feature-verify.record',
+    invoke: 'bee state feature-verify record',
+    description:
+      'main-verifies D2: stamp the feature-level verify record — {feature, command, output_sha256, result, at} — on the ACTIVE feature\'s tracked record (session-bound lane else default, the same resolution as state route; no --lane targeting flag) AND its underlying workflow-store record. output_sha256 is computed by the verb from --output-file, never caller-supplied. --result is a closed green|red enum: red is storable (it documents the failure for the fix-cells-then-re-verify loop, D5) but NEVER satisfies the close door — leaving phase "swarming" (state set out, or state scribing-run) stays refused (guardFeatureVerifyDebt, D3, no gate_bypass level lifts it) while any cell capped via `cells cap --feature-verify-pending` lacks a green record stamped strictly newer than the newest pending cap. Refuses when no feature is active. --show is the read-only query mode (also available as `bee state feature-verify show`): prints the currently recorded feature_verify (null when absent) without writing.',
+    parameters: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'The feature-verify command that was run (the impacted suite over the feature\'s whole diff).' },
+        'output-file': { type: 'string', description: 'Path to the captured verify output; the verb computes and stores its sha256.' },
+        result: { type: 'string', description: 'Verify outcome: green or red. Red is storable but never satisfies the close door.', enum: ['green', 'red'] },
+        show: { type: 'boolean', description: 'Read-only query mode: print the currently recorded feature_verify (null when absent) without writing; needs none of the write flags.' },
+        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
+      },
+      required: [],
+    },
+    examples: [
+      'bee state feature-verify record --command "node packages/bee/tests/run_verify.mjs --impacted" --output-file feature-verify-output.txt --result green --json',
+      'bee state feature-verify record --show --json',
+    ],
+    deprecated: null,
+  },
+  {
+    name: 'state.feature-verify.show',
+    invoke: 'bee state feature-verify show',
+    description:
+      'Read-only: print the ACTIVE feature\'s recorded feature-verify record — {feature, command, output_sha256, result, at} (main-verifies D2) — or null when none is recorded. Same record `state feature-verify record --show` prints; never writes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line summary.' },
+      },
+      required: [],
+    },
+    examples: ['bee state feature-verify show --json'],
     deprecated: null,
   },
   {

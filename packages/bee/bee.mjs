@@ -1595,6 +1595,10 @@ async function handleCellsCap(root, flags) {
     friction: flags.friction ? String(flags.friction) : null,
     overrideJudge: flags['override-judge'] !== undefined ? String(flags['override-judge']) : null,
     diff_stats: diffStats,
+    // main-verifies D1: the sanctioned evidence-free cap path — stamps
+    // trace.feature_verify: "pending"; capCell refuses combining it with
+    // per-cell evidence claims. Absent flag keeps the classic path untouched.
+    feature_verify_pending: flags['feature-verify-pending'] === true,
     ...ownershipFlags(flags),
   });
   emitJudgeStandardCapAdvisory(cell); // F5
@@ -2846,6 +2850,11 @@ async function handleStateSet(root, flags) {
       // `swarming`. Runs BEFORE any field is mutated and inside the mutation
       // lock, so a refusal leaves the record byte-identical.
       guardTestCellDebt(root, state, targetPhase);
+      // main-verifies D3 — the feature-verify close door at the same
+      // boundary: pending caps (D1) hold `swarming` shut until a fresh
+      // green feature-verify record (D2) covers them. Same pre-mutation,
+      // no-bypass, no-waiver mechanics as guardTestCellDebt above.
+      guardFeatureVerifyDebt(root, state, targetPhase);
       if (targetPhase === 'compounding-complete') {
         // scribing-integrity si-1 (D2): a lane close checks the LANE's own
         // feature debt (thresholded on the lane's own last_scribing_run) —
@@ -3105,6 +3114,79 @@ function guardTestCellDebt(root, record, targetPhase) {
     `set: refusing to leave phase "swarming" for "${targetPhase}" — feature "${feature}" has ${offenders.length} consolidated test cell(s) not green: ${offenders.join(', ')}.\n` +
       'Slice-tail test batching (spec #80/#85 P4) deferred this slice\'s test AUTHORING to that cell; leaving swarming now would ship behavior whose tests were never written or never passed.\n' +
       'FIX: execute the test cell (happy path, edge cases, error paths over the slice\'s net behavior), record a passing verify, and cap it — `bee cells verify --id <id> ... --passed true` then `bee cells cap --id <id> ...`. If its suite exposed a regression in an already-capped cell, open fix cells in this same feature and cap the test cell green after; capped cells are never un-capped.\n' +
+      'This is a mechanical precondition, not a human gate: no gate_bypass level (including "total") and no headless run lifts it, and there is no waiver flag.',
+  );
+}
+
+// ─── main-verifies D3 — the feature-verify close door ──────────────────────
+//
+// D1 relocated per-cell proof to the feature boundary: a cell may cap
+// evidence-free through `cells cap --feature-verify-pending`, stamping
+// trace.feature_verify: "pending". This guard is the relocated enforcement
+// point — without it the cap law's essence ("no ship without green
+// evidence") would be prose. Exact mirror of guardTestCellDebt above: same
+// two doors (state set out of `swarming` + state scribing-run), same
+// placement BEFORE any field mutates, and — deliberately — the same
+// NOT-A-GATE posture: it reads neither bypassLevel nor any headless flag, so
+// NO gate_bypass level (including "total") lifts it, and there is no waiver
+// flag. The fix is always the same: run the ONE feature-level verify
+// (impacted over the feature's whole diff), record it via `bee state
+// feature-verify record ... --result green`, and retry.
+//
+// Satisfaction (CONTEXT "Agent's Discretion" — record timestamp, never
+// marker clearing): the pending markers are never rewritten; the door opens
+// when the selected record carries a feature_verify record that is (a) for
+// THIS feature, (b) result "green" — a red record is storable evidence of
+// the failure but never satisfies (D2) — and (c) stamped strictly NEWER
+// than the newest pending cap, so a cell capped after the last verify run
+// re-closes the door until the verify is re-run and re-recorded (D5's
+// fix-cells-then-re-verify loop at feature granularity).
+function guardFeatureVerifyDebt(root, record, targetPhase) {
+  const from = record && record.phase;
+  if (from !== 'swarming') return; // only the exit from execution is guarded
+  if (targetPhase === 'swarming') return; // a no-op re-set is not a departure
+  const feature = record && record.feature;
+  if (!feature) return; // no active feature ⇒ nothing to hold open
+  let cells = [];
+  try {
+    cells = listCells(root, { feature });
+  } catch {
+    return; // unreadable cell store degrades to today's behavior, never a crash
+  }
+  const pending = [];
+  let newestPendingCapMs = null;
+  for (const cell of cells) {
+    if (!cell || cell.status !== 'capped') continue;
+    const trace = cell.trace || {};
+    if (trace.feature_verify !== 'pending') continue;
+    pending.push(cell.id);
+    const cappedMs = Date.parse(trace.capped_at);
+    if (Number.isFinite(cappedMs) && (newestPendingCapMs === null || cappedMs > newestPendingCapMs)) {
+      newestPendingCapMs = cappedMs;
+    }
+  }
+  if (pending.length === 0) return; // no relocated proof owed ⇒ door untouched
+  const raw = record.feature_verify;
+  const rec = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+  const sameFeature = rec && (!rec.feature || rec.feature === feature);
+  const green = rec && sameFeature && rec.result === 'green';
+  const recAtMs = rec ? Date.parse(rec.at) : NaN;
+  const fresh = Number.isFinite(recAtMs) && (newestPendingCapMs === null || recAtMs > newestPendingCapMs);
+  if (green && fresh) return;
+  let recordState;
+  if (!rec) {
+    recordState = 'NO feature-verify record exists';
+  } else if (!sameFeature) {
+    recordState = `the recorded feature-verify names feature "${rec.feature}", not "${feature}"`;
+  } else if (rec.result !== 'green') {
+    recordState = `the recorded feature-verify is "${rec.result}" — a red record documents the failure, it never satisfies this door (main-verifies D2)`;
+  } else {
+    recordState = `the recorded GREEN feature-verify (at ${rec.at}) is STALE — not newer than the newest pending cap, so at least one capped cell was never covered by it`;
+  }
+  throw new Error(
+    `set: refusing to leave phase "swarming" for "${targetPhase}" — feature "${feature}" has ${pending.length} capped cell(s) awaiting the feature-level verify (trace.feature_verify: "pending"): ${pending.join(', ')}, and ${recordState}.\n` +
+      'Those cells capped through `cells cap --feature-verify-pending` (main-verifies D1): their per-cell proof was deliberately relocated to ONE feature-level verify over the feature\'s whole diff, and this door is what keeps that relocation honest (D3).\n' +
+      'FIX: run the feature verify (the impacted suite over the feature\'s whole diff), capture its output to a file, record it — `bee state feature-verify record --command "<cmd>" --output-file <file> --result green` — then retry this transition. A red result is recordable (it documents the failure) but never opens this door: open fix cells in this same feature (never un-cap, main-verifies D5), re-verify, and record the green.\n' +
       'This is a mechanical precondition, not a human gate: no gate_bypass level (including "total") and no headless run lifts it, and there is no waiver flag.',
   );
 }
@@ -3647,6 +3729,12 @@ async function handleStateScribingRun(root, flags) {
       // and before the ledger append, so nothing records a run that the
       // refusal then undid.
       guardTestCellDebt(root, state, 'compounding');
+      // main-verifies D3 — the SECOND door for the feature-verify debt too:
+      // scribing-run is the sole producer of phase=compounding, so guarding
+      // only `state set` would leave the normal path wide open (the exact
+      // reasoning of the guardTestCellDebt call above). Refuses before
+      // last_scribing_run is stamped and before the ledger append.
+      guardFeatureVerifyDebt(root, state, 'compounding');
       state.last_scribing_run = { feature, date, at, areas_synced: areas, next_action: nextAction };
       // "plus top-level phase/next_action" (bee-scribing SKILL.md:112).
       state.phase = 'compounding';
@@ -4297,6 +4385,113 @@ async function handleStateRoute(root, flags) {
     result: route,
     text: `Recorded route (class=${route.class} lane=${route.lane} flags=${route.flags.length} files=${route.product_files}).${targetLane ? ` (lane "${targetLane}")` : ''}`,
   };
+}
+
+// ─── state feature-verify: main-verifies D2 — the feature-level proof record ─
+// The delegator's ONE verify over the feature's whole diff, recorded the same
+// discipline as validation-cache/advisor-ref: a machine-readable record the
+// close door (guardFeatureVerifyDebt, D3) reads back — {feature, command,
+// output_sha256, result, at}. `record` stamps it on the ACTIVE feature's
+// tracked record (session-bound lane else default, the same
+// resolveMutationTarget resolution `state route` uses — no --lane targeting
+// flag here either) AND on the underlying workflow-store record (route's own
+// belt-and-suspenders precedent). --result is a closed green|red enum: red is
+// STORABLE — it documents the failure for D5's fix-cells-then-re-verify loop
+// — but never satisfies the door. output_sha256 is computed HERE from
+// --output-file, never caller-supplied, so the record always names real
+// captured bytes (validation-cache's stamp-it-yourself discipline).
+
+const FEATURE_VERIFY_RESULTS = ['green', 'red'];
+
+function featureVerifyRecordFor(state) {
+  const raw = state ? state.feature_verify : null;
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+}
+
+function featureVerifyShowPayload(root) {
+  const target = resolveMutationTarget(root, null, 'feature-verify show', { noLane: false });
+  const rec = featureVerifyRecordFor(target.record);
+  if (!rec) return { result: null, text: 'No feature-verify recorded.' };
+  return {
+    result: rec,
+    text:
+      `feature="${rec.feature}" result=${rec.result} command="${rec.command}" output_sha256=${rec.output_sha256} at=${rec.at}` +
+      `${target.lane ? ` (lane "${target.lane}")` : ''}`,
+  };
+}
+
+async function handleStateFeatureVerifyRecord(root, flags) {
+  // sqs-b3 precedent (scribing-run --show): read-only query mode returns
+  // ABOVE rejectDryRun/requireFlags — a read never supplies write-only flags.
+  if (flags.show === true) return featureVerifyShowPayload(root);
+  rejectDryRun(flags);
+  const { command, 'output-file': outputFile, result: resultRaw } = requireFlags(
+    flags,
+    [{ name: 'command' }, { name: 'output-file' }, { name: 'result' }],
+    exampleFor('state.feature-verify.record'),
+  );
+  const result = String(resultRaw);
+  if (!FEATURE_VERIFY_RESULTS.includes(result)) {
+    throw new Error(
+      `feature-verify record: invalid --result "${result}" — must be one of ${FEATURE_VERIFY_RESULTS.join('|')}. ` +
+        'A red record is storable (it documents the failure) but never satisfies the close door (main-verifies D2/D3).',
+    );
+  }
+  let outputBytes;
+  try {
+    outputBytes = fs.readFileSync(path.resolve(String(outputFile)));
+  } catch (err) {
+    throw new Error(
+      `feature-verify record: could not read --output-file "${outputFile}" (${err && err.code ? err.code : err}). ` +
+        'FIX: pass the path to the captured feature-verify output.',
+    );
+  }
+  const outputSha256 = crypto.createHash('sha256').update(outputBytes).digest('hex');
+  const { record, targetLane } = await withMutationLock(root, null, false, async () => {
+    const target = resolveMutationTarget(root, null, 'feature-verify record', { noLane: false });
+    const { record: state, write } = target;
+    const phase = state.phase;
+    if (!state.feature || phase === 'idle' || phase === 'compounding-complete') {
+      throw new Error(
+        `feature-verify record: refused — no active feature to attach the verify to (phase "${phase ?? 'idle'}", feature "${state.feature ?? 'none'}"). ` +
+          'FIX: the feature-level verify proves an in-flight feature; start one first.',
+      );
+    }
+    // Whole-record replace, never a field merge — route's D4 contract.
+    state.feature_verify = {
+      feature: state.feature,
+      command: String(command),
+      output_sha256: outputSha256,
+      result,
+      at: new Date().toISOString(),
+    };
+    await write(state);
+    // main-verifies D2 ("onto the ACTIVE feature's workflow record") — also
+    // patch the underlying workflow-store record, exactly handleStateRoute's
+    // belt-and-suspenders shape: `write` above already lands the field on
+    // the PROJECTION (state.json / lanes/<feature>.json) the door reads;
+    // this keeps the workflow record itself carrying it too. Already inside
+    // withMutationLock's workflow:<id> hold whenever a live workflow exists,
+    // so updateWorkflowAssumingLock is the correct, non-self-deadlocking form.
+    const ctrlRoot = controlRootFor(root);
+    const targetFeature = target.lane || state.feature;
+    const wf = listWorkflows(ctrlRoot).workflows.find((w) => w.feature === targetFeature && w.status !== 'closed');
+    if (wf) {
+      updateWorkflowAssumingLock(ctrlRoot, wf.id, { feature_verify: state.feature_verify });
+    }
+    return { record: state.feature_verify, targetLane: target.lane };
+  });
+  const redNote = result === 'red'
+    ? ' Red is recorded evidence of the failure — it never opens the close door; fix cells in this feature, re-verify, and record the green (main-verifies D5).'
+    : '';
+  return {
+    result: record,
+    text: `Recorded feature-verify (${result}) for "${record.feature}" at ${record.at}.${targetLane ? ` (lane "${targetLane}")` : ''}${redNote}`,
+  };
+}
+
+function handleStateFeatureVerifyShow(root, flags) {
+  return featureVerifyShowPayload(root);
 }
 
 // ─── state validation-cache: the spec #77 P1 delta-validation surface ────────
@@ -7313,7 +7508,13 @@ function stateUsageFallback(leading) {
     const sub = leading[2];
     return `Unknown plan-rev action "${sub || '(missing)'}". Use: bump.`;
   }
-  return `Unknown command "${verb || '(missing)'}". Use: set, gate, route, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, validation-cache, compact-log, compact-check, compact-capsule.`;
+  // feature-verify (main-verifies D2): the two-verb feature-level proof
+  // family, mirroring the advisor-ref/validation-cache branches above.
+  if (verb === 'feature-verify') {
+    const sub = leading[2];
+    return `Unknown feature-verify action "${sub || '(missing)'}". Use: record, show.`;
+  }
+  return `Unknown command "${verb || '(missing)'}". Use: set, gate, route, feature-verify, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, validation-cache, compact-log, compact-check, compact-capsule.`;
 }
 
 function backlogUsageFallback(leading) {
@@ -7477,6 +7678,8 @@ const HANDLERS = {
   'state.set': handleStateSet,
   'state.gate': handleStateGate,
   'state.route': handleStateRoute,
+  'state.feature-verify.record': handleStateFeatureVerifyRecord,
+  'state.feature-verify.show': handleStateFeatureVerifyShow,
   'state.plan-rev.bump': handleStatePlanRevBump,
   'state.worker.add': handleStateWorkerAdd,
   'state.worker.update': handleStateWorkerUpdate,
@@ -7590,7 +7793,12 @@ const HANDLERS = {
 // `state route --set --class feature ...` would consume `--class`'s VALUE as
 // `--set`'s own value, the exact class of bug dry-run/write/as-lane/show
 // guard against.
-export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief']);
+// `feature-verify-pending` (main-verifies D1) is `cells cap`'s flag-alone
+// opt-in for the evidence-free pending cap path — MUST be here or
+// `cells cap --id X --feature-verify-pending --outcome ...` would consume
+// `--outcome` as its value, the exact class of bug the flags above guard
+// against.
+export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief', 'feature-verify-pending']);
 
 export function splitCommandTokens(argv) {
   const leading = [];
