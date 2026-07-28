@@ -60,7 +60,7 @@ constrain the answer.
 
 ## Anti-Probes (never ask these here)
 
-These are implementation choices; they belong to `bee-planning` or `bee-validating`:
+These are implementation choices; they belong to `bee-planning`:
 
 - library, framework, or storage engine selection
 - performance targets, caching strategy, index design

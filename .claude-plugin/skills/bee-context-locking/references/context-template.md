@@ -87,5 +87,5 @@ Out-of-scope ideas captured during exploring. Not lost, not planned.
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads locked
 decisions, code context, canonical references, and deferred-to-planning questions.
-Validating and reviewing use locked decisions for coverage and UAT.
+Planning's Gate 2 shape stage and reviewing use locked decisions for coverage and UAT.
 ```

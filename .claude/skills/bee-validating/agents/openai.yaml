@@ -1,5 +1,0 @@
-interface:
-  display_name: "Bee Validating"
-  short_description: "Prove the plan against repo reality with concrete evidence before any code is written. Use when planning has an approved work shape that needs feasibility validation before swarming, or when a plan smells like plausibility instead of proof."
-policy:
-  allow_implicit_invocation: true

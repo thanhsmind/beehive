@@ -1,7 +1,7 @@
 ---
 name: bee-swarming
 description: >-
-  Orchestrate bounded workers over validated cells without implementing anything directly. Use when validating approves execution (Gate 3) and current-slice cells are open and validated.
+  Orchestrate bounded workers over Gate-2-approved cells without implementing anything directly. Use when the merged Gate 2 (shape+execution) is approved and current-slice cells are open.
 metadata:
   version: '0.1'
   ecosystem: bee
@@ -24,7 +24,7 @@ decision IDs: `references/provenance.md`.
 
 | Lane | Shape |
 |---|---|
-| `tiny`/`small` | Merged Gate 2+3 + frozen-judge stay with the orchestrator; implementation runs through **one dispatched execution worker** under the full execution contract (same template, status tokens, reservation/cap discipline) — never a wave: no wave analysis, no reviewers, no panels. `small`'s 1-3 cells run PARALLEL when disjoint (regen deferred), 3-4 live workers cap; serial names its conflict. |
+| `tiny`/`small` | The merged Gate 2 + frozen-judge stay with the orchestrator; implementation runs through **one dispatched execution worker** under the full execution contract (same template, status tokens, reservation/cap discipline) — never a wave: no analysis, no reviewers, no panels. No `plan.md`, so the prompt is told to cite the cell itself as the work spec. `small`'s 1-3 cells run PARALLEL when disjoint (regen deferred), 3-4 live workers cap; serial names its conflict. |
 | `standard`/`high-risk` | Full wave protocol below; tiny/small borrows only its Spawn, tier-judgment, Record, and Goal-check steps. |
 
 Tiny/small execution dispatch: see `Single execution worker in full` in `references/swarming-reference.md`.
@@ -36,8 +36,8 @@ return to bee-planning instead — see Completion Signals below).
 
 ## Preconditions
 
-- Gate 3 approved: `gates.execution` true in `node .bee/bin/bee.mjs status --json`, else stop — return to bee-validating.
-- Sweep stale reservations: `node .bee/bin/bee.mjs reservations sweep`
+- Gate 2 approved (merged shape+execution): `gates.execution` true in `node .bee/bin/bee.mjs status --json`, else stop — return to bee-planning.
+- Sweep stale reservations: `reservations sweep`
 - Critical patterns read: bundle → `docs/knowledge/index.md` `## Critical patterns`; no bundle → `docs/history/learnings/critical-patterns.md` when present.
 
 ## Opt-in Native Worktree Dispatch
@@ -98,14 +98,14 @@ When a cell or wave finishes (capped, verify green) and execution-approved
 work remains, continue with the next unit in this session — finishing a unit
 is never a reason to stop, ask, or wait. Only at real session exit: claim
 the next unit, write the `planned-next` handoff, end cleanly; the next fresh
-session adopts the carried claim automatically, no confirmation asked. Never
-stop to suggest or wait for `/clear`, never issue it yourself. Full
-contract: `references/swarming-reference.md` ("Fresh-session handoff in full").
+session adopts the carried claim automatically. Never stop to suggest or
+wait for `/clear`, never issue it yourself. Full contract:
+`references/swarming-reference.md` ("Fresh-session handoff in full").
 
 ## Hard Rules
 
 - `standard`/`high-risk`: never implement cells yourself, not even a one-line fix — make it a cell and dispatch it (`tiny`/`small`: see Lane scaling).
-- Never spawn before Gate 3 approval.
+- Never spawn before Gate 2 approval.
 - Never let workers self-select cells; pass one explicit cell id each.
 - Never resolve file conflicts by "being careful"; fix reservations or cell scope.
 - Never paste session history into a worker dispatch.
@@ -114,12 +114,12 @@ contract: `references/swarming-reference.md` ("Fresh-session handoff in full").
 
 `mode:headless`: waves run without check-ins; unrescuable blockers and
 anything needing user judgment go to an `Outstanding Questions` section
-instead of a blocking question. Gate 3 must already be approved — headless
+instead of a blocking question. Gate 2 must already be approved — headless
 never grants or assumes it, and never self-approves Gate 4 at the end.
 
 ## Red Flags
 
-- spawning before validation approval
+- spawning before Gate 2 approval
 - a worker choosing its own cell, or handling two
 - full session context forked into a routine worker
 - a worker spawned as another plugin's registered agent type instead of the default type + inline template

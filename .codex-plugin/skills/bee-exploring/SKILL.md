@@ -23,7 +23,7 @@ Scout bees find the flowers; they do not build the comb.
   `references/exploring-reference.md` ("Batching mechanics").
 - Do not answer your own question — even when sure of the answer.
 - No implementation research, architecture proposals, cell creation, or
-  code — the sole exception is a throwaway SEE mock under
+  code — except a throwaway SEE mock under
   `.bee/spikes/<feature>/mocks/`:
   `references/exploring-reference.md` ("SEE mock").
 - Do not invoke planning yourself. End by handing the user to `bee-planning`.
@@ -36,16 +36,12 @@ Scout bees find the flowers; they do not build the comb.
 
 ## Flow
 
-0. **Enter the feature atomically (from `idle`).** Fresh session = phase
-   `idle`. ONE call —
+0. **Enter the feature atomically (from `idle`).** ONE call —
    `node .bee/bin/bee.mjs state start-feature --feature "<slug>" --mode "<mode>"`
-   — sets `idle → exploring` + feature + mode + resets all four gates. Do
-   this FIRST; never hand-write `state set --owner exploring --phase
-   exploring` from `idle` — the owner guard needs `--owner` to match the
-   pre-mutation phase, so it is refused and bounces back to routing. After
-   `start-feature`, phase is `exploring`, matching step 7's `state set
-   --owner exploring …`. Feature already active (phase not `idle`/terminal)
-   → skip, you are resuming.
+   — sets `idle → exploring` + feature + mode + resets all gates. Do this
+   FIRST; never hand-write `state set --owner exploring --phase exploring`
+   from `idle` (refused — `--owner` must match the pre-mutation phase).
+   Feature already active → skip, you are resuming.
 
 1. **Scope**
    - Classify `Quick` / `Standard` / `Deep`.
@@ -89,11 +85,9 @@ Scout bees find the flowers; they do not build the comb.
      single-choice where possible, outcome-framed, CONTEXT / QUESTION /
      RECOMMENDATION / options format.
    - Materiality test; under `gate_bypass_level` `full`/`total`, apply the
-     info-vs-approval litmus to each surviving candidate before asking —
-     *do I already have a confident best answer?* Yes → it is an approval
-     question, lock it as a decision from that recommendation and do not
-     ask. No, and only the user can supply it → it is a genuine information
-     question, still ask, even under `total`. Blindspot pass, SEE mock:
+     info-vs-approval litmus — *confident best answer already?* Yes → lock
+     it as a decision, don't ask. No → genuine information, still ask, even
+     under `total`. Blindspot pass, SEE mock:
      `references/exploring-reference.md` ("Materiality test",
      "Gate-bypass refinement", "Blindspot pass", "SEE mock").
    - After each answer, confirm it back and assign a stable ID: `D1`, `D2`…
@@ -101,8 +95,7 @@ Scout bees find the flowers; they do not build the comb.
      decision: `references/exploring-reference.md` ("Pinned terms").
    - One answer, several decisions: lock the one asked about, echo the
      others as candidates to confirm one at a time.
-   - Scope creep: mark deferred with one line, return to the current
-     question.
+   - Scope creep: mark deferred, return to the current question.
 
 6. **Context Assembly**
    - Write `docs/history/<feature-slug>/CONTEXT.md` from
@@ -117,12 +110,11 @@ Scout bees find the flowers; they do not build the comb.
 
 7. **State And Handoff**
    - `node .bee/bin/bee.mjs state set --owner exploring --phase exploring --feature "<feature>" --summary "Exploring complete. CONTEXT.md is ready for planning." --next-action "Gate 1, then invoke bee-planning."`
-   - Gate-bypass check FIRST — read the active `gate_bypass_level` before
-     presenting anything; `full`/`total` lift the high-risk floor and cover
-     **every** lane including high-risk/hard-gate (the human already
-     approved it), so when the level covers Gate 1 for this lane, skip the
-     question and continue straight to `bee-planning`:
-     `references/exploring-reference.md` ("Gate 1 bypass mechanics").
+   - Gate-bypass check FIRST — read the active `gate_bypass_level`; `full`/
+     `total` lift the high-risk floor for **every** lane (already approved),
+     so when the level covers Gate 1 here, skip the question, go straight
+     to `bee-planning`: `references/exploring-reference.md`
+     ("Gate 1 bypass mechanics").
    - Else present **Gate 1** per the Gate Presentation Contract: plain-
      language layer in chat (what we decided / why trustworthy / cost if
      wrong / what you are deciding), CONTEXT.md linked not pasted; then

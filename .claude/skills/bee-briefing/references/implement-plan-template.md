@@ -22,7 +22,7 @@ decisions: [<D-IDs cited below>]
 # Implementation Plan: <Feature>
 
 > Human-layer projection of the truth artifacts. Truth lives in CONTEXT.md
-> (decisions), plan.md + cells (work), and the validating report (evidence).
+> (decisions), plan.md + cells (work), and cell/feature verify output (evidence).
 > Feedback on this document flows back to those artifacts, then this re-renders.
 
 ## 1. Goal
@@ -88,12 +88,12 @@ Phase headers only if plan.md is phase-shaped — never invent phases.>
 
 ## 8. Validation Plan
 
-<Describe what WILL be checked. Link evidence from the validating report once it
-exists. NEVER state a result that has not run.>
+<Describe what WILL be checked. Link evidence from cell verify output / the
+feature-verify record once it exists. NEVER state a result that has not run.>
 
 **Automated** — `<verify command from the cells>` → expected: <target outcome>
 **Manual** — [ ] <check for SEE/CALL/RUN decisions>
-**Evidence** — <link to docs/history/<feature>/reports/… once validating runs; "pending" before>
+**Evidence** — <link to docs/history/<feature>/reports/… once cell/feature verify runs; "pending" before>
 
 ## 9. Risks & Mitigation
 
@@ -123,10 +123,10 @@ Carried from Antigravity's agent guide, minus what bee enforces elsewhere:
 2. **Only real references.** Name only files/APIs/tables that exist or are marked "to be created" in a cell. No invented paths.
 3. **Separate facts from assumptions.** No plausibility language ("should work"). A guess is labeled a guess and lives in Open Questions.
 4. **Present tense, projected.** "The sender retries on 5xx" — describe the planned system as the artifacts define it. Do not narrate history ("we changed…").
-5. **Never claim validation ran** unless the validating report exists; the Validation Plan links evidence, it does not assert green.
+5. **Never claim validation ran** unless cell verify output or the feature-verify record exists; the Validation Plan links evidence, it does not assert green.
 6. **Status mirrors the gate.** Never `Approved` before the gate fires; flip to `Needs Revision` when a source changes after approval.
 
-**Dropped from Antigravity's guide as redundant with bee** (do not re-add): "do not modify files before approval" (the write-guard denies source writes pre-Gate-3), "inspect the codebase first" (exploring/planning own that), "always include validation steps" (cells cannot exist without a `verify` command).
+**Dropped from Antigravity's guide as redundant with bee** (do not re-add): "do not modify files before approval" (the write-guard denies source writes before the merged Gate 2 approves execution), "inspect the codebase first" (exploring/planning own that), "always include validation steps" (cells cannot exist without a `verify` command).
 
 ## Rendering procedure (concise)
 

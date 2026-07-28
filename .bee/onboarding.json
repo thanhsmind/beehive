@@ -2,17 +2,17 @@
   "schema_version": "1.0",
   "bee_version": "1.20.1",
   "managed": {
-    "agents_block": "379200f7b7cbecfe58efb698e258a8899d990bf91cde5ffd44d99031b1c2b10b",
-    "gitignore_block": "8940e45de24b9d602166dec022b11038bb9f71caa98e25ba60363bef9adaca42",
+    "agents_block": "4db3b1aedfde62cbb9ea9cb2e037a1d8394bc63ddf759b4396ce2559e2b0ba28",
+    "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
     "helpers": {
-      "bee.mjs": "2855183e2a7fb3da8692fa5025ffa238aa048a83d88634bfecd5514a574580a0"
+      "bee.mjs": "2facf8e374f24fed8175946bf1db7a817515d515576325d4cac934db1ce3f2c0"
     },
     "lib": {
       "backlog.mjs": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "d573a76acf0fdf14188377c0032cfa0b6b359895c93d99ed775e16389e87acec",
       "claims.mjs": "de7726a26b2354b65ee598d00f9179f04f71fe3d53f39a865b749da49e03623d",
-      "command-registry.mjs": "e45359c86bd1c4fcad2c7627c419e3a19ad35506e56cc6823c1fb668f66783a6",
+      "command-registry.mjs": "a1fe9c5958d0729e8a79801180467b6298f960f1b52f77f0e83afb0fdf86e38c",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
@@ -38,7 +38,7 @@
       "scratch.mjs": "3b7ab2e104b3f4cee240a43fac49ee630df7ca2ed995eb71f403d25eae17afb0",
       "source-identity.mjs": "716740641e1f6bfbb5ccc5b4fe7827f1165c2a1f1127ee3800f52a47ac09fc7a",
       "state-projection.mjs": "0ff0a75338db7469bda508305ed13311b2dea07a0c8f61cf8161d03ec3096d9d",
-      "state.mjs": "25176e782997ea54be2642db08cea04076dac22a0adb53e7306a9dad4f8df852",
+      "state.mjs": "b7ec65b4e679354cce6afcd47498787ada6a6e796db9d2e0927c426a5271079f",
       "validate-args.mjs": "99a28f221deb373ee128a821a1463acafdf91413c377c04d56cbda5137c81b17",
       "workflow-store.mjs": "f2e4988b7ecd278f220e7dfcd8d15f2e06a28312871f9291f1d890a1f669ad29",
       "workspace-store.mjs": "aa8017d71df1e3d35f40503b47bbe1aa1a2e110623b4a480fe66eb5bb1f3c3c1",
@@ -82,5 +82,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-28T16:08:41.538Z"
+  "updated_at": "2026-07-28T23:07:55.273Z"
 }

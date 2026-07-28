@@ -9,7 +9,7 @@ metadata:
     web-docs-search:
       kind: capability
       missing_effect: degraded
-      reason: Checks current official documentation version-aware (Exa or WebSearch/WebFetch/browser); absent, docs claims degrade to Inference and become proof obligations for validating.
+      reason: Checks current official documentation version-aware (Exa or WebSearch/WebFetch/browser); absent, docs claims degrade to Inference and become proof obligations for bee-planning's review wave.
     upstream-pattern-research:
       kind: capability
       missing_effect: degraded
@@ -27,7 +27,7 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
 - **Research only.** No source edits, no cells, no architecture commitments. The output is a brief, never code.
 - **Locked decisions win.** A finding that contradicts an active D-ID is *noted* with its evidence; superseding the D-ID is the user's move, never xia's.
 - **Finish the brief before recommending.** Ask one targeted question only when viable paths differ materially in behavior, operational risk, or migration cost — otherwise recommend from evidence.
-- xia is already the delegated researcher (per the Delegation contract, D2/D3, `bee-hive/references/routing-and-contracts.md`); its internal step 1 stack-ledger scan may sub-delegate as an extraction-tier I/O worker. Any other ad-hoc subagent dispatch xia makes beyond its own research steps defaults to the generation slot model; ceiling requires the [bee-tier: ceiling] marker plus a one-line justification.
+- xia is already the delegated researcher (Delegation contract, `bee-hive/references/routing-and-contracts.md`); its step 1 stack-ledger scan may sub-delegate as extraction-tier I/O. Any other ad-hoc dispatch defaults to generation; ceiling needs the `[bee-tier: ceiling]` marker plus a one-line justification.
 
 ## Depth
 
@@ -66,7 +66,7 @@ State why the chosen rung beats the next-best alternative, and what evidence wou
 
 ## Output
 
-- **In-chain** (invoked from `bee-planning` discovery L2/L3): no separate file — findings merge into the feature's `approach.md` (chosen path / rejected alternatives carry the ladder rationale; risk-map rows cite evidence labels; version caveats and `Inference`-only claims become open questions for `bee-validating`).
+- **In-chain** (invoked from `bee-planning` discovery L2/L3): no separate file — findings merge into the feature's `approach.md` (chosen path / rejected alternatives carry the ladder rationale; risk-map rows cite evidence labels; version caveats and `Inference`-only claims become open questions for `bee-planning`'s Gate 2).
 - **Standalone** (no feature underway): write `docs/history/research/<topic-slug>.md` from `references/research-brief-template.md`, lead with the Bottom Line, and suggest the next step — `bee-exploring` if the topic is becoming a fuzzy feature, `bee-planning` if scope is already clear.
 - A genuinely new first-principles finding (layer-3 knowledge) → flag it for `bee-compounding`.
 
@@ -84,7 +84,7 @@ State why the chosen rung beats the next-best alternative, and what evidence wou
 - a recommendation without the rejected rungs stated
 - a capability gap silently skipping a step instead of degrading it honestly
 - a research finding silently replacing a locked D-ID
-- writing code "just to try it" mid-research (that is a spike — `bee-validating` owns it)
+- writing code "just to try it" mid-research (that is a spike — opt-in `spike` lane, never xia's job)
 
 Violating the letter of these rules is violating the spirit of these rules.
 

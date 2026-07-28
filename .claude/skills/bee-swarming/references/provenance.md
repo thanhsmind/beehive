@@ -8,6 +8,8 @@ each body rule to the decision(s) that authorize it and the rationale in one lin
 | Body rule | Decision IDs / labels | Rationale |
 |---|---|---|
 | Tiny/small implementation runs through one dispatched execution worker, never a wave | AO14 | Execution authority is a named dispatch class, distinct from I/O gathers, even for the lightest lane |
+| Tiny/small's merged Gate 2 covers shape+execution together | validation-diet D2 | Standalone Gate 3 is retired; one approval covers both |
+| Tiny/small carry no `plan.md`; the worker cites the cell itself as the work spec | validation-diet D3/D4 | The `validating` phase and its artifacts no longer exist |
 | Small-lane cells (1-3) run PARALLEL when product file sets are disjoint, 3-4 live workers cap; serial names its conflict | hardening-7, parallel-default D1 | Reservations are the proof and the police; undeclared-overlap concurrency is a wave shape wearing a small lane |
 | `regen_obligation_ack: "wave-barrier"` drops shared generated artifacts from the disjointness check; orchestrator owes the regen chain once at wave close | parallel-default D2 | Shared generated artifacts were the near-universal overlap forcing serial dispatch |
 | Orchestrator claims the cell before spawning; workers only validate | D1 | A spawned worker never self-selects or claims its own work |

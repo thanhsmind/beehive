@@ -8,18 +8,17 @@ Open this when the compact bootstrap in `SKILL.md` is not enough.
 |---|-------|----------------------|--------------|
 | 1 | `bee-hive` | Routing, go mode, gates, red flags. | Starting any session |
 | 2 | `bee-exploring` | Identify gray areas, lock decisions into `CONTEXT.md`. | Feature request is vague or new |
-| 3 | `bee-planning` | Research, mode gate, approach, unified plan, current-slice cells. | Decisions are locked, or scope is already clear |
-| 4 | `bee-validating` | Reality gate, feasibility matrix, spikes, plan-checker, cell review. | Work shape is approved |
-| 5 | `bee-swarming` | Launch and tend bounded workers with reservations. | Gate 3 approved |
-| 6 | `bee-executing` | Bounded worker loop for one cell. | Spawned by swarming |
-| 7 | `bee-reviewing` | Parallel review gate with P1/P2/P3 findings, user-invoked over a scope the user chooses. | User explicitly requests review (decision 565e68d0) — never automatic after a final slice or feature close |
-| 8 | `bee-scribing` | BA-grade tech-agnostic area specs: sync, capture, harvest. | Review approved; documenting any area (UI/API/job); a settled outcome must be kept |
-| 9 | `bee-compounding` | Capture durable learnings and decisions. | Scribing done or work abandoned |
-| 10 | `bee-grooming` | Entropy audit, debt hunt, approved kills. | Cleanup/audit requested; hive idle |
-| 11 | `bee-writing-skills` | TDD-for-skills, pressure testing. | Authoring or editing a bee skill's `SKILL.md` content |
-| 12 | `bee-evolving` | Run bee's gated self-improvement loop over its own collected feedback digest (cluster → rank → Gate A → Iron Law hand-off → suites green → Gate B → push). Bee repo only, human-invoked, never auto-runs, never pushes on its own. | Human asks bee to evolve/improve itself from its own dogfood friction, in the bee repository |
-| 13 | `bee-briefing` | Render the one human-readable implement plan per feature, and the post-Gate-4 walkthrough (consolidator, not planner). | Planning shaped `small`+ work; a feature's implement plan needs (re)generating; a `standard`/`high-risk` feature passed Gate 4 |
-| 14 | `bee-bypass-gate` | Toggle opt-in gate-bypass autopilot (`on`/`off`/`status`): auto-approve Gates 1-3 for normal-lane work; high-risk/hard-gate, secrets, UAT always stop. | User wants to run without approving every gate, or to check/turn off bypass |
+| 3 | `bee-planning` | Research, mode gate, approach, unified plan, current-slice cells; the SMALLER PATH reality check and the review wave run inline before its merged Gate 2. | Decisions are locked, or scope is already clear |
+| 4 | `bee-swarming` | Launch and tend bounded workers with reservations. | Gate 2 approved (merged shape+execution) |
+| 5 | `bee-executing` | Bounded worker loop for one cell. | Spawned by swarming |
+| 6 | `bee-reviewing` | Parallel review gate with P1/P2/P3 findings, user-invoked over a scope the user chooses. | User explicitly requests review (decision 565e68d0) — never automatic after a final slice or feature close |
+| 7 | `bee-scribing` | BA-grade tech-agnostic area specs: sync, capture, harvest. | Review approved; documenting any area (UI/API/job); a settled outcome must be kept |
+| 8 | `bee-compounding` | Capture durable learnings and decisions. | Scribing done or work abandoned |
+| 9 | `bee-grooming` | Entropy audit, debt hunt, approved kills. | Cleanup/audit requested; hive idle |
+| 10 | `bee-writing-skills` | TDD-for-skills, pressure testing. | Authoring or editing a bee skill's `SKILL.md` content |
+| 11 | `bee-evolving` | Run bee's gated self-improvement loop over its own collected feedback digest (cluster → rank → Gate A → Iron Law hand-off → suites green → Gate B → push). Bee repo only, human-invoked, never auto-runs, never pushes on its own. | Human asks bee to evolve/improve itself from its own dogfood friction, in the bee repository |
+| 12 | `bee-briefing` | Render the one human-readable implement plan per feature, and the post-Gate-4 walkthrough (consolidator, not planner). | Planning shaped `small`+ work; a feature's implement plan needs (re)generating; a `standard`/`high-risk` feature passed Gate 4 |
+| 13 | `bee-bypass-gate` | Toggle opt-in gate-bypass autopilot (`on`/`off`/`status`): auto-approve Gates 1-2 for normal-lane work; high-risk/hard-gate, secrets, UAT always stop. | User wants to run without approving every gate, or to check/turn off bypass |
 
 ## First-Skill Routing
 
@@ -349,13 +348,15 @@ carries the full per-lane ceremony detail (moved here by skill-token-diet diet-3
 
 Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 4 after execution. Every lane below closes through scribing/compounding as `unreviewed`; a review session — and its Gate 4 — happens only when the user asks, over whatever scope they choose. Separately, `standard`/`high-risk` goal-checks also run a semantic checklist judge per capped `behavior_change` cell (table: "Goal-check judge tier" below) — that is verification of the cell, not this on-demand review session.
 
-| Lane | Plan | Validate | Execute | Review | Human stops |
+**"Validate" below is ceremony, not a phase — it runs inline inside `planning`'s shape stage (D1/D5); `bee-validating` and its standalone Gate 3 are retired.**
+
+| Lane | Plan | Validate (inline, inside planning) | Execute | Review | Human stops |
 |---|---|---|---|---|---|
 | `docs` | none — announce one line | format check (parse/lint if applicable) | direct, in-session | none | 0 |
-| `tiny` | none — the cell is the micro-plan | 2-minute reality check inline, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract) | one dispatched execution worker (AO14 — param-carrying dispatch, model param or pinned type, never a bare marker; standard worker prompt template, no reviewers/panels/waves) | orchestrator-authored done-report (worker's verbatim diff + commit; caps `--feature-verify-pending` by default, main-verifies D4 — no per-cell verify output; orchestrator re-runs only on smell, parallel waves, or hard-gate — test-runs-lean D1) — verification, not independent review | 1 — the merged shape+execution gate |
-| `small` | logged scoping synthesis; plan.md is opt-in | inline reality gate + matrix, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract); spike only if a blocking assumption demands it | one dispatched execution worker (AO14 — same contract as `tiny`'s Execute column), its 1-3 cells dispatched in PARALLEL when disjoint (see Concurrency law in full below) | orchestrator-authored done-report, self-checks only, no auto reviewer (the correctness reviewer moves inside an on-demand review session) | 2 — merged shape+execution gate, self-checks close-out |
-| `standard` | full `plan.md` | merged reviewer; ≤5-file diff (0 hard-gate flags): inline self-review, no dispatch | swarm workers | on user request only: session panel scaled to scope risk (4 core reviewers) | 3 — Gates 1-3 |
-| `high-risk` | `plan.md` + brief | persona panel | swarm workers | on user request only: session panel scaled to scope risk (full wave + conditionals) | 3 — Gates 1-3 |
+| `tiny` | none — the cell is the micro-plan | SMALLER PATH check inline (D1, the sole reality-gate survivor), 0 ceremony subagents (I/O-offload workers exempt — Delegation contract) | one dispatched execution worker (AO14 — param-carrying dispatch, model param or pinned type, never a bare marker; standard worker prompt template, no reviewers/panels/waves) | orchestrator-authored done-report (worker's verbatim diff + commit; caps `--feature-verify-pending` by default, main-verifies D4 — no per-cell verify output; orchestrator re-runs only on smell, parallel waves, or hard-gate — test-runs-lean D1) — verification, not independent review | 1 — the merged shape+execution gate |
+| `small` | logged scoping synthesis; plan.md is opt-in | SMALLER PATH check inline (D1), 0 ceremony subagents (I/O-offload workers exempt — Delegation contract); spike only if a blocking assumption demands it (D8) | one dispatched execution worker (AO14 — same contract as `tiny`'s Execute column), its 1-3 cells dispatched in PARALLEL when disjoint (see Concurrency law in full below) | orchestrator-authored done-report, self-checks only, no auto reviewer (the correctness reviewer moves inside an on-demand review session) | 2 — merged shape+execution gate, self-checks close-out |
+| `standard` | full `plan.md` | SMALLER PATH check (D1) + merged reviewer; ≤5-file diff (0 hard-gate flags): inline self-review, no dispatch | swarm workers | on user request only: session panel scaled to scope risk (4 core reviewers) | 2 — Gate 1, Gate 2 (merged shape+execution) |
+| `high-risk` | `plan.md` + brief | SMALLER PATH check (D1) + persona panel | swarm workers | on user request only: session panel scaled to scope risk (full wave + conditionals) | 2 — Gate 1, Gate 2 (merged shape+execution) |
 
 **Gate 4 is additive, not counted above:** it is asked once, whenever a review session actually runs for that scope — never automatically at the end of a lane's default chain.
 
@@ -392,9 +393,8 @@ Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-ce
 | hive | onboarding, state, HANDOFF, critical-patterns, decisions | state routing updates only |
 | exploring | user conversation, critical-patterns, quick scout | `docs/history/<feature>/CONTEXT.md`, state update |
 | planning | CONTEXT.md, critical-patterns, active decisions, bee_status | `approach.md`, `plan.md` (frozen at Gate 2 — approval stamp only after approval; none for `tiny`, opt-in for `small`, D1/D3/D4), current-slice cells via `bee.mjs cells add` |
-| briefing | CONTEXT.md, approach.md, frozen plan.md + cells (drift re-render triggers on cell changes only, since the plan can no longer drift after approval — D9), validating reports, state gates (render/refresh); capped cell traces, review findings, UAT (walkthrough) | `docs/history/<feature>/implement-plan.md` (projection; `high-risk` always, `standard` on-demand, `small` optional on request per D4); `docs/history/<feature>/walkthrough.md` (post-Gate-4; `standard`/`high-risk`) |
-| validating | CONTEXT.md, discovery, approach, approved shape, cells | reality-gate report, feasibility matrix, spike results in `.bee/spikes/`, repaired cells |
-| swarming | validated cells, state, reservations | worker registry in state, HANDOFF at ~65%, wave results |
+| briefing | CONTEXT.md, approach.md, frozen plan.md + cells (drift re-render triggers on cell changes only, since the plan can no longer drift after approval — D9), cell/feature verify output, state gates (render/refresh); capped cell traces, review findings, UAT (walkthrough) | `docs/history/<feature>/implement-plan.md` (projection; `high-risk` always, `standard` on-demand, `small` optional on request per D4); `docs/history/<feature>/walkthrough.md` (post-Gate-4; `standard`/`high-risk`) |
+| swarming | Gate-2-approved cells, state, reservations | worker registry in state, HANDOFF at ~65%, wave results |
 | executing | assigned cell, CONTEXT.md, reservations | implementation commits (one per cell, cell id in message), cap (`--feature-verify-pending` by default, main-verifies D4; classic verify record for spot use), report in `docs/history/<feature>/reports/` |
 | reviewing | user-selected immutable scope (a `bee_reviews` session — never triggered by phase or cell completion) | session findings (P1/P2/P3) and the Gate 4 decision recorded on that session, backlog items, `residual-findings.md` fallback |
 | scribing | `behavior_change` cells + verification evidence, CONTEXT.md, active decisions, UAT/worker reports, code + user interview (harvest) | with a bundle: `docs/knowledge/areas/<area>/` concepts (BA-grade merge); with no bundle, unchanged: `docs/specs/<area>.md` (BA-grade merge), `docs/specs/reading-map.md`; either way: capture-mode decision log entries, state record |
@@ -556,11 +556,11 @@ Off by default. Turned on with the `bee-bypass-gate` skill, which sets `.bee/con
 | Level | Config value | Auto-approves | Still stops for the human |
 |---|---|---|---|
 | `off` | `false` / absent | nothing — every gate stops | every gate (default) |
-| `normal` | `true` / `"on"` / `"normal"` | Gates 1-3 for `tiny`/`small`/`standard` non-hard-gate work | high-risk/hard-gate Gates 1-3 · secret reads · Gate 4 UAT/P1 |
-| `full` | `"full"` | **all** Gates 1-3 at every lane, high-risk/hard-gate included | secret-file reads · a review P1 finding |
-| `total` | `"total"` | **everything** — all Gates 1-3 any lane, secret-file reads, Gate 4 UAT, review P1 findings | **nothing — zero stops** |
+| `normal` | `true` / `"on"` / `"normal"` | Gates 1-2 for `tiny`/`small`/`standard` non-hard-gate work | high-risk/hard-gate Gates 1-2 · secret reads · Gate 4 UAT/P1 |
+| `full` | `"full"` | **all** Gates 1-2 at every lane, high-risk/hard-gate included | secret-file reads · a review P1 finding |
+| `total` | `"total"` | **everything** — all Gates 1-2 any lane, secret-file reads, Gate 4 UAT, review P1 findings | **nothing — zero stops** |
 
-Legacy `true` maps to `normal`, so existing repos are unchanged. At **Gate 1, 2, or 3** when the level bypasses that gate:
+Legacy `true` maps to `normal`, so existing repos are unchanged. At **Gate 1 or Gate 2** when the level bypasses that gate:
 
 1. **Safety floor is level-scoped, not absolute.** Under `normal` the floor is exactly as before: a `high-risk` lane or any hard-gate flag (auth · authorization · data loss · audit/security · external provider · validation removal · database migration/schema change) is **NOT** bypassed — present it to the human normally. Under `full` and `total` the high-risk/hard-gate floor is **lifted** — the human lifted it by choosing the level — so those gates auto-approve too.
 2. Do not ask. Instead: select the option the RECOMMENDATION favors; set `approved_gates.<gate>` in `.bee/state.json` (same write the human's "yes" would trigger); still write the machine-layer report to `docs/history/<feature>/reports/`; log a one-line audit entry — `node .bee/bin/bee.mjs decisions log --decision "auto-approved Gate N (bypass): <choice>" --rationale "<the recommendation's why>"` — so the approval is never silent; then post a **short chat line** (not a question) — `⚡ auto-approved Gate N (bypass): <what/why in one plain sentence>` — and continue. The human sees what happened and can still interrupt.
@@ -571,7 +571,7 @@ Legacy `true` maps to `normal`, so existing repos are unchanged. At **Gate 1, 2,
 
 The mechanical guards do not change: `claimCell` and the write-guard still require `approved_gates.execution: true` — bypass simply means the agent records that approval itself for eligible work instead of waiting for the human. Bypass state is surfaced every session (the preamble and `bee_status` both print a loud level-specific `GATE BYPASS` banner — `NORMAL` / `FULL AUTOPILOT` / `TOTAL AUTOPILOT — ZERO STOPS`) so the active level is never silently in effect.
 
-**The bypass is now mechanized at runtime, not prose-only (GitHub #18, hook-runtime B15/R14).** The rule above is still the assistant's to follow, but it is no longer the *only* thing honoring it: the session-stop checkpoint (`hooks/bee-session-close.mjs` `maybeBypassBlock`) emits a turn-control block that forces continuation when the assistant tries to stop mid-planning/validating at a gate the active level covers and is still pending. It is loop-guarded (blocks once per `sessionId:phase:gate:level`, then degrades to advisory) and excludes exploring/Gate 1 (genuine information questions still stop even under `total`). This closes the "invariant left in prose WILL be bypassed" gap (crit-pattern 20260714): the doctrine test mechanized the prose, this mechanizes the runtime.
+**The bypass is now mechanized at runtime, not prose-only (GitHub #18, hook-runtime B15/R14).** The rule above is still the assistant's to follow, but it is no longer the *only* thing honoring it: the session-stop checkpoint (`hooks/bee-session-close.mjs` `maybeBypassBlock`) emits a turn-control block that forces continuation when the assistant tries to stop mid-planning at a gate the active level covers and is still pending. It is loop-guarded (blocks once per `sessionId:phase:gate:level`, then degrades to advisory) and excludes exploring/Gate 1 (genuine information questions still stop even under `total`). This closes the "invariant left in prose WILL be bypassed" gap (crit-pattern 20260714): the doctrine test mechanized the prose, this mechanizes the runtime.
 
 ### Headless mode (never ask; defer into Outstanding Questions)
 

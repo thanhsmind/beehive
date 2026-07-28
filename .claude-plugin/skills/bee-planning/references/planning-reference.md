@@ -197,9 +197,95 @@ At L2+, invoke `bee-xia` in-chain: local truth → local reuse → upstream patt
 
 **Gate-bypass check FIRST** (routing-and-contracts.md §Gate bypass, decisions 0010/dcf01d7b). Read the active level (`node .bee/bin/bee.mjs status --json` → `gate_bypass_level`). If it bypasses Gate 2 for this lane — `normal` covers `tiny`/`small`/`standard` non-hard-gate; `full`/`total` cover **every** lane incl. high-risk/hard-gate — then **DO NOT ask.** Take the shaped plan as approved (the recommended path), set `approved_gates.shape` yourself (`bee.mjs state gate --name shape --approved true`), stamp the plan frontmatter with the approval date (the only permitted post-approval write, per D1), log a one-line audit decision, post `⚡ auto-approved Gate 2 (bypass) — preparing cells`, and continue straight to §6 Prep. Only present the question below when the level does NOT cover this gate. Present **Gate 2** per the Gate Presentation Contract (bee-hive routing reference): plain-language layer in chat — what I plan to build / why this size / cost if the shape is wrong / what you are deciding — in the user's language, the review document linked not pasted; then verbatim: "Work shape is ready. Approve before current-work preparation?" — then **stop**. No pseudo-cells in markdown, no prep, no cells.
 
+## Review Wave in full
+
+**A wave, not a chain (D5).** Dispatch the merged reviewer below **simultaneously** with the SMALLER PATH check, the moment the shape is drafted (`plan.md` written for standard/high-risk) — the stage costs `max(reviewer, planning)`, never their sum. **Sync point:** findings block nothing until the Gate 2 presentation — or its bypass self-approval — and Gate 2 never happens while the wave is outstanding.
+
+**One dispatch, two mandates, both vocabularies.** One `bee-review`-class dispatch on the **`review` slot** (default opus on Claude, generation fallback; state the model explicitly; if the runtime cannot select per-agent models, cap its reads and output instead) returns **one report, two sections**: **Structure** — the adversarial check over its 5 dimensions, every finding **BLOCKER** or **WARNING**; and **Cells** — the cold-pickup review, every finding **CRITICAL** (all fixed before approval) or **MINOR** (may ship with a recorded note). Merging the dispatches never merges the finding classes. Prompt and dimensions below.
+
+On Claude Code, spawn `subagent_type: "bee-review"` when `.claude/agents/bee-review.md` exists — bee's own rendered agent for the review tier, never `general-purpose` (a model-guard denies that pairing).
+
+It is a **read-only gather**, never a cell: a cli-shaped review slot resolves with the purpose-scoped `resolveTier(root, 'review', runtime, {for:'gather'})` — a bare 3-arg resolve of one now refuses; a model-shaped slot is unaffected by purpose.
+
+**One shot, then at most one blocker pass.** The merged reviewer runs **once**. WARNING-level and mechanically fixable findings (a missing link, a vague verify command, a dependency typo) the orchestrator applies **directly to the cells** — legal because cells are mutable before Gate 2. Only **unresolved BLOCKERs** trigger a **second and final** pass, scoped to those blockers. No third pass: a BLOCKER open after pass 2 escalates to the user with both positions.
+
+**Small-diff standard: same mandates, no dispatch.** When the counted touch set is ≤5 product files with zero hard-gate flags, the merged reviewer is not dispatched — the session model runs both mandates itself: Structure over the same 5 dimensions, Cells as a cold-pickup pass, findings in the same vocabularies, recorded alongside the Gate 2 approval block. Same sync point, same one-shot-then-one-blocker-pass cap. A hard-gate flag, a 6th product file, or genuine doubt about self-review independence restores the dispatch. `high-risk` never takes this path.
+
+## Merged Reviewer Subagent Prompt
+
+One dispatch on the **review** slot, two mandates, two finding vocabularies, one report (D5). Verify, do
+not redesign. On slice 2+ the scope is the new/changed cells and stale rows only — the plan is frozen and
+was checked on slice 1.
+
+```text
+You are a merged plan reviewer. Two mandates. Assume the work is flawed until proven so.
+Inputs: docs/history/<feature>/CONTEXT.md, approach.md, plan.md, and the current-work
+cells (node .bee/bin/bee.mjs cells list --feature <feature>).
+
+MANDATE 1 — STRUCTURE. Verify exactly 5 dimensions:
+1. Requirement/decision coverage — every locked D-ID lands in at least one cell.
+2. Cell completeness — each cell has files, read_first, directive action, must_haves
+   (per lane tier), and a runnable verify.
+3. Dependency correctness — deps form a DAG; no cell depends on a future slice.
+4. Key links — integration points named in plan.md are owned by a specific cell.
+5. Scope sanity — no cell is doing hidden architecture work or exceeds its lane.
+Report every structural finding as BLOCKER (structurally unsound) or WARNING
+(survivable, note it).
+
+Small-diff `standard` (≤5 product files, zero hard-gate flags) runs these same
+dimensions as an inline self-review on the session model — no dispatch (SKILL.md
+§3 "Review wave", D5). Both finding vocabularies and the one-blocker-pass cap
+apply unchanged.
+
+MANDATE 2 — CELLS, COLD PICKUP. You have NO session history. For each cell, answer:
+could a worker who has read only CONTEXT.md, plan.md, and this cell implement and
+verify it without guessing?
+Flag CRITICAL: assumed context, vague acceptance, scope overload, unproven feasibility,
+broken verify command.
+Flag MINOR: missing rationale, implicit file assumption, fuzzy boundary, known tradeoff
+not recorded.
+
+Return ONE report with both sections below. Never merge the two vocabularies: structure
+findings are BLOCKER/WARNING, cell findings are CRITICAL/MINOR.
+Do not propose redesigns. Do not soften findings. Quote file/cell evidence per finding.
+```
+
+```text
+REVIEW REPORT
+Work: <current slice / direct task>
+
+STRUCTURE
+BLOCKERS: <dimension> problem / evidence / fix
+WARNINGS: <dimension> problem / evidence / note
+
+CELLS  (reviewed: <N>)
+CRITICAL FLAGS: <cell-id> problem / evidence / fix
+MINOR FLAGS: <cell-id> problem / evidence / suggestion
+CLEAN CELLS: <cell-id>, <cell-id>
+
+SUMMARY: <2-3 sentences>
+```
+
+**One shot, then at most one blocker pass.** WARNING-level and mechanically fixable
+findings — a missing link, a vague verify command, a dependency typo — the orchestrator
+applies directly to the cells, which is legal because cells are mutable before Gate 2.
+Only unresolved BLOCKERs earn a second and final pass, scoped to those blockers. There
+is no third pass: a BLOCKER still open after pass 2 escalates to the user with both
+positions. All CRITICAL cell flags are fixed before Gate 2; MINOR flags ship with a
+recorded note.
+
+### High-Risk Persona Panel
+
+For the high-risk lane, scale this same merged dispatch to a small panel: **coherence**
+and **feasibility** personas always; add conditional lenses — **security**, **product**,
+**scope-guardian** — chosen by the diff of concerns (auth/data → security; user-visible
+behavior → product; growing surface → scope-guardian). Each persona gets the same inputs
+and both vocabularies. Dedupe overlapping findings, then synthesize into two buckets:
+**auto-fix** (apply, record) and **present-for-decision** (user judgment required).
+
 ## Tiny/small merged gate
 
-**Preview before persist (D5).** For `tiny` and `small`, the ordering is inverted so the approval covers the exact work packet: **draft the cell(s) and run the validating reality check FIRST**, before the merged shape+execution question. The draft cell(s) are rendered as a **preview in the gate message** (never persisted first); the reality check — MODE FIT / REPO FIT / ASSUMPTIONS / SMALLER PATH / PROOF SURFACE, each one line of file/command evidence, 2 minutes not a report — runs inline. Then present **one merged question** in place of Gates 2 and 3: "Work shape + execution: I'm about to do [X] via [Y], verified by [Z]. Approve?" The approval covers the **exact previewed work packet**; `cells add` runs only **after** approval and the cells are claimed only then — **never persist-then-preview**. Execution approval is never granted before the execution package exists. Approval records **both** `approved_gates.shape` and `approved_gates.execution`. **Under any active bypass level** (tiny/small are always covered — even `normal`), do NOT ask the merged question: the reality check still runs (bypass changes only whether the question is asked, never whether the check runs), the draft-cell preview goes into the auto-approval audit line, and if the reality check PASSES, set both `approved_gates.shape` and `approved_gates.execution` yourself, log one audit decision, post `⚡ auto-approved shape+execution (bypass)`, then persist the cells and continue to bee-swarming. Only a reality-check FAIL is surfaced to the human regardless of bypass, and it is presented before asking, never buried. `bee-validating` is not separately invoked for these lanes; its subagents (plan-checker, cell reviewer) do not run — the cell(s) are what a stranger picks up with zero session history, and the cold-pickup criteria are self-checked when writing them.
+**Preview before persist (D5).** For `tiny` and `small`, the ordering is inverted so the approval covers the exact work packet: **draft the cell(s) and run the SMALLER PATH check FIRST**, before the merged shape+execution question. The draft cell(s) are rendered as a **preview in the gate message** (never persisted first); the check — per D1 the sole reality-gate survivor, one line of file/command evidence, 2 minutes not a report: *is there a cheaper shape than this one that still honors every locked decision?* — runs inline. Then present **one merged question** in place of Gates 2 and 3: "Work shape + execution: I'm about to do [X] via [Y], verified by [Z]. Approve?" The approval covers the **exact previewed work packet**; `cells add` runs only **after** approval and the cells are claimed only then — **never persist-then-preview**. Execution approval is never granted before the execution package exists. Approval records **both** `approved_gates.shape` and `approved_gates.execution`. **Under any active bypass level** (tiny/small are always covered — even `normal`), do NOT ask the merged question: the SMALLER PATH check still runs (bypass changes only whether the question is asked, never whether the check runs), the draft-cell preview goes into the auto-approval audit line, and if the check PASSES, set both `approved_gates.shape` and `approved_gates.execution` yourself, log one audit decision, post `⚡ auto-approved shape+execution (bypass)`, then persist the cells and continue to bee-swarming. Only a check FAIL is surfaced to the human regardless of bypass, and it is presented before asking, never buried. The review wave never dispatches for these lanes (D5) — the cell(s) are what a stranger picks up with zero session history, and the cold-pickup criteria are self-checked when writing them.
 
 ## Slice-tail test batching in full
 

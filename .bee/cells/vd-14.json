@@ -1,0 +1,80 @@
+{
+  "id": "vd-14",
+  "feature": "validation-diet",
+  "title": "Restore the doctrine tokens the operating-block rewrite dropped",
+  "lane": "standard",
+  "status": "capped",
+  "change_class": "bugfix",
+  "regen_obligation_ack": "wave-barrier",
+  "deps": [],
+  "decisions": [
+    "D9",
+    "D11"
+  ],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md"
+  ],
+  "read_first": [
+    "packages/bee/AGENTS.block.md",
+    "scripts/tests/test_gate_bypass_doctrine.mjs"
+  ],
+  "action": "Cell vd-10 rewrote the shipped operating block for the merged gate and the new evidence rule, and dropped several unrelated required tokens on the way out. test_gate_bypass_doctrine.mjs is red on packages/bee/AGENTS.block.md only. Run the suite and DERIVE the full missing set from its own assertions; known examples, not the list: the briefing fan-out wording ('standard: on-demand' / 'high-risk: always'), the docs/history tree note's 'plan.md is opt-in' and 'cell is the micro-plan', and critical rule 8's D3/D4 tie ('whether or not the lane produced a plan.md (D3/D4)'). Restore each where it belongs semantically -- inside the line that carries the rule -- not as a keyword appended to satisfy a grep. Constraints from scripts/tests/test_agents_budget.mjs: rules stay contiguous with no gaps, the rule-count constant must match reality, TERMINAL_HOME rules keep full text rather than a pointer, and the byte fence is 15000 hard / 14000 warn on both the template and the rendered root AGENTS.md (it is near 13.3K now, so there is room but not unlimited room). Never hand-edit root AGENTS.md -- edit the template and re-render via node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply.",
+  "must_haves": {
+    "truths": [
+      "node scripts/tests/test_gate_bypass_doctrine.mjs reports no failure on packages/bee/AGENTS.block.md",
+      "node scripts/tests/test_agents_budget.mjs exits 0",
+      "Root AGENTS.md is the rendered template, byte-identical between the markers",
+      "No restored token sits outside the rule it governs"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "the derived missing-token set restored in place"
+      }
+    ],
+    "key_links": [
+      "root AGENTS.md regenerated through onboard_bee.mjs"
+    ],
+    "prohibitions": [
+      "No hand-edit of root AGENTS.md",
+      "No weakening of an assertion in test_gate_bypass_doctrine.mjs",
+      "No byte-fence violation",
+      "No edit to skills/ or docs/"
+    ]
+  },
+  "verify": "node scripts/tests/test_agents_budget.mjs && node scripts/tests/test_gate_bypass_doctrine.mjs",
+  "trace": {
+    "worker": "vd14-worker",
+    "outcome": "Restored the 4 doctrine tokens abd-1/abd-2 dropped from packages/bee/AGENTS.block.md: briefing fan-out wording on the chain line, plan.md-is-opt-in + cell-is-the-micro-plan on the docs/history tree note, and the D3/D4 tie in critical rule 8 -- each placed inside the rule it governs, not appended. Re-rendered root AGENTS.md via onboard_bee.mjs. Both test_agents_budget.mjs and test_gate_bypass_doctrine.mjs pass; byte fence: template 13396B, root 13515B (under 14000 warn / 15000 hard).",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T22:37:53.632Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "test_agents_budget: 7 passed, 0 failed; sizes: template=13396B root=13515B (warn>=14000B, fail>=15000B). test_gate_bypass_doctrine: 0 failure(s), all ok including packages/bee/AGENTS.block.md fan-out wording, docs/history tree tokens (frozen at Gate 2, plan.md is opt-in, cell is the micro-plan), and critical rule 8 D3/D4 tie.",
+    "verify_passed": true,
+    "claim_session": "175d1343-db84-4593-8e3e-42e79c3e3d73",
+    "claimed_at": "2026-07-28T22:37:04.350Z",
+    "verify_command": "node scripts/tests/test_agents_budget.mjs && node scripts/tests/test_gate_bypass_doctrine.mjs",
+    "verified_at": "2026-07-28T22:37:47.769Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T22:37:47.769Z",
+        "claim_session": "175d1343-db84-4593-8e3e-42e79c3e3d73",
+        "claimed_at": "2026-07-28T22:37:04.349Z",
+        "acquired_at": "2026-07-28T22:37:04.349Z",
+        "worker": "vd14-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

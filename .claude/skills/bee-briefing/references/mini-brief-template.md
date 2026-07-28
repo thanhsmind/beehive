@@ -25,7 +25,7 @@ decisions: [<D-IDs>]
 **Affected files**
 - `<path>` — <why>
 
-**Validation** — `<verify command>` → expected: <outcome>. Evidence: <link once validating runs; "pending" before>
+**Validation** — `<verify command>` → expected: <outcome>. Evidence: <link once the cell/feature verify runs; "pending" before>
 
 **Risk** — <one line, or "none">
 **Rollback** — <one line: revert the cell's commit / disable the flag>

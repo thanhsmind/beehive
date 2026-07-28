@@ -1,6 +1,6 @@
 # Swarming Reference
 
-Load after Gate 3 approval, before spawning the first wave.
+Load after Gate 2 approval (merged shape+execution, D2), before spawning the first wave.
 
 ## Single execution worker in full
 
@@ -374,7 +374,7 @@ Only the **cheaper** slots are configured, in `.bee/config.json` `models`, keyed
 }
 ```
 
-A slot value may also be `{ "model": "opus", "effort": "xhigh" }` (P17 — per-agent reasoning effort, applied where the runtime supports it, silently recorded where it does not; levels: low/medium/high/xhigh/max) or `{ "kind": "cli", "command": "..." }` (external executor, section below — effort rides inside the command). The `review` slot is consumed by bee-reviewing's specialists, exploring's fresh-eyes, and validating's plan-checker/cell-reviewer; `null` review falls back to generation. **Copy-paste presets** (all-claude, tuned, GPT adversarial review, codex-implements, antigravity/`agy`, opencode, budget): `docs/model-presets.md` in the bee repo — including the `bash -lc '… "$(cat)"'` wrapper every CLI that cannot read the prompt from stdin (`agy`, `opencode`) needs to satisfy the stdin transport in step 3 below.
+A slot value may also be `{ "model": "opus", "effort": "xhigh" }` (P17 — per-agent reasoning effort, applied where the runtime supports it, silently recorded where it does not; levels: low/medium/high/xhigh/max) or `{ "kind": "cli", "command": "..." }` (external executor, section below — effort rides inside the command). The `review` slot is consumed by bee-reviewing's specialists, exploring's fresh-eyes, and bee-planning's merged reviewer (the review wave, D5 — Structure + cold-pickup cell review); `null` review falls back to generation. **Copy-paste presets** (all-claude, tuned, GPT adversarial review, codex-implements, antigravity/`agy`, opencode, budget): `docs/model-presets.md` in the bee repo — including the `bash -lc '… "$(cat)"'` wrapper every CLI that cannot read the prompt from stdin (`agy`, `opencode`) needs to satisfy the stdin transport in step 3 below.
 
 - **ceiling** = the strongest model in play = **the session model itself** (no config entry). A ceiling cell inherits the session model — omit the `model` param **and** carry the `[bee-tier: ceiling]` marker, anchored to the first non-whitespace token of the prompt or the start of the description (decision 0023 — a marker anywhere else never counts). Keep it scarce: planning, integration, architecture, final review only. Touch it on every dispatch and the saving evaporates.
 - **generation** = the mid worker that runs the loops (implementation, test writing). Where the bulk of dispatches go.
@@ -544,7 +544,7 @@ one, and never issue `/clear` yourself.
 
 ## Red Flags
 
-- spawning before Gate 3 approval
+- spawning before Gate 2 approval
 - full-context forks for routine cells
 - worker edits without reservations, or the orchestrator editing anything
 - passive waiting while cells/reservations are unhealthy

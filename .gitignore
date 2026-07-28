@@ -17,7 +17,6 @@
 .bee/locks/
 .bee/doctor-attest.json
 .bee/native-transport-probe.json
-.bee/validation-cache.json
 .bee/config.local.json
 .bee/tmp/
 .bee/backups/

@@ -27,3 +27,9 @@ body rule to the decision(s) that authorize it and the rationale in one line. Lo
 | `state set` needs a real phase-enum value, never invented | chain-integrity D6 | An agent that hits the refusal and improvises the state machine is exactly how the chain broke |
 | Scope-Reduction Prohibition — answer SPLIT RECOMMENDED, never shrink a locked decision | planning invariant (pre-migration Scope-Reduction Prohibition) | A locked decision is cited, never quietly reinterpreted or dropped to fit a budget |
 | Headless — never self-approve Gate 2 or the merged gate; ambiguities go to Outstanding Questions | hive law 14 (Headless mode) | Headless is not bypass; every mode still stops at its gate |
+| Handoff only to `bee-swarming`, every lane | validation-diet D1 | `bee-validating` is deleted; there is no other downstream skill left to hand off to |
+| Spike lane opt-in by change class, never a default | validation-diet D8 | Mirrors R55's narrowing of red-first proof by change class |
+| Feasibility matrix and delta rule deleted outright, no replacement | validation-diet D6 | Zero machine coverage existed for either; nothing to migrate |
+| SMALLER PATH check — the sole reality-gate survivor, moved into planning | validation-diet D1 | The one reality-gate item that saves money instead of spending it; every other reality-gate check is deleted with D6 |
+| Review wave (Structure + Cold pickup) moved into planning, dispatched when the shape is drafted | validation-diet D5 | Review value, not feasibility; cost stays `max(reviewer, planning)`, never the sum |
+| Hand off phase `swarming` for every lane; `validating` is no longer a phase-enum value | validation-diet D1/D3 | The merged gate lives entirely inside phase `planning` |
