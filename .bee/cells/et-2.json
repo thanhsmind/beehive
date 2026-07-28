@@ -1,0 +1,71 @@
+{
+  "id": "et-2",
+  "feature": "explicit-triage",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "refactor",
+  "title": "Triage law: count THEN record, re-lane updates in place (D4)",
+  "action": "Per CONTEXT D4: (1) skills/bee-hive/SKILL.md triage/mode-gate text: after the mechanical flag count, the route is RECORDED same turn via bee state route --set (cite the exact line format 'Route: class=<c> | lane=<l> | flags=<n> [<names>] | files=<n>'); counting without recording is the guess this law kills. Body budget 8183/8192 — 9 bytes headroom: keep body edits net-zero-or-negative (trim a reassurance phrase if needed), full protocol to references. (2) skills/bee-hive/references/routing-and-contracts.md: extend the triage/re-lane sections — the re-lane checkpoint UPDATES the same route record (new lane, logged decision; never a second record); mode-gate records in plan.md/cells cite the route record; claim's warning is the safety net, never the trigger. State rules bare (provenance to references/provenance.md). Fences must end green. Vendored regen DEFERRED (wave-barrier ack).",
+  "must_haves": {
+    "truths": [
+      "Hive body mandates record-same-turn with the verbatim Route line format; net body growth <= 0 vs recorded budget.",
+      "routing-and-contracts carries the full route-record protocol incl. re-lane update-in-place.",
+      "skill_budget_fence + skill_lint + okf_instructions_fence green."
+    ],
+    "prohibitions": [
+      "Do NOT exceed any recorded body budget.",
+      "Do NOT weaken the mode-gate flag list or lane thresholds.",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node scripts/okf_instructions_fence.mjs",
+  "read_first": [
+    "docs/history/explicit-triage/CONTEXT.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "files": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/provenance.md"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at wave close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-et2",
+    "outcome": "Triage law: hive body now records the route same turn via state route --set (verbatim Route line format cited); routing-and-contracts.md gained a Route record protocol section and a re-lane-updates-in-place note; provenance row added. Body 8180/8183 bytes (3 under budget). All three fences green.",
+    "files_changed": [
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/references/provenance.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T05:19:09.446Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "PASS skill_budget_fence: 18 skill(s) checked, 0 findings\nok    every references/<file>.md (\"Heading\") pointer in a body resolves to a real file and a real heading\nok    the three rules this slice moved to references are reachable from a body pointer\nok    bee-validating routes to the MERGED reviewer prompt and no longer names the retired pair as separate dispatches\nok    no SKILL.md body repeats a number within one ordered list — inserting a step without renumbering its successors is silent\n\nOK — skill tree clean\nPASS okf_instructions_fence: 18 instruction-surface file(s) name the retired state layer (12 branched, 4 historical-record, 2 legacy-anchor), 0 unbranched misroutes\n",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T05:11:37.817Z",
+    "verify_command": "node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node scripts/okf_instructions_fence.mjs",
+    "verified_at": "2026-07-28T05:19:04.384Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T05:19:04.384Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-28T05:12:13.694Z",
+        "acquired_at": "2026-07-28T05:11:37.814Z",
+        "worker": "exec-et2",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}

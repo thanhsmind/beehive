@@ -138,6 +138,25 @@ Do not read `node_modules/`, `dist/`, `build/`, `.git/` internals, `vendor/`, `c
 
 **Orphaned scribing debt (scribing-integrity si-1/si-2/si-3):** when `bee.mjs status --json` reports a non-zero `scribing_debt.orphaned` count (the preamble already prints one loud line for it), surface it and offer it as fix-first knowledge work with the same one-line offer discipline as the capture-queue flush — e.g. "N cell(s) across M feature(s) never got their scribing sync — close the gap now, or after the current task?" One line, user chooses; orphaned scribing debt is never silently ignored. The repair verb is `bee.mjs state scribing-run --feature <feature> --areas "<a,b>" --next-action "<n>"`, which can stamp a non-active feature directly — no need to reactivate it first.
 
+### Route record
+
+`state route --set` persists one validated record on the ACTIVE feature's workflow record: `{class, lane, flags[], product_files, rationale}`. Enum-checked, typed refusals — free prose is refused, that is the point (explicit-triage D1):
+
+- `class` ∈ `feature`, `bugfix`, `docs`, `refactor`, `research`, `release`, `spike`
+- `lane` ∈ `docs`, `tiny`, `small`, `spike`, `standard`, `high-risk`
+- `flags[]` — every entry from the canonical mode-gate list (auth, authorization, data-model, audit-security, external-systems, public-contracts, cross-platform, covered-contract-change, proof-weakening, multi-domain)
+- `product_files` — a non-negative integer
+
+**Record same turn as the count, never after.** The mode gate's flag count and the record are the same act (explicit-triage D4) — counting without recording is the "đoán" (guess) this law kills. `status --json` carries the `route` block; the session preamble renders one line when a route exists for the active feature, nothing when absent (explicit-triage D2):
+
+```
+Route: class=<c> | lane=<l> | flags=<n> [<names>] | files=<n>
+```
+
+Mode-gate records in `plan.md` and cells cite this line rather than re-deriving it. `cells claim` emits a one-line stderr warning when the claimed cell's feature has no route record — soft enforcement (explicit-triage D3): a safety net that catches a missed record, never the trigger that prompts one; the record is written at triage time, not discovered missing at claim time.
+
+**The re-lane checkpoint below updates this same record in place — never a second record.** A demotion rewrites `lane` (and `flags`/`product_files` when the touch set changed) on the existing record and logs the audit decision exactly as the checkpoint already does; one route per feature, for its whole life, always current.
+
 ### Re-lane checkpoint (evidence-based demotion, spec #81 P3)
 
 Triage lanes the work from the request text alone, before any repo evidence, and uncertainty resolves upward. That is correct as a *guessing* rule — but nothing re-examines the guess once evidence exists, so an ambiguous request for a two-file change pays the full standard pipeline. This checkpoint converts **measured evidence** into a smaller lane. Never optimism, never a re-argued count.
@@ -172,6 +191,8 @@ node .bee/bin/bee.mjs decisions log \
   --decision "re-laned <from> → <to> (evidence checkpoint): <feature>" \
   --rationale "<n> product files scouted, 0 hard-gate flags, 0 open gray areas"
 ```
+
+Alongside the decision, `state route --set` rewrites the same route record's `lane` in place ("Route record" above) — never a second record — so the decision log and the route record agree on the target lane.
 
 Then emit the re-lane tick (Progress ticks below) and continue on the new lane — its gates, ceremony, and worker shape from that point are the target lane's, exactly as if triage had picked it.
 
