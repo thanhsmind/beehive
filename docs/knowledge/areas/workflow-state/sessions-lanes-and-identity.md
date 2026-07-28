@@ -279,6 +279,18 @@ its knowledge actually landed — the state and the specs can no longer disagree
   the acting session's own resolved workspace, never accepted as a caller-
   supplied value (multisession-native D2/D3, msn-19).
 
+- R85 — **Per-turn rules live in the always-loaded layer, never behind an
+  on-demand file.** The communication contract governs every single turn, so
+  its operative form sits in the instruction surface that is present in every
+  session by construction; the long-form contract may stay in a reference, but
+  only as the expansion of a rule already loaded. A rule reachable only by a
+  file nothing forces open is a rule nothing follows — proven the hard way: a
+  full communication contract sat authored-and-unread with no body pointing at
+  it, and the user experienced bee as having no communication style at all. A
+  guard now pins the turn shape and the pre-send check to the always-loaded
+  layer, so no future text migration can exile them again. This is the one
+  standing exception to the thin-body doctrine (comms-always-loaded ca-1,
+  user report 2026-07-28).
 - R84 — **Every perceivable step is visible as it happens.** The pipeline no
   longer works invisibly and reports at the end: each perceivable step emits
   exactly one short line, on by default, in the user's own work language —
