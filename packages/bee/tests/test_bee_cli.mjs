@@ -27,7 +27,7 @@ import { validate, isValidParameterSchema } from '../lib/validate-args.mjs';
 import { addCell, updateCell, deriveRegenGuards, regenObligationRefusal } from '../lib/cells.mjs';
 import { createSession, bindSessionLane } from '../lib/claims.mjs';
 import { writeJsonAtomic, hashFile, appendJsonl } from '../lib/fsutil.mjs';
-import { defaultState, writeState, writeLane, BEE_VERSION } from '../lib/state.mjs';
+import { defaultState, writeState, writeLane, BEE_VERSION, GATE_NAMES } from '../lib/state.mjs';
 import { listWorkflows } from '../lib/workflow-store.mjs';
 import { buildSessionPreamble } from '../lib/inject.mjs';
 import { mirrorHold, findForeignHolds } from '../lib/worktree-holds.mjs';
@@ -899,6 +899,75 @@ await check('status --lanes-full is a registered flag with a runnable example', 
   assert(idx !== -1, `status registry entry must carry a runnable --lanes-full example, got ${JSON.stringify(entry.examples)}`);
   const result = await assertExampleOk('status', { exampleIndex: idx, cwd: rootLanes });
   assert(Array.isArray(JSON.parse(result.stdout).lanes), `the registered --lanes-full example should actually restore the full array, got ${result.stdout}`);
+});
+
+// ─── status-diet st-3: `status --brief` payload contract (D3) ──────────────
+// st-1 (D1) added the fast-path flag; this cell is the slice-tail test that
+// pins its behavioral contract per CONTEXT.md assertions (a)-(e). One
+// hermetic fixture, built through the real dispatcher (start-feature + gate),
+// carries the whole story: no route yet -> brief keys/size/text -> full
+// status untouched -> route recorded -> brief picks it up.
+
+const briefDir = await routeFixtureRepo('sd-brief-contract');
+
+await check('status --brief --json returns exactly the 7 D1 keys, no extras, route null before any route is recorded (a, b-before)', async () => {
+  const result = await runBee(['status', '--brief', '--json'], briefDir);
+  assert(result.status === 0, `status --brief --json should succeed, got ${result.status}: ${result.stderr}`);
+  const brief = JSON.parse(result.stdout);
+  assert(
+    Object.keys(brief).sort().join(',') === ['feature', 'gate_bypass_level', 'gates', 'mode', 'phase', 'route', 'ship_visibility'].join(','),
+    `expected exactly the 7 D1 keys, no extras, got ${JSON.stringify(Object.keys(brief))}`,
+  );
+  assert(brief.route === null, `expected route null before any "state route --set" call, got ${JSON.stringify(brief.route)}`);
+  assert(brief.feature === 'sd-brief-contract', `expected the fixture feature, got ${JSON.stringify(brief.feature)}`);
+});
+
+await check('status --brief --json payload is well under the D1 1KB target on this fixture (d)', async () => {
+  const result = await runBee(['status', '--brief', '--json'], briefDir);
+  const byteLength = Buffer.byteLength(result.stdout.trim(), 'utf8');
+  assert(byteLength < 1024, `expected the brief payload under 1024 bytes, got ${byteLength}B: ${result.stdout}`);
+});
+
+await check('status --brief (no --json) prints the exact one-line form the --json payload implies (e)', async () => {
+  const jsonResult = await runBee(['status', '--brief', '--json'], briefDir);
+  const brief = JSON.parse(jsonResult.stdout);
+  const textResult = await runBee(['status', '--brief'], briefDir);
+  assert(textResult.status === 0, `status --brief (text) should succeed, got ${textResult.status}: ${textResult.stderr}`);
+  const gatesStr = GATE_NAMES.map((g) => (brief.gates?.[g] ? 'true' : 'false')).join('/');
+  const expected = `phase=${brief.phase} feature=${brief.feature ?? 'none'} mode=${brief.mode ?? 'none'} gates=${gatesStr} bypass=${brief.gate_bypass_level}`;
+  assert(textResult.stdout.trim() === expected, `expected the exact one-line brief text, got: ${textResult.stdout}`);
+});
+
+await check('full status --json (no --brief) still carries its pre-existing keys, unchanged by st-1 (c)', async () => {
+  const result = await runBee(['status', '--json'], briefDir);
+  assert(result.status === 0, `status --json should succeed, got ${result.status}: ${result.stderr}`);
+  const full = JSON.parse(result.stdout);
+  for (const key of ['phase', 'gates', 'models', 'handoff']) {
+    assert(key in full, `expected full status --json to still carry key "${key}", got ${JSON.stringify(Object.keys(full))}`);
+  }
+  assert(Object.keys(full).length > 7, `full status must carry substantially more than the 7-key brief shape, got ${Object.keys(full).length} keys`);
+});
+
+await check('status --brief --json route is populated once "state route --set" records one, mirroring full status (b-after)', async () => {
+  const setResult = await runBee(
+    ['state', 'route', '--set', '--class', 'feature', '--lane', 'standard', '--flags', 'multi-domain', '--files', '5', '--json'],
+    briefDir,
+  );
+  assert(setResult.status === 0, `state route --set should succeed, got ${setResult.status}: ${setResult.stdout}${setResult.stderr}`);
+
+  const briefResult = await runBee(['status', '--brief', '--json'], briefDir);
+  const brief = JSON.parse(briefResult.stdout);
+  assert(
+    brief.route && brief.route.class === 'feature' && brief.route.lane === 'standard' && brief.route.product_files === 5,
+    `expected brief route to carry the recorded route, got ${briefResult.stdout}`,
+  );
+
+  const fullResult = await runBee(['status', '--json'], briefDir);
+  const full = JSON.parse(fullResult.stdout);
+  assert(
+    JSON.stringify(full.route) === JSON.stringify(brief.route),
+    `expected brief and full status to report the SAME route record, brief=${JSON.stringify(brief.route)} full=${JSON.stringify(full.route)}`,
+  );
 });
 
 // ─── state.* examples: run in a dedicated fresh repo (dispatcher-unify du-1) ─
