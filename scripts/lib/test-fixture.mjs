@@ -18,6 +18,11 @@
 // would NOT resolve from a mirror copy is safe and already the established
 // pattern here (see the pre-existing `../../../../scripts/lib/run-module-
 // worker.mjs` import a few lines above this one's call site).
+//
+// cfl-1: BEE_CHECK_ONLY=<needle|/regex/> scopes check() in this shared
+// helper to matching-name checks (non-matching run no body, counted as
+// skipped and named in the summary — never silently dropped); unset, this
+// module's behavior is byte-identical to before this cell.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -63,6 +68,7 @@ export function makeCell(id, extra = {}) {
 
 let passed = 0;
 let failed = 0;
+let skipped = 0;
 
 function recordPass(name) {
   passed += 1;
@@ -75,7 +81,40 @@ function recordFailure(name, error) {
   console.log(`      ${error instanceof Error ? error.message : error}`);
 }
 
+function recordSkip(name) {
+  skipped += 1;
+  console.log(`SKIP  ${name}`);
+}
+
+// ─── BEE_CHECK_ONLY name filter (cfl-1) ────────────────────────────────────
+// A name-pattern filter for the check() runner below: with BEE_CHECK_ONLY
+// set, only checks whose name matches run — everything else is skipped, not
+// silently passed. A value wrapped in slashes (/re/[flags]) is a regex;
+// anything else is a case-insensitive substring match. Exported so suites
+// with their OWN local check() (22 of them, not converted in this cell) can
+// adopt the same predicate later.
+export function checkOnlyPredicate(filterValue) {
+  if (!filterValue) return null;
+  const regexForm = /^\/(.*)\/([a-z]*)$/.exec(filterValue);
+  if (regexForm) {
+    const re = new RegExp(regexForm[1], regexForm[2]);
+    return (name) => re.test(name);
+  }
+  const needle = filterValue.toLowerCase();
+  return (name) => name.toLowerCase().includes(needle);
+}
+
+// Computed once at module load — BEE_CHECK_ONLY is set by the process
+// environment before a suite ever runs, same lifecycle as BEE_VERIFY_ONLY
+// in scripts/run_verify.mjs.
+const CHECK_ONLY = process.env.BEE_CHECK_ONLY || '';
+const checkOnlyMatch = checkOnlyPredicate(CHECK_ONLY);
+
 export function check(name, fn) {
+  if (checkOnlyMatch && !checkOnlyMatch(name)) {
+    recordSkip(name);
+    return;
+  }
   try {
     const result = fn();
     if (result && typeof result.then === 'function') {
@@ -128,9 +167,24 @@ export async function assertRejects(fn, needle, message) {
 /**
  * Prints the "<n> passed, <m> failed" summary and exits nonzero on any
  * failure — same contract as the two lines this replaces at the bottom of
- * test_lib.mjs.
+ * test_lib.mjs. With BEE_CHECK_ONLY unset this is byte-identical to before
+ * cfl-1: no skip counter, no extra text. With BEE_CHECK_ONLY set, the
+ * summary also reports the skip count and the filter used, and a run that
+ * matched zero checks (nothing ran, so it can never read as green) exits
+ * non-zero with a typed message instead of the ordinary 0-passed/0-failed
+ * summary.
  */
 export function printSummaryAndExit() {
-  console.log(`\n${passed} passed, ${failed} failed`);
+  if (!checkOnlyMatch) {
+    console.log(`\n${passed} passed, ${failed} failed`);
+    process.exit(failed > 0 ? 1 : 0);
+  }
+  if (passed + failed === 0) {
+    console.error(
+      `test-fixture: BEE_CHECK_ONLY="${CHECK_ONLY}" matched zero checks — refusing a silent trivial-green run. FIX: check the filter against a check's name.`,
+    );
+    process.exit(1);
+  }
+  console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped (BEE_CHECK_ONLY=${CHECK_ONLY})`);
   process.exit(failed > 0 ? 1 : 0);
 }
