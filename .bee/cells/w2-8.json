@@ -1,0 +1,58 @@
+{
+  "id": "w2-8",
+  "feature": "skill-diet-wave2",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "refactor",
+  "title": "Migrate bee-writing-skills to thin-body doctrine (8968 -> <=8192)",
+  "action": "Rewrite skills/bee-writing-skills/SKILL.md to the thin-body doctrine, following the proven exemplar in docs/history/skill-token-diet/reports/diet-3.md (READ IT FIRST — same editorial mechanics, six skills already done this way). Body keeps ONLY: trigger + lane scaling, one flow diagram or step table, load-bearing invariants (Red Flags qualify), and the reference routing table. Everything else moves into skills/bee-writing-skills/references/ with quoted-heading pointers that resolve; every provenance citation (decision ids, plan names, hardening labels) is exiled into skills/bee-writing-skills/references/provenance.md as a rule -> decision-ids + rationale table. Mechanics: law-paragraph becomes a table row or a <=2-line bullet, one idea per line, target <=80 chars/line, delete reassurance clauses, exceptions-of-exceptions go to the branch's reference. MEANING NEVER CHANGES — rules move or compress, never weaken. BEFORE trimming anything, grep packages/bee/tests/test_misc.mjs for phrases pinned to this skill and treat them as immovable (two separate incidents today lost a census-pinned pointer to a byte trim). Preserve pointer phrases skill_lint checks (references/<file>.md (\"Heading\") pointers must resolve) and any bee:only marker grammar. BUDGET LEDGER IS NOT YOURS: do NOT touch scripts/skill-body-budget.json — it is a shared ledger and MAIN updates every entry in one pass at the wave barrier. Instead, report your skill's exact new byte size (wc -c) in your report's first line so MAIN can record it. R82: run NO test suites; cap --feature-verify-pending; MAIN verifies at close.",
+  "must_haves": {
+    "truths": [
+      "wc -c skills/bee-writing-skills/SKILL.md <= 8192, exact size reported in the report's first line.",
+      "Every section removed from the body is reachable from the body's reference routing table; provenance.md maps body rules to exiled decision ids.",
+      "Report carries 2-3 side-by-side before/after excerpt pairs showing identical normative content."
+    ],
+    "prohibitions": [
+      "Do NOT weaken, drop, or reword-into-ambiguity any rule — location and phrasing change, meaning never.",
+      "Do NOT edit any other skill's SKILL.md.",
+      "Do NOT touch scripts/skill-body-budget.json (shared ledger, MAIN owns it at the barrier).",
+      "Do NOT run any test suite (R82).",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node packages/bee/tests/test_misc.mjs",
+  "read_first": [
+    "docs/history/skill-token-diet/reports/diet-3.md",
+    "skills/bee-writing-skills/SKILL.md",
+    "packages/bee/tests/test_misc.mjs"
+  ],
+  "files": [
+    "skills/bee-writing-skills/SKILL.md",
+    "skills/bee-writing-skills/references/provenance.md"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-w28",
+    "outcome": "bee-writing-skills SKILL.md migrated to thin-body doctrine: 8958 -> 5157 bytes, four references split out (checklist-examples.md, rationalization-table.md new; provenance.md new), pressure-test-template.md/creation-log-template.md untouched",
+    "files_changed": [
+      "skills/bee-writing-skills/SKILL.md",
+      "skills/bee-writing-skills/references/checklist-examples.md",
+      "skills/bee-writing-skills/references/rationalization-table.md",
+      "skills/bee-writing-skills/references/provenance.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T09:03:23.618Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T08:59:54.361Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  }
+}
