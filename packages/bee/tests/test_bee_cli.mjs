@@ -1969,6 +1969,204 @@ await check('a close with ZERO scribing debt passes and writes no waiver decisio
   }
 });
 
+// ─── main-verifies mv-3 (D1-D3): the feature-verify law's net behavior ─────
+// mv-1 (cell mv-1) relocated per-cell proof to the feature boundary: `cells
+// cap --feature-verify-pending` stamps trace.feature_verify: "pending" with
+// zero per-cell evidence, `state feature-verify record` stamps the ONE
+// feature-level proof, and guardFeatureVerifyDebt holds `swarming` shut at
+// both exits (state set + state scribing-run) until a fresh green record
+// covers every pending cap. This is the trailing net over that whole law:
+// the record verb's real computed sha256 round-trip, every door-refusal
+// shape, the pass/untouched cases, and proof that gate_bypass "total" does
+// NOT lift the door.
+
+function makeFeatureVerifyRepo(feature) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-feature-verify-'));
+  fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
+  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'swarming', feature });
+  return dir;
+}
+
+function writePendingCappedCell(dir, id, feature, cappedAtIso) {
+  writeJsonAtomic(path.join(dir, '.bee', 'cells', `${id}.json`), {
+    id,
+    feature,
+    status: 'capped',
+    trace: { feature_verify: 'pending', capped_at: cappedAtIso },
+  });
+}
+
+await check('mv-3(c): state feature-verify record green/red round-trips with a REAL computed output_sha256, and --show reads it back', async () => {
+  const dir = makeFeatureVerifyRepo('mv3demo');
+  try {
+    const outFile = path.join(dir, 'verify-output.txt');
+    fs.writeFileSync(outFile, 'suite A: 12/12 green\n');
+    const expectedGreenSha = crypto.createHash('sha256').update(fs.readFileSync(outFile)).digest('hex');
+    const green = await runBee(
+      ['state', 'feature-verify', 'record', '--command', 'node run_verify.mjs --impacted', '--output-file', outFile, '--result', 'green', '--json'],
+      dir,
+    );
+    assert(green.status === 0, `green record must succeed, got: ${green.stdout}${green.stderr}`);
+    const greenRec = JSON.parse(green.stdout);
+    assert(greenRec.result === 'green' && greenRec.feature === 'mv3demo', `expected a green record for mv3demo, got ${green.stdout}`);
+    assert(
+      greenRec.output_sha256 === expectedGreenSha,
+      `output_sha256 must be computed from the real captured bytes, never caller-supplied, got ${greenRec.output_sha256} vs ${expectedGreenSha}`,
+    );
+
+    const show = await runBee(['state', 'feature-verify', 'show', '--json'], dir);
+    assert(show.status === 0, `show must succeed, got: ${show.stdout}${show.stderr}`);
+    const shown = JSON.parse(show.stdout);
+    assert(
+      shown.result === 'green' && shown.output_sha256 === expectedGreenSha,
+      `show must round-trip the exact recorded record, got ${show.stdout}`,
+    );
+
+    // Red round-trip: storable evidence of the failure, distinct from green.
+    fs.writeFileSync(outFile, 'suite A: 3 failing\n');
+    const expectedRedSha = crypto.createHash('sha256').update(fs.readFileSync(outFile)).digest('hex');
+    const red = await runBee(
+      ['state', 'feature-verify', 'record', '--command', 'node run_verify.mjs --impacted', '--output-file', outFile, '--result', 'red', '--json'],
+      dir,
+    );
+    assert(red.status === 0, `a red result must be RECORDABLE — it documents the failure (main-verifies D2), got: ${red.stdout}${red.stderr}`);
+    const redRec = JSON.parse(red.stdout);
+    assert(
+      redRec.result === 'red' && redRec.output_sha256 === expectedRedSha,
+      `expected the red record with its own freshly computed sha, got ${red.stdout}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('mv-3(d): door refuses — a pending cap with NO feature-verify record at all names the pending cell and the missing record', async () => {
+  const dir = makeFeatureVerifyRepo('mv3door');
+  try {
+    writePendingCappedCell(dir, 'mv3d-1', 'mv3door', new Date().toISOString());
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
+    assert(refused.status !== 0, 'a pending cap with no record must refuse leaving swarming');
+    const out = refused.stdout + refused.stderr;
+    assert(/mv3d-1/.test(out), `refusal must name the pending cell, got: ${out}`);
+    assert(/NO feature-verify record exists/.test(out), `refusal must say no record exists, got: ${out}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'swarming',
+      'a refused departure must leave the phase untouched — no partial write',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('mv-3(d): door refuses — a RED feature-verify record documents the failure but never satisfies the door', async () => {
+  const dir = makeFeatureVerifyRepo('mv3door');
+  try {
+    writePendingCappedCell(dir, 'mv3d-2', 'mv3door', new Date(Date.now() - 60000).toISOString());
+    const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
+    state.feature_verify = { feature: 'mv3door', command: 'x', output_sha256: 'a'.repeat(64), result: 'red', at: new Date().toISOString() };
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
+    assert(refused.status !== 0, 'a red record must never satisfy the door, even though it is newer than the pending cap');
+    const out = refused.stdout + refused.stderr;
+    assert(/mv3d-2/.test(out) && /never satisfies this door/.test(out), `refusal must name the cell and explain red never satisfies, got: ${out}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('mv-3(d): door refuses — a GREEN record older than the newest pending cap is STALE, naming the gap', async () => {
+  const dir = makeFeatureVerifyRepo('mv3door');
+  try {
+    const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
+    state.feature_verify = {
+      feature: 'mv3door',
+      command: 'x',
+      output_sha256: 'b'.repeat(64),
+      result: 'green',
+      at: new Date(Date.now() - 120000).toISOString(),
+    };
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
+    // Capped AFTER the green record — the record never covered this cell.
+    writePendingCappedCell(dir, 'mv3d-3', 'mv3door', new Date().toISOString());
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
+    assert(refused.status !== 0, 'a stale green record must not satisfy the door');
+    const out = refused.stdout + refused.stderr;
+    assert(/mv3d-3/.test(out) && /STALE/.test(out), `refusal must name the cell and call out staleness, got: ${out}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('mv-3(d): door passes — a GREEN record strictly newer than the newest pending cap opens it, and the departure actually writes', async () => {
+  const dir = makeFeatureVerifyRepo('mv3door');
+  try {
+    writePendingCappedCell(dir, 'mv3d-4', 'mv3door', new Date(Date.now() - 60000).toISOString());
+    const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
+    state.feature_verify = { feature: 'mv3door', command: 'x', output_sha256: 'c'.repeat(64), result: 'green', at: new Date().toISOString() };
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
+    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
+    assert(ok.status === 0, `a fresh green record must open the door, got: ${ok.stdout}${ok.stderr}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'reviewing',
+      'the departure must actually write the target phase once the door opens',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('mv-3(d): door stays UNTOUCHED when no cell carries a pending marker — departs freely with no feature-verify record at all', async () => {
+  const dir = makeFeatureVerifyRepo('mv3door');
+  try {
+    // A normal, classically-capped cell — no feature_verify field at all.
+    writeJsonAtomic(path.join(dir, '.bee', 'cells', 'mv3d-5.json'), {
+      id: 'mv3d-5',
+      feature: 'mv3door',
+      status: 'capped',
+      trace: { capped_at: new Date().toISOString() },
+    });
+    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
+    assert(ok.status === 0, `zero pending cells must never engage this door, got: ${ok.stdout}${ok.stderr}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('mv-3(e): gate_bypass "total" does NOT lift the feature-verify close door — refused identically to no bypass at all', async () => {
+  const dir = makeFeatureVerifyRepo('mv3door');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total' });
+    writePendingCappedCell(dir, 'mv3d-6', 'mv3door', new Date().toISOString());
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
+    assert(refused.status !== 0, 'gate_bypass "total" must NOT lift this door — it is a mechanical precondition, not a gate');
+    const out = refused.stdout + refused.stderr;
+    assert(/mv3d-6/.test(out), `refusal must still name the pending cell under bypass total, got: ${out}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('mv-3: the SECOND door (state scribing-run) refuses identically — guardFeatureVerifyDebt is wired at both swarming exits (D3)', async () => {
+  const dir = makeFeatureVerifyRepo('mv3door2');
+  try {
+    writePendingCappedCell(dir, 'mv3d-7', 'mv3door2', new Date().toISOString());
+    const refused = await runBee(
+      ['state', 'scribing-run', '--feature', 'mv3door2', '--areas', 'demo', '--next-action', 'x', '--json'],
+      dir,
+    );
+    assert(refused.status !== 0, 'scribing-run must also refuse over a pending cap with no record');
+    const out = refused.stdout + refused.stderr;
+    assert(/mv3d-7/.test(out), `refusal must name the pending cell, got: ${out}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'swarming',
+      'a refused scribing-run must leave the phase untouched — no last_scribing_run stamped',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 await check('capture.count example runs through the real dispatcher', async () => {
   const result = await assertExampleOk('capture.count', { cwd: rootBacklogCapture });
   assert(typeof JSON.parse(result.stdout).count === 'number', `expected a numeric count, got ${result.stdout}`);

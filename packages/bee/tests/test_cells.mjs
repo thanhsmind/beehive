@@ -1324,6 +1324,47 @@ await check('capCell honors the cell-declared behavior_change when the flag is o
   assert(capped.trace.behavior_change === true, 'trace.behavior_change carried from the cell declaration');
 });
 
+// ─── main-verifies mv-3 (D1): feature-verify-pending cap path ─────────────
+// Assertion (a): the pending path caps with ZERO per-cell verify evidence
+// demanded — no recordVerify call at all, no verification_evidence, no
+// files_changed/outcome floor tripped — and stamps trace.feature_verify:
+// "pending" for guardFeatureVerifyDebt (bee.mjs) to read at the close door.
+
+await check('mv-3(a): capCell --feature-verify-pending caps with NO verify recorded at all and stamps trace.feature_verify: "pending"', async () => {
+  addCell(root, makeCell('mv3-pend-1'));
+  await claimCell(root, 'mv3-pend-1', 'worker-mv3');
+  // Deliberately no recordVerify call — the pending path's whole point.
+  const capped = await capCell(root, 'mv3-pend-1', {
+    feature_verify_pending: true,
+    files_changed: ['src/mv3.js'],
+    outcome: 'pending cap, zero per-cell evidence',
+  });
+  assert(capped.status === 'capped', 'mv3-pend-1 capped through the pending path');
+  assert(capped.trace.feature_verify === 'pending', `expected trace.feature_verify "pending", got ${JSON.stringify(capped.trace.feature_verify)}`);
+  assert(capped.trace.verify_passed !== true, 'the pending path never claims a per-cell verify passed');
+  assert(!capped.trace.verification_evidence, 'the pending path attaches no verification_evidence');
+});
+
+// Assertion (b): the CLASSIC evidence path — feature_verify_pending omitted
+// (default false) — stays byte-identical: cap still refuses without a
+// passing verify, and once capped through the classic path the trace carries
+// NO trace.feature_verify field at all (the pending marker is stamped ONLY
+// on the pending path, never as a byproduct of the classic one).
+
+await check('mv-3(b): classic cap path is byte-identical — still refuses without verify, and a classically-capped cell carries no trace.feature_verify field', async () => {
+  addCell(root, makeCell('mv3-classic-1'));
+  await claimCell(root, 'mv3-classic-1', 'worker-mv3');
+  await assertRejects(
+    () => capCell(root, 'mv3-classic-1', { files_changed: ['src/mv3-classic.js'], outcome: 'done' }),
+    'verify',
+    'the classic path still demands a passing verify — untouched by D1',
+  );
+  await recordVerify(root, 'mv3-classic-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
+  const capped = await capCell(root, 'mv3-classic-1', { files_changed: ['src/mv3-classic.js'], outcome: 'done classically' });
+  assert(capped.status === 'capped', 'mv3-classic-1 capped through the classic path');
+  assert(!('feature_verify' in capped.trace), `classic cap must not stamp trace.feature_verify, got ${JSON.stringify(capped.trace.feature_verify)}`);
+});
+
 await check('isKnownPhase accepts the enum + terminal alias and rejects drift', async () => {
   assert(isKnownPhase('swarming') === true, 'enum phase accepted');
   assert(isKnownPhase('compounding-complete') === true, 'terminal alias accepted');
