@@ -20,6 +20,20 @@
 //       RegExp(...)` unguarded, which threw a raw SyntaxError before any
 //       check ever ran).
 //
+// check-filter cell cfl-2 (consolidated slice-tail coverage) added the four
+// net-behavior properties p1-2 left unpinned, all of them ways the filter
+// could still lie about a run:
+//   (6) a filter that KEEPS a failing check still exits 1 — filtering must
+//       never be able to mask a real failure, only to narrow what is asked;
+//   (7) substring matching is case-insensitive in BOTH directions (every
+//       existing case matched lowercase-to-lowercase, so the documented
+//       case-insensitivity was asserted nowhere);
+//   (8) the exported checkOnlyPredicate behaves as the 22 suites with their
+//       own local check() will consume it — that export is a cfl-1 promise
+//       with no test behind it;
+//   (9) this suite is reached by run_verify's own discovery, so the pins
+//       above actually run in CI rather than sitting in an orphan file.
+//
 // Mechanism: BEE_CHECK_ONLY is read once at module load, so the same
 // process/module instance can't be re-exercised under a different filter
 // value. Each property is instead pinned by writing a small throwaway
@@ -38,6 +52,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// cfl-2 (8): the predicate is a pure exported function, so it is exercised
+// in-process here — unlike the filter itself, which is frozen at module load
+// and can only be re-exercised by spawning a child.
+import { checkOnlyPredicate } from '../lib/test-fixture.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.join(path.dirname(__filename), '..', '..');
@@ -258,6 +277,104 @@ checkLocal('invalid /regex/ refuses cleanly instead of crashing at module load',
       `an invalid regex must refuse before any check runs (no PASS/SKIP/FAIL lines at all) — got:\n${result.stdout}`,
     );
   });
+});
+
+// ─── (6) a filter that KEEPS a failing check can never mask it ────────────
+// The inverse of property (2). There, the filter excluded the failing check
+// and the run went green — correct, but it leaves open the far worse bug: a
+// filter that SELECTS a failing check yet still reports success. A narrowed
+// run must stay just as red about what it did run.
+checkLocal('a filter that selects a FAILING check still exits 1 and still accounts for the skips', () => {
+  withFixture(({ suitePath, sentinelPath }) => {
+    const result = runFixture(suitePath, { checkOnly: 'banana', sentinelPath });
+    assertLocal(
+      result.status === 1,
+      `filtering never masks a real failure — a selected failing check must exit 1, got ${result.status}`,
+    );
+    assertLocal(
+      result.stdout.includes('FAIL  banana-check'),
+      `the selected failing check must still report FAIL:\n${result.stdout}`,
+    );
+    assertLocal(
+      result.stdout.includes('0 passed, 1 failed, 2 skipped (BEE_CHECK_ONLY=banana)'),
+      `a red filtered run must still name its skip count and filter:\n${result.stdout}`,
+    );
+    const ran = readSentinel(sentinelPath);
+    assertLocal(
+      ran.length === 1 && ran[0] === 'banana-check',
+      `only the selected body may execute — got: ${JSON.stringify(ran)}`,
+    );
+  });
+});
+
+// ─── (7) substring matching is case-insensitive in BOTH directions ────────
+// Every pre-existing case matched a lowercase needle against a lowercase
+// name, which a case-SENSITIVE implementation would also pass. These two
+// runs fail on such an implementation.
+checkLocal('substring matching is case-insensitive in both directions', () => {
+  withFixture(({ suitePath, sentinelPath }) => {
+    const upperNeedle = runFixture(suitePath, { checkOnly: 'APPLE-CHECK', sentinelPath });
+    assertLocal(
+      upperNeedle.status === 0,
+      `an uppercase needle must match the lowercase check name, got exit ${upperNeedle.status}:\n${upperNeedle.stderr}`,
+    );
+    const ran = readSentinel(sentinelPath);
+    assertLocal(
+      ran.length === 1 && ran[0] === 'apple-check',
+      `"APPLE-CHECK" must select exactly apple-check — got: ${JSON.stringify(ran)}`,
+    );
+  });
+  withFixture(({ suitePath, sentinelPath }) => {
+    const mixedNeedle = runFixture(suitePath, { checkOnly: 'BaNaNa', sentinelPath });
+    assertLocal(
+      mixedNeedle.status === 1,
+      `mixed-case needle must still select banana-check (which fails), got exit ${mixedNeedle.status}`,
+    );
+    const ran = readSentinel(sentinelPath);
+    assertLocal(
+      ran.length === 1 && ran[0] === 'banana-check',
+      `"BaNaNa" must select exactly banana-check — got: ${JSON.stringify(ran)}`,
+    );
+  });
+});
+
+// ─── (8) the exported predicate, as the local-check() suites will use it ──
+// cfl-1 exported checkOnlyPredicate specifically so the 22 suites carrying
+// their own check() could adopt the same matching later. Nothing pinned that
+// export, so its contract could drift away from the filter it mirrors.
+checkLocal('checkOnlyPredicate returns null for an absent filter, so callers can branch on it', () => {
+  assertLocal(checkOnlyPredicate('') === null, 'an empty filter must yield null, not a match-everything predicate');
+  assertLocal(checkOnlyPredicate(undefined) === null, 'an unset filter must yield null');
+});
+
+checkLocal('checkOnlyPredicate builds a case-insensitive substring matcher for a plain value', () => {
+  const match = checkOnlyPredicate('APPLE');
+  assertLocal(typeof match === 'function', 'a non-empty filter must yield a predicate function');
+  assertLocal(match('apple-check') === true, 'must match ignoring case');
+  assertLocal(match('appleseed-check') === true, 'substring form must match anywhere in the name');
+  assertLocal(match('banana-check') === false, 'must not match an unrelated name');
+});
+
+checkLocal('checkOnlyPredicate builds a real regex matcher for a slash-wrapped value', () => {
+  const match = checkOnlyPredicate('/^apple-check$/');
+  assertLocal(match('apple-check') === true, 'the anchored regex must match its exact name');
+  assertLocal(
+    match('appleseed-check') === false,
+    'the anchored regex must NOT match appleseed-check — that is what proves it is a regex and not a substring test',
+  );
+  assertLocal(checkOnlyPredicate('/^APPLE-CHECK$/i')('apple-check') === true, 'flags must be passed through');
+});
+
+// ─── (9) discovery: these pins actually run ───────────────────────────────
+const { SUITES } = await import(
+  pathToFileURL(path.join(REPO_ROOT, 'scripts', 'run_verify.mjs')).href
+);
+
+checkLocal('this suite is reached by run_verify discovery, with no hand-registration', () => {
+  assertLocal(
+    SUITES.some((entry) => entry[0] === 'scripts/tests/test_check_filter.mjs'),
+    'scripts/tests/test_check_filter.mjs must appear in the discovered suite list — an unreached pin pins nothing',
+  );
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

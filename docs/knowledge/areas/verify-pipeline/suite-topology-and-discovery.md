@@ -59,6 +59,19 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   silent trivial green, and every scoped run prints a loud
   `SCOPED RUN (--only)` banner twice so a scoped green can never be mistaken
   for a full one (verify-scoping D1).
+- **Check-level narrowing inside a suite (check-filter D1).** Suite selection
+  narrows which suites run; a second, finer filter narrows which *checks*
+  inside them run. When the check-filter setting names a pattern, a check
+  whose NAME does not match executes no body and is counted as skipped —
+  never as passed — and the summary line reports the skips and the pattern
+  explicitly, so a narrowed run can never be read as a full one. Matching is
+  a case-insensitive substring by default; a value wrapped in slashes is read
+  as a regular expression. A pattern matching zero checks is a typed failure,
+  never a green: a filter that selects nothing is a mistake, not a clean run.
+  With the setting absent, behavior is byte-identical to an unfiltered run —
+  same counts, same summary, no skip accounting. The matching predicate is
+  exported so the suites carrying their own private check runner can adopt
+  the same narrowing later.
 - **Impact-registry-scoped dev loop (ci-owned-verify D3/D4/D5).** The dev
   loop's own broader command, `commands.test`, runs `run_verify.mjs
   --impacted <files>` / `--impacted-from-git`, mapping changed files through
@@ -154,6 +167,12 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   dropped, and the run's exit code always reflects the part that actually
   ran — a capped run is never a silent green. An explicit `--level 1` run is
   never subject to this cap (test-economy D6).
+- **R7** — Every narrowing mechanism accounts for what it removed. A skipped
+  check is counted and named as skipped, never folded into the passed count;
+  a narrowed run states its pattern in its own summary; and a narrowing that
+  selects nothing exits non-zero. The same three obligations bind suite-level
+  and check-level narrowing alike, so no filtered run can present itself as
+  proof it did not produce (check-filter D1).
 
 ## Edge Cases Settled
 
@@ -188,5 +207,6 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
 - **P1** — `scripts/run_verify.mjs` — discovery roots, EXTRA/EXCLUDE, serial
   convention, pool.
 - **P2** — `scripts/tests/test_verify_manifest.mjs` — floor + existence + membership guard.
-- **P3** — `scripts/lib/test-fixture.mjs` — shared fixture/check-runner.
+- **P3** — `scripts/lib/test-fixture.mjs` — shared fixture/check-runner,
+  including the `BEE_CHECK_ONLY` name filter and its exported predicate.
 - **P4** — `packages/bee/tests/` — per-module suites (11 files).
