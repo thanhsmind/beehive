@@ -2714,8 +2714,13 @@ async function seedLegacyWorkflows(root) {
   const { workflows: existing } = listWorkflows(controlRoot);
   if (existing.length > 0) return; // never re-seed once ANY workflow record exists
 
-  const liveForFeature = (feature) => existing.some((wf) => wf.feature === feature && wf.status !== 'closed');
-
+  // workflow-lifecycle wl-1: the per-candidate "does this feature already have
+  // a live record?" test is no longer kept here as a local array scan — it is
+  // ensureWorkflowRecordForFeature's own idempotency, re-read from disk, so
+  // seeding and starting share ONE definition of "already recorded". The
+  // zero-records gate above still makes this whole function a once-per-repo
+  // operation.
+  //
   // (a) the legacy default record. "NON-idle" per C1: phase outside
   // idle/compounding-complete, OR a gate approved, OR a feature recorded —
   // read with the fail-open readState (never throw here; a corrupt default
@@ -2725,17 +2730,16 @@ async function seedLegacyWorkflows(root) {
     Boolean(legacy.feature) ||
     (legacy.phase && legacy.phase !== 'idle' && legacy.phase !== 'compounding-complete') ||
     Object.values(legacy.approved_gates || {}).some((v) => v === true);
-  if (legacyLive && legacy.feature && !liveForFeature(legacy.feature)) {
-    const created = await createWorkflow(controlRoot, {
+  if (legacyLive && legacy.feature) {
+    await ensureWorkflowRecordForFeature(root, {
       feature: legacy.feature,
-      phase: isKnownPhase(legacy.phase) ? legacy.phase : 'idle',
+      phase: legacy.phase,
       mode: legacy.mode,
       gates: legacyGatesToWorkflowGates(legacy.approved_gates),
       summary: legacy.summary,
       next_action: legacy.next_action,
       status: 'active',
     });
-    existing.push(created);
   }
 
   // (b) every non-terminal lane (same phase test as (a) minus the gates/
@@ -2745,17 +2749,16 @@ async function seedLegacyWorkflows(root) {
   for (const lane of listLanes(root)) {
     if (!lane || !lane.feature) continue;
     const laneLive = lane.phase && lane.phase !== 'idle' && lane.phase !== 'compounding-complete';
-    if (!laneLive || liveForFeature(lane.feature)) continue;
-    const created = await createWorkflow(controlRoot, {
+    if (!laneLive) continue;
+    await ensureWorkflowRecordForFeature(root, {
       feature: lane.feature,
-      phase: isKnownPhase(lane.phase) ? lane.phase : 'idle',
+      phase: lane.phase,
       mode: lane.mode,
       gates: legacyGatesToWorkflowGates(lane.approved_gates),
       summary: lane.summary,
       next_action: lane.next_action,
       status: 'active',
     });
-    existing.push(created);
   }
 }
 
@@ -2793,6 +2796,138 @@ function checkNoSameFeatureClaimedCells(feature, cells) {
         .join(', ')}. FIX: cap or drop them first (bee.mjs cells cap / bee.mjs cells drop).`,
     );
   }
+}
+
+// ─── workflow-lifecycle wl-1: the ONE record-creation seam + close-by-feature
+// ────────────────────────────────────────────────────────────────────────────
+// DEFECT this closes (5 live drift incidents, 2026-07-28). Sessions kept
+// reverting mid-run to a previously CLOSED feature. The chain: a stopping
+// subagent fires the state-sync hook -> rebuildStateProjection's
+// idle-bootstrap branch picks the NEWEST `status: 'active'` workflow record
+// (state-projection.mjs) -> and stale records stayed active forever, because
+//   (a) some feature-start paths never created a workflow record at all
+//       (inspection of .bee/runtime/workflows/ found records for only 4 of the
+//       ~10 features that ran that day: main-verifies, foundation-fixes,
+//       parallel-default, test-batching-finish and ship-visibility-config had
+//       none), and
+//   (b) fx-1's close reached only records that EXIST and only for the
+//       OUTGOING feature named on the legacy default record — so a feature
+//       whose record was never created could never be closed either (starting
+//       status-diet left skill-token-diet active).
+// The two exports below are the fix's public shape; ensureWorkflowRecordForFeature
+// is the single creation seam every start path in this file routes through, so
+// "which paths create a record" can never again drift path-by-path.
+//
+// AUDIT — every path in THIS file that starts, materializes, or adopts a
+// feature, and what it now does about a workflow record:
+//   1. startFeature, DEFAULT branch          -> ensureWorkflowRecordForFeature,
+//      then closeWorkflowsForFeature({keepFeature}).
+//   2. startFeature, LANE branch (startLane) -> ensureWorkflowRecordForFeature
+//      (the same post-lock call — one seam, both branches); closes nothing, by
+//      design (lanes are deliberately concurrent; startLane is byte-untouched).
+//   3. startFeature, --isolate REDIRECT      -> returns before any write to
+//      this root at all (a new checkout is created instead), so there is no
+//      pipeline here to record; the redirected-to checkout starts normally.
+//   4. seedLegacyWorkflows (C1 materialization) -> ensureWorkflowRecordForFeature
+//      for the live legacy default record and every non-terminal lane, gates
+//      carried over. Not a "start", but it is the other creator of records, so
+//      it shares the seam rather than open-coding its own idempotency test.
+//   5. adoptHandoff / adoptMailboxHandoff    -> NO record work, deliberately.
+//      Neither writes `feature`, `phase`, or gates: they transfer a CELL claim
+//      and clear a mailbox slot. adoptMailboxHandoff is keyed BY workflow id,
+//      so a record provably exists; adoptHandoff is the C1 fallback that runs
+//      only in a repo with zero workflow records, whose next real pipeline
+//      write goes through 1/2/4 above.
+//   6. writeState / writeLane                -> raw persistence primitives, not
+//      start paths; every caller that means "start" goes through startFeature.
+// The remaining creator OUTSIDE this file is the CLI's own `state set --feature`
+// (bee.mjs) — the path that produced hole (a) in practice — which is why the two
+// contracted exports above exist: it calls them rather than growing its own copy.
+
+/**
+ * listWorkflowRecords(root) — INTERFACE CONTRACT (workflow-lifecycle wl-1/wl-2,
+ * frozen so the library and CLI cells could be implemented in parallel).
+ * Returns a plain ARRAY of the full workflow records (not listWorkflows'
+ * `{workflows, skipped}` envelope), resolved through controlRootFor so a caller
+ * inside a worktree reads the SAME control-plane store main reads (msn-18a).
+ * Fail-open exactly like listWorkflows: an unreadable record is skipped and
+ * warned about, never thrown for the whole listing.
+ */
+export function listWorkflowRecords(root) {
+  const { workflows } = listWorkflows(controlRootFor(root));
+  return workflows;
+}
+
+/**
+ * closeWorkflowsForFeature(root, { keepFeature }) — INTERFACE CONTRACT
+ * (workflow-lifecycle wl-1/wl-2, frozen). Closes every LIVE workflow record
+ * (`status !== 'closed'` — this file's own definition of live, the same one
+ * checkNoLiveWorkflowForFeature uses) whose `feature` differs from
+ * `keepFeature`, and returns the array of closed `{id, feature}`.
+ *
+ * Close BY FEATURE, never by record presence: hole (b) above existed because
+ * the old close asked "does the outgoing feature have a record?" — a question
+ * whose answer is "no" exactly when the drift is worst. This asks the only
+ * question that stays true either way: "is any OTHER feature still live?".
+ * `keepFeature: null` closes every live record (a full wind-down).
+ *
+ * Idempotent — a second call finds nothing left to close and returns []. Lock-
+ * safe — each close is one updateWorkflow call taking that record's OWN
+ * `workflow:<id>` lock, sequentially, never a shared lock and never nested
+ * inside the 'state' lock (call it only from OUTSIDE that lock, exactly as
+ * startFeature does below; C4's sessions/workflow isolation is unaffected —
+ * this touches no session record).
+ */
+export async function closeWorkflowsForFeature(root, { keepFeature = null } = {}) {
+  const controlRoot = controlRootFor(root);
+  const keep = typeof keepFeature === 'string' && keepFeature.trim() ? keepFeature.trim() : null;
+  const closed = [];
+  for (const wf of listWorkflows(controlRoot).workflows) {
+    if (!wf || wf.status === 'closed') continue;
+    if (keep !== null && wf.feature === keep) continue;
+    await updateWorkflow(controlRoot, wf.id, { status: 'closed' });
+    closed.push({ id: wf.id, feature: wf.feature });
+  }
+  return closed;
+}
+
+/**
+ * ensureWorkflowRecordForFeature(root, {...}) — the SINGLE workflow-record
+ * creation seam for every path that starts or adopts a feature. Returns
+ * `{ record, created }`.
+ *
+ * Idempotent by FEATURE: when a live (`status !== 'closed'`) record already
+ * names this feature it is returned untouched with `created: false` — never a
+ * second record for one feature, and never a silent overwrite of the live
+ * one's phase/gates (a caller that means to MOVE a live record uses
+ * updateWorkflow, which is what bee.mjs's own state verbs already do).
+ * Otherwise one fresh record is created via createWorkflow under its own
+ * `workflow:<id>` lock.
+ *
+ * Callers must be OUTSIDE the 'state' lock (createWorkflow takes
+ * `workflow:<id>`; the two are never held together — see startFeature's header).
+ */
+export async function ensureWorkflowRecordForFeature(
+  root,
+  { feature, phase = 'idle', mode = null, summary = '', next_action = '', status = 'active', gates = undefined } = {},
+) {
+  if (typeof feature !== 'string' || !feature.trim()) {
+    throw new Error('ensureWorkflowRecordForFeature: a non-empty feature slug is required.');
+  }
+  const featureTrimmed = feature.trim();
+  const controlRoot = controlRootFor(root);
+  const live = listWorkflows(controlRoot).workflows.find((wf) => wf.feature === featureTrimmed && wf.status !== 'closed');
+  if (live) return { record: live, created: false };
+  const record = await createWorkflow(controlRoot, {
+    feature: featureTrimmed,
+    phase: isKnownPhase(phase) ? phase : 'idle',
+    mode: mode == null ? null : String(mode),
+    status,
+    summary: typeof summary === 'string' ? summary : '',
+    next_action: typeof next_action === 'string' ? next_action : '',
+    ...(gates === undefined ? {} : { gates }),
+  });
+  return { record, created: true };
 }
 
 // D6 — async: the whole precondition-read-through-write body below runs
@@ -2882,14 +3017,6 @@ export async function startFeature(
     }
   }
 
-  // D1 (foundation-fixes): captured only on the DEFAULT (non-lane) branch
-  // below — lanes are bee's existing, deliberately-concurrent mechanism
-  // (many features running side by side), so a lane start never closes any
-  // OTHER feature's workflow. Read outside the lock so the close-step after
-  // it (which runs its own workflow-store locking) never nests inside
-  // 'state'.
-  let outgoingFeatureToClose = null;
-
   const legacyRecord = await withStoreLock(root, 'state', () => {
     if (lane) {
       return startLane(root, {
@@ -2958,7 +3085,6 @@ export async function startFeature(
     }
 
     const priorFeature = state.feature;
-    outgoingFeatureToClose = priorFeature || null;
     if (priorFeature) {
       const nonterminal = cells.filter(
         (cell) =>
@@ -3007,36 +3133,45 @@ export async function startFeature(
   // handleStateStartFeature in bee.mjs) must show the same descriptive text
   // startLane already wrote, not a blank one.
   // Workflow records are control-plane (msn-18a) — see seedLegacyWorkflows.
-  await createWorkflow(controlRootFor(root), {
+  //
+  // workflow-lifecycle wl-1: routed through ensureWorkflowRecordForFeature,
+  // the ONE creation seam, so BOTH branches above (default and lane) and every
+  // future start path create their record through identical logic instead of
+  // each open-coding a createWorkflow call. Idempotent by feature, so a
+  // half-completed earlier start that already left a live record for this
+  // feature is adopted rather than duplicated (checkNoLiveWorkflowForFeature
+  // normally refuses before ever reaching here; this is the belt to its braces).
+  await ensureWorkflowRecordForFeature(root, {
     feature: featureTrimmed,
     phase: phaseValue,
-    mode: mode == null ? null : String(mode),
+    mode,
     status: 'active',
     summary: legacyRecord.summary,
     next_action: legacyRecord.next_action,
   });
 
-  // D1 (foundation-fixes): close the OUTGOING feature's live workflow
-  // record(s) — the enum value STATUS_VALUES has carried since msn-5
-  // (workflow-store.mjs:72) finally gets a writer. Scoped to the DEFAULT
-  // (non-lane) path only (`outgoingFeatureToClose` is set only on that
-  // branch above) and only to records naming that SPECIFIC prior feature —
-  // never a blanket "close everything else active", which would wrongly
-  // close unrelated concurrent lanes. `outgoingFeatureToClose` is guaranteed
-  // to differ from `featureTrimmed` here: checkNoLiveWorkflowForFeature above
-  // already refused this call if a live record for `featureTrimmed` existed,
-  // so a match on `outgoingFeatureToClose === featureTrimmed` can never reach
-  // this point. Runs AFTER the new workflow is created (never before) so a
-  // crash between them leaves the new record live and only a to-be-closed
-  // stale record behind — never a moment with zero active workflows for a
-  // feature genuinely still starting.
-  if (outgoingFeatureToClose && outgoingFeatureToClose !== featureTrimmed) {
-    const controlRoot = controlRootFor(root);
-    const { workflows: postCreate } = listWorkflows(controlRoot);
-    const stale = postCreate.filter((wf) => wf.feature === outgoingFeatureToClose && wf.status === 'active');
-    for (const wf of stale) {
-      await updateWorkflow(controlRoot, wf.id, { status: 'closed' });
-    }
+  // Close the OUTGOING work — D1 (foundation-fixes), widened by
+  // workflow-lifecycle wl-1 from "the prior feature's records" to "every OTHER
+  // live record". The old shape asked whether the legacy default record still
+  // NAMED the outgoing feature and whether that feature happened to have a
+  // record; when either answer was no (the two holes documented on
+  // closeWorkflowsForFeature above), a stale `status: 'active'` record survived
+  // and the projection's idle-bootstrap picker later resurrected it mid-session.
+  // Closing by feature — keep exactly the feature being started, close the rest
+  // — is true regardless of what the outgoing side left behind.
+  //
+  // Still scoped to the DEFAULT (non-lane) path: a lane start closes nothing,
+  // because lanes are bee's deliberately-concurrent mechanism and startLane's
+  // own logic stays byte-untouched. The residual, accepted by design: a DEFAULT
+  // start closes a live LANE feature's record too — the default record is the
+  // whole-repo pipeline, and the picker it feeds must resolve to exactly one
+  // active workflow.
+  //
+  // Runs AFTER the new record exists (never before) so a crash between the two
+  // leaves the new record live plus a to-be-closed stale one — never a moment
+  // with zero active workflows for a feature genuinely still starting.
+  if (!lane) {
+    await closeWorkflowsForFeature(root, { keepFeature: featureTrimmed });
   }
 
   return legacyRecord;
