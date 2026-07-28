@@ -1,11 +1,11 @@
 {
-  "note": "Per-skill SKILL.md body budget in bytes. Ratchet: may only go down. Blocking fence: scripts/skill_budget_fence.mjs (skill-token-diet D6). migrated[] lists skills whose body is provenance-exiled (D8) \u2014 appended one at a time by each migration commit, never inferred from budget size. notes.<skill> justifies any budget over 8192 (D1).",
+  "note": "Per-skill SKILL.md body budget in bytes. Ratchet: may only go down. Blocking fence: scripts/skill_budget_fence.mjs (skill-token-diet D6). migrated[] lists skills whose body is provenance-exiled (D8) — appended one at a time by each migration commit, never inferred from budget size. notes.<skill> justifies any budget over 8192 (D1).",
   "budgets": {
     "bee-briefing": 14549,
     "bee-bypass-gate": 6096,
     "bee-compounding": 14079,
     "bee-context-locking": 6454,
-    "bee-evolving": 8850,
+    "bee-evolving": 8828,
     "bee-executing": 10225,
     "bee-exploring": 15915,
     "bee-grooming": 9185,
@@ -17,7 +17,7 @@
     "bee-scribing": 8151,
     "bee-swarming": 8187,
     "bee-validating": 18273,
-    "bee-writing-skills": 9154,
+    "bee-writing-skills": 8968,
     "bee-xia": 6385
   },
   "migrated": [

@@ -18,7 +18,7 @@ metadata:
 Bee reads the friction it has already collected and ships itself an improvement — with a human
 approving **what** to fix (Gate A) and **the exact diff** that fixes it (Gate B), and a push that
 is never automatic (D5). This loop modifies bee itself; that is why it has two human gates where
-ordinary work has none extra, and why every rule below is written as a refusal, not a preference.
+ordinary work has none extra.
 
 This skill is **invoked by the human, never triggered automatically** (D3), and is **never
 dispatched to an external CLI executor** (decision 0019: self-modifying work stays on native tiers
@@ -38,11 +38,10 @@ vendored `.bee/bin/` copy does NOT make it the bee repo. If the guard fails, **R
 > bee-evolving runs only in the bee repository. This repo is a bee *host*. I will not rank, patch,
 > or "prepare" bee changes here — invoke me from the bee repo checkout.
 
-No exceptions. Not for a deadline, not for a tech lead's direct instruction, not because the
-helpers are physically present, not "read-only ranking here, patch on a branch, upstream later."
-Ranking a host repo's digest in place and editing vendored bee files inside a host project IS
-running the loop in a host repo — the branch and the upstreaming plan change nothing. A stale bee
-checkout is fixed by updating the bee checkout, never by moving the loop.
+No exceptions — not a deadline, a tech lead's instruction, the helpers being physically present,
+or "read-only ranking here, patch on a branch, upstream later." Ranking or editing vendored bee
+files inside a host project IS running the loop there; the branch and upstreaming plan change
+nothing. A stale bee checkout is fixed by updating the checkout, never by moving the loop.
 
 ## 1. Rank the feedback — merged view only
 
@@ -72,12 +71,12 @@ Render the top clusters to the human, each as:
 Then **STOP and wait**. The human picks one item to fix, or stops the loop. Both are complete,
 successful outcomes.
 
-- No trust statement, standing delegation, or "make bee better today" pre-authorizes the choice —
-  a human saying "you have my trust" has delegated *effort*, never this decision.
-- A deterministic ranking is an *agenda*, not a decision. The top-ranked item being "objectively
-  first" does not make it chosen. Rank 14 vs rank 6 chooses nothing.
-- Starting the fix now and getting "retroactive sign-off" later is a Gate A violation, not a
-  time-saver. Implementation before the human's pick = failure. Every time.
+- No trust statement or standing delegation pre-authorizes the choice — trust delegates *effort*,
+  never this decision.
+- A deterministic ranking is an *agenda*, not a decision — "objectively first" does not make it
+  chosen.
+- Starting the fix and getting "retroactive sign-off" later is a Gate A violation: implementation
+  before the human's pick is failure, every time.
 
 ## 3. The fix — handed off under the Iron Law, never inline
 
@@ -87,6 +86,11 @@ then the minimal change, then re-test GREEN. bee-evolving itself NEVER implement
 it is the loop's conductor, not its editor. A fix that touches non-skill surfaces still enters
 through the normal bee chain (cells, verification, capping); nothing is edited "quickly, since
 we're here."
+
+**Learning placement:** a promoted learning lands in the knowledge bundle or the target skill's
+`references/` by default; editing the skill's body is allowed only for a load-bearing invariant,
+and only if the body still fits its recorded budget in `scripts/skill-body-budget.json` — over
+budget, trim the body first (one in, one out) rather than growing it unchecked.
 
 ## 4. Suites green
 
@@ -141,7 +145,6 @@ gate-bypass switch nor any autonomy flag covers them.
 | "The ranking is deterministic; the top item is objectively first" | A rank is an agenda, not a decision. The human chooses. |
 | "Standing rule: small green diffs just push" | Gate B is per-diff and cannot be pre-granted. Wait for approval of THIS diff. |
 | "Monday's plan approval + the runbook's 'push the result' step authorize it" | A plan approval is not a diff approval. Push waits, even if the scheduler pages someone. |
-| "A scratch branch isn't really a push" | Any remote ref is a push. The unapproved diff left the machine. |
 
 ## Red Flags — STOP
 

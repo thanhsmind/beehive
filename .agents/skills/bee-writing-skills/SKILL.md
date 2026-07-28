@@ -12,7 +12,7 @@ metadata:
 
 Skills are code. They have bugs. Test them before deploying.
 
-This is the TDD-for-skills methodology from Superpowers via khuym (N=28,000 scale testing confirms persuasion-optimized skills produce 3-4× better agent compliance than plain instructions).
+This is the TDD-for-skills methodology from Superpowers via khuym.
 
 **THE IRON LAW: NO SKILL WITHOUT A FAILING TEST FIRST.**
 Wrote the skill before testing? Delete it. Start over. No exceptions — not for "simple additions," not for "just a section," not for "reference only." The Iron Law applies to edits.
@@ -49,6 +49,7 @@ Write SKILL.md addressing the **specific rationalizations documented in RED only
 - [ ] `description`: one short purpose clause (shown in the /slash menu), then "Use when..." triggering conditions — **NEVER a workflow/step summary**; third person, ≤1024 chars
 - [ ] `metadata.version: '0.1'`, `metadata.ecosystem: bee`, `metadata.dependencies` mapping or `[]`
 - [ ] Body < 200 lines preferred; overflow goes to exactly one level of `references/`
+- [ ] Regrowth law: a new learning lands in the knowledge bundle or `references/` by default; edit the body itself only for a load-bearing invariant, and only if the edit still fits the recorded budget in `scripts/skill-body-budget.json` — over budget, trim the body first (one in, one out) before adding
 - [ ] Commands quoted in the body match the `.bee/bin` CLI surface in `bee/docs/07-contracts.md` verbatim
 - [ ] Short `Headless` section documenting `mode:headless` behavior
 - [ ] Red Flags list; persuasion principles applied (table below); HARD-GATE markers on critical stops
@@ -113,7 +114,7 @@ The bee plugin has no automated skill validator in v0.1. Validate by hand plus `
 node --check <skill-dir>/scripts/<each-script>.mjs   # only if the skill ships scripts
 ```
 
-Manual checks (every item, every time): frontmatter parses and starts on line 1; `name` = directory; description is trigger-only; version/ecosystem/dependencies match the conventions above; body < 200 lines; every `references/` link resolves one level deep; quoted `.bee/bin` commands match `bee/docs/07-contracts.md` verbatim. If the skill owns a repo-local test script, run it and quote the output.
+Manual checks (every item, every time): re-run the SKILL.md checklist above end to end. If the skill owns a repo-local test script, run it and quote the output.
 
 **Create CREATION-LOG.md** (see `references/creation-log-template.md`): source material and extraction decisions, scenarios run and results, rationalizations found and fixes, iterations required.
 
@@ -129,7 +130,6 @@ Manual checks (every item, every time): frontmatter parses and starts on line 1;
 | "My description summarizes the workflow so agents know what to do" | Workflow-summary descriptions make agents skip the skill body. Remove it. |
 | "This edit is minor — testing isn't needed" | The Iron Law applies to edits. No exceptions. |
 | "I'll test it after a few real uses" | Problems = agents misusing it in production. Test BEFORE deploying. |
-| "The baseline is obvious, I know what failures to expect" | You know YOUR failures. Agent failures differ. Run the baseline. |
 
 ## Headless
 
