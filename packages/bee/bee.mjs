@@ -59,6 +59,10 @@ import {
   isKnownPhase,
   checkPhaseTransition,
   checkScribingRunPhase,
+  // review-p1-fixes p1-3 (F3): state.mjs's own answer to "which phases can a
+  // feature leave execution from" — reused verbatim by the feature-verify
+  // close door below rather than re-deciding the set in a second place.
+  SCRIBING_RUN_FROM,
   checkCompoundingRunPhase,
   startFeature,
   hasStaleAdvisorKey,
@@ -2908,6 +2912,11 @@ async function handleStateSet(root, flags) {
       const newFeature = String(flags.feature);
       if (state.feature && newFeature !== state.feature) {
         swapFromFeature = state.feature;
+        // review-p1-fixes p1-3 (F3): the feature-verify swap door runs FIRST,
+        // before the waivable scribing one — an unwaivable mechanical
+        // precondition must never be reachable only through a run that also
+        // happened to pass (or waive) a softer check.
+        featureSwapGuardFeatureVerifyDebt(root, state, newFeature);
         waivedSwap = featureSwapGuardScribingDebt(root, state.feature, flags);
       }
     }
@@ -3175,17 +3184,19 @@ function guardTestCellDebt(root, record, targetPhase) {
 // than the newest pending cap, so a cell capped after the last verify run
 // re-closes the door until the verify is re-run and re-recorded (D5's
 // fix-cells-then-re-verify loop at feature granularity).
-function guardFeatureVerifyDebt(root, record, targetPhase) {
-  const from = record && record.phase;
-  if (from !== 'swarming') return; // only the exit from execution is guarded
-  if (targetPhase === 'swarming') return; // a no-op re-set is not a departure
-  const feature = record && record.feature;
-  if (!feature) return; // no active feature ⇒ nothing to hold open
+// review-p1-fixes p1-3 (F3), half one — the debt COMPUTATION, shared by both
+// doors below. Returns null when the door is clear (no pending caps, or a
+// fresh green record already covers them), otherwise {pending, recordState}.
+// Deliberately takes the feature as a parameter rather than reading
+// record.feature: the swap door's whole point is that the record's feature is
+// about to be replaced, and the debt it must weigh is the OUTGOING one's.
+function featureVerifyDebtState(root, record, feature) {
+  if (!feature) return null; // no active feature ⇒ nothing to hold open
   let cells = [];
   try {
     cells = listCells(root, { feature });
   } catch {
-    return; // unreadable cell store degrades to today's behavior, never a crash
+    return null; // unreadable cell store degrades to today's behavior, never a crash
   }
   const pending = [];
   let newestPendingCapMs = null;
@@ -3199,14 +3210,14 @@ function guardFeatureVerifyDebt(root, record, targetPhase) {
       newestPendingCapMs = cappedMs;
     }
   }
-  if (pending.length === 0) return; // no relocated proof owed ⇒ door untouched
-  const raw = record.feature_verify;
+  if (pending.length === 0) return null; // no relocated proof owed ⇒ door untouched
+  const raw = record && record.feature_verify;
   const rec = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
   const sameFeature = rec && (!rec.feature || rec.feature === feature);
   const green = rec && sameFeature && rec.result === 'green';
   const recAtMs = rec ? Date.parse(rec.at) : NaN;
   const fresh = Number.isFinite(recAtMs) && (newestPendingCapMs === null || recAtMs > newestPendingCapMs);
-  if (green && fresh) return;
+  if (green && fresh) return null;
   let recordState;
   if (!rec) {
     recordState = 'NO feature-verify record exists';
@@ -3217,11 +3228,60 @@ function guardFeatureVerifyDebt(root, record, targetPhase) {
   } else {
     recordState = `the recorded GREEN feature-verify (at ${rec.at}) is STALE — not newer than the newest pending cap, so at least one capped cell was never covered by it`;
   }
+  return { pending, recordState };
+}
+
+// The shared FIX tail — identical for both doors, because the remedy is
+// identical: run the ONE feature-level verify and record it green.
+const FEATURE_VERIFY_FIX_TAIL =
+  'Those cells capped through `cells cap --feature-verify-pending` (main-verifies D1): their per-cell proof was deliberately relocated to ONE feature-level verify over the feature\'s whole diff, and this door is what keeps that relocation honest (D3).\n' +
+  'FIX: run the feature verify (the impacted suite over the feature\'s whole diff), capture its output to a file, record it — `bee state feature-verify record --command "<cmd>" --output-file <file> --result green` — then retry. A red result is recordable (it documents the failure) but never opens this door: open fix cells in this same feature (never un-cap, main-verifies D5), re-verify, and record the green.\n' +
+  'This is a mechanical precondition, not a human gate: no gate_bypass level (including "total") and no headless run lifts it, and there is no waiver flag.';
+
+// review-p1-fixes p1-3 (F3), half two — WHICH phases this door guards.
+// "Only the exit from execution is guarded" was right; `from !== 'swarming'`
+// was a narrower spelling of it than the repo's own. SCRIBING_RUN_FROM is
+// state.mjs's answer to "from which phases can a feature leave execution",
+// and cells cap --feature-verify-pending in every one of them — a cell capped
+// pending while the record sits in `reviewing` or `scribing` was as unproven
+// as one capped in `swarming`, yet walked out of BOTH doors untouched
+// (scribing-run's own call passes targetPhase 'compounding' from any of the
+// three). Note the departure test stays `targetPhase === from` — a move
+// BETWEEN guarded phases (swarming → scribing) is still guarded exactly as
+// before, only a literal no-op re-set is not a departure.
+function guardFeatureVerifyDebt(root, record, targetPhase) {
+  const from = record && record.phase;
+  if (!SCRIBING_RUN_FROM.includes(from)) return;
+  if (targetPhase === from) return; // a no-op re-set is not a departure
+  const feature = record && record.feature;
+  const debt = featureVerifyDebtState(root, record, feature);
+  if (!debt) return;
   throw new Error(
-    `set: refusing to leave phase "swarming" for "${targetPhase}" — feature "${feature}" has ${pending.length} capped cell(s) awaiting the feature-level verify (trace.feature_verify: "pending"): ${pending.join(', ')}, and ${recordState}.\n` +
-      'Those cells capped through `cells cap --feature-verify-pending` (main-verifies D1): their per-cell proof was deliberately relocated to ONE feature-level verify over the feature\'s whole diff, and this door is what keeps that relocation honest (D3).\n' +
-      'FIX: run the feature verify (the impacted suite over the feature\'s whole diff), capture its output to a file, record it — `bee state feature-verify record --command "<cmd>" --output-file <file> --result green` — then retry this transition. A red result is recordable (it documents the failure) but never opens this door: open fix cells in this same feature (never un-cap, main-verifies D5), re-verify, and record the green.\n' +
-      'This is a mechanical precondition, not a human gate: no gate_bypass level (including "total") and no headless run lifts it, and there is no waiver flag.',
+    `set: refusing to leave phase "${from}" for "${targetPhase}" — feature "${feature}" has ${debt.pending.length} capped cell(s) awaiting the feature-level verify (trace.feature_verify: "pending"): ${debt.pending.join(', ')}, and ${debt.recordState}.\n` +
+      FEATURE_VERIFY_FIX_TAIL,
+  );
+}
+
+// review-p1-fixes p1-3 (F3), half three — the FEATURE-SWAP door, the exact
+// mirror of featureSwapGuardScribingDebt below and the reason it exists: a
+// guard that covers one door is a suggestion. guardFeatureVerifyDebt above
+// only ever ran inside `if (flags.phase !== undefined)`, so
+// `state set --feature <other> --owner swarming` walked away from a feature
+// holding pending caps without touching either door — and because every
+// reader keys on record.feature, those caps are then read by NO path, ever
+// again. Unlike its scribing twin this door has NO waiver: --waive-scribing-
+// debt waives scribing debt, and no gate_bypass level (including "total")
+// lifts a mechanical precondition. Lanes never reach here (--feature is
+// already refused alongside --lane).
+function featureSwapGuardFeatureVerifyDebt(root, record, newFeature) {
+  const feature = record && record.feature;
+  if (!feature) return; // idle → nothing was abandoned
+  const debt = featureVerifyDebtState(root, record, feature);
+  if (!debt) return;
+  throw new Error(
+    `set: refusing to swap away from feature "${feature}" to "${newFeature}" — "${feature}" has ${debt.pending.length} capped cell(s) awaiting the feature-level verify (trace.feature_verify: "pending"): ${debt.pending.join(', ')}, and ${debt.recordState}.\n` +
+      `Setting --feature abandons "${feature}" before its ONE feature-level verify ever ran, and every reader of these markers keys on the record's feature: once the swap lands, nothing reads those pending caps again. The relocated proof would not be deferred, it would be destroyed.\n` +
+      FEATURE_VERIFY_FIX_TAIL,
   );
 }
 
@@ -4581,16 +4641,38 @@ function handleStateWorkflowsList(root, flags) {
   return { result: records, text };
 }
 
+// review-p1-fixes p1-3 (F5) — resolving the active feature is a PRECONDITION
+// of the two guarded modes, not a best-effort hint. This used to swallow
+// every error into `null`, and `null` is the very same value that means "no
+// active feature, nothing to protect": a corrupt state.json or a session
+// bound to a missing lane therefore turned `--all-but-active` from "close
+// every live record EXCEPT the active feature's" into "close every live
+// record", in-flight work included — a failure that WIDENED the verb's blast
+// radius instead of narrowing it, contradicting the registry contract the
+// verb advertises.
+//
+// Now: {ok: true, feature} on a real resolution (feature may legitimately be
+// null — idle is a definite answer, not a failure), {ok: false, reason} when
+// resolution itself failed. The two modes that depend on the answer refuse
+// typed and close nothing; --id, which never consults it, keeps its
+// documented right to name any record explicitly, the active one included.
 function resolveActiveFeatureForWorkflowsClose(root) {
   try {
     const target = resolveMutationTarget(root, null, 'workflows close', { noLane: false });
-    return target.record.feature || null;
-  } catch {
-    // No active feature (or a corrupt/missing lane) resolves to "nothing to
-    // protect" rather than refusing the whole verb — `list`/`close` operate
-    // over ALL workflow records, not scoped to a single feature's lifecycle.
-    return null;
+    return { ok: true, feature: (target.record && target.record.feature) || null };
+  } catch (err) {
+    return { ok: false, reason: err && err.message ? err.message : String(err) };
   }
+}
+
+// The shared tail of both unresolved-active refusals (F5): same cause, same
+// two ways out.
+function workflowsCloseUnresolvedActiveTail(reason) {
+  return (
+    `Underlying resolution failure: ${reason}\n` +
+    'A guard that cannot establish its precondition refuses — it never proceeds on a null active feature.\n' +
+    'FIX: repair the routing record named above (restore .bee/state.json, start or unbind the session-bound lane), then retry — or close one record explicitly with `bee state workflows close --id <id>`, the one mode that never consults the active feature.'
+  );
 }
 
 async function closeWorkflowRecordById(ctrlRoot, id) {
@@ -4618,7 +4700,10 @@ async function handleStateWorkflowsClose(root, flags) {
   // closeWorkflowsForFeature resolve controlRootFor(root) themselves —
   // always called with plain `root` below.
   const ctrlRoot = controlRootFor(root);
-  const activeFeature = resolveActiveFeatureForWorkflowsClose(root);
+  // F5: computed for every mode (unchanged), but CONSULTED only by the two
+  // modes it protects — the --id branch below returns before ever reading it.
+  const active = resolveActiveFeatureForWorkflowsClose(root);
+  const activeFeature = active.ok ? active.feature : null;
 
   if (hasId) {
     const id = String(flags.id);
@@ -4636,6 +4721,12 @@ async function handleStateWorkflowsClose(root, flags) {
 
   if (hasFeature) {
     const feature = String(flags.feature);
+    if (!active.ok) {
+      throw new Error(
+        `workflows close --feature: refused — the currently active feature could not be resolved, so the guard that keeps "${feature}" from being closed while it IS the active feature cannot be evaluated. Nothing was closed.\n` +
+          workflowsCloseUnresolvedActiveTail(active.reason),
+      );
+    }
     if (activeFeature && feature === activeFeature) {
       throw new Error(
         `workflows close --feature: refused — "${feature}" is the currently active feature; use --id <id> to close its record explicitly.`,
@@ -4657,6 +4748,12 @@ async function handleStateWorkflowsClose(root, flags) {
   }
 
   // --all-but-active
+  if (!active.ok) {
+    throw new Error(
+      'workflows close --all-but-active: refused — the currently active feature could not be resolved, so "all but active" would silently degrade into "all": every live workflow record, in-flight work included, would be closed. Nothing was closed.\n' +
+        workflowsCloseUnresolvedActiveTail(active.reason),
+    );
+  }
   const closed = await closeWorkflowsForFeature(root, { keepFeature: activeFeature });
   if (!closed || closed.length === 0) {
     throw new Error(

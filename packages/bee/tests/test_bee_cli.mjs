@@ -2017,11 +2017,14 @@ await check('a close with ZERO scribing debt passes and writes no waiver decisio
 // shape, the pass/untouched cases, and proof that gate_bypass "total" does
 // NOT lift the door.
 
-function makeFeatureVerifyRepo(feature) {
+// review-p1-fixes p1-3 (F3): `phase` is a parameter now — the door is not
+// swarming-only any more, so the fixture must be able to seat a feature in
+// any phase it can leave execution from.
+function makeFeatureVerifyRepo(feature, phase = 'swarming') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-feature-verify-'));
   fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
   writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
-  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'swarming', feature });
+  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase, feature });
   return dir;
 }
 
@@ -2198,6 +2201,185 @@ await check('mv-3: the SECOND door (state scribing-run) refuses identically — 
     assert(
       JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'swarming',
       'a refused scribing-run must leave the phase untouched — no last_scribing_run stamped',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── review-p1-fixes p1-3 (F3): the OTHER door + the wider phase set ───────
+// Two independent reviewers found the feature-verify guard covered the
+// phase-transition door only. `state set --feature <other>` walked away from
+// a feature holding pending caps with no green record at all — and since
+// every reader keys on record.feature, those caps are then read by no path,
+// ever again. The same guard's phase condition was also narrower than the set
+// of phases a feature can leave execution from (SCRIBING_RUN_FROM admits
+// reviewing and scribing), so a cap taken in either skipped BOTH doors.
+
+await check('p1-3(F3): the feature-SWAP door refuses — state set --feature over pending caps names the cell, and the swap never lands', async () => {
+  const dir = makeFeatureVerifyRepo('mv3swap');
+  try {
+    writePendingCappedCell(dir, 'p13-1', 'mv3swap', new Date().toISOString());
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--feature', 'someother', '--json'], dir);
+    assert(refused.status !== 0, 'swapping --feature away from a feature with pending caps must refuse');
+    const out = refused.stdout + refused.stderr;
+    // --json renders the refusal inside a JSON string, so the quotes around
+    // the feature name arrive escaped — match the words, not the quoting.
+    assert(/refusing to swap away from feature/.test(out) && /mv3swap/.test(out), `refusal must name the outgoing feature, got: ${out}`);
+    assert(/p13-1/.test(out), `refusal must name the pending cell, got: ${out}`);
+    assert(/NO feature-verify record exists/.test(out), `refusal must say why the door is shut, got: ${out}`);
+    assert(/feature-verify record/.test(out) && /--result green/.test(out), `refusal must carry the runnable FIX, got: ${out}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'mv3swap',
+      'a refused swap must leave the feature untouched — no partial write',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p1-3(F3): gate_bypass "total" and --waive-scribing-debt both fail to lift the feature-SWAP door', async () => {
+  const dir = makeFeatureVerifyRepo('mv3swap2');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total' });
+    writePendingCappedCell(dir, 'p13-2', 'mv3swap2', new Date().toISOString());
+    const refused = await runBee(
+      ['state', 'set', '--owner', 'swarming', '--feature', 'someother', '--waive-scribing-debt', '--json'],
+      dir,
+    );
+    assert(
+      refused.status !== 0,
+      'the swap door is a mechanical precondition: neither bypass "total" nor the SCRIBING waiver may lift it',
+    );
+    const out = refused.stdout + refused.stderr;
+    assert(/p13-2/.test(out), `refusal must still name the pending cell, got: ${out}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'mv3swap2',
+      'nothing may be written when the swap door refuses under bypass',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p1-3(F3): the swap door OPENS once a fresh green feature-verify covers the pending caps — a guard, not a blanket block', async () => {
+  const dir = makeFeatureVerifyRepo('mv3swap3');
+  try {
+    writePendingCappedCell(dir, 'p13-3', 'mv3swap3', new Date(Date.now() - 60000).toISOString());
+    const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
+    state.feature_verify = { feature: 'mv3swap3', command: 'x', output_sha256: 'd'.repeat(64), result: 'green', at: new Date().toISOString() };
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
+    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--feature', 'someother', '--json'], dir);
+    assert(ok.status === 0, `a fresh green record must open the swap door, got: ${ok.stdout}${ok.stderr}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'someother',
+      'the swap must actually write once the door opens',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+for (const fromPhase of ['reviewing', 'scribing']) {
+  await check(`p1-3(F3): a pending cap is still guarded when the feature leaves execution from "${fromPhase}", not only from swarming`, async () => {
+    const dir = makeFeatureVerifyRepo(`mv3phase-${fromPhase}`, fromPhase);
+    try {
+      writePendingCappedCell(dir, `p13-${fromPhase}`, `mv3phase-${fromPhase}`, new Date().toISOString());
+      const refused = await runBee(['state', 'set', '--owner', fromPhase, '--phase', 'idle', '--json'], dir);
+      assert(refused.status !== 0, `leaving execution from "${fromPhase}" over a pending cap must refuse`);
+      const out = refused.stdout + refused.stderr;
+      // Quotes arrive JSON-escaped under --json (\" is two characters), so
+      // match the phase names themselves rather than the quoting.
+      assert(
+        new RegExp(`refusing to leave phase \\W{0,2}${fromPhase}\\W{0,3} for \\W{0,2}idle`).test(out),
+        `refusal must name the real originating phase, got: ${out}`,
+      );
+      assert(new RegExp(`p13-${fromPhase}`).test(out), `refusal must name the pending cell, got: ${out}`);
+      assert(
+        JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === fromPhase,
+        'a refused departure must leave the phase untouched — no partial write',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+// ─── review-p1-fixes p1-3 (F5): a failed resolution must NARROW, not widen ──
+// resolveActiveFeatureForWorkflowsClose swallowed every error into null, and
+// null is also the value meaning "no active feature to protect" — so a
+// corrupt routing record turned `--all-but-active` into a full wind-down of
+// in-flight work. A guard that cannot establish its precondition refuses.
+
+// createWorkflow goes through withStoreLock, so it resolves a promise —
+// awaited here (unlike the fire-and-forget seeding above, which never reads
+// the returned record's id).
+async function makeWorkflowsCloseRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-workflows-close-'));
+  fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
+  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'swarming', feature: 'live-feature' });
+  const live = await createWorkflow(dir, { feature: 'live-feature', status: 'active' });
+  const other = await createWorkflow(dir, { feature: 'other-feature', status: 'active' });
+  return { dir, live, other };
+}
+
+// The precondition failure: a present-but-corrupt .bee/state.json. readState
+// stays fail-open (hooks/status must never crash), but readStateStrict —
+// which resolveMutationTarget uses — throws, which is exactly the
+// "resolution failed" case that used to degrade into keepFeature: null.
+function corruptStateJson(dir) {
+  fs.writeFileSync(path.join(dir, '.bee', 'state.json'), '{ this is not json', 'utf8');
+}
+
+await check('p1-3(F5): workflows close --all-but-active REFUSES when the active feature cannot be resolved, and closes nothing', async () => {
+  const { dir } = await makeWorkflowsCloseRepo();
+  try {
+    corruptStateJson(dir);
+    const refused = await runBee(['state', 'workflows', 'close', '--all-but-active', '--json'], dir);
+    assert(refused.status !== 0, 'an unresolvable active feature must refuse, never close everything');
+    const out = refused.stdout + refused.stderr;
+    assert(
+      /could not be resolved/.test(out) && /Nothing was closed/.test(out),
+      `refusal must name the unresolved precondition and state that nothing was closed, got: ${out}`,
+    );
+    const after = listWorkflows(dir).workflows;
+    assert(
+      after.length === 2 && after.every((r) => r.status !== 'closed'),
+      `every live workflow record must survive the refusal, got: ${JSON.stringify(after)}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p1-3(F5): workflows close --feature also refuses on an unresolvable active feature — the active-feature guard cannot be evaluated', async () => {
+  const { dir } = await makeWorkflowsCloseRepo();
+  try {
+    corruptStateJson(dir);
+    const refused = await runBee(['state', 'workflows', 'close', '--feature', 'other-feature', '--json'], dir);
+    assert(refused.status !== 0, '--feature must not close a record whose active-feature protection cannot be evaluated');
+    const out = refused.stdout + refused.stderr;
+    assert(/could not be resolved/.test(out), `refusal must name the unresolved precondition, got: ${out}`);
+    const after = listWorkflows(dir).workflows;
+    assert(after.every((r) => r.status !== 'closed'), `nothing may be closed, got: ${JSON.stringify(after)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p1-3(F5): workflows close --id keeps its documented exception — it never consults the active feature, so it still closes explicitly', async () => {
+  const { dir, other } = await makeWorkflowsCloseRepo();
+  try {
+    corruptStateJson(dir);
+    const ok = await runBee(['state', 'workflows', 'close', '--id', other.id, '--json'], dir);
+    assert(ok.status === 0, `--id names a record explicitly and must still work, got: ${ok.stdout}${ok.stderr}`);
+    const after = listWorkflows(dir).workflows;
+    const closed = after.find((r) => r.id === other.id);
+    assert(closed && closed.status === 'closed', `--id must close exactly the named record, got: ${JSON.stringify(after)}`);
+    assert(
+      after.filter((r) => r.status !== 'closed').length === 1,
+      `only the named record may close, got: ${JSON.stringify(after)}`,
     );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
