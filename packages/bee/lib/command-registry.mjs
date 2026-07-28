@@ -707,12 +707,13 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.gate',
     invoke: 'bee state gate',
-    description: 'Approve or unapprove a named gate. This dedicated command does not accept routing --owner. Idempotent: the same call run twice yields an identical file. Target resolution (i54-closeout D7, symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes.',
+    description: 'Approve or unapprove a named gate, OR — validation-diet D2 — pass --merge instead of --name to approve/unapprove the MERGED shape+execution gate in ONE call (sets approved_gates.shape AND approved_gates.execution together, since bee now asks a single question at the end of briefing in place of separate Gate 2/Gate 3 questions). --merge and --name are mutually exclusive. This dedicated command does not accept routing --owner. Idempotent: the same call run twice yields an identical file. Target resolution (i54-closeout D7, symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes. D14: a --merge approval inherits the SAME high-risk advisor-consult precondition that already guards a --name execution approval (AO3/AO13) — refuses when mode is high-risk and advisor_ref is missing or stale, before any write. D15: under --merge, both gates carry the approved_for_plan_rev stamp (a plain --name execution approval still stamps execution alone), so a later `state plan-rev bump` revokes both instead of leaving the merged gate half-revoked.',
     parameters: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Gate name.', enum: [...GATE_NAMES] },
-        approved: { type: 'string', description: 'Whether the gate is approved ("true" or "false").' },
+        name: { type: 'string', description: 'Gate name. Required unless --merge is set; refused together with --merge.', enum: [...GATE_NAMES] },
+        merge: { type: 'boolean', description: 'Validation-diet D2: approve/unapprove shape AND execution together in this one call, instead of a single named gate. Mutually exclusive with --name.' },
+        approved: { type: 'string', description: 'Whether the gate(s) are approved ("true" or "false").' },
         lane: { type: 'string', description: 'Route the mutation to this lane record instead of the default state.json. Refuses if the lane is missing or corrupt. Omitted: the calling session\'s bound lane is targeted automatically; unbound sessions target the default record.' },
         'no-lane': { type: 'boolean', description: 'Force the default state.json even when the calling session is bound to a lane. Cannot be combined with --lane.' },
         owner: { type: 'string', description: 'NOT accepted by this dedicated command — declared here only so the dispatcher\'s central unknown-flag check (packages-engine-move-3) still lets it through to this handler\'s own specific refusal ("--owner is not accepted..."); routing ownership protects generic `state set` fields only.' },
@@ -723,13 +724,14 @@ export const COMMAND_REGISTRY = [
     examples: [
       'bee state gate --name execution --approved true --json',
       'bee state gate --lane demo-lane --name execution --approved true --json',
+      'bee state gate --merge --approved true --json',
     ],
     deprecated: null,
   },
   {
     name: 'state.plan-rev.bump',
     invoke: 'bee state plan-rev bump',
-    description: "Bump a workflow's plan_rev by 1 (multisession-native-9, CONTEXT.md D7; advisor consult slice 2 C2, binding). plan_rev lives ONLY on the workflow record, so this verb targets a lane exactly like gate/set/scribing-run (explicit --lane > the calling session's bound lane) but REFUSES when resolution would land on the default (non-lane) record — that record's workflow is not yet kept in sync (C5 residual seam, multisession-native-10). The bump immediately rebuilds the lane's projection: any gate stamped with the PRE-bump plan_rev (only the execution gate is ever stamped a real rev — D7 default) now projects as unapproved in .bee/lanes/<feature>.json, so a subsequent `cells claim` against that lane's cells refuses right away. Never touches any other workflow's record (invariant 3) — context/shape/review on THIS workflow are also untouched (D7 default: they are never rev-stamped, so they stay effective across a bump).",
+    description: "Bump a workflow's plan_rev by 1 (multisession-native-9, CONTEXT.md D7; advisor consult slice 2 C2, binding). plan_rev lives ONLY on the workflow record, so this verb targets a lane exactly like gate/set/scribing-run (explicit --lane > the calling session's bound lane) but REFUSES when resolution would land on the default (non-lane) record — that record's workflow is not yet kept in sync (C5 residual seam, multisession-native-10). The bump immediately rebuilds the lane's projection: any gate stamped with the PRE-bump plan_rev (the execution gate always; the shape gate too when it was approved via `state gate --merge` — D2/D15) now projects as unapproved in .bee/lanes/<feature>.json, so a subsequent `cells claim` against that lane's cells refuses right away. Never touches any other workflow's record (invariant 3) — context/review on THIS workflow are also untouched (D7 default: they are never rev-stamped, so they stay effective across a bump).",
     parameters: {
       type: 'object',
       properties: {

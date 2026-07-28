@@ -119,10 +119,17 @@ export function projectionsAuthoritative(root) {
 // approved_for_plan_rev === planRev)`. `approved_for_plan_rev === null` (or
 // the field being absent — a hand-written/legacy record predating this
 // cell, or msn-6's own seedLegacyWorkflows) means "not rev-scoped" and is
-// ALWAYS effective, independent of `planRev` — this is what keeps the
-// context/shape/review gates immune to a plan_rev bump by construction
-// (CONTEXT.md D7 default: only the execution gate is ever stamped with a
-// real rev number — see bee.mjs's handleStateGate/writeLaneRecordThroughProjection).
+// ALWAYS effective, independent of `planRev` — this keeps `context`/`review`
+// immune to a plan_rev bump by construction, since NEITHER is ever stamped
+// with a real rev number by any caller (D7 default). `execution` always is
+// (bee.mjs's handleStateGate/writeLaneRecordThroughProjection, plain
+// `--name execution` branch); `shape` is too, but ONLY when approved through
+// the SAME handler's `--merge` branch (validation-diet D2/D15,
+// findGateStamp) — never through a plain `state gate --name shape` call,
+// which stays additive/unstamped. This
+// function itself needs no per-gate-name special-casing either way: it
+// reads whatever rev (or absence of one) each gate's entry carries,
+// generically, for every name in GATE_NAMES.
 // `planRev` is OPTIONAL and defaults to `undefined`: a caller that omits it
 // (e.g. a bare structural translation with no live workflow record's
 // plan_rev in hand) gets the SAME rev-immune behavior only for `null`/absent

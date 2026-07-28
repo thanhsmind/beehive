@@ -17,9 +17,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { check, assert, printSummaryAndExit } from '../../../scripts/lib/test-fixture.mjs';
+import { runModuleWorker } from '../../../scripts/lib/run-module-worker.mjs';
 import { writeJsonAtomic } from '../lib/fsutil.mjs';
-import { readState, writeState, readLane, writeLane, statePath, lanePath, GATE_NAMES } from '../lib/state.mjs';
+import { readState, writeState, defaultState, readLane, writeLane, statePath, lanePath, GATE_NAMES, startFeature } from '../lib/state.mjs';
 import { createWorkflow, updateWorkflow, listWorkflows } from '../lib/workflow-store.mjs';
 import {
   projectionsAuthoritative,
@@ -34,6 +36,198 @@ import { reserve, listReservations, reservationsPath, rebuildReservationsProject
 function makeRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'bee-state-projection-'));
 }
+
+// ─── validation-diet D2/D14/D15: the merged shape+execution gate, exercised
+// through the REAL bee.mjs CLI dispatcher (never a hand-rolled shortcut) —
+// D9 evidence discipline: this is the exact machinery bee-briefing calls at
+// the end of planning, not a throwaway probe. Mirrors test_cli_state.mjs's
+// pre-existing multisession-native-9 proof shape (lane workflow + gate +
+// plan-rev bump), extended to the merged verb.
+
+function beeMjsPath() {
+  return fileURLToPath(new URL('../bee.mjs', import.meta.url));
+}
+
+function runBee(args, cwd) {
+  return runModuleWorker(beeMjsPath(), { args, cwd });
+}
+
+function makeCliRoot(prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  fs.mkdirSync(path.join(dir, '.bee'), { recursive: true });
+  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+  return dir;
+}
+
+// Builds a default-record (non-lane) high-risk repo with a real decision and
+// plan.md, so advisor_ref staleness has real anchors to bind to — same shape
+// as test_bee_cli.mjs's makeAdvisorRoot, reproduced locally rather than
+// imported (test files are not a shared-library surface).
+function makeAdvisorRoot(dir, { mode = 'high-risk', feature = 'merge-advtest', decisionId = 'dec-1', planBody = '# plan\ncontent\n' } = {}) {
+  writeState(dir, {
+    ...defaultState(),
+    phase: 'planning',
+    feature,
+    mode,
+    approved_gates: { context: true, shape: false, execution: false, review: false },
+  });
+  if (decisionId) {
+    fs.writeFileSync(
+      path.join(dir, '.bee', 'decisions.jsonl'),
+      `${JSON.stringify({ id: decisionId, type: 'decide', date: '2026-07-17T00:00:00.000Z', decision: 'seed', scope: 'repo' })}\n`,
+    );
+  }
+  if (planBody != null) {
+    fs.mkdirSync(path.join(dir, 'docs', 'history', feature), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', 'history', feature, 'plan.md'), planBody);
+  }
+}
+
+await check('D2: `state gate --merge --approved true` flips BOTH approved_gates.shape and approved_gates.execution in one call, on a live lane workflow', async () => {
+  const dir = makeCliRoot('bee-gate-merge-basic-');
+  try {
+    const started = await startFeature(dir, { feature: 'merge-lane', mode: 'standard', lane: true });
+    assert(started.feature === 'merge-lane', 'precondition: lane started');
+    const before = listWorkflows(dir).workflows.find((wf) => wf.feature === 'merge-lane');
+    assert(before.gates.shape.approved === false && before.gates.execution.approved === false, 'precondition: both gates start unapproved');
+
+    const result = await runBee(['state', 'gate', '--lane', 'merge-lane', '--merge', '--approved', 'true', '--json'], dir);
+    assert(result.status === 0, `merged gate approval should succeed: ${result.stderr}`);
+    const out = JSON.parse(result.stdout);
+    assert(
+      out.approved_gates.shape === true && out.approved_gates.execution === true,
+      `one call must flip BOTH gates, got ${JSON.stringify(out.approved_gates)}`,
+    );
+
+    const after = listWorkflows(dir).workflows.find((wf) => wf.feature === 'merge-lane');
+    assert(
+      after.gates.shape.approved === true && after.gates.execution.approved === true,
+      'the WORKFLOW RECORD (not merely the projected lane file) carries both approvals',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('D2: `state gate --merge --name shape` refuses the ambiguous combination, zero write', async () => {
+  const dir = makeCliRoot('bee-gate-merge-name-conflict-');
+  try {
+    const started = await startFeature(dir, { feature: 'conflict-lane', mode: 'standard', lane: true });
+    assert(started.feature === 'conflict-lane', 'precondition: lane started');
+    const result = await runBee(['state', 'gate', '--lane', 'conflict-lane', '--merge', '--name', 'shape', '--approved', 'true'], dir);
+    assert(result.status !== 0, `expected non-zero exit, got ${result.status}`);
+    assert(/--merge cannot be combined with --name/.test(result.stderr), `expected the mutual-exclusion refusal, got stderr=${result.stderr}`);
+    const wf = listWorkflows(dir).workflows.find((w) => w.feature === 'conflict-lane');
+    assert(wf.gates.shape.approved === false && wf.gates.execution.approved === false, 'a refused call must not write either gate');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('D2: the standalone `state gate --name shape|execution` verb still works unchanged now that --merge exists (additive, never a replacement)', async () => {
+  const dir = makeCliRoot('bee-gate-standalone-still-works-');
+  try {
+    const started = await startFeature(dir, { feature: 'solo-lane', mode: 'standard', lane: true });
+    assert(started.feature === 'solo-lane', 'precondition: lane started');
+
+    const shapeResult = await runBee(['state', 'gate', '--lane', 'solo-lane', '--name', 'shape', '--approved', 'true', '--json'], dir);
+    assert(shapeResult.status === 0, `standalone shape approval should still succeed: ${shapeResult.stderr}`);
+    assert(JSON.parse(shapeResult.stdout).approved_gates.shape === true, 'shape gate approved standalone');
+
+    const execResult = await runBee(['state', 'gate', '--lane', 'solo-lane', '--name', 'execution', '--approved', 'true', '--json'], dir);
+    assert(execResult.status === 0, `standalone execution approval should still succeed: ${execResult.stderr}`);
+    const out = JSON.parse(execResult.stdout);
+    assert(
+      out.approved_gates.shape === true && out.approved_gates.execution === true,
+      'both gates end up true when approved one at a time, exactly as before --merge existed',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('D14: `state gate --merge --approved true` refuses for mode high-risk when advisor_ref is missing, exactly as the standalone execution gate does (AO3/AO13) — zero write', async () => {
+  const dir = makeCliRoot('bee-gate-merge-advisor-missing-');
+  try {
+    makeAdvisorRoot(dir, { feature: 'merge-advtest-missing' });
+    const result = await runBee(['state', 'gate', '--merge', '--approved', 'true'], dir);
+    assert(result.status !== 0, `expected non-zero exit, got ${result.status}`);
+    assert(
+      /AO3\/AO13/.test(result.stderr) && /missing or stale/.test(result.stderr),
+      `expected the AO3/AO13 refusal, got stderr=${result.stderr}`,
+    );
+    assert(/advisor-ref record/.test(result.stderr), `refusal must spell the FIX consult flow, got stderr=${result.stderr}`);
+    const st = JSON.parse(fs.readFileSync(statePath(dir), 'utf8'));
+    assert(st.approved_gates.shape === false && st.approved_gates.execution === false, 'a refused merge approval must not flip EITHER gate');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('D14: `state gate --merge --approved true` PASSES with a fresh advisor_ref, flipping both gates', async () => {
+  const dir = makeCliRoot('bee-gate-merge-advisor-fresh-');
+  try {
+    makeAdvisorRoot(dir, { feature: 'merge-advtest-fresh' });
+    const digest = path.join(dir, 'consult-digest.txt');
+    fs.writeFileSync(digest, 'DIGEST-BODY');
+    const rec = await runBee(['state', 'advisor-ref', 'record', '--advisor', 'gpt-5.6-sol', '--digest-file', digest, '--json'], dir);
+    assert(rec.status === 0, `recording a fresh advisor_ref should succeed: ${rec.stderr}`);
+
+    const result = await runBee(['state', 'gate', '--merge', '--approved', 'true', '--json'], dir);
+    assert(result.status === 0, `fresh ref should let the merged approval through: ${result.stderr}`);
+    const out = JSON.parse(result.stdout);
+    assert(
+      out.approved_gates.shape === true && out.approved_gates.execution === true,
+      `both gates must flip true, got ${JSON.stringify(out.approved_gates)}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('D15: `state plan-rev bump` revokes BOTH shape and execution when they were approved through --merge — never left half-revoked', async () => {
+  const dir = makeCliRoot('bee-gate-merge-plan-rev-');
+  try {
+    const started = await startFeature(dir, { feature: 'merge-bump-lane', mode: 'standard', lane: true });
+    assert(started.feature === 'merge-bump-lane', 'precondition: lane started');
+
+    const approve = await runBee(['state', 'gate', '--lane', 'merge-bump-lane', '--merge', '--approved', 'true', '--json'], dir);
+    assert(approve.status === 0, `merged approval should succeed: ${approve.stderr}`);
+
+    const wfBefore = listWorkflows(dir).workflows.find((wf) => wf.feature === 'merge-bump-lane');
+    assert(
+      wfBefore.gates.shape.approved === true &&
+        wfBefore.gates.shape.approved_for_plan_rev === 0 &&
+        wfBefore.gates.execution.approved === true &&
+        wfBefore.gates.execution.approved_for_plan_rev === 0,
+      `both gates must be stamped to the workflow's CURRENT plan_rev (0, freshly started), got ${JSON.stringify(wfBefore.gates)}`,
+    );
+
+    const bump = await runBee(['state', 'plan-rev', 'bump', '--lane', 'merge-bump-lane', '--json'], dir);
+    assert(bump.status === 0, `plan-rev bump should succeed: ${bump.stderr}`);
+    const bumped = JSON.parse(bump.stdout);
+    assert(bumped.plan_rev === 1, `expected plan_rev bumped to 1, got ${bump.stdout}`);
+    assert(
+      bumped.lane.approved_gates.shape === false && bumped.lane.approved_gates.execution === false,
+      `a bump must revoke BOTH projected booleans — never leave the merged gate half-revoked (D15), got ${JSON.stringify(bumped.lane.approved_gates)}`,
+    );
+
+    // The raw approval is never revoked by a bump — only its plan-rev
+    // EFFECTIVENESS changes (mirrors test_cli_state.mjs's pre-existing
+    // execution-only proof for multisession-native-9).
+    const wfAfter = listWorkflows(dir).workflows.find((wf) => wf.feature === 'merge-bump-lane');
+    assert(
+      wfAfter.gates.shape.approved === true &&
+        wfAfter.gates.shape.approved_for_plan_rev === 0 &&
+        wfAfter.gates.execution.approved === true &&
+        wfAfter.gates.execution.approved_for_plan_rev === 0,
+      `the raw approvals are untouched by a bump, got ${JSON.stringify(wfAfter.gates)}`,
+    );
+    assert(wfAfter.plan_rev === 1, 'the workflow record itself carries the bumped plan_rev');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 // ─── workflowGatesToApprovedGates ───────────────────────────────────────────
 
@@ -224,12 +418,12 @@ await check('multisession-native-10: rebuildStateProjection rebuilds D1 fields f
   const root = makeRoot();
   try {
     writeJsonAtomic(statePath(root), { schema_version: '1.0', phase: 'swarming', feature: 'matched-feat', mode: 'standard', approved_gates: { context: true, shape: false, execution: false, review: false }, workers: [{ nickname: 'w1' }], summary: 'stale', next_action: 'stale' });
-    const wf = await createWorkflow(root, { feature: 'matched-feat', phase: 'validating', mode: 'high-risk', plan_rev: 1, gates: { context: { approved: true, approved_for_plan_rev: null }, shape: { approved: true, approved_for_plan_rev: null } }, summary: 'fresh from record', next_action: 'fresh next' });
+    const wf = await createWorkflow(root, { feature: 'matched-feat', phase: 'planning', mode: 'high-risk', plan_rev: 1, gates: { context: { approved: true, approved_for_plan_rev: null }, shape: { approved: true, approved_for_plan_rev: null } }, summary: 'fresh from record', next_action: 'fresh next' });
 
     const result = rebuildStateProjection(root);
     assert(result.authoritative === true && result.source === wf.id, `must be sourced from matched-feat's own workflow record, got ${JSON.stringify(result)}`);
     const onDisk = readState(root);
-    assert(onDisk.phase === 'validating' && onDisk.mode === 'high-risk', `D1 fields must come from the matching record even though the default record is non-idle, got ${JSON.stringify({ phase: onDisk.phase, mode: onDisk.mode })}`);
+    assert(onDisk.phase === 'planning' && onDisk.mode === 'high-risk', `D1 fields must come from the matching record even though the default record is non-idle, got ${JSON.stringify({ phase: onDisk.phase, mode: onDisk.mode })}`);
     assert(onDisk.approved_gates.context === true && onDisk.approved_gates.shape === true && onDisk.approved_gates.execution === false, 'approved_gates re-derived from the record');
     assert(onDisk.summary === 'fresh from record' && onDisk.next_action === 'fresh next', 'summary/next_action re-derived, not left stale');
     assert(onDisk.feature === 'matched-feat', 'feature stays matched-feat (unchanged — no swap happened)');
@@ -365,8 +559,8 @@ await check('self-heal (F8): a lane file that has drifted from its workflow reco
     // (or left stale by a crash between "record written" and "projection
     // rebuilt") so it disagrees with the record.
     const lane = readLane(root, 'drift-feat');
-    writeLane(root, { ...lane, phase: 'validating', summary: 'DRIFTED — must not survive a rebuild' });
-    assert(readLane(root, 'drift-feat').phase === 'validating', 'precondition: the lane file is now diverged from its record');
+    writeLane(root, { ...lane, phase: 'planning', summary: 'DRIFTED — must not survive a rebuild' });
+    assert(readLane(root, 'drift-feat').phase === 'planning', 'precondition: the lane file is now diverged from its record');
 
     const result = rebuildLaneProjection(root, 'drift-feat');
     assert(result.authoritative === true && result.source === wf.id);
@@ -383,7 +577,7 @@ await check('self-heal (F8): a lane file that has drifted from its workflow reco
 await check('invariant 13/14: deleting .bee/lanes/<feature>.json and rebuilding it reproduces byte-identical content — "deleting a projection loses nothing"', async () => {
   const root = makeRoot();
   try {
-    await createWorkflow(root, { feature: 'invariant-lane', phase: 'validating', mode: 'high-risk', plan_rev: 1, gates: { context: { approved: true, approved_for_plan_rev: 1 }, shape: { approved: true, approved_for_plan_rev: 1 } }, summary: 'invariant summary', next_action: 'invariant next' });
+    await createWorkflow(root, { feature: 'invariant-lane', phase: 'planning', mode: 'high-risk', plan_rev: 1, gates: { context: { approved: true, approved_for_plan_rev: 1 }, shape: { approved: true, approved_for_plan_rev: 1 } }, summary: 'invariant summary', next_action: 'invariant next' });
 
     const first = rebuildLaneProjection(root, 'invariant-lane');
     assert(first.authoritative === true);

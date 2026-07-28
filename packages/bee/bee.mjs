@@ -2529,13 +2529,19 @@ function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {})
 // now-updated record — the file callers read back is always
 // projection-builder output, never a hand-written copy.
 //
-// `gateStamp` (multisession-native-9, D7/C2 — optional, `{ name, approvedForPlanRev }`):
-// ONLY handleStateGate passes this, and ONLY for the 'execution' gate (D7
-// default: a plan_rev bump invalidates only the execution gate — context/
-// shape/review are never stamped with a real rev, so mergeGates in
-// workflow-store.mjs preserves their `approved_for_plan_rev` (always null in
-// practice) untouched across every other write here). When present, the
-// named gate's patch carries an explicit `approved_for_plan_rev` (the
+// `gateStamp` (multisession-native-9, D7/C2 — optional, `{ name, approvedForPlanRev }`
+// or, since validation-diet D15, an ARRAY of that shape): handleStateGate's
+// plain `--name execution` branch passes a single stamp for the 'execution'
+// gate only (D7 default: a plan_rev bump invalidates only the execution gate
+// when approved that way). Its `--merge` branch (D2/D15 — the merged
+// shape+execution approval) passes an array covering BOTH 'shape' and
+// 'execution', so a bump revokes both instead of leaving the merged gate
+// half-revoked. `context`/`review` are never stamped with a real rev by
+// either branch, so mergeGates in workflow-store.mjs preserves their
+// `approved_for_plan_rev` (always null in practice) untouched across every
+// other write here. findGateStamp below normalizes both shapes to a single
+// lookup. When a stamp names the current
+// gate, that gate's patch carries an explicit `approved_for_plan_rev` (the
 // workflow's CURRENT plan_rev at approval time, or null on revocation);
 // every other gate's patch carries `approved` only, so mergeGates preserves
 // its existing `approved_for_plan_rev` field exactly as before this write —
@@ -2559,6 +2565,16 @@ function resolveMutationTarget(root, laneFeature, verb, { noLane = false } = {})
 // (rebuildLaneProjection -> writeLane) takes no lock of its own here either
 // — it is protected by that same outer `workflow:<id>` hold, same as the
 // updateWorkflowAssumingLock call above it.
+// findGateStamp — normalizes `gateStamp` (a single `{ name, approvedForPlanRev }`
+// object, an array of them per D15, or null/undefined) to the one entry (if
+// any) naming `name`. Shared by writeLaneRecordThroughProjection and
+// writeStateRecordThroughProjection so both write paths read the SAME shape
+// regardless of which handler produced it.
+function findGateStamp(gateStamp, name) {
+  const stamps = Array.isArray(gateStamp) ? gateStamp : gateStamp ? [gateStamp] : [];
+  return stamps.find((stamp) => stamp && stamp.name === name) || null;
+}
+
 async function writeLaneRecordThroughProjection(root, laneFeature, updated, gateStamp = null) {
   // msn-18c: workflow records are control-plane — resolve/update against
   // controlRootFor so a linked worktree's write lands in main's SAME record
@@ -2578,8 +2594,9 @@ async function writeLaneRecordThroughProjection(root, laneFeature, updated, gate
     gates: Object.fromEntries(
       GATE_NAMES.map((name) => {
         const entry = { approved: Boolean(updated.approved_gates && updated.approved_gates[name] === true) };
-        if (gateStamp && gateStamp.name === name) {
-          entry.approved_for_plan_rev = gateStamp.approvedForPlanRev;
+        const stamp = findGateStamp(gateStamp, name);
+        if (stamp) {
+          entry.approved_for_plan_rev = stamp.approvedForPlanRev;
         }
         return [name, entry];
       }),
@@ -2641,8 +2658,9 @@ async function writeStateRecordThroughProjection(root, targetFeature, updated, g
     gates: Object.fromEntries(
       GATE_NAMES.map((name) => {
         const entry = { approved: Boolean(updated.approved_gates && updated.approved_gates[name] === true) };
-        if (gateStamp && gateStamp.name === name) {
-          entry.approved_for_plan_rev = gateStamp.approvedForPlanRev;
+        const stamp = findGateStamp(gateStamp, name);
+        if (stamp) {
+          entry.approved_for_plan_rev = stamp.approvedForPlanRev;
         }
         return [name, entry];
       }),
@@ -3259,7 +3277,39 @@ function scribingRunStampMsForGuard(run) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// Gate 3 advisor precondition (AO3/AO13): high-risk execution never opens
+// without a non-stale advisor_ref. Computed BEFORE any write, so a refusal
+// makes zero mutations. Bound to the SELECTED record's feature (M1): a lane
+// approval checks the lane's own advisor_ref against the lane's plan.md.
+//
+// validation-diet D14: shared by both branches of handleStateGate below — a
+// plain `--name execution` approval, and a `--merge` approval (which always
+// carries an execution component) — so the merged path inherits this SAME
+// refusal rather than a copy of it, and a naive merge can never silently
+// drop the precondition for high-risk work.
+function requireFreshAdvisorForHighRisk(root, state, target) {
+  if (state.mode !== 'high-risk') return;
+  const staleness = advisorRefStale(root, state.advisor_ref, state);
+  if (staleness.stale) {
+    throw new Error(
+      `gate: execution approval refused for high-risk work — the advisor consult is missing or stale (AO3/AO13). ` +
+        `Reason(s): ${staleness.reasons.join('; ')}. ` +
+        `FIX: resolve the advisor from config (models.<runtime>.advisor), run it read-only with the evidence bundle on stdin, ` +
+        `then record the consult: bee state advisor-ref record --advisor "<identity>" --digest-file <path>` +
+        `${target.lane ? ` --lane ${target.lane}` : ''}. Nothing is written until a non-stale advisor_ref exists.`,
+    );
+  }
+}
+
 // D6 — async: record-read through write() runs inside withStoreLock('state').
+//
+// validation-diet D2: --merge is an ADDITIVE branch through this SAME
+// handler — pass --merge instead of --name to flip approved_gates.shape AND
+// approved_gates.execution together in one call (bee now asks a single
+// merged question at the end of briefing in place of separate Gate 2/Gate 3
+// questions). Every `merge` check below gates the ONLY behavior that
+// differs; with `merge` false (the default — --name supplied, no --merge),
+// this function is byte-for-byte the pre-D2 standalone gate verb.
 async function handleStateGate(root, flags) {
   rejectDryRun(flags);
   if (flags.owner !== undefined) {
@@ -3267,16 +3317,27 @@ async function handleStateGate(root, flags) {
       'gate: --owner is not accepted — routing ownership protects generic `state set` fields only. FIX: omit --owner and use the dedicated gate command.',
     );
   }
+  const merge = flags.merge === true;
+  if (merge && flags.name !== undefined) {
+    throw new Error(
+      'gate: --merge cannot be combined with --name — --merge always addresses BOTH shape and execution in one call. ' +
+        'FIX: pass --merge alone, or drop --merge and use --name to approve a single gate.',
+    );
+  }
   // ce-1: name/approved batched into one refusal (requireFlags) — 'approved'
   // is enum-checked against the literal CLI-string encoding ('true'/'false')
   // rather than parsed as a boolean first, so an invalid value still lands
   // in the SAME batch as a missing --name instead of throwing separately.
+  // D2: --merge skips --name's own requirement entirely (refused above if
+  // BOTH are given) — only --approved is required in that branch.
   const { name, approved: approvedRaw } = requireFlags(
     flags,
-    [
-      { name: 'name', enum: GATE_NAMES },
-      { name: 'approved', enum: ['true', 'false'] },
-    ],
+    merge
+      ? [{ name: 'approved', enum: ['true', 'false'] }]
+      : [
+          { name: 'name', enum: GATE_NAMES },
+          { name: 'approved', enum: ['true', 'false'] },
+        ],
     exampleFor('state.gate'),
   );
   const approved = approvedRaw === 'true';
@@ -3285,50 +3346,59 @@ async function handleStateGate(root, flags) {
   const { state, targetLane } = await withMutationLock(root, laneFeature, noLane, async () => {
     const target = resolveMutationTarget(root, laneFeature, 'gate', { noLane });
     const { record: state, write } = target;
-    // Gate 3 advisor precondition (AO3/AO13): high-risk execution never opens
-    // without a non-stale advisor_ref. Computed BEFORE any write, so a refusal
-    // makes zero mutations. Bound to the SELECTED record's feature (M1): a lane
-    // approval checks the lane's own advisor_ref against the lane's plan.md.
-    if (name === 'execution' && approved === true && state.mode === 'high-risk') {
-      const staleness = advisorRefStale(root, state.advisor_ref, state);
-      if (staleness.stale) {
-        throw new Error(
-          `gate: execution approval refused for high-risk work — the advisor consult is missing or stale (AO3/AO13). ` +
-            `Reason(s): ${staleness.reasons.join('; ')}. ` +
-            `FIX: resolve the advisor from config (models.<runtime>.advisor), run it read-only with the evidence bundle on stdin, ` +
-            `then record the consult: bee state advisor-ref record --advisor "<identity>" --digest-file <path>` +
-            `${target.lane ? ` --lane ${target.lane}` : ''}. Nothing is written until a non-stale advisor_ref exists.`,
-        );
-      }
+    // D14: a --merge approval ALWAYS carries an execution component, so it
+    // inherits the SAME high-risk advisor precondition as a plain --name
+    // execution approval — reused via requireFreshAdvisorForHighRisk, never
+    // re-implemented. A naive merge would otherwise silently drop this
+    // refusal for every high-risk feature.
+    if ((merge || name === 'execution') && approved === true) {
+      requireFreshAdvisorForHighRisk(root, state, target);
     }
     // Revocation tracking (AO13): stamp the execution revocation moment so a ref
-    // recorded before it reads stale. Only the execution gate is tracked — it is
-    // the only revocation the staleness rule needs.
-    if (name === 'execution' && approved === false) {
+    // recorded before it reads stale. Only the execution component is tracked —
+    // it is the only revocation the staleness rule needs; a --merge revocation
+    // always carries one.
+    if ((merge || name === 'execution') && approved === false) {
       state.gate_revoked_at = { ...state.gate_revoked_at, execution: new Date().toISOString() };
     }
-    state.approved_gates = { ...state.approved_gates, [name]: approved };
+    state.approved_gates = merge
+      ? { ...state.approved_gates, shape: approved, execution: approved }
+      : { ...state.approved_gates, [name]: approved };
     // multisession-native-9 (D7, C2): only the execution gate is ever
-    // stamped with a real approved_for_plan_rev — approving it records the
-    // TARGET LANE's live workflow's CURRENT plan_rev, so a later `state
-    // plan-rev bump` on that same workflow flips this approval's projected
-    // effectiveness false without touching any other workflow (invariant 3)
-    // or any other gate on THIS workflow (D7 default: context/shape/review
-    // stay rev-immune, never stamped). No live workflow for this lane (C1)
-    // leaves gateStamp null: nothing plan-rev-scoped to stamp. Deliberately
-    // lane-only, permanently — not a msn-10 gap: `state plan-rev bump`
-    // itself still refuses outright on the default record (see its own
-    // comment below), so stamping a plan_rev on the default path's execution
-    // gate would record a value that can never be bumped, and could never
-    // go stale. msn-10 keeps the default record's OTHER fields (phase, mode,
-    // summary, approved booleans) in sync via workflow-routing, but this ONE
-    // rev-stamping behavior stays scoped to lanes exactly as msn-9 shipped it.
+    // stamped with a real approved_for_plan_rev via a plain --name approval —
+    // approving it records the TARGET LANE's live workflow's CURRENT
+    // plan_rev, so a later `state plan-rev bump` on that same workflow flips
+    // this approval's projected effectiveness false without touching any
+    // other workflow (invariant 3) or any other gate on THIS workflow (D7
+    // default: context/review stay rev-immune, never stamped here). No live
+    // workflow for this lane (C1) leaves gateStamp null: nothing plan-rev-
+    // scoped to stamp. Deliberately lane-only, permanently — not a msn-10
+    // gap: `state plan-rev bump` itself still refuses outright on the
+    // default record (see its own comment below), so stamping a plan_rev on
+    // the default path's gate(s) would record a value that can never be
+    // bumped, and could never go stale. msn-10 keeps the default record's
+    // OTHER fields (phase, mode, summary, approved booleans) in sync via
+    // workflow-routing, but this ONE rev-stamping behavior stays scoped to
+    // lanes exactly as msn-9 shipped it.
+    //
+    // validation-diet D15: a --merge approval stamps BOTH shape and
+    // execution this same way (an ARRAY of two stamp entries, rather than
+    // one), so a later `state plan-rev bump` revokes both instead of leaving
+    // the merged gate half-revoked (execution false, shape still true, with
+    // no 'validating' phase left to fall back to). findGateStamp (below,
+    // near writeLaneRecordThroughProjection) normalizes either shape.
     let gateStamp = null;
-    if (name === 'execution' && target.lane) {
+    if ((merge || name === 'execution') && target.lane) {
       // msn-18c: workflow records are control-plane.
       const wf = listWorkflows(controlRootFor(root)).workflows.find((w) => w.feature === target.lane && w.status !== 'closed');
       if (wf) {
-        gateStamp = { name: 'execution', approvedForPlanRev: approved ? wf.plan_rev : null };
+        const approvedForPlanRev = approved ? wf.plan_rev : null;
+        gateStamp = merge
+          ? [
+              { name: 'shape', approvedForPlanRev },
+              { name: 'execution', approvedForPlanRev },
+            ]
+          : { name: 'execution', approvedForPlanRev };
       }
     }
     await write(state, gateStamp);
@@ -3336,7 +3406,9 @@ async function handleStateGate(root, flags) {
   });
   return {
     result: state,
-    text: `Gate "${name}" set to ${approved}.${targetLane ? ` (lane "${targetLane}")` : ''}`,
+    text: merge
+      ? `Gates "shape" and "execution" set to ${approved}.${targetLane ? ` (lane "${targetLane}")` : ''}`
+      : `Gate "${name}" set to ${approved}.${targetLane ? ` (lane "${targetLane}")` : ''}`,
   };
 }
 
@@ -3359,14 +3431,19 @@ async function handleStateGate(root, flags) {
 // `approved_for_plan_rev` was stamped to the PRE-bump rev now reads
 // ineffective (`rev !== planRev`) the moment the projection is next
 // rebuilt — which this verb does immediately (rebuildLaneProjection), so
-// `.bee/lanes/<feature>.json`'s `approved_gates.execution` flips false in
-// the SAME call, and a subsequent `cells claim` against that lane's cells
-// refuses immediately (cells.mjs's claimCell reads gateApproved off exactly
-// this projected file, laneRecordForFeature). Per D7's default (see
-// handleStateGate's own gateStamp comment), only the execution gate is ever
-// stamped with a real rev, so this is the ONLY gate a bump can ever flip —
-// context/shape/review keep whatever they had (null in practice, always
-// effective). Bumping workflow W never reads or writes any OTHER workflow's
+// `.bee/lanes/<feature>.json`'s `approved_gates.execution` (and, when it was
+// approved through handleStateGate's `--merge` branch — D2/D15 — its
+// `approved_gates.shape` too) flips false in the SAME call, and a subsequent
+// `cells claim` against that lane's cells refuses immediately (cells.mjs's
+// claimCell reads gateApproved off exactly this projected file,
+// laneRecordForFeature). Per D7's default (see handleStateGate's own
+// gateStamp comment) a plain `--name` approval only ever stamps execution
+// with a real rev; a `--merge` approval (D15) stamps both shape and
+// execution — so depending on how a feature's gates were approved, a bump
+// flips either just execution or both — context/review are never stamped by
+// either branch and keep whatever they had (null in practice, always
+// effective). Bumping
+// workflow W never reads or writes any OTHER workflow's
 // record — cross-workflow isolation (invariant 3) falls out of updateWorkflow
 // only ever touching the single `wf.id` resolved here, under nothing but
 // that workflow's own `workflow:<id>` lock.
@@ -7980,7 +8057,12 @@ const HANDLERS = {
 // string flags — MUST be here or a trailing `--json` would be consumed as
 // `--all-but-active`'s own value, the exact class of bug every flag above
 // guards against.
-export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief', 'feature-verify-pending', 'all-but-active']);
+// `merge` (validation-diet D2) is `state gate`'s flag-alone opt-in for the
+// merged shape+execution approval — MUST be here or `state gate --merge
+// --approved true --json` would consume `--approved` as `--merge`'s own
+// value (then choke on the bare `true` token next), the exact class of bug
+// every flag above guards against.
+export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief', 'feature-verify-pending', 'all-but-active', 'merge']);
 
 export function splitCommandTokens(argv) {
   const leading = [];
