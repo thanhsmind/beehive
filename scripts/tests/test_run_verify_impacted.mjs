@@ -76,7 +76,7 @@ await check("filterSuitesByLabels returns empty for an empty label set (no accid
 
 // ── (a) mapped-file / self-selecting-suite: --impacted <own file> selects exactly itself ──
 await check("--impacted scripts/tests/test_release_tuple.mjs self-selects exactly that suite (registry closure includes its own entry), with a correct IMPACTED banner", () => {
-  const r = runVerify(["--impacted", "scripts/tests/test_release_tuple.mjs"]);
+  const r = runVerify(["--impacted", "scripts/tests/test_release_tuple.mjs", "--no-cache"]);
   assert.equal(r.status, 0, `expected exit 0, got ${r.status}; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
   assert.match(r.stdout, /PASS\s+\d+ms\s+scripts\/tests\/test_release_tuple\.mjs/, `expected the single suite's own PASS line:\n${r.stdout}`);
   assert.match(r.stdout, /run_verify: 1 suite\(s\)/, `expected exactly 1 suite to have run, not the full pool:\n${r.stdout}`);
@@ -228,7 +228,7 @@ await check("--impacted <hub file> --level 1 selects strictly fewer suites than 
   const { fixture, runVerifyPath } = buildLevelFixture();
   try {
     const full = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/inner_target.mjs"]);
-    const level1 = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/inner_target.mjs", "--level", "1"]);
+    const level1 = runFixtureVerify(runVerifyPath, fixture, ["--impacted", "scripts/inner_target.mjs", "--level", "1", "--no-cache"]);
     assert.equal(full.status, 0, `expected exit 0 for the default run, got ${full.status}; stdout:\n${full.stdout}\nstderr:\n${full.stderr}`);
     assert.equal(level1.status, 0, `expected exit 0 for the level-1 run, got ${level1.status}; stdout:\n${level1.stdout}\nstderr:\n${level1.stderr}`);
     assert.match(full.stdout, /IMPACTED RUN: 2 suite\(s\) from 1 changed file\(s\)/, `expected both fixture suites (direct + transitive) in the default run:\n${full.stdout}`);
@@ -516,7 +516,7 @@ await check("SUITES has more than one runnable (sanity: the M in N of M banners 
 
 // ── (a) --only test_release_tuple runs exactly that subset, banner has correct N/M ──
 await check("--only test_release_tuple selects exactly that suite and passes, with a correct banner", () => {
-  const r = runVerify(["--only", "test_release_tuple"]);
+  const r = runVerify(["--only", "test_release_tuple", "--no-cache"]);
   assert.equal(r.status, 0, `expected exit 0, got ${r.status}; stdout:\n${r.stdout}\nstderr:\n${r.stderr}`);
   assert.match(r.stdout, /PASS\s+\d+ms\s+scripts\/tests\/test_release_tuple\.mjs/, `expected the single suite's own PASS line:\n${r.stdout}`);
   assert.match(
