@@ -1724,7 +1724,7 @@
     },
     {
       "path": "packages/bee/AGENTS.block.md",
-      "sha256": "5d74896b0d3cbd90206caabea6c4f70d93a9f9f66f931bf7aa870bdf29b11d2a",
+      "sha256": "8d1ff2b1195506f3e7db485feb9e0d84a78c87e98641482d1ee326e78bff85ee",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/AGENTS.block.md"

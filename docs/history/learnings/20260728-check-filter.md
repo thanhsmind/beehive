@@ -40,7 +40,44 @@ looked like a broken feature. It was a wrong test target, not a defect.
 actually imports it; "no effect" on a non-adopter proves nothing either way.*
 The predicate is exported so those 22 can adopt it incrementally.
 
+## Second finding — the slice-tail test cell (cfl-2)
+
+The feature could not leave `swarming`: the consolidated-test-cell refusal
+fired because no cell in `check-filter` carried `change_class: "test"`. cfl-2
+was authored to pay that debt — and found `scripts/tests/test_check_filter.mjs`
+already written, under a *different* feature's cell (`review-p1-fixes` p1-2),
+already pinning five properties with a body-execution sentinel stronger than a
+print-only skip assertion.
+
+**That refusal is a debt check, not a file-creation check.** It asks whether
+someone in this feature owns coverage of the slice's net behavior. Answering it
+with a second suite would have split one truth across two files and left the
+real holes open, because a fresh author naturally re-derives the properties the
+first author already thought of.
+
+Diffing the existing pins against the net behavior found four gaps, every one an
+**asymmetry** rather than an omission:
+
+- filtering a failure *away* was pinned; filtering a failure *in* was not, so
+  nothing forbade a narrowed run from masking a real red;
+- case-insensitivity was documented, but every existing case matched
+  lowercase-to-lowercase — a case-*sensitive* implementation passed them all;
+- `checkOnlyPredicate`, exported as a promise to those 22 local-`check()`
+  suites, had zero tests behind it;
+- nothing proved the suite was reachable by `run_verify` discovery — an
+  unreached pin pins nothing.
+
+*Rules:* at a slice tail, grep for existing coverage of the mechanism before
+authoring, then diff its properties against the net behavior — **the gap is the
+deliverable, not the file**. When auditing coverage, hunt asymmetries first: for
+every "X filtered out" case ask whether "X filtered in" is pinned; for every
+case-insensitive claim ask which assertion would fail under a case-sensitive
+implementation. Symmetric-looking suites are where coverage debt hides. And an
+export that exists "so callers can adopt it later" is untested surface by
+default — pin it in the cell that exports it.
+
 ## Ran under
 
 R82 (worker ran no suites; MAIN verified at the boundary, green first pass),
-R88 (temp-index commit, shared checkout untouched).
+R88 (temp-index commit, shared checkout untouched). cfl-2 ran on MAIN with its
+own scoped verify recorded before cap: 12 passed, 0 failed.

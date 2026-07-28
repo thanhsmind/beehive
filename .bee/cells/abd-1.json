@@ -1,0 +1,71 @@
+{
+  "id": "abd-1",
+  "feature": "agents-block-diet",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "title": "The cut: slim packages/bee/AGENTS.block.md under every existing pin, then run the regen chain",
+  "action": "Rewrite packages/bee/AGENTS.block.md per docs/history/agents-block-diet/plan.md's cut budget. KEEP: all 15 numbered critical rules (same numbers, same order), the unnumbered native-wait pointer line, every section heading, and FULL text for critical rules 1, 5, 6, 11 and the whole Guardrails section (D3 -- bee-hive/SKILL.md defers back here, so a defer-out builds the R6 loop). CUT: (1) Startup steps 3/5/6 which restate the session preamble and step 7 which self-declares optional -- collapse to short steps, each leaving a one-line pointer naming the rule and its home (R5); (2) the Gate-4/bypass paragraph body, which already points at bee-bypass-gate and routing-and-contracts.md; (3) the restated elaboration in rules 2, 12, 13, 15, each of which already ends in a terminal pointer; (4) the Communication bullet list down to Open/Body/Close plus the pre-send check; (5) the planning-time D1/D3/D4 + decision-0009 conditionals in the docs/history/ working-files comment. Every pinned string in CONTEXT.md D4 must survive character-for-character -- especially the native-wait pointer, whose phrase and routing-and-contracts.md must stay on ONE line and stay unnumbered. THEN run the regen chain in order: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply (this is what re-renders the repo-root AGENTS.md between its BEE:START/BEE:END markers and updates .bee/onboarding.json's agents_block hash -- never hand-edit either), then node scripts/release_manifest.mjs --write. Confirm the prose OUTSIDE the markers survives the merge. R82: run no test suites; MAIN verifies at close.",
+  "must_haves": {
+    "truths": [
+      "All 15 numbered critical rules are present, numbered 1..15 in order.",
+      "Critical rules 1, 5, 6, 11 and the Guardrails section are byte-unchanged from before the cut.",
+      "Every pinned string listed in CONTEXT.md D4 is present (or, for the two banned-phrase sets, still absent).",
+      "The managed block in the repo-root AGENTS.md is byte-identical to the template, with exactly one ordered marker pair, and the header above the markers is unchanged.",
+      "The block is <= 12000 bytes, or the miss is reported with the reason."
+    ],
+    "prohibitions": [
+      "Do NOT change any rule's meaning, add an exception, or remove one.",
+      "Do NOT delete a why-clause from a safety rule (D6).",
+      "Do NOT delete a section heading (R5).",
+      "Do NOT hand-edit AGENTS.md or .bee/onboarding.json -- only the regen chain writes them."
+    ]
+  },
+  "verify": "node scripts/tests/test_agents_budget.mjs && node packages/bee/tests/test_misc.mjs && node scripts/tests/test_doctrine_parity.mjs && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "docs/history/agents-block-diet/CONTEXT.md",
+    "docs/history/agents-block-diet/plan.md",
+    "packages/bee/AGENTS.block.md"
+  ],
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "main",
+    "outcome": "AGENTS.block.md cut 16152 -> 12573 bytes (-3579, -22.2%); rendered root AGENTS.md 16271 -> 12692. All 15 numbered critical rules present and in order, the native-wait pointer still unnumbered and on one line, every section heading kept. Terminal-home text untouched per D3: rules 1, 5, 6, 11 and every Guardrails bullet, because bee-hive/SKILL.md defers back here for them and a defer-out would build the R6 pointer loop. Cut came from four places: Startup 2919->1554 (steps 3/5/6 restated the session preamble, step 7 declared itself optional), Chain and gates 2096->1618, Critical rules 5317->4515 (bodies of rules 2/12/13/15 that already end in a terminal pointer), Communication 1355->817, Working files 1844->1361, Session finish 603->551. Regen chain ran in-cell: render_plugin_skill_trees, onboard_bee --apply (re-rendered the managed block and the agents_block SHA256), release_manifest --write. MISSED the <=12000 target by 573 bytes (D7): the remaining text is rules, why-clauses and pinned strings, and D7 says the rules win over the number.",
+    "files_changed": [
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T12:11:43.127Z",
+    "behavior_change": true,
+    "verification_evidence": "test_agents_budget.mjs -> 4 passed, 0 failed; sizes: template=12573B root=12692B (warn>=18000B, fail>=20480B)\n  PASS managed block in AGENTS.md renders byte-identically to the template\n  PASS root AGENTS.md has exactly one ordered BEE:START/BEE:END marker pair\npackages/bee/tests/test_misc.mjs -> 118 passed, 0 failed (every AGENTS census: fan-out anchors, on-demand review side entry, native-wait pointer, handoff/etiquette, cli-gather rider, banned phrases)\nscripts/tests/test_doctrine_parity.mjs -> exit 0\nscripts/tests/test_skill_pointers.mjs -> exit 0 (R8 pointer-integrity gate)\nscripts/release_manifest.mjs --check -> 463 file(s) match stored manifest\n",
+    "verify_output": "test_agents_budget: 4 passed, 0 failed | sizes: template=12573B root=12692B (warn>=18000B, fail>=20480B)\ntest_misc: 118 passed, 0 failed\ntest_doctrine_parity: exit 0\ntest_skill_pointers: exit 0\nrelease_manifest --check: 463 file(s) match stored manifest",
+    "verify_passed": true,
+    "claim_session": "701a6745-4361-470d-9211-727268923607",
+    "claimed_at": "2026-07-28T12:03:14.637Z",
+    "verify_command": "node scripts/tests/test_agents_budget.mjs && node packages/bee/tests/test_misc.mjs && node scripts/tests/test_doctrine_parity.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-28T12:11:29.035Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T12:11:29.035Z",
+        "claim_session": "701a6745-4361-470d-9211-727268923607",
+        "claimed_at": "2026-07-28T12:03:14.635Z",
+        "acquired_at": "2026-07-28T12:03:14.635Z",
+        "worker": "main",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}
