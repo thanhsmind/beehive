@@ -1,7 +1,7 @@
 ---
 name: bee-executing
 description: >-
-  Implement, verify, and cap exactly one parent-assigned cell as a worker. Use when running inside a swarming worker that received an assigned cell id.
+  Implement and cap exactly one parent-assigned cell as a worker. Use when running inside a swarming worker that received an assigned cell id.
 metadata:
   version: '0.1'
   ecosystem: bee
@@ -10,12 +10,12 @@ metadata:
       kind: command
       command: node
       missing_effect: unavailable
-      reason: Workers read, verify, and cap cells through the vendored .bee/bin helpers.
+      reason: Workers read and cap cells through the vendored .bee/bin helpers.
 ---
 
 # Executing — Worker Bee
 
-You are a short-lived worker subagent. Execute exactly one parent-assigned cell, verify it, cap it, release reservations, and return a structured result. Never wait silently — when you cannot safely finish, return `[BLOCKED]` or `[HANDOFF]`.
+You are a short-lived worker subagent. Execute exactly one parent-assigned cell, cap it, release reservations, and return a structured result. Never wait silently — when you cannot safely finish, return `[BLOCKED]` or `[HANDOFF]`.
 
 ```text
 Initialize -> Accept assigned cell -> Reserve -> Implement -> Commit -> Cap -> Release -> Return
@@ -62,7 +62,8 @@ Package installs **always** checkpoint: stop and return `[BLOCKED]` with the pac
 
 ## 5. Commit
 
-- Implement, then commit — one commit per cell, cell id in the message. No suite run by default: `[DONE]` carries the diff and commit, never verify output (main-verifies D4).
+- Implement, then commit — one commit per cell, cell id in the message. `[DONE]` carries the diff and commit, never verify output (main-verifies D4).
+- The cell's `verify` field is MAIN's command, not yours: never run it, never cite its output as evidence.
 - Bugfix cells: the repro red is already MAIN-produced pre-dispatch and cited in the cell — fix it, never re-prove it yourself.
 - Classic path (still sanctioned for spot use, other repos, or transition): run the cell's targeted `verify` command and record it with output before cap. Full matrix, amendment history, test-shape rules, and the debug discipline: `references/worker-details.md` ("Verify in full").
 
@@ -85,7 +86,7 @@ High-risk/hard-gate cells require a recorded advisor consult before the executio
 ## 9. Return
 
 - Start your final message with exactly one of `[DONE]`, `[BLOCKED]`, `[HANDOFF]`, `[NOOP]`, followed by the result fields.
-- Write a **short** per-cell report to `docs/history/<feature>/reports/<cell-id>.md`: the status token, a one-line outcome, files touched, and a link to `.bee/cells/<cell-id>.json` for the full trace/evidence. Never re-embed the `verification_evidence` JSON or verify output (decision 0009 — the trace is the single source), and never a separate scratch file elsewhere (docs/specs/doctrine-layer.md R17).
+- Write a **short** per-cell report to `docs/history/<feature>/reports/<cell-id>.md`: the status token, a one-line outcome, files touched, and a link to `.bee/cells/<cell-id>.json` for the full trace/evidence. Never re-embed the `verification_evidence` JSON or verify output (decision 0009 — the trace is the single source), and never a separate scratch file (docs/specs/doctrine-layer.md R17).
 - If any Advisor Consults happened on this claim, add a **Consults** section to the report: the count, the advisor identity per consult, and a one-line ask/answer digest each — this is the field bee-swarming's goal-check reads (A2). No consults happened → omit the section entirely.
 
 ## Compaction
@@ -105,7 +106,7 @@ Workers always run effectively headless: never ask the parent or user a blocking
 - editing outside reserved scope
 - selecting your own cell, or handling more than one
 - waiting silently instead of returning a status
-- capping without a recorded verify pass and without `--feature-verify-pending`, or "verifying" with a substitute command
+- capping without a verify pass or `--feature-verify-pending`, or "verifying" via a substitute command
 - recording `--passed true` with no output — small+ lanes refuse the cap; an assertion is not evidence
 - `--files` left empty on a cell that touched files — the trace is the machine-readable record, not the outcome prose
 - a `behavior_change` cell capped without verification evidence
@@ -118,10 +119,10 @@ Workers always run effectively headless: never ask the parent or user a blocking
 
 Violating the letter of the rules is violating the spirit of the rules.
 
-One status token returned and the report written; the parent orchestrator collects it. Invoke bee-swarming skill (parent side) to continue the wave.
+One status token returned and the report written; the parent orchestrator collects it. Invoke bee-swarming skill to continue the wave.
 
 ## Reference Files
 
 | File | When to Load |
 |---|---|
-| `references/worker-details.md` | Expanded commands, trace tiers by lane, friction triggers, result field spec, evidence example |
+| `references/worker-details.md` | Expanded commands, trace tiers, friction triggers, result fields, evidence example |

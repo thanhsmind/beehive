@@ -1,0 +1,55 @@
+{
+  "id": "cf-2",
+  "feature": "concurrency-first",
+  "lane": "small",
+  "behavior_change": false,
+  "change_class": "bugfix",
+  "title": "Sync AGENTS template to the new root critical-rules block",
+  "action": "MAIN-DIAGNOSED (expected consequence, not a mistake): cf-1 added critical rule 15 (the concurrency law) to the rendered root AGENTS.md but could NOT touch packages/bee/AGENTS.block.md — that path was held by a sibling feature's live claim, and the lane guard's boundary is what kept the two features safely concurrent. The sibling has released it. FIX: make packages/bee/AGENTS.block.md byte-identical to the managed block now in the root AGENTS.md (scripts/tests/test_agents_budget.mjs asserts exactly this and names both paths — read it first). Copy the block content faithfully; do not reword rule 15, do not renumber other rules, do not touch anything outside the managed BEE:START/BEE:END region. Byte ceilings: root must stay under 18000B warn / 20480B hard; the template is measured the same way. R82: run NO test suites; cap --feature-verify-pending; MAIN verifies at close.",
+  "must_haves": {
+    "truths": [
+      "packages/bee/AGENTS.block.md and the root AGENTS.md managed block are byte-identical, both carrying critical rule 15.",
+      "Both files stay under the 18000B warn threshold.",
+      "No content outside the managed block changed."
+    ],
+    "prohibitions": [
+      "Do NOT reword or renumber any rule.",
+      "Do NOT run any test suite (R82).",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node scripts/tests/test_agents_budget.mjs && node packages/bee/tests/test_misc.mjs",
+  "read_first": [
+    "scripts/tests/test_agents_budget.mjs",
+    "AGENTS.md",
+    "packages/bee/AGENTS.block.md"
+  ],
+  "files": [
+    "packages/bee/AGENTS.block.md"
+  ],
+  "deps": [
+    "cf-1"
+  ],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-cf2",
+    "outcome": "Synced packages/bee/AGENTS.block.md to root AGENTS.md managed block content, including critical rule 15 (concurrency law). Both files byte-identical and under budget.",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T08:43:54.168Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T08:42:49.193Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "extraction"
+}

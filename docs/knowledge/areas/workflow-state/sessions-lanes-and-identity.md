@@ -279,6 +279,26 @@ its knowledge actually landed — the state and the specs can no longer disagree
   the acting session's own resolved workspace, never accepted as a caller-
   supplied value (multisession-native D2/D3, msn-19).
 
+- R86 — **One concurrency law, three tiers.** Work that can run at the same
+  time runs at the same time: gathering fans out to read-only workers, the
+  cells of a slice fan out to a wave, and independent features fan out to
+  lanes (or their own checkouts). Serial is legal for exactly four reasons —
+  declared file sets overlap (shared generated artifacts included, unless a
+  wave barrier defers them), a true dependency, a single scarce external
+  resource, or the human said so — and nothing else counts. Before dispatching
+  anything, the orchestrator states the concurrency plan in one line: what runs
+  together, what is forced serial, and which of the four reasons forces it —
+  computed from declared paths and dependencies, never guessed. A lane refusal
+  that names the holding claim is that computation's proof
+  (concurrency-first cf-1, user directive 2026-07-28).
+- R87 — **An artifact that survives a law change must be re-labelled, or it
+  keeps teaching the old law.** When ownership of a step moves, every field,
+  prompt, and rendered view that names that step states the new owner at the
+  point of reading. Proven the hard way: after verification moved to the
+  delegator, workers kept running suites — not from disobedience, but because
+  the work record still handed them a field named "verify" holding a runnable
+  command with no owner on it, and an artifact outranks a dispatch instruction.
+  The field now renders its owner beside it (verify-owner-signal vo-1).
 - R85 — **Per-turn rules live in the always-loaded layer, never behind an
   on-demand file.** The communication contract governs every single turn, so
   its operative form sits in the instruction surface that is present in every

@@ -1,0 +1,60 @@
+{
+  "id": "cf-1",
+  "feature": "concurrency-first",
+  "lane": "small",
+  "behavior_change": false,
+  "change_class": "refactor",
+  "title": "One core concurrency law: open a thread whenever work can run at once; lanes first-class",
+  "action": "USER DIRECTIVE 2026-07-28, verbatim intent: parallel is already the headline rule for cells, but LANES stay hidden — promote them to the same level, add a real planning check for what can run concurrently, and collapse everything into ONE core rule: if several pieces of work can run at the same time, open the threads and run them; run serially only when forced. Ship fast. IMPLEMENT: (1) AGENTS.md '## Communication' section stays untouched; add a SHORT rule to the critical-rules list (or extend the existing parallel rule if one is there) stating the core law in one sentence plus its three tiers — gather work fans out to I/O workers, cells of a slice fan out to a wave, and independent FEATURES fan out to lanes (bee state start-feature --as-lane --paths ...) or worktrees. AGENTS.md budget: root is ~15.4KB against 18KB warn / 20KB hard — keep the addition under ~700 bytes and edit the TEMPLATE plus the rendered root (see scripts/tests/test_agents_budget.mjs for both paths, they must stay byte-identical). (2) skills/bee-hive/references/routing-and-contracts.md: rewrite the parallel doctrine section into the full protocol under this one law: (a) THE LAW and its three tiers; (b) MANDATORY CONCURRENCY PLAN — before dispatching anything, the orchestrator states in one line what runs concurrently and what is forced serial and why; the plan is computed, not guessed: cells from `bee cells schedule` (declared file overlap), features from declared --paths (the lane guard refuses a real overlap, which is the machine proving the answer); (c) THE ONLY LEGAL REASONS FOR SERIAL, exhaustive: declared file-set overlap (including shared generated artifacts not deferred by a wave barrier), a true data dependency (deps), a single scarce external resource, or an explicit human instruction — anything else is not a reason and the work fans out; (d) LANES, first-class: when new feature work is ready while another feature is live and their paths are disjoint, the paved road is a lane, NOT a queue — `bee state start-feature --feature <f> --mode <m> --as-lane --paths <declared>`; lane-scoped mutations take --lane; a lane refusal names the holder and is itself the concurrency plan's evidence; worktrees remain the answer when the work needs its own checkout; (e) TICK: the concurrency plan emits its own progress line per the Progress ticks catalog. Fold any existing 'serial stays the default' or lane-as-exception wording into this — one law, no second list. (3) skills/bee-hive/SKILL.md: the triage/routing text must route new-feature-while-busy to a lane instead of waiting, in <=2 lines, pointing at the reference section. Body budget 8180 recorded, ceiling 8192 — net-zero-or-negative, trim to pay. NOTE: this cell deliberately does NOT touch packages/bee (a sibling feature holds it) — code affordances land in a follow-up cell. R82: run NO test suites; cap --feature-verify-pending; MAIN verifies at close.",
+  "must_haves": {
+    "truths": [
+      "The core law appears in the always-loaded layer (template and rendered root, byte-identical) in one sentence with its three tiers, under budget.",
+      "routing-and-contracts carries the full protocol: law, mandatory concurrency plan, exhaustive legal-serial list, lanes-first-class routing, tick — one section, no competing list.",
+      "bee-hive body routes new-feature-while-busy to a lane; body did not grow past 8192B.",
+      "No instruction surface still calls serial the default or lanes an exception."
+    ],
+    "prohibitions": [
+      "Do NOT touch packages/bee/** (sibling feature holds those paths).",
+      "Do NOT weaken reservation, claim, or wave-barrier discipline — they are what MAKES parallel safe.",
+      "Do NOT exceed AGENTS.md 18000B warn threshold.",
+      "Do NOT run any test suite (R82).",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node scripts/tests/test_agents_budget.mjs && node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node scripts/okf_instructions_fence.mjs && node packages/bee/tests/test_misc.mjs",
+  "read_first": [
+    "AGENTS.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "files": [
+    "AGENTS.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-cf1",
+    "outcome": "One concurrency law landed: AGENTS.md rule 15, routing-and-contracts.md's Concurrency law in full section (plan + exhaustive serial reasons + lanes-first-class + tick), SKILL.md routing line — body net -3B. packages/bee/AGENTS.block.md template left unsynced (HARD BOUNDARY, sibling holds packages/bee/**) — root/template byte-identical check will fail until a follow-up cell syncs it.",
+    "files_changed": [
+      "AGENTS.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": "Cell action text said edit the AGENTS.md template (packages/bee/AGENTS.block.md) too, but the cell's own prohibitions + the dispatcher's HARD BOUNDARY forbid touching packages/bee/** (sibling feature holds it). Edited only the rendered root; template sync deferred to a follow-up cell — root/template byte-identical invariant (test_agents_budget.mjs) is temporarily broken.",
+    "capped_at": "2026-07-28T08:41:52.922Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T08:30:15.897Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "generation"
+}

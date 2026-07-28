@@ -266,6 +266,7 @@ suppresses a tick. A red result or a refusal is never silence-able by anything, 
 | Event | Line |
 |---|---|
 | route recorded | `✓ route recorded: refactor · small · 2 files` |
+| concurrency plan stated | `▸ concurrency plan: 3 cells parallel — disjoint files` (serial named: `▸ concurrency plan: cf-2 serial — same file as cf-1`) |
 | gate passed | `✓ gate 2 passed: work shape approved — 3 cells, small lane` |
 | gate auto-approved (bypass) | `⚡ auto-approved Gate 2 (bypass): work shape — 3 cells, small lane` |
 | cells created | `✓ cells created: 3 cells — 1 wave, disjoint files` |
@@ -352,15 +353,25 @@ Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 4 afte
 |---|---|---|---|---|---|
 | `docs` | none — announce one line | format check (parse/lint if applicable) | direct, in-session | none | 0 |
 | `tiny` | none — the cell is the micro-plan | 2-minute reality check inline, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract) | one dispatched execution worker (AO14 — param-carrying dispatch, model param or pinned type, never a bare marker; standard worker prompt template, no reviewers/panels/waves) | orchestrator-authored done-report (worker's verbatim diff + commit; caps `--feature-verify-pending` by default, main-verifies D4 — no per-cell verify output; orchestrator re-runs only on smell, parallel waves, or hard-gate — test-runs-lean D1) — verification, not independent review | 1 — the merged shape+execution gate |
-| `small` | logged scoping synthesis; plan.md is opt-in | inline reality gate + matrix, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract); spike only if a blocking assumption demands it | one dispatched execution worker (AO14 — same contract as `tiny`'s Execute column), its 1-3 cells dispatched in PARALLEL when disjoint (see Parallel dispatch doctrine below) | orchestrator-authored done-report, self-checks only, no auto reviewer (the correctness reviewer moves inside an on-demand review session) | 2 — merged shape+execution gate, self-checks close-out |
+| `small` | logged scoping synthesis; plan.md is opt-in | inline reality gate + matrix, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract); spike only if a blocking assumption demands it | one dispatched execution worker (AO14 — same contract as `tiny`'s Execute column), its 1-3 cells dispatched in PARALLEL when disjoint (see Concurrency law in full below) | orchestrator-authored done-report, self-checks only, no auto reviewer (the correctness reviewer moves inside an on-demand review session) | 2 — merged shape+execution gate, self-checks close-out |
 | `standard` | full `plan.md` | merged reviewer; ≤5-file diff (0 hard-gate flags): inline self-review, no dispatch | swarm workers | on user request only: session panel scaled to scope risk (4 core reviewers) | 3 — Gates 1-3 |
 | `high-risk` | `plan.md` + brief | persona panel | swarm workers | on user request only: session panel scaled to scope risk (full wave + conditionals) | 3 — Gates 1-3 |
 
 **Gate 4 is additive, not counted above:** it is asked once, whenever a review session actually runs for that scope — never automatically at the end of a lane's default chain.
 
-### Parallel dispatch doctrine
+### Concurrency law in full
 
-A `small` lane's 1-3 cells fan out to **concurrent execution workers whenever every cell's product file set is disjoint** — reservations are the proof and the police, 3-4 live workers is the cap. Serial is the exception: the orchestrator claims and dispatches one cell, waits for it to return (`[DONE]`/`[BLOCKED]`/`[HANDOFF]`/`[NOOP]`), authors that cell's done-report, and only then claims and dispatches the next — and it happens only when a real product-file conflict is named in the dispatch note, never assumed by default. Undeclared-overlap concurrency for the same feature is a `standard`/`high-risk` wave shape wearing a `small` lane, the exact ceremony-mismatch red flag this lane scaling exists to catch. Full doctrine, the wave-barrier regen protocol, and the AO14 execution-worker class relationship: `bee-swarming/SKILL.md`'s Single execution worker section, `bee-swarming/references/swarming-reference.md`'s "Parallel by default" section, and the Delegation contract below.
+**THE LAW:** if pieces of work can run at the same time, open the threads and run them; serial only when forced. One rule, three tiers — gather work fans out to I/O workers (Delegation contract below), a slice's cells fan out to a wave whenever their product file sets are disjoint (reservations are the proof and the police, 3-4 live workers is the cap), and independent ready features fan out to lanes or worktrees (Lanes, first-class below). Undeclared-overlap concurrency for the same feature is a `standard`/`high-risk` wave shape wearing a `small` lane, the exact ceremony-mismatch red flag this lane scaling exists to catch.
+
+**MANDATORY CONCURRENCY PLAN:** before dispatching anything, the orchestrator states in one line what runs concurrently and what is forced serial and why — computed, not guessed, never assumed by default. Cells: `bee cells schedule` names the disjoint sets from declared file overlap; a real product-file conflict named in the dispatch note is what makes a cell wait, nothing else does. Features: the declared `--paths` on `state start-feature --as-lane` are checked against every other live session's claims/reservations before the lane starts — a refusal names the holder and is itself the plan's proof that the paths were not disjoint (live example: this feature opened as a lane while a sibling feature held `packages/bee/bee.mjs`; the guard refused the overlapping path set by name and accepted the disjoint one).
+
+**THE ONLY LEGAL REASONS FOR SERIAL, exhaustive:** a declared file-set overlap (including a shared generated artifact not deferred by a wave barrier), a true data dependency (`deps`), a single scarce external resource, or an explicit human instruction. Nothing else is a reason — anything else fans out.
+
+**LANES, FIRST-CLASS:** when new feature work is ready while another feature is live and their declared paths are disjoint, the paved road is a lane, not a queue — `bee state start-feature --feature <f> --mode <m> --as-lane --paths <declared>`; lane-scoped mutations take `--lane`. A worktree remains the answer only when the work needs its own checkout (a different branch state, a separate install) — disjoint paths alone never force one. A lane refusal (holder + expiry) means the paths were not disjoint after all — pick other ready work or wait for the hold to lapse (rule 13), never work around it.
+
+**TICK:** the concurrency plan emits its own progress line per the Progress ticks catalog above — same silent-bookkeeping rule as every other tick, never suppressed by bypass.
+
+Full doctrine for the cell/wave tier — the wave-barrier regen protocol and the AO14 execution-worker class relationship: `bee-swarming/SKILL.md`'s Single execution worker section, `bee-swarming/references/swarming-reference.md`'s "Parallel by default" section, and the Delegation contract below.
 
 ### Docs lane
 
