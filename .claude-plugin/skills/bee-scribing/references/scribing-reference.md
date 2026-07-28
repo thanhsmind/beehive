@@ -4,6 +4,58 @@ Load after `bee-scribing` is selected. The workflow lives in SKILL.md; the templ
 
 **The templates below, through Reading Map, are written against the no-bundle spec tree** — `docs/specs/<area>.md`, `system-overview.md`, `reading-map.md` — exactly as they have always been (SKILL.md §2 states the single predicate; do not re-derive it here). **With a bundle**, the equivalent state layer is `docs/knowledge/areas/<area>/*.md` — one `bee.area` concept per subject, authored per SKILL.md §2a via `scribingTarget()`, with `emitFrontmatter` producing every frontmatter block and the full worked examples living in `docs/knowledge/areas/okf-profile/concept-model-and-authoring.md` §Templates. In that mode `docs/specs/` is the **read-only compatibility surface**: a legacy citation resolves through its pointer stub to the concept that owns the anchor now, and it is never written for new content. The nine sections, the rebuild bar, the tech-agnostic rule, and every per-section rule below are the same body contract in both modes (SKILL.md §3) — only the file layout and frontmatter mechanics differ, and each section below states its own bundle counterpart at the point where the two diverge.
 
+## Delegation
+
+Gather sources, map deltas, render sections, harvest inventory, and reading-map refresh delegate as extraction/generation-tier I/O workers per the Delegation contract (D2/D3, `bee-hive/references/routing-and-contracts.md`); any other ad-hoc subagent dispatch scribing makes (for example, a harvest research pass) defaults to the generation slot model, and ceiling requires the `[bee-tier: ceiling]` marker plus a one-line justification.
+
+## Gather Sources — What Each May Feed
+
+| Source | May feed | Never feeds |
+|---|---|---|
+| capped `behavior_change` cells + `verification_evidence` (`node .bee/bin/bee.mjs cells list --feature <feature>`) | Entry Points & Triggers, Data Dictionary, Behaviors & Operations, Actors & Access | — |
+| gate-locked `CONTEXT.md` + active decisions (`node .bee/bin/bee.mjs decisions active`) | Business Rules (cited by D-ID); the `Terms` section seeds the Data Dictionary | Behaviors stated as current reality, unless also evidenced |
+| worker reports, UAT records in `docs/history/<feature>/reports/` | Behaviors ("what each actor sees") | — |
+| code reading (harvest mode) | observable behavior, field inventory | field *meanings* and rules — code shows what, not why |
+| user answers (harvest/capture) | any section, after confirmation | — |
+
+**NEVER invent.** A claim backed by neither verification evidence nor an approved decision enters the spec only as an Open Gap (or becomes a question in interactive mode). Plans describe intent, not reality — never copy from `plan.md`.
+
+## Map Deltas — bundleMode Routing (scribingTarget)
+
+Map each delta to an area by the files/screens it touched; area names are kebab-case, chosen at first write, stable forever. Never decide by eye where an area's truth lives, and never re-state the rule in your own words — one predicate answers it: `bundleMode(root)` in `.bee/bin/lib/knowledge.mjs`, true only when `docs/knowledge/` exists AND at least one concept in it actually parses (a directory holding only `.gitkeep` is NOT a bundle). Ask the module for the exact target:
+
+```
+node -e "import('./.bee/bin/lib/knowledge.mjs').then(m=>console.log(JSON.stringify(m.scribingTarget(process.cwd(),{area:'<area>',subject:'<area>: <subject>'}),null,1)))"
+```
+
+It returns `{bundle_mode, action, area, subject, path, owner, regenerate_index}` — the same seven keys every time. Write to `path`, do exactly `action`, regenerate the index when `regenerate_index` is true. Pass `intent:'new-concept'` when the subject is believed new — if it is already owned, the answer is `fork_denied` naming the owner, and there is nothing to write.
+
+**A `path: null` answer is a refusal, never a licence to pick your own path.** Three answers refuse:
+
+| `action` | Means | Do |
+|---|---|---|
+| `fork_denied` | the subject is already owned by the concept in `owner` | update the owner in place, or declare the split inside it |
+| `subject_required` | `intent:'new-concept'` with no subject (empty, blank, `null`, punctuation-only) | name the subject and ask again — never routed to `overview.md` |
+| `duplicate_authority` | two or more concepts already claim this subject, listed on `owner.conflicts` | fix the bundle first — collapse the rival claims to one authority, then re-ask |
+
+The call **throws** when any concept in the bundle carries a malformed `bee.authoritative_for` (a list, a boolean, an empty/blank string), naming the file — a claim bee cannot read is an owner the anti-fork gate cannot see; fix the concept, do not route around it.
+
+`docs/knowledge/` and `docs/specs/` are both product doc trees — the module resolves them through `resolveProductRoot`, so a repo whose `.bee/config.json` sets `product_root` (the repo-divorce topology) is graded on its real product docs, not the workshop root. Never join these paths yourself.
+
+**Bundle mode — one subject, one concept, forever.** Three paths, gated on `bee.authoritative_for` (the field naming, in one line, the subject a concept is the single truth for):
+
+| Situation | Action | Where |
+|---|---|---|
+| subject already owned (`bee.authoritative_for` matches, anywhere in the bundle) | update THAT concept in place | the owner's own file — never a second one |
+| new subject in an existing area | author a new concept, then regenerate the index | `docs/knowledge/areas/<area>/<subject-slug>.md` |
+| brand-new area | create the area with an `overview` concept, then regenerate the index | `docs/knowledge/areas/<area>/overview.md` |
+
+A new concept may NOT claim a subject an existing concept already owns — checked bundle-wide, not per area. When a subject genuinely splits, the owning concept is rewritten and the split is declared inside it (see `docs/knowledge/areas/doctrine-layer/overview.md` §"How this area is split") — never by quietly authoring a rival.
+
+**The anti-fork gate has three layers**, and none may be softened to get a write through — a refused write means the bundle is wrong, not the gate: skeleton matching (NFKC, casefold, confusable fold), malformed-input fail-closed (the throw above), and the bundle-wide `duplicate_authoritative_for` chain-fail. Frontmatter is always produced by `emitFrontmatter`, never typed by hand (see "Bundle-mode gate and frontmatter" below).
+
+**No bundle — the area's spec file.** One area = one file, forever; a modified area is ALWAYS an in-place update. Before creating any spec, check `docs/specs/reading-map.md` and existing `docs/specs/*.md` for an area that already covers this surface (it may be named differently than expected — search by what it describes). Only when nothing covers the surface, create one from the Area Spec Template below. Never create `-v2`, `-new`, or date-suffixed spec files.
+
 ## Area Shapes
 
 An area is any long-lived unit with observable behavior: a screen/form, an API, a background job, an integration with an external system, a data pipeline, a CLI command, a business process. The template below fits all of them — the sections stay, the content shifts:
@@ -162,11 +214,23 @@ Deleting this section must not remove any business meaning.>
 - Standard commands are a Pointers-level fact: when a synced change alters how the project is set up, started, tested, or verified, update `.bee/config.json` `commands` in the same pass (docs/09 item 1) — one record, never a second location.
 - After merging, run the rebuild self-check (below) on every touched spec (or concept).
 
+## Capture Mode in full
+
+The trigger is **settlement**, not subject matter: whenever a discuss → build → test → adjust loop lands on an outcome that is now "how it works" — a business rule agreed, a behavior confirmed by a test run, a retry/threshold/tuning value chosen after experiment, an error-handling policy adjusted — capture it in the same session. When the user says the settlement out loud — "chốt", "final", "ok ship it", any equivalent — capture happens in that same turn, never deferred. What "capture" costs in that turn is lane-scaled: high-risk = the full spec merge; every other lane = decision log + a one-line queue stub, with the merge at flush — the flow is never held hostage to the elaboration. The session-close hook warns when a decision exists that no spec update followed, and when queued stubs await their flush.
+
+**The debt signal backs this up.** Every `behavior_change` cell capped since the last scribing run is counted as *scribing debt* and surfaced mechanically — in the session preamble, in `bee_status`, and in the chain-nudge fired when a worker returns during swarming. Debt > 0 means a settlement already landed in a capped cell and belongs in a spec now, not at feature close. Self-detection is still the first duty; the debt count is the backstop for the settlements the agent's own watching missed. Running capture (or sync) and recording the run in state clears it.
+
+**Flush — draining the queue.** Flush points, whichever comes first: wrap-up (the working session is ending), the PreCompact/close warning (the hook fires when the queue is non-empty), or the session-start offer (bee-hive surfaces a non-empty queue before new work). At flush: `node .bee/bin/bee.mjs capture list`, then oldest-first give each stub the full capture treatment — merge into its area's spec per the Merge Rules above, `bee.mjs capture flush --id <id> --into <spec>` — and record the scribing run in state. A stub is never dropped, summarized away, or flushed without its merge; if a stub's meaning is no longer reconstructable, ask the user rather than invent — that cost is the signal to flush earlier next time.
+
+If a settlement contradicts current shipped behavior, record it as a rule with a note "not yet implemented — see backlog" and file a backlog item; do NOT state it as current behavior.
+
 ## Citation Discipline (D3)
 
 Any artifact that encodes a decision — a spec's Business Rules line, a `docs/backlog.md` row's Story/CoS, a CONTEXT/plan passage — cites the decision's **short8 id** (the log entry's id, first 8 hex chars, e.g. `b9b9fee3`) alongside any CONTEXT-local label (`D4`, `D11b`); the label alone is not enough. The `decisions supersede` propagation sweep (dp-2) matches short8 word-boundary hits across `docs/**` — it finds only what is cited that way, so a passage carrying only a `D4`-style label is invisible to the scan. An uncited embodiment is the residual risk: the decision changes, but nothing points a sweep at the passage that assumed it.
 
 ## Harvest Interview Protocol
+
+**Harvest mode, three steps:** (1) inventory the area from code and running behavior — screens, fields, actions, roles, or for backend areas: triggers, inputs, outputs, consumers, failure paths; (2) draft the spec with everything code can *prove*, every meaning or rule code cannot prove becomes a question; (3) unanswered questions → `## Open Gaps`, `coverage: partial` — a partial spec that states its gaps beats an invented-complete one.
 
 For each meaning/rule code cannot prove, ask in the standard question format — one per message, outcome-framed, single-choice preferred:
 
