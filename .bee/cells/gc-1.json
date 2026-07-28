@@ -1,0 +1,80 @@
+{
+  "id": "gc-1",
+  "feature": "guard-completion",
+  "lane": "standard",
+  "change_class": "bugfix",
+  "behavior_change": true,
+  "title": "One debt question, asked by every door",
+  "action": "OPEN P1 from the review session's second delta re-review, reproduced live by the reviewer: the feature-swap door calls featureSwapGuardFeatureVerifyDebt and featureSwapGuardScribingDebt but never asks testCellDebt (packages/bee/bee.mjs ~:2918-2928). REPRO (reproduce it yourself first, scratch repo, CLI-only writes): feature `alpha` with a capped change_class 'behavior' cell and NO test cell at all -> `bee state set --feature beta --owner swarming --waive-scribing-debt` returns EXIT 0 and the feature becomes beta; the identical state refuses via `state set --phase scribing` (EXIT 1) and via `start-feature` (EXIT 1). CONTEXT YOU MUST HONOUR: this is the THIRD round on this surface. Round one guarded the phase door and missed the swap door. Round two guarded the swap door for feature-verify debt, added a shared debt core in packages/bee/lib/state.mjs (readFeatureCellsStrict / isDebtGuardedDeparture / featureVerifyDebt / testCellDebt), and still left the swap door assembling its own subset of questions. A third round that adds one more call in one more place will be outflanked the same way. FIX: make the question singular — ONE entry point that answers 'does this feature owe anything?' over the whole debt set, and every door (phase departure, feature swap, startFeature) calls exactly it; no door composes its own list. Waivers keep their existing scope: a --waive-scribing-debt must not waive an unwaivable debt. Derive the test coverage from the debt set (iterate it) rather than hand-listing pairs, so a debt kind added later is inherited by every door AND by the tests. You MAY run packages/bee/tests/test_bee_cli.mjs, packages/bee/tests/test_cli_state.mjs and packages/bee/tests/test_state.mjs, and must quote all three. GIT SAFETY (shared checkout, sibling worker live): commit through your OWN temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref); NEVER plain git add, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "The reviewer's repro refuses; quote the before/after exit codes and the refusal text.",
+      "Every door asks the same debt set through one shared entry point; no door composes its own subset.",
+      "Waivers waive exactly what they always waived.",
+      "Tests iterate the debt set rather than hand-listing pairs; all three suites green (quote them)."
+    ],
+    "prohibitions": [
+      "Do NOT add a third hand-written guard call and leave the doors free to diverge again.",
+      "Do NOT widen any waiver.",
+      "Do NOT weaken an existing refusal.",
+      "Do NOT touch packages/bee/lib/guards.mjs or hooks (sibling cell owns them).",
+      "Do NOT run other suites."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs && node packages/bee/tests/test_cli_state.mjs && node packages/bee/tests/test_state.mjs",
+  "read_first": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/state.mjs"
+  ],
+  "files": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/state.mjs",
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-gc1",
+    "outcome": "Collapsed the per-door debt lists into one question: FEATURE_DEBT_KINDS + guardFeatureDebt (lib/state.mjs) answer the whole unwaivable debt set, and all four doors (phase departure, scribing-run, feature swap, startFeature) supply only a refusal head. Reviewer's repro reproduced at EXIT 0 before, refuses at EXIT 1 after, at all three doors, with the swap never landing. Tests are generated from the registry (door x kind matrix + debt-free controls + fixture-coverage + a structural check that no bee.mjs door calls a per-kind detector); a mutation reintroducing the exact round-two defect was caught by 4 of them.",
+    "files_changed": [
+      "packages/bee/bee.mjs",
+      "packages/bee/lib/state.mjs",
+      "packages/bee/tests/test_bee_cli.mjs",
+      "packages/bee/tests/test_misc.mjs"
+    ],
+    "deviations": [
+      "- Touched packages/bee/tests/test_misc.mjs, which is outside the cell's declared",
+      "  files (deviation rule 3, blocking issue). lib/state.mjs's export surface is",
+      "  pinned there by an EXACT-SET allowlist (EXPECTED_STATE_EXPORTS), so the two new",
+      "  exports (FEATURE_DEBT_KINDS, guardFeatureDebt) fail that check until registered.",
+      "  Change is +6 lines (two entries + comment). NOT run by this worker: the dispatch",
+      "  restricted execution to the three suites named in `verify`. MAIN's feature-level",
+      "  verify covers test_misc.mjs.",
+      "- Removed four now-unused imports from bee.mjs (featureVerifyDebt, testCellDebt,",
+      "  FEATURE_VERIFY_FIX_TAIL, testCellDebtFixTail). They stay EXPORTED from",
+      "  state.mjs (registry internals + still on the allowlist) — deliberately not",
+      "  un-exported, because a sibling worker is live in this checkout and could be",
+      "  importing them.",
+      "- .bee/bin/bee.mjs (the installed dispatcher copy) still holds the pre-fix door",
+      "  code; regen is MAIN's at feature close per the cell's regen_obligation_ack.",
+      "- Stale shared git index: `git status` shows my four files as MM and gc-2.md as",
+      "  staged-deleted. Both are artifacts of the temp-index commit discipline in a",
+      "  shared checkout — HEAD and the worktree agree (git diff HEAD is empty for all",
+      "  four files, gc-2.md is present in HEAD and on disk). No action taken, since",
+      "  refreshing the real index is a reset-class operation the dispatch forbids."
+    ],
+    "friction": null,
+    "capped_at": "2026-07-28T11:19:03.280Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T11:03:09.712Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}

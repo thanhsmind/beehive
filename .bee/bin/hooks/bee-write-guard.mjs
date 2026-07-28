@@ -1219,12 +1219,16 @@ async function main() {
         }
       }
 
-      // Intake-gate git exemption (D1/D3/D4, cell ige-2, closes P46 / GH #1):
-      // additive and scoped to Bash only. `guards.checkGitBashCommand` itself
-      // returns null unless the phase is terminal AND the command contains a
-      // recognizable `git` invocation — everywhere else this is a no-op, so
-      // it can never override or discard a denial checks (a)-(c) above (or
-      // the reservation/gate loop just run) already computed.
+      // Intake-gate git exemption (D1/D3/D4, cell ige-2, closes P46 / GH #1)
+      // AND the concurrent-worker whole-tree denial (gc-2): additive and
+      // scoped to Bash only. `guards.checkGitBashCommand` returns null unless
+      // the command contains a recognizable `git` invocation AND either the
+      // phase is terminal (the intake-gate branch) or more than one worker is
+      // live in this checkout (the gc-2 branch, which is phase-independent
+      // BECAUSE the phase it exists for — swarming — is never terminal).
+      // Everywhere else this is a no-op, so it can never override or discard
+      // a denial checks (a)-(c) above (or the reservation/gate loop just run)
+      // already computed.
       if (!denial && toolName === "Bash" && typeof guards.checkGitBashCommand === "function") {
         const bashCommand = typeof toolInput.command === "string" ? toolInput.command : "";
         if (bashCommand) {

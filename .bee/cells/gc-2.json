@@ -1,0 +1,86 @@
+{
+  "id": "gc-2",
+  "feature": "guard-completion",
+  "lane": "standard",
+  "change_class": "security",
+  "behavior_change": true,
+  "title": "Deny whole-tree git verbs while more than one worker is live",
+  "action": "P1 FRICTION, independently confirmed by the review session's security reviewer: `checkGitBashCommand` (packages/bee/lib/guards.mjs ~:451) returns null unless the phase is in TERMINAL_PHASES (~:151), so during `swarming` NOTHING mechanically stops a subagent running `git reset --hard`, `git stash`, `git checkout .` or `git clean -fd` in a shared checkout. This is not theoretical: in one parallel wave today it happened three times — two index sweeps that destroyed commit attribution, and one whole-tree revert that DELETED a live worker's in-progress edit while that worker held a valid file reservation (reservations govern files; the tree is not a file). The rules shipped as prose only. FIX: extend checkGitBashCommand so that when the runtime has MORE THAN ONE live worker (the computed live view, not the stored array — see how active workers are derived elsewhere in the lib), a whole-tree git verb is REFUSED with a typed message naming the verb, why it is unsafe with concurrent workers, and the sanctioned alternatives: status / diff / log, and a single path-scoped commit made through the worker's own temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref), with `git add -N` on new paths as the fallback. Scope the denial precisely — a single-worker session and the orchestrator's own release/merge work must stay unaffected, and a genuinely path-scoped `git commit -- <paths>` must remain allowed. Fail-open on any resolution error the way the surrounding guard code already does, EXCEPT that an unresolvable worker count is treated as multi-worker (the conservative side, matching the debt guards' 'unreadable means debt' discipline). Add tests in the owning suite for: refusal of each whole-tree verb under multi-worker, allowance under single-worker, allowance of path-scoped commit and of status/diff/log, and the unresolvable-count case refusing. You MAY run the guard suite(s) that own checkGitBashCommand (locate them; likely skills/bee-hive/templates/tests/test_guards.mjs and/or packages/bee/tests) and must quote them. GIT SAFETY: obey the very rule you are implementing — temp-index commit only.",
+  "must_haves": {
+    "truths": [
+      "A whole-tree git verb is refused with a typed message while more than one worker is live; the message names the sanctioned alternatives.",
+      "Single-worker sessions, path-scoped commits, and status/diff/log are unaffected.",
+      "An unresolvable worker count refuses (conservative), other resolution errors fail open as the surrounding code does.",
+      "Tests cover each case and are green (quote the suite lines)."
+    ],
+    "prohibitions": [
+      "Do NOT block the orchestrator's own release/merge git work.",
+      "Do NOT refuse path-scoped commits.",
+      "Do NOT touch packages/bee/bee.mjs or lib/state.mjs (sibling cell owns them).",
+      "Do NOT run other suites."
+    ]
+  },
+  "verify": "node skills/bee-hive/templates/tests/test_guards.mjs",
+  "read_first": [
+    "packages/bee/lib/guards.mjs",
+    "skills/bee-hive/templates/tests/test_guards.mjs"
+  ],
+  "files": [
+    "packages/bee/lib/guards.mjs",
+    "skills/bee-hive/templates/lib/guards.mjs",
+    "skills/bee-hive/templates/tests/test_guards.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-gc2",
+    "outcome": "Whole-tree git verbs (reset/stash/clean/checkout/restore/revert/rebase/merge/cherry-pick/apply, plus git add and un-path-scoped git commit) now refuse with a typed git-concurrent-tree verdict whenever the computed live-worker view shows >1 worker in this checkout — phase-independent (swarming included) and with no config opt-out. The count unions active reservation agents with claims.mjs activeWorkers, de-duped by session and scoped to the acting workspace_id; an unresolvable count refuses (conservative), every other resolution error keeps the file's fail-open posture. Solo sessions, the orchestrator's release/merge work, read-only git, path-scoped 'git commit -- <paths>', 'git add -N', 'git stash list/show', 'git apply --check', and the full temp-index route stay allowed. Owning suite green: node packages/bee/tests/test_guards.mjs -> 58 passed, 0 failed, including 8 new gc-2 rows.",
+    "files_changed": [
+      "packages/bee/lib/guards.mjs",
+      "packages/bee/tests/test_guards.mjs",
+      "packages/bee/hooks/bee-write-guard.mjs",
+      "docs/history/guard-completion/reports/gc-2.md"
+    ],
+    "deviations": [
+      "1. Cell file paths were stale. `skills/bee-hive/templates/lib/guards.mjs` and",
+      "   `skills/bee-hive/templates/tests/test_guards.mjs` do not exist — the guard lib",
+      "   and its owning suite live at `packages/bee/lib/guards.mjs` and",
+      "   `packages/bee/tests/test_guards.mjs`. Implemented and tested there. The cell's",
+      "   `verify` command (`node skills/bee-hive/templates/tests/test_guards.mjs`) is",
+      "   therefore not runnable as written; MAIN should run",
+      "   `node packages/bee/tests/test_guards.mjs`.",
+      "2. Auto-fixed a stale comment in `packages/bee/hooks/bee-write-guard.mjs` (~:1222)",
+      "   that asserted `checkGitBashCommand` \"returns null unless the phase is terminal",
+      "   — everywhere else this is a no-op\". That is now false, and a comment declaring a",
+      "   safety guard inert is exactly what invites a future editor to drop the call.",
+      "   Comment text only, no behavior change; path was reserved before editing.",
+      "3. Scope call — `git rm` / `git mv` are deliberately NOT denied. They are",
+      "   path-scoped by nature and were not part of the incident class; denying them",
+      "   would be over-block with no evidence behind it. Documented in the code.",
+      "4. Scope call — `git add` is denied under multi-worker (not only the whole-tree",
+      "   forms), because it stages into the SHARED index, which is the mechanism of the",
+      "   two attribution-loss incidents. `git add -N` / `--intent-to-add` stays allowed",
+      "   as the cell's named fallback.",
+      "5. Design finding worth carrying forward: `activeWorkers` alone would NOT have",
+      "   caught today's incident. Worker subagents inside one Claude session share one",
+      "   session id and one heartbeat, so the derived live-session view reports a",
+      "   three-worker wave as ONE worker. The count therefore unions active reservation",
+      "   agents (`session::agent`) with derived live sessions, de-duplicated by session,",
+      "   and scoped to the acting workspace so a worker in another worktree never",
+      "   over-blocks this checkout."
+    ],
+    "friction": "Cell gc-2 named skills/bee-hive/templates/lib/guards.mjs and .../templates/tests/test_guards.mjs in both files[] and verify — that directory does not exist in this repo (the lib moved to packages/bee/). The cell's verify command as written is unrunnable; MAIN must use 'node packages/bee/tests/test_guards.mjs'.",
+    "capped_at": "2026-07-28T11:12:35.506Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T11:03:09.793Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}

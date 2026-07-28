@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { findConflicts, findSessionConflicts, reservationsPath, isHardConflict } from './reservations.mjs';
+import { findConflicts, findSessionConflicts, listReservations, reservationsPath, isHardConflict } from './reservations.mjs';
 import { readConfig, resolveContext, resolvePipeline } from './state.mjs';
 // xwh-4: cross-worktree foreign-hold consultation. worktree-holds.mjs imports
 // only fsutil/lock/reservations.mjs — no cycle (same discipline cells.mjs's
@@ -18,7 +18,7 @@ import { findForeignHolds, holdsStoreCorrupt } from './worktree-holds.mjs';
 // (msn-19's session stamping) — both structurally isolated leaf modules, no
 // cycle back into guards.mjs (workspace-store.mjs imports only fs/path/
 // fsutil/lock; claims.mjs imports fs/path/crypto/fsutil/lock/decisions.mjs).
-import { isConcurrentMode, readSession, heartbeatStale } from './claims.mjs';
+import { isConcurrentMode, readSession, heartbeatStale, activeWorkers } from './claims.mjs';
 import { readWorkspace, workspacePath, WorkspaceStoreError } from './workspace-store.mjs';
 
 /** File-path patterns that must never be read without asking the human. */
@@ -427,6 +427,249 @@ function resolveGitMutationPaths(cwd, subcommand, restTokens) {
   return pathspecs;
 }
 
+// ─── concurrent-worker whole-tree git guard (gc-2) ────────────────────────
+// The intake-gate classification above only ever runs at a TERMINAL phase,
+// which left `swarming` — the one phase that by definition has several
+// workers in one checkout — with nothing mechanically stopping a subagent
+// from running `git reset --hard`, `git stash`, `git checkout .` or
+// `git clean -fd`. In one parallel wave this cost three incidents: two
+// `git add` index sweeps that folded workers' files into a sibling's commit
+// under the wrong authorship, and one whole-tree revert that DELETED a live
+// worker's in-progress edit while that worker held a valid file reservation.
+// Reservations govern FILES; the working tree is not a file, so no
+// reservation could ever have caught it. That is what this section adds:
+// while MORE THAN ONE worker is live, whole-tree git verbs are refused
+// outright, in every phase.
+//
+// Scope is deliberately two-sided. Under-blocking is the cost already paid;
+// over-blocking is a real cost too, so the denial applies ONLY when the
+// live-worker view actually shows more than one worker — a solo session and
+// the orchestrator's own release/merge work (which happens after workers cap
+// and release) are untouched — and read-only inspection, a path-scoped
+// `git commit -- <paths>`, `git add -N`, and the whole temp-index route
+// (read-tree/update-index/write-tree/commit-tree/update-ref) all stay
+// allowed, because those are exactly the alternatives the refusal names.
+//
+// `rm`/`mv` are deliberately NOT members: they are path-scoped by nature and
+// were not part of the incident class, so denying them would be over-block
+// with no evidence behind it.
+const GIT_WHOLE_TREE_SUBCOMMANDS = new Set([
+  'reset', 'clean', 'checkout', 'restore', 'revert', 'rebase', 'cherry-pick', 'merge',
+]);
+const GIT_STASH_READONLY_SUBVERBS = new Set(['list', 'show']);
+const GIT_APPLY_READONLY_FLAGS = new Set(['--check', '--stat', '--summary', '--numstat']);
+
+/**
+ * Classifies a git invocation against the concurrent-worker rule. Returns
+ * null when the command is safe to run beside other live workers, else
+ * `{ verb, why }` — `verb` is what the refusal names, `why` is the one
+ * sentence explaining the damage. Never consults worker state itself; the
+ * caller decides whether the rule applies at all.
+ */
+function classifyConcurrentTreeVerb(subcommand, rest) {
+  if (!subcommand) return null;
+
+  if (subcommand === 'add') {
+    // `git add -N` / `--intent-to-add` records a path's EXISTENCE with no
+    // content, which is the sanctioned way to make a brand-new file visible
+    // to a temp-index write-tree. Every other form stages real content into
+    // the shared index.
+    if (hasGitShortFlag(rest, 'N') || rest.includes('--intent-to-add')) return null;
+    return {
+      verb: 'add',
+      why:
+        'it stages content into the SHARED index, so the next sibling worker to commit sweeps your files into their commit — ' +
+        'the exact attribution loss that happened twice in one wave.',
+    };
+  }
+
+  if (subcommand === 'commit') {
+    const dashDashIdx = rest.indexOf('--');
+    const preDashDash = dashDashIdx === -1 ? rest : rest.slice(0, dashDashIdx);
+    if (hasGitShortFlag(preDashDash, 'a') || preDashDash.includes('--all')) {
+      return {
+        verb: 'commit -a',
+        why: '`-a`/`--all` commits every tracked modification in the checkout, including a sibling worker\'s in-progress edits.',
+      };
+    }
+    if (dashDashIdx !== -1) {
+      // Same pathspec discipline resolveGitMutationPaths applies: a pathspec
+      // counts only AFTER a literal `--`, and a broad/glob one is not scoped
+      // at all. A genuinely path-scoped commit is what the rules ASK workers
+      // to use and must never be refused.
+      const pathspecs = rest.slice(dashDashIdx + 1);
+      if (pathspecs.length > 0 && !pathspecs.some((p) => GIT_BROAD_PATHSPECS.has(p) || p.includes('*'))) return null;
+    }
+    return {
+      verb: 'commit',
+      why:
+        'with no explicit `-- <paths>` pathspec it commits whatever sits in the SHARED index, which may be a sibling worker\'s staged work.',
+    };
+  }
+
+  if (subcommand === 'stash') {
+    const firstWord = rest.find((t) => !t.startsWith('-'));
+    if (firstWord && GIT_STASH_READONLY_SUBVERBS.has(firstWord)) return null;
+    return {
+      verb: 'stash',
+      why: 'it sweeps every uncommitted change in the checkout out of the tree, including edits a sibling worker is still writing.',
+    };
+  }
+
+  if (subcommand === 'apply') {
+    if (rest.some((t) => GIT_APPLY_READONLY_FLAGS.has(t))) return null;
+    return { verb: 'apply', why: 'it rewrites tree content wholesale, and reservations cannot protect a tree.' };
+  }
+
+  if (GIT_WHOLE_TREE_SUBCOMMANDS.has(subcommand)) {
+    return {
+      verb: subcommand,
+      why:
+        'it rewrites the working tree or index as a whole, which no file reservation can protect — reservations govern FILES, ' +
+        'and the working tree is not a file.',
+    };
+  }
+
+  return null;
+}
+
+/**
+ * The live-worker count for this physical checkout, as a COMPUTED view —
+ * never state.json's hand-maintained `workers` array (D6: workers derived,
+ * never stored). Two sources, unioned, because neither alone sees the whole
+ * picture:
+ *
+ *  1. Active path reservations, keyed by `session::agent`. This is the
+ *     intra-session swarm signal and the one that matters most here: several
+ *     worker subagents in ONE Claude session share a single session id and a
+ *     single heartbeat, so `activeWorkers` alone reports them as one worker
+ *     — which is precisely the shape the incident had.
+ *  2. `activeWorkers` (claims.mjs) — live-heartbeat sessions joined with
+ *     their claims. This is the cross-session signal, and it also counts a
+ *     live session that holds no reservation at all.
+ *
+ * A session already represented by a reservation row is not double-counted.
+ * Workers whose session is stamped with a DIFFERENT `workspace_id` are
+ * excluded: a worker in another worktree has its own working tree, so its
+ * whole-tree verbs cannot reach this one, and counting it would over-block
+ * the orchestrator's cross-worktree merge work. An unknown workspace counts
+ * (conservative).
+ *
+ * Returns `{ resolved: true, count }`, or `{ resolved: false, reason }` when
+ * the count cannot be established. Per the cell: an unresolvable worker
+ * count is treated as MULTI-worker by the caller — the same "an unreadable
+ * store means obligation, not clearance" discipline reservationStoreCorrupt
+ * and holdsStoreCorrupt already apply. Every OTHER resolution error (bad
+ * topology, unreadable config) keeps this file's ordinary fail-open posture
+ * and never reaches here.
+ */
+function resolveLiveWorkerCount(root, controlRoot, ctx, now = Date.now()) {
+  const ownWorkspace = (ctx && ctx.workspaceId) || 'main';
+  const sameWorkspace = (sessionId) => {
+    if (!sessionId) return true; // unattributed: count it (conservative)
+    try {
+      return sessionWorkspaceId(controlRoot, sessionId) === ownWorkspace;
+    } catch {
+      return true;
+    }
+  };
+
+  // A present-but-unparseable reservation store cannot be read as "nobody is
+  // holding anything" — that is the exact torn-file case that would open the
+  // whole tree to a whole-tree verb.
+  try {
+    if (reservationStoreCorrupt(root)) {
+      return { resolved: false, reason: 'the reservation store is present but unparseable' };
+    }
+  } catch {
+    return { resolved: false, reason: 'the reservation store could not be inspected' };
+  }
+
+  const workerKeys = new Set();
+  const sessionsWithAgents = new Set();
+  let reservations;
+  try {
+    reservations = listReservations(root, { activeOnly: true, now });
+  } catch {
+    return { resolved: false, reason: 'active reservations could not be read' };
+  }
+  for (const reservation of reservations) {
+    const agent = typeof reservation.agent === 'string' ? reservation.agent.trim() : '';
+    if (!agent) continue;
+    const session = typeof reservation.session === 'string' ? reservation.session.trim() : '';
+    if (!sameWorkspace(session)) continue;
+    workerKeys.add(`${session}::agent:${agent}`);
+    if (session) sessionsWithAgents.add(session);
+  }
+
+  let workers;
+  try {
+    workers = activeWorkers(controlRoot, { now });
+  } catch {
+    return { resolved: false, reason: 'the live-session view could not be derived' };
+  }
+  for (const worker of workers) {
+    const sessionId = typeof worker.session_id === 'string' ? worker.session_id.trim() : '';
+    if (!sessionId || sessionsWithAgents.has(sessionId)) continue;
+    if (!sameWorkspace(sessionId)) continue;
+    workerKeys.add(`${sessionId}::session`);
+  }
+
+  return { resolved: true, count: workerKeys.size };
+}
+
+// The one refusal message for this guard. It names the verb, why the verb is
+// unsafe with concurrent workers, and — the part that makes it actionable —
+// every sanctioned alternative, in the order a blocked worker needs them.
+function concurrentTreeRefusal(verb, why, workerClause) {
+  return (
+    `bee concurrent-worker git guard: \`git ${verb}\` is refused because ${workerClause}. ` +
+    `${why} ` +
+    'FIX: inspection is always allowed — git status / git diff / git log. To land your own work, make ONE path-scoped ' +
+    'commit through your OWN temp index instead of the shared one: ' +
+    'GIT_INDEX_FILE=<tmp> git read-tree HEAD, then GIT_INDEX_FILE=<tmp> git update-index --add <your paths>, ' +
+    'GIT_INDEX_FILE=<tmp> git write-tree, git commit-tree <tree> -p HEAD -m "<msg>", git update-ref HEAD <commit>. ' +
+    'For a path git does not track yet, `git add -N <path>` first (intent-to-add stages no content). ' +
+    'A genuinely path-scoped `git commit -- <your paths>` is allowed too. Never reset / stash / checkout / clean / ' +
+    'restore / revert across the shared tree while a sibling worker holds work in it — a file reservation cannot protect a tree.'
+  );
+}
+
+/**
+ * Refuses whole-tree git verbs while more than one worker is live (gc-2).
+ * Runs in EVERY phase — swarming above all — and returns null (caller
+ * unaffected) whenever the verb is safe, the worker view shows one worker or
+ * none, or the command is not a git invocation at all.
+ */
+function checkConcurrentTreeVerb(root, controlRoot, ctx, subcommand, rest) {
+  const classified = classifyConcurrentTreeVerb(subcommand, rest);
+  if (!classified) return null;
+
+  const resolution = resolveLiveWorkerCount(root, controlRoot, ctx);
+  if (!resolution.resolved) {
+    return {
+      allow: false,
+      kind: 'git-concurrent-tree',
+      reason: concurrentTreeRefusal(
+        classified.verb,
+        classified.why,
+        `the live-worker count could not be resolved (${resolution.reason}), which is treated as more than one worker`,
+      ),
+    };
+  }
+  if (resolution.count <= 1) return null;
+
+  return {
+    allow: false,
+    kind: 'git-concurrent-tree',
+    reason: concurrentTreeRefusal(
+      classified.verb,
+      classified.why,
+      `${resolution.count} workers are live in this checkout`,
+    ),
+  };
+}
+
 /**
  * Git-command awareness for the intake gate (D1/D3/D4, ige-2 / P46 / GH #1).
  * Scoped ONLY to the terminal-phase intake gate — D1 says "while the phase
@@ -435,6 +678,10 @@ function resolveGitMutationPaths(cwd, subcommand, restTokens) {
  * phase (gated phases, swarming, ...), this returns null unconditionally and
  * the caller's existing Bash-target logic is completely unaffected — the
  * fix stays confined to the one door the incident (a7d2069) walked through.
+ *
+ * gc-2 layers a SECOND, phase-independent rule on top: the concurrent-worker
+ * whole-tree denial above. It is evaluated before the terminal-phase early
+ * return, because the phase it exists for (`swarming`) is never terminal.
  *
  * Returns:
  *   null                          — not a git command, phase isn't
@@ -449,22 +696,29 @@ function resolveGitMutationPaths(cwd, subcommand, restTokens) {
  *                                    non-bookkeeping path (today's refusal).
  */
 export function checkGitBashCommand(root, state, command, { cwd = root, sessionId = null, controlRoot: controlRootOverride = null } = {}) {
-  const { controlRoot } = resolveWriteTopology(root, controlRootOverride);
+  const { ctx, controlRoot } = resolveWriteTopology(root, controlRootOverride);
   const recordResolution = resolveWriteRecord(controlRoot, state, sessionId);
   if (!recordResolution.ok) {
     return { allow: false, kind: 'lane', reason: recordResolution.reason };
   }
   const phase = recordResolution.record?.phase || 'idle';
-  if (!TERMINAL_PHASES.has(phase)) return null;
-
-  const config = readConfig(controlRoot);
-  const idleGateOn = !(config.guards && config.guards.idle_gate === false);
-  if (!idleGateOn) return null;
 
   const tokens = tokenize(command);
   const invocation = findGitInvocation(tokens);
   if (!invocation) return null;
   const { subcommand, rest } = invocation;
+
+  // gc-2: phase-independent and NOT gated on guards.idle_gate — this is the
+  // concurrent-worker safety rule, not the intake gate, and it has no
+  // repo-level opt-out by design.
+  const concurrency = checkConcurrentTreeVerb(root, controlRoot, ctx, subcommand, rest);
+  if (concurrency) return concurrency;
+
+  if (!TERMINAL_PHASES.has(phase)) return null;
+
+  const config = readConfig(controlRoot);
+  const idleGateOn = !(config.guards && config.guards.idle_gate === false);
+  if (!idleGateOn) return null;
 
   if (subcommand && GIT_READONLY_SUBCOMMANDS.has(subcommand)) {
     return { allow: true, kind: 'git-read-only' };

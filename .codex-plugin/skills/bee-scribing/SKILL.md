@@ -17,9 +17,21 @@ metadata:
 
 Scribing is bee's BA — it owns the state layer. Rules stated bare — decision IDs: `references/provenance.md`; quoted headings resolve in `references/scribing-reference.md`.
 
-An **area is domain-general**: a screen, API, job, integration, pipeline, CLI command, or process — any unit with observable behavior that outlives features. Code is the implementation; the spec is the *meaning*, surviving a full rewrite on a different stack.
+An **area is domain-general**: a screen, API, job, integration, pipeline, CLI command, or process — any unit with observable behavior. Code is the implementation; the spec is the *meaning*.
 
-**Where meaning is written: `bundleMode(root)`** — true only when `docs/knowledge/` exists AND a concept in it parses (a `.gitkeep`-only dir is NOT a bundle). Bundle → `docs/knowledge/areas/<area>/*.md`, one `bee.area` concept per subject. No bundle → `docs/specs/<area>.md` + `system-overview.md` + `visuals/` + `reading-map.md`. Same rebuild bar, tech-agnostic rule, nine sections, modes, never-invent in both — only layout/frontmatter mechanics differ. Full routing (`scribingTarget()`, refusal answers, anti-fork gate, `emitFrontmatter`): `references/scribing-reference.md ("Map Deltas", "Bundle-mode gate and frontmatter")`.
+## Where Meaning Is Written (bundleMode Routing)
+
+`bundleMode(root)` — true only when `docs/knowledge/` exists AND a concept in it parses (a `.gitkeep`-only dir is NOT a bundle) — is the single predicate for where new area truth is written.
+
+### 2a. Bundle branch
+
+`docs/knowledge/areas/<area>/*.md`, one `bee.area` concept per subject, via `scribingTarget()`. Refusals: `subject_required` (empty/blank/punctuation-only subject on a new concept — never routed to `overview.md`); `duplicate_authority` (two+ concepts already claim the subject, `owner.conflicts` — collapse to one authority, re-ask). Backstop for a paraphrase neither refusal catches: the bundle-wide `duplicate_authoritative_for` chain-fail in `bee knowledge check`.
+
+### 2b. No-bundle branch
+
+`docs/specs/<area>.md` + `system-overview.md` + `visuals/` + `reading-map.md`. **One area = one file, forever.**
+
+Same rebuild bar, tech-agnostic rule, nine sections, modes, never-invent in both. Full routing and worked examples: `references/scribing-reference.md ("Map Deltas", "Bundle-mode gate and frontmatter")`.
 
 **Rebuild bar:** given ONLY the spec (Pointers deleted), a stranger rebuilds the same behavior, no code needed. **Tech-agnostic rule:** outside Pointers, no language/framework/library/class/table/file name — business vocabulary only.
 
@@ -37,7 +49,7 @@ Bootstrap is inventory, harvest is meaning. Sync runs AFTER goal-check — the s
 
 ## Capture — the self-triggering law
 
-**Detection is the scribe's own duty, unprompted.** Most settlements are silent — the user confirms a behavior, accepts an explanation, picks an option, moves on — and the agent watches for these itself, every turn, unasked. Do not ask "should I document this?" — announce what settled and where in one line, then do it same turn. **Close-audit, zero exceptions:** at every task close (cell, docs write, quick fix) ask "what settled here?" and either capture it or state "nothing settled" — smallness is never the answer. A user saying "ghi lại" means detection already failed once.
+**Detection is the scribe's own duty, unprompted.** Most settlements are silent — the user confirms a behavior, accepts an explanation, picks an option, moves on — and the agent watches for these itself, every turn, unasked. Do not ask "should I document this?" — announce what settled, then do it same turn. **Close-audit, zero exceptions:** at every task close (cell, docs write, quick fix) ask "what settled here?" and either capture it or state "nothing settled" — smallness is never the answer.
 
 1. Log: `node .bee/bin/bee.mjs decisions log --decision "..." --rationale "..."` — same turn, every lane.
 2. Lane-scaled (never memory-scaled): **high-risk** → full spec merge now, never queued. **Everything else** → one-line stub, `bee.mjs capture add --outcome "..." --did <D-IDs>`, merge deferred to flush.
@@ -47,7 +59,7 @@ Litmus: would this outcome survive outside the chat if the session ended now? A 
 
 ## Merge — nine BA-grade sections
 
-**Purpose → Entry Points & Triggers → Data Dictionary → Behaviors & Operations → Actors & Access → Business Rules → Edge Cases Settled → Open Gaps → Pointers (implementation).** Same nine, same order, for every area shape and for a `bee.area` concept — a concept covers what its subject has content for, never invents a different heading set. Deltas come from evidence only — capped cells, UAT records, worker reports — never `plan.md`, never memory; an unbacked claim is an Open Gap. Before finishing, cover Pointers: could a stranger rebuild this elsewhere? "You'd have to look at the code" is a hole — fix it or file the gap. Full template, rules, gather-sources: `references/scribing-reference.md`.
+**Purpose → Entry Points & Triggers → Data Dictionary → Behaviors & Operations → Actors & Access → Business Rules → Edge Cases Settled → Open Gaps → Pointers (implementation).** Same nine, same order, for every area shape and for a `bee.area` concept — a concept covers what its subject has content for, never invents a different heading set. Deltas come from evidence only — capped cells, UAT records, worker reports — never `plan.md`, never memory; an unbacked claim is an Open Gap. Before finishing: could a stranger rebuild this from Pointers alone? "Look at the code" is a hole — fix it or file the gap. Full template, rules, gather-sources: `references/scribing-reference.md`.
 
 ## Update State
 
@@ -67,13 +79,13 @@ Litmus: would this outcome survive outside the chat if the session ended now? A 
 
 ## Red Flags
 
-- a framework/library/file path above Pointers; an enum without its meaning; a Behavior block that never says what an actor observes
-- spec content copied from plan.md or memory; "I'll write it after compounding" — scribing runs first, while evidence is fresh
+- a framework/library/file path above Pointers; a Behavior block that never says what an actor observes
+- spec content copied from plan.md or memory; "I'll write it after compounding" instead of now
 - a `-v2`/`-new`/date-suffixed spec, or a fresh spec made without checking the reading map
 - a new concept for a claimed subject, or `authoritative_for` copied from a sibling; an area left without regenerating indexes
-- bundle mode decided by eye or `existsSync`; frontmatter typed by hand; harvest answers invented instead of asked
-- a settled outcome nowhere but the chat; a high-risk settlement queued as a stub; a stub or deferred request surviving a flush point unflushed/unfiled
-- a capture that ran only because the user asked, instead of the agent catching it itself; asking "should I document this?" instead of announcing and doing it
+- harvest answers invented instead of asked
+- a settled outcome nowhere but the chat; a stub or deferred request surviving a flush point unfiled
+- a capture triggered only because the user asked, not caught by the agent itself
 - a UI screen visibly changed with its snapshot unchanged and no Open Gap; an area added/removed with `system-overview.md` unsynced
 - treating scribing as UI-only — backend jobs, APIs, integrations, processes are areas too
 
