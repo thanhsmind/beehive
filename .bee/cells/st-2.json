@@ -1,0 +1,71 @@
+{
+  "id": "st-2",
+  "feature": "status-diet",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "refactor",
+  "title": "Worker contract: embed state line, startup uses brief (D2)",
+  "action": "Per CONTEXT D2, in skills/bee-swarming/references/swarming-reference.md Worker Prompt Template: (1) Identity/Inputs gains one orchestrator-filled line 'State at dispatch: phase=<p> feature=<f> gates.execution=<bool>' — the orchestrator copies from its own fresh read, never asks the worker to fetch the full payload; (2) Startup step 2 changes from 'node .bee/bin/bee.mjs status --json' to 'node .bee/bin/bee.mjs status --brief --json' with a half-line note that cells show remains the claim authority. (3) rg for other instruction-surface spots that mandate FULL status at worker startup (bee-executing SKILL.md/references) and align them the same way — only worker-startup mentions; the orchestrator/session-scout full status stays. Meaning otherwise unchanged; fences green; migrated body budgets hold (swarming body has ~12B headroom post-pd-3 — prefer reference-only edits). Vendored regen DEFERRED (wave-barrier ack).",
+  "must_haves": {
+    "truths": [
+      "Template carries the embedded State line + brief startup step; claim authority note present.",
+      "No instruction surface still mandates full status --json at WORKER startup.",
+      "skill_budget_fence + skill_lint + okf_instructions_fence green."
+    ],
+    "prohibitions": [
+      "Do NOT touch orchestrator/session-scout status guidance.",
+      "Do NOT grow any migrated body over budget.",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node scripts/okf_instructions_fence.mjs",
+  "read_first": [
+    "docs/history/status-diet/CONTEXT.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-executing/SKILL.md"
+  ],
+  "files": [
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-executing/SKILL.md",
+    "skills/bee-executing/references/worker-details.md"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at wave close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-st2",
+    "outcome": "Worker contract embeds State-at-dispatch line + status --brief --json at worker startup; cells show remains claim authority. Aligned bee-executing SKILL.md and worker-details.md the same way. Orchestrator/session-scout full status mentions (tier resolution, handoff resume) untouched.",
+    "files_changed": [
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-executing/SKILL.md",
+      "skills/bee-executing/references/worker-details.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T06:22:58.846Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "PASS skill_budget_fence: 18 skill(s) checked, 0 findings; skill_lint OK — skill tree clean; PASS okf_instructions_fence: 18 instruction-surface file(s), 0 unbranched misroutes",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T06:18:22.118Z",
+    "verify_command": "node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node scripts/okf_instructions_fence.mjs",
+    "verified_at": "2026-07-28T06:22:45.587Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T06:22:45.587Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-28T06:18:46.626Z",
+        "acquired_at": "2026-07-28T06:18:22.116Z",
+        "worker": "exec-st2",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}

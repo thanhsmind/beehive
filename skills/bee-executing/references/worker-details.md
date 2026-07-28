@@ -11,7 +11,7 @@ The assigned cell arrives **already claimed** under the worker's nickname — th
 ## Expanded Commands
 
 ```text
-node .bee/bin/bee.mjs status --json
+node .bee/bin/bee.mjs status --brief --json
 node .bee/bin/bee.mjs cells show --id <id>
 node .bee/bin/bee.mjs reservations reserve --agent "<name>" --cell "<id>" --path "<path>" --ttl 3600
 node .bee/bin/bee.mjs cells verify --id <id> --command "<cmd>" --passed true|false [--output-file <f>]

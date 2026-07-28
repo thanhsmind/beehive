@@ -484,6 +484,7 @@ Identity:
 - Assigned cell id: <CELL_ID> (ALREADY CLAIMED for you by the orchestrator before dispatch, per D1 — do NOT run `cells claim`; validate via `cells show`: status claimed, worker <NICKNAME>)
 - Feature: <FEATURE>
 - Model tier: <extraction|generation|ceiling> (model: <MODEL_NAME>)
+- State at dispatch: phase=<PHASE> feature=<FEATURE> gates.execution=<BOOL> (copied from the orchestrator's own fresh read; the worker never re-fetches the full payload for this)
 - Advisor (optional — present only when the advisor resolves and is not the worker's own model, the same-model no-op, AO4/AO5): <ADVISOR_MODEL_OR_CLI_COMMAND> — consult via <TRANSPORT>
 
 Inputs — read these; nothing else will be provided:
@@ -501,7 +502,7 @@ Contract:
 
 Startup:
 1. Read AGENTS.md.
-2. Run node .bee/bin/bee.mjs status --json
+2. Run node .bee/bin/bee.mjs status --brief --json (cheap live check; cells show stays the claim authority, next step).
 3. Validate ownership: node .bee/bin/bee.mjs cells show --id <CELL_ID> (confirm status claimed, worker <NICKNAME>), then read docs/history/<FEATURE>/CONTEXT.md.
 4. Reserve, implement, verify, cap, release, report.
 ```
