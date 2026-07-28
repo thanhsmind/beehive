@@ -251,7 +251,11 @@ await check('checkAskUserQuestion: an exactly-12-char header is left untouched (
 
 await check('checkWrite denies executable/code files under docs/history/ (the .md-only knowledge layer) in every phase (GitHub #17)', async () => {
   // Active work (execution approved) — the intake gate is NOT the reason here.
-  const active = { ...defaultState(), phase: 'validating', approved_gates: { context: true, shape: true, execution: true, review: false } };
+  // D13: 'planning' (a real GATED_PHASES member with execution approved), not
+  // the retired 'validating' — this fixture is passed as an in-memory literal,
+  // never through a disk read, so it never reaches the legacy-phase coercion
+  // and must already name a phase the state machine can actually produce.
+  const active = { ...defaultState(), phase: 'planning', approved_gates: { context: true, shape: true, execution: true, review: false } };
   const shDeny = checkWrite(root, active, 'docs/history/industry-count-company-registered/verify.sh');
   assert(shDeny.allow === false && shDeny.kind === 'docs-history-code', `a .sh under docs/history/ must be denied, got ${JSON.stringify(shDeny)}`);
   assert(/spikes|project|\.md/.test(shDeny.reason), 'the reason should point at .bee/spikes/ or the project scripts');
@@ -1033,7 +1037,7 @@ await check('NET branch 6 — gated phases: exploring/planning deny outside allo
   }
 });
 
-await check('NET branch 7 — swarming reservation: foreign reservation denies with kind reservation naming the holder; own agent and unreserved paths allowed; no agent identity means no check; unknown phase falls through open', async () => {
+await check('NET branch 7 — swarming reservation: foreign reservation denies with kind reservation naming the holder; own agent and unreserved paths allowed; no agent identity means no check; unknown phase denies (D13 tail flip)', async () => {
   const dir = makeStateRepo('bee-net-swarm-');
   try {
     const state = { ...defaultState(), phase: 'swarming', approved_gates: { context: true, shape: true, execution: true, review: false } };
@@ -1054,9 +1058,102 @@ await check('NET branch 7 — swarming reservation: foreign reservation denies w
       if (saved === undefined) delete process.env.BEE_AGENT_NAME;
       else process.env.BEE_AGENT_NAME = saved;
     }
-    // non-terminal, non-gated, non-swarming phase falls through open
+    // D13: a non-terminal, non-gated, non-swarming phase that is also not a
+    // known phase (the state machine can no longer produce it) now denies at
+    // the tail instead of silently falling through to allow — the fail-open
+    // door this decision closes.
     const executing = { ...defaultState(), phase: 'executing', approved_gates: { context: true, shape: true, execution: true, review: false } };
-    assert(checkWrite(dir, executing, 'src/app.ts', 'net-writer').allow === true, 'executing phase falls through to allow');
+    const unknownDeny = checkWrite(dir, executing, 'src/app.ts', 'net-writer');
+    assert(
+      unknownDeny.allow === false && unknownDeny.kind === 'unknown-phase',
+      `an unrecognized phase must deny at the tail, got ${JSON.stringify(unknownDeny)}`,
+    );
+    assert(unknownDeny.reason.includes('executing'), `the deny reason must name the actual unrecognized phase, got: ${unknownDeny.reason}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── D13 (validation-diet): legacy 'validating' phase migration + the ────────
+// narrowed tail deny. The standalone 'validating' stage was retired and
+// merged into 'planning' (vd-1); a repo whose .bee/state.json or
+// .bee/lanes/*.json still names it must keep working, and the guard's
+// fall-through tail must deny any OTHER unrecognized phase while still
+// allowing the four known-but-unhandled phases (reviewing/scribing/
+// compounding/grooming) — never a blanket deny.
+
+await check("D13: a state.json holding legacy phase 'validating' reads as 'planning' via both readState (fail-open) and readStateStrict (state set's pre-mutation reader) — isKnownPhase accepts it, so a live repo can still leave the phase", () => {
+  const dir = makeStateRepo('bee-d13-legacy-state-');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+      schema_version: '1.0',
+      phase: 'validating',
+      feature: 'legacy-feat',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+      workers: [],
+    });
+    assert(readState(dir).phase === 'planning', `readState must coerce 'validating' to 'planning', got ${readState(dir).phase}`);
+    const strict = laneStore.readStateStrict(dir);
+    assert(strict.phase === 'planning', `readStateStrict must coerce 'validating' to 'planning', got ${strict.phase}`);
+    assert(
+      laneStore.isKnownPhase(strict.phase) === true,
+      "the coerced phase must satisfy isKnownPhase — this is exactly bee.mjs state set's pre-mutation refusal check",
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check("D13: a LANE record (.bee/lanes/*.json) holding legacy phase 'validating' coerces on the same read path, not just the default store — readLane, readLaneStrict, and checkWrite's own resolvePipeline-sourced phase (via a session bound to the lane) all see 'planning'", async () => {
+  const dir = makeStateRepo('bee-d13-legacy-lane-');
+  try {
+    writeLaneFixture(dir, 'legacy-lane-feat', {
+      phase: 'validating',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+    });
+    assert(laneStore.readLane(dir, 'legacy-lane-feat').phase === 'planning', 'readLane must coerce the lane phase');
+    assert(laneStore.readLaneStrict(dir, 'legacy-lane-feat').phase === 'planning', 'readLaneStrict must coerce the lane phase');
+
+    // The write guard's own phase read (guards.mjs:1240) sources a lane
+    // record through resolveWriteRecord -> resolvePipeline for a session
+    // bound to that lane — prove the coercion reaches THAT path too, not
+    // just a direct readLane/readLaneStrict call.
+    laneBinding.createSession(dir, { id: 'sess-legacy-lane' });
+    laneBinding.bindSessionLane(dir, 'sess-legacy-lane', 'legacy-lane-feat');
+    const viaGuard = checkWrite(dir, defaultState(), 'src/legacy.ts', null, { sessionId: 'sess-legacy-lane' });
+    assert(
+      viaGuard.allow === true,
+      `an execution-approved coerced-to-'planning' lane must allow a source write, got ${JSON.stringify(viaGuard)}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('D13: checkWrite still allows writes when phase is reviewing, scribing, compounding, or grooming — real PHASES members with no dedicated branch, so the narrowed tail deny must not catch them (no blanket deny)', () => {
+  const dir = makeStateRepo('bee-d13-unhandled-known-');
+  try {
+    for (const phase of ['reviewing', 'scribing', 'compounding', 'grooming']) {
+      const state = { ...defaultState(), phase };
+      const verdict = checkWrite(dir, state, 'src/app.ts');
+      assert(verdict.allow === true, `phase '${phase}' must still allow at the tail, got ${JSON.stringify(verdict)}`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('D13: a repo with no .bee/state.json at all is unaffected by the tail narrowing — the missing/empty phase still collapses to idle and hits the pre-existing TERMINAL_PHASES intake branch, never the new unknown-phase deny', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-d13-no-state-'));
+  try {
+    assert(!fs.existsSync(path.join(dir, '.bee', 'state.json')), 'fixture sanity: no state.json must exist');
+    const state = readState(dir);
+    assert(state.phase === 'idle', `readState with no file on disk must default to idle, got ${state.phase}`);
+    const verdict = checkWrite(dir, state, 'src/app.ts');
+    assert(
+      verdict.allow === false && verdict.kind === 'intake',
+      `a fresh repo with no state.json must hit the intake gate, never the unknown-phase deny, got ${JSON.stringify(verdict)}`,
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

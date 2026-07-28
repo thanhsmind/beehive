@@ -1,0 +1,95 @@
+{
+  "id": "vd-2",
+  "feature": "validation-diet",
+  "title": "Migrate legacy validating state and close the write guard's fail-open tail",
+  "lane": "high-risk",
+  "status": "capped",
+  "change_class": "migration",
+  "regen_obligation_ack": "wave-barrier",
+  "deps": [
+    "vd-1"
+  ],
+  "decisions": [
+    "D13"
+  ],
+  "files": [
+    "packages/bee/lib/state.mjs",
+    "packages/bee/lib/guards.mjs",
+    ".bee/bin/lib/state.mjs",
+    ".bee/bin/lib/guards.mjs",
+    "packages/bee/tests/test_guards.mjs",
+    "packages/bee/tests/test_bee_write_guard_hook.mjs"
+  ],
+  "read_first": [
+    "packages/bee/lib/guards.mjs",
+    "packages/bee/lib/state.mjs",
+    "docs/history/validation-diet/CONTEXT.md"
+  ],
+  "action": "Per D13, two coupled changes. (1) Coerce a legacy phase 'validating' read from .bee/state.json OR .bee/lanes/*.json to 'planning', following the existing precedent at lib/state.mjs:3299 (isKnownPhase(phase) ? phase : ...). The lane path is not optional (advisor finding 3): the phase read at guards.mjs:1240 can arrive from a lane/workflow record via resolveWriteRecord -> resolvePipeline (guards.mjs:256-265, state.mjs:1813), so an uncoerced legacy lane would hit the new deny. Without the coercion a live repo cannot leave the phase at all: bee.mjs:2931-2934 refuses state set before any write when the PRE-mutation phase is unknown, and state set is the only verb that changes phase. (2) The write guard's true fall-through tail is lib/guards.mjs:1366 -- NOT :1318, which is the GATED_PHASES branch's own local return. Flip it from return { allow: true } to a deny, NARROWED to !isKnownPhase(phase) using the exported helper at lib/state.mjs:54-56. The narrowing is mandatory: 'reviewing', 'scribing', 'compounding' and 'grooming' are real PHASES members matched by no branch, they reach the tail today, and that path carries no underAllowedPrefix or idle_gate carve-out -- a blanket deny would hard-block every write during ordinary post-approval work. Fresh and corrupt repos are already safe upstream: guards.mjs:1240 collapses missing/empty phase to 'idle', handled by TERMINAL_PHASES at :1294. This cell also owns the fixtures its own verify trips on: test_guards.mjs:1036-1059 ('unknown phase falls through open', fixture phase 'executing') flips from asserting allow to asserting deny -- that flip is THIS cell's behavior change, not vd-4's. Twins move in the same commit.",
+  "must_haves": {
+    "truths": [
+      "A state file holding phase 'validating' reads as 'planning' and state set succeeds from it",
+      "A LANE record (.bee/lanes/*.json) holding phase 'validating' coerces on the same read path, not just the default store",
+      "checkWrite denies a source write when phase is a non-empty string outside KNOWN_PHASES",
+      "checkWrite still allows writes when phase is reviewing, scribing, compounding or grooming",
+      "A repo with no .bee/state.json is unaffected",
+      "node packages/bee/tests/test_guards.mjs exits 0"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/lib/guards.mjs",
+        "substantive": "tail returns a deny guarded by !isKnownPhase, no blanket deny"
+      },
+      {
+        "path": "packages/bee/lib/state.mjs",
+        "substantive": "legacy phase coercion on the read path, covering the lane path"
+      }
+    ],
+    "key_links": [
+      "the deny reuses isKnownPhase exported from lib/state.mjs, never a second hardcoded phase list",
+      "the coercion sits where resolvePipeline (state.mjs:1813) and the default store both pass through, per guards.mjs:256-265"
+    ],
+    "prohibitions": [
+      "No blanket deny on the tail",
+      "No new hardcoded phase list -- derive from KNOWN_PHASES",
+      "No change to the TERMINAL_PHASES or GATED_PHASES branches"
+    ]
+  },
+  "verify": "node packages/bee/tests/test_guards.mjs && node packages/bee/tests/test_bee_write_guard_hook.mjs",
+  "trace": {
+    "worker": "vd2-worker",
+    "outcome": "D13: coerced legacy phase 'validating' -> 'planning' at every state/lane read (readState, readStateStrict, laneRecordFrom shared by readLane+readLaneStrict), and closed checkWrite's true fall-through tail (guards.mjs:1366) to a deny narrowed to !isKnownPhase(phase) — reviewing/scribing/compounding/grooming still allow, no blanket deny, TERMINAL_PHASES/GATED_PHASES untouched. Flipped the one fixture the tail-flip trips (test_guards.mjs unknown-phase test) and added 4 new D13 tests. Mirrored packages/bee/lib/{state,guards}.mjs into .bee/bin/lib/ last, in this same commit.",
+    "files_changed": [
+      "packages/bee/lib/state.mjs",
+      "packages/bee/lib/guards.mjs",
+      ".bee/bin/lib/state.mjs",
+      ".bee/bin/lib/guards.mjs",
+      "packages/bee/tests/test_guards.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T15:24:30.081Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"red_failure_evidence\": \"BEFORE (git show bf1042e8021cb50f638d9f2a9a29b27b0e41854a:packages/bee/lib/guards.mjs, lines 1363-1367 -- checkWrite's true fall-through tail prior to this cell): the function ended with an UNCONDITIONAL return { allow: true } after the swarming branch, reached by any phase that is not TERMINAL_PHASES, not GATED_PHASES, and not 'swarming' -- i.e. every unrecognized/legacy/typo'd phase silently allowed EVERY source write with no deny path at all. The same commit's test_guards.mjs (lines 1057-1059) pinned this as intended behavior: a fixture using phase 'executing' (a string not even in the PHASES enum) asserted checkWrite(...).allow === true, 'executing phase falls through to allow'. Running that exact assertion against the OLD code (git show HEAD, prior to this cell) passes green -- proving the fail-open door concretely, not by inspection alone. AFTER this cell's guards.mjs change (the tail now returns a deny narrowed to !isKnownPhase(phase)), the SAME fixture now asserts allow===false && kind==='unknown-phase' and passes -- that flip from green-on-allow to green-on-deny is this cell's own behavior change, verified by test_guards.mjs's current run (62 passed, 0 failed) recorded via cells verify just above.\",\n  \"deliberate_exceptions\": []\n}\n",
+    "verify_output": "test_guards.mjs: 62 passed, 0 failed (includes flipped NET branch 7 unknown-phase-denies assertion and 4 new D13 tests: legacy state.json coercion+isKnownPhase, legacy lane coercion via readLane/readLaneStrict/checkWrite+session, four known-but-unhandled phases still allow, no-state.json repo unaffected). test_bee_write_guard_hook.mjs: 33 passed, 0 failed (end-to-end hook subprocess tests, vendoring packages/bee/lib source — unaffected by the guard change since none of its fixtures use an unknown phase). Both runs exit 0.",
+    "verify_passed": true,
+    "claim_session": "175d1343-db84-4593-8e3e-42e79c3e3d73",
+    "claimed_at": "2026-07-28T15:10:14.641Z",
+    "verify_command": "node packages/bee/tests/test_guards.mjs && node packages/bee/tests/test_bee_write_guard_hook.mjs",
+    "verified_at": "2026-07-28T15:23:59.315Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T15:23:59.315Z",
+        "claim_session": "175d1343-db84-4593-8e3e-42e79c3e3d73",
+        "claimed_at": "2026-07-28T15:10:14.639Z",
+        "acquired_at": "2026-07-28T15:10:14.639Z",
+        "worker": "vd2-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

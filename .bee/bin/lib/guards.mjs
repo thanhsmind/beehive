@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { findConflicts, findSessionConflicts, listReservations, reservationsPath, isHardConflict } from './reservations.mjs';
-import { readConfig, resolveContext, resolvePipeline } from './state.mjs';
+import { readConfig, resolveContext, resolvePipeline, isKnownPhase } from './state.mjs';
 // xwh-4: cross-worktree foreign-hold consultation. worktree-holds.mjs imports
 // only fsutil/lock/reservations.mjs — no cycle (same discipline cells.mjs's
 // own findForeignHolds import documents).
@@ -1361,6 +1361,28 @@ export function checkWrite(root, state, relPath, agentName = null, { sessionId =
       }
     }
     return { allow: true };
+  }
+
+  // D13 (validation-diet) — the true fall-through tail. Every phase in the
+  // enum is now handled explicitly by a branch above OR is a deliberately
+  // unhandled-but-KNOWN phase ('reviewing', 'scribing', 'compounding',
+  // 'grooming' — real PHASES members with no dedicated branch, matching
+  // ordinary post-approval scribing/compounding work that carries no
+  // underAllowedPrefix/idle_gate carve-out, so a blanket deny here would
+  // hard-block it). Narrowed to !isKnownPhase(phase) so those four keep
+  // falling through to allow exactly as before — only a phase the state
+  // machine cannot actually produce (missing/legacy/typo'd) is denied,
+  // closing the fail-open door D3/D4 identified as the root cause: before
+  // this, ANY unrecognized phase silently allowed every source write.
+  if (!isKnownPhase(phase)) {
+    return {
+      allow: false,
+      kind: 'unknown-phase',
+      reason:
+        `bee phase guard: phase "${phase}" is not a recognized phase — writing "${normalized}" is refused rather ` +
+        'than silently allowed through an unhandled state. FIX: restore a valid phase (bee state set), or if this ' +
+        'is a legitimate new phase, add explicit dispatch for it in checkWrite.',
+    };
   }
 
   return { allow: true };

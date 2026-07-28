@@ -54,6 +54,31 @@ export function isKnownPhase(phase) {
   return KNOWN_PHASES.includes(phase);
 }
 
+// D13 (validation-diet) — a phase value a pre-cut repo's file still carries
+// (removed from PHASES/KNOWN_PHASES by the merge of the standalone
+// 'validating' stage into 'planning') is coerced, at read, to the phase that
+// now carries its role — never re-derived per call site. Mirrors the
+// isKnownPhase(phase) ? phase : 'idle' read-coercion precedent at
+// ensureWorkflowRecordForFeature below, but preserves the record's INTENT
+// (mid-execution-gate work, which 'planning' now carries under the merged
+// gate) rather than resetting it to 'idle'.
+//
+// Applied at readState/readStateStrict (the default store) AND at
+// laneRecordFrom (the single merge point shared by readLane AND
+// readLaneStrict, so the lane path gets it for free rather than as a second
+// copy) — the two read surfaces D13 names. This is why both bee.mjs's
+// `state set` pre-mutation isKnownPhase(state.phase) refusal (resolveMutation
+// Target reads through readStateStrict/readLaneStrict) and the write guard's
+// resolvePipeline-sourced phase (guards.mjs, via readState/readLane) see the
+// coerced value automatically: neither module re-implements the mapping.
+const LEGACY_PHASE_COERCIONS = { validating: 'planning' };
+
+export function coerceLegacyPhase(phase) {
+  return Object.prototype.hasOwnProperty.call(LEGACY_PHASE_COERCIONS, phase)
+    ? LEGACY_PHASE_COERCIONS[phase]
+    : phase;
+}
+
 // chain-integrity D1-REVISED — the chain's tail is guarded at the DOOR, not by
 // phase name. The enum check above is the ONLY thing that used to stand between
 // `swarming` and `compounding-complete`, so a hand-typed close asserted that
@@ -1087,6 +1112,7 @@ export function readState(root) {
   if (!state || typeof state !== 'object' || Array.isArray(state)) return defaultState();
   const merged = { ...defaultState(), ...state };
   merged.approved_gates = { ...defaultState().approved_gates, ...(state.approved_gates || {}) };
+  merged.phase = coerceLegacyPhase(merged.phase); // D13: legacy 'validating' -> 'planning'
   return merged;
 }
 
@@ -1140,6 +1166,7 @@ export function readStateStrict(root) {
   }
   const merged = { ...defaultState(), ...parsed };
   merged.approved_gates = { ...defaultState().approved_gates, ...(parsed.approved_gates || {}) };
+  merged.phase = coerceLegacyPhase(merged.phase); // D13: legacy 'validating' -> 'planning'
   return merged;
 }
 
@@ -1697,6 +1724,7 @@ function laneRecordFrom(feature, parsed) {
   if (parsed.feature !== feature) return null;
   const merged = { ...defaultLaneRecord(feature), ...parsed };
   merged.approved_gates = { ...defaultLaneRecord(feature).approved_gates, ...(parsed.approved_gates || {}) };
+  merged.phase = coerceLegacyPhase(merged.phase); // D13: legacy 'validating' -> 'planning', shared by readLane + readLaneStrict
   return merged;
 }
 
