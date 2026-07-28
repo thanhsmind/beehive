@@ -590,3 +590,4 @@
 {"ts":"2026-07-28T09:03:02.225Z","type":"friction","title":"CONFIRMED WORK LOSS: sibling git reset wiped a live worker's uncommitted edit mid-task","detail":"exec-w24 (bee-compounding) lost its in-progress SKILL.md edit to a sibling's reset sequence while holding a valid file reservation; recovered only because the worker rewrote and committed fast. Reflog shows repeated 'reset: moving to <sha>' between sibling commits. Upgrades the earlier 'no data lost' assessment. Hook denial of whole-tree git verbs under multi-worker state is now the fix, not a nicety.","severity":"P1","layer":"hooks","feature":"skill-diet-wave2"}
 {"ts":"2026-07-28T09:22:24.475Z","kind":"pbi","event":"status","id":"p-3d6877c2","status":"done"}
 {"ts":"2026-07-28T09:22:24.553Z","kind":"pbi","event":"status","id":"p-7f564c5e","status":"done"}
+{"ts":"2026-07-28T09:28:29.006Z","kind":"pbi","event":"status","id":"p-0a47ea8d","status":"done"}

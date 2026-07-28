@@ -1,0 +1,54 @@
+{
+  "id": "cfl-1",
+  "feature": "check-filter",
+  "lane": "small",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "title": "BEE_CHECK_ONLY name filter in the shared check() helper",
+  "action": "PROBLEM (user-raised, measured): a cell touching one handler still pays a 346-check suite because a suite is all-or-nothing. Under the feature-verify law MAIN runs the suites, so the cost lands on the boundary run and on every fix-cell re-verify. FIX: add a name-pattern filter to the shared helper `check()` in scripts/lib/test-fixture.mjs (31 suites import it): when process.env.BEE_CHECK_ONLY is set, a check whose NAME does not match runs no body and is counted as skipped, not passed; matching is a case-insensitive substring by default, and a value wrapped in slashes (/re/) is treated as a regex. The summary line reports skips explicitly — e.g. 'N passed, M failed, K skipped (BEE_CHECK_ONLY=...)' — so a filtered run can never be mistaken for a full one, and a filtered run with ZERO matches exits non-zero with a typed message (a filter that matches nothing is a mistake, never a green). Unfiltered behavior must be byte-identical: no env var, no skip counter, same output as today. Also export the filter predicate so suites with their own local check() (22 of them) can adopt it later — do NOT convert them in this cell. Then document it in one line where the verify commands are described (scripts/lib/test-fixture.mjs header comment is enough). R82: run NO test suites — MAIN verifies at close. GIT SAFETY (shared checkout): commit through your own temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref) or `git add -N` then a path-scoped commit; NEVER plain `git add`, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "With BEE_CHECK_ONLY unset, every suite importing the helper behaves byte-identically to today (same counts, same summary line).",
+      "With BEE_CHECK_ONLY set to a substring, only matching checks execute; non-matching are counted as skipped and named in the summary.",
+      "A /regex/ value is honoured; a filter matching zero checks exits non-zero with a typed message.",
+      "The predicate is exported for later adoption by suites with a local check()."
+    ],
+    "prohibitions": [
+      "Do NOT change any suite's assertions.",
+      "Do NOT convert the 22 suites with a local check() in this cell.",
+      "Do NOT let a filtered run report itself as a full pass.",
+      "Do NOT run any test suite (R82)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs && node packages/bee/tests/test_misc.mjs && node scripts/tests/test_run_verify_impacted.mjs",
+  "read_first": [
+    "scripts/lib/test-fixture.mjs",
+    "scripts/tests/test_run_verify_impacted.mjs"
+  ],
+  "files": [
+    "scripts/lib/test-fixture.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-cfl1",
+    "outcome": "Added BEE_CHECK_ONLY name-pattern filter (substring or /regex/) to the shared check() helper in scripts/lib/test-fixture.mjs: non-matching checks are skipped and named in the summary, zero matches is a typed non-zero exit, unfiltered behavior is byte-identical, and checkOnlyPredicate is exported for the 22 suites with local check() to adopt later (not converted in this cell).",
+    "files_changed": [
+      "scripts/lib/test-fixture.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T09:26:18.421Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T09:23:51.000Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "generation"
+}
