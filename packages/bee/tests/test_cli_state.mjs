@@ -3359,13 +3359,29 @@ await check('slice-tail P4: `state scribing-run` — the door the chain actually
   }
 });
 
-await check('slice-tail P4: the guard is scoped to the exit from swarming — it never fires on a feature that is not in swarming', async () => {
+// review-p1-fixes p2-1 INVERTS this check. It used to assert that the guard
+// "is scoped to the exit from swarming — it never fires on a feature that is
+// not in swarming", and that scoping was the bug: the guard's own scribing-run
+// call site fires from `reviewing` and `scribing` too, and a delta re-reviewer
+// walked the sibling feature-verify door out through `compounding`. Debt lives
+// on CELLS, which are phase-independent, so the guarded set is derived now —
+// EVERY departure asks (isDebtGuardedDeparture, lib/state.mjs). The exemption
+// that remains, and the one this check now pins alongside the refusal, is a
+// literal no-op re-set of the same phase.
+await check('slice-tail P4 / p2-1: an unfinished test cell holds EVERY departure, not just the exit from swarming — while a same-phase re-set stays exempt', async () => {
   const dir = makeStateRepo('bee-p4-not-swarming-');
   try {
     writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'planning', feature: 'demo' });
-    addCell(dir, makeCell('p4-test-elsewhere', { feature: 'demo', change_class: 'test', lane: 'standard', must_haves: { truths: ['p4-test-elsewhere: outside swarming the guard stays silent'] } }));
-    const result = await runBeeState(dir, ['set', '--owner', 'planning', '--phase', 'validating']);
-    assert(result.status === 0, `planning->validating is untouched by P4, got ${result.status}: ${result.stderr}`);
+    addCell(dir, makeCell('p4-test-elsewhere', { feature: 'demo', change_class: 'test', lane: 'standard', must_haves: { truths: ['p4-test-elsewhere: an open test cell is debt in every phase, not only in swarming'] } }));
+    const refused = await runBeeState(dir, ['set', '--owner', 'planning', '--phase', 'validating']);
+    assert(refused.status !== 0, `planning->validating must be guarded too, got ${refused.status}: ${refused.stdout}`);
+    assert(/p4-test-elsewhere/.test(refused.stderr + refused.stdout), `refusal must name the open test cell, got ${refused.stderr}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'planning',
+      'a refused departure must leave the phase untouched',
+    );
+    const noop = await runBeeState(dir, ['set', '--owner', 'planning', '--phase', 'planning']);
+    assert(noop.status === 0, `a literal no-op re-set is not a departure, got ${noop.status}: ${noop.stderr}`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

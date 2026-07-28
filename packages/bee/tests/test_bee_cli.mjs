@@ -27,7 +27,7 @@ import { validate, isValidParameterSchema } from '../lib/validate-args.mjs';
 import { addCell, updateCell, deriveRegenGuards, regenObligationRefusal } from '../lib/cells.mjs';
 import { createSession, bindSessionLane } from '../lib/claims.mjs';
 import { writeJsonAtomic, hashFile, appendJsonl } from '../lib/fsutil.mjs';
-import { defaultState, writeState, writeLane, BEE_VERSION, GATE_NAMES } from '../lib/state.mjs';
+import { defaultState, writeState, writeLane, BEE_VERSION, GATE_NAMES, KNOWN_PHASES } from '../lib/state.mjs';
 import { listWorkflows, createWorkflow } from '../lib/workflow-store.mjs';
 import { buildSessionPreamble } from '../lib/inject.mjs';
 import { mirrorHold, findForeignHolds } from '../lib/worktree-holds.mjs';
@@ -2304,6 +2304,294 @@ for (const fromPhase of ['reviewing', 'scribing']) {
     }
   });
 }
+
+// ─── review-p1-fixes p2-1: guard every DEPARTURE; unreadable ≠ clean ───────
+//
+// p1-3 (above) patched the two doors the first panel named, and a delta
+// re-reviewer immediately walked through a third: the guard's ALLOWLIST of
+// origin phases (SCRIBING_RUN_FROM) did not include `compounding`, so a cell
+// capped `--feature-verify-pending` there left through
+// `compounding -> compounding-complete` and then `state start-feature`, which
+// destroyed the relocated proof outright. Two more of the same class came with
+// it: guardTestCellDebt still read `from !== 'swarming'` while its own
+// scribing-run call site fires from every SCRIBING_RUN_FROM phase, and both
+// guards treated an UNREADABLE cell store as "no debt".
+//
+// These checks pin the inverted rule rather than the three specific holes:
+// debt is cleared by EVIDENCE, never by the absence of evidence — so every
+// departure from every phase asks, every door asks the same question, and a
+// store bee cannot read is unknown debt, not zero debt.
+
+function writeTestClassCell(dir, id, feature, extra = {}) {
+  writeJsonAtomic(path.join(dir, '.bee', 'cells', `${id}.json`), {
+    id,
+    feature,
+    change_class: 'test',
+    status: 'open',
+    trace: {},
+    ...extra,
+  });
+}
+
+function writeCappedBehaviorCell(dir, id, feature) {
+  writeJsonAtomic(path.join(dir, '.bee', 'cells', `${id}.json`), {
+    id,
+    feature,
+    change_class: 'behavior',
+    status: 'capped',
+    files: ['src/thing.js'],
+    trace: { capped_at: new Date().toISOString(), verify_passed: true },
+  });
+}
+
+await check('p2-1: THE DELTA-REVIEW REPRO — a cap taken in `compounding` no longer walks out through `compounding -> compounding-complete` (and --waive-compounding does not lift it)', async () => {
+  const dir = makeFeatureVerifyRepo('p21repro', 'compounding');
+  try {
+    writePendingCappedCell(dir, 'p21-1', 'p21repro', new Date().toISOString());
+    const refused = await runBee(
+      ['state', 'set', '--owner', 'compounding', '--phase', 'compounding-complete', '--waive-compounding', '--json'],
+      dir,
+    );
+    assert(refused.status !== 0, 'the reviewer\'s exact repro must now be refused at the first door it reaches');
+    const out = refused.stdout + refused.stderr;
+    assert(/p21-1/.test(out), `refusal must name the pending cell, got: ${out}`);
+    assert(
+      /refusing to leave phase \W{0,2}compounding\W{0,3} for \W{0,2}compounding-complete/.test(out),
+      `refusal must name the real originating phase, not an allowlisted one, got: ${out}`,
+    );
+    assert(/NO feature-verify record exists/.test(out), `refusal must say why the door is shut, got: ${out}`);
+    assert(/--result green/.test(out), `refusal must carry the runnable FIX, got: ${out}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'compounding',
+      'a refused close must leave the phase untouched — no partial write',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The guarded set is DERIVED (isDebtGuardedDeparture), so this is not a list
+// of the phases somebody remembered: it is every phase in the enum. A phase
+// added tomorrow inherits the door instead of escaping it.
+for (const fromPhase of KNOWN_PHASES) {
+  // Any target that is not `fromPhase` itself — a same-phase re-set is the one
+  // documented exemption, and is pinned by its own check below.
+  const targetPhase = fromPhase === 'idle' ? 'exploring' : 'idle';
+  await check(`p2-1: no phase escapes the feature-verify door — a pending cap blocks the departure from "${fromPhase}"`, async () => {
+    const dir = makeFeatureVerifyRepo(`p21all-${fromPhase}`, fromPhase);
+    try {
+      writePendingCappedCell(dir, `p21all-${fromPhase}`, `p21all-${fromPhase}`, new Date().toISOString());
+      const refused = await runBee(['state', 'set', '--owner', fromPhase, '--phase', targetPhase, '--json'], dir);
+      assert(refused.status !== 0, `a pending cap must block the departure from "${fromPhase}"`);
+      const out = refused.stdout + refused.stderr;
+      assert(new RegExp(`p21all-${fromPhase}`).test(out), `refusal must name the pending cell, got: ${out}`);
+      assert(
+        JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === fromPhase,
+        'a refused departure must leave the phase untouched',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+await check('p2-1: a no-op re-set is still not a departure — the same phase re-set passes over a pending cap', async () => {
+  const dir = makeFeatureVerifyRepo('p21noop', 'swarming');
+  try {
+    writePendingCappedCell(dir, 'p21noop-1', 'p21noop', new Date().toISOString());
+    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'swarming', '--json'], dir);
+    assert(ok.status === 0, `a literal no-op re-set must stay exempt, got: ${ok.stdout}${ok.stderr}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+for (const fromPhase of ['reviewing', 'scribing']) {
+  await check(`p2-1: the TEST-CELL door fires from "${fromPhase}" too — scribing-run refused over an open test cell (F2)`, async () => {
+    const dir = makeFeatureVerifyRepo(`p21tc-${fromPhase}`, fromPhase);
+    try {
+      writeCappedBehaviorCell(dir, `p21tc-b-${fromPhase}`, `p21tc-${fromPhase}`);
+      writeTestClassCell(dir, `p21tc-t-${fromPhase}`, `p21tc-${fromPhase}`);
+      const refused = await runBee(
+        ['state', 'scribing-run', '--feature', `p21tc-${fromPhase}`, '--areas', 'demo', '--next-action', 'x', '--json'],
+        dir,
+      );
+      assert(refused.status !== 0, `scribing-run from "${fromPhase}" must refuse over an open test cell`);
+      const out = refused.stdout + refused.stderr;
+      assert(new RegExp(`p21tc-t-${fromPhase}`).test(out), `refusal must name the open test cell, got: ${out}`);
+      assert(/not green/.test(out), `refusal must be the "not green" branch, got: ${out}`);
+      assert(
+        JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === fromPhase,
+        'a refused scribing-run must leave the phase untouched — no last_scribing_run stamped',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+await check('p2-1: a test cell capped with a FAILING recorded verify blocks scribing-run from `reviewing` exactly like an open one', async () => {
+  const dir = makeFeatureVerifyRepo('p21red', 'reviewing');
+  try {
+    writeCappedBehaviorCell(dir, 'p21red-b', 'p21red');
+    writeTestClassCell(dir, 'p21red-t', 'p21red', {
+      status: 'capped',
+      trace: { capped_at: new Date().toISOString(), verify_passed: false },
+    });
+    const refused = await runBee(
+      ['state', 'scribing-run', '--feature', 'p21red', '--areas', 'demo', '--next-action', 'x', '--json'],
+      dir,
+    );
+    assert(refused.status !== 0, 'a capped-RED test cell must block the scribing-run door');
+    const out = refused.stdout + refused.stderr;
+    assert(/p21red-t/.test(out) && /FAILING recorded verify/.test(out), `refusal must name the red test cell, got: ${out}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p2-1: start-feature REFUSES while the outgoing feature holds pending feature-verify caps — closing must not erase the obligation', async () => {
+  const dir = makeFeatureVerifyRepo('p21out', 'compounding-complete');
+  try {
+    writePendingCappedCell(dir, 'p21out-1', 'p21out', new Date().toISOString());
+    const refused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
+    assert(refused.status !== 0, 'starting a new feature over the outgoing one\'s pending caps must refuse');
+    const out = refused.stdout + refused.stderr;
+    assert(/p21out-1/.test(out), `refusal must name the pending cell, got: ${out}`);
+    assert(/abandons feature/.test(out) && /p21out/.test(out), `refusal must name the outgoing feature, got: ${out}`);
+    assert(/--result green/.test(out), `refusal must carry the runnable FIX, got: ${out}`);
+    const after = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
+    assert(after.feature === 'p21out', `a refused start must make ZERO mutations, got feature ${after.feature}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p2-1: start-feature REFUSES while the outgoing feature still owes its consolidated test cell', async () => {
+  const dir = makeFeatureVerifyRepo('p21outtc', 'compounding-complete');
+  try {
+    writeCappedBehaviorCell(dir, 'p21outtc-b', 'p21outtc');
+    const refused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
+    assert(refused.status !== 0, 'test-cell debt on the outgoing feature must block a new start too');
+    const out = refused.stdout + refused.stderr;
+    assert(/p21outtc-b/.test(out), `refusal must name the uncovered behavior cell, got: ${out}`);
+    assert(/NO consolidated test cell/.test(out), `refusal must be the "no test cell at all" branch, got: ${out}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'p21outtc',
+      'a refused start must make ZERO mutations',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p2-1: start-feature still STARTS when the outgoing feature is debt-free — a guard, not a wall', async () => {
+  const dir = makeFeatureVerifyRepo('p21clean', 'compounding-complete');
+  try {
+    writeCappedBehaviorCell(dir, 'p21clean-b', 'p21clean');
+    writeTestClassCell(dir, 'p21clean-t', 'p21clean', {
+      status: 'capped',
+      trace: { capped_at: new Date().toISOString(), verify_passed: true },
+    });
+    const ok = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
+    assert(ok.status === 0, `a debt-free outgoing feature must not block the next start, got: ${ok.stdout}${ok.stderr}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'beta',
+      'the start must actually land once the door is clear',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p2-1: an UNREADABLE cell store REFUSES the phase door, naming the store — unknown debt is never zero debt (F5 class)', async () => {
+  const dir = makeFeatureVerifyRepo('p21unread', 'swarming');
+  try {
+    writePendingCappedCell(dir, 'p21unread-1', 'p21unread', new Date().toISOString());
+    fs.writeFileSync(path.join(dir, '.bee', 'cells', 'p21unread-2.json'), '{ not json at all', 'utf8');
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
+    assert(refused.status !== 0, 'an unreadable cell store must refuse, never pass as "no debt"');
+    const out = refused.stdout + refused.stderr;
+    assert(/UNREADABLE/.test(out), `refusal must say the store is unreadable, got: ${out}`);
+    assert(/p21unread-2.json/.test(out) && /malformed JSON/.test(out), `refusal must name the unreadable file, got: ${out}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'swarming',
+      'a refused departure must leave the phase untouched',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p2-1: an UNREADABLE cell store REFUSES start-feature too — both doors ask the same question', async () => {
+  const dir = makeFeatureVerifyRepo('p21unread2', 'compounding-complete');
+  try {
+    fs.writeFileSync(path.join(dir, '.bee', 'cells', 'p21unread2-1.json'), '{ not json at all', 'utf8');
+    const refused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
+    assert(refused.status !== 0, 'start-feature must refuse over a store it cannot read');
+    const out = refused.stdout + refused.stderr;
+    assert(/UNREADABLE/.test(out) && /p21unread2-1.json/.test(out), `refusal must name the unreadable store, got: ${out}`);
+    assert(
+      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'p21unread2',
+      'a refused start must make ZERO mutations',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p2-1: an unreadable cell DIRECTORY refuses as well — the failure mode the old `catch { return; }` swallowed', async () => {
+  if (typeof process.getuid === 'function' && process.getuid() === 0) return; // root reads through chmod 000
+  const dir = makeFeatureVerifyRepo('p21chmod', 'swarming');
+  try {
+    writePendingCappedCell(dir, 'p21chmod-1', 'p21chmod', new Date().toISOString());
+    fs.chmodSync(path.join(dir, '.bee', 'cells'), 0o000);
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
+    fs.chmodSync(path.join(dir, '.bee', 'cells'), 0o755);
+    assert(refused.status !== 0, 'an unreadable cells directory must refuse, never read as "no debt"');
+    const out = refused.stdout + refused.stderr;
+    assert(/UNREADABLE/.test(out) && /EACCES/.test(out), `refusal must name the directory failure, got: ${out}`);
+  } finally {
+    try {
+      fs.chmodSync(path.join(dir, '.bee', 'cells'), 0o755);
+    } catch {
+      /* already restored */
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p2-1: a MISSING cell store is the one honest zero — a repo with no .bee/cells at all departs freely', async () => {
+  const dir = makeFeatureVerifyRepo('p21nostore', 'swarming');
+  try {
+    fs.rmSync(path.join(dir, '.bee', 'cells'), { recursive: true, force: true });
+    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
+    assert(ok.status === 0, `a store that never existed holds zero cells — that is evidence, got: ${ok.stdout}${ok.stderr}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('p2-1: gate_bypass "total" lifts none of it — the compounding close door and the start-feature door both still refuse', async () => {
+  const dir = makeFeatureVerifyRepo('p21bypass', 'compounding');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total' });
+    writePendingCappedCell(dir, 'p21bypass-1', 'p21bypass', new Date().toISOString());
+    const closeRefused = await runBee(
+      ['state', 'set', '--owner', 'compounding', '--phase', 'compounding-complete', '--waive-compounding', '--json'],
+      dir,
+    );
+    assert(closeRefused.status !== 0, 'bypass "total" must not lift the close door — it is a mechanical precondition');
+    assert(/p21bypass-1/.test(closeRefused.stdout + closeRefused.stderr), 'the close refusal must still name the pending cell');
+
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'compounding-complete', feature: 'p21bypass' });
+    const startRefused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
+    assert(startRefused.status !== 0, 'bypass "total" must not lift the start-feature door either');
+    assert(/p21bypass-1/.test(startRefused.stdout + startRefused.stderr), 'the start refusal must still name the pending cell');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 // ─── review-p1-fixes p1-3 (F5): a failed resolution must NARROW, not widen ──
 // resolveActiveFeatureForWorkflowsClose swallowed every error into null, and
