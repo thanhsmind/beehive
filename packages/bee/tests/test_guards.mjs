@@ -1016,10 +1016,10 @@ await check('NET branch 5 — terminal-phase intake: idle and compounding-comple
   }
 });
 
-await check('NET branch 6 — gated phases: exploring/planning/validating deny outside allowed prefixes with kind gate; execution approval opens them', async () => {
+await check('NET branch 6 — gated phases: exploring/planning deny outside allowed prefixes with kind gate; execution approval opens them', async () => {
   const dir = makeStateRepo('bee-net-gate-');
   try {
-    for (const phase of ['exploring', 'planning', 'validating']) {
+    for (const phase of ['exploring', 'planning']) {
       const state = { ...defaultState(), phase };
       const deny = checkWrite(dir, state, 'src/app.ts');
       assert(deny.allow === false && deny.kind === 'gate', `gate deny at ${phase}, got ${JSON.stringify(deny)}`);

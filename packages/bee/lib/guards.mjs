@@ -139,7 +139,7 @@ function scratchShapeDeny(normalized) {
   return null;
 }
 
-const GATED_PHASES = new Set(['exploring', 'planning', 'validating']);
+const GATED_PHASES = new Set(['exploring', 'planning']);
 
 // Phases where no bee work is active: never started ('idle') and finished
 // ('compounding-complete', the terminal alias state.mjs already accepts as an
@@ -1018,7 +1018,7 @@ function checkWorkspaceOwnership(controlRoot, ctx, sessionId) {
  *   Repository-harness lesson: a default-open first move is the hole every
  *   ad-hoc edit slips through — and "the feature just closed" is a first move.
  *   Disable per repo with: bee config set --key guards.idle_gate --value false
- * - Gated phases (exploring/planning/validating): block writes outside
+ * - Gated phases (exploring/planning): block writes outside
  *   GATE_ALLOWED_PREFIXES while approved_gates.execution is false.
  * - Swarming: deny writes that conflict with another agent's reservation
  *   (agent identity from agentName arg or BEE_AGENT_NAME env).

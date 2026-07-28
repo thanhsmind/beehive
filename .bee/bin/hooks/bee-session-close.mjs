@@ -21,9 +21,11 @@ const HOOK_NAME = "session-close";
 // The one phase → pending-gate mapping the mechanical bypass net acts on. Gate 1
 // (exploring) is DELIBERATELY absent: under `total`, genuine information questions
 // still stop for the human (routing-and-contracts.md, decision a93994d3) — only
-// approval gates are mechanized. planning → Gate 2 (shape); validating → Gate 3
-// (execution).
-const PHASE_GATE = Object.freeze({ planning: "shape", validating: "execution" });
+// approval gates are mechanized. planning carries the merged Gate 2/3
+// (execution) now that 'validating' is retired as a phase (plan.md Q1) —
+// every other enforcement surface for phase planning already read "execution"
+// before this change; this is the last surface to catch up.
+const PHASE_GATE = Object.freeze({ planning: "execution" });
 
 // Which bypass levels cover a pending gate for a given lane/mode. `full`/`total`
 // lifted the high-risk floor, so they cover every lane; `normal` covers only the
@@ -366,14 +368,15 @@ async function maybePerfRefresh(root, sessionId) {
 // invariant you leave in prose WILL be bypassed; mechanize it": the doctrine
 // test mechanized the prose, this mechanizes the runtime.
 //
-// When the session tries to STOP mid-planning/validating with a gate the active
+// When the session tries to STOP mid-planning with a gate the active
 // bypass level should have auto-approved, return decision:"block" (via
 // encodeBlock) so the turn CONTINUES, carrying an instruction to auto-approve
 // and proceed. Deliberately narrow so it can only convert an illegitimate
 // gate-stop into a continue, never trap a session:
 //   - Stop event ONLY (ctx.event==="Stop" exactly; never PreCompact, never an
 //     empty/missing event — those must stay advisory).
-//   - phase ∈ {planning, validating} with that phase's gate still pending.
+//   - phase === planning (the only PHASE_GATE member) with that phase's gate
+//     still pending.
 //   - the active level covers that gate for the lane (levelCoversGate).
 //   - loop-guard: block ONCE per sessionId:phase:gate:level (inject dedup); an
 //     immediate re-stop at the same gate degrades to advisory — never loops.

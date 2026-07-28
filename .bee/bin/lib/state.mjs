@@ -42,7 +42,6 @@ export const PHASES = [
   'idle',
   'exploring',
   'planning',
-  'validating',
   'swarming',
   'reviewing',
   'scribing',
