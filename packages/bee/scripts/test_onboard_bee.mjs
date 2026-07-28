@@ -154,8 +154,8 @@ try {
     .filter((e) => e.isDirectory() && e.name.startsWith("bee-"))
     .map((e) => e.name)
     .sort();
-  check(sourceBeeSkills.length === 18,
-    "source tree carries the expected 18 bee-* skills", JSON.stringify(sourceBeeSkills));
+  check(sourceBeeSkills.length === 17,
+    "source tree carries the expected 17 bee-* skills", JSON.stringify(sourceBeeSkills));
   for (const relRoot of [".claude/skills", ".agents/skills"]) {
     const rootAbs = path.join(tmp, ...relRoot.split("/"));
     const installed = fs.existsSync(rootAbs)
@@ -165,7 +165,7 @@ try {
           .sort()
       : [];
     check(JSON.stringify(installed) === JSON.stringify(sourceBeeSkills),
-      `fresh host apply materializes all 18 bee-* dirs under ${relRoot}`,
+      `fresh host apply materializes all 17 bee-* dirs under ${relRoot}`,
       JSON.stringify(installed));
   }
   const applyTargetKinds = (apply1.payload?.skills?.targets || []).map((t) => t.kind);

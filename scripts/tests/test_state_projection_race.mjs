@@ -644,12 +644,6 @@ const NON_PROJECTION_VERBS = [
   'state.handoff.adopt',
   'state.handoff.show',
   'state.advisor-ref.show',
-  // spec #77 P1 — the delta-validation evidence cache. `record` writes only
-  // .bee/validation-cache.json (under its own 'validation-cache' lock, never
-  // the 'state' lock) and `check` is a pure read; neither touches the shared
-  // projection record, so neither can race it.
-  'state.validation-cache.record',
-  'state.validation-cache.check',
   'state.compact-log',
   'state.compact-check',
   'state.compact-capsule',

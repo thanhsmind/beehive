@@ -61,7 +61,8 @@ const RETIRED_SENTENCES = [
 // retired sentence verbatim as the thing being retired, and old plans record
 // counts that were true when written. Freezing history is the point of that
 // tree, so a doctrine gate must not police it. Every other tracked markdown
-// file is in scope, derived from `git ls-files`.
+// file that still exists on disk is in scope, derived from `git ls-files`
+// filtered to what the working tree actually carries (see deriveScanSet).
 const SCAN_EXCLUSION_PREFIXES = ["docs/history/"];
 
 // ─── count derivation ─────────────────────────────────────────────────────
@@ -114,6 +115,14 @@ function deriveCounts(root) {
  * Every tracked markdown file, minus the stated exclusions. -z because the
  * repo genuinely contains tracked paths with spaces in them (docs/REFs/...),
  * which a newline-split of `git ls-files` mangles into nonexistent paths.
+ *
+ * `git ls-files` reflects the index, not the working tree: a file deleted on
+ * disk but not yet staged/committed (e.g. a rendered mirror mid-regen) still
+ * comes back. Reading such a path throws ENOENT and crashes the whole gate
+ * instead of failing the one assertion at fault — worse than a failure,
+ * because it hides everything behind it. The scan set is filtered down to
+ * paths that actually exist on disk, so the tree in front of the gate is
+ * always the tree it reads.
  */
 function deriveScanSet(root) {
   const raw = execFileSync("git", ["ls-files", "-z", "*.md"], {
@@ -124,6 +133,7 @@ function deriveScanSet(root) {
     .split("\0")
     .filter(Boolean)
     .filter((p) => !SCAN_EXCLUSION_PREFIXES.some((prefix) => p.startsWith(prefix)))
+    .filter((p) => fs.existsSync(path.join(root, p)))
     .sort();
 }
 
