@@ -279,6 +279,16 @@ its knowledge actually landed — the state and the specs can no longer disagree
   the acting session's own resolved workspace, never accepted as a caller-
   supplied value (multisession-native D2/D3, msn-19).
 
+- R80 — **Triage leaves a machine-readable trace.** Every feature carries a
+  route record — work class, lane, the counted risk flags, and the product-file
+  count — written the same turn the mode gate counts them, through a validated
+  verb that refuses free prose and unknown enum values with nothing written.
+  The record lives on the feature's workflow record, appears in the runtime
+  status report and as one session-preamble line, and a re-lane demotion
+  rewrites the same record in place (one route per feature, never a second).
+  Claiming a cell of a route-less feature warns once — a safety net, never a
+  refusal. Counting without recording is the guess this rule kills
+  (explicit-triage D1–D4).
 - R79 — **A feature's workflow record is closed, not abandoned.** Starting a
   new feature closes the outgoing feature's live workflow record(s) (terminal
   status) inside the same guarded mutation that creates the new one, and the

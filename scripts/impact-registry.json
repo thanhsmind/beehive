@@ -1905,6 +1905,7 @@
     "packages/bee/lib/inject.mjs": {
       "direct": [
         "packages/bee/tests/test_backlog_capture.mjs",
+        "packages/bee/tests/test_bee_cli.mjs",
         "packages/bee/tests/test_bundle_mode.mjs",
         "packages/bee/tests/test_cli_state.mjs",
         "packages/bee/tests/test_guards.mjs",
