@@ -236,30 +236,71 @@ theater. Artifacts live under `docs/history/<feature>/reports/` (`.md`-safe cont
 otherwise `.bee/tmp/` with the path quoted), and when a draft PR is active, each
 slice's demo posts as a PR comment.
 
-### Progress ticks (spec #81 P4)
+### Progress ticks (spec #81 P4, mandatory ak-style per-step contract — user directive 2026-07-28)
 
-Under gate bypass the chat goes silent between start and final report except the gate
-auto-approve lines, so perceived latency is the whole pipeline even when cells finish in
-minutes. One line per event, never a question, never a paragraph:
+Bee used to work invisibly inside `.bee/` and stay silent under gate bypass until the
+very end — perceived latency was the whole pipeline even when cells finished in minutes.
+That inverts: **every perceivable pipeline step emits exactly ONE short chat line**, on
+by default, in the user's own work language (Silent Bookkeeping's litmus still applies —
+no cell ids as the subject, no "capped cell xyz-3" as the whole line; say what happened
+to the work, an id may ride at the end). Ticks are chat output the agent writes as it
+goes, not an emitter subsystem — nothing to build, nothing to poll.
+
+**Bypass silences QUESTIONS, never ticks.** Gate auto-approval under bypass (Gate bypass
+mode above) already posts its own `⚡` line and keeps going instead of stopping to ask —
+that line is a tick, not an exception to one. No bypass level, at any tier, ever
+suppresses a tick. A red result or a refusal is never silence-able by anything, including
+`quiet` — see the exact two switches below.
+
+**Format, fixed:** `<glyph> <event>: <what> — <key fact>`
+
+| Glyph | Meaning |
+|---|---|
+| `▸` | step started |
+| `✓` | step done / green |
+| `✗` | red or refusal — always shown, never quiet-able |
+| `⚡` | bypass auto-approval |
+
+**Tick catalog — one list, every perceivable step, each with a worked example:**
 
 | Event | Line |
 |---|---|
-| cell capped | `✓ cell <id> capped — <outcome summary>` |
+| route recorded | `✓ route recorded: refactor · small · 2 files` |
+| gate passed | `✓ gate 2 passed: work shape approved — 3 cells, small lane` |
+| gate auto-approved (bypass) | `⚡ auto-approved Gate 2 (bypass): work shape — 3 cells, small lane` |
+| cells created | `✓ cells created: 3 cells — 1 wave, disjoint files` |
+| worker dispatched | `▸ worker dispatched: vt-1 — rewriting the progress-ticks section` (parallel siblings named together: `▸ 3 workers dispatched: vt-1, vt-2, vt-3 — disjoint files, parallel`) |
+| `[DONE]` received | `✓ vt-1 done — routing-and-contracts.md rewritten, commit a1b2c3d` |
+| `[BLOCKED]` received | `✗ vt-2 blocked — reservation conflict on shared.md` |
+| cell capped | `✓ cell capped — vt-1: tick catalog rewritten` |
+| fix cell opened | `▸ fix cell opened — red import in worker.mjs, cell fix-3` |
+| feature verify started | `▸ feature verify started — full suite before close` |
+| feature verify green | `✓ feature verify green — 412 tests, 38s` |
+| feature verify RED | `✗ feature verify RED — 2 failures, fix-first cell opened` |
+| feature-verify recorded | `✓ feature-verify recorded — sha a1b2c3d` |
+| barrier paid | `✓ wave barrier paid — mirrors rendered, manifest checked` |
+| knowledge synced | `✓ knowledge synced — 2 concepts updated in areas/bee-hive` |
+| learnings compounded | `✓ learnings compounded — 1 pattern promoted` |
+| feature closed | `✓ feature closed — step-ticks done; next: none open` |
 | slice closed | `✓ slice <n> closed — <cells> cells capped (feature-verify pending until final slice, main-verifies D4)` |
 | wave completed | `✓ wave done — <n> worker(s), <findings> finding(s)` |
 | re-laned | `✓ re-laned standard → small — <n> files, 0 hard-gate flags` |
 | draft PR opened | `✓ draft PR <url>` |
 | demo posted | `✓ slice <n> demo — <artifact>` |
 
-Ticks are chat output the agent writes as it goes, not an emitter subsystem — there is
-nothing to build and nothing to poll. They carry outcome, never mechanics: the user reads
-what happened to their work, per the silent-bookkeeping rule above.
+**Silence is configurable, and only two switches produce it — both narrower than "the
+whole stream" now:**
 
-**Silence is configurable, and only two switches produce it.** `guards`-style config key
-`quiet: true` in `.bee/config.json` suppresses the stream; so does
-`ship_visibility: "off"`. Default is a live stream whenever a bypass level is active.
-With no bypass, gates already punctuate the work and ticks add nothing — emit them
-anyway only for cell caps and slice closes.
+- `quiet: true` in `.bee/config.json` — an explicit user opt-out — silences the tick
+  stream (never the `✗` red/refusal line, which stays visible regardless).
+- `ship_visibility: "off"` silences only the two PR-related ticks (draft PR opened, demo
+  posted) — every other tick in the catalog still fires; `ship_visibility` governs PR
+  wiring, not general visibility.
+
+No other condition silences a tick. In particular: gate bypass being on, at any level,
+never reaches this switch — ticks fire exactly the same with bypass off, on `normal`, or
+on `total`. Ticks carry outcome, never mechanics: the user reads what happened to their
+work, per the silent-bookkeeping rule above.
 
 ## Session Scout in full
 
