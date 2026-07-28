@@ -42,7 +42,7 @@ import { lockFilePath } from '../lib/lock.mjs';
 // graph at import time — the RED-first evidence stays per-row.
 import * as laneStore from '../lib/state.mjs';
 import * as laneBinding from '../lib/claims.mjs';
-import { checkWrite, checkRead, extractBashTargets, checkAskUserQuestion } from '../lib/guards.mjs';
+import { checkWrite, checkRead, extractBashTargets, checkAskUserQuestion, checkGitBashCommand } from '../lib/guards.mjs';
 import { buildPromptReminder, buildSessionPreamble } from '../lib/inject.mjs';
 import { readJson, writeJsonAtomic } from '../lib/fsutil.mjs';
 
@@ -1575,6 +1575,244 @@ await check('checkWrite (msn-21): the hook posture regression — checkWrite nev
     const elapsedMs = Date.now() - started;
     assert(verdict.allow === true, `the owner's own write must still be allowed, got ${JSON.stringify(verdict)}`);
     assert(elapsedMs < 500, `checkWrite must never wait on a store lock — took ${elapsedMs}ms with a lock file present`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── concurrent-worker whole-tree git guard (gc-2) ──────────────────────────
+// The incident this covers: in one parallel wave, two `git add` index sweeps
+// folded workers' files into a sibling's commit, and one whole-tree revert
+// DELETED a live worker's in-progress edit while that worker held a valid file
+// reservation. Every row below runs at phase `swarming` on purpose — the whole
+// point is that the pre-gc-2 guard returned null for every non-terminal phase.
+
+function makeGitConcurrencyRepo(prefix) {
+  const dir = makeStateRepo(prefix);
+  // resolveContext/controlRootFor both walk for a .git node; makeStateRepo
+  // (unlike makeTempRepo) does not create one.
+  fs.mkdirSync(path.join(dir, '.git'), { recursive: true });
+  return dir;
+}
+
+// One live session holding N reservations under N distinct agent nicknames —
+// the intra-session swarm shape. `activeWorkers` alone reports this as ONE
+// worker (subagents share their parent session's id and heartbeat), which is
+// exactly why the guard counts reservation agents too.
+async function seedWorkers(dir, agents, { session = 'sess-swarm' } = {}) {
+  laneBinding.createSession(dir, { id: session });
+  for (const agent of agents) {
+    await reserve(dir, { agent, cell: `cell-${agent}`, path: `src/${agent}.js`, ttl: 3600, session });
+  }
+}
+
+const swarmingState = () => ({ ...defaultState(), phase: 'swarming' });
+
+await check('checkGitBashCommand (gc-2): every whole-tree git verb is refused while >1 worker is live', async () => {
+  const dir = makeGitConcurrencyRepo('bee-gc2-multi-');
+  try {
+    await seedWorkers(dir, ['exec-a', 'exec-b']);
+    const state = swarmingState();
+    const commands = [
+      ['git reset --hard', 'reset'],
+      ['git reset HEAD~1', 'reset'],
+      ['git stash', 'stash'],
+      ['git stash pop', 'stash'],
+      ['git checkout .', 'checkout'],
+      ['git clean -fd', 'clean'],
+      ['git restore --staged src/a.js', 'restore'],
+      ['git revert HEAD', 'revert'],
+      ['git rebase main', 'rebase'],
+      ['git merge feature-x', 'merge'],
+      ['git cherry-pick abc123', 'cherry-pick'],
+      ['git apply patch.diff', 'apply'],
+      ['git add src/a.js', 'add'],
+      ['git add -A', 'add'],
+      ['git commit -m "sweep"', 'commit'],
+      ['git commit -am "sweep"', 'commit -a'],
+      ['git commit -m "broad" -- .', 'commit'],
+    ];
+    for (const [command, verb] of commands) {
+      const verdict = checkGitBashCommand(dir, state, command, { cwd: dir });
+      assert(
+        verdict && verdict.allow === false && verdict.kind === 'git-concurrent-tree',
+        `"${command}" must be refused under 2 live workers, got ${JSON.stringify(verdict)}`,
+      );
+      assert(
+        verdict.reason.includes(`\`git ${verb}\``),
+        `"${command}" refusal must name the verb \`git ${verb}\`, got: ${verdict.reason}`,
+      );
+      assert(verdict.reason.includes('2 workers are live'), `"${command}" refusal must name the worker count, got: ${verdict.reason}`);
+      // The refusal is only useful if it hands back the sanctioned route.
+      assert(verdict.reason.includes('git status'), `"${command}" refusal must name read-only inspection, got: ${verdict.reason}`);
+      assert(verdict.reason.includes('GIT_INDEX_FILE'), `"${command}" refusal must name the temp-index route, got: ${verdict.reason}`);
+      assert(verdict.reason.includes('git add -N'), `"${command}" refusal must name the intent-to-add fallback, got: ${verdict.reason}`);
+      assert(
+        verdict.reason.includes('git commit -- <your paths>'),
+        `"${command}" refusal must name the path-scoped commit, got: ${verdict.reason}`,
+      );
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkGitBashCommand (gc-2): a single-worker session is completely unaffected', async () => {
+  const dir = makeGitConcurrencyRepo('bee-gc2-solo-');
+  try {
+    await seedWorkers(dir, ['exec-solo']);
+    const state = swarmingState();
+    for (const command of ['git reset --hard', 'git stash', 'git checkout .', 'git clean -fd', 'git add -A', 'git commit -m "x"']) {
+      assert(
+        checkGitBashCommand(dir, state, command, { cwd: dir }) === null,
+        `"${command}" must stay allowed for a solo worker, got ${JSON.stringify(checkGitBashCommand(dir, state, command, { cwd: dir }))}`,
+      );
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check("checkGitBashCommand (gc-2): the orchestrator's own release/merge work is never blocked (no reservations, one live session)", async () => {
+  const dir = makeGitConcurrencyRepo('bee-gc2-orchestrator-');
+  try {
+    laneBinding.createSession(dir, { id: 'sess-orchestrator' });
+    const state = swarmingState();
+    for (const command of ['git merge feature-x', 'git rebase main', 'git checkout main', 'git commit -m "release"']) {
+      assert(
+        checkGitBashCommand(dir, state, command, { cwd: dir }) === null,
+        `"${command}" must stay allowed with a single live session, got ${JSON.stringify(checkGitBashCommand(dir, state, command, { cwd: dir }))}`,
+      );
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkGitBashCommand (gc-2): two live SESSIONS in the same checkout count as two workers (no reservations needed)', async () => {
+  const dir = makeGitConcurrencyRepo('bee-gc2-sessions-');
+  try {
+    // Guards the row above from passing vacuously: with nothing reserved, the
+    // count comes purely from the derived live-session view.
+    laneBinding.createSession(dir, { id: 'sess-one' });
+    laneBinding.createSession(dir, { id: 'sess-two' });
+    const verdict = checkGitBashCommand(dir, swarmingState(), 'git reset --hard', { cwd: dir });
+    assert(
+      verdict && verdict.allow === false && verdict.reason.includes('2 workers are live'),
+      `two live sessions must count as two workers, got ${JSON.stringify(verdict)}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkGitBashCommand (gc-2): a worker in ANOTHER workspace does not count — cross-worktree merge stays open', async () => {
+  const dir = makeGitConcurrencyRepo('bee-gc2-workspace-');
+  try {
+    // Two live sessions, but the second is stamped to a different physical
+    // checkout: its whole-tree verbs cannot reach this tree, so counting it
+    // would over-block this session for nothing.
+    laneBinding.createSession(dir, { id: 'sess-here' });
+    laneBinding.createSession(dir, { id: 'sess-elsewhere', workspace_id: 'other-worktree' });
+    const state = swarmingState();
+    assert(
+      checkGitBashCommand(dir, state, 'git merge feature-x', { cwd: dir }) === null,
+      'a live session in another workspace must not make this checkout look multi-worker',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkGitBashCommand (gc-2): path-scoped commits, reads, and the temp-index route stay allowed under >1 worker', async () => {
+  const dir = makeGitConcurrencyRepo('bee-gc2-allowed-');
+  try {
+    await seedWorkers(dir, ['exec-a', 'exec-b']);
+    const state = swarmingState();
+    const allowed = [
+      // read-only inspection
+      'git status',
+      'git diff',
+      'git diff --cached',
+      'git log --oneline -5',
+      'git show HEAD',
+      // exactly what the rules ask a worker to use
+      'git commit -m "gc-2: my work" -- src/exec-a.js',
+      'git commit -m "gc-2" -- src/exec-a.js src/exec-a2.js',
+      'git add -N src/brand-new.js',
+      'git add --intent-to-add src/brand-new.js',
+      'git stash list',
+      'git stash show',
+      'git apply --check patch.diff',
+      // the temp-index route the refusal itself prescribes
+      'GIT_INDEX_FILE=/tmp/idx git read-tree HEAD',
+      'GIT_INDEX_FILE=/tmp/idx git update-index --add src/exec-a.js',
+      'GIT_INDEX_FILE=/tmp/idx git write-tree',
+      'git commit-tree abc123 -p HEAD -m "gc-2"',
+      'git update-ref HEAD def456',
+    ];
+    for (const command of allowed) {
+      const verdict = checkGitBashCommand(dir, state, command, { cwd: dir });
+      assert(
+        verdict === null,
+        `"${command}" must stay allowed under 2 live workers, got ${JSON.stringify(verdict)}`,
+      );
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkGitBashCommand (gc-2): an UNRESOLVABLE worker count refuses (unreadable means obligation, not clearance)', async () => {
+  const dir = makeGitConcurrencyRepo('bee-gc2-unresolvable-');
+  try {
+    // Not a single worker anywhere — the refusal here comes purely from the
+    // torn store, proving the conservative branch and not a real count.
+    fs.writeFileSync(reservationsPath(dir), '{ "reservations": [ NOT JSON');
+    const state = swarmingState();
+    const verdict = checkGitBashCommand(dir, state, 'git reset --hard', { cwd: dir });
+    assert(
+      verdict && verdict.allow === false && verdict.kind === 'git-concurrent-tree',
+      `an unresolvable worker count must refuse, got ${JSON.stringify(verdict)}`,
+    );
+    assert(
+      verdict.reason.includes('could not be resolved') && verdict.reason.includes('treated as more than one worker'),
+      `the refusal must say the count was unresolvable and conservatively treated as multi-worker, got: ${verdict.reason}`,
+    );
+    // A read stays a read even then — an over-denying guard must never lock a
+    // session out of diagnosing its own mess (critical pattern 20260716).
+    assert(
+      checkGitBashCommand(dir, state, 'git status', { cwd: dir }) === null,
+      'git status must stay allowed even when the worker count is unresolvable',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('checkGitBashCommand (gc-2): the terminal-phase intake gate is untouched by the new branch', async () => {
+  const dir = makeGitConcurrencyRepo('bee-gc2-intake-');
+  try {
+    await seedWorkers(dir, ['exec-solo']);
+    const idle = { ...defaultState(), phase: 'idle' };
+    const push = checkGitBashCommand(dir, idle, 'git push origin main', { cwd: dir });
+    assert(
+      push && push.allow === false && push.kind === 'git-push',
+      `git push must still hit the intake gate at a terminal phase, got ${JSON.stringify(push)}`,
+    );
+    const readOnly = checkGitBashCommand(dir, idle, 'git status', { cwd: dir });
+    assert(
+      readOnly && readOnly.allow === true && readOnly.kind === 'git-read-only',
+      `read-only git must still be exempted at a terminal phase, got ${JSON.stringify(readOnly)}`,
+    );
+    // ...and the concurrency rule outranks it: a whole-tree verb under >1
+    // worker is refused as a CONCURRENCY denial, not an intake one.
+    await reserve(dir, { agent: 'exec-second', cell: 'cell-2', path: 'src/second.js', ttl: 3600, session: 'sess-swarm' });
+    const concurrent = checkGitBashCommand(dir, idle, 'git reset --hard', { cwd: dir });
+    assert(
+      concurrent && concurrent.allow === false && concurrent.kind === 'git-concurrent-tree',
+      `the concurrency rule must outrank the intake gate, got ${JSON.stringify(concurrent)}`,
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
