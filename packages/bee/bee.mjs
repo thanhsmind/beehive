@@ -920,6 +920,37 @@ function buildStatus(root, { lanesFull = false } = {}) {
   };
 }
 
+// status-diet (st-1, D1): `--brief` fast path for worker startup, which pays
+// the full status verb's cell/review/handoff/model-tier scans on every
+// dispatch for a payload the worker never reads. buildStatusBrief reads ONLY
+// the state layer — readState (state.json) plus the two config-derived
+// helpers bypassLevel/shipVisibility full status already calls — never
+// listCells, readHandoff, buildReviewBlock, tierMix, or activeWorkers. Field
+// set is frozen at exactly these 7 keys (CONTEXT D1); `route` mirrors full
+// status's own null-when-absent convention (state.route ?? null).
+function buildStatusBrief(root) {
+  const state = readState(root);
+  return {
+    phase: state.phase,
+    feature: state.feature,
+    mode: state.mode,
+    gates: state.approved_gates,
+    gate_bypass_level: bypassLevel(root),
+    ship_visibility: shipVisibility(root),
+    route: state.route ?? null,
+  };
+}
+
+// One-line human render for `status --brief` (no --json): CONTEXT D1's
+// template `phase=<p> feature=<f> mode=<m> gates=<c/s/e/r> bypass=<lvl>` —
+// `gates` is GATE_NAMES' fixed order (context/shape/execution/review) joined
+// by "/", compressed to fit a single glance at worker startup rather than
+// renderStatusText's full multi-word `Gates: name=approved|pending...` line.
+function renderStatusBriefText(brief) {
+  const gates = GATE_NAMES.map((g) => (brief.gates?.[g] ? 'true' : 'false')).join('/');
+  return `phase=${brief.phase} feature=${brief.feature ?? 'none'} mode=${brief.mode ?? 'none'} gates=${gates} bypass=${brief.gate_bypass_level}`;
+}
+
 function formatSlot(value) {
   if (value == null) return 'null';
   if (typeof value === 'string') return value;
@@ -1052,6 +1083,12 @@ function renderStatusText(status) {
 // original byte-for-byte in the steady state (no manifest drift). ──────────
 
 function handleStatus(root, flags) {
+  // status-diet st-1 (D1): --brief short-circuits before any cell/review/
+  // handoff/model-tier work — buildStatus below is never called on this path.
+  if (flags && flags.brief === true) {
+    const brief = buildStatusBrief(root);
+    return { result: brief, text: renderStatusBriefText(brief) };
+  }
   const lanesFull = Boolean(flags && flags['lanes-full'] === true);
   const status = buildStatus(root, { lanesFull });
   return { result: status, text: renderStatusText(status) };
@@ -7553,7 +7590,7 @@ const HANDLERS = {
 // `state route --set --class feature ...` would consume `--class`'s VALUE as
 // `--set`'s own value, the exact class of bug dry-run/write/as-lane/show
 // guard against.
-export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set']);
+export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief']);
 
 export function splitCommandTokens(argv) {
   const leading = [];
