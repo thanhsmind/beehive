@@ -107,6 +107,14 @@ await check('pickNewestActiveWorkflow: only status==="active" is eligible; newes
   assert(pickNewestActiveWorkflow([{ id: 'wf-z', status: 'closed', created_at: '2026-01-01T00:00:00.000Z' }]) === null, 'no ACTIVE workflow -> null even if one exists closed');
 });
 
+await check('D2 (foundation-fixes): pickNewestActiveWorkflow excludes a zombie record — status "active" but phase "compounding-complete" — even when it is the newest by created_at', () => {
+  const zombie = { id: 'wf-zombie', status: 'active', phase: 'compounding-complete', created_at: '2026-02-01T00:00:00.000Z' };
+  const live = { id: 'wf-live', status: 'active', phase: 'swarming', created_at: '2026-01-01T00:00:00.000Z' };
+  const picked = pickNewestActiveWorkflow([zombie, live]);
+  assert(picked && picked.id === 'wf-live', `the zombie (compounding-complete) must never be picked even though it is newest, got ${JSON.stringify(picked)}`);
+  assert(pickNewestActiveWorkflow([zombie]) === null, 'a lone zombie record (active + compounding-complete) must never be picked — null, never resurrected');
+});
+
 // ─── C1 fallback: zero workflow records ─────────────────────────────────────
 
 await check('C1: rebuildStateProjection with zero workflow records and no overrides is a pure no-op — the file is never written', async () => {
@@ -258,6 +266,25 @@ await check('multisession-native-10: feature-matched rebuild takes precedence ov
     assert(result.authoritative === true && result.source === ownWf.id, `must source the CURRENT feature's own record, never the newer unrelated one, got source=${result.source}`);
     const onDisk = readState(root);
     assert(onDisk.feature === 'own-feat' && onDisk.summary === 'own', `must reflect own-feat's own record, got ${JSON.stringify({ feature: onDisk.feature, summary: onDisk.summary })}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+await check('D2 (foundation-fixes): feature-matched rebuild preserves phase/feature for the CURRENT live feature even while a zombie (compounding-complete) workflow record exists for an UNRELATED feature — no resurrection', async () => {
+  const root = makeRoot();
+  try {
+    writeJsonAtomic(statePath(root), { schema_version: '1.0', phase: 'swarming', feature: 'live-feat', mode: 'standard', approved_gates: { context: true, shape: true, execution: false, review: false }, workers: [], summary: 'live summary', next_action: 'live next' });
+    const liveWf = await createWorkflow(root, { feature: 'live-feat', phase: 'swarming', mode: 'standard', summary: 'live summary', next_action: 'live next' });
+    // Zombie: status "active" (never closed by a pre-D1 writer) but already
+    // at the terminal phase — the exact drift shape D1/D2 exist to
+    // neutralize (CONTEXT.md D2).
+    await createWorkflow(root, { feature: 'zombie-feat', phase: 'compounding-complete', status: 'active' });
+
+    const result = rebuildStateProjection(root);
+    assert(result.authoritative === true && result.source === liveWf.id, `must source the current feature's own live record, never the zombie, got ${JSON.stringify(result)}`);
+    const onDisk = readState(root);
+    assert(onDisk.phase === 'swarming' && onDisk.feature === 'live-feat', `phase/feature must stay live-feat/swarming — no resurrection of the zombie, got ${JSON.stringify({ phase: onDisk.phase, feature: onDisk.feature })}`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

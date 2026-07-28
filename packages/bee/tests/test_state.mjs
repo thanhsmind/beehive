@@ -887,6 +887,39 @@ await check('msn-6 C1: a mid-flight legacy state.json is idempotently seeded int
   }
 });
 
+// ─── D1 (foundation-fixes): startFeature closes the outgoing feature's live
+// workflow record(s) on the DEFAULT (non-lane) path — a chain of starts
+// leaves exactly the newest feature's record active. ────────────────────────
+
+await check('D1 (foundation-fixes): a chain of 3 default-path startFeature calls leaves exactly the last workflow record active; the prior two are closed', async () => {
+  const dir = makeStateRepo('bee-start-close-outgoing-chain-');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { schema_version: '1.0', phase: 'idle', feature: null, workers: [] });
+    await startFeature(dir, { feature: 'chain-a' });
+
+    // Simulate feature A reaching its terminal phase (compounding-complete)
+    // before feature B starts — the real-world shape a fresh startFeature
+    // call always sees (D1's own precondition requires idle or
+    // compounding-complete). feature stays SET on state.json exactly like a
+    // just-closed real feature would leave it.
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { schema_version: '1.0', phase: 'compounding-complete', feature: 'chain-a', workers: [] });
+    await startFeature(dir, { feature: 'chain-b' });
+
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { schema_version: '1.0', phase: 'compounding-complete', feature: 'chain-b', workers: [] });
+    await startFeature(dir, { feature: 'chain-c' });
+
+    const workflows = listWorkflows(dir).workflows;
+    const a = workflows.filter((wf) => wf.feature === 'chain-a');
+    const b = workflows.filter((wf) => wf.feature === 'chain-b');
+    const c = workflows.filter((wf) => wf.feature === 'chain-c');
+    assert(a.length === 1 && a[0].status === 'closed', `chain-a's workflow record must be closed, got ${JSON.stringify(a)}`);
+    assert(b.length === 1 && b[0].status === 'closed', `chain-b's workflow record must be closed, got ${JSON.stringify(b)}`);
+    assert(c.length === 1 && c[0].status === 'active', `chain-c (the last-started feature) must still be active, got ${JSON.stringify(c)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ─── config.local.json overlay (hardening-8) ───────────────────────────────
 // Machine-local values (today: dogfood_repos absolute paths) live in a
 // gitignored .bee/config.local.json sibling, deep-merged OVER the tracked

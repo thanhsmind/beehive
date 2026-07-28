@@ -314,5 +314,19 @@ await check("test-economy D6: level-1 query over a multi-file changed set stays 
   }
 });
 
+// ── fx-2 (foundation-fixes): the worktree-store suite split lands both
+// halves in the committed registry ─────────────────────────────────────────
+await check("foundation-fixes fx-2: both split suite filenames (test_worktree_store.mjs topology half + test_worktree_store_merge.mjs merge half) are present in scripts/impact-registry.json", async () => {
+  const onDisk = fs.readFileSync(REGISTRY_JSON, "utf8");
+  assert.ok(
+    onDisk.includes("packages/bee/tests/test_worktree_store.mjs"),
+    "expected the topology-half suite filename (packages/bee/tests/test_worktree_store.mjs) in the committed registry",
+  );
+  assert.ok(
+    onDisk.includes("packages/bee/tests/test_worktree_store_merge.mjs"),
+    "expected the merge-half suite filename (packages/bee/tests/test_worktree_store_merge.mjs) in the committed registry",
+  );
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
