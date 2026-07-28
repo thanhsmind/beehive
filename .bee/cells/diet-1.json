@@ -72,7 +72,47 @@
         "note": null
       }
     ],
-    "warnings": []
+    "warnings": [],
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "exit-paths",
+            "status": "PASS",
+            "evidence": "empirical --root temp fixtures: missing-baseline/no-entry/over-budget/no-note>8192 all exit=1 naming skill,size,budget,delta; bare run 18 skills 0 findings exit=0 (skill_budget_fence.mjs:374-386)"
+          },
+          {
+            "id": "selftest-coverage",
+            "status": "PASS",
+            "evidence": "9 PASS fixtures incl. all four specified bites; failed===0?0:1 at :355; selftest_exit=0"
+          },
+          {
+            "id": "baseline-reseed",
+            "status": "PASS",
+            "evidence": "wc -c matches all 18 entries exactly; migrated:[]; notes='pending migration' for exactly the 15 skills >8192"
+          },
+          {
+            "id": "provenance-scope",
+            "status": "PASS",
+            "evidence": "loop iterates only migrated[] (:164); bee-context-locking 11 matches yet live run 0 findings"
+          },
+          {
+            "id": "registration-and-lint-trim",
+            "status": "PASS",
+            "evidence": "selftest+bare pair at run_verify.mjs:353+ merged at :400; skill_lint.mjs no budget code, process.exit(0) only, lint_exit=0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-27T23:53:02.311Z"
+      }
+    ]
   },
   "tier": "generation"
 }
