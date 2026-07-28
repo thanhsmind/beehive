@@ -1,0 +1,69 @@
+{
+  "id": "wl-2",
+  "feature": "workflow-lifecycle",
+  "lane": "standard",
+  "behavior_change": true,
+  "change_class": "behavior",
+  "title": "bee state workflows list/close CLI verb",
+  "action": "Rule 12 gap: today the orchestrator had to hand-edit .bee/runtime/workflows/*/state.json to close zombie records because no CLI verb exists — hand-editing bee state is exactly what rule 12 forbids, and the only sanctioned escape (file friction first) was used. Close the gap: add `bee state workflows` with two modes in packages/bee/bee.mjs + packages/bee/lib/command-registry.mjs (LIBRARY side is a sibling cell — do NOT touch packages/bee/lib/state.mjs or workflow-store.mjs): (1) `bee state workflows list [--json]` — every workflow record with id, feature, status, phase, created_at, sorted newest first; human render one line each. (2) `bee state workflows close (--feature <f> | --id <id> | --all-but-active)` — closes matching live records, prints what it closed, refuses with a typed message when nothing matches, and NEVER closes the currently active feature's record unless --id names it explicitly. INTERFACE CONTRACT (frozen, sibling cell implements these in lib): call `listWorkflowRecords(root)` and `closeWorkflowsForFeature(root, { keepFeature })` — import them from packages/bee/lib/workflow-store.mjs. They may not exist yet while you work (the sibling lands them in parallel): code against the contract, and if your own smoke check fails only because the import is missing, say so in your report — do NOT implement them yourself. R82: run NO test suites; cap --feature-verify-pending; MAIN verifies at close.",
+  "must_haves": {
+    "truths": [
+      "state workflows list renders every record (human + --json); state workflows close supports --feature, --id and --all-but-active.",
+      "Closing refuses typed when nothing matches; the active feature's record is protected unless named by --id.",
+      "Registry entries carry runnable examples for both modes.",
+      "Only bee.mjs and command-registry.mjs changed."
+    ],
+    "prohibitions": [
+      "Do NOT touch packages/bee/lib/state.mjs or workflow-store.mjs (sibling cell holds them).",
+      "Do NOT reimplement the two contracted helpers.",
+      "Do NOT run any test suite (R82).",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs",
+  "read_first": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/command-registry.mjs"
+  ],
+  "files": [
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/command-registry.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wl2",
+    "outcome": "Added bee state workflows list/close CLI verb (bee.mjs + command-registry.mjs). list renders every workflow record (id/feature/status/phase/created_at, JSON + human, newest first). close supports --feature/--id/--all-but-active (mutually exclusive), refuses typed when nothing matches, and protects the calling context's active feature unless --id names it explicitly. Imports listWorkflowRecords/closeWorkflowsForFeature per MAIN's corrected contract (lib/state.mjs, not workflow-store.mjs). Smoke-tested read-only (list + close refusal paths); mutating close paths not exercised live to avoid touching concurrent swarms' real records. Two commits instead of one due to a shared-index git-hygiene incident (documented in deviations) plus MAIN's mid-work import-path correction.",
+    "files_changed": [
+      "packages/bee/bee.mjs",
+      "packages/bee/lib/command-registry.mjs"
+    ],
+    "deviations": [
+      {
+        "type": "process",
+        "description": "Interface-contract update mid-work: MAIN reported the sibling (wl-1, commit c01310e7) exported listWorkflowRecords/closeWorkflowsForFeature from lib/state.mjs, not lib/workflow-store.mjs as the cell text said (workflow-store.mjs cannot import controlRootFor). Adjusted the import line and every call site (both now called with plain `root`, not ctrlRoot, since they resolve controlRootFor internally) in a follow-up commit."
+      },
+      {
+        "type": "git-hygiene",
+        "description": "The first wl-2 commit (99b989bf) was made while another concurrent process (skill-diet-wave2 lane) had unrelated files already staged in the same shared index (skills/bee-exploring/*, skills/bee-herding/*). `git commit -m` with no pathspec commits the whole index, so those files landed inside 99b989bf's diff even though only packages/bee/bee.mjs and lib/command-registry.mjs were `git add`-ed for this cell. A skill-diet-wave2 commit (fd27524d) then landed on top of 99b989bf before the mistake was caught. An initial `git reset --soft HEAD~1` orphaned fd27524d; this was immediately corrected with `git reset --hard fd27524d` (verified no content lost) before any further action. No history rewrite was attempted afterward — the import-path fix landed as a new, cleanly-scoped commit (b6d664c4, verified via `git diff --cached --name-only` before committing) rather than amending the polluted commit, to avoid re-orphaning fd27524d's descendants a second time. Net effect: correct content, but wl-2 now has two commits instead of one, and 99b989bf's diff also contains unrelated skill-diet-wave2 file changes. No data was lost; flagging for MAIN's awareness."
+      },
+      {
+        "type": "scope",
+        "description": "MAIN offered a bonus: wiring the newly available ensureWorkflowRecordForFeature(root, {...}) into `bee state set --feature` (handleStateSet) to close the historical missing-record hole on that path. Left undone — it is a distinct verb from `state workflows list/close` and outside wl-2's must_haves; MAIN said to report rather than implement if it doesn't fit cleanly. Recommend a follow-up cell."
+      }
+    ],
+    "friction": "Shared checkout with a concurrent swarm caused git commit to sweep in unrelated already-staged files; see deviations for the recovery steps taken.",
+    "capped_at": "2026-07-28T09:01:21.638Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T08:48:58.007Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "generation"
+}

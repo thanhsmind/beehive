@@ -27,21 +27,25 @@
   ],
   "deps": [],
   "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
-  "status": "claimed",
+  "status": "capped",
   "decisions": [],
   "trace": {
     "worker": "exec-wl4",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Declared three new workflow-lifecycle exports (closeWorkflowsForFeature, ensureWorkflowRecordForFeature, listWorkflowRecords) in EXPECTED_STATE_EXPORTS. Test result: 118 passed, 0 failed.",
+    "files_changed": [
+      "packages/bee/tests/test_misc.mjs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-07-28T09:13:59.422Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
-    "claimed_at": "2026-07-28T09:11:47.094Z"
+    "claimed_at": "2026-07-28T09:11:47.094Z",
+    "warnings": [],
+    "feature_verify": "pending"
   },
   "tier": "extraction"
 }

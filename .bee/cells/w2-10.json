@@ -1,0 +1,53 @@
+{
+  "id": "w2-10",
+  "feature": "skill-diet-wave2",
+  "lane": "small",
+  "behavior_change": false,
+  "change_class": "bugfix",
+  "title": "Restore the bundle branch on bee-compounding's docs/specs line",
+  "action": "MAIN-PRODUCED REPRO (red at feature verify): `node scripts/okf_instructions_fence.mjs` reports 1 unbranched misroute — skills/bee-compounding/SKILL.md:121 names `docs/specs/` with no bundle branch on the line. Cause: w2-4's thin-body compression of the close-commit paragraph dropped the branch clause the fence requires (the fence is LINE-local: a line naming the retired state layer must also name the bundle, or cite a legacy anchor). FIX: restore the branch on that line only — the close's commit paths are the knowledge bundle when the repo has one, `docs/specs/` when it does not — keeping the rest of the paragraph as w2-4 left it. Read the fence's own message and, if useful, another migrated skill's equivalent line for the accepted phrasing. Budget: bee-compounding is 8148 against 8192 — you have ~44 bytes; if the branch costs more, trim a reassurance clause in the SAME paragraph to pay. R82: run NO test suites — but you MAY run the single fence `node scripts/okf_instructions_fence.mjs` since it is this cell's own repro, and quote its green output as evidence. Commit through your own temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref) or, failing that, `git add -N` on new paths then a path-scoped commit — NEVER plain `git add`, NEVER reset/stash/checkout/restore: siblings share this checkout.",
+  "must_haves": {
+    "truths": [
+      "node scripts/okf_instructions_fence.mjs reports 0 unbranched misroutes (quote the output).",
+      "skills/bee-compounding/SKILL.md stays <= 8192 bytes; report the exact size.",
+      "The paragraph's meaning is unchanged apart from the restored branch."
+    ],
+    "prohibitions": [
+      "Do NOT weaken or bypass the fence.",
+      "Do NOT touch any other skill.",
+      "Do NOT run the full test suite.",
+      "Do NOT run mirror/onboard/manifest regen (MAIN owns the barrier)."
+    ]
+  },
+  "verify": "node scripts/okf_instructions_fence.mjs && node scripts/skill_budget_fence.mjs",
+  "read_first": [
+    "skills/bee-compounding/SKILL.md",
+    "scripts/okf_instructions_fence.mjs"
+  ],
+  "files": [
+    "skills/bee-compounding/SKILL.md"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-w210",
+    "outcome": "Bundle branch restored on line 121; fence now green",
+    "files_changed": [
+      "skills/bee-compounding/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T09:10:40.433Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T09:08:41.149Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "extraction"
+}

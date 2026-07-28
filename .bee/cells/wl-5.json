@@ -1,0 +1,53 @@
+{
+  "id": "wl-5",
+  "feature": "workflow-lifecycle",
+  "lane": "small",
+  "change_class": "test",
+  "behavior_change": false,
+  "title": "Exercise the two new workflows registry examples",
+  "action": "MAIN-PRODUCED REPRO (red at feature verify): `node packages/bee/tests/test_bee_cli.mjs` -> 343 passed, 1 failed — 'every registry entry had its example executed at least once (nothing silently skipped)': these registry entries were never exercised: state.workflows.list, state.workflows.close. wl-2 added the verb and its registry entries but no runExample coverage. FIX: add coverage in packages/bee/tests/test_bee_cli.mjs following the file's existing runExample pattern (read a neighbouring state.* example row first — e.g. state.route or state.feature-verify — and copy its fixture shape). Cover: (1) `state workflows list` against a fixture repo with at least one seeded workflow record, asserting the record is rendered; (2) `state workflows close` — exercise a SAFE path: the typed refusal when no mode flag is given, or a close of a seeded non-active record inside the fixture. NEVER run a mutating close against the live repo. End: test_bee_cli 345+ passed, 0 failed, and the coverage check green. You MAY run that one suite (it is the repro) and must quote its final line; run nothing else. GIT SAFETY (shared checkout): commit through your own temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref) or `git add -N` then a path-scoped commit; NEVER plain `git add`, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "node packages/bee/tests/test_bee_cli.mjs => 0 failed, and the registry-example coverage check passes (quote the final line).",
+      "Both state.workflows.list and state.workflows.close examples are exercised.",
+      "No live-repo workflow record was closed by the test."
+    ],
+    "prohibitions": [
+      "Do NOT weaken the coverage check or delete a registry example.",
+      "Do NOT touch packages/bee/bee.mjs or lib/*.",
+      "Do NOT run other suites.",
+      "Do NOT run regen (MAIN owns the barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs",
+  "read_first": [
+    "packages/bee/tests/test_bee_cli.mjs",
+    "packages/bee/lib/command-registry.mjs"
+  ],
+  "files": [
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wl5",
+    "outcome": "Added runExample coverage for state.workflows.list and state.workflows.close registry examples; seeded a non-active stale-feature workflow record so the close example runs for real without touching the active feature's record. test_bee_cli.mjs: 346 passed, 0 failed.",
+    "files_changed": [
+      "packages/bee/tests/test_bee_cli.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T09:20:06.528Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T09:15:44.806Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "generation"
+}

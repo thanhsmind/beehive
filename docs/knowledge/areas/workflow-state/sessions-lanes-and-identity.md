@@ -279,6 +279,19 @@ its knowledge actually landed — the state and the specs can no longer disagree
   the acting session's own resolved workspace, never accepted as a caller-
   supplied value (multisession-native D2/D3, msn-19).
 
+- R88 — **A worker in a shared checkout touches only its own paths, never the
+  whole tree.** Concurrency makes the repository a shared resource, so the
+  worker's version-control surface narrows to four moves: inspect state, read
+  a diff, read the log, and record its own work in one path-scoped commit made
+  through its own private index — never the repository's. Every whole-tree
+  operation (staging, stashing, checking out, resetting) is forbidden, because
+  each one silently takes or discards what every sibling has not yet recorded;
+  a worker that produced a wrong commit reports it and lets the delegator
+  repair history. Three separate incidents in one wave proved each half: two
+  index sweeps that lost commit attribution, and one whole-tree revert that
+  destroyed a live worker's in-progress edit while its file reservation was
+  held — reservations govern files, not the tree (skill-diet-wave2,
+  2026-07-28).
 - R86 — **One concurrency law, three tiers.** Work that can run at the same
   time runs at the same time: gathering fans out to read-only workers, the
   cells of a slice fan out to a wave, and independent features fan out to

@@ -1,0 +1,50 @@
+{
+  "id": "wl-3",
+  "feature": "workflow-lifecycle",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "test",
+  "title": "Slice test: lifecycle net behavior",
+  "action": "Trailing test cell for the slice's net behavior, in the owning suites (extend never fork — expected packages/bee/tests/test_workflow_store.mjs, test_state.mjs, test_bee_cli.mjs): (a) every feature-start path creates a record (cover default start AND --as-lane start); (b) starting a feature closes every other live record, including the case where the outgoing feature had no record; (c) listWorkflowRecords/closeWorkflowsForFeature contracts hold and are idempotent (second close returns empty, changes nothing); (d) state workflows list renders all records; close --feature / --id / --all-but-active each behave, refuse typed on no match, and protect the active record unless named by --id; (e) regression guard: after a chain of three feature starts, at most ONE record is active. Hermetic temp-dir fixtures.",
+  "must_haves": {
+    "truths": [
+      "Assertions a-e green.",
+      "Suites green end-to-end."
+    ],
+    "prohibitions": [
+      "Do NOT weaken wl-1 or wl-2.",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_workflow_store.mjs && node packages/bee/tests/test_state.mjs && node packages/bee/tests/test_bee_cli.mjs",
+  "read_first": [
+    "packages/bee/lib/workflow-store.mjs",
+    "packages/bee/bee.mjs",
+    "packages/bee/tests/test_workflow_store.mjs"
+  ],
+  "files": [
+    "packages/bee/tests/test_workflow_store.mjs",
+    "packages/bee/tests/test_state.mjs",
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "deps": [
+    "wl-1",
+    "wl-2"
+  ],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at feature close (parallel-default D2)",
+  "status": "open",
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

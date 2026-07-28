@@ -107,6 +107,13 @@ import {
   // claim/claim-next further down) — see applyWritePolicy's own header in
   // state.mjs for the observe/shared-disjoint/isolated contract.
   applyWritePolicy,
+  // workflow-lifecycle wl-1/wl-2 INTERFACE CONTRACT: these two live in
+  // lib/state.mjs, NOT lib/workflow-store.mjs — that leaf module is
+  // structurally forbidden from importing controlRootFor, and both helpers
+  // need control-root resolution. Both already resolve controlRootFor(root)
+  // internally, so every call site below passes plain `root`, never ctrlRoot.
+  listWorkflowRecords,
+  closeWorkflowsForFeature,
 } from './lib/state.mjs';
 // multisession-native-7/10 (C1/C4/C5/F8): workflow-store.mjs's read/update/
 // lock primitives and state-projection.mjs's rebuild functions, composed
@@ -4521,6 +4528,147 @@ function handleStateFeatureVerifyShow(root, flags) {
   return featureVerifyShowPayload(root);
 }
 
+// ─── state workflows: rule-12 gap closed (workflow-lifecycle wl-2) ─────────
+// Today the orchestrator had to hand-edit .bee/runtime/workflows/*/state.json
+// to close zombie records — no CLI verb existed, and hand-editing bee's own
+// state is exactly rule 12's forbidden escape hatch. Two verbs:
+// `list` (read-only) and `close` (--feature | --id | --all-but-active).
+//
+// `listWorkflowRecords(root)` / `closeWorkflowsForFeature(root, {
+// keepFeature })` are the INTERFACE CONTRACT the sibling wl-1 cell lands in
+// lib/state.mjs (frozen shape so both cells run in parallel — see wl-2's
+// cell action; both live in state.mjs rather than workflow-store.mjs because
+// that leaf module is structurally forbidden from importing controlRootFor,
+// which both helpers need). Both already resolve controlRootFor(root)
+// internally, so every call below passes plain `root`, never ctrlRoot.
+// `close` never reimplements either helper; --feature and --id each close a
+// SINGLE record via withWorkflowLock + updateWorkflowAssumingLock (already
+// imported above, from workflow-store.mjs) — the self-locking `updateWorkflow`
+// form is deliberately never used directly in THIS file (state-phase-lock-race
+// GH #70, see this file's own import-list comment) even though
+// closeWorkflowsForFeature itself uses it internally from OUTSIDE any lock
+// this file holds, exactly as its own doc comment requires. --all-but-active
+// instead calls closeWorkflowsForFeature directly: its "close every live
+// record whose feature differs from keepFeature" shape IS --all-but-active's
+// semantics.
+//
+// "The currently active feature" this verb protects is the CALLING
+// context's own active feature — the same session-bound-lane-else-default
+// resolution `state route`/`state feature-verify` use (resolveMutationTarget,
+// read-only here: no target.write() is ever called, so no projection lock is
+// needed — exactly `state route --show`'s own precedent). A workflow
+// record's OWN `status: 'active'` field is NOT this: state.mjs's D1
+// close-on-start comment is explicit that multiple concurrent lanes can each
+// hold a live `status: 'active'` record at once, so that field alone can
+// never name a single "the" active feature.
+
+function workflowsListSort(records) {
+  return [...records].sort((a, b) => {
+    const at = a && a.created_at ? Date.parse(a.created_at) : 0;
+    const bt = b && b.created_at ? Date.parse(b.created_at) : 0;
+    return bt - at; // newest first
+  });
+}
+
+function handleStateWorkflowsList(root, flags) {
+  const records = workflowsListSort(listWorkflowRecords(root));
+  const text =
+    records.length === 0
+      ? 'No workflow records.'
+      : records
+          .map((r) => `${r.id} feature=${r.feature} status=${r.status} phase=${r.phase} created_at=${r.created_at}`)
+          .join('\n');
+  return { result: records, text };
+}
+
+function resolveActiveFeatureForWorkflowsClose(root) {
+  try {
+    const target = resolveMutationTarget(root, null, 'workflows close', { noLane: false });
+    return target.record.feature || null;
+  } catch {
+    // No active feature (or a corrupt/missing lane) resolves to "nothing to
+    // protect" rather than refusing the whole verb — `list`/`close` operate
+    // over ALL workflow records, not scoped to a single feature's lifecycle.
+    return null;
+  }
+}
+
+async function closeWorkflowRecordById(ctrlRoot, id) {
+  return withWorkflowLock(ctrlRoot, id, () => updateWorkflowAssumingLock(ctrlRoot, id, { status: 'closed' }));
+}
+
+async function handleStateWorkflowsClose(root, flags) {
+  rejectDryRun(flags);
+  const hasFeature = flags.feature !== undefined && flags.feature !== true && flags.feature !== '';
+  const hasId = flags.id !== undefined && flags.id !== true && flags.id !== '';
+  const hasAllButActive = flags['all-but-active'] === true;
+  const modeCount = [hasFeature, hasId, hasAllButActive].filter(Boolean).length;
+  if (modeCount !== 1) {
+    const example = exampleFor('state.workflows.close');
+    throw new Error(
+      'workflows close: requires exactly one of --feature <feature>, --id <id>, or --all-but-active.' +
+        (example ? ` Example: ${example}` : ''),
+    );
+  }
+
+  // ctrlRoot is used ONLY for closeWorkflowRecordById below (a direct
+  // workflow-store.mjs withWorkflowLock/updateWorkflowAssumingLock call,
+  // which needs explicit control-root resolution, same as every other
+  // direct workflow-store call in this file). listWorkflowRecords/
+  // closeWorkflowsForFeature resolve controlRootFor(root) themselves —
+  // always called with plain `root` below.
+  const ctrlRoot = controlRootFor(root);
+  const activeFeature = resolveActiveFeatureForWorkflowsClose(root);
+
+  if (hasId) {
+    const id = String(flags.id);
+    const records = listWorkflowRecords(root);
+    const rec = records.find((r) => r.id === id);
+    if (!rec || rec.status === 'closed') {
+      throw new Error(`workflows close --id: no live workflow record found with id "${id}".`);
+    }
+    const closed = await closeWorkflowRecordById(ctrlRoot, id);
+    return {
+      result: { closed: [{ id: closed.id, feature: closed.feature }] },
+      text: `Closed 1 workflow record: ${closed.id} (feature "${closed.feature}").`,
+    };
+  }
+
+  if (hasFeature) {
+    const feature = String(flags.feature);
+    if (activeFeature && feature === activeFeature) {
+      throw new Error(
+        `workflows close --feature: refused — "${feature}" is the currently active feature; use --id <id> to close its record explicitly.`,
+      );
+    }
+    const records = listWorkflowRecords(root);
+    const matches = records.filter((r) => r.feature === feature && r.status !== 'closed');
+    if (matches.length === 0) {
+      throw new Error(`workflows close --feature: no live workflow record found for feature "${feature}".`);
+    }
+    const closed = [];
+    for (const rec of matches) {
+      closed.push(await closeWorkflowRecordById(ctrlRoot, rec.id));
+    }
+    return {
+      result: { closed: closed.map((r) => ({ id: r.id, feature: r.feature })) },
+      text: `Closed ${closed.length} workflow record(s) for feature "${feature}": ${closed.map((r) => r.id).join(', ')}.`,
+    };
+  }
+
+  // --all-but-active
+  const closed = await closeWorkflowsForFeature(root, { keepFeature: activeFeature });
+  if (!closed || closed.length === 0) {
+    throw new Error(
+      'workflows close --all-but-active: nothing to close — no live workflow record other than the active feature.',
+    );
+  }
+  return {
+    result: { closed },
+    text: `Closed ${closed.length} workflow record(s), kept active feature "${activeFeature ?? '(none)'}": ${closed.map((r) => r.id).join(', ')}.`,
+  };
+}
+
 // ─── state validation-cache: the spec #77 P1 delta-validation surface ────────
 // Two verbs, deliberately shaped exactly like advisor-ref record/show above:
 // `record` stamps the staleness anchors ITSELF (never caller-supplied) and
@@ -7541,7 +7689,13 @@ function stateUsageFallback(leading) {
     const sub = leading[2];
     return `Unknown feature-verify action "${sub || '(missing)'}". Use: record, show.`;
   }
-  return `Unknown command "${verb || '(missing)'}". Use: set, gate, route, feature-verify, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, validation-cache, compact-log, compact-check, compact-capsule.`;
+  // workflows (workflow-lifecycle wl-2, rule-12 gap): the two-verb list/close
+  // family, mirroring the feature-verify branch above.
+  if (verb === 'workflows') {
+    const sub = leading[2];
+    return `Unknown workflows action "${sub || '(missing)'}". Use: list, close.`;
+  }
+  return `Unknown command "${verb || '(missing)'}". Use: set, gate, route, feature-verify, workflows, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, validation-cache, compact-log, compact-check, compact-capsule.`;
 }
 
 function backlogUsageFallback(leading) {
@@ -7707,6 +7861,8 @@ const HANDLERS = {
   'state.route': handleStateRoute,
   'state.feature-verify.record': handleStateFeatureVerifyRecord,
   'state.feature-verify.show': handleStateFeatureVerifyShow,
+  'state.workflows.list': handleStateWorkflowsList,
+  'state.workflows.close': handleStateWorkflowsClose,
   'state.plan-rev.bump': handleStatePlanRevBump,
   'state.worker.add': handleStateWorkerAdd,
   'state.worker.update': handleStateWorkerUpdate,
@@ -7825,7 +7981,12 @@ const HANDLERS = {
 // `cells cap --id X --feature-verify-pending --outcome ...` would consume
 // `--outcome` as its value, the exact class of bug the flags above guard
 // against.
-export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief', 'feature-verify-pending']);
+// `all-but-active` (workflow-lifecycle wl-2) is `state workflows close`'s
+// third flag-alone mode selector, alongside its own `--feature`/`--id`
+// string flags — MUST be here or a trailing `--json` would be consumed as
+// `--all-but-active`'s own value, the exact class of bug every flag above
+// guards against.
+export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief', 'feature-verify-pending', 'all-but-active']);
 
 export function splitCommandTokens(argv) {
   const leading = [];

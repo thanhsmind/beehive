@@ -1,0 +1,57 @@
+{
+  "id": "wl-1",
+  "feature": "workflow-lifecycle",
+  "lane": "standard",
+  "behavior_change": true,
+  "change_class": "bugfix",
+  "title": "Record on every start path + close by feature (library side)",
+  "action": "DEFECT (main-diagnosed, 5 live incidents 2026-07-28): sessions kept reverting mid-run to a previously closed feature. Chain: a stopping subagent fires the state-sync hook, which rebuilds the projection; the idle-bootstrap branch picks the newest ACTIVE workflow record; and closed features stayed active forever. fx-1 added a close-on-start transition and mv-4 fixed createWorkflow's default symmetry, but two holes remain, both proven by inspection of .bee/runtime/workflows/ on 2026-07-28: (a) several features that ran today have NO workflow record at all (main-verifies, foundation-fixes, parallel-default, test-batching-finish, ship-visibility-config) — so some start paths skip record creation entirely; (b) fx-1's close only reaches records that exist, so a feature with no record can never be closed, and starting status-diet left skill-token-diet active. FIX in packages/bee/lib (library only — the CLI surface is a sibling cell, do not touch bee.mjs or command-registry.mjs): (1) audit EVERY path that starts or adopts a feature in packages/bee/lib/state.mjs (default start, --as-lane start, any adopt/resume/handoff path) and guarantee each creates its workflow record — one helper, called from every path, never duplicated logic. (2) Close by FEATURE, not by record presence: when a feature starts, every other live record closes; if the outgoing feature has no record, that is not a reason to skip — it is a reason the audit in (1) must prevent. (3) Export exactly these two names for the sibling CLI cell to call (INTERFACE CONTRACT — the names and shapes are frozen so the two cells run in parallel): `listWorkflowRecords(root)` returning an array of the full records (may simply wrap the existing listWorkflows), and `closeWorkflowsForFeature(root, { keepFeature })` closing every live record whose feature differs from keepFeature and returning the array of closed {id, feature}. Keep both idempotent and lock-safe (updateWorkflow discipline). R82: run NO test suites; cap --feature-verify-pending; MAIN verifies at close.",
+  "must_haves": {
+    "truths": [
+      "Every feature-start path in lib creates a workflow record — name the paths you audited in the report.",
+      "Starting a feature closes every other live record, including when the outgoing feature had none.",
+      "listWorkflowRecords and closeWorkflowsForFeature are exported with exactly the contracted names and shapes; both idempotent.",
+      "No behavior change to gate resets, lane handling, or claim/reservation logic."
+    ],
+    "prohibitions": [
+      "Do NOT touch packages/bee/bee.mjs or packages/bee/lib/command-registry.mjs (sibling cell holds them).",
+      "Do NOT change the projection's picker logic (fx-1/D2 already handles it).",
+      "Do NOT run any test suite (R82).",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_state.mjs && node packages/bee/tests/test_workflow_store.mjs && node packages/bee/tests/test_state_projection.mjs",
+  "read_first": [
+    "packages/bee/lib/state.mjs",
+    "packages/bee/lib/workflow-store.mjs",
+    "packages/bee/lib/state-projection.mjs"
+  ],
+  "files": [
+    "packages/bee/lib/state.mjs",
+    "packages/bee/lib/workflow-store.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wl1",
+    "outcome": "lib/state.mjs: added ensureWorkflowRecordForFeature (the ONE workflow-record creation seam, idempotent by feature) and routed startFeature's default+lane branches and seedLegacyWorkflows' C1 materialization through it; replaced fx-1's outgoing-feature close with close-by-feature (closeWorkflowsForFeature(root,{keepFeature}) closes every OTHER live record, default path only, lane path closes nothing and startLane is byte-untouched); exported the frozen interface contract listWorkflowRecords(root) + closeWorkflowsForFeature(root,{keepFeature}) from lib/state.mjs (they need controlRootFor, which the workflow-store leaf may not import). Path audit of every start/materialize/adopt site recorded as a header comment block. lib/workflow-store.mjs needed no change.",
+    "files_changed": [
+      "packages/bee/lib/state.mjs",
+      "docs/history/workflow-lifecycle/reports/wl-1.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T08:56:40.983Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T08:48:57.932Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}

@@ -4,7 +4,7 @@
   "skills": [
     {
       "name": "bee-briefing",
-      "sha256": "9f0c80f4cb14b1b17ea71e289d4b3e227a6e6f9929ebd3fe22ab08501274d982"
+      "sha256": "2d0ae74dde4d954bda5e0cf32f391cfb08abbf43d624fa44da747b32d3b63049"
     },
     {
       "name": "bee-bypass-gate",
@@ -12,7 +12,7 @@
     },
     {
       "name": "bee-compounding",
-      "sha256": "4118c9eec55676842b57ca821770d86bac1c76919d38164385ca0021c7e5672d"
+      "sha256": "98636e1e0a9773a8ff5ec91e7128c830f73cd0202754325ae07a4ca40b2f95b8"
     },
     {
       "name": "bee-context-locking",
@@ -20,23 +20,23 @@
     },
     {
       "name": "bee-evolving",
-      "sha256": "e783b7ffffd7b36a9b54187c3842d9f3ec7b6540c3f48c0747f76c0d29b7c2fd"
+      "sha256": "587dc98df28ccd6fc97396dfb518983add5673c264d97fb85b45bb49c20f4d1e"
     },
     {
       "name": "bee-executing",
-      "sha256": "21837fd886b3279ab20213e78ac2292ea2c67168838e99b3693ce9c962826f0f"
+      "sha256": "56d8f11ac0a0a8159955e001635a5463439d5afa360bcc04efeb9ed85add96bd"
     },
     {
       "name": "bee-exploring",
-      "sha256": "79fd98ea548f469714cc1e4a9e8fdec8ffc8b4d0bd79ee55ec745472f77e770b"
+      "sha256": "5c191d5cf6e7a660033ed42e1c6feaae554fefd52b26c5f5c31c9af06e5fd602"
     },
     {
       "name": "bee-grooming",
-      "sha256": "434f7acf2ab1508c290aab1bcea08fd9a3362227319b3deda8804bc9225fa3f8"
+      "sha256": "af1c986f736d50a9ea3ab35dec569f4a296af6fe9788f52fc66856c7e169bc47"
     },
     {
       "name": "bee-herding",
-      "sha256": "3d7b29fe675ecb54cd5a09460eda678be46d4af34aebef8ef582c2c49fb4b2ef"
+      "sha256": "1a1eafc71c782cd5f7737d90dbf44355adc375fce327b6bf5f9848f467d3df64"
     },
     {
       "name": "bee-hive",
@@ -48,7 +48,7 @@
     },
     {
       "name": "bee-qualifying",
-      "sha256": "547f65cfe92db5d7d037707d9923c346daf2c4ef55bf11709ff5e11423ee0745"
+      "sha256": "444e3bb4dca0dccf60b845ac408d4a5da719e05057ebab0cd9a0e32a243eea8a"
     },
     {
       "name": "bee-reviewing",
@@ -68,7 +68,7 @@
     },
     {
       "name": "bee-writing-skills",
-      "sha256": "1d7ad9a655d954a4a60af519417c9bd0e65bfd70593699b5c01ee94123555d62"
+      "sha256": "6dfab82c475225e1184142f44ff4bb926493ee95dfd711657348d6e9659e6036"
     },
     {
       "name": "bee-xia",

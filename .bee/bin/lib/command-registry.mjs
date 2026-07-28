@@ -932,6 +932,43 @@ export const COMMAND_REGISTRY = [
     deprecated: null,
   },
   {
+    name: 'state.workflows.list',
+    invoke: 'bee state workflows list',
+    description:
+      "workflow-lifecycle wl-2 (rule-12 gap closed): read-only listing of every workflow record under .bee/runtime/workflows/ — {id, feature, status, phase, created_at, ...the full record} per entry, sorted newest-created first. Never writes. `status` is one of active/paused/closed (workflow-store.mjs STATUS_VALUES); MULTIPLE records can be status \"active\" at once (one per concurrently-running lane) — this verb is a plain inventory, not itself the pruning tool (see `state workflows close`).",
+    parameters: {
+      type: 'object',
+      properties: {
+        json: { type: 'boolean', description: 'Emit machine-readable JSON (the full record array) instead of a one-line-per-record summary.' },
+      },
+      required: [],
+    },
+    examples: ['bee state workflows list --json'],
+    deprecated: null,
+  },
+  {
+    name: 'state.workflows.close',
+    invoke: 'bee state workflows close',
+    description:
+      'workflow-lifecycle wl-2 (rule-12 gap closed): closes zombie/stale workflow records without hand-editing .bee/runtime/workflows/*/state.json (rule 12\'s forbidden escape hatch). Requires EXACTLY ONE of three mutually exclusive modes: --feature <f> closes every live (non-closed) record whose feature equals <f>; --id <id> closes the single record with that id; --all-but-active closes every live record whose feature differs from the CALLING context\'s own active feature (the same session-bound-lane-else-default resolution `state route`/`state feature-verify` use), keeping that one. The currently active feature\'s record is NEVER closed by --feature or --all-but-active — only --id may name it explicitly, bypassing the protection on purpose. Refuses with a typed, zero-mutation error when a mode selects zero live records (already closed, unknown id, unknown feature, or nothing left besides the active feature). Prints the closed {id, feature} pairs on success.',
+    parameters: {
+      type: 'object',
+      properties: {
+        feature: { type: 'string', description: 'Close every live workflow record for this feature. Refused if this is the currently active feature (use --id instead).' },
+        id: { type: 'string', description: 'Close the single live workflow record with this id, even if it is the currently active feature\'s record.' },
+        'all-but-active': { type: 'boolean', description: 'Close every live workflow record except the currently active feature\'s.' },
+        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
+      },
+      required: [],
+    },
+    examples: [
+      'bee state workflows close --feature stale-feature --json',
+      'bee state workflows close --id wf-abc123 --json',
+      'bee state workflows close --all-but-active --json',
+    ],
+    deprecated: null,
+  },
+  {
     name: 'state.start-feature',
     invoke: 'bee state start-feature',
     description: 'Guarded atomic feature start: fails closed with zero mutations unless the workspace is clean (idle/terminal phase, no handoff/active workers/reservations/claimed or nonterminal prior cells); on success sets feature/mode/phase and resets all four gates. "Active workers" (D6, multisession-native-8) is a derived view — live-heartbeat sessions joined with their current cell claim, never a hand-maintained list — so --session-id names the calling session on EITHER path (default or --as-lane) so its own heartbeat never counts against itself (C3); without --session-id every live session, including the caller\'s own if it has one, counts. Optional --as-lane (D2/D4) starts the feature as a per-feature lane record (.bee/lanes/<feature>.json) beside the default pipeline instead of mutating state.json; --paths is a comma-separated list of intended file paths checked against other sessions\' active claims/reservations before the lane starts (--as-lane only).',
