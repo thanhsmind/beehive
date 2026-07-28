@@ -21,12 +21,12 @@ You are a short-lived worker subagent. Execute exactly one parent-assigned cell,
 Initialize -> Accept assigned cell -> Reserve -> Implement -> Verify -> (Advisor Consult, if stuck) -> Cap -> Release -> Return
 ```
 
-Open `references/worker-details.md` only for expanded commands, trace tiers, friction triggers, and result fields.
+Open `references/worker-details.md` for expanded commands, trace tiers, friction triggers, and result fields.
 
 ## 1. Initialize
 
 - Read `AGENTS.md`.
-- Run `node .bee/bin/bee.mjs status --json`
+- Run `node .bee/bin/bee.mjs status --brief --json`
 - Read `docs/history/<feature>/CONTEXT.md`.
 - Read the cell: `node .bee/bin/bee.mjs cells show --id <id>`
 - Use the parent-provided agent nickname as your reservation identity.
@@ -68,11 +68,9 @@ Package installs **always** checkpoint: stop and return `[BLOCKED]` with the pac
 - A prose `verify` is a planning defect — return `[BLOCKED]`, never invent a substitute. On failure: fix the root cause, rerun the exact command.
 - Full matrix table, amendment history, test-shape rules (D3), read-first (D5), scoped cap evidence, and the debug discipline: `references/worker-details.md` ("Verify in full").
 
-
 ## 6. Advisor Consult
 
 High-risk/hard-gate cells require a recorded advisor consult before the execution gate — the CLI throws without a fresh `advisor_ref` (AO3/AO13; staleness is hash-and-decision-anchored, never a TTL). Resolve the advisor from config, run it read-only with the evidence bundle on stdin, record via `bee state advisor-ref record`. Advice never approves a gate and never overrides a locked decision. Full mechanics, digest shape, and the consult prompt: `references/worker-details.md` ("Advisor consult in full").
-
 
 ## 7. Cap
 
@@ -80,7 +78,7 @@ High-risk/hard-gate cells require a recorded advisor consult before the executio
   `node .bee/bin/bee.mjs cells cap --id <id> --outcome "<summary>" --files <a,b> [--deviations-file <f>] [--friction "<text>"]`
 - If the cell is `behavior_change: true`, add `--behavior-change --evidence-stdin` and **pipe** the structured `verification_evidence` (tests inspected, tests added/changed, red-failure/before-state evidence, verification run — see `references/worker-details.md`). It lands in the cell trace; **do not write an evidence file** in `reports/` or anywhere else (decision 0009 — the trace is the single source; if you ever must, the one canonical scratch home is `.bee/tmp/<feature-or-session>/`, docs/specs/doctrine-layer.md R17).
 - If any Advisor Consults happened on this claim, fold their count and advisor identity into the trace alongside the rest of the evidence — no separate file, same decision 0009 rule.
-- Trace depth follows the cell's lane (tiny = one line; high-risk = full trace). Record friction only when a trigger fired.
+- Trace depth follows the cell's lane (tiny = one line; high-risk = full trace). Record friction when a trigger fired.
 - Make exactly **one commit per cell**, cell id in the message.
 
 ## 8. Release

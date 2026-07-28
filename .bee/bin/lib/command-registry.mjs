@@ -49,10 +49,15 @@ export const COMMAND_REGISTRY = [
           description:
             'Restore the `lanes` field to its full per-lane array (every lane record in full, including bound_sessions) instead of the default summary ({active, counts, ids}). Payload-size only — every other top-level field (phase/mode/feature/gates/cells/recommended_next/...) is unaffected either way.',
         },
+        brief: {
+          type: 'boolean',
+          description:
+            'status-diet D1: fast orientation path for worker startup. Reads ONLY the state layer (state.json + config-derived gate_bypass_level/ship_visibility) — no cell scan, no review/handoff resolution, no models/tier_mix. Emits exactly {phase, feature, mode, gates, gate_bypass_level, ship_visibility, route} (route null when absent); ignored together with --lanes-full (mutually exclusive fast/full paths — --brief wins). Full `status` (this flag omitted) is unchanged.',
+        },
       },
       required: [],
     },
-    examples: ['bee status --json', 'bee status --lanes-full --json'],
+    examples: ['bee status --json', 'bee status --lanes-full --json', 'bee status --brief --json'],
     deprecated: null,
   },
 

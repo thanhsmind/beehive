@@ -1,0 +1,47 @@
+{
+  "id": "st-3",
+  "feature": "status-diet",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "test",
+  "title": "Slice test: brief payload contract (D3)",
+  "action": "Trailing test cell in the owning suite (packages/bee/tests/test_bee_cli.mjs, extend never fork): (a) status --brief --json returns exactly the 7 keys {phase,feature,mode,gates,gate_bypass_level,ship_visibility,route} — no extras; (b) route null when the feature has no route, populated after state route --set; (c) full status --json still carries its pre-existing keys (spot-check: phase, gates, models, handoff present); (d) brief payload byte length < 1024 in the fixture; (e) --brief plain prints the one-line form. Hermetic temp-dir fixtures.",
+  "must_haves": {
+    "truths": [
+      "Assertions a-e green.",
+      "Suite green end-to-end."
+    ],
+    "prohibitions": [
+      "Do NOT weaken st-1.",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs",
+  "read_first": [
+    "packages/bee/bee.mjs",
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "files": [
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "deps": [
+    "st-1",
+    "st-2"
+  ],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at wave close (parallel-default D2)",
+  "status": "open",
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
