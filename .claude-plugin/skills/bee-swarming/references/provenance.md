@@ -8,7 +8,8 @@ each body rule to the decision(s) that authorize it and the rationale in one lin
 | Body rule | Decision IDs / labels | Rationale |
 |---|---|---|
 | Tiny/small implementation runs through one dispatched execution worker, never a wave | AO14 | Execution authority is a named dispatch class, distinct from I/O gathers, even for the lightest lane |
-| Small-lane cells (1-3) run SERIAL, one live worker at a time | hardening-7 | 2+ live small-lane workers is a wave shape wearing a small lane |
+| Small-lane cells (1-3) run PARALLEL when product file sets are disjoint, 3-4 live workers cap; serial names its conflict | hardening-7, parallel-default D1 | Reservations are the proof and the police; undeclared-overlap concurrency is a wave shape wearing a small lane |
+| `regen_obligation_ack: "wave-barrier"` drops shared generated artifacts from the disjointness check; orchestrator owes the regen chain once at wave close | parallel-default D2 | Shared generated artifacts were the near-universal overlap forcing serial dispatch |
 | Orchestrator claims the cell before spawning; workers only validate | D1 | A spawned worker never self-selects or claims its own work |
 | `--session-id` optional, self-derives from `CLAUDE_CODE_SESSION_ID` | D3 | Session id is environment-derived, never pasted transcript |
 | Worker prompt carries only the contract fields, never session history or a literal session id | D3 | Isolation guarantee: fresh context per dispatch |

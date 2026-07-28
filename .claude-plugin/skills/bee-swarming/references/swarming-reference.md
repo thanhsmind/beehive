@@ -22,19 +22,28 @@ command and quotes the fresh output, records `verification_evidence` (and
 `red_failure_evidence` for `behavior_change` cells per the cap rules), caps
 it, releases its reservations, and returns exactly one status token.
 
-**Small-lane serial doctrine (hardening-7):** a `small` lane's cells (1-3)
-never fan out to concurrent workers — process them SERIALLY, one live
-execution worker at a time. Dispatch cell 1, wait for its status token and
-author its done-report, THEN claim and dispatch cell 2 — never claim/dispatch
-a second small-lane cell for the same feature while the first worker is still
-live. Same one-worker contract as `tiny`, across more cells: `small`'s extra
-cells scale the WORK, never the concurrency. Two or more live small-lane
-workers for one feature is a wave shape wearing a `small` lane — the ceremony
-mismatch lane scaling exists to catch. **Parallel criterion:** serial stays
-the default; cells may run in parallel ONLY when every cell's file set —
-including regen targets (release manifest, onboarding ledger, plugin
-mirrors) — is provably disjoint; any shared generated artifact forces
-serial; in doubt, serial.
+**Parallel by default (hardening-7, D1):** a `small` lane's cells (1-3) fan
+out to concurrent execution workers whenever every cell's *product* file set
+is disjoint — reservations are the proof and the police, 3-4 live workers is
+the ak-calibrated cap. Serial is the exception: it requires a named conflict
+recorded in the dispatch note, never assumed as the default. `tiny` stays
+single-cell by shape, so the concurrency question does not arise; `small`'s
+extra cells scale the WORK and, when disjoint, the concurrency too — never
+concurrency wearing an unrecorded conflict. Two or more live small-lane
+workers with an undeclared overlap is a wave shape wearing a `small` lane —
+the ceremony mismatch lane scaling exists to catch.
+
+**Disjointness and the wave-barrier regen protocol:** a cell's *effective*
+file set for the disjointness check excludes shared generated artifacts
+(release manifest, onboarding ledger, plugin mirrors) whenever the cell
+carries `regen_obligation_ack: "wave-barrier"` — the cell itself skips
+in-cell regen, and the ORCHESTRATOR owes the full regen chain (mirror
+render → `onboard --apply` → `manifest --write`/`--check`) exactly ONCE at
+wave close, folded into the wave-close/close commit, before the wave is
+declared clean. This is what lets the scheduler's overlap check see truly
+disjoint product sets instead of serializing every cell on a shared
+generated file. Any *product* file actually shared (not just a regen
+target) still forces serial — in doubt, serial.
 
 After `[DONE]`, emit the cap tick, and when `ship_visibility` is active push
 the cap (first cap of a feature opens the draft PR) —

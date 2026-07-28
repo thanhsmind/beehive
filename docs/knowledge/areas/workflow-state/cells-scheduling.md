@@ -74,6 +74,20 @@ impossible to record; pre-existing records are never mutated by the check
   the schedule's diagnostics report cycles (parallel-scheduler D1/D2/D3,
   decisions a648ea2a/ecc8862d).
 
+- R78 — **Parallel is the default dispatch posture, every lane.** Units of the
+  same wave dispatch concurrently (3–4 live workers) whenever their product
+  file sets are disjoint — reservations prove and police the disjointness;
+  serial dispatch is the exception and must name its conflict. A unit touching
+  shared generated artifacts (release manifest, plugin mirrors, onboarding
+  ledger) may defer their regeneration to the **wave barrier** by declaring
+  the recognized skip value on its regen obligation: the orchestrator then
+  owes the full regeneration chain exactly once at wave close, in the
+  wave-close commit, before the wave is declared clean — removing those
+  artifacts from the overlap comparison so the schedule computes truly
+  disjoint waves (parallel-default D1/D2, user philosophy decision
+  2026-07-28; supersedes the serial-default parallel criterion and rescopes
+  the small-lane serial doctrine).
+
 ## Pointers (implementation)
 
 - Computed schedule (B17/B18, R26/R27): `packages/bee/lib/schedule.mjs`

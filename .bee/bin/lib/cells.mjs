@@ -390,7 +390,9 @@ export function regenObligationRefusal(root, cell, verb = 'addCell') {
       `a root ${guard.covers} (derived at runtime from ${guard.script}, never a list kept here). ` +
       `Missing: ${missing.join('; ')}. FIX: ${fixes.join(', ')}, and run the regen inside THIS cell — ${guard.regen}. ` +
       `To skip deliberately, set "${REGEN_ACK_FIELD}" on the cell to a one-line reason; it is recorded in the cell, ` +
-      `so skipping is a named act rather than an oversight. The write is refused; nothing was written.`
+      `so skipping is a named act rather than an oversight. For parallel waves, the recognized value "wave-barrier" ` +
+      `defers the regen to the orchestrator, which owes the full regen chain once at wave close, in the wave-close ` +
+      `commit, before the wave is declared clean (parallel-default D2). The write is refused; nothing was written.`
     );
   }
   return null;
