@@ -1,6 +1,33 @@
 # Reviewing Reference
 
-Load after `bee-reviewing` is selected. Companion to SKILL.md — flow lives there; prompts, schemas, and checklists live here. Every record on this page lands on a review session (`.bee/reviews/<id>.json`) via `node .bee/bin/bee.mjs reviews record --id <id> --kind ...` — a session exists only after an explicit user request created it (SKILL.md Trigger + Scope Freeze and Preview).
+Load after `bee-reviewing` is selected. Companion to SKILL.md — flow lives there; prompts, schemas, and checklists live here. Every record on this page lands on a review session (`.bee/reviews/<id>.json`) via `node .bee/bin/bee.mjs reviews record --id <id> --kind ...` — a session exists only after an explicit user request created it (SKILL.md Trigger + Scope).
+
+## Scope Resolution in full
+
+The user owns the review boundary. A request resolves to exactly one of five scope types:
+
+1. the current feature, or a named feature
+2. a named list of features/cells
+3. everything completed and unreviewed since the last review baseline
+4. an explicit range with a stated start and end point
+5. everything completed within a stated time window (resolved to an explicit list + immutable diff before dispatch)
+
+If the request does not pin one of these, ask exactly ONE boundary question, then proceed — never ask a second question just to re-confirm permission once the scope is already clear.
+
+**Resolving candidates:** `node .bee/bin/bee.mjs reviews candidates` lists completed-but-unreviewed work; `node .bee/bin/bee.mjs reviews status [--feature F]` reports each candidate's derived coverage label (`unreviewed` / `in review` / `reviewed` / `review stale`). For a batch scope (type 3 or 5), resolve the matching candidates through these verbs, then build ONE cumulative diff spanning all of them, with a mapping from each diff region back to its source feature/cell — reviewers read the cumulative diff once so they can see interaction bugs between changes made together, which is the whole point of batching.
+
+**In-progress work is excluded, never swept in:** any cell that is still `open`/`claimed` is excluded from scope with reason "in progress" and stated to the user. Do not wait for it, do not cap it, do not assume it is done. If the runtime cannot hold a review session and an active feature simultaneously, preserve the active state before entering review and restore it exactly afterward — reviewing must never overwrite active work or drop a handoff.
+
+## Scope Freeze in full
+
+Before any reviewer is dispatched, the scope is frozen:
+
+1. Build the scope JSON: `{ id, requested_by, scope_description, included, excluded, baseline, head }`. Each entry in `included`/`excluded` is `{ type: cell|feature|commit, id, reason? }` — the exact shape `normalizeScopeEntry` in `packages/bee/lib/reviews.mjs` accepts.
+2. Create the session: `node .bee/bin/bee.mjs reviews create --file <scope.json>`. This runs the verification preflight over every included behavior-change cell and **fails closed** — non-zero exit, zero files written — when evidence is missing. A failed preflight is a stop: surface the error to the user; never dispatch reviewers to compensate for missing verification. Commit-only scope entries (type 4/5 ranges with no mappable cell) carry nothing to preflight — state that explicitly in the preview below rather than implying the same evidence guarantee cell entries get.
+3. Only after `create` succeeds, show the user the preview: covered features/cells, baseline/head, what was excluded and why, the expected reviewer count (core + conditional), the review model/tier or external executor that will run, and a warning if the scope is unusually large or has commit-only entries with no preflighted evidence.
+4. Record the reviewer manifest once dispatch is decided: `node .bee/bin/bee.mjs reviews record --id <session-id> --kind manifest --file <manifest.json>` (every `record` call requires `--id`).
+
+Reviewer dispatch is impossible before step 2 succeeds and the preview in step 3 has been shown — nothing in this flow spawns a reviewer against an unfrozen or unpreviewed scope.
 
 ## Specialist Dispatch
 
@@ -131,6 +158,12 @@ After a P1 fix caps:
 
 For each capped cell with `behavior_change: true`, the trace's `verification_evidence` must name: tests inspected, tests added/changed, red-failure or characterization evidence, the verification run, and any deliberate exception. Missing field, or prose like "covered by existing tests" with no test named → P1 finding; the cell's work goes back.
 
+This is a backstop, not the primary catch: the cap helper already refuses a `behavior_change` cell without a "before" characterization (`red_failure_evidence`, or a `deliberate_exceptions` note for a genuinely new surface), and `bee.mjs reviews create`'s own preflight already fails closed on missing evidence before a session could even exist — so an assertion-capped cell should not reach review at all. If one does, treat it as a double bypass and a P1. Do **not** raise a P1 whose only remedy is "record the missing before-state in a new evidence cell" — that backfill loop is exactly what cap-time and create-time enforcement exist to prevent; a real evidence gap means the behavior was never actually proven, which the worker fixes by re-verifying, not by writing a document. Read evidence from the cell trace — the single source — never from a parallel `reports/*-evidence.*` file.
+
+## Frozen-Judge Flags
+
+Any cell the orchestrator flagged with judge hits — undeclared test/CI/lockfile/verify-config changes (`node .bee/bin/bee.mjs cells judge --id <id>`) — is reviewed assuming the judge was *moved*, not passed: diff each flagged file; verify no assertion weakened, no test skipped or deleted, no verify command softened, no dependency silently repinned. A weakened judge is a P1 (it invalidates the wave's evidence), never a cleanup note.
+
 ## Human UAT
 
 For each SEE/CALL/RUN decision in CONTEXT.md:
@@ -153,6 +186,28 @@ Can you confirm this works? [Pass / Fail / Skip]
 - [ ] residual-findings fallback written if any filing failed
 - [ ] UAT results (and skip reasons) recorded on the session (`record --kind uat`) and in `.bee/state.json` where a skip reason is needed
 - [ ] session closeout: `node .bee/bin/bee.mjs reviews record --id <session-id> --kind decision --file decision.json` (`pending`/`blocked`/`approved`) — this closes the SESSION, not a workflow phase; every covered feature already reached its own close via execution → scribing → compounding independently, and that feature state is left untouched (7.5). Do not set `next_action: "Invoke bee-compounding."` here — there is no automatic chain hop out of a review session.
+
+## Gate 4 Bypass Mechanics
+
+Gate bypass (`.bee/config.json` `gate_bypass: true`) NEVER creates or auto-approves a review session (R8) — a session only ever exists because a user explicitly requested one (SKILL.md Trigger). Once a session already exists and reaches its human UAT/merge question, the pre-existing bypass carve-out applies unchanged: the UAT items are always presented to the human, any P1 finding always stops, and bypass may auto-approve the **merge** question only when P1 = 0 **and** every UAT item was confirmed pass by the human — then record the review gate, log a one-line audit decision, and post a short `⚡ auto-approved merge (bypass)` line instead of asking. Any P1, or any UAT fail/skip, stops Gate 4 for the human as normal. Secret reads during review always require human approval regardless of bypass (decision 0010 boundary).
+
+## Lane Scaling in full
+
+No lane auto-runs a reviewer at feature close (goal 1: zero reviewer tokens spent without a request). `tiny`'s done-report stays entirely inside `bee-swarming`'s single-execution-worker dispatch (the orchestrator authors it from the worker's diff plus its own verify re-run, AO14) — that is verification, not independent review, and it never substitutes for a session. Once a session is requested, its panel scales to the SCOPE's own risk, independent of any single feature's lane, per the Lane Scaling table in SKILL.md. A scope containing any high-risk content warrants the full wave regardless of how small the rest of the batch is. None of these depths are ever reduced by gate bypass or by the originating feature having been `tiny`. Everything runs the pre-existing full-review contract **unreduced** — same reviewer count, same models, same severity rules, same UAT obligations (goal 5) — it now simply executes over the session's frozen, immutable diff instead of an ad hoc "final slice" diff.
+
+## Required Inputs and Delegation
+
+- the review session: `node .bee/bin/bee.mjs reviews show --id <session-id>` (scope, baseline/head, included/excluded)
+- `docs/history/<feature>/CONTEXT.md` and `docs/history/<feature>/plan.md` for every feature in scope
+- the session's cumulative diff (baseline..head, or the mapped multi-feature diff from Scope Resolution)
+- capped cells and traces: `node .bee/bin/bee.mjs cells list --feature <feature>`
+- current state: `node .bee/bin/bee.mjs status --json`
+
+Missing CONTEXT.md or plan.md for any feature in scope → stop and return to the stage that owns it. The required-inputs gather, the Verification-Evidence Gate mining, and the Artifact Verification EXISTS/SUBSTANTIVE scan delegate as extraction/generation-tier I/O workers per the Delegation contract (`bee-hive/references/routing-and-contracts.md`); WIRED judgment and severity synthesis stay on the orchestrator.
+
+## Headless in full
+
+`mode:headless` = report-only, and still requires the explicit Trigger before it starts a session at all: run all reviewers, both verification gates, and artifact checks; emit every finding in a structured terminal report with UAT items and ambiguous severities deferred to an `Outstanding Questions` section. Gate 4 still requires the human — headless never self-approves merge, and headless never invents a review request the user didn't make.
 
 ## Red Flags
 

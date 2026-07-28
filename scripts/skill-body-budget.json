@@ -13,7 +13,7 @@
     "bee-hive": 8183,
     "bee-planning": 8139,
     "bee-qualifying": 9383,
-    "bee-reviewing": 22303,
+    "bee-reviewing": 8190,
     "bee-scribing": 8151,
     "bee-swarming": 8187,
     "bee-validating": 18273,
@@ -24,7 +24,8 @@
     "bee-hive",
     "bee-swarming",
     "bee-scribing",
-    "bee-planning"
+    "bee-planning",
+    "bee-reviewing"
   ],
   "notes": {
     "bee-briefing": "pending migration",
@@ -35,7 +36,6 @@
     "bee-grooming": "pending migration",
     "bee-herding": "pending migration",
     "bee-qualifying": "pending migration",
-    "bee-reviewing": "pending migration",
     "bee-validating": "pending migration",
     "bee-writing-skills": "pending migration"
   }
