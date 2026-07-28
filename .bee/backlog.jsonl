@@ -579,3 +579,6 @@
 {"ts":"2026-07-28T07:35:59.518Z","kind":"pbi","event":"add","id":"p-7fceeba1","title":"Feature-close events: scribing+compounding run once at full feature completion; per-slice keeps only capture stubs","status":"proposed","cos":"Sync trigger rescoped in bee-scribing; swarming close protocol updated; AGENTS.md rule 8 + hive capture law aligned; fences green; closes under live R82 law (first run)"}
 {"ts":"2026-07-28T07:36:11.530Z","kind":"pbi","event":"status","id":"p-7fceeba1","status":"in-flight","feature":"feature-close-events"}
 {"ts":"2026-07-28T07:52:25.737Z","kind":"pbi","event":"status","id":"p-7fceeba1","status":"done"}
+{"ts":"2026-07-28T07:55:34.274Z","kind":"pbi","event":"add","id":"p-6ec778c5","title":"Step ticks: mandatory ak-style per-step progress lines (route/gates/dispatch/cap/verify/barrier/sync/close), fixed format, user language, bypass never silences","status":"proposed","cos":"Progress ticks section carries the full tick catalog + glyph format; hive/swarming pointers intact; fences green; demonstrated live at this feature's own close"}
+{"ts":"2026-07-28T07:55:40.551Z","kind":"pbi","event":"status","id":"p-6ec778c5","status":"in-flight","feature":"step-ticks"}
+{"ts":"2026-07-28T08:01:58.901Z","kind":"pbi","event":"status","id":"p-6ec778c5","status":"done"}

@@ -279,6 +279,18 @@ its knowledge actually landed — the state and the specs can no longer disagree
   the acting session's own resolved workspace, never accepted as a caller-
   supplied value (multisession-native D2/D3, msn-19).
 
+- R84 — **Every perceivable step is visible as it happens.** The pipeline no
+  longer works invisibly and reports at the end: each perceivable step emits
+  exactly one short line, on by default, in the user's own work language —
+  route recorded, gate passed or auto-approved, work created, workers
+  dispatched, results received, work capped, fix opened, verification started
+  and its outcome, evidence recorded, sync paid, knowledge synced, learnings
+  compounded, feature closed. One fixed shape: a state glyph (started, done,
+  red, auto-approved), the event, and its key fact. **Bypass silences
+  questions, never ticks**; an explicit quiet setting silences the stream but
+  never a red or a refusal; the ship-visibility switch silences only its own
+  PR-related lines. Ticks are what the agent writes as it goes, never a
+  subsystem to build (step-ticks vt-1, user directive 2026-07-28).
 - R83 — **Scribing and compounding are feature-close events.** A feature spans
   many slices and cells; one executing pass is a small part. Mid-feature,
   settlements are captured as same-turn one-line stubs (unchanged duty); the

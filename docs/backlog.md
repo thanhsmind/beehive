@@ -74,6 +74,7 @@ never a generation timestamp or any other wall-clock value.
 
 - [p-0aa807b9] run_verify --impacted gains --level 1: direct-edge-only selection for the dev loop, transitive closure reserved for wave-close/merge — done
 - [p-50de38d7] Ship visibility: draft PR on first cap, walking-skeleton slice 1, evidence-based lane demotion, progress ticks (spec ak/plans/reports/spec-260727-1632-bee-ship-visibility.md) — done
+- [p-6ec778c5] Step ticks: mandatory ak-style per-step progress lines (route/gates/dispatch/cap/verify/barrier/sync/close), fixed format, user language, bypass never silences — done
 - [p-72af01ca] Status diet: status --brief fast path + workers stop paying full status at startup (dispatch embeds state line) — done
 - [p-7fceeba1] Feature-close events: scribing+compounding run once at full feature completion; per-slice keeps only capture stubs — done
 - [p-8aae1301] Skill token diet: thin-body doctrine + byte budget fence for bee skills (spec ak/plans/reports/spec-260727-1619-bee-skill-token-diet.md) — done

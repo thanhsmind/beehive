@@ -28,7 +28,7 @@ body rule to the decision(s) that authorize it and the rationale in one line. Lo
 | Gate bypass levels (`normal`/`full`/`total`) and their stop floors | decisions 0010, dcf01d7b, a93994d3 | The human chose the level in advance; the recommended option is the approval at that level |
 | Re-lane checkpoint (evidence-based demotion, once per feature) | lane-lean D1/D2; spec #81 P3; USER FEEDBACK 5794a92a | Measured evidence demotes to the smallest honest lane; hard-gate flags never demote |
 | CI status gate before the first claim; `verify: "none"` sentinel | ci-owned-verify D6; decision e54878b1 (superseded ladder); decision 55b951e1 | The full suite is CI-owned; never build on red; only the sentinel means "no tests, deliberately" |
-| Silent bookkeeping — work language only; progress ticks under bypass | decision 1689af1b; spec #81 P4 | The user hears the work, never the machinery; ticks carry outcome, not mechanics |
+| Silent bookkeeping — work language only; progress ticks always-on, mandatory ak-style per-step catalog, bypass never silences | decision 1689af1b; spec #81 P4; user directive 2026-07-28 | The user hears the work, never the machinery; ticks carry outcome, not mechanics; bypass silences questions, never ticks |
 | Purpose-first narration | decision 4439bd7e; work-visibility D1 | Silence about mechanics is never silence about purpose |
 | The agent runs the machinery, not the user | hive law 10 (AGENTS.md critical rule 9) | The only human actions are gate approvals, decision answers, privacy approvals |
 | The hook is a safety net, not the authority | decision c2c46488 | An unblocked write is not an approved write; the law lives in the instruction files |

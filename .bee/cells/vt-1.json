@@ -1,0 +1,54 @@
+{
+  "id": "vt-1",
+  "feature": "step-ticks",
+  "lane": "small",
+  "behavior_change": false,
+  "change_class": "refactor",
+  "title": "Mandatory ak-style per-step tick contract in the Progress ticks law",
+  "action": "Rewrite skills/bee-hive/references/routing-and-contracts.md's 'Progress ticks' section into the full per-step visibility contract (user directive 2026-07-28: bee must never work invisibly under bypass — bypass silences QUESTIONS, never ticks). The section must carry: (1) LAW: every perceivable pipeline step emits exactly ONE short chat line, in the USER's language (work-language law), on by default; only an explicit user 'quiet' (or ship_visibility 'off' for PR-related ticks only) silences them; gate bypass NEVER silences ticks. (2) FORMAT, fixed: '<glyph> <event>: <what> — <key fact>'; glyphs: '▸' step started, '✓' step done/green, '✗' red or refusal (always shown, never quiet-able), '⚡' bypass auto-approval. (3) TICK CATALOG (each with a one-line example): route recorded; gate passed/auto-approved; cells created (N, wave shape); worker dispatched (parallel siblings named); [DONE]/[BLOCKED] received; cell capped; fix cell opened; feature verify started / green / RED; feature-verify recorded (sha); barrier paid; knowledge synced; learnings compounded; feature closed + next action. (4) The existing cap-seam/slice/re-lane tick rows fold INTO this catalog (no second list). Keep the section's existing ship-visibility PR wiring intact. If bee-hive's or bee-swarming's body pointers to the section need no change, touch nothing else; census (test_misc) patterns checked BY GREP (do not run suites — R82): the tick-related checks' regexes must stay satisfiable. Budgets: reference file has no budget; bodies untouched preferred.",
+  "must_haves": {
+    "truths": [
+      "Progress ticks section carries law + fixed format + full catalog with examples, one list only.",
+      "Bypass-never-silences-ticks and red-never-quietable stated explicitly.",
+      "Bodies untouched or within budget; existing pointers still resolve (skill_lint patterns by inspection)."
+    ],
+    "prohibitions": [
+      "Do NOT run any test suite (R82 — main verifies).",
+      "Do NOT weaken ship-visibility PR wiring.",
+      "Do NOT run regen (wave-barrier)."
+    ]
+  },
+  "verify": "node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node scripts/okf_instructions_fence.mjs && node packages/bee/tests/test_misc.mjs",
+  "read_first": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "packages/bee/tests/test_misc.mjs"
+  ],
+  "files": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/provenance.md"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at feature close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-vt1",
+    "outcome": "Progress ticks section rewritten into the mandatory ak-style per-step contract: fixed glyph format, one merged tick catalog with 20 events + examples, bypass-never-silences-ticks and red-never-quiet-able stated explicitly, ship-visibility PR wiring intact",
+    "files_changed": [
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/references/provenance.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T08:00:15.294Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T07:56:32.284Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "generation"
+}
