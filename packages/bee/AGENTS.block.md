@@ -34,7 +34,7 @@ Independent review is user-invoked, not an automatic chain stage (decision 565e6
 ## Critical rules
 
 1. Never execute before validating: no source edits until Gate 3 (`approved_gates.execution: true` in `.bee/state.json`).
-2. **Capping requires verification — with proof.** `node .bee/bin/bee.mjs cells cap` refuses unless a passing verify result is recorded, and the cell's `verify` field must be a runnable command — an assertion is not evidence. Full requirements: `bee-executing` skill.
+2. **Capping proves at the feature boundary, not per cell (R82).** `cells cap --feature-verify-pending` is the sanctioned default for dispatched workers — no per-cell verify evidence required; the classic per-cell evidence path (a passing `verify` result recorded before cap) stays available for spot use, other repos, or transition. Leaving `swarming` (or running `scribing-run`) is refused, immune to every `gate_bypass` level, while any capped cell still carries a pending record and the feature lacks a fresh green feature-verify record newer than it. Full requirements: `bee-executing` skill.
 3. Cells are assigned by the orchestrator; workers never self-select. `claim` refuses while Gate 3 is unapproved or deps are uncapped.
 4. Reserve files before write-heavy work in a swarm (`node .bee/bin/bee.mjs reservations reserve --agent <name> --cell <id> --path <path>`) and prefix write-heavy shell commands with `BEE_AGENT_NAME=<name>` so reservation ownership is checkable. On conflict, return `[BLOCKED]` with the conflict — do not write anyway.
 5. Write `.bee/HANDOFF.json` and pause cleanly before context runs out.
