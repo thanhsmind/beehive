@@ -1601,6 +1601,7 @@
         "packages/bee/tests/test_state_projection.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_instructions_fence.mjs",
         "scripts/okf_instructions_fence.mjs --selftest",
@@ -1703,6 +1704,7 @@
         "packages/bee/tests/test_state_projection.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_instructions_fence.mjs",
         "scripts/okf_instructions_fence.mjs --selftest",
@@ -1845,6 +1847,7 @@
         "packages/bee/tests/test_workflow_store.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_instructions_fence.mjs",
         "scripts/okf_instructions_fence.mjs --selftest",
@@ -2070,6 +2073,7 @@
         "packages/bee/tests/test_state_projection.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_instructions_fence.mjs",
         "scripts/okf_instructions_fence.mjs --selftest",
@@ -2131,6 +2135,7 @@
         "packages/bee/tests/test_workflow_store.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_instructions_fence.mjs",
         "scripts/okf_instructions_fence.mjs --selftest",
@@ -2181,6 +2186,7 @@
         "packages/bee/tests/test_state_projection.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_instructions_fence.mjs",
         "scripts/okf_instructions_fence.mjs --selftest",
@@ -2270,6 +2276,7 @@
         "packages/bee/tests/test_state_projection.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_instructions_fence.mjs",
         "scripts/okf_instructions_fence.mjs --selftest",
@@ -2546,6 +2553,7 @@
         "packages/bee/tests/test_state_projection.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_instructions_fence.mjs",
         "scripts/okf_instructions_fence.mjs --selftest",
@@ -2595,6 +2603,7 @@
         "packages/bee/tests/test_state_projection.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_instructions_fence.mjs",
         "scripts/okf_instructions_fence.mjs --selftest",
@@ -2619,6 +2628,7 @@
         "packages/bee/tests/test_msn_invariants.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "scripts/tests/test_path_identity.mjs"
       ],
       "all": [
@@ -2645,6 +2655,7 @@
         "packages/bee/tests/test_state_projection.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/okf_instructions_fence.mjs",
         "scripts/okf_instructions_fence.mjs --selftest",
@@ -2989,6 +3000,14 @@
         "packages/bee/tests/test_worktree_store.mjs"
       ]
     },
+    "packages/bee/tests/test_worktree_store_merge.mjs": {
+      "direct": [
+        "packages/bee/tests/test_worktree_store_merge.mjs"
+      ],
+      "all": [
+        "packages/bee/tests/test_worktree_store_merge.mjs"
+      ]
+    },
     "packages/bee/tests/test_write_policy.mjs": {
       "direct": [
         "packages/bee/tests/test_write_policy.mjs"
@@ -3174,6 +3193,7 @@
         "packages/bee/tests/test_workflow_store.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/tests/test_compact_capsule.mjs",
         "scripts/tests/test_compaction_advisories.mjs",
@@ -3206,6 +3226,7 @@
         "packages/bee/tests/test_workflow_store.mjs",
         "packages/bee/tests/test_workspace_store.mjs",
         "packages/bee/tests/test_worktree_store.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
         "packages/bee/tests/test_write_policy.mjs",
         "scripts/tests/test_compact_capsule.mjs",
         "scripts/tests/test_compaction_advisories.mjs",
