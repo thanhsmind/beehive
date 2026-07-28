@@ -1,0 +1,94 @@
+{
+  "feature": "skill-token-diet",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "refactor",
+  "read_first": [
+    "docs/history/skill-token-diet/CONTEXT.md",
+    "docs/history/skill-token-diet/plan.md",
+    "docs/history/skill-token-diet/reports/diet-3.md",
+    "scripts/skill_budget_fence.mjs"
+  ],
+  "deps": [
+    "diet-3"
+  ],
+  "id": "diet-4",
+  "title": "Migrate bee-swarming SKILL.md to thin-body doctrine (24676 bytes -> <=8192)",
+  "action": "Rewrite skills/bee-swarming/SKILL.md to the D7 thin-body doctrine following diet-3's proven shape (read docs/history/skill-token-diet/reports/diet-3.md first — same editorial mechanics: body keeps trigger+lane scaling, one flow table, load-bearing invariants incl. Red Flags, reference routing table; everything else exiled to skills/bee-swarming/references/ with quoted-heading pointers; provenance citations exiled to skills/bee-swarming/references/provenance.md per D8; law-paragraph -> table/<=2-line bullet; reassurance clauses deleted; MEANING NEVER CHANGES). Preserve intact: worker prompt template pointer integrity (references/swarming-reference.md headings), worktree attestation invariants (typed halts stay load-bearing in the body or land intact in the reference with a body pointer), single-execution-worker/serial-doctrine rules, all skill_lint-checked pointers. Then update scripts/skill-body-budget.json: lower bee-swarming entry to new exact size (<=8192), append \"bee-swarming\" to migrated[], delete notes[\"bee-swarming\"]. Do NOT edit other skills' bodies or fence/lint/run_verify logic. REGEN OBLIGATION (in THIS cell, in order): node scripts/render_plugin_skill_trees.mjs; node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write — mirrors and manifest ship in the same commit.",
+  "must_haves": {
+    "truths": [
+      "wc -c skills/bee-swarming/SKILL.md <= 8192; baseline entry equals new exact size; \"bee-swarming\" in migrated[]; no notes entry.",
+      "Full cell verify chain green (fence selftest+bare, lint, okf instructions fence, render test, manifest check).",
+      "Every removed section reachable from the body's routing table; provenance.md maps body rules to exiled decision IDs.",
+      "Side-by-side behavior check in the report: 2-3 before/after excerpt pairs (one happy path, one rare branch) showing identical normative content."
+    ],
+    "prohibitions": [
+      "Do NOT weaken, drop, or reword-into-ambiguity any rule — location and phrasing change, meaning never.",
+      "Do NOT edit any other skills/*/SKILL.md.",
+      "Do NOT delete content outright except reassurance clauses — text leaves the body only into a reachable reference."
+    ]
+  },
+  "verify": "node scripts/skill_budget_fence.mjs --selftest && node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node scripts/okf_instructions_fence.mjs && node scripts/tests/test_skill_render.mjs && node scripts/release_manifest.mjs --check",
+  "files": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/provenance.md",
+    "scripts/skill-body-budget.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-diet4",
+    "outcome": "skills/bee-swarming/SKILL.md migrated to D7 thin-body doctrine: 24676 -> 8187 bytes. Full step detail (Operating Contract, Single execution worker, Native worktree dispatch, Fresh-session handoff) moved meaning-intact into references/swarming-reference.md; provenance citations exiled to new references/provenance.md (D8), fence's provenance grep now active on bee-swarming with 0 hits. Baseline lowered 24676 -> 8187, bee-swarming appended to migrated[], grandfather note deleted. Regen obligation ran in-cell: plugin mirror render, onboarding apply, release manifest rewrite. Full cell verify chain green: budget fence selftest (14/14) + bare (18 skills, 0 findings), skill_lint clean, okf_instructions_fence PASS, skill_render 27/27, manifest check 411 files match.",
+    "files_changed": [
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-swarming/references/provenance.md",
+      "scripts/skill-body-budget.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".agents/skills/bee-swarming/SKILL.md",
+      ".agents/skills/bee-swarming/references/swarming-reference.md",
+      ".agents/skills/bee-swarming/references/provenance.md",
+      ".agents/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-swarming/SKILL.md",
+      ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
+      ".claude-plugin/skills/bee-swarming/references/provenance.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude/skills/bee-swarming/SKILL.md",
+      ".claude/skills/bee-swarming/references/swarming-reference.md",
+      ".claude/skills/bee-swarming/references/provenance.md",
+      ".claude/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-swarming/SKILL.md",
+      ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
+      ".codex-plugin/skills/bee-swarming/references/provenance.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T00:38:57.384Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "skill_budget_fence --selftest: 14 passed, 0 failed | skill_budget_fence: 18 skill(s) checked, 0 findings | skill_lint: OK — skill tree clean | okf_instructions_fence: PASS (20 files, 0 unbranched misroutes) | skill_render: 27 passed, 0 failed | release_manifest --check: 411 file(s) match stored manifest",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T00:28:30.948Z",
+    "verify_command": "node scripts/skill_budget_fence.mjs --selftest && node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node scripts/okf_instructions_fence.mjs && node scripts/tests/test_skill_render.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-28T00:38:49.611Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T00:38:49.611Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-28T00:28:46.448Z",
+        "acquired_at": "2026-07-28T00:28:30.946Z",
+        "worker": "exec-diet4",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}

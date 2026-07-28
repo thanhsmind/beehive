@@ -60,7 +60,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "0d98505646a047cd6a05646419505d5fa8b2e48192eb9761d53f3cc8cd4255d4"
+      "sha256": "e05bcec30e3b400018e8cf46dcc853e51d81d6486def5548395f30d470a43ce9"
     },
     {
       "name": "bee-validating",

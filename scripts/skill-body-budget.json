@@ -15,13 +15,14 @@
     "bee-qualifying": 9383,
     "bee-reviewing": 22303,
     "bee-scribing": 24472,
-    "bee-swarming": 24676,
+    "bee-swarming": 8187,
     "bee-validating": 18273,
     "bee-writing-skills": 9154,
     "bee-xia": 6385
   },
   "migrated": [
-    "bee-hive"
+    "bee-hive",
+    "bee-swarming"
   ],
   "notes": {
     "bee-briefing": "pending migration",
@@ -35,7 +36,6 @@
     "bee-qualifying": "pending migration",
     "bee-reviewing": "pending migration",
     "bee-scribing": "pending migration",
-    "bee-swarming": "pending migration",
     "bee-validating": "pending migration",
     "bee-writing-skills": "pending migration"
   }
