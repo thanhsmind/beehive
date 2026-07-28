@@ -3,7 +3,7 @@
 // (GitHub #18) added to hooks/bee-session-close.mjs. Honoring gate_bypass was
 // prose-only: nothing caught the model when it stopped at Gate 2/3 anyway. The
 // Stop hook now returns decision:"block" (continue the turn) when the session
-// tries to stop mid-planning/validating with a gate the active bypass level
+// tries to stop mid-planning with a gate the active bypass level
 // should have auto-approved. This proves the fire/no-fire matrix, the
 // once-per-key loop-guard, PreCompact/SubagentStop never blocking, and
 // fail-open.
@@ -87,14 +87,19 @@ async function runHook(root, { event = "Stop", sessionId = "sess-1" } = {}) {
 // --- rows --------------------------------------------------------------
 
 async function main() {
-  // 1. Happy path: total + planning + shape pending + Stop → block once.
+  // 1. Happy path: total + planning + execution pending + Stop → block once.
+  // (validation-diet D2/D3: planning now carries the SINGLE merged Gate 2/3,
+  // named "execution" in both PHASE_GATE and approved_gates — the standalone
+  // "validating" phase this scenario and the old scenario 3 used to split
+  // between them is retired outright, so there is no separate shape-only-
+  // pending case left; the two collapsed into this one scenario.)
   {
     const root = buildFixture({ phase: "planning", gateBypass: "total" });
     const r = await runHook(root);
-    check(r.fired, "total + planning + shape-pending + Stop → decision:block", r.stdout.slice(0, 120));
+    check(r.fired, "total + planning + execution-pending + Stop → decision:block", r.stdout.slice(0, 120));
     check(
-      r.stdout.includes("Gate 2") && r.stdout.includes("shape"),
-      "block reason names Gate 2 / shape",
+      r.stdout.includes("Gate 3") && r.stdout.includes("execution"),
+      "block reason names Gate 3 / execution",
     );
   }
 
@@ -107,40 +112,35 @@ async function main() {
     check(!second.fired, "loop-guard: immediate same-key re-stop → NO block (advisory)", second.stdout.slice(0, 120));
   }
 
-  // 3. validating → execution / Gate 3.
+  // 1b. H3: high-risk planning/execution instruction names the AO3/AO13
+  // advisor-consult prerequisite before "Set the gate yourself now". (Was
+  // "3b" against the now-retired "validating" phase — same merged gate,
+  // exercised via "planning" + mode: high-risk instead.)
   {
-    const root = buildFixture({ phase: "validating", gateBypass: "total" });
-    const r = await runHook(root);
-    check(r.fired && r.stdout.includes("Gate 3") && r.stdout.includes("execution"),
-      "total + validating + execution-pending + Stop → block (Gate 3)");
-  }
-
-  // 3b. H3: high-risk validating/execution instruction names the AO3/AO13
-  // advisor-consult prerequisite before "Set the gate yourself now".
-  {
-    const root = buildFixture({ phase: "validating", mode: "high-risk", gateBypass: "total" });
+    const root = buildFixture({ phase: "planning", mode: "high-risk", gateBypass: "total" });
     const r = await runHook(root);
     check(
       r.fired &&
         r.stdout.includes("state advisor-ref record") &&
         r.stdout.includes("AO3/AO13") &&
         r.stdout.indexOf("advisor consult") < r.stdout.indexOf("Set the gate yourself now"),
-      "total + high-risk + validating/execution → block names advisor-consult prerequisite before setting the gate",
+      "total + high-risk + planning/execution → block names advisor-consult prerequisite before setting the gate",
       r.stdout,
     );
   }
 
-  // 3c. Non-high-risk execution instruction stays byte-unchanged — no consult
-  // sentence, straight from "do NOT ask the human." to "Set the gate yourself now".
+  // 1c. Non-high-risk execution instruction stays byte-unchanged — no consult
+  // sentence, straight from "do NOT ask the human." to "Set the gate yourself
+  // now". (Was "3c" against the now-retired "validating" phase.)
   {
-    const root = buildFixture({ phase: "validating", mode: "standard", gateBypass: "total" });
+    const root = buildFixture({ phase: "planning", mode: "standard", gateBypass: "total" });
     const r = await runHook(root);
     check(
       r.fired &&
         !r.stdout.includes("advisor-ref record") &&
         !r.stdout.includes("AO3/AO13") &&
         r.stdout.includes("do NOT ask the human. Set the gate yourself now:"),
-      "total + standard mode + validating/execution → block instruction unchanged (no consult sentence)",
+      "total + standard mode + planning/execution → block instruction unchanged (no consult sentence)",
       r.stdout,
     );
   }
@@ -152,15 +152,18 @@ async function main() {
     check(!r.fired, "total + exploring phase → NO block (Gate 1 excluded)", r.stdout.slice(0, 120));
   }
 
-  // 5. gate already approved → nothing to force.
+  // 5. gate already approved → nothing to force. (validation-diet D2/D15:
+  // the merged gate flips shape+execution TOGETHER, so an "already approved"
+  // fixture carries both true — PHASE_GATE checks approved_gates.execution
+  // for phase "planning" now, not "shape".)
   {
     const root = buildFixture({
       phase: "planning",
       gateBypass: "total",
-      approved_gates: { context: true, shape: true, execution: false, review: false },
+      approved_gates: { context: true, shape: true, execution: true, review: false },
     });
     const r = await runHook(root);
-    check(!r.fired, "total + planning + shape ALREADY approved → NO block");
+    check(!r.fired, "total + planning + execution ALREADY approved → NO block");
   }
 
   // 6. off → never fires.

@@ -105,26 +105,175 @@ function rm(root) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════
-// Scenario 3 — source write before Gate 3 -> write-guard binary denies
+// Scenario 3 — source write before the execution gate -> write-guard binary
+// denies (validation-diet D4 ANCHOR: drives the REAL state machine to the
+// pre-execution phase via real `bee.mjs state` commands -- start-feature,
+// then the actual phase transition -- never a hand-built `phase:` fixture.
+// This is bee's canonical conformance proof that a source write is denied
+// before execution is approved; pre-cut it hand-built `phase: "validating"`
+// via buildStoreFixture, which after the phase-enum cut would have driven an
+// unknown phase into the write guard's new deny-on-unrecognized-phase tail --
+// proving the wrong thing for the wrong reason. D2/D3: "planning" is now the
+// one phase carrying the merged Gate 2/3, so reaching it for real is reaching
+// the actual pre-execution state.)
 // (fixture payload; no live-repo mutation; negative-state: nothing written)
 // ═════════════════════════════════════════════════════════════════════════
 
 async function scenario3() {
-  const root = buildStoreFixture("bee-conformance-s3-", { phase: "validating", executionApproved: false });
+  const root = mkFixture("bee-conformance-s3-");
+  fs.mkdirSync(path.join(root, ".bee"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".bee", "onboarding.json"), "{}\n");
+  copyLib(root);
+
+  // Real state machine, real commands: a fresh feature starts at "exploring"
+  // (start-feature's own default), then the actual phase-transition verb
+  // moves it to "planning" -- the phase that now carries the merged
+  // shape+execution gate. Neither command touches .bee/state.json by hand.
+  const started = await runBee(root, [
+    "state", "start-feature", "--feature", "conform-demo", "--mode", "standard", "--json",
+  ]);
+  const transitioned = await runBee(root, [
+    "state", "set", "--phase", "planning", "--owner", "exploring", "--json",
+  ]);
+
   const target = "src/new-feature.js";
   const res = await runHook(WRITE_GUARD, { tool_name: "Edit", tool_input: { file_path: target } }, root);
   const denied = res.status === 2 && /bee gate/.test(res.stderr);
   const nothingWritten = !fs.existsSync(path.join(root, target));
-  // Control row: the same gated phase still allows a docs/ target — proves
+  // Control row: the same gated phase still allows a docs/ target -- proves
   // the deny is gate policy, not a broad write block (negative control).
   const control = await runHook(WRITE_GUARD, { tool_name: "Edit", tool_input: { file_path: "docs/notes.md" } }, root);
   record(
     "scenario-3",
-    "a source write before Gate 3 is denied by the write-guard binary (public entrypoint) and nothing was written; a docs/ write in the same gated phase still passes (control)",
-    denied && nothingWritten && control.status === 0,
-    `deny: status=${res.status} stderr=${res.stderr}; nothingWritten=${nothingWritten}; control status=${control.status} stderr=${control.stderr}`,
+    "a source write before the execution gate -- reached by driving the REAL state machine (state start-feature + state set --phase planning, D2/D3/D4) to phase \"planning\", never a hand-built fixture -- is denied by the write-guard binary (public entrypoint) and nothing was written; a docs/ write in the same gated phase still passes (control)",
+    started.status === 0 && transitioned.status === 0 && denied && nothingWritten && control.status === 0,
+    `start=${started.status} transition=${transitioned.status} deny: status=${res.status} stderr=${res.stderr}; nothingWritten=${nothingWritten}; control status=${control.status} stderr=${control.stderr}`,
   );
   rm(root);
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Scenario D2-happy-path -- the merged gate's OTHER half: once `state gate
+// --merge --approved true` flips both shape and execution together (D2), the
+// SAME source write scenario3 just proved denied now passes through the
+// write-guard binary. Closes the loop between the merged-gate CLI command
+// (already proven at the state-flip level by test_state_projection.mjs's
+// own D2/D14/D15 suite) and the actual write-guard outcome -- net slice-1
+// behavior, not a per-cell internal.
+// ═════════════════════════════════════════════════════════════════════════
+
+async function scenarioMergedGateHappyPath() {
+  const root = mkFixture("bee-conformance-mergegate-");
+  fs.mkdirSync(path.join(root, ".bee"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".bee", "onboarding.json"), "{}\n");
+  copyLib(root);
+
+  await runBee(root, ["state", "start-feature", "--feature", "merge-demo", "--mode", "standard", "--json"]);
+  await runBee(root, ["state", "set", "--phase", "planning", "--owner", "exploring", "--json"]);
+
+  const target = "src/merge-demo-feature.js";
+  const before = await runHook(WRITE_GUARD, { tool_name: "Edit", tool_input: { file_path: target } }, root);
+  const deniedBefore = before.status === 2;
+
+  const merged = await runBee(root, ["state", "gate", "--merge", "--approved", "true", "--json"]);
+  const mergedParsed = merged.status === 0 ? JSON.parse(merged.stdout) : null;
+  const bothFlipped = Boolean(
+    mergedParsed && mergedParsed.approved_gates &&
+      mergedParsed.approved_gates.shape === true && mergedParsed.approved_gates.execution === true,
+  );
+
+  const after = await runHook(WRITE_GUARD, { tool_name: "Edit", tool_input: { file_path: target } }, root);
+  const allowedAfter = after.status === 0;
+
+  record(
+    "scenario-d2-merged-gate-happy-path",
+    "the SAME source write denied pre-approval (scenario 3) is allowed by the write-guard binary once `state gate --merge --approved true` (D2, real public entrypoint) flips BOTH shape and execution in one call -- the merged gate's happy path, net behavior end to end",
+    deniedBefore && merged.status === 0 && bothFlipped && allowedAfter,
+    `before: status=${before.status}; merge: status=${merged.status} gates=${JSON.stringify(mergedParsed && mergedParsed.approved_gates)}; after: status=${after.status} stderr=${after.stderr}`,
+  );
+  rm(root);
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Scenario D13-legacy-lane -- the read-side migration (D13) proven at a real
+// public entrypoint for a LANE record, not just the default store (already
+// proven at the unit level by test_guards.mjs). A lane file written by a
+// pre-cut bee (the only way "validating" can appear on disk today, since the
+// live machine refuses to ever construct it again -- proven in the same
+// scenario) still reads back as phase "planning" through `state lanes --json`.
+// ═════════════════════════════════════════════════════════════════════════
+
+async function scenarioLegacyLaneMigration() {
+  const root = mkFixture("bee-conformance-lanemigrate-");
+  fs.mkdirSync(path.join(root, ".bee"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".bee", "onboarding.json"), "{}\n");
+  copyLib(root);
+
+  const feature = "legacy-lane-demo";
+  const started = await runBee(root, [
+    "state", "start-feature", "--feature", feature, "--as-lane", "--mode", "standard", "--json",
+  ]);
+
+  // Simulate a lane record a PRE-CUT bee wrote to disk: the only way
+  // "validating" can appear in a lane file today is that it was written
+  // before the phase-enum cut landed -- no live command can construct it
+  // (proven by the refusal check below), so a direct on-disk edit is the
+  // correct way to build this fixture, not a violation of "never hand-build
+  // a phase for gating" (D4): this IS the migration input under test.
+  const lanePath = path.join(root, ".bee", "lanes", `${feature}.json`);
+  const laneRaw = JSON.parse(fs.readFileSync(lanePath, "utf8"));
+  laneRaw.phase = "validating";
+  laneRaw.approved_gates = { context: true, shape: true, execution: true, review: false };
+  fs.writeFileSync(lanePath, `${JSON.stringify(laneRaw, null, 2)}\n`);
+
+  // The live state machine now refuses to ever (re)produce "validating" --
+  // proves the phase is truly retired, not merely renamed.
+  const refused = await runBee(root, [
+    "state", "start-feature", "--feature", "reject-demo", "--phase", "validating", "--json",
+  ]);
+  const refusedOk = refused.status !== 0 && /not in the known-phase enum/.test(`${refused.stdout}${refused.stderr}`);
+
+  // Read-side coercion (D13) at a real public entrypoint: `state lanes
+  // --json` reports the coerced phase, never the legacy literal on disk.
+  const lanes = await runBee(root, ["state", "lanes", "--json"]);
+  const lanesParsed = lanes.status === 0 ? JSON.parse(lanes.stdout) : null;
+  const laneEntry = Array.isArray(lanesParsed) ? lanesParsed.find((l) => l.feature === feature) : null;
+  const coerced = Boolean(laneEntry && laneEntry.phase === "planning");
+
+  record(
+    "scenario-d13-legacy-lane-migration",
+    "a lane record (.bee/lanes/*.json) written by a pre-cut bee holding the retired phase \"validating\" is coerced to \"planning\" at the real `state lanes` entrypoint (D13), and the live state machine now refuses to ever construct \"validating\" again via `state start-feature --phase`",
+    started.status === 0 && refusedOk && coerced,
+    `started=${started.status} refused: status=${refused.status} stdout=${refused.stdout} stderr=${refused.stderr}; lanes: status=${lanes.status} entry=${JSON.stringify(laneEntry)}`,
+  );
+  rm(root);
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Scenario D13-still-allowed-phases -- the four KNOWN-but-deliberately-
+// unhandled phases (D13's narrowed tail: `reviewing`, `scribing`,
+// `compounding`, `grooming`) still fall through to allow a source write --
+// pinning that the new deny-on-unrecognized-phase tail (D13) narrowed to
+// `!isKnownPhase(phase)` and did NOT become a blanket deny that would also
+// trap ordinary post-approval scribing/compounding work.
+// ═════════════════════════════════════════════════════════════════════════
+
+async function scenarioStillAllowedPhases() {
+  const phases = ["reviewing", "scribing", "compounding", "grooming"];
+  const results = [];
+  for (const phase of phases) {
+    const root = buildStoreFixture(`bee-conformance-allowed-${phase}-`, { phase, executionApproved: false });
+    const res = await runHook(WRITE_GUARD, { tool_name: "Edit", tool_input: { file_path: "src/x.js" } }, root);
+    results.push({ phase, status: res.status, stderr: res.stderr });
+    rm(root);
+  }
+  const allAllowed = results.every((r) => r.status === 0);
+  record(
+    "scenario-d13-four-still-allowed-phases",
+    "each of the four known-but-unhandled phases (reviewing, scribing, compounding, grooming -- D13's narrowed deny tail) still allows a source write via the write-guard binary",
+    allAllowed,
+    JSON.stringify(results),
+  );
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -618,6 +767,9 @@ async function scenario15() {
 
 async function main() {
   await scenario3();
+  await scenarioMergedGateHappyPath();
+  await scenarioLegacyLaneMigration();
+  await scenarioStillAllowedPhases();
   await scenario6();
   await scenario5a();
   await scenario12();

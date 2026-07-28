@@ -563,13 +563,17 @@ await invariantCheck(
     try {
       fs.mkdirSync(path.join(guardRoot, '.bee'), { recursive: true });
       fs.writeFileSync(path.join(guardRoot, '.bee', 'onboarding.json'), JSON.stringify({ schema_version: '1.0', bee_version: '0.1.0' }, null, 2));
-      // 'validating' + execution approved (never 'idle' — the intake gate
+      // 'planning' + execution approved (never 'idle' — the intake gate
       // would block first; never 'swarming' — the workspace-ownership deny
       // class explicitly excludes it, guards.mjs's own `phase !== 'swarming'`
       // condition, "swarming reservations keep their existing guard
       // branches") — same placement discipline test_guards.mjs's own
       // ownershipRepo() fixture uses, so the ownership check is what
-      // actually decides here, not an earlier gate branch.
+      // actually decides here, not an earlier gate branch. (validation-diet
+      // D3/D4: was 'validating' pre-cut — that phase is retired outright, so
+      // any GATED_PHASES member with execution approved proves the same
+      // "sessionless carve-out reaches the ordinary gate-allow path" shape;
+      // 'planning' is the live member now that Gate 2/3 merged.)
       //
       // Written to DISK, not just held in memory: checkWrite's
       // resolveWriteRecord only uses the in-memory `state` param when
@@ -579,7 +583,7 @@ await invariantCheck(
       // moment the session has no lane binding (readSession returns null
       // for a session that was never created here) — so the on-disk record
       // is what actually governs the intruder's write below.
-      const state = { ...defaultState(), phase: 'validating', approved_gates: { context: true, shape: true, execution: true, review: false } };
+      const state = { ...defaultState(), phase: 'planning', approved_gates: { context: true, shape: true, execution: true, review: false } };
       writeState(guardRoot, state);
       // checkWorkspaceOwnership only treats an owner as a live blocker when
       // its SESSION RECORD exists and its heartbeat is fresh (a

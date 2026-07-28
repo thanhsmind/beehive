@@ -1634,15 +1634,18 @@ async function runCodexSubagentAuditRows() {
 
 async function runNicknameRows() {
   const rows = [];
-  // Dedicated fixture: a NON-swarming, non-reviewing phase (validating), so
+  // Dedicated fixture: a NON-swarming, non-reviewing phase (planning), so
   // the nudge can only fire through registered-worker matching — never
   // through the phase==="swarming" shortcut the shared fixture uses.
+  // (validation-diet D3/D4: was "validating" pre-cut, now retired outright —
+  // any non-swarming/non-reviewing phase proves the same "not the shortcut"
+  // shape, and this hook does not gate on GATED_PHASES at all.)
   const root = buildFixture("hook-contracts-nickname-");
   fs.writeFileSync(
     path.join(root, ".bee", "state.json"),
     `${JSON.stringify(
       {
-        phase: "validating",
+        phase: "planning",
         mode: "standard",
         feature: "demo",
         approved_gates: { context: true, shape: true, execution: false, review: false },
