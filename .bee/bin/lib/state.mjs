@@ -29,7 +29,7 @@ import { activeDecisions } from './decisions.mjs';
 // no cycle: it never imports this file back. startFeature (below) uses it to
 // create/seed workflow records alongside its existing legacy-store writes
 // (D1, multisession-native-6).
-import { createWorkflow, listWorkflows } from './workflow-store.mjs';
+import { createWorkflow, listWorkflows, updateWorkflow } from './workflow-store.mjs';
 
 export const BEE_VERSION = '1.19.2';
 
@@ -2882,6 +2882,14 @@ export async function startFeature(
     }
   }
 
+  // D1 (foundation-fixes): captured only on the DEFAULT (non-lane) branch
+  // below — lanes are bee's existing, deliberately-concurrent mechanism
+  // (many features running side by side), so a lane start never closes any
+  // OTHER feature's workflow. Read outside the lock so the close-step after
+  // it (which runs its own workflow-store locking) never nests inside
+  // 'state'.
+  let outgoingFeatureToClose = null;
+
   const legacyRecord = await withStoreLock(root, 'state', () => {
     if (lane) {
       return startLane(root, {
@@ -2950,6 +2958,7 @@ export async function startFeature(
     }
 
     const priorFeature = state.feature;
+    outgoingFeatureToClose = priorFeature || null;
     if (priorFeature) {
       const nonterminal = cells.filter(
         (cell) =>
@@ -3006,6 +3015,29 @@ export async function startFeature(
     summary: legacyRecord.summary,
     next_action: legacyRecord.next_action,
   });
+
+  // D1 (foundation-fixes): close the OUTGOING feature's live workflow
+  // record(s) — the enum value STATUS_VALUES has carried since msn-5
+  // (workflow-store.mjs:72) finally gets a writer. Scoped to the DEFAULT
+  // (non-lane) path only (`outgoingFeatureToClose` is set only on that
+  // branch above) and only to records naming that SPECIFIC prior feature —
+  // never a blanket "close everything else active", which would wrongly
+  // close unrelated concurrent lanes. `outgoingFeatureToClose` is guaranteed
+  // to differ from `featureTrimmed` here: checkNoLiveWorkflowForFeature above
+  // already refused this call if a live record for `featureTrimmed` existed,
+  // so a match on `outgoingFeatureToClose === featureTrimmed` can never reach
+  // this point. Runs AFTER the new workflow is created (never before) so a
+  // crash between them leaves the new record live and only a to-be-closed
+  // stale record behind — never a moment with zero active workflows for a
+  // feature genuinely still starting.
+  if (outgoingFeatureToClose && outgoingFeatureToClose !== featureTrimmed) {
+    const controlRoot = controlRootFor(root);
+    const { workflows: postCreate } = listWorkflows(controlRoot);
+    const stale = postCreate.filter((wf) => wf.feature === outgoingFeatureToClose && wf.status === 'active');
+    for (const wf of stale) {
+      await updateWorkflow(controlRoot, wf.id, { status: 'closed' });
+    }
+  }
 
   return legacyRecord;
 }

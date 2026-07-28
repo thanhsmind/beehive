@@ -75,6 +75,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-50de38d7] Ship visibility: draft PR on first cap, walking-skeleton slice 1, evidence-based lane demotion, progress ticks (spec ak/plans/reports/spec-260727-1632-bee-ship-visibility.md) — done
 - [p-8aae1301] Skill token diet: thin-body doctrine + byte budget fence for bee skills (spec ak/plans/reports/spec-260727-1619-bee-skill-token-diet.md) — done
 - [p-8afb88a4] Test batching: slice test cell replaces per-cell red-first on feature work (spec ak/plans/reports/spec-260727-1626-bee-test-batching.md) — done
+- [p-91ceee70] Foundation fixes: workflow close transition kills state-clobber zombies; Windows suite split kills 600s timeout — done
 - [p-b11732c2] bee worktree new must require --with-companion (or refuse) when a live concurrent session touches a shared companion checkout — done
 - [p-ccc558a0] Installer verify fails: bee.mjs status reports drift=true post-apply when repo-copy sync leaves an orphaned extra lib file — done
 - [p-e8a153e2] Validation speedup: delta validation, merged review wave, deferred presentation (spec ak/plans/reports/spec-260727-1610-bee-validation-speedup.md) — done

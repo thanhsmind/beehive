@@ -279,6 +279,14 @@ its knowledge actually landed — the state and the specs can no longer disagree
   the acting session's own resolved workspace, never accepted as a caller-
   supplied value (multisession-native D2/D3, msn-19).
 
+- R79 — **A feature's workflow record is closed, not abandoned.** Starting a
+  new feature closes the outgoing feature's live workflow record(s) (terminal
+  status) inside the same guarded mutation that creates the new one, and the
+  projection's idle-bootstrap picker never selects a record whose phase is the
+  terminal close phase — so a rebuild fired by a stopping subagent can never
+  resurrect a finished feature into the live state. Settled after three
+  same-day incidents where zombie-active records of closed features were
+  picked on SubagentStop rebuilds (foundation-fixes D1/D2).
 - R77 — Ship visibility is an opt-in workspace setting with exactly two
   values: off (the default when the key is absent) and draft-pr. The runtime
   status report always carries the resolved value; the session preamble adds

@@ -146,8 +146,16 @@ export function workflowGatesToApprovedGates(gates, planRev) {
 // the default projection's source); ties broken by created_at descending,
 // then id descending, so two records created within the same millisecond
 // still resolve deterministically.
+//
+// D2 (foundation-fixes): also excludes `phase === 'compounding-complete'` —
+// defense in depth alongside D1's startFeature close-on-start writer. A
+// zombie record that predates D1 (or slips through some other path that
+// never closes its workflow) can still carry `status: 'active'` forever;
+// this filter makes sure such a record — a feature that has already reached
+// its terminal phase — can never be resurrected as "the" active workflow by
+// the idle-bootstrap branch below, even if its status was never flipped.
 export function pickNewestActiveWorkflow(workflows) {
-  const active = (workflows || []).filter((wf) => wf && wf.status === 'active');
+  const active = (workflows || []).filter((wf) => wf && wf.status === 'active' && wf.phase !== 'compounding-complete');
   if (active.length === 0) return null;
   return active.slice().sort((a, b) => {
     const ta = Date.parse(a.created_at) || 0;
