@@ -17,7 +17,7 @@ Use `bee-hive` first in this repo unless you are resuming an already approved be
 ```
 bee-hive
   -> bee-exploring     [GATE 1] "Decisions locked. Approve CONTEXT.md before planning?"
-  -> bee-planning      (shape) → bee-briefing renders implement-plan.md
+  -> bee-planning      (shape) → bee-briefing renders implement-plan.md (standard: on-demand; high-risk: always)
                        [GATE 2] "Work shape and execution are ready. Approve shape and execution together?"
   -> bee-swarming
   -> bee-executing
@@ -39,7 +39,7 @@ Independent review is user-invoked, never an automatic chain stage (decision 565
 5. Write `.bee/HANDOFF.json` and pause cleanly before context runs out.
 6. `docs/history/<feature>/CONTEXT.md` is the source of truth for locked decisions. Log decisions through `bee.mjs decisions`, never by hand-editing `.bee/decisions.jsonl`.
 7. One commit per cell, cell id in the commit message.
-8. **Lanes scale ceremony, never memory.** Capture every settled rule, behavior, or value the moment it settles — whatever the lane — and close every task with a capture line or an explicit "nothing settled". Full trigger and detection discipline: `bee-scribing` skill.
+8. **Lanes scale ceremony, never memory.** Capture every settled rule, behavior, or value the moment it settles — whether or not the lane produced a `plan.md` (D3/D4) — and close every task with a capture line or an explicit "nothing settled". Full trigger and detection discipline: `bee-scribing` skill.
 9. **The agent runs the machinery, not the user.** Every bee command is run by the agent itself the moment the workflow calls for it — never printed for the user to run. The only human actions are gate approvals, decision answers, and privacy approvals. Full rule: `bee-hive` skill, critical rule 10.
 10. **Work language only, purpose first:** the user hears the work in their own terms, never bee mechanics, and every work unit opens with one sentence naming what is being done and for what outcome. Full rule: `bee-hive` skill, critical rule 11.
 11. **The hook is a safety net, not the authority.** The law is this file: route through `bee-hive` before touching source, every time — an unblocked write is not an approved write.
@@ -76,7 +76,7 @@ Full contract: `skills/bee-hive/references/routing-and-contracts.md` § Communic
   logs/               <- hooks.jsonl (fail-open crash/audit) + timings.jsonl
   bin/                <- bee.mjs, the sole shipped CLI; bin/lib/ its shared modules
 
-docs/history/<feature>/    <- CONTEXT.md + reports/; plan.md frozen at Gate 2 (which lanes owe one: `bee-planning`)
+docs/history/<feature>/    <- CONTEXT.md + reports/; plan.md frozen at Gate 2 (D1) - standard/high-risk always, plan.md is opt-in (D4) for small, tiny/spike none since the cell is the micro-plan (D3)
 docs/history/learnings/    <- critical-patterns.md + dated learnings
 docs/knowledge/       <- knowledge bundle: areas/<area>/ concepts — the state layer; read FIRST
 docs/specs/           <- read-only compat surface (the state layer when no bundle)
