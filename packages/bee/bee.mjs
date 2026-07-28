@@ -1107,11 +1107,38 @@ function handleCellsReady(root, flags) {
   return { result: cells, text: cells.length ? cells.map(summarizeCell).join('\n') : 'No ready cells.' };
 }
 
+// vo-1 (verify-owner-signal): under R82 (main-verifies) the assigned worker
+// never runs a cell's `verify` field — MAIN runs it once at feature close.
+// A worker reading `cells show` sees a field literally named `verify` with a
+// ready-to-run command and no owner on it, which reads as an instruction to
+// run it. This annotation makes ownership visible at the exact read moment,
+// in both the --json and human-render paths (both consume the same object
+// below), without renaming or removing the `verify` field itself.
+export const VERIFY_OWNER_ANNOTATION = 'main (feature close) — the worker never runs this';
+
+// Inserts `verify_owner` immediately after `verify` in key order so it reads
+// as a suffix on the verify line in the pretty-printed render; falls back to
+// appending at the end for a malformed cell that has no `verify` key.
+function withVerifyOwner(cell) {
+  const out = {};
+  let inserted = false;
+  for (const [key, value] of Object.entries(cell)) {
+    out[key] = value;
+    if (key === 'verify') {
+      out.verify_owner = VERIFY_OWNER_ANNOTATION;
+      inserted = true;
+    }
+  }
+  if (!inserted) out.verify_owner = VERIFY_OWNER_ANNOTATION;
+  return out;
+}
+
 function handleCellsShow(root, flags) {
   const id = requireFlag(flags, 'id');
   const cell = readCell(root, id);
   if (!cell) throw new Error(`Cell "${id}" not found.`);
-  return { result: cell, text: JSON.stringify(cell, null, 2) };
+  const annotated = withVerifyOwner(cell);
+  return { result: annotated, text: JSON.stringify(annotated, null, 2) };
 }
 
 // H2 (post-advisor-hardening, learnings 20260717 "the release-manifest trap

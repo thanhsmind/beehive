@@ -96,7 +96,8 @@ export const COMMAND_REGISTRY = [
   {
     name: 'cells.show',
     invoke: 'bee cells show',
-    description: 'Show one cell by id, including its full trace.',
+    description:
+      'Show one cell by id, including its full trace. The output carries a `verify_owner` field (JSON and text alike) stating that the `verify` command is MAIN\'s — run once at feature close, never by the assigned worker.',
     parameters: {
       type: 'object',
       properties: {
@@ -134,7 +135,7 @@ export const COMMAND_REGISTRY = [
     name: 'cells.update',
     invoke: 'bee cells update',
     description:
-      'Door-validated in-place revision for validation-repair loops: only open|blocked cells are updatable. Plan fields only (title/action/verify/files/read_first/deps/decisions/must_haves/behavior_change/lane/pbi); frozen keys (id/feature/status/trace/tier) and any unknown key refuse the whole patch untouched. Exactly one of --file / --stdin is required at call time (both satisfy the schema; the handler itself enforces the choice).',
+      'Door-validated in-place revision for validation-repair loops: only open|blocked cells are updatable. Plan fields only (title/action/verify/files/read_first/deps/decisions/must_haves/behavior_change/lane/pbi) — verify is plan text the worker edits but never runs; MAIN owns running it at feature close. Frozen keys (id/feature/status/trace/tier) and any unknown key refuse the whole patch untouched. Exactly one of --file / --stdin is required at call time (both satisfy the schema; the handler itself enforces the choice).',
     parameters: {
       type: 'object',
       properties: {
