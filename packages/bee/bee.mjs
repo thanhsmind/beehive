@@ -65,6 +65,7 @@ import {
   STALE_ADVISOR_KEY_WARNING,
   validateModelsConfig,
   validateAgentFilesDrift,
+  readLane,
   readLaneStrict,
   writeLane,
   listLanes,
@@ -860,6 +861,11 @@ function buildStatus(root, { lanesFull = false } = {}) {
     gate_bypass: bypassLevel(root) !== 'off',
     gate_bypass_level: bypassLevel(root),
     ship_visibility: shipVisibility(root),
+    // explicit-triage D2: the validated route record for the active feature
+    // (null when absent) — same zero-conditional-line-when-absent posture as
+    // ship_visibility above; `state` is already the resolved default record,
+    // and `state route --set`'s write() lands `route` straight onto it.
+    route: state.route ?? null,
     models: readConfig(root).models,
     tier_mix: tierMix(root, { feature: state.feature || null }),
     ceiling_scarcity: ceilingScarcityWarning(root),
@@ -1335,7 +1341,33 @@ async function handleCellsClaim(root, flags) {
   if (!result.ok) {
     throw new Error(`claim: ${result.code} — ${result.reason}`);
   }
+  // explicit-triage D3: soft enforcement — a claimed cell whose feature has
+  // no recorded route gets ONE stderr warning, never a refusal ("warn now,
+  // tighten later if warnings recur", the ratchet philosophy CONTEXT.md
+  // names). Never blocks the claim itself, which has already succeeded above.
+  if (!claimedFeatureHasRoute(root, result.cell.feature)) {
+    process.stderr.write(
+      `WARNING: cell "${result.cell.id}" claimed for feature "${result.cell.feature}" with no route record — ` +
+        'run "bee state route --set --class <c> --lane <l> --flags <f> --files <n>" to record the triage (D3, soft enforcement).\n',
+    );
+  }
   return { result: result.cell, text: `Claimed ${result.cell.id} for ${result.cell.trace.worker}.` };
+}
+
+// explicit-triage D3 helper: does `feature` already have a recorded route?
+// Checked against whichever record actually tracks it — a lane record when
+// one exists for this feature, else the default record when it names the
+// SAME feature. A feature that resolves to neither (a legacy/edge cell whose
+// feature was never started as a lane and isn't the current default feature)
+// is not something this check can evaluate at all — stays silent rather than
+// warning about a target it cannot resolve.
+function claimedFeatureHasRoute(root, feature) {
+  if (!feature) return true;
+  const lane = readLane(root, feature);
+  if (lane) return Boolean(lane.route);
+  const state = readState(root);
+  if (state && state.feature === feature) return Boolean(state.route);
+  return true;
 }
 
 // D4 (msh-4): the ownership pair shared by every claim-aware mutator below —
@@ -4073,6 +4105,160 @@ function handleStateAdvisorRefShow(root, flags) {
     text:
       `advisor="${ref.advisor}" feature="${ref.feature}" consulted_at=${ref.consulted_at} stale=${staleness.stale}` +
       `${staleness.reasons.length ? ` (${staleness.reasons.join('; ')})` : ''}`,
+  };
+}
+
+// ─── state route: explicit-triage D1 — a validated route record ────────────
+// {class, lane, flags[], product_files, rationale, updated_at} persisted on
+// the ACTIVE feature's tracked record (session-bound lane when the calling
+// session is bound, else the default record — the SAME resolution
+// resolveMutationTarget gives every other mutation verb; no --lane targeting
+// flag is exposed here on purpose, since --lane already names this record's
+// OWN `lane` field — a "route to feature X" override was explicitly deferred
+// to a later pass, CONTEXT.md Outstanding Questions). Typed enum refusals
+// only — free prose is the exact "đoán" (guessing) this feature kills.
+const ROUTE_CLASS_VALUES = ['feature', 'bugfix', 'docs', 'refactor', 'research', 'release', 'spike'];
+const ROUTE_LANE_VALUES = ['docs', 'tiny', 'small', 'spike', 'standard', 'high-risk'];
+const ROUTE_FLAG_VALUES = [
+  'auth',
+  'authorization',
+  'data-model',
+  'audit-security',
+  'external-systems',
+  'public-contracts',
+  'cross-platform',
+  'covered-contract-change',
+  'proof-weakening',
+  'multi-domain',
+];
+
+// ce-1-shaped batch validation (mirrors requireFlags), but hand-rolled rather
+// than requireFlags itself: requireFlags treats an empty string as "missing",
+// which is wrong here — `--flags ""` is the valid, explicit spelling of "zero
+// flags" (CONTEXT.md D1), not an omitted flag.
+function validateRouteSetFlags(flags) {
+  const missing = [];
+  const invalid = [];
+
+  const classValue = flags.class;
+  if (classValue === undefined || classValue === '' || classValue === true) {
+    missing.push('--class');
+  } else if (!ROUTE_CLASS_VALUES.includes(String(classValue))) {
+    invalid.push(`--class "${classValue}" (must be one of ${ROUTE_CLASS_VALUES.join(', ')})`);
+  }
+
+  const laneValue = flags.lane;
+  if (laneValue === undefined || laneValue === '' || laneValue === true) {
+    missing.push('--lane');
+  } else if (!ROUTE_LANE_VALUES.includes(String(laneValue))) {
+    invalid.push(`--lane "${laneValue}" (must be one of ${ROUTE_LANE_VALUES.join(', ')})`);
+  }
+
+  let flagNames = [];
+  if (flags.flags === undefined || flags.flags === true) {
+    missing.push('--flags');
+  } else {
+    flagNames = splitList(flags.flags);
+    const bad = flagNames.filter((f) => !ROUTE_FLAG_VALUES.includes(f));
+    if (bad.length > 0) {
+      invalid.push(`--flags "${flags.flags}" names invalid flag(s) ${bad.join(', ')} (legal set: ${ROUTE_FLAG_VALUES.join(', ')})`);
+    }
+  }
+
+  let productFiles = null;
+  if (flags.files === undefined || flags.files === '' || flags.files === true) {
+    missing.push('--files');
+  } else {
+    const n = Number(flags.files);
+    if (!Number.isInteger(n) || n < 0) {
+      invalid.push(`--files "${flags.files}" (must be a non-negative integer)`);
+    } else {
+      productFiles = n;
+    }
+  }
+
+  if (missing.length > 0 || invalid.length > 0) {
+    const parts = [];
+    if (missing.length) parts.push(`missing required flag(s): ${missing.join(', ')}`);
+    if (invalid.length) parts.push(`invalid flag(s): ${invalid.join('; ')}`);
+    const example = exampleFor('state.route');
+    throw new Error(`route --set: ${parts.join('; ')}.${example ? ` Example: ${example}` : ''}`);
+  }
+
+  return {
+    class: String(classValue),
+    lane: String(laneValue),
+    flags: flagNames,
+    product_files: productFiles,
+    rationale: flags.rationale !== undefined && flags.rationale !== true ? String(flags.rationale) : null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+// Read-only resolution shared by --set (pre-write read) and --show: the SAME
+// session-bound-lane-else-default resolution every other mutation verb uses
+// (resolveMutationTarget), called here with no lane-targeting flag (never
+// parsed for this verb — see the module comment above).
+function resolveRouteTarget(root, verb) {
+  return resolveMutationTarget(root, null, verb, { noLane: false });
+}
+
+async function handleStateRoute(root, flags) {
+  if (flags.show === true) {
+    const target = resolveRouteTarget(root, 'route show');
+    const route = target.record.route ?? null;
+    if (!route) return { result: null, text: 'No route recorded.' };
+    return {
+      result: route,
+      text:
+        `class=${route.class} lane=${route.lane} flags=${route.flags.length} [${route.flags.join(',')}] files=${route.product_files}` +
+        `${route.rationale ? ` rationale="${route.rationale}"` : ''}${target.lane ? ` (lane "${target.lane}")` : ''}`,
+    };
+  }
+
+  if (flags.set !== true) {
+    throw new Error('route: requires --set (to record a route) or --show (to read it back).');
+  }
+  rejectDryRun(flags);
+  const routeObject = validateRouteSetFlags(flags);
+
+  const { route, targetLane } = await withMutationLock(root, null, false, async () => {
+    const target = resolveRouteTarget(root, 'route');
+    const { record: state, write } = target;
+    const phase = state.phase;
+    if (!state.feature || phase === 'idle' || phase === 'compounding-complete') {
+      throw new Error(
+        `route --set: refused — no active feature to attach a route to (phase "${phase ?? 'idle'}", feature "${state.feature ?? 'none'}"). ` +
+          'FIX: start a feature first (state start-feature), then record its route.',
+      );
+    }
+    state.route = routeObject;
+    await write(state);
+    // D1 ("persists on the ACTIVE feature's workflow record") — also patch
+    // the underlying workflow-store.mjs record directly, mirroring fx-1's
+    // close-transition precedent (a direct one-field updateWorkflow-style
+    // patch). `write` above already lands `route` on the PROJECTION file
+    // (state.json / lanes/<feature>.json) — what status/preamble actually
+    // read — via its own full-record writeState/writeLane; this is the
+    // belt-and-suspenders sibling so the workflow record itself carries the
+    // field too, same "route replaces wholesale, never merges" contract
+    // (D4). Already holding workflow:<id> here whenever a live workflow
+    // exists for this target (withMutationLock's own wrapping, mirrored by
+    // writeStateRecordThroughProjection/writeLaneRecordThroughProjection's
+    // identical re-lookup) — updateWorkflowAssumingLock is the correct,
+    // non-self-deadlocking form.
+    const ctrlRoot = controlRootFor(root);
+    const targetFeature = target.lane || state.feature;
+    const wf = listWorkflows(ctrlRoot).workflows.find((w) => w.feature === targetFeature && w.status !== 'closed');
+    if (wf) {
+      updateWorkflowAssumingLock(ctrlRoot, wf.id, { route: routeObject });
+    }
+    return { route: routeObject, targetLane: target.lane };
+  });
+
+  return {
+    result: route,
+    text: `Recorded route (class=${route.class} lane=${route.lane} flags=${route.flags.length} files=${route.product_files}).${targetLane ? ` (lane "${targetLane}")` : ''}`,
   };
 }
 
@@ -7090,7 +7276,7 @@ function stateUsageFallback(leading) {
     const sub = leading[2];
     return `Unknown plan-rev action "${sub || '(missing)'}". Use: bump.`;
   }
-  return `Unknown command "${verb || '(missing)'}". Use: set, gate, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, validation-cache, compact-log, compact-check, compact-capsule.`;
+  return `Unknown command "${verb || '(missing)'}". Use: set, gate, route, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, validation-cache, compact-log, compact-check, compact-capsule.`;
 }
 
 function backlogUsageFallback(leading) {
@@ -7253,6 +7439,7 @@ const HANDLERS = {
   'decisions.render': handleDecisionsRender,
   'state.set': handleStateSet,
   'state.gate': handleStateGate,
+  'state.route': handleStateRoute,
   'state.plan-rev.bump': handleStatePlanRevBump,
   'state.worker.add': handleStateWorkerAdd,
   'state.worker.update': handleStateWorkerUpdate,
@@ -7361,7 +7548,12 @@ const HANDLERS = {
 // here or `state scribing-run --show --feature X` would consume `--feature`
 // as --show's own value, same class of bug dry-run/write/as-lane guard
 // against above.
-export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate']);
+// `set` (explicit-triage D1) is `state route`'s write-mode opt-in, mirroring
+// `show`'s own read-only opt-in immediately above it — MUST be here or
+// `state route --set --class feature ...` would consume `--class`'s VALUE as
+// `--set`'s own value, the exact class of bug dry-run/write/as-lane/show
+// guard against.
+export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set']);
 
 export function splitCommandTokens(argv) {
   const leading = [];

@@ -863,6 +863,31 @@ export const COMMAND_REGISTRY = [
     deprecated: null,
   },
   {
+    name: 'state.route',
+    invoke: 'bee state route',
+    description:
+      'explicit-triage CONTEXT.md D1: a validated route record — {class, lane, flags[], product_files, rationale, updated_at} — persisted on the ACTIVE feature\'s tracked record (session-bound lane when the calling session is bound, else the default record; refuses when no active feature). This verb never accepts a --lane TARGETING flag (unlike state set/gate/scribing-run) — --lane here is the route\'s OWN mode-gate lane value, not a feature router; targeting a non-active feature is deferred (CONTEXT.md Outstanding Questions). --set requires --class (enum: feature/bugfix/docs/refactor/research/release/spike), --lane (enum: docs/tiny/small/spike/standard/high-risk), --flags (comma-separated; every entry must be one of the canonical mode-gate flag names auth/authorization/data-model/audit-security/external-systems/public-contracts/cross-platform/covered-contract-change/proof-weakening/multi-domain; the empty string means zero flags, not a missing flag), --files (a non-negative integer); optional --rationale. Any enum/shape violation is a typed refusal naming the bad value and the legal set — free prose is never accepted, and nothing is written on refusal (D1: "an enum-validated record cannot be vibes"). --show is read-only: prints the currently recorded route (null when absent) without requiring any --set flag. `cells claim` (D3) warns on stderr, never refuses, when the claimed cell\'s feature has no route yet.',
+    parameters: {
+      type: 'object',
+      properties: {
+        set: { type: 'boolean', description: 'Write mode: record a new route (requires --class/--lane/--flags/--files).' },
+        show: { type: 'boolean', description: 'Read-only mode: print the currently recorded route (null when absent).' },
+        class: { type: 'string', description: 'Route class.' },
+        lane: { type: 'string', description: 'Route lane (the mode-gate lane classification — never a feature-routing flag).' },
+        flags: { type: 'string', description: 'Comma-separated mode-gate flag names; the empty string means zero flags.' },
+        files: { type: 'string', description: "Non-negative integer: the mode-gate's product file count." },
+        rationale: { type: 'string', description: 'Optional free-text rationale for the route.' },
+        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
+      },
+      required: [],
+    },
+    examples: [
+      'bee state route --set --class feature --lane standard --flags multi-domain --files 7 --json',
+      'bee state route --show --json',
+    ],
+    deprecated: null,
+  },
+  {
     name: 'state.start-feature',
     invoke: 'bee state start-feature',
     description: 'Guarded atomic feature start: fails closed with zero mutations unless the workspace is clean (idle/terminal phase, no handoff/active workers/reservations/claimed or nonterminal prior cells); on success sets feature/mode/phase and resets all four gates. "Active workers" (D6, multisession-native-8) is a derived view — live-heartbeat sessions joined with their current cell claim, never a hand-maintained list — so --session-id names the calling session on EITHER path (default or --as-lane) so its own heartbeat never counts against itself (C3); without --session-id every live session, including the caller\'s own if it has one, counts. Optional --as-lane (D2/D4) starts the feature as a per-feature lane record (.bee/lanes/<feature>.json) beside the default pipeline instead of mutating state.json; --paths is a comma-separated list of intended file paths checked against other sessions\' active claims/reservations before the lane starts (--as-lane only).',

@@ -167,6 +167,14 @@ function baseWorkflowDefaults() {
     summary: '',
     next_action: '',
     status: DEFAULT_STATUS,
+    // explicit-triage D1: the validated route record — {class, lane, flags[],
+    // product_files, rationale, updated_at} — set via `bee state route --set`.
+    // Optional, defaults to null (no route recorded yet); the whole object is
+    // always replaced wholesale on update, never merged field-by-field (D4:
+    // "one route per feature, updated in place, never a second record" — the
+    // generic updateWorkflow/updateWorkflowAssumingLock patch mechanism
+    // already gives this for free, same as every other top-level field here).
+    route: null,
   };
 }
 

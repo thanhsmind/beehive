@@ -927,6 +927,24 @@ await check('state.gate example runs through the real dispatcher', async () => {
   assert(JSON.parse(result.stdout).approved_gates.execution === true, `expected execution approved, got ${result.stdout}`);
 });
 
+// explicit-triage D1/D2 (cell et-1): the registry-completeness invariant
+// ("every registry entry had its example executed at least once") demands at
+// least this much for the new verb — deeper coverage (each enum refusal, the
+// empty---flags round-trip, --show, the D3 claim warning, the preamble line)
+// is et-3's own cell.
+await check('state.route example runs through the real dispatcher (registry-completeness — deeper coverage is et-3\'s own cell)', async () => {
+  const result = await assertExampleOk('state.route', { cwd: rootState });
+  const route = JSON.parse(result.stdout);
+  assert(
+    route.class === 'feature' &&
+      route.lane === 'standard' &&
+      Array.isArray(route.flags) &&
+      route.flags.includes('multi-domain') &&
+      route.product_files === 7,
+    `expected the route record to round-trip class/lane/flags/product_files, got ${result.stdout}`,
+  );
+});
+
 await check('state.worker.add example runs through the real dispatcher', async () => {
   const result = await assertExampleOk('state.worker.add', { cwd: rootState });
   assert(JSON.parse(result.stdout).workers.some((w) => w.nickname === 'w1'), `expected worker w1, got ${result.stdout}`);
