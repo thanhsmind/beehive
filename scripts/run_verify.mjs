@@ -18,6 +18,7 @@
 // only printed when a suite fails, so a green run stays quiet.
 
 import { spawn, execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -28,6 +29,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..");
 const IMPACT_REGISTRY_PATH = path.join(__dirname, "impact-registry.json");
 const BEE_CONFIG_PATH = path.join(REPO_ROOT, ".bee", "config.json");
+const VERIFY_CACHE_PATH = path.join(REPO_ROOT, ".bee", "logs", "verify-cache.json");
 
 // test-economy D6: impacted-cap config reader. Key `verify_impacted_cap`
 // (float 0-1) in .bee/config.json — a missing file, a parse failure, or a
@@ -951,14 +953,150 @@ function printImpactedBanner(selectedCount, changedCount, level) {
   console.log(`IMPACTED RUN: ${selectedCount} suite(s) from ${changedCount} changed file(s)`);
 }
 
+// ─── suite-result cache (tbf-1, spec #80 P7) ───────────────────────────────
+// A content-hash-keyed skip for the LOCAL dev loop only: a suite whose
+// impact-registry transitive closure is byte-identical to the last GREEN run
+// of that exact suite is skipped outright. Never a substitute for CI — see
+// isCacheDisabled() below — and a suite is written to the cache ONLY after
+// it exits green (never red), so a stale skip can never mask a real
+// failure.
+//
+// "closure_sha reflects the working tree, not history" — hashing raw file
+// BYTES off disk (not git blobs/commits) is deliberate: an uncommitted edit
+// to a closure file changes that file's content hash immediately, so a
+// dirty in-progress edit still forces a cache miss on every suite it
+// touches without any git plumbing at all; there is no separate "uncommitted
+// changes" case to special-case.
+export function isCacheDisabled(argv = process.argv.slice(2)) {
+  return Boolean(process.env.CI) || argv.includes("--no-cache");
+}
+
+export function hasCacheClearFlag(argv = process.argv.slice(2)) {
+  return argv.includes("--cache-clear");
+}
+
+export function loadVerifyCache() {
+  try {
+    const raw = fs.readFileSync(VERIFY_CACHE_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    return {};
+  } catch {
+    // Missing file, unreadable, or corrupt JSON: fail open to an empty
+    // cache — every suite is a cache miss this run, never a crash.
+    return {};
+  }
+}
+
+function writeVerifyCache(cache) {
+  try {
+    fs.mkdirSync(path.dirname(VERIFY_CACHE_PATH), { recursive: true });
+    fs.writeFileSync(VERIFY_CACHE_PATH, `${JSON.stringify(cache, null, 2)}\n`);
+  } catch {
+    // A cache write failure must never fail (or even affect) the run — the
+    // cache is a pure wall-clock optimization, not a source of truth.
+  }
+}
+
+function clearVerifyCache() {
+  try {
+    fs.rmSync(VERIFY_CACHE_PATH, { force: true });
+  } catch {
+    // fail-open, same rationale as writeVerifyCache.
+  }
+}
+
+// Inverts the registry's file->suites map back into suite->files, one pass,
+// reusing buildRegistry()'s own closure walk (closureFor) rather than
+// re-implementing it — every SUITES entry's transitive closure is already
+// computed there.
+async function buildSuiteClosureMap() {
+  const registry = await buildRegistry();
+  const map = new Map();
+  for (const [file, entry] of Object.entries(registry.files)) {
+    for (const label of entry.all) {
+      if (!map.has(label)) map.set(label, new Set());
+      map.get(label).add(file);
+    }
+  }
+  return map;
+}
+
+// sha256 over the sorted "path\0content-sha256\n" lines of a suite's closure
+// files, folding in the suite's own argv tail so two EXTRA_SUITES entries
+// that share an entry file but differ by args (e.g. release_manifest.mjs
+// --selftest vs --check) never collide even if closure lookup ever changed.
+// Returns null when a closure file can't be read (race/deleted mid-run) —
+// the caller treats null as "never cache this suite this run", never a
+// crash.
+function closureShaFor(entry, suiteClosureMap) {
+  const label = suiteLabel(entry);
+  let files = suiteClosureMap.get(label);
+  if (!files || files.size === 0) {
+    // EXTRA_SUITES entries with no registry closure (defensive: an entry
+    // file the registry could not walk) hash the entry file + its args
+    // instead of a closure that doesn't exist.
+    files = new Set([entry[0]]);
+  }
+  const hasher = createHash("sha256");
+  for (const rel of [...files].sort()) {
+    let content;
+    try {
+      content = fs.readFileSync(path.join(REPO_ROOT, rel));
+    } catch {
+      return null;
+    }
+    const fileHash = createHash("sha256").update(content).digest("hex");
+    hasher.update(rel);
+    hasher.update("\0");
+    hasher.update(fileHash);
+    hasher.update("\n");
+  }
+  hasher.update(entry.join(""));
+  return hasher.digest("hex");
+}
+
 // Shared execution + reporting tail, used by both the normal (full/--only)
 // path and the impacted path: build the serial/bundle/parallel units for
-// whatever suite set was selected, run the pool, print PASS/FAIL lines and
-// the summary, then exit. `beforeBanner`/`afterBanner` are the mode-specific
-// scoped-run banners (--only's or --impacted's) — null for an unscoped run.
+// whatever suite set was selected, run the pool, print PASS/FAIL/CACHED
+// lines and the summary, then exit. `beforeBanner`/`afterBanner` are the
+// mode-specific scoped-run banners (--only's or --impacted's) — null for an
+// unscoped run.
 async function runSelectedSuites(activeSuites, { concurrency, beforeBanner, afterBanner }) {
-  const serialEntries = activeSuites.filter((entry) => SERIAL_SENSITIVE.has(entry[0]));
-  const rest = activeSuites.filter((entry) => !SERIAL_SENSITIVE.has(entry[0]));
+  const argv = process.argv.slice(2);
+  if (hasCacheClearFlag(argv)) {
+    clearVerifyCache();
+    console.log(`VERIFY CACHE: cleared (${path.relative(REPO_ROOT, VERIFY_CACHE_PATH)})`);
+  }
+
+  const cacheDisabled = isCacheDisabled(argv);
+  const cache = cacheDisabled ? {} : loadVerifyCache();
+  const shaByLabel = new Map();
+  const cachedResults = [];
+  let selectedSuites = activeSuites;
+
+  if (!cacheDisabled) {
+    const suiteClosureMap = await buildSuiteClosureMap();
+    const toRun = [];
+    for (const entry of activeSuites) {
+      const label = suiteLabel(entry);
+      const sha = closureShaFor(entry, suiteClosureMap);
+      if (sha) shaByLabel.set(label, sha);
+      const cached = cache[label];
+      if (sha && cached && cached.result === "green" && cached.closure_sha === sha) {
+        cachedResults.push({ label, code: 0, ms: 0, stdout: "", stderr: "", timedOut: false, cached: true });
+      } else {
+        toRun.push(entry);
+      }
+    }
+    // Cache is cold (no green hits) => selectedSuites stays byte-identical
+    // to activeSuites, so discovery/order is unaffected when the cache
+    // buys nothing.
+    selectedSuites = toRun;
+  }
+
+  const serialEntries = selectedSuites.filter((entry) => SERIAL_SENSITIVE.has(entry[0]));
+  const rest = selectedSuites.filter((entry) => !SERIAL_SENSITIVE.has(entry[0]));
   const bundleEntries = rest.filter((entry) => LIVE_BUNDLE_GROUP.has(suiteLabel(entry)));
   const parallelEntries = rest.filter((entry) => !LIVE_BUNDLE_GROUP.has(suiteLabel(entry)));
 
@@ -983,12 +1121,29 @@ async function runSelectedSuites(activeSuites, { concurrency, beforeBanner, afte
   stopHeartbeat(heartbeatTimer);
   const wallMs = Date.now() - wallStart;
 
-  results.sort((a, b) => a.label.localeCompare(b.label));
+  if (!cacheDisabled) {
+    let cacheChanged = false;
+    for (const r of results) {
+      if (r.code !== 0) continue; // never cache red
+      const sha = shaByLabel.get(r.label);
+      if (!sha) continue; // closure file was unreadable this run — skip caching
+      cache[r.label] = { closure_sha: sha, at: new Date().toISOString(), result: "green" };
+      cacheChanged = true;
+    }
+    if (cacheChanged) writeVerifyCache(cache);
+  }
+
+  const allResults = [...cachedResults, ...results];
+  allResults.sort((a, b) => a.label.localeCompare(b.label));
 
   let anyFail = false;
-  for (const r of results) {
-    const status = r.timedOut ? "TIMEOUT" : r.code === 0 ? "PASS" : "FAIL";
+  for (const r of allResults) {
+    const status = r.cached ? "CACHED" : r.timedOut ? "TIMEOUT" : r.code === 0 ? "PASS" : "FAIL";
     if (r.code !== 0) anyFail = true;
+    if (status === "CACHED") {
+      console.log(`CACHED green ${r.label} (closure unchanged)`);
+      continue;
+    }
     let note = "";
     if (status === "PASS") {
       const skip = skipNote(r.stdout);
@@ -999,7 +1154,7 @@ async function runSelectedSuites(activeSuites, { concurrency, beforeBanner, afte
     console.log(`${status}  ${String(r.ms).padStart(6)}ms  ${r.label}${note}`);
   }
 
-  const failed = results.filter((r) => r.code !== 0);
+  const failed = allResults.filter((r) => r.code !== 0);
   if (failed.length > 0) {
     console.error("");
     console.error(`FAILED SUITES (${failed.length}):`);
@@ -1018,7 +1173,7 @@ async function runSelectedSuites(activeSuites, { concurrency, beforeBanner, afte
 
   console.log("");
   console.log(
-    `${anyFail ? "FAIL" : "PASS"} run_verify: ${results.length} suite(s), concurrency=${concurrency}, wall=${wallMs}ms`,
+    `${anyFail ? "FAIL" : "PASS"} run_verify: ${allResults.length} suite(s) (${results.length} run, ${cachedResults.length} cached), concurrency=${concurrency}, wall=${wallMs}ms`,
   );
   if (afterBanner) afterBanner();
 

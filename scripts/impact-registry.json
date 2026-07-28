@@ -3258,6 +3258,16 @@
         "scripts/tests/test_verify_timeout.mjs"
       ]
     },
+    "scripts/skill_budget_fence.mjs": {
+      "direct": [
+        "scripts/skill_budget_fence.mjs",
+        "scripts/skill_budget_fence.mjs --selftest"
+      ],
+      "all": [
+        "scripts/skill_budget_fence.mjs",
+        "scripts/skill_budget_fence.mjs --selftest"
+      ]
+    },
     "scripts/tests/test_agents_budget.mjs": {
       "direct": [
         "scripts/tests/test_agents_budget.mjs"
