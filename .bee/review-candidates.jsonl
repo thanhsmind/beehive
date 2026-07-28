@@ -73,3 +73,4 @@
 {"id":"a769b92a-99b3-4dc0-8397-459fd49fb8e7","type":"candidate","date":"2026-07-28T06:45:49.323Z","feature":"status-diet","head":"0cbabcaf16c05f8375e8675d077ee7ad42070b9d","mode":"standard","baseline":null,"cells":["st-1","st-2","st-3"]}
 {"id":"9a7047d0-3125-4c68-a92f-dd5ffcf28809","type":"candidate","date":"2026-07-28T07:33:49.879Z","feature":"main-verifies","head":"b708d8c670f84ca041ffc9b20764c5119f66a5b3","mode":"standard","baseline":null,"cells":["mv-1","mv-2","mv-3","mv-4"]}
 {"id":"8f81ad60-1e07-42d0-8e00-40b886dccd9f","type":"candidate","date":"2026-07-28T07:52:36.724Z","feature":"feature-close-events","head":"d483d06ee82d2fecb9fe9eeab96b9fca45e586f1","mode":"small","baseline":null,"cells":["fc-1","fc-2"]}
+{"id":"3fb7a9ab-2d5b-4f9e-9b7d-53c0af5ff33b","type":"candidate","date":"2026-07-28T08:02:09.420Z","feature":"step-ticks","head":"679cdc32bdd255dc026967a2bce0893b2df5dd3e","mode":"small","baseline":null,"cells":["vt-1"]}
