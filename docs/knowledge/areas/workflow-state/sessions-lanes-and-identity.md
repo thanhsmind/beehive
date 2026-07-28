@@ -279,6 +279,18 @@ its knowledge actually landed — the state and the specs can no longer disagree
   the acting session's own resolved workspace, never accepted as a caller-
   supplied value (multisession-native D2/D3, msn-19).
 
+- R82 — **The delegator verifies, at the shippable unit.** Workers implement,
+  commit, and report — they run no suites; a cell caps through the sanctioned
+  pending path with no per-cell proof. MAIN produces all evidence: red proof
+  (bugfix repro) before dispatch at authoring, and ONE feature-level verify
+  (impacted over the feature's diff, cache-assisted) when the full picture
+  exists, recorded as a machine-readable feature-verify record (command,
+  output hash, result). Leaving the execution phase is refused — typed, and
+  no bypass level lifts it — while pending-capped cells lack a green record
+  newer than the newest pending cap. A red feature verify opens fix cells in
+  the same feature (never un-caps); per-cell commits and bisect localize.
+  The classic per-cell evidence path survives for spot use and transition
+  (main-verifies D1–D5, two user philosophy decisions 2026-07-28).
 - R81 — **Worker orientation is brief, not the full status.** The status
   report has a brief form — phase, feature, mode, gates, bypass level, ship
   visibility, route only — that reads nothing but the state layer (no cell
