@@ -988,7 +988,7 @@ await check('shipped routing callers declare their pre-phase owner and independe
     });
   }
 
-  assert(calls.length === 4, `expected four shipped routing state-set calls, got ${JSON.stringify(calls)}`);
+  assert(calls.length === 3, `expected three shipped routing state-set calls, got ${JSON.stringify(calls)}`);
   for (const { relative, call } of calls) {
     assert(/--owner\s+\S+/.test(call), `${relative} has a state-set caller without explicit ownership: ${call}`);
   }

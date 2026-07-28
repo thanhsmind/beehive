@@ -24,7 +24,7 @@ decision IDs: `references/provenance.md`.
 
 | Lane | Shape |
 |---|---|
-| `tiny`/`small` | The merged Gate 2 (shape+execution, D2) + frozen-judge stay with the orchestrator; implementation runs through **one dispatched execution worker** under the full execution contract (same template, status tokens, reservation/cap discipline) — never a wave: no wave analysis, no reviewers, no panels. Since tiny/small carry no `plan.md` (D3/D4), the worker prompt is told to cite the cell itself as the work spec. `small`'s 1-3 cells run PARALLEL when disjoint (regen deferred), 3-4 live workers cap; serial names its conflict. |
+| `tiny`/`small` | The merged Gate 2 + frozen-judge stay with the orchestrator; implementation runs through **one dispatched execution worker** under the full execution contract (same template, status tokens, reservation/cap discipline) — never a wave: no analysis, no reviewers, no panels. No `plan.md`, so the prompt is told to cite the cell itself as the work spec. `small`'s 1-3 cells run PARALLEL when disjoint (regen deferred), 3-4 live workers cap; serial names its conflict. |
 | `standard`/`high-risk` | Full wave protocol below; tiny/small borrows only its Spawn, tier-judgment, Record, and Goal-check steps. |
 
 Tiny/small execution dispatch: see `Single execution worker in full` in `references/swarming-reference.md`.
@@ -36,8 +36,8 @@ return to bee-planning instead — see Completion Signals below).
 
 ## Preconditions
 
-- Gate 2 approved (merged shape+execution, D2): `gates.execution` true in `node .bee/bin/bee.mjs status --json`, else stop — return to bee-planning.
-- Sweep stale reservations: `node .bee/bin/bee.mjs reservations sweep`
+- Gate 2 approved (merged shape+execution): `gates.execution` true in `node .bee/bin/bee.mjs status --json`, else stop — return to bee-planning.
+- Sweep stale reservations: `reservations sweep`
 - Critical patterns read: bundle → `docs/knowledge/index.md` `## Critical patterns`; no bundle → `docs/history/learnings/critical-patterns.md` when present.
 
 <!-- bee:only claude -->
@@ -100,9 +100,9 @@ When a cell or wave finishes (capped, verify green) and execution-approved
 work remains, continue with the next unit in this session — finishing a unit
 is never a reason to stop, ask, or wait. Only at real session exit: claim
 the next unit, write the `planned-next` handoff, end cleanly; the next fresh
-session adopts the carried claim automatically, no confirmation asked. Never
-stop to suggest or wait for `/clear`, never issue it yourself. Full
-contract: `references/swarming-reference.md` ("Fresh-session handoff in full").
+session adopts the carried claim automatically. Never stop to suggest or
+wait for `/clear`, never issue it yourself. Full contract:
+`references/swarming-reference.md` ("Fresh-session handoff in full").
 
 ## Hard Rules
 

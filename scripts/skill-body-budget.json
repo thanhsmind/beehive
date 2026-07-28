@@ -11,7 +11,7 @@
     "bee-grooming": 7025,
     "bee-herding": 7312,
     "bee-hive": 8183,
-    "bee-planning": 8139,
+    "bee-planning": 10003,
     "bee-qualifying": 7460,
     "bee-reviewing": 8190,
     "bee-scribing": 8151,
@@ -35,5 +35,7 @@
     "bee-swarming",
     "bee-writing-skills"
   ],
-  "notes": {}
+  "notes": {
+    "bee-planning": "Re-baselined 8139 -> 10003 (vd-15): absorbed bee-validating's two survivors when that skill was deleted outright (validation-diet D1/D5) -- the SMALLER PATH reality-gate check and the merged structure+cold-pickup review wave, both compacted to their tightest wording; the repo-wide skill-body total still fell by far more than this delta. Ceremony was cut hard first (995 bytes trimmed off the post-absorption size before this baseline was set); this is what remains once every other line was made as terse as it can be while keeping both survivors and every gate_bypass_level/D3/D4/D5/D8 doctrine token intact."
+  }
 }

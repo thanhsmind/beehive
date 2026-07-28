@@ -15,7 +15,7 @@ metadata:
 
 # Briefing (the beekeeper's brief)
 
-One artifact per feature: `docs/history/<feature>/implement-plan.md`. Consolidates the truth artifacts (`CONTEXT.md`, `approach.md`, `plan.md`, cells, cell/feature verify output); authors only Technical Design and Rollback Plan. Never originates a decision, scope, approach, or cell — inventing content to fill a section is the one failure this skill exists to prevent. Rules stated bare — decision IDs: `references/provenance.md`.
+One artifact per feature: `docs/history/<feature>/implement-plan.md`. Consolidates truth artifacts (`CONTEXT.md`, `approach.md`, `plan.md`, cells, verify output); authors only Technical Design and Rollback Plan. Never originates a decision, scope, approach, or cell — inventing content to fill a section is the one failure this skill exists to prevent. Rules stated bare — decision IDs: `references/provenance.md`.
 
 If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
 
@@ -35,7 +35,7 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
 | Mode | Trigger | Does |
 |---|---|---|
 | render (chain) | `bee-planning` before Gate 2 | build `implement-plan.md`; `status: Ready for Review`; Gate 2 links it |
-| refresh (chain) | after Gate 2 prep, on cell changes only (plan.md is frozen post-approval, D9) | re-project changed sections in place, never a second file |
+| refresh (chain) | after Gate 2 prep, on cell changes only (plan.md frozen post-approval) | re-project changed sections in place, never a second file |
 | walkthrough (chain) | Gate 4 passed, standard/high-risk | write `walkthrough.md`; set plan `status: Shipped` |
 | on-demand | user asks | render/refresh/walkthrough as above, any phase |
 
@@ -53,7 +53,7 @@ Every section projects from a named source; source silent → Open Question, nev
 | **Technical Design** | authored from `approach.md` + cells | narrative as implied; beyond → Open Question |
 | Affected Files | `approach.md`, then cells after prep | cells authoritative post-prep |
 | Implementation Steps | `plan.md` shape, then cells | project titles/deps after prep |
-| Validation Plan | cell `verify` output + feature-verify record | describe + link evidence, never assert unrun |
+| Validation Plan | cell `verify` + feature-verify record | describe + link evidence, never assert unrun |
 | Risks & Mitigation | `approach.md` risk map | as written |
 | **Rollback Plan** | authored | how *this* work reverts; undecided → Open Question |
 | Open Questions | `approach.md` + uncovered gaps | honest home for every gap/guess |
@@ -66,10 +66,10 @@ generation-tier I/O workers; the two authored sections (§2) stay on the session
 
 ## 2. The Two Authored Sections
 
-Only two sections briefing writes from judgment — even here, reading what the artifacts imply, never designing anew:
+Only two sections briefing writes from judgment — reading what the artifacts imply, never designing anew:
 
 - **Technical Design** — the flow the approach implies: components, data shape, API/UI/security surface. A choice the artifacts don't contain is a proposal, not a rendering — Open Questions, flows back through `bee-planning`, never smuggled in.
-- **Rollback Plan** — how *this* change is undone (revert commits / disable a flag / reverse a migration). Undecided → "OPEN QUESTION: …", never a plausible procedure nobody agreed to. `high-risk` must resolve it before Gate 2 (the merged shape+execution gate).
+- **Rollback Plan** — how *this* change is undone (revert commits / disable a flag / reverse a migration). Undecided → "OPEN QUESTION: …", never a plausible procedure nobody agreed to. `high-risk` must resolve it before Gate 2.
 
 ## Projection & Lifecycle
 
@@ -78,7 +78,7 @@ Only two sections briefing writes from judgment — even here, reading what the 
 - `status` mirrors the gates: `Draft` → `Ready for Review` → `Approved` → `Needs Revision` → `Shipped` post-walkthrough.
 - `plan.md` freezes at Gate 2, so drift fires on **cell changes only**: cells change after approval → `Needs Revision`, re-render before the next gate.
 
-`bee-planning` presents gates, not briefing — the brief is what its merged Gate 2 message **links**. Chat stays plain-language; the brief is the durable review object; never paste the whole brief into gate chat.
+`bee-planning` presents gates, not briefing — the brief is what its Gate 2 message **links**. Chat stays plain-language; the brief is the durable review object; never paste the whole brief into gate chat.
 
 ## Walkthrough (post-Gate-4)
 
