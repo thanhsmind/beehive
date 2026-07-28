@@ -19,7 +19,7 @@ Scribing is bee's BA — it owns the state layer. Rules stated bare — decision
 
 An **area is domain-general**: a screen, API, job, integration, pipeline, CLI command, or process — any unit with observable behavior that outlives features. Code is the implementation; the spec is the *meaning*, surviving a full rewrite on a different stack.
 
-**Where meaning is written: `bundleMode(root)`** (`.bee/bin/lib/knowledge.mjs`) — true only when `docs/knowledge/` exists AND a concept in it parses (a `.gitkeep`-only dir is NOT a bundle). Bundle → `docs/knowledge/areas/<area>/*.md`, one `bee.area` concept per subject. No bundle → `docs/specs/<area>.md` + `system-overview.md` + `visuals/` + `reading-map.md`. Same rebuild bar, tech-agnostic rule, nine sections, modes, never-invent in both — only layout/frontmatter mechanics differ. Full routing (`scribingTarget()`, refusal answers, anti-fork gate, `emitFrontmatter`): `references/scribing-reference.md ("Map Deltas", "Bundle-mode gate and frontmatter")`.
+**Where meaning is written: `bundleMode(root)`** — true only when `docs/knowledge/` exists AND a concept in it parses (a `.gitkeep`-only dir is NOT a bundle). Bundle → `docs/knowledge/areas/<area>/*.md`, one `bee.area` concept per subject. No bundle → `docs/specs/<area>.md` + `system-overview.md` + `visuals/` + `reading-map.md`. Same rebuild bar, tech-agnostic rule, nine sections, modes, never-invent in both — only layout/frontmatter mechanics differ. Full routing (`scribingTarget()`, refusal answers, anti-fork gate, `emitFrontmatter`): `references/scribing-reference.md ("Map Deltas", "Bundle-mode gate and frontmatter")`.
 
 **Rebuild bar:** given ONLY the spec (Pointers deleted), a stranger rebuilds the same behavior, no code needed. **Tech-agnostic rule:** outside Pointers, no language/framework/library/class/table/file name — business vocabulary only.
 
@@ -27,7 +27,7 @@ An **area is domain-general**: a screen, API, job, integration, pipeline, CLI co
 
 | Mode | Trigger | Does |
 |---|---|---|
-| **sync** (chain default) | execution completed, `behavior_change` cells capped | merge behavior deltas into the touched areas' specs |
+| **sync** (chain default) | feature close, capped cells incl. `behavior_change` | merge feature's behavior deltas into touched specs, once |
 | **capture** | a discuss→build→test→adjust loop **settles an outcome** — rule, tested behavior, tuning value, policy; a spoken settlement ("chốt"/"final"/"ok ship it") is mandatory same turn | log same turn, then per lane below |
 | **flush** | capture queue non-empty at a flush point (wrap-up, PreCompact warning, session-start offer) | drain oldest-first: full merge + `capture flush --id <id> --into <spec>` |
 | **harvest** | user asks to document an area, or grooming files a missing-spec item | write the first spec for a pre-bee area; interview for what code can't prove |
@@ -55,7 +55,7 @@ Litmus: would this outcome survive outside the chat if the session ended now? A 
 
 ## Hard Gates
 
-- Never skip scribing when `behavior_change` cells were capped — any lane, tiny included.
+- Never skip feature-close sync when capped cells hold `behavior_change` — any lane, tiny included.
 - Never name technology outside Pointers; never state an unverified claim as behavior (evidence→behavior, decision→rule, neither→Open Gap).
 - Never create a second spec/concept for a covered area/subject — one truth in place forever, ownership checked bundle-wide, never by eye.
 - Never hand-write concept frontmatter (`emitFrontmatter` produces every block); never decide bundle mode by eye or `existsSync`.
