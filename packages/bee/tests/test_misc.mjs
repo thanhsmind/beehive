@@ -1018,6 +1018,7 @@ const EXPECTED_STATE_EXPORTS = [
   // sites onto the shared control plane — see those modules' own comments.
   'controlRootFor',
   'defaultState',
+  'ensureWorkflowRecordForFeature',
   'statePath',
   'readState',
   'readStateStrict',
@@ -1056,6 +1057,7 @@ const EXPECTED_STATE_EXPORTS = [
   'SCRIBING_RUN_FROM',
   'checkPhaseTransition',
   'checkScribingRunPhase',
+  'closeWorkflowsForFeature',
   // compounding-gate D1/D2 (cell cg-1): the compounding-run recorder's own
   // phase door, sibling to SCRIBING_RUN_FROM/checkScribingRunPhase above —
   // pure and cells-free for the same reason (its freshness check only reads
@@ -1071,6 +1073,7 @@ const EXPECTED_STATE_EXPORTS = [
   'writeLane',
   'removeLane',
   'listLanes',
+  'listWorkflowRecords',
   'resolvePipeline',
   // GitHub #14: product-doc root resolution (repo-divorce topology).
   'resolveProductRoot',

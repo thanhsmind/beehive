@@ -1,0 +1,47 @@
+{
+  "id": "wl-4",
+  "feature": "workflow-lifecycle",
+  "lane": "small",
+  "change_class": "bugfix",
+  "behavior_change": false,
+  "title": "Declare the three new state.mjs exports in the census allowlist",
+  "action": "MAIN-PRODUCED REPRO (red at feature verify): `node packages/bee/tests/test_misc.mjs` -> 117 passed, 1 failed, 'lib/state.mjs export surface drifted from the allowlist'. Cause: wl-1 added three exports — closeWorkflowsForFeature, ensureWorkflowRecordForFeature, listWorkflowRecords — and did not declare packages/bee/tests/test_misc.mjs in its file set, so EXPECTED_STATE_EXPORTS was never updated. This is the known allowlist pattern (an export addition is a declared act). FIX: add exactly those three names to EXPECTED_STATE_EXPORTS in packages/bee/tests/test_misc.mjs, in the list's existing alphabetical position, changing nothing else. End: test_misc 118 passed, 0 failed. You MAY run that one suite (it is this cell's repro) and quote its output; run nothing else. GIT SAFETY (shared checkout): commit through your own temp index (GIT_INDEX_FILE + read-tree/update-index/write-tree/commit-tree/update-ref) or `git add -N` then a path-scoped commit; NEVER plain `git add`, NEVER reset/stash/checkout/restore.",
+  "must_haves": {
+    "truths": [
+      "node packages/bee/tests/test_misc.mjs => 118 passed, 0 failed (quote it).",
+      "Only the three names were added; no other allowlist entry or test changed."
+    ],
+    "prohibitions": [
+      "Do NOT weaken or delete the allowlist check.",
+      "Do NOT touch lib/state.mjs.",
+      "Do NOT run other suites.",
+      "Do NOT run regen (MAIN owns the barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_misc.mjs",
+  "read_first": [
+    "packages/bee/tests/test_misc.mjs"
+  ],
+  "files": [
+    "packages/bee/tests/test_misc.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
+  "status": "claimed",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wl4",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T09:11:47.094Z"
+  },
+  "tier": "extraction"
+}
