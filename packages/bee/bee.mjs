@@ -65,11 +65,15 @@ import {
   // straight past through `compounding`. The set is derived now, the debt
   // computation lives in exactly one place, and the doors below own only their
   // refusal head.
+  //
+  // guard-completion gc-1: that last sentence was still not true — the doors
+  // also owned their own LIST of which debts to ask about, and the swap door's
+  // list was short by one. Exactly ONE debt symbol is imported here now:
+  // guardFeatureDebt, which asks the whole FEATURE_DEBT_KINDS set. Importing a
+  // per-kind detector (featureVerifyDebt / testCellDebt) into this file again
+  // would rebuild the drift by hand, and test_bee_cli.mjs refuses it.
   isDebtGuardedDeparture,
-  featureVerifyDebt,
-  testCellDebt,
-  FEATURE_VERIFY_FIX_TAIL,
-  testCellDebtFixTail,
+  guardFeatureDebt,
   checkCompoundingRunPhase,
   startFeature,
   hasStaleAdvisorKey,
@@ -2891,15 +2895,11 @@ async function handleStateSet(root, flags) {
       const transition = checkPhaseTransition(state.phase, targetPhase, state, { waiveCompounding });
       if (!transition.ok) throw new Error(transition.reason);
       if (transition.waivedCompounding) waivedCompoundingFeature = state.feature || null;
-      // slice-tail-test-batching P4 — the first of the two doors out of
-      // `swarming`. Runs BEFORE any field is mutated and inside the mutation
-      // lock, so a refusal leaves the record byte-identical.
-      guardTestCellDebt(root, state, targetPhase);
-      // main-verifies D3 — the feature-verify close door at the same
-      // boundary: pending caps (D1) hold `swarming` shut until a fresh
-      // green feature-verify record (D2) covers them. Same pre-mutation,
-      // no-bypass, no-waiver mechanics as guardTestCellDebt above.
-      guardFeatureVerifyDebt(root, state, targetPhase);
+      // guard-completion gc-1 — ONE call, the whole unwaivable debt set
+      // (slice-tail test cells P4, main-verifies D3, and anything added to
+      // FEATURE_DEBT_KINDS later). Runs BEFORE any field is mutated and inside
+      // the mutation lock, so a refusal leaves the record byte-identical.
+      guardPhaseDepartureDebt(root, state, targetPhase);
       if (targetPhase === 'compounding-complete') {
         // scribing-integrity si-1 (D2): a lane close checks the LANE's own
         // feature debt (thresholded on the lane's own last_scribing_run) —
@@ -2919,11 +2919,11 @@ async function handleStateSet(root, flags) {
       const newFeature = String(flags.feature);
       if (state.feature && newFeature !== state.feature) {
         swapFromFeature = state.feature;
-        // review-p1-fixes p1-3 (F3): the feature-verify swap door runs FIRST,
-        // before the waivable scribing one — an unwaivable mechanical
-        // precondition must never be reachable only through a run that also
-        // happened to pass (or waive) a softer check.
-        featureSwapGuardFeatureVerifyDebt(root, state, newFeature);
+        // review-p1-fixes p1-3 (F3) / guard-completion gc-1: the UNWAIVABLE
+        // debt set runs FIRST, before the waivable scribing one — an
+        // unwaivable mechanical precondition must never be reachable only
+        // through a run that also happened to pass (or waive) a softer check.
+        guardFeatureSwapDebt(root, state, newFeature);
         waivedSwap = featureSwapGuardScribingDebt(root, state.feature, flags);
       }
     }
@@ -3094,36 +3094,38 @@ async function handleStateSet(root, flags) {
 // cells, cells are phase-independent, so EVERY departure asks. The debt
 // computation itself is state.mjs's shared core — this function now owns only
 // the refusal head, so this door and the start-feature door cannot drift.
-function guardTestCellDebt(root, record, targetPhase) {
+// guard-completion gc-1 — the two phase-door guards (test-cell debt and
+// feature-verify debt) are ONE door asking ONE question. They were two
+// functions and two call sites per door, which is how the swap door came to
+// ask only one of them; the debt SET now lives in FEATURE_DEBT_KINDS
+// (state.mjs) and this function owns nothing but the refusal head and the
+// derived-departure test. A debt kind added there is refused here for free.
+function guardPhaseDepartureDebt(root, record, targetPhase) {
   const from = record && record.phase;
   if (!isDebtGuardedDeparture(from, targetPhase)) return; // a no-op re-set is not a departure
   const feature = record && record.feature;
-  if (!feature) return; // no active feature ⇒ nothing to hold open
-  const fromLabel = from || 'unknown';
   // Throws (never silently passes) when the cell store is unreadable: an
-  // unreadable store is unknown debt, not zero debt.
-  const debt = testCellDebt(root, feature);
-  if (!debt) return;
-  if (debt.kind === 'missing') {
-    throw new Error(
-      `set: refusing to leave phase "${fromLabel}" for "${targetPhase}" — feature "${feature}" has ${debt.cappedBehaviorBearing.length} capped behavior/api cell(s) and NO consolidated test cell at all: ${debt.cappedBehaviorBearing.join(', ')}.\n` +
-        testCellDebtFixTail('missing', feature),
-    );
-  }
-  throw new Error(
-    `set: refusing to leave phase "${fromLabel}" for "${targetPhase}" — feature "${feature}" has ${debt.offenders.length} consolidated test cell(s) not green: ${debt.offenders.join(', ')}.\n` +
-      testCellDebtFixTail('not-green', feature),
-  );
+  // unreadable store is unknown debt, not zero debt. A phase move does not
+  // abandon the feature, so no abandonment paragraph.
+  guardFeatureDebt(root, record, feature, {
+    subject: `set: refusing to leave phase "${from || 'unknown'}" for "${targetPhase}" — feature "${feature}"`,
+  });
 }
 
-// ─── main-verifies D3 — the feature-verify close door ──────────────────────
+// ─── main-verifies D3 — the feature-verify debt, and WHY it is a door ──────
+//
+// guard-completion gc-1: there is no longer a feature-verify door FUNCTION.
+// This debt is one entry in FEATURE_DEBT_KINDS (state.mjs); every door asks it
+// — together with every other kind — through the single guardFeatureDebt call.
+// The rationale below is why the debt exists and what satisfies it (the D3
+// record), which is exactly the part that is NOT door-specific.
 //
 // D1 relocated per-cell proof to the feature boundary: a cell may cap
 // evidence-free through `cells cap --feature-verify-pending`, stamping
-// trace.feature_verify: "pending". This guard is the relocated enforcement
+// trace.feature_verify: "pending". The debt door is the relocated enforcement
 // point — without it the cap law's essence ("no ship without green
-// evidence") would be prose. Exact mirror of guardTestCellDebt above: same
-// two doors (state set out of `swarming` + state scribing-run), same
+// evidence") would be prose. It is asked at every door the test-cell debt is
+// asked at, because they are the same call now: same
 // placement BEFORE any field mutates, and — deliberately — the same
 // NOT-A-GATE posture: it reads neither bypassLevel nor any headless flag, so
 // NO gate_bypass level (including "total") lifts it, and there is no waiver
@@ -3140,8 +3142,8 @@ function guardTestCellDebt(root, record, targetPhase) {
 // re-closes the door until the verify is re-run and re-recorded (D5's
 // fix-cells-then-re-verify loop at feature granularity).
 // review-p1-fixes p2-1 — the debt COMPUTATION and the shared FIX tail both
-// moved to state.mjs (featureVerifyDebt / FEATURE_VERIFY_FIX_TAIL, see the
-// DEBT CORE header there). They used to live here, which is exactly why
+// moved to state.mjs (see the DEBT CORE header there, and gc-1's registry
+// below it). They used to live here, which is exactly why
 // startFeature — the third door, in state.mjs, which could not import back
 // up to this file — had no feature-verify check at all, and `state
 // start-feature --feature beta` walked off with the outgoing feature's
@@ -3158,40 +3160,31 @@ function guardTestCellDebt(root, record, targetPhase) {
 // lives on cells and cells are phase-independent. A phase invented next year
 // inherits this door instead of escaping it. The only exemption is a literal
 // no-op re-set (targetPhase === from), exactly as before.
-function guardFeatureVerifyDebt(root, record, targetPhase) {
-  const from = record && record.phase;
-  if (!isDebtGuardedDeparture(from, targetPhase)) return; // a no-op re-set is not a departure
-  const feature = record && record.feature;
-  // Throws (never silently passes) when the cell store is unreadable.
-  const debt = featureVerifyDebt(root, record, feature);
-  if (!debt) return;
-  throw new Error(
-    `set: refusing to leave phase "${from || 'unknown'}" for "${targetPhase}" — feature "${feature}" has ${debt.pending.length} capped cell(s) awaiting the feature-level verify (trace.feature_verify: "pending"): ${debt.pending.join(', ')}, and ${debt.recordState}.\n` +
-      FEATURE_VERIFY_FIX_TAIL,
-  );
-}
 
-// review-p1-fixes p1-3 (F3), half three — the FEATURE-SWAP door, the exact
-// mirror of featureSwapGuardScribingDebt below and the reason it exists: a
-// guard that covers one door is a suggestion. guardFeatureVerifyDebt above
-// only ever ran inside `if (flags.phase !== undefined)`, so
-// `state set --feature <other> --owner swarming` walked away from a feature
-// holding pending caps without touching either door — and because every
-// reader keys on record.feature, those caps are then read by NO path, ever
-// again. Unlike its scribing twin this door has NO waiver: --waive-scribing-
-// debt waives scribing debt, and no gate_bypass level (including "total")
-// lifts a mechanical precondition. Lanes never reach here (--feature is
+// ─── the FEATURE-SWAP door ─────────────────────────────────────────────────
+//
+// review-p1-fixes p1-3 (F3) built this door because a guard that covers one
+// door is a suggestion: `state set --feature <other> --owner swarming` walks
+// away from the current feature without touching the phase door at all, and
+// because every reader keys on record.feature, whatever that feature still
+// owed is then read by NO path, ever again.
+//
+// guard-completion gc-1 — and then this door asked only the feature-verify
+// half of the debt set, so the reviewer's repro (a capped `behavior` cell, no
+// test cell, `--waive-scribing-debt`) walked out through it at EXIT 0 while
+// both other doors refused the identical state at EXIT 1. It now asks the
+// WHOLE set through the one shared call and composes no list of its own.
+// Unlike its scribing twin below this door has NO waiver: --waive-scribing-
+// debt waives scribing debt and nothing else, and no gate_bypass level
+// (including "total") lifts a mechanical precondition — which is why this runs
+// BEFORE featureSwapGuardScribingDebt. Lanes never reach here (--feature is
 // already refused alongside --lane).
-function featureSwapGuardFeatureVerifyDebt(root, record, newFeature) {
+function guardFeatureSwapDebt(root, record, newFeature) {
   const feature = record && record.feature;
-  if (!feature) return; // idle → nothing was abandoned
-  const debt = featureVerifyDebt(root, record, feature);
-  if (!debt) return;
-  throw new Error(
-    `set: refusing to swap away from feature "${feature}" to "${newFeature}" — "${feature}" has ${debt.pending.length} capped cell(s) awaiting the feature-level verify (trace.feature_verify: "pending"): ${debt.pending.join(', ')}, and ${debt.recordState}.\n` +
-      `Setting --feature abandons "${feature}" before its ONE feature-level verify ever ran, and every reader of these markers keys on the record's feature: once the swap lands, nothing reads those pending caps again. The relocated proof would not be deferred, it would be destroyed.\n` +
-      FEATURE_VERIFY_FIX_TAIL,
-  );
+  guardFeatureDebt(root, record, feature, {
+    subject: `set: refusing to swap away from feature "${feature}" to "${newFeature}" — "${feature}"`,
+    abandonedFor: newFeature,
+  });
 }
 
 // chain-integrity D2/D4 — the close boundary is the ONE place scribing debt is a
@@ -3725,19 +3718,13 @@ async function handleStateScribingRun(root, flags) {
     if (stampedActive) {
       const phaseCheck = checkScribingRunPhase(state.phase);
       if (!phaseCheck.ok) throw new Error(phaseCheck.reason);
-      // slice-tail-test-batching P4 — the SECOND door out of `swarming`, and
-      // the one the chain actually walks (scribing-run is the sole producer
-      // of phase=compounding). Guarding only `state set` would leave the
-      // normal path wide open. Refuses before last_scribing_run is stamped
-      // and before the ledger append, so nothing records a run that the
-      // refusal then undid.
-      guardTestCellDebt(root, state, 'compounding');
-      // main-verifies D3 — the SECOND door for the feature-verify debt too:
-      // scribing-run is the sole producer of phase=compounding, so guarding
-      // only `state set` would leave the normal path wide open (the exact
-      // reasoning of the guardTestCellDebt call above). Refuses before
-      // last_scribing_run is stamped and before the ledger append.
-      guardFeatureVerifyDebt(root, state, 'compounding');
+      // The SECOND phase door, and the one the chain actually walks
+      // (scribing-run is the sole producer of phase=compounding): guarding
+      // only `state set` would leave the normal path wide open. Same single
+      // call over the same whole debt set (guard-completion gc-1). Refuses
+      // before last_scribing_run is stamped and before the ledger append, so
+      // nothing records a run that the refusal then undid.
+      guardPhaseDepartureDebt(root, state, 'compounding');
       state.last_scribing_run = { feature, date, at, areas_synced: areas, next_action: nextAction };
       // "plus top-level phase/next_action" (bee-scribing SKILL.md:112).
       state.phase = 'compounding';
@@ -4393,7 +4380,8 @@ async function handleStateRoute(root, flags) {
 // ─── state feature-verify: main-verifies D2 — the feature-level proof record ─
 // The delegator's ONE verify over the feature's whole diff, recorded the same
 // discipline as validation-cache/advisor-ref: a machine-readable record the
-// close door (guardFeatureVerifyDebt, D3) reads back — {feature, command,
+// debt doors (the 'feature-verify' kind in FEATURE_DEBT_KINDS, D3) read back
+// — {feature, command,
 // output_sha256, result, at}. `record` stamps it on the ACTIVE feature's
 // tracked record (session-bound lane else default, the same
 // resolveMutationTarget resolution `state route` uses — no --lane targeting

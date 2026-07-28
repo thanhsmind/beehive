@@ -2917,32 +2917,115 @@ export function testCellDebtFixTail(kind, feature) {
   );
 }
 
+// ─── guard-completion gc-1 — ONE QUESTION, ASKED BY EVERY DOOR ─────────────
+//
+// Round THREE on this surface, and the first two both looked correct:
+//
+//   round 1 — guarded the phase door, missed the feature-swap door;
+//   round 2 — guarded the swap door for feature-verify debt and moved the
+//             computations up here (the DEBT CORE above) so no two doors
+//             could compute the same debt differently.
+//
+// A reviewer walked straight through round 2 anyway, because the knowledge
+// that actually escaped was never the computation — it was the LIST. Each door
+// still assembled its own sequence of questions by hand, and the swap door's
+// sequence was {feature-verify, scribing}: it never asked about test-cell debt.
+// So a feature holding a capped `change_class: "behavior"` cell and NO test
+// cell at all was refused by the phase door (EXIT 1) and by start-feature
+// (EXIT 1), while `state set --feature beta --owner swarming
+// --waive-scribing-debt` walked out with it (EXIT 0). One shared answer is
+// worth nothing while every caller still chooses which parts of it to hear.
+//
+// So the doors stop knowing what debt IS. They ask ONE question —
+// guardFeatureDebt — and the answer knows the whole set:
+//
+//   · a new debt kind is ONE entry in FEATURE_DEBT_KINDS below. Every door
+//     inherits it the instant it is added, with no door edited, and the
+//     door × kind matrix in test_bee_cli.mjs (which iterates this same array
+//     rather than hand-listing pairs) fails until that kind has a fixture, so
+//     the coverage is inherited too;
+//   · a new DOOR gets the whole set by construction — the only thing it can
+//     supply is its own refusal head, never a subset of the questions;
+//   · a door that tried to ask a subset would have to re-import the detectors
+//     and rebuild the message composition by hand. That is precisely the shape
+//     that produced three rounds of this bug, and test_bee_cli.mjs pins it
+//     shut structurally (no per-kind detector call survives in bee.mjs).
+//
+// SCOPE — the UNWAIVABLE debt set: mechanical preconditions that no
+// gate_bypass level (including "total") and no waiver flag lift. Scribing debt
+// is deliberately NOT a member: it is waivable (--waive-scribing-debt), and it
+// is computed in cells.mjs, which imports this file and therefore cannot be
+// read from here. Every door runs this guard BEFORE its own scribing check for
+// exactly that reason — a waiver for the waivable debt must never be the thing
+// that carries an unwaivable one through (the reviewer's repro was that exact
+// command).
+
+/**
+ * FEATURE_DEBT_KINDS — the whole unwaivable debt set, in refusal order.
+ * Each kind owns four things and nothing else: how the debt is DETECTED, how
+ * it is NAMED in a refusal, what it means to ABANDON it (doors that walk away
+ * from the feature rather than merely moving its phase), and its FIX tail.
+ * Nothing here knows which door is asking; no door knows what is in here.
+ */
+export const FEATURE_DEBT_KINDS = [
+  {
+    id: 'feature-verify',
+    label: 'pending feature-level verify (main-verifies D1/D3)',
+    detect: (root, record, feature) => featureVerifyDebt(root, record, feature),
+    owed: (debt) =>
+      `has ${debt.pending.length} capped cell(s) awaiting the feature-level verify (trace.feature_verify: "pending"): ${debt.pending.join(', ')}, and ${debt.recordState}`,
+    abandonment: (feature, incoming) =>
+      `Walking away to "${incoming}" leaves "${feature}"'s ONE feature-level verify unrun, and every reader of these markers keys on the record's feature: once the swap lands, nothing reads those pending caps again. The relocated proof would not be deferred, it would be destroyed.`,
+    fixTail: () => FEATURE_VERIFY_FIX_TAIL,
+  },
+  {
+    id: 'test-cell',
+    label: 'consolidated slice-tail test coverage (spec #80/#85 P1/P4)',
+    detect: (root, record, feature) => testCellDebt(root, feature),
+    owed: (debt) =>
+      debt.kind === 'missing'
+        ? `has ${debt.cappedBehaviorBearing.length} capped behavior/api cell(s) and NO consolidated test cell at all: ${debt.cappedBehaviorBearing.join(', ')}`
+        : `has ${debt.offenders.length} consolidated test cell(s) not green: ${debt.offenders.join(', ')}`,
+    abandonment: (feature, incoming) =>
+      `Walking away to "${incoming}" leaves that coverage owed by nobody: every reader of these cells keys on the record's feature, so once "${incoming}" is the active feature, "${feature}"'s behavior is never asked for its tests again.`,
+    fixTail: (debt, feature) => testCellDebtFixTail(debt.kind, feature),
+  },
+];
+
+/**
+ * guardFeatureDebt(root, record, feature, {subject, abandonedFor}) — THE door
+ * call. Every door in the codebase makes exactly this one call and supplies
+ * only its own refusal head:
+ *
+ *   subject      the refusal up to (but not including) the debt clause, e.g.
+ *                `set: refusing to leave phase "x" for "y" — feature "f"`.
+ *                The kind appends `has …` and the FIX tail.
+ *   abandonedFor the incoming feature when this door WALKS AWAY from `feature`
+ *                (swap, start-feature) rather than moving its phase; adds each
+ *                kind's abandonment paragraph. null for phase doors.
+ *
+ * Throws on the first standing debt, and throws (never passes) when the cell
+ * store is unreadable — unknown debt is never zero debt. Returns nothing.
+ */
+export function guardFeatureDebt(root, record, feature, { subject, abandonedFor = null } = {}) {
+  if (!feature) return; // no feature ⇒ nothing keyed to hold open (idle, or a record with none)
+  for (const kind of FEATURE_DEBT_KINDS) {
+    const debt = kind.detect(root, record, feature);
+    if (!debt) continue;
+    const abandonNote = abandonedFor ? `${kind.abandonment(feature, abandonedFor)}\n` : '';
+    throw new Error(`${subject} ${kind.owed(debt)}.\n${abandonNote}${kind.fixTail(debt, feature)}`);
+  }
+}
+
 /**
  * guardOutgoingFeatureDebt(root, record, outgoing, incoming) — startFeature's
- * door, asking the same two questions the phase doors in bee.mjs ask, of the
- * feature that is about to be walked away from. Throws; returns nothing.
+ * door. Owns its refusal head; asks the whole debt set through the one call.
  */
 function guardOutgoingFeatureDebt(root, record, outgoing, incoming) {
-  const verifyDebt = featureVerifyDebt(root, record, outgoing);
-  if (verifyDebt) {
-    throw new Error(
-      `startFeature: refused — starting "${incoming}" abandons feature "${outgoing}", which has ${verifyDebt.pending.length} capped cell(s) awaiting the feature-level verify (trace.feature_verify: "pending"): ${verifyDebt.pending.join(', ')}, and ${verifyDebt.recordState}.\n` +
-        `Every reader of these markers keys on the record's feature: once "${incoming}" is started, nothing reads "${outgoing}"'s pending caps again, and closing its workflow records is exactly what this start does next. The relocated proof would not be deferred, it would be destroyed.\n` +
-        FEATURE_VERIFY_FIX_TAIL,
-    );
-  }
-  const testDebt = testCellDebt(root, outgoing);
-  if (!testDebt) return;
-  if (testDebt.kind === 'missing') {
-    throw new Error(
-      `startFeature: refused — starting "${incoming}" abandons feature "${outgoing}", which has ${testDebt.cappedBehaviorBearing.length} capped behavior/api cell(s) and NO consolidated test cell at all: ${testDebt.cappedBehaviorBearing.join(', ')}.\n` +
-        testCellDebtFixTail('missing', outgoing),
-    );
-  }
-  throw new Error(
-    `startFeature: refused — starting "${incoming}" abandons feature "${outgoing}", which has ${testDebt.offenders.length} consolidated test cell(s) not green: ${testDebt.offenders.join(', ')}.\n` +
-      testCellDebtFixTail('not-green', outgoing),
-  );
+  guardFeatureDebt(root, record, outgoing, {
+    subject: `startFeature: refused — starting "${incoming}" abandons feature "${outgoing}", which`,
+    abandonedFor: incoming,
+  });
 }
 
 function listAllCellsForStart(root) {

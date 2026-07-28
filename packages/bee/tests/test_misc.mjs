@@ -979,6 +979,12 @@ const EXPECTED_STATE_EXPORTS = [
   'isLocalOnlyConfigKey',
   'testCellDebt',
   'testCellDebtFixTail',
+  // guard-completion gc-1: the SINGULAR debt question. Every door (phase
+  // departure, scribing-run, feature swap, start-feature) asks guardFeatureDebt
+  // and nothing else; FEATURE_DEBT_KINDS is the whole unwaivable debt set, and
+  // test_bee_cli.mjs iterates it to generate the door × kind matrix.
+  'FEATURE_DEBT_KINDS',
+  'guardFeatureDebt',
   'trackedLocalOnlyKeyWarning',
   'COMMAND_KEYS',
   // worktree-companion-hook: separate from COMMAND_KEYS on purpose — see the

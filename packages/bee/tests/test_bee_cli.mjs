@@ -27,7 +27,7 @@ import { validate, isValidParameterSchema } from '../lib/validate-args.mjs';
 import { addCell, updateCell, deriveRegenGuards, regenObligationRefusal } from '../lib/cells.mjs';
 import { createSession, bindSessionLane } from '../lib/claims.mjs';
 import { writeJsonAtomic, hashFile, appendJsonl } from '../lib/fsutil.mjs';
-import { defaultState, writeState, writeLane, BEE_VERSION, GATE_NAMES, KNOWN_PHASES } from '../lib/state.mjs';
+import { defaultState, writeState, writeLane, BEE_VERSION, GATE_NAMES, KNOWN_PHASES, FEATURE_DEBT_KINDS } from '../lib/state.mjs';
 import { listWorkflows, createWorkflow } from '../lib/workflow-store.mjs';
 import { buildSessionPreamble } from '../lib/inject.mjs';
 import { mirrorHold, findForeignHolds } from '../lib/worktree-holds.mjs';
@@ -2588,6 +2588,166 @@ await check('p2-1: gate_bypass "total" lifts none of it — the compounding clos
     const startRefused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
     assert(startRefused.status !== 0, 'bypass "total" must not lift the start-feature door either');
     assert(/p21bypass-1/.test(startRefused.stdout + startRefused.stderr), 'the start refusal must still name the pending cell');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── guard-completion gc-1: EVERY DOOR × EVERY DEBT KIND, GENERATED ────────
+//
+// The checks above are hand-written pairs, and hand-written pairs are how this
+// P1 survived two rounds: p1-3 wrote {swap × feature-verify} and nobody wrote
+// {swap × test-cell}, so a feature with a capped `behavior` cell and NO test
+// cell was refused by the phase door (EXIT 1) and by start-feature (EXIT 1)
+// while `state set --feature beta --owner swarming --waive-scribing-debt`
+// carried it out at EXIT 0.
+//
+// So the pairs are not written here. They are GENERATED — every door below
+// crossed with every kind in FEATURE_DEBT_KINDS (imported from lib/state.mjs,
+// the same array the doors ask). A debt kind added next month is exercised
+// against all four doors the moment it is registered, and the fixture-coverage
+// check below fails loudly until it can be. A door added next month is one row
+// in DEBT_DOORS and inherits every kind. Each pair also asserts the refusal
+// wrote NOTHING, and each door gets a debt-free control so this stays a guard
+// and never becomes a wall.
+
+// One fixture per debt kind, keyed by the kind's own id — the only hand-
+// maintained mapping left, and the check below makes forgetting it a failure
+// rather than a silent gap.
+const DEBT_KIND_FIXTURES = {
+  'feature-verify': (dir, feature) =>
+    writePendingCappedCell(dir, `${feature}-pending`, feature, new Date().toISOString()),
+  'test-cell': (dir, feature) => writeCappedBehaviorCell(dir, `${feature}-behavior`, feature),
+};
+
+// Debt-free for EVERY kind at once: capped behavior work whose consolidated
+// test cell is capped green, and no cell awaiting the feature-level verify.
+function seedDebtFreeFeature(dir, feature) {
+  writeCappedBehaviorCell(dir, `${feature}-behavior`, feature);
+  writeTestClassCell(dir, `${feature}-test`, feature, {
+    status: 'capped',
+    trace: { capped_at: new Date().toISOString(), verify_passed: true },
+  });
+}
+
+// Every door that can walk a feature's debt out of reach. The swap row carries
+// --waive-scribing-debt deliberately: that is the reviewer's exact command,
+// and a waiver for the WAIVABLE debt must never carry an unwaivable one.
+const DEBT_DOORS = [
+  {
+    id: 'phase-departure (state set --phase)',
+    phase: 'swarming',
+    argv: () => ['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'],
+    untouched: (state, feature) => state.phase === 'swarming' && state.feature === feature,
+    landed: (state) => state.phase === 'scribing',
+  },
+  {
+    id: 'scribing-run (state scribing-run)',
+    phase: 'swarming',
+    argv: (feature) => ['state', 'scribing-run', '--feature', feature, '--areas', 'demo', '--next-action', 'x', '--json'],
+    untouched: (state) => state.phase === 'swarming' && !state.last_scribing_run,
+    landed: (state) => state.phase === 'compounding',
+  },
+  {
+    id: 'feature-swap (state set --feature, with --waive-scribing-debt)',
+    phase: 'swarming',
+    argv: () => ['state', 'set', '--owner', 'swarming', '--feature', 'beta', '--waive-scribing-debt', '--json'],
+    untouched: (state, feature) => state.feature === feature,
+    landed: (state) => state.feature === 'beta',
+  },
+  {
+    id: 'start-feature (state start-feature)',
+    phase: 'compounding-complete',
+    argv: () => ['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'],
+    untouched: (state, feature) => state.feature === feature,
+    landed: (state) => state.feature === 'beta',
+  },
+];
+
+const slug = (text) => text.replace(/[^a-z0-9]+/gi, '').slice(0, 12).toLowerCase();
+const readStateOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
+
+await check('gc-1: every registered debt kind has a matrix fixture — adding a kind to FEATURE_DEBT_KINDS fails HERE until every door is exercised against it', async () => {
+  const registered = FEATURE_DEBT_KINDS.map((kind) => kind.id);
+  const missing = registered.filter((id) => typeof DEBT_KIND_FIXTURES[id] !== 'function');
+  assert(
+    missing.length === 0,
+    `debt kind(s) [${missing.join(', ')}] are registered in lib/state.mjs but have no fixture here, so no door is proven to refuse them. FIX: add a DEBT_KIND_FIXTURES entry — the door matrix then covers the new kind at every door automatically.`,
+  );
+  const orphans = Object.keys(DEBT_KIND_FIXTURES).filter((id) => !registered.includes(id));
+  assert(orphans.length === 0, `fixture(s) [${orphans.join(', ')}] name debt kinds that no longer exist in FEATURE_DEBT_KINDS`);
+  assert(registered.length >= 2, `the unwaivable debt set must not silently shrink, got [${registered.join(', ')}]`);
+});
+
+await check('gc-1: no door in bee.mjs composes its own debt list — the per-kind detectors are unreachable from the door layer (structural: this is the drift that survived two rounds)', async () => {
+  const source = fs.readFileSync(fileURLToPath(new URL('../bee.mjs', import.meta.url)), 'utf8');
+  // Comments discuss these names on purpose (they are the history); only real
+  // CALL sites rebuild the per-door list, so strip comment lines first.
+  const code = source
+    .split('\n')
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join('\n');
+  for (const detector of ['featureVerifyDebt', 'testCellDebt']) {
+    assert(
+      !new RegExp(`\\b${detector}\\s*\\(`).test(code),
+      `bee.mjs calls ${detector}() directly — a door asking one debt kind by hand is exactly how the swap door came to skip another. FIX: ask guardFeatureDebt() and let FEATURE_DEBT_KINDS answer.`,
+    );
+  }
+  assert(/guardFeatureDebt\(/.test(code), 'the bee.mjs door layer must ask the shared question at least once');
+});
+
+for (const door of DEBT_DOORS) {
+  for (const kind of FEATURE_DEBT_KINDS) {
+    await check(`gc-1: door "${door.id}" REFUSES "${kind.id}" debt — one question, asked by every door`, async () => {
+      const feature = `gc1${slug(door.id)}${slug(kind.id)}`;
+      const dir = makeFeatureVerifyRepo(feature, door.phase);
+      try {
+        DEBT_KIND_FIXTURES[kind.id](dir, feature);
+        const refused = await runBee(door.argv(feature), dir);
+        assert(
+          refused.status !== 0,
+          `door "${door.id}" let "${kind.id}" debt walk out (exit ${refused.status}) — every door asks the whole debt set: ${refused.stdout}${refused.stderr}`,
+        );
+        const out = refused.stdout + refused.stderr;
+        assert(/FIX:/.test(out), `the refusal must carry a runnable FIX, got: ${out}`);
+        assert(new RegExp(feature).test(out), `the refusal must name the feature that owes, got: ${out}`);
+        assert(door.untouched(readStateOf(dir), feature), `a refused door must write NOTHING, state is now: ${JSON.stringify(readStateOf(dir))}`);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  await check(`gc-1: door "${door.id}" OPENS for a debt-free feature — a guard, not a wall`, async () => {
+    const feature = `gc1clean${slug(door.id)}`;
+    const dir = makeFeatureVerifyRepo(feature, door.phase);
+    try {
+      seedDebtFreeFeature(dir, feature);
+      const ok = await runBee(door.argv(feature), dir);
+      assert(ok.status === 0, `a feature that owes nothing must pass door "${door.id}", got: ${ok.stdout}${ok.stderr}`);
+      assert(door.landed(readStateOf(dir)), `the change must actually land once the door is clear, state is: ${JSON.stringify(readStateOf(dir))}`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+await check('gc-1: THE REVIEWER\'S REPRO — a capped behavior cell with NO test cell is refused at the feature-swap door, the one door that used to let it through at EXIT 0', async () => {
+  const dir = makeFeatureVerifyRepo('gc1repro', 'swarming');
+  try {
+    writeCappedBehaviorCell(dir, 'gc1repro-b', 'gc1repro');
+    const refused = await runBee(
+      ['state', 'set', '--owner', 'swarming', '--feature', 'beta', '--waive-scribing-debt', '--json'],
+      dir,
+    );
+    assert(refused.status !== 0, 'the reviewer\'s exact command must now refuse');
+    const out = refused.stdout + refused.stderr;
+    assert(/refusing to swap away from feature/.test(out), `it must refuse AT THE SWAP DOOR, got: ${out}`);
+    assert(/NO consolidated test cell/.test(out) && /gc1repro-b/.test(out), `the refusal must name the uncovered behavior cell, got: ${out}`);
+    assert(
+      readStateOf(dir).feature === 'gc1repro',
+      'the swap must not land — the scribing waiver never carries an unwaivable debt through',
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
