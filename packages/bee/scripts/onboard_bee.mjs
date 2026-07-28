@@ -818,8 +818,17 @@ export function validateSkillMarkers(text) {
     }
     if (!NEAR_MARKER_RE.test(line)) {
       // A `---` opener appearing AFTER a marker but with the marker above the
-      // top of the file signals a marker placed before frontmatter.
-      if (firstFrontmatterOpener === -1 && FRONTMATTER_DELIM_RE.test(line) && i > 0 && frontmatterEnd === -1) {
+      // top of the file signals a marker placed before frontmatter. Only
+      // counts outside a fenced code block — a `---` inside a ```-fenced
+      // example (e.g. a sample plan.md frontmatter shown for illustration)
+      // is example content, never a real frontmatter opener.
+      if (
+        firstFrontmatterOpener === -1 &&
+        fence === null &&
+        FRONTMATTER_DELIM_RE.test(line) &&
+        i > 0 &&
+        frontmatterEnd === -1
+      ) {
         firstFrontmatterOpener = i;
       }
       continue;

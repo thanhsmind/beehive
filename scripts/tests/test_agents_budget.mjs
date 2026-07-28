@@ -42,12 +42,16 @@ const MARKER_END = "<!-- BEE:END -->";
 const HARD_FAIL_BYTES = 15000;
 const WARN_BYTES = 14000;
 
-// The 15 numbered critical rules, and the four whose FULL text is terminal
+// The 16 numbered critical rules, and the four whose FULL text is terminal
 // here (bee-hive/SKILL.md line "Rules 2-4, 13 appear in full in AGENTS.md"
 // and its rule 13 pointing at "AGENTS.md Guardrails"). A future diet that
 // answers one of those defer-backs with a defer-out builds a pointer loop in
 // which the rule's full text lives nowhere at all.
-const EXPECTED_RULE_COUNT = 15;
+//
+// validation-diet vd-10 — rule 16 (evidence doctrine, D9) was appended after
+// rule 15 rather than inserted mid-list, so TERMINAL_HOME_RULES' indices
+// [1, 5, 6, 11] are unaffected by the count moving from 15 to 16.
+const EXPECTED_RULE_COUNT = 16;
 const TERMINAL_HOME_RULES = [1, 5, 6, 11];
 
 let passed = 0;
@@ -176,7 +180,7 @@ function assertRuleRoster(text, label) {
   );
 }
 
-check("the block still carries all 15 numbered critical rules, no gaps, no duplicates", () => {
+check("the block still carries all 16 numbered critical rules, no gaps, no duplicates", () => {
   assertRuleRoster(templateText, "packages/bee/AGENTS.block.md");
   assertRuleRoster(rootText, "AGENTS.md");
 });
