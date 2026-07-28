@@ -9,7 +9,7 @@ metadata:
     web-docs-search:
       kind: capability
       missing_effect: degraded
-      reason: Checks current official documentation version-aware (Exa or WebSearch/WebFetch/browser); absent, docs claims degrade to Inference and become proof obligations for validating.
+      reason: Checks current official documentation version-aware (Exa or WebSearch/WebFetch/browser); absent, docs claims degrade to Inference and become proof obligations for the review wave (bee-planning's Gate 2 shape stage).
     upstream-pattern-research:
       kind: capability
       missing_effect: degraded
@@ -66,7 +66,7 @@ State why the chosen rung beats the next-best alternative, and what evidence wou
 
 ## Output
 
-- **In-chain** (invoked from `bee-planning` discovery L2/L3): no separate file — findings merge into the feature's `approach.md` (chosen path / rejected alternatives carry the ladder rationale; risk-map rows cite evidence labels; version caveats and `Inference`-only claims become open questions for `bee-validating`).
+- **In-chain** (invoked from `bee-planning` discovery L2/L3): no separate file — findings merge into the feature's `approach.md` (chosen path / rejected alternatives carry the ladder rationale; risk-map rows cite evidence labels; version caveats and `Inference`-only claims become open questions carried into `bee-planning`'s Gate 2 shape presentation).
 - **Standalone** (no feature underway): write `docs/history/research/<topic-slug>.md` from `references/research-brief-template.md`, lead with the Bottom Line, and suggest the next step — `bee-exploring` if the topic is becoming a fuzzy feature, `bee-planning` if scope is already clear.
 - A genuinely new first-principles finding (layer-3 knowledge) → flag it for `bee-compounding`.
 
@@ -84,7 +84,7 @@ State why the chosen rung beats the next-best alternative, and what evidence wou
 - a recommendation without the rejected rungs stated
 - a capability gap silently skipping a step instead of degrading it honestly
 - a research finding silently replacing a locked D-ID
-- writing code "just to try it" mid-research (that is a spike — `bee-validating` owns it)
+- writing code "just to try it" mid-research (that is a spike — opt-in by change class through the `spike` lane, never xia's job)
 
 Violating the letter of these rules is violating the spirit of these rules.
 

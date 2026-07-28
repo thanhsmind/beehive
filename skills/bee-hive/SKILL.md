@@ -21,20 +21,20 @@ Load first in bee repos. Rules are stated bare — decision IDs:
 ## Lanes — triage first (the mode gate)
 
 Decide the lane from the request, before loading a second skill: count
-risk flags and product files (`.bee/**`, docs, plans, generated renders never
-count):
+risk flags. Lane file caps count product files only — `.bee/**`, docs,
+plans, generated renders never count:
 
 > auth · authorization · data model · audit/security · external systems ·
-> public contracts · cross-platform · behavior an existing test asserts ·
-> weaken/delete/replace existing proof · multi-domain (covered bugfix
-> keeping tests green + adding one: 0 on the last two)
+> public contracts · cross-platform · changes behavior an existing test asserts ·
+> the change requires weakening, deleting, or replacing existing proof ·
+> multi-domain (covered bugfix keeping tests green + adding one: 0 on the last two)
 
 | Lane | Trigger (from the request alone) |
 |---|---|
 | `docs` | all touched files are knowledge, not runtime (docs, README, samples, plans) |
-| `tiny` | 0–1 flags, ≤2 product files, no API/data change, one direct task |
-| `spike` | one yes/no proof decides whether the plan is real |
-| `small` | 0–1 flags, ≤3 product files, no gray areas |
+| `tiny` | 0–1 flags, ≤2 product files, no API/data change, one direct task — the cell is the micro-plan, no `plan.md` |
+| `spike` | one yes/no proof decides whether the plan is real — opt-in by change class (migration, security, external side effect, or no in-repo precedent), never a phase step |
+| `small` | 0–1 flags, ≤3 product files, no gray areas — logged scoping synthesis; plan.md is opt-in |
 | `standard` | 2–3 flags, story-sized behavior, or genuine row uncertainty |
 | `high-risk` | 4+ flags or any hard-gate flag (auth, authorization, data loss, audit/security, external provider, validation removal) |
 
@@ -78,52 +78,50 @@ dispatches review · document an area / settled rule → `bee-scribing`
 Briefing, grooming, compounding, skill-writing, evolving, and the
 jump-to-planning offer: ("First-Skill Routing").
 
-## The Four Gates
+## The Gates
 
 Never skipped, batched, or self-approved — any mode, go or headless
 included. Sole exception, the opt-in bypass level (`bee-bypass-gate`):
-`normal` auto-approves Gates 1-3 for tiny/small/standard only
+`normal` auto-approves Gates 1-2 for tiny/small/standard only
 (high-risk/hard-gate, secrets, Gate 4 UAT still stop); `full` adds those
-Gates 1-3 (only secret reads and a review P1 stop); `total`: everything, zero
+Gates 1-2 (only secret reads and a review P1 stop); `total`: everything, zero
 stops. At `full`/`total` the human lifted the high-risk floor — never re-erect
 it ("Gate bypass mode"); headless stops at every gate regardless, not
 bypass.
 
 - Gate 1: "Decisions locked. Approve CONTEXT.md before planning?"
-- Gate 2: "Work shape is ready. Approve before current-work preparation?"
-- Gate 3: "Feasibility validated. Approve execution?"
+- Gate 2: "Work shape is ready. Approve before current-work preparation?" — one question approves `shape` AND `execution` together (`bee state gate --merge`, D2); the retired standalone Gate 3 question no longer exists.
 - Gate 4: P1 > 0 → "P1 findings block merge. Fix before proceeding?"; P1 = 0 → "Review complete. Approve merge?"
 
 Gate 4 exists only inside a user-invoked review session — never automatic
 after execution, never after an unreviewed close; bypass never *creates* one;
 `normal`/`full`: UAT items and any P1 always stop; `total` auto-proceeds.
-`docs`: no gates; `tiny`/`small`: the merged question above; Gates 1-3
+`docs`: no gates; `tiny`/`small`: the merged question above; Gates 1-2
 otherwise one at a time. Presentation: plain-language layer + fixed question;
 report linked, never pasted; the user can restate it
-("Gate Presentation Contract"); optional cross-model second opinion at Gates
-2-4, never auto-resolved. CI status gate before the first `cells claim`, never a
+("Gate Presentation Contract"); optional cross-model second opinion at Gate
+2 and Gate 4, never auto-resolved. CI status gate before the first `cells claim`, never a
 local run: red CI / open `verify-red` → a fix-first tiny cell, **never build
 on red**; impacted tests locally, full suite CI-owned ("CI status gate").
 
 ## Priority Rules (hive law)
 
-Rules 2-4, 13 appear in full in `AGENTS.md` (auto-loaded every session).
+Rules 2-4, 12 appear in full in `AGENTS.md` (auto-loaded every session).
 
 1. P1 review findings always block.
 2. At ~65% context, write `.bee/HANDOFF.json` and pause.
 3. `CONTEXT.md` is truth; locked decisions cited, never reinterpreted.
-4. No source-editing execution before Gate 3.
-5. Failed reality gate or NO spike → halt; back to planning.
-6. Never skip validating; tiny = 2-minute reality check.
-7. Critical patterns + recent decisions before planning/executing (Session Scout).
-8. "done/passing/fixed" needs fresh command output in the same message.
-9. Lanes scale ceremony, never memory: scribing sync per `behavior_change` cap; settlements captured on settle; every close: a capture line or "nothing settled" ("Capture discipline").
-10. The agent runs the machinery, never the user ("The agent runs the machinery").
-11. Work language only; bypass = one outcome line per cap/slice/wave/re-lane ("Silent Bookkeeping", "Progress ticks").
-12. No hand-edits to `.bee/*.json(l)`; CLI verbs only; `state set` needs `--owner`; no verb → file friction first.
-13. Hooks are a safety net, never the authority — an unblocked write is not an approved write; never retry a blocked action (`AGENTS.md` Guardrails).
-14. Headless: never ask; defer into `Outstanding Questions`; never self-approve a gate ("Headless mode").
-15. Session-end nudge: ask for a durable decision/learning; log via `decisions log`.
+4. No source-editing execution before the merged Gate 2 approves execution.
+5. Failed SMALLER PATH check or a NO spike result → halt; redraft before the gate.
+6. Critical patterns + recent decisions before planning/executing (Session Scout).
+7. "done/passing/fixed" needs fresh command output in the same message.
+8. Lanes scale ceremony, never memory: scribing sync per `behavior_change` cap; settlements captured on settle; every close: a capture line or "nothing settled" ("Capture discipline").
+9. The agent runs the machinery, never the user ("The agent runs the machinery").
+10. Work language only; bypass = one outcome line per cap/slice/wave/re-lane ("Silent Bookkeeping", "Progress ticks").
+11. No hand-edits to `.bee/*.json(l)`; CLI verbs only; `state set` needs `--owner`; no verb → file friction first.
+12. Hooks are a safety net, never the authority — an unblocked write is not an approved write; never retry a blocked action (`AGENTS.md` Guardrails).
+13. Headless: never ask; defer into `Outstanding Questions`; never self-approve a gate ("Headless mode").
+14. Session-end nudge: ask for a durable decision/learning; log via `decisions log`.
 
 ## Red Flags
 
