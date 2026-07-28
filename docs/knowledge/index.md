@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 93 concept(s)
-- [patterns/](patterns/index.md) — 75 concept(s)
+- [patterns/](patterns/index.md) — 78 concept(s)
 - [work/](work/index.md) — 4 concept(s)
 
 ## Critical patterns
@@ -85,3 +85,6 @@ never a generation timestamp or any other wall-clock value.
 - [A shim that preserves a CLI surface can still drop a side-effect that surface never named](patterns/20260725-a-shim-can-drop-an-unnamed-side-effect.md) — The cross-worktree mirror write lived beside the reservation store's write, not inside it — a neighbor, not a return value. Retiring the store's own implementation without deliberately carrying that neighbor along would have lost cross-worktree coordination silently, because every visible test of the shim's own contract (reserve/release/renew) would still pass.
 - [A lock that guards the wrong record buys nothing and costs an invariant](patterns/20260727-a-lock-scoped-to-the-wrong-record-buys-nothing.md) — Serializing a lane mutation on the shared 'state' lock closed nothing for lanes — the write it guards (lanePath) is never touched by that lock's other holders — and it turned a correct, live invariant red by forcing an unrelated writer to wait out the lock's own timeout.
 - [An impacted-test run computed after the commit selects nothing, and caps false-green](patterns/20260727-an-impacted-run-computed-after-the-commit-selects-nothing.md) — A worker committed its change, then ran run_verify.mjs --impacted-from-git, which diffed against the now-clean tree and saw only leftover uncommitted bookkeeping files — reporting 0 suites and capping the cell verify_passed:true while the change was in fact red.
+- [A derivation the tooling already computes is worthless where doctrine forbids it](patterns/20260728-a-derivation-the-tooling-computes-but-doctrine-forbids-where-it-is-needed.md) — The impact registry already maps every source file to the suites that consume it, but a cell's verify is doctrinally forbidden from using it — so sibling-suite selection fell back to human memory, and two cells editing the same file made opposite guesses.
+- [A scan set built from the git index crashes the very gate it feeds](patterns/20260728-a-scan-set-from-the-git-index-crashes-the-gate-that-guards-it.md) — A coverage gate listed its inputs with git ls-files — the index, not the working tree — so a deferred deletion left it reading a file that no longer existed; the ENOENT killed the process and took every assertion behind it into silence.
+- [One membership hand-copied six times has no owner and no alarm](patterns/20260728-one-membership-hand-copied-six-times-has-no-owner-and-no-alarm.md) — The same two-element phase set is written out by hand in six modules under three different names, none importing the enum it mirrors and none cross-checked — so the next phase rename silently splits behaviour across the six, and the copy that governs write-denial fails open.

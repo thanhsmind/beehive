@@ -270,6 +270,8 @@
     "workflow-state",
     "worktree-parallelism",
     "verify-red",
-    "debt"
+    "debt",
+    "evidence",
+    "verification"
   ]
 }
