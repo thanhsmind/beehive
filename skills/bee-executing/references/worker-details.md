@@ -8,16 +8,26 @@ The orchestrator supplies: agent nickname (reservation identity), assigned cell 
 
 The assigned cell arrives **already claimed** under the worker's nickname — the orchestrator claims before spawning (D1), never the worker. No literal session id is ever handed down in the prompt (D3): reservation and claim verbs resolve the session from `CLAUDE_CODE_SESSION_ID` in the worker's own environment when one is needed, never from prompt text.
 
+## Feature-verify pending path (default, main-verifies D1/D4)
+
+The sanctioned default: implement, commit, cap with `--feature-verify-pending` — no per-cell verify run, no `verification_evidence`. `cells cap` refuses combining this flag with a recorded passing verify or with per-cell evidence (the two proof paths are exclusive). The full feature-verify protocol — when the ONE feature verify runs, what proves it, how it's recorded, and the red path — is stated once, in full, at `bee-swarming/references/swarming-reference.md` ("Feature verify at close, in full"); this is the orchestrator's job, never the worker's. Bugfix cells: the repro red already exists (MAIN-produced pre-dispatch, cited in the cell) — fix it, never re-run it as "proof". The classic evidenced path below stays sanctioned for spot use, other repos, or transition.
+
 ## Expanded Commands
 
 ```text
 node .bee/bin/bee.mjs status --brief --json
 node .bee/bin/bee.mjs cells show --id <id>
 node .bee/bin/bee.mjs reservations reserve --agent "<name>" --cell "<id>" --path "<path>" --ttl 3600
-node .bee/bin/bee.mjs cells verify --id <id> --command "<cmd>" --passed true|false [--output-file <f>]
-node .bee/bin/bee.mjs cells cap --id <id> [--outcome TEXT] [--files a,b] [--behavior-change] [--evidence-stdin] [--deviations-file F] [--friction TEXT]
+node .bee/bin/bee.mjs cells cap --id <id> --feature-verify-pending [--outcome TEXT] [--files a,b] [--deviations-file F] [--friction TEXT]
 node .bee/bin/bee.mjs reservations release --agent "<name>" --cell "<id>"
 node .bee/bin/bee.mjs decisions active --recent 3
+```
+
+Classic path only — record a per-cell verify before cap (never combine with `--feature-verify-pending`):
+
+```text
+node .bee/bin/bee.mjs cells verify --id <id> --command "<cmd>" --passed true|false [--output-file <f>]
+node .bee/bin/bee.mjs cells cap --id <id> [--outcome TEXT] [--files a,b] [--behavior-change] [--evidence-stdin] [--deviations-file F] [--friction TEXT]
 ```
 
 Shell guard for write-heavy commands (`git add/mv/rm`, `mv`, `cp`, `rm`, `mkdir`, `touch`, `sed -i`, `tee`, redirection writes):
@@ -117,7 +127,7 @@ prove base ancestry and the reserved-path diff subset before the result counts.
 Do not describe a branch name, worktree id, base, or commit as integration
 authority, and do not ask the orchestrator to trust a worker-supplied value.
 
-- `[DONE]` — cell capped, one commit made, verification recorded as passed, reservations released.
+- `[DONE]` — cell capped (pending path: no per-cell verify; classic path: verification recorded as passed), one commit made, reservations released.
 - `[BLOCKED]` — cannot continue safely; include the blocker, diagnosis, and current reservation state.
 - `[HANDOFF]` — `.bee/HANDOFF.json` written; include progress, active reservations, and the resume point.
 - `[NOOP]` — the assigned cell is unavailable or unsafe; include why and a suggested parent action.
@@ -149,9 +159,11 @@ Reread, in order:
 
 ## Verify in full
 
+Classic/spot-use path (main-verifies D1) — the sanctioned default is the feature-verify pending path above; a cell only reaches this section when it is explicitly cited for spot use, another repo, or transition.
+
 - Run the cell's verify command exactly, then record it **with its output** (decision 0004 — proof, not assertion):
   `node .bee/bin/bee.mjs cells verify --id <id> --command "<cmd>" --output "<what it printed>" --passed true|false` (or `--output-file <f>` for long output)
-- The `verify` field is the cell's **targeted** suite (seconds) — never the full configured `commands.verify` chain (D4, decision `e54878b1`). Run red-first, then green, and stop there: do **not** additionally run the full chain yourself — the orchestrator's own wave-close run (`bee-swarming/SKILL.md`) is the independent proof that covers your cell, now the impacted run (`commands.test`) rather than the full chain (ci-owned-verify D1/D6). The full chain itself is CI-owned: no local baseline run before the first claim, and worktree merge gates on `commands.test` (impacted over the staged merge) instead of the full chain — session finish likewise runs `commands.test`, and the release flow runs the impacted suite locally then dispatches the CI full run (`gh workflow run CI --ref main`) right after the tag push, with red arriving back as a `verify-red` issue (`AGENTS.md`). Mid-iteration, run the level-1 impacted run (`run_verify --impacted-from-git --level 1` — direct edges only, seconds); the transitive impacted run (`commands.test`) stays the wave-close/merge gate.
+- The `verify` field is the cell's **targeted** suite (seconds) — never the full configured `commands.verify` chain (D4, decision `e54878b1`). Run red-first, then green, and stop there: do **not** additionally run the full chain yourself. The orchestrator no longer re-runs it routinely either (main-verifies D4 retired the wave-close impacted run) — a fresh re-run happens only on a smell, and the feature's ONE proof event is the feature verify at final-slice close (`bee-swarming/references/swarming-reference.md`, "Feature verify at close, in full"). The full chain itself is CI-owned: no local baseline run before the first claim, and worktree merge gates on `commands.test` (impacted over the staged merge) instead of the full chain — session finish likewise runs `commands.test`, and the release flow runs the impacted suite locally then dispatches the CI full run (`gh workflow run CI --ref main`) right after the tag push, with red arriving back as a `verify-red` issue (`AGENTS.md`). Mid-iteration, run the level-1 impacted run (`run_verify --impacted-from-git --level 1` — direct edges only, seconds) if you need one; it is never owed by default.
 - **Proof-tier matrix (test-economy D1/D2).** How much proof a cap demands is no longer one uniform red-first rule for every `behavior_change` cell — it is derived from the cell's `change_class × lane`, resolved by `requiredProofTier` (`packages/bee/lib/cells.mjs`):
 
   | change_class | lane | tier | what capCell accepts |

@@ -18,7 +18,7 @@ metadata:
 You are a short-lived worker subagent. Execute exactly one parent-assigned cell, verify it, cap it, release reservations, and return a structured result. Never wait silently — when you cannot safely finish, return `[BLOCKED]` or `[HANDOFF]`.
 
 ```text
-Initialize -> Accept assigned cell -> Reserve -> Implement -> Verify -> (Advisor Consult, if stuck) -> Cap -> Release -> Return
+Initialize -> Accept assigned cell -> Reserve -> Implement -> Commit -> Cap -> Release -> Return
 ```
 
 Open `references/worker-details.md` for expanded commands, trace tiers, friction triggers, and result fields.
@@ -60,13 +60,11 @@ Open `references/worker-details.md` for expanded commands, trace tiers, friction
 
 Package installs **always** checkpoint: stop and return `[BLOCKED]` with the package and reason — never install on your own authority.
 
-## 5. Verify
+## 5. Commit
 
-- Run the cell's `verify` command **exactly**, then record it **with its output** — proof, not assertion. `verify` is the cell's **targeted** suite (seconds), never the full chain: the full suite is CI-owned, the orchestrator's wave-close impacted run covers your cell.
-- **Proof-tier matrix (test-economy D1/D2):** resolved by `requiredProofTier(change_class, lane)` — `security`/`migration` → red-first (every lane); `refactor`/`formatting` → suite-green; `bugfix` → targeted-green with repro-first; `behavior`/`api` → existing-targeted-green on tiny/small/standard (no new test here — the slice's trailing `test` cell owes the coverage, and only for code-touching slices), red-first on high-risk.
-- Red-first is **scoped**: the red run executes only the test(s) this cell adds or changes; the cell's verify chain runs once, at the end. In a declared no-test repo (`commands.verify: "none"`), a cell's verify may be `"none"` — never invent a fake check, never carry the sentinel elsewhere.
-- A prose `verify` is a planning defect — return `[BLOCKED]`, never invent a substitute. On failure: fix the root cause, rerun the exact command.
-- Full matrix table, amendment history, test-shape rules (D3), read-first (D5), scoped cap evidence, and the debug discipline: `references/worker-details.md` ("Verify in full").
+- Implement, then commit — one commit per cell, cell id in the message. No suite run by default: `[DONE]` carries the diff and commit, never verify output (main-verifies D4).
+- Bugfix cells: the repro red is already MAIN-produced pre-dispatch and cited in the cell — fix it, never re-prove it yourself.
+- Classic path (still sanctioned for spot use, other repos, or transition): run the cell's targeted `verify` command and record it with output before cap. Full matrix, amendment history, test-shape rules, and the debug discipline: `references/worker-details.md` ("Verify in full").
 
 ## 6. Advisor Consult
 
@@ -74,12 +72,11 @@ High-risk/hard-gate cells require a recorded advisor consult before the executio
 
 ## 7. Cap
 
-- Cap only after the verify pass is recorded (the helper refuses otherwise):
-  `node .bee/bin/bee.mjs cells cap --id <id> --outcome "<summary>" --files <a,b> [--deviations-file <f>] [--friction "<text>"]`
-- If the cell is `behavior_change: true`, add `--behavior-change --evidence-stdin` and **pipe** the structured `verification_evidence` (tests inspected, tests added/changed, red-failure/before-state evidence, verification run — see `references/worker-details.md`). It lands in the cell trace; **do not write an evidence file** in `reports/` or anywhere else (decision 0009 — the trace is the single source; if you ever must, the one canonical scratch home is `.bee/tmp/<feature-or-session>/`, docs/specs/doctrine-layer.md R17).
-- If any Advisor Consults happened on this claim, fold their count and advisor identity into the trace alongside the rest of the evidence — no separate file, same decision 0009 rule.
+- Default: cap through the sanctioned pending path — no per-cell verify evidence required:
+  `node .bee/bin/bee.mjs cells cap --id <id> --feature-verify-pending --outcome "<summary>" --files <a,b> [--deviations-file <f>] [--friction "<text>"]`
+- Classic path: cap only after a verify pass is recorded (`cells verify`); `behavior_change: true` cells add `--behavior-change --evidence-stdin` and pipe `verification_evidence` (tests inspected, tests added/changed, red-failure/before-state evidence, verification run) — never a written evidence file (decision 0009).
+- If any Advisor Consults happened on this claim, fold their count and advisor identity into the trace — no separate file, same decision 0009 rule.
 - Trace depth follows the cell's lane (tiny = one line; high-risk = full trace). Record friction when a trigger fired.
-- Make exactly **one commit per cell**, cell id in the message.
 
 ## 8. Release
 
@@ -97,7 +94,7 @@ At roughly 65% context before a safe finish: write `.bee/HANDOFF.json` (cell, fi
 
 ## Fresh-Session Handoff (downstream, not a worker action)
 
-This `[HANDOFF]` is the pause kind — unrelated to the planned-next handoff (fresh-session-handoff D1). When this cell caps with a green verify and further execution-approved work remains, the orchestrator continues in-session; only at real session exit does it run the finish → claim-next → planned-next handoff flow for the next fresh session to adopt silently (no-clear-stop D1) — never a stop or a `/clear` prompt to the user, and never something a worker claims or writes mid-swarm on its own initiative. A worker's job stays exactly Cap → Release → Return.
+This `[HANDOFF]` is the pause kind — unrelated to the planned-next handoff (fresh-session-handoff D1). When this cell caps (pending or classic-evidenced) and further execution-approved work remains, the orchestrator continues in-session; only at real session exit does it run the finish → claim-next → planned-next handoff flow for the next fresh session to adopt silently (no-clear-stop D1) — never a stop or a `/clear` prompt to the user, and never something a worker claims or writes mid-swarm on its own initiative. A worker's job stays exactly Cap → Release → Return.
 
 ## Headless
 
@@ -108,7 +105,7 @@ Workers always run effectively headless: never ask the parent or user a blocking
 - editing outside reserved scope
 - selecting your own cell, or handling more than one
 - waiting silently instead of returning a status
-- capping without a recorded verify pass, or "verifying" with a substitute command
+- capping without a recorded verify pass and without `--feature-verify-pending`, or "verifying" with a substitute command
 - recording `--passed true` with no output — small+ lanes refuse the cap; an assertion is not evidence
 - `--files` left empty on a cell that touched files — the trace is the machine-readable record, not the outcome prose
 - a `behavior_change` cell capped without verification evidence

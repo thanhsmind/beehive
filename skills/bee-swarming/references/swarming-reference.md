@@ -17,10 +17,13 @@ the Delegation contract's execution-worker class
 (`bee-hive/references/routing-and-contracts.md`): it registers in the swarm
 registry (`state worker add`), validates the claim it was handed (`cells
 show`, never `cells claim`) and takes reservations under its own nickname,
-reads its `read_first`, implements within its `files`, runs its `verify`
-command and quotes the fresh output, records `verification_evidence` (and
-`red_failure_evidence` for `behavior_change` cells per the cap rules), caps
-it, releases its reservations, and returns exactly one status token.
+reads its `read_first`, implements within its `files`, commits, and caps it —
+by default through the pending path (`cells cap --feature-verify-pending`,
+main-verifies D4): no per-cell verify run, no `verification_evidence`. The
+classic evidenced path (verify run + `verification_evidence`/
+`red_failure_evidence`) still applies for spot use or other repos not on this
+doctrine. Then it releases its reservations and returns exactly one status
+token.
 
 **Parallel by default (hardening-7, D1):** a `small` lane's cells (1-3) fan
 out to concurrent execution workers whenever every cell's *product* file set
@@ -48,15 +51,19 @@ target) still forces serial — in doubt, serial.
 After `[DONE]`, emit the cap tick, and when `ship_visibility` is active push
 the cap (first cap of a feature opens the draft PR) —
 `bee-hive/references/routing-and-contracts.md`, "Progress ticks" / "Ship
-visibility". Then — never the worker — author the done-report, including the
-slice's demo artifact when one is owed: its evidence is the worker's
-verbatim diff plus the orchestrator's own independent verify re-run (AO14,
-decision 0018's goal-check restated as authorship, not new mechanics). Then
-hand off: both `tiny` and `small` present that done-report (diff + fresh
-verify output + capture line) and invoke bee-scribing — no auto reviewer;
-the 1-correctness-reviewer contract lives inside a user-invoked session
-(implementation is verified; independent review runs only on user request,
-R1).
+visibility". Then — never the worker — author the done-report from the
+worker's verbatim diff plus the commit (main-verifies D4: no routine verify
+re-run; AO14, decision 0018's goal-check restated as authorship, not new
+mechanics — a re-run stays a smell-triggered judgment call, step 7 below),
+including the slice's demo artifact when one is owed. `tiny`/`small`'s one
+slice is also the feature's FINAL slice: before leaving swarming, run and
+record the ONE feature verify ("Feature verify at close, in full", below) —
+the close-door guard enforces this exactly as it does for a wave. Then hand
+off: both `tiny` and `small` present that done-report (diff + commit +
+feature-verify result + capture line) and invoke bee-scribing — no auto
+reviewer; the 1-correctness-reviewer contract lives inside a user-invoked
+session (implementation is verified; independent review runs only on user
+request, R1).
 
 The rest of this reference and the body's Operating Contract are the
 multi-worker wave protocol for `standard`/`high-risk`; a tiny/small dispatch
@@ -184,18 +191,18 @@ single worker — never wave analysis or multi-cell assignment.
 7. **Goal-check every `[DONE]` yourself (P12, decision 0018) — miss reruns,
    hit ships.** A worker's word is never the evidence; the orchestrator
    measures before the cell counts:
-   - **Re-run the verify.** Run the cell's verify command yourself (fresh
-     output, your own shell) — this is the cell's **targeted** suite
-     (seconds), never the full configured chain (D4, decision `e54878b1`,
-     superseded by ci-owned-verify D1/D6: the impacted run, `commands.test`,
-     runs exactly once, at wave close, below — per-cell full-chain re-runs
-     stay retired, and the full chain itself is CI-owned, never run locally
-     at wave close). `tiny`/`small` lanes may spot-check one representative
-     cell per wave; `standard`/`high-risk` re-run every behavior-change
-     cell's targeted verify. Failure → the cell is NOT done: re-dispatch to
-     the same tier with the failing output (a task miss is a rerun, never a
-     silent tier escalation — provider errors, not task errors, are what
-     the rescue ladder's tier rung is for).
+   - **Re-run the verify — smell-triggered, not routine (main-verifies D4).**
+     Most cells now cap through the pending path with no per-cell verify to
+     re-run; the ONE feature verify at final-slice close ("Feature verify at
+     close, in full", below) is what proves the wave, not a per-`[DONE]`
+     rerun. Re-run a cell's own verify yourself only on a smell — a
+     missing/garbled report, a `[DONE]` with no diff, a `high-risk`/hard-gate
+     cell, or a classic-path cap (a recorded verify, `--feature-verify-pending`
+     NOT used) — orchestrator judgment, never a routine step. Failure on a
+     spot-check → the cell is NOT done: re-dispatch to the same tier with the
+     failing output (a task miss is a rerun, never a silent tier escalation —
+     provider errors, not task errors, are what the rescue ladder's tier rung
+     is for).
    - **Frozen judge:** `node .bee/bin/bee.mjs cells judge --id <id>`. Hits
      (undeclared test/CI/lockfile/verify-config changes) → the cell never
      auto-counts toward a clean wave: record the hits in the cell trace and
@@ -214,20 +221,14 @@ single worker — never wave analysis or multi-cell assignment.
    - A `[DONE]` report carrying a **Consults** section is goal-checked
      exactly like any other — advice never substitutes for fresh verify
      output; re-run the verify yourself regardless of what the advisor said.
-8. **Wave clean → next wave.** A wave is clean only when every cell is
-   capped, goal-checked, and judge-intact (or explicitly flagged and carried
-   to review). Before declaring the wave clean, the orchestrator runs
-   `commands.test` (the impacted run, `run_verify.mjs --impacted-from-git`)
-   **exactly once** (fresh output, your own shell) — this single wave-close
-   run is the independent impacted proof for every cell in the wave,
-   replacing the per-cell full-chain re-runs formerly implied by step 7 (D4,
-   decision `e54878b1`, superseded by ci-owned-verify D1/D6). The full
-   `commands.verify` chain is CI-owned and never runs locally at wave close
-   — it runs on the project's own CI cadence (push, nightly, or scheduled —
-   the host workflow decides) and auto-files a `verify-red` issue when red.
-   A red wave-close run means the wave is NOT clean: diagnose and fix before
-   moving on, never carry a red impacted run into the next wave. All waves
-   clean → completion.
+8. **Wave clean → next wave (main-verifies D4).** A wave is clean once every
+   cell is capped (pending or classic), goal-checked, and judge-intact (or
+   explicitly flagged and carried to review) — no routine suite run gates
+   this step: the wave-close impacted run formerly required here is retired,
+   not relocated. Smell-triggered spot checks (step 7) stay the
+   orchestrator's judgment call. All waves clean → completion, **except** the
+   feature's final slice, which additionally owes the ONE feature verify
+   below before swarming may be left (the close-door guard enforces it).
 
    **Test consolidation (slice-tail-test-batching P5, spec #80/#85).** The
    done-report carries one line — `Test consolidation: <n> behavior cell(s)
@@ -239,6 +240,38 @@ single worker — never wave analysis or multi-cell assignment.
    test cell is uncapped or red is refused by the CLI — a mechanical
    precondition no `gate_bypass` level (`total` included) and no headless
    run lifts.
+
+## Feature verify at close, in full (main-verifies D1-D5)
+
+The per-cell proof requirement is deliberately relocated to the feature
+boundary: cells still commit and cap, but a pending cap's proof defers to
+ONE run over the feature's whole diff, made once the full picture exists —
+never per cell, never per wave.
+
+- **When:** at the FINAL slice's close, before leaving `swarming` (any
+  `state set` phase transition out) or running `state scribing-run` — the
+  close door (`guardFeatureVerifyDebt`, D3, mirrors `guardTestCellDebt`)
+  refuses both while any cell capped `--feature-verify-pending` lacks a
+  green record newer than the newest pending cap; no `gate_bypass` level
+  lifts it.
+- **What:** `commands.test` — the impacted run over the feature's whole
+  diff, cache-assisted (the content-hash suite-result cache makes a
+  repeat/no-op run cheap). Capture the output to a file.
+- **Record:** `node .bee/bin/bee.mjs state feature-verify record --command
+  "<the command>" --output-file <f> --result green|red` (D2) — stamps
+  `{feature, command, output_sha256, result, at}` on the active workflow
+  record; `output_sha256` is computed from the file, never caller-supplied.
+- **Green** satisfies every pending cap recorded before it; the door opens.
+- **Red (D5):** storable — it documents the failure — but never satisfies
+  the door. Open fix cells in the SAME feature, never un-cap a capped cell
+  (the fix is new work), then re-verify. Per-cell commits + `git bisect`
+  localize the regression across the feature's cells.
+- Read-only check anytime: `node .bee/bin/bee.mjs state feature-verify
+  show`.
+- Bugfix cells never owe this locally either: the repro red proving a
+  bugfix cell's fix is MAIN-produced pre-dispatch (et-4 precedent) and cited
+  in the cell — the worker fixes it, and the feature verify above is what
+  later confirms the fix, never a worker-side re-proof.
 
 <!-- bee:only claude -->
 ## Native Worktree Integration Transaction
