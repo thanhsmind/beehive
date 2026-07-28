@@ -12,6 +12,15 @@ Load after bee-validating is selected and the required inputs exist. Formats her
 6. Cell review (cold pickup); fix CRITICAL flags.
 7. Decision, then the Gate 3 approval block.
 
+## Required Inputs in full
+
+- `docs/history/<feature>/CONTEXT.md`.
+- `docs/history/<feature>/plan.md` — approved and frozen at Gate 2: its content sections are immutable once `approved_gates.shape` is set, so what validating reads is byte-identical to what the human approved.
+- The discovery and approach content: `discovery.md` and `approach.md` if they exist; otherwise the `## Discovery` and `## Approach` sections folded into `plan.md` (separate files are written only for L2+ discovery or high-risk lanes).
+- Current-slice cells exist: `node .bee/bin/bee.mjs cells list --feature <feature>` (the current slice lives only in cells; there is no separate slice document).
+
+If `plan.md` is absent, unapproved, or the current-slice cells do not exist, stop and return to bee-planning. Never validate an unapproved shape. A missing `discovery.md`/`approach.md` is **not** a failure when `plan.md` carries the equivalent sections — read those; stop only if neither exists.
+
 ## Reality Gate Report
 
 ```text
@@ -49,6 +58,8 @@ Accepted evidence: existing implementation, file/API/type inspection, command ou
 - NO → return to bee-planning with the failed assumption and the plan change it forces.
 - YES → record constraints for planning and execution.
 - Spike code must never silently become production implementation.
+- **Debug discipline (hypothesis before repro, read before rerun):** before writing any repro script, record the hypothesis in one line plus the file:line evidence from reading the code that grounds it — a repro script with no prior hypothesis is not a spike, it's a guess with extra steps. Cap the loop at **2** failed repro rounds: after the second wrong repro, stop running scripts and go back to reading/instrumenting the actual code path instead of a third guess blind. Prose law; the machine-enforced proof-tier matrix lives in `bee-executing/SKILL.md`.
+- **Verify scripts and any executable code never go in `docs/history/`** (`docs/history/` is the tech-agnostic knowledge layer — `.md` only). A cell's `verify` is a runnable command; a multi-line harness lives in the project's own scripts (committed with the product, so `verify` points at it) or, if disposable, in `.bee/spikes/<feature>/`. The write-guard denies a code-extension file (`.sh`, `.mjs`, `.py`, …) written under `docs/history/`, and any scratch-shaped write landing in a tracked directory outside `.bee/tmp/`/`.bee/spikes/`.
 
 ## Repair Routing
 
@@ -60,6 +71,20 @@ Accepted evidence: existing implementation, file/API/type inspection, command ou
 | Broken or unrunnable verify command | fix the cell's `verify`; re-run PROOF SURFACE |
 | Unreachable exit / integration hole | `plan.md` (key links) then cells |
 | Scope reduction of a locked decision | prohibited — SPLIT the work instead, via planning |
+
+## Review Wave in full
+
+**A wave, not a chain.** At stage start dispatch **simultaneously** the merged reviewer below and — when the D2 rubric fires — the orient/extraction worker, then run the reality gate and feasibility matrix on the session model **while the wave runs**: the stage costs max(reviewer, matrix), not their sum. **Sync point (wave-wide):** findings block nothing until the Gate 3 presentation — or its bypass self-approval — and neither ever happens while **any** wave member is outstanding.
+
+**One dispatch, two mandates, both vocabularies.** One `bee-review`-class dispatch on the **`review` slot** (default opus on Claude, generation fallback; state the model explicitly; if the runtime cannot select per-agent models, cap its reads and output instead) replaces the former plan-checker + cell-reviewer pair and returns **one report, two sections**: **Structure** — the adversarial check over its 5 dimensions, every finding **BLOCKER** or **WARNING**; and **Cells** — the cold-pickup review, every finding **CRITICAL** (all fixed before approval) or **MINOR** (may ship with a recorded note). Merging the dispatches never merges the finding classes. Prompt, dimensions, and both flag lists: below.
+
+Codex has no per-agent subagent type, so the tier stays enforced as a read budget + output cap only.
+
+It is a **read-only gather**, never a cell: a cli-shaped review slot resolves with the purpose-scoped `resolveTier(root, 'review', runtime, {for:'gather'})` — a bare 3-arg resolve of one now refuses; a model-shaped slot is unaffected by purpose.
+
+**One shot, then at most one blocker pass.** The merged reviewer runs **once**. WARNING-level and mechanically fixable findings (a missing link, a vague verify command, a dependency typo) the orchestrator applies **directly to the cells** — legal because cells are mutable before Gate 3. Only **unresolved BLOCKERs** trigger a **second and final** pass, scoped to those blockers. No third pass: a BLOCKER open after pass 2 escalates to the user with both positions.
+
+**Small-diff standard: same mandates, no dispatch.** When the counted touch set is ≤5 product files with zero hard-gate flags, the merged reviewer is not dispatched — the session model runs both mandates itself: Structure over the same 5 dimensions, Cells as a cold-pickup pass, findings in the same vocabularies, recorded in the validation report. Same sync point, same one-shot-then-one-blocker-pass cap. A hard-gate flag, a 6th product file, or genuine doubt about self-review independence restores the dispatch. `high-risk` never takes this path.
 
 ## Merged Reviewer Subagent Prompt
 
@@ -134,6 +159,16 @@ behavior → product; growing surface → scope-guardian). Each persona gets the
 and both vocabularies. Dedupe overlapping findings, then synthesize into two buckets:
 **auto-fix** (apply, record) and **present-for-decision** (user judgment required).
 
+## Advisor Consult in full
+
+The orchestrator resolves the advisor from config (`resolveAdvisor(root, runtime)`):
+
+- **cli-shaped** advisor → run the configured command verbatim, read-only, with an evidence bundle on stdin (plan summary, risk map, validation findings, open questions — never session history, never secrets) and capture the digest.
+- **model-shaped** advisor → dispatch a `bee-review`-class read-only run with the same evidence bundle.
+- **unconfigured** advisor (`resolveAdvisor` returns `null`) → record that fact and proceed. This adds one trigger; it is not a hard dependency on an advisor being configured.
+
+Then record the consult: `node .bee/bin/bee.mjs state advisor-ref record --advisor "<identity>" --digest-file <path>` (the verb stamps the staleness anchors itself — the caller supplies only the advisor identity and the digest file). Nothing is written to the gate until a non-stale `advisor_ref` exists; this is CLI-enforced, not optional ceremony.
+
 ## Approval Gate Block
 
 Two layers (Gate Presentation Contract, bee-hive routing reference). The machine block goes into the **report file** `docs/history/<feature>/reports/validation-<slice>.md`, together with the reality gate report, feasibility matrix, plan-checker findings, and cell review above. It is never pasted into chat:
@@ -161,7 +196,11 @@ Full validation report: docs/history/<feature>/reports/validation-<slice>.md
 Feasibility validated. Approve execution?
 ```
 
-Litmus: the user can restate what they are approving in their own words.
+Litmus: the user can restate what they are approving in their own words. Optionally offer a cross-model second opinion first: agreement → mention it; disagreement → quote both positions; never auto-resolve.
+
+**The `bee-briefing` refresh** (patching the implement plan's Validation Plan section with the evidence links) is presentation, not evidence: when the bypass level covers Gate 3, skip it here and run it lazily at the next human-facing event instead — a real gate presentation, an explicit `bee-briefing` invocation, or feature close-out. With bypass off, or when this session is the one stopping at the gate, refresh now as before, so the Gate 3 message links a current brief.
+
+**On approval**, `validated` is never written as a phase — it never was one: `state gate --name execution --approved true` records the approval, then `state set --owner validating --phase swarming ...` moves the phase straight to `swarming`. An agent that hits a refusal and invents an intermediate phase value is exactly the failure this note exists to prevent.
 
 Approval is for the current work only. On yes: update `.bee/state.json` (`approved_gates.execution: true`) and hand off to bee-swarming. In headless mode, stop here — emit both layers in the terminal report and exit without approval.
 
