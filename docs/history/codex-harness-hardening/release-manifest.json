@@ -233,7 +233,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "3726651a8eedb300febc5f3f4a55d1ade6423f9178e44499a58098de9be8d9a5",
+      "sha256": "bb7c3a8f66306146a6596eddf9e8d4966fcea6073350b9de8f2ba65bc640a657",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -625,14 +625,21 @@
     },
     {
       "path": ".claude-plugin/skills/bee-planning/references/planning-reference.md",
-      "sha256": "e4bbdbfd53a33cd09b22613564f2286bfafda61c30f0cc085f7f486b74295484",
+      "sha256": "0b6cae3640774d9a4ce4aee1ff5655c84e0b9996c82659f53cbf58eaca5baaea",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/references/planning-reference.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-planning/references/provenance.md",
+      "sha256": "1d2f71b148fdeb33d15d34ad92555c342348c54e7e1655ebb7c28d67d0130190",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-planning/references/provenance.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-planning/SKILL.md",
-      "sha256": "1a8d1bc0af8a652553abdc836ff7e7ee427601850cb1e93ddf751c7f5ba08ad9",
+      "sha256": "4d23f065b475d2704d6850128e06eeb81cb812a90736fe61f50775cbd5684724",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/SKILL.md"
@@ -870,7 +877,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "3036ed7b27b48b3a0226a25c777260dbe7086b33374874dd6c4b31ee763c70e0",
+      "sha256": "bd061b1249bbca35fd0c56ddc0188b04841dab17d85c524cb837dc307d3b7045",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1262,14 +1269,21 @@
     },
     {
       "path": ".codex-plugin/skills/bee-planning/references/planning-reference.md",
-      "sha256": "e4bbdbfd53a33cd09b22613564f2286bfafda61c30f0cc085f7f486b74295484",
+      "sha256": "0b6cae3640774d9a4ce4aee1ff5655c84e0b9996c82659f53cbf58eaca5baaea",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/references/planning-reference.md"
     },
     {
+      "path": ".codex-plugin/skills/bee-planning/references/provenance.md",
+      "sha256": "1d2f71b148fdeb33d15d34ad92555c342348c54e7e1655ebb7c28d67d0130190",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-planning/references/provenance.md"
+    },
+    {
       "path": ".codex-plugin/skills/bee-planning/SKILL.md",
-      "sha256": "1a8d1bc0af8a652553abdc836ff7e7ee427601850cb1e93ddf751c7f5ba08ad9",
+      "sha256": "4d23f065b475d2704d6850128e06eeb81cb812a90736fe61f50775cbd5684724",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/SKILL.md"
@@ -2623,14 +2637,21 @@
     },
     {
       "path": "skills/bee-planning/references/planning-reference.md",
-      "sha256": "e4bbdbfd53a33cd09b22613564f2286bfafda61c30f0cc085f7f486b74295484",
+      "sha256": "0b6cae3640774d9a4ce4aee1ff5655c84e0b9996c82659f53cbf58eaca5baaea",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/references/planning-reference.md"
     },
     {
+      "path": "skills/bee-planning/references/provenance.md",
+      "sha256": "1d2f71b148fdeb33d15d34ad92555c342348c54e7e1655ebb7c28d67d0130190",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-planning/references/provenance.md"
+    },
+    {
       "path": "skills/bee-planning/SKILL.md",
-      "sha256": "1a8d1bc0af8a652553abdc836ff7e7ee427601850cb1e93ddf751c7f5ba08ad9",
+      "sha256": "4d23f065b475d2704d6850128e06eeb81cb812a90736fe61f50775cbd5684724",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/SKILL.md"
