@@ -2,14 +2,14 @@
 type: bee.area
 title: "Hook Runtime — advisories, session-stop output, and the one deliberate turn-control exception"
 description: "Why close-time, compaction and child-stop checkpoints only ever inform, what a session-stop handler is allowed to emit, and the single scoped exception — the gate-bypass net — that turns the close-time checkpoint into a loop-guarded block verdict on purpose."
-timestamp: 2026-07-23
+timestamp: 2026-07-28
 bee:
   id: hook-runtime-advisories-and-turn-control
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-runtime-parity D1, D2", "4c1c5921 (GitHub #18 — the gate-bypass net mechanized at runtime as a loop-guarded turn-control block)"]
-  sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "post-advisor-hardening cells pah-1/pah-3 (onboarding-generator drift check + B15 consult instruction, 2026-07-18)", "docs/specs/hook-runtime.md#B2", "docs/specs/hook-runtime.md#B10", "docs/specs/hook-runtime.md#B15", "docs/specs/hook-runtime.md#R4", "docs/specs/hook-runtime.md#R10", "docs/specs/hook-runtime.md#R14", "docs/specs/hook-runtime.md#P4", "docs/specs/hook-runtime.md#P5", "codex-loop-p0 cell clp-1 (the prompt reminder threads sessionId and stops reporting the on-demand review gate outside a review session; trace in `.bee/cells/`, 2026-07-23)", "loop-seams-1112 cell ls-1 (advisor issue #54 — both surfaces, terminal owes no gate, per-session dedup; trace in `.bee/cells/`, 2026-07-23)"]
+  decisions: ["codex-runtime-parity D1, D2", "4c1c5921 (GitHub #18 — the gate-bypass net mechanized at runtime as a loop-guarded turn-control block)", "validation-diet D1-D3 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)"]
+  sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "post-advisor-hardening cells pah-1/pah-3 (onboarding-generator drift check + B15 consult instruction, 2026-07-18)", "docs/specs/hook-runtime.md#B2", "docs/specs/hook-runtime.md#B10", "docs/specs/hook-runtime.md#B15", "docs/specs/hook-runtime.md#R4", "docs/specs/hook-runtime.md#R10", "docs/specs/hook-runtime.md#R14", "docs/specs/hook-runtime.md#P4", "docs/specs/hook-runtime.md#P5", "codex-loop-p0 cell clp-1 (the prompt reminder threads sessionId and stops reporting the on-demand review gate outside a review session; trace in `.bee/cells/`, 2026-07-23)", "loop-seams-1112 cell ls-1 (advisor issue #54 — both surfaces, terminal owes no gate, per-session dedup; trace in `.bee/cells/`, 2026-07-23)", "validation-diet cell vd-1 (trace in .bee/cells/, report docs/history/validation-diet/reports/vd-1.md, 2026-07-28 — the bypass net's fire matrix narrowed to the single phase now carrying the merged approval, since the standalone feasibility phase it used to also cover is retired)"]
   authoritative_for: "hook-runtime: the advisory contract and the gate-bypass turn-control exception"
 ---
 
@@ -53,27 +53,31 @@ placeholder (codex-runtime-parity cell 6b).
 
 **B15 — The gate-bypass net mechanizes "zero stops" at the close-time
 checkpoint (GitHub #18).** Honoring the gate-bypass autopilot was previously
-prose-only: the level-aware auto-approval rule lived in the planning/validating
-skills (and is machine-checked green there), but nothing caught the assistant
+prose-only: the level-aware auto-approval rule lived in the planning skill
+(and is machine-checked green there), but nothing caught the assistant
 when it skipped that rule and stopped at an approval gate anyway — the close-time
 checkpoint only warned. This is the "an invariant left in prose WILL be bypassed;
 mechanize it" pattern. The close-time checkpoint now emits a **turn-control block
 verdict** (the deliberate exception to B2) — forcing the turn to continue — when
 ALL hold: the event is the session-stop event itself (never compaction, never a
-child-stop, never a missing/ambiguous event); the active phase is one whose
-stop is an *approval* gate (plan-shaping → Gate 2, feasibility → Gate 3) with
-that gate still pending; and the active bypass level covers that gate for the
+child-stop, never a missing/ambiguous event); the active phase is the one phase
+whose stop is a pending *approval* gate — shape and execution approved together
+as a single question, with no separate later stop for either half — and that
+gate is still pending; and the active bypass level covers that gate for the
 lane (`full`/`total` cover every lane; `normal` covers only the non-hard-gate
 lanes — a `normal`-lane high-risk change still stops; `off` never fires). The
 exploring/Gate-1 phase is **excluded on purpose**: under the highest level a
-genuine *information* question still stops for the human — only rubber-stamp
-approval gates are mechanized. The block carries an instruction to record the
-approval, log the audit decision, and proceed — and when the pending gate is
-execution approval on high-risk work, the instruction additionally names the
-adviser-consult prerequisite first (run the configured adviser read-only,
-record the consult, then approve), so the mechanized instruction can no longer
-steer the assistant into the consult-precondition refusal uninformed; every
-other gate's instruction is unchanged (cell pah-3, 2026-07-18). **Loop-guard:** it blocks at most
+genuine *information* question still stops for the human — only the
+rubber-stamp approval gate is mechanized, and there is no longer a separate
+pre-code feasibility phase to mechanize a stop for. The block carries an
+instruction to record the approval, log the audit decision, and proceed — and
+when the pending gate covers high-risk work, the instruction additionally
+names the adviser-consult prerequisite first (run the configured adviser
+read-only, record the consult, then approve), so the mechanized instruction
+can no longer steer the assistant into the consult-precondition refusal
+uninformed; the same gate's instruction is the plain version whenever the
+change is not high-risk (cell pah-3, 2026-07-18; validation-diet D1-D3,
+2026-07-28). **Loop-guard:** it blocks at most
 once per (session, phase, gate, level); an immediate re-stop at the same gate is
 deduped and degrades to the ordinary advisory, so a turn that genuinely cannot
 proceed is never trapped in a loop. Fail-open is unchanged: any internal failure

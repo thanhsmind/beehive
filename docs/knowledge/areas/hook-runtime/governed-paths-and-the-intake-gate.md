@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Hook Runtime — governed paths, the always-writable set, and the intake gate"
-description: "Which write targets escape the active feature's gate routing and which never do, why the always-writable set only ever shrinks, and why a finished feature's leftover approvals are not what decides whether the next source write is allowed."
-timestamp: 2026-07-22
+description: "Which write targets escape the active feature's gate routing and which never do, why the always-writable set only ever shrinks, why a finished feature's leftover approvals are not what decides whether the next source write is allowed, how many phases require that approval today, why a phase value the workflow does not recognize is now refused instead of silently allowed, and how a value left by a retired phase is translated rather than left to trip that refusal."
+timestamp: 2026-07-28
 bee:
   id: hook-runtime-governed-paths-and-the-intake-gate
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them)]
-  sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8"]
+  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)"]
+  sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)"]
   authoritative_for: "hook-runtime: which write targets are governed and which are always writable"
 ---
 
@@ -27,6 +27,7 @@ feature left behind.
 | Element | Meaning |
 |---|---|
 | always-writable location | A small named set of locations a write may target without the active feature's gate routing, because the content is machine-local and disposable — today: the workflow's own state/log directory and, inside it, a dedicated subfolder for disposable experiment work. Removing a location from this set only tightens governance; adding one is a deliberate, reviewed decision. |
+| gated phase | A phase in which a source write outside the always-writable set is refused until the workflow’s approval is granted; today exactly two of the phases that precede that approval carry this requirement. |
 
 ## Behaviors & Operations
 
@@ -64,6 +65,52 @@ allowed to do. Escape hatch: unchanged — a repository may disable the intake
 gate entirely in its configuration, and doing so disables it for both terminal
 states alike, never one but not the other (decision c2c46488).
 
+**B13 — The gated set of phases lost the one entry a retired feasibility phase
+used to hold (validation-diet D3, 2026-07-28).** Trigger: a source write while
+the workflow sits in one of the phases that require approval before a write
+outside the always-writable set proceeds. What blocks it: exactly the
+existing behavior, unchanged in mechanism — an unapproved write is refused.
+What changed: the gated set itself is one entry smaller, because the phase
+that used to sit between the two that remain no longer exists at all — its
+own reality check moved earlier, into the shape-drafting step of the phase
+right before it. Nothing about which paths are governed, what unblocks
+them, or how the always-writable set behaves changes; only the count of
+phases carrying the approval requirement drops from three to two.
+
+**B14 — A phase value matching none of the workflow’s real phases is now
+refused outright, not silently passed through (validation-diet D13,
+2026-07-28).** Trigger: a source write checked against a phase value that
+matches none of the workflow’s real phases — a broken or stale record, never
+a phase the workflow can actually be in. What changed: previously such a
+value fell through every branch of the write check and reached an implicit
+allow, so a broken record gated nothing at all, silently. Now the same
+situation is refused outright, naming the unrecognized value. What stays
+unaffected: every phase the workflow can actually reach keeps its own
+behavior exactly as before — the two gated phases (B13), the states a new
+feature may start from, the mid-execution state, and the four phases after
+approval that were never given a dedicated branch of their own (independent
+review, spec-sync, learning-capture, and housekeeping) all still write
+freely once reached; a repository with no saved state, or one the workflow
+cannot read, resolves to the very first phase, which has always had its own
+branch and is untouched by this change. What actors observe: an assistant
+working against a genuinely broken state record now sees a clear refusal
+instead of writes silently going ungated.
+
+**B15 — A saved phase value left over from the retired feasibility phase is
+translated before the new refusal ever sees it (validation-diet D13,
+2026-07-28).** Trigger: a repository whose saved state still names the
+phase that used to sit between the two gated phases, written before that
+phase was retired. What happens: reading the state translates that value,
+transparently, to the phase that absorbed its role — before either the
+approval check or B14’s refusal evaluates it, so it is treated as the
+perfectly ordinary recognized phase it now is. What this avoids: without
+the translation, such a repository would either be permanently unable to
+leave the retired phase (only an explicit phase change moves it, and an
+unrecognized value refuses that too) or would fall straight into B14’s new
+refusal and find every write blocked. What actors observe: an existing
+repository resumes exactly where it left off, still gated the same as it
+always was, never bricked and never silently ungated.
+
 ## Business Rules
 
 - R11 — The write guard's always-writable set no longer includes the
@@ -90,6 +137,22 @@ states alike, never one but not the other (decision c2c46488).
   read — were aligned in one pass; half-fixing recreates the bug on the
   remaining path (gh-fix-batch cell gfb-2, 2026-07-28).
 
+- R14 — The gated set — phases requiring approval before a source write
+  outside the always-writable set — now holds exactly two entries; the
+  retired feasibility phase’s membership disappeared with the phase itself
+  (validation-diet D3).
+
+- R15 — A phase value the workflow does not recognize as any of its real
+  phases is refused at the write check; every phase the workflow can
+  actually produce — gated or not — is unaffected, including the four
+  phases after approval with no dedicated branch and the very first phase a
+  repository with no or unreadable state resolves to (validation-diet D13).
+
+- R16 — A saved phase value naming the retired feasibility phase is read as
+  the phase that absorbed its gate, so an existing repository is neither
+  locked out of progressing nor left with its writes silently ungated
+  (validation-diet D13).
+
 ## Pointers (implementation)
 
 - Always-writable set: `GATE_ALLOWED_PREFIXES` in
@@ -98,6 +161,11 @@ states alike, never one but not the other (decision c2c46488).
   workflow's own `.bee/spikes/` subfolder is already covered by `.bee/`);
   session-close nudge mirrors it as `NUDGE_ALLOWED` in
   `packages/bee/hooks/bee-session-close.mjs`.
+- Gated set, unrecognized-phase refusal, and legacy-phase translation:
+  `GATED_PHASES` and the `checkWrite` phase dispatch's final branch in
+  `packages/bee/lib/guards.mjs`; the translation itself
+  (`LEGACY_PHASE_COERCIONS`) lives in `packages/bee/lib/state.mjs`, applied at
+  read time so every consumer of the state/lane record sees it automatically.
 
 ## Open Gaps
 

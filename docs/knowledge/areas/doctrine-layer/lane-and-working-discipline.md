@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: Doctrine Layer — lane classification and working discipline
-description: "The standing rules that size a piece of work and govern its by-products: work-packet-first tiny/small shapes, product-file-only caps, test-anchored risk flags, classification before context loading, evidence-based re-lane demotion, diff-scaled review-wave ceremony, the one canonical scratch home, and the verify ladder."
-timestamp: 2026-07-27
+description: "The standing rules that size a piece of work and govern its by-products: work-packet-first tiny/small shapes, product-file-only caps, test-anchored risk flags, classification before context loading, evidence-based re-lane demotion, diff-scaled review-wave ceremony, the shape-time survivors of the retired predictive-validation stage, the one canonical scratch home and its narrowed disposable-proof exemptions, the never-author-as-evidence rule, and the verify ladder."
+timestamp: 2026-07-28
 bee:
   id: doctrine-layer-lane-and-working-discipline
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27)]
-  sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)", "lane-lean cells ll-1..ll-2 (traces in .bee/cells/, 2026-07-27 — re-lane demotion default-on + tiny ladder, diff-scaled review wave; skill-text cells, verified by skill_lint + release-manifest check)"]
+  decisions: ["lane-ceremony-v3 D1-D10 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19)", "f21efe6e (tree-hygiene D1/D4 — one canonical scratch home, the write-guard that enforces it)", I51 (issues-46-53 — claim-triggered baseline), I53a (issues-46-53 — sweeper reaches what the guard produces), "8ef2bae6 (cli-ergonomics D3 — scoped red-first, the small-lane parallel criterion, schema-first; 2026-07-24)", "lane-lean D1/D2 (evidence demotion default-on, ladder reaches tiny; 2026-07-27)", lane-lean D3 (small-diff standard review wave runs inline; 2026-07-27), "validation-diet D1/D5/D6/D9/D10 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)"]
+  sources: ["lane-ceremony-v3 cells lcv3-1..lcv3-4 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19 — plan freeze, lane work-packet shapes, product-file caps, test-anchored flags, intake-first classification; each RED-first against the doctrine assertion suite)", "tree-hygiene (cell th-6, 2026-07-21 — write-guard scratch-shape denial + the three competing prose homes collapsed into one doctrine rule)", "docs/specs/doctrine-layer.md#R13", "docs/specs/doctrine-layer.md#R14", "docs/specs/doctrine-layer.md#R15", "docs/specs/doctrine-layer.md#R16", "docs/specs/doctrine-layer.md#R17", "issues-46-53 cells i-3 (GH #51 — the baseline gate is claim-triggered and lives in the execution discipline; GH #53-adjacent — a guard that directs writes obliges the sweeper to reach there; traces in `.bee/cells/`, 2026-07-23)", "lane-lean cells ll-1..ll-2 (traces in .bee/cells/, 2026-07-27 — re-lane demotion default-on + tiny ladder, diff-scaled review wave; skill-text cells, verified by skill_lint + release-manifest check)", "validation-diet cells vd-9/vd-12 (traces in .bee/cells/, reports docs/history/validation-diet/reports/, 2026-07-28 — the predictive-validation stage's two survivors folded into the shape step, the feasibility matrix and its delta rule retired with no replacement, the never-author-as-evidence rule added, and the disposable-proof area narrowed to two uses)"]
   authoritative_for: "doctrine-layer: lane classification and working discipline"
 ---
 
@@ -81,6 +81,22 @@ govern the working residue of a cell rather than its content.
   the dispatched persona panel. Rationale on record: the dispatched wave on a
   4-5-file diff costs more than it catches, and ceremony must never displace
   the main task (standing user feedback 5794a92a).
+- **R16d — There is no longer a separate stage that judges a plan before code
+  exists; its two worthwhile checks now run inside the shape step itself
+  (validation-diet D1/D5/D6, 2026-07-28).** The predictive stage's matrix of
+  feasibility checks, and its rule for handling a plan that drifted from
+  reality mid-flight, are retired outright with no replacement — the
+  empirical check bee already runs after code exists (build the change, then
+  prove it against reality, undo cleanly if it fails) makes a redundant
+  predictive check wasted effort for work that is cheap to revert. Two things
+  that stage used to do are worth keeping, and both now run the moment a
+  shape is drafted, inside the planning work itself: first, one inline
+  question, asked every lane — is there a cheaper shape than the one just
+  chosen that still honors every locked decision. Second, the review wave
+  named in R16b — dispatched alongside the shape work rather than after it
+  finishes, so when it does dispatch, the wait is whichever of the two takes
+  longer, never their combined length, with its findings held until the
+  merged approval.
 - **R16c — Test runs are the scarce resource (test-runs-lean D1/D2,
   2026-07-27).** Verify-once: in a serial tiny/small dispatch the worker's
   recorded verify output is the cap evidence — the orchestrator repeats the
@@ -129,6 +145,25 @@ govern the working residue of a cell rather than its content.
   go, the mechanism that reclaims them is specified against that same shape, not
   against the shape someone assumed.
 
+- **R17b — An artifact is never authored for the sole purpose of being
+  deleted once it has served as evidence, and the scratch spike location is
+  narrowed to exactly two legitimate uses (validation-diet D9/D10,
+  2026-07-28).** Evidence is what the ordinary course of building already
+  produces — a failing check's own output, the trail an error leaves, the
+  record that a verification command ran clean, or the difference between
+  two states already committed — never a throwaway artifact staged purely to
+  produce a string and then discarded. A proof that some prior behavior held
+  is written at the real location where it will actually ship and stays
+  there; the reason is auditability, since a deleted artifact leaves only a
+  claim about something nobody can inspect anymore. Exactly one class of
+  artifact is exempt: a feasibility proof taken on deliberately before a
+  change is judged safe to build directly, owed only when the change moves
+  data, touches security, reaches an outside system with a side effect, or
+  leans on a technique the repository has never used before — never as a
+  routine step everything passes through. The scratch spike location itself
+  now holds only two legitimate uses — that opt-in feasibility proof, and the
+  throwaway visual sketch used while resolving a gray area with a human eye —
+  and is never an evidence store.
 - **The verify ladder (cli-performance D4, `e54878b1`) — retired by
   ci-owned-verify D1/D6:** a cell's verify is its TARGETED suite (seconds),
   run red-first and green by the worker; the full configured chain is now
