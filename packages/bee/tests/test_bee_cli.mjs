@@ -29,6 +29,7 @@ import { createSession, bindSessionLane } from '../lib/claims.mjs';
 import { writeJsonAtomic, hashFile, appendJsonl } from '../lib/fsutil.mjs';
 import { defaultState, writeState, writeLane, BEE_VERSION } from '../lib/state.mjs';
 import { listWorkflows } from '../lib/workflow-store.mjs';
+import { buildSessionPreamble } from '../lib/inject.mjs';
 import { mirrorHold, findForeignHolds } from '../lib/worktree-holds.mjs';
 import { ANCHOR_NUDGE_COMMAND } from '../lib/compaction.mjs';
 import { encodeProjectDir } from '../lib/perf.mjs';
@@ -943,6 +944,244 @@ await check('state.route example runs through the real dispatcher (registry-comp
       route.product_files === 7,
     `expected the route record to round-trip class/lane/flags/product_files, got ${result.stdout}`,
   );
+});
+
+// ─── explicit-triage et-3: deep behavioral net for `state route` (D1-D4) ───
+// Assertions a-e per docs/history/explicit-triage/CONTEXT.md and cell et-3.
+// Every fixture below is its own hermetic temp repo built through the REAL
+// dispatcher (start-feature + gate), never the shared rootState chain above
+// and never live .bee/ — et-1's registry-example check (just above) already
+// covers the shallow "the example runs" case; this covers the enum
+// refusals, the claim-warning D3 toggle, the preamble D2 line, and the D4
+// re-lane rewrite.
+
+async function routeFixtureRepo(feature) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-route-net-'));
+  fs.mkdirSync(path.join(dir, '.bee'), { recursive: true });
+  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), {
+    schema_version: '1.0',
+    bee_version: '0.1.0',
+  });
+  const started = await runBee(['state', 'start-feature', '--feature', feature, '--json'], dir);
+  assert(started.status === 0, `fixture start-feature(${feature}) failed: ${started.stdout}${started.stderr}`);
+  const gated = await runBee(['state', 'gate', '--name', 'execution', '--approved', 'true', '--json'], dir);
+  assert(gated.status === 0, `fixture gate(${feature}) failed: ${gated.stdout}${gated.stderr}`);
+  return dir;
+}
+
+function workflowRouteFor(dir, feature) {
+  const wf = listWorkflows(dir).workflows.find((w) => w.feature === feature && w.status !== 'closed');
+  assert(wf, `expected a live workflow record for feature "${feature}"`);
+  return wf.route ?? null;
+}
+
+// (b) bad class, bad lane, bad flag, negative files each typed-refused with
+// nothing written — each against its OWN never-set feature, so "nothing
+// written" is unambiguous (a stale prior value could never masquerade as a
+// refused write).
+
+await check('state route --set: bad --class is typed-refused, nothing written (D1)', async () => {
+  const dir = await routeFixtureRepo('rt-refuse-class');
+  const refused = await runBee(
+    ['state', 'route', '--set', '--class', 'bogus', '--lane', 'standard', '--flags', 'multi-domain', '--files', '3'],
+    dir,
+  );
+  assert(refused.status !== 0, `expected non-zero exit, got ${refused.status}: ${refused.stdout}${refused.stderr}`);
+  assert(
+    /--class "bogus".*must be one of/.test(refused.stdout + refused.stderr),
+    `expected a typed --class refusal naming the legal set, got: ${refused.stdout}${refused.stderr}`,
+  );
+  const show = await runBee(['state', 'route', '--show'], dir);
+  assert(show.stdout.trim() === 'No route recorded.', `expected nothing written, got: ${show.stdout}`);
+});
+
+await check('state route --set: bad --lane is typed-refused, nothing written (D1)', async () => {
+  const dir = await routeFixtureRepo('rt-refuse-lane');
+  const refused = await runBee(
+    ['state', 'route', '--set', '--class', 'feature', '--lane', 'bogus', '--flags', 'multi-domain', '--files', '3'],
+    dir,
+  );
+  assert(refused.status !== 0, `expected non-zero exit, got ${refused.status}: ${refused.stdout}${refused.stderr}`);
+  assert(
+    /--lane "bogus".*must be one of/.test(refused.stdout + refused.stderr),
+    `expected a typed --lane refusal naming the legal set, got: ${refused.stdout}${refused.stderr}`,
+  );
+  const show = await runBee(['state', 'route', '--show'], dir);
+  assert(show.stdout.trim() === 'No route recorded.', `expected nothing written, got: ${show.stdout}`);
+});
+
+await check('state route --set: bad --flags entry is typed-refused, nothing written (D1)', async () => {
+  const dir = await routeFixtureRepo('rt-refuse-flags');
+  const refused = await runBee(
+    ['state', 'route', '--set', '--class', 'feature', '--lane', 'standard', '--flags', 'not-a-real-flag', '--files', '3'],
+    dir,
+  );
+  assert(refused.status !== 0, `expected non-zero exit, got ${refused.status}: ${refused.stdout}${refused.stderr}`);
+  assert(
+    /invalid flag\(s\) not-a-real-flag/.test(refused.stdout + refused.stderr),
+    `expected a typed --flags refusal naming the bad flag, got: ${refused.stdout}${refused.stderr}`,
+  );
+  const show = await runBee(['state', 'route', '--show'], dir);
+  assert(show.stdout.trim() === 'No route recorded.', `expected nothing written, got: ${show.stdout}`);
+});
+
+await check('state route --set: negative --files is typed-refused, nothing written (D1)', async () => {
+  const dir = await routeFixtureRepo('rt-refuse-files');
+  const refused = await runBee(
+    ['state', 'route', '--set', '--class', 'feature', '--lane', 'standard', '--flags', 'multi-domain', '--files', '-1'],
+    dir,
+  );
+  assert(refused.status !== 0, `expected non-zero exit, got ${refused.status}: ${refused.stdout}${refused.stderr}`);
+  assert(
+    /--files "-1".*non-negative integer/.test(refused.stdout + refused.stderr),
+    `expected a typed --files refusal, got: ${refused.stdout}${refused.stderr}`,
+  );
+  const show = await runBee(['state', 'route', '--show'], dir);
+  assert(show.stdout.trim() === 'No route recorded.', `expected nothing written, got: ${show.stdout}`);
+});
+
+// (a) valid --set round-trips on the active feature's workflow record, via
+// --show, and via status --json (D1/D2) — plus (d) the preamble's Route
+// line, absent before any --set and present in the exact D2 format after —
+// and (e) a second --set (re-lane demotion) rewriting the SAME record.
+// Sequenced in ONE fixture repo on purpose: (e) can only prove "the SAME
+// record, not a second one" by observing the record this exact test built.
+
+const rtRoot = await routeFixtureRepo('rt-full-cycle');
+
+await check('state route: preamble carries no Route line before any route is recorded (D2 zero-cost-when-absent)', async () => {
+  const preamble = buildSessionPreamble(rtRoot);
+  assert(!preamble.includes('- Route:'), `expected no Route line before a route is recorded, got:\n${preamble}`);
+});
+
+let firstRoute = null;
+await check('state route --set: valid input round-trips via --show, status --json, and the underlying workflow record (D1)', async () => {
+  const setResult = await runBee(
+    [
+      'state', 'route', '--set',
+      '--class', 'feature',
+      '--lane', 'standard',
+      '--flags', 'multi-domain,data-model',
+      '--files', '3',
+      '--rationale', 'et-3 fixture',
+      '--json',
+    ],
+    rtRoot,
+  );
+  assert(setResult.status === 0, `--set should succeed, got ${setResult.status}: ${setResult.stdout}${setResult.stderr}`);
+  firstRoute = JSON.parse(setResult.stdout);
+  assert(
+    firstRoute.class === 'feature' &&
+      firstRoute.lane === 'standard' &&
+      firstRoute.flags.join(',') === 'multi-domain,data-model' &&
+      firstRoute.product_files === 3,
+    `expected the set result to carry the recorded fields, got ${setResult.stdout}`,
+  );
+
+  const showResult = await runBee(['state', 'route', '--show', '--json'], rtRoot);
+  assert(showResult.status === 0, `--show should succeed, got ${showResult.status}: ${showResult.stdout}${showResult.stderr}`);
+  assert(
+    JSON.parse(showResult.stdout).updated_at === firstRoute.updated_at,
+    `--show should return the SAME record --set just wrote, got ${showResult.stdout}`,
+  );
+
+  const statusResult = await runBee(['status', '--json'], rtRoot);
+  assert(statusResult.status === 0, `status --json should succeed, got ${statusResult.status}: ${statusResult.stderr}`);
+  const statusRoute = JSON.parse(statusResult.stdout).route;
+  assert(
+    statusRoute && statusRoute.class === 'feature' && statusRoute.lane === 'standard' && statusRoute.product_files === 3,
+    `expected status --json to carry the route block, got ${statusResult.stdout}`,
+  );
+
+  const wfRoute = workflowRouteFor(rtRoot, 'rt-full-cycle');
+  assert(
+    wfRoute && wfRoute.updated_at === firstRoute.updated_at && wfRoute.lane === 'standard',
+    `expected the underlying workflow record to carry the SAME route (belt-and-suspenders, D1), got ${JSON.stringify(wfRoute)}`,
+  );
+});
+
+await check('state route: preamble carries the exact "- Route: ..." line once a route is recorded (D2)', async () => {
+  const preamble = buildSessionPreamble(rtRoot);
+  assert(
+    preamble.includes('- Route: class=feature | lane=standard | flags=2 [multi-domain,data-model] | files=3'),
+    `expected the exact D2-formatted Route line, got:\n${preamble}`,
+  );
+});
+
+await check('state route --set: a second --set (re-lane demotion) rewrites the SAME record — lane changes, one record, updated_at moves (D4)', async () => {
+  await new Promise((resolve) => setTimeout(resolve, 5)); // guarantee updated_at actually moves
+  const setResult = await runBee(
+    ['state', 'route', '--set', '--class', 'feature', '--lane', 'tiny', '--flags', '', '--files', '0', '--json'],
+    rtRoot,
+  );
+  assert(setResult.status === 0, `re-lane --set should succeed, got ${setResult.status}: ${setResult.stdout}${setResult.stderr}`);
+  const secondRoute = JSON.parse(setResult.stdout);
+  assert(
+    secondRoute.lane === 'tiny' && secondRoute.flags.length === 0 && secondRoute.product_files === 0,
+    `expected the demoted lane/flags/files, got ${setResult.stdout}`,
+  );
+  assert(secondRoute.updated_at !== firstRoute.updated_at, `updated_at must move on re-lane, still ${secondRoute.updated_at}`);
+
+  const showResult = await runBee(['state', 'route', '--show', '--json'], rtRoot);
+  const shown = JSON.parse(showResult.stdout);
+  assert(
+    shown.lane === 'tiny' && shown.updated_at === secondRoute.updated_at,
+    `--show must reflect the rewritten record, got ${showResult.stdout}`,
+  );
+
+  const wfRoute = workflowRouteFor(rtRoot, 'rt-full-cycle');
+  assert(
+    wfRoute && wfRoute.lane === 'tiny' && wfRoute.updated_at === secondRoute.updated_at,
+    `expected the SAME workflow record rewritten in place (one record, not a second), got ${JSON.stringify(wfRoute)}`,
+  );
+
+  const preamble = buildSessionPreamble(rtRoot);
+  assert(
+    preamble.includes('- Route: class=feature | lane=tiny | flags=0 [] | files=0'),
+    `expected the preamble Route line to reflect the rewritten record, got:\n${preamble}`,
+  );
+});
+
+// (c) `cells claim` (D3): ONE stderr warning when the claimed cell's feature
+// has no route yet, and never a refusal; silent once a route is recorded.
+
+await check('cells claim: warns ONCE on stderr when the claimed cell\'s feature has no route record (D3, soft enforcement, never a refusal)', async () => {
+  const dir = await routeFixtureRepo('rt-warn-none');
+  addCell(dir, {
+    id: 'rt-warn-none-1',
+    feature: 'rt-warn-none',
+    title: 'et-3 fixture cell (no route)',
+    lane: 'small',
+    action: 'Exercise the D3 claim-warning behavior with no route recorded.',
+    verify: 'node -e "process.exit(0)"',
+  });
+  const claimed = await runBee(['cells', 'claim', '--id', 'rt-warn-none-1', '--worker', 'et3-fixture', '--json'], dir);
+  assert(claimed.status === 0, `claim should still succeed (D3 never refuses), got ${claimed.status}: ${claimed.stdout}${claimed.stderr}`);
+  assert(JSON.parse(claimed.stdout).status === 'claimed', `expected the cell claimed, got ${claimed.stdout}`);
+  const warnings = claimed.stderr.split('\n').filter((line) => line.startsWith('WARNING: cell "rt-warn-none-1"'));
+  assert(warnings.length === 1, `expected exactly ONE D3 warning line, got ${warnings.length}: ${claimed.stderr}`);
+  assert(/no route record/.test(warnings[0]), `expected the warning to name the missing route, got: ${warnings[0]}`);
+});
+
+await check('cells claim: silent (no D3 warning) when the claimed cell\'s feature already has a recorded route', async () => {
+  const dir = await routeFixtureRepo('rt-warn-quiet');
+  const setResult = await runBee(
+    ['state', 'route', '--set', '--class', 'feature', '--lane', 'standard', '--flags', '', '--files', '1', '--json'],
+    dir,
+  );
+  assert(setResult.status === 0, `fixture route --set should succeed, got ${setResult.status}: ${setResult.stdout}${setResult.stderr}`);
+  addCell(dir, {
+    id: 'rt-warn-quiet-1',
+    feature: 'rt-warn-quiet',
+    title: 'et-3 fixture cell (routed)',
+    lane: 'small',
+    action: 'Exercise the D3 claim-warning behavior with a route already recorded.',
+    verify: 'node -e "process.exit(0)"',
+  });
+  const claimed = await runBee(['cells', 'claim', '--id', 'rt-warn-quiet-1', '--worker', 'et3-fixture', '--json'], dir);
+  assert(claimed.status === 0, `claim should succeed, got ${claimed.status}: ${claimed.stdout}${claimed.stderr}`);
+  assert(JSON.parse(claimed.stdout).status === 'claimed', `expected the cell claimed, got ${claimed.stdout}`);
+  assert(!/WARNING: cell/.test(claimed.stderr), `expected NO D3 warning when a route is recorded, got: ${claimed.stderr}`);
 });
 
 await check('state.worker.add example runs through the real dispatcher', async () => {
