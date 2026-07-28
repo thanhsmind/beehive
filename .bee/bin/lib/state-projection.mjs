@@ -122,11 +122,11 @@ export function projectionsAuthoritative(root) {
 // ALWAYS effective, independent of `planRev` — this keeps `context`/`review`
 // immune to a plan_rev bump by construction, since NEITHER is ever stamped
 // with a real rev number by any caller (D7 default). `execution` always is
-// (bee.mjs's handleStateGate/writeLaneRecordThroughProjection, standalone
-// verb); `shape` is too, but ONLY when approved through the merged
-// `state gate merge` verb (validation-diet D2/D15,
-// handleStateGateMerge/findGateStamp) — never through the standalone
-// `state gate --name shape` path, which stays additive/unstamped. This
+// (bee.mjs's handleStateGate/writeLaneRecordThroughProjection, plain
+// `--name execution` branch); `shape` is too, but ONLY when approved through
+// the SAME handler's `--merge` branch (validation-diet D2/D15,
+// findGateStamp) — never through a plain `state gate --name shape` call,
+// which stays additive/unstamped. This
 // function itself needs no per-gate-name special-casing either way: it
 // reads whatever rev (or absence of one) each gate's entry carries,
 // generically, for every name in GATE_NAMES.

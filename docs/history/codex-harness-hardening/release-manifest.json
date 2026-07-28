@@ -27,7 +27,7 @@
     },
     {
       "path": ".bee/bin/lib/command-registry.mjs",
-      "sha256": "2e57ee7e050fa97e389626cdeefda84b5b906afaf32f52b97878a1559bbdb972",
+      "sha256": "e45359c86bd1c4fcad2c7627c419e3a19ad35506e56cc6823c1fb668f66783a6",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -75,7 +75,7 @@
     },
     {
       "path": ".bee/bin/lib/guards.mjs",
-      "sha256": "2ab6b35557ddc46ddf39d20235a7a8a92520688aea53440115ae4169e51b9e6f",
+      "sha256": "615716039b59ebea29e7778475f27bfec8bf5b705ed1c72954e62b6a084cf8de",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -177,13 +177,13 @@
     },
     {
       "path": ".bee/bin/lib/state-projection.mjs",
-      "sha256": "2986c53ffc013f519c69a122db47a02470472dbdddcd5d558d1f062e5cde959e",
+      "sha256": "0ff0a75338db7469bda508305ed13311b2dea07a0c8f61cf8161d03ec3096d9d",
       "mode": "644",
       "role": "runtime_lib"
     },
     {
       "path": ".bee/bin/lib/state.mjs",
-      "sha256": "dd5e9bc73a0c4d8c0d835f3884632ec27ea1c4832e1ee0d24b2c83571c36fcd4",
+      "sha256": "25176e782997ea54be2642db08cea04076dac22a0adb53e7306a9dad4f8df852",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -1752,7 +1752,7 @@
     },
     {
       "path": "packages/bee/bee.mjs",
-      "sha256": "9943321252fd16ce675b42fe7cd8f13c5430f91bd8f82f8365f92ecb44ae3723",
+      "sha256": "2855183e2a7fb3da8692fa5025ffa238aa048a83d88634bfecd5514a574580a0",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/bee.mjs"
@@ -1794,7 +1794,7 @@
     },
     {
       "path": "packages/bee/hooks/bee-session-close.mjs",
-      "sha256": "c6ffb52f99e169cf7883e4b88d488e30d99b87b445b1376f786d147056d3a219",
+      "sha256": "b81097abbab641d0cd58ad5ccfd34bd927888bce7a28d9aeb81525371373c064",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/bee-session-close.mjs"
@@ -1850,14 +1850,14 @@
     },
     {
       "path": "packages/bee/hooks/test_bypass_stop_net.mjs",
-      "sha256": "6c047b933715bd68ff99f42e42fb7de551678ee667b7bd98b2f6d58256038045",
+      "sha256": "2ddd37db5ce50cc59eec5f5c1ace212873b27e22f090969d5fef1a288241e4f8",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/test_bypass_stop_net.mjs"
     },
     {
       "path": "packages/bee/hooks/test_hook_contracts.mjs",
-      "sha256": "fb1bc0549088ad0793c54f232a5995dc85e0d1a78bfa13cfb16bcd82f0a715a7",
+      "sha256": "4fd014ccf94feb310427013a7645bb9d30b6a88154b76368d42029dba346b0f7",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/test_hook_contracts.mjs"
@@ -1913,7 +1913,7 @@
     },
     {
       "path": "packages/bee/lib/command-registry.mjs",
-      "sha256": "2e57ee7e050fa97e389626cdeefda84b5b906afaf32f52b97878a1559bbdb972",
+      "sha256": "e45359c86bd1c4fcad2c7627c419e3a19ad35506e56cc6823c1fb668f66783a6",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/command-registry.mjs"
@@ -1969,7 +1969,7 @@
     },
     {
       "path": "packages/bee/lib/guards.mjs",
-      "sha256": "2ab6b35557ddc46ddf39d20235a7a8a92520688aea53440115ae4169e51b9e6f",
+      "sha256": "615716039b59ebea29e7778475f27bfec8bf5b705ed1c72954e62b6a084cf8de",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/guards.mjs"
@@ -2088,14 +2088,14 @@
     },
     {
       "path": "packages/bee/lib/state-projection.mjs",
-      "sha256": "2986c53ffc013f519c69a122db47a02470472dbdddcd5d558d1f062e5cde959e",
+      "sha256": "0ff0a75338db7469bda508305ed13311b2dea07a0c8f61cf8161d03ec3096d9d",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/state-projection.mjs"
     },
     {
       "path": "packages/bee/lib/state.mjs",
-      "sha256": "dd5e9bc73a0c4d8c0d835f3884632ec27ea1c4832e1ee0d24b2c83571c36fcd4",
+      "sha256": "25176e782997ea54be2642db08cea04076dac22a0adb53e7306a9dad4f8df852",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/state.mjs"
@@ -2256,7 +2256,7 @@
     },
     {
       "path": "packages/bee/tests/test_cli_state.mjs",
-      "sha256": "2e56c38dd1867c3e46f55ecb9c4e53d290e530790390b058d174d64b82861d81",
+      "sha256": "ea9fc6d6d4710fe24ad5f9cf5c88d5074c3afbc21fa0ca0671a172cfbb8e52b4",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_cli_state.mjs"
@@ -2298,7 +2298,7 @@
     },
     {
       "path": "packages/bee/tests/test_guards.mjs",
-      "sha256": "f8b788abbe1cf475fa10a72ed33d5cebd0ceca723f805e2821abe0ceaee0a23c",
+      "sha256": "f1443cdfebc5c2637069841c8dcdd4713672d9a68e26f4c5cb850af00ca90edd",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_guards.mjs"
@@ -2354,7 +2354,7 @@
     },
     {
       "path": "packages/bee/tests/test_msn_invariants.mjs",
-      "sha256": "2dc5f54bb74531482e9a88c385763e712e3ddb98991fd5c514c32fd7f742ef63",
+      "sha256": "543d686cd2685ed784609b52f648815225a88a28f31fb2a9b3b45a5e2905e072",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_msn_invariants.mjs"
@@ -2396,7 +2396,7 @@
     },
     {
       "path": "packages/bee/tests/test_state_projection.mjs",
-      "sha256": "05eb4f035ea2a44b5b9a54c67d7294517ea14ae599a077fbbd7f156a0b9a3cd2",
+      "sha256": "af1ddc818e94b1d95da6ec95af15546312695d57e83002e9d8502e76302e4b4a",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_state_projection.mjs"

@@ -73,7 +73,7 @@ export function isKnownPhase(phase) {
 // coerced value automatically: neither module re-implements the mapping.
 const LEGACY_PHASE_COERCIONS = { validating: 'planning' };
 
-export function coerceLegacyPhase(phase) {
+function coerceLegacyPhase(phase) {
   return Object.prototype.hasOwnProperty.call(LEGACY_PHASE_COERCIONS, phase)
     ? LEGACY_PHASE_COERCIONS[phase]
     : phase;
