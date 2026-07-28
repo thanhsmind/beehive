@@ -111,6 +111,24 @@ rule never disappears — only its elaboration moves.
   somewhere.
 - **Restating a pinned string in new text is safe** where the check is a presence test — an extra
   occurrence does not break it. Rewording an existing occurrence does.
+- **2026-07-28 — the boundary was applied in the opposite direction, to the operating block itself
+  (agents-block-diet), and R6 turned out to be the binding constraint.** The block fell 16,152 →
+  12,573 bytes (−22.2%) with every rule intact. Three findings generalise beyond that one edit:
+  - **The router's earlier cut made the operating block a terminal home.** Because the router now
+    says its own rules 2-4 and 13 "appear in full" in the operating block, and points there for the
+    guardrail rules, those rules could not be thinned by pointing outward — that is exactly the R6
+    loop. **A document that has been cut toward becomes harder to cut, not easier**, and which
+    direction the boundary last ran in has to be checked before any second pass.
+  - **The cheapest safe cut is content the reader is handed anyway.** The largest single saving was
+    startup steps restating what the session preamble prints unprompted (2,919 → 1,554 bytes), plus
+    a step that described itself as optional. Duplication against a *generated* surface is invisible
+    to a duplication list built by comparing documents.
+  - **A byte budget alone is an unsafe instrument, and this closes the open gap above.** A budget
+    rewards cutting and cannot distinguish restated elaboration from a deleted rule. The fence was
+    ratcheted onto the achieved size (20,480/18,000 → 15,000/14,000) only together with a structural
+    guard: the numbered-rule roster pinned on both the template and the render, a negative control
+    proving it bites, and a check refusing any terminal-home rule compressed into a bare
+    cross-reference.
 - **2026-07-26 — the operating block's `## Critical rules` shrank 16 → 14, in judgement form
   (judgement-rules D1-D4)**, without touching this concept's own pinned wording: the fan-out rule
   (old 13, new 12) dropped its `>3 files` numeric proxy in favor of "digest, not verbatim" (D2), and
@@ -126,9 +144,12 @@ rule never disappears — only its elaboration moves.
   per cold entry, against an early estimate near 5,000. The estimate counted duplication that
   inspection showed was either genuinely needed or pinned. Going further would mean cutting
   route-critical prose or touching pinned wording.
-- **No check measures the router's size.** Nothing prevents it from growing back. Whether a size
-  budget is the right instrument, or whether it would merely invite threshold-widening later, is
-  undecided.
+- **No check measures the *router's* size.** Nothing prevents it from growing back. The operating
+  block's own version of this gap closed on 2026-07-28 (see Edge Cases Settled): a size budget is a
+  workable instrument, but only paired with a structural guard, because a budget on its own rewards
+  deleting a rule exactly as much as deleting a restatement. Whether the router deserves the same
+  pairing is still undecided; the threshold-widening worry is unchanged, and is why the budget
+  constant carries its reasoning inline — widening it is meant to be a visible act.
 - **Triage's effect is unmeasured.** No instrumentation records how often a session takes the early
   exit versus falling through, so the saving is modelled rather than observed.
 
