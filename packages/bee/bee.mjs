@@ -107,6 +107,13 @@ import {
   // claim/claim-next further down) — see applyWritePolicy's own header in
   // state.mjs for the observe/shared-disjoint/isolated contract.
   applyWritePolicy,
+  // workflow-lifecycle wl-1/wl-2 INTERFACE CONTRACT: these two live in
+  // lib/state.mjs, NOT lib/workflow-store.mjs — that leaf module is
+  // structurally forbidden from importing controlRootFor, and both helpers
+  // need control-root resolution. Both already resolve controlRootFor(root)
+  // internally, so every call site below passes plain `root`, never ctrlRoot.
+  listWorkflowRecords,
+  closeWorkflowsForFeature,
 } from './lib/state.mjs';
 // multisession-native-7/10 (C1/C4/C5/F8): workflow-store.mjs's read/update/
 // lock primitives and state-projection.mjs's rebuild functions, composed
@@ -126,7 +133,7 @@ import {
 // that had to go; every workflow mutation in bee.mjs now runs under a lock
 // this file acquired itself, so the ASSUMING-LOCK form is the only correct
 // one and the import list now says so.
-import { listWorkflows, withWorkflowLock, updateWorkflowAssumingLock, listWorkflowRecords, closeWorkflowsForFeature } from './lib/workflow-store.mjs';
+import { listWorkflows, withWorkflowLock, updateWorkflowAssumingLock } from './lib/workflow-store.mjs';
 import { rebuildLaneProjection, rebuildStateProjection, rebuildAllProjections, rebuildHandoffProjection } from './lib/state-projection.mjs';
 // Lane + session CLI surface (fresh-session-handoff fsh-4, D2/D4): claims.mjs
 // stays out of this cell's file scope — these are already-exported read/
@@ -4529,15 +4536,21 @@ function handleStateFeatureVerifyShow(root, flags) {
 //
 // `listWorkflowRecords(root)` / `closeWorkflowsForFeature(root, {
 // keepFeature })` are the INTERFACE CONTRACT the sibling wl-1 cell lands in
-// lib/workflow-store.mjs (frozen shape so both cells run in parallel — see
-// wl-2's cell action). `close` never reimplements either helper; --feature
-// and --id each close a SINGLE record via withWorkflowLock +
-// updateWorkflowAssumingLock (already imported above), mirroring every other
-// per-record workflow write in this file — the self-locking `updateWorkflow`
-// form is deliberately never used here (state-phase-lock-race GH #70, see
-// this file's own import-list comment). --all-but-active instead calls
-// closeWorkflowsForFeature directly: its "close every live record whose
-// feature differs from keepFeature" shape IS --all-but-active's semantics.
+// lib/state.mjs (frozen shape so both cells run in parallel — see wl-2's
+// cell action; both live in state.mjs rather than workflow-store.mjs because
+// that leaf module is structurally forbidden from importing controlRootFor,
+// which both helpers need). Both already resolve controlRootFor(root)
+// internally, so every call below passes plain `root`, never ctrlRoot.
+// `close` never reimplements either helper; --feature and --id each close a
+// SINGLE record via withWorkflowLock + updateWorkflowAssumingLock (already
+// imported above, from workflow-store.mjs) — the self-locking `updateWorkflow`
+// form is deliberately never used directly in THIS file (state-phase-lock-race
+// GH #70, see this file's own import-list comment) even though
+// closeWorkflowsForFeature itself uses it internally from OUTSIDE any lock
+// this file holds, exactly as its own doc comment requires. --all-but-active
+// instead calls closeWorkflowsForFeature directly: its "close every live
+// record whose feature differs from keepFeature" shape IS --all-but-active's
+// semantics.
 //
 // "The currently active feature" this verb protects is the CALLING
 // context's own active feature — the same session-bound-lane-else-default
@@ -4558,8 +4571,7 @@ function workflowsListSort(records) {
 }
 
 function handleStateWorkflowsList(root, flags) {
-  const ctrlRoot = controlRootFor(root);
-  const records = workflowsListSort(listWorkflowRecords(ctrlRoot));
+  const records = workflowsListSort(listWorkflowRecords(root));
   const text =
     records.length === 0
       ? 'No workflow records.'
@@ -4599,12 +4611,18 @@ async function handleStateWorkflowsClose(root, flags) {
     );
   }
 
+  // ctrlRoot is used ONLY for closeWorkflowRecordById below (a direct
+  // workflow-store.mjs withWorkflowLock/updateWorkflowAssumingLock call,
+  // which needs explicit control-root resolution, same as every other
+  // direct workflow-store call in this file). listWorkflowRecords/
+  // closeWorkflowsForFeature resolve controlRootFor(root) themselves —
+  // always called with plain `root` below.
   const ctrlRoot = controlRootFor(root);
   const activeFeature = resolveActiveFeatureForWorkflowsClose(root);
 
   if (hasId) {
     const id = String(flags.id);
-    const records = listWorkflowRecords(ctrlRoot);
+    const records = listWorkflowRecords(root);
     const rec = records.find((r) => r.id === id);
     if (!rec || rec.status === 'closed') {
       throw new Error(`workflows close --id: no live workflow record found with id "${id}".`);
@@ -4623,7 +4641,7 @@ async function handleStateWorkflowsClose(root, flags) {
         `workflows close --feature: refused — "${feature}" is the currently active feature; use --id <id> to close its record explicitly.`,
       );
     }
-    const records = listWorkflowRecords(ctrlRoot);
+    const records = listWorkflowRecords(root);
     const matches = records.filter((r) => r.feature === feature && r.status !== 'closed');
     if (matches.length === 0) {
       throw new Error(`workflows close --feature: no live workflow record found for feature "${feature}".`);
@@ -4639,7 +4657,7 @@ async function handleStateWorkflowsClose(root, flags) {
   }
 
   // --all-but-active
-  const closed = await closeWorkflowsForFeature(ctrlRoot, { keepFeature: activeFeature });
+  const closed = await closeWorkflowsForFeature(root, { keepFeature: activeFeature });
   if (!closed || closed.length === 0) {
     throw new Error(
       'workflows close --all-but-active: nothing to close — no live workflow record other than the active feature.',
