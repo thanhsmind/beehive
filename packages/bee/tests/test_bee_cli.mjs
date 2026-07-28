@@ -28,7 +28,7 @@ import { addCell, updateCell, deriveRegenGuards, regenObligationRefusal } from '
 import { createSession, bindSessionLane } from '../lib/claims.mjs';
 import { writeJsonAtomic, hashFile, appendJsonl } from '../lib/fsutil.mjs';
 import { defaultState, writeState, writeLane, BEE_VERSION, GATE_NAMES } from '../lib/state.mjs';
-import { listWorkflows } from '../lib/workflow-store.mjs';
+import { listWorkflows, createWorkflow } from '../lib/workflow-store.mjs';
 import { buildSessionPreamble } from '../lib/inject.mjs';
 import { mirrorHold, findForeignHolds } from '../lib/worktree-holds.mjs';
 import { ANCHOR_NUDGE_COMMAND } from '../lib/compaction.mjs';
@@ -1036,6 +1036,43 @@ await check('state.feature-verify.show example round-trips the recorded feature-
   const result = await assertExampleOk('state.feature-verify.show', { cwd: rootState });
   const rec = JSON.parse(result.stdout);
   assert(rec && rec.result === 'green' && rec.feature === 'newf', `expected the recorded green feature-verify back, got ${result.stdout}`);
+});
+
+// workflow-lifecycle wl-5 (rule-12 gap closed by wl-2): the two new
+// state.workflows.* registry entries had no example coverage at all — the
+// registry-completeness invariant ("every registry entry had its example
+// executed at least once") demands at least this much. rootState's active
+// feature is already "newf" (the workflow record startFeature's dual-write
+// created for the state.start-feature example above); seed ONE extra,
+// non-active workflow record here so `workflows close --feature
+// stale-feature` — the registry's OWN example string, verbatim — has a
+// live, non-active record to close for real, never a mutation against the
+// active "newf" record (that protection is the whole point of the verb).
+createWorkflow(rootState, { feature: 'stale-feature', status: 'active' });
+
+await check('state.workflows.list example runs through the real dispatcher and renders the seeded records', async () => {
+  const result = await assertExampleOk('state.workflows.list', { cwd: rootState });
+  const records = JSON.parse(result.stdout);
+  assert(Array.isArray(records) && records.length >= 2, `expected at least 2 workflow records, got ${result.stdout}`);
+  assert(
+    records.some((r) => r.feature === 'stale-feature') && records.some((r) => r.feature === 'newf'),
+    `expected both the active "newf" and seeded "stale-feature" records rendered, got ${result.stdout}`,
+  );
+});
+
+await check('state.workflows.close example runs through the real dispatcher (closes the seeded non-active "stale-feature" record, never the live "newf" record)', async () => {
+  const result = await assertExampleOk('state.workflows.close', { cwd: rootState });
+  const closed = JSON.parse(result.stdout);
+  assert(
+    Array.isArray(closed.closed) && closed.closed.length === 1 && closed.closed[0].feature === 'stale-feature',
+    `expected exactly the seeded "stale-feature" record closed, got ${result.stdout}`,
+  );
+  const after = await runBee(['state', 'workflows', 'list', '--json'], rootState);
+  const afterRecords = JSON.parse(after.stdout);
+  const stale = afterRecords.find((r) => r.feature === 'stale-feature');
+  const active = afterRecords.find((r) => r.feature === 'newf');
+  assert(stale && stale.status === 'closed', `expected the seeded "stale-feature" record closed, got ${JSON.stringify(stale)}`);
+  assert(active && active.status !== 'closed', `expected the active "newf" record left untouched, got ${JSON.stringify(active)}`);
 });
 
 // ─── explicit-triage et-3: deep behavioral net for `state route` (D1-D4) ───
