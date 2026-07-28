@@ -970,12 +970,15 @@ const EXPECTED_STATE_EXPORTS = [
   'GATE_NAMES',
   'PHASES',
   'KNOWN_PHASES',
+  'isDebtGuardedDeparture',
   'isKnownPhase',
   // intake-gate-git-exemption D2 (cell ige-1): guards.*/hooks.* toggles are
   // machine-local and persist only to the gitignored .bee/config.local.json,
   // so a temporary safety lift can never be committed to the tracked config.
   'LOCAL_ONLY_CONFIG_NAMESPACES',
   'isLocalOnlyConfigKey',
+  'testCellDebt',
+  'testCellDebtFixTail',
   'trackedLocalOnlyKeyWarning',
   'COMMAND_KEYS',
   // worktree-companion-hook: separate from COMMAND_KEYS on purpose — see the
@@ -985,6 +988,7 @@ const EXPECTED_STATE_EXPORTS = [
   'CONFIGURABLE_TIERS',
   'CONFIGURABLE_SLOTS',
   'EFFORT_LEVELS',
+  'FEATURE_VERIFY_FIX_TAIL',
   'RUNTIMES',
   // config-validate (ao-2ai-1): the shared validator + its unsafe-flag
   // blocklist, read by both `bee config validate` and `bee status`.
@@ -1019,6 +1023,7 @@ const EXPECTED_STATE_EXPORTS = [
   'controlRootFor',
   'defaultState',
   'ensureWorkflowRecordForFeature',
+  'featureVerifyDebt',
   'statePath',
   'readState',
   'readStateStrict',
@@ -1026,6 +1031,7 @@ const EXPECTED_STATE_EXPORTS = [
   'gateApproved',
   'readHandoff',
   'readOnboarding',
+  'readFeatureCellsStrict',
   'readConfig',
   'hookEnabled',
   'BYPASS_LEVELS',
