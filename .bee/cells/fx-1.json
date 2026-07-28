@@ -1,0 +1,70 @@
+{
+  "id": "fx-1",
+  "feature": "foundation-fixes",
+  "lane": "standard",
+  "behavior_change": true,
+  "change_class": "bugfix",
+  "title": "Workflow close transition + zombie-proof picker (D1+D2)",
+  "action": "REPRO CONTEXT (recorded, 3 incidents 2026-07-28): bee-state-sync on SubagentStop rebuilds the projection; with current.feature momentarily falsy, pickNewestActiveWorkflow resurrects a prior feature because nothing ever closes workflows. FIX per CONTEXT D1/D2: (1) in packages/bee/lib/state.mjs startFeature (~:2827-3011), inside the same guarded mutation that creates the new workflow (~:3001-3008), set the OUTGOING feature's live workflow record(s) to status 'closed' (workflow-store update path; only records whose feature differs from the new feature and status 'active'). (2) in packages/bee/lib/state-projection.mjs pickNewestActiveWorkflow (~:149-159), exclude records with phase 'compounding-complete' in addition to the existing status filtering. Keep both changes surgical; no other lifecycle semantics change. Run targeted existing suites green: the suites covering workflow-store and state-projection (locate via rg) plus packages/bee/tests/test_state.mjs. Red-first evidence: BEFORE the fix, write a throwaway probe in .bee/spikes/foundation-fixes/ seeding two workflows (one active+compounding-complete zombie, one live) with feature unset, showing the picker selects the zombie; quote it in your report, then show the same probe green after. Vendored .bee/bin regen DEFERRED (wave-barrier ack).",
+  "must_haves": {
+    "truths": [
+      "After startFeature for a new feature, every prior feature's workflow record has status 'closed' (probe evidence quoted).",
+      "pickNewestActiveWorkflow never returns a compounding-complete record (probe before/after quoted).",
+      "Targeted existing suites green (list them + results in report)."
+    ],
+    "prohibitions": [
+      "Do NOT touch bee-state-sync.mjs or hooks.",
+      "Do NOT change any other startFeature semantics (gate resets, lane handling).",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_state.mjs && node packages/bee/tests/test_workflow_store.mjs",
+  "read_first": [
+    "docs/history/foundation-fixes/CONTEXT.md",
+    "docs/history/foundation-fixes/plan.md",
+    "packages/bee/lib/state-projection.mjs",
+    "packages/bee/lib/workflow-store.mjs"
+  ],
+  "files": [
+    "packages/bee/lib/state.mjs",
+    "packages/bee/lib/state-projection.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at wave close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-fx1",
+    "outcome": "startFeature now closes the outgoing feature's live workflow record(s) on the next start (D1); pickNewestActiveWorkflow additionally excludes compounding-complete records (D2), defense in depth. Red-first probe (deleted, throwaway) reproduced both zombie shapes before the fix and confirmed green after; existing test_state.mjs (43) + test_workflow_store.mjs (15) stay green, 0 failed.",
+    "files_changed": [
+      "packages/bee/lib/state.mjs",
+      "packages/bee/lib/state-projection.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T04:50:40.243Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": [\"packages/bee/tests/test_state.mjs\", \"packages/bee/tests/test_workflow_store.mjs\"],\n  \"tests_added_or_changed\": [],\n  \"red_failure_evidence\": \"Throwaway probe (.bee/spikes/foundation-fixes/probe-zombie-workflow.mjs, deleted after use per wave-barrier scope) run against pre-fix code (git stash of the two changed files): Scenario A - pickNewestActiveWorkflow on a lone compounding-complete zombie (status active) picked it (feature=old-feature-zombie phase=compounding-complete) instead of returning null. Scenario B - after startFeature('feature-one') then startFeature('feature-two'), feature-one's workflow record status stayed 'active' (never closed). Overall probe exit 1 (RED, bug reproduced). After popping the stash (fix restored) the same probe printed feature=null/phase=null for Scenario A and status=closed for feature-one in Scenario B, exit 0 (GREEN).\",\n  \"verification_run\": \"node packages/bee/tests/test_state.mjs -> 43 passed, 0 failed; node packages/bee/tests/test_workflow_store.mjs -> 15 passed, 0 failed\",\n  \"deliberate_exceptions\": [\"No new test added in this cell per the proof-tier matrix for bugfix/behavior lane standard cells (existing-targeted-green suffices); fx-3 is the slice's trailing test cell that owns net-behavior regression coverage per plan.md D4.\"]\n}\n",
+    "verify_output": "PASS  readJson strips a leading UTF-8 BOM (GitHub #9) and warns instead of silently swallowing malformed JSON (GitHub #13)\nPASS  resolveProductRoot: unset->bee root (FREEZE, zero change); set->resolved; set-but-missing->loud warn (GitHub #14)\nPASS  backlog reads resolve against product_root when set — the repo-divorce topology (GitHub #14)\nPASS  inject cache re-homes to .bee/cache/ and migrates from the legacy .bee/ root file (GitHub #11)\nPASS  findRepoRoot walks up from a nested dir\nPASS  resolveRoots keeps ordinary repositories ordinary\nPASS  resolveRoots validates linked-worktree backlinks and shares main store\nPASS  linked-shaped invalid metadata fails closed with typed error\nPASS  resolveContext: main checkout — control/local/git roots, workspaceId main, worktreeId null\nPASS  resolveContext: unregistered linked worktree — control root shared at MAIN, local root at the worktree, workspaceId still main\nPASS  resolveContext: REGISTERED (granted) linked worktree — workspaceId becomes its own id, controlRoot stays shared at MAIN\nPASS  resolveContext BINDING: localRuntimeRoot is a DISTINCT per-worktree subtree, never collapsing onto main (data-plane isolation)\nPASS  resolveRoots compat wrapper stays byte-identical after the resolveContext refactor\nPASS  readState returns defaults when state.json missing\nPASS  readStateStrict returns defaults when state.json is absent (same as readState)\nPASS  readStateStrict throws on a present-but-unparseable state.json, naming the file and a FIX\nPASS  readStateStrict throws when state.json parses but is not a JSON object\nPASS  readState (non-strict) still returns defaults for the same corrupt input — fail-open shape unchanged\nPASS  lanes: writeLane/readLane round-trip at .bee/lanes/<feature>.json (unicode/space names included); missing lane reads null; listLanes enumerates; removeLane deletes\nPASS  lanes: readLane/listLanes are fail-open for display — a corrupt lane file warns, is skipped, and stays untouched on disk\nPASS  lanes: readLaneStrict refuses loudly on a present-but-corrupt lane file (untouched); a missing lane reads null (creation is the caller's explicit move)\nPASS  lanes: createSession OMITS the lane key when unbound; bindSessionLane writes it, unbindSessionLane removes the key entirely; ghost session is typed SESSION_MISSING\nPASS  lanes: resolvePipeline — no sessionId, unknown session, or unbound session resolves to the DEFAULT record; a bound session resolves to its lane record\nPASS  lanes: resolvePipeline — a binding to a missing or corrupt lane is a TYPED refusal naming the lane, never a silent fall-back to the default\nPASS  lanes: startFeature lane mode creates the lane with all four gates false while state.json and every other lane stay byte-identical (D4 zero-touch)\nPASS  lanes: a lane start refuses while THIS feature has nonterminal cells, and is never blocked by another feature's nonterminal cells\nPASS  lanes: a global HANDOFF blocks a lane start only when its feature names this lane\nPASS  F5: the DEFAULT (non-lane) start blocks only when .bee/HANDOFF.json names THIS feature; an unrelated-feature handoff no longer blocks it\nPASS  lanes: an OTHER live worker session blocks a lane start only when its claimed cell derives to this lane's feature (derived view, msn-8/D6)\nPASS  lanes: a hand-written state.workers entry alone (no live session) never blocks a lane start (D6 demotion, msn-8)\nPASS  lanes: a lane start declaring intended paths refuses on overlap with ANOTHER session's active holds (claimed-cell files or reservations); own and expired holds never block\nPASS  lanes: restarting a terminal lane resets exactly its four gates (created_at preserved); a mid-flight lane refuses; a corrupt lane file refuses loudly untouched\nPASS  msn-6 (cell truth): two DIFFERENT features started concurrently do not contend on a shared lock for the workflow-record-creation step (deterministic seam proof, msn-5-style)\nPASS  msn-6 C1: a mid-flight legacy state.json is idempotently seeded into a workflow record the first time ANY feature is started via the lane path; re-running never duplicates it\nPASS  readConfig: absent .bee/config.local.json is byte-identical to today (no overlay file at all)\nPASS  readConfig: an overlay value WINS over the tracked value for the same key\nPASS  readConfig: dogfood_repos overlay REPLACES the tracked array wholesale (never concatenated/interleaved)\nPASS  readConfig: dogfood_repos dead entry inside hook context (BEE_HOOK_CONTEXT set) — no warn output, entry still skipped\nPASS  readConfig: dogfood_repos dead entry with no BEE_HOOK_CONTEXT (plain CLI run) — warning still fires verbatim\nPASS  readConfig: overlay deep-merges nested objects (a partial hooks override leaves untouched siblings from the tracked file)\nPASS  readConfig: a malformed (non-object) .bee/config.local.json degrades to \"absent overlay\", never throws\nPASS  mergeConfigOverlay: pure function — base is never mutated, arrays replace, plain objects merge recursively\nPASS  grep-audit: production writers of the legacy .bee/HANDOFF.json are exactly {rebuildHandoffProjection, writeHandoff C1 fallback, adoptHandoff C1 fallback} (multisession-native-24, advisor slice 5 condition E)\n\n43 passed, 0 failed\nPASS  createWorkflow writes .bee/runtime/workflows/<id>/state.json with the full schema; readWorkflow round-trips it\nPASS  updateWorkflow read-modify-writes under lock; identity fields (id/feature/created_at) survive a patch attempt\nlistWorkflows: skipping unreadable workflow \"wf-0de6edbb\" — readWorkflow: \"/tmp/bee-workflow-store-iwk1yt/.bee/runtime/workflows/wf-0de6edbb/state.json\" exists but is not valid JSON (Expected property name or '}' in JSON at position 1 (line 1 column 2)). The bee CLI refuses to rebuild a workflow from defaults over a present-but-corrupt file — that would silently clobber real state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g. \"git checkout -- .bee/runtime/workflows/wf-0de6edbb/state.json\").\nPASS  listWorkflows enumerates every created workflow; tolerant of an unreadable entry (skip+report, never throws)\nPASS  listWorkflows on an absent .bee/runtime/workflows/ directory returns an empty, non-throwing result\nPASS  workflow_id is generated and distinct from the feature slug by default; an explicit id equal to feature is refused\nPASS  createWorkflow accepts an explicit id distinct from feature; refuses to overwrite an existing record at that id\nPASS  readWorkflow: missing record throws typed WORKFLOW_MISSING; corrupt/mismatched record throws typed WORKFLOW_CORRUPT\nPASS  updateWorkflow propagates the same typed refusals as readWorkflow, leaving a corrupt file untouched\nPASS  updateWorkflowAssumingLock: same merge semantics and typed refusals as updateWorkflow (missing/corrupt propagate, valid patch merges gates per-name)\nPASS  updateWorkflowAssumingLock (multisession-native-10, C4): succeeds through an externally-held workflow:<id> lock that DENIES updateWorkflow itself — proves it takes no lock of its own, the exact property that makes it safe for a caller already holding that lock\nPASS  status is a closed enum (active|paused|closed); an invalid status is refused on create and on update\nPASS  workflow:<id> lock names hash to DISTINCT lock files for distinct ids (sanitizeLockName never collapses them)\nPASS  two workflows never contend: holding workflow A's lock externally does not block a single-attempt update of workflow B (deterministic — no sleeps, real held lock)\nPASS  withWorkflowLock is a thin named wrapper: two ids run their bodies without either blocking the other\nPASS  workflow-store.mjs never imports claims.mjs/state.mjs and never names the sessions/state locks (C4 structural isolation)\n\n15 passed, 0 failed",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T04:45:21.550Z",
+    "verify_command": "node packages/bee/tests/test_state.mjs && node packages/bee/tests/test_workflow_store.mjs",
+    "verified_at": "2026-07-28T04:50:29.996Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T04:50:29.996Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-28T04:45:47.710Z",
+        "acquired_at": "2026-07-28T04:45:21.549Z",
+        "worker": "exec-fx1",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}
