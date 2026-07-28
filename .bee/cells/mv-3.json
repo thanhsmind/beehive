@@ -1,0 +1,49 @@
+{
+  "id": "mv-3",
+  "feature": "main-verifies",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "test",
+  "title": "Slice test: feature-verify law net behavior (D1-D3)",
+  "action": "Trailing test cell in the owning suites (extend never fork; expected test_bee_cli.mjs + test_cells.mjs): (a) pending cap stores the marker with zero evidence demanded; (b) classic cap byte-identical (existing assertions untouched and green); (c) record verb green/red round-trip with output sha; (d) door refuses: pending+no record, pending+red record, pending+record older than newest pending cap; passes: fresh green record; untouched: no pending cells; (e) gate_bypass total does NOT lift the door (fixture with bypass total still refused). Hermetic temp-dir fixtures.",
+  "must_haves": {
+    "truths": [
+      "Assertions a-e green.",
+      "Suites green end-to-end."
+    ],
+    "prohibitions": [
+      "Do NOT weaken mv-1.",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs && node packages/bee/tests/test_cells.mjs",
+  "read_first": [
+    "packages/bee/lib/cells.mjs",
+    "packages/bee/bee.mjs",
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "files": [
+    "packages/bee/tests/test_bee_cli.mjs",
+    "packages/bee/tests/test_cells.mjs"
+  ],
+  "deps": [
+    "mv-1",
+    "mv-2"
+  ],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at wave close (parallel-default D2)",
+  "status": "open",
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

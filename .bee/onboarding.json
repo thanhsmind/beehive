@@ -5,14 +5,14 @@
     "agents_block": "8be11c89dddc18a4c32a4d72a6287afa473d83e62694a6f52b13cddd358243d4",
     "gitignore_block": "8940e45de24b9d602166dec022b11038bb9f71caa98e25ba60363bef9adaca42",
     "helpers": {
-      "bee.mjs": "8d4ee4d270e49fa434d4d4cbd9ed428e144458caf68c3600841af7fa95d9d8f0"
+      "bee.mjs": "b7a3553533006a0b2afcce9dee490d2d2cddcdcc7217643067fa7cbfb1c80462"
     },
     "lib": {
       "backlog.mjs": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
-      "cells.mjs": "74f5717cf4eab81b8eb5772730c7912bf97a5324e09e7ce1a052451d62d4893c",
+      "cells.mjs": "d573a76acf0fdf14188377c0032cfa0b6b359895c93d99ed775e16389e87acec",
       "claims.mjs": "de7726a26b2354b65ee598d00f9179f04f71fe3d53f39a865b749da49e03623d",
-      "command-registry.mjs": "868e3731679fa469c70e917824361d4fea497f419c7cd495342933838079c0fc",
+      "command-registry.mjs": "7e784e36de720d6a7372cd8317e16c29534616669b13f4b4eee14b7f1cda31d0",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
@@ -40,7 +40,7 @@
       "state-projection.mjs": "2986c53ffc013f519c69a122db47a02470472dbdddcd5d558d1f062e5cde959e",
       "state.mjs": "65bab4f1f59645e0b9f134f7c8c0c18564256f44b1d1333e2b0fbbc3d3d37d71",
       "validate-args.mjs": "99a28f221deb373ee128a821a1463acafdf91413c377c04d56cbda5137c81b17",
-      "workflow-store.mjs": "7170ae479055bd3d69614934e3b78b936ce896b8467f37903d1ae6ff82f48df7",
+      "workflow-store.mjs": "f2e4988b7ecd278f220e7dfcd8d15f2e06a28312871f9291f1d890a1f669ad29",
       "workspace-store.mjs": "aa8017d71df1e3d35f40503b47bbe1aa1a2e110623b4a480fe66eb5bb1f3c3c1",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
       "worktree-store.mjs": "fba5062d249c39c41c52ee4bb1ee91a958ae12d6021b61c380c129c153fb0d11"
@@ -82,5 +82,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-28T06:36:25.279Z"
+  "updated_at": "2026-07-28T07:22:32.619Z"
 }

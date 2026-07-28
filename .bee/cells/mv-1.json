@@ -1,0 +1,80 @@
+{
+  "id": "mv-1",
+  "feature": "main-verifies",
+  "lane": "standard",
+  "behavior_change": true,
+  "change_class": "behavior",
+  "title": "Cap pending path + feature-verify record verb + close-door gate (D1-D3)",
+  "action": "Per CONTEXT D1/D2/D3, mirror named precedents: (1) packages/bee/lib/cells.mjs cap: new flag --feature-verify-pending — caps WITHOUT verify evidence, stamping trace.feature_verify='pending'; classic evidence path byte-unchanged; refuse combining the flag with recorded verify evidence claims. (2) New verb bee state feature-verify record --command <c> --output-file <f> --result green|red (register in command-registry beside state.route): stamps {command, output_sha256, result, at} onto the ACTIVE feature's workflow record (field feature_verify); red is storable, never satisfies D3; --show prints it. (3) Close-door guard mirroring guardTestCellDebt at BOTH doors (handleStateSet leaving swarming + handleStateScribingRun): typed refusal when any capped cell of the feature has trace.feature_verify==='pending' AND the workflow record lacks a GREEN feature_verify newer than the newest pending cap; message names the pending cell ids and the FIX (run the feature verify, record it, retry); NO gate_bypass level lifts it (guardTestCellDebt precedent). Allowlist tests (EXPECTED_STATE_EXPORTS, registry examples) updated as needed — declared. Vendored regen DEFERRED (wave-barrier ack).",
+  "must_haves": {
+    "truths": [
+      "cap --feature-verify-pending caps evidence-free with the pending marker; classic path unchanged (existing cap suites green).",
+      "feature-verify record round-trips green and red; red never satisfies the door.",
+      "Both doors refuse with pending cells + no/red/stale record, pass after a fresh green record, and are untouched when no cell is pending; gate_bypass total does not lift the refusal.",
+      "Targeted suites green (test_bee_cli, test_cells if present, test_state)."
+    ],
+    "prohibitions": [
+      "Do NOT weaken the classic cap evidence path.",
+      "Do NOT let any bypass level lift the door.",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs && node packages/bee/tests/test_state.mjs && node packages/bee/tests/test_cells.mjs",
+  "read_first": [
+    "docs/history/main-verifies/CONTEXT.md",
+    "docs/history/main-verifies/plan.md",
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/cells.mjs"
+  ],
+  "files": [
+    "packages/bee/lib/cells.mjs",
+    "packages/bee/lib/workflow-store.mjs",
+    "packages/bee/lib/state.mjs",
+    "packages/bee/bee.mjs",
+    "packages/bee/lib/command-registry.mjs",
+    "packages/bee/tests/test_misc.mjs"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at wave close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-mv1",
+    "outcome": "D1-D3 shipped: cells cap --feature-verify-pending caps evidence-free stamping trace.feature_verify='pending' (combining with per-cell evidence claims refused; classic path byte-unchanged); bee state feature-verify record/show stamps {feature,command,output_sha256,result,at} on the active record + workflow record (red storable, never satisfying); guardFeatureVerifyDebt refuses both swarming exits until a green record strictly newer than the newest pending cap — no gate_bypass level lifts it",
+    "files_changed": [
+      "packages/bee/bee.mjs",
+      "packages/bee/lib/cells.mjs",
+      "packages/bee/lib/command-registry.mjs",
+      "packages/bee/lib/workflow-store.mjs",
+      "packages/bee/tests/test_bee_cli.mjs"
+    ],
+    "deviations": [
+      "Reserved and edited packages/bee/tests/test_bee_cli.mjs beyond the declared six files: the cell text declares \"registry examples updated as needed\" but the example-coverage allowlist (\"every registry entry had its example executed\") lives in test_bee_cli.mjs — without example checks there the cell's own verify goes red. Declared files state.mjs and test_misc.mjs needed no change (no state.mjs export surface touched, so EXPECTED_STATE_EXPORTS stands)."
+    ],
+    "friction": "pre-existing red: test_workflow_store.mjs createWorkflow/readWorkflow round-trip fails on HEAD too (route:null defaults asymmetry, explicit-triage) — needs its own fix cell",
+    "capped_at": "2026-07-28T07:03:24.894Z",
+    "behavior_change": true,
+    "verification_evidence": "{\n  \"tests_inspected\": \"capCell suites in test_cells.mjs (verify-refusal, evidence guards, ratio/new-suite teeth) and the guardTestCellDebt door cases plus state-verb example chains in test_bee_cli.mjs/test_state.mjs — all still green, pinning the classic cap path byte-unchanged and both door precedents unbroken.\",\n  \"tests_added_or_changed\": \"test_bee_cli.mjs: two registry-completeness example checks (state.feature-verify.record round-trips a green record with a verb-computed sha256; state.feature-verify.show round-trips it) — deeper behavioral coverage (pending cap, door refusal matrix, red-never-satisfies, staleness, bypass immunity) is mv-3's owned suite per plan.md.\",\n  \"before_state\": \"Before this cell, capCell unconditionally refused any cap lacking a recorded passing verify (capCell: ... has no passing verify result), no feature_verify record or verb existed anywhere, and leaving swarming was guarded only by guardTestCellDebt — an evidence-free cap was impossible and a feature-level proof record had no home.\",\n  \"verification_run\": \"node packages/bee/tests/test_bee_cli.mjs && node packages/bee/tests/test_state.mjs && node packages/bee/tests/test_cells.mjs -> 336+44+126 passed, 0 failed. Hand smoke in a hermetic temp repo: pending cap stamps marker; combine-with-evidence and combine-with-green-verify both refused; both doors refuse (no record / red record / gate_bypass=total confirmed set in config) and pass after a fresh green record; a later pending cap re-closes the door as STALE.\",\n  \"deliberate_exceptions\": [\"Vendored .bee/bin regen deferred to orchestrator at wave close (wave-barrier ack recorded on the cell) — test_misc.mjs's byte-identity sweep is expectedly red until then.\", \"test_workflow_store.mjs round-trip check was already red on HEAD (route:null read-vs-create asymmetry from explicit-triage) — verified by running the HEAD tree; not touched by this cell.\"]\n}\n",
+    "verify_output": "test_bee_cli: 336 passed, 0 failed; test_state: 44 passed, 0 failed; test_cells: 126 passed, 0 failed (full chain run 2026-07-28, this session)",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T06:48:31.346Z",
+    "verify_command": "node packages/bee/tests/test_bee_cli.mjs && node packages/bee/tests/test_state.mjs && node packages/bee/tests/test_cells.mjs",
+    "verified_at": "2026-07-28T07:02:54.383Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T07:02:54.383Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-28T06:48:51.074Z",
+        "acquired_at": "2026-07-28T06:48:31.344Z",
+        "worker": "exec-mv1",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "ceiling"
+}
