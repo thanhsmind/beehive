@@ -300,7 +300,7 @@ try {
     : "";
   check(agentsText.includes("<!-- BEE:START -->") && agentsText.includes("<!-- BEE:END -->"),
     "AGENTS.md contains BEE:START/END markers");
-  check(agentsText.includes("node .bee/bin/bee.mjs status --json"), "AGENTS block mentions bee.mjs status first step");
+  check(agentsText.includes("bee.mjs status --json"), "AGENTS block mentions bee.mjs status first step");
   check(agentsText.includes("commands.verify") && agentsText.includes("never build on red"),
     "AGENTS block carries the CI-status-gate startup step");
 

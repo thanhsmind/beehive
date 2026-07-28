@@ -2151,7 +2151,7 @@
     },
     {
       "path": "packages/bee/scripts/test_onboard_bee.mjs",
-      "sha256": "cd54cb73c85f1615f0e8737a6483248ad961034272ee83d17a7e590a6a1ceac0",
+      "sha256": "835caec4962a1389d4b774c983aee99dfdd5cdd3809bbd42361e2ba017a74223",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/scripts/test_onboard_bee.mjs"

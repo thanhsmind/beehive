@@ -1,0 +1,74 @@
+{
+  "id": "vd-0",
+  "feature": "validation-diet",
+  "title": "Fix-first: retire the pre-diet AGENTS-block literal in the onboarding assertion",
+  "lane": "tiny",
+  "status": "capped",
+  "change_class": "test",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "packages/bee/scripts/test_onboard_bee.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee/scripts/test_onboard_bee.mjs",
+    "packages/bee/AGENTS.block.md"
+  ],
+  "action": "main is red: test_onboard_bee.mjs:303 asserts the rendered AGENTS block contains the literal 'node .bee/bin/bee.mjs status --json', but commit a16db517 (agents-block-diet) systematically stripped the 'node .bee/bin/' prefix across the whole block -- all 19 command mentions now use bare 'bee.mjs ...' / 'bee ...' and the string '.bee/bin' appears nowhere in AGENTS.block.md. The property the check protects (the block names the status command as the scout step) still holds at AGENTS.block.md:9. Update the assertion literal to 'bee.mjs status --json' so it pins the surviving property, not the retired prose. Do NOT restore the prefix in the block -- the bare form is the deliberate, consistent post-diet convention. This cell runs solo before the slice-1 wave, so it carries its own regen chain: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write, in that order.",
+  "must_haves": {
+    "truths": [
+      "node packages/bee/scripts/test_onboard_bee.mjs exits 0",
+      "The assertion still fails if the AGENTS block stops naming the status command at all",
+      "node scripts/release_manifest.mjs --check exits 0"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/scripts/test_onboard_bee.mjs",
+        "substantive": "assertion literal updated, check() title unchanged"
+      }
+    ],
+    "key_links": [
+      "assertion matches the actual text at packages/bee/AGENTS.block.md:9"
+    ],
+    "prohibitions": [
+      "No edit to packages/bee/AGENTS.block.md",
+      "No edit to root AGENTS.md beyond what onboard --apply renders",
+      "No weakening the check to a substring that would pass on an empty block"
+    ]
+  },
+  "verify": "node packages/bee/scripts/test_onboard_bee.mjs && node scripts/release_manifest.mjs --check",
+  "trace": {
+    "worker": "vd0-worker",
+    "outcome": "Updated the stale AGENTS-block literal in test_onboard_bee.mjs:303 from 'node .bee/bin/bee.mjs status --json' to 'bee.mjs status --json', matching the bare-command convention AGENTS.block.md:9 adopted in a16db517. Ran the regen chain (render_plugin_skill_trees, onboard_bee --apply, release_manifest --write) solo before the wave; render and onboard were no-ops content-wise, release-manifest picked up the diff. Both recorded verify commands green.",
+    "files_changed": [
+      "packages/bee/scripts/test_onboard_bee.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T14:48:15.004Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "ok    - AGENTS block mentions bee.mjs status first step\nPASS - failures: 0, skipped: 1\nrelease_manifest --check: 463 file(s) match stored manifest\n\nBefore-fix repro (pre-existing red, captured before any edit):\nFAIL - AGENTS block mentions bee.mjs status first step\nFAIL - failures: 1, skipped: 1",
+    "verify_passed": true,
+    "claim_session": "175d1343-db84-4593-8e3e-42e79c3e3d73",
+    "claimed_at": "2026-07-28T14:44:38.378Z",
+    "verify_command": "node packages/bee/scripts/test_onboard_bee.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-28T14:48:08.573Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T14:48:08.573Z",
+        "claim_session": "175d1343-db84-4593-8e3e-42e79c3e3d73",
+        "claimed_at": "2026-07-28T14:44:38.376Z",
+        "acquired_at": "2026-07-28T14:44:38.376Z",
+        "worker": "vd0-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}
