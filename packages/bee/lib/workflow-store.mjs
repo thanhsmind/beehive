@@ -319,6 +319,14 @@ export function createWorkflow(
         );
       }
       const record = {
+        // main-verifies mv-4: spread baseWorkflowDefaults() FIRST so every
+        // field readWorkflowRecord defaults on read (route, feature_verify,
+        // and any future addition) is also present on the record written
+        // here — created and read must be byte-symmetric. The explicit
+        // fields below override the spread with the caller's actual values;
+        // route/feature_verify have no create-time param (yet) so they keep
+        // their baseWorkflowDefaults() null.
+        ...baseWorkflowDefaults(),
         id: workflowId,
         feature: featureName,
         phase,

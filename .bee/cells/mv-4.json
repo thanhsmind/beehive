@@ -1,0 +1,68 @@
+{
+  "id": "mv-4",
+  "feature": "main-verifies",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "bugfix",
+  "title": "Fix: workflow-store create/read round-trip red (route null defaults asymmetry)",
+  "action": "MAIN-PRODUCED REPRO (red on HEAD): node packages/bee/tests/test_workflow_store.mjs => 14 passed, 1 failed — create/read round-trip asymmetry introduced when et-1 added route: null to baseWorkflowDefaults (a created record and a re-read record differ in the route field shape). Read the failing assertion first; fix the ASYMMETRY at its source in packages/bee/lib/workflow-store.mjs (normalize route on read AND write to the same shape — null stays null, never dropped/undefined), not by weakening the test. If the test itself asserts an outdated shape (pre-route), update the assertion to include route: null as the new canonical default — meaning: created==read, byte-symmetric. End green 15/0. This is a worker cell under the OLD law (this feature closes under it): run your verify, record, cap classically.",
+  "must_haves": {
+    "truths": [
+      "node packages/bee/tests/test_workflow_store.mjs => 15 passed, 0 failed.",
+      "Round-trip symmetry: a created record re-read is deep-equal, route included."
+    ],
+    "prohibitions": [
+      "Do NOT delete/weaken the round-trip assertion.",
+      "Do NOT touch mv-1's feature_verify field logic.",
+      "Do NOT run mirror/onboard/manifest regen (wave-barrier)."
+    ]
+  },
+  "verify": "node packages/bee/tests/test_workflow_store.mjs",
+  "read_first": [
+    "packages/bee/tests/test_workflow_store.mjs",
+    "packages/bee/lib/workflow-store.mjs"
+  ],
+  "files": [
+    "packages/bee/lib/workflow-store.mjs",
+    "packages/bee/tests/test_workflow_store.mjs"
+  ],
+  "deps": [
+    "mv-1"
+  ],
+  "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at wave close (parallel-default D2)",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-mv4",
+    "outcome": "Fixed create/read round-trip asymmetry: createWorkflow's record literal now spreads baseWorkflowDefaults() first (route, feature_verify, and any future default) before overriding with caller values, so a created record and a re-read record are byte-symmetric. verify: node packages/bee/tests/test_workflow_store.mjs => 15 passed, 0 failed.",
+    "files_changed": [
+      "packages/bee/lib/workflow-store.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T07:07:53.532Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "PASS  createWorkflow writes .bee/runtime/workflows/<id>/state.json with the full schema; readWorkflow round-trips it\nPASS  updateWorkflow read-modify-writes under lock; identity fields (id/feature/created_at) survive a patch attempt\nlistWorkflows: skipping unreadable workflow \"wf-4e6f0f4b\" — readWorkflow: \"/tmp/bee-workflow-store-ZfH9hT/.bee/runtime/workflows/wf-4e6f0f4b/state.json\" exists but is not valid JSON (Expected property name or '}' in JSON at position 1 (line 1 column 2)). The bee CLI refuses to rebuild a workflow from defaults over a present-but-corrupt file — that would silently clobber real state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g. \"git checkout -- .bee/runtime/workflows/wf-4e6f0f4b/state.json\").\nPASS  listWorkflows enumerates every created workflow; tolerant of an unreadable entry (skip+report, never throws)\nPASS  listWorkflows on an absent .bee/runtime/workflows/ directory returns an empty, non-throwing result\nPASS  workflow_id is generated and distinct from the feature slug by default; an explicit id equal to feature is refused\nPASS  createWorkflow accepts an explicit id distinct from feature; refuses to overwrite an existing record at that id\nPASS  readWorkflow: missing record throws typed WORKFLOW_MISSING; corrupt/mismatched record throws typed WORKFLOW_CORRUPT\nPASS  updateWorkflow propagates the same typed refusals as readWorkflow, leaving a corrupt file untouched\nPASS  updateWorkflowAssumingLock: same merge semantics and typed refusals as updateWorkflow (missing/corrupt propagate, valid patch merges gates per-name)\nPASS  updateWorkflowAssumingLock (multisession-native-10, C4): succeeds through an externally-held workflow:<id> lock that DENIES updateWorkflow itself — proves it takes no lock of its own, the exact property that makes it safe for a caller already holding that lock\nPASS  status is a closed enum (active|paused|closed); an invalid status is refused on create and on update\nPASS  workflow:<id> lock names hash to DISTINCT lock files for distinct ids (sanitizeLockName never collapses them)\nPASS  two workflows never contend: holding workflow A's lock externally does not block a single-attempt update of workflow B (deterministic — no sleeps, real held lock)\nPASS  withWorkflowLock is a thin named wrapper: two ids run their bodies without either blocking the other\nPASS  workflow-store.mjs never imports claims.mjs/state.mjs and never names the sessions/state locks (C4 structural isolation)\n\n15 passed, 0 failed",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T07:05:56.016Z",
+    "verify_command": "node packages/bee/tests/test_workflow_store.mjs",
+    "verified_at": "2026-07-28T07:07:48.321Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T07:07:48.321Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-28T07:06:25.489Z",
+        "acquired_at": "2026-07-28T07:05:56.014Z",
+        "worker": "exec-mv4",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}
