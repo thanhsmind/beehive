@@ -27,6 +27,8 @@ decision IDs: `references/provenance.md`.
 | `tiny`/`small` | Merged Gate 2+3 + frozen-judge stay with the orchestrator; implementation runs through **one dispatched execution worker** under the full execution contract (same template, status tokens, reservation/cap discipline) — never a wave: no wave analysis, no reviewers, no panels. `small`'s 1-3 cells run PARALLEL when disjoint (regen deferred), 3-4 live workers cap; serial names its conflict. |
 | `standard`/`high-risk` | Full wave protocol below; tiny/small borrows only its Spawn, tier-judgment, Record, and Goal-check steps. |
 
+Tiny/small execution dispatch: see `Single execution worker in full` in `references/swarming-reference.md`.
+
 After `[DONE]` on the final slice: emit the cap tick (push when
 `ship_visibility` is active); the orchestrator — never the worker — authors
 the done-report and invokes bee-scribing; no auto reviewer (earlier slices
@@ -72,9 +74,7 @@ Full per-step mechanics and tier rubric: `references/swarming-reference.md`
 2. Stronger tier — next model tier up (extraction → generation → ceiling); ceiling is the session model, so the top rung hands the blocker back to the orchestrator itself.
 3. Escalate — surface the blocker to the user with the worker's diagnosis; if it invalidates the plan, return to bee-planning.
 
-A `[BLOCKED]` here already spent its consult budget for that claim — the cap
-is per claim, not per cell lifetime, so a rung-1 re-dispatch grants the
-re-claimed cell a fresh budget. A reservation conflict is rescued by
+A `[BLOCKED]` here spent its consult budget; rung-1 re-dispatch grants a fresh one. A reservation conflict is rescued by
 adjusting reservations or cell scope — never by telling workers to be careful.
 
 ## Context Budget
@@ -130,8 +130,6 @@ never grants or assumes it, and never self-approves Gate 4 at the end.
 - state.json missing in-flight workers
 - orchestrator editing source files in a `standard`/`high-risk` wave
 - a WAVE of workers dispatched for a `tiny`/`small` lane (exactly one dispatched execution worker is correct there)
-
-Violating the letter of the rules is violating the spirit of the rules.
 
 ## Reference Files
 
