@@ -117,8 +117,7 @@ git commit -m "docs(learnings): <feature> close — <one line> [<feature> close]
 
 One commit, the close's own — never folded into a cell's commit, message
 names the feature + `[<feature> close]`. Unrelated dirty files stay out:
-commit only close paths (`docs/history/learnings/`, `docs/knowledge/` or
-`docs/specs/`, `docs/backlog.md`, `.bee/`), report the rest. Unresolved
+commit only close paths (`docs/history/learnings/`, `docs/knowledge/ or docs/specs/`, `docs/backlog.md`, `.bee/`), report the rest. Unresolved
 refusal: warn, proceed — never set §11's phase uncommitted/unmentioned.
 
 Register the close as a review candidate:
