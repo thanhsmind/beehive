@@ -279,6 +279,15 @@ its knowledge actually landed — the state and the specs can no longer disagree
   the acting session's own resolved workspace, never accepted as a caller-
   supplied value (multisession-native D2/D3, msn-19).
 
+- R77 — Ship visibility is an opt-in workspace setting with exactly two
+  values: off (the default when the key is absent) and draft-pr. The runtime
+  status report always carries the resolved value; the session preamble adds
+  one line only when the value is draft-pr (first cap opens a draft PR, every
+  cap pushes — the push/PR act itself is orchestrator behavior under the
+  routing contract, never a runtime side effect). An unrecognized configured
+  value resolves to off with a one-line warning, never a failure
+  (ship-visibility-config sv-1, spec #81 P1).
+
 ## Edge Cases Settled
 
 - A single-user workspace with no session identity anywhere in the
@@ -288,6 +297,10 @@ its knowledge actually landed — the state and the specs can no longer disagree
 
 ## Pointers (implementation)
 
+- Ship visibility (R77): `shipVisibility(root)` + `SHIP_VISIBILITY_VALUES` in
+  `packages/bee/lib/state.mjs`; status field in `packages/bee/bee.mjs`;
+  preamble line in `packages/bee/lib/inject.mjs`; suite
+  `scripts/tests/test_ship_visibility.mjs`; commits 5d46f40f, f0460a67.
 - Lanes (B12): lane store + `resolvePipeline` + lane-mode `startFeature` in
   `packages/bee/lib/state.mjs`; `bindSessionLane`/`unbindSessionLane`
   in `lib/claims.mjs`; CLI: `--lane` on `state.set/gate/scribing-run`,
