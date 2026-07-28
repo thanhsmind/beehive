@@ -16,7 +16,6 @@
     "bee-reviewing": 8190,
     "bee-scribing": 8151,
     "bee-swarming": 8187,
-    "bee-validating": 8049,
     "bee-writing-skills": 5157,
     "bee-xia": 6385
   },
@@ -34,7 +33,6 @@
     "bee-reviewing",
     "bee-scribing",
     "bee-swarming",
-    "bee-validating",
     "bee-writing-skills"
   ],
   "notes": {}

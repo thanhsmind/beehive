@@ -109,20 +109,6 @@ check('the three rules this slice moved to references are reachable from a body 
   assert(missing.length === 0, missing.join('\n  '));
 });
 
-check('bee-validating routes to the MERGED reviewer prompt and no longer names the retired pair as separate dispatches', () => {
-  const body = fs.readFileSync(path.join(SKILLS, 'bee-validating', 'SKILL.md'), 'utf8');
-  const ref = fs.readFileSync(path.join(SKILLS, 'bee-validating', 'references', 'validation-reference.md'), 'utf8');
-  assert(/merged reviewer prompt/i.test(body), 'the body no longer points at the merged reviewer prompt');
-  assert(/^##\s+Merged Reviewer Subagent Prompt/m.test(ref), 'the reference has no merged reviewer prompt section');
-  assert(
-    !/^##\s+Plan-Checker Subagent Prompt/m.test(ref) && !/^##\s+Cell-Reviewer Subagent Prompt/m.test(ref),
-    'the reference still carries the retired split prompts — two sources of truth for one dispatch',
-  );
-  for (const vocab of ['BLOCKER', 'WARNING', 'CRITICAL', 'MINOR']) {
-    assert(ref.includes(vocab), `the merged prompt dropped the ${vocab} finding class`);
-  }
-});
-
 // ─── 2. ordered-list integrity ─────────────────────────────────────────────
 check('no SKILL.md body repeats a number within one ordered list — inserting a step without renumbering its successors is silent', () => {
   const dupes = [];

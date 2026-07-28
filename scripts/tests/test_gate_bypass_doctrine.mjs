@@ -27,7 +27,6 @@ const REPO_ROOT = path.join(path.dirname(scriptPath), '..', '..');
 const GATE_SKILLS = [
   { file: 'skills/bee-exploring/SKILL.md', gate: 'Gate 1', tokens: ['gate_bypass_level', 'full'] },
   { file: 'skills/bee-planning/SKILL.md', gate: 'Gate 2', tokens: ['gate_bypass_level', 'full'] },
-  { file: 'skills/bee-validating/SKILL.md', gate: 'Gate 3', tokens: ['gate_bypass_level', 'full'] },
   { file: 'skills/bee-hive/references/go-mode.md', gate: 'go mode', tokens: ['full'] },
 ];
 
@@ -245,23 +244,17 @@ for (const { file, gate, tokens } of GATE_SKILLS) {
   }
 }
 
-// Lane-ceremony-v3 doctrine (D1/D2/D9): the chain skills (bee-validating,
-// bee-briefing, bee-swarming) must gate-in on the frozen plan.md + current-slice
-// cells (D1/D2) instead of the retired `artifact_readiness` field, and
+// Lane-ceremony-v3 doctrine (D9), narrowed by validation-diet D1 (bee-validating
+// is deleted outright, so its gate-in checks go with it): the remaining chain
+// skills (bee-briefing, bee-swarming) must gate-in on the frozen plan.md +
+// current-slice cells instead of the retired `artifact_readiness` field, and
 // briefing's drift rule must fire on cell changes only, since D1 freezes
 // plan.md content after Gate 2 (D9) — the plan itself can no longer drift.
 {
-  const validatingAbs = path.join(REPO_ROOT, 'skills/bee-validating/SKILL.md');
   const briefingAbs = path.join(REPO_ROOT, 'skills/bee-briefing/SKILL.md');
   const swarmingAbs = path.join(REPO_ROOT, 'skills/bee-swarming/SKILL.md');
-  let validatingText = '';
   let briefingText = '';
   let swarmingText = '';
-  try {
-    validatingText = fs.readFileSync(validatingAbs, 'utf8');
-  } catch {
-    fail('skills/bee-validating/SKILL.md: unreadable — lane-ceremony-v3 validating doctrine lives here');
-  }
   try {
     briefingText = fs.readFileSync(briefingAbs, 'utf8');
   } catch {
@@ -271,32 +264,6 @@ for (const { file, gate, tokens } of GATE_SKILLS) {
     swarmingText = fs.readFileSync(swarmingAbs, 'utf8');
   } catch {
     fail('skills/bee-swarming/SKILL.md: unreadable — lane-ceremony-v3 swarming doctrine lives here');
-  }
-
-  // (a) D1/D2: the retired `artifact_readiness` gate-in condition must be gone
-  // from bee-validating; gate-in must key off the frozen plan + existing cells.
-  if (validatingText.includes('artifact_readiness')) {
-    fail('skills/bee-validating/SKILL.md (D1/D2): still carries the retired `artifact_readiness` gate-in condition — validating now gates in on the frozen plan.md + current-slice cells');
-  } else {
-    ok('skills/bee-validating/SKILL.md (D1/D2): retired `artifact_readiness` gate-in condition absent');
-  }
-  const REQUIRED_VALIDATING = [
-    { token: 'frozen at Gate 2', d: 'D1', why: 'validating requires the plan approved and frozen, not "enriched"' },
-    { token: 'current-slice cells exist', d: 'D2', why: 'validating requires the current-slice cells to exist (cells are the slice, not a plan section)' },
-  ];
-  for (const { token, d, why } of REQUIRED_VALIDATING) {
-    if (!validatingText.includes(token)) {
-      fail(`skills/bee-validating/SKILL.md (${d}): missing required gate-in wording "${token}" — ${why}`);
-    } else {
-      ok(`skills/bee-validating/SKILL.md (${d}): "${token}" present`);
-    }
-  }
-  // Validating still refuses when the plan is unapproved or cells are missing —
-  // the gate-in check is renamed, never weakened.
-  if (!validatingText.includes('stop and return to bee-planning')) {
-    fail('skills/bee-validating/SKILL.md (D1/D2): missing the refusal wording — validating must still stop and return to bee-planning when the plan is unapproved or cells are missing');
-  } else {
-    ok('skills/bee-validating/SKILL.md (D1/D2): refusal-to-bee-planning wording present (gate-in renamed, not weakened)');
   }
 
   // (b) D9: briefing's drift rule fires on cell changes only — the plan can no
