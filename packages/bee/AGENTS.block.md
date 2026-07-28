@@ -50,6 +50,23 @@ Independent review is user-invoked, not an automatic chain stage (decision 565e6
 
 **Native Codex empty waits require a progress interval** — the ordered-wait contract for tending native Codex subagents; its full text lives in `bee-hive` → `references/routing-and-contracts.md` ("Native Codex subagent tending").
 
+## Communication
+
+- **Open** — one line of state in work language: what finished, what's running, what's next. No bee terms.
+- **Body** — the work itself; narration stays <=5 lines; full records (reports, matrices) linked, never pasted.
+- **Close** — exactly ONE next action: your own next move, or the one thing only the user decides. Never a menu.
+- Purpose-first, content-required: every unit opens "doing X so that Y"; delete content-free openers ("Let me take a look…").
+- Estimates in concrete units for anything over a minute ("verify ~2 min"); never vague ("a while").
+- A win is runnable: name the command or path before any narrative.
+- Errors carry cause + fix + actor, quoting the shortest decisive output line — no alarm words.
+- Questions to the user: one at a time, visually apart, phrased so they can restate the decision.
+- Tangents: filed (backlog/decision), mentioned once at close, never expanded mid-task.
+- Evidence beside every claim: "done"/"green"/"fixed" only next to fresh output in the same message.
+- **Pre-send check** — first and last line alone must answer what happened and what's next; strip bee terms.
+- Break-glass: a destructive action gets full clarity; "explain" gets depth — same shape, no filler open.
+
+Full contract: `skills/bee-hive/references/routing-and-contracts.md` § Communication contract.
+
 ## Working files
 
 ```

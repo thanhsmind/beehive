@@ -3681,6 +3681,79 @@ await check('writeJsonlAtomic and writeTextAtomic (decisions.mjs, tree-hygiene D
   }
 });
 
+await check('census: the Communication turn shape and pre-send check live in the always-loaded doctrine layer — AGENTS.block.md + root AGENTS.md carry them, not just the bee-hive reference (comms-always-loaded)', async () => {
+  const packagesBeeRoot = fileURLToPath(new URL('..', import.meta.url));
+  const repoRoot = findRepoRoot(packagesBeeRoot);
+  if (!repoRoot) return; // no repo context to check against (bare checkout)
+
+  // The Communication contract used to live only in
+  // skills/bee-hive/references/routing-and-contracts.md — a reference nothing
+  // pointed to — so a rule that governs EVERY turn was effectively dead
+  // (per-turn rules cannot be lazy-loaded). Fix: compress it into the
+  // always-loaded AGENTS layer. This census pins the anchors that must
+  // survive any future migration.
+  const surfaces = [
+    path.join(repoRoot, 'packages', 'bee', 'AGENTS.block.md'),
+    path.join(repoRoot, 'AGENTS.md'),
+  ];
+
+  const assertCommunicationAnchors = (text, rel) => {
+    assert(
+      /^## Communication$/m.test(text),
+      `${rel} must carry a "## Communication" section in the always-loaded layer`,
+    );
+    assert(
+      /exactly ONE next action/.test(text),
+      `${rel} must state the turn-close rule: exactly ONE next action, never a menu`,
+    );
+    assert(
+      /\*\*Pre-send check\*\*/.test(text),
+      `${rel} must carry the Pre-send check anchor`,
+    );
+    assert(
+      /first and last line/.test(text) && /what happened and what's next/.test(text),
+      `${rel} must state the pre-send check itself: first/last line must answer what happened and what's next`,
+    );
+    assert(
+      /Communication contract/.test(text),
+      `${rel} must point to the full contract (Communication contract) in bee-hive references`,
+    );
+  };
+
+  let communicationTemplate = null;
+  for (const surface of surfaces) {
+    if (!fs.existsSync(surface)) continue; // host repos onboarded without a root AGENTS.md yet
+    const text = fs.readFileSync(surface, 'utf8');
+    assertCommunicationAnchors(text, path.relative(repoRoot, surface));
+    if (communicationTemplate === null) communicationTemplate = text;
+  }
+  assert(communicationTemplate !== null, 'Communication census found no surface to check');
+
+  // Negative control: a fixture violating each anchor must FAIL the census —
+  // proves the assertions are load-bearing, not decorative.
+  const communicationMutationRows = [
+    ['section header dropped', /^## Communication$/m, '## Comms'],
+    ['turn-close rule dropped', /exactly ONE next action/, 'a menu of next actions'],
+    ['pre-send check label dropped', /\*\*Pre-send check\*\*/, 'Sanity check'],
+    ['pre-send wording dropped', /first and last line/, 'the whole message'],
+    ['full-contract pointer dropped', /Communication contract/, 'the reference doc'],
+  ];
+  const expectCommunicationReject = (mutated, name) => {
+    let rejected = false;
+    try {
+      assertCommunicationAnchors(mutated, `mutation: ${name}`);
+    } catch {
+      rejected = true;
+    }
+    assert(rejected, `Communication census must reject mutation: ${name}`);
+  };
+  for (const [name, pattern, replacement] of communicationMutationRows) {
+    const mutated = communicationTemplate.replace(pattern, replacement);
+    assert(mutated !== communicationTemplate, `Communication mutation fixture must alter the surface: ${name}`);
+    expectCommunicationReject(mutated, name);
+  }
+});
+
 fs.rmSync(detectRoot, { recursive: true, force: true });
 fs.rmSync(root, { recursive: true, force: true });
 fs.rmSync(siRoot, { recursive: true, force: true });

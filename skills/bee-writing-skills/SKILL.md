@@ -29,9 +29,9 @@ Wrote the skill before testing? Delete it. Start over. No exceptions — not for
 
 ## PHASE 1 — RED: Write the Failing Test
 
-**HARD-GATE: Do not write any skill content until this phase is complete.** Teams that skip baseline testing consistently deploy skills with predictable, preventable failures.
+**HARD-GATE: Do not write any skill content until this phase is complete.** Skipping baseline testing predictably ships preventable failures.
 
-1. Define the skill's purpose: what behavior must it enforce? What are the failure modes without it?
+1. Define the skill's purpose: what behavior must it enforce, and what fails without it?
 2. Create 3–5 pressure scenarios combining ≥3 pressures (see `references/pressure-test-template.md`).
 3. Run the scenarios WITHOUT the skill — give agents the realistic task under pressure.
 4. Document exact rationalizations verbatim. "Agent was wrong" is useless. "Agent said 'I already manually tested it, so the spirit of TDD is satisfied'" is target material.
@@ -50,23 +50,24 @@ Write SKILL.md addressing the **specific rationalizations documented in RED only
 - [ ] `metadata.version: '0.1'`, `metadata.ecosystem: bee`, `metadata.dependencies` mapping or `[]`
 - [ ] Body < 200 lines preferred; overflow goes to exactly one level of `references/`
 - [ ] Regrowth law: a new learning lands in the knowledge bundle or `references/` by default; edit the body itself only for a load-bearing invariant, and only if the edit still fits the recorded budget in `scripts/skill-body-budget.json` — over budget, trim the body first (one in, one out) before adding
+- [ ] Per-turn rules (chat shape, communication) are never exiled to references — they live in the always-loaded layer; a reference nothing forces open is a rule nothing follows.
 - [ ] Commands quoted in the body match the `.bee/bin` CLI surface in `bee/docs/07-contracts.md` verbatim
 - [ ] Short `Headless` section documenting `mode:headless` behavior
 - [ ] Red Flags list; persuasion principles applied (table below); HARD-GATE markers on critical stops
 - [ ] Ends with the handoff sentence: `[Outcome]. Invoke bee-<next-skill> skill.`
 - [ ] Cross-references other skills by name (`Invoke bee-planning`), never inlines their content
 
-**Description trap (most common mistake):** a workflow summary in the description makes Claude follow the description and skip the skill body. Every time.
+**Description trap:** a workflow summary in the description makes Claude follow the description and skip the skill body. Every time.
 
 ```yaml
-# ❌ BAD — workflow summary
+# ❌ BAD
 description: Use when creating skills — run baseline test, write minimal skill, run tests
 
-# ✅ GOOD — triggering conditions only
+# ✅ GOOD
 description: Use when creating a new bee skill or editing an existing one
 ```
 
-**Dependency metadata style:** write `metadata.dependencies` as a mapping keyed by dependency id — never a YAML array of objects (generic evaluators reject that shape). bee skills should mostly be dependency-free (Node 18+ and the vendored `.bee/bin/` helpers only):
+**Dependency metadata style:** write `metadata.dependencies` as a mapping keyed by dependency id — never a YAML array of objects (generic evaluators reject that shape). bee skills are usually dependency-free (Node 18+, vendored `.bee/bin/` helpers):
 
 ```yaml
 metadata:
@@ -108,15 +109,15 @@ An agent violating a rule despite having the skill is a test regression — the 
 
 ## PHASE 4 — VALIDATE & DOCUMENT
 
-The bee plugin has no automated skill validator in v0.1. Validate by hand plus `node --check`:
+No automated skill validator exists (v0.1); validate by hand plus `node --check`:
 
 ```bash
 node --check <skill-dir>/scripts/<each-script>.mjs   # only if the skill ships scripts
 ```
 
-Manual checks (every item, every time): re-run the SKILL.md checklist above end to end. If the skill owns a repo-local test script, run it and quote the output.
+Manual checks (every item, every time): re-run the checklist above end to end; run any repo-local test script and quote the output.
 
-**Create CREATION-LOG.md** (see `references/creation-log-template.md`): source material and extraction decisions, scenarios run and results, rationalizations found and fixes, iterations required.
+**Create CREATION-LOG.md** (see `references/creation-log-template.md`): source material/extraction decisions, scenarios run/results, rationalizations found/fixed, iterations required.
 
 **Bulletproof looks like:** the agent chooses the correct option under maximum pressure, cites skill sections, acknowledges the temptation, and the meta-test returns "the skill was clear." **Not bulletproof:** new rationalizations, the agent argues the skill is wrong, or "hybrid approaches" that satisfy the letter but not the spirit.
 
