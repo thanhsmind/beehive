@@ -551,3 +551,6 @@
 {"ts":"2026-07-27T23:43:19.393Z","type":"friction","title":"Windows CI: test_worktree_store.mjs TIMEOUT 600s recurrence (GH #82 class)","detail":"Run 30313643607 red on main 2026-07-28; full-verify CI 30313641746 green, no verify-red issue. Third sighting. Fix-first candidate: split or timeout-bump test_worktree_store on Windows runner.","severity":"P3","layer":"state","feature":""}
 {"ts":"2026-07-28T03:12:25.572Z","type":"friction","title":"Worker [DONE] without its cell commit (diet-8)","detail":"Worker reported DONE with verify green but made no commit; caught only by orchestrator git-log check, fixed via resume message. Candidate mechanization: cells cap or goal-check asserts a commit referencing the cell id exists.","severity":"P2","layer":"workers","feature":"skill-token-diet"}
 {"ts":"2026-07-28T03:12:35.482Z","kind":"pbi","event":"status","id":"p-8aae1301","status":"done"}
+{"ts":"2026-07-28T03:17:35.586Z","kind":"pbi","event":"status","id":"p-e8a153e2","status":"done"}
+{"ts":"2026-07-28T03:17:35.822Z","kind":"pbi","event":"status","id":"p-8afb88a4","status":"in-flight","feature":"test-batching-finish"}
+{"ts":"2026-07-28T03:47:29.479Z","kind":"pbi","event":"status","id":"p-8afb88a4","status":"done"}

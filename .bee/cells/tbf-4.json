@@ -1,0 +1,79 @@
+{
+  "id": "tbf-4",
+  "feature": "test-batching-finish",
+  "lane": "small",
+  "behavior_change": false,
+  "change_class": "bugfix",
+  "title": "Fix: 3 impacted-suite tests broken by default-on verify cache",
+  "action": "REPRO FIRST (already red): node scripts/tests/test_run_verify_impacted.mjs -> 34 passed, 3 failed — the 3 assertions expecting a suite's own PASS line now get 'CACHED green ... (closure unchanged)' because tbf-1's cache is default-on locally and .bee/logs/verify-cache.json is warm. Test intent is selection logic + real execution, so KEEP the assertions and make the three run_verify child invocations in scripts/tests/test_run_verify_impacted.mjs pass --no-cache (or set env CI=1) so cached shortcuts never apply inside this suite: the failing three are the --impacted self-select case, the --level 1 case, and the --only case. Do NOT weaken any assertion; do NOT touch run_verify.mjs. End green: 37 passed, 0 failed.",
+  "must_haves": {
+    "truths": [
+      "node scripts/tests/test_run_verify_impacted.mjs => 37 passed, 0 failed.",
+      "All three previously-failing assertions unchanged in what they assert."
+    ],
+    "prohibitions": [
+      "Do NOT modify scripts/run_verify.mjs.",
+      "Do NOT delete or weaken assertions.",
+      "Do NOT clear the live cache file as the fix (tests must be hermetic against a warm cache)."
+    ]
+  },
+  "verify": "node scripts/tests/test_run_verify_impacted.mjs",
+  "read_first": [
+    "scripts/tests/test_run_verify_impacted.mjs",
+    "scripts/run_verify.mjs"
+  ],
+  "files": [
+    "scripts/tests/test_run_verify_impacted.mjs"
+  ],
+  "deps": [
+    "tbf-1"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-tbf4",
+    "outcome": "Fixed 3 failing assertions by adding --no-cache to three run_verify spawn sites (--impacted self-select, --level 1, --only cases). All 37 tests now pass.",
+    "files_changed": [
+      "scripts/tests/test_run_verify_impacted.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T03:31:51.951Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "PASS filterSuitesByLabels selects only an exact suiteLabel match\nPASS filterSuitesByLabels returns empty for an empty label set (no accidental full-pool fallback)\nPASS --impacted scripts/tests/test_release_tuple.mjs self-selects exactly that suite (registry closure includes its own entry), with a correct IMPACTED banner\nPASS comma-separated --impacted mixes a mapped and an unmapped file: mapped one runs, unmapped one is listed loudly on stderr, never silently dropped\nPASS repeatable --impacted (two separate flags) unions into one changed-file set\nPASS --impacted with only an unmapped file is a loud zero-impacted pass naming CI, exit 0, zero suites run\nPASS --impacted combined with --only is a typed refusal, exit 1, before any suite runs\nPASS --impacted-from-git combined with BEE_VERIFY_ONLY env is also a typed refusal\nPASS --level 1 without --impacted/--impacted-from-git is a typed refusal, exit 1, before any suite runs\nPASS --impacted with --level 2 (unrecognized value) is a typed refusal, exit 1\nPASS --impacted <hub file> --level 1 selects strictly fewer suites than the default (transitive) impacted run, with the level-1 banner\nPASS --impacted <transitive-only file> --level 1: zero direct suites but nonzero transitive is a loud deferred-count note, exit 0, no suites run\nPASS --impacted-from-git counts a staged-but-uncommitted change in a fixture repo (P1-4)\nPASS test-economy D6: below cap (narrow.mjs, 2 suites) runs the full transitive selection unchanged, no cap banner\nPASS test-economy D6: config missing -> default cap 0.30 -> over-cap (lib.mjs) falls back to level-1, banner printed, direct suite still runs\nPASS test-economy D6: a red suite inside the capped (level-1) selection still exits red — cap never silences a real failure\nPASS test-economy D6: verify_impacted_cap = 1 disables the cutoff entirely — full transitive selection runs even over the default cap\nPASS test-economy D6: config present but verify_impacted_cap key missing -> falls back to default 0.30 (same as no config)\nPASS test-economy D6: malformed .bee/config.json -> parse failure falls back to default 0.30 (fail-open, never a crash)\nPASS test-economy D6: --level 1 is a no-op for the cap — no banner, no cut, even with an over-cap changed file and a low cap configured\nPASS test-economy D6: gh missing/erroring during a capped run prints a one-line note but never changes the exit code\nPASS filterSuitesByOnly(suites, []) returns the SAME array reference (byte-identical no-op)\nPASS SUITES has more than one runnable (sanity: the M in N of M banners must be > 1)\nPASS --only test_release_tuple selects exactly that suite and passes, with a correct banner\nPASS --only with a token matching zero suites is a typed refusal, exit 1\nPASS BEE_VERIFY_EXCLUDE narrows an --only selection down to zero, and still refuses\nPASS BEE_VERIFY_ONLY env var alone selects the scoped subset\nPASS CLI --only overrides BEE_VERIFY_ONLY when both are set (env token would refuse, CLI token passes)\nPASS with no --only and no BEE_VERIFY_ONLY, filterSuitesByOnly is never given a chance to fire — no banner text appears even on a scoped-looking exclude run\nPASS skipNote returns null for ordinary stdout with no marker\nPASS skipNote extracts the reason text from a CANARY_SKIP marker line\nPASS SKIP_MARKER_RE only matches a line that STARTS WITH CANARY_SKIP (anchored, not a bare substring)\nPASS a synthetic suite that prints CANARY_SKIP and exits 0 is captured by runOne() with an intact exit code\nPASS canary_codex.mjs default mode prints CANARY_SKIP and exits 0 when no codex binary is on PATH\nPASS canary_codex.mjs --probe prints CANARY_SKIP and exits 0 when no codex binary is on PATH\nPASS canary_codex.mjs --probe-selftest is unaffected (never touches codex, no marker expected)\nPASS SUITES export is still a plain array of discovered/extra suite entries (byte-shape untouched)\n\ntest_run_verify_impacted: 37 passed, 0 failed",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T03:30:11.225Z",
+    "verify_command": "node scripts/tests/test_run_verify_impacted.mjs",
+    "verified_at": "2026-07-28T03:31:48.905Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T03:31:40.163Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-28T03:30:26.707Z",
+        "acquired_at": "2026-07-28T03:30:11.224Z",
+        "worker": "exec-tbf4",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      },
+      {
+        "n": 2,
+        "at": "2026-07-28T03:31:48.905Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-28T03:30:26.707Z",
+        "acquired_at": "2026-07-28T03:30:11.224Z",
+        "worker": "exec-tbf4",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": [
+      "capCell: cell \"tbf-4\" test-to-source line ratio is 6.00 (>3) for lane \"small\" — test-economy D3 non-blocking warning."
+    ]
+  },
+  "tier": "extraction"
+}

@@ -1,0 +1,65 @@
+{
+  "id": "tbf-2",
+  "feature": "test-batching-finish",
+  "lane": "small",
+  "behavior_change": false,
+  "change_class": "test",
+  "title": "Slice test: verify-cache behavior suite",
+  "action": "New suite scripts/tests/test_verify_cache.mjs (new_suite_reason: new subsystem — no existing suite covers run_verify's cache layer). Fixture-based (temp dir registry + fake suites): green run populates cache; identical rerun skips all green; closure-file edit invalidates exactly that suite; red never cached; corrupt cache file = cache miss not crash; CI env var disables; --no-cache bypasses; --cache-clear wipes. Net slice behavior only.",
+  "must_haves": {
+    "truths": [
+      "All 7 behaviors above asserted green.",
+      "Fixtures in temp dirs; live .bee/logs and scripts untouched by tests."
+    ],
+    "prohibitions": [
+      "Do NOT weaken tbf-1 logic to pass.",
+      "Do NOT run the full chain in tests."
+    ]
+  },
+  "verify": "node scripts/tests/test_verify_cache.mjs",
+  "read_first": [
+    "scripts/run_verify.mjs"
+  ],
+  "files": [
+    "scripts/tests/test_verify_cache.mjs"
+  ],
+  "deps": [
+    "tbf-1"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-tbf2",
+    "outcome": "Added fixture-based scripts/tests/test_verify_cache.mjs proving run_verify.mjs's tbf-1 suite-result cache end to end (cold populate, warm CACHED skip, closure-edit invalidation, red-never-cached, corrupt-cache fail-open, CI/--no-cache bypass, --cache-clear) via throwaway temp-dir mini-repos (byte copies of run_verify.mjs + impact_registry.mjs + fake controllable-exit suites); live .bee/logs/verify-cache.json and scripts/tests untouched. Regenerated scripts/impact-registry.json (registry --check demanded it for the new suite).",
+    "files_changed": [
+      "scripts/tests/test_verify_cache.mjs",
+      "scripts/impact-registry.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-28T03:38:48.325Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "PASS cold run (no cache file yet): both fake suites run for real, PASS, and a green cache file is written\nPASS identical rerun: both suites reported CACHED green, zero real executions\nPASS closure-file edit invalidates exactly the dependent suite, leaving the unrelated one cached\nPASS a red suite is never cached: it re-runs for real on every subsequent identical run, and the first green run after it also runs for real\nPASS a corrupt cache file degrades to a cache miss (fail-open), never a crash — the suite runs for real and the cache is repaired\nPASS the CI env var disables the cache entirely: a suite with a valid green cache entry still runs for real, and the cache file is left untouched\nPASS --no-cache bypasses the cache the same way CI does: real execution, cache file left untouched\nPASS --cache-clear wipes the cache file and prints the cleared banner, forcing a real run even with a valid green entry\n\ntest_verify_cache: 8 passed, 0 failed",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-28T03:28:56.710Z",
+    "verify_command": "node scripts/tests/test_verify_cache.mjs",
+    "verified_at": "2026-07-28T03:38:42.650Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T03:38:42.650Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-28T03:32:14.834Z",
+        "acquired_at": "2026-07-28T03:28:56.708Z",
+        "worker": "exec-tbf2",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "generation"
+}
