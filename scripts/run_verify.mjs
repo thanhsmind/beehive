@@ -967,8 +967,26 @@ function printImpactedBanner(selectedCount, changedCount, level) {
 // dirty in-progress edit still forces a cache miss on every suite it
 // touches without any git plumbing at all; there is no separate "uncommitted
 // changes" case to special-case.
+// Why a run may not touch the cache at all — returns the human-readable
+// reason (printed in the summary line) or null when the cache is live.
+//
+// BEE_CHECK_ONLY (p1-1 F2a) is the third and least obvious member. It scopes
+// which checks INSIDE a suite run (scripts/lib/test-fixture.mjs), it is NOT
+// part of any cache key, and childEnv() forwards it to every child — so a
+// filtered run that exercised three checks would otherwise be written to the
+// cache as a green result for the suite's FULL closure sha, and every later
+// unfiltered run would print CACHED green for checks that never executed
+// once. A filtered run is therefore treated exactly like --no-cache: never
+// read, never written, and visibly labelled as uncached in the summary.
+export function cacheDisableReason(argv = process.argv.slice(2)) {
+  if (process.env.CI) return "CI";
+  if (argv.includes("--no-cache")) return "--no-cache";
+  if (process.env.BEE_CHECK_ONLY) return "BEE_CHECK_ONLY";
+  return null;
+}
+
 export function isCacheDisabled(argv = process.argv.slice(2)) {
-  return Boolean(process.env.CI) || argv.includes("--no-cache");
+  return cacheDisableReason(argv) !== null;
 }
 
 export function hasCacheClearFlag(argv = process.argv.slice(2)) {
@@ -1029,14 +1047,174 @@ async function buildSuiteClosureMap() {
 // Returns null when a closure file can't be read (race/deleted mid-run) —
 // the caller treats null as "never cache this suite this run", never a
 // crash.
+// ─── data inputs the impact registry cannot see (p1-1 F2b/F2c) ─────────────
+//
+// The registry is built by STATIC IMPORT analysis, so a suite's closure only
+// ever contains code it `import`s. Every file a suite opens at RUNTIME —
+// prose, JSON baselines, whole directory trees — is invisible to it. That is
+// not a corner case here: scripts/skill_budget_fence.mjs has a closure of
+// itself alone yet reads scripts/skill-body-budget.json and every skill body,
+// and packages/bee/tests/test_misc.mjs reads the repo's own operating block
+// and skill prose. Keyed on the closure alone, editing any of those leaves
+// the sha unchanged and the suite reports CACHED green without running — a
+// cache that LIES, which is strictly worse than no cache at all.
+//
+// Two explicit escapes, and one automatic default:
+//
+//   1. CACHE_EXTRA_INPUTS — a suite whose runtime inputs CAN be enumerated
+//      declares them here as repo-relative paths/globs. Both the pattern
+//      strings and every matched file's content are hashed into that suite's
+//      key, so editing (or adding, or deleting) a declared input invalidates
+//      exactly that suite.
+//   2. CACHE_OPT_OUT — a suite whose real inputs cannot honestly be
+//      enumerated is never cached at all.
+//   3. The default when in doubt is OPT-OUT, applied automatically: a suite
+//      with no declaration whose own source mentions one of the data
+//      surfaces below is treated as uncacheable (mentionsUndeclaredInput).
+//      This over-approximates on purpose — a false positive costs one
+//      re-run, a false negative costs a false green.
+//
+// Keys are the suite's entry FILE (entry[0]), so EXTRA_SUITES variants that
+// share a file (e.g. `--selftest` vs the plain check) share one policy.
+const CACHE_EXTRA_INPUTS = {
+  "scripts/skill_budget_fence.mjs": ["scripts/skill-body-budget.json", "skills/**/*.md"],
+  "scripts/okf_instructions_fence.mjs": ["AGENTS.md", "skills/**/*.md"],
+  "packages/bee/tests/test_misc.mjs": ["AGENTS.md", "packages/bee/AGENTS.block.md", "skills/**/*"],
+};
+
+// Broad repo scanners: their input is "most of the working tree" (plus, for
+// several, git state), which no declaration can honestly pin down.
+const CACHE_OPT_OUT = new Set([
+  "scripts/release_manifest.mjs",
+  "scripts/ledger_parity.mjs",
+  "scripts/backlog_uniqueness.mjs",
+  "scripts/census_stale_spawn_syntax.mjs",
+  "scripts/okf_migrate.mjs",
+  "scripts/okf_specs_fence.mjs",
+  "scripts/tests/test_installers_e2e.mjs",
+  ".bee/bin/bee.mjs",
+]);
+
+// Substrings that mark a suite as reaching into repo content the registry
+// cannot walk. Matched against the suite's OWN source text only (not its
+// whole closure): a suite names the live surface it reads, while shared libs
+// are normally parameterized by a root argument.
+const UNDECLARED_INPUT_TOKENS = [
+  "AGENTS.md",
+  "AGENTS.block.md",
+  "skills/",
+  "docs/knowledge",
+  "docs/specs",
+  "docs/history",
+  "docs/backlog.md",
+  "skill-body-budget.json",
+  ".bee/onboarding.json",
+  ".bee/bin/",
+];
+
+function mentionsUndeclaredInput(text) {
+  for (const token of UNDECLARED_INPUT_TOKENS) {
+    if (text.includes(token)) return true;
+  }
+  return false;
+}
+
+// Translates a repo-relative glob into an anchored regex over repo-relative
+// paths. Supports `*` (one path segment) and `**` (any depth) — the only two
+// forms the declarations above need; everything else is literal.
+function inputPatternToRegex(pattern) {
+  let out = "";
+  for (let i = 0; i < pattern.length; i += 1) {
+    const c = pattern[i];
+    if (c === "*") {
+      if (pattern[i + 1] === "*") {
+        i += 1;
+        if (pattern[i + 1] === "/") {
+          i += 1;
+          out += "(?:.*/)?";
+        } else {
+          out += ".*";
+        }
+      } else {
+        out += "[^/]*";
+      }
+      continue;
+    }
+    out += "^$.|?+()[]{}".includes(c) ? `\\${c}` : c;
+  }
+  return new RegExp(`^${out}$`);
+}
+
+function listFilesUnder(relDir, acc = []) {
+  let entries;
+  try {
+    entries = fs.readdirSync(path.join(REPO_ROOT, relDir), { withFileTypes: true });
+  } catch {
+    return acc;
+  }
+  for (const entry of entries) {
+    if (entry.name === "node_modules" || entry.name === ".git") continue;
+    const rel = relDir ? `${relDir}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) listFilesUnder(rel, acc);
+    else if (entry.isFile()) acc.push(rel);
+  }
+  return acc;
+}
+
+// Memoized per process (run_verify is one short-lived run): a pattern expands
+// once even when several suites declare the same surface.
+const inputPatternCache = new Map();
+
+// Sorted repo-relative matches for one declared pattern, or null when a
+// LITERAL (wildcard-free) declaration points at a file that does not exist —
+// a broken declaration must never quietly become "no extra inputs".
+function expandInputPattern(pattern) {
+  if (inputPatternCache.has(pattern)) return inputPatternCache.get(pattern);
+  let result;
+  if (!pattern.includes("*")) {
+    result = fs.existsSync(path.join(REPO_ROOT, pattern)) ? [pattern] : null;
+  } else {
+    const baseSegments = [];
+    for (const segment of pattern.split("/")) {
+      if (segment.includes("*")) break;
+      baseSegments.push(segment);
+    }
+    const re = inputPatternToRegex(pattern);
+    result = listFilesUnder(baseSegments.join("/"))
+      .filter((rel) => re.test(rel))
+      .sort();
+  }
+  inputPatternCache.set(pattern, result);
+  return result;
+}
+
+const fileShaCache = new Map();
+
+// sha256 of one repo-relative file's bytes, or null when it can't be read.
+function fileShaFor(rel) {
+  if (fileShaCache.has(rel)) return fileShaCache.get(rel);
+  let sha;
+  try {
+    sha = createHash("sha256").update(fs.readFileSync(path.join(REPO_ROOT, rel))).digest("hex");
+  } catch {
+    sha = null;
+  }
+  fileShaCache.set(rel, sha);
+  return sha;
+}
+
 function closureShaFor(entry, suiteClosureMap) {
+  const suitePath = entry[0];
+  if (CACHE_OPT_OUT.has(suitePath)) return null;
+
   const label = suiteLabel(entry);
+  const declaredInputs = CACHE_EXTRA_INPUTS[suitePath];
   let files = suiteClosureMap.get(label);
   if (!files || files.size === 0) {
     // EXTRA_SUITES entries with no registry closure (defensive: an entry
     // file the registry could not walk) hash the entry file + its args
     // instead of a closure that doesn't exist.
-    files = new Set([entry[0]]);
+    files = new Set([suitePath]);
   }
   const hasher = createHash("sha256");
   for (const rel of [...files].sort()) {
@@ -1046,6 +1224,12 @@ function closureShaFor(entry, suiteClosureMap) {
     } catch {
       return null;
     }
+    if (!declaredInputs && rel === suitePath && mentionsUndeclaredInput(content.toString("utf8"))) {
+      // Doubt => opt out. This suite reads repo content the closure cannot
+      // represent and has declared nothing, so caching it could serve green
+      // for work that never ran.
+      return null;
+    }
     const fileHash = createHash("sha256").update(content).digest("hex");
     hasher.update(rel);
     hasher.update("\0");
@@ -1053,6 +1237,20 @@ function closureShaFor(entry, suiteClosureMap) {
     hasher.update("\n");
   }
   hasher.update(entry.join(""));
+  if (declaredInputs) {
+    hasher.update("extra-inputs");
+    for (const pattern of declaredInputs) {
+      hasher.update(pattern);
+      const matches = expandInputPattern(pattern);
+      if (matches === null) return null; // a declared literal input is missing
+      for (const rel of matches) {
+        const fileHash = fileShaFor(rel);
+        if (fileHash === null) return null;
+        hasher.update(rel);
+        hasher.update(fileHash);
+      }
+    }
+  }
   return hasher.digest("hex");
 }
 
@@ -1069,7 +1267,8 @@ async function runSelectedSuites(activeSuites, { concurrency, beforeBanner, afte
     console.log(`VERIFY CACHE: cleared (${path.relative(REPO_ROOT, VERIFY_CACHE_PATH)})`);
   }
 
-  const cacheDisabled = isCacheDisabled(argv);
+  const cacheDisabledReason = cacheDisableReason(argv);
+  const cacheDisabled = cacheDisabledReason !== null;
   const cache = cacheDisabled ? {} : loadVerifyCache();
   const shaByLabel = new Map();
   const cachedResults = [];
@@ -1173,7 +1372,9 @@ async function runSelectedSuites(activeSuites, { concurrency, beforeBanner, afte
 
   console.log("");
   console.log(
-    `${anyFail ? "FAIL" : "PASS"} run_verify: ${allResults.length} suite(s) (${results.length} run, ${cachedResults.length} cached), concurrency=${concurrency}, wall=${wallMs}ms`,
+    `${anyFail ? "FAIL" : "PASS"} run_verify: ${allResults.length} suite(s) (${results.length} run, ${cachedResults.length} cached), concurrency=${concurrency}, wall=${wallMs}ms${
+      cacheDisabled ? `, cache=disabled (${cacheDisabledReason})` : ""
+    }`,
   );
   if (afterBanner) afterBanner();
 
