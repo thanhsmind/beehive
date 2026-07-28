@@ -3766,6 +3766,55 @@ await check('the escape hatch must carry a REASON — a bare true is refused at 
   assert(threw !== null && /non-empty string/.test(threw), `a boolean ack must be refused, got: ${threw}`);
 });
 
+// ─── wave-barrier (parallel-default D2): the ack field already carried any
+// reason string; this names "wave-barrier" as the recognized value the
+// orchestrator owes at wave close, so a slice's regen-touching cells can
+// parallelize instead of false-serializing on shared generated artifacts.
+// ─────────────────────────────────────────────────────────────────────────
+
+await check('the refusal names the wave-barrier alternative and the orchestrator\'s wave-close debt (parallel-default D2)', async () => {
+  const refusal = regenObligationRefusal(regenRoot, regenCell({ files: ['widgets/panel.mjs'] }));
+  console.log(`      REFUSAL(wave-barrier mention): ${refusal}`);
+  assert(refusal !== null, 'a hashed-root touch with no check must still be refused');
+  assert(refusal.includes('wave-barrier'), `must name the recognized wave-barrier value, got: ${refusal}`);
+  assert(
+    /orchestrator/.test(refusal) && /wave close/.test(refusal),
+    `must name the orchestrator's wave-close debt, got: ${refusal}`,
+  );
+});
+
+await check('a cell acknowledged with the wave-barrier value is accepted, and the ack is recorded verbatim on the stored cell', async () => {
+  const ackReason = 'wave-barrier: shared regen targets deferred to orchestrator at wave close';
+  const accepted = addCell(
+    regenRoot,
+    regenCell({ id: 'regen-e2e-wave-barrier', files: ['widgets/panel.mjs'], regen_obligation_ack: ackReason }),
+  );
+  assert(accepted.id === 'regen-e2e-wave-barrier', 'the acknowledged cell writes normally');
+  assert(
+    accepted.regen_obligation_ack === ackReason,
+    `the ack must be recorded verbatim on the return value, got: ${JSON.stringify(accepted.regen_obligation_ack)}`,
+  );
+  const stored = JSON.parse(
+    fs.readFileSync(path.join(regenRoot, '.bee', 'cells', 'regen-e2e-wave-barrier.json'), 'utf8'),
+  );
+  assert(
+    stored.regen_obligation_ack === ackReason,
+    `the persisted cell must carry the ack verbatim, got: ${JSON.stringify(stored.regen_obligation_ack)}`,
+  );
+});
+
+await check('a touching cell with neither the manifest check in verify nor a regen_obligation_ack still refuses — wave-barrier is a named act, never a default', async () => {
+  let threw = null;
+  try {
+    addCell(regenRoot, regenCell({ id: 'regen-e2e-no-ack', files: ['widgets/panel.mjs'] }));
+  } catch (err) {
+    threw = err.message;
+  }
+  console.log(`      addCell REFUSED (no ack, no check): ${threw}`);
+  assert(threw !== null && /REGEN_OBLIGATION/.test(threw), `addCell must refuse without an ack or the required check, got: ${threw}`);
+  assert(!fs.existsSync(path.join(regenRoot, '.bee', 'cells', 'regen-e2e-no-ack.json')), 'a refused add must write nothing');
+});
+
 await check('measured against THIS checkout\'s real guard scripts (skipped where they are absent)', async () => {
   const realRoot = path.resolve(TEMPLATES_DIR, '..', '..');
   if (!fs.existsSync(path.join(realRoot, 'scripts', 'release_manifest.mjs'))) {
