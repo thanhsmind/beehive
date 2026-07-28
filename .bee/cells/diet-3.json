@@ -1,0 +1,89 @@
+{
+  "id": "diet-3",
+  "feature": "skill-token-diet",
+  "lane": "standard",
+  "behavior_change": false,
+  "change_class": "refactor",
+  "title": "Migrate bee-hive SKILL.md to thin-body doctrine (30.1K -> <=8192)",
+  "action": "Rewrite skills/bee-hive/SKILL.md to the D7 thin-body doctrine: body keeps ONLY (1) trigger + lane scaling, (2) one flow/step table, (3) load-bearing invariants (Red Flags stay), (4) the reference routing table. Everything else moves VERBATIM-in-meaning into skills/bee-hive/references/ — existing files where topical (routing-and-contracts.md, go-mode.md), new files where needed; all provenance citations (D-IDs, decision hashes, plan/hardening labels) exiled per D8 into skills/bee-hive/references/provenance.md as a rule->decision-IDs+rationale table. Worked example per plan P5: the ~1100-char crash-recovery line becomes a ~150-char body pointer + full protocol in a reference (heading must match the body pointer). Rewrite mechanics per plan: law-paragraph -> table row or <=2-line bullet, one idea per line, <=80 chars/line target, delete reassurance clauses, exceptions-of-exceptions -> the branch's reference. MEANING NEVER CHANGES: every rule keeps its normative content; every removed section reachable through the routing table (P1 acceptance). Preserve intact: (a) every okf_instructions_fence-graded bundle-branch line (fence must stay green), (b) the skill_lint pointer targets 'Progress ticks' and 'Re-lane checkpoint' — body must keep pointers with those exact quoted headings resolving into references, (c) bee:only marker grammar if present. Then update scripts/skill-body-budget.json: lower bee-hive entry to the new exact byte size (<=8192), append \"bee-hive\" to migrated[], delete notes[\"bee-hive\"]. Do NOT edit other skills' bodies. Do NOT touch fence/lint/run_verify logic. REGEN OBLIGATION (in THIS cell, in order): node scripts/render_plugin_skill_trees.mjs; node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply; node scripts/release_manifest.mjs --write — the rendered mirrors and manifest ship in the same commit.",
+  "must_haves": {
+    "truths": [
+      "wc -c skills/bee-hive/SKILL.md <= 8192; baseline entry equals the new exact size; \"bee-hive\" in migrated[]; no notes entry for bee-hive.",
+      "node scripts/skill_budget_fence.mjs green (selftest + bare) — provenance grep now ACTIVE on bee-hive and finds 0 citations in the body.",
+      "node scripts/skill_lint.mjs still green: all reference pointers resolve (including 'Progress ticks' and 'Re-lane checkpoint'), no duplicate ordered-list numbers.",
+      "node scripts/okf_specs_fence.mjs and node scripts/okf_instructions_fence.mjs both green after the rewrite.",
+      "node scripts/tests/test_skill_render.mjs green (marker grammar + render projection).",
+      "Every section removed from the body is reachable from the body's reference routing table; skills/bee-hive/references/provenance.md maps each body rule to its exiled decision IDs.",
+      "Side-by-side behavior check recorded in the report: (s1) lane triage for a tiny fix routes identically, (s2) Gate 1-3 contract and bypass-level behavior stated identically, (s3) crash-recovery branch reachable via the new pointer — each shown as before/after excerpt pairs.",
+      "node scripts/release_manifest.mjs --check green; plugin/skill mirrors regenerated in the same commit."
+    ],
+    "prohibitions": [
+      "Do NOT weaken, drop, or reword-into-ambiguity any gate rule, bypass rule, or hard law — location and phrasing change, meaning never (spec non-goal).",
+      "Do NOT edit any other skills/*/SKILL.md.",
+      "Do NOT touch scripts/skill_budget_fence.mjs, skill_lint.mjs, or run_verify.mjs logic.",
+      "Do NOT delete content outright: text leaves the body only by landing in a reachable reference (except reassurance clauses, which may be deleted)."
+    ]
+  },
+  "verify": "node scripts/skill_budget_fence.mjs --selftest && node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node scripts/okf_instructions_fence.mjs && node scripts/tests/test_skill_render.mjs && node scripts/release_manifest.mjs --check",
+  "read_first": [
+    "docs/history/skill-token-diet/CONTEXT.md",
+    "docs/history/skill-token-diet/plan.md",
+    "skills/bee-hive/SKILL.md",
+    "scripts/skill_budget_fence.mjs",
+    "scripts/skill_lint.mjs"
+  ],
+  "files": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/provenance.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "scripts/skill-body-budget.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "deps": [
+    "diet-1"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "exec-diet3",
+    "outcome": "bee-hive SKILL.md migrated to thin-body doctrine: 30078 -> 8183 bytes (<=8192). Exiled text landed in references/ (routing-and-contracts.md: Greenfield init lane, Session Scout in full, Lane ceremony in full, CI status gate, +3 First-Skill Routing rows; new provenance.md rule->decision-ID map). Baseline lowered to 8183, bee-hive appended to migrated[] (provenance grep active, 0 hits), notes entry deleted. Regen ran in-cell (mirror render, onboard --apply, manifest --write). Full chain green: budget fence selftest+bare, skill_lint, okf specs+instructions fences, skill_render 27/27, manifest --check 408 match.",
+    "files_changed": [
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/references/provenance.md",
+      "scripts/skill-body-budget.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      {
+        "kind": "auto-add",
+        "description": "Added three rows (bee-qualifying, docs lane, merge/ship/release ask-ONE-question) to the reference's First-Skill Routing table so the body router could compress to a short chain without dropping any route — additive, meaning unchanged, inside the declared file set (routing-and-contracts.md)."
+      }
+    ],
+    "friction": null,
+    "capped_at": "2026-07-28T00:26:13.643Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "PASS skill_budget_fence --selftest: 14 passed, 0 failed\nPASS skill_budget_fence: 18 skill(s) checked, 0 findings\nOK — skill tree clean\nPASS okf_instructions_fence: 20 instruction-surface file(s) name the retired state layer (12 branched, 4 historical-record, 4 legacy-anchor), 0 unbranched misroutes\nskill_render: 27 passed, 0 failed\nrelease_manifest --check: 408 file(s) match stored manifest",
+    "verify_passed": true,
+    "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+    "claimed_at": "2026-07-27T23:59:03.818Z",
+    "verify_command": "node scripts/skill_budget_fence.mjs --selftest && node scripts/skill_budget_fence.mjs && node scripts/skill_lint.mjs && node scripts/okf_instructions_fence.mjs && node scripts/tests/test_skill_render.mjs && node scripts/release_manifest.mjs --check",
+    "verified_at": "2026-07-28T00:25:20.670Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-28T00:25:20.670Z",
+        "claim_session": "9343141e-4732-4077-8eef-f2f16317a423",
+        "claimed_at": "2026-07-27T23:59:25.062Z",
+        "acquired_at": "2026-07-27T23:59:03.816Z",
+        "worker": "exec-diet3",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  },
+  "tier": "ceiling"
+}

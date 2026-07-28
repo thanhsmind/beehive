@@ -39,6 +39,9 @@ Open this when the compact bootstrap in `SKILL.md` is not enough.
 | `/go` / full pipeline | Go mode | See `go-mode.md` |
 | Turn gate-bypass on/off, or check it | `bee-bypass-gate` | Load directly, any phase; toggles `.bee/config.json` `gate_bypass` |
 | Resume session | Resume logic | Check `HANDOFF.json` first — kind-aware: pause waits, planned-next adopts only at a fresh-session boundary |
+| Explicit request to run the automatic backlog-triage pass on a `docs/backlog.md` row (a human or an external caller invoking the pipeline path directly — no auto-trigger exists yet) | `bee-qualifying` | Pipeline path, explicit invocation only |
+| Docs/spec/README/sample-only change | docs lane | "Docs lane" under Lane ceremony in full — announce, write, format-check, capture or "nothing settled"; no pipeline |
+| Merge/ship/release request while unreviewed or stale candidates exist | Report the candidate count + risk level, then ask ONE question: "Create a review session for this scope?" | Only an explicit yes dispatches `bee-reviewing` — never spawn a reviewer silently |
 
 **Surface-scope-earlier check** (runs before routing to exploring): the request contains concrete acceptance criteria AND references to existing patterns → offer "Found clear requirements. Jump straight to planning, or explore alternatives first?" On approval, planning receives a one-paragraph scoping synthesis whose decisions still carry D-IDs.
 
@@ -66,6 +69,10 @@ Then inspect the result:
 - `--claude-md` only when plugin hooks are unavailable and the user wants the CLAUDE.md `@AGENTS.md` import fallback.
 
 If onboarding is not complete, do not continue into the rest of the bee workflow.
+
+### Greenfield init lane
+
+When the onboarding result carries the init-lane notice (first onboard, no detectable build), offer it before any feature work: the first planning slice is **one init cell** whose `must_haves` are exactly the initialization checklist — setup succeeds from scratch, one passing test exists, standard commands recorded in `.bee/config.json`, clean first commit. The user may decline; a declined offer is recorded as a deferred idea, never silently dropped. (Provenance: P1, docs/09 item 6 — `references/provenance.md`.)
 
 ## State Bootstrap
 
@@ -232,6 +239,78 @@ what happened to their work, per the silent-bookkeeping rule above.
 `ship_visibility: "off"`. Default is a live stream whenever a bypass level is active.
 With no bypass, gates already punctuate the work and ticks add nothing — emit them
 anyway only for cell caps and slice closes.
+
+## Session Scout in full
+
+The router's Session Scout section keeps the invariants as one line each; this section carries the
+full text behind each bullet (moved here by skill-token-diet diet-3 — the router keeps the rule,
+this file keeps the detail; rule → decision-ID map: `references/provenance.md`).
+
+### Preamble-first scout
+
+**The preamble is the scout's first source, and usually its only one.** The session preamble injected at session start already carries onboarding health, phase, mode, feature, gate states, cell counts, PBI counts, the recent critical-patterns digest and the recent active decisions (`inject.mjs` renders all of it). Read what arrived; never re-fetch what it just told you.
+
+Re-run the read-only scout (`node .bee/bin/bee.mjs status --json`) when you are about to **route work** — claim a cell, plan, or change phase — or when no preamble arrived, or it went stale after a compaction. That run adds what the preamble does not carry: active reservations, staleness warnings, and `recommended_next`. Answering a question, reading code, or explaining something is not routing work — for those, the preamble has already answered, and `status --json` plus `decisions active --recent 3` are pure duplication. The decisions re-fetch (`node .bee/bin/bee.mjs decisions active --recent 3`) belongs to routing work, not to answering a question.
+
+### Knowledge context
+
+When the active feature has a `bee.work-item` concept in `docs/knowledge/`, the session preamble says so and names the command — run `bee knowledge context --work <feature> --budget 20000` and read the manifest's files before planning or execution; that manifest is the feature's curated context and it replaces scanning `docs/history/`. When the feature is active but has no work item, offer to author one (`docs/knowledge/areas/okf-profile/concept-model-and-authoring.md`, Templates section) — one line, user chooses, never silent and never auto-written.
+
+### Capture queue offer
+
+When `bee_status` reports pending capture stubs, offer the flush before new work — "N settlement(s) from a previous session await their spec merge — flush now (a few minutes) or after the current task?" One line, user chooses; the queue is never silently ignored and never silently dropped.
+
+### Review candidates
+
+`bee_status --json` carries a `review` block — candidate counts by derived status (`unreviewed`/`in_review`/`reviewed`/`stale`) and any open review sessions. Independent review is user-invoked only: never self-dispatch a reviewer wave because candidates exist. When `high_risk_unreviewed > 0`, surface it plainly — a hard-gate change (auth, data loss, security, external provider) is sitting unreviewed — state the merge/release consequence and offer to start a review; do not label anything reviewed or approved until the user calls it.
+
+### Critical patterns source
+
+The preamble's `### Critical patterns (digest)` and `### Recent decisions` sections have already delivered the recent critical patterns and the same three active decisions `decisions active --recent 3` would return. Open the full source only when the digest is missing, or when you need more than it shows: with a bundle, `docs/knowledge/index.md`'s `## Critical patterns` section (the live equivalent, generated from the bundle); with no bundle, `docs/history/learnings/critical-patterns.md` when present.
+
+### State layer reading order (bundle vs no bundle)
+
+Note the state layer in the orientation summary. Which layer that is depends on one predicate — `bundleMode` (`docs/knowledge/` holding at least one concept that actually parses; a directory alone is not a bundle). Both branches below are live guidance, not a migration path:
+
+- **With a bundle — the reading order is `bundle → decisions → history`.** Read `docs/knowledge/areas/<area>/` FIRST: its `index.md` names the area's concepts, and each concept states the subject it is authoritative for. Then decisions for the why; `docs/history/` only for archaeology. `docs/specs/` is named for exactly one job — the **read-only compatibility surface**: a legacy citation like `docs/specs/<area>.md#R7` resolves through that file's pointer stub (its anchor map) to the concept that owns the anchor now. Never send an agent there for current truth, and never write new content there — `scripts/okf_specs_fence.mjs` fails the chain when new prose lands under `docs/specs/`. `docs/specs/reading-map.md` stays the hand-written "where does X live" map and points at the bundle. When an area has no overview concept, offer a `bee-scribing` bootstrap pass to author one **in the bundle** — user-approved, never silent, never auto-run.
+- **With no bundle — today's guidance stands, unchanged.** When `docs/specs/` exists, note it in the orientation summary. Before working in any area, the reading order is **spec → decisions → history**: read `docs/specs/<area>.md` (what the area does now) before its code, decisions for the why, `docs/history/` only for archaeology. `docs/specs/reading-map.md` answers "where does X live" before any broad grep. When `docs/specs/` lacks `system-overview.md` or `reading-map.md`, offer a `bee-scribing` bootstrap pass to skeleton the missing file(s) — user-approved, never silent, never auto-run. The fence never fires here and nothing in this branch mentions a bundle: a repo that never migrated keeps working exactly as before.
+
+### Worktree routing
+
+If the scout is about to start NEW feature work in a checkout that already has another live session's active work — a live cross-session heartbeat plus a non-idle phase in the shared store, or active holds / live-owner lanes — the paved road is `bee worktree new --feature <slug>`, then opening the next session in the printed path. Docs-lane work, tiny fixes, and release machinery stay in the MAIN checkout — release always runs in main. Merge-back happens from main via `bee worktree merge --id <id>`; the merge is staged uncommitted (`git merge --no-ff --no-commit`) and the configured verify runs against that staged tree as the semantic-conflict gate before any commit exists — a red verify after a textually clean merge is the alarm to investigate, and it aborts the stage, leaving main byte-untouched, not a signal to roll back a commit (none was ever made).
+
+## Lane ceremony in full
+
+The router's Modes and Lanes section keeps the classification rule and the scaling law; this section
+carries the full per-lane ceremony detail (moved here by skill-token-diet diet-3).
+
+Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 4 after execution. Every lane below closes through scribing/compounding as `unreviewed`; a review session — and its Gate 4 — happens only when the user asks, over whatever scope they choose. Separately, `standard`/`high-risk` goal-checks also run a semantic checklist judge per capped `behavior_change` cell (table: "Goal-check judge tier" below) — that is verification of the cell, not this on-demand review session.
+
+| Lane | Plan | Validate | Execute | Review | Human stops |
+|---|---|---|---|---|---|
+| `docs` | none — announce one line | format check (parse/lint if applicable) | direct, in-session | none | 0 |
+| `tiny` | none — the cell is the micro-plan | 2-minute reality check inline, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract) | one dispatched execution worker (AO14 — param-carrying dispatch, model param or pinned type, never a bare marker; standard worker prompt template, no reviewers/panels/waves) | orchestrator-authored done-report (worker's verbatim diff + its recorded verify output; orchestrator re-runs only on smell, parallel waves, or hard-gate — test-runs-lean D1) — verification, not independent review | 1 — the merged shape+execution gate |
+| `small` | logged scoping synthesis; plan.md is opt-in | inline reality gate + matrix, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract); spike only if a blocking assumption demands it | one dispatched execution worker (AO14 — same contract as `tiny`'s Execute column), its 1-3 cells processed SERIALLY (see Small-lane serial doctrine below) | orchestrator-authored done-report, self-checks only, no auto reviewer (the correctness reviewer moves inside an on-demand review session) | 2 — merged shape+execution gate, self-checks close-out |
+| `standard` | full `plan.md` | merged reviewer; ≤5-file diff (0 hard-gate flags): inline self-review, no dispatch | swarm workers | on user request only: session panel scaled to scope risk (4 core reviewers) | 3 — Gates 1-3 |
+| `high-risk` | `plan.md` + brief | persona panel | swarm workers | on user request only: session panel scaled to scope risk (full wave + conditionals) | 3 — Gates 1-3 |
+
+**Gate 4 is additive, not counted above:** it is asked once, whenever a review session actually runs for that scope — never automatically at the end of a lane's default chain.
+
+### Small-lane serial doctrine
+
+A `small` lane's 1-3 cells are processed by **ONE live execution worker at a time** — the orchestrator claims and dispatches one cell, waits for it to return (`[DONE]`/`[BLOCKED]`/`[HANDOFF]`/`[NOOP]`), authors that cell's done-report, and only then claims and dispatches the next. Never 2+ live small-lane execution workers for the same feature at once — that is a `standard`/`high-risk` wave shape wearing a `small` lane, the exact ceremony-mismatch red flag this lane scaling exists to catch. Full doctrine and its relationship to the AO14 execution-worker class: `bee-swarming/SKILL.md`'s Single execution worker section and the Delegation contract below.
+
+### Docs lane
+
+The change is knowledge upkeep, same class as capture — announce one line ("docs lane: writing X"), write it, run a format check when one exists (JSON parses, markdown lints), then close by logging a decision/capture stub when the content encodes a settled outcome, or stating "nothing settled" when it does not — a docs-lane close with neither is not a close. No cells, no gates, no reviewers. If the target path is outside the write-guard allowlist (`.bee/, docs/, plans/, AGENTS.md`) the hook will block the idle write — fall back to the tiny fast path instead of fighting the guard.
+
+### Tiny/small fast path
+
+The draft cell(s) are rendered as a **preview inside the gate message** — never persisted first — and the 2-minute reality check runs inline against that preview, before Gates 2 and 3 are presented as **one merged question** — "Work shape + execution: I'm about to do X via Y, verified by Z. Approve?" — approval records both `shape` and `execution` and covers exactly the previewed work packet. `cells add` runs only **after** approval, and the cells are claimed only then — previewed before persist, never persist-then-preview. Implementation itself runs through the one dispatched execution worker named in the lane table's Execute column (AO14) — never in-session. After the worker returns: no separate merge gate — the orchestrator authors the done-report itself from the worker's verbatim diff plus its recorded verify output (verify-once, test-runs-lean D1 — a re-run only on smell, parallel waves, or hard-gate) and that done-report (diff + verify output + capture line) closes it. A real problem found during the orchestrator's own review stops and asks, always.
+
+### Capture discipline
+
+Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-cell quick work included: a capped `behavior_change` cell obliges a `bee-scribing` sync in every lane — tiny included — and a settled discussion outcome (rule, behavior, tuned value; backend or frontend alike) is captured the moment it settles. Every task close carries either a decision-log/capture-stub line or an explicit "nothing settled" statement — a close with neither is not a close. **Settlement detection is the agent's duty, unprompted:** the routing row "user asks to document" is the fallback, not the norm — the norm is the agent noticing "this just settled", announcing it in one line, and capturing in the same turn without being asked. What same-turn capture costs is lane-scaled (decision 0017): high-risk = full spec sync inline; every other lane = decision log + a one-line capture stub (`bee.mjs capture add`), with the full merge at a flush point (wrap-up, PreCompact warning, or next session's offer). Capture writes only `docs/` + `.bee/` — no gate applies.
 
 ## Chaining Contract
 
@@ -431,6 +510,10 @@ opt-in gate-bypass switch above, and how far it reaches is its level (`normal` =
 `full` = also high-risk/hard-gate; `total` = everything incl. UAT/secrets). Headless and bypass are
 independent: headless without bypass still stops at every gate. Go mode's own headless behaviour is
 in `references/go-mode.md` ("Headless Go Mode").
+
+### CI status gate (before the first claim)
+
+**Before your first `cells claim`, never on arrival.** Not one of the four gates, and not a scout step: the trigger is the *claim*. Before your first `cells claim` of a session, if `.bee/config.json` records `commands.verify`, check CI instead of running it locally — the latest full-verify run on the base branch (`gh run list`/`gh api`) plus any open `verify-red` issue. Red on either is surfaced to the user and becomes its own fix-first tiny cell — **never build on red**. No local full-suite run is ever owed: the dev loop runs registry-scoped tests only (`commands.test` / `run_verify.mjs --impacted`), and the full suite is CI-owned on the host workflow's own cadence, auto-filing a `verify-red` issue when red. A session that claims no cell owes no CI check. When no commands are recorded, `bee_status` warns and the capture belongs to exploring or onboarding, never to guesswork.
 
 ### Delegation contract (fan-out: decide-altitude vs gather-altitude)
 
