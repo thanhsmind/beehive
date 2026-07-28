@@ -97,7 +97,19 @@ export function checkOnlyPredicate(filterValue) {
   if (!filterValue) return null;
   const regexForm = /^\/(.*)\/([a-z]*)$/.exec(filterValue);
   if (regexForm) {
-    const re = new RegExp(regexForm[1], regexForm[2]);
+    let re;
+    try {
+      re = new RegExp(regexForm[1], regexForm[2]);
+    } catch (error) {
+      // An invalid /regex/ must never crash the module at import time (that
+      // would take down every suite that imports this file, not just the
+      // filtered run) — refuse with a typed message instead, same shape as
+      // the zero-match refusal in printSummaryAndExit below.
+      console.error(
+        `test-fixture: BEE_CHECK_ONLY="${filterValue}" is not a valid regex — ${error.message}. FIX: check the filter syntax.`,
+      );
+      process.exit(1);
+    }
     return (name) => re.test(name);
   }
   const needle = filterValue.toLowerCase();
