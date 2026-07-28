@@ -937,19 +937,60 @@ await check('bee.mjs state gate rejects an unknown gate name and a non-boolean -
 
 await check('shipped routing callers declare their pre-phase owner and independent review has no generic state-set caller', async () => {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-  const routingSkills = [
-    'skills/bee-exploring/SKILL.md',
-    'skills/bee-planning/SKILL.md',
-    'skills/bee-validating/SKILL.md',
-    'skills/bee-compounding/SKILL.md',
-  ];
-  const calls = routingSkills.flatMap((relative) => {
-    const text = fs.readFileSync(path.join(repoRoot, relative), 'utf8');
-    return [...text.matchAll(/node \.bee\/bin\/bee\.mjs state set\b[^`\n]*/g)].map((match) => ({ relative, call: match[0] }));
-  });
-  assert(calls.length === 5, `expected five shipped routing state-set calls, got ${JSON.stringify(calls)}`);
+  const skillsDir = path.join(repoRoot, 'skills');
+
+  // Derive the scanned surface from the tree itself — every skill's SKILL.md
+  // plus every skills/<skill>/references/*.md — instead of a hand-written
+  // skill list. A thin-body migration that relocates a routing example (body
+  // <-> reference, or into a differently-named skill) stays covered; only a
+  // migration that deletes the example outright can slip past this.
+  const skillFiles = [];
+  for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const skillPath = path.join(skillsDir, entry.name);
+    const body = path.join(skillPath, 'SKILL.md');
+    if (fs.existsSync(body)) skillFiles.push(body);
+    const refsDir = path.join(skillPath, 'references');
+    if (fs.existsSync(refsDir)) {
+      for (const refEntry of fs.readdirSync(refsDir)) {
+        if (refEntry.endsWith('.md')) skillFiles.push(path.join(refsDir, refEntry));
+      }
+    }
+  }
+
+  // A shipped call: `state set` (with or without the redundant node-binary
+  // prefix — thin-body prose drops it once the prefix is established once
+  // already) whose flags include `--owner <value>` on the same line/backtick
+  // span. Two things that match "state set ... --owner ..." are NOT shipped
+  // calls and must not count: (a) a "never/don't hand-write this" teaching
+  // example that quotes the forbidden form — recognized by the word
+  // "hand-write" on the same line; (b) a generic multi-subcommand syntax
+  // reference whose owner is a placeholder (`<...>`), not a concrete phase
+  // name. A bare `state set` mention with no --owner at all (a rule
+  // statement, a cross-reference, a prohibition) never matches in the first
+  // place, since --owner is required inside the same match.
+  const callPattern = /(?:node \.bee\/bin\/bee\.mjs )?state set\b[^`\n]*--owner\s+(\S+)[^`\n]*/g;
+  const calls = [];
+  for (const file of skillFiles) {
+    const relative = path.relative(repoRoot, file);
+    const lines = fs.readFileSync(file, 'utf8').split('\n');
+    lines.forEach((line, idx) => {
+      callPattern.lastIndex = 0;
+      let match;
+      while ((match = callPattern.exec(line))) {
+        const ownerValue = match[1];
+        const isTeachingExample = /hand-write/i.test(line);
+        const isPlaceholderOwner = ownerValue.startsWith('<');
+        if (!isTeachingExample && !isPlaceholderOwner) {
+          calls.push({ relative, line: idx + 1, call: match[0] });
+        }
+      }
+    });
+  }
+
+  assert(calls.length === 4, `expected four shipped routing state-set calls, got ${JSON.stringify(calls)}`);
   for (const { relative, call } of calls) {
-    assert(/\s--owner\s+\S+/.test(call), `${relative} has a state-set caller without explicit ownership: ${call}`);
+    assert(/--owner\s+\S+/.test(call), `${relative} has a state-set caller without explicit ownership: ${call}`);
   }
   const reviewing = fs.readFileSync(path.join(repoRoot, 'skills/bee-reviewing/SKILL.md'), 'utf8');
   assert(
