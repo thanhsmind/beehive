@@ -279,6 +279,15 @@ its knowledge actually landed — the state and the specs can no longer disagree
   the acting session's own resolved workspace, never accepted as a caller-
   supplied value (multisession-native D2/D3, msn-19).
 
+- R81 — **Worker orientation is brief, not the full status.** The status
+  report has a brief form — phase, feature, mode, gates, bypass level, ship
+  visibility, route only — that reads nothing but the state layer (no cell
+  scans, no review or handoff resolution, no model tables). A dispatched
+  worker receives the state line embedded in its dispatch and re-validates
+  with the brief form; the claim record stays the sole claim authority. The
+  full report remains the orchestrator's routing surface. Measured driver:
+  the full report cost 372ms and 15KB per worker startup; brief costs ~70ms
+  and ~0.5KB (status-diet D1/D2).
 - R80 — **Triage leaves a machine-readable trace.** Every feature carries a
   route record — work class, lane, the counted risk flags, and the product-file
   count — written the same turn the mode gate counts them, through a validated
