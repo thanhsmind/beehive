@@ -3556,6 +3556,14 @@
         "scripts/tests/test_store_lock.mjs"
       ]
     },
+    "scripts/tests/test_verify_cache.mjs": {
+      "direct": [
+        "scripts/tests/test_verify_cache.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_verify_cache.mjs"
+      ]
+    },
     "scripts/tests/test_verify_manifest.mjs": {
       "direct": [
         "scripts/tests/test_verify_manifest.mjs"
