@@ -22,7 +22,7 @@ body rule to the decision(s) that authorize it and the rationale in one line. Lo
 | Tiny mode: the cell is the micro-plan; small: plan.md opt-in | planning D3, D4 | Ceremony scales down when the cell itself carries the whole shape |
 | Tiny/small fast path: preview-then-persist, merged Gate 2+3 | fast-path D5 | Approval covers exactly the previewed packet; cells persist only after the merged yes |
 | One dispatched execution worker in every lane, never zero | AO14 | Execution authority is a named dispatch class, distinct from I/O gathers, even for the lightest lane |
-| Small-lane serial doctrine (one live worker at a time) | hardening-7 | 2+ live small-lane workers is a wave shape wearing a small lane |
+| Parallel-by-default doctrine (3-4 concurrent workers cap when disjoint; serial names its conflict) | hardening-7, parallel-default D1 | Undeclared-overlap concurrency is a wave shape wearing a small lane |
 | Done-report verify-once; re-run only on smell, parallel waves, or hard-gate | test-runs-lean D1 | The worker's recorded verify output is the evidence; duplicate runs are waste, not proof |
 | Goal-check semantic judge per capped `behavior_change` cell | goal-check D4/D5 (self-correcting-loop); P12, decision 0018 | Verification of the cell, never the user-invoked review session |
 | Gate bypass levels (`normal`/`full`/`total`) and their stop floors | decisions 0010, dcf01d7b, a93994d3 | The human chose the level in advance; the recommended option is the approval at that level |
