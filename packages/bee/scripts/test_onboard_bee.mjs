@@ -1443,9 +1443,6 @@ try {
     ".bee/locks/",
     ".bee/doctor-attest.json",
     ".bee/native-transport-probe.json",
-    // spec #77 P1: the delta-validation evidence cache — derived, machine-local
-    // and re-earnable, so it is ignored like the probe records above it.
-    ".bee/validation-cache.json",
     ".bee/config.local.json",
     ".bee/tmp/",
     ".bee/backups/",

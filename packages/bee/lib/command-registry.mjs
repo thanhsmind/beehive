@@ -1167,47 +1167,6 @@ export const COMMAND_REGISTRY = [
     deprecated: null,
   },
 
-  // ─── state validation-cache (spec #77 P1): hash-anchored delta validation,
-  // so slice N+1 re-proves only what actually moved. Shaped as a deliberate
-  // twin of advisor-ref record/show above — same anchors (feature, newest
-  // active decision id, sha256(plan.md)), same "the verb stamps them itself"
-  // rule, same absence of any clear verb and any TTL.
-  {
-    name: 'state.validation-cache.record',
-    invoke: 'bee state validation-cache record',
-    description:
-      "Record the feasibility-matrix rows a validation slice proved, into .bee/validation-cache.json keyed by feature, so a later slice can carry unchanged rows forward instead of re-proving them (spec #77 P1). --rows-file holds a JSON array of rows; each row carries {id, kind, claim, verdict, evidence, sources}, where a source is either {path} for file evidence or {command, output_sha} for command evidence. The verb stamps every hash ITSELF — it reads each source path and computes its sha256, and it stamps the feature-level staleness anchors (newest active decision id and sha256 of that feature's plan.md) exactly as advisor-ref record does — so a caller can never assert a hash it did not earn. A command source needs its output_sha supplied (recording never executes anything); one recorded without it stays permanently stale until re-proven. Recording REPLACES that feature's row set rather than merging, so a row dropped from the input cannot linger as a stale survivor; other features are untouched. Writes .bee/validation-cache.json atomically under its own lock, and rebuilds the file from scratch if it was missing or corrupt. Staleness is anchored to content only — there is no TTL, no age threshold, and the recorded timestamps are audit fields no check ever reads.",
-    parameters: {
-      type: 'object',
-      properties: {
-        feature: { type: 'string', description: 'Feature to key the cached rows by. Defaults to the active feature in state.json.' },
-        slice: { type: 'string', description: 'Slice number these rows were proven in (a positive integer); a carried-forward row reports it as "cached, proven in slice N".' },
-        'rows-file': { type: 'string', description: 'Path to a JSON array of proven matrix rows, each with an id, its evidence, and its sources.' },
-        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
-      },
-      required: ['slice', 'rows-file'],
-    },
-    examples: ['bee state validation-cache record --slice 1 --rows-file rows.json --json'],
-    deprecated: null,
-  },
-  {
-    name: 'state.validation-cache.check',
-    invoke: 'bee state validation-cache check',
-    description:
-      'Report which cached validation rows are still fresh and which went stale, so slice N+1 re-proves only the stale ones (spec #77 P1). Pure read: never writes, never runs a command, never throws. A row is STALE when any cited source file\'s sha256 changed or the file vanished, when the newest active decision id changed, or when sha256(plan.md) changed — the last two are feature-level anchors that stale every row at once, since a re-shaped plan or a new decision can change what any row was meant to prove. Every stale row reports the reason it moved. DEGRADATION IS THE SAFETY PROPERTY: a missing, unreadable, malformed, wrong-version, or partially-valid cache reports degraded:true with revalidate:"full" and zero cached rows — a cache problem always yields MORE validation, never a skipped proof — and a row storing no hashes is treated as stale for the same reason. Command-evidence rows carry forward only when --outputs-file supplies a freshly-observed hash for that command, since a read-only check cannot re-run it; an absent or unreadable --outputs-file simply re-proves those rows. Exits 0 in every case, including degraded — it is a report, not a gate.',
-    parameters: {
-      type: 'object',
-      properties: {
-        feature: { type: 'string', description: 'Feature whose cached rows to check. Defaults to the active feature in state.json.' },
-        'outputs-file': { type: 'string', description: 'Optional JSON object mapping a command source to the sha256 of its output as re-observed this slice. Commands with no entry re-prove.' },
-        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a human-readable summary.' },
-      },
-      required: [],
-    },
-    examples: ['bee state validation-cache check --json'],
-    deprecated: null,
-  },
-
   // ─── state compact-*: compaction-hardening's helper floor (D3) — three thin
   // CLI wrappers over lib/compaction.mjs, the ONE module every compaction
   // surface (hooks and verbs alike) calls. All three of D3's locked verbs are

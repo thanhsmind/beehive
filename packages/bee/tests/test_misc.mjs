@@ -1003,15 +1003,6 @@ const EXPECTED_STATE_EXPORTS = [
   // sandbox blocklist layered on top of UNSAFE_CLI_FLAGS above.
   'ADVICE_CLASS_SLOTS',
   'ADVICE_CLASS_WRITABLE_TOKENS',
-  // spec #77 P1: the delta-validation evidence cache. Only the two verbs'
-  // entry points and the two constants are public — the hashing, row
-  // normalization, row-level staleness and file reader stay module-private,
-  // exactly as advisorPlanPath does for the advisor_ref precedent this
-  // mirrors.
-  'VALIDATION_CACHE_VERSION',
-  'VALIDATION_SOURCE_ABSENT_SENTINEL',
-  'validationCacheCheck',
-  'writeValidationCache',
   'validateModelsConfig',
   // ao-3b-2/AO12: root-taking drift advisory sibling — validateModelsConfig
   // above stays pure (no root/fs); this one reads rendered .claude/agents/

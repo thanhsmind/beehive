@@ -94,11 +94,6 @@ import {
   cacheFilePath,
   advisorRefAnchors,
   advisorRefStale,
-  // spec #77 P1 — the delta-validation evidence cache, which reuses
-  // advisorRefAnchors above as its staleness anchors rather than inventing a
-  // second rule (AO13).
-  validationCacheCheck,
-  writeValidationCache,
   localConfigPath,
   isLocalOnlyConfigKey,
   trackedLocalOnlyKeyWarning,
@@ -4456,7 +4451,7 @@ async function handleStateRoute(root, flags) {
 
 // ─── state feature-verify: main-verifies D2 — the feature-level proof record ─
 // The delegator's ONE verify over the feature's whole diff, recorded the same
-// discipline as validation-cache/advisor-ref: a machine-readable record the
+// discipline as advisor-ref: a machine-readable record the
 // debt doors (the 'feature-verify' kind in FEATURE_DEBT_KINDS, D3) read back
 // — {feature, command,
 // output_sha256, result, at}. `record` stamps it on the ACTIVE feature's
@@ -4467,7 +4462,7 @@ async function handleStateRoute(root, flags) {
 // STORABLE — it documents the failure for D5's fix-cells-then-re-verify loop
 // — but never satisfies the door. output_sha256 is computed HERE from
 // --output-file, never caller-supplied, so the record always names real
-// captured bytes (validation-cache's stamp-it-yourself discipline).
+// captured bytes (advisor-ref's stamp-it-yourself discipline).
 
 const FEATURE_VERIFY_RESULTS = ['green', 'red'];
 
@@ -4738,100 +4733,6 @@ async function handleStateWorkflowsClose(root, flags) {
     result: { closed },
     text: `Closed ${closed.length} workflow record(s), kept active feature "${activeFeature ?? '(none)'}": ${closed.map((r) => r.id).join(', ')}.`,
   };
-}
-
-// ─── state validation-cache: the spec #77 P1 delta-validation surface ────────
-// Two verbs, deliberately shaped exactly like advisor-ref record/show above:
-// `record` stamps the staleness anchors ITSELF (never caller-supplied) and
-// `check` is a pure read that reports a verdict. There is no clear verb, for
-// the same reason advisor-ref has none — staleness makes an old entry inert on
-// its own, so there is nothing a human needs to remember to purge.
-//
-// Neither verb has any notion of elapsed time: `check` never looks at a clock,
-// and the only timestamps `record` writes are audit fields no predicate reads.
-
-async function handleStateValidationCacheRecord(root, flags) {
-  rejectDryRun(flags);
-  const rowsFile = requireFlag(flags, 'rows-file');
-  const sliceRaw = requireFlag(flags, 'slice');
-  const slice = Number(sliceRaw);
-  if (!Number.isInteger(slice) || slice < 1) {
-    throw new Error(
-      `validation-cache record: --slice must be a positive integer (got "${sliceRaw}"). ` +
-        'FIX: pass the slice number these rows were proven in, e.g. --slice 1.',
-    );
-  }
-  let rows;
-  try {
-    rows = JSON.parse(fs.readFileSync(path.resolve(String(rowsFile)), 'utf8'));
-  } catch (err) {
-    throw new Error(
-      `validation-cache record: could not read --rows-file "${rowsFile}" (${err && err.code ? err.code : err}). ` +
-        'FIX: pass a JSON file containing the proven matrix rows.',
-    );
-  }
-  if (!Array.isArray(rows)) {
-    throw new Error(
-      `validation-cache record: --rows-file "${rowsFile}" must contain a JSON array of rows. ` +
-        'FIX: wrap the rows in an array, e.g. [{"id":"row-1","claim":"...","sources":[{"path":"a.mjs"}]}].',
-    );
-  }
-  const feature = flags.feature ? String(flags.feature) : readStateStrict(root)?.feature;
-  if (!feature) {
-    throw new Error(
-      'validation-cache record: refused — no feature to key the cache by (no --feature and no active feature in state). ' +
-        'FIX: pass --feature <name>, or start a feature first.',
-    );
-  }
-  const entry = await withStoreLock(root, 'validation-cache', async () =>
-    writeValidationCache(root, feature, { slice, rows }),
-  );
-  return {
-    result: entry,
-    text: `Recorded ${entry.rows.length} validation row(s) for feature "${feature}" (slice ${slice}).`,
-  };
-}
-
-function handleStateValidationCacheCheck(root, flags) {
-  const feature = flags.feature ? String(flags.feature) : readStateStrict(root)?.feature;
-  if (!feature) {
-    throw new Error(
-      'validation-cache check: refused — no feature to check (no --feature and no active feature in state). ' +
-        'FIX: pass --feature <name>.',
-    );
-  }
-  // Optional: hashes of command-evidence output re-observed this slice. Absent
-  // or unreadable => command-backed rows simply go stale, which is the safe
-  // direction, so a bad --outputs-file must never be fatal here.
-  let commandOutputs = null;
-  let outputsNote = '';
-  if (flags['outputs-file']) {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(path.resolve(String(flags['outputs-file'])), 'utf8'));
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) commandOutputs = parsed;
-      else outputsNote = ' (--outputs-file ignored: not a JSON object; command rows re-prove)';
-    } catch (err) {
-      outputsNote = ` (--outputs-file unreadable: ${err && err.code ? err.code : err}; command rows re-prove)`;
-    }
-  }
-  const verdict = validationCacheCheck(root, feature, { commandOutputs });
-  const lines = [];
-  if (verdict.degraded) {
-    lines.push(
-      `validation-cache: DEGRADED to full re-validation — ${verdict.degrade_reason}. Re-prove every row and dimension.`,
-    );
-  } else {
-    lines.push(
-      `validation-cache: ${verdict.revalidate} (${verdict.counts.cached} cached, ${verdict.counts.stale} stale of ${verdict.counts.total}) for feature "${feature}".`,
-    );
-    for (const row of verdict.cached) {
-      lines.push(`  [cached] ${row.id ?? '(unnamed)'} — proven in slice ${row.proven_in_slice}, sources unchanged`);
-    }
-    for (const row of verdict.stale) {
-      lines.push(`  [stale]  ${row.id ?? '(unnamed)'} — ${row.reasons.join('; ')}`);
-    }
-  }
-  return { result: verdict, text: `${lines.join('\n')}${outputsNote}` };
 }
 
 // ─── state compact-*: compaction-hardening's helper floor (D3) — thin CLI
@@ -7742,12 +7643,6 @@ function stateUsageFallback(leading) {
     const sub = leading[2];
     return `Unknown advisor-ref action "${sub || '(missing)'}". Use: record, show.`;
   }
-  // validation-cache (spec #77 P1): the two-verb delta-validation family,
-  // mirroring the advisor-ref branch above.
-  if (verb === 'validation-cache') {
-    const sub = leading[2];
-    return `Unknown validation-cache action "${sub || '(missing)'}". Use: record, check.`;
-  }
   // plan-rev (multisession-native-9, D7/C2): a one-verb family, mirroring
   // the worker/session/handoff/advisor-ref branches above.
   if (verb === 'plan-rev') {
@@ -7755,7 +7650,7 @@ function stateUsageFallback(leading) {
     return `Unknown plan-rev action "${sub || '(missing)'}". Use: bump.`;
   }
   // feature-verify (main-verifies D2): the two-verb feature-level proof
-  // family, mirroring the advisor-ref/validation-cache branches above.
+  // family, mirroring the advisor-ref branch above.
   if (verb === 'feature-verify') {
     const sub = leading[2];
     return `Unknown feature-verify action "${sub || '(missing)'}". Use: record, show.`;
@@ -7766,7 +7661,7 @@ function stateUsageFallback(leading) {
     const sub = leading[2];
     return `Unknown workflows action "${sub || '(missing)'}". Use: list, close.`;
   }
-  return `Unknown command "${verb || '(missing)'}". Use: set, gate, route, feature-verify, workflows, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, validation-cache, compact-log, compact-check, compact-capsule.`;
+  return `Unknown command "${verb || '(missing)'}". Use: set, gate, route, feature-verify, workflows, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, compact-log, compact-check, compact-capsule.`;
 }
 
 function backlogUsageFallback(leading) {
@@ -7953,8 +7848,6 @@ const HANDLERS = {
   'state.handoff.show': handleStateHandoffShow,
   'state.advisor-ref.record': handleStateAdvisorRefRecord,
   'state.advisor-ref.show': handleStateAdvisorRefShow,
-  'state.validation-cache.record': handleStateValidationCacheRecord,
-  'state.validation-cache.check': handleStateValidationCacheCheck,
   'state.compact-log': handleStateCompactLog,
   'state.compact-check': handleStateCompactCheck,
   'state.compact-capsule': handleStateCompactCapsule,
