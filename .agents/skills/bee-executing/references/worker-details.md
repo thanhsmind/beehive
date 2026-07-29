@@ -48,6 +48,28 @@ For the one assigned cell, confirm before starting (D1 — the orchestrator clai
 
 `[NOOP]` if the cell is missing or already done; `[BLOCKED]` for ambiguity, a locked-decision conflict, or an ownership mismatch.
 
+## Conformance habits (worker-conformance D8)
+
+Effort moves from proving to conforming — it is not removed. Habits, not a form:
+nothing here is a required output artifact, and none of it is written up anywhere.
+
+**Before writing code**, five passes over the cell:
+
+1. Read the docs the cell routes you to — `read_first` first, then `CONTEXT.md`.
+2. Scout the adjacent code and match how its neighbours already do this.
+3. Look for an existing helper before writing a new one.
+4. Verify the interface contracts the cell names — signatures and call sites as
+   they actually are, not as the cell describes them.
+5. Cross-check the cell's declared `files` inventory against what the work truly
+   needs; a real mismatch is a deviation to record, and an architectural one is
+   `[BLOCKED]`.
+
+**After editing each file**, three cheap checks:
+
+- Does it compile / type-check?
+- Does it match the pattern its neighbours use?
+- Does it introduce an import cycle?
+
 ## Trace Field Tiers By Lane
 
 | Lane | Required trace on cap |
@@ -55,8 +77,89 @@ For the one assigned cell, confirm before starting (D1 — the orchestrator clai
 | `tiny` | one-line `outcome` |
 | `small` | `outcome`, `files_changed` |
 | `standard` | `outcome`, `files_changed`, `deviations`, `friction` when a trigger fired |
-| `high-risk` | all of the above (non-empty `files_changed` and `outcome` are enforced by the helper), plus spike-evidence links where the plan recorded constraints, plus `verification_evidence` |
-| any lane with `behavior_change: true` | `verification_evidence` is mandatory — `cap` refuses without it; pipe it via `--evidence-stdin` (no file written) |
+| `high-risk` | all of the above (non-empty `files_changed` and `outcome` are enforced by the helper), plus spike-evidence links where the plan recorded constraints |
+| any cell whose proof tier resolves to `red-first`, capping on the classic path | `verification_evidence` carrying `red_failure_evidence` is mandatory — `cap` refuses without it; pipe it via `--evidence-stdin` (no file written). On `--feature-verify-pending` the door is deferred to the feature verify, never waived |
+| `behavior_change: true` below the `red-first` tier | evidence is accepted, not demanded — `cap` no longer refuses without it. Capping with neither verify output nor evidence records `trace.proof: "unrecorded"` and warns; see "Absent proof is recorded, not forgiven" below |
+
+## Absent proof is recorded, not forgiven (worker-conformance D1/D12/D14)
+
+Two cap refusals were retired: the `behavior_change: true` door that demanded
+`verification_evidence`, and decision 0004's small+ door that refused a passing
+verify recorded with no output. Both caps now succeed. **You are no longer asked
+to author anything in order to pass a gate** — evidence is what the build emits
+(a red run, a verify run, `git show`), never prose you compose at cap time.
+
+The judgement did not soften. An assertion is still not evidence; it simply stops
+being your refusal and becomes a recorded absence:
+
+- Cap with **neither** real verify output **nor** `verification_evidence`, and the
+  helper stamps `trace.proof: "unrecorded"` on the cell (predicate
+  `cells.mjs:2231-2235`, stamped at `:2273`). The stderr warning that accompanies
+  it is lane-gated to `small`/`standard`/`high-risk` (`:2188-2190`) — on a `tiny`
+  cell the marker lands **silently**. Nothing tells you; the door still knows.
+- That marker arms the feature-boundary close-door alongside
+  `trace.feature_verify: "pending"` — `featureVerifyDebt` refuses to leave
+  `swarming` or run `scribing-run` until a green feature-verify record newer than
+  the newest owed cap exists (`state.mjs:2526-2548`). **No `gate_bypass` level
+  lifts it.**
+- D14: "unrecorded" needs **both** channels empty. A cell holding genuine
+  evidence — a `red_failure_evidence` that already passed the red-first door —
+  is never marked, even with empty `verify_output`.
+- Exempt: the explicit `--feature-verify-pending` path (it carries its own
+  marker) and a repo declaring `commands.verify: "none"`.
+
+So a silent cap is not a free cap. It moves the cost from your cell to the
+feature's door, where main pays it with one real green run.
+
+## What did NOT change (read this before assuming everything loosened)
+
+No `gate_bypass` level lifts any refusal below. Which path you cap on does
+matter, though, and the doctrine is honest about it: the doors marked
+**both paths** fire whatever you do, and the ones marked **classic path** are
+deferred — never waived — by `--feature-verify-pending`, because that flag hands
+their proof to the feature-level verify and stamps a marker the close-door reads.
+
+**Both paths:**
+
+- **Claim ownership** (`cells.mjs:1874`, `guardClaimOwnership`) — a cap from a
+  session that does not own the claim is refused. The cell is not yours to cap.
+- **The two proof paths stay exclusive** — `--feature-verify-pending` combined
+  with `verification_evidence` or with a recorded passing verify is refused
+  (`:1892`, `:1897`).
+- **A recorded passing verify** whenever you are NOT on the pending path
+  (`:1913-1917`) — cap without `trace.verify_passed === true` is refused, the
+  sole exception being a `verify: "none"` cell in a declared no-test repo
+  (`:1909-1911`). What was retired is the demand for *output alongside* the
+  pass, never the pass itself.
+- **Non-empty `files_changed`** on lanes `small`/`standard`/`high-risk`
+  (`:2191-2194`) — it asks what you touched, not for authored proof.
+- **An outcome summary** on `high-risk` (`:2197-2200`).
+- **A new test file on a `refactor`/`formatting` cell** — refused outright
+  (`:1990-1998`), and `new_suite_reason` can never rescue it. Needing a new
+  suite for a "refactor" means the cell is misclassified.
+- **A `NEEDS_REVISION` semantic-judge verdict** (`:1926-1931`) without an audited
+  `--override-judge` reason.
+
+**Classic path (deferred, not waived, by `--feature-verify-pending`):**
+
+- **Red-first** (`:2135`, `:2150-2168`): `red_failure_evidence` ≥80 chars,
+  non-duplicate, or an explicit `deliberate_exceptions` door. It fires wherever
+  `requiredProofTier` (`cells.mjs:163-186`) resolves to `red-first`:
+  `security`/`migration` in **every** lane, and `bugfix`/`behavior`/`api` at
+  lane `high-risk` (an undeclared `change_class` on a `behavior_change: true`
+  cell derives to `behavior` and lands here too). **Narrower than "high-risk,
+  all classes":** at `high-risk`, `refactor` and `formatting` still resolve to
+  `suite-green` and `test` still resolves to `targeted-green` — the lane alone
+  does not buy red-first.
+- **`new_suite_reason` ≥20 chars** for a genuinely new suite file (`:2014-2027`).
+- **Ratio ceiling** (`:2044-2060`): tiny/small warn above 3, standard/high-risk
+  refuse above 4 without a `ratio_waiver` ≥20 chars. On the pending path the
+  same overage is recorded as a visible warning instead — the waiver channel is
+  per-cell evidence, which that path refuses by construction.
+
+Deferral is not a discount: a pending cap carries `trace.feature_verify:
+"pending"`, and the feature cannot close until one real green feature verify
+answers for it.
 
 ## Friction Triggers (verbatim — record friction only when one fires)
 
@@ -71,7 +174,7 @@ One line per trigger, factual, in `--friction` (or the deviations file for multi
 
 ## verification_evidence Example
 
-Piped via `--evidence-stdin` on cap for any `behavior_change: true` cell (the evidence goes straight into `trace.verification_evidence` — **no file is written**):
+Piped via `--evidence-stdin` on cap wherever evidence is supplied — **mandatory at the `red-first` tier, accepted but never demanded below it** (the evidence goes straight into `trace.verification_evidence` — **no file is written**):
 
 ```bash
 node .bee/bin/bee.mjs cells cap --id <id> --files a,b --behavior-change --evidence-stdin <<'JSON'
@@ -93,7 +196,7 @@ The evidence object:
 
 Every field is honest or explicitly empty with a reason in `deliberate_exceptions`. Vague evidence here becomes a P1 finding in bee-reviewing — the work comes back.
 
-**`red_failure_evidence` is captured at cap time, not backfilled later (decision 0009).** For a `behavior_change` cell the helper *refuses to cap* unless the evidence names a "before": the prior behavior this change alters — a `git show <pre-change-commit>:<file>` extract, or a pre-change check that failed. If the surface is genuinely new (no prior behavior to characterize), say so in `deliberate_exceptions`. This is why the characterization is cheap to record now — the old state is one `git show` away while you hold the diff in context; recovering it after review means a whole extra evidence-only cell.
+**`red_failure_evidence` is captured at cap time, not backfilled later (decision 0009).** Wherever `requiredProofTier` resolves to `red-first` — the door is keyed on the tier, not on the `behavior_change` flag (`cells.mjs:2118`, `:2150`) — the helper *refuses to cap* unless the evidence names a "before": the prior behavior this change alters — a `git show <pre-change-commit>:<file>` extract, or a pre-change check that failed. If the surface is genuinely new (no prior behavior to characterize), say so in `deliberate_exceptions`. This is why the characterization is cheap to record now — the old state is one `git show` away while you hold the diff in context; recovering it after review means a whole extra evidence-only cell.
 
 **Scoped red-first (decision 8ef2bae6):** the red run that produces this "before" executes ONLY the test(s) this cell adds or changes — name the test file or filter in `tests_added_or_changed`, never the full configured suite. The full cell verify chain runs exactly once, at the end, right before cap; a full-suite run inside the red-first loop is the named waste this scopes away.
 
@@ -163,6 +266,7 @@ Classic/spot-use path (main-verifies D1) — the sanctioned default is the featu
 
 - Run the cell's verify command exactly, then record it **with its output** (decision 0004 — proof, not assertion):
   `node .bee/bin/bee.mjs cells verify --id <id> --command "<cmd>" --output "<what it printed>" --passed true|false` (or `--output-file <f>` for long output)
+  - **The recorded pass is still required; the output is no longer enforced** (worker-conformance D1). A cap on the classic path with no passing verify is refused outright (`cells.mjs:1913`), but a pass recorded with empty output no longer refuses on small+ lanes — it caps, warns, and marks `trace.proof: "unrecorded"`, which arms the feature close-door. An assertion is still not evidence; skipping the output does not save you the run, it just relocates the bill. See "Absent proof is recorded, not forgiven".
 - The `verify` field is the cell's **targeted** suite (seconds) — never the full configured `commands.verify` chain (D4, decision `e54878b1`). Run red-first, then green, and stop there: do **not** additionally run the full chain yourself. The orchestrator no longer re-runs it routinely either (main-verifies D4 retired the wave-close impacted run) — a fresh re-run happens only on a smell, and the feature's ONE proof event is the feature verify at final-slice close (`bee-swarming/references/swarming-reference.md`, "Feature verify at close, in full"). The full chain itself is CI-owned: no local baseline run before the first claim, and worktree merge gates on `commands.test` (impacted over the staged merge) instead of the full chain — session finish likewise runs `commands.test`, and the release flow runs the impacted suite locally then dispatches the CI full run (`gh workflow run CI --ref main`) right after the tag push, with red arriving back as a `verify-red` issue (`AGENTS.md`). Mid-iteration, run the level-1 impacted run (`run_verify --impacted-from-git --level 1` — direct edges only, seconds) if you need one; it is never owed by default.
 - **Proof-tier matrix (test-economy D1/D2).** How much proof a cap demands is no longer one uniform red-first rule for every `behavior_change` cell — it is derived from the cell's `change_class × lane`, resolved by `requiredProofTier` (`packages/bee/lib/cells.mjs`):
 

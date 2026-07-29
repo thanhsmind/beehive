@@ -75,9 +75,11 @@ its own file, drop this section and point to it instead.>
 <one of the bodies below, by mode>
 
 ## Test matrix
-<edge dimensions that apply (see edge-dimensions.md), at lane depth:
-tiny/small = the 2–3 dimensions that bite; standard = one pass over all 12;
-high-risk = probes written out per dimension>
+<at lane depth: standard and below = the triad (happy path, edge cases, error
+paths) at its smallest demonstrating size — edge-dimensions.md is NOT the checklist here;
+high-risk/hard-gate = the 12 dimensions of edge-dimensions.md, probes written out
+per applicable dimension. Whatever the depth, the trailing test cell judges
+existing coverage first and authors only what is not already pinned.>
 
 ## Out of scope
 <explicitly not solved; deferred ideas stay deferred>
@@ -289,4 +291,24 @@ and both vocabularies. Dedupe overlapping findings, then synthesize into two buc
 
 ## Slice-tail test batching in full
 
-**One trailing test cell per slice (slice-tail-test-batching P2, spec #80/#85).** Whenever the slice holds ≥1 `change_class: 'behavior'`/`'api'` cell **that touches code** — instruction/knowledge text (`skills/`, `docs/`, plans, `.md`) is not code and owes no test — emit **exactly one** `change_class: 'test'` cell, last, with `deps` naming **every** implementation cell of the slice. Its `action`: the slice's **net behavior** — happy path, edge cases, error paths — over the declared surfaces, never per-cell internals; `verify` is the targeted suite over the slice's scope. Implementation cells no longer author tests (they cap on existing-green), so a code-touching slice with no test cell is a planning defect. Test economy relocates here unchanged: D5 read-first applies **at this cell**, D3's `new_suite_reason` still governs new files, and D3's ratio ceilings compute against the slice's **aggregate** source delta, not per cell. `bugfix` and `high-risk` cells keep per-cell red-first/repro-first and are not batched.
+**One trailing test cell per slice (slice-tail-test-batching P2, spec #80/#85).** Whenever the slice holds ≥1 `change_class: 'behavior'`/`'api'` cell **that touches code** — instruction/knowledge text (`skills/`, `docs/`, plans, `.md`) is not code and owes no test — emit **exactly one** `change_class: 'test'` cell, last, with `deps` naming **every** implementation cell of the slice. Its `action` covers the slice's **net behavior** over the declared surfaces, never per-cell internals; `verify` is the targeted suite over the slice's scope. Implementation cells no longer author tests (they cap on existing-green), so a code-touching slice with no test cell is a planning defect. The cell is unconditional. **What it is obliged to do is judge, not author.**
+
+**Step 1 — the coverage judgment (D4).** Before a single row is written, the cell cites the **nearest existing tests by `file:line`** (test-economy D5 read-first applies at this cell) and states, per acceptance criterion of the slice, whether those tests already cover it. Three outcomes, all legitimate:
+
+| Verdict | What the cell does | How it caps |
+|---|---|---|
+| covered | authors nothing | runs the cited tests green, records **"already covered, no new rows"** |
+| partly covered | authors **only** the uncovered gap | runs the targeted suite green over old rows + new |
+| not covered | authors the triad below at its smallest demonstrating size | runs the targeted suite green |
+
+**A test cell that authors no test is NOT a defect.** The defect the floor exists to catch is a slice whose net behavior nobody ever asked about — not a slice that asked and found the answer already pinned. Authoring rows that duplicate existing coverage is precisely the waste this rule exists to stop: duplicate rows cost review attention, rot independently of the rows they shadow, and buy no proof the suite did not already hold. Write the judgment down in the cell's report even when the verdict is "covered" — the citation *is* the deliverable in that case.
+
+**Worked instance.** `docs/history/worker-conformance/reports/wc-3.md` is the rule's first real run: it graded the slice's net-behavior story part by part against `file:line` anchors, authored **zero rows against a "covered" line**, and closed only the one genuinely naked case — a single debt door never crossed under any bypass value — with four generated rows. Its step-1 table is the shape to copy.
+
+**Step 2 — shape, only for what is actually owed.** At lane `standard` and below the shape is the **triad**: happy path, edge cases, error paths — the smallest set that demonstrates each, not a matrix to fill. `references/edge-dimensions.md`'s twelve dimensions are **not** the default checklist here; they apply only at `high-risk` and hard-gate work. Reason, plainly: read as a checklist to fill, twelve dimensions generate volume — the list answers "what could I write?" when the standard-lane question is "what is not yet proven?".
+
+**Unchanged by all of the above (D6).** The triad is the *shape* guide; the ratio ceiling is the *volume* brake, and two brakes on one axis would contradict. So: D3's ratio ceilings still compute against the slice's **aggregate** source delta, not per cell; `new_suite_reason` still governs a genuinely new suite file; a new test file on a `refactor`/`formatting` cell is still refused outright. No numeric per-group cap is added.
+
+**Doctrine vs machine — a real gap, recorded not fixed (D13).** `bugfix` and `high-risk` cells keep per-cell red-first/repro-first and are not batched — but the machine does not know that exemption. `testCellDebt` (`packages/bee/lib/state.mjs`) reads **no lane at all**. It refuses a feature close while the feature has capped code-touching `behavior`/`api` cells — and a cell whose recorded file list is empty or missing counts as code-touching — and no `change_class: 'test'` cell has **capped green with recorded proof**. Two refusal kinds, not one: *missing* (no test cell exists; a **dropped** test cell counts as none) and *not-green* (a test cell exists but is still open/claimed/blocked, capped red, or capped with `trace.proof: "unrecorded"`). Neither kind is waivable — the test-cell door sits in the unwaivable feature-debt set, so no `gate_bypass` level, `total` included, lifts it.
+
+A `high-risk` feature planned strictly by the prose above would therefore be unable to leave `swarming`. Until the predicate learns the exemption: plan **one** trailing test cell on such a feature too, and see it capped green with real recorded output — creating the cell is not what satisfies the door. Its coverage judgment will usually find the per-cell red-first proof already covers most of the story, which is the correct and cheap outcome. Do not work around the predicate, and do not silently drop the cell.

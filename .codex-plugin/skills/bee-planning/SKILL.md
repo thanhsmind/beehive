@@ -73,7 +73,9 @@ Never rewrite `plan.md` — frozen; prep only creates cells, current slice only,
 
 **Walking skeleton first.** Any user-visible surface (UI/API/CLI) → slice 1 is the thinnest end-to-end runnable path, one happy path, real behavior, no stubs; each slice's done-report owes one artifact proving it runs. Full rule: `bee-hive/references/routing-and-contracts.md` ("Ship visibility").
 
-**One trailing test cell per slice.** Any slice with ≥1 code-touching `behavior`/`api` cell (instruction/knowledge text owes no test) emits exactly **one** `change_class: 'test'` cell, last, `deps` naming every implementation cell. Its `action` is the slice's **net behavior** — happy path, edges, errors, never per-cell internals. `bugfix`/`high-risk` stay per-cell red-first, never batched. Full: `references/planning-reference.md` ("Slice-tail test batching in full").
+**One trailing test cell per slice — coverage judgment first, authoring second.** Any slice with ≥1 code-touching `behavior`/`api` cell (instruction/knowledge text owes no test) emits exactly **one** `change_class: 'test'` cell, last, `deps` naming every implementation cell: a code-touching slice with no test cell is a planning defect. Its **first mandated step is a coverage judgment, not authoring** — cite the nearest existing tests by `file:line` and state whether they already cover the slice's acceptance criteria. Covered → the cell caps by running those tests green and recording "already covered, no new rows". Partly covered → it authors **only** the uncovered gap. **A test cell that authors no test is not a defect**; authoring rows that duplicate existing coverage is the waste this rule exists to stop. Worked instance: `docs/history/worker-conformance/reports/wc-3.md` — the judgment found all but one part of the story already pinned and closed only the real gap. Where rows are genuinely owed, the shape at `standard` and below is the triad — happy path, edge cases, error paths — at its smallest demonstrating size; `references/edge-dimensions.md` applies only at `high-risk`/hard-gate. `bugfix`/`high-risk` stay per-cell red-first, never batched. Full: `references/planning-reference.md` ("Slice-tail test batching in full").
+
+**Doctrine vs machine, recorded not fixed:** "never batched" above permits what the machine refuses. `testCellDebt` (`packages/bee/lib/state.mjs`) has **no lane exemption** — it refuses a feature close while capped code-touching `behavior`/`api` cells exist (an unrecorded file list counts as code-touching) and no `change_class: 'test'` cell has **capped green with recorded proof**: none existing at all — dropped counts as none — is one refusal kind; one left open, capped red, or capped without recorded proof refuses just the same, and no `gate_bypass` level lifts either. Until the predicate learns the exemption, plan one trailing test cell even on a `high-risk` feature whose cells each carry per-cell red-first proof, and let it cap green; that cell's coverage judgment is usually the whole of its work.
 
 Verify is scoped, never the full chain: `references/planning-reference.md` ("Verify scoping"). Hand off, every lane: `node .bee/bin/bee.mjs state set --owner planning --phase swarming --next-action "Invoke bee-swarming."` — the merged gate lives entirely inside phase `planning`; `validating` is no longer a phase-enum value.
 
@@ -96,7 +98,7 @@ Violating the letter of the rules is violating the spirit of the rules.
 | File | When to load |
 |---|---|
 | `references/planning-reference.md` | Templates, fan-out, cell quality, full bootstrap/discovery/gate/verify protocols |
-| `references/edge-dimensions.md` | The 12 edge-case test-matrix dimensions |
+| `references/edge-dimensions.md` | The 12 edge-case test-matrix dimensions — `high-risk`/hard-gate only; `standard` and below use the triad |
 | `references/provenance.md` | Decision IDs + rationale for every body rule |
 
 Plan shaped, current-slice cells prepared. Invoke bee-swarming.

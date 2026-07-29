@@ -1,0 +1,86 @@
+{
+  "id": "wc-6",
+  "feature": "worker-conformance",
+  "title": "Make asking whether tests are needed the required step, not writing them",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "wc-4"
+  ],
+  "decisions": [
+    "D4",
+    "D5",
+    "D6",
+    "D13"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "files": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-planning/references/edge-dimensions.md",
+    "skills/bee-planning/references/provenance.md"
+  ],
+  "read_first": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "docs/history/worker-conformance/CONTEXT.md",
+    "docs/history/worker-conformance/reports/wc-3.md"
+  ],
+  "action": "Turn planning's trailing test cell from an authoring obligation into a judgement. Edit only the bee-planning skill. Three jobs. FIRST, per D4: the trailing test cell stays unconditional — 'a code-touching slice with no test cell is a planning defect' survives verbatim — but its FIRST mandated step becomes a coverage judgment, not authoring. Write that into SKILL.md:76 and the expanded section at references/planning-reference.md:295-297: the cell cites the nearest existing tests by file:line and states whether they already cover the slice's acceptance criteria; covered means it caps by running those tests green and recording 'already covered, no new rows'; partly covered means it authors only the uncovered gap. State explicitly that a test cell which authors no test is NOT a defect, and that authoring rows which duplicate existing coverage is the waste this rule exists to stop. There is a worked instance to point at: docs/history/worker-conformance/reports/wc-3.md, where the judgment found four of five parts already pinned and closed only the real gap. SECOND, per D5: the test shape at lane standard and below is the triad — happy path, edge cases, error paths — at its smallest demonstrating size, and references/edge-dimensions.md's twelve dimensions stop being the default checklist at standard and apply only at high-risk and hard-gate work. Say why in one line: read as a checklist to fill, twelve dimensions generate volume. Add a short note at the top of edge-dimensions.md itself naming its new scope, so nobody reaches it by accident from a standard lane. THIRD, per D13, record the doctrine-versus-machine gap honestly where planners will meet it: SKILL.md's 'bugfix/high-risk stay per-cell red-first, never batched' permits what testCellDebt refuses — that predicate has no lane exemption and will refuse a feature close that has capped code-touching behavior or api cells and no test cell at all. Until the predicate learns the exemption, a high-risk feature still owes one trailing test cell. Do not fix the predicate here. Per D6 change nothing about the ratio ceiling or the new-suite rules — the triad is the shape guide, the ratio ceiling is the volume brake, and two brakes on one axis would contradict. Update references/provenance.md with the decision ids. Do not touch source. Regen is deferred to the orchestrator at wave close (wave-barrier).",
+  "must_haves": {
+    "truths": [
+      "The trailing test cell's first mandated step is a coverage judgment with file:line citations",
+      "The text says plainly that a test cell authoring no test is not a defect",
+      "The triad is the stated shape at standard and below, and edge-dimensions.md is scoped to high-risk both where it is referenced and at the top of the file itself",
+      "The doctrine-versus-machine gap around testCellDebt is recorded where a planner will meet it",
+      "The ratio ceiling and new-suite rules are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-planning/references/planning-reference.md",
+        "substantive": "the expanded trailing-test-cell section rewritten around the coverage judgment, with the triad and the scoped edge dimensions"
+      },
+      {
+        "path": "skills/bee-planning/references/edge-dimensions.md",
+        "substantive": "a scope note naming high-risk and hard-gate as its only readers"
+      }
+    ],
+    "key_links": [
+      "the coverage-judgment rule points at the worked instance in docs/history/worker-conformance/reports/wc-3.md"
+    ],
+    "prohibitions": [
+      "No source changes",
+      "No edits to any skill other than bee-planning",
+      "Do not weaken the trailing test cell into an optional artifact",
+      "Do not change the ratio ceiling or the new-suite rules",
+      "Do not run the regen scripts — the orchestrator owes them at wave close"
+    ]
+  },
+  "verify": "node packages/bee/tests/test_misc.mjs",
+  "behavior_change": false,
+  "change_class": "behavior",
+  "trace": {
+    "worker": "Tim",
+    "outcome": "Trailing test cell's first mandated step is now a coverage judgment with file:line citations, not authoring (D4); the cell stays unconditional and a test cell that authors no test is stated to be no defect, pointing at the wc-3 worked instance. Triad is the shape at standard and below; edge-dimensions.md scoped to high-risk/hard-gate at every call site and at the top of the file (D5). Ratio ceiling and new-suite rules untouched (D6). testCellDebt doctrine-vs-machine gap recorded in SKILL.md and planning-reference.md, predicate unfixed (D13). Advisor fable corrected the machine claim (two refusal kinds, not one), the wc-3 count, and a missing tiny/small rung; all adopted. Instruction text only, no source, no regen.",
+    "files_changed": [
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-planning/references/edge-dimensions.md",
+      "skills/bee-planning/references/provenance.md",
+      "docs/history/worker-conformance/reports/wc-6.md",
+      "docs/history/worker-conformance/reports/wc-6-consult.md"
+    ],
+    "deviations": [],
+    "friction": "Advisor dispatch was denied once by bee-model-guard: the dispatch brief said 'model param fable' and I anchored [bee-tier: review], but fable is configured as the 'advisor' tier, so tier and param disagreed. Cost one round trip. A dispatch brief naming an advisor should name its tier, not just its model.",
+    "capped_at": "2026-07-29T11:29:05.920Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "389dabf8-013e-4a66-b307-106a4a97dd94",
+    "claimed_at": "2026-07-29T11:21:27.161Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}
