@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-// test_agents_budget.mjs — D13 (codex-native-runtime-v2, cell cnr2-15):
-// AGENTS.md stays under a ratcheted byte budget, measured in UTF-8 bytes, for
-// both the human-edited template source and this repo's rendered root file.
-// Also guards the render contract itself: exactly one ordered BEE:START /
-// BEE:END marker pair in root AGENTS.md, and the managed block between those
-// markers must be byte-identical to the template it was rendered from — a
-// silent hand-edit or a stale render would otherwise drift undetected.
+// test_agents_budget.mjs — guards AGENTS.md by content, not size (see
+// docs/history/budget-fence-removal/CONTEXT.md D1, D5): exactly one ordered
+// BEE:START / BEE:END marker pair in root AGENTS.md, the managed block
+// byte-identical to the template it was rendered from, and every numbered
+// critical rule present with no gaps or duplicates — a silent hand-edit, a
+// stale render, or a dropped rule would otherwise go unnoticed.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -20,33 +19,20 @@ const ROOT_AGENTS_PATH = path.join(REPO_ROOT, "AGENTS.md");
 const MARKER_START = "<!-- BEE:START -->";
 const MARKER_END = "<!-- BEE:END -->";
 
-// agents-block-diet abd-2 — the fence is ratcheted onto the achieved size.
-//
-// It used to be 20 KiB / 18 KiB warn, set when the block was ~16.2 KB. The
-// diet cut the template to 12,573 B and the render to 12,692 B, which left
-// the old fence ~8 KB above reality: a budget that far above the real file
-// protects nothing, because the file can double before it ever bites, and
-// the whole point of the cut was to stop paying those bytes every session
-// and after every compaction.
-//
-// New numbers, measured from the achieved render (the larger of the two, so
-// one pair of thresholds governs both targets):
-//   hard fail 15,000 B — ~2.3 KB of headroom, room for several ordinary rule
-//                        additions before anyone has to think about size.
-//   warn       14,000 B — ~1.3 KB, the early signal that the next addition
-//                        should come with a corresponding cut.
-// The fence guards REGROWTH, not growth: it is deliberately loose enough
-// that adding a genuine rule is never blocked, and tight enough that drifting
-// back to 16 KB is impossible without someone editing this constant on
-// purpose — which is exactly the moment the decision deserves to be visible.
-const HARD_FAIL_BYTES = 15000;
-const WARN_BYTES = 14000;
+// budget-fence-removal D1/D5 — AGENTS.md carries no enforced size ceiling.
+// A size number is never a standing law here (D1): a diet is a deliberate
+// one-off pass, not a permanent gate. What this suite still enforces is
+// meaning: the render contract below (one ordered marker pair, byte-
+// identical managed block) and the critical-rule roster further down (every
+// rule present, none dropped, the terminal-home rules keep their full
+// text). Those checks catch a silent hand-edit, a stale render, or a
+// vanished rule — the failure modes that matter, independent of length.
 
 // The 17 numbered critical rules, and the four whose FULL text is terminal
-// here (bee-hive/SKILL.md line "Rules 2-4, 13 appear in full in AGENTS.md"
-// and its rule 13 pointing at "AGENTS.md Guardrails"). A future diet that
-// answers one of those defer-backs with a defer-out builds a pointer loop in
-// which the rule's full text lives nowhere at all.
+// here (bee-hive/SKILL.md line "Rules 2-4, 12 are in `AGENTS.md`
+// (auto-loaded)" and its rule 12 pointing at "AGENTS.md Guardrails"). A
+// future diet that answers one of those defer-backs with a defer-out builds a
+// pointer loop in which the rule's full text lives nowhere at all.
 //
 // validation-diet vd-10 — rule 16 (evidence doctrine, D9) was appended after
 // rule 15 rather than inserted mid-list, so TERMINAL_HOME_RULES' indices
@@ -72,48 +58,12 @@ function check(name, fn) {
   }
 }
 
-function utf8Bytes(text) {
-  return Buffer.byteLength(text, "utf8");
-}
-
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
 const templateText = fs.readFileSync(TEMPLATE_PATH, "utf8");
 const rootText = fs.readFileSync(ROOT_AGENTS_PATH, "utf8");
-
-const templateBytes = utf8Bytes(templateText);
-const rootBytes = utf8Bytes(rootText);
-
-// ─── dual-target byte budget ───────────────────────────────────────────────
-
-check("template block stays under the ratcheted hard budget", () => {
-  assert(
-    templateBytes < HARD_FAIL_BYTES,
-    `packages/bee/AGENTS.block.md is ${templateBytes} UTF-8 bytes, ` +
-      `at or over the ${HARD_FAIL_BYTES}-byte hard budget`,
-  );
-  if (templateBytes >= WARN_BYTES) {
-    console.warn(
-      `WARN template block is ${templateBytes} bytes (warn threshold ${WARN_BYTES}, ` +
-        `hard budget ${HARD_FAIL_BYTES})`,
-    );
-  }
-});
-
-check("rendered root AGENTS.md stays under the ratcheted hard budget", () => {
-  assert(
-    rootBytes < HARD_FAIL_BYTES,
-    `AGENTS.md is ${rootBytes} UTF-8 bytes, at or over the ${HARD_FAIL_BYTES}-byte hard budget`,
-  );
-  if (rootBytes >= WARN_BYTES) {
-    console.warn(
-      `WARN rendered AGENTS.md is ${rootBytes} bytes (warn threshold ${WARN_BYTES}, ` +
-        `hard budget ${HARD_FAIL_BYTES})`,
-    );
-  }
-});
 
 // ─── marker-pair + byte-identical render ──────────────────────────────────
 
@@ -145,10 +95,10 @@ check("managed block in AGENTS.md renders byte-identically to the template", () 
 });
 
 // ─── structural guard: no rule may vanish in a future diet ────────────────
-// The byte fence above rewards cutting. Nothing in it distinguishes "cut 400
-// bytes of restated elaboration" from "cut critical rule 7", so the fence on
-// its own quietly incentivises the wrong cut. These two checks are what make
-// the budget safe to enforce.
+// A diet compresses wording; it must never drop a rule outright. Nothing
+// else in this suite distinguishes "cut 400 bytes of restated elaboration"
+// from "cut critical rule 7" — these two checks are what catch that
+// specific failure, whatever the surrounding text's length.
 
 // The rules live under `## Critical rules`, up to the next `##` heading —
 // scoped so that numbered lists elsewhere in the block (Startup, Session
@@ -230,7 +180,4 @@ check("the terminal-home rules and the Guardrails heading survive — a defer-ou
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
-console.log(
-  `sizes: template=${templateBytes}B root=${rootBytes}B (warn>=${WARN_BYTES}B, fail>=${HARD_FAIL_BYTES}B)`,
-);
 if (failed > 0) process.exit(1);
