@@ -75,10 +75,17 @@ import { validateJudgeVerdict, deriveModelIndependence } from './judge.mjs';
 import { withStoreLock, acquireStoreLockOnceSync } from './lock.mjs';
 // derived-check-hardening E1: the cap-time impact-registry cross-check below
 // reuses the SAME derivation scripts/impact_registry.mjs already computes
-// (queryRegistry/normalizeQueryPath) rather than re-deriving file->suite
-// relatedness here. scripts/impact_registry.mjs imports only node builtins
-// (fs/path/url), so this creates no import cycle back into lib/.
-import { queryRegistry, normalizeQueryPath } from '../../../scripts/impact_registry.mjs';
+// (queryRegistry) rather than re-deriving file->suite relatedness here.
+// dch-8: NOT a static top-level import — scripts/ is a sibling of lib/'s
+// package root, not lib/ itself, so a fixture that vendors only
+// .bee/bin/lib/*.mjs (e.g. test_write_guard.mjs's copyLib()) has no
+// scripts/ directory at all. A static import of a missing module fails
+// the whole module load with ERR_MODULE_NOT_FOUND before any try/catch in
+// this file can run, which silently disabled the caller's fail-open path.
+// The import is done lazily with `await import(...)` inside the guarded
+// try block right where it's used (below), so an absent module resolves
+// to the SAME silent skip E1 already requires for an absent or malformed
+// registry file.
 
 export const LANES = ['tiny', 'small', 'standard', 'high-risk', 'spike'];
 
@@ -1829,7 +1836,11 @@ export async function capCell(
   } = {},
 ) {
   const overrideReason = typeof overrideJudge === 'string' ? overrideJudge.trim() : '';
-  const saved = await withStoreLock(root, `cells:${id}`, () => {
+  // dch-8: async so the E1 impact-registry cross-check below can `await
+  // import(...)` its optional dependency lazily instead of a static
+  // top-level import — withStoreLock already does `return await fn()`, so
+  // an async callback here changes nothing about the lock's semantics.
+  const saved = await withStoreLock(root, `cells:${id}`, async () => {
     assertNotArchived(root, 'capCell', id); // hardening-1: refuse before ever reading/writing
     const cell = readCell(root, id);
     if (!cell) throw new Error(`capCell: cell "${id}" not found.`);
@@ -2035,16 +2046,19 @@ export async function capCell(
     // nobody reads) suites for `cell.files`. LOUD, never a refusal: a
     // refusal on this door would gate every future cap on registry
     // freshness, so any returned suite missing from `cell.verify` is only
-    // named on stderr. Reuses queryRegistry/normalizeQueryPath verbatim (see
-    // the import above) — no new derivation logic here. A missing,
-    // unreadable, or malformed registry is a silent skip: this runs on
-    // EVERY cap, so it must never throw.
+    // named on stderr. Reuses queryRegistry verbatim (see the note above) —
+    // no new derivation logic here. dch-8: the module itself is imported
+    // lazily, inside this same try, so a vendored-lib-only fixture with no
+    // sibling scripts/ directory hits the catch below exactly like a
+    // missing, unreadable, or malformed registry FILE — this runs on EVERY
+    // cap, so it must never throw either way.
     let impactWarning = null;
     try {
       const cellFiles = Array.isArray(cell.files) ? cell.files : [];
       if (cellFiles.length > 0) {
         const registryPath = path.join(root, 'scripts', 'impact-registry.json');
         const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+        const { queryRegistry } = await import('../../../scripts/impact_registry.mjs');
         const { mappedSuites } = queryRegistry(registry, cellFiles, { level: 1 });
         const verifyText = typeof cell.verify === 'string' ? cell.verify : '';
         const missingSuites = mappedSuites.filter((suite) => !verifyText.includes(suite));
@@ -2054,7 +2068,9 @@ export async function capCell(
         }
       }
     } catch {
-      // Missing, unreadable, or malformed registry — silent skip (E1: never a throw).
+      // Missing, unreadable, or malformed registry FILE, or the registry
+      // MODULE itself being absent (vendored-lib-only fixture) — either way
+      // a silent skip (E1: never a throw).
       impactWarning = null;
     }
     // Decision 0009, NARROWED by test-economy D2: a behavior_change cell must
