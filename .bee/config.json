@@ -17,10 +17,7 @@
   "models": {
     "claude": {
       "extraction": "haiku",
-      "generation": {
-        "model": "sonnet",
-        "effort": "medium"
-      },
+      "generation": "opus-4-5-20251101",
       "review": "opus",
       "advisor": "fable"
     },

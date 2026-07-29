@@ -15,7 +15,7 @@
     },
     {
       "path": ".bee/bin/lib/cells.mjs",
-      "sha256": "d573a76acf0fdf14188377c0032cfa0b6b359895c93d99ed775e16389e87acec",
+      "sha256": "f4e432d941c7384490f12324af3922fc03a6dc73ba36e9416e445d56d5e12591",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -233,7 +233,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "a333468f85193d5ce5130b2ef26e9e7f2a39e17e11b212a7f0d9e61e0e04d6b5",
+      "sha256": "3824179d49174ce22d0597b7207db1895f845136f387b97eb69ca3858dad21d8",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -919,7 +919,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-xia/references/research-brief-template.md",
-      "sha256": "97e1f321795d864d7144dbede52ad5bfb1483878fcecd8248b8889f5f9af6e0c",
+      "sha256": "88d0b355cb47d631900e97251cad08e3ef06ae8ee5ce043f36ca51d13f3f751e",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-xia/references/research-brief-template.md"
@@ -947,7 +947,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "0ea9b75909d8c3a32724daec8fba1cce2edf262e85ecd1edcb41cc7e6aa6639c",
+      "sha256": "d71ce4709c89ba46284945ca098528a1e55c68e22b6fa1cb16d1e9dccc1c55e6",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1633,7 +1633,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-xia/references/research-brief-template.md",
-      "sha256": "97e1f321795d864d7144dbede52ad5bfb1483878fcecd8248b8889f5f9af6e0c",
+      "sha256": "88d0b355cb47d631900e97251cad08e3ef06ae8ee5ce043f36ca51d13f3f751e",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-xia/references/research-brief-template.md"
@@ -1794,14 +1794,14 @@
     },
     {
       "path": "packages/bee/hooks/test_model_guard.mjs",
-      "sha256": "4b7720bacb7f2cbe0e93fd27b0ac4cb1e5e8dbda5abb4f14f09dd995677691b4",
+      "sha256": "cd70cb7a4bd58bd8ebe8f74c7165080c42aa0439d65fab7733ee3d524d640b48",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/test_model_guard.mjs"
     },
     {
       "path": "packages/bee/hooks/test_write_guard.mjs",
-      "sha256": "9da9925265cae7147f1f51846e896d8986814c78b579acc3a76982db628aa1ad",
+      "sha256": "c4bd9db8f08c61c4a1b68fc6dfa8d7eb65e0a131e4df19177909ca4c041705a3",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/test_write_guard.mjs"
@@ -1829,7 +1829,7 @@
     },
     {
       "path": "packages/bee/lib/cells.mjs",
-      "sha256": "d573a76acf0fdf14188377c0032cfa0b6b359895c93d99ed775e16389e87acec",
+      "sha256": "f4e432d941c7384490f12324af3922fc03a6dc73ba36e9416e445d56d5e12591",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/cells.mjs"
@@ -2165,7 +2165,7 @@
     },
     {
       "path": "packages/bee/tests/test_cells.mjs",
-      "sha256": "c2e3785831704c30d4748f4eee5462bf762d90a24a3fdedda04ef6c2369176e7",
+      "sha256": "37661f2d441717d16d077da4b1b5686109904f6f64d96e56d033d9de233b1535",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_cells.mjs"
@@ -3078,7 +3078,7 @@
     },
     {
       "path": "skills/bee-xia/references/research-brief-template.md",
-      "sha256": "97e1f321795d864d7144dbede52ad5bfb1483878fcecd8248b8889f5f9af6e0c",
+      "sha256": "88d0b355cb47d631900e97251cad08e3ef06ae8ee5ce043f36ca51d13f3f751e",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-xia/references/research-brief-template.md"

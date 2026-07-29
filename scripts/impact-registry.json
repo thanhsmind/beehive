@@ -1618,7 +1618,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/lib/command-registry.mjs": {
@@ -1721,7 +1722,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/lib/dispatch-guard.mjs": {
@@ -1867,6 +1869,7 @@
         "scripts/tests/test_skill_render.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs",
         "scripts/tests/test_worktree_holds.mjs"
       ]
     },
@@ -2092,7 +2095,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/lib/lock.mjs": {
@@ -2154,7 +2158,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/lib/path-identity.mjs": {
@@ -2205,7 +2210,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/lib/perf.mjs": {
@@ -2295,7 +2301,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/lib/reviews.mjs": {
@@ -2415,7 +2422,8 @@
         "scripts/okf_specs_fence.mjs",
         "scripts/okf_specs_fence.mjs --selftest",
         "scripts/tests/test_compact_capsule.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ],
       "all": [
         "packages/bee/scripts/test_plugin_distribution.mjs",
@@ -2455,7 +2463,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/lib/validate-args.mjs": {
@@ -2520,7 +2529,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/lib/workspace-store.mjs": {
@@ -2572,7 +2582,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/lib/worktree-holds.mjs": {
@@ -2622,7 +2633,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/lib/worktree-store.mjs": {
@@ -2674,7 +2686,8 @@
         "scripts/tests/test_render_race.mjs",
         "scripts/tests/test_ship_visibility.mjs",
         "scripts/tests/test_skill_render.mjs",
-        "scripts/tests/test_state_projection_race.mjs"
+        "scripts/tests/test_state_projection_race.mjs",
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "packages/bee/scripts/onboard_bee.mjs": {
@@ -3063,11 +3076,54 @@
         "scripts/tests/test_impact_registry.mjs"
       ],
       "all": [
+        ".bee/bin/bee.mjs knowledge check",
+        ".bee/bin/bee.mjs knowledge index --check",
+        "packages/bee/tests/test_backlog_capture.mjs",
+        "packages/bee/tests/test_bee_cli.mjs",
+        "packages/bee/tests/test_bundle_mode.mjs",
+        "packages/bee/tests/test_cells.mjs",
+        "packages/bee/tests/test_cli_cells.mjs",
+        "packages/bee/tests/test_cli_state.mjs",
+        "packages/bee/tests/test_contention_status.mjs",
+        "packages/bee/tests/test_guards.mjs",
+        "packages/bee/tests/test_knowledge.mjs",
+        "packages/bee/tests/test_misc.mjs",
+        "packages/bee/tests/test_recovery.mjs",
+        "packages/bee/tests/test_reviews.mjs",
+        "packages/bee/tests/test_scratch.mjs",
+        "packages/bee/tests/test_state.mjs",
+        "scripts/okf_migrate.mjs --check advisor-protocol",
+        "scripts/okf_migrate.mjs --check decision-memory",
+        "scripts/okf_migrate.mjs --check doctrine-layer",
+        "scripts/okf_migrate.mjs --check feedback-digest",
+        "scripts/okf_migrate.mjs --check hook-runtime",
+        "scripts/okf_migrate.mjs --check okf-profile",
+        "scripts/okf_migrate.mjs --check onboarding",
+        "scripts/okf_migrate.mjs --check performance-log",
+        "scripts/okf_migrate.mjs --check verify-pipeline",
+        "scripts/okf_migrate.mjs --check workflow-state",
+        "scripts/okf_migrate.mjs --check worktree-parallelism",
+        "scripts/okf_migrate.mjs --check-patterns",
         "scripts/tests/test_check_filter.mjs",
+        "scripts/tests/test_claim_race.mjs",
+        "scripts/tests/test_compact_capsule.mjs",
+        "scripts/tests/test_compact_verbs.mjs",
+        "scripts/tests/test_compaction_advisories.mjs",
+        "scripts/tests/test_compaction_module.mjs",
+        "scripts/tests/test_conformance.mjs",
+        "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_impact_registry.mjs",
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_okf_pins.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
+        "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_verify_manifest.mjs",
-        "scripts/tests/test_verify_timeout.mjs"
+        "scripts/tests/test_verify_timeout.mjs",
+        "scripts/tests/test_worktree_cli.mjs",
+        "scripts/tests/test_worktree_companion.mjs",
+        "scripts/tests/test_worktree_holds.mjs",
+        "scripts/tests/test_worktree_merge_queue.mjs"
       ]
     },
     "scripts/install.ps1": {
@@ -3324,11 +3380,54 @@
         "scripts/tests/test_verify_timeout.mjs"
       ],
       "all": [
+        ".bee/bin/bee.mjs knowledge check",
+        ".bee/bin/bee.mjs knowledge index --check",
+        "packages/bee/tests/test_backlog_capture.mjs",
+        "packages/bee/tests/test_bee_cli.mjs",
+        "packages/bee/tests/test_bundle_mode.mjs",
+        "packages/bee/tests/test_cells.mjs",
+        "packages/bee/tests/test_cli_cells.mjs",
+        "packages/bee/tests/test_cli_state.mjs",
+        "packages/bee/tests/test_contention_status.mjs",
+        "packages/bee/tests/test_guards.mjs",
+        "packages/bee/tests/test_knowledge.mjs",
+        "packages/bee/tests/test_misc.mjs",
+        "packages/bee/tests/test_recovery.mjs",
+        "packages/bee/tests/test_reviews.mjs",
+        "packages/bee/tests/test_scratch.mjs",
+        "packages/bee/tests/test_state.mjs",
+        "scripts/okf_migrate.mjs --check advisor-protocol",
+        "scripts/okf_migrate.mjs --check decision-memory",
+        "scripts/okf_migrate.mjs --check doctrine-layer",
+        "scripts/okf_migrate.mjs --check feedback-digest",
+        "scripts/okf_migrate.mjs --check hook-runtime",
+        "scripts/okf_migrate.mjs --check okf-profile",
+        "scripts/okf_migrate.mjs --check onboarding",
+        "scripts/okf_migrate.mjs --check performance-log",
+        "scripts/okf_migrate.mjs --check verify-pipeline",
+        "scripts/okf_migrate.mjs --check workflow-state",
+        "scripts/okf_migrate.mjs --check worktree-parallelism",
+        "scripts/okf_migrate.mjs --check-patterns",
         "scripts/tests/test_check_filter.mjs",
+        "scripts/tests/test_claim_race.mjs",
+        "scripts/tests/test_compact_capsule.mjs",
+        "scripts/tests/test_compact_verbs.mjs",
+        "scripts/tests/test_compaction_advisories.mjs",
+        "scripts/tests/test_compaction_module.mjs",
+        "scripts/tests/test_conformance.mjs",
+        "scripts/tests/test_dispatch_prepare.mjs",
         "scripts/tests/test_impact_registry.mjs",
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_okf_pins.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
+        "scripts/tests/test_ship_visibility.mjs",
+        "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_verify_manifest.mjs",
-        "scripts/tests/test_verify_timeout.mjs"
+        "scripts/tests/test_verify_timeout.mjs",
+        "scripts/tests/test_worktree_cli.mjs",
+        "scripts/tests/test_worktree_companion.mjs",
+        "scripts/tests/test_worktree_holds.mjs",
+        "scripts/tests/test_worktree_merge_queue.mjs"
       ]
     },
     "scripts/skill_budget_fence.mjs": {
@@ -3589,6 +3688,14 @@
         "scripts/tests/test_run_verify_impacted.mjs"
       ]
     },
+    "scripts/tests/test_scan_set_hygiene.mjs": {
+      "direct": [
+        "scripts/tests/test_scan_set_hygiene.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_scan_set_hygiene.mjs"
+      ]
+    },
     "scripts/tests/test_ship_visibility.mjs": {
       "direct": [
         "scripts/tests/test_ship_visibility.mjs"
@@ -3643,6 +3750,14 @@
       ],
       "all": [
         "scripts/tests/test_store_lock.mjs"
+      ]
+    },
+    "scripts/tests/test_terminal_phase_parity.mjs": {
+      "direct": [
+        "scripts/tests/test_terminal_phase_parity.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_terminal_phase_parity.mjs"
       ]
     },
     "scripts/tests/test_verify_cache.mjs": {

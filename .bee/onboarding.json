@@ -10,7 +10,7 @@
     "lib": {
       "backlog.mjs": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
-      "cells.mjs": "d573a76acf0fdf14188377c0032cfa0b6b359895c93d99ed775e16389e87acec",
+      "cells.mjs": "f4e432d941c7384490f12324af3922fc03a6dc73ba36e9416e445d56d5e12591",
       "claims.mjs": "de7726a26b2354b65ee598d00f9179f04f71fe3d53f39a865b749da49e03623d",
       "command-registry.mjs": "a1fe9c5958d0729e8a79801180467b6298f960f1b52f77f0e83afb0fdf86e38c",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
@@ -73,7 +73,7 @@
     ],
     "rendered_from": {
       "extraction": "haiku",
-      "generation": "sonnet",
+      "generation": "opus-4-5-20251101",
       "review": "opus"
     },
     "codex": {
@@ -82,5 +82,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-28T23:07:55.273Z"
+  "updated_at": "2026-07-29T03:21:02.917Z"
 }

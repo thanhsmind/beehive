@@ -51,7 +51,7 @@ date: <yyyy-mm-dd>
 ## Risks, Unknowns, Follow-Ups
 
 - Technical risks / evidence gaps / version uncertainties:
-- Open questions (for the user, or as proof obligations for bee-validating):
+- Open questions (for the user, or as proof obligations for bee-planning's shape gate):
 
 ## Source Pack
 
