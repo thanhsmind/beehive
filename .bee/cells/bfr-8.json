@@ -1,0 +1,57 @@
+{
+  "id": "bfr-8",
+  "feature": "budget-fence-removal",
+  "title": "Repair the nine stale rule pointers the fresh sweep found outside bfr-6's scope",
+  "lane": "standard",
+  "change_class": "refactor",
+  "deps": [
+    "bfr-7"
+  ],
+  "decisions": [
+    "D9"
+  ],
+  "files": [
+    "scripts/run_verify.mjs",
+    "skills/bee-hive/references/provenance.md",
+    "packages/bee/lib/command-registry.mjs",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "packages/bee/tests/test_scratch.mjs",
+    "packages/bee/tests/test_bundle_mode.mjs",
+    "packages/bee/tests/test_knowledge.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    "scripts/impact-registry.json"
+  ],
+  "read_first": [
+    "docs/history/budget-fence-removal/reports/stale-rule-pointers.md",
+    "packages/bee/AGENTS.block.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "action": "Second pointer pass under D9. bfr-6's FRESH SWEEP found 18 defects where the inventory listed 13, and reported these as outside its own declared files. Two of them were rows 5/6 of the inventory that the cell scope simply missed -- an orchestrator error, not a discovery gap. Fix all nine. CONFIRMED, fix directly: (1) scripts/run_verify.mjs:475 and :483 -- both cite 'AGENTS.md critical rule 5' for the BEE_AGENT_NAME=<name> prefix mandate; rule 5 is the HANDOFF pause, the prefix is critical rule 4. Line numbers shifted from the inventory's 492/500 because bfr-1 removed the fence comment block above them -- match by text, not by line. (2) skills/bee-hive/references/provenance.md:33 -- 'hive law 10 (AGENTS.md critical rule 9)' for 'The agent runs the machinery'; hive law for that doctrine is 9, not 10. The parenthesised critical-rule 9 is correct; only the hive-law number is wrong. (3) packages/bee/lib/command-registry.mjs:955 -- \"rule 12's forbidden escape hatch\" for the hand-edit ban on bee's own state; critical rule 12 is fan-out and hive law 12 is hooks-as-safety-net. The hand-edit ban is hive law 11. Same defect that was fixed at packages/bee/bee.mjs:4563. (4) docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md:118 -- 'rules 2-4 and 13' should be 12; the live text at skills/bee-hive/SKILL.md:108 reads 'Rules 2-4, 12'. (5) same file :138 -- the native-Codex-wait pointer says 'unnumbered line under rule 14'; it sits between critical rules 16 and 17 in packages/bee/AGENTS.block.md, so it is under rule 16. (6,7,8) packages/bee/tests/test_scratch.mjs:15, test_bundle_mode.mjs:28, test_knowledge.mjs:9 all cite 'AGENTS.md critical rule 2' for a write-the-test-BEFORE-implementation / red-first convention. Critical rule 2 is now 'Capping proves at the feature boundary, not per cell'. The red-first convention is critical rule 16 ('a red-first repro is written at the real path where it will ship, run red once, and kept'). VERIFY EACH IN ITS OWN CONTEXT before changing it -- read the surrounding comment and confirm 16 is the rule it actually means; if a given one means something else, say so in your report rather than forcing it. EXCLUDED DELIBERATELY: skills/bee-hive/CREATION-LOG.md:12 -- a historical creation log, which records numbering as it stood when written, same frozen-log principle that excludes docs/history/** and .bee/**. Do not touch it. NEVER hand-edit .bee/bin/ -- it is a synced copy; source of truth is packages/bee/. AFTER the edits run the regen chain IN THIS ORDER: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write, then node scripts/impact_registry.mjs --write.",
+  "must_haves": {
+    "truths": [
+      "All nine cited pointers name the rule whose content they describe, in the correct one of the two rule lists",
+      "skills/bee-hive/CREATION-LOG.md is unchanged",
+      "No file under .bee/bin/ was hand-edited",
+      "node scripts/release_manifest.mjs --check exits 0",
+      "node scripts/ledger_parity.mjs --check exits 0",
+      "node scripts/impact_registry.mjs --check exits 0",
+      "A final sweep over packages/, scripts/, skills/ and docs/knowledge/ reports zero remaining numbered-rule mismatches"
+    ]
+  },
+  "verify": "node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check && node scripts/run_verify.mjs && node scripts/impact_registry.mjs --check",
+  "status": "dropped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "Scope decision by the user: budget-fence-removal delivers the removal of the byte-ceiling law. bfr-6 already fixed the 12 pointers that were direct collateral of the diet renumbering. The remaining 9 that bfr-6's fresh sweep surfaced are repo hygiene rather than consequences of this law - three of them (packages/bee/tests citing critical rule 2 for the red-first convention) may predate the byte diet entirely. Filed to the backlog with full anchors instead of riding along here."
+  }
+}
