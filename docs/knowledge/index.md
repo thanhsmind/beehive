@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 93 concept(s)
-- [patterns/](patterns/index.md) — 78 concept(s)
+- [patterns/](patterns/index.md) — 80 concept(s)
 - [work/](work/index.md) — 4 concept(s)
 
 ## Critical patterns
@@ -88,3 +88,5 @@ never a generation timestamp or any other wall-clock value.
 - [A derivation the tooling already computes is worthless where doctrine forbids it](patterns/20260728-a-derivation-the-tooling-computes-but-doctrine-forbids-where-it-is-needed.md) — The impact registry already maps every source file to the suites that consume it, but a cell's verify is doctrinally forbidden from using it — so sibling-suite selection fell back to human memory, and two cells editing the same file made opposite guesses.
 - [A scan set built from the git index crashes the very gate it feeds](patterns/20260728-a-scan-set-from-the-git-index-crashes-the-gate-that-guards-it.md) — A coverage gate listed its inputs with git ls-files — the index, not the working tree — so a deferred deletion left it reading a file that no longer existed; the ENOENT killed the process and took every assertion behind it into silence.
 - [One membership hand-copied six times has no owner and no alarm](patterns/20260728-one-membership-hand-copied-six-times-has-no-owner-and-no-alarm.md) — The same two-element phase set is written out by hand in six modules under three different names, none importing the enum it mirrors and none cross-checked — so the next phase rename silently splits behaviour across the six, and the copy that governs write-denial fails open.
+- [A gate keyed on an annotation misses exactly what it exists to catch](patterns/20260729-a-gate-keyed-on-an-annotation-misses-exactly-what-it-exists-to-catch.md) — The annotation is applied by the same author the gate exists to catch, so its miss-rate and the defect rate are the same number — deriving the trigger from the artifact's own wording fails toward a red build instead of toward silence.
+- [An advisory check that is wrong survives, because it cannot cost anything](patterns/20260729-an-advisory-check-that-is-wrong-survives-because-it-cannot-cost-anything.md) — A false-positive matcher reported a reachable pointer as missing for months; two workers in one session read the warning, wrote it off as pre-existing noise, and moved on — a blocking check with the same defect would have been fixed the day it landed.
