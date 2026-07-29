@@ -71,7 +71,57 @@
     "warnings": [
       "capCell: cell \"wc-1\" verify does not mention impact-registry direct-edge suite(s) packages/bee/tests/test_backlog_capture.mjs, packages/bee/tests/test_bee_cli.mjs, packages/bee/tests/test_cli_cells.mjs, packages/bee/tests/test_cli_state.mjs, packages/bee/tests/test_guards.mjs, packages/bee/tests/test_misc.mjs, packages/bee/tests/test_recovery.mjs, packages/bee/tests/test_reviews.mjs for file(s) packages/bee/lib/cells.mjs, packages/bee/tests/test_cells.mjs — derived-check-hardening E1 non-blocking warning."
     ],
-    "feature_verify": "pending"
+    "feature_verify": "pending",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "marker-post-refusal-chain",
+            "status": "PASS",
+            "evidence": "packages/bee/lib/cells.mjs:2210 computes proofUnrecorded after the last throw (high-risk outcome check ends :2177) and before cell.status='capped' at :2215; no throw exists between :2210 and writeCell at :2241"
+          },
+          {
+            "id": "never-sets-pending-flag",
+            "status": "PASS",
+            "evidence": "packages/bee/lib/cells.mjs:2213 only READS !pendingFeatureVerify; the flag is assigned once at :1886 and the diff is +39/-0, so no internal set was added"
+          },
+          {
+            "id": "six-short-circuits-unchanged",
+            "status": "PASS",
+            "evidence": "git show f852f66a -- packages/bee/lib/cells.mjs is 39 insertions 0 deletions; cells.mjs:1886-1899, :1912, :1999, :2032, :2135, :2164 are byte-identical"
+          },
+          {
+            "id": "evidence-with-empty-output-not-marked",
+            "status": "PASS",
+            "evidence": "packages/bee/lib/cells.mjs:2207 hasProofEvidence keys on verification_evidence alone; row wc1-evidence-empty-output green at packages/bee/tests/test_cells.mjs:3229"
+          },
+          {
+            "id": "verify-none-exemption-narrower",
+            "status": "PASS",
+            "evidence": "packages/bee/lib/cells.mjs:2214 calls isNoTestCommand(commands.verify) only, while isNoTestRepo ORs verify||test at packages/bee/lib/state.mjs:2411"
+          },
+          {
+            "id": "all-six-truths-green",
+            "status": "PASS",
+            "evidence": "packages/bee/tests/test_cells.mjs:3200,:3229,:3278,:3316 cover every declared truth plus the negative controls; 138 passed, 0 failed"
+          },
+          {
+            "id": "no-refusal-relaxed",
+            "status": "PASS",
+            "evidence": "packages/bee/lib/cells.mjs:2239 spreads the field conditionally, additive-only; negative control at packages/bee/tests/test_cells.mjs:3316 asserts status stays 'claimed' after each refused cap"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-07-29T09:42:06.799Z"
+      }
+    ]
   },
   "tier": "ceiling"
 }

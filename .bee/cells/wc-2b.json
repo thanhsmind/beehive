@@ -1,0 +1,65 @@
+{
+  "id": "wc-2b",
+  "feature": "worker-conformance",
+  "title": "Prove the cap-writes / door-reads seam end to end",
+  "lane": "high-risk",
+  "status": "dropped",
+  "deps": [
+    "wc-1",
+    "wc-2"
+  ],
+  "decisions": [
+    "D11",
+    "D12"
+  ],
+  "files": [
+    "packages/bee/tests/test_bee_cli.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee/tests/test_bee_cli.mjs",
+    "packages/bee/lib/cells.mjs",
+    "packages/bee/lib/state.mjs"
+  ],
+  "action": "The semantic judge returned NEEDS_REVISION on wc-2 with this failure signature: the cross-cell contract trace.proof = \"unrecorded\" is WRITTEN by capCell (packages/bee/lib/cells.mjs:2239) and READ by both door predicates (packages/bee/lib/state.mjs:2527 and :2592), but no test exercises both sides in one run. Every door row is seeded by writeUnrecordedCappedCell (test_bee_cli.mjs:2046), which hand-writes the field. A rename or shape drift on either side leaves both suites green. Close that seam: add at least one integration case that drives a real cap through capCell with neither verify output nor verification_evidence, then hits a real feature-debt door (the compounding close door and the start-feature door are the two cheapest) and asserts the refusal names that cell. Do NOT hand-write trace.proof anywhere in the new case — the whole point is that capCell produces the value the door consumes. Add the mirror row too: a cap that DID record real verify output must let the same door open, so the case cannot pass vacuously. Keep the existing hand-written fixture rows; they cover the door x kind matrix cheaply and this cell adds the producer-consumer proof beside them, it does not replace them. Test-only cell: do not touch the lib directory. This cell owns its regen chain — run the plugin skill-tree render, then the onboarding apply, then the release-manifest write, in that order, before capping.",
+  "must_haves": {
+    "truths": [
+      "At least one test drives capCell with no output and no evidence and then asserts a real door refuses, naming that cell",
+      "The new case never writes trace.proof by hand",
+      "A mirror case with real recorded verify output lets the same door open, so the assertion cannot pass vacuously",
+      "The existing hand-written door x kind matrix rows stay green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/tests/test_bee_cli.mjs",
+        "substantive": "producer-consumer integration case: capCell to a real door, plus its opening mirror; no writeUnrecordedCappedCell in the new rows"
+      }
+    ],
+    "key_links": [
+      "the new case imports and calls capCell from the cells lib rather than seeding a cell file"
+    ],
+    "prohibitions": [
+      "No change to the cells or state lib modules",
+      "Do not delete or weaken the existing hand-written fixture rows",
+      "Do not hand-write trace.proof in the new case"
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs && node scripts/release_manifest.mjs --check",
+  "behavior_change": false,
+  "change_class": "test",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "Folded into wc-2: the NEEDS_REVISION verdict reopened wc-2, so the seam repair belongs in that cell rather than a dependent one that can never become ready."
+  },
+  "tier": "ceiling"
+}

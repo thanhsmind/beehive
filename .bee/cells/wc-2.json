@@ -51,25 +51,132 @@
   "verify": "node packages/bee/tests/test_bee_cli.mjs",
   "behavior_change": true,
   "trace": {
-    "worker": "Stuart",
-    "outcome": "featureVerifyDebt and testCellDebt arm on trace.proof \"unrecorded\" as well as feature_verify \"pending\"; freshness clock runs over the union of both; an asserted-pass test cell no longer satisfies the test-cell door",
+    "worker": "Bob",
+    "outcome": "Revision pass: the trace.proof \"unrecorded\" seam is now proven end to end. Four new rows in test_bee_cli.mjs drive a REAL cells add/claim/verify/cap through the CLI in a real git repo and assert against whatever capCell stamped — never a hand-written marker — then hit a real feature-debt door in the same run. Both readers are crossed: featureVerifyDebt (refactor-class cap) and testCellDebt (test-class cap, with the feature-verify door cleared honestly first via a real state feature-verify record so the refusal under test can only be the test-cell one). Each has a mirror row where real recorded verify output leaves no marker and the same door opens, so neither pair can pass vacuously. Every pre-existing hand-written fixture row kept: pure insertion, zero deletions. 392 passed, 0 failed.",
     "files_changed": [
-      "packages/bee/lib/state.mjs",
-      "packages/bee/tests/test_bee_cli.mjs"
+      "packages/bee/tests/test_bee_cli.mjs",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
     ],
     "deviations": [],
-    "friction": "packages/bee/lib/{cells,state}.mjs have diverged from their .bee/bin/lib vendored copies, so test_misc.mjs's byte-identity guard is red for the whole wave — cells.mjs was already stale before this cell touched anything; clearing it is the orchestrator's wave-close regen (onboard_bee.mjs), which this cell's wave-barrier ack forbids it to run",
-    "capped_at": "2026-07-29T09:29:21.546Z",
+    "friction": "The judge's failure signature named BOTH readers of the marker (state.mjs:2527 and :2592) but my first revision commit crossed only the first — a 'refactor' cell never enters testCellDebt's test-class branch at all. The advisor consult caught it; without it this cell would have capped a second time believing a half-closed seam was closed. A one-reader proof reads as complete because the row is green.",
+    "capped_at": "2026-07-29T09:59:16.608Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "389dabf8-013e-4a66-b307-106a4a97dd94",
-    "claimed_at": "2026-07-29T09:03:28.721Z",
+    "claimed_at": "2026-07-29T09:45:20.270Z",
     "warnings": [
       "capCell: cell \"wc-2\" verify does not mention impact-registry direct-edge suite(s) packages/bee/tests/test_backlog_capture.mjs, packages/bee/tests/test_cells.mjs, packages/bee/tests/test_cli_cells.mjs, packages/bee/tests/test_cli_state.mjs, packages/bee/tests/test_config_validate.mjs, packages/bee/tests/test_contention_status.mjs, packages/bee/tests/test_guards.mjs, packages/bee/tests/test_intent.mjs, packages/bee/tests/test_misc.mjs, packages/bee/tests/test_msn_invariants.mjs, packages/bee/tests/test_reviews.mjs, packages/bee/tests/test_state.mjs, packages/bee/tests/test_state_projection.mjs, packages/bee/tests/test_worktree_store.mjs, packages/bee/tests/test_write_policy.mjs, scripts/okf_specs_fence.mjs, scripts/okf_specs_fence.mjs --selftest, scripts/tests/test_compact_capsule.mjs, scripts/tests/test_state_projection_race.mjs, scripts/tests/test_terminal_phase_parity.mjs for file(s) packages/bee/lib/state.mjs, packages/bee/tests/test_bee_cli.mjs — derived-check-hardening E1 non-blocking warning."
     ],
-    "feature_verify": "pending"
+    "feature_verify": "pending",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "union-freshness-clock",
+            "status": "PASS",
+            "evidence": "packages/bee/lib/state.mjs:2537 updates newestOwedCapMs after the combined relocated||unproven filter at :2526-2529, and :2547 compares the record against it; interleaving case green at packages/bee/tests/test_bee_cli.mjs:2875"
+          },
+          {
+            "id": "both-predicates-armed",
+            "status": "PASS",
+            "evidence": "packages/bee/lib/state.mjs:2527 arms featureVerifyDebt on trace.proof==='unrecorded' and :2592 adds the asserted-pass offender to testCellDebt"
+          },
+          {
+            "id": "no-bypass-power",
+            "status": "PASS",
+            "evidence": "packages/bee/lib/state.mjs:2767 guardFeatureDebt reads no bypass value; total-bypass close+start-feature case green at packages/bee/tests/test_bee_cli.mjs:2900"
+          },
+          {
+            "id": "no-direct-detector-calls",
+            "status": "PASS",
+            "evidence": "rg over packages/bee/bee.mjs returns only a comment at bee.mjs:73; structural check at packages/bee/tests/test_bee_cli.mjs:2767 is green"
+          },
+          {
+            "id": "door-x-kind-matrix-complete",
+            "status": "PASS",
+            "evidence": "packages/bee/tests/test_bee_cli.mjs:2830 regenerates every DEBT_DOORS x FEATURE_DEBT_KINDS row on the new marker; coverage meta-check at :2749 forces a seed+refusal entry per kind; 388 passed, 0 failed"
+          },
+          {
+            "id": "seam-end-to-end-unproven",
+            "status": "FAIL",
+            "evidence": "packages/bee/tests/test_bee_cli.mjs:2046 writeUnrecordedCappedCell hand-writes trace.proof; capCell is never invoked in any door test, and 'unrecorded' matches only test_cells.mjs (writer) and test_bee_cli.mjs (reader)"
+          },
+          {
+            "id": "red-first-claim-not-reproduced",
+            "status": "PASS",
+            "evidence": "commit 50bc9610 claims 377 passed/11 failed pre-change; arithmetic matches the observed 388/0 at packages/bee/tests/test_bee_cli.mjs, corroborated not reproduced"
+          }
+        ],
+        "failure_signature": "cross-cell contract trace.proof=\"unrecorded\" is written by capCell (packages/bee/lib/cells.mjs:2239) and read by both door predicates (packages/bee/lib/state.mjs:2527, :2592) with no test exercising both sides in one run — every door row is seeded by a hand-written fixture, so a rename or shape drift on either side leaves both suites green",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-07-29T09:42:06.885Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "real-cap-drives-capcell-then-real-door",
+            "status": "PASS",
+            "evidence": "packages/bee/tests/test_bee_cli.mjs:3018 realCapThroughCli drives cells add/claim/verify/cap through runBee, re-reads .bee/cells/<id>.json and asserts trace.proof rather than writing it, then the same run hits a real door via state set --phase scribing"
+          },
+          {
+            "id": "both-readers-covered",
+            "status": "PASS",
+            "evidence": "reader 1 asserted via the featureVerifyDebt message built at packages/bee/lib/state.mjs:2732 from the trace.proof branch at :2527; reader 2 via the testCellDebt offenders message at :2745 from the branch at :2592, after a real feature-verify record clears the first door"
+          },
+          {
+            "id": "non-vacuous-mirror-per-reader",
+            "status": "PASS",
+            "evidence": "two mirror rows differ only by a real --output value: packages/bee/tests/test_bee_cli.mjs:3095 and :3162 assert trace.proof undefined, exit 0, and the phase advancing"
+          },
+          {
+            "id": "existing-fixture-rows-retained",
+            "status": "PASS",
+            "evidence": "git diff --stat 50bc9610..HEAD -- packages/bee/tests/test_bee_cli.mjs is 206 insertions 0 deletions; writeUnrecordedCappedCell still at :2046 with call sites :2672, :2870, :2890, :2904 intact"
+          },
+          {
+            "id": "no-lib-edits-in-range",
+            "status": "PASS",
+            "evidence": "git diff --name-only 50bc9610..HEAD lists neither packages/bee/lib/cells.mjs nor packages/bee/lib/state.mjs"
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "node packages/bee/tests/test_bee_cli.mjs reports 392 passed, 0 failed, with the four wc-2 SEAM rows passing"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "opus",
+        "model_independence": "unverified",
+        "recorded_at": "2026-07-29T10:04:26.315Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-07-29T09:42:06.886Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-07-29T09:59:16.602Z",
+        "reason": "Audited override for the REVISION pass, not a dismissal of the verdict. The recorded NEEDS_REVISION had exactly one FAIL — seam-end-to-end-unproven — and this cell was reopened to fix precisely that; the other six checks passed. The fix landed in commits d52b86c8 and 6188af19: four rows that drive a real cap through the CLI and hit a real feature-debt door in one run, crossing BOTH readers named in the failure signature (state.mjs:2527 featureVerifyDebt and :2592 testCellDebt), each with a non-vacuity mirror, and nothing hand-writes trace.proof. 392 passed, 0 failed (was 388). A worker recording its own PASS verdict via judge-record would be self-judging, so the override is the honest channel: re-judging belongs to the orchestrator, which can re-run the judge over this trace.",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
   },
   "tier": "ceiling"
 }
