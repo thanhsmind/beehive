@@ -27,7 +27,7 @@ import { validate, isValidParameterSchema } from '../lib/validate-args.mjs';
 import { addCell, updateCell, deriveRegenGuards, regenObligationRefusal } from '../lib/cells.mjs';
 import { createSession, bindSessionLane } from '../lib/claims.mjs';
 import { writeJsonAtomic, hashFile, appendJsonl } from '../lib/fsutil.mjs';
-import { defaultState, writeState, writeLane, BEE_VERSION, GATE_NAMES, KNOWN_PHASES, FEATURE_DEBT_KINDS } from '../lib/state.mjs';
+import { defaultState, writeState, writeLane, BEE_VERSION, GATE_NAMES, KNOWN_PHASES, FEATURE_DEBT_KINDS, bypassLevel } from '../lib/state.mjs';
 import { listWorkflows, createWorkflow } from '../lib/workflow-store.mjs';
 import { buildSessionPreamble } from '../lib/inject.mjs';
 import { mirrorHold, findForeignHolds } from '../lib/worktree-holds.mjs';
@@ -3298,6 +3298,91 @@ for (const door of DEBT_DOORS) {
       }
     });
   }
+}
+
+// ─── worker-conformance wc-3: THE BYPASS AXIS, GENERATED OVER EVERY DOOR ───
+//
+// wc-3 is this feature's consolidated test cell and its first mandated step
+// (CONTEXT D4) was a coverage judgment, not authoring. That judgment found the
+// net-behavior story already pinned everywhere EXCEPT here, and the honest
+// provenance matters more than a tidy comment: the bypass axis was NOT
+// uncovered. It was covered piecemeal, by hand, across three feature eras —
+// phase-departure at :2209 (mv-3(e), pending marker) and again inside the wc-2
+// pair at :2900 (unrecorded marker); feature-swap at :2274 (p1-3(F3), pending);
+// start-feature inside p2-1 at :2608 and the wc-2 pair at :2900. Three of the
+// four registered doors. `scribing-run` was crossed by no bypass row at all.
+//
+// One naked door is a small hole, but the SHAPE of the hole is the known one:
+// gc-1's comment above records that a hand-written pair is exactly how a P1
+// survived two rounds, because whoever writes the pairs writes them for the
+// doors they happen to have in hand. So this closes it the way this file has
+// already chosen three times — generated over DEBT_DOORS, so the door added
+// next month inherits the bypass question with nothing edited here.
+//
+// Scoped deliberately to ONE marker (`unrecorded`) and one kind. The edit this
+// block defends against is a handler-level `if (bypassLevel(root) === 'total')
+// return;` placed ABOVE guardFeatureDebt (state.mjs:2782) — and above that
+// seam a marker and a kind are indistinguishable, so crossing doors × markers ×
+// kinds would buy nothing but rows. The wc-2 matrix at :2830 already crosses
+// the kinds below the seam. The structural check at :2767 cannot see this edit:
+// it bans a door composing its own debt list, not a door returning early.
+//
+// Advisor consult (fable): every hand-written bypass row above shares one
+// weakness — if the config seeding silently failed (typo'd key, wrong path),
+// the row exercises the NO-bypass path and passes anyway. Each row here asserts
+// the level is actually live before it knocks, so the block cannot rot quietly.
+const WC3_UNRECORDED_FIXTURE = DEBT_KIND_UNRECORDED_FIXTURES['feature-verify'];
+
+for (const door of DEBT_DOORS) {
+  await check(`wc-3: door "${door.id}" REFUSES the unrecorded marker under gate_bypass "total", and still OPENS under it when nothing is owed`, async () => {
+    const feature = `wc3byp${slug(door.id)}`;
+    const dir = makeFeatureVerifyRepo(feature, door.phase);
+    try {
+      writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total' });
+      assert(
+        bypassLevel(dir) === 'total',
+        `the fixture must actually seat bypass "total" before the door is knocked on — a row whose config never took would exercise the NO-bypass path and pass vacuously, got "${bypassLevel(dir)}"`,
+      );
+      WC3_UNRECORDED_FIXTURE.seed(dir, feature);
+      const refused = await runBee(door.argv(feature), dir);
+      assert(
+        refused.status !== 0,
+        `door "${door.id}" let a cap with no recorded proof walk out under bypass "total" (exit ${refused.status}) — CONTEXT D3 locks this door as a mechanical precondition that NO bypass level lifts: ${refused.stdout}${refused.stderr}`,
+      );
+      const out = refused.stdout + refused.stderr;
+      assert(
+        WC3_UNRECORDED_FIXTURE.refusal.test(out),
+        `the refusal must come from the feature-verify door itself (${WC3_UNRECORDED_FIXTURE.refusal}) — another kind refusing first would leave the bypass question unproven at this door, got: ${out}`,
+      );
+      assert(/unrecorded/.test(out), `the refusal must name the marker it armed on, got: ${out}`);
+      assert(new RegExp(`${feature}-unrecorded`).test(out), `the refusal must name the unproven cell even under bypass, got: ${out}`);
+      assert(/FIX:/.test(out), `bypass must not cost the refusal its runnable FIX, got: ${out}`);
+      assert(door.untouched(readStateOf(dir), feature), `a refused door must write NOTHING, state is now: ${JSON.stringify(readStateOf(dir))}`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+
+    // The other half, in its own repo: bypass "total" must not weld the door
+    // shut either. Without this, a bug that made every door refuse
+    // unconditionally under bypass would pass the half above. No debt-free
+    // crossing under bypass exists anywhere else in this file — :2886 and
+    // :3244 both run on a default config.
+    const okFeature = `wc3bok${slug(door.id)}`;
+    const okDir = makeFeatureVerifyRepo(okFeature, door.phase);
+    try {
+      writeJsonAtomic(path.join(okDir, '.bee', 'config.json'), { gate_bypass: 'total' });
+      assert(bypassLevel(okDir) === 'total', `the open half must seat bypass too, got "${bypassLevel(okDir)}"`);
+      seedDebtFreeFeature(okDir, okFeature);
+      const ok = await runBee(door.argv(okFeature), okDir);
+      assert(
+        ok.status === 0,
+        `door "${door.id}" must still OPEN under bypass "total" when nothing is owed — the door is a guard on real debt, not a wall bypass switches on, got: ${ok.stdout}${ok.stderr}`,
+      );
+      assert(door.landed(readStateOf(okDir)), `the change must land once the door is clear, state is: ${JSON.stringify(readStateOf(okDir))}`);
+    } finally {
+      fs.rmSync(okDir, { recursive: true, force: true });
+    }
+  });
 }
 
 // ─── review-p1-fixes p1-3 (F5): a failed resolution must NARROW, not widen ──
