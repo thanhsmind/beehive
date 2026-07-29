@@ -3008,7 +3008,7 @@ function makeRealCapRepo(feature) {
 // a string means it recorded real proof (the mirror case). Returns the cell
 // as capCell left it on disk — the test asserts against THAT, never against
 // anything this helper wrote.
-async function realCapThroughCli(dir, feature, id, { output = null } = {}) {
+async function realCapThroughCli(dir, feature, id, { output = null, changeClass = 'refactor' } = {}) {
   const fixturePath = path.join(dir, `${id}.cell.json`);
   fs.writeFileSync(
     fixturePath,
@@ -3020,7 +3020,7 @@ async function realCapThroughCli(dir, feature, id, { output = null } = {}) {
         lane: 'tiny',
         action: 'wc-2 seam fixture only.',
         verify: 'node -e "process.exit(0)"',
-        change_class: 'refactor',
+        change_class: changeClass,
       },
       null,
       2,
@@ -3092,6 +3092,72 @@ await check('wc-2 SEAM (mirror): the same real cap WITH recorded verify output c
       `a feature whose only cap recorded real proof owes nothing at the boundary — without this row the refusal above could come from any cap at all, got: ${ok.stdout}${ok.stderr}`,
     );
     assert(readStateOf(dir).phase === 'scribing', 'the departure must land once the door is clear');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The marker has TWO readers, not one — featureVerifyDebt (state.mjs) and
+// testCellDebt (state.mjs) — and the pair above only crosses the first. So the
+// same real cap is driven a second time as a `change_class: "test"` cell, with
+// the feature-verify door DELIBERATELY satisfied first (a real green record,
+// recorded through the CLI, stamped after the cap so it is genuinely fresher)
+// so that the refusal under test can only be the test-cell one. Same discipline
+// as the row above: nothing here hand-writes trace.proof.
+async function recordRealGreenFeatureVerify(dir) {
+  const outFile = path.join(dir, 'feature-verify-output.txt');
+  fs.writeFileSync(outFile, 'impacted suite: 12/12 green\n');
+  const rec = await runBee(
+    ['state', 'feature-verify', 'record', '--command', 'node run_verify.mjs --impacted', '--output-file', outFile, '--result', 'green', '--json'],
+    dir,
+  );
+  assert(rec.status === 0, `recording the feature-level green must succeed: ${rec.stdout}${rec.stderr}`);
+}
+
+await check('wc-2 SEAM (second reader): a REAL cap of a TEST-class cell with no recorded proof fails to discharge the test-cell debt — capCell\'s marker, read by the other predicate', async () => {
+  const dir = makeRealCapRepo('wc2seamtc');
+  try {
+    const cell = await realCapThroughCli(dir, 'wc2seamtc', 'wc2seamtc-1', { output: null, changeClass: 'test' });
+    assert(
+      cell.trace.proof === 'unrecorded',
+      `capCell must stamp the marker on a test-class cap holding no proof either — the marker is class-independent, got trace: ${JSON.stringify(cell.trace)}`,
+    );
+    // Clear the FIRST door honestly, so the second one is the one under test.
+    await recordRealGreenFeatureVerify(dir);
+
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
+    assert(
+      refused.status !== 0,
+      `a test cell whose pass was asserted with no output must not discharge the test-cell debt, even with the feature-level verify green (exit ${refused.status}): ${refused.stdout}${refused.stderr}`,
+    );
+    const out = refused.stdout + refused.stderr;
+    assert(
+      /consolidated test cell\(s\) not green/.test(out),
+      `it must be the TEST-CELL door that refused — the feature-verify door was satisfied on purpose so this row cannot be rescued by it, got: ${out}`,
+    );
+    assert(/wc2seamtc-1/.test(out), `the refusal must name the test cell that proved nothing, got: ${out}`);
+    assert(/unrecorded/.test(out), `the refusal must name the marker it armed on, got: ${out}`);
+    assert(readStateOf(dir).phase === 'swarming', 'a refused departure must write NOTHING');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('wc-2 SEAM (second reader, mirror): the same real TEST-class cap WITH recorded output discharges the debt and the door opens', async () => {
+  const dir = makeRealCapRepo('wc2seamtcok');
+  try {
+    const cell = await realCapThroughCli(dir, 'wc2seamtcok', 'wc2seamtcok-1', { output: 'suite A: 12/12 green', changeClass: 'test' });
+    assert(
+      cell.trace.proof === undefined,
+      `a test-class cap that recorded real output carries no marker, got trace: ${JSON.stringify(cell.trace)}`,
+    );
+
+    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
+    assert(
+      ok.status === 0,
+      `a test cell capped on real recorded output IS the coverage this door holds out for — without this row the refusal above could come from any test cell at all, got: ${ok.stdout}${ok.stderr}`,
+    );
+    assert(readStateOf(dir).phase === 'scribing', 'the departure must land once both doors are clear');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

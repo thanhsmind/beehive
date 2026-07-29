@@ -2144,7 +2144,7 @@
     },
     {
       "path": "packages/bee/tests/test_bee_cli.mjs",
-      "sha256": "8f4427c2e05d06d98ef7a348ef9548c3b41a42cfce1c2a5c0fa7024b9862325e",
+      "sha256": "0368563128e9fcb8dbcd176220fc8831f09e8fd040dfd1a59e6f252cab3e0eb6",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_bee_cli.mjs"
