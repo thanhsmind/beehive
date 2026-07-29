@@ -2,8 +2,8 @@ name: CI
 
 on:
   schedule:
-    # 16:00 UTC = 23:00 Asia/Ho_Chi_Minh
-    - cron: '0 16 * * *'
+    # 23:00 UTC = 06:00 Asia/Ho_Chi_Minh (next day)
+    - cron: '0 23 * * *'
   workflow_dispatch:
 
 concurrency:

@@ -1,0 +1,74 @@
+{
+  "id": "dch-3",
+  "feature": "derived-check-hardening",
+  "title": "Move the CI cron to 23:00, keeping the daily cadence",
+  "lane": "tiny",
+  "status": "capped",
+  "change_class": "refactor",
+  "deps": [],
+  "decisions": [
+    "E2",
+    "E9"
+  ],
+  "files": [
+    ".github/workflows/ci.yml"
+  ],
+  "read_first": [
+    ".github/workflows/ci.yml"
+  ],
+  "action": "Per E2 change .github/workflows/ci.yml's schedule cron from '0 16 * * *' to '0 23 * * *'. Keep it once per day. Do NOT add a push or pull_request trigger -- the owner declined both, with the tradeoff stated. Per E9 this ships as a KNOWN PARTIAL fix and must not be described as closing anything: main can still carry a red for up to 24 hours and CI still only files an issue rather than blocking a commit. If ci.yml carries a comment describing the schedule's purpose, keep it honest -- do not write anything implying the change narrows the detection window, because it does not; it moves when the window opens.",
+  "must_haves": {
+    "truths": [
+      "ci.yml's schedule cron is '0 23 * * *'",
+      "No push or pull_request trigger is added",
+      "The workflow still runs the full unscoped verify chain"
+    ],
+    "artifacts": [
+      {
+        "path": ".github/workflows/ci.yml",
+        "substantive": "cron moved, triggers otherwise unchanged"
+      }
+    ],
+    "key_links": [
+      "no comment in the file claims the detection gap is closed"
+    ],
+    "prohibitions": [
+      "No new trigger of any kind",
+      "No change to the verify chain the workflow runs",
+      "No prose implying L4 is resolved"
+    ]
+  },
+  "verify": "node -e \"const y=require('fs').readFileSync('.github/workflows/ci.yml','utf8'); if(!y.includes('0 23 * * *')) throw new Error('cron not moved to 23:00'); const m=y.match(/^on:\\n([\\s\\S]*?)(?=^\\S)/m); const on=m?m[1]:''; if(!on) throw new Error('could not isolate the on: block'); if(/pull_request|^\\s+push:/m.test(on)) throw new Error('unexpected trigger inside the on: block'); console.log('ci.yml: cron 0 23 * * *, on: block carries no push/pull_request trigger');\"",
+  "trace": {
+    "worker": "dch37-worker",
+    "outcome": "CI cron moved to 0 23 * * * UTC (23:00), once-daily cadence unchanged; no push/pull_request trigger added -- known partial fix per E9, moves the daily detection window rather than narrowing it",
+    "files_changed": [
+      ".github/workflows/ci.yml"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-29T00:31:53.624Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "ci.yml: cron 0 23 * * *, on: block carries no push/pull_request trigger\n",
+    "verify_passed": true,
+    "claim_session": "175d1343-db84-4593-8e3e-42e79c3e3d73",
+    "claimed_at": "2026-07-29T00:29:30.212Z",
+    "verify_command": "node -e \"const y=require('fs').readFileSync('.github/workflows/ci.yml','utf8'); if(!y.includes('0 23 * * *')) throw new Error('cron not moved to 23:00'); const m=y.match(/^on:\\n([\\s\\S]*?)(?=^\\S)/m); const on=m?m[1]:''; if(!on) throw new Error('could not isolate the on: block'); if(/pull_request|^\\s+push:/m.test(on)) throw new Error('unexpected trigger inside the on: block'); console.log('ci.yml: cron 0 23 * * *, on: block carries no push/pull_request trigger');\"",
+    "verified_at": "2026-07-29T00:31:17.193Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-29T00:31:17.194Z",
+        "claim_session": "175d1343-db84-4593-8e3e-42e79c3e3d73",
+        "claimed_at": "2026-07-29T00:29:30.211Z",
+        "acquired_at": "2026-07-29T00:29:30.211Z",
+        "worker": "dch37-worker",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}
