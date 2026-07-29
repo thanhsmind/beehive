@@ -3448,6 +3448,14 @@
         "scripts/tests/test_agents_budget.mjs"
       ]
     },
+    "scripts/tests/test_always_loaded_rules.mjs": {
+      "direct": [
+        "scripts/tests/test_always_loaded_rules.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_always_loaded_rules.mjs"
+      ]
+    },
     "scripts/tests/test_bump_version.mjs": {
       "direct": [
         "scripts/tests/test_bump_version.mjs"
