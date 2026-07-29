@@ -33,7 +33,6 @@ const REPO_ROOT = path.join(__dirname, "..", "..");
 const SCRIPTS_ROOT = path.join(REPO_ROOT, "scripts");
 const AGENTS_BUDGET_SUITE_PATH = path.join(__dirname, "test_agents_budget.mjs");
 const REAL_TEMPLATE_PATH = path.join(REPO_ROOT, "packages", "bee", "AGENTS.block.md");
-const REAL_ROOT_AGENTS_PATH = path.join(REPO_ROOT, "AGENTS.md");
 
 const MARKER_START = "<!-- BEE:START -->";
 const MARKER_END = "<!-- BEE:END -->";
@@ -217,7 +216,6 @@ check("negative control: the JSON-baseline detector catches a renamed per-skill 
 
 const realSuiteSource = fs.readFileSync(AGENTS_BUDGET_SUITE_PATH, "utf8");
 const realTemplateText = fs.readFileSync(REAL_TEMPLATE_PATH, "utf8");
-const realRootText = fs.readFileSync(REAL_ROOT_AGENTS_PATH, "utf8");
 
 // Mirrors test_agents_budget.mjs's own `criticalRulesSection` exactly, so a
 // mutation built here lands in the same place a mutation built there would.

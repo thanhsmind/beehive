@@ -3606,6 +3606,14 @@
         "scripts/tests/test_installers_e2e.mjs --installer bash"
       ]
     },
+    "scripts/tests/test_instruction_size_law.mjs": {
+      "direct": [
+        "scripts/tests/test_instruction_size_law.mjs"
+      ],
+      "all": [
+        "scripts/tests/test_instruction_size_law.mjs"
+      ]
+    },
     "scripts/tests/test_ledger_parity.mjs": {
       "direct": [
         "scripts/tests/test_ledger_parity.mjs"
