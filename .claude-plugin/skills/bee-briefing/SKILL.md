@@ -1,7 +1,7 @@
 ---
 name: bee-briefing
 description: >-
-  Render one human-readable implementation plan per feature so the human and the agent review and agree on the same document before code is touched. Use when planning has shaped work that needs Gate 2/3 approval, when a feature's implement plan must be (re)generated, or when the terse per-feature artifacts need consolidating into one reviewable doc. Do NOT use to originate decisions, scope, or approach — those come from exploring/planning.
+  Render one human-readable implementation plan per feature so the human and the agent review and agree on the same document before code is touched. Use when planning has shaped work that needs Gate 2 approval, when a feature's implement plan must be (re)generated, or when the terse per-feature artifacts need consolidating into one reviewable doc. Do NOT use to originate decisions, scope, or approach — those come from exploring/planning.
 metadata:
   version: '0.1'
   ecosystem: bee
@@ -97,7 +97,7 @@ Violating the letter of these rules is violating the spirit of these rules.
 
 ## Handoff
 
-- **render / refresh** (Gate 2/3): plan rendered (`<lane>`, `status: <status>`), linked for the gate. Return to the calling skill.
+- **render / refresh** (Gate 2): plan rendered (`<lane>`, `status: <status>`), linked for the gate. Return to the calling skill.
 - **walkthrough** (post-Gate-4): walkthrough written, implement plan `status: Shipped`. Invoke bee-scribing skill.
 
 | Reference | When to Load |

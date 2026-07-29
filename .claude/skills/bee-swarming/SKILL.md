@@ -40,7 +40,6 @@ return to bee-planning instead — see Completion Signals below).
 - Sweep stale reservations: `reservations sweep`
 - Critical patterns read: bundle → `docs/knowledge/index.md` `## Critical patterns`; no bundle → `docs/history/learnings/critical-patterns.md` when present.
 
-<!-- bee:only claude -->
 ## Opt-in Native Worktree Dispatch
 
 Opt-in Git-consistency mode for an enabled wave of 2+ workers (never
@@ -50,7 +49,6 @@ exception. Protected pre-dispatch attestation, the three-check re-attest gate
 (identity/ancestry/diff containment, typed halts), and the full threat model:
 `references/swarming-reference.md` ("Native Worktree Integration Transaction",
 "Threat model and protected attestation").
-<!-- bee:end -->
 
 ## Operating Contract
 

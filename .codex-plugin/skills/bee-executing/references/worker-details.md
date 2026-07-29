@@ -340,12 +340,7 @@ A re-dispatched cell (rescue rung) starts a **fresh** budget — the 2-consult c
 **Evidence bundle (mandatory, every consult):** exact failing command, the failing output, your diagnosis, the relevant cited file excerpts, and the `CONTEXT.md` path. Pass it **inline in the consult prompt or via stdin — never a `/tmp` path** (critical pattern 20260708). Never include secrets or env values.
 
 **Transport** — the `Advisor` line names the advisor and how to consult it:
-<!-- bee:only claude -->
-- **Model-shaped advisor:** consult via your own Agent tool, with the model param set to the named advisor model, and the dispatch `description` starting **exactly** `advisor-consult <cell-id>: <advisor-model>` — this is the A2 attribution record; bee-swarming's goal-check reads it from `.bee/logs/dispatch.jsonl`. Fallback if Agent dispatch is unavailable or rejected: a headless one-shot `claude -p --model <advisor-model>` call, same evidence bundle via stdin.
-<!-- bee:end -->
-<!-- bee:only codex -->
 - **Model-shaped advisor:** consult via Codex-native subagent dispatch at the named advisor model, recording the same `advisor-consult <cell-id>: <advisor-model>` attribution that bee-swarming's goal-check reads from `.bee/logs/dispatch.jsonl`. The transport stays runtime-native (D10): a model-shaped transport that is unavailable or rejected surfaces in the Consults section (spending at most one budget slot, per the transport-error rule below) — never a silent fallback to a cross-vendor CLI, unless the advisor slot itself is configured as that CLI (a cli-shaped advisor, next).
-<!-- bee:end -->
 - **cli-shaped advisor:** run the given command with the evidence bundle on stdin, reusing the External Executors output-capture discipline.
 - A **transport error** (non-zero exit, rejected dispatch, a hang past the External Executors timeout discipline) is **not advice** — it burns at most **one** budget slot total for the whole claim, and is never retried in a storm. Continue to the next step of the loop, or `[BLOCKED]` once the budget is spent.
 

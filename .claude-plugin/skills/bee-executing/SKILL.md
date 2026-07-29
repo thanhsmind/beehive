@@ -21,7 +21,7 @@ wait silently — when you cannot safely finish, return `[BLOCKED]` or
 `[HANDOFF]`. Rules stated bare — decision IDs: `references/provenance.md`.
 
 ```text
-Initialize -> Accept assigned cell -> Reserve -> Implement -> Commit -> Cap -> Release -> Return
+Initialize -> Accept assigned cell -> Reserve -> Implement -> Commit -> Advisor consult (high-risk/hard-gate only) -> Cap -> Release -> Return
 ```
 
 Open `references/worker-details.md` for expanded commands, trace tiers,

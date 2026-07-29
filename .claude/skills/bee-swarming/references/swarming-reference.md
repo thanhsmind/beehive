@@ -99,7 +99,6 @@ single worker — never wave analysis or multi-cell assignment.
    status-token protocol (`[DONE] [BLOCKED] [HANDOFF] [NOOP]`) — **nothing
    else, never session history, never a literal session id (D3)**. Use the
    template below.
-<!-- bee:only claude -->
    **Spawn the tier-matched pinned type when its rendered agent exists**
    (W3, AO5/AO10/AO11): `subagent_type: "bee-gather"` for `generation`,
    `"bee-extract"` for `extraction`, `"bee-review"` for `review` — these are
@@ -111,12 +110,6 @@ single worker — never wave analysis or multi-cell assignment.
    `[bee-tier: generation|extraction|review]` marker with `subagent_type:
    "general-purpose"` — `bee-model-guard` denies it (`generic-type-denied`,
    decision 0023/AO5) precisely so this rule cannot be skipped by habit.
-<!-- bee:end -->
-<!-- bee:only codex -->
-   Codex has no per-agent `subagent_type` equivalent (AO11 asymmetry) — its
-   tier stays enforced as a read budget + output cap only, exactly as
-   before.
-<!-- bee:end -->
    NEVER spawn any OTHER plugin's agent type, even when the name matches the
    role: a same-named agent carries a different contract and makes the run
    depend on what happens to be installed.
@@ -166,28 +159,6 @@ single worker — never wave analysis or multi-cell assignment.
    and `node .bee/bin/bee.mjs reservations list --active-only` before
    assuming a worker is stuck. Do not send routine mid-flight pings;
    interrupt only for explicit user aborts or confirmed deadlocks.
-<!-- bee:only codex -->
-   For native Codex agents, a completed `wait_agent` call with no completion
-   is an **empty wait** and a timeout signal only. A `wait_agent`
-   timeout/no-completion result is only an empty wait; silence is not
-   failure. Never call `wait_agent` twice consecutively after an empty wait;
-   authority, urgency, and no-chatter instructions create no exception.
-   Before any later bounded wait, perform at least one material task-local
-   action when work remains; that one action satisfies the interval, and
-   exhausting all local work is not required. Only when no material work
-   remains, take exactly one `list_agents` snapshot. Handle any completion
-   that arrives during the interval exactly once, then recompute the
-   relevant live-agent set. Send one concise commentary update naming both
-   the live agent state and the next action. Only after this commentary may
-   a later bounded wait run, and only while the relevant live-agent set is
-   non-empty; zero live agents ends collection without another wait. No-op
-   work, repeated state reads, hidden reasoning, generic commentary, or
-   commentary alone do not qualify. Timeout never licenses interrupt,
-   duplicate dispatch, claim release, or reservation release; every running
-   agent, claim, and reservation stays owned. External process and artifact
-   polling remains outside this native-agent rule and stays governed by the
-   separate executor contract below.
-<!-- bee:end -->
 7. **Goal-check every `[DONE]` yourself (P12, decision 0018) — miss reruns,
    hit ships.** A worker's word is never the evidence; the orchestrator
    measures before the cell counts:
@@ -273,7 +244,6 @@ never per cell, never per wave.
   in the cell — the worker fixes it, and the feature verify above is what
   later confirms the fix, never a worker-side re-proof.
 
-<!-- bee:only claude -->
 ## Native Worktree Integration Transaction
 
 This is the orchestrator-owned goal-check for an eligible Claude Code native
@@ -376,11 +346,9 @@ Acceptance tests use deterministic temporary Git repositories to inject identity
 mismatch, out-of-scope diff, merge conflict, targeted red, post-commit full red,
 `[BLOCKED]`, `[HANDOFF]`, abandonment, cleanup suppression, and revert behavior.
 No live checkout is used as a fault-injection target.
-<!-- bee:end -->
 
 ## Runtime Spawn Mechanics (side by side)
 
-<!-- bee:only claude -->
 | | Claude Code |
 |---|---|
 | Spawn | `Agent` tool, one call per worker; put the worker prompt in `prompt`; set `run_in_background: true` so the whole wave runs in parallel (send all spawns of a wave in one message) |
@@ -390,46 +358,10 @@ No live checkout is used as a fault-injection target.
 | Harness assist | `bee-chain-nudge` hook fires on SubagentStop: collect the status, update the cell, check reservations |
 | Isolation guarantee | Fresh context per Agent call; include only the contract fields |
 | Subagent type (W3, AO5/AO10/AO11) | `subagent_type: "bee-gather"`/`"bee-extract"`/`"bee-review"` for generation/extraction/review, when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling`, and any tier whose slot is cli-shaped or otherwise unrendered, use the runtime default (`general-purpose`) |
-<!-- bee:end -->
-<!-- bee:only codex -->
-| | Codex |
-|---|---|
-| Spawn | `spawn_agent({task_name: "<stable-name>", message: "<WORKER_PROMPT>", fork_turns: "none"})` (ORCH-01) — the live-probed codex 0.145.0 schema (i54-closeout D1): `task_name` + `message` required, no `agent_type` field; `bee dispatch prepare --runtime codex` emits exactly this shape, and the guard judges the `[bee-tier: <t>]` marker at the START of `message` for every `spawn_agent` payload |
-| Model tier | `config.models.codex[tier]` if set; today Codex cannot select a per-agent model → tier is enforced as a read budget + output cap in the prompt |
-| Result collection | Status tokens arrive in the parent thread; use `wait_agent(..., timeout_ms=60000)` only when a specific result is needed |
-| Follow-up / rescue | `followup_task({target: "<agent id or task name>", message: "..."})` to continue the same agent; a fresh `spawn_agent` only for a genuinely new task — no routine `send_input(...)` mid-flight |
-| Harness assist | None — the tend loop in this skill is the nudge |
-| Isolation guarantee | `fork_turns: "none"`; never fork the parent history for routine cells (ORCH-02) |
-| Subagent type (W3, AO5/AO10/AO11) | No per-agent subagent type — the tier is enforced as a read budget + output cap in the worker prompt regardless of what is spawned (documented asymmetry, not parity) |
-<!-- bee:end -->
 
 On both runtimes the integrity rails are identical because they live in the helpers: `bee.mjs cells cap` refuses without a verify pass, and `bee.mjs reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
-<!-- bee:only claude -->
 On Claude Code, `bee-model-guard` additionally denies pairing a `[bee-tier: generation|extraction|review]` marker with `subagent_type: "general-purpose"` (`generic-type-denied`) — the pinned type above is not optional guidance, it is enforced at dispatch.
-<!-- bee:end -->
 
-<!-- bee:only codex -->
-### Native Codex timeout interval
-
-A `wait_agent` result with no completion is an **empty wait**, not a worker
-failure. A `wait_agent` timeout/no-completion result is only an empty wait;
-silence is not failure. Never call `wait_agent` twice consecutively after an
-empty wait; authority, urgency, and no-chatter instructions create no exception.
-Before any later bounded wait, perform at least one material task-local action
-when work remains; that one action satisfies the interval, and exhausting all
-local work is not required. Only when no material work remains, take exactly one
-`list_agents` snapshot. Handle any completion that arrives during the interval
-exactly once, then recompute the relevant live-agent set. Send one concise
-commentary update naming both the live agent state and the next action. Only
-after this commentary may a later bounded wait run, and only while the relevant
-live-agent set is non-empty; zero live agents ends collection without another
-wait. No-op work, repeated state reads, hidden reasoning, generic commentary, or
-commentary alone do not qualify. The timeout never licenses interrupt, duplicate
-dispatch, claim release, or reservation release: every running agent, claim, and
-reservation stays owned. Do not poll files or scratchpads for harness-managed
-native agents. External process and artifact polling stays governed by External
-Executors below and remains outside this native-agent rule.
-<!-- bee:end -->
 
 ## Model Tiers — Config-Driven, Runtime-Keyed (decision 0012)
 
@@ -541,9 +473,7 @@ Startup:
 ```
 
 The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are no longer a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder (AO5). The same-model no-op is the orchestrator's, run at dispatch, never left to the worker (AO4 + AO5). When present, `<TRANSPORT>` states the proven transport verbatim, matching what bee-executing's Advisor Consult section tells the worker to run:
-<!-- bee:only claude -->
 for a **model-shaped** advisor, `your own Agent tool, model param <advisor-model>, description starting exactly "advisor-consult <CELL_ID>: <advisor-model>"` (fallback: headless `claude -p --model <advisor-model>`);
-<!-- bee:end -->
 for a **cli-shaped** advisor, `<the configured command>, evidence bundle on stdin` (External Executors output-capture discipline, above).
 
 Never include session history, other cells, or the orchestrator's reasoning. If a worker needs more than this contract, the cell failed cold-pickup review — route the gap back, do not widen the prompt with transcript.
@@ -622,7 +552,6 @@ one, and never issue `/clear` yourself.
 - results collected but state.json / cells not updated
 - session history in a worker prompt
 
-<!-- bee:only claude -->
 
 ## Threat model and protected attestation
 
@@ -649,5 +578,4 @@ These are typed identity halts: stop integration, preserve the worktree and
 branch, and never reinterpret worker result wording as authority. Transactional
 merge, verification, revert, cleanup, and destructive-drop disposition remain the
 acceptance procedure owned by `worktree-isolation-4` and the swarming reference.
-<!-- bee:end -->
 

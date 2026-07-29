@@ -205,12 +205,7 @@ At L2+, invoke `bee-xia` in-chain: local truth → local reuse → upstream patt
 
 **One dispatch, two mandates, both vocabularies.** One `bee-review`-class dispatch on the **`review` slot** (default opus on Claude, generation fallback; state the model explicitly; if the runtime cannot select per-agent models, cap its reads and output instead) returns **one report, two sections**: **Structure** — the adversarial check over its 5 dimensions, every finding **BLOCKER** or **WARNING**; and **Cells** — the cold-pickup review, every finding **CRITICAL** (all fixed before approval) or **MINOR** (may ship with a recorded note). Merging the dispatches never merges the finding classes. Prompt and dimensions below.
 
-<!-- bee:only claude -->
-On Claude Code, spawn `subagent_type: "bee-review"` when `.claude/agents/bee-review.md` exists — bee's own rendered agent for the review tier, never `general-purpose` (a model-guard denies that pairing).
-<!-- bee:end -->
-<!-- bee:only codex -->
 Codex has no per-agent subagent type, so the tier stays enforced as a read budget + output cap only.
-<!-- bee:end -->
 
 It is a **read-only gather**, never a cell: a cli-shaped review slot resolves with the purpose-scoped `resolveTier(root, 'review', runtime, {for:'gather'})` — a bare 3-arg resolve of one now refuses; a model-shaped slot is unaffected by purpose.
 

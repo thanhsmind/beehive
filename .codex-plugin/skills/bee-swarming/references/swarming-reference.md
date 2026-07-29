@@ -99,24 +99,9 @@ single worker — never wave analysis or multi-cell assignment.
    status-token protocol (`[DONE] [BLOCKED] [HANDOFF] [NOOP]`) — **nothing
    else, never session history, never a literal session id (D3)**. Use the
    template below.
-<!-- bee:only claude -->
-   **Spawn the tier-matched pinned type when its rendered agent exists**
-   (W3, AO5/AO10/AO11): `subagent_type: "bee-gather"` for `generation`,
-   `"bee-extract"` for `extraction`, `"bee-review"` for `review` — these are
-   bee's own rendered agent definitions (`.claude/agents/bee-*.md`,
-   config-sourced at onboarding), never another plugin's type. `ceiling` has
-   no rendered agent (it IS the session model) — spawn it as the runtime's
-   default/general subagent type; the same default applies when the tier's
-   slot is cli-shaped or otherwise has no rendered file. NEVER pair a
-   `[bee-tier: generation|extraction|review]` marker with `subagent_type:
-   "general-purpose"` — `bee-model-guard` denies it (`generic-type-denied`,
-   decision 0023/AO5) precisely so this rule cannot be skipped by habit.
-<!-- bee:end -->
-<!-- bee:only codex -->
    Codex has no per-agent `subagent_type` equivalent (AO11 asymmetry) — its
    tier stays enforced as a read budget + output cap only, exactly as
    before.
-<!-- bee:end -->
    NEVER spawn any OTHER plugin's agent type, even when the name matches the
    role: a same-named agent carries a different contract and makes the run
    depend on what happens to be installed.
@@ -166,7 +151,6 @@ single worker — never wave analysis or multi-cell assignment.
    and `node .bee/bin/bee.mjs reservations list --active-only` before
    assuming a worker is stuck. Do not send routine mid-flight pings;
    interrupt only for explicit user aborts or confirmed deadlocks.
-<!-- bee:only codex -->
    For native Codex agents, a completed `wait_agent` call with no completion
    is an **empty wait** and a timeout signal only. A `wait_agent`
    timeout/no-completion result is only an empty wait; silence is not
@@ -187,7 +171,6 @@ single worker — never wave analysis or multi-cell assignment.
    agent, claim, and reservation stays owned. External process and artifact
    polling remains outside this native-agent rule and stays governed by the
    separate executor contract below.
-<!-- bee:end -->
 7. **Goal-check every `[DONE]` yourself (P12, decision 0018) — miss reruns,
    hit ships.** A worker's word is never the evidence; the orchestrator
    measures before the cell counts:
@@ -273,125 +256,9 @@ never per cell, never per wave.
   in the cell — the worker fixes it, and the feature verify above is what
   later confirms the fix, never a worker-side re-proof.
 
-<!-- bee:only claude -->
-## Native Worktree Integration Transaction
-
-This is the orchestrator-owned goal-check for an eligible Claude Code native
-worktree wave. It is a consistency and recovery protocol, not a security
-boundary: a same-UID worker is cooperative but fallible, worker-reported Git
-identity is informational, and Git metadata is evidence rather than authority.
-Normal eligibility remains an opted-in wave of at least two workers. The sole
-one-worker exception is the post-enablement `worktree-isolation-4` acceptance,
-and its serialized prerequisites (`worktree-isolation-1` →
-`worktree-isolation-2` → `worktree-isolation-3`) must already be capped.
-
-### Protected pre-dispatch record
-
-Before dispatch — before worker output or a worker result can exist — record the
-main checkout's pre-main SHA and a control-plane attestation outside the worker's
-editable worktree:
-
-- canonical `commonDir`, canonical `worktreePath`, and metadata-derived
-  `worktreeId`;
-- the initial symbolic `headRef` (detached HEAD is ineligible) and `baseCommit`;
-- normalized cell `declaredPaths` and the actually held `reservedPaths`.
-
-If the runtime cannot capture and retain this record, halt with
-`WORKTREE_ATTESTATION_UNAVAILABLE`; it is ineligible for worktree mode. Never
-accept a branch, base, path, id, or candidate supplied only by worker text.
-
-### Re-attest before integration
-
-After `[DONE]`, derive the candidate from the protected worktree id and fresh Git
-metadata. Re-resolve the canonical common dir and worktree path, validate the
-metadata backlink, require the same symbolic ref, and reject detached HEAD. Any
-identity or backlink mismatch halts as `WORKTREE_IDENTITY_MISMATCH`. Then run
-`git merge-base --is-ancestor <baseCommit> <candidate>`; failure is
-`WORKTREE_BASE_ANCESTRY_MISMATCH`. Finally obtain
-`git diff --name-only <baseCommit>..<candidate>`, apply the same logical path
-normalization used by reservations, and require the result to be a subset of
-the attested `reservedPaths`; an extra path is
-`WORKTREE_RESERVED_DIFF_MISMATCH`.
-
-Every typed halt preserves the worktree, branch/ref, candidate commit, and
-attestation. The orchestrator does not reinterpret a worker's result wording to
-continue.
-
-### Merge, verify, and provenance
-
-From the attested main checkout, capture `pwd` and pre-main HEAD, then run exactly
-`git merge --no-ff --no-commit <candidate>`. On a merge conflict, run
-`git merge --abort`, prove HEAD still equals pre-main HEAD, and preserve the
-worker recovery state. Run the cell's targeted checks while the merge is
-uncommitted; on targeted red, run `git merge --abort` and again prove main
-history still equals pre-main HEAD. Only green targeted checks permit the merge
-commit.
-
-On committed main, capture this provenance as one attributable record:
-
-- `pwd`;
-- pre-main HEAD and post-main HEAD;
-- merged-commit ancestry (`git merge-base --is-ancestor <candidate> <post-main>`);
-- the exact full repository verify command;
-- full verify output and exit status.
-
-Run that exact full repository verification only from the committed main
-checkout. An unexpected post-commit red immediately runs
-`git revert -m 1 --no-edit <post-main>` before any later work. Record the new
-revert commit, confirm main is no longer carrying the merge's changes, and
-preserve the worker worktree/ref. Revert is non-destructive: never reset or
-rewrite main history to hide the failed merge.
-
-### Conservative disposition and cleanup
-
-Automatic cleanup is a conjunction, not a best-effort tail. Immediately before
-cleanup, require worker `git status --porcelain` to be empty, the recorded
-committed-main full verify to be green, and
-`git merge-base --is-ancestor <candidate> <main-head>` to prove the candidate is
-reachable. Only then use the non-force commands
-`git worktree remove <worktreePath>` followed by `git branch -d <headRef>`.
-Failure of either command preserves whatever recovery identity remains and is
-reported; it never falls through to a force variant.
-
-`[BLOCKED]`, `[HANDOFF]`, abandonment, identity mismatch, merge conflict,
-targeted or full red verification, post-commit revert, and any incomplete or
-unknown outcome all suppress automatic cleanup. They preserve the worktree,
-symbolic ref/branch, HEAD, candidate, attestation, and the reason integration
-stopped. A feature close, capped cell, worker log, timeout, or absent process is
-not cleanup authorization.
-
-### Explicit destructive drop
-
-A destructive drop is a separate operator action, never an automatic recovery
-step. Before asking for explicit operator authorization, record the current
-status, dirty/untracked diff, HEAD, candidate reachability from main, and a
-recovery ref or patch stored outside the worktree being dropped. The approval
-must identify that captured recovery artifact and the exact worktree/ref to
-destroy. Without both explicit operator authorization and successful recovery
-capture, preserve everything. Even with approval, report the resulting recovery
-identity; a force removal or branch deletion must never appear in the automatic
-cleanup path above.
-
-Acceptance tests use deterministic temporary Git repositories to inject identity
-mismatch, out-of-scope diff, merge conflict, targeted red, post-commit full red,
-`[BLOCKED]`, `[HANDOFF]`, abandonment, cleanup suppression, and revert behavior.
-No live checkout is used as a fault-injection target.
-<!-- bee:end -->
 
 ## Runtime Spawn Mechanics (side by side)
 
-<!-- bee:only claude -->
-| | Claude Code |
-|---|---|
-| Spawn | `Agent` tool, one call per worker; put the worker prompt in `prompt`; set `run_in_background: true` so the whole wave runs in parallel (send all spawns of a wave in one message) |
-| Model tier | `model` parameter per Agent call = `config.models.claude[tier]` (default `haiku`/`sonnet`/`fable`; ceiling = the orchestrator's model, kept scarce) |
-| Result collection | You are notified when each background agent completes; its final message is the worker report — parse the leading status token |
-| Follow-up / rescue | `SendMessage` to the same agent id continues it with context intact; a new `Agent` call starts fresh |
-| Harness assist | `bee-chain-nudge` hook fires on SubagentStop: collect the status, update the cell, check reservations |
-| Isolation guarantee | Fresh context per Agent call; include only the contract fields |
-| Subagent type (W3, AO5/AO10/AO11) | `subagent_type: "bee-gather"`/`"bee-extract"`/`"bee-review"` for generation/extraction/review, when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling`, and any tier whose slot is cli-shaped or otherwise unrendered, use the runtime default (`general-purpose`) |
-<!-- bee:end -->
-<!-- bee:only codex -->
 | | Codex |
 |---|---|
 | Spawn | `spawn_agent({task_name: "<stable-name>", message: "<WORKER_PROMPT>", fork_turns: "none"})` (ORCH-01) — the live-probed codex 0.145.0 schema (i54-closeout D1): `task_name` + `message` required, no `agent_type` field; `bee dispatch prepare --runtime codex` emits exactly this shape, and the guard judges the `[bee-tier: <t>]` marker at the START of `message` for every `spawn_agent` payload |
@@ -401,14 +268,9 @@ No live checkout is used as a fault-injection target.
 | Harness assist | None — the tend loop in this skill is the nudge |
 | Isolation guarantee | `fork_turns: "none"`; never fork the parent history for routine cells (ORCH-02) |
 | Subagent type (W3, AO5/AO10/AO11) | No per-agent subagent type — the tier is enforced as a read budget + output cap in the worker prompt regardless of what is spawned (documented asymmetry, not parity) |
-<!-- bee:end -->
 
 On both runtimes the integrity rails are identical because they live in the helpers: `bee.mjs cells cap` refuses without a verify pass, and `bee.mjs reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
-<!-- bee:only claude -->
-On Claude Code, `bee-model-guard` additionally denies pairing a `[bee-tier: generation|extraction|review]` marker with `subagent_type: "general-purpose"` (`generic-type-denied`) — the pinned type above is not optional guidance, it is enforced at dispatch.
-<!-- bee:end -->
 
-<!-- bee:only codex -->
 ### Native Codex timeout interval
 
 A `wait_agent` result with no completion is an **empty wait**, not a worker
@@ -429,7 +291,6 @@ dispatch, claim release, or reservation release: every running agent, claim, and
 reservation stays owned. Do not poll files or scratchpads for harness-managed
 native agents. External process and artifact polling stays governed by External
 Executors below and remains outside this native-agent rule.
-<!-- bee:end -->
 
 ## Model Tiers — Config-Driven, Runtime-Keyed (decision 0012)
 
@@ -541,9 +402,6 @@ Startup:
 ```
 
 The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are no longer a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder (AO5). The same-model no-op is the orchestrator's, run at dispatch, never left to the worker (AO4 + AO5). When present, `<TRANSPORT>` states the proven transport verbatim, matching what bee-executing's Advisor Consult section tells the worker to run:
-<!-- bee:only claude -->
-for a **model-shaped** advisor, `your own Agent tool, model param <advisor-model>, description starting exactly "advisor-consult <CELL_ID>: <advisor-model>"` (fallback: headless `claude -p --model <advisor-model>`);
-<!-- bee:end -->
 for a **cli-shaped** advisor, `<the configured command>, evidence bundle on stdin` (External Executors output-capture discipline, above).
 
 Never include session history, other cells, or the orchestrator's reasoning. If a worker needs more than this contract, the cell failed cold-pickup review — route the gap back, do not widen the prompt with transcript.
@@ -622,32 +480,4 @@ one, and never issue `/clear` yourself.
 - results collected but state.json / cells not updated
 - session history in a worker prompt
 
-<!-- bee:only claude -->
-
-## Threat model and protected attestation
-
-A same-UID worker is cooperative and fallible, not a security principal. Git
-metadata is consistency evidence, never independent authorization or a security
-boundary against that worker. Worker-reported id, branch, base, path, and commit
-are informational only; the orchestrator derives the candidate from the protected
-attestation and freshly read Git metadata.
-
-After `[DONE]` and before any merge, re-resolve the attested worktree and require:
-
-1. canonical path, native id, `commonDir`, forward link/backlink, and symbolic
-   `headRef` still match the attestation. A detached HEAD returns
-   `WORKTREE_IDENTITY_MISMATCH`; any path/id/common-dir/ref/backlink mismatch also
-   returns `WORKTREE_IDENTITY_MISMATCH`.
-2. the candidate is the freshly read worktree HEAD and
-   `git merge-base --is-ancestor <baseCommit> <candidate>` succeeds. A
-   non-descendant returns `WORKTREE_BASE_ANCESTRY_MISMATCH`.
-3. the NUL-delimited `git diff --name-only <baseCommit>..<candidate>` is a subset
-   of attested `reservedPaths` after the same logical normalization used by
-   reservations. Any extra path returns `WORKTREE_RESERVED_DIFF_MISMATCH`.
-
-These are typed identity halts: stop integration, preserve the worktree and
-branch, and never reinterpret worker result wording as authority. Transactional
-merge, verification, revert, cleanup, and destructive-drop disposition remain the
-acceptance procedure owned by `worktree-isolation-4` and the swarming reference.
-<!-- bee:end -->
 

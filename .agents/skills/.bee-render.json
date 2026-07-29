@@ -4,11 +4,11 @@
   "skills": [
     {
       "name": "bee-briefing",
-      "sha256": "7961a2bb400efc01c6643c79e53a1cf0c92764a932090d757c9e2023443584f8"
+      "sha256": "40ad28cddd81f78006e00368aec9e9fec90bfeee66862c3e880d55dd16ff3f08"
     },
     {
       "name": "bee-bypass-gate",
-      "sha256": "be871eec8d36cf6b14ec8ba73326899d190229d66547c92ebf8b564810472572"
+      "sha256": "5917089b90541dabb23c49588c68819b04c6dc172056585568be28f1b5412f0b"
     },
     {
       "name": "bee-compounding",
@@ -24,7 +24,7 @@
     },
     {
       "name": "bee-executing",
-      "sha256": "08e414b4a9306b21ba55630c38eb2bdc39c6eae2a93f003feaff4f7ee9aa5ca2"
+      "sha256": "dfad88625f3f838da6dada71fee293496f1fdc158677bbe43c8781f8b0cd0468"
     },
     {
       "name": "bee-exploring",
@@ -36,7 +36,7 @@
     },
     {
       "name": "bee-herding",
-      "sha256": "1a1eafc71c782cd5f7737d90dbf44355adc375fce327b6bf5f9848f467d3df64"
+      "sha256": "2e6fc3a7d8d32539719e8f9e54203841e5cfdb8684050220919aa5631f1cf1f4"
     },
     {
       "name": "bee-hive",
