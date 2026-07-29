@@ -73,6 +73,12 @@ import { validateJudgeVerdict, deriveModelIndependence } from './judge.mjs';
 // so distinct cells never serialize against each other. Pure readers
 // (readCell, listCells, etc.) stay lock-free.
 import { withStoreLock, acquireStoreLockOnceSync } from './lock.mjs';
+// derived-check-hardening E1: the cap-time impact-registry cross-check below
+// reuses the SAME derivation scripts/impact_registry.mjs already computes
+// (queryRegistry/normalizeQueryPath) rather than re-deriving file->suite
+// relatedness here. scripts/impact_registry.mjs imports only node builtins
+// (fs/path/url), so this creates no import cycle back into lib/.
+import { queryRegistry, normalizeQueryPath } from '../../../scripts/impact_registry.mjs';
 
 export const LANES = ['tiny', 'small', 'standard', 'high-risk', 'spike'];
 
@@ -2023,6 +2029,34 @@ export async function capCell(
         });
       }
     }
+    // derived-check-hardening E1: cap-time cross-check of the cell's static
+    // `verify` command against the impact registry's DIRECT-edge (level:1 —
+    // a transitive sweep would name so many suites the warning becomes noise
+    // nobody reads) suites for `cell.files`. LOUD, never a refusal: a
+    // refusal on this door would gate every future cap on registry
+    // freshness, so any returned suite missing from `cell.verify` is only
+    // named on stderr. Reuses queryRegistry/normalizeQueryPath verbatim (see
+    // the import above) — no new derivation logic here. A missing,
+    // unreadable, or malformed registry is a silent skip: this runs on
+    // EVERY cap, so it must never throw.
+    let impactWarning = null;
+    try {
+      const cellFiles = Array.isArray(cell.files) ? cell.files : [];
+      if (cellFiles.length > 0) {
+        const registryPath = path.join(root, 'scripts', 'impact-registry.json');
+        const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+        const { mappedSuites } = queryRegistry(registry, cellFiles, { level: 1 });
+        const verifyText = typeof cell.verify === 'string' ? cell.verify : '';
+        const missingSuites = mappedSuites.filter((suite) => !verifyText.includes(suite));
+        if (missingSuites.length > 0) {
+          impactWarning = `capCell: cell "${id}" verify does not mention impact-registry direct-edge suite(s) ${missingSuites.join(', ')} for file(s) ${cellFiles.join(', ')} — derived-check-hardening E1 non-blocking warning.`;
+          process.stderr.write(`${impactWarning}\n`);
+        }
+      }
+    } catch {
+      // Missing, unreadable, or malformed registry — silent skip (E1: never a throw).
+      impactWarning = null;
+    }
     // Decision 0009, NARROWED by test-economy D2: a behavior_change cell must
     // record the "before" it changed — a characterization of prior behavior —
     // not just an assertion that the new behavior works. This blocks
@@ -2123,8 +2157,10 @@ export async function capCell(
       // test-economy D3: non-blocking ratio-ceiling warning (tiny/small
       // only, computed above) — additive field, an empty array whenever
       // diff_stats is absent or the ratio is within bounds, so existing
-      // consumers of trace see no schema break.
-      warnings: ratioWarning ? [ratioWarning] : [],
+      // consumers of trace see no schema break. derived-check-hardening E1
+      // folds the impact-registry warning (also computed above, also
+      // non-blocking) into the SAME array — same channel, same semantics.
+      warnings: [ratioWarning, impactWarning].filter(Boolean),
       // main-verifies D1: the pending marker guardFeatureVerifyDebt (bee.mjs)
       // reads at both swarming exits. Stamped ONLY on the pending path — the
       // classic evidence path's trace stays byte-identical to before.

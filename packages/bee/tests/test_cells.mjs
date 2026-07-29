@@ -2401,6 +2401,170 @@ await check('capCell (D3 fail-open): diff_stats omitted skips BOTH new_suite_rea
   assert(!capped.trace.warnings || capped.trace.warnings.length === 0, 'no ratio warning can be computed without diff_stats');
 });
 
+// ─── derived-check-hardening E1: cap-time impact-registry cross-check ──────
+// A dedicated fixture repo per test (own scripts/impact-registry.json), never
+// the shared `root` above — the registry lookup is keyed by repo-relative
+// path, and adding a registry file to the shared root could shadow unrelated
+// cells' `files` elsewhere in this suite.
+function makeImpactRegistryRepo(prefix, registryFileContents) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
+  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), {
+    schema_version: '1.0',
+    bee_version: '0.1.0',
+  });
+  // Gate 3 pre-approved (makeTaxonomyRepo precedent above) — claimCell
+  // refuses on an unapproved execution gate, orthogonal to what E1 exercises.
+  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+    schema_version: '1.0',
+    phase: 'swarming',
+    feature: 'demo-feat',
+    mode: 'standard',
+    approved_gates: { context: true, shape: true, execution: true, review: false },
+    workers: [],
+  });
+  if (registryFileContents !== undefined) {
+    fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'scripts', 'impact-registry.json'), registryFileContents);
+  }
+  return dir;
+}
+
+const IMPACT_REGISTRY_FIXTURE = JSON.stringify({
+  version: 2,
+  files: {
+    'src/registry-fixture/thing.mjs': {
+      direct: ['packages/bee/tests/test_thing_direct.mjs'],
+      all: ['packages/bee/tests/test_thing_direct.mjs', 'packages/bee/tests/test_thing_transitive.mjs'],
+    },
+  },
+});
+
+await check(
+  'capCell (E1): a verify omitting a direct-edge registry suite prints a named, non-blocking warning on stderr and still caps',
+  async () => {
+    const iRoot = makeImpactRegistryRepo('bee-impact-warn-', IMPACT_REGISTRY_FIXTURE);
+    try {
+      addCell(
+        iRoot,
+        makeCell('e1-warn-1', {
+          lane: 'small',
+          files: ['src/registry-fixture/thing.mjs'],
+          verify: 'node packages/bee/tests/test_unrelated.mjs',
+        }),
+      );
+      await claimCell(iRoot, 'e1-warn-1', 'worker-e1');
+      await recordVerify(iRoot, 'e1-warn-1', {
+        command: 'node packages/bee/tests/test_unrelated.mjs',
+        output: 'ok',
+        passed: true,
+      });
+      const originalWrite = process.stderr.write;
+      let stderrOut = '';
+      process.stderr.write = (chunk) => {
+        stderrOut += chunk;
+        return true;
+      };
+      let capped;
+      try {
+        capped = await capCell(iRoot, 'e1-warn-1', {
+          files_changed: ['src/registry-fixture/thing.mjs'],
+          outcome: 'done',
+        });
+      } finally {
+        process.stderr.write = originalWrite;
+      }
+      assert(capped.status === 'capped', 'a missing direct-edge suite must warn, never refuse the cap');
+      assert(
+        Array.isArray(capped.trace.warnings) &&
+          capped.trace.warnings.some((w) => w.includes('packages/bee/tests/test_thing_direct.mjs')),
+        `expected trace.warnings to name the missing direct-edge suite, got ${JSON.stringify(capped.trace.warnings)}`,
+      );
+      assert(
+        stderrOut.includes('packages/bee/tests/test_thing_direct.mjs'),
+        `expected the missing suite to be named on stderr, got ${JSON.stringify(stderrOut)}`,
+      );
+      assert(
+        !stderrOut.includes('test_thing_transitive.mjs'),
+        'level:1 must scope to DIRECT edges only — the transitive-only suite must never be named',
+      );
+    } finally {
+      fs.rmSync(iRoot, { recursive: true, force: true });
+    }
+  },
+);
+
+await check('capCell (E1): a verify that already mentions the direct-edge suite gets no impact-registry warning', async () => {
+  const iRoot = makeImpactRegistryRepo('bee-impact-clean-', IMPACT_REGISTRY_FIXTURE);
+  try {
+    addCell(
+      iRoot,
+      makeCell('e1-clean-1', {
+        lane: 'small',
+        files: ['src/registry-fixture/thing.mjs'],
+        verify: 'node packages/bee/tests/test_thing_direct.mjs',
+      }),
+    );
+    await claimCell(iRoot, 'e1-clean-1', 'worker-e1');
+    await recordVerify(iRoot, 'e1-clean-1', {
+      command: 'node packages/bee/tests/test_thing_direct.mjs',
+      output: 'ok',
+      passed: true,
+    });
+    const capped = await capCell(iRoot, 'e1-clean-1', {
+      files_changed: ['src/registry-fixture/thing.mjs'],
+      outcome: 'done',
+    });
+    assert(capped.status === 'capped', 'a matching verify must still cap');
+    assert(
+      !capped.trace.warnings || !capped.trace.warnings.some((w) => w.includes('impact-registry') || w.includes('E1')),
+      `expected no impact-registry warning when the direct-edge suite is already covered, got ${JSON.stringify(capped.trace.warnings)}`,
+    );
+  } finally {
+    fs.rmSync(iRoot, { recursive: true, force: true });
+  }
+});
+
+await check('capCell (E1): a missing impact registry is a silent skip, never a throw', async () => {
+  const iRoot = makeImpactRegistryRepo('bee-impact-missing-'); // no registry file at all
+  try {
+    addCell(
+      iRoot,
+      makeCell('e1-missing-1', {
+        lane: 'small',
+        files: ['src/registry-fixture/thing.mjs'],
+        verify: 'node -e "process.exit(0)"',
+      }),
+    );
+    await claimCell(iRoot, 'e1-missing-1', 'worker-e1');
+    await recordVerify(iRoot, 'e1-missing-1', { command: 'x', output: 'ok', passed: true });
+    const capped = await capCell(iRoot, 'e1-missing-1', { files_changed: ['a.js'], outcome: 'done' });
+    assert(capped.status === 'capped', 'a missing registry must never block a cap');
+  } finally {
+    fs.rmSync(iRoot, { recursive: true, force: true });
+  }
+});
+
+await check('capCell (E1): a malformed impact registry (invalid JSON) is a silent skip, never a throw', async () => {
+  const iRoot = makeImpactRegistryRepo('bee-impact-malformed-', '{ not valid json');
+  try {
+    addCell(
+      iRoot,
+      makeCell('e1-malformed-1', {
+        lane: 'small',
+        files: ['src/registry-fixture/thing.mjs'],
+        verify: 'node -e "process.exit(0)"',
+      }),
+    );
+    await claimCell(iRoot, 'e1-malformed-1', 'worker-e1');
+    await recordVerify(iRoot, 'e1-malformed-1', { command: 'x', output: 'ok', passed: true });
+    const capped = await capCell(iRoot, 'e1-malformed-1', { files_changed: ['a.js'], outcome: 'done' });
+    assert(capped.status === 'capped', 'a malformed registry must never block a cap');
+  } finally {
+    fs.rmSync(iRoot, { recursive: true, force: true });
+  }
+});
+
 // ─── D1 Δ2-amendment: EVERY claim-clearing transition releases the claim
 // file — cap, unclaim, block, drop, reopen — not only the claim-next unwind.
 // Without this a same-session round trip through one of these verbs would
