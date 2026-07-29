@@ -1,0 +1,77 @@
+{
+  "id": "wc-1",
+  "feature": "worker-conformance",
+  "title": "Stamp trace.proof = \"unrecorded\" when a cap carries no real proof",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D10",
+    "D12",
+    "D14"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "files": [
+    "packages/bee/lib/cells.mjs",
+    "packages/bee/tests/test_cells.mjs"
+  ],
+  "read_first": [
+    "packages/bee/lib/cells.mjs",
+    "docs/history/worker-conformance/CONTEXT.md",
+    "docs/history/worker-conformance/plan.md"
+  ],
+  "action": "In capCell, after the ENTIRE refusal chain has run (post cells.mjs:2178) and only for a cap that is about to succeed, stamp a new cell trace field trace.proof = \"unrecorded\" when NEITHER real verify output NOR verification_evidence was supplied (per D14). Treat output that is missing, null, empty, or whitespace-only as absent; a one-line real output counts as present. Never set the local feature_verify_pending flag to reach this — that variable (cells.mjs:1885) short-circuits six refusal sites (:1886-1899, :1912, :1999, :2032, :2135, :2164) and reusing it would void D2 and D6 (per D12). A cell holding verification_evidence is never stamped, even with empty verify_output, because a tiny-lane security cell whose 80-char red_failure_evidence already passed :2135 holds the strongest proof in the system (per D14). Exempt repos whose commands.verify is the string \"none\" — the noTestWaiver path at cells.mjs:1908 has no verify output by construction, so marking it would arm a close-door such a repo can never satisfy (per D12). Leave trace.feature_verify semantics completely untouched. This cell is high-risk lane, so it owns its own red-first proof: write the failing tests first, in packages/bee/tests/test_cells.mjs, following the table-driven fixture shape at test_cells.mjs:2189-2239 (cases array plus a for..of loop over the makeCell/claimCell/recordVerify/capCell pipeline). Required rows: output absent, null, empty string, whitespace-only all stamp; a one-line real output does not; verification_evidence present with empty output does not; an explicit --feature-verify-pending cap sets feature_verify and leaves trace.proof untouched; a commands.verify \"none\" repo is never stamped. Add a negative-control row proving an \"unrecorded\" cell still dies at the red-first door (:2135) when it is security/migration or high-risk lane.",
+  "must_haves": {
+    "truths": [
+      "A cap with no verify output and no verification_evidence records trace.proof === \"unrecorded\"",
+      "A cap with a one-line real verify output does not record trace.proof",
+      "A cap with verification_evidence and empty verify output does not record trace.proof",
+      "An explicit --feature-verify-pending cap still sets trace.feature_verify === \"pending\" and leaves trace.proof unset",
+      "A repo whose commands.verify is \"none\" is never stamped",
+      "An \"unrecorded\" cell in a red-first tier still refuses without red_failure_evidence"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/lib/cells.mjs",
+        "substantive": "capCell stamps trace.proof = \"unrecorded\" post-refusal-chain under the D14 predicate; no new use of feature_verify_pending"
+      },
+      {
+        "path": "packages/bee/tests/test_cells.mjs",
+        "substantive": "table-driven rows for every truth above plus the red-first negative control, in the :2189-2239 fixture shape"
+      }
+    ],
+    "key_links": [
+      "capCell's success path writes trace.proof before the cell record is persisted"
+    ],
+    "prohibitions": [
+      "No change to the six pendingFeatureVerify short-circuit sites (cells.mjs:1886-1899, :1912, :1999, :2032, :2135, :2164)",
+      "No change to trace.feature_verify semantics",
+      "No relaxation of any existing refusal — this cell only adds a marker",
+      "Do not set feature_verify_pending internally"
+    ]
+  },
+  "verify": "node packages/bee/tests/test_cells.mjs",
+  "behavior_change": true,
+  "trace": {
+    "worker": "Kevin",
+    "outcome": "capCell stamps trace.proof=\"unrecorded\" post-refusal-chain when neither real verify output nor verification_evidence was supplied (D10/D12/D14) — a new inert field, never the feature_verify pending flag; pending path and commands.verify:\"none\" repos exempt. 5 red-first rows + a 3-row negative control prove the marker buys no door bypass.",
+    "files_changed": [
+      "packages/bee/lib/cells.mjs",
+      "packages/bee/tests/test_cells.mjs"
+    ],
+    "deviations": [],
+    "friction": "Dispatch collision: the cell's verify_owner says main runs the suite and the worker never does, while the high-risk red-first doctrine requires the worker itself to run the new tests red then green. I ran them as development iterations and capped through --feature-verify-pending; the two instructions should be reconciled for red-first cells.",
+    "capped_at": "2026-07-29T09:25:03.967Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "389dabf8-013e-4a66-b307-106a4a97dd94",
+    "claimed_at": "2026-07-29T09:03:28.641Z",
+    "warnings": [
+      "capCell: cell \"wc-1\" verify does not mention impact-registry direct-edge suite(s) packages/bee/tests/test_backlog_capture.mjs, packages/bee/tests/test_bee_cli.mjs, packages/bee/tests/test_cli_cells.mjs, packages/bee/tests/test_cli_state.mjs, packages/bee/tests/test_guards.mjs, packages/bee/tests/test_misc.mjs, packages/bee/tests/test_recovery.mjs, packages/bee/tests/test_reviews.mjs for file(s) packages/bee/lib/cells.mjs, packages/bee/tests/test_cells.mjs — derived-check-hardening E1 non-blocking warning."
+    ],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}

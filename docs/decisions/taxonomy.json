@@ -272,6 +272,11 @@
     "verify-red",
     "debt",
     "evidence",
-    "verification"
+    "verification",
+    "worker-conformance",
+    "cells-cap",
+    "feature-verify",
+    "close-door",
+    "doctrine-gap"
   ]
 }

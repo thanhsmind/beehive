@@ -1,0 +1,75 @@
+{
+  "id": "wc-2",
+  "feature": "worker-conformance",
+  "title": "Arm both close-door predicates on the unrecorded marker",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D11",
+    "D12",
+    "D3"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "files": [
+    "packages/bee/lib/state.mjs",
+    "packages/bee/tests/test_bee_cli.mjs"
+  ],
+  "read_first": [
+    "packages/bee/lib/state.mjs",
+    "packages/bee/tests/test_bee_cli.mjs",
+    "docs/history/worker-conformance/CONTEXT.md"
+  ],
+  "action": "Teach both feature-debt predicates to arm on the new marker from wc-1. featureVerifyDebt (state.mjs:2502-2518) currently arms only when a capped cell carries trace.feature_verify === \"pending\"; it must arm equally on trace.proof === \"unrecorded\" (per D11/D12). testCellDebt (state.mjs:2546-2570) currently treats only trace.verify_passed === false as not-green; a capped test cell whose pass was asserted with no recorded output must not satisfy the door either (per D11). Critical: the freshness comparison — newestPendingCapMs around state.mjs:2506-2523 — must compute over the UNION of pending and unrecorded caps, so a green feature-verify record newer than the newest pending cap but older than a newer unrecorded cap still refuses the close-door (per D12). Do not add a new debt kind unless the coverage-completeness meta-check at test_bee_cli.mjs:2670 demands one; prefer widening the existing 'feature-verify' and 'test-cell' kinds so every registered door inherits the change for free via guardFeatureDebt. High-risk lane, so red-first: write the failing tests first in packages/bee/tests/test_bee_cli.mjs, extending the DEBT_KIND_FIXTURES at :2617-2621 and the generated door x kind matrix at :2699-2719. The existing bypass-total case at :2575 must stay green — gate_bypass total still cannot pass either door.",
+  "must_haves": {
+    "truths": [
+      "A capped cell carrying trace.proof === \"unrecorded\" arms featureVerifyDebt exactly as a pending cap does",
+      "A green feature-verify record older than the newest unrecorded cap does not clear the door",
+      "A capped test cell whose pass was asserted with no output does not satisfy testCellDebt",
+      "gate_bypass total still cannot pass either door",
+      "Every registered door in the door x kind matrix inherits the new behavior"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/lib/state.mjs",
+        "substantive": "featureVerifyDebt and testCellDebt arm on the unrecorded marker; newestPendingCapMs computes over the union"
+      },
+      {
+        "path": "packages/bee/tests/test_bee_cli.mjs",
+        "substantive": "fixtures and matrix rows covering the unrecorded marker at every door, plus the union-staleness case"
+      }
+    ],
+    "key_links": [
+      "guardFeatureDebt composes both widened predicates so no door builds its own list"
+    ],
+    "prohibitions": [
+      "No door may call featureVerifyDebt or testCellDebt directly — the structural check at test_bee_cli.mjs:2682 must stay green",
+      "No bypass level may be given power over either door",
+      "No change to the feature-verify recording contract itself"
+    ]
+  },
+  "verify": "node packages/bee/tests/test_bee_cli.mjs",
+  "behavior_change": true,
+  "trace": {
+    "worker": "Stuart",
+    "outcome": "featureVerifyDebt and testCellDebt arm on trace.proof \"unrecorded\" as well as feature_verify \"pending\"; freshness clock runs over the union of both; an asserted-pass test cell no longer satisfies the test-cell door",
+    "files_changed": [
+      "packages/bee/lib/state.mjs",
+      "packages/bee/tests/test_bee_cli.mjs"
+    ],
+    "deviations": [],
+    "friction": "packages/bee/lib/{cells,state}.mjs have diverged from their .bee/bin/lib vendored copies, so test_misc.mjs's byte-identity guard is red for the whole wave — cells.mjs was already stale before this cell touched anything; clearing it is the orchestrator's wave-close regen (onboard_bee.mjs), which this cell's wave-barrier ack forbids it to run",
+    "capped_at": "2026-07-29T09:29:21.546Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "389dabf8-013e-4a66-b307-106a4a97dd94",
+    "claimed_at": "2026-07-29T09:03:28.721Z",
+    "warnings": [
+      "capCell: cell \"wc-2\" verify does not mention impact-registry direct-edge suite(s) packages/bee/tests/test_backlog_capture.mjs, packages/bee/tests/test_cells.mjs, packages/bee/tests/test_cli_cells.mjs, packages/bee/tests/test_cli_state.mjs, packages/bee/tests/test_config_validate.mjs, packages/bee/tests/test_contention_status.mjs, packages/bee/tests/test_guards.mjs, packages/bee/tests/test_intent.mjs, packages/bee/tests/test_misc.mjs, packages/bee/tests/test_msn_invariants.mjs, packages/bee/tests/test_reviews.mjs, packages/bee/tests/test_state.mjs, packages/bee/tests/test_state_projection.mjs, packages/bee/tests/test_worktree_store.mjs, packages/bee/tests/test_write_policy.mjs, scripts/okf_specs_fence.mjs, scripts/okf_specs_fence.mjs --selftest, scripts/tests/test_compact_capsule.mjs, scripts/tests/test_state_projection_race.mjs, scripts/tests/test_terminal_phase_parity.mjs for file(s) packages/bee/lib/state.mjs, packages/bee/tests/test_bee_cli.mjs — derived-check-hardening E1 non-blocking warning."
+    ],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}

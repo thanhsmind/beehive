@@ -2503,24 +2503,48 @@ export function featureVerifyDebt(root, record, feature) {
   if (!feature) return null; // no feature ⇒ nothing keyed to hold open
   const cells = readFeatureCellsStrict(root, feature);
   const pending = [];
-  let newestPendingCapMs = null;
+  const unrecorded = [];
+  let newestOwedCapMs = null;
   for (const cell of cells) {
     if (!cell || cell.status !== 'capped') continue;
     const trace = cell.trace || {};
-    if (trace.feature_verify !== 'pending') continue;
+    // worker-conformance D11/D12 — TWO markers, ONE debt.
+    //
+    //   feature_verify: "pending"  proof deliberately RELOCATED to the feature
+    //                              boundary (main-verifies D1);
+    //   proof: "unrecorded"        proof never recorded AT ALL — a cap that
+    //                              asserted a pass with no output and no
+    //                              verification_evidence, stamped by capCell
+    //                              after its whole refusal chain has run (D14).
+    //
+    // This door cannot tell them apart and must not try: in both cases the one
+    // thing that can still prove the cell is the feature-level green run, so
+    // both arm it. The second marker is what keeps D1 survivable — once the
+    // per-cell evidence doors stop refusing, an unproven cap carries no
+    // "pending" marker, and a door armed on "pending" alone would let a
+    // feature close with zero tests executed anywhere.
+    const relocated = trace.feature_verify === 'pending';
+    const unproven = trace.proof === 'unrecorded';
+    if (!relocated && !unproven) continue;
     pending.push(cell.id);
+    if (unproven) unrecorded.push(cell.id);
+    // …and the freshness clock runs over the UNION of both, which is the
+    // load-bearing half (D12): reading it over the relocated caps alone lets a
+    // green record newer than the newest PENDING cap but older than a newer
+    // UNRECORDED cap look fresh, and open the door on a cell that run never
+    // covered.
     const cappedMs = Date.parse(trace.capped_at);
-    if (Number.isFinite(cappedMs) && (newestPendingCapMs === null || cappedMs > newestPendingCapMs)) {
-      newestPendingCapMs = cappedMs;
+    if (Number.isFinite(cappedMs) && (newestOwedCapMs === null || cappedMs > newestOwedCapMs)) {
+      newestOwedCapMs = cappedMs;
     }
   }
-  if (pending.length === 0) return null; // no relocated proof owed ⇒ door untouched
+  if (pending.length === 0) return null; // no proof owed at the boundary ⇒ door untouched
   const raw = record && record.feature_verify;
   const rec = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
   const sameFeature = rec && (!rec.feature || rec.feature === feature);
   const green = rec && sameFeature && rec.result === 'green';
   const recAtMs = rec ? Date.parse(rec.at) : NaN;
-  const fresh = Number.isFinite(recAtMs) && (newestPendingCapMs === null || recAtMs > newestPendingCapMs);
+  const fresh = Number.isFinite(recAtMs) && (newestOwedCapMs === null || recAtMs > newestOwedCapMs);
   if (green && fresh) return null;
   let recordState;
   if (!rec) {
@@ -2530,9 +2554,9 @@ export function featureVerifyDebt(root, record, feature) {
   } else if (rec.result !== 'green') {
     recordState = `the recorded feature-verify is "${rec.result}" — a red record documents the failure, it never satisfies this door (main-verifies D2)`;
   } else {
-    recordState = `the recorded GREEN feature-verify (at ${rec.at}) is STALE — not newer than the newest pending cap, so at least one capped cell was never covered by it`;
+    recordState = `the recorded GREEN feature-verify (at ${rec.at}) is STALE — not newer than the newest cap still owing proof (pending OR unrecorded), so at least one capped cell was never covered by it`;
   }
-  return { pending, recordState };
+  return { pending, unrecorded, recordState };
 }
 
 /**
@@ -2565,6 +2589,15 @@ export function testCellDebt(root, feature) {
         offenders.push(`${cell.id} (status: ${cell.status || 'unknown'} — not capped)`);
       } else if (trace.verify_passed === false) {
         offenders.push(`${cell.id} (capped with a FAILING recorded verify)`);
+      } else if (trace.proof === 'unrecorded') {
+        // worker-conformance D11 — the third way a test cell fails to
+        // discharge this debt, and the one D1 creates. `verify_passed: false`
+        // is a test cell that ran and lost; this is a test cell that asserted
+        // a pass with nothing to show for it — no verify output and no
+        // verification_evidence (D14). Decision 0004's rule outlives the door
+        // that used to enforce it per-cell: an assertion is not evidence, so
+        // an asserted pass cannot be the coverage this door is holding out for.
+        offenders.push(`${cell.id} (capped with NO recorded proof — trace.proof: "unrecorded"; an asserted pass is not evidence)`);
       }
       continue;
     }
@@ -2613,7 +2646,7 @@ export function testCellDebt(root, feature) {
 // the text does not either. Every door imports these rather than growing its
 // own copy (the drift that produced this cell in the first place).
 export const FEATURE_VERIFY_FIX_TAIL =
-  'Those cells capped through `cells cap --feature-verify-pending` (main-verifies D1): their per-cell proof was deliberately relocated to ONE feature-level verify over the feature\'s whole diff, and this door is what keeps that relocation honest (D3).\n' +
+  'Those cells owe their proof at the feature boundary by one of two roads: capped through `cells cap --feature-verify-pending` (main-verifies D1), which relocates per-cell proof to ONE feature-level verify over the feature\'s whole diff; or capped with trace.proof "unrecorded" (worker-conformance D11/D12), meaning no verify output and no verification evidence was recorded at all. Either way the same single run discharges them, and this door is what keeps that honest (D3).\n' +
   'FIX: run the feature verify (the impacted suite over the feature\'s whole diff), capture its output to a file, record it — `bee state feature-verify record --command "<cmd>" --output-file <file> --result green` — then retry. A red result is recordable (it documents the failure) but never opens this door: open fix cells in this same feature (never un-cap, main-verifies D5), re-verify, and record the green.\n' +
   'This is a mechanical precondition, not a human gate: no gate_bypass level (including "total") and no headless run lifts it, and there is no waiver flag.';
 
@@ -2627,7 +2660,7 @@ export function testCellDebtFixTail(kind, feature) {
     );
   }
   return (
-    "Slice-tail test batching (spec #80/#85 P4) deferred this slice's test AUTHORING to that cell; leaving now would ship behavior whose tests were never written or never passed.\n" +
+    "Slice-tail test batching (spec #80/#85 P4) deferred this slice's test AUTHORING to that cell; leaving now would ship behavior whose tests were never written, never passed, or never actually run (a cap marked trace.proof \"unrecorded\" asserted a pass with no output and no evidence — worker-conformance D11).\n" +
     'FIX: execute the test cell (happy path, edge cases, error paths over the slice\'s net behavior), record a passing verify, and cap it — `bee cells verify --id <id> ... --passed true` then `bee cells cap --id <id> ...`. If its suite exposed a regression in an already-capped cell, open fix cells in this same feature and cap the test cell green after; capped cells are never un-capped.\n' +
     'This is a mechanical precondition, not a human gate: no gate_bypass level (including "total") and no headless run lifts it, and there is no waiver flag.'
   );
@@ -2688,8 +2721,16 @@ export const FEATURE_DEBT_KINDS = [
     id: 'feature-verify',
     label: 'pending feature-level verify (main-verifies D1/D3)',
     detect: (root, record, feature) => featureVerifyDebt(root, record, feature),
-    owed: (debt) =>
-      `has ${debt.pending.length} capped cell(s) awaiting the feature-level verify (trace.feature_verify: "pending"): ${debt.pending.join(', ')}, and ${debt.recordState}`,
+    owed: (debt) => {
+      // Both roads are named, and the unrecorded ones are named TWICE — the
+      // reader needs to know which cells never recorded proof at all, because
+      // their FIX reads differently from a deliberate relocation's.
+      const unrecordedNote =
+        debt.unrecorded && debt.unrecorded.length
+          ? ` — of those, ${debt.unrecorded.join(', ')} recorded NO proof at all (trace.proof: "unrecorded")`
+          : '';
+      return `has ${debt.pending.length} capped cell(s) awaiting the feature-level verify (trace.feature_verify: "pending", or trace.proof: "unrecorded"): ${debt.pending.join(', ')}${unrecordedNote}, and ${debt.recordState}`;
+    },
     abandonment: (feature, incoming) =>
       `Walking away to "${incoming}" leaves "${feature}"'s ONE feature-level verify unrun, and every reader of these markers keys on the record's feature: once the swap lands, nothing reads those pending caps again. The relocated proof would not be deferred, it would be destroyed.`,
     fixTail: () => FEATURE_VERIFY_FIX_TAIL,

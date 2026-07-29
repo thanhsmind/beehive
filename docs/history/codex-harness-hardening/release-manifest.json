@@ -15,7 +15,7 @@
     },
     {
       "path": ".bee/bin/lib/cells.mjs",
-      "sha256": "f4e432d941c7384490f12324af3922fc03a6dc73ba36e9416e445d56d5e12591",
+      "sha256": "571d3a4a208a71ce67e60c2fd56bf1a6c0cad5b91333cee5b1e847dc1be4460e",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -183,7 +183,7 @@
     },
     {
       "path": ".bee/bin/lib/state.mjs",
-      "sha256": "b7ec65b4e679354cce6afcd47498787ada6a6e796db9d2e0927c426a5271079f",
+      "sha256": "cb536fe1aeff8c9fb1f776d0a9e88fc02b77f6dfb5c47f407828948945ff11dc",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -1829,7 +1829,7 @@
     },
     {
       "path": "packages/bee/lib/cells.mjs",
-      "sha256": "f4e432d941c7384490f12324af3922fc03a6dc73ba36e9416e445d56d5e12591",
+      "sha256": "571d3a4a208a71ce67e60c2fd56bf1a6c0cad5b91333cee5b1e847dc1be4460e",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/cells.mjs"
@@ -2025,7 +2025,7 @@
     },
     {
       "path": "packages/bee/lib/state.mjs",
-      "sha256": "b7ec65b4e679354cce6afcd47498787ada6a6e796db9d2e0927c426a5271079f",
+      "sha256": "cb536fe1aeff8c9fb1f776d0a9e88fc02b77f6dfb5c47f407828948945ff11dc",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/state.mjs"
@@ -2144,7 +2144,7 @@
     },
     {
       "path": "packages/bee/tests/test_bee_cli.mjs",
-      "sha256": "506baba1f899209537eb063979cf0b3c06dec73bc9565f96c1771270e2b8aaec",
+      "sha256": "00e480270240bcef73e76be693097036600760b67c75e9b7faa887244b95206a",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_bee_cli.mjs"
@@ -2165,7 +2165,7 @@
     },
     {
       "path": "packages/bee/tests/test_cells.mjs",
-      "sha256": "37661f2d441717d16d077da4b1b5686109904f6f64d96e56d033d9de233b1535",
+      "sha256": "aef48fd823da5530343cd01e79e4ddc5b6ee11e37c7d9fafd62e7e0c865f7298",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_cells.mjs"

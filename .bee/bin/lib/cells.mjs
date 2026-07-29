@@ -18,6 +18,7 @@ import {
   readConfig,
   NO_TEST_SENTINEL,
   isNoTestRepo,
+  isNoTestCommand,
   controlRootFor,
 } from './state.mjs';
 // fsh-11 (D2/D4): claim-next's cross-session selection + throw-safe two-store
@@ -2177,6 +2178,40 @@ export async function capCell(
         throw new Error(`capCell: high-risk cell "${id}" requires an outcome summary.`);
       }
     }
+    // worker-conformance D10/D12/D14: the absence-of-proof marker. Computed
+    // HERE — after the ENTIRE refusal chain above has run, on a cap that is
+    // already going to succeed — so it can never decide whether a cap is
+    // refused, only describe one that isn't. D10's hole it closes: recordVerify
+    // (above) validates only `command` and `passed`, so `--passed true` with no
+    // output at all is legal; without a marker such a cap would leave the
+    // feature closeable with zero tests executed anywhere.
+    // D12: this is a NEW, inert field — never a reuse of the pending flag.
+    // `pendingFeatureVerify` is not neutral: it short-circuits six refusal
+    // sites (:1886-1899, :1912, :1999, :2032, :2135, :2164), so routing an
+    // unproven cap onto it would have voided D2's red-first tier and D6's
+    // brakes. `trace.proof` is read by nothing in this function.
+    // D14: "unrecorded" means NEITHER channel carried proof — a cell holding
+    // genuine verification_evidence (e.g. a tiny-lane security cell whose
+    // red_failure_evidence already passed the red-first door at :2135) is
+    // never marked, even when verify_output is empty.
+    // Exemptions: the explicit --feature-verify-pending path (it already
+    // carries its own marker), and a repo that declared `commands.verify:
+    // "none"` (decision 55b951e1) — a feature-level verify can never run
+    // there, so marking would arm a close-door that repo could never satisfy.
+    // Keyed on commands.verify alone, deliberately narrower than
+    // isNoTestRepo() at :1908: a repo with only `commands.test: "none"` can
+    // still run a real feature verify and must keep arming the door.
+    const proofOutput = trace.verify_output;
+    const hasProofOutput =
+      typeof proofOutput === 'string' ? proofOutput.trim().length > 0 : proofOutput != null;
+    const hasProofEvidence =
+      verification_evidence != null &&
+      (typeof verification_evidence !== 'string' || verification_evidence.trim().length > 0);
+    const proofUnrecorded =
+      !hasProofOutput &&
+      !hasProofEvidence &&
+      !pendingFeatureVerify &&
+      !isNoTestCommand((readConfig(root).commands || {}).verify);
     cell.status = 'capped';
     cell.trace = {
       ...trace,
@@ -2198,6 +2233,10 @@ export async function capCell(
       // reads at both swarming exits. Stamped ONLY on the pending path — the
       // classic evidence path's trace stays byte-identical to before.
       ...(pendingFeatureVerify ? { feature_verify: 'pending' } : {}),
+      // worker-conformance D10/D12/D14 (computed just above): additive and
+      // absent whenever the cap recorded real proof, so every existing trace
+      // consumer sees a byte-identical record on the proved path.
+      ...(proofUnrecorded ? { proof: 'unrecorded' } : {}),
     };
     return writeCell(root, cell);
   });
