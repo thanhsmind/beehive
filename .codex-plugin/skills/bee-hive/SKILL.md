@@ -116,9 +116,9 @@ Rules 2-4, 12 are in `AGENTS.md` (auto-loaded).
 7. "done/passing/fixed" needs fresh command output in the same message.
 8. Lanes scale ceremony, never memory: scribing sync per `behavior_change` cap; capture on settle; every close: a capture line or "nothing settled" ("Capture discipline").
 9. The agent runs the machinery, never the user ("The agent runs the machinery").
-10. Work language only; bypass = one outcome line per cap/slice/wave/re-lane ("Silent Bookkeeping", "Progress ticks").
+10. Work language only; every perceivable step emits one tick line, on by default (rule: `AGENTS.md` 17; "Silent Bookkeeping", "Progress ticks").
 11. No hand-edits to `.bee/*.json(l)`; CLI verbs only; `state set` needs `--owner`; no verb → file friction first.
-12. Hooks are a safety net, never the authority — an unblocked write is not an approved write; never retry a blocked action (`AGENTS.md` Guardrails).
+12. Hooks are a safety net, never the authority; never retry a blocked action (`AGENTS.md` Guardrails).
 13. Headless: never ask; defer into `Outstanding Questions`; never self-approve a gate ("Headless mode").
 14. Session-end nudge: ask for a durable decision/learning; log via `decisions log`.
 
