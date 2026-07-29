@@ -2,14 +2,14 @@
 type: bee.area
 title: "Workflow State — completion teeth, the judge verdict, and the archive transaction"
 description: "What a unit must prove before it may be completed — proof scaled to change-class × lane, a diff_stats-backed test-shape guard, and the older hard door for red-first branches — the structured append-only judge verdict with its honest independence stamp and the reopen it can force on an already-capped unit, and why archiving a cell is a journaled transaction serialized against every other mutator."
-timestamp: 2026-07-25
+timestamp: 2026-07-29
 bee:
   id: workflow-state-cells-completion-judge-and-archive
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["self-correcting-loop D3/D4/D5 with Validating amendments Δ5-Δ6 (behavior-class completion teeth, judge-verdict schema, risk-scaled goal-check judge)", "gh-issue-fixes-172 D-GHF-C (the judge cap-guard: a needs-revision verdict blocks completion absent an audited override)", "565e68d0-327f-404e-b49e-d1c61ba81bfd (unchanged: the goal-check judge is never the user-invoked independent review)", "test-economy D1/D2/D3/D8 (proof-tier by change_class × lane replaces the flat behavior-vs-advisory split; diff_stats-backed test-shape guard at cap; the D8 negative-control floor — amending self-correcting-loop D3's completion door and narrowing decision 0009 / e54878b1 / 8ef2bae6 to the red-first branches only)"]
-  sources: ["self-correcting-loop cells scl-1..scl-5 (traces in .bee/cells/, reports docs/history/self-correcting-loop/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — journaled crash-recoverable cell archive; needs-revision reopen clears verify evidence), "test-economy cells te-1/te-2 (proof-tier matrix + diff_stats handler; test-shape guard — new_suite_reason + ratio ceiling; docs/history/test-economy/CONTEXT.md, traces in .bee/cells/, 2026-07-25)", "docs/specs/workflow-state.md#B30", "docs/specs/workflow-state.md#B31", "docs/specs/workflow-state.md#B32", "docs/specs/workflow-state.md#B34", "docs/specs/workflow-state.md#B35", "docs/specs/workflow-state.md#B36", "docs/specs/workflow-state.md#R47", "docs/specs/workflow-state.md#R48", "docs/specs/workflow-state.md#R49", "docs/specs/workflow-state.md#R50", "docs/specs/workflow-state.md#R53", "docs/specs/workflow-state.md#R54", "docs/specs/workflow-state.md#E25"]
+  decisions: ["self-correcting-loop D3/D4/D5 with Validating amendments Δ5-Δ6 (behavior-class completion teeth, judge-verdict schema, risk-scaled goal-check judge)", "gh-issue-fixes-172 D-GHF-C (the judge cap-guard: a needs-revision verdict blocks completion absent an audited override)", "565e68d0-327f-404e-b49e-d1c61ba81bfd (unchanged: the goal-check judge is never the user-invoked independent review)", "test-economy D1/D2/D3/D8 (proof-tier by change_class × lane replaces the flat behavior-vs-advisory split; diff_stats-backed test-shape guard at cap; the D8 negative-control floor — amending self-correcting-loop D3's completion door and narrowing decision 0009 / e54878b1 / 8ef2bae6 to the red-first branches only)", "derived-check-hardening E1/E9 (the cap door cross-checks the impact registry and warns, never refuses; the residual ships open and named)", "derived-check-hardening E6 (capCell resolves behavior_change from the top-level field or trace.behavior_change, forward-only)"]
+  sources: ["self-correcting-loop cells scl-1..scl-5 (traces in .bee/cells/, reports docs/history/self-correcting-loop/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — journaled crash-recoverable cell archive; needs-revision reopen clears verify evidence), "test-economy cells te-1/te-2 (proof-tier matrix + diff_stats handler; test-shape guard — new_suite_reason + ratio ceiling; docs/history/test-economy/CONTEXT.md, traces in .bee/cells/, 2026-07-25)", "docs/specs/workflow-state.md#B30", "docs/specs/workflow-state.md#B31", "docs/specs/workflow-state.md#B32", "docs/specs/workflow-state.md#B34", "docs/specs/workflow-state.md#B35", "docs/specs/workflow-state.md#B36", "docs/specs/workflow-state.md#R47", "docs/specs/workflow-state.md#R48", "docs/specs/workflow-state.md#R49", "docs/specs/workflow-state.md#R50", "docs/specs/workflow-state.md#R53", "docs/specs/workflow-state.md#R54", "docs/specs/workflow-state.md#E25", "derived-check-hardening cells dch-1/dch-2/dch-8 (cap-door impact-registry warning, behavior_change resolution, lazy registry import surviving a vendored-lib fixture; traces .bee/cells/dch-{1,2,8}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)"]
   authoritative_for: "workflow-state: unit completion teeth, judge verdicts, and the cell archive transaction"
 ---
 
@@ -87,6 +87,42 @@ never a quiet exemption. What each actor observes: the two checks are
 independent (a justified new suite can still trip the ratio ceiling, and vice
 versa), and both trace back to the one diff snapshot from B37 rather than
 re-deriving their own counts (test-economy D3).
+
+**B39 — Completing a unit names every suite the dependency map ties to the
+files it touched but its own check command leaves out.** Trigger: a unit is
+completed and its record lists the files it changed. What happens: each of
+those files is looked up in the project's own dependency map — the derived
+record of which verification suites a given file can affect — and every
+directly affected suite the map returns that the unit's recorded check command
+does not mention is named back to the author on the same warning channel the
+other completion advisories use. The door still opens: this is a loud warning,
+never a refusal, and the unit completes either way. The lookup is resolved only
+at the moment it is needed rather than pulled in when the completion path is
+first loaded, and it sits inside the guard that already tolerates a map that
+cannot be read — so a workspace where the map is absent, unreadable,
+malformed, or where the component that derives it is not present at all
+completes in silence rather than erroring. What each actor observes: an author
+who scoped a check command too narrowly is told exactly which suites the map
+says they left out, and can widen the command or accept the gap knowingly; a
+workspace carrying no map behaves exactly as it did before the cross-check
+existed. Why it reports rather than blocks: this door stands on the path of
+every future unit, so making completion depend on the map being current would
+let one stale or wrong edge block all work (derived-check-hardening E1/E9).
+
+**B40 — The behavior-change flag is resolved from either place a unit may
+record it.** Trigger: a unit is completed. What happens: the flag is taken from
+the unit's explicitly set top-level value when one is present, and otherwise
+from the value recorded inside the unit's own trace; an explicit top-level
+setting always wins, and a unit that declares the flag in neither place is left
+unset exactly as before. The resolution happens once, where the completion
+reads the record, so every downstream consumer sees the same answer. The
+correction is forward-only — units already completed are not revisited, because
+the tooling refuses to rewrite a completed record. What each actor observes: a
+unit authored the common way, declaring its change inside its own trace rather
+than at the top level, now completes carrying the flag it actually declared,
+and therefore falls inside both the spec-debt obligation (R21a/R22) and the
+semantic goal-check judge's scope (B32) instead of silently escaping both
+(derived-check-hardening E6).
 
 **B31 — A judge verdict is a structured, append-only record with an honest
 independence stamp.** Trigger: a judge examines a unit of work and renders a
@@ -228,6 +264,16 @@ over and proving it again (hardening-1-7-10).
   ratio warns above 3 for `tiny`/`small` and refuses above 4 for
   `standard`/`high-risk` unless a `ratio_waiver` of ≥20 characters is
   recorded — an audited exemption, not a silent one (test-economy D3).
+- R58 — At completion, the unit's recorded check command is cross-checked
+  against the dependency map's directly affected suites for the files it
+  touched, and every omission is named — but the omission never refuses the
+  completion. A map that is absent, unreadable, or malformed is a silent skip,
+  never an error, and the lookup is resolved lazily so a workspace without the
+  deriving component still completes normally (derived-check-hardening E1/E9).
+- R59 — The behavior-change flag at completion resolves from the explicit
+  top-level value when it is set and otherwise from the value recorded in the
+  unit's trace; an already-completed unit is never retroactively corrected,
+  because the correction is forward-only (derived-check-hardening E6).
 
 ## Edge Cases Settled
 
@@ -243,3 +289,40 @@ over and proving it again (hardening-1-7-10).
   a new test file on `refactor`, a level-1 suite still running when the
   transitive cap trims it) — a widened threshold that stopped catching its
   own heavy case is a regression, not a relaxation (test-economy D8).
+- A unit whose declared change is recorded only inside its own trace is the
+  common authoring shape, not an exception. Reading the top-level field alone
+  meant such units completed with the flag false while their own records
+  plainly said otherwise — escaping the spec-debt obligation and the semantic
+  judge together, and reporting nothing, because both consumers were handed a
+  value that looked correctly resolved (derived-check-hardening E6).
+
+## Open Gaps
+
+- **The dependency cross-check reports and never blocks.** A unit whose check
+  command omits suites the map names still completes, and nothing obliges the
+  author to act on the warning — so the coverage the warning describes stays
+  advisory. The stronger form, refusing completion until the command covers
+  every directly affected suite, was considered and deliberately declined:
+  this door stands on the path of every unit, and a refusal here would make
+  all work depend on the map being fresh. It ships open and named, never
+  recorded as a closed finding (derived-check-hardening E1/E9).
+
+## Pointers (implementation)
+
+- Dependency cross-check at the cap door (B39/R58): `capCell` in
+  `packages/bee/lib/cells.mjs` (byte-mirrored to `.bee/bin/lib/cells.mjs`),
+  around the `queryRegistry(registry, cellFiles, { level: 1 })` call. The map
+  is `scripts/impact-registry.json`; `queryRegistry` is resolved by
+  `await import('../../../scripts/impact_registry.mjs')` **inside** the
+  existing guarded `try/catch` at the point of use — never a top-level import,
+  so a fixture vendoring only `.bee/bin/lib/` with no sibling `scripts/` tree
+  hits the same catch as a missing or malformed map and skips silently.
+  `capCell`'s `withStoreLock` callback is `async` to carry that await. The
+  warning follows the `ratioWarning` shape in the same module. Evidence:
+  traces `.bee/cells/dch-1.json`, `.bee/cells/dch-8.json`.
+- Behavior-change resolution (B40/R59): `resolveDeclaredBehaviorChange` at
+  `packages/bee/lib/cells.mjs:1821`, consulted at the cap read
+  (`cells.mjs:1869`) only when the top-level field is `undefined`. Evidence:
+  trace `.bee/cells/dch-2.json`.
+- Tests: `packages/bee/tests/test_cells.mjs` (the registry-warning rows and the
+  two behavior-change resolution rows), `packages/bee/tests/test_cli_cells.mjs`.

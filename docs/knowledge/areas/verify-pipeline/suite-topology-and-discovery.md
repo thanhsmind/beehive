@@ -2,13 +2,13 @@
 type: bee.area
 title: Verify Pipeline — suite topology and discovery
 description: "Keeping full-repo verification fast and contention-free by giving every module its own suite file, discovering suites by convention instead of a hand-registry, failing loudly the moment a curated suite goes missing, and capping the transitive impacted run so a hot-file fan-out never quietly balloons back into a full run."
-timestamp: 2026-07-25
+timestamp: 2026-07-29
 bee:
   id: verify-pipeline-suite-topology-and-discovery
   lifecycle: active
   areas: [verify-pipeline]
-  decisions: [contention-split D1-D6 (decision 1ce777d9), verify-scoping D1/D2 (decisions e39d3f89, 20534ea9), impacted-level1 D1 (decision 4f8295fb), i54-closeout D2, "test-economy D6 (impacted cap over the transitive tail — level-1 direct/self-selected always run, exit reflects only the part actually run, best-effort CI delegation)"]
-  sources: ["contention-split cells cs-1/cs-2a/cs-2b/cs-3/cs-4 (fixture extraction, monolith split 430-check conservation, monolith deletion, convention-based suite discovery; traces in .bee/cells/, 2026-07-20)", "hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — Windows CI runs the real split suites through the runner's own discovery rather than a hand-maintained list; write-guard-hook-fix wgf-1, 2026-07-21 — the fixture that vendors a module tree copies the tree, never a hand-maintained file list)", "verify-scoping cells vs-1/vs-2 (scoped --only include filter + two-tier verify doctrine; traces in .bee/cells/, 2026-07-23)", "impacted-level1 cells l1-1/l1-2 (registry per-edge depth split + run_verify --level 1 direct-only selection; traces in .bee/cells/, 2026-07-23)", "test-economy cell te-3 (impacted cap — transitive tail delegated to CI; docs/history/test-economy/CONTEXT.md, trace in .bee/cells/, 2026-07-25)", "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", "docs/specs/verify-pipeline.md#R3", "docs/specs/verify-pipeline.md#E1", "docs/specs/verify-pipeline.md#P1", "docs/specs/verify-pipeline.md#P2", "docs/specs/verify-pipeline.md#P3", "docs/specs/verify-pipeline.md#P4", "i54-closeout cell i54-closeout-2 (run_verify per-suite wall-clock timeout + heartbeat; trace in .bee/cells/, 2026-07-24)"]
+  decisions: [contention-split D1-D6 (decision 1ce777d9), verify-scoping D1/D2 (decisions e39d3f89, 20534ea9), impacted-level1 D1 (decision 4f8295fb), i54-closeout D2, "test-economy D6 (impacted cap over the transitive tail — level-1 direct/self-selected always run, exit reflects only the part actually run, best-effort CI delegation)", derived-check-hardening E3/E4 (index-derived scan sets are existence-filtered and unioned with the porcelain status; the hand-grep that found it becomes a standing check), derived-check-hardening E2/E9 (the scheduled full run moves its daily slot and stays once-a-day; the 24-hour blind window ships open and named)]
+  sources: ["contention-split cells cs-1/cs-2a/cs-2b/cs-3/cs-4 (fixture extraction, monolith split 430-check conservation, monolith deletion, convention-based suite discovery; traces in .bee/cells/, 2026-07-20)", "hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — Windows CI runs the real split suites through the runner's own discovery rather than a hand-maintained list; write-guard-hook-fix wgf-1, 2026-07-21 — the fixture that vendors a module tree copies the tree, never a hand-maintained file list)", "verify-scoping cells vs-1/vs-2 (scoped --only include filter + two-tier verify doctrine; traces in .bee/cells/, 2026-07-23)", "impacted-level1 cells l1-1/l1-2 (registry per-edge depth split + run_verify --level 1 direct-only selection; traces in .bee/cells/, 2026-07-23)", "test-economy cell te-3 (impacted cap — transitive tail delegated to CI; docs/history/test-economy/CONTEXT.md, trace in .bee/cells/, 2026-07-25)", "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", "docs/specs/verify-pipeline.md#R3", "docs/specs/verify-pipeline.md#E1", "docs/specs/verify-pipeline.md#P1", "docs/specs/verify-pipeline.md#P2", "docs/specs/verify-pipeline.md#P3", "docs/specs/verify-pipeline.md#P4", "i54-closeout cell i54-closeout-2 (run_verify per-suite wall-clock timeout + heartbeat; trace in .bee/cells/, 2026-07-24)", "derived-check-hardening cells dch-3/dch-4/dch-5 (CI schedule slot, portable-paths scan-set reconciliation, scan-set hygiene suite; traces .bee/cells/dch-{3,4,5}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)"]
   authoritative_for: "verify-pipeline: suite topology and discovery"
 ---
 
@@ -112,6 +112,34 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   its own cadence and would pick up the deferred tail regardless
   (test-economy D6).
 
+- **A scan set taken from the version-control index is filtered to what exists
+  and unioned with what the index has not yet seen.** A suite that asks version
+  control for "every file in the repository" gets two things wrong by default:
+  it carries paths the index still records but the working tree no longer holds,
+  and it omits files that are really there and about to ship but have not been
+  recorded yet. Both are handled where the scan set is built — the list is
+  narrowed to paths that actually exist, and unioned with the working tree's own
+  report of what changed — so a suite scanning the whole repository scans the
+  repository that is really on disk. A standing check holds the discipline across
+  the test roots and the package tree: any file that derives a path list from the
+  version-control index and later reads those paths with no intervening existence
+  filter is reported as a named finding. Two failures are prevented at once — the
+  loud one, where a whole coverage gate crashes on the first missing path and
+  hides every assertion behind it, and the quiet one, where a real file is simply
+  never scanned and the gate passes green having looked at less than it claimed
+  (derived-check-hardening E3/E4).
+
+- **This repository's own full run is scheduled once a day, and otherwise only
+  on an explicit manual request.** Nothing automatic triggers it — not a push,
+  not opening a change proposal — and when it goes red it files an issue rather
+  than blocking anything. Moving the
+  daily slot changes *when* a failure is noticed, never *whether* — the base
+  branch can carry a red for up to a full day before anything reports it, and
+  work started in that window is built on an unproven base. This is the local
+  shape of R4's CI-owned full tier, stated here because the cadence is what
+  bounds how stale the base branch's proof may be
+  (derived-check-hardening E2/E9).
+
 - **A hung suite is killed and named, never left to hang the whole run.** Every
   suite the runner launches carries a per-suite wall-clock timeout (default
   300s, overridable via `BEE_VERIFY_SUITE_TIMEOUT_MS`; `0`/`none` disables it).
@@ -167,6 +195,11 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   dropped, and the run's exit code always reflects the part that actually
   ran — a capped run is never a silent green. An explicit `--level 1` run is
   never subject to this cap (test-economy D6).
+- **R8** — A scan set derived from the version-control index is narrowed to
+  paths that exist and unioned with the working tree's unrecorded changes
+  before anything reads it. A standing check names any place that derives such
+  a list and then reads it unfiltered, so the discipline is enforced on every
+  run rather than swept for by hand once (derived-check-hardening E3/E4).
 - **R7** — Every narrowing mechanism accounts for what it removed. A skipped
   check is counted and named as skipped, never folded into the passed count;
   a narrowed run states its pattern in its own summary; and a narrowing that
@@ -186,6 +219,14 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
 - The CLI dispatcher (4.4k lines, all handlers inline) remains the last
   structural hotspot; handler extraction is deferred to its own feature
   (contention-split D5).
+- **The base branch can carry a failure for up to a day.** The full run's
+  once-a-day cadence is unchanged, and no push-triggered or
+  proposal-triggered run was added: moving the daily slot moved the moment of
+  detection, not the blind window. The run still only files an issue when it
+  goes red — nothing is blocked by it — so work can be built on a red base for
+  as long as a day before anyone is told. Both halves, the missing trigger and
+  the non-blocking outcome, ship deliberately open and named rather than
+  recorded as closed (derived-check-hardening E2/E9).
 
 ## Resolved Gaps
 
@@ -210,3 +251,18 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
 - **P3** — `scripts/lib/test-fixture.mjs` — shared fixture/check-runner,
   including the `BEE_CHECK_ONLY` name filter and its exported predicate.
 - **P4** — `packages/bee/tests/` — per-module suites (11 files).
+- **P5** — `scripts/tests/test_scan_set_hygiene.mjs` — the standing check
+  behind R8. Check 1 flags any file under `scripts/tests/**` or
+  `packages/bee/**` that derives a path list from `git ls-files` and reads
+  from it with no `existsSync` guard in the enclosing function; check 2 is the
+  retired-stage currency assertion owned by
+  `areas/doctrine-layer/placement-and-anchoring.md` (R3). Both carry negative
+  controls under `--selftest`. Registered by the discovery convention alone
+  (P1) — `run_verify.mjs` was not edited to add it.
+- **P6** — `scripts/tests/test_portable_paths.mjs` — the existence filter plus
+  the `git status --porcelain` union (R8), following the sibling filter in
+  `scripts/tests/test_doctrine_parity.mjs`; `gitImpactedFiles()` /
+  `statusPorcelainFiles()` in `scripts/run_verify.mjs` are the union source.
+- **P7** — `.github/workflows/ci.yml` — the `on:` block: `schedule` with
+  `cron: '0 23 * * *'` (23:00 UTC = 06:00 Asia/Ho_Chi_Minh) plus
+  `workflow_dispatch`; no `push` or `pull_request` trigger.

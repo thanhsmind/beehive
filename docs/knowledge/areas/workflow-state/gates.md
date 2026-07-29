@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["chain-integrity D1-REVISED/D2/D3/D4 (the tail of the chain: learning capture is produced not asserted, the sync demands executed work, the close demands zero spec debt, the waiver is audited)", "AO3/AO13 (execution-gate adviser precondition — folded from the old standalone Gate 3 into Gate 2, validation-diet D2/D14 — event-based staleness, never a TTL — cells ao-4-1/ao-4-2 2026-07-17)", codex-hook-state-parity D4-D6 (pre-phase routing ownership and review isolation), "scribing-integrity D1-D3/D6 (the wall at every door — feature-swap guard, lane-aware close, durable scribing ledger + orphan sweep, pre-ledger amnesty; cells si-1/si-3, 2026-07-24)", multisession-native D1/D7 (starting a feature also creates its own workflow record via three separate lock transactions; the execution gate records approved_for_plan_rev — docs/history/multisession-native/CONTEXT.md), "scribing-stamp-seam 5b2f963d (sss-1 — the close-door threshold folds in the durable ledger as fallback/max, not the record stamp alone)", "validation-diet D2/D14/D15 (the merged approval flips `shape` and `execution` together via `bee state gate --merge`, inherits the high-risk advisor-consult precondition D14 previously guarding execution alone, and stamps `approved_for_plan_rev` on both fields together so a later bump can never leave the merged approval half-revoked — docs/history/validation-diet/CONTEXT.md, cell vd-3, 2026-07-28)", "compounding-gate D1 (the close also demands recorded learning-capture evidence, fresh against the knowledge-sync stamp, waivable only with a logged decision; cells cg-1/cg-2, 2026-07-27)"]
-  sources: ["chain-integrity cells ci-1/ci-2/ci-3 (traces in .bee/cells/, CONTEXT docs/history/chain-integrity/CONTEXT.md, 2026-07-14 — origin: an owner-supplied post-mortem of a real session in which the chain's tail was bypassed seven times)", "advisor-and-orchestration Slice 4 cells ao-4-1/ao-4-2 (adviser consult record + event-based staleness + high-risk execution precondition, live-throw verified, 2026-07-17)", "codex-hook-state-parity cell codex-hook-state-parity-1 (pre-phase routing ownership and review isolation; report and capped trace, 2026-07-16)", "docs/specs/workflow-state.md#B1", "docs/specs/workflow-state.md#B2", "docs/specs/workflow-state.md#B9a", "docs/specs/workflow-state.md#B19", "docs/specs/workflow-state.md#R1", "docs/specs/workflow-state.md#R2", "docs/specs/workflow-state.md#R3", "docs/specs/workflow-state.md#R19a", "docs/specs/workflow-state.md#R20a", "docs/specs/workflow-state.md#R21a", "docs/specs/workflow-state.md#R22", "docs/specs/workflow-state.md#R23", "docs/specs/workflow-state.md#R25", "docs/specs/workflow-state.md#R29", "docs/specs/workflow-state.md#R30", "docs/specs/workflow-state.md#R31", "docs/specs/workflow-state.md#E1", "docs/specs/workflow-state.md#E2", "docs/specs/workflow-state.md#P2", "docs/specs/workflow-state.md#P3", "docs/specs/workflow-state.md#P4", "docs/specs/workflow-state.md#P5", "multisession-native cell multisession-native-6 (startFeature creates a workflow record; trace .bee/cells/multisession-native-6.json, commit f4fe163, 2026-07-25)", "multisession-native cell multisession-native-9 (gates scoped to plan revision; trace .bee/cells/multisession-native-9.json, commit 2dd834f, 2026-07-25)", "scribing-stamp-seam cell sss-1 (trace .bee/cells/sss-1.json, capped 2026-07-26)", "compounding-gate cells cg-1/cg-2 (state compounding-run verb + close gate + mutation-proven suite; traces .bee/cells/cg-1.json/cg-2.json, 2026-07-27)"]
+  decisions: ["chain-integrity D1-REVISED/D2/D3/D4 (the tail of the chain: learning capture is produced not asserted, the sync demands executed work, the close demands zero spec debt, the waiver is audited)", "AO3/AO13 (execution-gate adviser precondition — folded from the old standalone Gate 3 into Gate 2, validation-diet D2/D14 — event-based staleness, never a TTL — cells ao-4-1/ao-4-2 2026-07-17)", codex-hook-state-parity D4-D6 (pre-phase routing ownership and review isolation), "scribing-integrity D1-D3/D6 (the wall at every door — feature-swap guard, lane-aware close, durable scribing ledger + orphan sweep, pre-ledger amnesty; cells si-1/si-3, 2026-07-24)", multisession-native D1/D7 (starting a feature also creates its own workflow record via three separate lock transactions; the execution gate records approved_for_plan_rev — docs/history/multisession-native/CONTEXT.md), "scribing-stamp-seam 5b2f963d (sss-1 — the close-door threshold folds in the durable ledger as fallback/max, not the record stamp alone)", "validation-diet D2/D14/D15 (the merged approval flips `shape` and `execution` together via `bee state gate --merge`, inherits the high-risk advisor-consult precondition D14 previously guarding execution alone, and stamps `approved_for_plan_rev` on both fields together so a later bump can never leave the merged approval half-revoked — docs/history/validation-diet/CONTEXT.md, cell vd-3, 2026-07-28)", "compounding-gate D1 (the close also demands recorded learning-capture evidence, fresh against the knowledge-sync stamp, waivable only with a logged decision; cells cg-1/cg-2, 2026-07-27)", derived-check-hardening E5 (the six hand-copied terminal-phase memberships are pinned by a parity suite rather than refactored to derive from the phase enum)]
+  sources: ["chain-integrity cells ci-1/ci-2/ci-3 (traces in .bee/cells/, CONTEXT docs/history/chain-integrity/CONTEXT.md, 2026-07-14 — origin: an owner-supplied post-mortem of a real session in which the chain's tail was bypassed seven times)", "advisor-and-orchestration Slice 4 cells ao-4-1/ao-4-2 (adviser consult record + event-based staleness + high-risk execution precondition, live-throw verified, 2026-07-17)", "codex-hook-state-parity cell codex-hook-state-parity-1 (pre-phase routing ownership and review isolation; report and capped trace, 2026-07-16)", "docs/specs/workflow-state.md#B1", "docs/specs/workflow-state.md#B2", "docs/specs/workflow-state.md#B9a", "docs/specs/workflow-state.md#B19", "docs/specs/workflow-state.md#R1", "docs/specs/workflow-state.md#R2", "docs/specs/workflow-state.md#R3", "docs/specs/workflow-state.md#R19a", "docs/specs/workflow-state.md#R20a", "docs/specs/workflow-state.md#R21a", "docs/specs/workflow-state.md#R22", "docs/specs/workflow-state.md#R23", "docs/specs/workflow-state.md#R25", "docs/specs/workflow-state.md#R29", "docs/specs/workflow-state.md#R30", "docs/specs/workflow-state.md#R31", "docs/specs/workflow-state.md#E1", "docs/specs/workflow-state.md#E2", "docs/specs/workflow-state.md#P2", "docs/specs/workflow-state.md#P3", "docs/specs/workflow-state.md#P4", "docs/specs/workflow-state.md#P5", "multisession-native cell multisession-native-6 (startFeature creates a workflow record; trace .bee/cells/multisession-native-6.json, commit f4fe163, 2026-07-25)", "multisession-native cell multisession-native-9 (gates scoped to plan revision; trace .bee/cells/multisession-native-9.json, commit 2dd834f, 2026-07-25)", "scribing-stamp-seam cell sss-1 (trace .bee/cells/sss-1.json, capped 2026-07-26)", "compounding-gate cells cg-1/cg-2 (state compounding-run verb + close gate + mutation-proven suite; traces .bee/cells/cg-1.json/cg-2.json, 2026-07-27)", "derived-check-hardening cell dch-6 (terminal-phase parity suite over 12 discovered declarations vs KNOWN_PHASES; trace .bee/cells/dch-6.json, report docs/history/derived-check-hardening/reports/dch-6.md, 2026-07-29)"]
   authoritative_for: "workflow-state: feature start, the phase vocabulary, phase-owned routing mutation, and the closing tail"
 ---
 
@@ -54,6 +54,25 @@ rule (B1/R1/R2) itself; only *what backs* a successful start changed.
 **B2 — Closed phase vocabulary.** Every phase write is validated against the
 closed list; historical skill wording that used other names (e.g.
 "exploring-complete", "validated") is invalid at the record layer.
+
+**B2a — The hand-copied terminal-phase memberships are pinned to the
+vocabulary by a standing check.** Trigger: the verification chain runs. What
+is checked: the set of phases meaning no work is in flight is written out by
+hand in six places under three different names, each place layering its own
+semantics on the shared list, and every one of those copies is asserted to
+agree with every other and with the closed vocabulary itself — the canonical
+copies and their mirrored twins alike. The copies are found by scanning for
+the declaration's shape rather than read from a list of locations, so a
+seventh copy is covered the moment it appears and no maintained inventory can
+go stale behind the check. What happens on drift: the run fails naming the
+exact place and line that disagrees, not merely that something disagrees.
+What each actor observes: the six copies stay a duplication with an alarm on
+it rather than a duplication with no owner. Why a check and not a
+consolidation: each copy carries its own layered meaning, so deriving all six
+from the vocabulary is a much larger change, while the copy that governs
+write-denial is the one that must never drift silently — the parity check
+catches that same class at a fraction of the risk
+(derived-check-hardening E5).
 
 **B9a — High-risk execution approval requires a live adviser consult, on
 whichever door opens it.** Opening the execution gate on a record in the
@@ -271,6 +290,12 @@ its knowledge actually landed — the state and the specs can no longer disagree
   feature — never the record stamp alone. This closes the seam where a
   workflow-record rebuild could drop an in-flight stamp write and force a
   genuine sync into the waiver path (scribing-stamp-seam decision 5b2f963d).
+- R79 — Every hand-written copy of the terminal-phase membership must agree
+  with every other copy and with the closed phase vocabulary; drift fails the
+  verification chain naming the offending place and line. The copies are
+  discovered by the shape of their declaration, never from a maintained list
+  of locations, so the check cannot go blind to a copy nobody registered
+  (derived-check-hardening E5).
 
 ## Edge Cases Settled
 
@@ -323,6 +348,16 @@ its knowledge actually landed — the state and the specs can no longer disagree
   `packages/bee/bee.mjs` + `.bee/bin/bee.mjs`. Evidence: trace
   `.bee/cells/vd-3.json`; `test_cli_state.mjs`, `test_state_projection.mjs`,
   `test_bee_cli.mjs` all green.
+- Terminal-phase parity (B2a/R79): `scripts/tests/test_terminal_phase_parity.mjs`
+  — scans `packages/bee/lib` and `.bee/bin/lib` for top-level
+  `const <NAME> = new Set([...])` under `TERMINAL_PHASES` / `NO_WORK_PHASES` /
+  `TERMINAL_LANE_PHASES`, and compares all 12 discovered declarations (6
+  canonical + their 6 mirrored twins) against `KNOWN_PHASES` in
+  `packages/bee/lib/state.mjs`. The six canonical sites: `lib/guards.mjs:151`,
+  `lib/compaction.mjs:81`, `lib/scratch.mjs:62` (`TERMINAL_PHASES`);
+  `lib/inject.mjs:235`, `lib/intent.mjs:49` (`NO_WORK_PHASES`);
+  `lib/recovery.mjs:40` (`TERMINAL_LANE_PHASES`). `guards.mjs` is the copy
+  governing write-denial. Evidence: trace `.bee/cells/dch-6.json`.
 - Close-door threshold + ledger fallback: `scribingDebt`,
   `bestScribingStampMs`, `readScribingLedger` in `packages/bee/lib/cells.mjs`
   (mirrored `.bee/bin/lib/cells.mjs`). Evidence: trace

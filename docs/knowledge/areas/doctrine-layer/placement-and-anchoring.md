@@ -2,14 +2,14 @@
 type: bee.area
 title: "Doctrine Layer — rule placement, propagation, and anchoring"
 description: "Which layer a rule belongs on, how much of its mechanics travels with it, how doctrine reaches every project by copy, and the anchor tests that stop a rule from disappearing."
-timestamp: 2026-07-21
+timestamp: 2026-07-29
 bee:
   id: doctrine-layer-placement-and-anchoring
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [ba5a35f1-981d-4cb5-8a57-234a187f122d (placement rule), "0023 + 6cd34376 (explicit-tier transport rides critical rule 12, B3a)"]
-  sources: ["tier-transport-doctrine (cell tier-transport-doctrine-1, 2026-07-13)", "docs/specs/doctrine-layer.md#B1", "docs/specs/doctrine-layer.md#B2", "docs/specs/doctrine-layer.md#B3a", "docs/specs/doctrine-layer.md#B4", "docs/specs/doctrine-layer.md#R1", "docs/specs/doctrine-layer.md#R2", "docs/specs/doctrine-layer.md#E1", "docs/specs/doctrine-layer.md#P1", "docs/specs/doctrine-layer.md#P2", "docs/specs/doctrine-layer.md#P4"]
+  decisions: [ba5a35f1-981d-4cb5-8a57-234a187f122d (placement rule), "0023 + 6cd34376 (explicit-tier transport rides critical rule 12, B3a)", "derived-check-hardening E7/E8 (the two live doctrine residuals are cleared, and the completeness criterion becomes a standing check deriving retired stage names from the phase-coercion table)"]
+  sources: ["tier-transport-doctrine (cell tier-transport-doctrine-1, 2026-07-13)", "docs/specs/doctrine-layer.md#B1", "docs/specs/doctrine-layer.md#B2", "docs/specs/doctrine-layer.md#B3a", "docs/specs/doctrine-layer.md#B4", "docs/specs/doctrine-layer.md#R1", "docs/specs/doctrine-layer.md#R2", "docs/specs/doctrine-layer.md#E1", "docs/specs/doctrine-layer.md#P1", "docs/specs/doctrine-layer.md#P2", "docs/specs/doctrine-layer.md#P4", "derived-check-hardening cells dch-5/dch-7 (retired-stage currency check with derived tokens; research-brief and write-guard fixture residuals cleared; traces .bee/cells/dch-{5,7}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)"]
   authoritative_for: "doctrine-layer: rule placement, propagation, and anchoring"
 ---
 
@@ -65,6 +65,24 @@ naming the missing rule. Why: doctrine has no runtime — nothing *executes* a
 rule, so nothing fails loudly when one goes missing. The anchor test is the only
 mechanism that makes deleting or relocating a rule a visible event.
 
+**B5 — A retired workflow stage may not be described as current anywhere a
+reader is told is current behavior.** Trigger: the suite runs. What is checked:
+every document that describes how the system behaves today — the standing
+sheet, the procedure references and their bodies, and the state layer — is read
+for any description of a workflow stage that has been retired, written as
+though the stage still exists. What happens on failure: the suite fails, naming
+the document. How the retired names are known: they are derived from the record
+layer's own table of renamed phase values rather than written into the check, so
+the check keeps working the next time a stage is retired without anyone
+remembering to teach it the new name. What is exempt: exactly the two
+append-only trees where past decisions and past features are recorded by design,
+and the single path whose whole job is translating the retired name — nothing
+else, and the exception set is never widened to turn a real finding green. Why a
+standing check rather than a sweep: this criterion had been run by hand once and
+never again, and by the time anyone looked, two live documents were still
+routing readers to a stage that no longer existed. A criterion with no
+enforcement is a note, not a criterion (derived-check-hardening E7/E8).
+
 ## Business Rules
 
 - **R1** — A rule that must hold when no workflow stage is running belongs on the
@@ -72,6 +90,12 @@ mechanism that makes deleting or relocating a rule a visible event.
   for it (ba5a35f1).
 - **R2** — Every doctrine rule that must never disappear carries a suite-enforced
   anchor. A rule without one may be deleted or relocated with no signal.
+- **R3** — No document describing current behavior may present a retired
+  workflow stage as though it still exists. The check derives the retired names
+  from the record layer's own rename table instead of naming them, so it
+  survives the next retirement unedited, and its only exemptions are the two
+  append-only history trees and the translation path itself
+  (derived-check-hardening E7/E8).
 
 ## Edge Cases Settled
 
@@ -81,6 +105,16 @@ mechanism that makes deleting or relocating a rule a visible event.
   every citation of it lived somewhere that ordinary conversation never loaded.
   Completeness of a rule's *text* says nothing about its *reach*. When a rule is
   being ignored, check its placement before rewriting its wording.
+
+- **A check can be green for an accidental reason.** One fixture asserted a
+  gate's behavior using a stage name that had already been retired. It passed —
+  reliably, every run — only because the read path underneath it silently
+  rewrote the retired name into a live one before the assertion ever saw it. The
+  fixture was proving the wrong thing and proving it consistently. A retired
+  value reaching a check through a translation path is not evidence the check
+  works; it is evidence that nothing is exercising the real value. The fixture
+  now names a value the state machine can actually produce, so it exercises the
+  gate policy rather than the translation (derived-check-hardening E7).
 
 ## Pointers (implementation)
 
@@ -93,3 +127,14 @@ mechanism that makes deleting or relocating a rule a visible event.
   `census:` checks, including the delegation-layer anchor and the on-demand
   review anchors, plus the native Codex empty-wait anchor across the master,
   root, canonical procedure, and writable `.claude` surfaces.
+- Retired-stage currency check (B5/R3): `scripts/tests/test_scan_set_hygiene.mjs`,
+  check 2. Retired tokens are derived from `LEGACY_PHASE_COERCIONS` in
+  `packages/bee/lib/state.mjs` (`{ validating: 'planning' }` today), never
+  hard-coded. Scanned surfaces: `skills/**/SKILL.md`, `skills/**/references/**`,
+  `docs/knowledge/**`, `docs/specs/**`, `AGENTS.md`, `CLAUDE.md`. Exceptions:
+  `docs/decisions/**`, `docs/history/**`, and the coercion path itself. The two
+  residuals it was written for: `skills/bee-xia/references/research-brief-template.md`
+  (proof obligations now route to `bee-planning`'s shape gate) and
+  `packages/bee/hooks/test_write_guard.mjs` (the fixture row that hand-built the
+  retired phase value). Evidence: traces `.bee/cells/dch-5.json`,
+  `.bee/cells/dch-7.json`.
