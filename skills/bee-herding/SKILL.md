@@ -1,7 +1,7 @@
 ---
 name: bee-herding
 description: >-
-  Drives the bee-herding cockpit's three roles: bootstrap is a one-shot setup a human invokes directly (no `--role` given) to pre-flight and turn the cockpit on, starting ONLY the dispatch loop; dispatch — enabled only once the owner creates an enable marker — picks the highest-impact ready backlog item, refuses unsafe or unclassifiable work, and starts a working agent in a fresh worktree via the herdr CLI; merge is an owner GESTURE run single-shot (not looped), finding worktrees finished by bee's own state, merging and cleaning them up, closing their runtime pane, and stopping cold — never retrying — on a red verify. Use bootstrap for that one direct human invocation; use dispatch/merge for exactly one control iteration at a time, in the role named by `--role dispatch|merge` — each invocation is fresh, with no memory of any earlier one.
+  Drive the bee-herding cockpit's three roles — bootstrap (one-shot human setup that pre-flights and turns the cockpit on), dispatch (one cold control-loop iteration that starts safe backlog work in a fresh worktree), and merge (an owner gesture, single-shot, that lands finished worktrees in main). Use when a human invokes bootstrap directly (no --role given), or when control-loop.sh runs exactly one iteration as --role dispatch|merge — each invocation is fresh, with no memory of any earlier one. Not for feature work inside a worktree — that belongs to the working agent's own bee chain.
 metadata:
   version: '0.1'
   ecosystem: bee
@@ -112,6 +112,25 @@ allows a restart (it never self-restarts — re-run bootstrap). **Does NOT
 stop working agents already running** — each is its own `claude` session
 that never reads the stop file; close their panes to stop them. Full
 detail: `references/operational-invariants.md` ("Stop and resume").
+
+## Red Flags
+
+- taking another role's action — bootstrap picking a PBI or merging; dispatch
+  merging, deleting a worktree, or closing a pane; merge picking a PBI,
+  creating a worktree, or starting an agent
+- dispatch building the dispatchable set without the owner's enable marker
+- merge run as a loop, or retrying after a red verify instead of stopping cold
+- a control pane granted `bypassPermissions`, or treated as "read-only"
+- carrying assumptions from "an earlier iteration" — nothing persists except
+  bee state, git, and the herdr workspace
+
+Violating the letter of these rules is violating the spirit of these rules.
+
+## Handoff
+
+Bootstrap: cockpit up, dispatch loop running — report and stop. Dispatch or
+merge: exactly one control iteration complete — report and exit; the loop (or
+the owner's next gesture) invokes the next iteration fresh.
 
 ## References
 

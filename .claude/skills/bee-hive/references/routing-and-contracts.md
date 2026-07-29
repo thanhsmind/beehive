@@ -607,6 +607,30 @@ The judge returns the D5 schema (`judge-verdict/1`), recorded via `bee cells jud
 
 A cell's `verify` field, when a cell runs one at all, is always its **targeted** suite (seconds), never the full configured `commands.verify` chain. The four-milestone ladder above is retired: no local full run is ever a workflow obligation. Per-cell proof is now the exception, not the rule: cells cap by default through `--feature-verify-pending` (main-verifies D1), and the dev loop's own broader check, `commands.test` (the impacted run, `run_verify.mjs --impacted` / `--impacted-from-git`, authored from the impact registry `impact_registry.mjs --query`), runs ONCE per feature at final-slice close (`bee-swarming/references/swarming-reference.md`, "Feature verify at close, in full") instead of at every wave close — worktree merge still runs it instead of the full chain. The full `commands.verify` chain is CI-owned: it runs on the project's own CI cadence (push, nightly, or scheduled — the host workflow decides) and auto-files a `verify-red` issue when red. Session finish also runs `commands.test` (impacted), not the full chain (`AGENTS.md`); the release flow runs the impacted suite locally and then dispatches the CI full run (`gh workflow run CI --ref main`) right after the tag push — a red result there arrives back as the same `verify-red` issue, not a local gate. Judges and reviewers verify against the diff and `must_haves`, never by running the full chain as part of a verdict.
 
+<!-- bee:only codex -->
+### Native Codex subagent tending
+
+For every bee-owned native Codex subagent flow, including ordinary delegated
+gathers, a completed `wait_agent` call with no completion is an **empty wait**:
+it is a timeout signal only, never failure. A `wait_agent` timeout/no-completion
+result is only an empty wait; silence is not failure. Never call `wait_agent`
+twice consecutively after an empty wait; authority, urgency, and no-chatter
+instructions create no exception. Before any later bounded wait, perform at
+least one material task-local action when work remains; that one action satisfies
+the interval, and exhausting all local work is not required. Only when no
+material work remains, take exactly one `list_agents` snapshot. Handle any
+completion that arrives during the interval exactly once, then recompute the
+relevant live-agent set. Send one concise commentary update naming both the live
+agent state and the next action. Only after this commentary may a later bounded
+wait run, and only while the relevant live-agent set is non-empty; zero live
+agents ends collection without another wait. No-op work, repeated state reads,
+hidden reasoning, generic commentary, or commentary alone do not qualify.
+Timeout never licenses interrupt, duplicate dispatch, claim release, or
+reservation release; every running agent, claim, and reservation stays owned.
+This refines, rather than replaces, the ban on file/scratchpad polling for
+harness-managed subagents. External process and artifact polling keeps its own
+contract and remains outside this native-agent rule.
+<!-- bee:end -->
 
 ## Question Format
 

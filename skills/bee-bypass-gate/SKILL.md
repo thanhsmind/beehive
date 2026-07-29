@@ -1,7 +1,7 @@
 ---
 name: bee-bypass-gate
 description: >-
-  Toggle opt-in gate-bypass autopilot, which now has levels. `normal` auto-approves Gates 1-3 for tiny/small/standard work (high-risk, secrets, and Gate 4 still stop); `full` also auto-approves high-risk/hard-gate work; `total` stops for nothing at all. Use when the user wants to run the pipeline without approving every gate, to widen how far bypass reaches, or to check or turn it off. Invocable as the command bee-bypass-gate with off / on / normal / full / total / status.
+  Toggle opt-in gate-bypass autopilot, which now has levels. `normal` auto-approves Gates 1-2 for tiny/small/standard work (high-risk, secrets, and Gate 4 still stop); `full` also auto-approves high-risk/hard-gate work; `total` stops for nothing at all. Use when the user wants to run the pipeline without approving every gate, to widen how far bypass reaches, or to check or turn it off. Invocable as the command bee-bypass-gate with off / on / normal / full / total / status.
 metadata:
   version: '0.1'
   ecosystem: bee
@@ -21,14 +21,14 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
 
 ## The levels (say the chosen level's row when setting it)
 
-At any on-level the agent stops asking at bypassed gates and instead takes the RECOMMENDATION option, records the approval with `node .bee/bin/bee.mjs state gate --name context|shape|execution --approved true`, logs a one-line audit decision, and continues — posting a short `⚡ auto-approved Gate N` line, not a question. How far that reaches is the level:
+Gate 2 approves `shape` and `execution` together (`--merge`) — the retired Gate 3 has no question of its own, so "Gates 1-2" is the whole set below review. At any on-level the agent stops asking at bypassed gates and instead takes the RECOMMENDATION option, records the approval with `node .bee/bin/bee.mjs state gate --name context|shape|execution --approved true`, logs a one-line audit decision, and continues — posting a short `⚡ auto-approved Gate N` line, not a question. How far that reaches is the level:
 
 | Level | `gate_bypass` | Auto-approves | Still stops for the human |
 |---|---|---|---|
 | `off` | `false` | nothing | **every** gate (default) |
-| `normal` | `true` | Gates 1-3 for `tiny`/`small`/`standard` non-hard-gate work | high-risk/hard-gate Gates 1-3 · secret reads · Gate 4 UAT/P1 |
-| `full` | `"full"` | **all** Gates 1-3 at every lane, high-risk/hard-gate included | secret-file reads · a review P1 finding |
-| `total` | `"total"` | **everything** — all Gates 1-3, secret reads, Gate 4 UAT, review P1 | **nothing — zero stops** |
+| `normal` | `true` | Gates 1-2 for `tiny`/`small`/`standard` non-hard-gate work | high-risk/hard-gate Gates 1-2 · secret reads · Gate 4 UAT/P1 |
+| `full` | `"full"` | **all** Gates 1-2 at every lane, high-risk/hard-gate included | secret-file reads · a review P1 finding |
+| `total` | `"total"` | **everything** — all Gates 1-2, secret reads, Gate 4 UAT, review P1 | **nothing — zero stops** |
 
 - The high-risk/hard-gate flags are: auth · authorization · data loss · audit/security · external provider · validation removal · database migration/schema change. Under `normal` they stop; under `full`/`total` the user has chosen to lift that floor.
 - **Secret-file reads** (`.env*`, `*.pem`, keys, `credentials*`, `secrets.*`) stop under `off`/`normal`/`full`; only `total` auto-proceeds on them — meaning credential contents may enter context/logs unprompted. Say this plainly when the user picks `total`.

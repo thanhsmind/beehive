@@ -1,5 +1,5 @@
 interface:
   display_name: "Bee Briefing"
-  short_description: "Render one human-readable implementation plan per feature so the human and the agent review and agree on the same document before code is touched. Use when planning has shaped work that needs Gate 2/3 approval, when a feature's implement plan must be (re)generated, or when the terse per-feature artifacts need consolidating into one reviewable doc. Do NOT use to originate decisions, scope, or approach — those come from exploring/planning."
+  short_description: "Render one human-readable implementation plan per feature so the human and the agent review and agree on the same document before code is touched. Use when planning has shaped work that needs Gate 2 approval, when a feature's implement plan must be (re)generated, or when the terse per-feature artifacts need consolidating into one reviewable doc. Do NOT use to originate decisions, scope, or approach — those come from exploring/planning."
 policy:
   allow_implicit_invocation: true
