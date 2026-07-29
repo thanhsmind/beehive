@@ -95,6 +95,45 @@ check('every references/<file>.md ("Heading") pointer in a body resolves to a re
   );
 });
 
+// A pointer is a quoted heading inside a parenthetical. One parenthetical
+// routinely names several — `("Backlog flip", "Brief check", "Command
+// detection")` — and the house style wraps the long ones across lines. Testing
+// for the literal `("<heading>")`, as this check did until cell tci-2, sees
+// only the lone-heading shape: every pointer that grew a second heading read
+// back as *missing*, and two workers in one session dismissed the resulting
+// warning as pre-existing noise. That is the cost of a false positive in an
+// advisory check — it teaches its readers to skip the output.
+//
+// Reachability is still the bar, not mention: a heading quoted outside every
+// parenthetical is prose about the rule, not a pointer to it, and does not
+// count. The parenthetical need not carry the reference path — bee-hive's body
+// says up front that its bare quoted headings resolve in
+// references/routing-and-contracts.md.
+function* parentheticals(text) {
+  // Paragraph-scoped: a parenthetical wraps across lines but never across a
+  // blank line, so one unbalanced `(` in prose cannot swallow the rest of the
+  // file and turn a bare mention into a pointer. Depth-tracked, so a nested
+  // `(...)` does not truncate its parent.
+  for (const para of text.split(/\n[ \t]*\n/)) {
+    const open = [];
+    for (let i = 0; i < para.length; i += 1) {
+      const c = para[i];
+      if (c === '(') open.push(i);
+      else if (c === ')' && open.length > 0) yield para.slice(open.pop() + 1, i);
+    }
+  }
+}
+
+const norm = (s) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+
+function pointsTo(body, heading) {
+  const want = norm(heading);
+  for (const inner of parentheticals(body)) {
+    for (const m of inner.matchAll(/"([^"]+)"/g)) if (norm(m[1]) === want) return true;
+  }
+  return false;
+}
+
 check('the three rules this slice moved to references are reachable from a body pointer', () => {
   const required = [
     ['bee-hive', 'Progress ticks'],
@@ -104,7 +143,7 @@ check('the three rules this slice moved to references are reachable from a body 
   const missing = [];
   for (const [skill, heading] of required) {
     const body = fs.readFileSync(path.join(SKILLS, skill, 'SKILL.md'), 'utf8');
-    if (!body.includes(`("${heading}")`)) missing.push(`${skill}/SKILL.md has no pointer to "${heading}"`);
+    if (!pointsTo(body, heading)) missing.push(`${skill}/SKILL.md has no pointer to "${heading}"`);
   }
   assert(missing.length === 0, missing.join('\n  '));
 });
