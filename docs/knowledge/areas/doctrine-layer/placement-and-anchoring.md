@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [ba5a35f1-981d-4cb5-8a57-234a187f122d (placement rule), "0023 + 6cd34376 (explicit-tier transport rides critical rule 12, B3a)", "derived-check-hardening E7/E8 (the two live doctrine residuals are cleared, and the completeness criterion becomes a standing check deriving retired stage names from the phase-coercion table)", "tick-contract-inline T1/T3/T5/T6 (a narrower always-loaded summary is a misfiled rule; new sheet text is paid for by removing sheet text, never by raising the fence; every-turn rules unreachable from the sheet fail the build, derived from wording not a marker; the check proves reachability, never obedience)"]
+  decisions: [ba5a35f1-981d-4cb5-8a57-234a187f122d (placement rule), "0023 + 6cd34376 (explicit-tier transport rides critical rule 12, B3a)", "derived-check-hardening E7/E8 (the two live doctrine residuals are cleared, and the completeness criterion becomes a standing check deriving retired stage names from the phase-coercion table)", "tick-contract-inline T1/T5/T6 (a narrower always-loaded summary is a misfiled rule; every-turn rules unreachable from the sheet fail the build, derived from wording not a marker; the check proves reachability, never obedience) -- T3's pay-by-removal rule is RETIRED by budget-fence-removal", "budget-fence-removal D1/D6 + repo decision 8f63adb4 (a size ceiling on instruction text is never a standing rule; a diet is a one-off event leaving no permanent gate; body length is judged per edit by information density, and the surviving standing guards prove meaning, never size)"]
   sources: ["tier-transport-doctrine (cell tier-transport-doctrine-1, 2026-07-13)", "docs/specs/doctrine-layer.md#B1", "docs/specs/doctrine-layer.md#B2", "docs/specs/doctrine-layer.md#B3a", "docs/specs/doctrine-layer.md#B4", "docs/specs/doctrine-layer.md#R1", "docs/specs/doctrine-layer.md#R2", "docs/specs/doctrine-layer.md#E1", "docs/specs/doctrine-layer.md#P1", "docs/specs/doctrine-layer.md#P2", "docs/specs/doctrine-layer.md#P4", "derived-check-hardening cells dch-5/dch-7 (retired-stage currency check with derived tokens; research-brief and write-guard fixture residuals cleared; traces .bee/cells/dch-{5,7}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)"]
   authoritative_for: "doctrine-layer: rule placement, propagation, and anchoring"
 ---
@@ -119,10 +119,18 @@ rule. It says nothing whatever about whether the rule was then obeyed
   that is reachable only from an on-demand procedure reference fails the build,
   named. The check derives which rules are in scope from their wording, never
   from a maintained marker (tick-contract-inline T5).
-- **R5** — New standing-sheet text is paid for by removing text from that same
-  sheet. Its size fence is never raised to make an addition fit: the fence
-  exists precisely to resist the growth the addition represents, and raising it
-  once makes raising it again easier (tick-contract-inline T3).
+- **R5** — A standing-sheet line earns its place by changing what an agent
+  does. A line that changes no behavior belongs in an on-demand reference, and
+  a line that changes behavior every turn belongs on the sheet however long the
+  sheet becomes. Length is judged per edit, by that question alone — never
+  against a recorded size, and no gate measures it (budget-fence-removal D1/D6,
+  superseding tick-contract-inline T3's pay-by-removal rule).
+- **R6** — A size ceiling on instruction text is never a standing rule. A
+  deliberate compression pass is legitimate work and leaves nothing behind; a
+  permanent ceiling is not, because it makes an author fund a correct addition
+  by cutting correct text elsewhere. What survives as a standing guard is
+  meaning — that no rule vanished, and that a rendered copy still matches its
+  master — never size (budget-fence-removal D1).
 
 ## Edge Cases Settled
 
@@ -206,6 +214,12 @@ rule. It says nothing whatever about whether the rule was then obeyed
   critical rule 17 from the block, each turn the suite red naming
   `skills/bee-hive/references/routing-and-contracts.md` "Progress ticks —
   worked examples" as the unreachable every-turn section.
+- Size-law regression guard (R6): `scripts/tests/test_instruction_size_law.mjs` —
+  fails the build if any byte or line ceiling on instruction text reappears
+  anywhere under `scripts/`, and separately proves the two surviving meaning
+  guards still exit non-zero on a seeded violation. It matches on the shape of
+  a size law, not on the names of the deleted files, so the same rule under a
+  new identifier is still caught; its own negative controls prove that.
 - Standing-sheet meaning guard (R5): `scripts/tests/test_agents_budget.mjs` —
   guards the 17-rule roster and the byte-identical render between the master
   block and the rendered `AGENTS.md`, no size threshold anywhere in the suite;
