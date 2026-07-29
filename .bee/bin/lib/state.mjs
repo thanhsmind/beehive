@@ -2583,6 +2583,21 @@ export function testCellDebt(root, feature) {
     if (!cell) continue;
     const changeClass = cellChangeClass(cell);
     if (changeClass === 'test') {
+      // worker-conformance wc-2c — a DROPPED test cell is WITHDRAWN work: it
+      // owes nothing, and it stands in for nothing. Before this skip the
+      // branch read one dropped cell two contradictory ways at once — it
+      // counted toward testCellCount (suppressing the 'missing' kind below)
+      // AND landed in offenders through the `!== 'capped'` arm as "not
+      // capped". Found live on this feature's own close-door.
+      //
+      // The ORDER is the whole guard against this becoming an escape hatch:
+      // skipping BEFORE the counter increments means a feature that drops its
+      // only test cell falls through to 'missing' rather than passing clean,
+      // so dropping the cell is never cheaper than writing it.
+      //
+      // Only 'dropped' — 'open', 'claimed' and 'blocked' are genuinely
+      // undischarged work somebody still owes, and must keep refusing.
+      if (cell.status === 'dropped') continue;
       testCellCount += 1;
       const trace = cell.trace || {};
       if (cell.status !== 'capped') {

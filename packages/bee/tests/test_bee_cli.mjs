@@ -3184,6 +3184,122 @@ await check('gc-1: THE REVIEWER\'S REPRO — a capped behavior cell with NO test
   }
 });
 
+// ─── worker-conformance wc-2c: A WITHDRAWN TEST CELL OWES NOTHING, AND ────
+// ─── HIDES NOTHING — the same matrix, one status deeper ────────────────────
+//
+// Found live on THIS feature's own close-door: a `change_class: "test"` cell
+// that had been deliberately DROPPED was read twice over, and wrongly both
+// times. The test-class branch incremented `testCellCount` BEFORE it looked at
+// the status, so a withdrawn cell (a) counted as a test cell and therefore
+// suppressed the 'missing' kind, and (b) simultaneously landed in `offenders`
+// through the `status !== 'capped'` arm, reported as "not capped". One cell,
+// two contradictory readings: it was both the coverage the door was waiting
+// for and the reason the door stayed shut.
+//
+// Withdrawn work owes no coverage AND stands in for none. The ORDERING is the
+// whole fix and the whole guard against it becoming an escape hatch: the skip
+// happens BEFORE the counter increments, so a feature that drops its only test
+// cell falls through to the 'missing' kind rather than passing clean —
+// dropping the cell is never cheaper than writing it.
+//
+// Generated over DEBT_DOORS for the same reason as the two blocks above: a
+// door added next month inherits every row here with nothing edited.
+
+// Every other non-capped status is genuinely undischarged work — a cell
+// somebody still owes — and must keep refusing exactly as before. Only
+// 'dropped' is a withdrawal, and this list is what stops the exemption
+// widening into "any status that is not capped".
+const WC2C_UNDISCHARGED_STATUSES = ['open', 'claimed', 'blocked'];
+
+for (const door of DEBT_DOORS) {
+  await check(`wc-2c: door "${door.id}" REFUSES with the "missing" kind when the feature's ONLY test cell was DROPPED — a withdrawn cell never stands in for coverage`, async () => {
+    const feature = `wc2cdrop${slug(door.id)}`;
+    const dir = makeFeatureVerifyRepo(feature, door.phase);
+    try {
+      writeCappedBehaviorCell(dir, `${feature}-b`, feature);
+      writeTestClassCell(dir, `${feature}-t`, feature, { status: 'dropped' });
+      const refused = await runBee(door.argv(feature), dir);
+      assert(
+        refused.status !== 0,
+        `door "${door.id}" let a feature whose only test cell was DROPPED walk out clean (exit ${refused.status}) — dropping the cell must never be cheaper than writing it: ${refused.stdout}${refused.stderr}`,
+      );
+      const out = refused.stdout + refused.stderr;
+      assert(
+        /NO consolidated test cell/.test(out),
+        `it must be the "missing" kind — the dropped cell is withdrawn work, so this feature has no test cell at all, got: ${out}`,
+      );
+      assert(new RegExp(`${feature}-b`).test(out), `the refusal must name the uncovered behavior cell, got: ${out}`);
+      assert(
+        !new RegExp(`${feature}-t`).test(out),
+        `a withdrawn cell must not be reported as an offender — it owes nothing, got: ${out}`,
+      );
+      assert(!/not capped/.test(out), `a dropped cell is not "not capped" work, it is no work, got: ${out}`);
+      assert(/FIX:/.test(out), `the refusal must carry a runnable FIX, got: ${out}`);
+      assert(door.untouched(readStateOf(dir), feature), `a refused door must write NOTHING, state is now: ${JSON.stringify(readStateOf(dir))}`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  await check(`wc-2c: door "${door.id}" OPENS when a dropped test cell sits beside a green capped one — the drop is inert, never fatal`, async () => {
+    const feature = `wc2cok${slug(door.id)}`;
+    const dir = makeFeatureVerifyRepo(feature, door.phase);
+    try {
+      seedDebtFreeFeature(dir, feature);
+      writeTestClassCell(dir, `${feature}-dropped`, feature, { status: 'dropped' });
+      const ok = await runBee(door.argv(feature), dir);
+      assert(
+        ok.status === 0,
+        `a dropped test cell beside a green capped one must not shut door "${door.id}" — the coverage exists and the withdrawal owes nothing, got: ${ok.stdout}${ok.stderr}`,
+      );
+      assert(door.landed(readStateOf(dir)), `the change must land once the door is clear, state is: ${JSON.stringify(readStateOf(dir))}`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  for (const status of WC2C_UNDISCHARGED_STATUSES) {
+    await check(`wc-2c: door "${door.id}" still REFUSES a "${status}" test cell as not capped — only "dropped" is withdrawn work`, async () => {
+      const feature = `wc2c${status}${slug(door.id)}`;
+      const dir = makeFeatureVerifyRepo(feature, door.phase);
+      try {
+        writeCappedBehaviorCell(dir, `${feature}-b`, feature);
+        writeTestClassCell(dir, `${feature}-t`, feature, { status });
+        const refused = await runBee(door.argv(feature), dir);
+        assert(
+          refused.status !== 0,
+          `door "${door.id}" let an undischarged "${status}" test cell walk out (exit ${refused.status}) — the dropped exemption must not widen to any other status: ${refused.stdout}${refused.stderr}`,
+        );
+        const out = refused.stdout + refused.stderr;
+        assert(
+          !/NO consolidated test cell/.test(out),
+          `it must never be the "missing" kind — a "${status}" cell EXISTS and is owed, got: ${out}`,
+        );
+        assert(new RegExp(`${feature}-t`).test(out), `the refusal must name the undischarged test cell, got: ${out}`);
+        // `start-feature` owns an EARLIER guard of its own (nonterminal /
+        // claimed cells must be resolved before a new feature starts), so it
+        // legitimately answers before the debt door is ever asked. Every OTHER
+        // door reaches the debt door, so the debt door's exact wording is
+        // pinned there unconditionally.
+        //
+        // The branch is on the DOOR, never on the output text: keying it on
+        // `/not green/` would mean a refusal that ever lost that phrase
+        // silently skipped the strict assertion on ALL FOUR doors, leaving the
+        // rows passing on exit code and cell name alone (advisor finding).
+        if (!door.id.startsWith('start-feature')) {
+          assert(
+            new RegExp(`${feature}-t \\(status: ${status} — not capped\\)`).test(out),
+            `the debt door must name the undischarged test cell and its status, got: ${out}`,
+          );
+        }
+        assert(door.untouched(readStateOf(dir), feature), `a refused door must write NOTHING, state is now: ${JSON.stringify(readStateOf(dir))}`);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+}
+
 // ─── review-p1-fixes p1-3 (F5): a failed resolution must NARROW, not widen ──
 // resolveActiveFeatureForWorkflowsClose swallowed every error into null, and
 // null is also the value meaning "no active feature to protect" — so a
