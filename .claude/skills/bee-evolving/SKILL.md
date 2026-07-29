@@ -88,8 +88,8 @@ then re-test GREEN. bee-evolving never implements inline — it conducts the loo
 fix touching non-skill surfaces still enters the normal bee chain (cells, verification, capping).
 
 **Learning placement:** a promoted learning lands in the knowledge bundle or the target skill's
-`references/` by default; editing the skill's body is allowed only for a load-bearing invariant,
-within its recorded budget in `scripts/skill-body-budget.json` — over budget, trim first.
+`references/` by default; editing the skill's body is allowed only for a load-bearing invariant —
+a body line must change agent behavior, or it belongs in `references/`.
 
 ## 4. Suites green
 

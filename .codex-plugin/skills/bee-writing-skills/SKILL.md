@@ -37,8 +37,8 @@ CREATION-LOG.md template: `references/creation-log-template.md`.
 - [ ] YAML frontmatter starts on line 1 (`---`); `name` hyphen-case with the `bee-` prefix, matches the directory exactly
 - [ ] `description`: one purpose clause, then "Use when..." triggers — NEVER a workflow/step summary (agents follow the description and skip the body); third person, ≤1024 chars
 - [ ] `metadata.version: '0.1'`, `metadata.ecosystem: bee`, `metadata.dependencies` mapping or `[]` (never a YAML array of objects — `references/checklist-examples.md` ("Dependency metadata style"))
-- [ ] Body <200 lines preferred; overflow to exactly one level of `references/`
-- [ ] **Regrowth law:** a new learning lands in the knowledge bundle or `references/` by default; edit the body itself only for a load-bearing invariant, and only if it still fits the recorded budget in `scripts/skill-body-budget.json` — over budget, trim the body first (one in, one out)
+- [ ] Information density, not length: overflow to exactly one level of `references/`; a body line earns its place only by changing agent behavior — a line that doesn't belongs in `references/`
+- [ ] **Regrowth law:** a new learning lands in the knowledge bundle or `references/` by default; edit the body itself only for a load-bearing invariant
 - [ ] **Per-turn rules (chat shape, communication) are never exiled to references** — they live in the always-loaded layer; a reference nothing forces open is a rule nothing follows
 - [ ] Commands quoted in the body match the `.bee/bin` CLI surface in `bee/docs/07-contracts.md` verbatim
 - [ ] Short `Headless` section; Red Flags list; persuasion principles applied (`references/checklist-examples.md` ("Persuasion principles")); HARD-GATE markers on critical stops

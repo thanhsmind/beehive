@@ -1,0 +1,58 @@
+{
+  "id": "bfr-5",
+  "feature": "budget-fence-removal",
+  "title": "Replace the standing length instructions with an information-density rule",
+  "lane": "standard",
+  "change_class": "refactor",
+  "deps": [],
+  "decisions": [
+    "D6",
+    "D4"
+  ],
+  "files": [
+    "skills/bee-writing-skills/SKILL.md",
+    "skills/bee-writing-skills/references/provenance.md",
+    "skills/bee-evolving/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/budget-fence-removal/CONTEXT.md",
+    "docs/history/budget-fence-removal/plan.md",
+    "skills/bee-writing-skills/SKILL.md",
+    "skills/bee-evolving/SKILL.md"
+  ],
+  "action": "Per D6 replace every STANDING instruction about how long a skill body may be with one information-density rule: a body line must change agent behavior; a line that does not belongs in references/. No number, no threshold, nobody measures it. Wording is yours within that shape. Four edits. (1) skills/bee-writing-skills/SKILL.md:41 -- the Regrowth law currently reads 'a new learning lands in the knowledge bundle or references/ by default; edit the body itself only for a load-bearing invariant, and only if it still fits the recorded budget in scripts/skill-body-budget.json -- over budget, trim the body first (one in, one out)'. KEEP the useful half (default to the knowledge bundle or references/), DROP the budget clause and the one-in-one-out clause, since scripts/skill-body-budget.json no longer exists. (2) skills/bee-writing-skills/SKILL.md:40 -- 'Body <200 lines preferred; overflow to exactly one level of references/' falls under D6 as well: a line ceiling is the same instinct as a byte ceiling. Keep the overflow-to-references guidance, drop the number. (3) skills/bee-evolving/SKILL.md:90-92 -- the Learning placement paragraph ends 'within its recorded budget in scripts/skill-body-budget.json -- over budget, trim first'; same replacement. (4) skills/bee-writing-skills/references/provenance.md -- REMOVE the row at :14 (Body budget ceiling + ratchet enforcement | skill-token-diet D1/D6 | scripts/skill_budget_fence.mjs is the blocking half), and REWRITE the row at :12 (Regrowth law ... within budget, one in one out | skill-token-diet D5) so it documents the new rule and cites repo decision 8f63adb4 instead. Governing decision text, for your wording: 'A size ceiling on instruction text is never a standing law in bee. A diet is a deliberate one-off optimization event that leaves no permanent gate behind.' AFTER the edits run the regen chain IN THIS ORDER: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write, then node scripts/impact_registry.mjs --write. Never hand-edit .claude/, .agents/, .codex-plugin/, .claude-plugin/ or .bee/bin/ -- they are rendered.",
+  "must_haves": {
+    "truths": [
+      "No skill body instructs a reader to fit a byte or line budget",
+      "skills/bee-writing-skills/SKILL.md and skills/bee-evolving/SKILL.md both state the information-density rule and still send new learnings to references/ by default",
+      "No live instruction text references scripts/skill-body-budget.json or scripts/skill_budget_fence.mjs",
+      "node scripts/release_manifest.mjs --check exits 0",
+      "node scripts/ledger_parity.mjs --check exits 0",
+      "node scripts/okf_instructions_fence.mjs exits 0"
+    ]
+  },
+  "verify": "node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check && node scripts/okf_instructions_fence.mjs && node scripts/run_verify.mjs --only test_lib_mirror,test_render_race && node scripts/impact_registry.mjs --check",
+  "status": "capped",
+  "trace": {
+    "worker": "bfr-worker-5",
+    "outcome": "Replaced standing length/budget instructions in bee-writing-skills and bee-evolving with an information-density rule; provenance.md row rewritten to cite decision 8f63adb4, budget-fence row removed; regen chain run.",
+    "files_changed": [
+      "skills/bee-writing-skills/SKILL.md",
+      "skills/bee-writing-skills/references/provenance.md",
+      "skills/bee-evolving/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-29T06:28:14.395Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2dd5efdf-5e74-457e-b9dd-ee2109c21af7",
+    "claimed_at": "2026-07-29T06:25:59.541Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  }
+}

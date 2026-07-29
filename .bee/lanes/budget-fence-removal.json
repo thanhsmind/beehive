@@ -2,15 +2,15 @@
   "schema_version": "1.0",
   "feature": "budget-fence-removal",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false
   },
-  "summary": "Exploring complete. CONTEXT.md is ready for planning: 9 locked decisions removing every enforced byte ceiling on instruction text, keeping the meaning guards. CI status gate checked green (latest CI + Windows runs on main succeeded, no open verify-red issue).",
-  "next_action": "Gate 1, then invoke bee-planning.",
+  "summary": "Slice 1 closed: bfr-1..bfr-4 capped, full verify green (117 suites), feature-verify recorded. The byte fence is out of the chain and a structural regression suite guards its absence.",
+  "next_action": "Open slice 2: doctrine, knowledge, decision supersessions, and the remaining stale rule pointers.",
   "created_at": "2026-07-29T05:07:28.081Z",
   "route": {
     "class": "refactor",
