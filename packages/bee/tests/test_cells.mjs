@@ -1324,6 +1324,43 @@ await check('capCell honors the cell-declared behavior_change when the flag is o
   assert(capped.trace.behavior_change === true, 'trace.behavior_change carried from the cell declaration');
 });
 
+// ─── E6 (derived-check-hardening): behavior_change resolves from either the
+// top-level field OR trace.behavior_change — live evidence was vd-9/vd-10/
+// vd-11, each authored with ONLY trace.behavior_change: true (no top-level
+// field) and each capped with the flag false, silently missing scribing-debt
+// detection and the semantic goal-check judge tier.
+
+await check('capCell resolves behavior_change from trace.behavior_change when the top-level field is unset (E6)', async () => {
+  addCell(root, makeCell('bc-trace-only', { trace: { behavior_change: true } }));
+  assert(readCell(root, 'bc-trace-only').behavior_change === undefined, 'fixture carries no top-level behavior_change');
+  await claimCell(root, 'bc-trace-only', 'worker-e6');
+  await recordVerify(root, 'bc-trace-only', { command: 'npm test', output: 'ok', passed: true });
+  // trace-only declaration must still be enforced at cap — evidence demanded, same as the top-level case.
+  await assertRejects(
+    () => capCell(root, 'bc-trace-only', { files_changed: ['a.js'], outcome: 'done' }),
+    'verification_evidence',
+    'trace-only behavior_change is still enforced at cap',
+  );
+  const capped = await capCell(root, 'bc-trace-only', {
+    files_changed: ['a.js'],
+    outcome: 'done',
+    verification_evidence: {
+      red_failure_evidence: 'bc-trace-only: prior behavior characterized here before this change, distinct from every other fixture text, meeting the D3 anti-boilerplate floor.',
+      verification_run: 'npm test',
+    },
+  });
+  assert(capped.trace.behavior_change === true, 'trace-only declaration resolved to true at cap (E6 fix)');
+});
+
+await check('capCell keeps an explicit top-level behavior_change:false even when trace.behavior_change is true (E6)', async () => {
+  addCell(root, makeCell('bc-top-wins', { behavior_change: false, trace: { behavior_change: true } }));
+  await claimCell(root, 'bc-top-wins', 'worker-e6');
+  await recordVerify(root, 'bc-top-wins', { command: 'npm test', output: 'ok', passed: true });
+  const capped = await capCell(root, 'bc-top-wins', { files_changed: ['a.js'], outcome: 'done' });
+  assert(capped.status === 'capped', 'bc-top-wins caps with no behavior_change evidence demanded');
+  assert(capped.trace.behavior_change === false, 'explicit top-level false wins over a conflicting trace value');
+});
+
 // ─── main-verifies mv-3 (D1): feature-verify-pending cap path ─────────────
 // Assertion (a): the pending path caps with ZERO per-cell verify evidence
 // demanded — no recordVerify call at all, no verification_evidence, no

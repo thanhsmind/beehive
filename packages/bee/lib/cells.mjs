@@ -1809,6 +1809,21 @@ function findDuplicateRedEvidence(root, id, trimmed) {
   return null;
 }
 
+// E6 (derived-check-hardening): cells are commonly authored with
+// behavior_change nested under trace.behavior_change rather than the
+// top-level field validated by cells add/update — so a genuine behavior
+// change was capping with the flag false (live evidence: vd-9, vd-10,
+// vd-11). Resolve ONCE here, at the cap read, so no downstream consumer
+// needs its own fallback: an explicitly-set top-level true/false always
+// wins; only when the top-level field is genuinely unset (undefined) does
+// the nested trace value stand in. Forward-only — this never touches an
+// already-capped cell's stored record.
+function resolveDeclaredBehaviorChange(cell) {
+  if (cell.behavior_change === true) return true;
+  if (cell.behavior_change === false) return false;
+  return Boolean(cell.trace && cell.trace.behavior_change === true);
+}
+
 export async function capCell(
   root,
   id,
@@ -1848,8 +1863,10 @@ export async function capCell(
     // flag is opt-in, so a cell planned as behavior_change must not silently lose
     // its evidence/before-state guards (and its scribing debt) at cap just because
     // --behavior-change was not repeated. Explicit false/true from the caller wins.
+    // E6: the declared value itself may live at the top level or nested under
+    // trace.behavior_change — see resolveDeclaredBehaviorChange.
     const bc =
-      behavior_change === undefined ? cell.behavior_change === true : behavior_change === true;
+      behavior_change === undefined ? resolveDeclaredBehaviorChange(cell) : behavior_change === true;
     if (cell.status === 'capped') throw new Error(`capCell: cell "${id}" is already capped.`);
     if (cell.status === 'dropped') throw new Error(`capCell: cell "${id}" was dropped.`);
     let trace = { ...defaultTrace(), ...(cell.trace || {}) };
