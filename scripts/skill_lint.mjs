@@ -3,11 +3,9 @@
 // Always exits 0: anchor/numbering problems are warnings. A human decides;
 // nothing here blocks, nothing here runs in the verify estate.
 //
-// BODY BUDGET moved OUT to scripts/skill_budget_fence.mjs (skill-token-diet
-// D6, cell diet-1): the byte-budget ratchet plus the D8 provenance grep are
-// now a BLOCKING chain-fail fence, narrowly superseding the advisory-lint law
-// for that one check. `--update-baseline` moved there too. This file keeps
-// only the two properties below, both still advisory.
+// No body-budget check exists anywhere in bee (decision 8f63adb4: a size
+// ceiling on instruction text is never a standing law here). This file keeps
+// only the two properties below, both advisory.
 //
 // The slice's net behavior is instruction text: three rules (progress ticks,
 // the re-lane checkpoint, the merged review wave) moved into references with
@@ -57,9 +55,8 @@ function skillDirs() {
     .sort();
 }
 
-// Body budget + --update-baseline live in scripts/skill_budget_fence.mjs now
-// (skill-token-diet D6, cell diet-1) — that script is the blocking half and
-// the single source of the ratchet; this file no longer touches it.
+// No body-budget check exists in this file or anywhere else in bee (decision
+// 8f63adb4). This file only lints the two properties below.
 
 // ─── 1. anchor integrity ───────────────────────────────────────────────────
 // A pointer may be same-skill (`references/x.md`) or cross-skill

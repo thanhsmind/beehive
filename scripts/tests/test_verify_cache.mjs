@@ -75,7 +75,7 @@ function makeFixture() {
   // Caching is OPT-IN by declaration (p2-2), so the mini repo needs a
   // declaration table of its own. Start from the REAL shipped one — case (10)
   // below deliberately exercises run_verify's real declaration for
-  // scripts/skill_budget_fence.mjs, not a synthetic stand-in — then declare
+  // packages/bee/tests/test_misc.mjs, not a synthetic stand-in — then declare
   // the two fake suites on top: in this fixture they are the audited,
   // closure-complete suites ([] = "the import closure is the whole input
   // set"). Every other suite in the fixture is undeclared, hence uncacheable.
@@ -303,22 +303,29 @@ await check("BEE_CHECK_ONLY disables the cache outright: a filtered run neither 
 
 // (10) F2c: the impact registry is built by static import analysis, so files a
 // suite merely readFileSync's are invisible to its closure. Exercised against
-// run_verify.mjs's REAL declaration for scripts/skill_budget_fence.mjs (its
-// budget JSON + every skills/**/*.md body), not a synthetic one.
+// run_verify.mjs's REAL declaration for packages/bee/tests/test_misc.mjs (its
+// AGENTS.md, packages/bee/AGENTS.block.md, and skills/**/* inputs), not a
+// synthetic one.
 await check("a declared extra input invalidates that suite's cache entry: editing a skill body, and adding a new one, both force a real re-run", () => {
   const fx8 = makeFixture();
   try {
-    const FENCE = ["--only", "skill_budget_fence"];
-    const CACHED_FENCE = /CACHED green scripts\/skill_budget_fence\.mjs \(closure unchanged\)/;
-    const RAN_FENCE = /PASS\s+\d+ms\s+scripts\/skill_budget_fence\.mjs\s*$/m;
-    writeFixtureFile(fx8, "scripts/skill_budget_fence.mjs", "process.exit(0);\n");
-    writeFixtureFile(fx8, "scripts/skill-body-budget.json", '{"demo": 100}\n');
+    const FENCE = ["--only", "test_misc"];
+    const CACHED_FENCE = /CACHED green packages\/bee\/tests\/test_misc\.mjs \(closure unchanged\)/;
+    const RAN_FENCE = /PASS\s+\d+ms\s+packages\/bee\/tests\/test_misc\.mjs\s*$/m;
+    writeFixtureFile(fx8, "packages/bee/tests/test_misc.mjs", "process.exit(0);\n");
+    // test_misc.mjs declares THREE inputs (verify-cache-inputs.json): AGENTS.md,
+    // packages/bee/AGENTS.block.md, and skills/**/*. Both literal (non-glob)
+    // entries must exist or closureShaFor() returns null (a missing declared
+    // literal input is treated as a broken declaration, never silently dropped)
+    // and the suite is never written to the cache at all.
+    writeFixtureFile(fx8, "AGENTS.md", "# AGENTS\n");
+    writeFixtureFile(fx8, "packages/bee/AGENTS.block.md", "# AGENTS block\n");
     const skillBody = writeFixtureFile(fx8, "skills/demo/SKILL.md", "# demo\n");
 
     const cold = run(fx8, FENCE);
     assert.equal(cold.status, 0, `expected exit 0; stdout:\n${cold.stdout}\nstderr:\n${cold.stderr}`);
     assert.match(cold.stdout, RAN_FENCE, cold.stdout);
-    assert.equal(cacheEntries(fx8)["scripts/skill_budget_fence.mjs"]?.result, "green", "a declared-input suite is still cacheable");
+    assert.equal(cacheEntries(fx8)["packages/bee/tests/test_misc.mjs"]?.result, "green", "a declared-input suite is still cacheable");
 
     const warm = run(fx8, FENCE);
     assert.match(warm.stdout, CACHED_FENCE, "nothing changed, so the entry must still be served");

@@ -1,10 +1,6 @@
 {
   "note": "Opt-IN declaration table for the verify suite-result cache (scripts/run_verify.mjs). A suite is cacheable ONLY if its entry file is listed here; everything absent is NEVER cached. The value is the list of repo-relative paths/globs the suite reads at RUNTIME beyond its static import closure ([] means 'the import closure is already the complete input set'). Over-declaring is safe (it only costs extra re-runs); under-declaring produces a CACHED green for work that never ran, so declare a suite only when its full input set is actually known. Both the pattern strings and every matched file's bytes are hashed into that suite's cache key.",
   "suites": {
-    "scripts/skill_budget_fence.mjs": [
-      "scripts/skill-body-budget.json",
-      "skills/**/*.md"
-    ],
     "scripts/okf_instructions_fence.mjs": [
       "AGENTS.md",
       "skills/**/*.md"
