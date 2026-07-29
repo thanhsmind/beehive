@@ -2957,6 +2957,146 @@ await check('wc-2: only the literal "unrecorded" arms it — a capped cell whose
   }
 });
 
+// ─── wc-2: THE SEAM ITSELF — capCell WRITES it, the door READS it ──────────
+//
+// Everything above seeds `trace.proof: "unrecorded"` by hand, which is the
+// right shape for a door × kind matrix (cheap, exhaustive, no git) but proves
+// exactly one half of a two-party contract. The field is WRITTEN by capCell
+// (lib/cells.mjs, after its whole refusal chain) and READ by both predicates
+// in lib/state.mjs; with only hand-written fixtures, a rename or a shape
+// drift on either side leaves both suites green and the door silently dead.
+//
+// These two rows drive a REAL `cells cap` and then a REAL door in one run,
+// and they never write the marker themselves — the value under test is
+// whatever capCell chose to stamp. The mirror row is what stops the pair
+// passing vacuously: the SAME repo, the SAME door, one real verify output
+// away, must OPEN.
+//
+// Lane "tiny" is deliberate: decision 0004's "an assertion is not evidence"
+// refusal (cells.mjs:2159) is scoped to small+, so tiny is where a cap can
+// legally reach the marker today, before this feature's D1 loosens the same
+// door for the rest. That is precisely the hole D10 named — `cells verify
+// --passed true` with no --output is legal, and without the marker such a cap
+// would leave the feature closeable with zero tests executed anywhere.
+
+function makeRealCapRepo(feature) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-wc2-seam-'));
+  gitOk(dir, ['init', '-q', '-b', 'main']);
+  gitOk(dir, ['config', 'user.email', 's@e']);
+  gitOk(dir, ['config', 'user.name', 's']);
+  fs.writeFileSync(path.join(dir, 'src.js'), 'module.exports = 1;\n');
+  fs.mkdirSync(path.join(dir, '.bee', 'bin', 'lib'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.bee', 'bin', 'lib', 'mirror.mjs'), '// mirror placeholder\n');
+  gitOk(dir, ['add', '.']);
+  gitOk(dir, ['commit', '-q', '-m', 'init']);
+  fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
+  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+  writeState(dir, {
+    ...defaultState(),
+    phase: 'swarming',
+    feature,
+    approved_gates: { context: true, shape: true, execution: true, review: false },
+  });
+  // A real tracked edit, so diff_stats is computed from real `git diff` output
+  // and the cap travels the same path a worker's cap does.
+  fs.writeFileSync(path.join(dir, 'src.js'), 'module.exports = 2; // changed\n');
+  return dir;
+}
+
+// Drives add → claim → verify → cap through the real CLI. `output` null means
+// the worker asserted a pass with nothing to show for it (the marker case);
+// a string means it recorded real proof (the mirror case). Returns the cell
+// as capCell left it on disk — the test asserts against THAT, never against
+// anything this helper wrote.
+async function realCapThroughCli(dir, feature, id, { output = null } = {}) {
+  const fixturePath = path.join(dir, `${id}.cell.json`);
+  fs.writeFileSync(
+    fixturePath,
+    JSON.stringify(
+      {
+        id,
+        feature,
+        title: 'wc-2 seam fixture — a real cap, driven end to end',
+        lane: 'tiny',
+        action: 'wc-2 seam fixture only.',
+        verify: 'node -e "process.exit(0)"',
+        change_class: 'refactor',
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  );
+  const added = await runBee(['cells', 'add', '--file', `${id}.cell.json`, '--json'], dir);
+  assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
+  const claimed = await runBee(['cells', 'claim', '--id', id, '--worker', 'w', '--json'], dir);
+  assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
+  const verified = await runBee(
+    ['cells', 'verify', '--id', id, '--command', 'node -e 0', '--passed', 'true', ...(output === null ? [] : ['--output', output]), '--json'],
+    dir,
+  );
+  assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
+  const capped = await runBee(['cells', 'cap', '--id', id, '--outcome', 'seam fixture', '--files', 'src.js', '--json'], dir);
+  assert(
+    capped.status === 0,
+    `the cap itself must succeed — this row is about what a SUCCESSFUL cap stamps, not about a refusal, got exit ${capped.status}: ${capped.stdout}${capped.stderr}`,
+  );
+  return JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'cells', `${id}.json`), 'utf8'));
+}
+
+await check('wc-2 SEAM: a REAL cap that recorded no proof stamps trace.proof "unrecorded" itself, and THAT cap — never a hand-written fixture — holds the close door shut', async () => {
+  const dir = makeRealCapRepo('wc2seam');
+  try {
+    const cell = await realCapThroughCli(dir, 'wc2seam', 'wc2seam-1', { output: null });
+    // Writer half: the value the door consumes was produced by capCell.
+    assert(cell.status === 'capped', `the cell must be capped, got ${cell.status}`);
+    assert(
+      cell.trace.proof === 'unrecorded',
+      `capCell must stamp trace.proof "unrecorded" on a cap holding neither verify output nor verification_evidence — if this fails, the WRITER half of the contract moved and every hand-written door fixture above is now testing a field nothing produces. Got trace: ${JSON.stringify(cell.trace)}`,
+    );
+    assert(
+      cell.trace.feature_verify !== 'pending',
+      `the two markers are independent — this cap never asked for the pending path, so it must not carry it, got trace: ${JSON.stringify(cell.trace)}`,
+    );
+
+    // Reader half, same run, same repo: the real door on the real cap.
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
+    assert(
+      refused.status !== 0,
+      `the close door must refuse on a cap capCell itself marked unproven (exit ${refused.status}) — writer and reader are only actually connected if this run refuses: ${refused.stdout}${refused.stderr}`,
+    );
+    const out = refused.stdout + refused.stderr;
+    assert(/awaiting the feature-level verify/.test(out), `it must be the feature-verify door that refused, got: ${out}`);
+    assert(/wc2seam-1/.test(out), `the refusal must name the cell the real cap left unproven, got: ${out}`);
+    assert(/unrecorded/.test(out), `the refusal must name the marker it armed on, got: ${out}`);
+    assert(/FIX:/.test(out), `the refusal must carry a runnable FIX, got: ${out}`);
+    assert(readStateOf(dir).phase === 'swarming', 'a refused departure must write NOTHING');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('wc-2 SEAM (mirror): the same real cap WITH recorded verify output carries no marker and the same door opens — the pair cannot pass vacuously', async () => {
+  const dir = makeRealCapRepo('wc2seamok');
+  try {
+    const cell = await realCapThroughCli(dir, 'wc2seamok', 'wc2seamok-1', { output: 'suite A: 12/12 green' });
+    assert(cell.status === 'capped', `the cell must be capped, got ${cell.status}`);
+    assert(
+      cell.trace.proof === undefined,
+      `capCell must NOT mark a cap that recorded real verify output — the marker is absence of proof, not presence of a cap, got trace: ${JSON.stringify(cell.trace)}`,
+    );
+
+    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
+    assert(
+      ok.status === 0,
+      `a feature whose only cap recorded real proof owes nothing at the boundary — without this row the refusal above could come from any cap at all, got: ${ok.stdout}${ok.stderr}`,
+    );
+    assert(readStateOf(dir).phase === 'scribing', 'the departure must land once the door is clear');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 await check('gc-1: THE REVIEWER\'S REPRO — a capped behavior cell with NO test cell is refused at the feature-swap door, the one door that used to let it through at EXIT 0', async () => {
   const dir = makeFeatureVerifyRepo('gc1repro', 'swarming');
   try {
