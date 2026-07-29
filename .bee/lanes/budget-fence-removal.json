@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "budget-fence-removal",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -10,7 +10,7 @@
     "review": false
   },
   "summary": "Slice 1 closed: bfr-1..bfr-4 capped, full verify green (117 suites), feature-verify recorded. The byte fence is out of the chain and a structural regression suite guards its absence.",
-  "next_action": "Open slice 2: doctrine, knowledge, decision supersessions, and the remaining stale rule pointers.",
+  "next_action": "Invoke bee-compounding.",
   "created_at": "2026-07-29T05:07:28.081Z",
   "route": {
     "class": "refactor",
@@ -27,8 +27,18 @@
   "feature_verify": {
     "feature": "budget-fence-removal",
     "command": "node scripts/run_verify.mjs",
-    "output_sha256": "3957a595e9bf952029f19ba23ca08b3925b282d87c18bd2b7d8eef48318a9eb5",
+    "output_sha256": "85718036f38ffd731880670ce586bee131aa5bb43f700607ed87d2b0aa3a1c8a",
     "result": "green",
-    "at": "2026-07-29T06:23:38.545Z"
+    "at": "2026-07-29T06:49:13.184Z"
+  },
+  "last_scribing_run": {
+    "feature": "budget-fence-removal",
+    "date": "2026-07-29",
+    "at": "2026-07-29T06:52:02.025Z",
+    "areas_synced": [
+      "doctrine-layer",
+      "verify-pipeline"
+    ],
+    "next_action": "Invoke bee-compounding."
   }
 }

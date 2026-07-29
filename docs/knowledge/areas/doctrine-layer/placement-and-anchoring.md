@@ -169,12 +169,15 @@ rule. It says nothing whatever about whether the rule was then obeyed
   surface a claim of coverage it does not have, and a check that overstates its
   reach is how the next gap goes unnoticed (tick-contract-inline T6).
 
-- **Paying for an addition is when stale cross-references surface.** Trimming
-  the sheet to fund a new rule put a reader's eye on citations nobody had
-  re-read in a long time, and two of them pointed one rule off from the rule
-  they named. The trim forces a re-read of the whole document, which makes it
-  the cheapest moment to find that class of rot — an argument for the
-  pay-by-removing rule beyond the size fence itself.
+- **A deliberate re-read is when stale cross-references surface — the trim was
+  never the thing that found them.** Trimming the sheet to fund a new rule once
+  put a reader's eye on citations nobody had re-read in a long time, and two of
+  them pointed one rule off from the rule they named. That was read as an
+  argument for paying by removal. It was not: what found the rot was reading the
+  whole document, and a size law is an expensive and lossy way to schedule a
+  read. Removing the law and running one deliberate sweep instead found 18
+  defects of that class where the incident-driven approach had surfaced 2
+  (budget-fence-removal D9). Schedule the re-read directly.
 
 ## Pointers (implementation)
 

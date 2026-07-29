@@ -128,7 +128,10 @@ rule never disappears — only its elaboration moves.
     ratcheted onto the achieved size (20,480/18,000 → 15,000/14,000) only together with a structural
     guard: the numbered-rule roster pinned on both the template and the render, a negative control
     proving it bites, and a check refusing any terminal-home rule compressed into a bare
-    cross-reference.
+    cross-reference. **The observation outlived the instrument.** The fence was deleted outright in
+    2026-07-29 (budget-fence-removal D1/D2) once it became clear a budget alone was not merely
+    insufficient but actively harmful — it made an author fund a correct addition by cutting correct
+    text. The structural guards named here survive and still block; only the size half is gone.
 - **2026-07-26 — the operating block's `## Critical rules` shrank 16 → 14, in judgement form
   (judgement-rules D1-D4)**, without touching this concept's own pinned wording: the fan-out rule
   (old 13, new 12) dropped its `>3 files` numeric proxy in favor of "digest, not verbatim" (D2), and
