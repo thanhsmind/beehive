@@ -659,9 +659,12 @@ async function main() {
   // --- 24. Gate-policy row: apply_patch write to a source path during a
   // gated phase with execution unapproved is denied by the gate guard (not
   // direct-edit, not reservation) -- proves apply_patch runs the SAME gate
-  // decision as Edit/Write/Bash.
+  // decision as Edit/Write/Bash. Uses "planning" (a phase the state machine
+  // can actually produce, and a live member of guards.mjs's GATED_PHASES)
+  // rather than the retired "validating" value -- this row must exercise
+  // checkWrite's real gate policy, not readState's legacy-phase coercion.
   const gateRoot = buildFixture("bee-write-guard-applypatch-gate-", {
-    phase: "validating",
+    phase: "planning",
     executionApproved: false,
   });
   const patchGateSrc = "*** Begin Patch\n*** Add File: src/feature.txt\n+new code\n*** End Patch";
