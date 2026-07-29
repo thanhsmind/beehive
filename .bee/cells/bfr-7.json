@@ -1,0 +1,77 @@
+{
+  "id": "bfr-7",
+  "feature": "budget-fence-removal",
+  "title": "Retire the fence's knowledge concept and supersede its decisions",
+  "lane": "standard",
+  "change_class": "refactor",
+  "deps": [
+    "bfr-6"
+  ],
+  "decisions": [
+    "D7",
+    "D8"
+  ],
+  "files": [
+    "docs/knowledge/areas/verify-pipeline/skill-body-budget-fence.md",
+    "docs/knowledge/areas/verify-pipeline/index.md",
+    "docs/knowledge/areas/doctrine-layer/placement-and-anchoring.md",
+    "docs/knowledge/index.md",
+    "docs/decisions/index.md",
+    "docs/decisions/taxonomy.json"
+  ],
+  "read_first": [
+    "docs/history/budget-fence-removal/CONTEXT.md",
+    "docs/knowledge/areas/verify-pipeline/skill-body-budget-fence.md",
+    "docs/knowledge/areas/doctrine-layer/placement-and-anchoring.md"
+  ],
+  "action": "Per D7 and D8, retire the fence from the knowledge and decision layers. KNOWLEDGE: (1) delete docs/knowledge/areas/verify-pipeline/skill-body-budget-fence.md (70 lines) -- the knowledge bundle is the STATE layer describing what IS, so a concept describing a deleted gate is false, not historical; it declares no anchors and its only inbound link is the generated index. (2) docs/knowledge/areas/doctrine-layer/placement-and-anchoring.md:209-214 states the deleted thresholds as live fact ('Standing-sheet size fence (R5): scripts/tests/test_agents_budget.mjs -- WARN_BYTES 14000 and HARD_FAIL_BYTES 15000'). That became false when the thresholds were removed; correct it to describe what that suite now guards -- the 17-rule roster and the byte-identical render -- with no size figures. (3) run node .bee/bin/bee.mjs knowledge index, which regenerates every area index AND the root docs/knowledge/index.md. NEVER hand-edit either. DECISIONS: bee decisions supersede has NO clause mode -- its parameters are id, decision, rationale, tags, scope, json, and the superseded decision drops out of the active set WHOLE. So a partial retirement is executed as: supersede wholesale, and RESTATE THE SURVIVING CLAUSE VERBATIM inside the new --decision text. There is also no --replaces/--cites flag, so the citation of repo decision 8f63adb4 lives in the --rationale prose. docs/decisions/taxonomy.json exists so every event needs at least one tag: omit --tags to inherit the target's, and pass tags explicitly only if a target carries none. Supersede these seven: c4c17668 (skill-token-diet D1, byte budget <=8192) wholesale; 6d6c6a98 (D2, grandfather + ratchet) wholesale; 5a1b3228 (D5, one in one out) wholesale; f1c259c3 (D6, baseline JSON + blocking fence) wholesale; 27fb6302 (validation D1/D2, baseline re-seed + explicit migrated array) wholesale; cb78ad77 (D8, provenance exile + grep) wholesale BUT the replacing text must RESTATE THAT THE PLACEMENT CONVENTION SURVIVES -- provenance still lives in references/provenance.md and nothing is merged back into any skill body -- because 14 provenance.md files still cite it and must stay accurate; 4a247bb6 (D3, source-byte measurement) wholesale BUT the replacing text must RESTATE THE SURVIVING HALF and drop only the clause 'the fence measures source bytes ... render-time stripping does not relieve the budget'. FINALLY run node .bee/bin/bee.mjs decisions render -- docs/decisions/index.md declares itself GENERATED from the store and no chain suite catches its staleness. NOTE it is ALREADY red before you start, from two decisions logged earlier in this feature; your render clears that too, so do not read the pre-existing red as your own regression.",
+  "must_haves": {
+    "truths": [
+      "docs/knowledge/areas/verify-pipeline/skill-body-budget-fence.md no longer exists",
+      "No knowledge concept states a byte threshold on instruction text as live fact",
+      "All seven skill-token-diet decisions are superseded, with the two partial ones restating their surviving clauses verbatim in the replacing decision text",
+      "node .bee/bin/bee.mjs decisions render --check exits 0",
+      "node .bee/bin/bee.mjs knowledge index --check exits 0",
+      "node scripts/okf_migrate.mjs --check doctrine-layer exits 0",
+      "node scripts/okf_migrate.mjs --check verify-pipeline exits 0"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only knowledge && node scripts/okf_migrate.mjs --check doctrine-layer && node scripts/okf_migrate.mjs --check verify-pipeline && node .bee/bin/bee.mjs decisions render --check",
+  "status": "capped",
+  "trace": {
+    "worker": "bfr-worker-7",
+    "outcome": "Deleted the fence's knowledge concept, corrected the stale threshold reference in placement-and-anchoring.md, regenerated the knowledge indexes, and superseded all seven skill-token-diet decisions (two with their surviving clauses restated verbatim).",
+    "files_changed": [
+      "docs/knowledge/areas/verify-pipeline/skill-body-budget-fence.md",
+      "docs/knowledge/areas/doctrine-layer/placement-and-anchoring.md",
+      "docs/knowledge/index.md",
+      "docs/knowledge/areas/verify-pipeline/index.md",
+      "docs/decisions/index.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-29T06:45:48.665Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": "SCOPED RUN (--only): 3 of 117 runnables selected — full verify still required before close\nPASS     105ms  .bee/bin/bee.mjs knowledge check\nPASS     106ms  .bee/bin/bee.mjs knowledge index --check\nPASS    4355ms  packages/bee/tests/test_knowledge.mjs\n\nPASS run_verify: 3 suite(s) (3 run, 0 cached), cacheable=0/3 declared (3 uncached), concurrency=5, wall=4358ms\nSCOPED RUN (--only): 3 of 117 runnables selected — full verify still required before close\nPASS okf_migrate --check doctrine-layer: 39 anchors, 39 owned, 0 duplicated, 0 lost — every source anchor lands in exactly one concept and the stub map agrees (D35/D37)\n     ground truth DERIVED from pinned blob 351bf72adc2c34f9f18d9f3612735a6c92efac02 (ed65720b:docs/specs/doctrine-layer.md, via git, scheme ba-nine-section) — counts asserted {\"behaviors\":10,\"rules\":17,\"edges\":5,\"pointers\":7,\"total\":39,\"unparsed_blocks\":2}\n     fidelity floor 0.60 (F11): 39 anchors measured against their owning concept — min 0.955, median 1.000, max 1.000 normalized token overlap with the pinned blob\n     telemetry (F12): anchors_per_concept 6.50, concepts_per_100_source_lines 1.55 (39 anchors, 6 anchor-owning concepts of 10 files in the area, 387 source lines) — running median across 10 pinned \"ba-nine-section\"-shaped sources; outlier band [0.5x, 2x]\n     bundle invariants (F12): authority uniqueness, zero not_canonical, and index freshness all hold across docs/knowledge/\nPASS okf_migrate --check verify-pipeline: 14 anchors, 14 owned, 0 duplicated, 0 lost — every source anchor lands in exactly one concept and the stub map agrees (D35/D37)\n     ground truth DERIVED from pinned blob eab70d7e665ec73a5a8dc227bee5c16ada74dbe8 (72fd8284:docs/specs/verify-pipeline.md, via git, scheme ba-nine-section) — counts asserted {\"behaviors\":0,\"rules\":5,\"edges\":4,\"pointers\":5,\"total\":14,\"unparsed_blocks\":7}\n     fidelity floor 0.60 (F11): 14 anchors measured against their owning concept — min 0.700, median 1.000, max 1.000 normalized token overlap with the pinned blob\n     telemetry (F12): anchors_per_concept 7.00, concepts_per_100_source_lines 1.50 (14 anchors, 2 anchor-owning concepts of 4 files in the area, 133 source lines) — running median across 10 pinned \"ba-nine-section\"-shaped sources; outlier band [0.5x, 2x]\n     bundle invariants (F12): authority uniqueness, zero not_canonical, and index freshness all hold across docs/knowledge/\ndocs/decisions/index.md is up to date.\n[bee] decisions render 34ms\n",
+    "verify_passed": true,
+    "claim_session": "2dd5efdf-5e74-457e-b9dd-ee2109c21af7",
+    "claimed_at": "2026-07-29T06:38:52.580Z",
+    "verify_command": "node scripts/run_verify.mjs --only knowledge && node scripts/okf_migrate.mjs --check doctrine-layer && node scripts/okf_migrate.mjs --check verify-pipeline && node .bee/bin/bee.mjs decisions render --check",
+    "verified_at": "2026-07-29T06:45:43.056Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-29T06:45:43.057Z",
+        "claim_session": "2dd5efdf-5e74-457e-b9dd-ee2109c21af7",
+        "claimed_at": "2026-07-29T06:41:44.981Z",
+        "acquired_at": "2026-07-29T06:38:52.579Z",
+        "worker": "bfr-worker-7",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}

@@ -206,12 +206,14 @@ rule. It says nothing whatever about whether the rule was then obeyed
   critical rule 17 from the block, each turn the suite red naming
   `skills/bee-hive/references/routing-and-contracts.md` "Progress ticks —
   worked examples" as the unreachable every-turn section.
-- Standing-sheet size fence (R5): `scripts/tests/test_agents_budget.mjs` —
-  `WARN_BYTES` 14000 and `HARD_FAIL_BYTES` 15000, both unchanged by the
-  addition; `EXPECTED_RULE_COUNT` moved 16→17 by appending, so
+- Standing-sheet meaning guard (R5): `scripts/tests/test_agents_budget.mjs` —
+  guards the 17-rule roster and the byte-identical render between the master
+  block and the rendered `AGENTS.md`, no size threshold anywhere in the suite;
+  `EXPECTED_RULE_COUNT` moved 16→17 by appending, so
   `TERMINAL_HOME_RULES [1, 5, 6, 11]` was unaffected. The rule cost ~1,850 bytes
   and was funded by removing 835 bytes of restated prose plus the two stale
-  citations.
+  citations, at a time when the suite still carried a byte fence; that fence
+  was later deleted outright (budget-fence-removal D2/D5).
 - The two corrected cross-references: block rules 9 and 10 each carried a
   `Full rule: bee-hive skill, critical rule N` citation off by one; both were
   removed outright rather than repointed, the block stating those rules more
