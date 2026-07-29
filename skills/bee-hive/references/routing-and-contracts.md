@@ -235,30 +235,26 @@ theater. Artifacts live under `docs/history/<feature>/reports/` (`.md`-safe cont
 otherwise `.bee/tmp/` with the path quoted), and when a draft PR is active, each
 slice's demo posts as a PR comment.
 
-### Progress ticks (spec #81 P4, mandatory ak-style per-step contract — user directive 2026-07-28)
+### Progress ticks — worked examples (spec #81 P4, user directive 2026-07-28)
 
-Bee used to work invisibly inside `.bee/` and stay silent under gate bypass until the
-very end — perceived latency was the whole pipeline even when cells finished in minutes.
-That inverts: **every perceivable pipeline step emits exactly ONE short chat line**, on
-by default, in the user's own work language (Silent Bookkeeping's litmus still applies —
-no cell ids as the subject, no "capped cell xyz-3" as the whole line; say what happened
-to the work, an id may ride at the end). Ticks are chat output the agent writes as it
-goes, not an emitter subsystem — nothing to build, nothing to poll.
+**The rule itself lives in `AGENTS.md` critical rule 17**, not here: one short chat line
+per perceivable pipeline step, on by default, the fixed format `<glyph> <event>: <what> —
+<key fact>`, the glyph table, and the only two switches that produce silence (`quiet`,
+which never silences the `✗` line, and `ship_visibility`, which reaches only the two PR
+ticks). A rule that applies every turn cannot live behind an on-demand reference, which
+is exactly why it moved (tick-contract-inline T1). This section is the worked-example
+catalog for that rule — read it to see the shape of a line, never to learn whether ticks
+are owed.
+
+Two things the catalog does not repeat, and that the rule depends on. Ticks are chat
+output the agent writes as it goes, not an emitter subsystem — nothing to build, nothing
+to poll. And Silent Bookkeeping's litmus still applies to every line: no cell ids as the
+subject, no "capped cell xyz-3" as the whole line; say what happened to the work, an id
+may ride at the end.
 
 **Bypass silences QUESTIONS, never ticks.** Gate auto-approval under bypass (Gate bypass
 mode above) already posts its own `⚡` line and keeps going instead of stopping to ask —
-that line is a tick, not an exception to one. No bypass level, at any tier, ever
-suppresses a tick. A red result or a refusal is never silence-able by anything, including
-`quiet` — see the exact two switches below.
-
-**Format, fixed:** `<glyph> <event>: <what> — <key fact>`
-
-| Glyph | Meaning |
-|---|---|
-| `▸` | step started |
-| `✓` | step done / green |
-| `✗` | red or refusal — always shown, never quiet-able |
-| `⚡` | bypass auto-approval |
+that line is a tick, not an exception to one.
 
 **Tick catalog — one list, every perceivable step, each with a worked example:**
 
@@ -288,19 +284,14 @@ suppresses a tick. A red result or a refusal is never silence-able by anything, 
 | draft PR opened | `✓ draft PR <url>` |
 | demo posted | `✓ slice <n> demo — <artifact>` |
 
-**Silence is configurable, and only two switches produce it — both narrower than "the
-whole stream" now:**
-
-- `quiet: true` in `.bee/config.json` — an explicit user opt-out — silences the tick
-  stream (never the `✗` red/refusal line, which stays visible regardless).
-- `ship_visibility: "off"` silences only the two PR-related ticks (draft PR opened, demo
-  posted) — every other tick in the catalog still fires; `ship_visibility` governs PR
-  wiring, not general visibility.
-
-No other condition silences a tick. In particular: gate bypass being on, at any level,
-never reaches this switch — ticks fire exactly the same with bypass off, on `normal`, or
-on `total`. Ticks carry outcome, never mechanics: the user reads what happened to their
-work, per the silent-bookkeeping rule above.
+**Which catalog rows the two switches reach.** The switches are stated as rule in
+`AGENTS.md` critical rule 17; what belongs here is their effect on the rows above.
+`quiet: true` in `.bee/config.json` silences every row except the `✗` red/refusal ones,
+which stay visible regardless. `ship_visibility: "off"` silences exactly two rows —
+draft PR opened and demo posted — and leaves every other row firing; it governs PR
+wiring, not general visibility. Nothing else reaches these rows: gate bypass, at any
+level, touches neither switch, so the catalog fires identically with bypass off, on
+`normal`, or on `total`.
 
 ## Session Scout in full
 
