@@ -15,7 +15,7 @@
     },
     {
       "path": ".bee/bin/lib/cells.mjs",
-      "sha256": "571d3a4a208a71ce67e60c2fd56bf1a6c0cad5b91333cee5b1e847dc1be4460e",
+      "sha256": "46e5bd11b87c9c6b53b7f475baf8041560b21bceefc1d3cd563baed6bea3c0c7",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -1829,7 +1829,7 @@
     },
     {
       "path": "packages/bee/lib/cells.mjs",
-      "sha256": "571d3a4a208a71ce67e60c2fd56bf1a6c0cad5b91333cee5b1e847dc1be4460e",
+      "sha256": "46e5bd11b87c9c6b53b7f475baf8041560b21bceefc1d3cd563baed6bea3c0c7",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/cells.mjs"
@@ -2144,7 +2144,7 @@
     },
     {
       "path": "packages/bee/tests/test_bee_cli.mjs",
-      "sha256": "f553cd50825cf2503acf920eb5e75c9d376f48e99c105f9f057ee5d48424f74d",
+      "sha256": "c6f869cadbb7452aec50b4a0b0c721b7891d3dbb5b9fad7ed3797354e09e3945",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_bee_cli.mjs"
@@ -2165,7 +2165,7 @@
     },
     {
       "path": "packages/bee/tests/test_cells.mjs",
-      "sha256": "aef48fd823da5530343cd01e79e4ddc5b6ee11e37c7d9fafd62e7e0c865f7298",
+      "sha256": "03f5ee7a7ff3c693b071a3aec8403a22a540f85ee7bafe9a4892469a5e5cf229",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/tests/test_cells.mjs"

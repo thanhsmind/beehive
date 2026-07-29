@@ -1954,10 +1954,24 @@ export async function capCell(
       });
       trace = { ...trace, judge_overrides: [...overrides, overrideEntry] };
     }
+    // worker-conformance D1: this door — behavior_change declared with no
+    // verification_evidence — is NON-BLOCKING from here on. Asking a worker to
+    // *write* evidence text in order to pass a gate is authoring work, and
+    // authoring work drifts; the cap now succeeds and the absence is RECORDED
+    // instead (trace.proof "unrecorded", computed after the whole chain below
+    // per D12/D14), which arms the feature-boundary close-door — the sole
+    // blocking proof D3 keeps. Deliberately narrow: every heavier refusal
+    // below is untouched, so a bc cell resolving to the red-first tier
+    // (security/migration in every lane, every class in lane high-risk) still
+    // cannot cap without red_failure_evidence at the D3 red-first door below.
+    // This warning is the whole of the loosening, never a bypass.
+    let behaviorEvidenceWarning = null;
     if (bc && !verification_evidence && !pendingFeatureVerify) {
-      throw new Error(
-        `capCell: cell "${id}" declares behavior_change but provides no verification_evidence — attach evidence (--evidence-file) or drop the behavior_change flag.`,
-      );
+      // The text states only what is true on EVERY path that reaches it
+      // (advisor consult, wc-4): where the cap also recorded real verify
+      // output, D14 deliberately leaves it unmarked and the close-door opens,
+      // so this warning must not claim the door was armed.
+      behaviorEvidenceWarning = `capCell: cell "${id}" declares behavior_change but records no verification_evidence — worker-conformance D1 non-blocking warning (this was a refusal). Per-cell proof is deferred to the feature boundary; a cap that recorded NEITHER verify output nor evidence is additionally marked trace.proof "unrecorded", which arms the close-door. Either way this buys no per-cell door bypass.`;
     }
     // test-economy D1/D2: resolve the effective class (same derivation
     // deriveChangeClass always used — null/bc=true -> 'behavior', nothing new
@@ -2155,7 +2169,16 @@ export async function capCell(
         }
       }
     }
-    // Decision 0004: small+ lanes cap only on recorded proof, never on an assertion.
+    // Decision 0004: small+ lanes cap only on recorded proof, never on an
+    // assertion. worker-conformance D1: the "no recorded proof" half of this
+    // block is NON-BLOCKING from here on — same reasoning as the
+    // behavior_change door above, same replacement (a recorded absence plus a
+    // visible warning, with trace.proof arming the feature-boundary door).
+    // The non-empty files_changed half right below is EXPLICITLY out of scope
+    // and stays refusing (CONTEXT D1): it asks what the worker touched, not
+    // for authored proof, and a file list is not evidence a worker can drift
+    // into inventing.
+    let recordedProofWarning = null;
     if (cell.lane === 'small' || cell.lane === 'standard' || cell.lane === 'high-risk') {
       const output = trace.verify_output;
       const hasOutput = typeof output === 'string' ? output.trim().length > 0 : output != null;
@@ -2163,9 +2186,7 @@ export async function capCell(
         verification_evidence != null &&
         (typeof verification_evidence !== 'string' || verification_evidence.trim().length > 0);
       if (!hasOutput && !hasEvidence && !pendingFeatureVerify) {
-        throw new Error(
-          `capCell: lane "${cell.lane}" cell "${id}" has a passing verify flag but no recorded proof — re-record the verify with its output (bee.mjs cells verify --id ${id} --command CMD --output "..." --passed true) or attach verification_evidence (--evidence-file). An assertion is not evidence.`,
-        );
+        recordedProofWarning = `capCell: lane "${cell.lane}" cell "${id}" caps with a passing verify flag but no recorded proof — worker-conformance D1 non-blocking warning (this was decision 0004's refusal). An assertion is still not evidence: outside a repo that declared commands.verify "none", the absence is marked trace.proof "unrecorded" and arms the feature-boundary close-door, which no bypass level lifts.`;
       }
       if (!Array.isArray(files_changed) || files_changed.length === 0) {
         throw new Error(
@@ -2212,6 +2233,16 @@ export async function capCell(
       !hasProofEvidence &&
       !pendingFeatureVerify &&
       !isNoTestCommand((readConfig(root).commands || {}).verify);
+    // worker-conformance D1: the two loosened doors stay VISIBLE, not silent —
+    // an audited loosening, the same shape D8 gave new_suite_reason and
+    // ratio_waiver. Emitted HERE, after the entire refusal chain has run (the
+    // same discipline the trace.proof marker just above follows), so a cap
+    // that is still refused never prints a warning about a cap that did not
+    // happen. Stderr mirrors derived-check-hardening E1's impact warning so
+    // the absence shows up in the cap's own output, not only in the cell file.
+    for (const warning of [behaviorEvidenceWarning, recordedProofWarning]) {
+      if (warning) process.stderr.write(`${warning}\n`);
+    }
     cell.status = 'capped';
     cell.trace = {
       ...trace,
@@ -2228,7 +2259,10 @@ export async function capCell(
       // consumers of trace see no schema break. derived-check-hardening E1
       // folds the impact-registry warning (also computed above, also
       // non-blocking) into the SAME array — same channel, same semantics.
-      warnings: [ratioWarning, impactWarning].filter(Boolean),
+      // worker-conformance D1 appends its two loosened-door warnings to the
+      // SAME channel, at the END so any consumer keying on the existing
+      // positions sees no shift.
+      warnings: [ratioWarning, impactWarning, behaviorEvidenceWarning, recordedProofWarning].filter(Boolean),
       // main-verifies D1: the pending marker guardFeatureVerifyDebt (bee.mjs)
       // reads at both swarming exits. Stamped ONLY on the pending path — the
       // classic evidence path's trace stays byte-identical to before.

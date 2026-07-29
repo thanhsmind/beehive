@@ -3008,7 +3008,17 @@ function makeRealCapRepo(feature) {
 // a string means it recorded real proof (the mirror case). Returns the cell
 // as capCell left it on disk — the test asserts against THAT, never against
 // anything this helper wrote.
-async function realCapThroughCli(dir, feature, id, { output = null, changeClass = 'refactor' } = {}) {
+// wc-4 widened `lane` and `behaviorChange` onto this helper: until D1 made the
+// behavior_change and decision-0004 doors non-blocking, a cap in either shape
+// was REFUSED, so the seam could only ever be driven at lane "tiny" with
+// behavior_change false. Both default to the pre-wc-4 values, so every row
+// above travels a byte-identical path.
+async function realCapThroughCli(
+  dir,
+  feature,
+  id,
+  { output = null, changeClass = 'refactor', lane = 'tiny', behaviorChange = false } = {},
+) {
   const fixturePath = path.join(dir, `${id}.cell.json`);
   fs.writeFileSync(
     fixturePath,
@@ -3017,10 +3027,14 @@ async function realCapThroughCli(dir, feature, id, { output = null, changeClass 
         id,
         feature,
         title: 'wc-2 seam fixture — a real cap, driven end to end',
-        lane: 'tiny',
+        lane,
         action: 'wc-2 seam fixture only.',
         verify: 'node -e "process.exit(0)"',
         change_class: changeClass,
+        ...(behaviorChange ? { behavior_change: true } : {}),
+        ...(lane === 'tiny' || lane === 'small'
+          ? {}
+          : { must_haves: { truths: [`${id}: seam fixture truth`], artifacts: [], key_links: [], prohibitions: [] } }),
       },
       null,
       2,
@@ -3160,6 +3174,108 @@ await check('wc-2 SEAM (second reader, mirror): the same real TEST-class cap WIT
     assert(readStateOf(dir).phase === 'scribing', 'the departure must land once both doors are clear');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── wc-4: the seam the loosening OPENED — the same real cap, in the shapes
+// that were refused outright until D1 ─────────────────────────────────────────
+//
+// The wc-2 rows above had to use lane "tiny" with behavior_change false,
+// because decision 0004's door (small+) and the behavior_change door refused
+// every other shape before the cap could ever reach the marker — the comment
+// at the top of that block says so explicitly. wc-4 made both doors
+// non-blocking, so a small/standard/high-risk cap and a behavior_change cap
+// become markable for the FIRST time. That is exactly where a loosening could
+// go wrong in the way nothing above would catch: the cap now succeeds, and if
+// it succeeded WITHOUT stamping the marker, the feature would close green with
+// zero tests executed anywhere. So each shape is driven through the real CLI
+// (never a hand-written cell file) and then straight into the real close door.
+
+await check('wc-4 SEAM: the lanes D1 widened (small/standard/high-risk) now cap through the real CLI with no recorded proof — and every one of those caps holds the close door shut', async () => {
+  const cases = [
+    { lane: 'small', slug: 'wc4seamsm' },
+    { lane: 'standard', slug: 'wc4seamst' },
+    { lane: 'high-risk', slug: 'wc4seamhr' },
+  ];
+  for (const c of cases) {
+    const dir = makeRealCapRepo(c.slug);
+    try {
+      const cell = await realCapThroughCli(dir, c.slug, `${c.slug}-1`, { output: null, lane: c.lane });
+      assert(
+        cell.status === 'capped',
+        `lane ${c.lane}: the cap must now SUCCEED — before wc-4 decision 0004's door refused it outright, got ${cell.status}`,
+      );
+      assert(
+        cell.trace.proof === 'unrecorded',
+        `lane ${c.lane}: a cap the loosening let through must still be MARKED, or the feature closes green with nothing ever run. Got trace: ${JSON.stringify(cell.trace)}`,
+      );
+      const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
+      assert(
+        refused.status !== 0,
+        `lane ${c.lane}: the close door must refuse on the loosened cap (exit ${refused.status}) — the loosening only relocates the proof, it never removes it: ${refused.stdout}${refused.stderr}`,
+      );
+      const out = refused.stdout + refused.stderr;
+      assert(/awaiting the feature-level verify/.test(out), `lane ${c.lane}: it must be the feature-verify door, got: ${out}`);
+      assert(new RegExp(`${c.slug}-1`).test(out), `lane ${c.lane}: the refusal must name the unproven cell, got: ${out}`);
+      assert(readStateOf(dir).phase === 'swarming', `lane ${c.lane}: a refused departure must write NOTHING`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+await check('wc-4 SEAM: a behavior_change cap with NO verification_evidence — refused outright before D1 — now caps through the real CLI, carries the marker, and holds the close door shut', async () => {
+  const dir = makeRealCapRepo('wc4seambc');
+  try {
+    const cell = await realCapThroughCli(dir, 'wc4seambc', 'wc4seambc-1', { output: null, behaviorChange: true });
+    assert(cell.status === 'capped', `the behavior_change cap must now succeed, got ${cell.status}`);
+    assert(
+      cell.trace.behavior_change === true,
+      `the declared behavior_change must survive the cap, got trace: ${JSON.stringify(cell.trace)}`,
+    );
+    assert(
+      cell.trace.proof === 'unrecorded',
+      `a behavior_change cap holding no evidence at all is the loosest path this feature opens — it must be marked, got trace: ${JSON.stringify(cell.trace)}`,
+    );
+    assert(
+      (cell.trace.warnings || []).some((w) => w.includes('declares behavior_change but records no verification_evidence')),
+      `the loosened door must be VISIBLE in the real cap's own record, got ${JSON.stringify(cell.trace.warnings)}`,
+    );
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
+    assert(
+      refused.status !== 0,
+      `the close door must refuse on an evidence-less behavior_change cap (exit ${refused.status}): ${refused.stdout}${refused.stderr}`,
+    );
+    assert(/wc4seambc-1/.test(refused.stdout + refused.stderr), 'the refusal must name the cell');
+    assert(readStateOf(dir).phase === 'swarming', 'a refused departure must write NOTHING');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('wc-4 SEAM (mirror): the same widened shapes carrying REAL recorded output cap unmarked and the door opens — the loosening did not simply mark everything', async () => {
+  const cases = [
+    { lane: 'standard', slug: 'wc4seamstok', behaviorChange: false },
+    { lane: 'small', slug: 'wc4seambcok', behaviorChange: true },
+  ];
+  for (const c of cases) {
+    const dir = makeRealCapRepo(c.slug);
+    try {
+      const cell = await realCapThroughCli(dir, c.slug, `${c.slug}-1`, {
+        output: 'suite A: 12/12 green',
+        lane: c.lane,
+        behaviorChange: c.behaviorChange,
+      });
+      assert(
+        cell.trace.proof === undefined,
+        `${c.slug}: a widened cap that recorded real output must NOT be marked — otherwise the rows above pass for the wrong reason, got trace: ${JSON.stringify(cell.trace)}`,
+      );
+      const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
+      assert(ok.status === 0, `${c.slug}: the door must OPEN on a cap that recorded proof, got: ${ok.stdout}${ok.stderr}`);
+      assert(readStateOf(dir).phase === 'scribing', `${c.slug}: the departure must land`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 

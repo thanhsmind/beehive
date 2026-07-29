@@ -1234,12 +1234,34 @@ await check('capCell refuses when verify was recorded as failed', async () => {
   await assertRejects(() => capCell(root, 'demo-1', { outcome: 'done' }), 'verify', 'failed verify blocks cap');
 });
 
-await check('capCell refuses behavior_change without verification_evidence', async () => {
+// wc-4 (D1): this row guarded the behavior_change-without-evidence REFUSAL
+// until worker-conformance made that door non-blocking — asking a worker to
+// author evidence text in order to pass a gate is the exact drift the feature
+// removes. The assertion therefore moves from "it throws" to "it caps AND the
+// absence is recorded", which is the contract that replaced it; the door is
+// not merely deleted from the suite. The loosening runs on its own fixture so
+// demo-1 stays uncapped for the dependent-unlock row below, and demo-1 then
+// proves the door D1 explicitly KEPT still refuses in the very same call shape.
+await check('capCell RECORDS a behavior_change cap with no verification_evidence instead of refusing (wc-4 D1), while the files_changed door beside it still refuses', async () => {
+  addCell(root, makeCell('bc-loosened', { lane: 'small' }));
+  await claimCell(root, 'bc-loosened', 'worker-a');
+  await recordVerify(root, 'bc-loosened', { command: 'npm test', output: 'ok', passed: true });
+  const capped = await capCell(root, 'bc-loosened', {
+    behavior_change: true,
+    files_changed: ['src/x.js'],
+    outcome: 'done',
+  });
+  assert(capped.status === 'capped', 'a behavior_change cap with no evidence now succeeds (wc-4 D1)');
+  assert(
+    (capped.trace.warnings || []).some((w) => w.includes('declares behavior_change but records no verification_evidence')),
+    `the absence must be RECORDED, never silent (D8: a loosened guard stays visible), got ${JSON.stringify(capped.trace.warnings)}`,
+  );
+
   await recordVerify(root, 'demo-1', { command: 'npm test', output: 'ok', passed: true });
   await assertRejects(
     () => capCell(root, 'demo-1', { behavior_change: true, outcome: 'done' }),
-    'verification_evidence',
-    'evidence contract',
+    'files_changed',
+    'D1 kept this door: it asks what the worker touched, not for authored proof',
   );
 });
 
@@ -1274,26 +1296,39 @@ await check('capCell on a high-risk cell requires files_changed and outcome', as
   assert(readCell(root, 'hr-1').status === 'capped', 'hr-1 capped with full trace');
 });
 
-await check('capCell refuses a small cell whose verify has no output and no evidence (decision 0004)', async () => {
+// wc-4 (D1): decision 0004's "an assertion is not evidence" REFUSAL is the
+// second of the two doors the feature made non-blocking. The principle it
+// carried is not dropped — an assertion is still not evidence — but it is now
+// enforced at the FEATURE boundary instead of the cell: the cap succeeds and
+// stamps trace.proof "unrecorded", which arms the close-door no bypass level
+// lifts. The row below therefore asserts the marker, not a throw.
+await check('capCell RECORDS a small cell whose verify has no output and no evidence, instead of refusing (wc-4 D1 relocates decision 0004 to the feature boundary)', async () => {
   addCell(root, makeCell('ev-1'));
   await claimCell(root, 'ev-1', 'worker-c');
   await recordVerify(root, 'ev-1', { command: 'npm test', passed: true }); // assertion, no output
-  await assertRejects(
-    () => capCell(root, 'ev-1', { files_changed: ['src/y.js'], outcome: 'done' }),
-    'proof',
-    'assertion-capping must be refused',
+  const capped = await capCell(root, 'ev-1', { files_changed: ['src/y.js'], outcome: 'done' });
+  assert(capped.status === 'capped', 'assertion-capping is no longer refused at the cell (wc-4 D1)');
+  assert(
+    capped.trace.proof === 'unrecorded',
+    `an assertion is still not evidence — it must be RECORDED as unproven so the feature-boundary door arms, got ${JSON.stringify(capped.trace.proof)}`,
+  );
+  assert(
+    (capped.trace.warnings || []).some((w) => w.includes('no recorded proof')),
+    `the loosened door must leave a visible warning, got ${JSON.stringify(capped.trace.warnings)}`,
   );
 });
 
-await check('capCell refuses a small cell with proof but empty files_changed (decision 0004)', async () => {
-  await recordVerify(root, 'ev-1', { command: 'npm test', output: '3 passing', passed: true });
+await check('capCell refuses a small cell with proof but empty files_changed (decision 0004 — the door wc-4 D1 deliberately KEPT)', async () => {
+  addCell(root, makeCell('ev-2'));
+  await claimCell(root, 'ev-2', 'worker-c');
+  await recordVerify(root, 'ev-2', { command: 'npm test', output: '3 passing', passed: true });
   await assertRejects(
-    () => capCell(root, 'ev-1', { outcome: 'done' }),
+    () => capCell(root, 'ev-2', { outcome: 'done' }),
     'files_changed',
     'empty files_changed must be refused for small+',
   );
-  await capCell(root, 'ev-1', { files_changed: ['src/y.js'], outcome: 'done' });
-  assert(readCell(root, 'ev-1').status === 'capped', 'ev-1 caps once output + files recorded');
+  await capCell(root, 'ev-2', { files_changed: ['src/y.js'], outcome: 'done' });
+  assert(readCell(root, 'ev-2').status === 'capped', 'ev-2 caps once output + files recorded');
 });
 
 await check('tiny lane still caps on a passing verify alone (lanes scale strictness)', async () => {
@@ -1308,21 +1343,18 @@ await check('capCell honors the cell-declared behavior_change when the flag is o
   addCell(root, makeCell('bc-decl', { behavior_change: true }));
   await claimCell(root, 'bc-decl', 'worker-c');
   await recordVerify(root, 'bc-decl', { command: 'npm test', output: 'ok', passed: true });
-  // omitting the flag must NOT drop the declared behavior_change — cap still demands evidence
-  await assertRejects(
-    () => capCell(root, 'bc-decl', { files_changed: ['a.js'], outcome: 'done' }),
-    'verification_evidence',
-    'declared behavior_change is still enforced at cap when the flag is omitted',
-  );
-  const capped = await capCell(root, 'bc-decl', {
-    files_changed: ['a.js'],
-    outcome: 'done',
-    verification_evidence: {
-      red_failure_evidence: 'bc-decl: prior behavior characterized here before this change, distinct from the demo-1 fixture text, meeting the D3 anti-boilerplate floor.',
-      verification_run: 'npm test',
-    },
-  });
+  // Omitting the flag must NOT drop the declared behavior_change. Until wc-4
+  // that resolution was observable as an evidence REFUSAL; D1 made that door
+  // non-blocking, so the same resolution is asserted where it still shows —
+  // the D1 warning fires on NO path except a cap that resolved bc true (see
+  // the bc-top-wins row below, which caps in the identical shape with bc
+  // false and must stay warning-free), plus trace.behavior_change itself.
+  const capped = await capCell(root, 'bc-decl', { files_changed: ['a.js'], outcome: 'done' });
   assert(capped.trace.behavior_change === true, 'trace.behavior_change carried from the cell declaration');
+  assert(
+    (capped.trace.warnings || []).some((w) => w.includes('declares behavior_change but records no verification_evidence')),
+    `the flag-less cap must still RESOLVE behavior_change true — that warning fires on no other path, got ${JSON.stringify(capped.trace.warnings)}`,
+  );
 });
 
 // ─── E6 (derived-check-hardening): behavior_change resolves from either the
@@ -1336,21 +1368,15 @@ await check('capCell resolves behavior_change from trace.behavior_change when th
   assert(readCell(root, 'bc-trace-only').behavior_change === undefined, 'fixture carries no top-level behavior_change');
   await claimCell(root, 'bc-trace-only', 'worker-e6');
   await recordVerify(root, 'bc-trace-only', { command: 'npm test', output: 'ok', passed: true });
-  // trace-only declaration must still be enforced at cap — evidence demanded, same as the top-level case.
-  await assertRejects(
-    () => capCell(root, 'bc-trace-only', { files_changed: ['a.js'], outcome: 'done' }),
-    'verification_evidence',
-    'trace-only behavior_change is still enforced at cap',
-  );
-  const capped = await capCell(root, 'bc-trace-only', {
-    files_changed: ['a.js'],
-    outcome: 'done',
-    verification_evidence: {
-      red_failure_evidence: 'bc-trace-only: prior behavior characterized here before this change, distinct from every other fixture text, meeting the D3 anti-boilerplate floor.',
-      verification_run: 'npm test',
-    },
-  });
+  // Same wc-4 D1 re-anchoring as the row above: the trace-only declaration is
+  // still RESOLVED at cap, now observed through the recorded warning and
+  // trace.behavior_change rather than through the door D1 made non-blocking.
+  const capped = await capCell(root, 'bc-trace-only', { files_changed: ['a.js'], outcome: 'done' });
   assert(capped.trace.behavior_change === true, 'trace-only declaration resolved to true at cap (E6 fix)');
+  assert(
+    (capped.trace.warnings || []).some((w) => w.includes('declares behavior_change but records no verification_evidence')),
+    `the trace-only declaration must still resolve true — that warning fires on no other path, got ${JSON.stringify(capped.trace.warnings)}`,
+  );
 });
 
 await check('capCell keeps an explicit top-level behavior_change:false even when trace.behavior_change is true (E6)', async () => {
@@ -1360,6 +1386,13 @@ await check('capCell keeps an explicit top-level behavior_change:false even when
   const capped = await capCell(root, 'bc-top-wins', { files_changed: ['a.js'], outcome: 'done' });
   assert(capped.status === 'capped', 'bc-top-wins caps with no behavior_change evidence demanded');
   assert(capped.trace.behavior_change === false, 'explicit top-level false wins over a conflicting trace value');
+  // wc-4 (D1) non-vacuity control for the two rows above: they now read the
+  // behavior_change resolution off the D1 warning, which is only meaningful
+  // if a cap in the IDENTICAL shape with bc false stays warning-free.
+  assert(
+    !(capped.trace.warnings || []).some((w) => w.includes('declares behavior_change')),
+    `a cap that resolved behavior_change FALSE must carry no behavior_change warning, got ${JSON.stringify(capped.trace.warnings)}`,
+  );
 });
 
 // ─── main-verifies mv-3 (D1): feature-verify-pending cap path ─────────────
@@ -3357,6 +3390,213 @@ await check('capCell (wc-1 negative control): the "unrecorded" shape buys NO doo
       readCell(root, c.id).status === 'claimed',
       `${c.id}: the refused cap must leave the cell uncapped — no marker, no partial write`,
     );
+  }
+});
+
+// ─── wc-4 (D1 + D7): the loosening, and the proof every heavier door still bites ──
+//
+// D1 makes exactly TWO throws in capCell non-blocking: the behavior_change-
+// without-evidence door (cells.mjs:1957) and decision 0004's "an assertion is
+// not evidence" door (:2165). D7 is why the pair below is not optional — a
+// guard loosened without a negative control is a guard nobody can prove still
+// exists. So: one cases array walking every path that now caps, and one walking
+// every tier that must STILL refuse, both driven in exactly the shape the
+// loosening created (a passing verify with no output, no evidence attached).
+// Read-first (test-economy D5): the nearest existing rows are the wc-1 marker
+// rows directly above — they assert what a cap STAMPS, and every one of them
+// had to use lane "tiny" precisely because these two doors refused everywhere
+// else. None of them asserts what a cap now ACCEPTS or still REFUSES, so these
+// are new ROWS in this suite, not a new file.
+
+await check('capCell (wc-4 D1): the two loosened doors now RECORD instead of refusing — behavior_change with no evidence, and small/standard/high-risk with a verify recorded but no output, all cap — table-driven', async () => {
+  const cases = [
+    {
+      id: 'wc4-w-bc-small',
+      cell: { lane: 'small' },
+      cap: { behavior_change: true },
+      verify: { command: 'x', passed: true },
+      proof: 'unrecorded',
+      warns: ['declares behavior_change but records no verification_evidence', 'no recorded proof'],
+      why: 'both loosened doors fire on one cap — before wc-4 the behavior_change door refused first',
+    },
+    {
+      id: 'wc4-w-bc-tiny',
+      cell: { lane: 'tiny' },
+      cap: { behavior_change: true },
+      verify: { command: 'x', output: 'suite A: 12/12 green', passed: true },
+      proof: undefined,
+      warns: ['declares behavior_change but records no verification_evidence'],
+      why: 'isolates the behavior_change door alone — decision 0004 never applied at tiny, and real output means D14 leaves the cap unmarked',
+    },
+    {
+      id: 'wc4-w-proof-small',
+      cell: { lane: 'small' },
+      cap: {},
+      verify: { command: 'x', passed: true },
+      proof: 'unrecorded',
+      warns: ['no recorded proof'],
+      why: 'isolates decision 0004 door at lane small',
+    },
+    {
+      id: 'wc4-w-proof-standard',
+      cell: { lane: 'standard', must_haves: { truths: ['wc4-w-proof-standard: loosened-door fixture'] } },
+      cap: {},
+      verify: { command: 'x', passed: true },
+      proof: 'unrecorded',
+      warns: ['no recorded proof'],
+      why: 'same door, lane standard',
+    },
+    {
+      id: 'wc4-w-proof-highrisk',
+      cell: { lane: 'high-risk', must_haves: { truths: ['wc4-w-proof-highrisk: loosened-door fixture'] } },
+      cap: {},
+      verify: { command: 'x', passed: true },
+      proof: 'unrecorded',
+      warns: ['no recorded proof'],
+      why: 'lane high-risk with no behavior-bearing class declared resolves to no proof tier, so decision 0004 was the only door here — D2 is untested by this row on purpose, the negative control below owns it',
+    },
+  ];
+  for (const c of cases) {
+    addCell(root, makeCell(c.id, c.cell));
+    await claimCell(root, c.id, 'worker-wc4');
+    await recordVerify(root, c.id, c.verify);
+    const capped = await capCell(root, c.id, { files_changed: ['a.js'], outcome: 'done', ...c.cap });
+    assert(capped.status === 'capped', `${c.id}: the cap must now SUCCEED (${c.why})`);
+    assert(
+      capped.trace.proof === c.proof,
+      `${c.id}: expected trace.proof ${JSON.stringify(c.proof)} (${c.why}), got ${JSON.stringify(capped.trace.proof)}`,
+    );
+    // The absence is RECORDED, never silent — D8's audited-exemption shape.
+    const warnings = Array.isArray(capped.trace.warnings) ? capped.trace.warnings.join('\n') : '';
+    for (const needle of c.warns) {
+      assert(
+        warnings.includes(needle),
+        `${c.id}: a loosened door must leave a visible warning mentioning "${needle}", got ${JSON.stringify(capped.trace.warnings)}`,
+      );
+    }
+  }
+});
+
+await check('capCell (wc-4 D7 negative control): every heavier door STILL refuses in the exact shape wc-4 widened — red-first any lane, high-risk any class, refactor + new test file, new suite with no reason, over-ratio, and the files_changed door D1 kept — table-driven', async () => {
+  const hrTruths = (id) => ({ truths: [`${id}: negative-control fixture`] });
+  const cases = [
+    // D2: security/migration are red-first in EVERY lane — no lane softens the row.
+    { id: 'wc4-nc-sec-tiny', cell: { lane: 'tiny', change_class: 'security' }, expect: 'red_failure_evidence', why: 'security is red-first at tiny' },
+    { id: 'wc4-nc-sec-std', cell: { lane: 'standard', change_class: 'security', must_haves: hrTruths('wc4-nc-sec-std') }, expect: 'red_failure_evidence', why: 'security is red-first at standard' },
+    { id: 'wc4-nc-sec-hr', cell: { lane: 'high-risk', change_class: 'security', must_haves: hrTruths('wc4-nc-sec-hr') }, expect: 'red_failure_evidence', why: 'security is red-first at high-risk' },
+    { id: 'wc4-nc-mig-tiny', cell: { lane: 'tiny', change_class: 'migration' }, expect: 'red_failure_evidence', why: 'migration is red-first at tiny' },
+    { id: 'wc4-nc-mig-small', cell: { lane: 'small', change_class: 'migration' }, expect: 'red_failure_evidence', why: 'migration is red-first at small' },
+    // D2: EVERY behavior-bearing class in lane high-risk stays red-first.
+    { id: 'wc4-nc-behavior-hr', cell: { lane: 'high-risk', change_class: 'behavior', must_haves: hrTruths('wc4-nc-behavior-hr') }, expect: 'red_failure_evidence', why: 'behavior is red-first at high-risk' },
+    { id: 'wc4-nc-api-hr', cell: { lane: 'high-risk', change_class: 'api', must_haves: hrTruths('wc4-nc-api-hr') }, expect: 'red_failure_evidence', why: 'api is red-first at high-risk' },
+    { id: 'wc4-nc-bugfix-hr', cell: { lane: 'high-risk', change_class: 'bugfix', must_haves: hrTruths('wc4-nc-bugfix-hr') }, expect: 'red_failure_evidence', why: 'bugfix is red-first at high-risk' },
+    // D6: the new-test-file rules — refused outright for refactor/formatting,
+    // and needing a stated reason for every other class.
+    {
+      id: 'wc4-nc-refactor-newtest',
+      cell: { lane: 'small', change_class: 'refactor' },
+      cap: { diff_stats: { new_test_files: ['tests/test_wc4_nc_a.mjs'], test_lines_added: 10, source_lines_changed: 10 } },
+      expect: 'must not need a new test suite',
+      why: 'a refactor adding a new test file is refused with NO override — new_suite_reason cannot rescue it',
+    },
+    {
+      id: 'wc4-nc-formatting-newtest',
+      cell: { lane: 'small', change_class: 'formatting' },
+      cap: { diff_stats: { new_test_files: ['tests/test_wc4_nc_b.mjs'], test_lines_added: 10, source_lines_changed: 10 } },
+      expect: 'must not need a new test suite',
+      why: 'formatting rides the same unconditional refusal as refactor',
+    },
+    {
+      id: 'wc4-nc-newsuite',
+      cell: { lane: 'small', change_class: 'behavior' },
+      cap: { diff_stats: { new_test_files: ['tests/test_wc4_nc_c.mjs'], test_lines_added: 10, source_lines_changed: 10 } },
+      expect: 'new_suite_reason',
+      why: 'any other class still owes a stated reason for a new permanent CI suite',
+    },
+    // D6: the ratio ceiling refuses at standard and above without a waiver.
+    {
+      id: 'wc4-nc-ratio-std',
+      cell: { lane: 'standard', must_haves: hrTruths('wc4-nc-ratio-std') },
+      cap: { diff_stats: { test_lines_added: 50, source_lines_changed: 1 } },
+      expect: 'ratio_waiver',
+      why: 'the volume brake still refuses at standard',
+    },
+    {
+      id: 'wc4-nc-ratio-hr',
+      cell: { lane: 'high-risk', must_haves: hrTruths('wc4-nc-ratio-hr') },
+      cap: { diff_stats: { test_lines_added: 50, source_lines_changed: 1 } },
+      expect: 'ratio_waiver',
+      why: 'and at high-risk',
+    },
+    // D1's explicitly-kept door: it asks what the worker TOUCHED, not for
+    // authored proof, so it is out of scope for the loosening and must refuse
+    // in exactly the shape that now passes the two doors beside it.
+    {
+      id: 'wc4-nc-files-small',
+      cell: { lane: 'small' },
+      cap: { files_changed: [] },
+      expect: 'files_changed',
+      why: 'the non-empty files_changed door (cells.mjs:2170) is NOT in D1 scope and stays refusing',
+    },
+    {
+      id: 'wc4-nc-files-hr',
+      cell: { lane: 'high-risk', must_haves: hrTruths('wc4-nc-files-hr') },
+      cap: { files_changed: [] },
+      expect: 'files_changed',
+      why: 'same door at high-risk',
+    },
+  ];
+  for (const c of cases) {
+    addCell(root, makeCell(c.id, c.cell));
+    await claimCell(root, c.id, 'worker-wc4');
+    // Exactly the shape wc-4 widened: a passing verify with no output at all,
+    // and no verification_evidence on the cap. If a loosening leaked past its
+    // two doors, this is the shape that would carry it.
+    await recordVerify(root, c.id, { command: 'x', passed: true });
+    await assertRejects(
+      () => capCell(root, c.id, { files_changed: ['a.js'], outcome: 'done', ...(c.cap || {}) }),
+      c.expect,
+      `${c.id}: ${c.why}`,
+    );
+    assert(
+      readCell(root, c.id).status === 'claimed',
+      `${c.id}: a refused cap must leave the cell uncapped — no marker, no partial write`,
+    );
+  }
+});
+
+await check('capCell (wc-4 D7): gate_bypass "total" passes NONE of the surviving refusals — capCell never reads the bypass level at all', async () => {
+  const cases = [
+    { id: 'wc4-bp-security', cell: { lane: 'tiny', change_class: 'security' }, cap: {}, expect: 'red_failure_evidence' },
+    { id: 'wc4-bp-files', cell: { lane: 'small' }, cap: { files_changed: [] }, expect: 'files_changed' },
+    {
+      id: 'wc4-bp-ratio',
+      cell: { lane: 'standard', must_haves: { truths: ['wc4-bp-ratio: bypass negative-control fixture'] } },
+      cap: { diff_stats: { test_lines_added: 50, source_lines_changed: 1 } },
+      expect: 'ratio_waiver',
+    },
+  ];
+  const dir = makeStateRepo('bee-wc4-bypass-');
+  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+    schema_version: '1.0',
+    phase: 'swarming',
+    feature: 'demo-feat',
+    mode: 'standard',
+    approved_gates: { context: true, shape: true, execution: true, review: false },
+    workers: [],
+  });
+  // The loudest level there is (decision 0010 / total-autopilot dcf01d7b).
+  writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total', commands: { verify: 'node run_verify.mjs' } });
+  for (const c of cases) {
+    addCell(dir, makeCell(c.id, c.cell));
+    await claimCell(dir, c.id, 'worker-wc4');
+    await recordVerify(dir, c.id, { command: 'x', passed: true });
+    await assertRejects(
+      () => capCell(dir, c.id, { files_changed: ['a.js'], outcome: 'done', ...c.cap }),
+      c.expect,
+      `${c.id}: no bypass level buys a cap past a surviving refusal — bypass self-approves GATES, never proof`,
+    );
+    assert(readCell(dir, c.id).status === 'claimed', `${c.id}: the refused cap must write nothing`);
   }
 });
 
