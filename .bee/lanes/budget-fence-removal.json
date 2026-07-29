@@ -2,15 +2,15 @@
   "schema_version": "1.0",
   "feature": "budget-fence-removal",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false
   },
-  "summary": "Slice 1 closed: bfr-1..bfr-4 capped, full verify green (117 suites), feature-verify recorded. The byte fence is out of the chain and a structural regression suite guards its absence.",
-  "next_action": "Invoke bee-compounding.",
+  "summary": "learnings: docs/history/learnings/20260729-budget-fence-removal.md; promoted: 2",
+  "next_action": "Feature closed unreviewed. The byte-ceiling law is gone from code, doctrine, knowledge and the decision store; three executable checks are filed as P2 backlog rows.",
   "created_at": "2026-07-29T05:07:28.081Z",
   "route": {
     "class": "refactor",
@@ -40,5 +40,12 @@
       "verify-pipeline"
     ],
     "next_action": "Invoke bee-compounding."
+  },
+  "last_compounding_run": {
+    "feature": "budget-fence-removal",
+    "date": "2026-07-29",
+    "at": "2026-07-29T07:11:12.489Z",
+    "learnings": "docs/history/learnings/20260729-budget-fence-removal.md",
+    "next_action": null
   }
 }
