@@ -18,8 +18,8 @@ Capture writes only `docs/` and `.bee/` — allowed in every phase, no gate, no 
 
 ## Scope
 
-- `skills/bee-hive/templates/AGENTS.block.md` — rule 9 extended: detection duty, announce-then-do, no-gate note.
-- `skills/bee-hive/SKILL.md` — priority rule 9 extended: "user asks to document" routing row is the fallback, not the norm.
+- `packages/bee/AGENTS.block.md` — rule 8 extended: detection duty, announce-then-do, no-gate note.
+- `skills/bee-hive/SKILL.md` — priority rule 8 extended: "user asks to document" routing row is the fallback, not the norm.
 - `skills/bee-scribing/SKILL.md` — description marked SELF-TRIGGERING; capture mode gains the detection-duty paragraph; two new red flags (user-prompted capture of a silent settlement; asking permission to document).
 
 ## Alternatives considered

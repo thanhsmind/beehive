@@ -18,9 +18,9 @@ The only human actions in the bee workflow are: **gate approvals, decision answe
 
 ## Scope
 
-- `skills/bee-hive/templates/AGENTS.block.md` — Critical rule 10.
-- `skills/bee-hive/SKILL.md` — Priority rule 10 + red flag ("a bee command handed to the user to run").
-- `skills/bee-hive/templates/lib/inject.mjs` — session preamble closing line now says "yourself … (agent-run — never hand bee commands to the user)".
+- `packages/bee/AGENTS.block.md` — Critical rule 9.
+- `skills/bee-hive/SKILL.md` — Priority rule 9 + red flag ("a bee command handed to the user to run").
+- `packages/bee/lib/inject.mjs` — session preamble closing line now says "yourself … (agent-run — never hand bee commands to the user)".
 - `BEE_VERSION` bumped to 0.1.4 (AGENTS block + vendored lib drift; repos refresh via re-onboard).
 
 ## Alternatives considered

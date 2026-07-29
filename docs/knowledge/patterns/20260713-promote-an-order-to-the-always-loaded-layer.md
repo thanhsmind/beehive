@@ -15,7 +15,7 @@ bee:
 
 # Promote an order to the always-loaded layer and its transport must ride along
 
-Critical rule 13 (fan out the gathering) was promoted into AGENTS.block.md so it holds in
+Critical rule 12 (fan out the gathering) was promoted into AGENTS.block.md so it holds in
 plain conversation turns — but HOW to dispatch (a `model` param or an anchored `[bee-tier:]`
 marker, decision 0023) stayed in `bee-hive/references/routing-and-contracts.md`, which loads
 only on skill invoke. So the rule fired exactly where its mechanics were absent: every host

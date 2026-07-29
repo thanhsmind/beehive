@@ -1740,7 +1740,7 @@ async function handleCellsResetBudget(root, flags) {
 // judge-verdict/1 and appends the stamped result to trace.semantic_judge.
 // --builder-model/--judge-model presence is what marks that side PINNED —
 // the orchestrator only ever supplies a model name from its OWN pinned
-// dispatch param (Δ6; rule 13's mandatory transport means there is no code
+// dispatch param (Δ6; rule 12's mandatory transport means there is no code
 // path that would hand this flag an unverified guess) — so no separate
 // --*-status flag is needed at the CLI boundary; deriveModelIndependence
 // itself stays 4-arg/testable directly in test_lib.mjs regardless.
@@ -4560,7 +4560,7 @@ function handleStateFeatureVerifyShow(root, flags) {
 // ─── state workflows: rule-12 gap closed (workflow-lifecycle wl-2) ─────────
 // Today the orchestrator had to hand-edit .bee/runtime/workflows/*/state.json
 // to close zombie records — no CLI verb existed, and hand-editing bee's own
-// state is exactly rule 12's forbidden escape hatch. Two verbs:
+// state is exactly hive law 11's forbidden escape hatch. Two verbs:
 // `list` (read-only) and `close` (--feature | --id | --all-but-active).
 //
 // `listWorkflowRecords(root)` / `closeWorkflowsForFeature(root, {
@@ -6086,7 +6086,7 @@ async function handleWorktreeNew(_root, flags) {
     // Port-D7: a plain Error, matching every other refusal in this function —
     // WorktreeCreateError/its [CODE] prefix convention no longer exists here.
     throw new Error(
-      `refusing to create a worktree: another session is concurrently live on ${mainRoot} and it contains a shared nested checkout a companion mount must cover — running unguarded is how one session silently ate another's work. Re-run with "bee worktree new --feature ${feature} --with-companion" so the shared checkout is mounted and tracked (the paved road for concurrent shared-checkout work — AGENTS.md rule 14). This creates a NEW companion-mounted worktree; it does not retrofit the checkout you are in.`,
+      `refusing to create a worktree: another session is concurrently live on ${mainRoot} and it contains a shared nested checkout a companion mount must cover — running unguarded is how one session silently ate another's work. Re-run with "bee worktree new --feature ${feature} --with-companion" so the shared checkout is mounted and tracked (the paved road for concurrent shared-checkout work — AGENTS.md rule 13). This creates a NEW companion-mounted worktree; it does not retrofit the checkout you are in.`,
     );
   }
   // worktree-companion-hook: resolved HERE (readConfig(mainRoot).commands.*)

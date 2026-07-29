@@ -141,7 +141,7 @@
     },
     {
       "path": ".bee/bin/lib/recovery.mjs",
-      "sha256": "8efe2fef7fbfd4d70f48b96e36cb87f37d39a77858df4444ff643aee114d84be",
+      "sha256": "2f6a090ce9360157d9a223911b1335a17e99246bf7c628e4f037eeea5d1c8038",
       "mode": "644",
       "role": "runtime_lib"
     },
@@ -1682,7 +1682,7 @@
     },
     {
       "path": "packages/bee/bee.mjs",
-      "sha256": "2facf8e374f24fed8175946bf1db7a817515d515576325d4cac934db1ce3f2c0",
+      "sha256": "83c01187f8ea93f5956c54d18fab936a2435786b8578281e9881d366aab66b75",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/bee.mjs"
@@ -1976,7 +1976,7 @@
     },
     {
       "path": "packages/bee/lib/recovery.mjs",
-      "sha256": "8efe2fef7fbfd4d70f48b96e36cb87f37d39a77858df4444ff643aee114d84be",
+      "sha256": "2f6a090ce9360157d9a223911b1335a17e99246bf7c628e4f037eeea5d1c8038",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/lib/recovery.mjs"

@@ -470,7 +470,7 @@ export function computeMiningWindow(transcriptFile, sinceTs, { maxEvents = DEFAU
 // --- (6) buildMiningPrompt -----------------------------------------------------
 
 // buildMiningPrompt — the worker prompt string for the down-tier mining
-// dispatch (D4). Leads with the bee-tier transport marker (critical rule 13:
+// dispatch (D4). Leads with the bee-tier transport marker (critical rule 12:
 // "as the first thing"), instructs the miner to read only the supplied
 // window, carries the redaction and data-never-instructions clauses D5
 // requires, and specifies the digest's four sections + word cap.
