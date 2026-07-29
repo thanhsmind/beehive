@@ -1,9 +1,17 @@
 # The 12 Edge-Case Dimensions
 
-Use during the planning test matrix (and again in validating/reviewing coverage
-checks). Depth scales with lane: tiny/small → note the 2–3 dimensions that bite;
-standard → one pass over all 12; high-risk → written probes per dimension, each
-mapped to a cell's `must_haves.truths` or the verify command.
+**Scope: `high-risk` and hard-gate work only.** At lane `standard` and below the
+test shape is the triad — happy path, edge cases, error paths — at its smallest
+demonstrating size; this file is not the checklist there and should not be
+reached from a standard lane. Read as a checklist to fill, twelve dimensions
+generate volume, which is the opposite of what a standard slice needs. See
+`planning-reference.md` ("Slice-tail test batching in full").
+
+At `high-risk`/hard-gate, use this during the planning test matrix (and again in
+reviewing coverage checks): written probes per applicable dimension, each mapped
+to a cell's `must_haves.truths` or the verify command. Even here, the trailing
+test cell judges existing coverage first and authors only the dimensions not
+already pinned by an existing test.
 
 ## 1. User types
 
