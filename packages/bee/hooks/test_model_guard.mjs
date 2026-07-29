@@ -172,12 +172,59 @@ async function runHookRaw(rawInput, spawnCwd) {
 }
 
 // --- expectation: read the SAME state.mjs module the hook will import,
-// pointed at the enabled fixture (which carries a copy of the real config),
-// so the expected generation model always matches the hook's own resolution.
-
-async function computeExpectedGenerationModel(enabledRoot) {
+// pointed at the enabled fixture (which carries a copy of the real config), so
+// EVERY model name this suite asserts on is derived from that one config —
+// never hand-authored here.
+//
+// A literal is the very defect the guard exists to catch (AO5/B5: config is the
+// sole authority, and there is deliberately no hardcoded allowlist). The suite
+// used to write "sonnet" at eight-plus sites as "a model that is configured";
+// the moment the owner repointed models.claude.generation the guard rightly
+// denied and those rows went red with a message about the literal, saying
+// nothing about the real situation. Derive, so the fixture and the hook can
+// never disagree about what this repo configures.
+async function deriveConfiguredModels(enabledRoot) {
   const stateLib = await import(pathToFileURL(path.join(REAL_LIB_DIR, "state.mjs")).href);
-  return stateLib.modelForTier(enabledRoot, "generation", "claude") || "generation";
+  const name = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+  const byTier = {};
+  for (const slot of stateLib.CONFIGURABLE_SLOTS) {
+    byTier[slot] = name(stateLib.modelForTier(enabledRoot, slot, "claude"));
+  }
+  const advisorSlot = stateLib.resolveAdvisor(enabledRoot, "claude");
+  const advisor = advisorSlot && advisorSlot.type === "model" ? name(advisorSlot.model) : null;
+
+  // Mirrors dispatch-guard.mjs's configuredModelSet(): every CONFIGURABLE_SLOTS
+  // model plus the advisor slot's own resolved model, and nothing wider.
+  const members = [...new Set([...Object.values(byTier), advisor].filter(Boolean))];
+
+  // "a model that is configured" — the generation slot when it names one, else
+  // any member, so a repo whose generation slot is cli-shaped or null still
+  // hands these rows a real member instead of a literal.
+  const anyMember = byTier.generation || members[0] || null;
+
+  // A name guaranteed NOT to equal the generation model, for the rows that must
+  // make the marker and the param DISAGREE. A real configured member is used
+  // whenever one differs; otherwise a synthesized name keeps the row's meaning
+  // (disagreement) rather than letting it silently degrade into a match.
+  const mismatch =
+    members.find((m) => m !== byTier.generation) ||
+    `${byTier.generation || "generation"}-not-this-one`;
+
+  return {
+    generation: byTier.generation || "generation",
+    // extraction falls back to any member for the same reason as anyMember: the
+    // rows using it need a real member, never an unconfigured name.
+    extraction: byTier.extraction || anyMember,
+    // review is exposed raw (null included) — the rows using it assert against
+    // the guard's own resolution, which is null for a nameless review slot.
+    review: byTier.review,
+    advisor,
+    members,
+    anyMember,
+    mismatch,
+    codexGeneration: name(stateLib.modelForTier(enabledRoot, "generation", "codex")),
+  };
 }
 
 function readLastJsonl(file) {
@@ -210,8 +257,10 @@ async function main() {
   process.stdout.write(`empty-set fixture:    ${emptySetRoot}\n`);
   process.stdout.write(`malformed fixture:    ${malformedRoot}\n`);
 
-  const expectedGenerationModel = await computeExpectedGenerationModel(enabledRoot);
+  const models = await deriveConfiguredModels(enabledRoot);
+  const expectedGenerationModel = models.generation;
   process.stdout.write(`expected generation model: ${expectedGenerationModel}\n`);
+  process.stdout.write(`derived configured members: ${models.members.join(", ")}\n`);
 
   // --- 1. bare Agent payload -> exit 2, stderr has bee-tier + FIX + model --
   const barePayload = {
@@ -249,8 +298,8 @@ async function main() {
     JSON.stringify(lastEvent),
   );
 
-  // --- 2. model:'sonnet' -> exit 0 -----------------------------------------
-  const r2 = await runHookPayload({ tool_name: "Agent", tool_input: { model: "sonnet" } }, enabledRoot);
+  // --- 2. bare param naming a configured model -> exit 0 -------------------
+  const r2 = await runHookPayload({ tool_name: "Agent", tool_input: { model: models.anyMember } }, enabledRoot);
   check(r2.status === 0, "row2: model param set is allowed", `status=${r2.status} stderr=${r2.stderr}`);
 
   // --- 3. prompt marker -> exit 0 ------------------------------------------
@@ -367,7 +416,7 @@ async function main() {
   // via the process.cwd() fallback (P1-2: normalize cwd before ANY use, never
   // let a non-string reach findRepoRoot/path.resolve) -----------------------
   const r17 = await runHookRaw(
-    JSON.stringify({ tool_name: "Agent", cwd: { not: "a string" }, tool_input: { model: "sonnet" } }),
+    JSON.stringify({ tool_name: "Agent", cwd: { not: "a string" }, tool_input: { model: models.anyMember } }),
     enabledRoot,
   );
   check(
@@ -379,7 +428,7 @@ async function main() {
   // into the directory the suite happens to run from.
   const d17 = readLastJsonl(path.join(enabledRoot, ".bee", "logs", "dispatch.jsonl"));
   check(
-    d17 && d17.transport === "model-param" && d17.model === "sonnet",
+    d17 && d17.transport === "model-param" && d17.model === models.anyMember,
     "row17: fallback-evaluated dispatch logged in the fixture's dispatch.jsonl",
     JSON.stringify(d17),
   );
@@ -420,7 +469,10 @@ async function main() {
       bare.stderr,
     );
 
-    const withModel = await runHookPayload({ tool_name: toolName, tool_input: { model: "sonnet" } }, enabledRoot);
+    const withModel = await runHookPayload(
+      { tool_name: toolName, tool_input: { model: models.anyMember } },
+      enabledRoot,
+    );
     check(withModel.status === 0, `row-table[${toolName}]: model param set is allowed`,
       `status=${withModel.status} stderr=${withModel.stderr}`);
 
@@ -440,7 +492,11 @@ async function main() {
   const r20a = await runHookPayload(
     {
       tool_name: "Agent",
-      tool_input: { model: "haiku", description: "pattern extractor", subagent_type: "general-purpose" },
+      tool_input: {
+        model: models.extraction,
+        description: "pattern extractor",
+        subagent_type: "general-purpose",
+      },
     },
     enabledRoot,
   );
@@ -449,7 +505,7 @@ async function main() {
   check(
     d20a &&
       d20a.transport === "model-param" &&
-      d20a.model === "haiku" &&
+      d20a.model === models.extraction &&
       d20a.tool === "Agent" &&
       d20a.description === "pattern extractor" &&
       d20a.subagent_type === "general-purpose",
@@ -463,8 +519,8 @@ async function main() {
       d20a.channel === "claude-agent" &&
       d20a.enforcement === "model-param" &&
       d20a.effective_model_status === "pinned" &&
-      d20a.effective_model === "haiku" &&
-      d20a.requested_model === "haiku",
+      d20a.effective_model === models.extraction &&
+      d20a.requested_model === models.extraction,
     "row20a economics: claude-agent/model-param -> pinned, effective_model equals the param",
     JSON.stringify(d20a),
   );
@@ -490,7 +546,7 @@ async function main() {
       d20b.enforcement === "prompt-budget" &&
       d20b.effective_model_status === "unverified" &&
       d20b.effective_model === null &&
-      d20b.requested_model === "opus",
+      d20b.requested_model === models.review,
     "row20b economics: claude-agent/prompt-budget -> unverified, requested_model from config, no effective_model",
     JSON.stringify(d20b),
   );
@@ -519,7 +575,7 @@ async function main() {
   );
 
   const r20d = await runHookPayload(
-    { tool_name: "Agent", tool_input: { model: "sonnet", description: "z".repeat(300) } },
+    { tool_name: "Agent", tool_input: { model: models.anyMember, description: "z".repeat(300) } },
     enabledRoot,
   );
   check(r20d.status === 0, "row20d: long-description dispatch still allowed", `status=${r20d.status}`);
@@ -531,7 +587,7 @@ async function main() {
   );
 
   const disabledDispatchLog = path.join(disabledRoot, ".bee", "logs", "dispatch.jsonl");
-  await runHookPayload({ tool_name: "Agent", tool_input: { model: "sonnet" } }, disabledRoot);
+  await runHookPayload({ tool_name: "Agent", tool_input: { model: models.anyMember } }, disabledRoot);
   check(
     !fs.existsSync(disabledDispatchLog),
     "row20e: disabled guard writes no dispatch log",
@@ -539,20 +595,24 @@ async function main() {
   );
 
   // === 2A-iii rows: tier-first decision order (B4/B5/AO5) ==================
-  // The enabled fixture carries the real config: extraction=haiku,
-  // generation=sonnet, review=opus, advisor=fable → member set
-  // {haiku, opus, sonnet, fable} (advisor folded into the allowlist by cnt-7,
-  // advisor-digest R2 union).
+  // The enabled fixture carries a copy of the real config, so the member set is
+  // whatever that config names: every CONFIGURABLE_SLOTS model plus the advisor
+  // slot's own model (advisor folded into the allowlist by cnt-7, advisor-digest
+  // R2 union). `models` above derives all of it through the same state.mjs
+  // resolvers the guard uses — the rows below never name a model by hand.
 
   // --- 21. bare param NOT in the configured set (banana) -> deny -----------
   const r21 = await runHookPayload({ tool_name: "Agent", tool_input: { model: "banana" } }, enabledRoot);
   check(r21.status === 2, "row21: model:'banana' (non-member) is denied",
     `status=${r21.status} stderr=${r21.stderr}`);
+  const missingFromFix = models.members.filter((m) => !r21.stderr.includes(m));
   check(
-    r21.stderr.includes("sonnet") && r21.stderr.includes("haiku") &&
-      r21.stderr.includes("opus") && r21.stderr.includes("fable"),
-    "row21: banana FIX lists the configured models incl. the advisor model (fable)",
-    r21.stderr,
+    models.members.length > 0 &&
+      missingFromFix.length === 0 &&
+      !!models.advisor &&
+      models.members.includes(models.advisor),
+    `row21: banana FIX lists every configured model incl. the advisor model (${models.advisor})`,
+    `missing=${JSON.stringify(missingFromFix)} members=${JSON.stringify(models.members)} stderr=${r21.stderr}`,
   );
   check(r21.stderr.includes("[bee-tier: ceiling]"), "row21: banana FIX teaches the ceiling marker route", r21.stderr);
   // The denied bare-param dispatch is no longer logged as a legitimate transport.
@@ -563,62 +623,77 @@ async function main() {
     JSON.stringify(d21),
   );
 
-  // --- 22. bare param model:'fable' IS the configured advisor model -> allow
+  // --- 22. bare param naming the configured advisor model -> allow
   // (cnt-7, advisor-digest R2 union — ORCHESTRATOR-CHARTERED UNFREEZE of the
   // former BLOCKER-1 deny row, which encoded the live prepare/guard asymmetry:
-  // enabledRoot copies the repo's real config whose models.claude.advisor is
-  // 'fable', yet the guard's allowlist union excluded the advisor slot, so
+  // enabledRoot copies the repo's real config whose models.claude.advisor names
+  // a model, yet the guard's allowlist union excluded the advisor slot, so
   // `bee dispatch prepare --runtime claude --kind advisor`'s own {model:'fable'}
   // payload was denied 'param-not-configured'. With resolveAdvisor folded into
   // configuredModelSet the advisor model is a member and its bare param is
   // allowed, exactly like the tier models — never widening past the advisor
   // slot's own resolved model.)
-  const r22 = await runHookPayload({ tool_name: "Agent", tool_input: { model: "fable" } }, enabledRoot);
-  check(r22.status === 0, "row22: model:'fable' (the configured advisor model) is allowed",
+  const r22 = await runHookPayload({ tool_name: "Agent", tool_input: { model: models.advisor } }, enabledRoot);
+  check(r22.status === 0, `row22: model:'${models.advisor}' (the configured advisor model) is allowed`,
     `status=${r22.status} stderr=${r22.stderr}`);
   const d22 = readLastJsonl(path.join(enabledRoot, ".bee", "logs", "dispatch.jsonl"));
   check(
-    d22 && d22.transport === "model-param" && d22.model === "fable",
+    d22 && d22.transport === "model-param" && d22.model === models.advisor,
     "row22: advisor-model param logged as model-param (not param-not-configured)",
     JSON.stringify(d22),
   );
 
-  // --- 23. bare param IS a configured member (haiku) -> allow -------------
-  const r23 = await runHookPayload({ tool_name: "Agent", tool_input: { model: "haiku" } }, enabledRoot);
-  check(r23.status === 0, "row23: model:'haiku' (member) is allowed", `status=${r23.status} stderr=${r23.stderr}`);
+  // --- 23. bare param IS a configured member (the extraction slot) -> allow
+  const r23 = await runHookPayload({ tool_name: "Agent", tool_input: { model: models.extraction } }, enabledRoot);
+  check(r23.status === 0, `row23: model:'${models.extraction}' (member) is allowed`,
+    `status=${r23.status} stderr=${r23.stderr}`);
 
-  // --- 24. marker + param AGREE (generation + sonnet) -> allow -------------
+  // --- 24. marker + param AGREE (generation + its own model) -> allow ------
   const r24 = await runHookPayload(
-    { tool_name: "Agent", tool_input: { prompt: "[bee-tier: generation] do the thing", model: "sonnet" } },
+    {
+      tool_name: "Agent",
+      tool_input: { prompt: "[bee-tier: generation] do the thing", model: expectedGenerationModel },
+    },
     enabledRoot,
   );
-  check(r24.status === 0, "row24: marker+param equality match (generation+sonnet) is allowed",
+  check(r24.status === 0,
+    `row24: marker+param equality match (generation+${expectedGenerationModel}) is allowed`,
     `status=${r24.status} stderr=${r24.stderr}`);
 
-  // --- 25. marker + param DISAGREE (generation + opus) -> deny, FIX names sonnet
+  // --- 25. marker + param DISAGREE -> deny, FIX names the generation model.
+  // models.mismatch is another configured member whenever one differs from the
+  // generation slot, so the row stays a pure tier-vs-param disagreement (branch
+  // (1) fires before the membership check) rather than a membership failure.
   const r25 = await runHookPayload(
-    { tool_name: "Agent", tool_input: { prompt: "[bee-tier: generation] do the thing", model: "opus" } },
+    {
+      tool_name: "Agent",
+      tool_input: { prompt: "[bee-tier: generation] do the thing", model: models.mismatch },
+    },
     enabledRoot,
   );
-  check(r25.status === 2, "row25: marker+param mismatch (generation+opus) is denied",
+  check(r25.status === 2,
+    `row25: marker+param mismatch (generation+${models.mismatch}) is denied`,
     `status=${r25.status} stderr=${r25.stderr}`);
-  check(r25.stderr.includes("sonnet"), "row25: mismatch FIX names the tier's configured model (sonnet)", r25.stderr);
+  check(r25.stderr.includes(expectedGenerationModel),
+    `row25: mismatch FIX names the tier's configured model (${expectedGenerationModel})`, r25.stderr);
 
   // --- 26. ceiling marker + param -> deny (ceiling carries no model name) --
   const r26 = await runHookPayload(
-    { tool_name: "Agent", tool_input: { prompt: "[bee-tier: ceiling] do the thing", model: "sonnet" } },
+    { tool_name: "Agent", tool_input: { prompt: "[bee-tier: ceiling] do the thing", model: models.anyMember } },
     enabledRoot,
   );
   check(r26.status === 2, "row26: [bee-tier: ceiling] + model param is denied",
     `status=${r26.status} stderr=${r26.stderr}`);
   check(r26.stderr.includes("drop the model param"), "row26: ceiling+param FIX says drop the param", r26.stderr);
 
-  // --- 27. WARNING-2 pin: review marker + param opus (review is model-shaped) -> allow
+  // --- 27. WARNING-2 pin: review marker + the review slot's OWN configured
+  // model (derived, so it matches whatever this repo configures) -> allow
   const r27 = await runHookPayload(
-    { tool_name: "Agent", tool_input: { prompt: "[bee-tier: review] check the diff", model: "opus" } },
+    { tool_name: "Agent", tool_input: { prompt: "[bee-tier: review] check the diff", model: models.review } },
     enabledRoot,
   );
-  check(r27.status === 0, "row27: [bee-tier: review] + opus stays allowed while review is model-shaped (WARNING-2)",
+  check(r27.status === 0,
+    `row27: [bee-tier: review] + ${models.review} stays allowed while review is model-shaped (WARNING-2)`,
     `status=${r27.status} stderr=${r27.stderr}`);
 
   // --- 28. marker-only on a model tier (generation) -> allow --------------
@@ -778,7 +853,7 @@ async function main() {
   // (regresses row20a: model-param dispatches with general-purpose stay allowed
   // — the new rule only fires when a tier marker is present).
   const r39 = await runHookPayload(
-    { tool_name: "Agent", tool_input: { model: "haiku", subagent_type: "general-purpose" } },
+    { tool_name: "Agent", tool_input: { model: models.extraction, subagent_type: "general-purpose" } },
     enabledRoot,
   );
   check(r39.status === 0, "row39: bare param (no marker) + general-purpose stays allowed",
@@ -817,7 +892,7 @@ async function main() {
       d40.enforcement === "prompt-budget" &&
       d40.effective_model_status === "inherited-or-unknown" &&
       d40.effective_model === null &&
-      d40.requested_model === "gpt-5.5",
+      d40.requested_model === models.codexGeneration,
     "row40 economics: codex-native -> inherited-or-unknown ALWAYS, requested_model informational",
     JSON.stringify(d40),
   );
