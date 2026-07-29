@@ -23,6 +23,7 @@ import {
   writeState,
   isKnownPhase,
   bypassLevel,
+  NO_TEST_SENTINEL,
 } from '../lib/state.mjs';
 import {
   addCell,
@@ -3180,6 +3181,183 @@ await check('solo/main repos byte-identical: claimCellCrossSession behaves exact
   assert(claimed.ok === true, `byte-identical solo behavior expected, got ${JSON.stringify(claimed)}`);
   assert(readClaim(root, 'topo-solo-1').session === 'topo-solo-sess', 'claim visible at the same root, unchanged');
   assert(readCell(root, 'topo-solo-1').status === 'claimed', 'cell file visible at the same root, unchanged');
+});
+
+// ---------------------------------------------------------------------------
+// worker-conformance wc-1 (D10/D12/D14): trace.proof = "unrecorded" — the
+// absence-of-proof marker capCell stamps AFTER the entire refusal chain has
+// run, on a cap that is about to succeed. It exists so a cap that recorded no
+// real proof arms D3's close-door instead of passing silently, and it is
+// DELIBERATELY a new, inert field: D12 forbids reusing trace.feature_verify =
+// "pending", whose local flag short-circuits six refusal sites and would have
+// voided D2's red-first tier and D6's brakes the moment the marker landed.
+// Read-first (test-economy D5): the nearest existing rows are the D2
+// loosen/keep pair above (same makeCell/claimCell/recordVerify/capCell
+// pipeline) and the mv-3(a) pending-path row — neither says anything about
+// whether a cap recorded proof, so these are new ROWS in this suite, not a
+// new file.
+
+await check('capCell (wc-1 D10/D12): a cap with no real verify output and no verification_evidence stamps trace.proof "unrecorded" — table-driven over every shape of absent output', async () => {
+  const cases = [
+    { id: 'wc1-out-absent', verify: { command: 'x', passed: true }, why: 'output field omitted entirely' },
+    { id: 'wc1-out-null', verify: { command: 'x', output: null, passed: true }, why: 'output explicitly null' },
+    { id: 'wc1-out-empty', verify: { command: 'x', output: '', passed: true }, why: 'output is the empty string' },
+    { id: 'wc1-out-blank', verify: { command: 'x', output: '   \n\t  ', passed: true }, why: 'output is whitespace only' },
+    // Advisor consult (fable): the Decision 0004 door at cells.mjs:2158 lists
+    // small/standard/high-risk, but LANES (cells.mjs:91) also carries "spike" —
+    // so spike, like tiny, walks past it and is markable TODAY. D12/D14 grant
+    // no lane exemption, so a proofless spike cap arms the door like any other.
+    { id: 'wc1-out-spike', lane: 'spike', verify: { command: 'x', passed: true }, why: 'lane "spike" is markable too — no lane exemption exists' },
+  ];
+  for (const c of cases) {
+    addCell(root, makeCell(c.id, { lane: c.lane || 'tiny' }));
+    await claimCell(root, c.id, 'worker-wc1');
+    await recordVerify(root, c.id, c.verify);
+    const capped = await capCell(root, c.id, { files_changed: ['a.js'], outcome: 'done' });
+    assert(capped.status === 'capped', `${c.id}: the cap itself must still succeed — wc-1 only ADDS a marker (${c.why})`);
+    assert(
+      capped.trace.proof === 'unrecorded',
+      `${c.id} (${c.why}): expected trace.proof "unrecorded", got ${JSON.stringify(capped.trace.proof)}`,
+    );
+    assert(
+      capped.trace.feature_verify === undefined,
+      `${c.id}: D12 — the marker must never be the feature_verify pending flag, got ${JSON.stringify(capped.trace.feature_verify)}`,
+    );
+  }
+});
+
+await check('capCell (wc-1 D14): a cap that holds real proof is never marked — one-line output, verification_evidence with an empty output, and the explicit --feature-verify-pending path — table-driven', async () => {
+  const cases = [
+    {
+      id: 'wc1-real-output',
+      cell: { lane: 'tiny' },
+      verify: { command: 'x', output: 'ok', passed: true },
+      cap: {},
+      featureVerify: undefined,
+      why: 'a one-line real verify output is proof — D14 marks only the absence of BOTH channels',
+    },
+    {
+      id: 'wc1-evidence-empty-output',
+      cell: { lane: 'tiny', change_class: 'security' },
+      verify: { command: 'x', output: '', passed: true },
+      cap: {
+        verification_evidence: {
+          red_failure_evidence:
+            'wc1-evidence-empty-output: before this cell, capCell stamped nothing at all when a cap recorded no proof, so an output-less pass closed silently',
+        },
+      },
+      featureVerify: undefined,
+      why: 'D14 — a tiny-lane security cell whose red_failure_evidence already passed the red-first door holds the strongest proof in the system, even with an empty verify_output',
+    },
+    {
+      id: 'wc1-pending-path',
+      cell: { lane: 'tiny' },
+      verify: null,
+      cap: { feature_verify_pending: true },
+      featureVerify: 'pending',
+      why: 'the explicit pending path already carries its own marker — trace.proof stays untouched',
+    },
+  ];
+  for (const c of cases) {
+    addCell(root, makeCell(c.id, c.cell));
+    await claimCell(root, c.id, 'worker-wc1');
+    if (c.verify) await recordVerify(root, c.id, c.verify);
+    const capped = await capCell(root, c.id, { files_changed: ['a.js'], outcome: 'done', ...c.cap });
+    assert(capped.status === 'capped', `${c.id}: expected a successful cap`);
+    assert(
+      capped.trace.proof === undefined,
+      `${c.id}: expected trace.proof unset (${c.why}), got ${JSON.stringify(capped.trace.proof)}`,
+    );
+    assert(
+      capped.trace.feature_verify === c.featureVerify,
+      `${c.id}: expected trace.feature_verify ${JSON.stringify(c.featureVerify)}, got ${JSON.stringify(capped.trace.feature_verify)}`,
+    );
+  }
+});
+
+await check('capCell (wc-1 D12): a repo that declared commands.verify "none" (decision 55b951e1) is never marked — its close-door could never be satisfied', async () => {
+  const cases = [
+    {
+      id: 'wc1-nt-sentinel',
+      cell: { lane: 'tiny', verify: NO_TEST_SENTINEL },
+      verify: null,
+      why: 'the verify-none waiver path has no verify output by construction',
+    },
+    {
+      id: 'wc1-nt-realverify',
+      cell: { lane: 'tiny' },
+      verify: { command: 'x', passed: true },
+      why: 'the exemption is the REPO declaration, not the individual cell — no feature verify can ever run here',
+    },
+  ];
+  for (const c of cases) {
+    const dir = makeStateRepo('bee-wc1-notest-');
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+      schema_version: '1.0',
+      phase: 'swarming',
+      feature: 'demo-feat',
+      mode: 'standard',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+      workers: [],
+    });
+    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { commands: { verify: NO_TEST_SENTINEL } });
+    addCell(dir, makeCell(c.id, c.cell));
+    await claimCell(dir, c.id, 'worker-wc1');
+    if (c.verify) await recordVerify(dir, c.id, c.verify);
+    const capped = await capCell(dir, c.id, { files_changed: ['a.js'], outcome: 'done' });
+    assert(capped.status === 'capped', `${c.id}: a no-test repo must still cap`);
+    assert(
+      capped.trace.proof === undefined,
+      `${c.id}: expected NO marker in a declared no-test repo (${c.why}), got ${JSON.stringify(capped.trace.proof)}`,
+    );
+  }
+});
+
+await check('capCell (wc-1 negative control): the "unrecorded" shape buys NO door bypass — red-first still refuses without red_failure_evidence, and a new test file still needs new_suite_reason (D7/D12)', async () => {
+  const cases = [
+    {
+      id: 'wc1-nc-sec-tiny',
+      cell: { lane: 'tiny', change_class: 'security' },
+      cap: {},
+      expect: 'red_failure_evidence',
+      why: 'security is red-first in every lane — the marker is inert at cells.mjs:2135',
+    },
+    {
+      id: 'wc1-nc-behavior-hr',
+      cell: {
+        lane: 'high-risk',
+        change_class: 'behavior',
+        must_haves: { truths: ['wc1-nc-behavior-hr: red-first negative-control fixture'] },
+      },
+      cap: {},
+      expect: 'red_failure_evidence',
+      why: 'a behavior-bearing class in a high-risk lane is red-first — the marker buys nothing there either',
+    },
+    {
+      id: 'wc1-nc-newsuite',
+      cell: { lane: 'tiny', change_class: 'behavior' },
+      cap: {
+        diff_stats: { new_test_files: ['tests/test_wc1_new.mjs'], test_lines_added: 10, source_lines_changed: 10 },
+      },
+      expect: 'new_suite_reason',
+      why: 'D6 brake at cells.mjs:1999 still refuses a new permanent suite with no stated reason',
+    },
+  ];
+  for (const c of cases) {
+    addCell(root, makeCell(c.id, c.cell));
+    await claimCell(root, c.id, 'worker-wc1');
+    // Exactly the shape that earns the marker: a passing verify with no output at all.
+    await recordVerify(root, c.id, { command: 'x', passed: true });
+    await assertRejects(
+      () => capCell(root, c.id, { files_changed: ['a.js'], outcome: 'done', ...c.cap }),
+      c.expect,
+      `${c.id}: ${c.why}`,
+    );
+    assert(
+      readCell(root, c.id).status === 'claimed',
+      `${c.id}: the refused cap must leave the cell uncapped — no marker, no partial write`,
+    );
+  }
 });
 
 printSummaryAndExit();
