@@ -94,9 +94,17 @@ being your refusal and becomes a recorded absence:
 
 - Cap with **neither** real verify output **nor** `verification_evidence`, and the
   helper stamps `trace.proof: "unrecorded"` on the cell (predicate
-  `cells.mjs:2231-2235`, stamped at `:2273`). The stderr warning that accompanies
-  it is lane-gated to `small`/`standard`/`high-risk` (`:2188-2190`) — on a `tiny`
-  cell the marker lands **silently**. Nothing tells you; the door still knows.
+  `cells.mjs:2231-2235`, stamped at `:2273`). Two different stderr warnings can
+  announce it, and only one is lane-gated: the `behavior_change` warning
+  (`:1969-1974`) has **no lane gate at all** and prints on `tiny` exactly as it
+  does on `high-risk`, so a cell declaring `behavior_change` is essentially never
+  marked in silence; decision 0004's warning (`:2188-2190`) is the lane-gated one
+  (`small`/`standard`/`high-risk`), which leaves `tiny` **and `spike`** (both
+  outside that gate, `LANES` at `:91`) taking the marker with nothing printed
+  when the cell declares no `behavior_change`. One degenerate case slips both:
+  whitespace-only `verification_evidence` reads as present at `:1969` (skipping
+  the warning) but empty at `:2229-2230` (still marking). Silent or not, the door
+  still knows.
 - That marker arms the feature-boundary close-door alongside
   `trace.feature_verify: "pending"` — `featureVerifyDebt` refuses to leave
   `swarming` or run `scribing-run` until a green feature-verify record newer than
@@ -125,12 +133,10 @@ their proof to the feature-level verify and stamps a marker the close-door reads
   session that does not own the claim is refused. The cell is not yours to cap.
 - **The two proof paths stay exclusive** — `--feature-verify-pending` combined
   with `verification_evidence` or with a recorded passing verify is refused
-  (`:1892`, `:1897`).
-- **A recorded passing verify** whenever you are NOT on the pending path
-  (`:1913-1917`) — cap without `trace.verify_passed === true` is refused, the
-  sole exception being a `verify: "none"` cell in a declared no-test repo
-  (`:1909-1911`). What was retired is the demand for *output alongside* the
-  pass, never the pass itself.
+  (`:1892`, `:1897`). Read precisely: the whole check lives *inside*
+  `if (pendingFeatureVerify)` (`:1887-1900`), so it is the pending path's own
+  rule and can only fire when you pass the flag — nothing you pass alongside the
+  flag escapes it, and the classic path has nothing here to trip over.
 - **Non-empty `files_changed`** on lanes `small`/`standard`/`high-risk`
   (`:2191-2194`) — it asks what you touched, not for authored proof.
 - **An outcome summary** on `high-risk` (`:2197-2200`).
@@ -142,7 +148,17 @@ their proof to the feature-level verify and stamps a marker the close-door reads
 
 **Classic path (deferred, not waived, by `--feature-verify-pending`):**
 
-- **Red-first** (`:2135`, `:2150-2168`): `red_failure_evidence` ≥80 chars,
+Every door in this list is gated on `!pendingFeatureVerify`, and the pending
+path is the **default** — so on the sanctioned path none of them fire at your
+cell at all. Their proof moves to the feature verify; it does not evaporate.
+
+- **A recorded passing verify** (`:1913-1917`) — cap without
+  `trace.verify_passed === true` is refused **on the classic path only**; the
+  condition literally opens with `!pendingFeatureVerify`, and a further
+  exception is a `verify: "none"` cell in a declared no-test repo
+  (`:1909-1911`). What was retired is the demand for *output alongside* the
+  pass, never the pass itself.
+- **Red-first** (`:2118-2139`, `:2150-2170`): `red_failure_evidence` ≥80 chars,
   non-duplicate, or an explicit `deliberate_exceptions` door. It fires wherever
   `requiredProofTier` (`cells.mjs:163-186`) resolves to `red-first`:
   `security`/`migration` in **every** lane, and `bugfix`/`behavior`/`api` at
@@ -150,8 +166,13 @@ their proof to the feature-level verify and stamps a marker the close-door reads
   cell derives to `behavior` and lands here too). **Narrower than "high-risk,
   all classes":** at `high-risk`, `refactor` and `formatting` still resolve to
   `suite-green` and `test` still resolves to `targeted-green` — the lane alone
-  does not buy red-first.
-- **`new_suite_reason` ≥20 chars** for a genuinely new suite file (`:2014-2027`).
+  does not buy red-first. Both doors sit out the default path: `:2150` is gated
+  on `!pendingFeatureVerify` outright, and `:2118` can only fire when
+  `verification_evidence` was supplied, which the pending path refuses by
+  construction (`:1891-1895`).
+- **`new_suite_reason` ≥20 chars** for a genuinely new suite file
+  (`:2013-2028`) — gated on `!pendingFeatureVerify`, because its justification
+  channel *is* per-cell evidence.
 - **Ratio ceiling** (`:2044-2060`): tiny/small warn above 3, standard/high-risk
   refuse above 4 without a `ratio_waiver` ≥20 chars. On the pending path the
   same overage is recorded as a visible warning instead — the waiver channel is
@@ -196,7 +217,9 @@ The evidence object:
 
 Every field is honest or explicitly empty with a reason in `deliberate_exceptions`. Vague evidence here becomes a P1 finding in bee-reviewing — the work comes back.
 
-**`red_failure_evidence` is captured at cap time, not backfilled later (decision 0009).** Wherever `requiredProofTier` resolves to `red-first` — the door is keyed on the tier, not on the `behavior_change` flag (`cells.mjs:2118`, `:2150`) — the helper *refuses to cap* unless the evidence names a "before": the prior behavior this change alters — a `git show <pre-change-commit>:<file>` extract, or a pre-change check that failed. If the surface is genuinely new (no prior behavior to characterize), say so in `deliberate_exceptions`. This is why the characterization is cheap to record now — the old state is one `git show` away while you hold the diff in context; recovering it after review means a whole extra evidence-only cell.
+**`red_failure_evidence` is captured at cap time, not backfilled later (decision 0009).** Wherever `requiredProofTier` resolves to `red-first` — the door is keyed on the tier, not on the `behavior_change` flag (`cells.mjs:2118`, `:2150`) — the helper *refuses to cap*, **on the classic path**, unless the evidence names a "before": the prior behavior this change alters — a `git show <pre-change-commit>:<file>` extract, or a pre-change check that failed. If the surface is genuinely new (no prior behavior to characterize), say so in `deliberate_exceptions`. This is why the characterization is cheap to record now — the old state is one `git show` away while you hold the diff in context; recovering it after review means a whole extra evidence-only cell.
+
+**Both red-first doors sit out the default `--feature-verify-pending` path**: `:2150` is gated on `!pendingFeatureVerify`, and `:2118` only fires when `verification_evidence` was supplied at all, which the pending path refuses by construction (`:1891-1895`). Deferred to the feature verify, never waived — dispatched on the default path you are not refused for its absence, and capping through the classic path (spot use, another repo, transition) is where it is owed at the cell.
 
 **Scoped red-first (decision 8ef2bae6):** the red run that produces this "before" executes ONLY the test(s) this cell adds or changes — name the test file or filter in `tests_added_or_changed`, never the full configured suite. The full cell verify chain runs exactly once, at the end, right before cap; a full-suite run inside the red-first loop is the named waste this scopes away.
 
@@ -281,14 +304,14 @@ Classic/spot-use path (main-verifies D1) — the sanctioned default is the featu
   | unclassified (`change_class` null), `behavior_change: false` | any | *(no matrix check)* | today's pre-test-economy behavior, untouched — claiming a lighter tier than `behavior` requires declaring `change_class` explicitly; the null default never gets a discount. |
   | unclassified (`change_class` null), `behavior_change: true` | any | derived as `behavior`, then tiered per the `behavior` row above | same acceptance as the row it derives into |
 
-  **Amendment note:** decisions `e54878b1`/`8ef2bae6` (scoped red-first) are **amended, not reversed**, by test-economy D2 and again by slice-tail-test-batching P1. The *shape* they defined — a red run before the fix touches ONLY the test(s) this cell adds or changes — still governs every `red-first` row, and repro-first still governs `bugfix`. What P1 moves is *when new coverage is authored*, never *whether it exists*: a `behavior`/`api` cell outside `high-risk` caps on existing-green, and the slice's one trailing `test` cell writes the coverage before the slice may leave `swarming` — a CLI throw no bypass level lifts (P4), owed only when the slice touched CODE: instruction/knowledge text is not code and owes no test (user law 2026-07-27). Regression catching comes from *running* the existing suite at every cap; that is unchanged.
+  **Amendment note:** decisions `e54878b1`/`8ef2bae6` (scoped red-first) are **amended, not reversed**, by test-economy D2 and again by slice-tail-test-batching P1. The *shape* they defined — a red run before the fix touches ONLY the test(s) this cell adds or changes — still governs every `red-first` row, and repro-first still governs `bugfix`. What P1 moves is *when new coverage is authored*, never *whether the question gets asked*: a `behavior`/`api` cell outside `high-risk` caps on existing-green, and the trailing `test` cell owes the **coverage judgment** — cite the nearest existing tests by `file:line` and state whether they already cover the net behavior. **A test cell that authors no test is not a defect**; a "covered" verdict caps by running the cited tests green and recording "already covered, no new rows". The door is keyed on the **feature**, not the slice (`testCellDebt(root, feature)`, `state.mjs:2570`), and it refuses the close in two distinct ways: no `test` cell anywhere in the feature while capped code-touching `behavior`/`api` cells exist (`:2653-2654`), or a `test` cell that is still open/claimed/blocked, capped with `verify_passed: false`, or capped with `trace.proof: "unrecorded"` (`:2604-2615`, `:2656-2657`) — the second kind fires on the offending cell alone. A CLI throw no bypass level lifts (P4), owed only when the feature touched CODE: instruction/knowledge text is not code and owes no test (user law 2026-07-27). Regression catching comes from *running* the existing suite at every cap; that is unchanged.
 
 - **Scoped red-first (decision 8ef2bae6), wherever the matrix above resolves to `red-first`:** the red run before a fix executes ONLY the test(s) this cell adds or changes — name the test file or filter, never the full configured suite. The cell's own `verify` chain (however many checks it strings together) then runs exactly once, at the end, right before cap, to prove the green state. A full-suite run inside a red-first loop is the named waste this scopes away.
 - **Test-shape rules (test-economy D3)** — apply whenever this cell adds or changes tests, independent of which proof tier applies:
   - ≥3 cases exercising the same behavior are table-driven, not copy-pasted near-duplicates.
   - A new scenario for behavior the suite already covers is a new **row** in the existing suite, not a new file.
-  - A genuinely new `test_*.mjs` file must declare `new_suite_reason` (≥20 chars, in the evidence JSON) explaining why a new permanent CI suite is warranted — cap refuses without it. For a `refactor`/`formatting` cell this can never rescue a new test file; see the matrix above.
-  - Test-to-source line ratio has a ceiling: `tiny`/`small` warn above 3, `standard`/`high-risk` refuse above 4 unless the evidence declares a `ratio_waiver` (≥20 chars) — shrink the diff or justify the ratio. At the slice `test` cell, measure against the **slice's aggregate** source delta (the sum of its implementation cells), never that cell's own near-zero delta.
+  - A genuinely new `test_*.mjs` file must declare `new_suite_reason` (≥20 chars, in the evidence JSON) explaining why a new permanent CI suite is warranted — cap refuses without it **on the classic path only** (`cells.mjs:2013-2028` opens with `!pendingFeatureVerify`): the justification channel is per-cell evidence, which the default pending path refuses by construction, so there the scrutiny moves to the feature verify and the trailing test cell's own review. For a `refactor`/`formatting` cell nothing rescues a new test file — that refusal (`:1990-1998`) fires on **both** cap paths, `new_suite_reason` included; the one thing that skips it is an absent `diff_stats` (`:1992`, fail-open by design, the same way `:2017` is), never a flag you pass. See the matrix above.
+  - Test-to-source line ratio has a ceiling: `tiny`/`small` warn above 3, `standard`/`high-risk` refuse above 4 unless the evidence declares a `ratio_waiver` (≥20 chars) — shrink the diff or justify the ratio. **That refusal is classic-path only**: on the default `--feature-verify-pending` path the same overage is recorded as a visible warning in `trace.warnings` instead (`cells.mjs:2047-2052`), because the waiver channel is per-cell evidence, which that path refuses by construction. At the slice `test` cell, measure against the **slice's aggregate** source delta (the sum of its implementation cells), never that cell's own near-zero delta.
 - **Read-first, before writing a new test (test-economy D5):** before adding a test, cite the nearest existing test that already exercises this area and say in one line why it doesn't already cover the new case (fold it into `tests_inspected`/evidence). Reading first is cheap; a duplicate suite born from not looking first is not.
   - **Falsifiability proof is scoped (test-runs-lean D2):** proving a new suite load-bearing by mutation (neuter the guard, watch the red, restore) is owed only when the suite guards `high-risk`/hard-gate behavior — and then at most ONE mutation cycle. Everywhere else it is optional, and skipping it is never a cap defect: the scarce resource is suite runs, not assurance theater.
 - **Cap evidence is scoped, not full (verify-scoping D2, decision `20534ea9`).** Cap evidence is the cell's own scoped verify passing — never run the full configured verify yourself just to cap. **Verify-once (test-runs-lean D1, user feedback 2026-07-27):** in a serial `tiny`/`small` dispatch the worker's recorded verify output IS the cap evidence — the orchestrator does not repeat the same command by default; it re-runs only when the report smells (missing or garbled output, a pass claimed without the command's tail), when workers ran in parallel, or when the cell is `high-risk`/hard-gate. Proof stays proof — output recorded, never asserted — it just is not paid for twice. The full run belongs to close, not to caps.
