@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Doctrine Layer — rule placement, propagation, and anchoring"
-description: "Which layer a rule belongs on, how much of its mechanics travels with it, how doctrine reaches every project by copy, and the anchor tests that stop a rule from disappearing."
+description: "Which layer a rule belongs on, how much of its mechanics travels with it, how doctrine reaches every project by copy, the anchor tests that stop a rule from disappearing, and the standing check that fails the build when an every-turn rule is reachable only from an on-demand reference."
 timestamp: 2026-07-29
 bee:
   id: doctrine-layer-placement-and-anchoring
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [ba5a35f1-981d-4cb5-8a57-234a187f122d (placement rule), "0023 + 6cd34376 (explicit-tier transport rides critical rule 12, B3a)", "derived-check-hardening E7/E8 (the two live doctrine residuals are cleared, and the completeness criterion becomes a standing check deriving retired stage names from the phase-coercion table)"]
-  sources: ["tier-transport-doctrine (cell tier-transport-doctrine-1, 2026-07-13)", "docs/specs/doctrine-layer.md#B1", "docs/specs/doctrine-layer.md#B2", "docs/specs/doctrine-layer.md#B3a", "docs/specs/doctrine-layer.md#B4", "docs/specs/doctrine-layer.md#R1", "docs/specs/doctrine-layer.md#R2", "docs/specs/doctrine-layer.md#E1", "docs/specs/doctrine-layer.md#P1", "docs/specs/doctrine-layer.md#P2", "docs/specs/doctrine-layer.md#P4", "derived-check-hardening cells dch-5/dch-7 (retired-stage currency check with derived tokens; research-brief and write-guard fixture residuals cleared; traces .bee/cells/dch-{5,7}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)"]
+  decisions: [ba5a35f1-981d-4cb5-8a57-234a187f122d (placement rule), "0023 + 6cd34376 (explicit-tier transport rides critical rule 12, B3a)", "derived-check-hardening E7/E8 (the two live doctrine residuals are cleared, and the completeness criterion becomes a standing check deriving retired stage names from the phase-coercion table)", "tick-contract-inline T1/T3/T5/T6 (a narrower always-loaded summary is a misfiled rule; new sheet text is paid for by removing sheet text, never by raising the fence; every-turn rules unreachable from the sheet fail the build, derived from wording not a marker; the check proves reachability, never obedience)"]
+  sources: ["tier-transport-doctrine (cell tier-transport-doctrine-1, 2026-07-13)", "docs/specs/doctrine-layer.md#B1", "docs/specs/doctrine-layer.md#B2", "docs/specs/doctrine-layer.md#B3a", "docs/specs/doctrine-layer.md#B4", "docs/specs/doctrine-layer.md#R1", "docs/specs/doctrine-layer.md#R2", "docs/specs/doctrine-layer.md#E1", "docs/specs/doctrine-layer.md#P1", "docs/specs/doctrine-layer.md#P2", "docs/specs/doctrine-layer.md#P4", "derived-check-hardening cells dch-5/dch-7 (retired-stage currency check with derived tokens; research-brief and write-guard fixture residuals cleared; traces .bee/cells/dch-{5,7}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)"]
   authoritative_for: "doctrine-layer: rule placement, propagation, and anchoring"
 ---
 
@@ -83,6 +83,25 @@ never again, and by the time anyone looked, two live documents were still
 routing readers to a stage that no longer existed. A criterion with no
 enforcement is a note, not a criterion (derived-check-hardening E7/E8).
 
+**B6 — A rule whose own wording says it applies every turn must be named by the
+standing sheet, and which rules those are is derived from the wording itself.**
+Trigger: the suite runs. What is checked: every section of every on-demand
+procedure reference is read, and any section whose wording states that its rule
+applies on every turn must also be named by the always-loaded sheet, through a
+pointer the sheet itself carries. What happens on failure: the suite fails,
+naming the offending section by document and line. How the rule set is known: it
+is derived from the rules' own wording — a small vocabulary of the ways English
+states per-turn scope — and never from a list of rules an author marked. A marker
+would have to be applied by the same author who has just filed an every-turn rule
+in a reference, so its failure mode is **silence**: precisely the defect this
+check exists to catch, relocated one level up. Derivation fails the other way —
+toward a false positive, a red build a human clears by moving the rule or by
+rewording a claim that was never meant to read as every-turn — which is the safe
+direction for a gate to be wrong in. What this establishes is **reachability**
+only: that an agent loading nothing but the standing sheet still arrives at the
+rule. It says nothing whatever about whether the rule was then obeyed
+(tick-contract-inline T5/T6).
+
 ## Business Rules
 
 - **R1** — A rule that must hold when no workflow stage is running belongs on the
@@ -96,6 +115,14 @@ enforcement is a note, not a criterion (derived-check-hardening E7/E8).
   survives the next retirement unedited, and its only exemptions are the two
   append-only history trees and the translation path itself
   (derived-check-hardening E7/E8).
+- **R4** — A rule that applies every turn is named by the standing sheet. One
+  that is reachable only from an on-demand procedure reference fails the build,
+  named. The check derives which rules are in scope from their wording, never
+  from a maintained marker (tick-contract-inline T5).
+- **R5** — New standing-sheet text is paid for by removing text from that same
+  sheet. Its size fence is never raised to make an addition fit: the fence
+  exists precisely to resist the growth the addition represents, and raising it
+  once makes raising it again easier (tick-contract-inline T3).
 
 ## Edge Cases Settled
 
@@ -115,6 +142,31 @@ enforcement is a note, not a criterion (derived-check-hardening E7/E8).
   works; it is evidence that nothing is exercising the real value. The fixture
   now names a value the state machine can actually produce, so it exercises the
   gate policy rather than the translation (derived-check-hardening E7).
+
+- **A summary can be narrower than the rule it stands in for, and still read as
+  faithful.** The standing sheet did name the per-step reporting rule — as a
+  one-line summary — and that summary was narrower on two axes at once: it read
+  as conditional on a mode the reader might not be in, and it named four kinds
+  of event where the rule in fact covers every perceivable step. An agent
+  following the summary exactly still broke the contract, and nothing in the
+  summary's own text revealed the shortfall. A summary standing in for a rule is
+  judged by whether it is as **wide** as the rule, never by whether it mentions
+  it — B2's failure mode surviving a correct-looking placement
+  (tick-contract-inline T1).
+
+- **Reachability is not obedience, and the check that proves the first must not
+  be cited for the second.** B6 proves an every-turn rule can be arrived at from
+  what is always loaded. Whether it was then followed is observed nowhere in
+  this project. Recording the check as though it closed that gap would hand the
+  surface a claim of coverage it does not have, and a check that overstates its
+  reach is how the next gap goes unnoticed (tick-contract-inline T6).
+
+- **Paying for an addition is when stale cross-references surface.** Trimming
+  the sheet to fund a new rule put a reader's eye on citations nobody had
+  re-read in a long time, and two of them pointed one rule off from the rule
+  they named. The trim forces a re-read of the whole document, which makes it
+  the cheapest moment to find that class of rot — an argument for the
+  pay-by-removing rule beyond the size fence itself.
 
 ## Pointers (implementation)
 
@@ -138,3 +190,31 @@ enforcement is a note, not a criterion (derived-check-hardening E7/E8).
   `packages/bee/hooks/test_write_guard.mjs` (the fixture row that hand-built the
   retired phase value). Evidence: traces `.bee/cells/dch-5.json`,
   `.bee/cells/dch-7.json`.
+- Every-turn reachability check (B6/R4): `scripts/tests/test_always_loaded_rules.mjs`
+  — blocking (exits 1 on a finding), picked up by the chain's `test_*.mjs` glob
+  over `scripts/tests/`, so no registration in `scripts/run_verify.mjs` was
+  needed. Its one seed is `EVERY_TURN_PHRASES` (six wording patterns); the rule
+  set, the reference corpus (`*.md` under any `references/` directory beneath
+  `skills/`), and the pointer set are all read off the tree at run time — no rule
+  name, heading, or rule count is hardcoded. The two always-loaded locations it
+  reads, `AGENTS.md` and `packages/bee/AGENTS.block.md`, are the only paths it
+  fixes. Deliberately out of scope: `skills/*/SKILL.md` bodies (a different tier
+  with a different pointer convention). Provenance ledgers are skipped only when
+  a file self-declares as a rule→decision map, never by filename, so the
+  exclusion fails toward flagging.
+- Drift proof for B6: reverting to `c3c67005^`, and separately stripping only
+  critical rule 17 from the block, each turn the suite red naming
+  `skills/bee-hive/references/routing-and-contracts.md` "Progress ticks —
+  worked examples" as the unreachable every-turn section.
+- Standing-sheet size fence (R5): `scripts/tests/test_agents_budget.mjs` —
+  `WARN_BYTES` 14000 and `HARD_FAIL_BYTES` 15000, both unchanged by the
+  addition; `EXPECTED_RULE_COUNT` moved 16→17 by appending, so
+  `TERMINAL_HOME_RULES [1, 5, 6, 11]` was unaffected. The rule cost ~1,850 bytes
+  and was funded by removing 835 bytes of restated prose plus the two stale
+  citations.
+- The two corrected cross-references: block rules 9 and 10 each carried a
+  `Full rule: bee-hive skill, critical rule N` citation off by one; both were
+  removed outright rather than repointed, the block stating those rules more
+  fully than the hive one-liners it was citing.
+- Evidence: traces `.bee/cells/tci-1.json`, `.bee/cells/tci-3.json`; reports
+  under `docs/history/tick-contract-inline/reports/`.

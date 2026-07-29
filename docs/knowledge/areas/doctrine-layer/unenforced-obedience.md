@@ -2,14 +2,14 @@
 type: bee.area
 title: Doctrine Layer — unenforced obedience and the human boundary
 description: "The rules with no runtime behind them: obey where no guard covers the action, amend doctrine even when the phase gate is shut, run the machinery yourself, and keep its vocabulary out of the conversation."
-timestamp: 2026-07-21
+timestamp: 2026-07-29
 bee:
   id: doctrine-layer-unenforced-obedience
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [c2c46488 (an unblocked write is not an approved write), 1689af1b (silent bookkeeping), 4439bd7e (purpose-first narration + intent-carrying dispatch descriptions)]
-  sources: ["terminal-phase-gate (cell tpg-2, 2026-07-13)", "docs/specs/doctrine-layer.md#B5", "docs/specs/doctrine-layer.md#R6", "docs/specs/doctrine-layer.md#R7", "docs/specs/doctrine-layer.md#R8", "docs/specs/doctrine-layer.md#E3"]
+  decisions: [c2c46488 (an unblocked write is not an approved write), 1689af1b (silent bookkeeping), 4439bd7e (purpose-first narration + intent-carrying dispatch descriptions), tick-contract-inline T6 (a green reachability check is not evidence of obedience; nothing observes agent chat output)]
+  sources: ["terminal-phase-gate (cell tpg-2, 2026-07-13)", "docs/specs/doctrine-layer.md#B5", "docs/specs/doctrine-layer.md#R6", "docs/specs/doctrine-layer.md#R7", "docs/specs/doctrine-layer.md#R8", "docs/specs/doctrine-layer.md#E3", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)"]
   authoritative_for: "doctrine-layer: unenforced obedience and the human boundary"
 ---
 
@@ -54,3 +54,12 @@ every rule it fails to cover (decision c2c46488).
 - **Doctrine is not gated.** Amending the standing sheet is knowledge work, and
   knowledge locations stay writable in every phase, including the terminal ones
   where source edits are shut (hook-runtime B12).
+
+- **A green check is not evidence of obedience.** A standing check now proves
+  that a rule which applies every turn can be reached from what is always
+  loaded. Whether the assistant then followed it is observed nowhere: no guard
+  reads the conversation and no suite asserts on it. This is R6 applied to
+  checks rather than guards — the check's silence about obedience grants
+  nothing, and citing a reachability result as coverage of obedience would
+  quietly delete the very rule the check was built to protect
+  (tick-contract-inline T6).

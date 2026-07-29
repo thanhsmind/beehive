@@ -1,16 +1,16 @@
 ---
 type: bee.area
 title: Doctrine Layer — the communication contract
-description: "The single ruleset for what execution reports to the person being served, and in what shape: five reader facts, the open/body/close turn shape, seven standing rules, when the rules deliberately break, and the pre-send acceptance test."
+description: "The single ruleset for what execution reports to the person being served, and in what shape: five reader facts, the open/body/close turn shape, the unconditional one-line-per-step contract with its four glyphs and two bounded silence settings, the standing rules, when they deliberately break, and the pre-send acceptance test."
 tags: [doctrine-layer, communication, voice]
-timestamp: 2026-07-26
+timestamp: 2026-07-29
 bee:
   id: doctrine-layer-communication-contract
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [ec9a60ae (comms-contract D1 — a single-home communication contract shaped as reader facts -> turn shape -> seven rules -> break conditions -> pre-send litmus), f6ff3bf5-df05-4af9-9d03-65fd9d0b4735 (auto-approved landing of the contract into routing-and-contracts.md)]
-  sources: ["docs/history/comms-contract/ (tiny lane, decisions ec9a60ae + f6ff3bf5-df05-4af9-9d03-65fd9d0b4735, 2026-07-26)", "skills/bee-hive/references/routing-and-contracts.md '## Communication contract' (the governing text this concept describes)"]
+  decisions: [ec9a60ae (comms-contract D1 — a single-home communication contract shaped as reader facts -> turn shape -> seven rules -> break conditions -> pre-send litmus), f6ff3bf5-df05-4af9-9d03-65fd9d0b4735 (auto-approved landing of the contract into routing-and-contracts.md), "tick-contract-inline T1 (the operative per-step line contract moves into the always-loaded sheet: one line per perceivable step, on by default, fixed shape, four glyphs, two bounded silence switches, no bypass level silences it)", "tick-contract-inline T2 (the worked-example catalogue stays on demand -- examples, not the contract)", tick-contract-inline T6 (emission is not enforced; nothing observes agent chat output)]
+  sources: ["docs/history/comms-contract/ (tiny lane, decisions ec9a60ae + f6ff3bf5-df05-4af9-9d03-65fd9d0b4735, 2026-07-26)", "skills/bee-hive/references/routing-and-contracts.md '## Communication contract' (the governing text this concept describes)", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)", packages/bee/AGENTS.block.md critical rule 17 (the governing per-step text)]
   authoritative_for: "doctrine-layer: the communication contract"
 ---
 
@@ -25,10 +25,16 @@ actually tracking while it works. This concept is the single ruleset for what cr
 execution into the conversation, and in what shape, so voice is never re-invented per skill or
 per session, and never drifts back toward mechanism.
 
+The contract's unit is the step, not the turn. A run made of many steps is invisible between
+messages unless each perceivable step says something as it passes, so the per-step line is the
+smallest thing this contract governs and the one it makes unconditional.
+
 ## Entry Points & Triggers
 
 - Every user-facing turn during any workflow-governed session — not only inside a named stage; a
   plain conversation turn is still bound by it.
+- Every perceivable step of a run — the finest-grained trigger in this contract. A step a person
+  could notice happening is reported as it happens, rather than summarised once it is over.
 - A gate, a decision point, or a privacy approval — the moments this contract calls out as
   deliberately unmistakable, so they are never mistaken for routine progress chatter.
 - An author changing user-facing wording anywhere in the workflow — this is the one place that
@@ -43,6 +49,18 @@ per session, and never drifts back toward mechanism.
 | **The seven rules** | The standing checklist a turn is written against: purpose-first content, concrete estimates, a runnable win, cause-plus-fix-plus-actor on any error, one unmistakable question at a time, a tangent surviving as one closing line instead of a mid-task detour, and evidence beside every claim of completion. |
 | **Break conditions** | The three situations where the contract deliberately trades brevity for depth: a destructive or irreversible action, an explicit request to explain, and genuine ambiguity — which still earns only one short question, never a guess. |
 | **Pre-send litmus** | The check applied before any user-facing message is sent: the first and last line alone must answer what just happened and what happens next, and every internal term should be strippable without losing anything the reader needed. |
+| **Per-step line** | The one short line a perceivable step emits as it happens, in the reader's own terms, carrying an outcome rather than mechanism. Its shape is fixed: a glyph, the event, what happened, and the single key fact — in that order. |
+| **Glyph vocabulary** | The four marks that let the reader tell one kind of line from another without reading it: a step starting, a step finished green, a red result or a refusal, and an approval granted automatically rather than asked for. |
+| **The two silence settings** | The only two settings that suppress any per-step line, each with a bounded reach: an explicit opt-out the reader sets, which quiets the ordinary stream but never the red-or-refusal line; and a publication-visibility setting, which reaches only the two lines announcing published work. |
+
+The four glyphs, and what each tells the reader:
+
+| Glyph | The reader reads it as |
+|---|---|
+| `▸` | a step has started |
+| `✓` | a step finished, green |
+| `✗` | a red result or a refusal — always shown, never suppressible |
+| `⚡` | an approval granted automatically rather than asked for |
 
 ## Behaviors & Operations
 
@@ -52,6 +70,14 @@ something is about to reach the person being served. The turn is built to the tu
 is rewritten or deleted, never softened into ambiguity. What the reader observes: a message that
 opens by naming state, stays short, and closes with exactly one thing to do or decide next — never
 a menu, never bare mechanism.
+
+**Reporting a step as it happens.** Trigger: any perceivable step of a run begins, finishes, goes
+red, or is refused. Exactly one short line is emitted for it, in the fixed shape, and this is on
+by default rather than something the reader has to ask for. What the reader observes: a stream
+they can follow at a glance — each line naming the event, what happened, and the one fact that
+matters — so a long run is legible while it is running instead of only in hindsight. What the
+reader never observes: a step passing unmentioned because the run was heavily automated, or a
+failure absent from the stream.
 
 **Presenting a high-stakes moment.** Trigger: a gate, a decision, or a privacy approval. These are
 visually and structurally set apart from ordinary progress narration, because the reader's
@@ -98,6 +124,23 @@ where more words are warranted, never elsewhere.
 10. **The pre-send litmus is the acceptance test.** A message whose first and last line fail to
     answer what happened and what happens next is rewritten before it is sent, and every internal
     term strippable without losing meaning is stripped (ec9a60ae).
+11. **Every perceivable step emits exactly one line, and it is on by default.** One line — never
+    two, never none. Silence is not a lighter form of reporting; it is the absence of it
+    (tick-contract-inline T1).
+12. **The line's shape is fixed.** A glyph, the event, what happened, and the one key fact, in
+    that order, in the reader's own terms — an outcome, never mechanism (T1).
+13. **No level of automation ever silences a line, and a red or a refusal cannot be silenced at
+    all.** However far the human has delegated approval away, the stream keeps reporting — and the
+    further they have delegated, the more that stream is the only thing standing between them and
+    an unobserved run (T1).
+14. **Exactly two settings produce silence, and each has a bounded reach.** The explicit opt-out
+    quiets the ordinary stream but never the red-or-refusal line; the publication-visibility
+    setting reaches only the two lines announcing published work. There is no third source of
+    silence, and neither setting is widened to cover a line someone found noisy (T1).
+15. **The operative clauses live where they are read every turn; the worked examples do not.** The
+    rule itself belongs on the standing instruction sheet. The catalogue of per-step examples is
+    illustration, stays on demand, and is never mistaken for the rule — a reader who loads only the
+    standing sheet already has everything needed to comply (T1, T2).
 
 ## Edge Cases Settled
 
@@ -105,11 +148,24 @@ where more words are warranted, never elsewhere.
   stage — the reader facts do not change just because no stage happens to be running.
 - A high-stakes moment is never demoted to ordinary progress narration for the sake of brevity;
   break condition 9 exists precisely so brevity never wins there.
+- **An example catalogue is not a contract.** The per-step worked examples were deliberately left
+  on demand rather than promoted alongside the rule: they are a long list of illustrations, they
+  would have cost several times the room the rule itself needs, and they add nothing an agent
+  requires in order to obey. What must travel to the always-loaded layer is the obligation and the
+  minimum needed to meet it first try — not the gallery (T2).
+- **The red line outranks every preference.** The opt-out exists for the ordinary stream only. A
+  reader who asks for quiet has asked for less noise, not for failures and refusals to go
+  unmentioned (T1).
 
 ## Open Gaps
 
 - No mechanical check enforces the seven rules or the pre-send litmus today; adherence is
   self-applied per turn, the same way the reader facts themselves are.
+- **Nor is the per-step line's emission observed.** Nothing in the project reads what the
+  assistant actually says: no guard parses the conversation, no check asserts on it. A standing
+  check does prove the per-step rule is *reachable* — that an agent loading only the standing
+  sheet still arrives at it — but reachability is not obedience, and this gap must never be
+  reported as closed by that check (T6).
 
 ## Pointers (implementation)
 
@@ -121,3 +177,17 @@ where more words are warranted, never elsewhere.
   `f6ff3bf5-df05-4af9-9d03-65fd9d0b4735`.
 - The neighboring `## Gate Presentation Contract` section in the same file specializes turn shape
   for the four approval gates.
+- The operative per-step contract (rules 11-15) is critical rule 17 of the standing sheet,
+  `packages/bee/AGENTS.block.md`, rendered into each host's root `AGENTS.md` between the
+  `<!-- BEE:START -->` / `<!-- BEE:END -->` markers. It carries the fixed format
+  `<glyph> <event>: <what> — <key fact>`, the four-row glyph table, and both silence switches by
+  name.
+- The 24-row worked-example catalogue stays in
+  `skills/bee-hive/references/routing-and-contracts.md` ("Progress ticks") — examples, not the
+  rule.
+- The two silence switches are `quiet: true` and `ship_visibility: "off"` in `.bee/config.json`.
+- Reachability of rule 17 from the always-loaded layer — never its emission — is enforced by
+  `scripts/tests/test_always_loaded_rules.mjs`; see
+  `areas/doctrine-layer/placement-and-anchoring.md` (B6/R4).
+- Landed by feature `tick-contract-inline` (decisions T1, T2, T6; cells tci-1, tci-3). Evidence:
+  `.bee/cells/tci-1.json`, `.bee/cells/tci-3.json`.

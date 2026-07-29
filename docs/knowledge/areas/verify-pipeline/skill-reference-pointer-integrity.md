@@ -1,16 +1,16 @@
 ---
 type: bee.area
 title: Verify Pipeline — skill reference pointer integrity
-description: "The gate that proves every pointer an instruction document makes to a reference document still resolves, why it checks named sections and not just files, and why its negative controls are the part that matters."
+description: "The gate that proves every pointer an instruction document makes to a reference document still resolves, why it checks named sections and not just files, why a citation naming several headings points at every one of them, and why its negative controls are the part that matters."
 tags: [verify-pipeline, guards, instruction-surfaces]
-timestamp: 2026-07-23
+timestamp: 2026-07-29
 bee:
   id: verify-pipeline-skill-pointer-integrity
   lifecycle: active
   areas: [verify-pipeline]
   required_context: [areas/verify-pipeline/suite-topology-and-discovery.md, areas/doctrine-layer/overview.md]
-  decisions: [router-cost D5, router-cost D8]
-  sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cell rc-2, capped)"]
+  decisions: [router-cost D5, router-cost D8, tick-contract-inline T4 (a parenthetical carrying more than one quoted heading is a live pointer to every heading it names)]
+  sources: [docs/history/router-cost/CONTEXT.md, "docs/history/router-cost/ (cell rc-2, capped)", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)"]
   authoritative_for: "verify-pipeline: skill reference pointer integrity"
 ---
 
@@ -44,7 +44,7 @@ Two modes:
 | Element | Meaning |
 |---|---|
 | **pointer** | A citation inside an instruction document naming a reference document, written in the repository's quoted-path convention. Two forms are recognised: bare (resolved relative to the citing document's own directory) and qualified (naming the owning instruction set explicitly). |
-| **named section** | A pointer that also names a heading inside the target — "the reference, under *that* heading". Three phrasings are in real use and all three are recognised. |
+| **named section** | A pointer that also names a heading inside the target — "the reference, under *that* heading". Three phrasings are in real use and all three are recognised. One citation may name **more than one** heading at once; when it does, it is a live pointer to every heading it names, not only to the first. |
 | **source document** | An instruction document that authors write. Only these are scanned. |
 | **rendered projection** | A byte-copy of a source document, produced mechanically for a delivery target. Never scanned. |
 | **finding** | One broken pointer, reported with its file, its line, and the offending line quoted. |
@@ -62,6 +62,12 @@ a finding.
 **Asserting the named section.** When a pointer names a heading, that heading must exist in the
 target. A pointer to a real file that names a section which was renamed away is still a broken
 promise to the reader, and is reported as one.
+
+**Recognising a citation that names several headings.** A citation naming more than one heading in
+one breath is one pointer per heading named. Which position a heading occupies does not matter,
+and neither does a line break falling inside the citation — a reader following any one of those
+headings is following a promise the document made, so each of them is checked. What does not count
+is a heading quoted outside any citation: a mention is not a pointer, and reachability is the bar.
 
 **Reporting.** Each finding names the file, the line, and quotes the offending line, so the fix
 needs no search. The check reports how many pointers it examined, not only how many broke — a count
@@ -95,6 +101,10 @@ run on every verification, not once at authoring time.
 - **R6.** This gate is a prerequisite for any work that moves prose out of an instruction document
   into a reference. Ordering is the point: cutting first and guarding afterwards is cutting without a
   net (router-cost D5).
+- **R7.** A citation naming more than one heading points at every heading it names. Reading only
+  the first — or declining to read the citation at all because it names more than one — makes a
+  reachable rule look unreachable, and leaves the headings it skipped unguarded
+  (tick-contract-inline T4).
 
 ## Edge Cases Settled
 
@@ -105,6 +115,16 @@ run on every verification, not once at authoring time.
   cue to search elsewhere. Resolution is deterministic; guessing would hide the error.
 - **A pointer whose target exists in a rendered projection but not in the source** is a finding: the
   source is the truth, and the projection is downstream of it.
+
+- **A finding that cannot fail a build is a finding that gets stepped over.** The advisory
+  sibling's *reachability* check misread a two-heading citation for as long as that citation had
+  carried two headings, and
+  reported a rule as unreachable the entire time. Because that check cannot turn a build red, its
+  warning was read twice in one session by two different workers, recorded both times as
+  pre-existing and unrelated, and stepped past. The misreport was fixed at its cause; the class of
+  failure it had failed to stop was closed separately, by a check that does turn the build red. An
+  advisory finding is worth roughly what it can cost the person who ignores it
+  (tick-contract-inline T4).
 
 ## Edge Cases Settled — what the gate found on first contact
 
@@ -129,9 +149,29 @@ nothing had ever looked.
   trees are not covered by the manifest or by any chain check, so drift there is invisible. Unrelated
   to this gate, but adjacent to it and worth naming.
 
+- **The advisory sibling's *file-and-heading* check silently skips any citation it cannot parse
+  whole.** It recognises a citation only when the parenthetical holds exactly one quoted heading
+  and nothing else — a separate check from the reachability one fixed above. A
+  citation naming a second heading — or carrying any other trailing item at all — is not partially
+  read, it matches nothing: the whole citation is skipped, so neither the target's existence nor
+  any of its headings is checked. This is strictly worse than the partial coverage it was first
+  reported as, and it is confirmed by running the pattern against fixtures rather than by reading
+  it. The blocking gate has a milder form of the same limit — it binds only the first heading a
+  citation names, leaving later ones unchecked. Both remain open; neither was in this feature's
+  scope.
+
 ## Pointers (implementation)
 
 - `scripts/tests/test_skill_pointers.mjs` — the check, with `--selftest` carrying the negative controls.
 - `scripts/run_verify.mjs` — the discovery roots that make registration unnecessary.
 - `scripts/okf_instructions_fence.mjs` — the sibling instruction-surface check whose reporting style
   this one follows.
+- Advisory sibling: `scripts/skill_lint.mjs`. Its reachability check carries the multi-heading
+  matcher (R7) in `pointsTo()` / `parentheticals()` — paragraph-scoped so an unbalanced `(` cannot
+  swallow the file, depth-tracked so a nested parenthetical does not truncate its parent, and
+  whitespace-normalised so a heading wrapped across lines still matches. Its `ANCHOR_RE` (check 1)
+  carries the skip-whole-citation limit recorded above. The lint always exits 0 and is not a member
+  of the verify chain.
+- The reachability roster inside that lint is a literal three-entry list, which is the opposite bet
+  from the derived every-turn check in `areas/doctrine-layer/placement-and-anchoring.md` (B6).
+- Landed by `tick-contract-inline` decision T4, cell tci-2 (trace `.bee/cells/tci-2.json`).
