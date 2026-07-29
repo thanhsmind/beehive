@@ -2037,6 +2037,39 @@ function writePendingCappedCell(dir, id, feature, cappedAtIso) {
   });
 }
 
+// worker-conformance D12 — the OTHER marker this door arms on: a cap that
+// recorded no proof at all. `verify_passed: true` with no output is exactly
+// the shape decision 0004 calls an assertion rather than evidence, and capCell
+// stamps `trace.proof = "unrecorded"` on it after the whole refusal chain has
+// run. Deliberately carries NO `feature_verify` field: the two markers are
+// independent, and a test that set both would prove nothing about the new one.
+function writeUnrecordedCappedCell(dir, id, feature, cappedAtIso, extra = {}) {
+  writeJsonAtomic(path.join(dir, '.bee', 'cells', `${id}.json`), {
+    id,
+    feature,
+    status: 'capped',
+    ...extra,
+    trace: { proof: 'unrecorded', verify_passed: true, capped_at: cappedAtIso, ...(extra.trace || {}) },
+  });
+}
+
+// A green feature-verify record stamped NOW, for fixtures that need the
+// feature-verify door satisfied so a later kind's refusal is the one under
+// test. Merges into the existing state rather than replacing it — the fixture
+// repo already seated a phase and a feature.
+function seedFreshGreenFeatureVerify(dir, feature) {
+  const statePath = path.join(dir, '.bee', 'state.json');
+  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  state.feature_verify = {
+    feature,
+    command: 'node run_verify.mjs --impacted',
+    output_sha256: 'd'.repeat(64),
+    result: 'green',
+    at: new Date().toISOString(),
+  };
+  writeJsonAtomic(statePath, state);
+}
+
 await check('mv-3(c): state feature-verify record green/red round-trips with a REAL computed output_sha256, and --show reads it back', async () => {
   const dir = makeFeatureVerifyRepo('mv3demo');
   try {
@@ -2620,6 +2653,42 @@ const DEBT_KIND_FIXTURES = {
   'test-cell': (dir, feature) => writeCappedBehaviorCell(dir, `${feature}-behavior`, feature),
 };
 
+// worker-conformance D11/D12 — the SAME two kinds, armed by the OTHER marker.
+// This is a second fixture per kind rather than a third debt kind on purpose:
+// "this cell recorded no proof" is not a new species of debt, it is the same
+// debt reached by a second road, so it must ride the kinds and the doors that
+// already exist (and the coverage check below makes a future kind owe both
+// fixtures, not just the pending one).
+//
+// Each entry carries `seed` AND `refusal` — the regex that only THIS kind's
+// door text can satisfy. Without the discriminator the matrix row would pass
+// on any refusal at all: the 'test-cell' fixture has to satisfy the
+// feature-verify kind first (it seeds a fresh green record), and if that
+// seeding ever regressed, the earlier kind would refuse, the row would still
+// see a refusal naming the feature, and the test-cell door would go unproven
+// while the suite stayed green.
+const DEBT_KIND_UNRECORDED_FIXTURES = {
+  'feature-verify': {
+    seed: (dir, feature) => writeUnrecordedCappedCell(dir, `${feature}-unrecorded`, feature, new Date().toISOString()),
+    refusal: /awaiting the feature-level verify/,
+  },
+  // The feature-verify door is SATISFIED here (fresh green record, caps a
+  // minute older) precisely so the refusal under test is the test-cell one:
+  // the unrecorded test cell must fail to discharge its own debt on its own
+  // terms, not be rescued by the earlier kind refusing first.
+  'test-cell': {
+    seed: (dir, feature) => {
+      writeCappedBehaviorCell(dir, `${feature}-behavior`, feature);
+      writeTestClassCell(dir, `${feature}-test`, feature, {
+        status: 'capped',
+        trace: { capped_at: new Date(Date.now() - 60000).toISOString(), verify_passed: true, proof: 'unrecorded' },
+      });
+      seedFreshGreenFeatureVerify(dir, feature);
+    },
+    refusal: /consolidated test cell\(s\) not green/,
+  },
+};
+
 // Debt-free for EVERY kind at once: capped behavior work whose consolidated
 // test cell is capped green, and no cell awaiting the feature-level verify.
 function seedDebtFreeFeature(dir, feature) {
@@ -2677,6 +2746,22 @@ await check('gc-1: every registered debt kind has a matrix fixture — adding a 
   const orphans = Object.keys(DEBT_KIND_FIXTURES).filter((id) => !registered.includes(id));
   assert(orphans.length === 0, `fixture(s) [${orphans.join(', ')}] name debt kinds that no longer exist in FEATURE_DEBT_KINDS`);
   assert(registered.length >= 2, `the unwaivable debt set must not silently shrink, got [${registered.join(', ')}]`);
+  // worker-conformance D11/D12 — every kind owes the unrecorded fixture too,
+  // for the same reason it owes the pending one: a kind that only ever sees
+  // the deliberate marker is a kind nobody proved against the accidental one.
+  const missingUnrecorded = registered.filter((id) => {
+    const entry = DEBT_KIND_UNRECORDED_FIXTURES[id];
+    return !entry || typeof entry.seed !== 'function' || !(entry.refusal instanceof RegExp);
+  });
+  assert(
+    missingUnrecorded.length === 0,
+    `debt kind(s) [${missingUnrecorded.join(', ')}] have no complete DEBT_KIND_UNRECORDED_FIXTURES entry ({seed, refusal}), so no door is proven to refuse them on the "no recorded proof" marker (trace.proof: "unrecorded"). FIX: add the entry — the unrecorded matrix then covers the kind at every door automatically. The \`refusal\` regex is required so the row cannot pass on some OTHER kind's refusal.`,
+  );
+  const unrecordedOrphans = Object.keys(DEBT_KIND_UNRECORDED_FIXTURES).filter((id) => !registered.includes(id));
+  assert(
+    unrecordedOrphans.length === 0,
+    `unrecorded fixture(s) [${unrecordedOrphans.join(', ')}] name debt kinds that no longer exist in FEATURE_DEBT_KINDS`,
+  );
 });
 
 await check('gc-1: no door in bee.mjs composes its own debt list — the per-kind detectors are unreachable from the door layer (structural: this is the drift that survived two rounds)', async () => {
@@ -2731,6 +2816,146 @@ for (const door of DEBT_DOORS) {
     }
   });
 }
+
+// ─── worker-conformance wc-2: THE SAME MATRIX, ON THE UNRECORDED MARKER ────
+//
+// D1 of this feature makes the per-cell evidence doors non-blocking, so from
+// slice 2 onward a cell can cap having asserted `--passed true` with no output
+// at all. The ONLY thing that then stands between that cap and a closed
+// feature is this door — and it used to arm on exactly one marker,
+// `trace.feature_verify: "pending"`, which such a cap never carries. So every
+// door is crossed with every kind a SECOND time, on the second marker. The
+// generation is deliberate for the same reason as the block above: a door or a
+// kind added next month inherits both roads with nothing edited here.
+for (const door of DEBT_DOORS) {
+  for (const kind of FEATURE_DEBT_KINDS) {
+    await check(`wc-2: door "${door.id}" REFUSES "${kind.id}" debt armed by trace.proof "unrecorded" — absence of proof is debt, on every road`, async () => {
+      const feature = `wc2${slug(door.id)}${slug(kind.id)}`;
+      const dir = makeFeatureVerifyRepo(feature, door.phase);
+      try {
+        const fixture = DEBT_KIND_UNRECORDED_FIXTURES[kind.id];
+        fixture.seed(dir, feature);
+        const refused = await runBee(door.argv(feature), dir);
+        assert(
+          refused.status !== 0,
+          `door "${door.id}" let "${kind.id}" debt walk out on the unrecorded marker (exit ${refused.status}) — a cap with no recorded proof is unproven work, not clean work: ${refused.stdout}${refused.stderr}`,
+        );
+        const out = refused.stdout + refused.stderr;
+        assert(
+          fixture.refusal.test(out),
+          `the refusal must come from the "${kind.id}" door itself (${fixture.refusal}) — any other kind refusing first would leave this one unproven, got: ${out}`,
+        );
+        assert(/unrecorded/.test(out), `the refusal must name the marker it armed on, got: ${out}`);
+        assert(/FIX:/.test(out), `the refusal must carry a runnable FIX, got: ${out}`);
+        assert(new RegExp(feature).test(out), `the refusal must name the feature that owes, got: ${out}`);
+        assert(door.untouched(readStateOf(dir), feature), `a refused door must write NOTHING, state is now: ${JSON.stringify(readStateOf(dir))}`);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+}
+
+await check('wc-2: D12\'s union — a GREEN record newer than the newest PENDING cap but older than a newer UNRECORDED cap still refuses', async () => {
+  const dir = makeFeatureVerifyRepo('wc2union');
+  try {
+    // The exact interleaving D12 names: pending cap, then the green run, then
+    // a cap that recorded nothing. Reading the clock over the pending caps
+    // alone makes the record look fresh and opens the door on a cell the run
+    // never touched.
+    writePendingCappedCell(dir, 'wc2union-pending', 'wc2union', new Date(Date.now() - 180000).toISOString());
+    const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
+    state.feature_verify = { feature: 'wc2union', command: 'x', output_sha256: 'e'.repeat(64), result: 'green', at: new Date(Date.now() - 120000).toISOString() };
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
+    writeUnrecordedCappedCell(dir, 'wc2union-unrecorded', 'wc2union', new Date().toISOString());
+
+    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
+    assert(
+      refused.status !== 0,
+      `the freshness clock must run over the UNION of pending and unrecorded caps — a green run older than the newest unrecorded cap covered neither cell, got exit ${refused.status}: ${refused.stdout}${refused.stderr}`,
+    );
+    const out = refused.stdout + refused.stderr;
+    assert(/STALE/.test(out), `the refusal must be the staleness branch, got: ${out}`);
+    assert(/wc2union-unrecorded/.test(out), `the refusal must name the cap the green run never covered, got: ${out}`);
+    assert(readStateOf(dir).phase === 'swarming', 'a refused departure must write NOTHING');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('wc-2: a green record newer than BOTH caps opens the door — the union is a guard, not a wall', async () => {
+  const dir = makeFeatureVerifyRepo('wc2unionok');
+  try {
+    writePendingCappedCell(dir, 'wc2unionok-pending', 'wc2unionok', new Date(Date.now() - 180000).toISOString());
+    writeUnrecordedCappedCell(dir, 'wc2unionok-unrecorded', 'wc2unionok', new Date(Date.now() - 120000).toISOString());
+    seedFreshGreenFeatureVerify(dir, 'wc2unionok');
+    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
+    assert(ok.status === 0, `one green run newer than every owed cap must clear both markers, got: ${ok.stdout}${ok.stderr}`);
+    assert(readStateOf(dir).phase === 'scribing', 'the departure must land once the door is clear');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('wc-2: gate_bypass "total" lifts neither door on the unrecorded marker — the close door and start-feature both still refuse', async () => {
+  const dir = makeFeatureVerifyRepo('wc2bypass', 'compounding');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total' });
+    writeUnrecordedCappedCell(dir, 'wc2bypass-1', 'wc2bypass', new Date().toISOString());
+    const closeRefused = await runBee(
+      ['state', 'set', '--owner', 'compounding', '--phase', 'compounding-complete', '--waive-compounding', '--json'],
+      dir,
+    );
+    assert(closeRefused.status !== 0, 'bypass "total" must not lift the close door for a cap with no recorded proof');
+    assert(/wc2bypass-1/.test(closeRefused.stdout + closeRefused.stderr), 'the close refusal must name the unproven cell');
+
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'compounding-complete', feature: 'wc2bypass' });
+    const startRefused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
+    assert(startRefused.status !== 0, 'bypass "total" must not lift the start-feature door either');
+    assert(/wc2bypass-1/.test(startRefused.stdout + startRefused.stderr), 'the start refusal must name the unproven cell');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('wc-2: an unrecorded TEST cell gets the "not green" refusal, never the "no test cell at all" one — it exists, it just proved nothing', async () => {
+  const dir = makeFeatureVerifyRepo('wc2testcell');
+  try {
+    writeCappedBehaviorCell(dir, 'wc2testcell-b', 'wc2testcell');
+    writeTestClassCell(dir, 'wc2testcell-t', 'wc2testcell', {
+      status: 'capped',
+      trace: { capped_at: new Date(Date.now() - 60000).toISOString(), verify_passed: true, proof: 'unrecorded' },
+    });
+    seedFreshGreenFeatureVerify(dir, 'wc2testcell');
+    const refused = await runBee(['state', 'scribing-run', '--feature', 'wc2testcell', '--areas', 'demo', '--next-action', 'x', '--json'], dir);
+    assert(refused.status !== 0, 'a test cell whose pass was asserted with no output must not discharge the test-cell debt');
+    const out = refused.stdout + refused.stderr;
+    assert(/not green/.test(out) && !/NO consolidated test cell/.test(out), `it must be the "not green" branch — the cell exists, got: ${out}`);
+    assert(/wc2testcell-t/.test(out) && /unrecorded/.test(out), `the refusal must name the unproven test cell and the marker, got: ${out}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('wc-2: only the literal "unrecorded" arms it — a capped cell whose trace records real proof departs freely (negative control)', async () => {
+  const dir = makeFeatureVerifyRepo('wc2control');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'cells', 'wc2control-1.json'), {
+      id: 'wc2control-1',
+      feature: 'wc2control',
+      status: 'capped',
+      trace: { capped_at: new Date().toISOString(), verify_passed: true, verify_output: 'suite A: 12/12 green', proof: 'recorded' },
+    });
+    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
+    assert(
+      ok.status === 0,
+      `a cap holding real proof owes nothing at the feature boundary — this door must not widen into "every capped cell", got: ${ok.stdout}${ok.stderr}`,
+    );
+    assert(readStateOf(dir).phase === 'scribing', 'the departure must land');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 await check('gc-1: THE REVIEWER\'S REPRO — a capped behavior cell with NO test cell is refused at the feature-swap door, the one door that used to let it through at EXIT 0', async () => {
   const dir = makeFeatureVerifyRepo('gc1repro', 'swarming');
