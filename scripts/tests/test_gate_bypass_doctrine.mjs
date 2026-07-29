@@ -421,6 +421,64 @@ for (const { file, gate, tokens } of GATE_SKILLS) {
   }
 }
 
+// Lane-plan-unconditional doctrine (lpu-1): the concurrency law's two
+// restatements must state the lane decision as a step taken BEFORE EVERY
+// feature start, never conditioned on another feature already being live —
+// AGENTS.md rule 15's actual case (two independent ready features, nobody
+// busy) never fired the old wording. Substance (disjoint-paths test, the
+// --paths refusal, the worktree-only-when-needed carve-out) is unchanged;
+// only the trigger moves from conditional to unconditional.
+{
+  const hiveAbs = path.join(REPO_ROOT, 'skills/bee-hive/SKILL.md');
+  const routingAbs = path.join(REPO_ROOT, 'skills/bee-hive/references/routing-and-contracts.md');
+  let hiveText = '';
+  let routingText = '';
+  try {
+    hiveText = fs.readFileSync(hiveAbs, 'utf8');
+  } catch {
+    fail('skills/bee-hive/SKILL.md: unreadable — lane-plan-unconditional doctrine lives here');
+  }
+  try {
+    routingText = fs.readFileSync(routingAbs, 'utf8');
+  } catch {
+    fail('skills/bee-hive/references/routing-and-contracts.md: unreadable — lane-plan-unconditional doctrine lives here');
+  }
+
+  // (a) lpu-1: the retired busy-precondition wording must be gone from
+  // skills/bee-hive/SKILL.md's Routing list.
+  if (hiveText.includes('busy + disjoint paths')) {
+    fail('skills/bee-hive/SKILL.md (lpu-1): still carries the retired busy-precondition wording "busy + disjoint paths" — the lane decision fires before every feature start, not only once something is already busy');
+  } else {
+    ok('skills/bee-hive/SKILL.md (lpu-1): retired busy-precondition wording "busy + disjoint paths" absent');
+  }
+
+  // (b) lpu-1: the new unconditional trigger must be present in the Routing list.
+  if (!hiveText.includes('before every feature start')) {
+    fail('skills/bee-hive/SKILL.md (lpu-1): missing unconditional trigger "before every feature start" — the lane decision must be stated as a step taken before every feature start, not a reaction to detecting a busy session');
+  } else {
+    ok('skills/bee-hive/SKILL.md (lpu-1): unconditional trigger "before every feature start" present');
+  }
+
+  // (c) lpu-1: the retired live-feature precondition wording must be gone from
+  // routing-and-contracts.md's LANES, FIRST-CLASS paragraph.
+  if (routingText.includes('when new feature work is ready while another feature is live')) {
+    fail('skills/bee-hive/references/routing-and-contracts.md (lpu-1): still carries the retired precondition "when new feature work is ready while another feature is live" — the lane decision must not require another feature to already be live');
+  } else {
+    ok('skills/bee-hive/references/routing-and-contracts.md (lpu-1): retired live-feature precondition wording absent');
+  }
+
+  // (d) lpu-1: the new unconditional trigger + explicit either-way statement
+  // must be present in the LANES, FIRST-CLASS paragraph.
+  const LPU_ROUTING_TOKENS = ['before every feature start', 'whether or not another feature is already live'];
+  for (const token of LPU_ROUTING_TOKENS) {
+    if (!routingText.includes(token)) {
+      fail(`skills/bee-hive/references/routing-and-contracts.md (lpu-1): missing unconditional wording "${token}"`);
+    } else {
+      ok(`skills/bee-hive/references/routing-and-contracts.md (lpu-1): unconditional wording "${token}" present`);
+    }
+  }
+}
+
 // Sentinel: prove the checker bites. A synthetic gate surface missing the tokens
 // (and carrying a banned phrase) MUST be flagged by the same predicates.
 const sentinelBad = 'Present Gate X, then verbatim ask. The safety floor is absolute.';

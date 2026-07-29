@@ -1,0 +1,72 @@
+{
+  "id": "lpu-1",
+  "feature": "lane-plan-unconditional",
+  "title": "Make the concurrency plan unconditional: drop the busy precondition from both lane restatements",
+  "lane": "small",
+  "change_class": "refactor",
+  "deps": [],
+  "files": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "scripts/tests/test_gate_bypass_doctrine.mjs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "scripts/tests/test_gate_bypass_doctrine.mjs"
+  ],
+  "action": "PROBLEM. bee's concurrency law is right at the top and wrong in its two restatements. routing-and-contracts.md's MANDATORY CONCURRENCY PLAN already reads 'before dispatching anything, the orchestrator states in one line what runs concurrently and what is forced serial and why' -- unconditional, correct. But two places restate it with a precondition the law never had: (a) skills/bee-hive/SKILL.md's Routing section reads 'busy + disjoint paths -> lane not wait; own checkout -> worktree', which only fires once something is ALREADY busy; (b) the LANES, FIRST-CLASS paragraph of routing-and-contracts.md reads 'when new feature work is ready WHILE ANOTHER FEATURE IS LIVE and their declared paths are disjoint'. Neither ever fires on the case AGENTS.md rule 15 actually describes -- two independent ready features and nobody busy. Measured consequence: 17 lane records exist but only two occasions of genuinely concurrent features (both 2026-07-28); the two most recent features ran serially through the default pipeline. CONTRAST that motivates the fix: cell-level parallelism is not prose -- bee-swarming step 1 REQUIRES `cells schedule --json`, whose real algorithm (packages/bee/lib/schedule.mjs:151-246, Kahn layering plus greedy overlap packing) returns the parallel grouping as its OUTPUT, so an agent must argue to go serial. Lanes have no equivalent, so the agent must remember to ask a question nothing asks it. FIX, both sites: state the lane decision as a step taken BEFORE EVERY feature start, not as a reaction to detecting a busy session. Keep it one line in SKILL.md's Routing list -- that list is terse by design and this is not a new rule, it is the existing MANDATORY CONCURRENCY PLAN reaching the router. The disjoint-paths test, the --paths refusal, and the worktree-only-when-a-separate-checkout-is-needed carve-out all stay exactly as they are; only the trigger changes from conditional to unconditional. DO NOT add a CLI verb and DO NOT add a status suggestion line -- the user scoped this to the flow itself. PIN IT. scripts/tests/test_gate_bypass_doctrine.mjs already asserts doctrine wording against skills/bee-hive/SKILL.md in absent-old / present-new pairs (see its D7 block around :158-177 for the established shape). Extend that suite with the same pair for this change: the conditional wording must be ABSENT and the unconditional wording PRESENT, in both files. Follow the file's existing fail()/ok() idiom exactly; do not create a new suite. THEN run the regen chain in order: node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write, then node scripts/impact_registry.mjs --write. Never hand-edit .claude/, .agents/, .codex-plugin/, .claude-plugin/ or .bee/bin/.",
+  "must_haves": {
+    "truths": [
+      "Neither skills/bee-hive/SKILL.md nor routing-and-contracts.md conditions the lane decision on another feature already being live",
+      "The lane decision is stated as a step before every feature start",
+      "The disjoint-paths requirement, the --paths refusal behavior, and the worktree carve-out are unchanged in substance",
+      "No new CLI verb and no status suggestion line were added",
+      "scripts/tests/test_gate_bypass_doctrine.mjs fails if the conditional wording returns, and fails if the unconditional wording goes missing, for both files",
+      "node scripts/okf_instructions_fence.mjs exits 0",
+      "node scripts/release_manifest.mjs --check exits 0",
+      "node scripts/ledger_parity.mjs --check exits 0"
+    ]
+  },
+  "verify": "node scripts/run_verify.mjs --only test_gate_bypass_doctrine && node scripts/okf_instructions_fence.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check && node scripts/impact_registry.mjs --check",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "lpu-worker-1",
+    "outcome": "Removed the busy precondition from both lane-concurrency restatements (skills/bee-hive/SKILL.md Routing list, routing-and-contracts.md LANES FIRST-CLASS paragraph) so the lane decision fires before every feature start, matching the unconditional MANDATORY CONCURRENCY PLAN law; pinned via a new lpu-1 block in scripts/tests/test_gate_bypass_doctrine.mjs, red-then-green proven",
+    "files_changed": [
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "scripts/tests/test_gate_bypass_doctrine.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-29T07:37:17.596Z",
+    "behavior_change": false,
+    "verification_evidence": "{\"tests_inspected\": [\"scripts/tests/test_gate_bypass_doctrine.mjs (existing D7 absent-old/present-new pair idiom, ~:158-179)\"], \"tests_added_or_changed\": [\"scripts/tests/test_gate_bypass_doctrine.mjs: new lane-plan-unconditional (lpu-1) block asserting the retired busy-precondition wording ('busy + disjoint paths' in SKILL.md, 'when new feature work is ready while another feature is live' in routing-and-contracts.md) is absent, and the unconditional wording ('before every feature start', 'whether or not another feature is already live') is present in both files\"], \"red_failure_evidence\": \"Temporarily reintroduced the retired conditional wording in both skills/bee-hive/SKILL.md and skills/bee-hive/references/routing-and-contracts.md (reverting only those two lines) and reran node scripts/tests/test_gate_bypass_doctrine.mjs: 5 FAILs, each naming the exact retired/missing phrase per file. FAIL - gate-bypass doctrine: 5 failure(s). Then restored the fixed wording in both files and reran: PASS - gate-bypass doctrine: 0 failure(s).\", \"verification_run\": \"node scripts/run_verify.mjs --only test_gate_bypass_doctrine: PASS 37ms (1/1). node scripts/okf_instructions_fence.mjs: PASS, 18 instruction-surface files, 0 unbranched misroutes. node scripts/release_manifest.mjs --check: 448 file(s) match stored manifest. node scripts/ledger_parity.mjs --check: .bee/bin/** matches the managed-hash ledger. node scripts/impact_registry.mjs --check: up to date. All five commands exited 0 in sequence.\"}\n",
+    "verify_output": "PASS 37ms scripts/tests/test_gate_bypass_doctrine.mjs (1/1) | okf_instructions_fence PASS 18 instruction-surface files, 0 unbranched misroutes | release_manifest --check: 448 file(s) match stored manifest | ledger_parity --check: .bee/bin/** matches managed-hash ledger | impact_registry --check: scripts/impact-registry.json is up to date",
+    "verify_passed": true,
+    "claim_session": "2dd5efdf-5e74-457e-b9dd-ee2109c21af7",
+    "claimed_at": "2026-07-29T07:32:44.206Z",
+    "verify_command": "node scripts/run_verify.mjs --only test_gate_bypass_doctrine && node scripts/okf_instructions_fence.mjs && node scripts/release_manifest.mjs --check && node scripts/ledger_parity.mjs --check && node scripts/impact_registry.mjs --check",
+    "verified_at": "2026-07-29T07:37:11.650Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-29T07:37:11.651Z",
+        "claim_session": "2dd5efdf-5e74-457e-b9dd-ee2109c21af7",
+        "claimed_at": "2026-07-29T07:33:19.019Z",
+        "acquired_at": "2026-07-29T07:32:44.203Z",
+        "worker": "lpu-worker-1",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": [
+      "capCell: cell \"lpu-1\" test-to-source line ratio is 14.50 (>3) for lane \"small\" — test-economy D3 non-blocking warning.",
+      "capCell: cell \"lpu-1\" verify does not mention impact-registry direct-edge suite(s) scripts/tests/test_gate_bypass_doctrine.mjs for file(s) skills/bee-hive/SKILL.md, skills/bee-hive/references/routing-and-contracts.md, scripts/tests/test_gate_bypass_doctrine.mjs, docs/history/codex-harness-hardening/release-manifest.json — derived-check-hardening E1 non-blocking warning."
+    ]
+  }
+}

@@ -73,7 +73,7 @@ candidates → report count + risk, ask ONE question — only an explicit yes
 dispatches review · document an area / settled rule → `bee-scribing`
 · backlog-triage pass (explicit-only) → `bee-qualifying` · `/go`
 → go mode (`references/go-mode.md`) · resume → surface HANDOFF, wait
-· busy + disjoint paths → lane not wait; own checkout → worktree
+· before every feature start → disjoint paths lane not wait; own checkout → worktree
 ("Concurrency law in full").
 Briefing, grooming, compounding, skill-writing, evolving,
 jump-to-planning: ("First-Skill Routing").
