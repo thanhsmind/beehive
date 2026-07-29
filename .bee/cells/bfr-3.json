@@ -1,0 +1,71 @@
+{
+  "id": "bfr-3",
+  "feature": "budget-fence-removal",
+  "title": "Prove the removal by its invariants, not by the names deleted",
+  "lane": "standard",
+  "change_class": "test",
+  "deps": [
+    "bfr-1",
+    "bfr-2"
+  ],
+  "decisions": [
+    "D1",
+    "D5"
+  ],
+  "files": [
+    "scripts/tests/test_instruction_size_law.mjs"
+  ],
+  "read_first": [
+    "docs/history/budget-fence-removal/plan.md",
+    "scripts/tests/test_agents_budget.mjs",
+    "scripts/run_verify.mjs"
+  ],
+  "action": "Create scripts/tests/test_instruction_size_law.mjs. It is auto-discovered under scripts/tests by run_verify.mjs:93-98, so it needs no EXTRA_SUITES entry. This is the slice's one trailing test cell and it asserts NET behavior, not per-cell internals. A removal is verified by its invariants, not the names it deletes (critical pattern 20260711), so scope every assertion to the DEFECT CLASS and never to the two filenames just deleted. Assert (1) no size law on instruction text survives anywhere in scripts/: no HARD_FAIL_BYTES, no WARN_BYTES, no read of a per-skill byte baseline, no comparison of a skills/**/SKILL.md size against a recorded ceiling. Assert (2) the meaning guards STILL BITE -- seed a violation and assert scripts/tests/test_agents_budget.mjs exits non-zero, for the roster guard AND for the byte-identical render guard, because a guard that tests one state is a law with a hole (critical pattern 20260713). MECHANISM, so nothing is guessed: test_agents_budget.mjs:83-84 reads the REAL TEMPLATE_PATH and ROOT_AGENTS_PATH, so NEVER mutate the live AGENTS.md -- that trips the write guard and critical rule 16. Follow the pattern the file already uses at :193-213, where the negative control builds fixture TEXT in memory and runs the assertion helper against it; confirm that control still runs after bfr-2's edit and extend the same in-memory approach to the render guard. DO NOT add an orphan-declaration guard over scripts/verify-cache-inputs.json: no locked decision authorizes new standing coverage and it is already filed to the backlog. DO NOT assert an exact SUITES.length: it would contradict the discovery design at run_verify.mjs:86-88 and duplicate the floor at scripts/tests/test_verify_manifest.mjs:219.",
+  "must_haves": {
+    "truths": [
+      "scripts/tests/test_instruction_size_law.mjs exists and is discovered by run_verify.mjs without any EXTRA_SUITES edit",
+      "It fails if a byte or line ceiling on instruction text is reintroduced anywhere in scripts/",
+      "It proves the roster guard and the byte-identical render guard both still exit non-zero on a seeded violation",
+      "It never mutates the live AGENTS.md or packages/bee/AGENTS.block.md",
+      "It contains no orphan-declaration assertion and no exact SUITES.length pin"
+    ]
+  },
+  "verify": "node scripts/tests/test_instruction_size_law.mjs && node scripts/run_verify.mjs --only test_instruction_size_law,test_agents_budget,test_verify_cache,test_verify_manifest",
+  "status": "capped",
+  "trace": {
+    "worker": "bfr-worker-3",
+    "outcome": "New regression suite proves the deleted byte-budget fence stays gone by invariant (structural detectors + negative controls), and that both meaning guards in test_agents_budget.mjs still exit non-zero on a seeded roster or render violation.",
+    "files_changed": [
+      "scripts/tests/test_instruction_size_law.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-29T06:15:41.049Z",
+    "behavior_change": false,
+    "verification_evidence": "{\"new_suite_reason\": \"This is the slice-tail test cell for budget-fence-removal (D1/D5, plan.md BFR-3): it is the sole regression guard proving the deleted byte-budget fence stays deleted by invariant, not by filename, so a permanent CI-registered suite is the deliberate point of this cell, not a side effect.\", \"ratio_waiver\": \"change_class=test with deps [bfr-1, bfr-2] already capped; this cell adds ONLY scripts/tests/test_instruction_size_law.mjs and touches zero source lines by design (a pure test cell has no companion source diff), so the test/source ratio is definitionally unbounded here — waived per plan.md BFR-3, which scopes this cell to test-only output.\"}\n",
+    "verify_output": "8 passed, 0 failed (test_instruction_size_law.mjs) ; run_verify --only: PASS test_agents_budget 38ms, PASS test_instruction_size_law 169ms, PASS test_verify_cache 3972ms, PASS test_verify_manifest 49ms — run_verify: 4 suite(s) (4 run, 0 cached)",
+    "verify_passed": true,
+    "claim_session": "2dd5efdf-5e74-457e-b9dd-ee2109c21af7",
+    "dropped_reason": null,
+    "claimed_at": "2026-07-29T06:05:42.915Z",
+    "verify_command": "node scripts/tests/test_instruction_size_law.mjs && node scripts/run_verify.mjs --only test_instruction_size_law,test_agents_budget,test_verify_cache,test_verify_manifest",
+    "verified_at": "2026-07-29T06:15:27.333Z",
+    "blocked_reason": null,
+    "reopened_at": "2026-07-29T05:55:58.178Z",
+    "reopened_reason": "Deferred, not cancelled - the drop did not clear the slice-tail guard either (it counts dropped cells), so honest state is open. Executes after bfr-1 and bfr-2 cap.",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-07-29T06:15:27.333Z",
+        "claim_session": "2dd5efdf-5e74-457e-b9dd-ee2109c21af7",
+        "claimed_at": "2026-07-29T06:06:19.410Z",
+        "acquired_at": "2026-07-29T06:05:42.914Z",
+        "worker": "bfr-worker-3",
+        "verdict": "pass",
+        "failure_signature": null,
+        "note": null
+      }
+    ],
+    "warnings": []
+  }
+}
