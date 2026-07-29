@@ -312,6 +312,21 @@ its knowledge actually landed — the state and the specs can no longer disagree
   the work record still handed them a field named "verify" holding a runnable
   command with no owner on it, and an artifact outranks a dispatch instruction.
   The field now renders its owner beside it (verify-owner-signal vo-1).
+- R88 — **A restatement can be born stricter than the law it restates, and the
+  reader obeys the restatement.** R87 covers a copy that survives a law change;
+  this is its mirror, and no law has to change for it to happen. R86 has always
+  required the concurrency plan *before dispatching anything*, but the two
+  places that operationalized it — the router's decision list and the
+  lanes-first-class paragraph — each restated it with a precondition the law
+  never carried: act only when another feature is already live. The case R86
+  exists for, two independent ready features and nothing busy, therefore
+  triggered nothing. The evidence is the usage gap: seventeen lane records on
+  disk against two occasions of genuinely concurrent features. A rule is only
+  as strong as the narrowest restatement an agent reads first, so a law
+  expressed in more than one place is audited against its own statement, not
+  against its neighbours (lane-plan-unconditional lpu-1). Where the tier can be
+  checked, check it: cell-level concurrency is not prose but the output of a
+  required command, which an agent must argue against to go serial.
 - R85 — **Per-turn rules live in the always-loaded layer, never behind an
   on-demand file.** The communication contract governs every single turn, so
   its operative form sits in the instruction surface that is present in every
