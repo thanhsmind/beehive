@@ -277,6 +277,13 @@
     "cells-cap",
     "feature-verify",
     "close-door",
-    "doctrine-gap"
+    "doctrine-gap",
+    "state-fields",
+    "validation-removal",
+    "critical-pattern",
+    "testing",
+    "cross-cell-contracts",
+    "vacuous-tests",
+    "fixtures"
   ]
 }

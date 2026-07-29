@@ -2,14 +2,14 @@
 type: bee.area
 title: "Workflow State — authoring a unit of work, revising its plan, and the frozen plan document"
 description: "How a slice of work units is created all-or-nothing, which of a unit's plan fields may be revised afterwards and which are frozen audit, how a unit's change is classified at authoring, how a scope-derived regeneration obligation refuses authoring without it, and why the approved plan document stops changing the moment its gate is granted."
-timestamp: 2026-07-23
+timestamp: 2026-07-29
 bee:
   id: workflow-state-cells-authoring-and-revision
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["lane-ceremony-v3 D1/D2/D9 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19 — plan document frozen at shape approval, slice-in-units)", self-correcting-loop D3 with Validating amendment Δ4 (change classification and the advisory verification standard), "regen-obligation-derived D1/D2 (derived regen obligation refuses at authoring, recorded escape hatch; roots derived from the tools, never hard-coded — 2026-07-23)", "8ef2bae6 (cli-ergonomics D2 — whole-batch exhaustive refusal + --dry-run preview, 2026-07-24)"]
-  sources: [cells-update-verb cell cuv-1 (2026-07-12), dispatcher-unify cells-batch-add suite rows (v0.1.27), "post-advisor-hardening cell pah-2 (cells add/update manifest-lint advisory, 2026-07-18)", "lane-ceremony-v3 cells lcv3-1..lcv3-5 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19)", "regen-obligation-derived cell ro-1 (12 suite rows + mutation red, commit e4ae329, 2026-07-23)", "docs/specs/workflow-state.md#B7", "docs/specs/workflow-state.md#B10", "docs/specs/workflow-state.md#B25", "docs/specs/workflow-state.md#B29", "docs/specs/workflow-state.md#R46", "docs/specs/workflow-state.md#E14", "docs/specs/workflow-state.md#P9", "docs/specs/workflow-state.md#P12"]
+  decisions: ["lane-ceremony-v3 D1/D2/D9 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19 — plan document frozen at shape approval, slice-in-units)", self-correcting-loop D3 with Validating amendment Δ4 (change classification and the advisory verification standard), "regen-obligation-derived D1/D2 (derived regen obligation refuses at authoring, recorded escape hatch; roots derived from the tools, never hard-coded — 2026-07-23)", "8ef2bae6 (cli-ergonomics D2 — whole-batch exhaustive refusal + --dry-run preview, 2026-07-24)", "worker-conformance D4/D5/D6 (the trailing test unit stays unconditional but its first mandated step is a coverage judgement, not authoring; test shape below the highest-risk lane is the happy-path/edge-cases/error-paths triad and the twelve-dimension checklist applies only to high-risk/hard-gate work; no numeric per-group test cap is added — 2026-07-29)", "worker-conformance D13 (the doctrine-vs-machine disagreement over batching the trailing test unit at high risk is recorded as an open gap, not fixed — the close-door predicate was deliberately left unchanged)"]
+  sources: [cells-update-verb cell cuv-1 (2026-07-12), dispatcher-unify cells-batch-add suite rows (v0.1.27), "post-advisor-hardening cell pah-2 (cells add/update manifest-lint advisory, 2026-07-18)", "lane-ceremony-v3 cells lcv3-1..lcv3-5 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19)", "worker-conformance cells wc-3/wc-6/wc-7 (coverage-judgement-first trailing test unit, triad test shape, ten doctrine overstatements corrected against the live predicates; traces .bee/cells/wc-{3,6,7}.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "regen-obligation-derived cell ro-1 (12 suite rows + mutation red, commit e4ae329, 2026-07-23)", "docs/specs/workflow-state.md#B7", "docs/specs/workflow-state.md#B10", "docs/specs/workflow-state.md#B25", "docs/specs/workflow-state.md#B29", "docs/specs/workflow-state.md#R46", "docs/specs/workflow-state.md#E14", "docs/specs/workflow-state.md#P9", "docs/specs/workflow-state.md#P12"]
   authoritative_for: "workflow-state: unit-of-work authoring, plan revision, and the frozen plan document"
 ---
 
@@ -109,6 +109,23 @@ owes nothing. What each actor observes: authors cannot forget the obligation,
 only decline it on the record; the advisory lint (B10) is unchanged for its
 narrower case (regen-obligation-derived D1/D2, cell ro-1, 2026-07-23).
 
+**B44 — The trailing test unit stays unconditional, but its first mandated
+step is a coverage JUDGEMENT, not authoring.** Trigger: planning shapes a
+slice that touches code. What happens: the slice still gets a trailing test
+unit — a code-touching slice with no test unit remains a planning defect, and
+that floor is unchanged. What the unit is required to do FIRST changed: cite
+the nearest existing tests by exact location, state whether they already cover
+the slice's acceptance criteria, and author only the gap that remains.
+"Already covered — no new rows" is a legitimate completed outcome; the unit
+discharges by running those existing tests green and recording that judgement.
+A test unit that authors no test is explicitly **not** a defect. What each
+actor observes: the required THOUGHT is "do we need more coverage here?"
+instead of the required OUTPUT being "write tests" — which is what turned a
+volume brake into a volume generator. The feature-level coverage door is
+unchanged by this and still demands the unit complete on recorded proof
+(worker-conformance D4; the door itself is
+areas/workflow-state/cells-completion-judge-and-archive.md B43).
+
 ## Business Rules
 
 - R46 — A unit's change classification is set explicitly or derived only from
@@ -120,14 +137,58 @@ narrower case (regen-obligation-derived D1/D2, cell ro-1, 2026-07-23).
   unit records a reasoned acknowledgement; the obligated roots are always
   derived from the regeneration tools themselves, never hard-coded in the
   guard (regen-obligation-derived D1/D2, 2026-07-23).
+- R94 — **Coverage judgement before coverage authoring.** The trailing test
+  unit per slice is unconditional, and its first mandated step is to cite the
+  nearest existing tests and judge whether they already cover the slice's
+  acceptance criteria; only the uncovered gap is authored. Concluding "already
+  covered, no new rows" is a legitimate outcome, never a defect
+  (worker-conformance D4).
+- R95 — **Test shape below the highest-risk lane is the triad at its smallest
+  demonstrating size: happy path, edge cases, error paths.** The
+  twelve-dimension edge checklist stops being the default at the standard lane
+  and applies only to highest-risk and hard-gated work — read as a checklist
+  to fill, it generated volume rather than coverage. No numeric per-group test
+  cap is added: the existing brakes stand exactly as written (the volume
+  ceiling, the justification demanded for a genuinely new permanent suite, and
+  the outright refusal of a new test file on a refactor or formatting unit).
+  The triad is the shape guide; the ceiling is the volume brake — two brakes on
+  the same axis would contradict (worker-conformance D5/D6).
 
 ## Edge Cases Settled
 
 - One invalid unit in a batch slice-creation request → zero units written; a
   duplicate identifier inside the batch is refused the same way.
+- A test unit that authors zero new rows because the existing suite already
+  covers the criteria has discharged its mandate, not skipped it. It completes
+  by running those tests green and recording the judgement with its citations
+  (worker-conformance D4).
+
+## Open Gaps
+
+- **The planning doctrine and the machine disagree about batching the trailing
+  test unit at the highest risk level, and the disagreement was recorded rather
+  than resolved.** The doctrine says highest-risk work is never batched into a
+  trailing test unit — each such unit proves itself red-first. The
+  feature-level coverage door has no such exemption: it refuses the close of
+  any feature holding completed code-touching behaviour work and no test unit,
+  in every lane. A planner following the prose alone at the highest risk level
+  leaves the feature unable to close, with no bypass level lifting it. The
+  doctrine now states the gap where a planner meets it; the door's predicate
+  was deliberately NOT changed, because loosening a close-door to match prose
+  is the more dangerous of the two repairs. Named, not closed
+  (worker-conformance D13).
 
 ## Pointers (implementation)
 
+- Coverage-judgement-first trailing test unit and the triad test shape
+  (B44/R94/R95): instruction text only — `skills/bee-planning/SKILL.md`,
+  `skills/bee-planning/references/planning-reference.md`, and
+  `skills/bee-planning/references/edge-dimensions.md` (the twelve dimensions,
+  now scoped to high-risk/hard-gate). No source predicate implements these;
+  the enforcing door is `testCellDebt` in `packages/bee/lib/state.mjs`.
+  Evidence: traces `.bee/cells/wc-3.json`, `.bee/cells/wc-6.json`,
+  `.bee/cells/wc-7.json`; reports
+  `docs/history/worker-conformance/reports/wc-{3,6,7}.md`.
 - Batch slice creation: `addCells` in `packages/bee/lib/cells.mjs`,
   CLI `bee.mjs cells add --stdin` (JSON array). Evidence: dispatcher-unify
   cells-batch-add suite rows (v0.1.27).

@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["self-correcting-loop D3/D4/D5 with Validating amendments Δ5-Δ6 (behavior-class completion teeth, judge-verdict schema, risk-scaled goal-check judge)", "gh-issue-fixes-172 D-GHF-C (the judge cap-guard: a needs-revision verdict blocks completion absent an audited override)", "565e68d0-327f-404e-b49e-d1c61ba81bfd (unchanged: the goal-check judge is never the user-invoked independent review)", "test-economy D1/D2/D3/D8 (proof-tier by change_class × lane replaces the flat behavior-vs-advisory split; diff_stats-backed test-shape guard at cap; the D8 negative-control floor — amending self-correcting-loop D3's completion door and narrowing decision 0009 / e54878b1 / 8ef2bae6 to the red-first branches only)", "derived-check-hardening E1/E9 (the cap door cross-checks the impact registry and warns, never refuses; the residual ships open and named)", "derived-check-hardening E6 (capCell resolves behavior_change from the top-level field or trace.behavior_change, forward-only)"]
-  sources: ["self-correcting-loop cells scl-1..scl-5 (traces in .bee/cells/, reports docs/history/self-correcting-loop/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — journaled crash-recoverable cell archive; needs-revision reopen clears verify evidence), "test-economy cells te-1/te-2 (proof-tier matrix + diff_stats handler; test-shape guard — new_suite_reason + ratio ceiling; docs/history/test-economy/CONTEXT.md, traces in .bee/cells/, 2026-07-25)", "docs/specs/workflow-state.md#B30", "docs/specs/workflow-state.md#B31", "docs/specs/workflow-state.md#B32", "docs/specs/workflow-state.md#B34", "docs/specs/workflow-state.md#B35", "docs/specs/workflow-state.md#B36", "docs/specs/workflow-state.md#R47", "docs/specs/workflow-state.md#R48", "docs/specs/workflow-state.md#R49", "docs/specs/workflow-state.md#R50", "docs/specs/workflow-state.md#R53", "docs/specs/workflow-state.md#R54", "docs/specs/workflow-state.md#E25", "derived-check-hardening cells dch-1/dch-2/dch-8 (cap-door impact-registry warning, behavior_change resolution, lazy registry import surviving a vendored-lib fixture; traces .bee/cells/dch-{1,2,8}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)"]
+  decisions: ["self-correcting-loop D3/D4/D5 with Validating amendments Δ5-Δ6 (behavior-class completion teeth, judge-verdict schema, risk-scaled goal-check judge)", "gh-issue-fixes-172 D-GHF-C (the judge cap-guard: a needs-revision verdict blocks completion absent an audited override)", "565e68d0-327f-404e-b49e-d1c61ba81bfd (unchanged: the goal-check judge is never the user-invoked independent review)", "test-economy D1/D2/D3/D8 (proof-tier by change_class × lane replaces the flat behavior-vs-advisory split; diff_stats-backed test-shape guard at cap; the D8 negative-control floor — amending self-correcting-loop D3's completion door and narrowing decision 0009 / e54878b1 / 8ef2bae6 to the red-first branches only)", "derived-check-hardening E1/E9 (the cap door cross-checks the impact registry and warns, never refuses; the residual ships open and named)", "derived-check-hardening E6 (capCell resolves behavior_change from the top-level field or trace.behavior_change, forward-only)", worker-conformance D1/D10/D12/D14 (per-unit authored evidence stops being a completion precondition — exactly two doors become non-blocking recorded warnings; absence of proof is stamped as a distinct inert marker that arms only the feature-boundary door), "worker-conformance D11 (the feature-level trailing test-coverage door inherits the same treatment: an asserted pass with nothing recorded does not discharge it) + wc-2c (a withdrawn test unit owes no coverage and stands in for none)", worker-conformance D2 as corrected (the highest-risk lane raises the behaviour-bearing classes only — refactor/formatting stay suite-green and a coverage-authoring unit stays targeted-green even there)]
+  sources: ["self-correcting-loop cells scl-1..scl-5 (traces in .bee/cells/, reports docs/history/self-correcting-loop/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — journaled crash-recoverable cell archive; needs-revision reopen clears verify evidence), "test-economy cells te-1/te-2 (proof-tier matrix + diff_stats handler; test-shape guard — new_suite_reason + ratio ceiling; docs/history/test-economy/CONTEXT.md, traces in .bee/cells/, 2026-07-25)", "docs/specs/workflow-state.md#B30", "docs/specs/workflow-state.md#B31", "docs/specs/workflow-state.md#B32", "docs/specs/workflow-state.md#B34", "docs/specs/workflow-state.md#B35", "docs/specs/workflow-state.md#B36", "docs/specs/workflow-state.md#R47", "docs/specs/workflow-state.md#R48", "docs/specs/workflow-state.md#R49", "docs/specs/workflow-state.md#R50", "docs/specs/workflow-state.md#R53", "docs/specs/workflow-state.md#R54", "docs/specs/workflow-state.md#E25", "derived-check-hardening cells dch-1/dch-2/dch-8 (cap-door impact-registry warning, behavior_change resolution, lazy registry import surviving a vendored-lib fixture; traces .bee/cells/dch-{1,2,8}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)", "worker-conformance cells wc-1/wc-2/wc-2c/wc-3/wc-4 (absence-of-proof marker stamped after the refusal chain; both debt doors armed on it with the freshness clock over the union; withdrawn test unit skipped before the count; two doors loosened to recorded warnings; per-door bypass rows — traces .bee/cells/wc-*.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, feature verify green 117 suites 2026-07-29)"]
   authoritative_for: "workflow-state: unit completion teeth, judge verdicts, and the cell archive transaction"
 ---
 
@@ -31,9 +31,14 @@ or derived: an unclassified unit with `behavior_change: true` still derives to
 `behavior`, and an unclassified `behavior_change: false` stays advisory-only,
 exactly as before. What happens: the required proof is looked up from a fixed
 matrix over change-class × lane (the proof-tier): `security`/`migration`
-demand red-first proof in every lane; `bugfix`/`behavior`/`api` demand
-red-first only in the `high-risk` lane and a single targeted-green test
-everywhere else; `refactor`/`formatting` demand only that the existing suite
+demand red-first proof in every lane; `bugfix` demands red-first only in the
+`high-risk` lane and a single targeted-green test everywhere else;
+`behavior`/`api` likewise demand red-first only in the `high-risk` lane and,
+everywhere else, prove on the EXISTING targeted suite rather than on newly
+authored rows; a unit whose whole mandate IS test coverage proves on its own
+targeted suite green, in every lane including the highest-risk one, because it
+has no prior production behavior to characterize a "before" for;
+`refactor`/`formatting` demand only that the existing suite
 still passes green, and are refused outright the moment their diff adds any
 new test file at all — no evidence field can buy that door open, because a
 refactor that needs a new suite was misclassified. Wherever the tier resolves
@@ -47,7 +52,14 @@ deliberate-exceptions door keeps that door's contract unchanged, with an
 advisory noting it took that door instead. What each actor observes: a
 behavior-changing unit in a low-risk lane no longer automatically pays the
 full red-first cost — the same rigor now lands exactly on `security`/
-`migration` and on `high-risk`-lane work, never loosened for those
+`migration` in every lane and on the behaviour-bearing classes inside the
+`high-risk` lane, never loosened for those. **The highest-risk lane does not
+sweep every class into red-first**, and any statement that it does is wrong:
+`refactor`/`formatting` stay at existing-suite-green there, and a
+coverage-authoring unit stays at its own targeted green there — a unit with no
+new behaviour to characterize cannot produce a real "before", so demanding one
+would only create pressure to misclassify (worker-conformance, correcting the
+"all classes" reading of that feature's D2)
 (self-correcting-loop D3, Δ5; amended by test-economy D1/D2: decision 0009's
 blanket behavior-change hard door and the self-correcting-loop D3 red-evidence
 floor at e54878b1/8ef2bae6 keep their original shape but now apply only inside
@@ -123,6 +135,63 @@ than at the top level, now completes carrying the flag it actually declared,
 and therefore falls inside both the spec-debt obligation (R21a/R22) and the
 semantic goal-check judge's scope (B32) instead of silently escaping both
 (derived-check-hardening E6).
+
+**B41 — Completing a unit no longer asks a worker to AUTHOR evidence; exactly
+two doors record the absence instead of refusing.** Trigger: a unit is
+completed through the ordinary path (not the path that deliberately relocates
+its proof to the feature boundary). What happens: two doors that used to refuse
+now let the completion through and record a warning on the unit and on the
+operator's channel — the door that demanded written evidence from a unit
+declaring it changed behaviour, and the door that refused a small-or-larger
+lane asserting its check passed with nothing recorded. Every other refusal at
+this door survives untouched, including the one in the same block that demands
+the unit list the files it actually touched: a file list states what was
+touched, it is not authored proof, so it cannot drift into invention. Separately
+from either warning, a completion that recorded NEITHER real check output NOR
+supplied evidence is stamped with a distinct **absence-of-proof marker**. The
+marker is computed only after the entire refusal chain has already run, on a
+completion that is already going to succeed, so it can never decide whether a
+completion is refused — only describe one that was not. What each actor
+observes: a worker is never again asked to produce prose in order to pass a
+gate; the absence of proof stops being either enforced per unit or silently
+forgiven, and becomes a fact on the record (worker-conformance D1/D10/D14).
+
+**B42 — The absence-of-proof marker is a new, inert field, and its only power
+is arming the feature-boundary door.** Trigger: the marker is stamped by B41.
+What happens: nothing, anywhere at the unit door — no refusal reads it, no
+exemption keys on it, no brake is lifted or tightened by it. Its single
+consumer is the feature-boundary door (R82), which it arms exactly as the
+relocated-proof marker does. It is deliberately NOT that older marker: the
+relocated-proof flag short-circuits six separate refusal sites at the unit
+door, so routing an unproven completion onto it would have voided the red-first
+tier and the test-volume brakes the instant the marker landed. A second,
+powerless field was the whole design point. What each actor observes: a
+completion carrying the marker looks and behaves exactly like any other
+completed unit until the feature tries to close, at which point one real green
+run at the feature boundary is owed and no bypass level lifts it
+(worker-conformance D12).
+
+**B43 — A feature owes trailing test coverage, and withdrawn work discharges
+none of it.** Trigger: a feature attempts to leave execution or run its
+knowledge sync. What happens: the door reads the feature's units and reports
+one of two debts — *missing*, when the feature holds completed behaviour-or-
+interface units that touched code and no test unit at all; or *not-green*, when
+a test unit exists but is not completed, was completed on a recorded failing
+check, or was completed carrying the absence-of-proof marker. That third case
+is the one the evidence diet creates: the older judgement that an assertion is
+not evidence outlives the per-unit door that used to enforce it, because an
+asserted pass cannot be the coverage this door is holding out for. A
+**withdrawn** test unit is neither an obligation nor a discharge — it is
+skipped before the count of test units is taken, so a feature that drops its
+only test unit falls through to *missing* rather than passing clean.
+Withdrawing the work is never cheaper than doing it. Only withdrawal is exempt:
+a test unit still open, claimed, or blocked is undischarged work somebody owes
+and keeps refusing. Behaviour-or-interface units whose entire recorded file set
+is instruction or knowledge text owe nothing here, and a missing or empty file
+set counts conservatively as code so an unrecorded diff can never launder real
+behaviour past the debt. What each actor observes: the trailing coverage
+judgement is owed by the FEATURE, not by each slice's units individually
+(worker-conformance D11; wc-2c, found live on this feature's own close-door).
 
 **B31 — A judge verdict is a structured, append-only record with an honest
 independence stamp.** Trigger: a judge examines a unit of work and renders a
@@ -216,9 +285,13 @@ over and proving it again (hardening-1-7-10).
 
 ## Business Rules
 
-- R47 — A behavior-changing unit's completion requires substantial (not
+- R47 — *(Superseded twice, kept for lineage — read R55 and R89 for the live
+  rule.)* A behavior-changing unit's completion requires substantial (not
   placeholder), non-duplicated proof-of-red evidence; every other change
   classification stays advisory-only in this version (self-correcting-loop D3).
+  R55 narrowed the demand to the red-first branches of the proof-tier matrix;
+  R89 then made the remaining blanket "declared behaviour change with no
+  written evidence" door a recorded warning rather than a refusal.
 - R48 — A judge verdict is accepted only in its one structured shape;
   free-form prose is a failed judge run, re-dispatched once, then recorded
   unverified — never accepted as the verdict itself (self-correcting-loop D5).
@@ -245,9 +318,15 @@ over and proving it again (hardening-1-7-10).
 - R55 — The proof a unit must show at completion is
   `requiredProofTier(change_class, lane)`: `red-first` for `security`/
   `migration` in every lane and for `bugfix`/`behavior`/`api` in the
-  `high-risk` lane; `targeted-green` for `bugfix`/`behavior`/`api` outside
-  `high-risk`; `suite-green` (existing suite passes, new test files refused
-  outright) for `refactor`/`formatting`; an unclassified unit derives
+  `high-risk` lane; `targeted-green` for `bugfix` outside `high-risk` and for
+  a coverage-authoring `test` unit in EVERY lane; existing-targeted-green for
+  `behavior`/`api` outside `high-risk`; `suite-green` (existing suite passes,
+  new test files refused outright) for `refactor`/`formatting` in every lane.
+  The `high-risk` lane raises the behaviour-bearing classes ONLY — it never
+  sweeps `refactor`, `formatting`, or a coverage-authoring unit into
+  red-first, and any statement that it covers "all classes" overstates the
+  door (worker-conformance, correcting that feature's own D2 wording). An
+  unclassified unit derives
   `behavior` when `behavior_change: true` and stays advisory-only when
   `false` — a lighter tier is never available without declaring the class
   (test-economy D1, amending self-correcting-loop D3 and narrowing decision
@@ -274,6 +353,53 @@ over and proving it again (hardening-1-7-10).
   top-level value when it is set and otherwise from the value recorded in the
   unit's trace; an already-completed unit is never retroactively corrected,
   because the correction is forward-only (derived-check-hardening E6).
+- R89 — **A worker is never asked to AUTHOR evidence in order to complete a
+  unit.** Exactly two doors became non-blocking recorded warnings: a
+  behaviour-changing unit that supplied no written evidence, and a
+  small-or-larger lane asserting its check passed with nothing recorded.
+  Every other refusal at that door survives, including the demand — in the
+  same block as one of the two — that the unit list the files it touched: a
+  file list reports what was touched and is not authored proof. Proof was
+  relocated to the feature boundary, never removed (worker-conformance D1).
+- R90 — **Absence of proof is recorded, not ignored.** A completion that
+  carried neither real check output nor supplied evidence is stamped with a
+  distinct absence-of-proof marker, computed after the whole refusal chain has
+  run. The marker arms the feature-boundary door (R82) and buys nothing else:
+  it is read by no refusal, lifts no brake, and grants no exemption. It is
+  deliberately not the older relocated-proof flag, which short-circuits six
+  refusal sites — reusing that flag would have voided the red-first tier and
+  the test-volume brakes the moment an unproven completion carried it
+  (worker-conformance D10/D12).
+- R91 — **Genuine evidence with empty output is never marked, and a workspace
+  that declares it runs no verification is exempt.** The marker means NEITHER
+  channel carried proof, so a unit holding real supplied evidence — a
+  low-lane security unit whose proof-of-red already passed the red-first door
+  is the canonical case — stays unmarked even with no recorded output, because
+  it holds the strongest proof in the system. A workspace whose declared
+  verification command is the explicit "none" sentinel is exempt outright:
+  a feature-level verification can never run there, so marking would arm a
+  door that workspace could never satisfy. The exemption keys on the
+  verification declaration alone and is deliberately narrower than the
+  no-test-workspace test — a workspace that declares only its impacted-test
+  command as "none" can still run a real feature verification and must keep
+  arming the door (worker-conformance D14).
+- R92 — **Several surviving refusals are DEFERRED by the default completion
+  path, never waived.** The path that relocates proof to the feature boundary
+  is the default for dispatched workers, and four doors do not fire on it: the
+  demand for a recorded passing check, the new-suite justification, the volume
+  ceiling's refusal (which becomes a recorded warning there, because its
+  waiver channel is the per-unit evidence that path refuses by construction),
+  and the red-first proof-of-red. Calling them unconditional misleads every
+  worker taking the default; calling them waived misstates what the feature
+  boundary still owes. Deferred is the exact word, and the distinction is
+  load-bearing (worker-conformance, wc-5/wc-7).
+- R93 — **A withdrawn test unit owes no coverage and stands in for none.** The
+  feature-level coverage door skips a withdrawn test unit BEFORE counting test
+  units, so a feature that drops its only test unit falls through to the
+  *missing* debt rather than passing clean. Only withdrawal is exempt — open,
+  claimed, and blocked test units are undischarged work and keep refusing. The
+  order is the whole guard against withdrawal becoming an escape hatch
+  (worker-conformance, wc-2c).
 
 ## Edge Cases Settled
 
@@ -295,6 +421,17 @@ over and proving it again (hardening-1-7-10).
   plainly said otherwise — escaping the spec-debt obligation and the semantic
   judge together, and reporting nothing, because both consumers were handed a
   value that looked correctly resolved (derived-check-hardening E6).
+- A unit holding real supplied evidence but no recorded check output is NOT
+  marked absent-of-proof. The predicate was first written against recorded
+  output alone, which would have armed the feature-boundary door for exactly
+  the units carrying the strongest proof in the system; an adviser consult
+  caught it before it shipped (worker-conformance D14).
+- A feature that drops its only test unit reaches the *missing* coverage debt,
+  not a clean close. Before the fix the door read one withdrawn unit two
+  contradictory ways at once — counting it as a test unit that exists
+  (suppressing *missing*) while also listing it as an offender for not being
+  completed. Found live on this feature's own close-door
+  (worker-conformance, wc-2c).
 
 ## Open Gaps
 
@@ -306,6 +443,24 @@ over and proving it again (hardening-1-7-10).
   this door stands on the path of every unit, and a refusal here would make
   all work depend on the map being fresh. It ships open and named, never
   recorded as a closed finding (derived-check-hardening E1/E9).
+- **Units completed before the absence-of-proof marker existed carry none, so
+  the coverage door cannot see them.** A legacy test unit that asserted a pass
+  with nothing recorded stays invisible to the *not-green* debt. Backfilling
+  the marker onto historical records was out of reach from the door's own
+  layer and was not attempted. Named, not closed (worker-conformance, wc-2).
+- **The behaviour-change warning and the marker key on different things, so a
+  behaviour-changing unit can complete warned but unmarked.** The warning fires
+  on missing supplied evidence alone; the marker requires that neither output
+  nor evidence was recorded. A behaviour-changing unit that recorded real check
+  output therefore warns without arming the feature-boundary door. This is the
+  intended reading of R91, but the asymmetry is real and worth stating rather
+  than discovering (worker-conformance, wc-4).
+- **A workspace declaring only its impacted-test command as "none" takes an
+  automatic evidence waiver and completes unmarked**, even though it could run
+  a real feature-level verification. That waiver is the older declared-no-test
+  semantics, deliberately untouched by this feature; the two exemptions
+  (waiver vs marker) read the two declarations differently on purpose, and the
+  seam ships named rather than reconciled (worker-conformance, wc-1).
 
 ## Pointers (implementation)
 
@@ -326,3 +481,25 @@ over and proving it again (hardening-1-7-10).
   trace `.bee/cells/dch-2.json`.
 - Tests: `packages/bee/tests/test_cells.mjs` (the registry-warning rows and the
   two behavior-change resolution rows), `packages/bee/tests/test_cli_cells.mjs`.
+- The two loosened doors (B41/R89): `capCell` in `packages/bee/lib/cells.mjs`
+  (byte-mirrored to `.bee/bin/lib/cells.mjs`) — the `behaviorEvidenceWarning`
+  branch (`cells.mjs:1969-1975`) and the `recordedProofWarning` branch
+  (`:2186-2190`); the surviving non-empty `files_changed` refusal sits
+  immediately below the second at `:2191-2195`. Throw count inside `capCell`
+  went 18 → 16.
+- The absence-of-proof marker (B42/R90/R91): `proofUnrecorded` at
+  `packages/bee/lib/cells.mjs:2228-2237`, written as `trace.proof:
+  "unrecorded"` at `:2273`; the workspace exemption is `isNoTestCommand` from
+  `packages/bee/lib/state.mjs` applied to `commands.verify`. Both doors read
+  it in `packages/bee/lib/state.mjs`: `featureVerifyDebt` (`:2502-2560`) and
+  `testCellDebt` (`:2570-2640`).
+- The feature coverage door (B43/R93): `testCellDebt` in
+  `packages/bee/lib/state.mjs` — the withdrawn-unit skip sits before the
+  `testCellCount += 1` increment; the debt doors table is `DEBT_DOORS` in the
+  same module. Evidence: traces `.bee/cells/wc-1.json`, `.bee/cells/wc-2.json`,
+  `.bee/cells/wc-2c.json`, `.bee/cells/wc-4.json`; reports
+  `docs/history/worker-conformance/reports/`.
+- Tests for all of the above: `packages/bee/tests/test_cells.mjs` (marker
+  table rows) and `packages/bee/tests/test_bee_cli.mjs` (end-to-end door rows
+  driving real add/claim/verify/cap without hand-writing the marker, plus the
+  per-door bypass rows).

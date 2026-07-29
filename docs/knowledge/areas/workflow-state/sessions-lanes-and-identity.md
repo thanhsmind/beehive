@@ -2,13 +2,13 @@
 type: bee.area
 title: "Workflow State — working sessions, self-derived identity, lanes, and the renewing heartbeat"
 description: "Who the acting session is (resolved from its own environment, never handed down), how a feature gets its own pipeline lane that every reader resolves through, how a live session's heartbeat renews itself and carries its claims and holds forward with it, how lane binding now shares the same store lock as the heartbeat so the two writers of one session record can never lose each other's update, and how active workers are always a computed join of live sessions and claims rather than a stored array."
-timestamp: 2026-07-25
+timestamp: 2026-07-29
 bee:
   id: workflow-state-sessions-lanes-and-identity
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/worktree-parallelism/control-plane-topology.md]
-  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)", "multisession-native D6 (active workers derived from live-heartbeat sessions + lane/workflow binding + claims, never the stored workers array; advisor condition C3 — startFeature excludes the calling session's own heartbeat)", "multisession-native D2/D3 (slice 4: session creation re-roots onto controlRoot; a session's own record carries workspace_id, auto-looked-up and stamped onto its claims too — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)"]
+  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)", "multisession-native D6 (active workers derived from live-heartbeat sessions + lane/workflow binding + claims, never the stored workers array; advisor condition C3 — startFeature excludes the calling session's own heartbeat)", "multisession-native D2/D3 (slice 4: session creation re-roots onto controlRoot; a session's own record carries workspace_id, auto-looked-up and stamped onto its claims too — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "worker-conformance D11/D12 (R82's feature-boundary door arms on two markers — proof relocated and proof never recorded — with the freshness clock running over the union of both; cells wc-1/wc-2, docs/history/worker-conformance/CONTEXT.md, 2026-07-29)"]
   sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "multisession-native cell multisession-native-8 (activeWorkers derivation, trace .bee/cells/multisession-native-8.json, commit c435add, 2026-07-25)", "multisession-native cell multisession-native-10 (default-path mutation now also routes through its workflow record; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25)", "multisession-native cell multisession-native-19 (createSession/claimCellFile stamp workspace_id; bee-session-init.mjs re-roots onto resolveContext.controlRoot and lazily auto-registers the workspace; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)"]
   authoritative_for: "workflow-state: session identity, per-feature lanes, and heartbeat/lease renewal"
 ---
@@ -365,11 +365,27 @@ its knowledge actually landed — the state and the specs can no longer disagree
   (impacted over the feature's diff, cache-assisted) when the full picture
   exists, recorded as a machine-readable feature-verify record (command,
   output hash, result). Leaving the execution phase is refused — typed, and
-  no bypass level lifts it — while pending-capped cells lack a green record
-  newer than the newest pending cap. A red feature verify opens fix cells in
+  no bypass level lifts it — while any cell still OWING proof lacks a green
+  record newer than the newest owed cap. **Two markers, one debt** (amended by
+  worker-conformance D11/D12): proof deliberately RELOCATED to the feature
+  boundary, and proof never recorded AT ALL — a completion that asserted a pass
+  with neither real output nor supplied evidence. The door cannot tell them
+  apart and must not try, because in both cases the one thing that can still
+  prove the cell is the feature-level green run. **The freshness clock runs
+  over the UNION of both kinds**, which is the load-bearing half: reading it
+  over the relocated caps alone would let a green record newer than the newest
+  relocated cap but older than a newer unrecorded cap look fresh, and open the
+  door on a cell that run never covered. The second marker is what keeps the
+  evidence diet survivable — once the per-unit evidence doors stop refusing, an
+  unproven completion carries no relocation marker, and a door armed on
+  relocation alone would let a feature close with zero tests executed anywhere.
+  A red feature verify opens fix cells in
   the same feature (never un-caps); per-cell commits and bisect localize.
   The classic per-cell evidence path survives for spot use and transition
-  (main-verifies D1–D5, two user philosophy decisions 2026-07-28).
+  (main-verifies D1–D5, two user philosophy decisions 2026-07-28; the two-marker
+  debt and the union freshness clock added by worker-conformance D11/D12,
+  2026-07-29 — the per-unit teeth themselves live in
+  areas/workflow-state/cells-completion-judge-and-archive.md R89–R93).
 - R81 — **Worker orientation is brief, not the full status.** The status
   report has a brief form — phase, feature, mode, gates, bypass level, ship
   visibility, route only — that reads nothing but the state layer (no cell
