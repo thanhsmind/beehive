@@ -95,7 +95,10 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
 - flipping `Status` to anything other than `parked` in park mode, or touching
   `in-flight`/`done` (those stay each caller's own convention, untouched here)
 
-Violating the letter of the rules is violating the spirit of the rules.
+When a rule's letter stops serving its purpose here, say so out loud and
+deviate with a recorded reason — boundary rules (gates, state, secrets) hold
+as written; silent deviation is the defect (bee-hive routing reference,
+"Judgment contract").
 
 ## Handoff
 

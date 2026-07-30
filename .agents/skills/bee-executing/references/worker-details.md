@@ -14,9 +14,9 @@ The sanctioned default: implement, commit, cap with `--feature-verify-pending` �
 
 ## Expanded Commands
 
+Startup runs ZERO of these (exec-speed D7): the dispatch prompt inlines the cell JSON and the state line — `status --brief` and `cells show` are post-compaction recovery verbs only, never startup verbs.
+
 ```text
-node .bee/bin/bee.mjs status --brief --json
-node .bee/bin/bee.mjs cells show --id <id>
 node .bee/bin/bee.mjs reservations reserve --agent "<name>" --cell "<id>" --path "<path>" --ttl 3600
 node .bee/bin/bee.mjs cells cap --id <id> --feature-verify-pending [--outcome TEXT] [--files a,b] [--deviations-file F] [--friction TEXT]
 node .bee/bin/bee.mjs reservations release --agent "<name>" --cell "<id>"
@@ -40,7 +40,7 @@ BEE_AGENT_NAME="<name>" git add src/foo.ts
 
 For the one assigned cell, confirm before starting (D1 — the orchestrator claims before spawning; the worker only validates, never claims):
 
-- `cells show --id <id>` shows `status: "claimed"` with `trace.worker` matching your nickname — a different worker, no claim, or any other status is not yours to touch
+- the INLINED cell JSON in your dispatch prompt (exec-speed D7) shows `status: "claimed"` with `trace.worker` matching your nickname — a different worker, no claim, or any other status is not yours to touch; a prompt with no inlined cell JSON is malformed → `[BLOCKED]`
 - all `deps` are capped
 - `files` scope is clear and reservable
 - the `verify` command is concrete and runnable in this repo
@@ -233,16 +233,19 @@ Fix the root cause and rerun the exact failing command. After two serious attemp
 
 ## Atomic Commit
 
-One commit per cell, cell id in the message:
+One commit per cell. The subject describes the change — imperative
+mood, no process narration, no counts, no cell id; the cell id rides
+the last line of the body as a trailer (ids live in records, not in
+subjects — Communication contract rule 8):
 
 ```bash
 BEE_AGENT_NAME="<name>" git add <files>
-git commit -m "feat(<cell-id>): <summary matching the cap outcome>"
+git commit -m "<Imperative summary matching the cap outcome>" -m "Cell: <cell-id>"
 ```
 
 ## Result Field Spec
 
-Every result starts with exactly one token and includes, minimum: nickname, cell id, files touched/requested, reservation outcome (released yes/no), verification result, and the parent's next action. Mirror the result into `docs/history/<feature>/reports/<cell-id>.md` as a short summary that **links** the cell (`.bee/cells/<cell-id>.json`) for the full trace and evidence — never a second copy of the `verification_evidence` JSON or the verify output (decision 0009: the trace is the single source).
+Every result starts with exactly one token and includes, minimum: nickname, cell id, files touched/requested, reservation outcome (released yes/no), verification result, and the parent's next action. When the cell owes a report file (`[BLOCKED]`/`[HANDOFF]`/consult-carrying/explicit request — exec-speed D10), mirror the result into `docs/history/<feature>/reports/<cell-id>.md` as a short summary that **links** the cell (`.bee/cells/<cell-id>.json`) for the full trace and evidence — never a second copy of the `verification_evidence` JSON or the verify output (decision 0009: the trace is the single source).
 
 When dispatched with native worktree isolation, also report the observed working
 directory, symbolic ref (or detached state), and resulting commit. These values
@@ -262,7 +265,7 @@ Ambiguities you deferred go in an `Outstanding Questions` section of the report.
 
 ## Evidence Report Budget
 
-A worker's per-cell report in `docs/history/<feature>/reports/<cell-id>.md` targets **<=40 lines**. Structure:
+A per-cell report file is CONDITIONAL (exec-speed D10): routine `[DONE]` cells write none — the cap trace + status-token message are the record. A report is owed only for `[BLOCKED]`/`[HANDOFF]`, consult-carrying cells, or on explicit orchestrator request. When one IS written, `docs/history/<feature>/reports/<cell-id>.md` targets **<=40 lines**. Structure:
 
 - **Outcome** (1-3 lines) — status token + what changed, in plain language.
 - **Verify** — the exact command, plus its decisive output lines, quoted, **<=10 lines**.
@@ -296,7 +299,7 @@ Classic/spot-use path (main-verifies D1) — the sanctioned default is the featu
   | change_class | lane | tier | what capCell accepts |
   |---|---|---|---|
   | `refactor` / `formatting` | every lane, **including `high-risk`** | `suite-green` | the existing suite passing is proof enough; a **new** test file in the diff is refused outright — `new_suite_reason` (D3, below) can NOT override this. Needing a new suite for a "refactor" means the cell is misclassified. |
-  | `behavior` / `api` | `tiny` / `small` / `standard` | `existing-targeted-green` | the cell's targeted scope of the **existing** suite passing — **author no new test here** (slice-tail-test-batching P1, spec #80/#85): that moves to the slice's one trailing `test` cell. `verify` is still a runnable command recorded with output, so the cap still proves you didn't break what exists. |
+  | `behavior` / `api` | `tiny` / `small` / `standard` | `existing-targeted-green` | the cell's targeted scope of the **existing** suite passing — **author no new test here** (slice-tail-test-batching P1, spec #80/#85): that moves to the slice's one trailing `test` cell. `verify` is still a runnable command recorded with output, so the cap still proves you didn't break what exists. At `tiny`/`small`, when the behavior is NOT a public contract and carries no hard-gate flag, a **verified transcript** is equally legal proof (proof-economy, decision 2bb2cb27): run the real command that demonstrates the behavior and record it with its decisive output via `cells verify` — no new test authored; the trailing cell's coverage judgment still runs at slice close. |
   | `bugfix` | `tiny` / `small` / `standard` | `targeted-green` | **unchanged — repro-first stays**: write the failing repro **before** the fix. It is diagnosis evidence, not coverage ceremony; P1 amended `behavior`/`api` only. |
   | `test` (the slice's consolidated cell) | every lane | `targeted-green` | its own new suite passing over the slice's **net behavior** — happy path, edge cases, error paths — for the surfaces the slice's cells declared. Not per-cell internals. |
   | `bugfix` / `behavior` / `api` | `high-risk` | `red-first` | the scoped red-first below still applies in full: `red_failure_evidence` ≥80 chars, anti-duplicate floor. |
@@ -337,10 +340,19 @@ fail 1 -> consult 1 -> advised retry
 
 A re-dispatched cell (rescue rung) starts a **fresh** budget — the 2-consult cap is per claim, not per cell lifetime. Consulting after `[BLOCKED]` has already been returned for the current claim is never permitted.
 
-**Evidence bundle (mandatory, every consult):** exact failing command, the failing output, your diagnosis, the relevant cited file excerpts, and the `CONTEXT.md` path. Pass it **inline in the consult prompt or via stdin — never a `/tmp` path** (critical pattern 20260708). Never include secrets or env values.
+**Evidence bundle — two shapes (exec-speed D11):**
+- **On-failure consult (this loop):** exact failing command, the failing output, your diagnosis, the relevant cited file excerpts, and the `CONTEXT.md` path — the advisor is debugging with you, it needs the evidence.
+- **Gate-time consult (the unconditional high-risk/hard-gate pre-cap consult, bee-executing step 6):** a COMPACT DIGEST only — cell id, one-paragraph change summary, file list with a one-liner per file, the `CONTEXT.md` path. Never full file excerpts: nothing failed, the advisor is sanity-checking shape and risk, and the semantic judge plus the feature verify independently backstop correctness.
+
+Either shape passes **inline in the consult prompt or via stdin — never a `/tmp` path** (critical pattern 20260708). Never include secrets or env values.
 
 **Transport** — the `Advisor` line names the advisor and how to consult it:
+<!-- bee:only claude -->
+- **Model-shaped advisor:** consult via your own Agent tool, with the model param set to the named advisor model, and the dispatch `description` starting **exactly** `advisor-consult <cell-id>: <advisor-model>` — this is the A2 attribution record; bee-swarming's goal-check reads it from `.bee/logs/dispatch.jsonl`. Fallback if Agent dispatch is unavailable or rejected: a headless one-shot `claude -p --model <advisor-model>` call, same evidence bundle via stdin.
+<!-- bee:end -->
+<!-- bee:only codex -->
 - **Model-shaped advisor:** consult via Codex-native subagent dispatch at the named advisor model, recording the same `advisor-consult <cell-id>: <advisor-model>` attribution that bee-swarming's goal-check reads from `.bee/logs/dispatch.jsonl`. The transport stays runtime-native (D10): a model-shaped transport that is unavailable or rejected surfaces in the Consults section (spending at most one budget slot, per the transport-error rule below) — never a silent fallback to a cross-vendor CLI, unless the advisor slot itself is configured as that CLI (a cli-shaped advisor, next).
+<!-- bee:end -->
 - **cli-shaped advisor:** run the given command with the evidence bundle on stdin, reusing the External Executors output-capture discipline.
 - A **transport error** (non-zero exit, rejected dispatch, a hang past the External Executors timeout discipline) is **not advice** — it burns at most **one** budget slot total for the whole claim, and is never retried in a storm. Continue to the next step of the loop, or `[BLOCKED]` once the budget is spent.
 

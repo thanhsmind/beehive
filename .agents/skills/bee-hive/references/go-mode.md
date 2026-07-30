@@ -4,7 +4,7 @@ Load this when executing go mode. Go mode is the full bee pipeline from raw feat
 
 Trigger: `/go [feature]`, "run the full pipeline", or "go mode".
 
-**Lane fast paths short-circuit this diagram** (bee-hive Modes and Lanes): `docs` lane skips the pipeline entirely (announce → write → format-check → capture). `tiny`/`small` collapse Steps 2–5 into: no plan.md (`tiny`, D3) or an opt-in scoping synthesis + plan.md (`small`, D4) → draft cell(s) previewed before persist, inline reality check → **one merged shape+execution gate** → one dispatched execution worker (AO14) → orchestrator-authored done-report → scribing. The full diagram below is the `standard`/`high-risk` pipeline.
+**Lane fast paths short-circuit this diagram** (bee-hive Modes and Lanes): `docs` lane skips the pipeline entirely (announce → write → format-check → capture). `tiny`/`small` collapse Steps 2–5 into: no plan.md (`tiny`, D3) or an opt-in scoping synthesis + plan.md (`small`, D4) → draft cell(s) previewed before persist, inline reality check → **one merged shape+execution gate** → execution (tiny: inline, exec-speed D6; small: one dispatched execution worker, AO14) → orchestrator-authored done-report → scribing. The full diagram below is the `standard`/`high-risk` pipeline.
 
 ```text
 User: "/go [feature]"
@@ -59,7 +59,7 @@ DONE — verified, unreviewed, development continues
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-Separately, `standard`/`high-risk` swarming waves also run a semantic checklist judge at goal-check time per capped `behavior_change` cell (D4, table in `bee-hive/references/routing-and-contracts.md`) — that is verification of the cell, not the boxed review flow above, and never triggers Gate 4 on its own.
+Separately, `standard`/`high-risk` swarming waves also run a semantic checklist judge once per slice at slice close over its capped `behavior_change` cells (exec-speed D8; table in `bee-hive/references/routing-and-contracts.md`) — that is verification of the cells, not the boxed review flow above, and never triggers Gate 4 on its own.
 
 ## Pre-Pipeline: Bootstrap
 

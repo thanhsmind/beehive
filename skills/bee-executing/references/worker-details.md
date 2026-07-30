@@ -233,16 +233,19 @@ Fix the root cause and rerun the exact failing command. After two serious attemp
 
 ## Atomic Commit
 
-One commit per cell, cell id in the message:
+One commit per cell. The subject describes the change — imperative
+mood, no process narration, no counts, no cell id; the cell id rides
+the last line of the body as a trailer (ids live in records, not in
+subjects — Communication contract rule 8):
 
 ```bash
 BEE_AGENT_NAME="<name>" git add <files>
-git commit -m "feat(<cell-id>): <summary matching the cap outcome>"
+git commit -m "<Imperative summary matching the cap outcome>" -m "Cell: <cell-id>"
 ```
 
 ## Result Field Spec
 
-Every result starts with exactly one token and includes, minimum: nickname, cell id, files touched/requested, reservation outcome (released yes/no), verification result, and the parent's next action. Mirror the result into `docs/history/<feature>/reports/<cell-id>.md` as a short summary that **links** the cell (`.bee/cells/<cell-id>.json`) for the full trace and evidence — never a second copy of the `verification_evidence` JSON or the verify output (decision 0009: the trace is the single source).
+Every result starts with exactly one token and includes, minimum: nickname, cell id, files touched/requested, reservation outcome (released yes/no), verification result, and the parent's next action. When the cell owes a report file (`[BLOCKED]`/`[HANDOFF]`/consult-carrying/explicit request — exec-speed D10), mirror the result into `docs/history/<feature>/reports/<cell-id>.md` as a short summary that **links** the cell (`.bee/cells/<cell-id>.json`) for the full trace and evidence — never a second copy of the `verification_evidence` JSON or the verify output (decision 0009: the trace is the single source).
 
 When dispatched with native worktree isolation, also report the observed working
 directory, symbolic ref (or detached state), and resulting commit. These values
@@ -296,7 +299,7 @@ Classic/spot-use path (main-verifies D1) — the sanctioned default is the featu
   | change_class | lane | tier | what capCell accepts |
   |---|---|---|---|
   | `refactor` / `formatting` | every lane, **including `high-risk`** | `suite-green` | the existing suite passing is proof enough; a **new** test file in the diff is refused outright — `new_suite_reason` (D3, below) can NOT override this. Needing a new suite for a "refactor" means the cell is misclassified. |
-  | `behavior` / `api` | `tiny` / `small` / `standard` | `existing-targeted-green` | the cell's targeted scope of the **existing** suite passing — **author no new test here** (slice-tail-test-batching P1, spec #80/#85): that moves to the slice's one trailing `test` cell. `verify` is still a runnable command recorded with output, so the cap still proves you didn't break what exists. |
+  | `behavior` / `api` | `tiny` / `small` / `standard` | `existing-targeted-green` | the cell's targeted scope of the **existing** suite passing — **author no new test here** (slice-tail-test-batching P1, spec #80/#85): that moves to the slice's one trailing `test` cell. `verify` is still a runnable command recorded with output, so the cap still proves you didn't break what exists. At `tiny`/`small`, when the behavior is NOT a public contract and carries no hard-gate flag, a **verified transcript** is equally legal proof (proof-economy, decision 2bb2cb27): run the real command that demonstrates the behavior and record it with its decisive output via `cells verify` — no new test authored; the trailing cell's coverage judgment still runs at slice close. |
   | `bugfix` | `tiny` / `small` / `standard` | `targeted-green` | **unchanged — repro-first stays**: write the failing repro **before** the fix. It is diagnosis evidence, not coverage ceremony; P1 amended `behavior`/`api` only. |
   | `test` (the slice's consolidated cell) | every lane | `targeted-green` | its own new suite passing over the slice's **net behavior** — happy path, edge cases, error paths — for the surfaces the slice's cells declared. Not per-cell internals. |
   | `bugfix` / `behavior` / `api` | `high-risk` | `red-first` | the scoped red-first below still applies in full: `red_failure_evidence` ≥80 chars, anti-duplicate floor. |

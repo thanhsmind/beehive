@@ -129,4 +129,6 @@ This role is a single-shot gesture, not a loop (D11): make **one pass** over the
 | On red, write the marker then report, once, no retry | `mkdir -p .bee/tmp && touch .bee/tmp/bee-herding.red.<slug>`, then `herdr pane send-text <chat_pane_id> "..."` |
 | `WORKTREE_MERGE_MAIN_DIRTY` | Anomaly, report it — never a silent skip |
 
-Violating the letter of the rules above is violating the spirit of the rules.
+The merge role runs on rails: deviate only through the typed halts above,
+each recorded — never a silent judgment call (the Judgment contract's
+orchestrator latitude does not apply inside an integration transaction).

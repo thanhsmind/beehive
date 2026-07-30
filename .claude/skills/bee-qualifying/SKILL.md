@@ -69,7 +69,10 @@ of a live prompt.
 - running the human Socratic dialogue directly instead of handing off to `bee-exploring`
 - writing CONTEXT.md directly instead of routing through `bee-context-locking`
 
-Violating the letter of the rules is violating the spirit of the rules.
+When a rule's letter stops serving its purpose here, say so out loud and
+deviate with a recorded reason — boundary rules (gates, state, secrets) hold
+as written; silent deviation is the defect (bee-hive routing reference,
+"Judgment contract").
 
 Clear item: planning invoked, both gates settled (auto or human), item marked in-flight —
 invoke bee-context-locking skill for the write, then bee-planning. Parked item: brief

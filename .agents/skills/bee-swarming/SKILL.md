@@ -40,6 +40,17 @@ return to bee-planning instead — see Completion Signals below).
 - Sweep stale reservations: `reservations sweep`
 - Critical patterns read: bundle → `docs/knowledge/index.md` `## Critical patterns`; no bundle → `docs/history/learnings/critical-patterns.md` when present.
 
+<!-- bee:only claude -->
+## Opt-in Native Worktree Dispatch
+
+Opt-in Git-consistency mode for an enabled wave of 2+ workers (never
+tiny/small's single-worker dispatch); enabling cells `worktree-isolation-1..3`
+serialize first, `worktree-isolation-4` is the sole one-worker validation
+exception. Protected pre-dispatch attestation, the three-check re-attest gate
+(identity/ancestry/diff containment, typed halts), and the full threat model:
+`references/swarming-reference.md` ("Native Worktree Integration Transaction",
+"Threat model and protected attestation").
+<!-- bee:end -->
 
 ## Operating Contract
 
@@ -51,7 +62,7 @@ return to bee-planning instead — see Completion Signals below).
 | 4. Judge tier + advisor | Judge the tier (extraction/generation/ceiling) per cell, record it (`cells tier`), resolve the advisor slot — add the `Advisor` line unless it's the same-model no-op. |
 | 5. Record | `state worker add` before results arrive. |
 | 6. Tend | Collect status tokens; silence ≠ failure — inspect cells/reservations before assuming stuck; no routine mid-flight pings. |
-| 7. Goal-check `[DONE]` | Smell-triggered verify re-run only — most cells cap pending; `cells judge` for undeclared-file hits; standard/high-risk: semantic judge per `behavior_change` cell (`cells judge-record`). A worker's word is never the evidence. |
+| 7. Goal-check `[DONE]` | Smell-triggered verify re-run only — most cells cap pending; `cells judge` for undeclared-file hits; standard/high-risk: one semantic judge per slice at slice close over its `behavior_change` cells, verdicts recorded per cell (`cells judge-record`, exec-speed D8). A worker's word is never the evidence. |
 | 8. Wave clean → next | Every cell capped, goal-checked, judge-intact — no suite run; final slice: run + record the ONE feature verify first, door-enforced. |
 
 Full per-step mechanics and tier rubric: `references/swarming-reference.md`

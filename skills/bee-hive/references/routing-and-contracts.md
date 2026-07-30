@@ -240,7 +240,7 @@ slice's demo posts as a PR comment.
 
 ### Progress ticks — worked examples (spec #81 P4, user directive 2026-07-28)
 
-**The rule itself lives in `AGENTS.md` critical rule 17**, not here: one short chat line
+**The rule itself lives in `AGENTS.md`'s "Communicate in work language" section**, not here: one short chat line
 per perceivable pipeline step, on by default, the fixed format `<glyph> <event>: <what> —
 <key fact>`, the glyph table, and the only two switches that produce silence (`quiet`,
 which never silences the `✗` line, and `ship_visibility`, which reaches only the two PR
@@ -271,15 +271,15 @@ alone the moment it happens. `standard`/`high-risk` keep one line per step.
 | Event | Line |
 |---|---|
 | route recorded | `✓ route recorded: refactor · small · 2 files` |
-| concurrency plan stated | `▸ concurrency plan: 3 cells parallel — disjoint files` (serial named: `▸ concurrency plan: cf-2 serial — same file as cf-1`) |
+| concurrency plan stated | `▸ concurrency plan: 3 cells parallel — disjoint files` (serial named work-first: `▸ concurrency plan: the registry rewrite waits — same file as the parser fix`) |
 | gate passed | `✓ gate 2 passed: work shape approved — 3 cells, small lane` |
 | gate auto-approved (bypass) | `⚡ auto-approved Gate 2 (bypass): work shape — 3 cells, small lane` |
 | cells created | `✓ cells created: 3 cells — 1 wave, disjoint files` |
-| worker dispatched | `▸ worker dispatched: vt-1 — rewriting the progress-ticks section` (parallel siblings named together: `▸ 3 workers dispatched: vt-1, vt-2, vt-3 — disjoint files, parallel`) |
-| `[DONE]` received | `✓ vt-1 done — routing-and-contracts.md rewritten, commit a1b2c3d` |
-| `[BLOCKED]` received | `✗ vt-2 blocked — reservation conflict on shared.md` |
-| cell capped | `✓ cell capped — vt-1: tick catalog rewritten` |
-| fix cell opened | `▸ fix cell opened — red import in worker.mjs, cell fix-3` |
+| worker dispatched | `▸ worker dispatched: rewriting the progress-ticks section` (parallel siblings: `▸ 3 workers dispatched — disjoint files, parallel`) |
+| `[DONE]` received | `✓ ticks section rewritten — commit a1b2c3d` |
+| `[BLOCKED]` received | `✗ blocked: reservation conflict on shared.md — cell vt-2` (the id trails only because the user may need the handle to act) |
+| cell capped | `✓ capped: tick catalog rewritten` |
+| fix cell opened | `▸ fix opened: red import in worker.mjs` |
 | feature verify started | `▸ feature verify started — full suite before close` |
 | feature verify green | `✓ feature verify green — 412 tests, 38s` |
 | feature verify RED | `✗ feature verify RED — 2 failures, fix-first cell opened` |
@@ -295,7 +295,7 @@ alone the moment it happens. `standard`/`high-risk` keep one line per step.
 | demo posted | `✓ slice <n> demo — <artifact>` |
 
 **Which catalog rows the two switches reach.** The switches are stated as rule in
-`AGENTS.md` critical rule 17; what belongs here is their effect on the rows above.
+`AGENTS.md` ("Communicate in work language"); what belongs here is their effect on the rows above.
 `quiet: true` in `.bee/config.json` silences every row except the `✗` red/refusal ones,
 which stay visible regardless. `ship_visibility: "off"` silences exactly two rows —
 draft PR opened and demo posted — and leaves every other row firing; it governs PR
@@ -436,8 +436,8 @@ Avoid "violates D5" or "non-monotonic" without immediate explanation.
 Every bee command (`bee.mjs status`, `cells`, `reservations`, `decisions`, onboarding, cell verify
 commands) is run by the agent itself the moment the workflow calls for it — never printed for the
 user to execute, never "run this and tell me the output". The only human actions in bee are gate
-approvals, decision answers, and privacy approvals. `AGENTS.md` critical rule 9 states the same law
-in one line and defers here for the full form; `SKILL.md`'s hive law 10 is the router-side pointer.
+approvals, decision answers, and privacy approvals. `AGENTS.md` states the same law inside its
+workflow boundaries and defers here for the full form; `SKILL.md`'s hive law 10 is the router-side pointer.
 
 ### Silent Bookkeeping — work language only (decision 1689af1b)
 
@@ -509,6 +509,14 @@ one of these):
    never expanded mid-task.
 7. **Evidence before claims** (hive law 8's chat surface): "done", "green", "fixed"
    appear only beside fresh output in the same message.
+8. **Ids and counts never lead.** The work is the subject of every line; a cell id,
+   commit hash, or decision id may TRAIL as a handle ("— cell vt-2") when the reader
+   genuinely needs it to act, and is otherwise omitted. Counts appear only as
+   evidence beside a claim (test totals, timings next to a green) — never as
+   achievement statistics ("fixed 12 issues", "updated 47 files"); the diff and the
+   trace carry the numbers. Scope: chat and commit subjects. Protocol and record
+   surfaces are exempt — worker status tokens, cap traces, decision logs, and
+   CONTEXT.md keep their ids, because that is where ids live.
 
 **When to break the rules:** a destructive or irreversible action gets full explicit
 clarity — safety beats brevity, always. An explicit "explain / walk me through"
@@ -601,6 +609,41 @@ The one orchestration pattern bee runs: the session model (the owner's best mode
 - **Execution worker (AO14, second named class)** — the Delegation contract's other dispatch shape, distinguished from the I/O-offload worker by **authority and state effects**, not by task size. Unlike an I/O worker, an execution worker **does** register in the swarm registry (`bee.mjs state worker add`) and **does** take reservations under its own nickname; it implements exactly one assigned cell (claim → read `read_first` → implement within `files` → commit → cap → release; verify is classic-path spot use, main-verifies D4) and returns exactly one status token (`[DONE]`/`[BLOCKED]`/`[HANDOFF]`/`[NOOP]`) — it is authority-bearing, never a digest-only gather. Every `bee-swarming` worker dispatch belongs to this class: full waves in `standard`/`high-risk`, and the single dispatched worker that carries out `small` cell implementation (`bee-swarming/SKILL.md`'s Single execution worker section) — never zero of them from `small` up; `tiny` may execute inline in the orchestrator session instead (exec-speed D6), and when a tiny cell IS dispatched it belongs to this class too. **Parallel by default (hardening-7, D1):** a `small` lane's 1-3 cells fan out to concurrent execution workers whenever every cell's product file set is disjoint — reservations are the proof and the police, 3-4 live workers is the cap; serial requires a named conflict recorded in the dispatch note (worker returns and its done-report lands before the conflicting next cell is claimed/dispatched) — never assumed as the default. **Parallel criterion:** cells run in parallel whenever every cell's *product* file set is provably disjoint; a cell's regen targets (release manifest, onboarding ledger, plugin mirrors) drop out of that comparison when it carries `regen_obligation_ack: "wave-barrier"` (the orchestrator then owes the full regen chain once, at wave close); any *actually shared* product file still forces serial — in doubt, serial. An independent reviewer or checker (plan-checker, cell reviewer, panel member) is **neither** class: it is a review-class dispatch — read-only, no registry entry, no reservations, no cell of its own — and is never called an "execution worker."
 - **cli gather branch (plan 2A-ii, decision 34398e69)** — when `resolveTier(root, 'generation', runtime, {for:'gather'}).type === 'cli'`, a gather dispatch runs the configured command **verbatim** via the shell — nothing appended, ever (W7); the prompt goes in on **stdin**; every path handed to the worker is **absolute** (W9); the run is **read-only** by contract. **Stdout IS the digest**, framed by a delimiter contract: the worker prompt instructs the CLI to emit its digest between `<<<BEE_DIGEST` and `BEE_DIGEST>>>` lines, and the orchestrator extracts only what sits between them — missing delimiters or an empty digest is a **failed run**, surfaced loudly, never accepted as a silent green (fail-open-masking pattern, critical-patterns 20260716-class). No `result.json`, no cell, no reservation, no `bee.mjs state worker add` registration for a gather, same as any other I/O worker. **Known measurement gap, named not solved here:** a Bash-launched gather emits zero `dispatch.jsonl` rows (W-d) — closing that gap is Slice 3's job, not this branch's.
 
+### Judgment contract — rails for workers, boundaries for the orchestrator
+
+Rules bind differently by rule kind and by role (exec-speed retrospective,
+2026-07-30 — adopted after a live session showed the same work done at equal
+quality and a fraction of the cost once form rules stopped binding the
+orchestrator).
+
+**Three rule kinds:**
+
+1. **Boundary rules** hold as written, for every role, at every bypass level
+   that does not explicitly lift them: gate-before-source, proof at feature
+   close, CLI-only state mutation, reservations/holds, secret handling, the
+   feature-verify close door. These constrain OUTCOMES; they bind rarely and
+   at the right moments. They are never "form".
+2. **Form rules** constrain the PATH between boundaries: step order, line
+   shapes, templates, tick phrasing, report structure. For a cold dispatched
+   worker they are rails — followed as written, deviation only through the
+   worker's own Deviation Rules. For the orchestrator they are DEFAULTS:
+   when a form rule's letter stops serving its purpose in the situation at
+   hand, the orchestrator says so in one line and deviates with a recorded
+   reason (a decision-log line or a deviation note in the relevant trace).
+   Silent deviation is the defect; named deviation is the system working.
+3. **Environment-conditioned rules** presuppose a fact about the world — a
+   CI, a git history, a runnable regen chain, a GitHub remote. Such a rule
+   CHECKS its precondition first; absent, it names the gap and takes its
+   recorded fallback (the ack field, the sentinel value, the documented
+   downgrade) — it never demands its ritual in an environment that cannot
+   satisfy it, and needing to "work around" such a rule is a signal the rule
+   is missing its precondition check, worth a friction entry.
+
+**What this never licenses:** skipping a gate, capping without the proof
+path, hand-editing state, writing through a reservation, reading secrets
+unprompted, or silencing a red. Judgment widens the path, never the
+boundary.
+
 ### Goal-check judge tier (D4/D5, self-correcting-loop) — verification, not review
 
 The swarming goal-check (P12, decision 0018) gains a **semantic** judge tier by lane, layered on the existing frozen judge (`bee cells judge`, undeclared-file check) — this is verification of a capped cell, never the user-invoked review session (decision 565e68d0 stands; Gate 4 and the candidates ledger are untouched by every row below).
@@ -608,7 +651,7 @@ The swarming goal-check (P12, decision 0018) gains a **semantic** judge tier by 
 | Lane | Judge | Model | Verdict handling |
 |---|---|---|---|
 | `tiny` / `small` | mechanical only (frozen judge) — unchanged | — | — |
-| `standard` | ONE checklist judge — a pinned `bee-review` dispatch, review tier, read-only — per SLICE at slice close, covering every capped `behavior_change` cell of that slice in one dispatch (exec-speed D8; a single-cell slice is identical to the old per-cell shape); returns one verdict per cell, each checked against `must_haves` truths vs the diff, CONTEXT decision citations, task-to-diff alignment | review-tier config | per cell, each verdict recorded via `cells judge-record`: `PASS` → counts; `NEEDS_REVISION` + `automatic` → cell NOT done, re-dispatch with the exact failing checks + a ledger entry; `NEEDS_REVISION` + `authority` → escalate to the user |
+| `standard` | SELECTIVE (proof-economy, decision 2bb2cb27): the per-slice checklist judge — a pinned `bee-review` dispatch, review tier, read-only, covering every capped `behavior_change` cell of the slice in one dispatch (exec-speed D8) — dispatches when ANY of: the goal-check smells, the slice contains a worker's (or model's) first cells of the feature, or the ~1-in-3 sample falls on it (state the sample choice in the slice-close tick; never silently skip). ESCALATION: any `NEEDS_REVISION` puts that worker's remaining slices on judge-every-slice for the rest of the feature. Unjudged slices still pass the frozen judge per cell — that stays universal and free | review-tier config | per judged cell, each verdict recorded via `cells judge-record`: `PASS` → counts; `NEEDS_REVISION` + `automatic` → cell NOT done, re-dispatch with the exact failing checks + a ledger entry; `NEEDS_REVISION` + `authority` → escalate to the user |
 | `high-risk` | same checklist judge as `standard` | independence preferred — model differs from the builder's resolved model; if equal, record `model_independence: "same-model"` honestly and the judge still runs | same verdict handling as `standard` |
 
 The judge returns the D5 schema (`judge-verdict/1`), recorded via `bee cells judge-record`; free-prose output is a failed judge run, re-dispatched once, then recorded `unverified`. This table is the single home for the judge-tier rule (D4+Δ6) — every other 565e68d0-adjacent surface (bee-swarming SKILL + reference, bee-hive SKILL both sites, go-mode, AGENTS.md + its template, bee-scribing SKILL) carries only a one-line pointer back here, never a repeated table.
@@ -616,6 +659,8 @@ The judge returns the D5 schema (`judge-verdict/1`), recorded via `bee cells jud
 ### Verify Ladder (D4, `e54878b1`, superseded by ci-owned-verify D6, then by main-verifies D4)
 
 A cell's `verify` field, when a cell runs one at all, is always its **targeted** suite (seconds), never the full configured `commands.verify` chain. The four-milestone ladder above is retired: no local full run is ever a workflow obligation. Per-cell proof is now the exception, not the rule: cells cap by default through `--feature-verify-pending` (main-verifies D1), and the dev loop's own broader check, `commands.test` (the impacted run, `run_verify.mjs --impacted` / `--impacted-from-git`, authored from the impact registry `impact_registry.mjs --query`), runs ONCE per feature at final-slice close (`bee-swarming/references/swarming-reference.md`, "Feature verify at close, in full") instead of at every wave close — worktree merge still runs it instead of the full chain. The full `commands.verify` chain is CI-owned: it runs on the project's own CI cadence (push, nightly, or scheduled — the host workflow decides) and auto-files a `verify-red` issue when red. Session finish also runs `commands.test` (impacted), not the full chain (`AGENTS.md`); the release flow runs the impacted suite locally and then dispatches the CI full run (`gh workflow run CI --ref main`) right after the tag push — a red result there arrives back as the same `verify-red` issue, not a local gate. Judges and reviewers verify against the diff and `must_haves`, never by running the full chain as part of a verdict.
+
+**Suite rent (proof-economy, decision 2bb2cb27).** A suite is not immortal: every guard suite pays rent by catching real defects. A suite that has not caught one in ~6 months is a demotion candidate — moved out of the local/impacted hot path to the CI/nightly tier by a RECORDED decision (never a silent delete; the suite still runs, just not on every developer loop). `bee-grooming` owns the audit: read the verify logs for which suites have gone red for a real defect (environment reds don't count as rent paid), list the never-fired tenants, and propose demotions. Institutional/meta guards (fences, parity checks, doctrine gates) are the usual tenants — product-behavior suites earn rent more often and mostly stay.
 
 <!-- bee:only codex -->
 ### Native Codex subagent tending

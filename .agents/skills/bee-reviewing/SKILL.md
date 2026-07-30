@@ -106,7 +106,7 @@ Violating the letter of these rules is violating the spirit of these rules.
 
 ## Handoff
 
-Record the decision and close the session — closes the REVIEW, not the feature; every feature already closed independently. `standard`/`high-risk`: `bee-briefing` walkthrough mode writes `walkthrough.md` per feature. A P1 fix settling new behavior triggers `bee-scribing` (AGENTS.md rule 8): a settled decision, not a chain hop.
+Record the decision and close the session — closes the REVIEW, not the feature; every feature already closed independently. `standard`/`high-risk`: `bee-briefing` walkthrough mode writes `walkthrough.md` per feature. A P1 fix settling new behavior triggers `bee-scribing` (AGENTS.md, "Capture what settles"): a settled decision, not a chain hop.
 
 | Reference | When to Load |
 |---|---|

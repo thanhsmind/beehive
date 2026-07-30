@@ -42,7 +42,7 @@ generated renders never count:
 - docs/tiny/small: nothing more — merged shape+execution gate, execution per lane (tiny: inline or dispatched, exec-speed D6; small: one dispatched execution worker), no `bee-planning`; standard/high-risk: the full chain.
 - Uncertainty resolves downward, never up into skipping. One hard-gate flag = `high-risk` at one file; re-counting to dodge a threshold = already `standard`.
 - One re-lane checkpoint after first evidence: measured demotion only, never twice, never with a hard-gate flag; promotion always open ("Re-lane checkpoint").
-- Review is on demand — every lane closes `unreviewed`; one dispatched worker per lane; `small` SERIAL; standard/high-risk: goal-check judge once per slice over its capped `behavior_change` cells (exec-speed D8, "Goal-check judge tier"); tiny/small: preview-then-persist, orchestrator-authored done-report ("Lane ceremony in full").
+- Review is on demand — every lane closes `unreviewed`; one dispatched worker per lane; `small` SERIAL; standard: selective slice-close goal-check judge (smell / first slice from a worker / ~1-in-3 sample; NEEDS_REVISION escalates — proof-economy 2bb2cb27); high-risk: judge every slice (exec-speed D8, "Goal-check judge tier"); tiny/small: preview-then-persist, orchestrator-authored done-report ("Lane ceremony in full").
 
 ## Onboarding
 
@@ -105,7 +105,9 @@ impacted tests locally, full suite CI-owned ("CI status gate").
 
 ## Priority Rules (hive law)
 
-Rules 2-4, 12 are in `AGENTS.md` (auto-loaded).
+The always-loaded `AGENTS.md` block carries the boundary rules
+(gate-before-source, proof at close, CLI-only state, reservations,
+concurrency, ids-never-lead); this list adds the router-side laws.
 
 1. P1 review findings always block.
 2. At ~65% context, write `.bee/HANDOFF.json` and pause.
@@ -116,7 +118,7 @@ Rules 2-4, 12 are in `AGENTS.md` (auto-loaded).
 7. "done/passing/fixed" needs fresh command output in the same message.
 8. Lanes scale ceremony, never memory: scribing sync per `behavior_change` cap; capture on settle; every close: a capture line or "nothing settled" ("Capture discipline").
 9. The agent runs the machinery, never the user ("The agent runs the machinery").
-10. Work language only; every perceivable step emits one tick line, on by default (rule: `AGENTS.md` 17; "Silent Bookkeeping", "Progress ticks").
+10. Work language only; every perceivable step emits one tick line, on by default (rule: `AGENTS.md` "Communicate in work language"; "Silent Bookkeeping", "Progress ticks").
 11. No hand-edits to `.bee/*.json(l)`; CLI verbs only; `state set` needs `--owner`; no verb → file friction first.
 12. Hooks are a safety net, never the authority; never retry a blocked action (`AGENTS.md` Guardrails).
 13. Headless: never ask; defer into `Outstanding Questions`; never self-approve a gate ("Headless mode").
@@ -126,7 +128,11 @@ Rules 2-4, 12 are in `AGENTS.md` (auto-loaded).
 
 docs-only change through the full pipeline · a gate with no plain-language
 layer · a gate the user cannot restate · a bee command handed to the user to
-run. Violating the letter of the rules violates their spirit.
+run · a rule deviated from silently. When a rule's letter stops serving its
+purpose in the situation at hand, say so out loud and deviate with a named,
+recorded reason (decision log or deviation note) — boundary rules (gates,
+proof at close, CLI-only state, reservations, secrets) hold as written;
+form rules bend on judgment, never in silence ("Judgment contract").
 
 ## Reference Map
 

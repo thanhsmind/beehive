@@ -214,11 +214,16 @@ single worker — never wave analysis or multi-cell assignment.
      ask the worker's diff to justify each file or re-dispatch with
      corrected scope. A worker that rewrites the test is not passing the
      test.
-   - **Semantic judge, `standard`/`high-risk` only (D4, exec-speed D8):**
-     ONE checklist-judge dispatch per SLICE at slice close, covering every
-     capped `behavior_change` cell of that slice (tier table in
+   - **Semantic judge, `standard`/`high-risk` only (D4, exec-speed D8,
+     proof-economy 2bb2cb27):** ONE checklist-judge dispatch per SLICE at
+     slice close, covering every capped `behavior_change` cell of that
+     slice. `high-risk`: every slice. `standard`: selective — dispatch on
+     smell, on a worker's/model's first slice of the feature, or on the
+     ~1-in-3 sample (choice stated in the slice-close tick, never a silent
+     skip); any `NEEDS_REVISION` escalates that worker to judge-every-slice
+     for the feature's remainder (tier table in
      `bee-hive/references/routing-and-contracts.md`, "Goal-check judge
-     tier"); the judge returns one verdict per cell and each verdict is
+     tier"). The judge returns one verdict per cell and each verdict is
      recorded with `cells judge-record` — per-cell records and cap teeth
      unchanged; a single-cell slice is identical to the old per-cell shape.
      This is goal-check verification, distinct from the no-auto-reviewer
