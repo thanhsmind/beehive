@@ -1,0 +1,104 @@
+{
+  "id": "es-5",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "bee-state-sync: skip cells scan + projection rebuild when the cells store is unchanged",
+  "behavior_change": true,
+  "files": [
+    ".bee/bin/hooks/bee-state-sync.mjs"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    ".bee/bin/hooks/bee-state-sync.mjs"
+  ],
+  "action": "Per exec-speed D5. After the heartbeat/hold-renewal block (which ALWAYS still runs), compute a cheap change stamp for <root>/.bee/cells: readdirSync top-level *.json names + per-file statSync mtimeMs; stamp = { count, newestMtimeMs, namesHash (sha256 of sorted names) }. Compare to .bee/logs/state-sync.stamp.json. Unchanged + stamp exists => return 0 WITHOUT importing cells.mjs / lock.mjs / state-projection.mjs (skip the listCells scan and the locked rebuild entirely). Changed or stamp missing/corrupt => run today's full path, then write the new stamp (fail-open write, same discipline as appendHookLog). Stat-only scan is the point: never read/parse cell JSON on the fast path. Confirm listCells(root, {}) semantics cover exactly the top-level .json files you stat (read cells.mjs listCells first; if it recurses into subdirs like archive/, mirror that in the stamp scan).",
+  "verify": "node scripts/run_verify.mjs --only test_config_validate",
+  "must_haves": {
+    "truths": [
+      "heartbeat touch + hold renewal run on every invocation regardless of stamp",
+      "unchanged store: no cells.mjs import, no store lock taken",
+      "changed store: counts + last_activity refresh exactly as today, stamp updated",
+      "corrupt/missing stamp falls back to the full path, never a throw"
+    ]
+  },
+  "decisions": [
+    "exec-speed D5"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "host checkout without packages/bee source tree: regen chain (onboard_bee/render/manifest --write) unrunnable here; onboarding ledger refreshed by es-12; release manifest absent at baseline (pre-existing red, see plan.md)",
+  "status": "capped",
+  "trace": {
+    "worker": "dave",
+    "outcome": "state-sync stamp debounce; unchanged-store run ~91ms vs full-path run ~179ms",
+    "files_changed": [
+      ".bee/bin/hooks/bee-state-sync.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:36:04.482Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:30:57.578Z",
+    "warnings": [],
+    "feature_verify": "pending",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "heartbeat + hold renewal always run",
+            "status": "PASS",
+            "evidence": "bee-state-sync.mjs:124-164 runs before the debounce gate at :172-176; no early return precedes it except the pre-existing !root / missing state.mjs guards."
+          },
+          {
+            "id": "unchanged store skips cells.mjs / lock.mjs / state-projection.mjs",
+            "status": "PASS",
+            "evidence": "all three imports live after the `if (stampsEqual(...)) return 0;` gate; the only added static import is fsutil.mjs (fs/path/crypto only)."
+          },
+          {
+            "id": "stamp scan mirrors listCells(root, {})",
+            "status": "PASS",
+            "evidence": "cells.mjs listCells skips directories and non-.json at top level and does not touch archive/ unless includeArchived; computeCellsStamp does exactly the same walk, stat-only, no JSON parsed."
+          },
+          {
+            "id": "changed store refreshes and stamps",
+            "status": "PASS",
+            "evidence": "rebuildStateProjection under withStoreLock unchanged; writeStateSyncStamp runs only after a successful locked rebuild, so a LOCK_BUSY skip deliberately leaves the stamp stale."
+          },
+          {
+            "id": "corrupt/missing stamp falls back, never throws",
+            "status": "PASS",
+            "evidence": "readJson returns the null fallback on ENOENT and on parse error; stampsEqual requires both operands and the right types, so null/garbage reads as changed."
+          },
+          {
+            "id": "fail-open discipline preserved",
+            "status": "PASS",
+            "evidence": "computeCellsStamp catches readdir/stat errors; writeStateSyncStamp swallows write failures; the whole body stays inside the logCrash -> return 0 boundary."
+          },
+          {
+            "id": "matches D5, not more permissive",
+            "status": "PASS",
+            "evidence": "D5 authorizes skipping both the listCells scan and the projection rebuild on an unchanged store, with heartbeat/hold renewal always running — exactly what the code does."
+          },
+          {
+            "id": "namesHash covers same-count swaps",
+            "status": "PASS",
+            "evidence": "sha256 over sorted names catches an add+delete that count/mtime alone would miss."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-30T04:04:03.662Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

@@ -1,0 +1,50 @@
+{
+  "id": "es-12",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "Refresh onboarding.json managed hashes for every .bee/bin file this feature edited",
+  "behavior_change": false,
+  "files": [
+    ".bee/onboarding.json"
+  ],
+  "read_first": [
+    ".bee/onboarding.json",
+    "docs/history/exec-speed/plan.md"
+  ],
+  "action": "Per exec-speed plan (ledger parity). After es-1/es-3/es-4/es-5 cap: recompute sha256 (hex, over raw bytes) for every .bee/bin/** file changed by this feature (bee.mjs; hooks/adapter.mjs, bee-tools-logger.mjs, bee-write-guard.mjs, bee-state-sync.mjs; lib/command-registry.mjs, lib/guards.mjs, lib/guard-lite.mjs new entry) and update the matching entries under managed.helpers / managed.lib / the hooks section of .bee/onboarding.json via a small node script (never hand-typing hashes). Add guard-lite.mjs as a NEW managed.lib entry alongside its siblings. updated_at refreshed. Verify: node .bee/bin/bee.mjs status --json reports onboarding drift:false.",
+  "verify": "node .bee/bin/bee.mjs status --json",
+  "must_haves": {
+    "truths": [
+      "status --json shows drift:false after refresh",
+      "only hash values + updated_at + the one new lib entry change in onboarding.json"
+    ]
+  },
+  "decisions": [
+    "exec-speed D1"
+  ],
+  "deps": [
+    "es-1",
+    "es-3",
+    "es-4",
+    "es-5"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "queen",
+    "outcome": "onboarding.json managed hashes refreshed for the 8 edited/new .bee/bin files (bee.mjs; 4 hooks; command-registry, guards, NEW guard-lite); status --json reports drift:false",
+    "files_changed": [
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:52:25.146Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:51:49.894Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  }
+}

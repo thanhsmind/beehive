@@ -1,4 +1,9 @@
 {
+  "_note": "Recommended .claude/settings.json after exec-speed (2026-07-30). Same wiring you removed, now safe to restore: es-3 made the per-call cost cheap (tools-logger no longer loads state.mjs; write-guard fast-paths Read/Glob/Grep; adapter enables the V8 compile cache). If you want the absolute-minimum overhead variant instead, change the first PreToolUse matcher to 'Edit|Write|MultiEdit|Bash|AskUserQuestion' — that drops read-side scout/secret enforcement in exchange for zero hook cost on reads. Copy this object (without _note) to .claude/settings.json to re-enable enforcement.",
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/statusline-command.sh\""
+  },
   "permissions": {
     "defaultMode": "bypassPermissions"
   },

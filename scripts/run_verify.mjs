@@ -486,6 +486,16 @@ function childEnv() {
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.BEE_SESSION_ID;
   delete env.BEE_AGENT_NAME;
+  // es-2 (exec-speed D2/plan Slice 1): persist V8 compile caches across
+  // suite children — each spawned suite is a fresh node process that would
+  // otherwise re-parse its own import graph from scratch every run. Only
+  // set a default when the caller left NODE_COMPILE_CACHE unset (an
+  // explicit caller value always wins) and CI is unset (CI runners are
+  // short-lived/parallel-sharded, so a persistent on-disk cache dir buys
+  // nothing and risks cross-job contention).
+  if (!env.NODE_COMPILE_CACHE && !process.env.CI) {
+    env.NODE_COMPILE_CACHE = path.join(os.tmpdir(), "bee-compile-cache");
+  }
   return env;
 }
 

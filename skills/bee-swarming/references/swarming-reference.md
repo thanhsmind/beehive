@@ -4,19 +4,23 @@ Load after Gate 2 approval (merged shape+execution, D2), before spawning the fir
 
 ## Single execution worker in full
 
-For `tiny` and `small`, the merged Gate 2+3 question and the frozen-judge
+For `small`, the merged Gate 2+3 question and the frozen-judge
 check stay with the orchestrator, but implementation itself runs through
 **one dispatched execution worker** (AO14) — a lighter direct Agent dispatch
 under the same execution contract as a swarm worker (same worker prompt
 template, same status-token protocol, same reservation and cap discipline),
 never a full bee-swarming wave: no wave analysis, no reviewers, no panels.
+`tiny` may instead execute inline in the orchestrator session (exec-speed
+D6 — same merged gate, cap discipline, and done-report; dispatch stays
+legal and, when chosen, follows this same contract).
 The orchestrator claims the cell itself (D1) before spawning — same as any
 wave — then spawns it per the Operating Contract's Spawn step (param-carrying
 dispatch — a `model` param or a pinned agent type, never a bare marker) and
 the Delegation contract's execution-worker class
 (`bee-hive/references/routing-and-contracts.md`): it registers in the swarm
-registry (`state worker add`), validates the claim it was handed (`cells
-show`, never `cells claim`) and takes reservations under its own nickname,
+registry (`state worker add`), validates the claim it was handed (against
+the inlined cell JSON in its prompt, exec-speed D7 — never `cells claim`)
+and takes reservations under its own nickname,
 reads its `read_first`, implements within its `files`, commits, and caps it —
 by default through the pending path (`cells cap --feature-verify-pending`,
 main-verifies D4): no per-cell verify run, no `verification_evidence`. The
@@ -210,14 +214,17 @@ single worker — never wave analysis or multi-cell assignment.
      ask the worker's diff to justify each file or re-dispatch with
      corrected scope. A worker that rewrites the test is not passing the
      test.
-   - **Semantic judge, `standard`/`high-risk` only (D4):** per capped
-     `behavior_change` cell, dispatch the one checklist judge from the tier
-     table in `bee-hive/references/routing-and-contracts.md` ("Goal-check
-     judge tier") and record its verdict with `cells judge-record`. This is
-     goal-check verification, distinct from the no-auto-reviewer stance
-     above and from any user-invoked review session (565e68d0, Gate 4, and
-     the candidates ledger stay untouched) — `NEEDS_REVISION`/`automatic`
-     means the cell is NOT done yet.
+   - **Semantic judge, `standard`/`high-risk` only (D4, exec-speed D8):**
+     ONE checklist-judge dispatch per SLICE at slice close, covering every
+     capped `behavior_change` cell of that slice (tier table in
+     `bee-hive/references/routing-and-contracts.md`, "Goal-check judge
+     tier"); the judge returns one verdict per cell and each verdict is
+     recorded with `cells judge-record` — per-cell records and cap teeth
+     unchanged; a single-cell slice is identical to the old per-cell shape.
+     This is goal-check verification, distinct from the no-auto-reviewer
+     stance above and from any user-invoked review session (565e68d0, Gate
+     4, and the candidates ledger stay untouched) —
+     `NEEDS_REVISION`/`automatic` means the cell is NOT done yet.
    - A `[DONE]` report carrying a **Consults** section is goal-checked
      exactly like any other — advice never substitutes for fresh verify
      output; re-run the verify yourself regardless of what the advisor said.
@@ -514,7 +521,7 @@ You are a bee worker subagent.
 
 Identity:
 - Agent nickname (reservation identity): <NICKNAME>
-- Assigned cell id: <CELL_ID> (ALREADY CLAIMED for you by the orchestrator before dispatch, per D1 — do NOT run `cells claim`; validate via `cells show`: status claimed, worker <NICKNAME>)
+- Assigned cell id: <CELL_ID> (ALREADY CLAIMED for you by the orchestrator before dispatch, per D1 — do NOT run `cells claim`; validate against the inlined cell JSON below, exec-speed D7)
 - Feature: <FEATURE>
 - Model tier: <extraction|generation|ceiling> (model: <MODEL_NAME>)
 - State at dispatch: phase=<PHASE> feature=<FEATURE> gates.execution=<BOOL> (copied from the orchestrator's own fresh read; the worker never re-fetches the full payload for this)
@@ -524,6 +531,8 @@ Inputs — read these; nothing else will be provided:
 - docs/history/<FEATURE>/CONTEXT.md
 - docs/history/<FEATURE>/plan.md
 - Global constraints: <GLOBAL_CONSTRAINTS — locked D-IDs, prohibitions, budgets>
+- Your cell (inlined verbatim from the orchestrator's claim-time read — authoritative, exec-speed D7):
+  <CELL_JSON — the full .bee/cells/<CELL_ID>.json content>
 
 Contract:
 - Load the bee-executing skill immediately and follow its loop exactly.
@@ -531,13 +540,13 @@ Contract:
 - Reserve every file before writing, under your nickname; never pass a session id you were handed — reservation and claim verbs auto-derive one from your own environment when needed (D3).
 - Prefix write-heavy shell commands with BEE_AGENT_NAME="<NICKNAME>".
 - Return exactly one final status token: [DONE], [BLOCKED], [HANDOFF], or [NOOP],
-  followed by the result fields, and write a report to docs/history/<FEATURE>/reports/.
+  followed by the result fields. Report file only for [BLOCKED]/[HANDOFF]/consult-carrying
+  cells (exec-speed D10) — a routine [DONE] relies on the cap trace + this message.
 
-Startup:
+Startup (exec-speed D7 — two reads, zero CLI round-trips):
 1. Read AGENTS.md.
-2. Run node .bee/bin/bee.mjs status --brief --json (cheap live check; cells show stays the claim authority, next step).
-3. Validate ownership: node .bee/bin/bee.mjs cells show --id <CELL_ID> (confirm status claimed, worker <NICKNAME>), then read docs/history/<FEATURE>/CONTEXT.md.
-4. Reserve, implement, verify, cap, release, report.
+2. Read docs/history/<FEATURE>/CONTEXT.md. Validate ownership against the INLINED cell JSON above (status claimed, worker <NICKNAME>) — never re-run `status --brief` or `cells show` at startup; the dispatch state line and inlined cell are authoritative, and ownership is re-enforced at cap by the claim guard. A prompt missing the inlined cell JSON is malformed → [BLOCKED].
+3. Reserve, implement, verify, cap, release, report.
 ```
 
 The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are no longer a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder (AO5). The same-model no-op is the orchestrator's, run at dispatch, never left to the worker (AO4 + AO5). When present, `<TRANSPORT>` states the proven transport verbatim, matching what bee-executing's Advisor Consult section tells the worker to run:

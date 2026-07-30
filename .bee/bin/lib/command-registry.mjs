@@ -364,7 +364,7 @@ export const COMMAND_REGISTRY = [
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Cell id the verdict is being recorded against.' },
-        file: { type: 'string', description: 'Path to a judge-verdict/1 JSON payload: {schema, verdict, checks[], failure_signature?, fixability, confidence}.' },
+        file: { type: 'string', description: 'Path to a judge-verdict/1 JSON payload: {schema:"judge-verdict/1", verdict:"PASS"|"NEEDS_REVISION", checks:[{id, status:"PASS"|"FAIL", evidence}], failure_signature? (required shape-wise only on NEEDS_REVISION, which also requires >=1 FAIL check), fixability:"automatic"|"authority", confidence:"low"|"medium"|"high"}. checks rows use id/status/evidence — not name/pass/note.' },
         'builder-model': { type: 'string', description: 'The resolved model name of the cell\'s builder dispatch, from the orchestrator\'s own pinned dispatch param. Omit when not pinned.' },
         'judge-model': { type: 'string', description: 'The resolved model name of this judge dispatch, from the orchestrator\'s own pinned dispatch param. Omit when not pinned.' },
         'session-id': { type: 'string', description: 'Recording session identity, for the claim-ownership guard. Optional — resolves from CLAUDE_CODE_SESSION_ID when omitted.' },
@@ -429,13 +429,13 @@ export const COMMAND_REGISTRY = [
   {
     name: 'reservations.reserve',
     invoke: 'bee reservations reserve',
-    description: "Reserve a file or glob path for a cell. A conflicting active reservation held by another agent returns ok:false with the holder(s). Optional --session (fresh-session-handoff D3) stamps the reservation as owned by that cross-session identity, so the write guard's hold check (checkWrite) can deny another live session's write into the same path — a reservation made without --session keeps today's exact intra-swarm-only semantics. Optional --kind (multisession-native-13, D4) is 'intent' or 'lease' (default 'lease'): 'lease' is a worker's own write-time reservation and stays a hard conflict; 'intent' declares a broad/glob planning-time scope that the write guard only warns about (never hard-blocks) unless it collapses onto the exact write target.",
+    description: "Reserve a file or glob path for a cell. A conflicting active reservation held by another agent returns ok:false with the holder(s). --path also accepts a COMMA-SEPARATED list of paths (exec-speed D4) to reserve several files in one atomic, all-or-nothing batch: paths are trimmed and deduped, and every path is checked for a conflict (foreign hold, then any other agent's HARD local reservation) BEFORE anything is reserved, so an ordinary conflict reserves nothing and refuses the whole batch. This hard-conflict check applies the same --kind rule as every other path in this command: another agent's broad 'intent' row on a DIFFERENT-but-overlapping path is never itself a conflict here, exactly as it never hard-blocks the identical single-path reserve below — only an exact-resource collision, or a plain 'lease' row, refuses the batch. This call never auto-releases reservations to 'roll back' a conflict — release() has no path filter, only {agent, cell}, so an automatic rollback could destroy this same agent's OTHER, unrelated reservations on that cell. In the rare case a genuinely concurrent writer still wins one exact path after that check (a real race, not an ordinary conflict), the batch stops immediately, reports it as a distinct BATCH_RACE_CONFLICT, and leaves whatever this call already reserved in place for the caller to inspect/release by hand — it is the one case this call is not strictly all-or-nothing. A single path with no comma is unchanged (byte-identical to before this flag existed); the batch result/text shape differs — see the multi-path example. Optional --session (fresh-session-handoff D3) stamps the reservation as owned by that cross-session identity, so the write guard's hold check (checkWrite) can deny another live session's write into the same path — a reservation made without --session keeps today's exact intra-swarm-only semantics. Optional --kind (multisession-native-13, D4) is 'intent' or 'lease' (default 'lease'): 'lease' is a worker's own write-time reservation and stays a hard conflict; 'intent' declares a broad/glob planning-time scope that the write guard only warns about (never hard-blocks) unless it collapses onto the exact write target.",
     parameters: {
       type: 'object',
       properties: {
         agent: { type: 'string', description: 'Reservation identity making the request.' },
         cell: { type: 'string', description: 'Cell id the reservation is for.' },
-        path: { type: 'string', description: 'File or directory path to reserve.' },
+        path: { type: 'string', description: 'File or directory path to reserve. Comma-separated for a multi-path batch (trimmed, deduped): checked all-or-nothing before reserving anything, never rolled back afterward — see the command description.' },
         ttl: { type: 'number', description: 'Time-to-live in seconds (default 3600).' },
         session: { type: 'string', description: 'Owning cross-session identity (D3 hold). Omit to keep an intra-swarm-only reservation with no cross-session hold effect.' },
         kind: { type: 'string', description: "'intent' or 'lease' (default 'lease'). 'intent' is advisory-only (warn, never hard-block) on overlap; 'lease' is a hard conflict, unchanged from before this flag existed." },
@@ -447,6 +447,7 @@ export const COMMAND_REGISTRY = [
       'bee reservations reserve --agent worker-a --cell demo-1 --path src/example.ts --json',
       'bee reservations reserve --agent worker-a --cell demo-1 --path src/example-session.ts --session sess-fsh7 --json',
       'bee reservations reserve --agent planner --cell demo-1 --path "src/api/*" --kind intent --json',
+      'bee reservations reserve --agent worker-a --cell demo-1 --path "src/a.ts,src/b.ts" --json',
     ],
     deprecated: null,
   },

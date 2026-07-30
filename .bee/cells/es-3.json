@@ -1,0 +1,128 @@
+{
+  "id": "es-3",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "Hooks: adapter compile cache + hookEnabledLite + write-guard allow-only fast path for Read/Glob/Grep",
+  "behavior_change": true,
+  "files": [
+    ".bee/bin/hooks/adapter.mjs",
+    ".bee/bin/hooks/bee-tools-logger.mjs",
+    ".bee/bin/hooks/bee-write-guard.mjs",
+    ".bee/bin/lib/guard-lite.mjs",
+    ".bee/bin/lib/guards.mjs"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    "docs/history/exec-speed/plan.md",
+    ".bee/bin/hooks/adapter.mjs",
+    ".bee/bin/hooks/bee-tools-logger.mjs",
+    ".bee/bin/hooks/bee-write-guard.mjs"
+  ],
+  "action": "Per exec-speed D3. (a) adapter.mjs: at module top (after existing imports), guarded enableCompileCache(path to os tmpdir bee-compile-cache) in try/catch — benefits every wrapper's LATER dynamic imports (state.mjs 195KB, guards.mjs 101KB, cells.mjs 179KB). (b) adapter.mjs: export hookEnabledLite(root, name): reads <root>/.bee/config.json and <root>/.bee/config.local.json (overlay wins where present, matching state.mjs readConfig precedence for hooks.*), returns config.hooks[name] !== false; ANY read/parse error returns true (fail-open = enabled, matching hookEnabled semantics for a missing config). Never throws. (c) bee-tools-logger.mjs: replace the state.mjs dynamic import + hookEnabled call with hookEnabledLite; drop the fs.existsSync state.mjs check (no longer needed); everything else byte-identical. (d) bee-write-guard.mjs: add an ALLOW-ONLY fast path immediately after readHookContext and the hookEnabledLite gate, for tool_name Read|Glob|Grep ONLY: extract the static read-policy constants (secret-shaped filename patterns, scout-dir list, read-size threshold) from guards.mjs into a NEW tiny module .bee/bin/lib/guard-lite.mjs; guards.mjs imports those constants from guard-lite.mjs (single source, byte-identical policy — extend the existing lib-mirror expectations only if a checker complains). Fast-path logic: resolve the tool's target path(s); if NONE matches a secret pattern, NONE is under a scout dir, and (for Read) the stat size is under the threshold, exit 0 silently WITHOUT importing state.mjs/guards.mjs. ANY match, any stat/parse doubt, any non-string path => fall through to the existing full guard path unchanged, so every deny message stays byte-identical. Glob/Grep pattern-only invocations with no resolvable path => fall through (never guess-allow a suspicious shape). Keep the whole fast path inside the existing fail-open try/catch discipline. Measure: pipe a Grep payload and a Read payload through the hook before/after and report ms in your result.",
+  "verify": "node scripts/run_verify.mjs --only test_config_validate",
+  "must_haves": {
+    "truths": [
+      "tools-logger no longer imports state.mjs; still appends the same JSONL line shape",
+      "write-guard denies for secret-shaped Read and scout-dir reads are byte-identical (they route through the full path)",
+      "Edit/Write/MultiEdit/Bash/AskUserQuestion behavior completely untouched",
+      "guard-lite.mjs is the single home of the extracted constants; guards.mjs re-imports them",
+      "hook ms before/after reported for Grep and Read payloads"
+    ]
+  },
+  "decisions": [
+    "exec-speed D3"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "host checkout without packages/bee source tree: regen chain (onboard_bee/render/manifest --write) unrunnable here; onboarding ledger refreshed by es-12; release manifest absent at baseline (pre-existing red, see plan.md)",
+  "status": "capped",
+  "trace": {
+    "worker": "bob",
+    "outcome": "hook fast paths: tools-logger lite config read (no state.mjs), adapter module-top guarded enableCompileCache to tmpdir bee-compile-cache, write-guard allow-only Read/Glob/Grep fast path over guard-lite constants; median ms before->after: tools-logger 71.3->62.3, write-guard Grep 77.4->58.4, write-guard Read 76.8->57.7; secret/scout/direct-edit denies verified byte-identical; test_config_validate green",
+    "files_changed": [
+      ".bee/bin/hooks/adapter.mjs",
+      ".bee/bin/hooks/bee-tools-logger.mjs",
+      ".bee/bin/hooks/bee-write-guard.mjs",
+      ".bee/bin/lib/guard-lite.mjs",
+      ".bee/bin/lib/guards.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:41:30.714Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:30:57.472Z",
+    "warnings": [
+      "capCell: cell \"es-3\" verify does not mention impact-registry direct-edge suite(s) .bee/bin/bee.mjs knowledge check, .bee/bin/bee.mjs knowledge index --check, packages/bee/hooks/test_write_guard.mjs, scripts/tests/test_worktree_companion.mjs, scripts/tests/test_worktree_grant_resolve.mjs for file(s) .bee/bin/hooks/adapter.mjs, .bee/bin/hooks/bee-tools-logger.mjs, .bee/bin/hooks/bee-write-guard.mjs, .bee/bin/lib/guard-lite.mjs, .bee/bin/lib/guards.mjs — derived-check-hardening E1 non-blocking warning."
+    ],
+    "feature_verify": "pending",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "tools-logger no longer imports state.mjs",
+            "status": "PASS",
+            "evidence": "imports only fs/path + readHookContext/logCrash/hookEnabledLite; the existsSync state.mjs probe is gone."
+          },
+          {
+            "id": "tools-logger JSONL line shape unchanged",
+            "status": "PASS",
+            "evidence": "live probe appended {ts,tool_name,agent_id,agent_type,duration_ms,status} exactly as the documented AO15 schema."
+          },
+          {
+            "id": "hookEnabledLite parity with state.hookEnabled",
+            "status": "PASS",
+            "evidence": "every DEFAULT_HOOKS value is true and hookEnabled tests !== false, so liteConfigValue(...)!==false is equivalent; overlay precedence and the non-object-overlay clobber branch both mirror mergeConfigOverlay; any error returns true (fail-open enabled)."
+          },
+          {
+            "id": "secret / scout / read-size denies byte-identical",
+            "status": "PASS",
+            "evidence": "probed .env (privacy + @@BEE_PRIVACY@@ marker, exit 2), node_modules/x (scout, exit 2), dist/sub (scout, exit 2), unbounded Read of bee.mjs (read-size, exit 2) — all produced by the full path after fast-path fall-through."
+          },
+          {
+            "id": "fast path is allow-only and equivalent to the full path",
+            "status": "PASS",
+            "evidence": "guards.checkRead is exactly SECRET_PATTERNS + SCOUT_DIRS; normalizeRel and the fast path's normalization are identical; a null rel is a no-op allow on the full path too; catch returns false (fall through)."
+          },
+          {
+            "id": "Edit/Write/MultiEdit/Bash/AskUserQuestion untouched",
+            "status": "PASS",
+            "evidence": "fast path is gated on READ_TOOLS only; the linked-invalid worktree check runs before it and is writeCapable-scoped; reservationWarnings/fixedAskVerdict are only populated in the write/ask branches."
+          },
+          {
+            "id": "guard-lite is the single home of the constants",
+            "status": "PASS",
+            "evidence": "guards.mjs:29-30 imports SECRET_PATTERNS/SCOUT_DIRS from guard-lite.mjs and re-exports them; write-guard imports all four constants from guard-lite; no duplicate literals remain."
+          },
+          {
+            "id": "adapter compile cache guarded + fail-open",
+            "status": "PASS",
+            "evidence": "adapter.mjs:60-66 typeof guard inside try/catch, module top, before any wrapper's dynamic import."
+          },
+          {
+            "id": "fail-open discipline",
+            "status": "PASS",
+            "evidence": "hookEnabledLite and liteConfigValue never throw; readToolFastAllow catches to false; the full path keeps its own logCrash/exit-0 boundary."
+          },
+          {
+            "id": "hook ms reported",
+            "status": "PASS",
+            "evidence": "trace.outcome carries median before/after for tools-logger and both write-guard payloads."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "fable",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-30T04:04:03.449Z"
+      }
+    ]
+  },
+  "tier": "ceiling"
+}

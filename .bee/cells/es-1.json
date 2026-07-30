@@ -1,0 +1,113 @@
+{
+  "id": "es-1",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "bee.mjs: guarded compile cache + lazy-import split for heavy single-consumer libs",
+  "behavior_change": true,
+  "files": [
+    ".bee/bin/bee.mjs"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    "docs/history/exec-speed/plan.md",
+    ".bee/bin/bee.mjs"
+  ],
+  "action": "Per exec-speed D1. (a) Add a guarded top-level compile-cache enable to .bee/bin/bee.mjs right after the existing node: imports: try { const { enableCompileCache } = await import('node:module'); if (typeof enableCompileCache === 'function') enableCompileCache(path.join(os.tmpdir(), 'bee-compile-cache')); } catch {} — fail-open, zero output. NOTE: ESM hoisting means this only benefits dynamically imported modules and spawned children; that is expected and documented in plan.md. (b) Lazy-import split: find static imports whose EVERY use site is inside handler function bodies (candidates: worktree-store.mjs, integration-queue.mjs, herding.mjs, feedback.mjs, workflow-store.mjs, schedule.mjs, scratch.mjs, perf-adjacent libs). For each such lib, remove the static import and add `const { ... } = await import('./lib/<name>.mjs');` at the top of each consuming handler (handlers are already async or can be made async — the dispatcher awaits handler() uniformly at the call site, verified at bee.mjs:8405). NEVER convert: any lib whose symbols are referenced at module top level, in parseFlags/resolveCommand/registry paths, or re-exported for tests. Behavior must stay byte-identical on stdout/stderr for every verb. Measure before/after: run `node .bee/bin/bee.mjs cells show --id es-1 --json` 3x and note the [bee] timing line deltas in your result message.",
+  "verify": "node scripts/run_verify.mjs --only test_config_validate,test_verify_cache,knowledge",
+  "must_haves": {
+    "truths": [
+      "node .bee/bin/bee.mjs status --json exits 0, output shape unchanged",
+      "node .bee/bin/bee.mjs cells list --json exits 0",
+      "node .bee/bin/bee.mjs --help --json exits 0 and lists the same command set",
+      "no static import remains for any lib converted to lazy; no handler lost access to a symbol",
+      "[bee] timing for small verbs reported before/after in the result"
+    ]
+  },
+  "decisions": [
+    "exec-speed D1"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "host checkout without packages/bee source tree: regen chain (onboard_bee/render/manifest --write) unrunnable here; onboarding ledger refreshed by es-12; release manifest absent at baseline (pre-existing red, see plan.md)",
+  "status": "capped",
+  "trace": {
+    "worker": "kevin",
+    "outcome": "compile cache (guarded, os.tmpdir/bee-compile-cache) + lazy-import split of herding/scratch/integration-queue (sole-consumer libs); worktree-store/feedback/workflow-store/schedule left static (already in static graph via state.mjs/cells.mjs or >3 handlers). Small-verb timings before/after: cells show 7-8ms in-proc, wall 111-132ms -> 110-120ms; status 847-898ms -> 885-895ms in-proc; help wall 107-111 -> 104-107ms. Targeted verify: config_validate PASS, verify_cache PASS, knowledge check PASS, knowledge index --check pre-existing FAIL identical to baseline log.",
+    "files_changed": [
+      ".bee/bin/bee.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:39:07.491Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:30:57.278Z",
+    "warnings": [
+      "capCell: cell \"es-1\" verify does not mention impact-registry direct-edge suite(s) .bee/bin/bee.mjs knowledge check, .bee/bin/bee.mjs knowledge index --check, scripts/okf_migrate.mjs --check advisor-protocol, scripts/okf_migrate.mjs --check decision-memory, scripts/okf_migrate.mjs --check doctrine-layer, scripts/okf_migrate.mjs --check feedback-digest, scripts/okf_migrate.mjs --check hook-runtime, scripts/okf_migrate.mjs --check okf-profile, scripts/okf_migrate.mjs --check onboarding, scripts/okf_migrate.mjs --check performance-log, scripts/okf_migrate.mjs --check verify-pipeline, scripts/okf_migrate.mjs --check workflow-state, scripts/okf_migrate.mjs --check worktree-parallelism, scripts/okf_migrate.mjs --check-patterns, scripts/tests/test_compact_verbs.mjs, scripts/tests/test_conformance.mjs, scripts/tests/test_native_probe.mjs, scripts/tests/test_state_compounding_gate.mjs, scripts/tests/test_worktree_cli.mjs, scripts/tests/test_worktree_companion.mjs, scripts/tests/test_worktree_holds.mjs, scripts/tests/test_worktree_merge_queue.mjs for file(s) .bee/bin/bee.mjs — derived-check-hardening E1 non-blocking warning."
+    ],
+    "feature_verify": "pending",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "compile-cache guarded + fail-open",
+            "status": "PASS",
+            "evidence": "bee.mjs:336-339 dynamic import of node:module, typeof guard, empty catch, zero output, os.tmpdir()/bee-compile-cache."
+          },
+          {
+            "id": "status --json exits 0",
+            "status": "PASS",
+            "evidence": "verified: exit 0, JSON shape emitted."
+          },
+          {
+            "id": "cells list --json exits 0",
+            "status": "PASS",
+            "evidence": "verified: exit 0."
+          },
+          {
+            "id": "--help --json exits 0, command set unchanged",
+            "status": "PASS",
+            "evidence": "exit 0; command set is sourced from COMMAND_REGISTRY, untouched by es-1."
+          },
+          {
+            "id": "no static import remains for lazified libs",
+            "status": "PASS",
+            "evidence": "herding.mjs / scratch.mjs / integration-queue.mjs have no static import; replaced by comment blocks at bee.mjs:213-218 and :297-299."
+          },
+          {
+            "id": "no handler lost a symbol",
+            "status": "PASS",
+            "evidence": "runThroughQueue/DEFAULT_WAIT_BOUND_MS, enableHerding/disableHerding/herdingStatus, runSweep each destructured inside their sole (async) handler; all 5 handlers are `async function`."
+          },
+          {
+            "id": "impact-registry edges preserved",
+            "status": "PASS",
+            "evidence": "buildRegistry still resolves dynamic import literals — herding/scratch/integration-queue keep their bee.mjs knowledge edges, so verify-cache keys and impacted selection are unaffected."
+          },
+          {
+            "id": "timings reported",
+            "status": "PASS",
+            "evidence": "trace.outcome carries before/after numbers for cells show / status / help."
+          },
+          {
+            "id": "scope: nothing unrelated in bee.mjs",
+            "status": "PASS",
+            "evidence": "only three es-1 marker sites plus the compile-cache block; the other bee.mjs edits are es-4's declared reserve work."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "fable",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-30T04:04:03.235Z"
+      }
+    ]
+  },
+  "tier": "ceiling"
+}

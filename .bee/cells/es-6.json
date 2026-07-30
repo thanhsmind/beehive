@@ -1,0 +1,54 @@
+{
+  "id": "es-6",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "Doctrine: tiny lane may execute inline (no mandatory dispatched worker)",
+  "behavior_change": false,
+  "files": [
+    "AGENTS.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/go-mode.md"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    "AGENTS.md"
+  ],
+  "action": "Per exec-speed D6. AGENTS.md rule 12: change the tail 'never zero *execution* workers for tiny/small cells (AO14)' to scope the execution-worker floor to small and above; add one sentence: tiny cells (<=2 product files, 0 flags) MAY be executed inline by the orchestrator — the merged gate, cap discipline, capture line, and feature-verify law apply unchanged; small+ keeps dispatched workers. Mirror the same change wherever routing-and-contracts.md states the AO14 floor ('Delegation contract', 'Tiny/small fast path' — the sentence 'Implementation itself runs through the one dispatched execution worker'), bee-hive SKILL.md line ~42 ('one dispatched execution worker'), and any go-mode.md echo. Cite 'exec-speed D6' inline next to each changed sentence the way neighboring rules cite decisions. Do not touch small/standard/high-risk wording.",
+  "verify": "node scripts/run_verify.mjs --only test_always_loaded_rules,test_skill_pointers",
+  "must_haves": {
+    "truths": [
+      "AGENTS.md rule 12 keeps the gather rubric and decide-altitude text intact",
+      "every AO14 echo across the four files says the same thing (no contradicting copy survives)",
+      "test_always_loaded_rules and test_skill_pointers stay green"
+    ]
+  },
+  "decisions": [
+    "exec-speed D6"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "host checkout without packages/bee source tree: regen chain (onboard_bee/render/manifest --write) unrunnable here; onboarding ledger refreshed by es-12; release manifest absent at baseline (pre-existing red, see plan.md)",
+  "status": "capped",
+  "trace": {
+    "worker": "queen",
+    "outcome": "Doctrine: tiny lane may execute inline (exec-speed D6) - AGENTS.md rule 12, bee-hive SKILL lane bullet, r-and-c lane table + fast path + AO14 class, go-mode fast-path line; small+ keeps dispatched workers; targeted suites green (test_always_loaded_rules, test_skill_pointers)",
+    "files_changed": [
+      "AGENTS.md",
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/references/go-mode.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:34:33.584Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:30:57.677Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}

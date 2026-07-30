@@ -1,0 +1,187 @@
+{
+  "id": "es-4",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "reservations reserve: comma-separated multi-path batch in one call",
+  "behavior_change": true,
+  "files": [
+    ".bee/bin/bee.mjs",
+    ".bee/bin/lib/command-registry.mjs"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    ".bee/bin/bee.mjs",
+    ".bee/bin/lib/command-registry.mjs"
+  ],
+  "action": "Per exec-speed D4. In handleReservationsReserve (bee.mjs:1872): split the --path value on commas, trim, drop empties, dedupe. Single path => existing behavior byte-identical. Multiple paths => batch semantics inside ONE atomic section: with a topology, run findForeignHolds for ALL paths first — any foreign hold refuses the WHOLE batch listing every conflicting path (reserve nothing); then reserve() each path in order; if any individual reserve returns ok:false, release the reservations just made in this call (rollback via release()) and return ok:false with every conflict listed. All of this inside the SAME withHoldsLock section the single-path flow uses (reserve() never spawns children, so holding the lock across the loop is safe — same rationale as the existing comment). insertHold per successfully reserved path. Output: single path keeps today's shape; multi-path returns { ok, reservations: [...], conflicts: [...] } and a one-line text summary. Update command-registry.mjs reservations.reserve description + add a multi-path example. Do NOT touch lib/reservations.mjs.",
+  "verify": "node scripts/run_verify.mjs --only test_config_validate",
+  "must_haves": {
+    "truths": [
+      "single-path reserve output byte-identical to today",
+      "multi-path all-or-nothing: a conflict on any path reserves none and names every conflict",
+      "rollback releases partial grants within the same call on mid-batch failure",
+      "registry description documents comma-separated --path"
+    ]
+  },
+  "decisions": [
+    "exec-speed D4"
+  ],
+  "deps": [
+    "es-1"
+  ],
+  "regen_obligation_ack": "host checkout without packages/bee source tree: regen chain (onboard_bee/render/manifest --write) unrunnable here; onboarding ledger refreshed by es-12; release manifest absent at baseline (pre-existing red, see plan.md)",
+  "status": "capped",
+  "trace": {
+    "worker": "mel",
+    "outcome": "multi-path reserve batch: all-or-nothing via per-path findConflicts+isHardConflict pre-check (no rollback release), BATCH_RACE_CONFLICT for the residual race, registry text matches code",
+    "files_changed": [
+      ".bee/bin/bee.mjs",
+      ".bee/bin/lib/command-registry.mjs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T04:17:02.798Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T04:12:10.360Z",
+    "warnings": [
+      "capCell: cell \"es-4\" verify does not mention impact-registry direct-edge suite(s) .bee/bin/bee.mjs knowledge check, .bee/bin/bee.mjs knowledge index --check, scripts/okf_migrate.mjs --check advisor-protocol, scripts/okf_migrate.mjs --check decision-memory, scripts/okf_migrate.mjs --check doctrine-layer, scripts/okf_migrate.mjs --check feedback-digest, scripts/okf_migrate.mjs --check hook-runtime, scripts/okf_migrate.mjs --check okf-profile, scripts/okf_migrate.mjs --check onboarding, scripts/okf_migrate.mjs --check performance-log, scripts/okf_migrate.mjs --check verify-pipeline, scripts/okf_migrate.mjs --check workflow-state, scripts/okf_migrate.mjs --check worktree-parallelism, scripts/okf_migrate.mjs --check-patterns, scripts/tests/test_compact_verbs.mjs, scripts/tests/test_conformance.mjs, scripts/tests/test_native_probe.mjs, scripts/tests/test_state_compounding_gate.mjs, scripts/tests/test_worktree_cli.mjs, scripts/tests/test_worktree_companion.mjs, scripts/tests/test_worktree_holds.mjs, scripts/tests/test_worktree_merge_queue.mjs for file(s) .bee/bin/bee.mjs, .bee/bin/lib/command-registry.mjs — derived-check-hardening E1 non-blocking warning."
+    ],
+    "feature_verify": "pending",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "single-path output byte-identical",
+            "status": "PASS",
+            "evidence": "handleReservationsReserve returns early into the batch branch only when the raw --path contains a comma; everything below that line is untouched."
+          },
+          {
+            "id": "comma split / trim / drop-empty / dedupe",
+            "status": "PASS",
+            "evidence": "bee.mjs:2030 `[...new Set(split(',').map(trim).filter(Boolean))]`, plus an explicit throw when only commas/blanks were passed."
+          },
+          {
+            "id": "foreign holds checked for all paths before any reserve",
+            "status": "PASS",
+            "evidence": "findForeignHolds(mainRoot, holder, paths) runs first inside runBatch and refuses the whole batch listing every conflicting path."
+          },
+          {
+            "id": "one atomic withHoldsLock section",
+            "status": "PASS",
+            "evidence": "runBatch executes inside the same withHoldsLock(topology.mainRoot, ...) the single-path branch uses; ledger rollback is deliberately deferred until after the section returns to avoid self-deadlock on the non-reentrant holds lock."
+          },
+          {
+            "id": "multi-path all-or-nothing on conflict",
+            "status": "PASS",
+            "evidence": "empirically verified in an isolated scratch repo: a conflict on path 2 left zero new reservations for the calling agent."
+          },
+          {
+            "id": "rollback releases only what this call granted",
+            "status": "FAIL",
+            "evidence": "rollback calls release(root, {agent, cell}), which reservations.mjs scopes by agent+cell ONLY — it destroys the same agent+cell reservations made by EARLIER calls, not just this call's partial grants."
+          },
+          {
+            "id": "registry description documents comma-separated --path",
+            "status": "PASS",
+            "evidence": "command-registry.mjs:432 description + path param text + a multi-path example were added."
+          },
+          {
+            "id": "registry description matches the code",
+            "status": "FAIL",
+            "evidence": "the description promises \"rolls back every reservation this call already made ... nothing is left partially reserved\", but the code releases agent+cell-wide — doctrine is stricter than the code enforces."
+          },
+          {
+            "id": "lib/reservations.mjs untouched",
+            "status": "PASS",
+            "evidence": "no edits there; only bee.mjs + command-registry.mjs changed."
+          }
+        ],
+        "failure_signature": "rollback releases only what this call granted — handleReservationsReserveBatch (.bee/bin/bee.mjs:2058) calls release(root, {agent, cell}), which reservations.mjs release() filters by agent+cell only, so a mid-batch conflict silently drops pre-existing reservations the same agent already held on that cell. Reproduced in an isolated scratch repo: agent A reserves p/one.txt (cell c1); agent B reserves p/three.txt (cell c2); A then runs `reserve --cell c1 --path \"p/two.txt,p/three.txt\"` — the batch correctly refuses, but `reservations list` afterwards shows A's p/one.txt gone (only B's row remains). A believes it still holds p/one.txt while the write guard no longer protects it.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-30T04:04:03.553Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "over-release path gone",
+            "status": "PASS",
+            "evidence": "No release() or releaseHolds() call remains anywhere in handleReservationsReserveBatch (.bee/bin/bee.mjs:2038-2160); the only textual match is inside the BATCH_RACE_CONFLICT message explaining why no rollback is attempted. sessionsSeen / ledgerRollbackNeeded are gone."
+          },
+          {
+            "id": "pre-existing same-agent reservations survive a refused batch",
+            "status": "PASS",
+            "evidence": "Original repro re-run in an isolated scratch repo: A reserves p/one.txt (cell c1), B reserves p/three.txt, A batches \"p/two.txt,p/three.txt\" -> batch refused with B named, and `reservations list --active-only` still shows A's p/one.txt. Nothing was reserved (p/two.txt absent) and nothing was destroyed."
+          },
+          {
+            "id": "conflict pre-check runs before any reserve()",
+            "status": "PASS",
+            "evidence": "runBatch: findForeignHolds(paths) first, then findConflicts(root, agent, paths) at bee.mjs:2067, both returning a refusal before the reserve() loop is entered. findConflicts re-roots internally via listPathLeaseRecords -> controlRootFor, so passing the bare `root` is correct for a linked worktree."
+          },
+          {
+            "id": "residual race handled non-destructively and named",
+            "status": "PASS",
+            "evidence": "raceResidue branch returns code BATCH_RACE_CONFLICT, keeps outcome.partialReservations in the result, names the failed path and the winning holder, exit 1, and performs no release."
+          },
+          {
+            "id": "batch conflict semantics match reserve()'s own (isHardConflict)",
+            "status": "FAIL",
+            "evidence": "reserve() filters its findConflicts result through isHardConflict (reservations.mjs:543), so another agent's broad 'intent' row never refuses a fellow caller's exact-path reserve. The batch pre-check at bee.mjs:2067 calls findConflicts with NO isHardConflict filter, so an intent row hard-denies the whole batch. Reproduced live: planner reserves \"src/api/*\" --kind intent; worker's SINGLE reserve of src/api/a.ts returns ok:true, but worker's BATCH of \"src/api/b.ts,src/api/c.ts\" returns ok:false with the planner's intent row as the conflict. This is the exact 'hard deny from an intent record' that multisession-native-13 D4 and isHardConflict's own doc comment prohibit, and it makes a batch behave differently from N single reserves."
+          },
+          {
+            "id": "registry text matches the code exactly",
+            "status": "FAIL",
+            "evidence": "The rollback/race half is now accurate (no-rollback rationale plus the BATCH_RACE_CONFLICT carve-out are stated). But the same entry's `kind` parameter still reads \"'intent' is advisory-only (warn, never hard-block) on overlap\", which the batch path now contradicts, and the description's \"any other agent's local reservation\" wording carves out no exception for intent rows. Same root cause as the check above."
+          },
+          {
+            "id": "single-path flow byte-identical",
+            "status": "PASS",
+            "evidence": "handleReservationsReserve still routes to the batch only on `requestedPath.includes(',')`; everything below that guard is unchanged (same doReserve, same withHoldsLock section, same FOREIGN_HOLD text, same multi-line bulleted CONFLICT text). Live single-path reserve still returns the original ok:true shape."
+          },
+          {
+            "id": "scope: nothing else changed in the two files",
+            "status": "PASS",
+            "evidence": "bee.mjs changes are confined to the reservations import line (findConflicts added at :187) and handleReservationsReserveBatch + its doc comment; command-registry.mjs changes are confined to the reservations.reserve description, the path param text, and the multi-path example. lib/reservations.mjs untouched. `--help --json` exits 0 and test_config_validate is PASS (101ms)."
+          }
+        ],
+        "failure_signature": "batch conflict semantics match reserve()'s own (isHardConflict) — handleReservationsReserveBatch's new pre-check (.bee/bin/bee.mjs:2067) calls findConflicts(root, agent, paths) without reserve()'s isHardConflict filter, so another agent's broad 'intent' reservation hard-refuses the whole batch even though the identical single-path reserve succeeds. Reproduced: planner holds \"src/api/*\" --kind intent; worker single-reserves src/api/a.ts -> ok:true; worker batches \"src/api/b.ts,src/api/c.ts\" -> ok:false naming the intent row. Fix inside the declared files: filter the pre-check per requested path, e.g. dedupe over paths.flatMap((p) => findConflicts(root, agent, [p]).filter((c) => isHardConflict(c, p))) — isHardConflict is already exported by lib/reservations.mjs, so no change there is needed. The command-registry `kind` clause (\"'intent' is advisory-only ... never hard-block\") becomes true again once the filter is added.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-30T04:12:10.223Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-07-30T04:12:10.225Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-07-30T04:08:58.782Z",
+        "reason": "Both revision findings fixed: rollback no longer calls release(root,{agent,cell}) (no path filter, was destroying same-agent+cell earlier reservations); replaced with upfront findConflicts pre-check for all paths before any reserve() call, plus a non-destructive BATCH_RACE_CONFLICT refusal for the residual concurrent-race case. Registry description updated to match. Re-tested including the reproduction case (pre-existing agent-a/one.txt survives a refused agent-a batch conflicting with agent-b) and test_config_validate is green.",
+        "last_verdict": "NEEDS_REVISION"
+      },
+      {
+        "overridden_at": "2026-07-30T04:17:02.791Z",
+        "reason": "round-3 isHardConflict per-path filter applied and hand-verified by orchestrator: intent-kind broad hold no longer blocks a batch (T1 ok:true), same-agent pre-existing reservation survives a refused batch (T2 one.txt still active), single-path shape unchanged (T3); user requested wrap-up outside harness",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
+  },
+  "tier": "generation"
+}

@@ -13,6 +13,11 @@
     "scripts/tests/test_check_filter.mjs": [
       "scripts/lib/**",
       "packages/bee/lib/**"
+    ],
+    ".bee/bin/bee.mjs": [
+      "docs/knowledge/**",
+      "docs/specs/**",
+      ".bee/config.json"
     ]
   }
 }

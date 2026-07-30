@@ -1,0 +1,51 @@
+{
+  "id": "es-11",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "Doctrine: high-risk pre-cap advisor consult carries a compact digest, not full excerpts",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-executing/SKILL.md",
+    "skills/bee-executing/references/worker-details.md"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    "skills/bee-executing/references/worker-details.md"
+  ],
+  "action": "Per exec-speed D11. bee-executing step 6 + worker-details 'Advisor consult in full': the UNCONDITIONAL high-risk/hard-gate pre-cap consult keeps its gate (advisor_ref freshness code check unchanged) but its evidence bundle becomes a COMPACT DIGEST: cell id, one-paragraph change summary, file list with per-file one-liners, the CONTEXT.md path — never full file excerpts. Full excerpts (exact failing command, failing output, diagnosis, cited excerpts) remain REQUIRED for the on-failure consult loop (max 2/claim, unchanged). Update the Red Flags / attribution lines only where they name the bundle contents. Cite 'exec-speed D11'.",
+  "verify": "node scripts/run_verify.mjs --only test_skill_pointers",
+  "must_haves": {
+    "truths": [
+      "advisor_ref gate language unchanged (consult still mandatory pre-cap on high-risk)",
+      "on-failure consult loop keeps the full evidence bundle",
+      "attribution prefix format (advisor-consult <cell-id>: <model>) unchanged"
+    ]
+  },
+  "decisions": [
+    "exec-speed D11"
+  ],
+  "deps": [
+    "es-10"
+  ],
+  "regen_obligation_ack": "host checkout without packages/bee source tree: regen chain (onboard_bee/render/manifest --write) unrunnable here; onboarding ledger refreshed by es-12; release manifest absent at baseline (pre-existing red, see plan.md)",
+  "status": "capped",
+  "trace": {
+    "worker": "queen",
+    "outcome": "Doctrine: gate-time high-risk advisor consult carries a compact digest (exec-speed D11) - advisor_ref gate unchanged, on-failure loop keeps the full evidence bundle; bee-executing step 6 + worker-details two-shape bundle spec",
+    "files_changed": [
+      "skills/bee-executing/SKILL.md",
+      "skills/bee-executing/references/worker-details.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:41:14.108Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:39:16.832Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  }
+}

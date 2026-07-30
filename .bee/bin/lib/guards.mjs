@@ -21,28 +21,13 @@ import { findForeignHolds, holdsStoreCorrupt } from './worktree-holds.mjs';
 import { isConcurrentMode, readSession, heartbeatStale, activeWorkers } from './claims.mjs';
 import { readWorkspace, workspacePath, WorkspaceStoreError } from './workspace-store.mjs';
 
-/** File-path patterns that must never be read without asking the human. */
-export const SECRET_PATTERNS = [
-  /(^|[\\/])\.env(\.[A-Za-z0-9._-]+)?$/i,
-  /\.pem$/i,
-  /\.key$/i,
-  /(^|[\\/])id_rsa[^\\/]*$/i,
-  /\.p12$/i,
-  /(^|[\\/])credentials[^\\/]*$/i,
-  /(^|[\\/])secrets\.[^\\/]+$/i,
-];
-
-/** Directories agents should never scout through. */
-export const SCOUT_DIRS = [
-  'node_modules/',
-  'dist/',
-  'build/',
-  '.git/objects',
-  'vendor/',
-  'coverage/',
-  '.next/',
-  '__pycache__/',
-];
+// es-3 (exec-speed D3): the secret/scout read policy lives in guard-lite.mjs
+// — a dependency-free constants module the write-guard hook's read fast path
+// can import WITHOUT pulling in state.mjs/guards.mjs. Re-exported here under
+// the exact names every existing consumer already uses; single source, policy
+// bytes identical on both paths.
+import { SECRET_PATTERNS, SCOUT_DIRS } from './guard-lite.mjs';
+export { SECRET_PATTERNS, SCOUT_DIRS };
 
 /** Paths writable in gated phases even before execution approval. */
 export const GATE_ALLOWED_PREFIXES = ['.bee/', 'docs/', 'plans/', 'AGENTS.md'];

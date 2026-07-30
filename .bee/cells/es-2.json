@@ -1,0 +1,103 @@
+{
+  "id": "es-2",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "run_verify: NODE_COMPILE_CACHE for suite children + cache declarations for the two knowledge entries",
+  "behavior_change": true,
+  "files": [
+    "scripts/run_verify.mjs",
+    "scripts/verify-cache-inputs.json"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    "docs/history/exec-speed/plan.md",
+    "scripts/run_verify.mjs"
+  ],
+  "action": "Per exec-speed D2. (a) In childEnv() (scripts/run_verify.mjs), after the three deletes, set env.NODE_COMPILE_CACHE = path.join(os.tmpdir(), 'bee-compile-cache') UNLESS the caller already set NODE_COMPILE_CACHE (respect an explicit value) or process.env.CI is set (CI stays byte-identical). Every spawned suite child then persists V8 compile caches across runs. (b) In scripts/verify-cache-inputs.json add a declaration for '.bee/bin/bee.mjs' with inputs [\"docs/knowledge/**\", \"docs/specs/**\", \".bee/config.json\"] so the two knowledge EXTRA_SUITES entries (knowledge check / knowledge index --check) become cacheable when the bundle is unchanged (the import closure covers .bee/bin/** already via the registry). Keep the file's note text intact.",
+  "verify": "node scripts/run_verify.mjs --only test_verify_cache,test_verify_timeout",
+  "must_haves": {
+    "truths": [
+      "childEnv() still deletes CLAUDE_CODE_SESSION_ID, BEE_SESSION_ID, BEE_AGENT_NAME",
+      "NODE_COMPILE_CACHE is NOT forced when CI is set or when the caller provided one",
+      "verify-cache-inputs.json parses and declares .bee/bin/bee.mjs",
+      "test_verify_cache suite still green"
+    ]
+  },
+  "decisions": [
+    "exec-speed D2"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "stuart",
+    "outcome": "NODE_COMPILE_CACHE for suite children + cache declaration for bee.mjs knowledge entries; second knowledge run: knowledge check CACHED green (closure unchanged), wall 216ms->101ms; knowledge index --check FAIL both runs (pre-existing stale docs/knowledge/index.md, unrelated to es-2 files)",
+    "files_changed": [
+      "scripts/run_verify.mjs",
+      "scripts/verify-cache-inputs.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:33:17.456Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:30:57.374Z",
+    "warnings": [
+      "capCell: cell \"es-2\" verify does not mention impact-registry direct-edge suite(s) scripts/tests/test_check_filter.mjs, scripts/tests/test_impact_registry.mjs, scripts/tests/test_run_verify_impacted.mjs, scripts/tests/test_verify_manifest.mjs, scripts/tests/test_verify_timeout.mjs for file(s) scripts/run_verify.mjs, scripts/verify-cache-inputs.json — derived-check-hardening E1 non-blocking warning."
+    ],
+    "feature_verify": "pending",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "childEnv still deletes the three session vars",
+            "status": "PASS",
+            "evidence": "run_verify.mjs:486-488 deletes CLAUDE_CODE_SESSION_ID, BEE_SESSION_ID, BEE_AGENT_NAME before the new code."
+          },
+          {
+            "id": "NODE_COMPILE_CACHE not forced under CI or explicit caller value",
+            "status": "PASS",
+            "evidence": "run_verify.mjs:496 `if (!env.NODE_COMPILE_CACHE && !process.env.CI)` — both escapes honored."
+          },
+          {
+            "id": "verify-cache-inputs.json parses and declares .bee/bin/bee.mjs",
+            "status": "PASS",
+            "evidence": "valid JSON; entry with [docs/knowledge/**, docs/specs/**, .bee/config.json]; the existing note text is byte-intact."
+          },
+          {
+            "id": "declaration is not under-declared",
+            "status": "PASS",
+            "evidence": "knowledge check/index read only bundleDir = resolveProductRoot(root)/docs/knowledge plus the docs/specs fallback, and product_root comes from the declared .bee/config.json; .bee/bin/** is already in the static import closure the cache key hashes."
+          },
+          {
+            "id": "test_verify_cache green",
+            "status": "PASS",
+            "evidence": "ran `run_verify.mjs --only test_verify_cache,test_verify_timeout` — both PASS (15.2s / 1.3s)."
+          },
+          {
+            "id": "matches D2 intent, not more permissive",
+            "status": "PASS",
+            "evidence": "opt-in cache table is the existing safety mechanism; the compile-cache default is speedup-only and CI-exempt."
+          },
+          {
+            "id": "scope",
+            "status": "PASS",
+            "evidence": "only the two declared files touched; one marker site in run_verify.mjs."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-07-30T04:04:03.350Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

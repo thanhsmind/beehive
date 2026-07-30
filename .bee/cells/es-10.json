@@ -1,0 +1,53 @@
+{
+  "id": "es-10",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "Doctrine: per-cell report file only for BLOCKED/HANDOFF/consult cells",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-executing/SKILL.md",
+    "skills/bee-executing/references/worker-details.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    "skills/bee-executing/references/worker-details.md"
+  ],
+  "action": "Per exec-speed D10 (extends decision 0009 single-source-trace). bee-executing step 9 (Return) + worker-details 'Evidence Report Budget' / result spec + swarming-reference echoes: a routine [DONE] cell returns ONLY the status-token message — no docs/history/<feature>/reports/<cell-id>.md file; the cap trace (--outcome, --files) plus the status token are the record. The report file is REQUIRED only when the result is [BLOCKED] or [HANDOFF], or the cell carries advisor consults (Consults section), or the orchestrator explicitly asks for one (smell at goal-check). The <=40-line budget applies when a report IS written. Update every echo. Cite 'exec-speed D10'.",
+  "verify": "node scripts/run_verify.mjs --only test_skill_pointers",
+  "must_haves": {
+    "truths": [
+      "status-token content requirements unchanged",
+      "blocked/handoff/consult cells still owe the report file",
+      "no surviving text requires a report for a routine DONE"
+    ]
+  },
+  "decisions": [
+    "exec-speed D10"
+  ],
+  "deps": [
+    "es-7"
+  ],
+  "regen_obligation_ack": "host checkout without packages/bee source tree: regen chain (onboard_bee/render/manifest --write) unrunnable here; onboarding ledger refreshed by es-12; release manifest absent at baseline (pre-existing red, see plan.md)",
+  "status": "capped",
+  "trace": {
+    "worker": "queen",
+    "outcome": "Doctrine: per-cell report file conditional (exec-speed D10) - routine DONE relies on cap trace + status token; report owed only for BLOCKED/HANDOFF/consult cells or explicit request; bee-executing step 9 + close line, worker-details Evidence Report Budget, swarming-reference template contract",
+    "files_changed": [
+      "skills/bee-executing/SKILL.md",
+      "skills/bee-executing/references/worker-details.md",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:39:07.738Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:36:51.316Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  }
+}

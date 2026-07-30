@@ -39,10 +39,10 @@ generated renders never count:
 | `high-risk` | 4+ flags or any hard-gate flag (auth, authorization, data loss, audit/security, external provider, validation removal) |
 
 - Record same turn: `state route --set` — `Route: class=<c> | lane=<l> | flags=<n> [<names>] | files=<n>`; re-lane updates in place ("Route record").
-- docs/tiny/small: nothing more — merged shape+execution gate, one dispatched execution worker, no `bee-planning`; standard/high-risk: the full chain.
+- docs/tiny/small: nothing more — merged shape+execution gate, execution per lane (tiny: inline or dispatched, exec-speed D6; small: one dispatched execution worker), no `bee-planning`; standard/high-risk: the full chain.
 - Uncertainty resolves downward, never up into skipping. One hard-gate flag = `high-risk` at one file; re-counting to dodge a threshold = already `standard`.
 - One re-lane checkpoint after first evidence: measured demotion only, never twice, never with a hard-gate flag; promotion always open ("Re-lane checkpoint").
-- Review is on demand — every lane closes `unreviewed`; one dispatched worker per lane; `small` SERIAL; standard/high-risk: goal-check judge per capped `behavior_change` cell ("Goal-check judge tier"); tiny/small: preview-then-persist, orchestrator-authored done-report ("Lane ceremony in full").
+- Review is on demand — every lane closes `unreviewed`; one dispatched worker per lane; `small` SERIAL; standard/high-risk: goal-check judge once per slice over its capped `behavior_change` cells (exec-speed D8, "Goal-check judge tier"); tiny/small: preview-then-persist, orchestrator-authored done-report ("Lane ceremony in full").
 
 ## Onboarding
 

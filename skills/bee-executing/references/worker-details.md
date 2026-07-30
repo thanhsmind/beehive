@@ -14,9 +14,9 @@ The sanctioned default: implement, commit, cap with `--feature-verify-pending` �
 
 ## Expanded Commands
 
+Startup runs ZERO of these (exec-speed D7): the dispatch prompt inlines the cell JSON and the state line — `status --brief` and `cells show` are post-compaction recovery verbs only, never startup verbs.
+
 ```text
-node .bee/bin/bee.mjs status --brief --json
-node .bee/bin/bee.mjs cells show --id <id>
 node .bee/bin/bee.mjs reservations reserve --agent "<name>" --cell "<id>" --path "<path>" --ttl 3600
 node .bee/bin/bee.mjs cells cap --id <id> --feature-verify-pending [--outcome TEXT] [--files a,b] [--deviations-file F] [--friction TEXT]
 node .bee/bin/bee.mjs reservations release --agent "<name>" --cell "<id>"
@@ -40,7 +40,7 @@ BEE_AGENT_NAME="<name>" git add src/foo.ts
 
 For the one assigned cell, confirm before starting (D1 — the orchestrator claims before spawning; the worker only validates, never claims):
 
-- `cells show --id <id>` shows `status: "claimed"` with `trace.worker` matching your nickname — a different worker, no claim, or any other status is not yours to touch
+- the INLINED cell JSON in your dispatch prompt (exec-speed D7) shows `status: "claimed"` with `trace.worker` matching your nickname — a different worker, no claim, or any other status is not yours to touch; a prompt with no inlined cell JSON is malformed → `[BLOCKED]`
 - all `deps` are capped
 - `files` scope is clear and reservable
 - the `verify` command is concrete and runnable in this repo
@@ -262,7 +262,7 @@ Ambiguities you deferred go in an `Outstanding Questions` section of the report.
 
 ## Evidence Report Budget
 
-A worker's per-cell report in `docs/history/<feature>/reports/<cell-id>.md` targets **<=40 lines**. Structure:
+A per-cell report file is CONDITIONAL (exec-speed D10): routine `[DONE]` cells write none — the cap trace + status-token message are the record. A report is owed only for `[BLOCKED]`/`[HANDOFF]`, consult-carrying cells, or on explicit orchestrator request. When one IS written, `docs/history/<feature>/reports/<cell-id>.md` targets **<=40 lines**. Structure:
 
 - **Outcome** (1-3 lines) — status token + what changed, in plain language.
 - **Verify** — the exact command, plus its decisive output lines, quoted, **<=10 lines**.
@@ -337,7 +337,11 @@ fail 1 -> consult 1 -> advised retry
 
 A re-dispatched cell (rescue rung) starts a **fresh** budget — the 2-consult cap is per claim, not per cell lifetime. Consulting after `[BLOCKED]` has already been returned for the current claim is never permitted.
 
-**Evidence bundle (mandatory, every consult):** exact failing command, the failing output, your diagnosis, the relevant cited file excerpts, and the `CONTEXT.md` path. Pass it **inline in the consult prompt or via stdin — never a `/tmp` path** (critical pattern 20260708). Never include secrets or env values.
+**Evidence bundle — two shapes (exec-speed D11):**
+- **On-failure consult (this loop):** exact failing command, the failing output, your diagnosis, the relevant cited file excerpts, and the `CONTEXT.md` path — the advisor is debugging with you, it needs the evidence.
+- **Gate-time consult (the unconditional high-risk/hard-gate pre-cap consult, bee-executing step 6):** a COMPACT DIGEST only — cell id, one-paragraph change summary, file list with a one-liner per file, the `CONTEXT.md` path. Never full file excerpts: nothing failed, the advisor is sanity-checking shape and risk, and the semantic judge plus the feature verify independently backstop correctness.
+
+Either shape passes **inline in the consult prompt or via stdin — never a `/tmp` path** (critical pattern 20260708). Never include secrets or env values.
 
 **Transport** — the `Advisor` line names the advisor and how to consult it:
 <!-- bee:only claude -->

@@ -184,7 +184,7 @@ import {
   unarchiveFeature,
   archivedTotals,
 } from './lib/cells.mjs';
-import { reserve, release, listReservations, sweepExpired } from './lib/reservations.mjs';
+import { reserve, release, listReservations, sweepExpired, findConflicts, isHardConflict } from './lib/reservations.mjs';
 // xwh-2: wires the cross-worktree holds ledger (xwh-1, worktree-holds.mjs)
 // into the reservation seam below (handleReservationsReserve/Release/Sweep/
 // List) — see resolveHoldTopology's own comment for the holder/mainRoot
@@ -212,8 +212,10 @@ import { hasAnySharedNestedCheckout } from './lib/guards.mjs';
 // ONLY handleWorktreeMerge below becomes queue-aware — see
 // integration-queue.mjs's own header for why nothing else (dispatch-
 // interlock.mjs, herding.mjs) is ever wired to this.
-import { runThroughQueue, DEFAULT_WAIT_BOUND_MS } from './lib/integration-queue.mjs';
-import { enableHerding, disableHerding, herdingStatus } from './lib/herding.mjs';
+// exec-speed es-1 (D1): integration-queue.mjs and herding.mjs are lazy-loaded
+// inside their sole handlers (handleWorktreeMerge / handleHerding*) — bee.mjs
+// is their only static importer, so the split sheds their parse cost from
+// every other verb. No static import here on purpose.
 import { prepareDispatch } from './lib/dispatch-prepare.mjs';
 import {
   classifyNativeTransport,
@@ -292,22 +294,19 @@ import {
 } from './lib/reviews.mjs';
 import { readJson, writeJsonAtomic, appendJsonl, hashFile, removeFileIfExists, readJsonl } from './lib/fsutil.mjs';
 // tree-hygiene th-4 (D1/D2): the canonical scratch home + its broom.
-import { runSweep } from './lib/scratch.mjs';
+// exec-speed es-1 (D1): scratch.mjs is lazy-loaded inside handleTmpSweep —
+// bee.mjs is its only static importer. No static import here on purpose.
 // perf.mjs is imported ONLY here (never by command-registry.mjs) so it stays
 // out of the write-guard fixture's hand-listed VENDORED_LIB_MODULES.
-import {
-  claudeProjectsRoot,
-  resolveTranscript,
-  computeMetrics,
-  buildSection,
-  appendSection,
-  readSections,
-  writeReport,
-  scanCachePath,
-  syncSessionsToLog,
-  readSessionRecords,
-  buildMatrixFromLog,
-} from './lib/perf.mjs';
+// exec-speed follow-up: perf.mjs (32KB) is lazy-loaded — its only consumers
+// are the perf handlers + handleRecoveryWindow, all async-safe (the
+// dispatcher awaits every handler at bee.mjs's single call site). Keeps 32KB
+// out of every non-perf invocation's parse graph.
+let perfLibPromise = null;
+function loadPerfLib() {
+  perfLibPromise ??= import('./lib/perf.mjs');
+  return perfLibPromise;
+}
 import { KIND_ALIASES, NORMALIZED_KINDS, buildDigest, mergeDigests, clusterEntries, rankClusters } from './lib/feedback.mjs';
 // recovery.mjs is imported ONLY here (never by command-registry.mjs), the
 // same import discipline perf.mjs already follows above (transcript-recovery
@@ -323,6 +322,17 @@ import {
 import { SCHEMA_VERSION, COMMAND_REGISTRY } from './lib/command-registry.mjs';
 import { validate } from './lib/validate-args.mjs';
 import { classifySource } from './lib/source-identity.mjs';
+
+// exec-speed es-1 (D1): guarded on-disk compile cache (Node >= 22.8). ESM
+// hoisting means this cannot cache bee.mjs's OWN static import graph (those
+// modules are parsed before this line runs) — it benefits later dynamic
+// imports (the es-1 lazy handlers above) and any child node processes that
+// inherit NODE_COMPILE_CACHE (plan.md documents this accepted limit). Zero
+// output, fail-open: an old Node or a read-only tmpdir must never break a verb.
+try {
+  const { enableCompileCache } = await import('node:module');
+  if (typeof enableCompileCache === 'function') enableCompileCache(path.join(os.tmpdir(), 'bee-compile-cache'));
+} catch {}
 
 // ─── shared small helpers (mirrors requireFlag/readFileText across all 4) ──
 
@@ -1877,6 +1887,16 @@ async function handleReservationsReserve(root, flags) {
   const requestedPath = requireFlag(flags, 'path');
   const topology = resolveHoldTopology(root);
 
+  // exec-speed D4: a comma in the raw --path value routes into the
+  // multi-path batch branch (handleReservationsReserveBatch below). A bare
+  // single path — no comma, every pre-existing caller, and still the
+  // overwhelmingly common case — falls straight through this original
+  // single-path flow, UNTOUCHED below this point, so its output stays
+  // byte-identical to before this cell.
+  if (requestedPath.includes(',')) {
+    return handleReservationsReserveBatch(root, flags, { requestedPath, ttl, topology });
+  }
+
   const doReserve = () =>
     reserve(root, {
       agent: requireFlag(flags, 'agent'),
@@ -1956,6 +1976,205 @@ async function handleReservationsReserve(root, flags) {
       ].join('\n');
 
   return { result, text, exitCode: result.ok ? 0 : 1 };
+}
+
+/**
+ * exec-speed D4: the multi-path batch branch of reservations.reserve,
+ * entered only when the raw --path flag contains a comma
+ * (handleReservationsReserve keeps its single-path branch byte-identical to
+ * before this cell — this function is never reached for a bare, comma-free
+ * path). Splits on comma, trims, drops empties, and dedupes, then reserves
+ * every resulting path as ONE atomic all-or-nothing batch:
+ *
+ *   - With a topology, findForeignHolds runs ONCE for every path (the same
+ *     read the single-path branch does, just widened to N paths) BEFORE any
+ *     local reserve() is attempted — any foreign hold refuses the WHOLE
+ *     batch (nothing is reserved), listing every conflicting path.
+ *   - findConflicts + isHardConflict (reservations.mjs's own exported
+ *     OTHER-agents overlap read, filtered by its own exported intent/lease
+ *     classifier — together the exact pre-check reserve() runs internally,
+ *     per path, before its own acquireLeases attempt) then check every path
+ *     against every OTHER agent's active local reservations, also BEFORE any
+ *     reserve() call — a soft 'intent' row is filtered out per path via
+ *     isHardConflict exactly as the single-path flow does (es-4 revision fix
+ *     round 2, NEEDS_REVISION: a flat findConflicts with no isHardConflict
+ *     filter was hard-refusing a whole batch against another agent's broad
+ *     `--kind intent` row, e.g. a planner's `--path "src/api/*"`, even though
+ *     that identical row never hard-blocks the same path through the
+ *     single-path flow — multisession-native-13 D4's whole point). This
+ *     hard-conflict check runs PER PATH, not once flattened across the whole
+ *     set: isHardConflict's verdict (exact-match vs broad-glob-only overlap)
+ *     is specific to ONE target path, so batching the read across all paths
+ *     first and filtering once after could misjudge which path a given
+ *     conflict is actually hard against. es-4 revision fix round 1
+ *     (NEEDS_REVISION, semantic judge): a mid-batch
+ *     conflict must never fall through to reserve()'s own per-path check and
+ *     get caught only after some of THIS call's paths already succeeded,
+ *     because reservations.mjs's release() takes no path filter — it is
+ *     scoped by {agent, cell} ONLY (see its doc comment/export above). A
+ *     rollback built on release(root, {agent, cell}) at that point wipes out
+ *     every OTHER reservation this same agent+cell holds too, including ones
+ *     made in earlier, unrelated calls (reproduced live: agent A reserves
+ *     p/one.txt on cell c1 in one call; a later call batches
+ *     "p/two.txt,p/three.txt" on the same c1 where p/three.txt is held by B
+ *     — the batch correctly refuses, but the old rollback also silently
+ *     released A's already-held p/one.txt). Checking every path up front
+ *     means an ordinary conflict is caught before the loop ever reserves
+ *     anything, so no rollback is needed for the common case at all.
+ *   - reserve() then runs per path, in order, inside the SAME
+ *     withHoldsLock(topology.mainRoot, ...) section the single-path branch
+ *     uses — reserve() only performs fs reads/writes, never spawns a child
+ *     process, so it stays safe to run every iteration while holding that
+ *     lock (same rationale as the single-path branch's own comment).
+ *   - Residual case: reserve() can still return ok:false mid-loop despite
+ *     both pre-checks passing, if a genuinely concurrent writer wins the
+ *     exact-path race in the narrow window between the pre-check reads above
+ *     and this call's own acquireLeases attempt (reservations.mjs's own
+ *     documented "overlap-conflict race window" — an accepted trade-off
+ *     everywhere else in that module, not something this cell changes).
+ *     There is no path-scoped release to cleanly undo just THIS call's own
+ *     prior successes without the same over-release risk described above, so
+ *     this branch does NOT attempt any rollback: it refuses loudly instead,
+ *     reporting the race and every path THIS call did manage to reserve
+ *     (left in place — they are real, legitimate reservations, not phantom
+ *     rows) so the caller can decide by hand whether to keep or release
+ *     them, rather than the batch silently over-releasing to "fix" it.
+ *
+ * Result/text shape: `{ ok, reservations: [...], conflicts: [...] }` plus a
+ * one-line text summary (never the single-path branch's multi-line bulleted
+ * list — batch output stays a single line by design).
+ */
+async function handleReservationsReserveBatch(root, flags, { requestedPath, ttl, topology }) {
+  const agent = requireFlag(flags, 'agent');
+  const cell = requireFlag(flags, 'cell');
+  const paths = [...new Set(requestedPath.split(',').map((p) => p.trim()).filter(Boolean))];
+  if (paths.length === 0) {
+    throw new Error('reservations reserve: --path must contain at least one non-empty path (got only commas/blanks).');
+  }
+
+  const doReserveOne = (onePath) =>
+    reserve(root, {
+      agent,
+      cell,
+      path: onePath,
+      ...(ttl !== undefined ? { ttl } : {}),
+      ...(flags.session ? { session: String(flags.session) } : {}),
+      ...(flags.kind ? { kind: String(flags.kind) } : {}),
+    });
+
+  const runBatch = async () => {
+    if (topology) {
+      const foreignHolds = findForeignHolds(topology.mainRoot, topology.holder, paths);
+      if (foreignHolds.length > 0) {
+        return { refusal: foreignHolds };
+      }
+    }
+    // Pre-check every path against every OTHER agent's active local
+    // reservations, before reserving anything — see the function doc comment
+    // for why this (not a rollback) is the fix for the over-release bug.
+    // es-4 revision fix round 2 (NEEDS_REVISION, semantic judge): run
+    // per-path, exactly like reserve()'s own internal pre-check does
+    // (findConflicts(controlRoot, agent, [reservedPath]).filter((c) =>
+    // isHardConflict(c, reservedPath))) — a flat findConflicts(root, agent,
+    // paths) with no isHardConflict filter was refusing the WHOLE batch
+    // against another agent's 'intent' row (e.g. a planner's broad
+    // `--kind intent --path "src/api/*"`), even though that same row would
+    // never hard-block the identical path through the single-path flow
+    // (isHardConflict's whole contract, multisession-native-13 D4: an
+    // 'intent' record never hard-denies unless it collapses onto the exact
+    // same resource). isHardConflict's verdict is PATH-specific (exact-match
+    // vs broad-glob-only overlap against ONE target), so it must be applied
+    // per path here too — a single flat isHardConflict pass over
+    // findConflicts(root, agent, paths)'s combined result would blur which
+    // conflict belongs to which path and could misjudge an exact-match hit
+    // on one path as the broad-glob-only miss it only is against another.
+    const hardLocalConflicts = [];
+    for (const onePath of paths) {
+      hardLocalConflicts.push(...findConflicts(root, agent, [onePath]).filter((c) => isHardConflict(c, onePath)));
+    }
+    if (hardLocalConflicts.length > 0) {
+      return { localRefusal: hardLocalConflicts };
+    }
+    const reservations = [];
+    for (const onePath of paths) {
+      const reserveResult = await doReserveOne(onePath);
+      if (!reserveResult.ok) {
+        // Residual race only (both pre-checks above already passed) — no
+        // rollback attempted; see the function doc comment.
+        return { raceResidue: true, conflicts: reserveResult.conflicts || [], failedPath: onePath, partialReservations: reservations };
+      }
+      if (topology) {
+        insertHold(topology.mainRoot, {
+          path: reserveResult.reservation.path,
+          holder: topology.holder,
+          session: reserveResult.reservation.session || null,
+          cell: reserveResult.reservation.cell,
+          ttl: reserveResult.reservation.ttl_seconds,
+        });
+      }
+      reservations.push(reserveResult.reservation);
+    }
+    return { reservations };
+  };
+
+  const outcome = topology ? await withHoldsLock(topology.mainRoot, runBatch) : await runBatch();
+
+  if (outcome.refusal) {
+    const holds = outcome.refusal;
+    const result = {
+      ok: false,
+      reservations: [],
+      conflicts: holds.map((hold) => ({
+        code: 'FOREIGN_HOLD',
+        holder: hold.holder,
+        feature: hold.feature,
+        cell: hold.cell,
+        path: hold.path,
+        expires: holdForeignExpiry(hold),
+      })),
+    };
+    const text =
+      'bee cross-worktree hold — batch refused, nothing reserved: ' +
+      holds
+        .map(
+          (hold) =>
+            `"${hold.path}" held by checkout "${hold.holder}" (feature ${hold.feature || 'unknown'}, cell ${hold.cell || 'unknown'}), ${holdForeignExpiry(hold)}`,
+        )
+        .join('; ') +
+      ' — a cross-worktree hold is a hard block.';
+    return { result, text, exitCode: 1 };
+  }
+
+  if (outcome.localRefusal) {
+    const result = { ok: false, reservations: [], conflicts: outcome.localRefusal };
+    const text =
+      'Reservation CONFLICT — batch refused, nothing reserved (return [BLOCKED] to the orchestrator): ' +
+      outcome.localRefusal.map((c) => `${c.agent} holds "${c.path}" (cell ${c.cell})`).join('; ');
+    return { result, text, exitCode: 1 };
+  }
+
+  if (outcome.raceResidue) {
+    const result = {
+      ok: false,
+      code: 'BATCH_RACE_CONFLICT',
+      reservations: outcome.partialReservations,
+      conflicts: outcome.conflicts,
+    };
+    const text =
+      `Reservation RACE on "${outcome.failedPath}" — a concurrent reservation won this exact path after this batch's own conflict check cleared it. ` +
+      `${outcome.partialReservations.length} path(s) from this call are ALREADY reserved and were left in place, not auto-released ` +
+      '(release(root,{agent,cell}) has no path filter, so an automatic rollback here could destroy other reservations this same agent+cell already holds) — ' +
+      'inspect with `reservations list` and release by hand if the partial batch is unwanted: ' +
+      outcome.conflicts.map((c) => `${c.agent} holds "${c.path}" (cell ${c.cell})`).join('; ');
+    return { result, text, exitCode: 1 };
+  }
+
+  const result = { ok: true, reservations: outcome.reservations, conflicts: [] };
+  const text =
+    `Reserved ${outcome.reservations.length} path(s) for ${agent} (cell ${cell}, ttl ${outcome.reservations[0]?.ttl_seconds ?? ttl ?? 3600}s): ` +
+    outcome.reservations.map((r) => `"${r.path}"`).join(', ') +
+    '.';
+  return { result, text, exitCode: 0 };
 }
 
 async function handleReservationsRelease(root, flags) {
@@ -5716,7 +5935,8 @@ function perfRenderMarkdown(sections) {
   return lines.join('\n');
 }
 
-function handlePerfStart(root, flags) {
+async function handlePerfStart(root, flags) {
+  const { resolveTranscript, claudeProjectsRoot } = await loadPerfLib();
   const projectPath = root;
   const transcript = resolveTranscript(claudeProjectsRoot(), projectPath, { sessionId: flags.session });
   const marker = {
@@ -5735,7 +5955,8 @@ function handlePerfStart(root, flags) {
   return { result: marker, text };
 }
 
-function handlePerfStop(root, flags) {
+async function handlePerfStop(root, flags) {
+  const { computeMetrics, buildSection, appendSection } = await loadPerfLib();
   const markerPath = perfMarkerPath(root);
   // Prefer the new .bee/cache/ marker; fall back to a legacy root marker opened
   // before the #11 migration so an in-flight section can still be stopped.
@@ -5762,7 +5983,8 @@ function handlePerfStop(root, flags) {
   return { result: rec, text: `${perfSectionLine(rec)}\nlogged → ${file}` };
 }
 
-function handlePerfSection(root, flags) {
+async function handlePerfSection(root, flags) {
+  const { resolveTranscript, claudeProjectsRoot, computeMetrics, buildSection, appendSection } = await loadPerfLib();
   const endTs = new Date().toISOString();
   const endMs = Date.parse(endTs);
   const startMs = perfParseSince(flags.since, endMs);
@@ -5785,25 +6007,29 @@ function handlePerfSection(root, flags) {
   return { result: rec, text: `${perfSectionLine(rec)}\nlogged → ${file}` };
 }
 
-function handlePerfLog(_root, flags) {
+async function handlePerfLog(_root, flags) {
+  const { readSections } = await loadPerfLib();
   const limit = flags.limit ? Number(flags.limit) : 20;
   const sections = readSections({ limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
   const text = sections.length ? sections.map(perfSectionLine).join('\n') : 'perf: no sections logged yet.';
   return { result: sections, text };
 }
 
-function handlePerfRender(_root, flags) {
+async function handlePerfRender(_root, flags) {
+  const { readSections } = await loadPerfLib();
   const limit = flags.limit ? Number(flags.limit) : undefined;
   const sections = readSections({ limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
   return { result: sections, text: perfRenderMarkdown(sections) };
 }
 
-function handlePerfSync(_root, _flags) {
+async function handlePerfSync(_root, _flags) {
+  const { syncSessionsToLog, claudeProjectsRoot, scanCachePath } = await loadPerfLib();
   const res = syncSessionsToLog(claudeProjectsRoot(), { cachePath: scanCachePath() });
   return { result: res, text: `perf: synced ${res.sessions} session(s) across ${res.projects} project(s) into the log.` };
 }
 
-function handlePerfReport(_root, flags) {
+async function handlePerfReport(_root, flags) {
+  const { readSessionRecords, syncSessionsToLog, claudeProjectsRoot, scanCachePath, buildMatrixFromLog, writeReport } = await loadPerfLib();
   // The report READS the persistent store (performance.jsonl); it never scans
   // transcripts at view time. If the store is empty (first run), backfill once.
   if (readSessionRecords().length === 0) {
@@ -5886,7 +6112,8 @@ function handleRecoveryScan(root, _flags) {
 // session's own started_at — D3), then the bounded window and the miner
 // prompt (D4). The orchestrator dispatches `prompt`; this handler never
 // calls an LLM.
-function handleRecoveryWindow(root, flags) {
+async function handleRecoveryWindow(root, flags) {
+  const { resolveTranscript, claudeProjectsRoot } = await loadPerfLib();
   const sessionId = requireFlag(flags, 'session');
   // msn-18c: sessions are control-plane.
   const session = readSession(controlRootFor(root), sessionId);
@@ -6224,6 +6451,8 @@ async function handleWorktreeMerge(_root, flags) {
   // change that.
   const ctrlRootForMerge = controlRootFor(mainRoot);
   const mergeSessionId = resolveSessionId({ root: ctrlRootForMerge }) || WORKTREE_MERGE_SESSIONLESS_ID;
+  // exec-speed es-1 (D1): lazy-loaded — this handler is the lib's only consumer.
+  const { runThroughQueue, DEFAULT_WAIT_BOUND_MS } = await import('./lib/integration-queue.mjs');
   let queueWaitBoundMs = DEFAULT_WAIT_BOUND_MS;
   if (flags['queue-wait-ms'] !== undefined) {
     const parsedWaitBoundMs = Number(flags['queue-wait-ms']);
@@ -6333,17 +6562,22 @@ async function handleWorktreeUnregister(root, flags) {
 // automation/skill/agent code. D5: no runtime guard (no TTY check, not
 // excluded from --help --json) — convention-only safety, same level as
 // today's manual touch/rm. ──────────────────────────────────────────────────
-function handleHerdingEnable(_root, _flags) {
+async function handleHerdingEnable(_root, _flags) {
+  // exec-speed es-1 (D1): herding.mjs lazy-loaded — these three handlers are
+  // its only consumers; the dispatcher awaits handlers uniformly.
+  const { enableHerding } = await import('./lib/herding.mjs');
   const result = enableHerding();
   return { result, text: `Enabled bee-herding dispatch: ${result.marker}` };
 }
 
-function handleHerdingDisable(_root, _flags) {
+async function handleHerdingDisable(_root, _flags) {
+  const { disableHerding } = await import('./lib/herding.mjs');
   const result = disableHerding();
   return { result, text: `Disabled bee-herding dispatch: ${result.marker}` };
 }
 
-function handleHerdingStatus(_root, _flags) {
+async function handleHerdingStatus(_root, _flags) {
+  const { herdingStatus } = await import('./lib/herding.mjs');
   const result = herdingStatus();
   const text = result.enabled
     ? `enabled — owner marker present (${result.marker})`
@@ -6360,7 +6594,7 @@ function handleHerdingStatus(_root, _flags) {
 // given — an all-defaults call would otherwise silently pick a target set,
 // which is exactly the "no default purge" discipline `decisions archive`
 // already established for its own mandatory --before.
-function handleTmpSweep(root, flags) {
+async function handleTmpSweep(root, flags) {
   const feature = flags.feature !== undefined ? String(flags.feature) : undefined;
   const before = flags.before !== undefined ? String(flags.before) : undefined;
   const all = flags.all === true;
@@ -6371,6 +6605,8 @@ function handleTmpSweep(root, flags) {
         'FIX: pass --dry-run to preview the default (closed/absent-feature) target set, --feature <slug> to target one feature explicitly (even a live one), --before <ISO> to age-gate scratch with no feature/lane record, or --all to clear everything.',
     );
   }
+  // exec-speed es-1 (D1): scratch.mjs lazy-loaded — this handler is its only consumer.
+  const { runSweep } = await import('./lib/scratch.mjs');
   const result = runSweep(root, { feature, before, all, dryRun });
   const verb = dryRun ? 'Would remove' : 'Removed';
   const text = `${verb} ${result.removed.length} scratch entr(y|ies) (${result.bytes_freed} bytes, ${result.files_freed} files) from .bee/tmp/ and .bee/spikes/.`;

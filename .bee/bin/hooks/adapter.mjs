@@ -45,8 +45,25 @@
 //                          did not name SubagentStart or SubagentStop
 
 import fs from "node:fs";
+import nodeModule from "node:module";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+
+// es-3 (exec-speed D1): guarded on-disk compile cache, enabled at ADAPTER
+// module top on purpose — ESM hoisting means a module can never cache its own
+// static import graph, but every wrapper hook imports this adapter statically
+// FIRST and only then dynamically imports the heavy libs (state.mjs,
+// guards.mjs, cells.mjs, ...), so a top-level call here covers exactly those
+// loads. Node <22.1 has no enableCompileCache; any error (read-only tmpdir,
+// exotic host) is swallowed — a cache is a speedup, never a dependency.
+try {
+  if (typeof nodeModule.enableCompileCache === "function") {
+    nodeModule.enableCompileCache(path.join(os.tmpdir(), "bee-compile-cache"));
+  }
+} catch {
+  // fail-open: run uncached
+}
 
 // Events whose non-empty stdout must be a parseable JSON systemMessage.
 export const ADVISORY_EVENTS = Object.freeze(["PreCompact", "SubagentStop", "Stop"]);
@@ -240,6 +257,70 @@ export function controlRootFor(root) {
 
 export function libModuleUrl(root, name) {
   return pathToFileURL(path.join(root, ".bee", "bin", "lib", name)).href;
+}
+
+// --- lite config reads (es-3, exec-speed D3) --------------------------------
+// A hook that only needs one scalar from config must not pay the state.mjs
+// (195KB) import. These readers mirror state.mjs readConfig's overlay
+// precedence for a single `<namespace>.<key>` lookup, byte-for-byte in
+// outcome for the scalar namespaces they are used on (hooks.*, guards.*):
+//   - .bee/config.local.json overlays .bee/config.json; when the overlay's
+//     namespace is a plain object, its own keys win and the tracked value
+//     survives for keys the overlay does not define (mergeConfigOverlay's
+//     deep-merge on two plain objects);
+//   - an overlay namespace that is present but NOT a plain object replaces
+//     the tracked namespace wholesale (mergeConfigOverlay's array/scalar
+//     branch), so the lookup yields undefined — same as readConfig, where the
+//     clobbered namespace no longer carries the key;
+//   - a missing or malformed file reads as absent (state.mjs readJson).
+// Never throws; any error reads as "value undefined".
+
+function readJsonObjectLite(file) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+export function liteConfigValue(root, namespace, key) {
+  try {
+    const overlay = readJsonObjectLite(path.join(root, ".bee", "config.local.json"));
+    const tracked = readJsonObjectLite(path.join(root, ".bee", "config.json"));
+    const trackedNs = tracked && isPlainObject(tracked[namespace]) ? tracked[namespace] : null;
+    if (overlay && Object.prototype.hasOwnProperty.call(overlay, namespace)) {
+      const overlayNs = overlay[namespace];
+      if (!isPlainObject(overlayNs)) {
+        // Non-object overlay value replaces the namespace wholesale.
+        return undefined;
+      }
+      if (Object.prototype.hasOwnProperty.call(overlayNs, key)) {
+        return overlayNs[key];
+      }
+      return trackedNs ? trackedNs[key] : undefined;
+    }
+    return trackedNs ? trackedNs[key] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Lite twin of state.mjs hookEnabled(root, name): every DEFAULT_HOOKS value is
+// `true` and hookEnabled tests `!== false`, so "no explicit false anywhere
+// after overlay precedence" IS the whole contract. ANY error => enabled
+// (fail-open: a broken config must never silently disable a hook the full
+// reader would run).
+export function hookEnabledLite(root, name) {
+  try {
+    return liteConfigValue(root, "hooks", name) !== false;
+  } catch {
+    return true;
+  }
 }
 
 // --- fail-open logging -----------------------------------------------------

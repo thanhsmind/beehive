@@ -20,7 +20,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { readHookContext, logCrash, libModuleUrl } from "./adapter.mjs";
+import { readHookContext, logCrash, hookEnabledLite } from "./adapter.mjs";
 
 const HOOK_NAME = "tools-logger";
 
@@ -49,13 +49,13 @@ async function main() {
   if (!root) {
     return 0;
   }
-  if (!fs.existsSync(path.join(root, ".bee", "bin", "lib", "state.mjs"))) {
-    return 0;
-  }
 
   try {
-    const state = await import(libModuleUrl(root, "state.mjs"));
-    if (!state.hookEnabled(root, HOOK_NAME)) {
+    // es-3 (exec-speed D3): the toggle is the ONLY thing this hook needed
+    // state.mjs (195KB) for — read it through the adapter's lite config
+    // reader instead (same overlay precedence, fail-open enabled). The old
+    // state.mjs existsSync probe is gone with the import that motivated it.
+    if (!hookEnabledLite(root, HOOK_NAME)) {
       return 0;
     }
     logToolCall(root, ctx.payload);

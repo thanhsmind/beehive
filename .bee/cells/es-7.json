@@ -1,0 +1,52 @@
+{
+  "id": "es-7",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "Doctrine: trim worker startup — dispatch prompt inlines cell JSON + state; drop status/cells-show re-reads",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-executing/SKILL.md",
+    "skills/bee-executing/references/worker-details.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    "skills/bee-executing/SKILL.md"
+  ],
+  "action": "Per exec-speed D7. swarming-reference 'Worker Prompt Template': the dispatch prompt now INLINES the cell's full JSON (verbatim from cells show at claim time) and keeps the state-at-dispatch line. bee-executing SKILL.md step 1 (Initialize) and worker-details: the worker reads AGENTS.md and CONTEXT.md, but NO LONGER runs `status --brief --json` (the dispatch state line is authoritative — it was copied from the orchestrator's own fresh read) and NO LONGER re-fetches the cell via `cells show` (the inlined cell JSON is authoritative; ownership is still enforced at cap by guardClaimOwnership). Keep the acceptance validation (deps capped, decisions resolve) but run it against the inlined JSON. Adjust step 2 wording accordingly. Update every echo of the old 4-step startup in the three files. Cite 'exec-speed D7' next to each change.",
+  "verify": "node scripts/run_verify.mjs --only test_skill_pointers",
+  "must_haves": {
+    "truths": [
+      "no surviving instruction tells a worker to run status --brief or cells show at startup",
+      "the prompt template shows the inlined cell JSON block",
+      "cap-time ownership enforcement language unchanged"
+    ]
+  },
+  "decisions": [
+    "exec-speed D7"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "host checkout without packages/bee source tree: regen chain (onboard_bee/render/manifest --write) unrunnable here; onboarding ledger refreshed by es-12; release manifest absent at baseline (pre-existing red, see plan.md)",
+  "status": "capped",
+  "trace": {
+    "worker": "queen",
+    "outcome": "Doctrine: worker startup trimmed to 2 reads + 0 CLI round-trips (exec-speed D7) - dispatch prompt inlines cell JSON; status --brief and cells show removed from startup across bee-executing SKILL, worker-details, swarming-reference template; cells show remains the post-compaction recovery verb; also folded exec-speed D6 echo fix into swarming-reference Single-execution-worker section (deviation: adjacent-consistency edit, same file)",
+    "files_changed": [
+      "skills/bee-executing/SKILL.md",
+      "skills/bee-executing/references/worker-details.md",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:36:42.409Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:30:57.785Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  },
+  "tier": "ceiling"
+}

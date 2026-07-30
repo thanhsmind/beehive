@@ -1,0 +1,57 @@
+{
+  "id": "es-8",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "Doctrine: semantic judge once per slice at slice close, not per behavior_change cell",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "AGENTS.md"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "action": "Per exec-speed D8. routing-and-contracts 'Goal-check judge tier' + swarming-reference step 7 + bee-hive SKILL lane bullet + AGENTS.md chain note: standard/high-risk now dispatch ONE semantic checklist judge per SLICE at slice close, covering every capped behavior_change cell of that slice in a single read-only dispatch; the judge returns one verdict per cell and each verdict is still recorded via `cells judge-record` (per-cell records unchanged — cap teeth for NEEDS_REVISION stay exactly as coded). A single-cell slice is identical to today. Cite 'exec-speed D8'. Code check already done: no code guard requires per-cell judge dispatch timing, only NEEDS_REVISION blocks a cap — the doctrine change is instruction-layer only.",
+  "verify": "node scripts/run_verify.mjs --only test_always_loaded_rules,test_skill_pointers",
+  "must_haves": {
+    "truths": [
+      "per-cell judge-record verb usage unchanged (one verdict per cell, recorded)",
+      "NEEDS_REVISION cap-blocking language untouched",
+      "all four files tell the same per-slice story"
+    ]
+  },
+  "decisions": [
+    "exec-speed D8"
+  ],
+  "deps": [
+    "es-6"
+  ],
+  "regen_obligation_ack": "host checkout without packages/bee source tree: regen chain (onboard_bee/render/manifest --write) unrunnable here; onboarding ledger refreshed by es-12; release manifest absent at baseline (pre-existing red, see plan.md)",
+  "status": "capped",
+  "trace": {
+    "worker": "queen",
+    "outcome": "Doctrine: semantic judge once per slice at slice close over capped behavior_change cells (exec-speed D8) - judge-tier table (single home) + pointer echoes in r-and-c 340, bee-hive SKILL, AGENTS.md chain note, swarming-reference step 7; deviation: also fixed pointer echoes in bee-swarming/SKILL.md:65 and go-mode.md:62 (outside declared files, adjacent-consistency); per-cell judge-record + NEEDS_REVISION teeth unchanged",
+    "files_changed": [
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "AGENTS.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-hive/references/go-mode.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:38:10.894Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:36:51.213Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  }
+}

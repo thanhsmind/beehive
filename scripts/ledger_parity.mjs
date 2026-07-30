@@ -47,7 +47,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_REPO_ROOT = path.join(__dirname, "..");
@@ -58,7 +58,10 @@ let cachedHashFile = null;
 // buildManagedVersions and computeRuntimeDrift both import hashFile from.
 async function loadHashFile() {
   if (!cachedHashFile) {
-    const mod = await import(path.join(DEFAULT_REPO_ROOT, ".bee", "bin", "lib", "fsutil.mjs"));
+    // pathToFileURL: a bare absolute Windows path ("C:\...") is not a valid
+    // ESM specifier — Node rejects it with ERR_UNSUPPORTED_ESM_URL_SCHEME
+    // ("protocol 'c:'"). file:// URL works on every platform.
+    const mod = await import(pathToFileURL(path.join(DEFAULT_REPO_ROOT, ".bee", "bin", "lib", "fsutil.mjs")).href);
     cachedHashFile = mod.hashFile;
   }
   return cachedHashFile;

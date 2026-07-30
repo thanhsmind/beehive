@@ -1,0 +1,52 @@
+{
+  "id": "es-9",
+  "feature": "exec-speed",
+  "lane": "standard",
+  "title": "Doctrine: composite ticks for tiny/small, single-cell concurrency-plan waiver, tiny ships push-only",
+  "behavior_change": false,
+  "files": [
+    "AGENTS.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/go-mode.md"
+  ],
+  "read_first": [
+    "docs/history/exec-speed/CONTEXT.md",
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "action": "Per exec-speed D9. (a) AGENTS.md rule 17 + routing-and-contracts 'Progress ticks': tiny/small lanes MAY composite consecutive green ticks of one phase into a single line (format unchanged, multiple events comma-joined after the glyph); `✗` lines are NEVER composited or delayed; standard/high-risk keep one-line-per-step. (b) routing-and-contracts 'Concurrency law in full' (+ any AGENTS.md rule 15 echo): the mandatory one-line concurrency plan is WAIVED when exactly one cell is being dispatched (a one-worker plan states nothing); required again from two cells up. (c) 'Ship visibility': tiny lane default changes from draft-pr to push-only (push on cap, no draft PR, no demo obligation); small+ keep draft-pr. Cite 'exec-speed D9' at each site.",
+  "verify": "node scripts/run_verify.mjs --only test_always_loaded_rules,test_ship_visibility",
+  "must_haves": {
+    "truths": [
+      "red/refusal ticks stay uncompositable in every lane",
+      "two-plus-cell dispatches still require the stated concurrency plan",
+      "small/standard/high-risk ship visibility text unchanged"
+    ]
+  },
+  "decisions": [
+    "exec-speed D9"
+  ],
+  "deps": [
+    "es-8"
+  ],
+  "regen_obligation_ack": "host checkout without packages/bee source tree: regen chain (onboard_bee/render/manifest --write) unrunnable here; onboarding ledger refreshed by es-12; release manifest absent at baseline (pre-existing red, see plan.md)",
+  "status": "capped",
+  "trace": {
+    "worker": "queen",
+    "outcome": "Doctrine: composite green ticks for tiny/small (never for a red line), concurrency-plan waived for single-cell dispatch, tiny ships push-only by default (exec-speed D9) - AGENTS.md rule 17, r-and-c Progress ticks + Concurrency law + Ship visibility; test_always_loaded_rules green; test_ship_visibility red pre-existing (missing packages/bee tree, byte-identical to baseline)",
+    "files_changed": [
+      "AGENTS.md",
+      "skills/bee-hive/references/routing-and-contracts.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-07-30T03:40:37.073Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3f3d7790-444a-4bfc-899b-62a54d80dd3e",
+    "claimed_at": "2026-07-30T03:39:16.717Z",
+    "warnings": [],
+    "feature_verify": "pending"
+  }
+}
