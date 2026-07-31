@@ -17,6 +17,13 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { runModuleWorker } from "../../../scripts/lib/run-module-worker.mjs";
+import {
+  canSymlink,
+  envSkipLine,
+  SYMLINK_SKIP_REASON,
+  tmpdirIsCaseSensitive,
+  CASE_SENSITIVE_FS_SKIP_REASON,
+} from "../../../scripts/lib/env-capabilities.mjs";
 // wcg-1: isSharedNestedCheckoutTarget imported from the SAME vendored
 // location (`.bee/bin/lib`) as acquireLeases below, matching this file's
 // existing convention of testing against whatever is actually vendored there.
@@ -935,15 +942,36 @@ async function main() {
   const outsideExisting = path.join(outside, "existing.txt");
   fs.writeFileSync(outsideExisting, "outside\n");
   const symlink = path.join(linked.workRoot, "src", "escape-link");
-  fs.symlinkSync(outside, symlink, "dir");
+  // The two symlink-escape rows need a real symlink in the fixture — denied
+  // without elevation/Developer Mode on win32. The other escape rows carry no
+  // symlink and always run.
+  if (canSymlink()) {
+    fs.symlinkSync(outside, symlink, "dir");
+  } else {
+    console.log(envSkipLine(SYMLINK_SKIP_REASON, "row33[symlink-existing]: canonical containment denies target escape"));
+    console.log(envSkipLine(SYMLINK_SKIP_REASON, "row33[symlink-new]: canonical containment denies target escape"));
+  }
   const escapeRows = [
     ["traversal", "../outside.txt"],
     ["absolute-main", path.join(linked.mainRoot, "src", "main-only.txt")],
-    ["symlink-existing", path.join(symlink, "existing.txt")],
-    ["symlink-new", path.join(symlink, "new", "nested.txt")],
+    ...(canSymlink()
+      ? [
+          ["symlink-existing", path.join(symlink, "existing.txt")],
+          ["symlink-new", path.join(symlink, "new", "nested.txt")],
+        ]
+      : []),
     ["windows-separator-traversal", "..\\outside-win.txt"],
-    ["case-alias", path.join(path.dirname(linked.workRoot), path.basename(linked.workRoot).toUpperCase(), "src", "case.txt")],
+    // case-alias premise: an uppercased spelling of the worktree root is a
+    // DIFFERENT directory (a genuine escape) — only true on a case-sensitive
+    // volume. On a case-insensitive volume (default NTFS) the alias IS the
+    // contained worktree, so allowing it is correct and this row cannot fire.
+    ...(tmpdirIsCaseSensitive()
+      ? [["case-alias", path.join(path.dirname(linked.workRoot), path.basename(linked.workRoot).toUpperCase(), "src", "case.txt")]]
+      : []),
   ];
+  if (!tmpdirIsCaseSensitive()) {
+    console.log(envSkipLine(CASE_SENSITIVE_FS_SKIP_REASON, "row33[case-alias]: canonical containment denies target escape"));
+  }
   for (const [kind, target] of escapeRows) {
     for (const toolName of writeToolClasses) {
       const result = await runHookPayload(writePayloadFor(toolName, target), linked.workRoot);
@@ -1329,6 +1357,17 @@ async function main() {
   // mountPath}`. A target that lexically escapes the physical worktree
   // PURELY by crossing that specific, marker-declared symlink is the
   // companion's own working tree, not an escape.
+  if (!canSymlink()) {
+    for (const row of [
+      "row65: an Edit inside the matched companion mount is allowed (denied pre-fix)",
+      "row66: a Bash-extracted target under the mount is also mapped and allowed",
+      "row67: the same symlinked mount with NO marker file is still denied (generic containment)",
+      "row68: a marker whose declared worktreePath does NOT match the live symlink target is still denied",
+      "row69: a companion-mounted Read stays allowed regardless of the marker (read tools are untouched)",
+    ]) {
+      console.log(envSkipLine(SYMLINK_SKIP_REASON, row));
+    }
+  } else {
   const companionRoot = buildFixture("bee-write-guard-companion-");
   const companionMountTarget = mkFixture("bee-write-guard-companion-mount-");
   fs.writeFileSync(path.join(companionMountTarget, "foo.js"), "// companion file\n");
@@ -1380,6 +1419,7 @@ async function main() {
     noMarkerRoot,
   );
   check(r69.status === 0, "row69: a companion-mounted Read stays allowed regardless of the marker (read tools are untouched)", `status=${r69.status} stderr=${r69.stderr}`);
+  }
 
   // --- 70-77. worktree-concurrency-guard, cell wcg-1: the shared detection
   // primitive isSharedNestedCheckoutTarget (guards.mjs). This is Epic 1's
@@ -1395,7 +1435,9 @@ async function main() {
   // companion marker) is denied TODAY by canonicalRelPath/
   // describeCrossWorktreeTarget alone, independent of concurrency — spike
   // case A, status 2. Locks the baseline this feature must not regress.
-  {
+  if (!canSymlink()) {
+    console.log(envSkipLine(SYMLINK_SKIP_REASON, "row70: unverified symlink escape denied by EXISTING containment"));
+  } else {
     const root = buildFixture("bee-wcg1-baseline-symlink-");
     const external = mkFixture("bee-wcg1-baseline-external-");
     execFileSync("git", ["init", "-q"], { cwd: external, stdio: ["ignore", "pipe", "pipe"] });
@@ -1467,7 +1509,16 @@ async function main() {
   //   77: concurrent + symlink mount with NO marker at all -> NOT flagged
   //       (the primitive stays narrow; containment, not this primitive,
   //       denies an unverified escape).
-  {
+  if (!canSymlink()) {
+    for (const row of [
+      "row75: verified companion mount with NO concurrent session is NOT flagged (D6 no-op)",
+      "row74: verified companion mount + concurrent session IS flagged",
+      "row76: a marker whose worktreePath does NOT match the live symlink is NOT flagged (verification fails)",
+      "row77: a symlink mount with NO marker is NOT flagged by the primitive (containment's job, not this primitive's)",
+    ]) {
+      console.log(envSkipLine(SYMLINK_SKIP_REASON, row));
+    }
+  } else {
     const mountTarget = mkFixture("bee-wcg1-companion-mount-");
     execFileSync("git", ["init", "-q"], { cwd: mountTarget, stdio: ["ignore", "pipe", "pipe"] });
     fs.writeFileSync(path.join(mountTarget, "foo.js"), "// companion file\n");
@@ -1571,7 +1622,9 @@ async function main() {
   // fires (the whole point of `--with-companion`). This is the exemption that
   // separates a sanctioned companion write from an unguarded shared-checkout
   // write; without it the guard would break its own paved road.
-  {
+  if (!canSymlink()) {
+    console.log(envSkipLine(SYMLINK_SKIP_REASON, "row82: a write into a verified companion mount stays ALLOWED even when concurrent"));
+  } else {
     const mountTarget = mkFixture("bee-wcg2-companion-mount-");
     execFileSync("git", ["init", "-q"], { cwd: mountTarget, stdio: ["ignore", "pipe", "pipe"] });
     fs.writeFileSync(path.join(mountTarget, "foo.js"), "// companion file\n");

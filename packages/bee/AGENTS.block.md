@@ -50,9 +50,21 @@ recorded fallback instead of demanding the ritual.
 ## Start a session
 
 Read the injected preamble instead of re-fetching state; run
-`bee status --json` only when routing work. Present a pending handoff
-and wait — never auto-resume it. When the feature has knowledge under
-`docs/knowledge/`, read its context before planning or executing.
+`bee status --json` only when routing work. A handoff record has two
+kinds — `planned-next` and `pause` — and a kindless record reads as
+pause:
+
+- A `pause` handoff is presented to the user; wait for their word —
+  never auto-resume it.
+- A `planned-next` handoff was written at a clean stop with
+  `bee state handoff write --kind planned-next` (previous cell capped,
+  the next cell's claim already owned by the writer); take its carried
+  claim with `bee state handoff adopt`. Adoption fires only at the
+  fresh-session boundary — a resumed or compacted session never
+  adopts, it surfaces and waits.
+
+When the feature has knowledge under `docs/knowledge/`, read its
+context before planning or executing.
 
 ## Prove, then say so
 
@@ -70,14 +82,33 @@ and wait — never auto-resume it. When the feature has knowledge under
 
 - Concurrency is the default; serial needs a named reason: a file
   overlap, a real dependency, a scarce resource, or the user's say-so.
-- Delegate reading and gathering to cheap subagents; keep deciding —
-  gates, synthesis, state writes, the human conversation — in this
-  session. Name the model on every dispatch; small-and-up cells run
-  through dispatched workers, a tiny cell may run inline.
+- Fan out the gathering; keep the deciding. A mechanical step (read,
+  render, mine) delegates down-tier when its content is needed as a
+  digest, not verbatim — in every phase and lane, including plain
+  turns where no skill is running. Decide-altitude never delegates:
+  gates, synthesis, state writes, and the human conversation stay on
+  the session model.
+- Every dispatch carries its tier: a `model` param or a
+  `[bee-tier: <tier>]` marker, anchored — first thing in the prompt
+  or description, never buried mid-text. From `small` up, cells run
+  through dispatched workers (never zero *execution* workers); a tiny
+  cell may run inline. A cli-shaped gather tier runs the configured
+  external command per the Delegation contract's cli gather branch,
+  not an Agent dispatch.
 - Reserve files before write-heavy swarm work and prefix write-heavy
   shell commands with `BEE_AGENT_NAME=<name>`. On a reservation or
   hold conflict, stop and report it — never write through it. A worker
   executes exactly the one cell it was handed.
+
+**Native Codex empty waits require a progress interval** — the full ordered rule lives in `bee-hive` → `references/routing-and-contracts.md` ("Native Codex subagent tending").
+
+## Multi-session etiquette
+
+Parallel sessions coordinate through lanes, claims, and holds — never
+around them. Pick up cross-session work with `bee cells claim-next`,
+never by browsing for open cells. A hold or reservation deny
+names the holder and its expiry: pick other work and report the
+conflict — the guard is never worked around or waited out in silence.
 
 ## Capture what settles
 
@@ -87,17 +118,25 @@ close every task with a capture line or an explicit "nothing settled".
 `docs/knowledge/` is the state layer: read it first, sync it when
 behavior changes.
 
-## Communicate in work language
+## Communication
 
 The user hears the work in their own terms, never bee mechanics. Open
 with one line of state; keep narration under five lines; link records
-instead of pasting them; end on exactly one next action. Emit one
-short progress line per visible step, on by default — `▸` started,
-`✓` green, `⚡` auto-approved, `✗` red — and a red or refusal line is
-never silenced, composited, or delayed by any switch or bypass level.
-Ids and counts never lead: the work is the subject of every line; a
-cell id or hash may trail as a handle when the reader needs it, and
-counts appear only as evidence beside a claim, never as statistics.
+instead of pasting them; close on exactly ONE next action — the
+agent's own next move, or the one thing only the user can decide,
+never a menu. Emit one short progress line per visible step, on by
+default — `▸` started, `✓` green, `⚡` auto-approved, `✗` red — and a
+red or refusal line is never silenced, composited, or delayed by any
+switch or bypass level. Ids and counts never lead: the work is the
+subject of every line; a cell id or hash may trail as a handle when
+the reader needs it, and counts appear only as evidence beside a
+claim, never as statistics.
+
+**Pre-send check**: reading only the first and last line of the
+message must answer what happened and what's next; then strip every
+bee term — if nothing the user needs is lost, those terms did not
+belong there. The full turn shape and rules load with the `bee-hive`
+skill ("Communication contract").
 
 ## Care for the session
 
@@ -125,9 +164,10 @@ counts appear only as evidence beside a claim, never as statistics.
 
 The full mechanics live in `skills/bee-hive/SKILL.md` and its
 references, loaded when routing work: lanes and gate wording; § Gate
-bypass mode; § Progress ticks; § Communication contract; § Judgment
-contract; § Goal-check judge tier; § Concurrency law in full;
-§ Delegation contract; worktrees; § Native Codex subagent tending;
-plus the worker contract in `bee-swarming` ("Execute") and the capture discipline
-in `bee-capturing` ("Capture the moment it settles"). Independent review runs
+bypass mode; § Progress ticks; § Judgment contract; § Goal-check
+judge tier; § Concurrency law in full; § Delegation contract;
+worktrees; § Native Codex subagent tending; plus the worker contract
+in `bee-swarming` ("Execute"), the capture discipline in
+`bee-capturing` ("Capture the moment it settles"), and the question
+craft in `bee-shaping` ("Interview craft"). Independent review runs
 on user request: `bee-reviewing`, never as an automatic stage.

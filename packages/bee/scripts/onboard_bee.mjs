@@ -99,6 +99,12 @@ const SKILLS_ROOT = path.join(PLUGIN_ROOT, "skills");
 const PLUGIN_HOOKS_DIR = path.join(PLUGIN_ROOT, "packages", "bee", "hooks");
 const TEMPLATES_DIR = path.join(PLUGIN_ROOT, "packages", "bee");
 const TEMPLATES_LIB_DIR = path.join(TEMPLATES_DIR, "lib");
+// Prompt files (prompt-files spec §1): packages/bee/prompts/*.md is the
+// SOURCE; onboarding vendors it to <host>/.bee/bin/prompts/ beside the
+// engine, version-managed like lib/ — lib/prompt-renderer.mjs resolves the
+// prompts dir relative to itself, so the vendored engine always reads the
+// prompts that shipped with it.
+const TEMPLATES_PROMPTS_DIR = path.join(TEMPLATES_DIR, "prompts");
 const TEMPLATES_STATUSLINE_DIR = path.join(TEMPLATES_DIR, "statusline");
 const TEMPLATES_AGENTS_DIR = path.join(TEMPLATES_DIR, "agents");
 // Craft-guide layer (expertise-vendoring): repo-root expertise/*.md is the
@@ -1843,6 +1849,21 @@ function listSourceExpertise() {
     .sort();
 }
 
+// Same readdir discipline as listSourceExpertise (crit-pattern 20260714:
+// never a hand-kept list): every top-level *.md in the source prompts/ dir is
+// a vendored prompt file. Absent dir -> [] (a source tree without the prompt
+// layer plans no prompt items and never deletes a host's vendored copy).
+function listTemplatePrompts() {
+  if (!fs.existsSync(TEMPLATES_PROMPTS_DIR)) {
+    return [];
+  }
+  return fs
+    .readdirSync(TEMPLATES_PROMPTS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => entry.name)
+    .sort();
+}
+
 function listTemplateStatusline() {
   if (!fs.existsSync(TEMPLATES_STATUSLINE_DIR)) {
     return [];
@@ -3128,6 +3149,39 @@ function computePlan(
     }
   }
 
+  // 3e. vendored prompt files (prompt-files spec §1): <source>/packages/bee/
+  // prompts/*.md mirrors to <host>/.bee/bin/prompts/ with the same
+  // byte-compare discipline as the lib vendoring above, and the same
+  // enumeration-based removal as expertise (3d): .bee/bin/prompts/ is wholly
+  // managed — a file absent from source IS an intentional removal. Scoped to
+  // plain top-level *.md files only, and the removal pass is gated on the
+  // SOURCE dir existing so a pre-prompt-files checkout never reads as
+  // "delete everything".
+  const currentPromptNames = new Set(listTemplatePrompts());
+  for (const name of currentPromptNames) {
+    const source = fs.readFileSync(path.join(TEMPLATES_PROMPTS_DIR, name), "utf8");
+    const target = path.join(repoRoot, ".bee", "bin", "prompts", name);
+    if (readTextIfExists(target) !== source) {
+      plan.push({ action: "copy_prompt", path: `.bee/bin/prompts/${name}` });
+    }
+  }
+  if (fs.existsSync(TEMPLATES_PROMPTS_DIR)) {
+    const promptsTargetDir = path.join(repoRoot, ".bee", "bin", "prompts");
+    const stalePrompts = fs.existsSync(promptsTargetDir)
+      ? fs
+          .readdirSync(promptsTargetDir, { withFileTypes: true })
+          .filter(
+            (entry) =>
+              entry.isFile() && entry.name.endsWith(".md") && !currentPromptNames.has(entry.name),
+          )
+          .map((entry) => entry.name)
+          .sort()
+      : [];
+    for (const name of stalePrompts) {
+      plan.push({ action: "remove_prompt", path: `.bee/bin/prompts/${name}` });
+    }
+  }
+
   // 3b. statusline pair (opt-in sync): only for repos whose settings.json
   // already points statusLine at .claude/statusline-command.sh. Byte-compare
   // like the vendored helpers; never creates the opt-in on other repos.
@@ -3341,12 +3395,17 @@ function buildManagedVersions(
   for (const name of listSourceExpertise()) {
     expertise[name] = hashFile(path.join(EXPERTISE_DIR, name));
   }
+  const prompts = {};
+  for (const name of listTemplatePrompts()) {
+    prompts[name] = hashFile(path.join(TEMPLATES_PROMPTS_DIR, name));
+  }
   const managed = {
     agents_block: sha256(renderedBlock),
     gitignore_block: sha256(renderedGitignoreBlock),
     helpers,
     lib,
     expertise,
+    prompts,
   };
   if (repoHooks) {
     managed.repo_hooks = buildHookVersions();
@@ -3539,7 +3598,7 @@ function applyPlan(
         beeVersion,
       };
       // P49: a forceable refusal names its blast radius beyond skills - the
-      // copy_lib/copy_helper/copy_expertise paths a --force-downgrade would
+      // copy_lib/copy_helper/copy_expertise/copy_prompt paths a --force-downgrade would
       // also overwrite under .bee/. Filtered from the already-computed `plan` verbatim,
       // order preserved, never recomputed. Non-forceable refusals (unknown
       // version, blocked_no_source) omit the field entirely - it never
@@ -3547,7 +3606,8 @@ function applyPlan(
       if (skillSync.blocked.forceable) {
         blockedResult.host_items = plan.filter(
           ({ action }) =>
-            action === "copy_lib" || action === "copy_helper" || action === "copy_expertise",
+            action === "copy_lib" || action === "copy_helper" || action === "copy_expertise" ||
+            action === "copy_prompt",
         );
       }
       return blockedResult;
@@ -3662,6 +3722,21 @@ function applyPlan(
         // section 3d above (plain top-level *.md files only), never
         // host/user-supplied.
         if (path.dirname(item.path) === ".bee/expertise") {
+          fs.rmSync(target, { force: true });
+        }
+        break;
+      }
+      case "copy_prompt": {
+        const name = path.basename(item.path);
+        writeFileAtomic(target, fs.readFileSync(path.join(TEMPLATES_PROMPTS_DIR, name), "utf8"));
+        break;
+      }
+      case "remove_prompt": {
+        // Same exact-path safety as remove_expertise: item.path is always
+        // .bee/bin/prompts/<name>, derived from the target-dir enumeration in
+        // section 3e above (plain top-level *.md files only), never
+        // host/user-supplied.
+        if (path.dirname(item.path) === ".bee/bin/prompts") {
           fs.rmSync(target, { force: true });
         }
         break;

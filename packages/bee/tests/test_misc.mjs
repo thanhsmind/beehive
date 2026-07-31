@@ -2169,9 +2169,15 @@ await check('census: AO14 execution-worker class — the Delegation contract, be
   const contractPath = path.join(repoRoot, 'skills', 'bee-hive', 'references', 'routing-and-contracts.md');
   assert(fs.existsSync(contractPath), `routing-and-contracts.md not found at ${contractPath}`);
   const contractText = fs.readFileSync(contractPath, 'utf8');
+  // Provenance exile (refocus P1): the AO14 id was removed from live prose —
+  // the class is now named "Execution worker (second named class)" in
+  // routing-and-contracts.md. The old anchor grepped the literal "AO14",
+  // which no live surface may carry anymore; the anchor follows the rename,
+  // the contract it pins (the execution-worker class exists beside the
+  // I/O-offload worker) is unchanged.
   assert(
-    /Execution worker \(AO14/.test(contractText),
-    'routing-and-contracts.md must name the execution-worker class (AO14) beside the I/O-offload worker',
+    /Execution worker \(second named class\)/.test(contractText),
+    'routing-and-contracts.md must name the execution-worker class (formerly AO14) beside the I/O-offload worker',
   );
   assert(
     /does\*{0,2} register in the swarm registry/.test(contractText) && /does\*{0,2} take reservations/.test(contractText),
@@ -3607,7 +3613,11 @@ await check('writeJsonAtomic (fsutil.mjs, tree-hygiene D3): a failed rename unli
   try {
     const target = path.join(dir, 'config.json');
     // Pre-creating the target AS A DIRECTORY forces the tmp->target rename to
-    // fail with a real, deterministic EISDIR — no fs mocking needed.
+    // fail with a real, deterministic error — no fs mocking needed. The code
+    // is platform-fixed: POSIX rename(2) reports EISDIR; win32 MoveFileEx
+    // reports EPERM for the same collision. Either way the assertion stays
+    // exact — the ORIGINAL code for this box must survive unchanged.
+    const renameOntoDirCode = process.platform === 'win32' ? 'EPERM' : 'EISDIR';
     fs.mkdirSync(target);
     let thrown = null;
     try {
@@ -3616,7 +3626,7 @@ await check('writeJsonAtomic (fsutil.mjs, tree-hygiene D3): a failed rename unli
       thrown = error;
     }
     assert(thrown !== null, 'writeJsonAtomic must rethrow when the rename fails, never swallow it');
-    assert(thrown.code === 'EISDIR', `original error code must survive unchanged, got ${thrown && thrown.code}`);
+    assert(thrown.code === renameOntoDirCode, `original error code must survive unchanged, got ${thrown && thrown.code}, expected ${renameOntoDirCode}`);
     const leaked = fs.readdirSync(dir).filter((f) => f !== 'config.json' && f.endsWith('.tmp'));
     assert(leaked.length === 0, `no tmp file must be left behind after a failed rename, found: ${JSON.stringify(leaked)}`);
   } finally {
@@ -3627,6 +3637,9 @@ await check('writeJsonAtomic (fsutil.mjs, tree-hygiene D3): a failed rename unli
 await check('writeJsonlAtomic and writeTextAtomic (decisions.mjs, tree-hygiene D3): same failed-rename discipline as fsutil.mjs — tmp unlinked, original error rethrown unchanged', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-atomic-write-decisions-'));
   try {
+    // Same platform-fixed expected code as the fsutil.mjs check above:
+    // rename-onto-directory is EISDIR on POSIX, EPERM on win32.
+    const renameOntoDirCode = process.platform === 'win32' ? 'EPERM' : 'EISDIR';
     const jsonlTarget = path.join(dir, 'decisions.jsonl');
     fs.mkdirSync(jsonlTarget);
     let jsonlThrown = null;
@@ -3636,7 +3649,7 @@ await check('writeJsonlAtomic and writeTextAtomic (decisions.mjs, tree-hygiene D
       jsonlThrown = error;
     }
     assert(jsonlThrown !== null, 'writeJsonlAtomic must rethrow when the rename fails');
-    assert(jsonlThrown.code === 'EISDIR', `original error code must survive unchanged, got ${jsonlThrown && jsonlThrown.code}`);
+    assert(jsonlThrown.code === renameOntoDirCode, `original error code must survive unchanged, got ${jsonlThrown && jsonlThrown.code}, expected ${renameOntoDirCode}`);
     const jsonlLeaked = fs.readdirSync(dir).filter((f) => f !== 'decisions.jsonl' && f.endsWith('.tmp'));
     assert(jsonlLeaked.length === 0, `no tmp file left after writeJsonlAtomic failure, found: ${JSON.stringify(jsonlLeaked)}`);
 
@@ -3649,7 +3662,7 @@ await check('writeJsonlAtomic and writeTextAtomic (decisions.mjs, tree-hygiene D
       textThrown = error;
     }
     assert(textThrown !== null, 'writeTextAtomic must rethrow when the rename fails');
-    assert(textThrown.code === 'EISDIR', `original error code must survive unchanged, got ${textThrown && textThrown.code}`);
+    assert(textThrown.code === renameOntoDirCode, `original error code must survive unchanged, got ${textThrown && textThrown.code}, expected ${renameOntoDirCode}`);
     const textLeaked = fs
       .readdirSync(dir)
       .filter((f) => f !== 'index.md' && f !== 'decisions.jsonl' && f.endsWith('.tmp'));

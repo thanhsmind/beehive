@@ -22,6 +22,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { check, assert, printSummaryAndExit } from '../../../scripts/lib/test-fixture.mjs';
+import { canSymlink, envSkipLine, SYMLINK_SKIP_REASON } from '../../../scripts/lib/env-capabilities.mjs';
+
+// The --with-companion checks drive the PRODUCT's companion mount, which IS
+// a symlink (worktree-store mountCompanion) — on a box that cannot create
+// symlinks (win32 without elevation/Developer Mode) the product path itself
+// cannot run, so these checks skip loudly instead of failing on the fixture.
+async function checkNeedsSymlink(name, fn) {
+  if (!canSymlink()) {
+    console.log(envSkipLine(SYMLINK_SKIP_REASON, name));
+    return;
+  }
+  return check(name, fn);
+}
 import { createFeatureWorktree, mergeFeatureWorktree } from '../lib/worktree-store.mjs';
 
 function git(cwd, args, { allowFailure = false } = {}) {
@@ -211,7 +224,7 @@ await check('a merge with NO onVerifyTick/checkProcessorLease given at all (ever
 // and the worktree dirty-check must never falsely trip on the mount itself
 // (a git pathspec exclusion, not text-filtering of porcelain output). ──────
 
-await check('a merge refused by the worktree dirty-check (a genuinely dirty file, unrelated to the companion mount) preserves the companion mount — marker + symlink survive the refusal untouched', async () => {
+await checkNeedsSymlink('a merge refused by the worktree dirty-check (a genuinely dirty file, unrelated to the companion mount) preserves the companion mount — marker + symlink survive the refusal untouched', async () => {
   const { mainRoot, targetDir, created } = await companionWorktreeFixture('demo-companion-dirty-refuse');
   try {
     const markerPath = path.join(created.worktreeRoot, '.bee', 'companion-session.json');
@@ -240,7 +253,7 @@ await check('a merge refused by the worktree dirty-check (a genuinely dirty file
   }
 });
 
-await check('a clean --with-companion merge with a NESTED mountPath ("vendor/companion") succeeds and tears down the marker + symlink — proves the dirty-check uses a git pathspec exclusion, not text-filtering of porcelain output (a nested mount collapses to "?? vendor/" in porcelain, which text-filtering for the exact mount path would never match)', async () => {
+await checkNeedsSymlink('a clean --with-companion merge with a NESTED mountPath ("vendor/companion") succeeds and tears down the marker + symlink — proves the dirty-check uses a git pathspec exclusion, not text-filtering of porcelain output (a nested mount collapses to "?? vendor/" in porcelain, which text-filtering for the exact mount path would never match)', async () => {
   const { mainRoot, targetDir, created } = await companionWorktreeFixture('demo-companion-nested-clean', { mountPath: 'vendor/companion' });
   try {
     // Give the branch something new to merge so this isn't ALREADY_UP_TO_DATE
@@ -279,7 +292,7 @@ await check('a worktree with no companion marker merges exactly as before — no
   }
 });
 
-await check('a merge refused for a DETACHED HEAD worktree preserves the companion mount too — the fix covers every zero-mutation refusal, not just the dirty-check', async () => {
+await checkNeedsSymlink('a merge refused for a DETACHED HEAD worktree preserves the companion mount too — the fix covers every zero-mutation refusal, not just the dirty-check', async () => {
   const { mainRoot, targetDir, created } = await companionWorktreeFixture('demo-companion-detached');
   try {
     const markerPath = path.join(created.worktreeRoot, '.bee', 'companion-session.json');
@@ -311,7 +324,7 @@ await check('a merge refused for a DETACHED HEAD worktree preserves the companio
 // to run only after every zero-mutation refusal clears (see
 // mergeFeatureWorktreeStage above); this is the end-to-end proof that a
 // refused-then-retried merge actually recovers.
-await check('refused companion merge is retryable: refusal preserves the mount, and the retry after cleaning the dirt merges clean with companion teardown', async () => {
+await checkNeedsSymlink('refused companion merge is retryable: refusal preserves the mount, and the retry after cleaning the dirt merges clean with companion teardown', async () => {
   const { mainRoot, targetDir, created } = await companionWorktreeFixture('demo-companion-retry');
   try {
     const markerPath = path.join(created.worktreeRoot, '.bee', 'companion-session.json');

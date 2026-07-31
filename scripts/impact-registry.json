@@ -91,7 +91,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_native_probe.mjs",
@@ -139,8 +138,7 @@
     ".bee/bin/lib/cells.mjs": {
       "direct": [
         ".bee/bin/bee.mjs knowledge check",
-        ".bee/bin/bee.mjs knowledge index --check",
-        "scripts/tests/test_claim_race.mjs"
+        ".bee/bin/bee.mjs knowledge index --check"
       ],
       "all": [
         ".bee/bin/bee.mjs knowledge check",
@@ -157,7 +155,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_native_probe.mjs",
@@ -173,8 +170,7 @@
     ".bee/bin/lib/claims.mjs": {
       "direct": [
         ".bee/bin/bee.mjs knowledge check",
-        ".bee/bin/bee.mjs knowledge index --check",
-        "scripts/tests/test_claim_race.mjs"
+        ".bee/bin/bee.mjs knowledge index --check"
       ],
       "all": [
         ".bee/bin/bee.mjs knowledge check",
@@ -194,21 +190,18 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_okf_pins.mjs",
-        "scripts/tests/test_reservation_race.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_worktree_cli.mjs",
         "scripts/tests/test_worktree_companion.mjs",
         "scripts/tests/test_worktree_grant_resolve.mjs",
         "scripts/tests/test_worktree_holds.mjs",
-        "scripts/tests/test_worktree_holds_race.mjs",
         "scripts/tests/test_worktree_merge_queue.mjs",
         "scripts/tests/test_worktree_store.mjs"
       ]
@@ -300,21 +293,18 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_okf_pins.mjs",
-        "scripts/tests/test_reservation_race.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_worktree_cli.mjs",
         "scripts/tests/test_worktree_companion.mjs",
         "scripts/tests/test_worktree_grant_resolve.mjs",
         "scripts/tests/test_worktree_holds.mjs",
-        "scripts/tests/test_worktree_holds_race.mjs",
         "scripts/tests/test_worktree_merge_queue.mjs",
         "scripts/tests/test_worktree_store.mjs"
       ]
@@ -339,7 +329,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_native_probe.mjs",
@@ -421,11 +410,9 @@
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
         "scripts/ledger_parity.mjs --check",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_state_write_concurrency.mjs",
-        "scripts/tests/test_worktree_holds.mjs",
-        "scripts/tests/test_worktree_holds_race.mjs"
+        "scripts/tests/test_worktree_holds.mjs"
       ],
       "all": [
         ".bee/bin/bee.mjs knowledge check",
@@ -446,7 +433,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
@@ -454,7 +440,6 @@
         "scripts/tests/test_ledger_parity.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_okf_pins.mjs",
-        "scripts/tests/test_reservation_race.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_state_write_concurrency.mjs",
@@ -463,7 +448,6 @@
         "scripts/tests/test_worktree_companion.mjs",
         "scripts/tests/test_worktree_grant_resolve.mjs",
         "scripts/tests/test_worktree_holds.mjs",
-        "scripts/tests/test_worktree_holds_race.mjs",
         "scripts/tests/test_worktree_merge_queue.mjs",
         "scripts/tests/test_worktree_store.mjs"
       ]
@@ -645,7 +629,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_native_probe.mjs",
@@ -724,21 +707,18 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_okf_pins.mjs",
-        "scripts/tests/test_reservation_race.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_worktree_cli.mjs",
         "scripts/tests/test_worktree_companion.mjs",
         "scripts/tests/test_worktree_grant_resolve.mjs",
         "scripts/tests/test_worktree_holds.mjs",
-        "scripts/tests/test_worktree_holds_race.mjs",
         "scripts/tests/test_worktree_merge_queue.mjs",
         "scripts/tests/test_worktree_store.mjs"
       ]
@@ -768,14 +748,12 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_okf_pins.mjs",
-        "scripts/tests/test_reservation_race.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_store_lock.mjs",
@@ -783,7 +761,6 @@
         "scripts/tests/test_worktree_companion.mjs",
         "scripts/tests/test_worktree_grant_resolve.mjs",
         "scripts/tests/test_worktree_holds.mjs",
-        "scripts/tests/test_worktree_holds_race.mjs",
         "scripts/tests/test_worktree_merge_queue.mjs",
         "scripts/tests/test_worktree_store.mjs"
       ]
@@ -808,7 +785,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
@@ -830,6 +806,35 @@
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check"
       ],
+      "all": [
+        ".bee/bin/bee.mjs knowledge check",
+        ".bee/bin/bee.mjs knowledge index --check",
+        "scripts/okf_migrate.mjs --check advisor-protocol",
+        "scripts/okf_migrate.mjs --check decision-memory",
+        "scripts/okf_migrate.mjs --check doctrine-layer",
+        "scripts/okf_migrate.mjs --check feedback-digest",
+        "scripts/okf_migrate.mjs --check hook-runtime",
+        "scripts/okf_migrate.mjs --check okf-profile",
+        "scripts/okf_migrate.mjs --check onboarding",
+        "scripts/okf_migrate.mjs --check performance-log",
+        "scripts/okf_migrate.mjs --check verify-pipeline",
+        "scripts/okf_migrate.mjs --check workflow-state",
+        "scripts/okf_migrate.mjs --check worktree-parallelism",
+        "scripts/okf_migrate.mjs --check-patterns",
+        "scripts/tests/test_compact_verbs.mjs",
+        "scripts/tests/test_conformance.mjs",
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_okf_pins.mjs",
+        "scripts/tests/test_run_verify_impacted.mjs",
+        "scripts/tests/test_state_compounding_gate.mjs",
+        "scripts/tests/test_worktree_cli.mjs",
+        "scripts/tests/test_worktree_companion.mjs",
+        "scripts/tests/test_worktree_holds.mjs",
+        "scripts/tests/test_worktree_merge_queue.mjs"
+      ]
+    },
+    ".bee/bin/lib/prompt-renderer.mjs": {
+      "direct": [],
       "all": [
         ".bee/bin/bee.mjs knowledge check",
         ".bee/bin/bee.mjs knowledge index --check",
@@ -892,9 +897,7 @@
     ".bee/bin/lib/reservations.mjs": {
       "direct": [
         ".bee/bin/bee.mjs knowledge check",
-        ".bee/bin/bee.mjs knowledge index --check",
-        "scripts/tests/test_reservation_race.mjs",
-        "scripts/tests/test_worktree_holds_race.mjs"
+        ".bee/bin/bee.mjs knowledge index --check"
       ],
       "all": [
         ".bee/bin/bee.mjs knowledge check",
@@ -914,21 +917,18 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_native_probe.mjs",
         "scripts/tests/test_okf_pins.mjs",
-        "scripts/tests/test_reservation_race.mjs",
         "scripts/tests/test_run_verify_impacted.mjs",
         "scripts/tests/test_state_compounding_gate.mjs",
         "scripts/tests/test_worktree_cli.mjs",
         "scripts/tests/test_worktree_companion.mjs",
         "scripts/tests/test_worktree_grant_resolve.mjs",
         "scripts/tests/test_worktree_holds.mjs",
-        "scripts/tests/test_worktree_holds_race.mjs",
         "scripts/tests/test_worktree_merge_queue.mjs",
         "scripts/tests/test_worktree_store.mjs"
       ]
@@ -985,7 +985,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_conformance.mjs",
         "scripts/tests/test_native_probe.mjs",
@@ -1122,7 +1121,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
@@ -1225,7 +1223,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
@@ -1261,7 +1258,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
@@ -1281,8 +1277,7 @@
     ".bee/bin/lib/worktree-holds.mjs": {
       "direct": [
         ".bee/bin/bee.mjs knowledge check",
-        ".bee/bin/bee.mjs knowledge index --check",
-        "scripts/tests/test_worktree_holds_race.mjs"
+        ".bee/bin/bee.mjs knowledge index --check"
       ],
       "all": [
         ".bee/bin/bee.mjs knowledge check",
@@ -1302,7 +1297,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
@@ -1315,7 +1309,6 @@
         "scripts/tests/test_worktree_companion.mjs",
         "scripts/tests/test_worktree_grant_resolve.mjs",
         "scripts/tests/test_worktree_holds.mjs",
-        "scripts/tests/test_worktree_holds_race.mjs",
         "scripts/tests/test_worktree_merge_queue.mjs",
         "scripts/tests/test_worktree_store.mjs"
       ]
@@ -1345,7 +1338,6 @@
         "scripts/okf_migrate.mjs --check workflow-state",
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_config_samples_safe.mjs",
         "scripts/tests/test_config_validate.mjs",
@@ -2264,6 +2256,18 @@
         "scripts/tests/test_ship_visibility.mjs"
       ]
     },
+    "packages/bee/lib/prompt-renderer.mjs": {
+      "direct": [],
+      "all": [
+        "packages/bee/tests/test_bee_cli.mjs",
+        "packages/bee/tests/test_contention_status.mjs",
+        "packages/bee/tests/test_knowledge.mjs",
+        "packages/bee/tests/test_scratch.mjs",
+        "scripts/tests/test_dispatch_prepare.mjs",
+        "scripts/tests/test_native_probe.mjs",
+        "scripts/tests/test_ship_visibility.mjs"
+      ]
+    },
     "packages/bee/lib/recovery.mjs": {
       "direct": [
         "packages/bee/tests/test_recovery.mjs"
@@ -3149,7 +3153,6 @@
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
         "scripts/tests/test_check_filter.mjs",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_capsule.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_compaction_advisories.mjs",
@@ -3194,6 +3197,28 @@
       "all": [
         "scripts/ledger_parity.mjs --check",
         "scripts/tests/test_ledger_parity.mjs"
+      ]
+    },
+    "scripts/lib/env-capabilities.mjs": {
+      "direct": [
+        "packages/bee/hooks/test_write_guard.mjs",
+        "packages/bee/scripts/test_onboard_bee.mjs",
+        "packages/bee/scripts/test_plugin_distribution.mjs",
+        "packages/bee/tests/test_scratch.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
+        "scripts/tests/test_claim_race.mjs",
+        "scripts/tests/test_path_identity.mjs",
+        "scripts/tests/test_worktree_holds_race.mjs"
+      ],
+      "all": [
+        "packages/bee/hooks/test_write_guard.mjs",
+        "packages/bee/scripts/test_onboard_bee.mjs",
+        "packages/bee/scripts/test_plugin_distribution.mjs",
+        "packages/bee/tests/test_scratch.mjs",
+        "packages/bee/tests/test_worktree_store_merge.mjs",
+        "scripts/tests/test_claim_race.mjs",
+        "scripts/tests/test_path_identity.mjs",
+        "scripts/tests/test_worktree_holds_race.mjs"
       ]
     },
     "scripts/lib/release-tuple.mjs": {
@@ -3459,7 +3484,6 @@
         "scripts/okf_migrate.mjs --check worktree-parallelism",
         "scripts/okf_migrate.mjs --check-patterns",
         "scripts/tests/test_check_filter.mjs",
-        "scripts/tests/test_claim_race.mjs",
         "scripts/tests/test_compact_capsule.mjs",
         "scripts/tests/test_compact_verbs.mjs",
         "scripts/tests/test_compaction_advisories.mjs",

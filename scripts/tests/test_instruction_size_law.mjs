@@ -217,22 +217,14 @@ check("negative control: the JSON-baseline detector catches a renamed per-skill 
 const realSuiteSource = fs.readFileSync(AGENTS_BUDGET_SUITE_PATH, "utf8");
 const realTemplateText = fs.readFileSync(REAL_TEMPLATE_PATH, "utf8");
 
-// Mirrors test_agents_budget.mjs's own `criticalRulesSection` exactly, so a
-// mutation built here lands in the same place a mutation built there would.
-function criticalRulesSection(text) {
-  const start = text.indexOf("\n## Critical rules");
-  assert(start !== -1, "fixture template must keep its `## Critical rules` heading");
-  const rest = text.slice(start + 1);
-  const nextHeading = rest.indexOf("\n## ");
-  return nextHeading === -1 ? rest : rest.slice(0, nextHeading);
-}
-
-function removeRule(templateText, ruleNumber) {
-  const section = criticalRulesSection(templateText);
-  const stripped = section.replace(new RegExp(`^${ruleNumber}\\. .*$`, "m"), "");
-  assert(stripped !== section, `fixture mutation must actually remove rule ${ruleNumber}`);
-  const mutated = templateText.replace(section, stripped);
-  assert(mutated !== templateText, "fixture mutation must actually alter the template text");
+// Census-debt payoff (2026-08): test_agents_budget.mjs's roster moved from a
+// numbered `## Critical rules` list to a doctrine-SECTION roster (the block
+// was rewritten as thematic sections in the refocus). The mutation built here
+// mirrors the reshaped suite's own section-roster guard: dropping a section
+// heading must make the real suite exit non-zero, naming the section.
+function removeSectionHeading(templateText, heading) {
+  const mutated = templateText.replace(new RegExp(`^## ${heading}$\\n`, "m"), "");
+  assert(mutated !== templateText, `fixture mutation must actually remove the "## ${heading}" heading`);
   return mutated;
 }
 
@@ -274,7 +266,7 @@ check("fixture harness sanity: the real suite, byte-copied and pointed at a matc
       `expected the fixture harness to reproduce a green run before seeding any violation, got exit ${status}:\n${output}`,
     );
     assert(
-      output.includes("PASS negative control: a fixture missing rule 7 fails the roster check, naming the number"),
+      output.includes("PASS negative control: a fixture missing the Communication section fails the roster check, naming the section"),
       "test_agents_budget.mjs's own built-in negative control must still exist and pass after budget-fence-removal's edits — " +
         `got:\n${output}`,
     );
@@ -283,21 +275,22 @@ check("fixture harness sanity: the real suite, byte-copied and pointed at a matc
   }
 });
 
-check("the roster guard still bites: removing a critical rule makes the real suite exit non-zero", () => {
-  // Rule 3 (not 7, which the suite's own built-in negative control already
-  // uses as its fixture target) so this failure is isolated to exactly the
-  // main roster check, not entangled with that control's own assertions.
-  const mutatedTemplate = removeRule(realTemplateText, 3);
+check("the roster guard still bites: removing a doctrine section makes the real suite exit non-zero", () => {
+  // "Multi-session etiquette" (not "Communication", which the suite's own
+  // built-in negative control already uses as its fixture target) so this
+  // failure is isolated to exactly the main roster check, not entangled with
+  // that control's own assertions.
+  const mutatedTemplate = removeSectionHeading(realTemplateText, "Multi-session etiquette");
   const dir = makeFixtureDir();
   try {
     // Root's rendered block is derived from the SAME mutated template, so
     // the render-identical check still passes — only the roster is broken.
     writeFixtureAgents(dir, mutatedTemplate, renderRootAgents(mutatedTemplate));
     const { status, output } = runFixtureSuite(dir);
-    assert(status !== 0, `expected a non-zero exit with critical rule 3 missing, got exit ${status}:\n${output}`);
+    assert(status !== 0, `expected a non-zero exit with the Multi-session etiquette section missing, got exit ${status}:\n${output}`);
     assert(
-      /critical rule 3 is missing/.test(output),
-      `expected the failure to name critical rule 3, got:\n${output}`,
+      /"## Multi-session etiquette" is missing/.test(output),
+      `expected the failure to name the missing section, got:\n${output}`,
     );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -305,7 +298,7 @@ check("the roster guard still bites: removing a critical rule makes the real sui
 });
 
 check("the byte-identical render guard still bites: a drifted managed block makes the real suite exit non-zero", () => {
-  // Template is untouched (all 17 rules, matches the real one) — only the
+  // Template is untouched (full section roster, matches the real one) — only the
   // block rendered inside AGENTS.md's markers drifts from it, isolating the
   // failure to exactly the render-identical check.
   const driftedBlock = `${realTemplateText.replace(/\n$/, "")} render-drift-marker\n`;

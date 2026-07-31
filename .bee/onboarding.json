@@ -2,22 +2,22 @@
   "schema_version": "1.0",
   "bee_version": "1.20.3",
   "managed": {
-    "agents_block": "d64bceda1af041b2ddcc44a874aaca868e91e0c7883b2f6288a73e2c69512380",
+    "agents_block": "e5e9bcd9c9277910656a25b5cb9d25b15f3a8b2c45b01461e571ffebf2d3b9d9",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
     "helpers": {
-      "bee.mjs": "2dc51fd13d610f661c74d0791b7c500fa1fda83575514874d79ed485eedfe45e"
+      "bee.mjs": "5488c27d651458d075b9480bb8b5cc47e81437d64e18a36cf3dc48dda5c46d3c"
     },
     "lib": {
       "backlog.mjs": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
       "capture.mjs": "4a7705e78a65636cdc2c16ae008b256c52a172219e84818cffae07267671cfeb",
       "cells.mjs": "ed7fea1ad3c461a4cb43178c4eb721a093751bbc14cabc1699c5d65ec952a3e8",
       "claims.mjs": "de7726a26b2354b65ee598d00f9179f04f71fe3d53f39a865b749da49e03623d",
-      "command-registry.mjs": "cdf99aeb968c74292120f37dbf392e023e74aa8b646ce05c0d557fc30f47737d",
+      "command-registry.mjs": "8c63be404333fab595779500a4b4614d51799ad42768192fc8e8df22cbe14435",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
       "dispatch-guard.mjs": "acabfef60de3ce6babeda8deee7ea5c1954cc655d5bc8dae4d62f3e0338911d0",
-      "dispatch-prepare.mjs": "b2c357e0c61aa02bc4588b52e7975244e2ea6266fe1cc9c6740210b97afcc90c",
+      "dispatch-prepare.mjs": "89a937923620755d3c46e491ec848437ce447d5aa37c358ba30e5efc1bfefd33",
       "feedback.mjs": "cf0e59fe1acba5b8ecd8922c311db4d1d40c0cff9843cedc9cffedf1584ae633",
       "fsutil.mjs": "c0a65d8aebfca7f7423f10cc9e13fa8ca43234c4a7b7e7ea1f05619b18e06af0",
       "guards.mjs": "615716039b59ebea29e7778475f27bfec8bf5b705ed1c72954e62b6a084cf8de",
@@ -31,6 +31,7 @@
       "lock.mjs": "2c80c3738ce0f70c69cf45164c30a078a7e7c9c02d9feb702415900f41d4e9c9",
       "path-identity.mjs": "695073bd84bb473c900219bd792ec5a62a121f638df8503c6d1c2ca38ce0ecbb",
       "perf.mjs": "57dedfbd53cfce7a35ddb1e2cae1cc9c86533bdfa4df45965fcca0fc8497e5fc",
+      "prompt-renderer.mjs": "fd72549d14c16b448525168d6f931775cf22ae711ff8ae5a4a49dab23ec6bf2b",
       "recovery.mjs": "2f6a090ce9360157d9a223911b1335a17e99246bf7c628e4f037eeea5d1c8038",
       "reservations.mjs": "daa7754730a13d1858b492a5f937677c10ab562acecf5336b6313f0ba31ac4e9",
       "reviews.mjs": "89bede1df3421e057a8a333b700cc9b29d53d4f487dd4015e15c6978c8b3bf6d",
@@ -57,6 +58,12 @@
       "review.md": "39b2974638433428abbfcbaac37730106571409388ba856b5d89f3b99befcad1",
       "tests.md": "fa7ce43b7dc3e0321e6768594c5830da68cd41786c8871d12aed24fdef2d3b15",
       "thinking.md": "548618d837d7d07fa1f966b5f16a9ff11ecc971bce20a9bfdcc0880f71cbcbac"
+    },
+    "prompts": {
+      "advisor.md": "cc970fc08c6aa0bdccb77351926b481baa7b6176a281efdbeb5c4f1a3383a05e",
+      "gather.md": "593521c49a0983b1a50ad437f89905ded6cc1ee588730e6402920ae585eeb622",
+      "reviewer.md": "0c830dcb1ee67b8b27ea823984e487c1e16c31d5554d1e49f51a4562526e197c",
+      "worker-cell.md": "463b5fde29121c3f92f7eed408ad84cb8efc8cd61a9f156eb83048c420a4206e"
     },
     "repo_hooks": {
       "adapter.mjs": "e21c39e993390600cb2fe352078ae7554c74db0ee6ffd5bdb443c49192689dca",
@@ -91,5 +98,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-31T17:18:57.079Z"
+  "updated_at": "2026-07-31T17:55:50.409Z"
 }

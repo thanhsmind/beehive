@@ -16,6 +16,7 @@ import {
   provePluginInactive,
 } from "./plugin_distribution.mjs";
 import { renderSkillBytes, RENDER_RUNTIMES, RENDER_SIDECAR, walkSkillTree, skillDigest } from "./onboard_bee.mjs";
+import { canSymlink, envSkipLine, SYMLINK_SKIP_REASON } from "../../../scripts/lib/env-capabilities.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../..");
@@ -25,6 +26,17 @@ let failed = 0;
 function check(name, fn) {
   try { fn(); passed += 1; console.log(`PASS ${name}`); }
   catch (error) { failed += 1; console.error(`FAIL ${name}: ${error.stack ?? error.message}`); }
+}
+
+// A check whose FIXTURE needs symlink creation (denied without elevation /
+// Developer Mode on win32): skip loudly, never weaken, never fail on a
+// machine limit.
+function checkNeedsSymlink(name, fn) {
+  if (!canSymlink()) {
+    console.log(envSkipLine(SYMLINK_SKIP_REASON, name));
+    return;
+  }
+  check(name, fn);
 }
 
 function hash(file) { return createHash("sha256").update(fs.readFileSync(file)).digest("hex"); }
@@ -101,8 +113,10 @@ for (const [name, mutate] of [
   ["missing package file refuses", (f) => fs.rmSync(path.join(f.pkg, "hooks/hooks.json"))],
   ["changed package file refuses", (f) => fs.appendFileSync(path.join(f.pkg, "hooks/hooks.json"), "x")],
   ["unexpected package file refuses", (f) => write(path.join(f.pkg, "skills/extra/SKILL.md"), "x")],
+  // The symlink row's FIXTURE needs symlink creation — routed through
+  // checkNeedsSymlink below (loud env skip where symlinks are denied).
   ["package symlink refuses", (f) => fs.symlinkSync(path.join(f.pkg, "hooks/hooks.json"), path.join(f.pkg, "hooks/link.json"))],
-]) check(name, () => {
+]) (name.includes("symlink") ? checkNeedsSymlink : check)(name, () => {
   const f = fixture(); mutate(f); assert.throws(() => proveInstalledPackage(f.states[0], f.inventory)); fs.rmSync(f.root, { recursive: true, force: true });
 });
 
@@ -222,11 +236,13 @@ check("repeat plugin-first apply is idempotent", () => {
 });
 
 for (const [name, mutate] of [
+  // The symlink row's FIXTURE needs symlink creation — routed through
+  // checkNeedsSymlink below (loud env skip where symlinks are denied).
   ["project bee symlink refuses whole plan", (f) => { fs.rmSync(path.join(f.repo, ".claude/skills/bee-hive"), { recursive: true }); fs.symlinkSync(path.join(f.repo, ".agents/skills/bee-planning"), path.join(f.repo, ".claude/skills/bee-hive")); }],
   ["project bee file refuses whole plan", (f) => { fs.rmSync(path.join(f.repo, ".claude/skills/bee-hive"), { recursive: true }); write(path.join(f.repo, ".claude/skills/bee-hive"), "file"); }],
   ["malformed hook JSON refuses whole plan", (f) => write(path.join(f.repo, ".codex/hooks.json"), "{")],
   ["malformed hook shape refuses whole plan", (f) => write(path.join(f.repo, ".codex/hooks.json"), '{"hooks":{"SessionStart":{}}}')],
-]) check(name, () => {
+]) (name.includes("symlink") ? checkNeedsSymlink : check)(name, () => {
   const f = fixture(); mutate(f); const before = treeDigest(f.repo); assert.throws(() => planFor(f)); assert.equal(treeDigest(f.repo), before); fs.rmSync(f.root, { recursive: true, force: true });
 });
 

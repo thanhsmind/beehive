@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { resolveRoots } from '../../.bee/bin/lib/state.mjs';
 import { createFeatureWorktree, mergeFeatureWorktree } from '../../.bee/bin/lib/worktree-store.mjs';
@@ -1525,7 +1525,10 @@ try {
     fs.mkdirSync(path.join(mainLock, '.bee'), { recursive: true });
     fs.writeFileSync(path.join(mainLock, '.bee', 'onboarding.json'), JSON.stringify({ schema_version: '1.0', bee_version: '0.0.0' }));
     fs.writeFileSync(path.join(mainLock, '.bee', 'config.json'), JSON.stringify({ commands: { verify: 'node verify-lock-check.mjs' } }));
-    const lockMjsAbs = path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'lock.mjs');
+    // pathToFileURL: the injected script's static import of a bare absolute
+    // win32 path would parse as protocol "d:" — a file:// URL specifier is
+    // valid on every platform.
+    const lockMjsAbs = pathToFileURL(path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'lock.mjs')).href;
     fs.writeFileSync(
       path.join(mainLock, 'verify-lock-check.mjs'),
       [

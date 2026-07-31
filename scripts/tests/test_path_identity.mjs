@@ -41,6 +41,13 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { check, assert, printSummaryAndExit } from '../lib/test-fixture.mjs';
 import {
+  canSymlink,
+  envSkipLine,
+  SYMLINK_SKIP_REASON,
+  tmpdirIsCaseSensitive,
+  CASE_SENSITIVE_FS_SKIP_REASON,
+} from '../lib/env-capabilities.mjs';
+import {
   canonicalPathsEqual,
   detectCaseInsensitiveVolume,
   _resetCaseFoldCacheForTests,
@@ -85,6 +92,11 @@ function rewriteReversePointer(worktreeRoot, transform) {
   const match = raw.match(/^gitdir:\s*(.+)$/);
   assert(match, `fixture .git file at ${gitFile} is not a "gitdir: ..." pointer`);
   const original = match[1].trim();
+  // Unlink before rewriting: on Windows git marks a worktree's `.git` pointer
+  // file hidden, and opening a hidden file for truncating write fails EPERM —
+  // a fresh create carries no hidden attribute, so the rewrite works on every
+  // platform. (Test-fixture concern only; the content contract is unchanged.)
+  fs.rmSync(gitFile, { force: true });
   fs.writeFileSync(gitFile, `gitdir: ${transform(original)}\n`);
   return original;
 }
@@ -145,6 +157,16 @@ await check('detectCaseInsensitiveVolume probes the nearest EXISTING ancestor (n
   }
 });
 
+// The two NEGATIVE CONTROLs below premise a case-SENSITIVE volume ("two
+// case-differing directories are genuinely distinct" / "detection correctly
+// reports case-sensitive, so no fold"). On a case-insensitive volume (default
+// NTFS) the premise itself is false — mkdir of the second spelling EEXISTs,
+// and folding IS the correct detected behaviour — so the controls cannot
+// fire. Skip loudly; the injected-fold checks below still pin both branches.
+if (!tmpdirIsCaseSensitive()) {
+  console.log(envSkipLine(CASE_SENSITIVE_FS_SKIP_REASON, 'NEGATIVE CONTROL (real filesystem, no injection): case-differing directories stay UNEQUAL'));
+  console.log(envSkipLine(CASE_SENSITIVE_FS_SKIP_REASON, 'NEGATIVE CONTROL, string-fallback branch: case-mismatched non-existent pair stays UNEQUAL'));
+} else {
 await check('NEGATIVE CONTROL (real filesystem, no injection): this dev box is case-sensitive — two directories differing only by case are genuinely distinct, and canonicalPathsEqual must say so via real filesystem identity', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-path-identity-casefs-'));
   try {
@@ -171,6 +193,7 @@ await check('NEGATIVE CONTROL, string-fallback branch: two case-differing, NON-E
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+}
 
 await check('zero inode/device is treated as UNUSABLE and falls back to string comparison — two distinct real directories, forced to report a zero inode/device, still compare UNEQUAL (never accepted as identity)', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-path-identity-zeroid-'));
@@ -272,7 +295,12 @@ await check('the volume probe is READ-ONLY when the sample directory itself exis
     fs.mkdirSync(sample);
     const result = _readOnlyCaseProbeForTests(sample);
     assert(result !== null, 'the read-only probe must conclusively settle an existing, case-bearing directory on its own — a null here means it punted to the write-based fallback unnecessarily');
-    assert(result === false, `this real (case-sensitive) filesystem must read back as case-sensitive via the read-only path, got ${result}`);
+    // The expected answer is the volume's REAL behaviour, measured
+    // independently (does the case-flipped spelling resolve to the same
+    // entry?) — false on a case-sensitive box, true on default NTFS. The
+    // probe must agree with the measurement either way.
+    const measured = fs.existsSync(path.join(root, 'readonlysample'));
+    assert(result === measured, `the read-only probe must report this volume's real case behaviour (measured ${measured} via a case-flipped lookup), got ${result}`);
     // Also confirm the module-level entrypoint (detectCaseInsensitiveVolume, no
     // injection) leaves the directory with no marker litter, as a second signal.
     detectCaseInsensitiveVolume(sample);
@@ -285,6 +313,9 @@ await check('the volume probe is READ-ONLY when the sample directory itself exis
 
 // ─── Layer 2: the resolveWorktreeById call site, through the real mergeFeatureWorktree entrypoint ──
 
+if (!canSymlink()) {
+  console.log(envSkipLine(SYMLINK_SKIP_REASON, 'SITE FIX (real, no injection): symlink-aliased reverse gitdir pointer resolves through the REAL resolveWorktreeById'));
+} else {
 await check('SITE FIX (real, no injection): a reverse gitdir pointer that is a DIFFERENT STRING but the SAME real directory (via a symlink alias — the real-fs shape of 8.3 short-name aliasing) resolves correctly through the REAL resolveWorktreeById, end to end, with the DEFAULT pathsEqual (no test override) — filesystem identity is what decides it', async () => {
   const mainRoot = makeOrdinaryRepoFixture();
   let created;
@@ -301,6 +332,7 @@ await check('SITE FIX (real, no injection): a reverse gitdir pointer that is a D
     cleanupFixture(mainRoot, created && created.worktreeRoot);
   }
 });
+}
 
 await check('SITE FIX (case-fold branch, injected): a case-flipped reverse gitdir pointer is NOT refused at the resolveWorktreeById site itself once pathsEqual simulates a case-insensitive volume — this box\'s real git subprocess still cannot itself navigate a fake-cased path afterward (no real case-insensitive filesystem is available here), so the ONLY acceptable failure past this point is that unrelated, untyped git-invocation error, never the typed WORKTREE_MERGE_UNKNOWN_ID the pre-fix comparison would have produced right at resolution', async () => {
   const mainRoot = makeOrdinaryRepoFixture();

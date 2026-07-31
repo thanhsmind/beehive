@@ -15,17 +15,20 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");
 
+// pathToFileURL: dynamic import() of a bare absolute path breaks on win32
+// (a `d:\...` specifier parses as protocol "d:") — file:// URLs work on
+// every platform.
 const {
   classifyNativeTransport,
   NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE,
   NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
   NATIVE_TRANSPORT_EXTERNAL_CLI_ONLY,
-} = await import(path.join(REPO_ROOT, "packages", "bee", "lib", "dispatch-guard.mjs"));
+} = await import(pathToFileURL(path.join(REPO_ROOT, "packages", "bee", "lib", "dispatch-guard.mjs")).href);
 
 const {
   writeNativeTransportProbe,
@@ -35,7 +38,7 @@ const {
   doctorCodexVersion,
   doctorCodexFeaturesList,
   doctorNativeTransportUnlock,
-} = await import(path.join(REPO_ROOT, "packages", "bee", "bee.mjs"));
+} = await import(pathToFileURL(path.join(REPO_ROOT, "packages", "bee", "bee.mjs")).href);
 
 let failures = 0;
 function check(cond, label, detail) {
@@ -357,7 +360,7 @@ check(
 // packages/bee/lib <-> .bee/bin/lib — carries the same native-transport exports
 // as the template it was copied from).
 {
-  const runtimeBee = await import(path.join(REPO_ROOT, ".bee", "bin", "bee.mjs"));
+  const runtimeBee = await import(pathToFileURL(path.join(REPO_ROOT, ".bee", "bin", "bee.mjs")).href);
   check(
     typeof runtimeBee.readNativeTransportClassification === "function" &&
       typeof runtimeBee.writeNativeTransportProbe === "function" &&

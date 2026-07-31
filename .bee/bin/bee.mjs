@@ -591,6 +591,8 @@ function computeRuntimeDrift(root, onboardingRaw) {
   };
   checkGroup(managed.lib, 'lib');
   checkGroup(managed.helpers, '');
+  // Vendored prompt files (prompt-files spec §1): same hash discipline as lib.
+  checkGroup(managed.prompts, 'prompts');
   // File-set drift for the fully-managed lib dir: an extra .mjs on disk that
   // the recorded map does not list. (Helpers live beside non-managed files in
   // .bee/bin, so extra-detection is scoped to lib to avoid false positives.)

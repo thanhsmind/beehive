@@ -55,13 +55,24 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { envSkipLine } from '../lib/env-capabilities.mjs';
+
+// See test_claim_race.mjs: on win32, MoveFileEx refuses a concurrent
+// unguarded replace with EPERM, so racers crash instead of silently losing
+// updates — the lost-update negative-control fixture cannot fire here. The
+// guarded (product-path) scenarios still run.
+const WIN32_UNGUARDED_RENAME =
+  'win32 rename refuses concurrent unguarded replace (EPERM) — the silent-lost-update negative-control fixture cannot fire';
 
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.join(path.dirname(__filename), '..', '..');
-const WORKTREE_HOLDS_LIB_PATH = path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'worktree-holds.mjs');
-const RESERVATIONS_LIB_PATH = path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'reservations.mjs');
-const FSUTIL_LIB_PATH = path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'fsutil.mjs');
+// pathToFileURL: dynamic import() of a bare absolute path breaks on win32
+// (a `d:\...` specifier parses as protocol "d:") — file:// URL strings are
+// valid on every platform.
+const WORKTREE_HOLDS_LIB_PATH = pathToFileURL(path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'worktree-holds.mjs')).href;
+const RESERVATIONS_LIB_PATH = pathToFileURL(path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'reservations.mjs')).href;
+const FSUTIL_LIB_PATH = pathToFileURL(path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'fsutil.mjs')).href;
 
 const RACERS = 8;
 const UNSAFE_WIDEN_MS = 30;
@@ -357,7 +368,9 @@ async function runOrchestrator() {
   // scenario (c) fix below) proves every racer's stale read happens-before
   // every racer's write, making the lost-update collapse structural rather
   // than timing-dependent.
-  {
+  if (process.platform === 'win32') {
+    console.log(envSkipLine(WIN32_UNGUARDED_RENAME, '(b) DELIBERATE RED — unguarded hold-mirror racers'));
+  } else {
     const dir = makeRoot();
     const barrier = path.join(dir, '.race-barrier-b-unsafe');
     fs.mkdirSync(barrier, { recursive: true });
@@ -577,9 +590,14 @@ async function runOrchestrator() {
     process.exit(1);
   }
 
+  // (b) is env-skipped on win32 (WIN32_UNGUARDED_RENAME above) — the summary
+  // must never claim a detector bit when its scenario printed a SKIP line.
   console.log(
     `PASS test_worktree_holds_race: (a) ${RACERS} real mirrorHold() racers on ${RACERS} distinct paths/holders -> all ${RACERS} entries survived ` +
-      "(no lost update); (b) deliberate-red unguarded proxy lost at least one racer's entry (detector bites, lock removed); " +
+      '(no lost update); ' +
+      (process.platform !== 'win32'
+        ? "(b) deliberate-red unguarded proxy lost at least one racer's entry (detector bites, lock removed); "
+        : '(b) env-skipped on win32 (see SKIP line above); ') +
       `(c) OLD check-then-act flow double-granted the SAME path (detector bites, hazard proven real); ` +
       `(d) NEW withHoldsLock-atomic flow on the SAME path yielded exactly 1 winner among ${RACERS} racers (no double grant); ` +
       '(e) renewHolds pushed mirrored_at forward, keeping a live session\'s hold active past its original TTL window, ' +

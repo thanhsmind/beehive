@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { runModuleWorker } from "../../../scripts/lib/run-module-worker.mjs";
+import { canSymlink, envSkipLine, SYMLINK_SKIP_REASON } from "../../../scripts/lib/env-capabilities.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SCRIPTS_DIR = path.dirname(SCRIPT_PATH);
@@ -36,6 +37,14 @@ function check(condition, label, extra = "") {
 function skip(label, why) {
   skips += 1;
   process.stdout.write(`skip  - ${label} (${why})\n`);
+}
+
+// Environment-capability skip: same counter as skip(), but the loud
+// one-line `SKIP (env: <capability>) — <check>` format shared across suites
+// (scripts/lib/env-capabilities.mjs).
+function envSkip(reason, label) {
+  skips += 1;
+  console.log(envSkipLine(reason, label));
 }
 
 // --- hermetic per-case fake HOME/USERPROFILE isolation ----------------------
@@ -301,7 +310,7 @@ try {
   check(agentsText.includes("<!-- BEE:START -->") && agentsText.includes("<!-- BEE:END -->"),
     "AGENTS.md contains BEE:START/END markers");
   check(agentsText.includes("bee status --json"), "AGENTS block mentions the status routing step");
-  check(agentsText.includes("commands.test") && agentsText.includes("Never build on a red base"),
+  check(agentsText.includes("commands.test") && /Never build on a\s+red base/.test(agentsText),
     "AGENTS block carries the test-before-close and red-base rules");
 
   // --- 3a. minimal header above the block (D4, propose_agents_header) -------
@@ -511,6 +520,36 @@ try {
       JSON.stringify(Object.keys(onboardingLedger.managed?.expertise || {})));
   }
 
+  // --- 5c. vendored prompt files (prompt-files spec §1) ----------------------
+  // A fresh apply mirrors every source packages/bee/prompts/*.md into
+  // .bee/bin/prompts/ byte-identical, so the vendored engine's
+  // lib/prompt-renderer.mjs (which resolves ../prompts relative to itself)
+  // reads the prompts matching its vendored lib. Derived via readdirSync,
+  // never hardcoded names (same discipline as the expertise checks above).
+  const PROMPTS_SOURCE_DIR = path.join(TEMPLATES_DIR, "prompts");
+  const promptNames = fs.existsSync(PROMPTS_SOURCE_DIR)
+    ? fs.readdirSync(PROMPTS_SOURCE_DIR, { withFileTypes: true })
+        .filter((e) => e.isFile() && e.name.endsWith(".md"))
+        .map((e) => e.name)
+        .sort()
+    : [];
+  if (promptNames.length === 0) {
+    skip("prompt copy to .bee/bin/prompts", "no packages/bee/prompts/*.md present in source");
+  } else {
+    for (const name of promptNames) {
+      const src = fs.readFileSync(path.join(PROMPTS_SOURCE_DIR, name), "utf8");
+      const dst = path.join(tmp, ".bee", "bin", "prompts", name);
+      check(fs.existsSync(dst) && fs.readFileSync(dst, "utf8") === src,
+        `.bee/bin/prompts/${name} copied verbatim on fresh apply`);
+    }
+    const promptLedger = JSON.parse(
+      fs.readFileSync(path.join(tmp, ".bee", "onboarding.json"), "utf8"));
+    check(JSON.stringify(Object.keys(promptLedger.managed?.prompts || {}).sort()) ===
+      JSON.stringify(promptNames),
+      "onboarding.json managed.prompts records every vendored prompt file",
+      JSON.stringify(Object.keys(promptLedger.managed?.prompts || {})));
+  }
+
   // --- 6. plan mode again -> up_to_date --------------------------------------
   const plan2 = await runOnboard(["--repo-root", tmp, "--json"], tmpHome);
   check(plan2.payload?.status === "up_to_date", "second plan run reports up_to_date",
@@ -557,6 +596,38 @@ try {
     check(planExpAfter.payload?.status === "up_to_date",
       "expertise: plan after repair reports up_to_date",
       JSON.stringify(planExpAfter.payload?.plan || []));
+  }
+
+  // --- 6c. prompt stale removal (prompt-files spec §1) -----------------------
+  // A stale .bee/bin/prompts file the source no longer carries is planned as
+  // remove_prompt; --apply removes it and the tree returns to up_to_date
+  // (same wholly-managed-dir discipline as the expertise checks in 6b).
+  if (promptNames.length === 0) {
+    skip("prompt stale removal", "no packages/bee/prompts/*.md present in source");
+  } else {
+    const stalePromptRel = ".bee/bin/prompts/retired-prompt.md";
+    const stalePromptAbs = path.join(tmp, ...stalePromptRel.split("/"));
+    fs.writeFileSync(stalePromptAbs, "# stale prompt the source no longer has\n", "utf8");
+
+    const planPrompt = await runOnboard(["--repo-root", tmp, "--json"], tmpHome);
+    check(planPrompt.payload?.status === "changes_needed",
+      "prompts: stale file reports changes_needed",
+      `got: ${planPrompt.payload?.status}`);
+    check(planPrompt.payload?.plan?.some((i) =>
+      i.action === "remove_prompt" && i.path === stalePromptRel),
+      "prompts: plan lists remove_prompt for the stale file",
+      JSON.stringify(planPrompt.payload?.plan || []));
+    check(fs.existsSync(stalePromptAbs),
+      "prompts: plan mode writes nothing (stale file intact)");
+
+    const applyPrompt = await runOnboard(["--repo-root", tmp, "--apply", "--json"], tmpHome);
+    check(applyPrompt.payload?.status === "applied", "prompts: re-apply succeeds");
+    check(!fs.existsSync(stalePromptAbs),
+      "prompts: stale target file is removed on re-apply");
+    const planPromptAfter = await runOnboard(["--repo-root", tmp, "--json"], tmpHome);
+    check(planPromptAfter.payload?.status === "up_to_date",
+      "prompts: plan after removal reports up_to_date",
+      JSON.stringify(planPromptAfter.payload?.plan || []));
   }
 
   // --- 7. AGENTS block idempotency -------------------------------------------
@@ -2740,7 +2811,9 @@ for (const scenario of [
 }
 
 // --- 10f. symlink fail-closed at BOTH levels (F6, panel-2 NEW-2) -------------
-{
+if (!canSymlink()) {
+  envSkip(SYMLINK_SKIP_REASON, "10f: symlink fail-closed at BOTH levels (blocked_symlink plan/apply/skip rows, whole section)");
+} else {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "bee-skillsync-symlink-"));
   const home = makeFakeHome();
   try {
@@ -3402,7 +3475,9 @@ for (const scenario of [
     }
 
     // (c) symlinked marker FILE -> unknown (the reader lstats the marker)
-    {
+    if (!canSymlink()) {
+      envSkip(SYMLINK_SKIP_REASON, "(c) symlinked version marker is never followed: unknown, refused");
+    } else {
       const home = makeFakeHome();
       try {
         const root = makeInstalledSkills(home, {
@@ -3431,7 +3506,9 @@ for (const scenario of [
     }
 
     // (d) symlinked path COMPONENT (templates/) -> unknown
-    {
+    if (!canSymlink()) {
+      envSkip(SYMLINK_SKIP_REASON, "(d) symlinked path component under the managed target is never trusted: unknown, refused");
+    } else {
       const home = makeFakeHome();
       try {
         const root = makeInstalledSkills(home, {
@@ -3826,7 +3903,9 @@ for (const scenario of [
 // general (non-skill) plan items are all freshly up to date and contribute
 // zero items - so plan.length alone reads as up_to_date. Blocked-first
 // precedence must override that.
-{
+if (!canSymlink()) {
+  envSkip(SYMLINK_SKIP_REASON, "recheck-honesty: blocked-skill recheck rows (nested rogue symlink fixture, whole section)");
+} else {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "bee-skillsync-recheckhonesty-"));
   const home = makeFakeHome();
   try {
@@ -3891,8 +3970,10 @@ for (const scenario of [
       skills: { "bee-normal": { "SKILL.md": "# normal\n" } },
     });
     fs.mkdirSync(outside, { recursive: true });
-    // Source-level symlinked skill entry -> scope: "source".
-    fs.symlinkSync(outside, path.join(skillsRoot, "bee-linked"));
+    // Source-level symlinked skill entry -> scope: "source". Fixture-only
+    // symlink: on a box without symlink capability the bee-linked row is
+    // skipped loudly below; the rest of 10z runs unchanged.
+    if (canSymlink()) fs.symlinkSync(outside, path.join(skillsRoot, "bee-linked"));
     const repo = path.join(base, "repo");
     fs.mkdirSync(repo, { recursive: true });
     makeInstalledSkills(home, {
@@ -3911,10 +3992,14 @@ for (const scenario of [
     check(removeMe?.scope === "installed" && removeMe?.target === "global",
       "scope: remove_skill (deletes from the global install) carries scope: installed + target: global",
       JSON.stringify(removeMe));
-    const linked = byKey("blocked_symlink", "bee-linked");
-    check(linked?.scope === "source",
-      "scope: a source-side symlinked skill entry carries scope: source, not installed",
-      JSON.stringify(linked));
+    if (canSymlink()) {
+      const linked = byKey("blocked_symlink", "bee-linked");
+      check(linked?.scope === "source",
+        "scope: a source-side symlinked skill entry carries scope: source, not installed",
+        JSON.stringify(linked));
+    } else {
+      envSkip(SYMLINK_SKIP_REASON, "scope: a source-side symlinked skill entry carries scope: source, not installed");
+    }
     const syncHive = byKey("sync_skill", "bee-hive");
     check(syncHive?.scope === "installed",
       "scope: bee-hive's own sync_skill also carries scope: installed",

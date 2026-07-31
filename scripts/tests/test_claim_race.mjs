@@ -59,13 +59,27 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { envSkipLine } from '../lib/env-capabilities.mjs';
+
+// The DELIBERATE-RED negative controls below race N unguarded processes
+// through writeJsonAtomic's rename onto ONE target file. On POSIX, rename(2)
+// atomically replaces and the hazard shows up as a silent lost update — the
+// exact thing the controls exist to demonstrate. On win32, MoveFileEx refuses
+// a concurrent replace with EPERM instead: racers CRASH rather than silently
+// losing updates, so the lost-update fixture cannot fire here at all. The
+// SAFE (guarded, product-path) scenarios are unaffected and still run.
+const WIN32_UNGUARDED_RENAME =
+  'win32 rename refuses concurrent unguarded replace (EPERM) — the silent-lost-update negative-control fixture cannot fire';
 
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.join(path.dirname(__filename), '..', '..');
-const CELLS_LIB_PATH = path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'cells.mjs');
-const CLAIMS_LIB_PATH = path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'claims.mjs');
-const FSUTIL_LIB_PATH = path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'fsutil.mjs');
+// pathToFileURL: dynamic import() of a bare absolute path breaks on win32
+// (a `d:\...` specifier parses as protocol "d:"), so every *_LIB_PATH used
+// with import() is a file:// URL string, valid on every platform.
+const CELLS_LIB_PATH = pathToFileURL(path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'cells.mjs')).href;
+const CLAIMS_LIB_PATH = pathToFileURL(path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'claims.mjs')).href;
+const FSUTIL_LIB_PATH = pathToFileURL(path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'fsutil.mjs')).href;
 
 const RACERS = 8;
 const UNSAFE_WIDEN_MS = 50; // hardening-4b: bumped from 30ms for extra margin under concurrent-verify (parallel suite) CPU contention — observed one transient miss on the new (g-unsafe) control at 30ms, clean on rerun; matches this file's own documented "widen enough to reliably demonstrate the hazard" discipline, not a semantics change.
@@ -513,7 +527,9 @@ async function runOrchestrator() {
   // multi-racer overlap structural (exactly RACERS saw "open") rather than
   // timing-dependent — the old fixed-sleep version could collapse to 1/RACERS
   // under real scheduler contention ("DETECTOR DID NOT BITE").
-  {
+  if (process.platform === 'win32') {
+    console.log(envSkipLine(WIN32_UNGUARDED_RENAME, '(b) DELIBERATE RED — unguarded claim racers'));
+  } else {
     const dir = makeRoot();
     const barrier = path.join(dir, '.race-barrier-b-unsafe');
     fs.mkdirSync(barrier, { recursive: true });
@@ -714,7 +730,9 @@ async function runOrchestrator() {
   // a deterministic fs-based barrier (same as (b)'s) proves every racer's
   // stale read happens-before every racer's write, making the lost-update
   // collapse structural rather than timing-dependent.
-  {
+  if (process.platform === 'win32') {
+    console.log(envSkipLine(WIN32_UNGUARDED_RENAME, '(f) DELIBERATE RED — unguarded verify-ledger racers'));
+  } else {
     const dir = makeRoot();
     const barrier = path.join(dir, '.race-barrier-f-unsafe');
     fs.mkdirSync(barrier, { recursive: true });
@@ -812,7 +830,9 @@ async function runOrchestrator() {
   // precede the claim) and every one of their writes is guaranteed to land
   // after the claim commits, so the revert is deterministic, 10/10 — the
   // detector bites when the FINAL status is not "claimed".
-  {
+  if (process.platform === 'win32') {
+    console.log(envSkipLine(WIN32_UNGUARDED_RENAME, '(g-unsafe) DELIBERATE RED — unlocked update racers vs raw claim'));
+  } else {
     const dir = makeRoot();
     const barrier = path.join(dir, '.race-barrier-g-unsafe');
     try {
@@ -968,16 +988,28 @@ async function runOrchestrator() {
     process.exit(1);
   }
 
+  // The (b)/(f)/(g-unsafe) negative controls are env-skipped on win32 (see
+  // WIN32_UNGUARDED_RENAME above) — the summary must never claim a detector
+  // bit when its scenario printed a SKIP line instead.
+  const negativeControlsRan = process.platform !== 'win32';
   console.log(
     `PASS test_claim_race: (a) ${RACERS} real-path racers on one cell -> exactly 1 winner, ${RACERS - 1} typed CLAIMED ` +
-      "refusals naming the winner's session + expiry; (b) deliberate-red unguarded proxy showed multiple racers " +
-      'believing they won (detector bites); (c) claim -> block -> reopen -> claim same-session round trip succeeded ' +
+      "refusals naming the winner's session + expiry; " +
+      (negativeControlsRan
+        ? '(b) deliberate-red unguarded proxy showed multiple racers believing they won (detector bites); '
+        : '(b) env-skipped on win32 (see SKIP line above); ') +
+      '(c) claim -> block -> reopen -> claim same-session round trip succeeded ' +
       `with no self-refusal; (d) ${RACERS} racers against an already-exhausted budget -> 0 winners, every loss typed ` +
       'CELL_BUDGET_EXHAUSTED or CLAIMED, no orphaned claim-store file (D2+Δ2 unwind holds under real concurrency); ' +
       `(e) ${RACERS} real recordVerify racers on one cell -> zero lost trace.attempts entries (GH #27.2 ledger lock); ` +
-      '(f) deliberate-red unsafe proxy demonstrated lost updates (detector bites); ' +
-      '(g) hardening-4b: real claimCell vs real updateCell cross-mutator race never reverts the claim, deliberate-red ' +
-      'unsafe-update proxy demonstrated the revert (detector bites); (h) sweepExpiredClaims resets a swept claimed ' +
+      (negativeControlsRan
+        ? '(f) deliberate-red unsafe proxy demonstrated lost updates (detector bites); '
+        : '(f) env-skipped on win32 (see SKIP line above); ') +
+      '(g) hardening-4b: real claimCell vs real updateCell cross-mutator race never reverts the claim' +
+      (negativeControlsRan
+        ? ', deliberate-red unsafe-update proxy demonstrated the revert (detector bites); '
+        : ' (its deliberate-red proxy env-skipped on win32, see SKIP line above); ') +
+      '(h) sweepExpiredClaims resets a swept claimed ' +
       'cell back to open (audited, re-claimable); (h2) a claim_session mismatch never clobbers a fresher claim.',
   );
 }

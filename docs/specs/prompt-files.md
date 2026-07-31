@@ -48,5 +48,7 @@ enrichment, never a refusal path):
    exists on disk.
 4. Nothing found → block omitted; prompt byte-identical to today.
 
-Cap the block at 8 lines. The cell's own `read_first` stays authoritative
-and is never duplicated into this block.
+Cap the block at 8 lines (8 pointer lines; the header line is not
+counted — the same convention as the Prior-rounds event-line cap). The
+cell's own `read_first` stays authoritative and is never duplicated into
+this block.

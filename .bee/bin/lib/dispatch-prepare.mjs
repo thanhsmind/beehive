@@ -40,6 +40,15 @@ import {
   NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE,
   NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY,
 } from './dispatch-guard.mjs';
+import { loadPrompt, render } from './prompt-renderer.mjs';
+import {
+  bundleDir,
+  bundleMode,
+  buildContextManifest,
+  collectConcepts,
+  KNOWLEDGE_CONTEXT_LANE_BUDGETS,
+  KNOWLEDGE_CONTEXT_DEFAULT_BUDGET,
+} from './knowledge.mjs';
 
 export const DISPATCH_RUNTIMES = ['codex', 'claude'];
 export const DISPATCH_KINDS = ['cell', 'gather', 'reviewer', 'advisor'];
@@ -99,11 +108,13 @@ function checkCellClaimOwnership(cell, worker) {
   return { ok: true, code: null, status: cell.status, owner };
 }
 
-// Template-consistent minimal prompt bodies (advisor spec: "for cell, render
-// from the Worker Prompt Template shape ... for gather/reviewer/advisor,
-// template-consistent minimal shapes"). Cell context comes from the loaded
-// cell; gather/reviewer/advisor get a goal + paths + digest contract shape —
-// the caller fills in the exact paths/question before dispatch.
+// Prompt WORDING lives in prompts/*.md (prompt-files spec §1), loaded through
+// lib/prompt-renderer.mjs; this module keeps only the LOGIC — which
+// conditional blocks appear and what fills the placeholders. Cell context
+// comes from the loaded cell; gather/reviewer/advisor get a goal + paths +
+// digest contract shape — the caller fills in the exact paths/question before
+// dispatch. Rendering is byte-identical to the string builders it replaced
+// (pinned by scripts/tests/test_dispatch_prepare.mjs).
 //
 // hardening-1-7-10 (D7): the reservation identity rendered into the prompt is
 // the CALLER-supplied, validated `worker` name (the same name
@@ -139,8 +150,8 @@ function checkCellClaimOwnership(cell, worker) {
 //   trace.reopened_for_rework   recorded return-to-open events. (unclaimCell
 //                               itself records nothing on the trace — a
 //                               reopen record is the durable analog.)
-const PRIOR_ROUNDS_HEADER = 'Prior rounds (machine-assembled from the cell record):';
-const PRIOR_ROUNDS_CLOSER = 'Address what blocked the last round before anything else.';
+// The block's header and closer live in prompts/worker-cell.md (the SPLIT:
+// wording in the template, logic here).
 // ~12-line cap on the digest: at most 12 event lines between header and
 // closer — overflow elides the OLDEST events behind one count line.
 const PRIOR_ROUNDS_MAX_EVENT_LINES = 12;
@@ -215,64 +226,95 @@ function priorRoundEventLines(cell) {
   return lines;
 }
 
-// Conditional add-only block (fluent-mechanism 2). Returns [] for a plain
-// first-dispatch cell, keeping that prompt byte-identical to the
-// unconditional template above it.
-// test-simple (decision 412e9b3a): the proof-contract block is deleted with
-// the proof-tier matrix — the finish line in the contract above states the
-// one test door every cell shares.
-function priorRoundsBlock(cell) {
-  const lines = priorRoundEventLines(cell);
-  if (lines.length === 0) return [];
-  return ['', PRIOR_ROUNDS_HEADER, ...lines, PRIOR_ROUNDS_CLOSER];
+// ─── learned-context block (prompt-files spec §2, machine-assembled) ────────
+// Learned context is INJECTED at dispatch time, never re-derived by the
+// worker — dispatch reads back what the capture layer wrote. Paths + one-line
+// titles ONLY, never file contents (the read budget belongs to the worker's
+// own reading), capped at LEARNED_CONTEXT_MAX_LINES pointer lines. The cell's
+// own read_first stays authoritative and is never duplicated here. Source
+// resolution, first hit wins, EVERY failure silent (the block is an
+// enrichment, never a refusal path):
+//   1. bundle repo, bee.work-item concept whose bee.id matches the cell's
+//      feature -> the `knowledge context` manifest's selected paths + titles
+//      (lane-scaled budget);
+//   2. bundle repo, no matching work item (or the manifest refused) -> the
+//      bundle index pointer (docs/knowledge/index.md, whose root carries the
+//      generated "Critical patterns" section);
+//   3. no bundle -> docs/history/learnings/critical-patterns.md when it
+//      exists on disk (the onboarding stub's location, repo-root-relative);
+//   4. nothing found -> [] and the block is omitted, so the prompt stays
+//      byte-identical to a no-knowledge-layer dispatch.
+const LEARNED_CONTEXT_MAX_LINES = 8;
+
+function bundleLearnedLines(root, cell, readFirst) {
+  // 1. work-item manifest: the CLI verb is `knowledge context --work <id>
+  //    --lane <lane>`; this calls the underlying function, never the CLI.
+  try {
+    const budget = KNOWLEDGE_CONTEXT_LANE_BUDGETS[cell.lane] ?? KNOWLEDGE_CONTEXT_DEFAULT_BUDGET;
+    const manifest = buildContextManifest(root, { work: cell.feature, budget });
+    const titles = new Map(
+      collectConcepts(root).map((concept) => [
+        `docs/knowledge/${concept.path}`,
+        typeof concept.data.title === 'string' && concept.data.title ? concept.data.title : null,
+      ]),
+    );
+    const lines = [];
+    for (const entry of manifest.entries) {
+      if (readFirst.has(entry.path)) continue; // read_first stays authoritative — never duplicated
+      const title = titles.get(entry.path) || entry.path.slice(entry.path.lastIndexOf('/') + 1);
+      lines.push(`- ${entry.path} — ${oneLine(title)}`);
+    }
+    if (lines.length > 0) return lines;
+  } catch {
+    // no matching work item, or the ranking refused — fall to the index pointer
+  }
+  // 2. the bundle index pointer (only when it actually exists on disk)
+  if (fs.existsSync(path.join(bundleDir(root), 'index.md')) && !readFirst.has('docs/knowledge/index.md')) {
+    return ['- docs/knowledge/index.md — Knowledge bundle index (see "Critical patterns")'];
+  }
+  return [];
 }
 
-function cellPromptBody(cell, worker) {
-  return [
-    `Nickname (reservation identity): ${worker}`,
-    `Assigned cell id: ${cell.id}`,
-    `Feature: ${cell.feature}`,
-    '',
-    'Cell (authoritative — do not re-fetch):',
-    JSON.stringify(cell, null, 2),
-    '',
-    'Inputs — read these; nothing else will be provided:',
-    '- AGENTS.md',
-    `- docs/history/${cell.feature}/CONTEXT.md`,
-    `- docs/history/${cell.feature}/plan.md (when present)`,
-    '',
-    'Contract:',
-    '- Load the bee-swarming skill (Execute section) for the full worker contract.',
-    '- Execute only the assigned cell. Do not select or accept other work.',
-    '- The cell\'s listed files are reserved under your nickname when dispatch claimed them; reserve any ADDITIONAL path before writing: node .bee/bin/bee.mjs reservations reserve --agent "<nickname>" --cell "<id>" --path "<path>"',
-    '- Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.',
-    '- Commit once: imperative-mood subject, cell id as the last body line.',
-    `- Finish with: node .bee/bin/bee.mjs cells finish --id ${cell.id} --outcome "<one line>" --files <a,b> — it runs the project's declared commands.test first: green caps the cell, red refuses the cap and quotes the failing excerpt. The red is the work: fix it and re-run finish; never build on a red base.`,
-    '- Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.',
-    // Conditional add-only block — empty for a first-dispatch, plain cell,
-    // so that prompt stays byte-identical to the template above.
-    ...priorRoundsBlock(cell),
-  ].join('\n');
+function learnedContextLines(root, cell) {
+  try {
+    const readFirst = new Set(
+      (Array.isArray(cell.read_first) ? cell.read_first : [])
+        .filter((entry) => typeof entry === 'string')
+        .map((entry) => entry.replace(/\\/g, '/').replace(/^\.\//, '')),
+    );
+    let lines;
+    if (bundleMode(root)) {
+      lines = bundleLearnedLines(root, cell, readFirst);
+    } else if (
+      fs.existsSync(path.join(root, 'docs', 'history', 'learnings', 'critical-patterns.md')) &&
+      !readFirst.has('docs/history/learnings/critical-patterns.md')
+    ) {
+      lines = ['- docs/history/learnings/critical-patterns.md — Critical patterns (hard-won learnings)'];
+    } else {
+      lines = [];
+    }
+    return lines.slice(0, LEARNED_CONTEXT_MAX_LINES);
+  } catch {
+    return []; // enrichment, never a refusal — any resolution failure is silent
+  }
 }
 
-const GATHER_SHAPED_GOAL = {
-  gather: 'Gather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.',
-  reviewer: 'Review: check the given claim/diff against the repo. Read-only; may run read-only commands (tests, linters, the configured verify) to check evidence.',
-  advisor: 'Advisor consult: produce an independent digest/opinion on the given question. Read-only.',
-};
-
-function gatherShapedPromptBody(kind) {
-  return [
-    GATHER_SHAPED_GOAL[kind] || `${kind}: read-only task.`,
-    '',
-    'Paths: <caller fills in the exact files/paths to read>',
-    '',
-    'Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.',
-  ].join('\n');
+function cellPromptBody(root, cell, worker) {
+  return render(loadPrompt('worker-cell'), {
+    worker,
+    cell_id: cell.id,
+    feature: cell.feature,
+    cell_json: JSON.stringify(cell, null, 2),
+    // Conditional add-only blocks — an empty string drops the block, so a
+    // first-dispatch cell with no knowledge layer renders byte-identically
+    // to the unconditional template.
+    learned_context: learnedContextLines(root, cell).join('\n'),
+    prior_rounds: priorRoundEventLines(cell).join('\n'),
+  });
 }
 
-function promptBodyFor(kind, cell, worker) {
-  return kind === 'cell' ? cellPromptBody(cell, worker) : gatherShapedPromptBody(kind);
+function promptBodyFor(root, kind, cell, worker) {
+  return kind === 'cell' ? cellPromptBody(root, cell, worker) : render(loadPrompt(kind), {});
 }
 
 // PREPARE-TIME RECORD (advisor R2): one line per prepared dispatch, appended
@@ -422,7 +464,7 @@ export function prepareDispatch(root, { runtime, kind, cell: cellId, worker, for
     }
   }
 
-  const promptBody = promptBodyFor(kind, cell, resolvedWorker);
+  const promptBody = promptBodyFor(root, kind, cell, resolvedWorker);
   const requestedModel = resolved.type === 'model' ? resolved.model : null;
   const pinnedType = PINNED_AGENT_TYPE[tierToken] || 'general-purpose';
 

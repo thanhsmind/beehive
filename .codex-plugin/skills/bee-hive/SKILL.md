@@ -30,7 +30,7 @@ current stop. Out-of-band requests:
 |---|---|
 | `bee-shaping` | Gray areas or unlocked decisions — lock them (also backlog triage, parking, the implement-plan brief). |
 | `bee-planning` | Decisions locked, or scope already clear ("just fix this") — route the lane, shape the work, present the gate. A code-touching route creates the feature's worktree in the same step (`bee worktree new --feature <slug>`) and the work lives there. |
-| `bee-swarming` | Merged shape+execution gate approved, cells open — orchestrate workers, or execute one assigned cell, inside the feature's worktree. |
+| `bee-swarming` | Merged shape+execution gate approved, cells open — orchestrate workers, or execute one assigned cell, inside the feature's worktree. A `tiny` cell may run inline; `small` and up runs through a dispatched execution worker. |
 | `bee-capturing` | Execution done, an area needs documenting, or something just settled — sync specs, record learnings. |
 | `bee-reviewing` | Only on an explicit review request — never automatic. Merge/ship with unreviewed candidates: report count + risk, ask ONE question. |
 | `bee-researching` | Research a topic, library, or approach — standalone, or from planning discovery. |

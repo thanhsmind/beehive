@@ -55,11 +55,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = path.join(path.dirname(__filename), '..', '..');
-const RESERVATIONS_LIB_PATH = path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'reservations.mjs');
+// pathToFileURL: dynamic import() of a bare absolute path breaks on win32
+// (a `d:\...` specifier parses as protocol "d:") — a file:// URL string is
+// valid on every platform.
+const RESERVATIONS_LIB_PATH = pathToFileURL(path.join(REPO_ROOT, '.bee', 'bin', 'lib', 'reservations.mjs')).href;
 
 const RACERS = 8;
 const UNSAFE_WIDEN_MS = 30;

@@ -3546,15 +3546,51 @@ function buildRouteFixture() {
   // The git-absent shim: node + bash + the login shell's usual coreutils, and
   // NO git. `command -v git` under this PATH must come back empty — a row
   // asserts exactly that before any git-absent conclusion is drawn.
-  for (const bin of SHIM_BINARIES) {
-    const found = spawnSync("sh", ["-c", `command -v ${bin}`], { encoding: "utf8", timeout: 5000 });
-    const resolved = (found.stdout || "").trim();
-    if (found.status === 0 && resolved && path.basename(resolved) !== "git") {
-      try {
-        fs.symlinkSync(resolved, path.join(shim, bin));
-      } catch {
-        // a missing optional utility is not fatal — the shim only has to carry
-        // enough for `bash -lc` and `node`
+  //
+  // Two platform shapes for ONE contract (a PATH value carrying bash + node
+  // + coreutils but no git):
+  //   - POSIX: a directory of symlinks to the resolved binaries (unchanged).
+  //   - win32: symlink creation needs elevation AND extension-less symlink
+  //     names are not spawnable via CreateProcess, so the shim is instead a
+  //     PATH *string* of two REAL directories: Git-for-Windows' usr\bin
+  //     (bash.exe + coreutils, NO git.exe lives there) plus node's own dir.
+  //     The login profile would re-prepend /mingw64/bin (where git.exe DOES
+  //     live) when MSYSTEM is set, so routeEnv() strips the MSYSTEM family
+  //     for the git-absent arm — verified empirically: with that strip,
+  //     `bash -lc 'command -v git'` under this PATH is empty while node,
+  //     bash and the coreutils all resolve.
+  let shimPath = shim;
+  if (process.platform === "win32") {
+    shimPath = null;
+    const whereGit = spawnSync("where", ["git"], { encoding: "utf8", timeout: 5000 });
+    const gitExe = (whereGit.stdout || "").split(/\r?\n/).map((l) => l.trim()).find(Boolean);
+    // Walk up from git.exe to the Git-for-Windows root (git.exe may live in
+    // cmd\, bin\ or mingw64\bin\) — the root is the ancestor carrying
+    // usr\bin\bash.exe.
+    for (let dir = gitExe ? path.dirname(gitExe) : null; dir; ) {
+      const usrBin = path.join(dir, "usr", "bin");
+      if (fs.existsSync(path.join(usrBin, "bash.exe")) && !fs.existsSync(path.join(usrBin, "git.exe"))) {
+        shimPath = `${usrBin}${path.delimiter}${path.dirname(process.execPath)}`;
+        break;
+      }
+      const parent = path.dirname(dir);
+      dir = parent === dir ? null : parent;
+    }
+    // If no git-free bash directory exists on this box, leave shimPath at the
+    // empty shim dir: the honest route-gitabsent-shim-precondition row below
+    // reports exactly why the git-absent rows cannot be trusted here.
+    if (shimPath === null) shimPath = shim;
+  } else {
+    for (const bin of SHIM_BINARIES) {
+      const found = spawnSync("sh", ["-c", `command -v ${bin}`], { encoding: "utf8", timeout: 5000 });
+      const resolved = (found.stdout || "").trim();
+      if (found.status === 0 && resolved && path.basename(resolved) !== "git") {
+        try {
+          fs.symlinkSync(resolved, path.join(shim, bin));
+        } catch {
+          // a missing optional utility is not fatal — the shim only has to carry
+          // enough for `bash -lc` and `node`
+        }
       }
     }
   }
@@ -3562,7 +3598,7 @@ function buildRouteFixture() {
   // A directory that is inside NO git repository (the "non-git cwd" arm).
   const nonGit = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bee route non-git ")));
 
-  return { root, home, codexHome, nested, shim, nonGit };
+  return { root, home, codexHome, nested, shim: shimPath, nonGit };
 }
 
 // The environment Codex would hand the hook — minus the two Claude-only root
@@ -3573,7 +3609,19 @@ function routeEnv(fixture, { noGit = false } = {}) {
   delete env.CLAUDE_PLUGIN_ROOT;
   env.HOME = fixture.home;
   env.CODEX_HOME = fixture.codexHome;
-  if (noGit) env.PATH = fixture.shim;
+  if (noGit) {
+    env.PATH = fixture.shim;
+    if (process.platform === "win32") {
+      // A Git-Bash login shell re-prepends /mingw64/bin (which carries
+      // git.exe) whenever the MSYSTEM family is set — stripping it keeps the
+      // git-absent PATH honest (see the shim-construction comment in
+      // buildRouteFixture).
+      delete env.MSYSTEM;
+      delete env.MSYS2_PATH_TYPE;
+      delete env.ORIGINAL_PATH;
+      delete env.MINGW_PREFIX;
+    }
+  }
   return env;
 }
 

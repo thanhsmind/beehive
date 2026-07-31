@@ -42,7 +42,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");
@@ -285,7 +285,8 @@ async function main() {
 
   let knownPhases;
   try {
-    ({ KNOWN_PHASES: knownPhases } = await import(path.join(REPO_ROOT, "packages", "bee", "lib", "state.mjs")));
+    // pathToFileURL: a bare absolute path breaks import() on win32 (protocol "d:").
+    ({ KNOWN_PHASES: knownPhases } = await import(pathToFileURL(path.join(REPO_ROOT, "packages", "bee", "lib", "state.mjs")).href));
   } catch (err) {
     console.error(`FAIL ${NAME}: could not import KNOWN_PHASES from packages/bee/lib/state.mjs — ${err.message}`);
     return 1;

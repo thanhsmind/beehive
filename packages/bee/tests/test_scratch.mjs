@@ -20,6 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { runModuleWorker } from '../../../scripts/lib/run-module-worker.mjs';
+import { canSymlink, envSkipLine, SYMLINK_SKIP_REASON } from '../../../scripts/lib/env-capabilities.mjs';
 import { writeJsonAtomic, readJson } from '../lib/fsutil.mjs';
 import {
   scratchRoots,
@@ -50,6 +51,18 @@ async function check(name, fn) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+// A check whose FIXTURE needs symlink creation (denied without elevation /
+// Developer Mode on win32). The symlink-escape REFUSAL contracts these
+// checks pin cannot be exercised where the escape itself cannot be built —
+// skip loudly, never weaken, never fail on a machine limit.
+async function checkNeedsSymlink(name, fn) {
+  if (!canSymlink()) {
+    console.log(envSkipLine(SYMLINK_SKIP_REASON, name));
+    return;
+  }
+  await check(name, fn);
 }
 
 // ─── fixture builders (mkdtempSync fixture roots only — never the real repo tree) ───
@@ -118,7 +131,7 @@ await check('containedRoot proves a plain in-root candidate contained', async ()
   assert(proof && proof.rel === '.bee/tmp', `expected containment proof for a plain in-root dir, got ${JSON.stringify(proof)}`);
 });
 
-await check('containedRoot REFUSES a symlink escaping both allowed roots — never follows it', async () => {
+await checkNeedsSymlink('containedRoot REFUSES a symlink escaping both allowed roots — never follows it', async () => {
   const root = makeFixtureRepo();
   fs.mkdirSync(path.join(root, '.bee', 'tmp'), { recursive: true });
   const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-scratch-outside-'));
@@ -133,7 +146,7 @@ await check('containedRoot REFUSES a symlink escaping both allowed roots — nev
   assert(fs.existsSync(path.join(outsideDir, 'secret.txt')), 'outside target must be untouched by the mere containment check');
 });
 
-await check('computeSweepPlan --all refuses the symlink escape (refused_escapes), never includes it, and dirSize/removal never dereference it', async () => {
+await checkNeedsSymlink('computeSweepPlan --all refuses the symlink escape (refused_escapes), never includes it, and dirSize/removal never dereference it', async () => {
   const root = makeFixtureRepo();
   makeScratchDir(root, '.bee/tmp', 'closed-feat', { 'x.txt': 'closed scratch' });
   const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-scratch-outside2-'));
@@ -358,7 +371,7 @@ await check('`bee tmp sweep --all --dry-run --json` (CLI, real fixture) reports 
 // <repo>/.bee/spikes prefix is ever trusted. Reproduces the judge's real
 // data-loss repro through the same lib entry points a real caller uses. ────
 
-await check('scratchRoots REFUSES a symlinked .bee/spikes ROOT — never relocates the authority root to the symlink target', async () => {
+await checkNeedsSymlink('scratchRoots REFUSES a symlinked .bee/spikes ROOT — never relocates the authority root to the symlink target', async () => {
   const root = makeFixtureRepo();
   fs.mkdirSync(path.join(root, '.bee', 'cells'), { recursive: true });
   fs.writeFileSync(path.join(root, '.bee', 'cells', 'demo-1.json'), '{"id":"demo-1"}');
@@ -370,7 +383,7 @@ await check('scratchRoots REFUSES a symlinked .bee/spikes ROOT — never relocat
   assert(!roots.some((r) => r.rel === '.bee/spikes'), `a symlinked .bee/spikes root must be refused entirely, got roots=${JSON.stringify(roots)}`);
 });
 
-await check('REPRO (judge): .bee/spikes -> repo root, `tmp sweep --all` must NOT delete .bee/cells/ or .bee/decisions.jsonl', async () => {
+await checkNeedsSymlink('REPRO (judge): .bee/spikes -> repo root, `tmp sweep --all` must NOT delete .bee/cells/ or .bee/decisions.jsonl', async () => {
   const root = makeFixtureRepo();
   writeDefaultState(root, { feature: null, phase: 'idle' });
   fs.mkdirSync(path.join(root, '.bee', 'cells'), { recursive: true });
@@ -385,7 +398,7 @@ await check('REPRO (judge): .bee/spikes -> repo root, `tmp sweep --all` must NOT
   assert(fs.existsSync(path.join(root, '.bee', 'onboarding.json')), '.bee/onboarding.json must survive a symlinked .bee/spikes root under --all');
 });
 
-await check('REPRO (judge): .bee/tmp -> docs/, `tmp sweep --all` must NOT delete docs/history', async () => {
+await checkNeedsSymlink('REPRO (judge): .bee/tmp -> docs/, `tmp sweep --all` must NOT delete docs/history', async () => {
   const root = makeFixtureRepo();
   writeDefaultState(root, { feature: null, phase: 'idle' });
   fs.mkdirSync(path.join(root, 'docs', 'history', 'demo'), { recursive: true });
@@ -398,7 +411,7 @@ await check('REPRO (judge): .bee/tmp -> docs/, `tmp sweep --all` must NOT delete
   assert(fs.existsSync(path.join(root, 'docs', 'history', 'demo', 'CONTEXT.md')), 'docs/history must survive a symlinked .bee/tmp root under --all');
 });
 
-await check('dry-run/real-run parity: a symlinked .bee/tmp root is refused THE SAME WAY under --dry-run as under a real run', async () => {
+await checkNeedsSymlink('dry-run/real-run parity: a symlinked .bee/tmp root is refused THE SAME WAY under --dry-run as under a real run', async () => {
   const root = makeFixtureRepo();
   writeDefaultState(root, { feature: null, phase: 'idle' });
   fs.mkdirSync(path.join(root, 'docs', 'history', 'demo'), { recursive: true });
@@ -412,7 +425,7 @@ await check('dry-run/real-run parity: a symlinked .bee/tmp root is refused THE S
   assert(fs.existsSync(path.join(root, 'docs', 'history', 'demo', 'CONTEXT.md')), 'dry-run must delete nothing regardless');
 });
 
-await check('plan-then-swap: a plan computed while .bee/tmp is real does not license a later run after the root is swapped to a symlink', async () => {
+await checkNeedsSymlink('plan-then-swap: a plan computed while .bee/tmp is real does not license a later run after the root is swapped to a symlink', async () => {
   const root = makeFixtureRepo();
   makeScratchDir(root, '.bee/tmp', 'closed-feat', { 'a.txt': 'closed scratch' });
   writeLaneFixture(root, 'closed-feat', 'compounding-complete');

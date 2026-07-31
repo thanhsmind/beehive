@@ -906,6 +906,260 @@ ${prompt}`,
 ${prompt}`);
 });
 
+// ─── prompt-files (spec §1): templates render BYTE-IDENTICAL to the string
+// builders they replaced — pinned against the literal pre-template output. ──
+
+await check("prompt-files: a fresh plain cell prompt renders byte-identical to the pre-template builder (and no learned-context block fires in a repo with no knowledge layer)", async () => {
+  const root = mkFixture("dispatch-prepare-template-byte-pin-");
+  claudeCellConfig(root);
+  writeCellFixture(root, {
+    id: "pin-1",
+    feature: "demo",
+    title: "Pinned cell",
+    action: "Do the demo thing.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    trace: { worker: "exec-pin-1" },
+  });
+  const cell = JSON.parse(fs.readFileSync(path.join(root, ".bee", "cells", "pin-1.json"), "utf8"));
+  const expected = [
+    "Nickname (reservation identity): exec-pin-1",
+    "Assigned cell id: pin-1",
+    "Feature: demo",
+    "",
+    "Cell (authoritative — do not re-fetch):",
+    JSON.stringify(cell, null, 2),
+    "",
+    "Inputs — read these; nothing else will be provided:",
+    "- AGENTS.md",
+    "- docs/history/demo/CONTEXT.md",
+    "- docs/history/demo/plan.md (when present)",
+    "",
+    "Contract:",
+    "- Load the bee-swarming skill (Execute section) for the full worker contract.",
+    "- Execute only the assigned cell. Do not select or accept other work.",
+    '- The cell\'s listed files are reserved under your nickname when dispatch claimed them; reserve any ADDITIONAL path before writing: node .bee/bin/bee.mjs reservations reserve --agent "<nickname>" --cell "<id>" --path "<path>"',
+    "- Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.",
+    "- Commit once: imperative-mood subject, cell id as the last body line.",
+    '- Finish with: node .bee/bin/bee.mjs cells finish --id pin-1 --outcome "<one line>" --files <a,b> — it runs the project\'s declared commands.test first: green caps the cell, red refuses the cap and quotes the failing excerpt. The red is the work: fix it and re-run finish; never build on a red base.',
+    "- Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.",
+  ].join("\n");
+  const prompt = prepareCellPrompt(root, "pin-1", "exec-pin-1");
+  assert(
+    prompt === `[bee-tier: generation]\n${expected}`,
+    `template render must be byte-identical to the pre-template builder.\ngot:      ${JSON.stringify(prompt)}\nexpected: ${JSON.stringify(expected)}`,
+  );
+});
+
+await check("prompt-files: the gather prompt renders byte-identical to the pre-template builder", async () => {
+  const root = mkFixture("dispatch-prepare-template-gather-pin-");
+  writeConfig(root, { claude: { extraction: "haiku", generation: "sonnet", review: "opus" } });
+  const out = prepareDispatch(root, { runtime: "claude", kind: "gather" });
+  const expected = [
+    "Gather: locate and digest the requested paths/facts. Read-only — never write, never edit, never run a mutating command.",
+    "",
+    "Paths: <caller fills in the exact files/paths to read>",
+    "",
+    "Digest contract: return the paths read, the facts with file:line anchors, and verbatim quotes only where asked.",
+  ].join("\n");
+  assert(
+    out.payload.prompt === `[bee-tier: generation]\n${expected}`,
+    `gather template must render byte-identical, got: ${JSON.stringify(out.payload.prompt)}`,
+  );
+});
+
+// ─── learned-context injection (prompt-files spec §2): paths + titles only,
+// read_first never duplicated, ≤8 lines, every resolution failure silent. ───
+
+const LEARNED_CONTEXT_HEADER =
+  "Learned context (machine-assembled — read before implementing; prefer it over re-deriving):";
+
+// The block's own pointer lines: everything between the header line and the
+// next blank line (the block sits between the Inputs section and Contract).
+function learnedBlockLines(prompt) {
+  const lines = prompt.split("\n");
+  const headerIdx = lines.indexOf(LEARNED_CONTEXT_HEADER);
+  if (headerIdx === -1) return null;
+  const rest = lines.slice(headerIdx + 1);
+  const end = rest.indexOf("");
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+function writeConcept(root, rel, frontmatterLines, body) {
+  const abs = path.join(root, "docs", "knowledge", ...rel.split("/"));
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, `---\n${frontmatterLines.join("\n")}\n---\n\n${body}\n`);
+}
+
+await check("learned-context: a bundle repo with a work-item concept matching the feature gets manifest paths + titles, with read_first entries filtered out", async () => {
+  const root = mkFixture("dispatch-prepare-learned-manifest-");
+  claudeCellConfig(root);
+  writeConcept(root, "work/widget-feature/work-item.md", [
+    "type: bee.work-item",
+    "title: Widget feature work item",
+    "description: Implement the widget end to end",
+    "bee:",
+    "  id: widget-feature",
+    "  lifecycle: active",
+    "  areas: [widget]",
+    "  required_context: [areas/widget/pattern-a.md, areas/widget/pattern-b.md]",
+  ], "Widget work body.");
+  writeConcept(root, "areas/widget/pattern-a.md", [
+    "type: bee.pattern",
+    "title: Widget pattern A",
+    "description: Already assigned via read_first",
+    "bee:",
+    "  id: widget-pattern-a",
+    "  lifecycle: active",
+  ], "Pattern A body.");
+  writeConcept(root, "areas/widget/pattern-b.md", [
+    "type: bee.pattern",
+    "title: Widget pattern B",
+    "description: Not in read_first",
+    "bee:",
+    "  id: widget-pattern-b",
+    "  lifecycle: active",
+  ], "Pattern B body.");
+  writeCellFixture(root, {
+    id: "learn-1",
+    feature: "widget-feature",
+    title: "Widget cell",
+    action: "Implement the widget.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    read_first: ["docs/knowledge/areas/widget/pattern-a.md"],
+    trace: { worker: "exec-learn-1" },
+  });
+
+  const prompt = prepareCellPrompt(root, "learn-1", "exec-learn-1");
+  const block = learnedBlockLines(prompt);
+  assert(block, `expected the Learned context block, got:\n${prompt}`);
+  assert(
+    block.includes("- docs/knowledge/work/widget-feature/work-item.md — Widget feature work item"),
+    `expected the work item's path + title, got block:\n${block.join("\n")}`,
+  );
+  assert(
+    block.includes("- docs/knowledge/areas/widget/pattern-b.md — Widget pattern B"),
+    `expected pattern B's path + title, got block:\n${block.join("\n")}`,
+  );
+  assert(
+    !block.some((line) => line.includes("pattern-a.md")),
+    `a read_first path must never be duplicated into the block, got:\n${block.join("\n")}`,
+  );
+  assert(
+    block.every((line) => /^- \S+ — .+$/.test(line)),
+    `every block line must be "- <path> — <title>" (paths + titles only, never content), got:\n${block.join("\n")}`,
+  );
+  // The block sits between the Inputs section and Contract, and the prompt
+  // still ends on the unconditional status-token line (add-only property).
+  assert(
+    prompt.indexOf(LEARNED_CONTEXT_HEADER) < prompt.indexOf("Contract:"),
+    `the block must precede the Contract section, got:\n${prompt}`,
+  );
+  const lines = prompt.split("\n");
+  assert(
+    lines[lines.length - 1].startsWith("- Return exactly one final status token:"),
+    `the prompt must still END on the status-token line, got: ${JSON.stringify(lines[lines.length - 1])}`,
+  );
+});
+
+await check("learned-context: a bundle repo with NO matching work-item concept gets just the bundle index pointer", async () => {
+  const root = mkFixture("dispatch-prepare-learned-index-");
+  claudeCellConfig(root);
+  writeConcept(root, "areas/widget/pattern-a.md", [
+    "type: bee.pattern",
+    "title: Widget pattern A",
+    "description: A pattern",
+    "bee:",
+    "  id: widget-pattern-a",
+    "  lifecycle: active",
+  ], "Pattern A body.");
+  fs.writeFileSync(path.join(root, "docs", "knowledge", "index.md"), "# Knowledge Bundle\n");
+  writeCellFixture(root, {
+    id: "learn-2",
+    feature: "no-work-item-here",
+    title: "Cell without a work item",
+    action: "Do the thing.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    trace: { worker: "exec-learn-2" },
+  });
+
+  const prompt = prepareCellPrompt(root, "learn-2", "exec-learn-2");
+  const block = learnedBlockLines(prompt);
+  assert(block, `expected the Learned context block, got:\n${prompt}`);
+  assert(
+    block.length === 1 && block[0] === '- docs/knowledge/index.md — Knowledge bundle index (see "Critical patterns")',
+    `expected exactly the index pointer line, got:\n${block.join("\n")}`,
+  );
+});
+
+await check("learned-context: a no-bundle repo with docs/history/learnings/critical-patterns.md gets that single pointer line", async () => {
+  const root = mkFixture("dispatch-prepare-learned-fallback-");
+  claudeCellConfig(root);
+  const learningsDir = path.join(root, "docs", "history", "learnings");
+  fs.mkdirSync(learningsDir, { recursive: true });
+  fs.writeFileSync(path.join(learningsDir, "critical-patterns.md"), "# Critical Patterns\n");
+  writeCellFixture(root, {
+    id: "learn-3",
+    feature: "demo",
+    title: "Cell in a bundle-less repo",
+    action: "Do the thing.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    trace: { worker: "exec-learn-3" },
+  });
+
+  const prompt = prepareCellPrompt(root, "learn-3", "exec-learn-3");
+  const block = learnedBlockLines(prompt);
+  assert(block, `expected the Learned context block, got:\n${prompt}`);
+  assert(
+    block.length === 1 && block[0] === "- docs/history/learnings/critical-patterns.md — Critical patterns (hard-won learnings)",
+    `expected exactly the critical-patterns pointer line, got:\n${block.join("\n")}`,
+  );
+});
+
+await check("learned-context: the block caps at 8 pointer lines", async () => {
+  const root = mkFixture("dispatch-prepare-learned-cap-");
+  claudeCellConfig(root);
+  const rcNames = [];
+  for (let i = 1; i <= 10; i += 1) {
+    const name = `areas/widget/pattern-${String(i).padStart(2, "0")}.md`;
+    rcNames.push(name);
+    writeConcept(root, name, [
+      "type: bee.pattern",
+      `title: Widget pattern ${i}`,
+      "description: One of many",
+      "bee:",
+      `  id: widget-pattern-${i}`,
+      "  lifecycle: active",
+    ], `Pattern ${i} body.`);
+  }
+  writeConcept(root, "work/widget-feature/work-item.md", [
+    "type: bee.work-item",
+    "title: Widget feature work item",
+    "description: Implement the widget end to end",
+    "bee:",
+    "  id: widget-feature",
+    "  lifecycle: active",
+    `  required_context: [${rcNames.join(", ")}]`,
+  ], "Widget work body.");
+  writeCellFixture(root, {
+    id: "learn-4",
+    feature: "widget-feature",
+    title: "Widget cell",
+    action: "Implement the widget.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    trace: { worker: "exec-learn-4" },
+  });
+
+  const prompt = prepareCellPrompt(root, "learn-4", "exec-learn-4");
+  const block = learnedBlockLines(prompt);
+  assert(block, `expected the Learned context block, got:\n${prompt}`);
+  assert(block.length === 8, `expected exactly 8 pointer lines (the cap; 11 manifest entries exist), got ${block.length}:\n${block.join("\n")}`);
+});
+
 // ─── bad --runtime / --kind refuse loudly ──────────────────────────────────
 
 await check("an unknown --runtime is refused (non-zero exit)", async () => {
