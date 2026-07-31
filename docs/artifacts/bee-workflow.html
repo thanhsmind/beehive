@@ -1,0 +1,298 @@
+<title>Bee — Workflow chi tiết</title>
+<style>
+  :root {
+    --bg: #FBF8F1;
+    --surface: #FFFFFF;
+    --ink: #2B2620;
+    --ink-soft: #6E6558;
+    --line: #E6DFD2;
+    --honey: #C77E12;
+    --honey-soft: #FBEED3;
+    --honey-ink: #7A4D06;
+    --machine: #5B6B7C;
+    --machine-soft: #EDF1F5;
+    --worker: #2F7D6D;
+    --worker-soft: #E3F0EC;
+    --orch: #8A5A44;
+    --orch-soft: #F4E9E2;
+    --mono-bg: #F3EEE3;
+    --gate-bg: linear-gradient(90deg, #FBEED3, #F7E3B8);
+    --shadow: 0 1px 3px rgba(43,38,32,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #201C17; --surface: #2A251F; --ink: #EDE6DA; --ink-soft: #A99C8A;
+      --line: #3B342B; --honey: #E8A93C; --honey-soft: #3A2F1B; --honey-ink: #F0C97E;
+      --machine: #93A6B8; --machine-soft: #2A313A; --worker: #6FBFAD; --worker-soft: #223530;
+      --orch: #C89A83; --orch-soft: #362A23; --mono-bg: #322C24;
+      --gate-bg: linear-gradient(90deg, #3A2F1B, #453619);
+      --shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #201C17; --surface: #2A251F; --ink: #EDE6DA; --ink-soft: #A99C8A;
+    --line: #3B342B; --honey: #E8A93C; --honey-soft: #3A2F1B; --honey-ink: #F0C97E;
+    --machine: #93A6B8; --machine-soft: #2A313A; --worker: #6FBFAD; --worker-soft: #223530;
+    --orch: #C89A83; --orch-soft: #362A23; --mono-bg: #322C24;
+    --gate-bg: linear-gradient(90deg, #3A2F1B, #453619);
+    --shadow: 0 1px 3px rgba(0,0,0,.4);
+  }
+  :root[data-theme="light"] {
+    --bg: #FBF8F1; --surface: #FFFFFF; --ink: #2B2620; --ink-soft: #6E6558;
+    --line: #E6DFD2; --honey: #C77E12; --honey-soft: #FBEED3; --honey-ink: #7A4D06;
+    --machine: #5B6B7C; --machine-soft: #EDF1F5; --worker: #2F7D6D; --worker-soft: #E3F0EC;
+    --orch: #8A5A44; --orch-soft: #F4E9E2; --mono-bg: #F3EEE3;
+    --gate-bg: linear-gradient(90deg, #FBEED3, #F7E3B8);
+    --shadow: 0 1px 3px rgba(43,38,32,.08);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 "Segoe UI", system-ui, sans-serif;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 40px 24px 80px; }
+  header h1 {
+    font-size: 30px; font-weight: 650; letter-spacing: -.3px; margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  header p.sub { color: var(--ink-soft); margin: 0 0 28px; max-width: 62ch; }
+  code, .verb {
+    font-family: "Cascadia Code", Consolas, monospace; font-size: .86em;
+    background: var(--mono-bg); padding: 1px 7px; border-radius: 4px; white-space: nowrap;
+  }
+  .verb { color: var(--honey-ink); border: 1px solid var(--line); }
+
+  /* legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px;
+    border-radius: 999px; font-size: 13px; font-weight: 600; border: 1px solid var(--line);
+  }
+  .chip i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .chip.human  { background: var(--honey-soft); }  .chip.human i  { background: var(--honey); }
+  .chip.orch   { background: var(--orch-soft); }   .chip.orch i   { background: var(--orch); }
+  .chip.worker { background: var(--worker-soft); } .chip.worker i { background: var(--worker); }
+  .chip.mach   { background: var(--machine-soft);} .chip.mach i   { background: var(--machine); }
+
+  /* topology strip */
+  .topo {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; gap: 0;
+    margin: 18px 0 34px; border: 1px solid var(--line); border-radius: 10px;
+    overflow: hidden; box-shadow: var(--shadow); background: var(--surface);
+  }
+  .topo > div { padding: 14px 18px; }
+  .topo .main-co { border-right: 1px dashed var(--line); }
+  .topo .arrow {
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    padding: 0 14px; color: var(--honey); font-weight: 700; font-size: 13px;
+    border-right: 1px dashed var(--line); text-align: center;
+  }
+  .topo h3 { margin: 0 0 4px; font-size: 14px; letter-spacing: .4px; text-transform: uppercase; color: var(--ink-soft); }
+  .topo p { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+  .topo strong { color: var(--ink); }
+
+  /* spine + phases */
+  .flow { position: relative; }
+  .flow::before {
+    content: ""; position: absolute; left: 19px; top: 0; bottom: 0;
+    width: 2px; background: var(--line);
+  }
+  .phase {
+    position: relative; margin: 0 0 22px 48px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  }
+  .phase::before {
+    content: attr(data-n); position: absolute; left: -48px; top: 14px;
+    width: 40px; height: 40px; border-radius: 50%; background: var(--surface);
+    border: 2px solid var(--honey); color: var(--honey-ink); font-weight: 700;
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+  }
+  .phase-head {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+    padding: 14px 18px 10px; border-bottom: 1px solid var(--line);
+  }
+  .phase-head h2 { margin: 0; font-size: 17px; font-weight: 650; }
+  .phase-head .skill { font-family: Consolas, monospace; font-size: 12.5px; color: var(--ink-soft); }
+  .phase-body { padding: 12px 18px 16px; }
+  .steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .steps li { display: flex; gap: 10px; align-items: baseline; }
+  .steps li::before { content: "▸"; color: var(--honey); flex: none; }
+  .who { font-size: 11.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+         padding: 1px 8px; border-radius: 4px; flex: none; }
+  .who.h { background: var(--honey-soft); color: var(--honey-ink); }
+  .who.o { background: var(--orch-soft); color: var(--orch); }
+  .who.w { background: var(--worker-soft); color: var(--worker); }
+  .who.m { background: var(--machine-soft); color: var(--machine); }
+  .guards {
+    margin-top: 12px; padding: 9px 12px; background: var(--machine-soft);
+    border-radius: 7px; font-size: 13px; color: var(--machine);
+  }
+  .guards b { letter-spacing: .4px; text-transform: uppercase; font-size: 11.5px; }
+
+  /* gate bars */
+  .gate {
+    position: relative; margin: 0 0 22px 48px; padding: 13px 18px;
+    background: var(--gate-bg); border: 1px solid var(--honey);
+    border-radius: 10px; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap;
+  }
+  .gate::before {
+    content: "⏸"; position: absolute; left: -44px; top: 10px; width: 32px; height: 32px;
+    border-radius: 50%; background: var(--honey); color: #FFF8EA;
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+  }
+  .gate b { color: var(--honey-ink); }
+  .gate span { color: var(--ink-soft); font-size: 13.5px; }
+
+  .branch {
+    margin-top: 12px; border-left: 3px solid var(--line); padding: 2px 0 2px 12px;
+    font-size: 13.5px; color: var(--ink-soft);
+  }
+  .branch b { color: var(--ink); }
+
+  .tokens { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .tok { font-family: Consolas, monospace; font-size: 12px; padding: 2px 8px;
+         border-radius: 4px; border: 1px solid var(--line); background: var(--mono-bg); }
+  .tok.done { color: var(--worker); border-color: var(--worker); }
+  .tok.blocked { color: #B0483A; border-color: #B0483A; }
+
+  footer {
+    margin: 34px 0 0 48px; padding: 14px 18px; border: 1px dashed var(--line);
+    border-radius: 10px; font-size: 13.5px; color: var(--ink-soft);
+  }
+  footer b { color: var(--ink); }
+  @media (max-width: 640px) {
+    .topo { grid-template-columns: 1fr; }
+    .topo .arrow { border-right: none; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); padding: 8px; }
+  }
+</style>
+
+<div class="wrap">
+<header>
+  <h1>🐝 Bee — workflow một feature, từ ý định đến main</h1>
+  <p class="sub">Bản đồ vòng đời hiện tại sau refocus: máy (CLI + hooks) giữ flow, skill giữ craft,
+  mọi feature đụng code sống trong worktree riêng — main luôn sạch. Mỗi bước ghi rõ ai làm.</p>
+</header>
+
+<div class="legend">
+  <span class="chip human"><i></i>Bạn — chủ dự án</span>
+  <span class="chip orch"><i></i>Phiên chính — orchestrator</span>
+  <span class="chip worker"><i></i>Worker — subagent</span>
+  <span class="chip mach"><i></i>Máy — bee CLI + hooks</span>
+</div>
+
+<div class="topo">
+  <div class="main-co">
+    <h3>Main checkout</h3>
+    <p><strong>Chỉ:</strong> tích hợp, docs-lane, release, đọc.<br>
+    Write-guard <strong>từ chối</strong> sửa source của feature đã có worktree.</p>
+  </div>
+  <div class="arrow">⟵<br>bee worktree merge<br><span style="font-weight:400">(cửa land duy nhất, có verify)</span></div>
+  <div>
+    <h3>Worktree wt/&lt;feature&gt;</h3>
+    <p><strong>Toàn bộ code của feature</strong> — thư mục anh em <code>&lt;repo&gt;--wt--&lt;slug&gt;</code>,
+    tạo ngay lúc route. Docs của feature (CONTEXT, plan) đi cùng nhánh.</p>
+  </div>
+</div>
+
+<div class="flow">
+
+  <div class="phase" data-n="0">
+    <div class="phase-head"><h2>Khởi động phiên</h2><span class="skill">bee-hive</span></div>
+    <div class="phase-body">
+      <ul class="steps">
+        <li><span class="who m">Máy</span><span>Hooks bơm preamble trạng thái vào phiên (session-init, prompt-context).</span></li>
+        <li><span class="who o">Phiên</span><span><span class="verb">bee orient</span> → đang ở đâu, quyết định nào bị khoá, việc gì mở, <b>một</b> next action + skill cần nạp. Handoff treo → trình bạn, không bao giờ tự resume.</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="phase" data-n="1">
+    <div class="phase-head"><h2>Shaping — chốt quyết định</h2><span class="skill">bee-shaping</span></div>
+    <div class="phase-body">
+      <ul class="steps">
+        <li><span class="who o">Phiên</span><span><b>Triage đầu vào</b>: Rõ / Nửa rõ / Mơ hồ — nỗ lực phỏng vấn theo tín hiệu, không theo kịch bản cứng.</span></li>
+        <li><span class="who h">Bạn</span><span>Phỏng vấn <b>một câu mỗi lượt</b> — pin từ vựng, hỏi có grounding code thật, câu đảo ngược ("hệ thống <i>không</i> được làm gì?"). Dừng khi mọi quyết định viết ra được mà không bịa ý.</span></li>
+        <li><span class="who o">Phiên</span><span>Khoá vào <code>docs/history/&lt;feature&gt;/CONTEXT.md</code>; <span class="verb">bee decisions log</span> từng thoả thuận ngay khi chốt.</span></li>
+      </ul>
+      <div class="branch"><b>Nhánh headless (Qualify):</b> backlog item mới → thu bằng chứng → đủ tự tin thì đi tiếp, còn gray area thì <b>park</b> kèm Outstanding Questions (<span class="verb">bee backlog add</span>).</div>
+    </div>
+  </div>
+
+  <div class="phase" data-n="2">
+    <div class="phase-head"><h2>Planning — chọn cỡ, tạo hình</h2><span class="skill">bee-planning</span></div>
+    <div class="phase-body">
+      <ul class="steps">
+        <li><span class="who o">Phiên</span><span>Đếm risk flags → lane <code>docs · tiny · small · standard · high-risk</code>; ghi <span class="verb">bee state route</span>.</span></li>
+        <li><span class="who m">Máy</span><span>Lane đụng code ở main → output route <b>đòi worktree</b>: <span class="verb">bee worktree new --feature &lt;slug&gt;</span>, phiên mở tại đó. (docs-lane &amp; tiny-một-mình được ở main.)</span></li>
+        <li><span class="who o">Phiên</span><span>Nghiên cứu theo lane; điểm mù lớn → dispatch <b>bee-researching</b>. Tạo hình nhỏ nhất trung thực + câu hỏi SMALLER PATH. Craft: <code>.bee/expertise/planning.md</code>.</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="gate">
+    <b>⛩ GATE — bạn duyệt hình dạng &amp; cho phép sửa file</b>
+    <span>Một câu hỏi tiếng người; <span class="verb">bee state gate</span> ghi câu trả lời. Chưa gật = chưa ai đụng source.
+    Autopilot: <code>gate_bypass</code> off / normal / full / total (bee-hive · Gates).</span>
+  </div>
+
+  <div class="phase" data-n="3">
+    <div class="phase-head"><h2>Swarming — thực thi</h2><span class="skill">bee-swarming (Orchestrate + Execute)</span></div>
+    <div class="phase-body">
+      <ul class="steps">
+        <li><span class="who o">Phiên</span><span><span class="verb">bee cells add</span> slice hiện tại (+ 1 test cell đuôi slice, việc đầu tiên của nó là <b>phán quyết coverage</b>); <span class="verb">bee cells schedule</span> xếp thứ tự; <span class="verb">bee cells tier</span> chọn model.</span></li>
+        <li><span class="who o">Phiên</span><span><span class="verb">bee dispatch prepare --cell … --worker … --claim</span> — <b>một verb</b>: claim + reserve files + prompt tự đủ (cell JSON inline; block <b>Prior rounds</b> máy lắp khi re-dispatch; block <b>Proof contract</b> cho cell red-first). Spawn đúng payload đó.</span></li>
+        <li><span class="who w">Worker</span><span>Đọc AGENTS + CONTEXT → conform trước khi code → implement đúng một cell (lệch thực tế: sửa-và-ghi-deviation, việc kiến trúc thì BLOCKED) → commit 1 lần → <span class="verb">bee cells finish</span> (cap + release trong một verb).</span></li>
+        <li><span class="who w">Worker</span><span>Trả đúng một token:</span></li>
+      </ul>
+      <div class="tokens">
+        <span class="tok done">[DONE]</span><span class="tok blocked">[BLOCKED]</span>
+        <span class="tok">[HANDOFF]</span><span class="tok">[NOOP]</span>
+      </div>
+      <div class="branch"><b>Tend &amp; rescue:</b> lời worker không phải bằng chứng — goal-check khi có mùi, <span class="verb">bee cells judge</span> khi lệch file khai báo. BLOCKED leo thang: (1) re-dispatch kèm context vòng trước (máy lắp) → (2) tier model cao hơn → (3) đưa bạn quyết.</div>
+      <div class="guards"><b>Guards trực chiến:</b> write-guard (chưa qua gate / sai worktree = từ chối) · model-guard · claim guard · reservations + cross-worktree holds · một worker một cell, không bao giờ tự chọn việc.</div>
+    </div>
+  </div>
+
+  <div class="phase" data-n="4">
+    <div class="phase-head"><h2>Close — trả nợ, chứng minh</h2><span class="skill">bee close</span></div>
+    <div class="phase-body">
+      <ul class="steps">
+        <li><span class="who o">Phiên</span><span><span class="verb">bee close --feature … --dry-run</span> — liệt kê từng <b>cửa nợ</b> (feature-verify, test-cell, scribing/capture) kèm đúng lệnh trả. Cửa không bao giờ được waive.</span></li>
+        <li><span class="who m">Máy</span><span>Chỉ còn cửa verify → <span class="verb">bee close</span> chạy lệnh verify đã ghi nhận, record xanh/đỏ qua đúng cơ chế cũ. Đỏ = surface output, không ghi gì là "pass".</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="phase" data-n="5">
+    <div class="phase-head"><h2>Capturing — giữ lại thứ đã chốt</h2><span class="skill">bee-capturing (tự kích hoạt suốt phiên)</span></div>
+    <div class="phase-body">
+      <ul class="steps">
+        <li><span class="who o">Phiên</span><span><b>Ngay khi</b> một rule/giá trị chốt trong hội thoại: <span class="verb">bee decisions log</span> + <span class="verb">bee capture add</span> cùng lượt — không chờ ai nhắc.</span></li>
+        <li><span class="who o">Phiên</span><span><b>Compound</b> sau close xanh: flush capture queue vào spec, viết learnings, log quyết định, <span class="verb">bee reviews candidate add</span>. Specs = memory của <i>dự án host</i> dưới <code>docs/</code>.</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="gate">
+    <b>⛩ GATE — bạn cho land</b>
+    <span>Từ <b>main</b>: <span class="verb">bee worktree merge --id …</span> — merge staged + chạy lại verify của dự án trên cây đã merge. Đây là con đường duy nhất về main.</span>
+  </div>
+
+  <div class="phase" data-n="6">
+    <div class="phase-head"><h2>Review độc lập — chỉ khi bạn gọi</h2><span class="skill">bee-reviewing</span></div>
+    <div class="phase-body">
+      <ul class="steps">
+        <li><span class="who h">Bạn</span><span>"Review feature này" → panel reviewer chạy theo <b>role card</b> (Purpose / Scope / Method, method trỏ vào <code>.bee/expertise/review.md</code>); findings + UAT trình bạn chấp nhận. Không bao giờ tự chạy như một stage.</span></li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <b>Ba bất biến xuyên suốt:</b> không gate nào tự phê duyệt (bypass là ngoại lệ có ghi nhận) ·
+  "xong / xanh / đã sửa" chỉ được nói cạnh output lệnh tươi · state chỉ đổi qua CLI, không sửa tay
+  <code>.bee/*.json</code>. Craft nằm ở <code>.bee/expertise/</code> (router INDEX → 8 guide);
+  cơ chế sâu nằm trong references của từng skill.
+</footer>
+</div>
