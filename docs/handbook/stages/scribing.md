@@ -1,4 +1,4 @@
-# Stage: scribing (`bee-scribing`)
+# Stage: scribing (`bee-capturing` — "Scribe")
 
 **Purpose** — bee's business analyst. Keeps technology-agnostic specs of every area
 current (in the `docs/knowledge/` bundle, or `docs/specs/`) so a human understands
@@ -39,4 +39,4 @@ and appends to the durable ledger `.bee/logs/scribing-runs.jsonl`).
   tiny included. Lanes scale ceremony, never memory.
 
 ## Source
-`skills/bee-scribing/SKILL.md`
+`skills/bee-capturing/SKILL.md` ("Scribe")

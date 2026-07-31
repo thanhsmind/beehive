@@ -69,7 +69,7 @@ govern the working residue of a cell rather than its content.
   dispatched worker).
 - **R16b — The review wave's ceremony scales with the measured diff (lane-lean
   D3, 2026-07-27).** The wave lives in `bee-planning` (validation-diet D1/D5
-  folded the deleted `bee-validating`'s reality gate and review wave in; there
+  folded the deleted standalone validating stage's reality gate and review wave in; there
   is no standalone `validating` stage or phase). A standard-lane feature whose
   counted touch set is at most 5 product files with zero hard-gate flags runs
   the review wave inline on the session model — the same two mandates

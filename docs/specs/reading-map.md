@@ -138,11 +138,12 @@ Where things live. Read the touched area's spec before its code.
 
 ## Not yet specced
 
-- The workflow's skills themselves (`skills/bee-*`, including the new `bee-evolving`) have no area
+- The workflow's skills themselves (`skills/bee-*`) have no area
   specs by convention. Their contracts live in `docs/07-contracts.md` and in each skill's own
-  `SKILL.md` + `CREATION-LOG.md`; `skills/bee-writing-skills/scripts/render_openai_metadata.mjs`
+  `SKILL.md` (creation logs under `docs/decisions/skills/`); `scripts/render_openai_metadata.mjs`
   projects each canonical frontmatter identity into `agents/openai.yaml` for Codex, and its
-  `--check` mode guards drift. The self-improvement *process* behavior is specced in
+  `--check` mode guards drift. The self-improvement loop itself is a maintainer guide,
+  `docs/handbook/evolving.md`. The self-improvement *process* behavior is specced in
   `docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md` (B5).
 - `docs/specs/system-overview.md` does not exist. Offered, not yet written.
 
@@ -163,7 +164,7 @@ Where things live. Read the touched area's spec before its code.
 - `docs/decisions/` — numbered design decisions. `.bee/decisions.jsonl` — the live decision log.
 - `docs/backlog.md` — the product backlog. `.bee/backlog.jsonl` — friction and findings.
 - `.bee/state.json` and `.bee/backlog.jsonl` are **CLI-owned**: every mutation goes through `bee.mjs state` (generic routing changes require the selected record's pre-change phase as owner; gates use their dedicated verb; worker/scribing-run remain dedicated; `worker prune` cleans `.bee/workers` transients — prefix keep-set, fail-closed destructive verbs) or `bee.mjs backlog add`; direct edits are denied by the write-guard, and a standing suite keeps `packages/bee/` byte-identical to `.bee/bin/`.
-- `docs/history/research/` — standalone bee-xia research briefs (topic-slug files; each leads with its Bottom Line).
+- `docs/history/research/` — standalone `bee-researching` briefs (topic-slug files; each leads with its Bottom Line).
 - `packages/bee/hooks/` — the catalog and handlers for the installed plugin projection and generated repository fallback. It declares the pre-spawn model-tier guard on both runtimes (Claude via its dispatch tools, Codex via its native spawn call on the observed envelope — unobserved shapes pass through open) and the paired Codex-only child-start/child-stop audit; onboarding activates exactly one source. Vendored handlers live under `.bee/bin/hooks/`.
 - `packages/bee/scripts/plugin_distribution.mjs` and `test_plugin_distribution.mjs` — shared strict distribution planner/prover and transaction suite. `scripts/install.sh`, `scripts/install.ps1`, and release-inventory tests are the two platform entrypoints and package proof.
 - [`docs/knowledge/areas/verify-pipeline/`](../knowledge/areas/verify-pipeline/index.md) — test

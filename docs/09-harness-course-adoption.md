@@ -42,7 +42,7 @@ Adopt: friction backlog entries and `trace.friction` gain an optional `layer` fi
 
 Course L10/L12 (and OpenAI's "capture taste once, enforce continuously"): every *recurring* review comment should become an automated check — lint rule, grep in a verify command, guard — because agents copy existing patterns and prose rules decay. bee's compounding promotes repeated patterns to `critical-patterns.md` — prose that costs context every session and relies on being read.
 
-Adopt: in `bee-compounding`, when the same review finding or user correction appears twice, the **first-choice promotion target is an executable check** (a grep/lint line appended to the area's verify command, a helper guard, a hook denial); `critical-patterns.md` is the fallback for what can't be mechanized. Grooming's review rules already grade proposals by lane — "promote to check" proposals are tiny/small.
+Adopt: in `bee-capturing` ("Compound"), when the same review finding or user correction appears twice, the **first-choice promotion target is an executable check** (a grep/lint line appended to the area's verify command, a helper guard, a hook denial); `critical-patterns.md` is the fallback for what can't be mechanized. Grooming's review rules already grade proposals by lane — "promote to check" proposals are tiny/small.
 
 ### 4. Fresh Session Test as a grooming audit
 

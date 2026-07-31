@@ -17,10 +17,11 @@ New to the system? Read [overview.md](overview.md) first.
 | 6 | **compounding** | Capture learnings + decisions; close the feature. | — | [stages/compounding.md](stages/compounding.md) |
 | R | **reviewing** | On-demand independent review gate over a chosen scope. | Gate 4 | [stages/reviewing.md](stages/reviewing.md) |
 
-On-demand side skills (not chain stages, so no dedicated page): `bee-briefing`
-(render one implement plan), `bee-grooming` (hunt tech debt), `bee-qualifying`
-(auto-triage a backlog row), `bee-xia` (research scout), `bee-bypass-gate`
-(toggle gate autopilot).
+On-demand side steps (not chain stages, so no dedicated page): the Brief step
+of `bee-shaping` (render one implement plan), `bee-grooming` (hunt tech debt),
+the Qualify step of `bee-shaping` (auto-triage a backlog row),
+`bee-researching` (research scout), and `bee-hive`'s "Gates" section (toggle
+gate autopilot).
 
 ## Maintainer guides (developing bee itself, not shipped product)
 

@@ -88,19 +88,21 @@ and a red CI run files a `verify-red` issue — never build on red.
 ## Architecture at a glance
 
 ```
-skills/                     the workflow, one SKILL.md per phase (instructions only)
-  bee-hive/                 router + gate keeper + onboarding  → stages/hive.md
-  bee-exploring/            fuzzy request → locked CONTEXT.md   → stages/exploring.md
+skills/                     the workflow, one SKILL.md per skill (instructions only)
+  bee-hive/                 router + gate keeper + onboarding + gate bypass → stages/hive.md
+  bee-shaping/              fuzzy request → locked CONTEXT.md; Explore, Qualify,
+                            Lock, and Brief in one front door   → stages/exploring.md
   bee-planning/             mode + shape + reality check + cells → stages/planning.md
-  bee-swarming/             orchestrate bounded workers         → stages/swarming.md
-  bee-executing/            implement + verify + cap one cell   → stages/executing.md
-  bee-scribing/             sync durable knowledge              → stages/scribing.md
-  bee-compounding/          capture learnings + decisions       → stages/compounding.md
+  bee-swarming/             orchestrate bounded workers, plus the
+                            "Execute" one-cell worker contract  → stages/swarming.md, stages/executing.md
   bee-reviewing/            on-demand independent review gate    → stages/reviewing.md
-  (plus on-demand: bee-briefing, bee-grooming, bee-qualifying,
-   bee-xia, bee-bypass-gate; maintainer guides for developing bee
-   itself live in docs/handbook/writing-skills.md and
-   docs/handbook/evolving.md)
+  bee-capturing/            sync durable knowledge (Scribe) and
+                            learnings + decisions (Compound)    → stages/scribing.md, stages/compounding.md
+  bee-researching/          evidence-labeled research scout
+  bee-grooming/             hunt tech debt
+  bee-herding/              autonomous cockpit (bootstrap / dispatch / merge)
+  (maintainer guides for developing bee itself live in
+   docs/handbook/writing-skills.md and docs/handbook/evolving.md)
 
 packages/bee/               the payload package (v1.18.0) — single standard code set
   scripts/bee.mjs           CLI source (vendored into host as .bee/bin/bee.mjs)

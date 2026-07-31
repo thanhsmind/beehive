@@ -99,5 +99,5 @@ previous change never counts as approval of the next publication.
 
 ## Pointers (implementation)
 
-- **P3** — The self-improvement process: `skills/bee-evolving/SKILL.md`; contract in
+- **P3** — The self-improvement process: `docs/handbook/evolving.md`; contract in
   `docs/07-contracts.md`; decision record `docs/decisions/0022-evolving-loop.md`

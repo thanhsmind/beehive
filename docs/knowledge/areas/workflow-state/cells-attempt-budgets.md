@@ -120,7 +120,7 @@ against the unit's new attempts (self-correcting-loop D2).
   `skills/bee-hive/references/routing-and-contracts.md` with a one-line
   565e68d0-scoping clause mirrored onto the seven adjacent surfaces
   (`bee-swarming` SKILL + reference, `bee-hive` SKILL x2 sites, go-mode,
-  `AGENTS.md` + `templates/AGENTS.block.md`, `bee-scribing` SKILL). Evidence:
+  `AGENTS.md` + `templates/AGENTS.block.md`, the scribing skill — today `bee-capturing`). Evidence:
   `docs/history/self-correcting-loop/CONTEXT.md` (D1-D6, Validating
   amendments Δ1-Δ6, decisions 84e49851/1cb27fbf); traces
   `.bee/cells/scl-{1..5}.json`; reports

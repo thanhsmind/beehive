@@ -19,7 +19,7 @@ Fresh Session Test coverage today:
 | How do I verify it? | `commands.verify` + baseline gate | half — same |
 | Where are we now? | `bee_status` + state + cells | covered (stronger than the course) |
 
-### A1. `bee-scribing` bootstrap mode — the generator
+### A1. Scribe bootstrap mode (`bee-capturing`) — the generator
 
 When onboarding succeeds and `docs/specs/` is empty (or missing system-overview/reading-map), offer a bounded skeleton pass: generate `system-overview.md` + `reading-map.md` containing **only what code mechanically proves** — top-level structure, entry points, README first paragraph — every *meaning* an Open Gap, `coverage: partial`. Never runs silently; the user approves the run. Never-invent holds: bootstrap writes provable facts and questions, nothing else. This is harvest-lite with a hard budget — inventory only, no interviews (harvest proper fills the gaps later).
 
@@ -58,7 +58,7 @@ The Fresh Session Test probe (grooming reference) files backlog items today; eac
 
 ### B1. `docs/backlog.md` — the product backlog artifact
 
-One human-first markdown table, owned by `bee-scribing` with merge rules (the `docs/specs/` pattern applied forward-looking): `ID | Story | CoS (one line) | Status | Feature`. Status enum is three values — `proposed / in-flight / done` — not six. Ordered by priority, highest first. One file forever, updated in place, never forked. Specs describe what IS; backlog describes what's NEXT.
+One human-first markdown table, owned by `bee-capturing` ("Scribe") with merge rules (the `docs/specs/` pattern applied forward-looking): `ID | Story | CoS (one line) | Status | Feature`. Status enum is three values — `proposed / in-flight / done` — not six. Ordered by priority, highest first. One file forever, updated in place, never forked. Specs describe what IS; backlog describes what's NEXT.
 
 ### B2. Proactive capture of deferred requests
 

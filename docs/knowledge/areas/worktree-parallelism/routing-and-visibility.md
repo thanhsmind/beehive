@@ -42,7 +42,7 @@ only — the deny itself is unchanged; any grants-read error falls back to the g
 message, never an allow).
 
 **Lane-first refinement (cross-worktree-holds D7, 2026-07-20):** exploring and planning (which
-now also carries the reality check and review wave folded in from the deleted `bee-validating`,
+now also carries the reality check and review wave folded in from the deleted standalone validating stage,
 validation-diet D1/D5) do not touch source — a new feature in an occupied checkout starts as a
 per-feature LANE on the shared store (full live coordination: claims, reservations, holds all
 visible), and a worktree grant is taken only once Gate 2's execution component is approved (the

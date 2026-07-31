@@ -35,6 +35,6 @@ privileges at configuration checking.
 
 ## Pointers (implementation)
 
-- **P1 —** Worker loop: `skills/bee-executing/SKILL.md` (Advisor Consult
-  section); dispatch-time offer + same-model no-op:
-  `skills/bee-swarming/SKILL.md` §4.
+- **P1 —** Worker loop: `skills/bee-swarming/references/worker-details.md`
+  ("Advisor consult in full"); dispatch-time offer + same-model no-op:
+  `skills/bee-swarming/SKILL.md`.

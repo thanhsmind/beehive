@@ -17,7 +17,7 @@ first.
 - A review session record (`reviews create/record`), findings graded **P1 / P2 / P3**.
 - Artifact verification results, UAT records.
 - Backlog rows for P2/P3, a session decision (`pending` / `blocked` / `approved`).
-- Optional `walkthrough.md` via bee-briefing.
+- Optional `walkthrough.md` via `bee-shaping` (Brief walkthrough).
 
 ## Gate
 **Gate 4** — P1>0: "P1 findings block merge. Fix before proceeding?"; P1=0:

@@ -25,22 +25,21 @@ bee/
       test_onboard_bee.mjs
   AGENTS.template.md             ← Codex bootstrap block (installed into repo AGENTS.md, BEE:START/END markers)
   skills/
-    hive/                        ← bootstrap + routing meta-skill (instructions only; the onboarding engine lives at packages/bee/scripts/ above)
+    bee-hive/        ← bootstrap + routing meta-skill, incl. gates and gate-bypass levels (instructions only; the onboarding engine lives at packages/bee/scripts/ above)
       SKILL.md
       references/routing-and-contracts.md
       references/go-mode.md
-    exploring/     SKILL.md + references/{gray-area-probes.md, context-template.md}
-    planning/      SKILL.md + references/{planning-reference.md, edge-dimensions.md} — also owns the reality check (SMALLER PATH) and review wave folded in from the deleted `validating` skill (validation-diet D1/D5)
-    swarming/      SKILL.md + references/swarming-reference.md
-    executing/     SKILL.md + references/worker-details.md
-    reviewing/     SKILL.md + references/reviewing-reference.md
-    scribing/      SKILL.md + references/scribing-reference.md
-    compounding/   SKILL.md + references/compounding-reference.md
-    grooming/      SKILL.md + references/grooming-reference.md
-    bee-writing-skills/  SKILL.md + references/{pressure-test-template.md, creation-log-template.md}
+    bee-shaping/     SKILL.md + references/{shaping-reference.md, gray-area-probes.md, context-template.md, mini-brief-template.md, implement-plan-template.md, walkthrough-template.md} — Explore, Qualify, Lock, and Brief in one front door
+    bee-planning/    SKILL.md + references/{planning-reference.md, edge-dimensions.md} — also owns the reality check (SMALLER PATH) and review wave folded in from the deleted `validating` skill (validation-diet D1/D5)
+    bee-swarming/    SKILL.md + references/{swarming-reference.md, worker-details.md} — orchestrator + "Execute" worker contract
+    bee-reviewing/   SKILL.md + references/reviewing-reference.md
+    bee-capturing/   SKILL.md + references/{area-spec.md, citations.md, promotion.md} — Scribe + Compound
+    bee-researching/ SKILL.md + references/{research-protocol.md, research-brief-template.md}
+    bee-grooming/    SKILL.md + references/grooming-reference.md
+    bee-herding/     SKILL.md + README.md + references/ + scripts/ — the autonomous cockpit (bootstrap / dispatch / merge)
 ```
 
-Ten skills; additions are decision-gated (a decision record naming the uncovered workflow gap — decision 0002), never casual. Every SKILL.md stays lean (< ~200 lines); depth lives in one `references/` file per skill, never nested deeper than one level (khuym/superpowers rule).
+Nine skills; additions are decision-gated (a decision record naming the uncovered workflow gap — decision 0002), never casual. Every SKILL.md stays lean (< ~200 lines); depth lives in `references/` files per skill, never nested deeper than one level (khuym/superpowers rule). The maintainer guides for building and evolving bee's own skills live outside the product, in `docs/handbook/writing-skills.md` (templates under `docs/handbook/writing-skills-references/`) and `docs/handbook/evolving.md`.
 
 ## Target-repo layout (what onboarding installs)
 
@@ -103,14 +102,14 @@ Everything else under `docs/` is **history-shaped** (append-only, dated, feature
 | Write discipline | Append-only, supersede, never edit | **Overwritten/merged** to match reality |
 | Organized by | Feature / date | **Area** (a form, a module — outlives features) |
 
-- **`docs/specs/<area>.md`** — a **BA-grade, technology-agnostic functional spec** of one long-lived area (domain-general: a screen/form, an API, a background job, an integration, a pipeline, a business process), written in the present tense: purpose, entry points & triggers (which link opens which screen; which schedule/event/call runs what), data dictionary (every field/input/output's meaning, every enum value's business meaning, display order for UI, chosen config values with their deciding D-ID), behaviors & operations per user action or system run (what blocks or triggers it, what changes, side effects, what each actor or consumer observes afterwards, failure behavior for operations), an actors & access matrix (human roles and consuming systems), numbered business rules citing active D-IDs, settled edge cases, honest open gaps — and a quarantined `Pointers (implementation)` section as the *only* technology-bound content. It never narrates history ("was", "changed from" are banned — history lives in git and `docs/history/`). Acceptance test is the **rebuild bar** (decision 0002): an agent given only the spec, minus Pointers, can rebuild the same observable behavior on a different stack; a human reads it and understands the area without the code. Template in `bee-scribing`'s reference.
+- **`docs/specs/<area>.md`** — a **BA-grade, technology-agnostic functional spec** of one long-lived area (domain-general: a screen/form, an API, a background job, an integration, a pipeline, a business process), written in the present tense: purpose, entry points & triggers (which link opens which screen; which schedule/event/call runs what), data dictionary (every field/input/output's meaning, every enum value's business meaning, display order for UI, chosen config values with their deciding D-ID), behaviors & operations per user action or system run (what blocks or triggers it, what changes, side effects, what each actor or consumer observes afterwards, failure behavior for operations), an actors & access matrix (human roles and consuming systems), numbered business rules citing active D-IDs, settled edge cases, honest open gaps — and a quarantined `Pointers (implementation)` section as the *only* technology-bound content. It never narrates history ("was", "changed from" are banned — history lives in git and `docs/history/`). Acceptance test is the **rebuild bar** (decision 0002): an agent given only the spec, minus Pointers, can rebuild the same observable behavior on a different stack; a human reads it and understands the area without the code. Template in `bee-capturing`'s `references/area-spec.md`.
 - **`docs/specs/reading-map.md`** — one line per location: `path — what lives here`, optionally pointing at the area's spec. This is the navigation knowledge that otherwise gets re-derived every session.
 - **`docs/specs/system-overview.md`** (decision 0003) — the cross-area glue no per-area spec owns: the area map (what areas exist, where each spec lives), shared business entities and their meanings, the global actor/role model stated once, and cross-area flows. Synced by scribing whenever a feature adds/removes an area or changes shared entities, roles, or a cross-area flow.
 - **`docs/specs/visuals/<area>/`** (decision 0003) — UI areas only: one settled snapshot per screen, referenced from the spec's `Visuals` section, refreshed at sync when the screen visibly changed. The vibe loop's final artifact is often *seen*; a missing snapshot is an Open Gap, never silent.
 
 The loop that keeps the layer honest:
 
-1. **Write:** `bee-scribing` owns the layer (decision 0002). In the chain it runs directly after execution — a feature may be scribed and closed while unreviewed; independent review is a separate, user-invoked session (decision 565e68d0): capped cells with `behavior_change: true` (plus their `verification_evidence`) are the ready-made delta list — sync means merging those deltas into the touched areas' specs and refreshing reading-map lines, not rewriting docs. On demand it also **captures** settled outcomes of the discuss → build → test → adjust loop — rules agreed, behaviors confirmed, values tuned, whatever the domain (logged as decisions, merged immediately) — and **harvests** first specs for areas built before/outside bee. An explicit user settlement signal ("chốt", "final", "ok ship it") is a **mandatory same-turn capture trigger** (decision 0003); the session-close hook nudges when the newest decision is more recent than every spec update. `bee-compounding` guards the handoff: it verifies scribing ran, and invokes it if not.
+1. **Write:** `bee-capturing` ("Scribe") owns the layer (decision 0002). In the chain it runs directly after execution — a feature may be scribed and closed while unreviewed; independent review is a separate, user-invoked session (decision 565e68d0): capped cells with `behavior_change: true` (plus their `verification_evidence`) are the ready-made delta list — sync means merging those deltas into the touched areas' specs and refreshing reading-map lines, not rewriting docs. On demand it also **captures** settled outcomes of the discuss → build → test → adjust loop — rules agreed, behaviors confirmed, values tuned, whatever the domain (logged as decisions, merged immediately) — and **harvests** first specs for areas built before/outside bee. An explicit user settlement signal ("chốt", "final", "ok ship it") is a **mandatory same-turn capture trigger** (decision 0003); the session-close hook nudges when the newest decision is more recent than every spec update. The same skill's "Compound" section guards the handoff: it verifies the scribe sync ran, and runs it if not.
 2. **Read:** `bee-hive`'s scout contract reads the touched area's spec *before* the area's code, in every lane; the session preamble mentions the state layer when `docs/specs/` exists. Fresh-session reading order: **system overview → touched area's spec (what is) → decisions (why) → history (only for archaeology)**.
 3. **Guard:** `bee-grooming`'s entropy score carries a `stale specs` term — an area with `behavior_change` cells capped after its spec's `updated` date (or with such cells and no spec at all) is measured debt, not a hope. The term also reads **git** (decision 0003): files under an area's Pointers / reading-map locations changed after `updated` count as stale even with no cell — vibe edits outside the chain are debt too. The audit additionally reports spec coverage (informational, unscored).
 
@@ -123,7 +122,7 @@ Every bee skill supports two invocation modes (compound-engineering):
 - **Interactive (default):** ask at decision points, using the standard question format.
 - **Headless (`mode:headless`):** never block on a question. Apply only unambiguous actions, classify ambiguous cases as deferred, and end with a structured report containing an `Outstanding Questions` section. Terminal output is JSON or structured markdown so an orchestrator (go mode, a pipeline, another skill) can consume it deterministically.
 
-Hard limit: headless mode defers *within-stage* ambiguity only and never self-approves a gate. The one mode that self-approves gates is the opt-in gate-bypass switch (`.bee/config.json` `gate_bypass`, toggled by `bee-bypass-gate`, decision 0010): it auto-approves Gates 1-2 for `tiny`/`small`/`standard` work, never for high-risk/hard-gate work, and never Gate 4 UAT/P1 or secret reads. Off by default; surfaced loudly in the preamble and `bee_status` when on.
+Hard limit: headless mode defers *within-stage* ambiguity only and never self-approves a gate. The one mode that self-approves gates is the opt-in gate-bypass switch (`.bee/config.json` `gate_bypass`, toggled through `bee-hive`'s "Gates" section, decision 0010): it auto-approves Gates 1-2 for `tiny`/`small`/`standard` work, never for high-risk/hard-gate work, and never Gate 4 UAT/P1 or secret reads. Off by default; surfaced loudly in the preamble and `bee_status` when on.
 
 ## The cell (task unit)
 

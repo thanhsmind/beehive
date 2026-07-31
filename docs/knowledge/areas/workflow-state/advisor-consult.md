@@ -105,7 +105,8 @@ consult budget.
 - Adviser (worker consult): `resolveAdvisor` + `MODEL_NORMALIZE_SLOTS` in
   `packages/bee/lib/state.mjs` (byte-mirrored to `.bee/bin/lib/`);
   slot `models.<runtime>.advisor` in `.bee/config.json`; worker protocol in
-  `skills/bee-executing/SKILL.md` (Advisor Consult section); dispatch-time
+  `skills/bee-swarming/references/worker-details.md` ("Advisor consult in
+  full"); dispatch-time
   same-model no-op + Advisor line (AO5 form, ladder removed by ao-2b-1) in
   `skills/bee-swarming/SKILL.md`
   and `references/swarming-reference.md`; consult record = `advisor-consult

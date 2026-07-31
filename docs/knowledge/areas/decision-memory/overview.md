@@ -7,7 +7,7 @@ bee:
   id: decision-memory-overview
   lifecycle: active
   areas: [decision-memory]
-  decisions: ["decision-propagation GH #32/#33/#34 (2026-07-21)", D1 b9b9fee3 (backlog CoS-gated done-flip), D2 b9b9fee3 (reversal citation sweep), D3 b9b9fee3 (citation discipline), "D4c b9b9fee3 (bounded store, archive verb)", "D5 b9b9fee3 (no stored graph, no daemon)", D6 b9b9fee3 (reversals inherit place), D7 c81c6795 (write-time classification + retro-tag reclassification), D8 1cea7713 (derived index recall surface), bee-scribing D11b, "bee-compounding fallback (identical, never-looser)"]
+  decisions: ["decision-propagation GH #32/#33/#34 (2026-07-21)", D1 b9b9fee3 (backlog CoS-gated done-flip), D2 b9b9fee3 (reversal citation sweep), D3 b9b9fee3 (citation discipline), "D4c b9b9fee3 (bounded store, archive verb)", "D5 b9b9fee3 (no stored graph, no daemon)", D6 b9b9fee3 (reversals inherit place), D7 c81c6795 (write-time classification + retro-tag reclassification), D8 1cea7713 (derived index recall surface), "D11b (scribing-skill copy of the done-flip rule, since consolidated into bee-capturing)", "compounding-skill fallback (identical, never-looser; same consolidation)"]
   sources: ["docs/specs/decision-memory.md#R1", "docs/specs/decision-memory.md#R2", "docs/specs/decision-memory.md#R3", "docs/specs/decision-memory.md#R4", "docs/specs/decision-memory.md#R5", "docs/specs/decision-memory.md#R6", "docs/specs/decision-memory.md#R7", "docs/specs/decision-memory.md#R8", "docs/specs/decision-memory.md#R9", docs/history/decision-propagation/reports/e2e-supersede.md, test_decisions_propagation.mjs (84 checks incl. worker-thread log-vs-archive race), "backfill: 406/406 legacy events classified via extraction batches; --untagged --all returns zero; 5-event recall spot check green", "judge-record-tags cells jrt-1, jrt-2 (five internal callers swept; the census derives its sites by scanning source, and was itself widened by measurement after its first scope hid a live instance; traces in `.bee/cells/`, 2026-07-23)"]
   authoritative_for: "decision-memory: what the system remembers about its own decisions"
 ---
@@ -98,8 +98,11 @@ Three field failures (reported against a host repo, fixed generically):
   the two archive writes). All store writers share one lock; append-only
   integrity is absolute.
 - **R7 — A backlog row flips `done` only when every CoS clause has cited
-  evidence** (D1, `b9b9fee3`; rule text lives in bee-scribing D11b and
-  bee-compounding's identical, never-looser fallback). Partial delivery keeps
+  evidence** (D1, `b9b9fee3`; the skill-side rule text formerly lived in the
+  scribing skill's D11b and the compounding skill's identical, never-looser
+  fallback — both since consolidated into `bee-capturing`, which carries no
+  separate copy, so this spec and the decision record are now the rule text's
+  home). Partial delivery keeps
   the row `in-flight` with a `Delivered:`/`Remaining:` annotation; splitting
   the remainder into a new row is allowed when the delivered subset ships
   alone; silent full-flip never.
@@ -144,8 +147,10 @@ Three field failures (reported against a host repo, fixed generically):
 - **The taxonomy** — `docs/decisions/taxonomy.json` — governs which tags are
   canonical; an unknown tag is accepted onto an event and appended to
   `candidates[]` for later curation, never refused.
-- **bee-scribing / bee-compounding** — hold the backlog done-flip rule text
-  (R7) as their own, identical, never-looser fallback.
+- **bee-capturing** — successor of the scribing and compounding skills, which
+  held the backlog done-flip rule text (R7) as their own, identical,
+  never-looser fallback; the consolidated skill carries no separate copy, and
+  R7 above (with decision D1 `b9b9fee3`) is the rule text's home.
 - **The archive** — receives superseded/redacted and aged-out events at an
   explicit cutoff; union reads (`--all`) reach both the active store and the
   archive and de-duplicate by id.

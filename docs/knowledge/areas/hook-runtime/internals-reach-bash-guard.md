@@ -1,7 +1,7 @@
 ---
 type: bee.area
 title: Hook Runtime — the internals-reach bash guard
-description: "Why the write guard denies an inline-eval Bash command that imports a bin/lib or templates/lib internal module, why file-based script runs that import the same modules are unaffected, and the open gap this leaves for bee-scribing's own documented internals-eval helper calls."
+description: "Why the write guard denies an inline-eval Bash command that imports a bin/lib or templates/lib internal module, why file-based script runs that import the same modules are unaffected, and the open gap this leaves for the scribe workflow's formerly documented internals-eval helper calls."
 timestamp: 2026-07-24
 bee:
   id: hook-runtime-internals-reach-bash-guard
@@ -78,16 +78,17 @@ inline-eval pattern is denied either way.
 
 ## Open Gaps
 
-The guard, once live in a fresh session, also blocks bee-scribing's own
-documented `node -e "import('...knowledge.mjs')..."` helper calls —
+The guard, once live in a fresh session, also blocks the scribe workflow's
+formerly documented `node -e "import('...knowledge.mjs')..."` helper calls —
 `scribingTarget` and `emitFrontmatter` — because there is no CLI verb yet
 that exposes them. A scribing worker hitting this guard mid-render has to
 fall back to writing a temporary file-based script under a gitignored path
 (e.g. `.bee/tmp/`) and running it with `node <path>.mjs` instead of the
 documented inline-eval form. This gap is tracked as backlog PBI
-`p-0530164c`; until it closes, the documented inline-eval invocation in the
-bee-scribing skill and the guard's own denial are in direct tension for
-exactly these two helpers.
+`p-0530164c`. The consolidated `bee-capturing` skill no longer documents the
+inline-eval invocation, so the direct skill-vs-guard tension is gone; the
+underlying gap — no CLI verb exposing these two helpers — remains until the
+PBI closes.
 
 ## Pointers (implementation)
 

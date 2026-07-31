@@ -101,10 +101,12 @@ route to the external path until it earns its own proof (decisions 34398e69,
 
 ## Pointers (implementation)
 
-- B7/R11's settled case: `skills/bee-compounding/SKILL.md` §2 (analysts pinned
-  to the runtime's read-only agent type — Claude Code `Explore` — with
-  event-driven wait, one re-dispatch, partial-return synthesis); RED→GREEN
-  record in `skills/bee-compounding/CREATION-LOG.md` amendment 2026-07-17.
+- B7/R11's settled case: `skills/bee-capturing/SKILL.md` ("Compound" step 2 —
+  delegate the reading to read-only subagents, keep synthesis in the
+  orchestrator; the fuller pinning text — runtime read-only agent type,
+  event-driven wait, one re-dispatch, partial-return synthesis — was slimmed
+  out of the skill in the consolidation); RED→GREEN record in the compounding
+  skill's creation log under `docs/decisions/skills/`, amendment 2026-07-17.
 - B8/R12 implementation: `resolveTier(root, slot, runtime, {for:'gather'|'cell'})`
   in `packages/bee/lib/state.mjs` (default `'cell'`, refusal
   `{type:'refused', reason:'cli_tier_gather_only'}`); the cli gather branch +

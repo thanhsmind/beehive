@@ -21,7 +21,7 @@ Mapping the 12-section template against what bee already produces:
 | 5 Technical Design (flow, data, API, UI, security) | fragments in approach.md; mostly implicit in cells | **gap** (no narrative) |
 | 6 Affected Files / Components | approach.md `Files and order` + cell `files` | covered, scattered |
 | 7 Implementation Steps | plan.md shape + cells | covered, agent-shaped |
-| 8 Validation Plan | cell `verify` + (at proposal time) `bee-validating`'s reality gate & feasibility matrix — since deleted; the reality gate's SMALLER PATH survivor and the review wave now live in `bee-planning` (validation-diet D1/D5/D6) | covered, scattered across reports |
+| 8 Validation Plan | cell `verify` + (at proposal time) the standalone validating stage's reality gate & feasibility matrix — since deleted; the reality gate's SMALLER PATH survivor and the review wave now live in `bee-planning` (validation-diet D1/D5/D6) | covered, scattered across reports |
 | 9 Risks & Mitigation | approach.md risk map | covered |
 | 10 Rollback Plan | **nowhere in bee** | **gap** |
 | 11 Open Questions | approach.md `Questions for planning's reality check` (formerly "for validating") | covered |
@@ -35,7 +35,7 @@ Worth noting: Antigravity enforces "no code before approval" by agent discipline
 
 Owner constraint, adopted verbatim: document generation is its own skill; the chain (harness) only *calls* it.
 
-**Proposed skill: `bee-briefing`** — the beekeeper's brief. In the hive metaphor: `bee-planning` is the waggle dance (bee-to-bee communication, precise and terse); `bee-briefing` translates the dance for the beekeeper. It writes and maintains **one artifact per feature**:
+**Proposed skill: the beekeeper's brief** (shipped as a standalone briefing skill; today `bee-shaping`'s "Brief" section). In the hive metaphor: `bee-planning` is the waggle dance (bee-to-bee communication, precise and terse); the Brief step translates the dance for the beekeeper. It writes and maintains **one artifact per feature**:
 
 ```
 docs/history/<feature>/implement-plan.md
@@ -46,10 +46,10 @@ Key property: **briefing is a consolidator, not a second planner.** It renders t
 ### Why not extend an existing skill
 
 - **bee-planning:** already the heaviest skill; its outputs are agent-shaped *by design* (cells are executable prompts). Mixing a human-audience artifact into it blurs both audiences and makes the renderer un-callable on demand ("regenerate the plan doc").
-- **bee-scribing:** owns durable, tech-agnostic state (`docs/specs/`). The brief is per-feature, tech-*specific*, and lives in history. Opposite rules (scribing quarantines technology; the brief centers on it).
+- **The scribe (today `bee-capturing`):** owns durable, tech-agnostic state (`docs/specs/`). The brief is per-feature, tech-*specific*, and lives in history. Opposite rules (scribing quarantines technology; the brief centers on it).
 - **Gate Presentation Contract alone:** fixes the chat layer but chat evaporates; the reports it links are machine-layer by contract. The gap is precisely the durable middle layer.
 
-Per decision 0002, adding a skill requires a decision record naming the uncovered gap — this document is the analysis; a `docs/decisions/0008-*.md` record accompanies the build. Per the Iron Law, the skill is built through `bee-writing-skills` with a failing pressure test first.
+Per decision 0002, adding a skill requires a decision record naming the uncovered gap — this document is the analysis; a `docs/decisions/0008-*.md` record accompanies the build. Per the Iron Law, the skill is built through the skill-writing discipline (now [handbook/writing-skills.md](handbook/writing-skills.md)) with a failing pressure test first.
 
 ## 3. Truth model: the brief is a projection *and* an agreement record
 
@@ -81,9 +81,9 @@ Anti-bloat rules carried from CONTEXT.md discipline: concrete language, no place
 
 Touch points, all one-to-two-line edits:
 
-1. **`bee-planning` §5 (Shape):** after writing plan.md (requirements-only) and before presenting Gate 2 — *"Invoke `bee-briefing` to render `implement-plan.md`; the Gate 2 message links the brief as the review document."*
-2. **`bee-planning` §6 (Prep):** after cells are created, briefing refreshes the projected sections (Affected Files, Implementation Steps) from the cells, and, once `bee-planning`'s own reality check (SMALLER PATH) and review wave run, patches the Validation Plan section with their evidence links before Gate 2's execution component is approved (`bee-validating` is deleted — validation-diet D1 — so there is no separate handoff for this step).
-3. **`bee-hive` routing:** one row — "(re)generate the implement plan for a feature" → `bee-briefing`, on demand any phase.
+1. **`bee-planning` §5 (Shape):** after writing plan.md (requirements-only) and before presenting Gate 2 — *"Invoke the Brief step to render `implement-plan.md`; the Gate 2 message links the brief as the review document."*
+2. **`bee-planning` §6 (Prep):** after cells are created, briefing refreshes the projected sections (Affected Files, Implementation Steps) from the cells, and, once `bee-planning`'s own reality check (SMALLER PATH) and review wave run, patches the Validation Plan section with their evidence links before Gate 2's execution component is approved (the standalone validating stage is deleted — validation-diet D1 — so there is no separate handoff for this step).
+3. **`bee-hive` routing:** one row — "(re)generate the implement plan for a feature" → the Brief step (today in `bee-shaping`), on demand any phase.
 4. **`routing-and-contracts.md`:** skill-catalog row + chaining-contract row (`briefing | reads: CONTEXT.md, approach.md, plan.md, cells, planning's reality-check evidence | writes: docs/history/<feature>/implement-plan.md`).
 5. **Gate Presentation Contract:** unchanged in structure; the brief becomes the canonical linked document for Gate 2 (reports/ stays the machine layer for reality-gate tables etc.).
 
@@ -92,12 +92,13 @@ No new hooks (cap untouched), no new helper CLI in v1, no write-guard change (`d
 ## 6. Skill shape (for the build, after approval)
 
 ```
-skills/bee-briefing/
+skills/bee-shaping/                         # the Brief step's home today (originally built as a standalone briefing skill)
   SKILL.md                                  # modes: render (Gate 2), refresh (post-prep, post-reality-check), on-demand
   references/implement-plan-template.md     # full template — adapted from docs/sample-implement-plan.md
   references/mini-brief-template.md         # small-lane form
-  CREATION-LOG.md                           # pressure test per the Iron Law
 ```
+
+(The pressure-test creation log lives with the briefing skill's records under `docs/decisions/skills/`.)
 
 Core rules for SKILL.md (distilled from the sample's agent guide, deduplicated against what bee already enforces):
 
@@ -111,7 +112,7 @@ Dropped from the sample as redundant with bee: "do not modify files before appro
 
 ## 7. Built: the Walkthrough artifact
 
-Antigravity's third artifact (post-implementation summary + how-to-test) is implemented as `bee-briefing` **walkthrough mode**, invoked by `bee-reviewing`'s Gate 4 when a user-invoked review session covers a `standard`/`high-risk` feature — Gate 4 no longer runs automatically at feature close (review-on-demand, decision 565e68d0); it fires only inside that session. It writes `docs/history/<feature>/walkthrough.md` — what shipped, how it was verified (real recorded evidence), how to test it, deviations from plan, and known limitations — **reconstructed from the execution records** (capped cell traces, review findings, UAT), never from the plan, and sets the implement plan `status: Shipped`. It was initially scoped as phase 2 but built the same session on owner request; its three walkthrough-specific RED scenarios are recorded in the skill's CREATION-LOG (all passed at the Fable/Opus tier — plan-narration-vs-reality, over-claimed verification, hidden findings).
+Antigravity's third artifact (post-implementation summary + how-to-test) is implemented as the Brief step's **walkthrough mode** (today in `bee-shaping`), invoked by `bee-reviewing`'s Gate 4 when a user-invoked review session covers a `standard`/`high-risk` feature — Gate 4 no longer runs automatically at feature close (review-on-demand, decision 565e68d0); it fires only inside that session. It writes `docs/history/<feature>/walkthrough.md` — what shipped, how it was verified (real recorded evidence), how to test it, deviations from plan, and known limitations — **reconstructed from the execution records** (capped cell traces, review findings, UAT), never from the plan, and sets the implement plan `status: Shipped`. It was initially scoped as phase 2 but built the same session on owner request; its three walkthrough-specific RED scenarios are recorded in the briefing skill's creation log under `docs/decisions/skills/` (all passed at the Fable/Opus tier — plan-narration-vs-reality, over-claimed verification, hidden findings).
 
 ## 8. Risks of this adoption itself
 
@@ -127,6 +128,6 @@ Antigravity's third artifact (post-implementation summary + how-to-test) is impl
 
 1. Owner approves/amends this design (esp. the skill name and the lane table).
 2. Decision record `0008-briefing-skill.md` (gap: human-grade agreement doc; why not planning/scribing).
-3. Build `bee-briefing` through `bee-writing-skills` (failing pressure test first: e.g., a standard-lane feature whose Gate 2 message currently forces the human to open three files).
+3. Build the briefing skill through the skill-writing discipline (failing pressure test first: e.g., a standard-lane feature whose Gate 2 message currently forces the human to open three files).
 4. Wire the five chain touch points (§5); absorb `docs/sample-implement-plan.md` into `references/implement-plan-template.md` and retire the sample.
 5. Dogfood on the next standard-lane feature; walkthrough mode afterwards.

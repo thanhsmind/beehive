@@ -183,8 +183,8 @@ behavior change at all.
   `handleStateSet`/`handleStateGate`/`stateWorkerMutate`/
   `handleStateScribingRun` in `bee.mjs`) serialized under the same lock,
   waiting normally. Orchestrator-claims-before-spawn doctrine in
-  `skills/bee-executing/SKILL.md` + `references/worker-details.md` and
-  `skills/bee-swarming/SKILL.md` + `references/swarming-reference.md`; the
+  `skills/bee-swarming/SKILL.md` + `references/worker-details.md`
+  + `references/swarming-reference.md`; the
   four new suites added to `.bee/config.json` `commands.verify`. Evidence:
   `docs/history/multi-session-hardening/CONTEXT.md` (D1-D7, Δ1-Δ6); traces
   `.bee/cells/msh-{1..7}.json`; reports

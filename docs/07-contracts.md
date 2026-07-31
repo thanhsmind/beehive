@@ -160,7 +160,7 @@ bee.mjs feedback digest [--out PATH] [--json]     (P18, evolving loop; decision 
                  | rank [--json]
   digest   → builds and writes the LOCAL allowlist digest (buildDigest) to .bee/feedback-digest.json
              (or --out PATH); schema_version + counts + dropped[] + entries[] (allowlist fields only,
-             see "bee-evolving contract" below)
+             see "evolving contract" below)
   count    → same digest, prints counts only (no write)
   collect  → the MERGED view: buildDigest(root) folded with every configured dogfood_repos digest via
              mergeDigests (revalidates + datamarks every foreign field — D2b); absent/unreachable
@@ -186,7 +186,7 @@ bee.mjs feedback digest [--out PATH] [--json]     (P18, evolving loop; decision 
     foundation-add without demonstrated need.
 ```
 
-## `bee-evolving` contract (P18, self-improvement loop; decisions D1–D5, `8cd4c84e`, `ff26725d`)
+## Evolving contract (P18, self-improvement loop — [handbook/evolving.md](handbook/evolving.md); decisions D1–D5, `8cd4c84e`, `ff26725d`)
 
 Enforced invariants only — this section states no promise the code above does not already make:
 
@@ -199,8 +199,8 @@ Enforced invariants only — this section states no promise the code above does 
   foreign `title` in `datamark()` before it is returned — a hand-edited or hostile foreign digest is
   never trusted as-is. `bee.mjs feedback rank`/`collect` only ever consume `mergeDigests`'s output,
   never a foreign digest file directly.
-- **Bee-repo-only (D3).** `skills/bee-evolving/SKILL.md` step 0 is a hard guard
-  (`test -f packages/bee/lib/feedback.mjs && test -f skills/bee-writing-skills/SKILL.md`)
+- **Bee-repo-only (D3).** [handbook/evolving.md](handbook/evolving.md) step 0 is a hard guard
+  (`test -f packages/bee/lib/feedback.mjs && test -f docs/handbook/writing-skills.md`)
   that refuses to proceed anywhere the bee-repo-only files are absent; pressure-tested RED-first
   under the full Iron Law (decision `ff26725d`) — see
   `docs/history/evolving-loop/reports/evolving-10-pressure.md`.
@@ -239,11 +239,11 @@ node onboard_bee.mjs --repo-root <path> [--apply] [--json] [--repo-hooks] [--cla
 - Body < 200 lines; one `references/` level; end with handoff sentence `[Outcome]. Invoke bee-<next> skill.`
 - Every skill documents `mode:headless` behavior in one short section.
 - Commands quoted in skills MUST match the CLI surface above verbatim.
-- Each skill ships `CREATION-LOG.md`: provenance (which upstream skill it adapts), what changed, and an honest `Pressure testing: PENDING (scheduled per Iron Law before 1.0)` note with the 3 scenarios from 04-skills-spec listed as the planned RED set.
+- Each skill keeps a creation log in `docs/decisions/skills/<skill>-creation-log.md`: provenance (which upstream skill it adapts), what changed, and an honest `Pressure testing: PENDING (scheduled per Iron Law before 1.0)` note with the 3 scenarios from 04-skills-spec listed as the planned RED set.
 
 ### OpenAI skill metadata projection
 
-`skills/bee-*/SKILL.md` frontmatter is the canonical identity and trigger-description source for both runtimes. `skills/bee-writing-skills/scripts/render_openai_metadata.mjs` deterministically projects each live bee skill to `skills/bee-*/agents/openai.yaml`: `interface.display_name` comes from the hyphenated `name`, `interface.short_description` comes from the folded `description`, and `policy.allow_implicit_invocation` is always `true`. Independent descriptions, default prompts, and workflow prose in the projection are prohibited.
+`skills/bee-*/SKILL.md` frontmatter is the canonical identity and trigger-description source for both runtimes. `scripts/render_openai_metadata.mjs` deterministically projects each live bee skill to `skills/bee-*/agents/openai.yaml`: `interface.display_name` comes from the hyphenated `name`, `interface.short_description` comes from the folded `description`, and `policy.allow_implicit_invocation` is always `true`. Independent descriptions, default prompts, and workflow prose in the projection are prohibited.
 
 Run the renderer without arguments to regenerate every projection and with `--check` to verify the tree. Check mode exits non-zero and names the first class of drift as `MISSING`, `STALE`, `ORPHAN`, or `MALFORMED`; the canonical library suite invokes this check so absent and stale projections cannot pass repository verification.
 

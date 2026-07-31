@@ -46,7 +46,7 @@ Exit: Gate discipline holds under pressure tests; a feature pauses at 65% and re
 2. **scribing** (decision 0002): the BA-grade state layer — area-spec template with the rebuild bar, sync mode in the chain after execution (review-on-demand, decision 565e68d0), capture mode for discussion-agreed rules, harvest mode for legacy areas.
 3. **compounding**: analysts, learnings template, critical promotion, friction → backlog, and the state-layer **guard** (verify scribing ran; invoke it if not — decisions 0001/0002).
 4. **grooming**: entropy audit (including the `stale specs` term), hunt checklists, propose/approve/execute/close-the-loop.
-5. **bee-writing-skills** (adapted from khuym; needed before Phase 3 skills are edited further — consider pulling it into Phase 1 if skill churn is high).
+5. **The skill-writing discipline** (adapted from khuym; today the maintainer guide [handbook/writing-skills.md](handbook/writing-skills.md); needed before Phase 3 skills are edited further — consider pulling it into Phase 1 if skill churn is high).
 6. Backlog outcome loop live: every grooming item closes with predicted-vs-actual.
 
 Exit: after two features, `critical-patterns.md` and active decisions demonstrably change agent behavior (fewer repeated mistakes in dogfood notes); entropy score reported and trending; for at least one area touched twice, a fresh session answers "what does this area do now?" from its `docs/specs/` entry without re-exploring the code; and the **rebuild test** has run once (decision 0003) — one small area rebuilt on a different stack from its spec alone (Pointers removed), observable behavior compared against the original.

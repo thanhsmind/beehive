@@ -98,7 +98,7 @@ impossible to record; pre-existing records are never mutated by the check
   `handleCellsSchedule` in both dispatcher copies); consumer prose in
   `skills/bee-swarming/SKILL.md` (wave analysis),
   `skills/bee-planning/references/planning-reference.md`
-  (files-authoring note; `skills/bee-validating/` is deleted — validation-diet
+  (files-authoring note; the standalone validating skill is deleted — validation-diet
   D1 — its feasibility matrix retired with no replacement, D6). Tests: schedule + cycle-refusal rows in
   `templates/tests/test_lib.mjs` (321 passing), verb example in
   `templates/tests/test_bee_cli.mjs` (132 passing). Evidence: commits 390165a,

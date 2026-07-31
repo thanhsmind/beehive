@@ -1,4 +1,4 @@
-# Stage: compounding (`bee-compounding`)
+# Stage: compounding (`bee-capturing` — "Compound")
 
 **Purpose** — Capture durable, reusable learnings and decisions from completed work
 so the next session starts smarter, then close the feature.
@@ -36,4 +36,4 @@ None. It **registers the feature as a review candidate** and states it is
 - The phase is set **only after the close commit lands** — close, then flip.
 
 ## Source
-`skills/bee-compounding/SKILL.md`
+`skills/bee-capturing/SKILL.md` ("Compound")

@@ -196,7 +196,7 @@ rule. It says nothing whatever about whether the rule was then obeyed
   hard-coded. Scanned surfaces: `skills/**/SKILL.md`, `skills/**/references/**`,
   `docs/knowledge/**`, `docs/specs/**`, `AGENTS.md`, `CLAUDE.md`. Exceptions:
   `docs/decisions/**`, `docs/history/**`, and the coercion path itself. The two
-  residuals it was written for: `skills/bee-xia/references/research-brief-template.md`
+  residuals it was written for: `skills/bee-researching/references/research-brief-template.md`
   (proof obligations now route to `bee-planning`'s shape gate) and
   `packages/bee/hooks/test_write_guard.mjs` (the fixture row that hand-built the
   retired phase value). Evidence: traces `.bee/cells/dch-5.json`,

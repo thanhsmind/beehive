@@ -61,9 +61,9 @@ and not a reason to invent structure that was never there.
 | E6 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | two generations from unchanged records differ only in the recorded generation moment |
 | P1 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | collector, boundary, merge, and ranking — `packages/bee/lib/feedback.mjs` |
 | P2 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | command surface — `packages/bee/bee.mjs` (`feedback` group) |
-| P3 | [docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md](../knowledge/areas/feedback-digest/ranking-and-self-improvement.md) | the self-improvement process — `skills/bee-evolving/SKILL.md` |
+| P3 | [docs/knowledge/areas/feedback-digest/ranking-and-self-improvement.md](../knowledge/areas/feedback-digest/ranking-and-self-improvement.md) | the self-improvement process — `docs/handbook/evolving.md` |
 | P4 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | source-repository list — `.bee/config.json` → `dogfood_repos` |
 | P5 | [docs/knowledge/areas/feedback-digest/cross-repo-trust-boundary.md](../knowledge/areas/feedback-digest/cross-repo-trust-boundary.md) | credential / instruction patterns and the neutralizer |
-| P6 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | close-time refresh — `skills/bee-compounding/SKILL.md` step 8 |
+| P6 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | close-time refresh — `skills/bee-capturing/SKILL.md`, "Compound" step 5 (housekeeping digest refresh) |
 | P7 | [docs/knowledge/areas/feedback-digest/generation-and-refresh.md](../knowledge/areas/feedback-digest/generation-and-refresh.md) | written artifact — `.bee/feedback-digest.json` |
 | P8 | [docs/knowledge/areas/feedback-digest/data-model.md](../knowledge/areas/feedback-digest/data-model.md) | tests — `packages/bee/tests/test_lib.mjs` |

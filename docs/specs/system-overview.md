@@ -9,4 +9,4 @@ repository.
 allowlists this file only while it stays an unwritten placeholder, and fails the
 chain the moment real prose lands in it. The system overview belongs in the
 knowledge bundle — start from `docs/knowledge/index.md`, which already lists
-every area, and author it as a concept through `bee-scribing`.)
+every area, and author it as a concept through `bee-capturing` ("Scribe").)

@@ -64,7 +64,7 @@ dependency on configuration.
   path and the merged `--merge` path) + `state advisor-ref record/show` in
   `packages/bee/bee.mjs`; helpers `advisorRefAnchors` /
   `advisorRefStale` in `packages/bee/lib/state.mjs`. There is no
-  `skills/bee-validating/` (deleted, validation-diet D1) — the consult now
+  standalone validating skill (deleted, validation-diet D1) — the consult now
   has to happen during planning/briefing, before Gate 2's execution component
   is approved (validation-diet D14).
 - **P6 —** Gate precondition spec detail: `docs/specs/workflow-state.md` B9/B9a.

@@ -78,7 +78,7 @@ seven keys, not five):**
 | `coverage` | **dropped** — grep confirms no code reads it |
 
 **`implement-plan.md` retirement (D36 — declared here, executed in F2):** the committed
-`implement-plan.md` artifact is retired once `bee-briefing` is rewired. Its review-state ladder
+`implement-plan.md` artifact is retired once the Brief step (`bee-shaping`) is rewired. Its review-state ladder
 (`Draft → Ready for Review → Approved → Needs Revision → Shipped`) moves into `bee.plan`'s
 `bee.review_status` field; the brief renders from that field instead of from a committed file. The
 brief was already a self-declared projection, but it was also the carrier of real gate-mirroring
@@ -179,7 +179,7 @@ gate.
 ## Open Gaps
 
 - **The bundle has no home for UI visual snapshots.** The no-bundle state layer keeps settled
-  screen snapshots under `docs/specs/visuals/<area>/`, and `bee-scribing` still requires one for
+  screen snapshots under `docs/specs/visuals/<area>/`, and the Scribe discipline (`bee-capturing`) still requires one for
   every UI area whose screen visibly changed. The bundle profile defines no equivalent location,
   and `docs/specs/` is read-only for new content once a repo has migrated (G2 —
   `scripts/okf_specs_fence.mjs` fails the chain), so in bundle mode there is nowhere legitimate to
@@ -206,7 +206,7 @@ this profile.
 
 ### `bee.area` — `docs/knowledge/areas/performance-log/cross-project-matrix.md` (live)
 
-The type `bee-scribing` writes on every sync, capture, flush and harvest run when the repo is in
+The type `bee-capturing` ("Scribe") writes on every sync, capture, flush and harvest run when the repo is in
 bundle mode. It is listed first because it is the one most authors reach for.
 
 ```yaml
@@ -311,7 +311,7 @@ comma, or other reserved character; both forms round-trip.
 - The product-root resolution both doc trees share: `resolveProductRoot` in
   `.bee/bin/lib/state.mjs` — the same resolver the session preamble (`inject.mjs`), the backlog
   and the session-close hook already use.
-- The scribe's own routing prose: `skills/bee-scribing/SKILL.md` §2 and §2a.
+- The scribe's own routing prose: `skills/bee-capturing/SKILL.md` ("Scribe" section).
 - Coverage for the gate, its three refusals and the repo-divorce topology:
   `packages/bee/tests/test_bundle_mode.mjs`.
 
@@ -344,7 +344,7 @@ bee:
 ```
 
 `bee.review_status` carries the `Draft → Ready for Review → Approved → Needs Revision → Shipped`
-ladder (D36) — the field `implement-plan.md`'s review state moves into once `bee-briefing` is
+ladder (D36) — the field `implement-plan.md`'s review state moves into once the Brief step is
 rewired (declared here, executed in F2). A `bee.plan`'s `required_context` typically points back
 at its own work item, since the plan only makes sense alongside the outcome/scope it implements.
 

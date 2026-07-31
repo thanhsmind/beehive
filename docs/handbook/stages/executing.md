@@ -1,4 +1,4 @@
-# Stage: executing (`bee-executing`)
+# Stage: executing (`bee-swarming` — "Execute")
 
 **Purpose** — Implement, verify, and cap *exactly one* parent-assigned cell as a
 worker, then return a structured status token. This is the only stage that edits
@@ -45,4 +45,4 @@ git commit.
 - Return **exactly one** status token: `[DONE]` · `[BLOCKED]` · `[HANDOFF]` · `[NOOP]`.
 
 ## Source
-`skills/bee-executing/SKILL.md`
+`skills/bee-swarming/SKILL.md` ("Execute") + `skills/bee-swarming/references/worker-details.md`

@@ -74,17 +74,17 @@ one owner, generated ids that never collide however many sessions run at once.
 
 ## Actors & Access
 
-- **bee-exploring** — owns the `proposed → in-flight` flip (D11a): status and feature slug
+- **bee-shaping ("Explore")** — owns the `proposed → in-flight` flip (D11a): status and feature slug
   together, in one `pbi status` call, the moment a feature opens against a matching PBI (or
   after a fresh `pbi add` when the request never had one).
-- **bee-scribing** — owns two moves: the unprompted-capture append (D8, "ghi vào backlog" is a
+- **bee-capturing ("Scribe")** — owns two moves: the unprompted-capture append (D8, "ghi vào backlog" is a
   detection failure, not a required prompt) via `pbi add`, and the CoS-gated close-flip to
   `done` (D11b) — every clause of the PBI's `cos` must have cited delivered evidence before the
   flip; a partial delivery gets a `Delivered:`/`Remaining:` annotation via `pbi amend` instead of
   a silent full flip, with the remainder split into a new `pbi add` row when it ships
   independently.
-- **bee-qualifying** — owns the `parked` flip (D13), written in the same move as the park brief
-  `bee-context-locking` writes into the feature's `CONTEXT.md`.
+- **bee-shaping ("Qualify")** — owns the `parked` flip (D13), written in the same move as the park
+  brief its "Lock" step writes into the feature's `CONTEXT.md`.
 - **bee-grooming** — audits the fold (`pbi list --json`) for three drift patterns: an
   `in-flight` PBI with no matching active feature, a `done` feature with no PBI at all, and
   duplicate PBIs describing one story — each files as a tiny, prose-ruled fix cell, never a hook
@@ -135,5 +135,6 @@ one owner, generated ids that never collide however many sessions run at once.
   `packages/bee/lib/guards.mjs`).
 - One-time migration and its invariant check: `scripts/migrate_backlog_pbis.mjs`,
   `scripts/backlog_uniqueness.mjs`.
-- Verb prose and merge rules: `skills/bee-scribing/references/scribing-reference.md`'s
-  "Product Backlog" section.
+- Verb prose and merge rules: formerly the scribing reference's "Product Backlog" section;
+  the surviving capture discipline lives in `skills/bee-capturing/SKILL.md` and
+  `skills/bee-capturing/references/citations.md` (backlog rows cite decision ids).

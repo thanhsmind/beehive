@@ -71,7 +71,7 @@ Codex's `approval_policy` (tool-call permission, `.codex/config.toml`) and bee's
 
 ## Render model: one source tree, runtime-conditional blocks (D9)
 
-The 4 runtime-sensitive skills (`bee-hive`, `bee-swarming`, `bee-executing`, `bee-reviewing`) are **one human-edited source tree**, not a fork per runtime. A skill file may fence a runtime-only passage with a strict, full-line HTML-comment marker pair:
+The runtime-sensitive skills (`bee-hive` and `bee-swarming` — whose "Execute" section carries the old standalone worker skill — with `bee-reviewing` historically in the set) are **one human-edited source tree**, not a fork per runtime. A skill file may fence a runtime-only passage with a strict, full-line HTML-comment marker pair:
 
 ```text
 <!-- bee:only claude -->

@@ -8,14 +8,14 @@ bee follows the khuym method: read each upstream system, keep what holds up in p
 |---|---|---|
 | 7-stage chain with explicit artifact handoffs | khuym | The bee chain (unchanged skeleton) |
 | Human gates, never skipped (originally 4, validation-diet D2 merged shape+execution into one) | khuym | Gates 1, 2, 4 in `bee-hive` |
-| Socratic decision locking, one question at a time, D-IDs | khuym / superpowers / gsd | `bee-exploring` |
+| Socratic decision locking, one question at a time, D-IDs | khuym / superpowers / gsd | `bee-shaping` ("Explore"/"Lock") |
 | Mode gate: smallest honest workflow | khuym | Mode gate in `bee-planning` |
-| Reality gate (SMALLER PATH survivor) + spikes (feasibility matrix deleted, D6) | khuym / gsd | `bee-planning` (folded in from the deleted `bee-validating`, validation-diet D1/D5) |
-| Reservation-based worker isolation, `[DONE]/[BLOCKED]/[HANDOFF]/[NOOP]` | khuym | `bee-swarming` + `bee-executing` |
+| Reality gate (SMALLER PATH survivor) + spikes (feasibility matrix deleted, D6) | khuym / gsd | `bee-planning` (folded in from the deleted standalone validating stage, validation-diet D1/D5) |
+| Reservation-based worker isolation, `[DONE]/[BLOCKED]/[HANDOFF]/[NOOP]` | khuym | `bee-swarming` (orchestrator + "Execute" worker) |
 | ~65% context budget → HANDOFF.json pause/resume | khuym | `bee-hive` priority rule |
 | Plans as executable prompts (`must_haves`: truths/artifacts/key_links/prohibitions) | gsd-core | Cell + plan format in `bee-planning` |
-| Goal-backward adversarial plan-checker with BLOCKER/WARNING severity | gsd-core | Plan-checker subagent in `bee-planning`'s review wave (folded in from the deleted `bee-validating`, validation-diet D5) |
-| 4-level deviation rules for executors | gsd-core | `bee-executing` |
+| Goal-backward adversarial plan-checker with BLOCKER/WARNING severity | gsd-core | Plan-checker subagent in `bee-planning`'s review wave (folded in from the deleted standalone validating stage, validation-diet D5) |
+| 4-level deviation rules for executors | gsd-core | `bee-swarming` ("Execute") |
 | Wave-based parallelism from a dependency graph | gsd-core | `bee-swarming` |
 | Research depth levels 0–3 | gsd-core | `bee-planning` scout step |
 | EXISTS / SUBSTANTIVE / WIRED artifact verification | gsd-core / khuym | `bee-reviewing` |
@@ -25,12 +25,12 @@ bee follows the khuym method: read each upstream system, keep what holds up in p
 | Entropy audit / hive health score | repository-harness | `bee-grooming` |
 | Decision records with lifecycle + optional verify command | repository-harness / gstack | `decisions.jsonl` + `docs/decisions/` |
 | Event-sourced decision log (decide/supersede/redact, append-only) | gstack | `.bee/decisions.jsonl` |
-| Learnings JSONL injected into future session preambles | gstack / khuym | `bee-compounding` + `bee-hive` bootstrap |
+| Learnings JSONL injected into future session preambles | gstack / khuym | `bee-capturing` ("Compound") + `bee-hive` bootstrap |
 | Cross-model second opinion at contentious gates | gstack | Optional step at Gates 2 and 4 |
 | Docs generated from code where code owns the truth | gstack | bee build script (later phase) |
 | Context isolation: task + interfaces + constraints only, never history | claudekit / superpowers | Worker spawn contract |
 | File-based agent communication (reports/ dir, no MCP required) | claudekit | Worker results + review reports |
-| Diff-aware testing (map changed files → affected tests) | claudekit | `bee-executing` verify step |
+| Diff-aware testing (map changed files → affected tests) | claudekit | `bee-swarming` ("Execute") verify step |
 | 12-dimension edge-case decomposition | claudekit | Reference checklist in `bee-planning`/`bee-reviewing` |
 | Privacy/scout blocking of secrets and generated dirs | claudekit | `bee-write-guard` hook (Claude Code) + guardrail text (Codex) |
 | Hook automation skeleton: config-gated, fail-open, injection-deduped, chain-nudging, state-syncing hooks over shared `lib/` | claudekit | 9-script hook skeleton in [06-runtime-integration.md](06-runtime-integration.md) |
@@ -39,13 +39,13 @@ bee follows the khuym method: read each upstream system, keep what holds up in p
 | Headless mode: `mode:headless` on every skill — defer ambiguous decisions to a report, never hang on a question | compound-engineering | Shared skill standard |
 | Severity corroboration: independent reviewers agreeing promotes a finding one level | compound-engineering | `bee-reviewing` synthesis rule |
 | Autofix classes (gated_auto / manual / advisory) + owner routing as *signal, not gates* | compound-engineering | `bee-reviewing` finding schema |
-| Verification-evidence contract when `behavior_change: true` | compound-engineering | `bee-executing` trace + `bee-reviewing` gate |
+| Verification-evidence contract when `behavior_change: true` | compound-engineering | `bee-swarming` ("Execute") trace + `bee-reviewing` gate |
 | Learnings searched structurally by planning and review (precedent injection), not just stored | compound-engineering / gstack | `bee-planning` bootstrap + reviewing roster |
 | Residual findings: durable file fallback when tracker filing fails | compound-engineering | `bee-reviewing` finishing step |
 | Surface scope earlier: skip exploration when acceptance criteria + pattern refs already given | compound-engineering | `bee-hive` routing check |
-| Iron Law: no skill without a failing pressure test | superpowers / khuym | `bee-writing-skills` |
+| Iron Law: no skill without a failing pressure test | superpowers / khuym | [docs/handbook/writing-skills.md](handbook/writing-skills.md) |
 | Description = trigger conditions only, never workflow summary | superpowers | Skill-writing checklist |
-| Evidence-before-claims verification gate | superpowers | `bee-executing` + `bee-reviewing` |
+| Evidence-before-claims verification gate | superpowers | `bee-swarming` ("Execute") + `bee-reviewing` |
 | Model selection per task complexity ("turn count beats token price") | superpowers | `bee-swarming` spawn guidance |
 | Session-start hook injecting the routing skill | superpowers | SessionStart hook on both runtimes; AGENTS.md block as the bootstrap fallback |
 
@@ -164,4 +164,4 @@ Every's CE plugin (29 skills, `/lfg` full-pipeline orchestrator, TypeScript conv
 1. **One task model across the whole chain.** Upstreams split "plan task", "bead", "story", "trace" across different stores. bee's **cell** carries plan fields (`must_haves`, deps, lane), execution fields (reservation, status, verify command), and trace fields (outcome, friction) in one JSON record with lane-scaled strictness.
 2. **Grooming as a first-class stage.** Upstreams treat debt as review fallout (khuym P3s), audit output (harness), or a dashboard (gstack `/health`). bee gives it a dedicated skill with its own loop: audit entropy → hunt candidates (dead code, stale docs, unverified cells, friction clusters) → propose kills with predicted impact → execute as tiny/small cells → record actual outcomes.
 3. **Dual-runtime as a contract, not a port — one brain, two belts.** The workflow artifacts (`.bee/`, `docs/history/`, cells, gates) are runtime-neutral, and the rules are enforced from one shared `bin/lib/` codebase in two ways: the CLI helpers enforce mechanically on *both* runtimes (cap-requires-verify, gate-locked claiming, reservation conflicts), and the 9-script hook skeleton — rendered from one shared catalog and wired for both runtimes — adds harness-level guards, deduped reminders, and chain-nudges on top. Codex is not a degraded copy; it runs the same helper-enforced rules with AGENTS.md as its bootstrap vector. Full design and parity matrix: [06-runtime-integration.md](06-runtime-integration.md).
-4. **A state layer next to the logs (decisions 0001, 0002).** Every upstream memory mechanism is history-shaped — append-only decisions, dated learnings, per-feature docs. bee adds the complementary state-shaped artifacts: `docs/specs/<area>.md` (a *BA-grade, technology-agnostic* functional spec of a long-lived area — field meanings, behaviors, role visibility, business rules — overwritten to match reality, rebuildable-on-another-stack by design) and `docs/specs/reading-map.md` (what lives where). A dedicated BA skill, `bee-scribing`, writes them: syncing `behavior_change` cell deltas after review, capturing rules agreed in discussion the moment they're agreed, and harvesting first specs for pre-bee areas. The hive scout reads the touched area's spec before its code; grooming's entropy score measures spec rot (`stale specs` term); compounding guards the handoff. Log answers "how did we get here"; spec answers "where are we" — a fresh session reads spec → decisions → history, in that order. Full design: [02-architecture.md](02-architecture.md) §state layer, [decisions/0001-state-layer.md](decisions/0001-state-layer.md), [decisions/0002-scribing-skill.md](decisions/0002-scribing-skill.md).
+4. **A state layer next to the logs (decisions 0001, 0002).** Every upstream memory mechanism is history-shaped — append-only decisions, dated learnings, per-feature docs. bee adds the complementary state-shaped artifacts: `docs/specs/<area>.md` (a *BA-grade, technology-agnostic* functional spec of a long-lived area — field meanings, behaviors, role visibility, business rules — overwritten to match reality, rebuildable-on-another-stack by design) and `docs/specs/reading-map.md` (what lives where). A dedicated BA discipline, `bee-capturing`'s "Scribe" section, writes them: syncing `behavior_change` cell deltas after review, capturing rules agreed in discussion the moment they're agreed, and harvesting first specs for pre-bee areas. The hive scout reads the touched area's spec before its code; grooming's entropy score measures spec rot (`stale specs` term); compounding guards the handoff. Log answers "how did we get here"; spec answers "where are we" — a fresh session reads spec → decisions → history, in that order. Full design: [02-architecture.md](02-architecture.md) §state layer, [decisions/0001-state-layer.md](decisions/0001-state-layer.md), [decisions/0002-scribing-skill.md](decisions/0002-scribing-skill.md).

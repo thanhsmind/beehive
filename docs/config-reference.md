@@ -141,11 +141,11 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | Key | What it does | Default |
 |---|---|---|
 | `commands` | the host project's `setup` / `start` / `test` (scoped, dev loop) / `verify` (full, CI-owned) commands — full section above | none — captured at onboarding |
-| `gate_bypass` | opt-in autopilot with levels `false` · `"normal"` · `"full"` · `"total"` (legacy `true` = normal); set via the `bee-bypass-gate` skill | `false` |
+| `gate_bypass` | opt-in autopilot with levels `false` · `"normal"` · `"full"` · `"total"` (legacy `true` = normal); set via `bee-hive`'s "Gates" section (gate-bypass levels) | `false` |
 | `hooks` | per-hook kill switch — nine hooks: `session-init`, `prompt-context`, `write-guard`, `model-guard`, `state-sync`, `chain-nudge`, `session-close`, `tools-logger`, `codex-subagent-audit` | all `true` (an absent key also reads `true`) |
 | `guards` | `idle_gate` (`false` disables the idle intake gate) · `max_read_lines` (line cap a single inbound file read may pull before the read guard trims it; number > 0) · `memory_root` (one absolute path the write guard will let the agent write — see below) | idle gate on · `800` · no memory root |
 | `lanes`, `capabilities` | advanced per-repo overrides | `{}` |
-| `dogfood_repos` | foreign repos whose feedback digest `bee.mjs feedback collect`/`rank` (and `bee-evolving`) fold in — see below | `null` (local digest only) |
+| `dogfood_repos` | foreign repos whose feedback digest `bee.mjs feedback collect`/`rank` (and the [handbook/evolving.md](handbook/evolving.md) loop) fold in — see below | `null` (local digest only) |
 | `product_root` | where the project's PRODUCT docs live (`docs/backlog.md`, `docs/specs/`, the product README) when they are NOT beside `.bee/` — a path relative to the bee root, or absolute. For the "workshop + nested product repo" (repo-divorce) topology where `.bee/` sits one level above the product's own git repo. Unset ⇒ the bee root (every ordinary single-root repo is unaffected). A set-but-missing path warns loudly to stderr rather than silently reading nothing. `.bee/*` runtime state and `docs/history/` (bee's own workshop trail) are never affected — only the product's own docs. | unset ⇒ bee root |
 
 ### `guards.memory_root` (GH #71) — letting the agent keep its own memory
@@ -198,7 +198,7 @@ warning**, never thrown:
 Every field pulled from a listed repo's digest is **revalidated and datamark-wrapped** by
 `mergeDigests` before it is used (decision D2b) — this repo never trusts a foreign digest's bytes as
 written. `null` (the default) means `collect`/`rank` return the local digest only, and
-`corroboration` is 1 for every cluster (see `docs/07-contracts.md`'s `bee-evolving` contract).
+`corroboration` is 1 for every cluster (see `docs/07-contracts.md`'s evolving contract).
 
 ## Full sample to copy
 

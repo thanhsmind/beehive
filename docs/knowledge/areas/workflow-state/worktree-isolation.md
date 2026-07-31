@@ -149,7 +149,7 @@ checkout at all, nothing about this behavior changes today's write.
   `packages/bee/hooks/adapter.mjs` and `packages/bee/hooks/bee-write-guard.mjs`; dispatch, attestation,
   merge-back, recovery, and disposal contracts in `skills/bee-swarming/SKILL.md`,
   `skills/bee-swarming/references/swarming-reference.md`, and
-  `skills/bee-executing/references/worker-details.md`. Evidence: capped cells
+  `skills/bee-swarming/references/worker-details.md`. Evidence: capped cells
   `.bee/cells/worktree-isolation-{1..4}.json`, reports
   `docs/history/worktree-isolation/reports/`, 333 passing library checks, and
   the green configured repository verify on 2026-07-16.

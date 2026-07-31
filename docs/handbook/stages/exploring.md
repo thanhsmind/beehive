@@ -1,4 +1,4 @@
-# Stage: exploring (`bee-exploring`)
+# Stage: exploring (`bee-shaping` — Explore/Qualify/Lock)
 
 **Purpose** — Turn a fuzzy, gray-area request into *locked decisions* recorded in
 `docs/history/<feature>/CONTEXT.md`, so planning never has to guess at product
@@ -36,4 +36,4 @@ decisions. Runs before planning; skipped when scope is already clear.
 - Batch independent questions into one message; serialize only dependent ones.
 
 ## Source
-`skills/bee-exploring/SKILL.md`
+`skills/bee-shaping/SKILL.md`
