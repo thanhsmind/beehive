@@ -132,6 +132,6 @@ references, loaded when routing work: lanes and gate wording; § Gate
 bypass mode; § Progress ticks; § Communication contract; § Judgment
 contract; § Goal-check judge tier; § Concurrency law in full;
 § Delegation contract; worktrees; § Native Codex subagent tending;
-plus the worker contract in `bee-executing` and the capture discipline
+plus the worker contract in `bee-swarming` ("Execute") and the capture discipline
 in `bee-scribing`.
 <!-- BEE:END -->

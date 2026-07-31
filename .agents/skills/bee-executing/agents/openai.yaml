@@ -1,5 +1,0 @@
-interface:
-  display_name: "Bee Executing"
-  short_description: "Implement and cap exactly one parent-assigned cell as a worker. Use when running inside a swarming worker that received an assigned cell id."
-policy:
-  allow_implicit_invocation: true

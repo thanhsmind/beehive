@@ -29,7 +29,7 @@ User: "/go [feature]"
 [STEP 3] bee-planning (prep)  → current-slice cells only — plan.md is frozen, never rewritten
          bee-briefing (refresh) → implement-plan.md Affected Files + Steps re-projected
        ▼
-[STEP 4] bee-swarming (+ bee-executing × N) — current slice only
+[STEP 4] bee-swarming (orchestrator + workers × N) — current slice only
        │
        ├── more approved work remains → return to STEP 3 for the next slice (execution stays
        │   approved feature-wide from Gate 2 — no re-ask per slice)

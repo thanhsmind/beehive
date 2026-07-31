@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "bee_version": "1.20.3",
   "managed": {
-    "agents_block": "1a83a9ae2f40e4d6e450491f40c6e6cc802e8182239c936c614d9a569e2e397b",
+    "agents_block": "a54d017da4616b27646c2f888e89e814d4ad54d55f7597d09349f79a0677a138",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
     "helpers": {
       "bee.mjs": "4b648e266740dc995e95675cf519fd768d8a89a2037b75d9449a6b444c6a5941"
@@ -17,7 +17,7 @@
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
       "dispatch-guard.mjs": "acabfef60de3ce6babeda8deee7ea5c1954cc655d5bc8dae4d62f3e0338911d0",
-      "dispatch-prepare.mjs": "039f2af9196809081bd4118c1f36f9bb886eaeb541f0b5a08659892c150d6b8e",
+      "dispatch-prepare.mjs": "4df88e5aef88ea9c1298bc71987d31f5220e91120b61ced145712e88d9376ca5",
       "feedback.mjs": "a38aabf50fc1fd597bddc208160b0f27bf270773c403de75a0c3b4783c95e02c",
       "fsutil.mjs": "c0a65d8aebfca7f7423f10cc9e13fa8ca43234c4a7b7e7ea1f05619b18e06af0",
       "guards.mjs": "615716039b59ebea29e7778475f27bfec8bf5b705ed1c72954e62b6a084cf8de",
@@ -78,5 +78,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-31T10:40:58.544Z"
+  "updated_at": "2026-07-31T10:45:49.611Z"
 }

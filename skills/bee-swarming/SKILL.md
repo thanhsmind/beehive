@@ -1,139 +1,114 @@
 ---
 name: bee-swarming
 description: >-
-  Orchestrate bounded workers over Gate-2-approved cells without implementing anything directly. Use when the merged Gate 2 (shape+execution) is approved and current-slice cells are open.
+  Run approved cells to done — orchestrate bounded workers over gate-approved cells, or execute exactly one assigned cell inside a dispatched worker. Use when the merged shape+execution gate is approved and current-slice cells are open, or when running as a worker that received an assigned cell id.
 metadata:
-  version: '0.1'
+  version: '0.2'
   ecosystem: bee
   dependencies:
     nodejs-runtime:
       kind: command
       command: node
       missing_effect: unavailable
-      reason: Orchestration reads cells and sweeps reservations through the vendored .bee/bin helpers.
+      reason: Both roles drive the work through the vendored .bee/bin CLI.
 ---
 
-# Swarming — Orchestrator
+# Swarming — run the approved work
 
-You are the orchestrator. Launch workers, tend results, handle rescues, keep
-the swarm moving. In `standard`/`high-risk` lanes you never implement cells
-yourself — workers load bee-executing and do the work.
+Two roles share this skill. A **worker** has an assigned cell id in its
+dispatch prompt; everyone else is the **orchestrator**. `bee orient` shows
+where the work stands either way.
 
-## Lane scaling — single worker vs full wave
+## Orchestrate
 
-| Lane | Shape |
-|---|---|
-| `tiny`/`small` | The merged Gate 2 + frozen-judge stay with the orchestrator; implementation runs through **one dispatched execution worker** under the full execution contract (same template, status tokens, reservation/cap discipline) — never a wave: no analysis, no reviewers, no panels. No `plan.md`, so the prompt is told to cite the cell itself as the work spec. `small`'s 1-3 cells run PARALLEL when disjoint (regen deferred), 3-4 live workers cap; serial names its conflict. |
-| `standard`/`high-risk` | Full wave protocol below; tiny/small borrows only its Spawn, tier-judgment, Record, and Goal-check steps. |
+You launch workers and tend results; you do not implement. A `tiny` cell
+may run inline in this session; `small` and up always dispatches — one
+worker for `tiny`/`small`, a wave for `standard`/`high-risk`.
 
-Tiny/small execution dispatch: see `Single execution worker in full` in `references/swarming-reference.md`.
+1. `bee cells schedule --json` sets dispatch order — override only with a
+   stated reason. Overlapping-file cells are fixed by scope or
+   reservations, never by "spawn both carefully".
+2. `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
+   claims the cell, reserves its files for the worker, and returns the
+   prompt payload in one verb. Judge and record the model tier first
+   (`bee cells tier`; rubric: `references/swarming-reference.md`).
+3. Spawn with exactly that payload. Never paste session history; never
+   hand a worker two cells.
+4. Tend: collect status tokens. Silence is not failure — inspect
+   `bee cells list` and `bee reservations list` before assuming stuck.
+5. On `[DONE]`: the worker's word is never the evidence. Goal-check on
+   smell; `bee cells judge` for undeclared-file hits; at
+   `standard`/`high-risk`, one semantic judge per slice over its
+   `behavior_change` cells.
+6. Slice clean: `bee close --feature <slug> --dry-run` names every
+   remaining door with the command that settles it; the final slice runs
+   `bee close --feature <slug>` to execute and record the feature verify.
+   Doors are never waived.
 
-After `[DONE]` on the final slice: emit the cap tick (push when
-`ship_visibility` is active); the orchestrator — never the worker — authors
-the done-report and invokes bee-scribing; no auto reviewer (earlier slices
-return to bee-planning instead — see Completion Signals below).
+**`[BLOCKED]` rescue ladder:** (1) re-dispatch the same cell with the
+missing context; (2) next model tier up — the ceiling is this session, so
+the top rung hands the blocker to you; (3) surface it to the user with the
+worker's diagnosis. If it invalidates the plan, return to bee-planning.
 
-## Preconditions
+**Completion:** slice done with more approved work remaining → return to
+bee-planning for the next batch (an approved plan stays frozen; planning
+shapes the next batch, never reopens it). Final slice green → tell the
+user execution is complete and invoke bee-scribing. Before declaring done:
+no active reservations, no in-flight workers recorded.
 
-- Gate 2 approved (merged shape+execution): `gates.execution` true in `node .bee/bin/bee.mjs status --json`, else stop — return to bee-planning.
-- Sweep stale reservations: `reservations sweep`
-- Critical patterns read: bundle → `docs/knowledge/index.md` `## Critical patterns`; no bundle → `docs/history/learnings/critical-patterns.md` when present.
+At ~65% context, write `.bee/HANDOFF.json` and pause cleanly — never push
+through the budget mid-wave. When a unit finishes and approved work
+remains, continue in-session; finishing a unit is never a reason to stop.
 
-<!-- bee:only claude -->
-## Opt-in Native Worktree Dispatch
+## Execute (worker)
 
-Opt-in Git-consistency mode for an enabled wave of 2+ workers (never
-tiny/small's single-worker dispatch); enabling cells `worktree-isolation-1..3`
-serialize first, `worktree-isolation-4` is the sole one-worker validation
-exception. Protected pre-dispatch attestation, the three-check re-attest gate
-(identity/ancestry/diff containment, typed halts), and the full threat model:
-`references/swarming-reference.md` ("Native Worktree Integration Transaction",
-"Threat model and protected attestation").
-<!-- bee:end -->
+Your dispatch prompt is the assignment: one cell, claimed for you, its
+listed files reserved under your nickname. Everything else comes from CLI
+outputs — when a verb refuses, its message names the fix.
 
-## Operating Contract
+1. Read `AGENTS.md`, then the cell's `CONTEXT.md` and plan (paths in the
+   prompt). Conform before you code: scout adjacent patterns, reuse
+   existing helpers, match the codebase's idiom. Authoring tests? Judge
+   existing coverage first — `expertise/tests.md`.
+2. Implement exactly the assigned cell. Reserve any additional path before
+   writing (`bee reservations reserve`). Package installs and
+   architectural changes are not yours to make — `[BLOCKED]` with the
+   proposal.
+3. When reality disagrees with the cell: a bug in touched code → fix it,
+   record the deviation; a missing piece the outcome depends on → add it,
+   record; blocking breakage in your path → fix, record; anything
+   architectural → `[BLOCKED]`. Never reinterpret a locked decision to
+   make the cell fit.
+4. Commit once: subject describes the change in imperative mood; the cell
+   id rides the last line of the body.
+5. `bee cells finish --id <cell> --feature-verify-pending
+   --outcome "<one line>" --files <a,b>` — cap and release in one verb.
+   The cell's `verify` command belongs to the orchestrator at close, not
+   to you.
+6. Return exactly one token, first thing in your final message:
+   `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
+   diagnosis) · `[HANDOFF]` (at ~65% context — write `.bee/HANDOFF.json`
+   first) · `[NOOP]` (cell missing or already capped). Never wait
+   silently; never ask a blocking question — you run headless.
 
-| Step | Rule |
-|---|---|
-| 1. Wave analysis | `cells schedule --json` sets the default dispatch order — override only with a stated reason. Cycles/overlapping-file cells → fix reservations/cell scope, never "spawn both carefully." |
-| 2. Assign & claim | Orchestrator claims exactly one cell per worker before spawning; workers only validate (`cells show`), never `cells claim`, never self-select. |
-| 3. Spawn | Prompt carries only the contract fields (template: `references/swarming-reference.md`); tier-matched pinned agent type where rendered, never another plugin's type. |
-| 4. Judge tier + advisor | Judge the tier (extraction/generation/ceiling) per cell, record it (`cells tier`), resolve the advisor slot — add the `Advisor` line unless it's the same-model no-op. |
-| 5. Record | `state worker add` before results arrive. |
-| 6. Tend | Collect status tokens; silence ≠ failure — inspect cells/reservations before assuming stuck; no routine mid-flight pings. |
-| 7. Goal-check `[DONE]` | Smell-triggered verify re-run only — most cells cap pending; `cells judge` for undeclared-file hits; standard/high-risk: one semantic judge per slice at slice close over its `behavior_change` cells, verdicts recorded per cell (`cells judge-record`). A worker's word is never the evidence. |
-| 8. Wave clean → next | Every cell capped, goal-checked, judge-intact — no suite run; final slice: run + record the ONE feature verify first, door-enforced. |
+## Hard rules (both roles)
 
-Full per-step mechanics and tier rubric: `references/swarming-reference.md`
-("Operating Contract in full", "Model Tiers — Config-Driven, Runtime-Keyed").
-
-## [BLOCKED] Rescue Ladder
-
-1. More context — re-dispatch the same cell with the specific missing information.
-2. Stronger tier — next model tier up (extraction → generation → ceiling); ceiling is the session model, so the top rung hands the blocker back to the orchestrator itself.
-3. Escalate — surface the blocker to the user with the worker's diagnosis; if it invalidates the plan, return to bee-planning.
-
-A `[BLOCKED]` here spent its consult budget; rung-1 re-dispatch grants a fresh one. A reservation conflict is rescued by
-adjusting reservations or cell scope — never by telling workers to be careful.
-
-## Context Budget
-
-At ~65% context, write `.bee/HANDOFF.json` (phase, feature, mode,
-cells_in_flight, done, remaining, next_action) and pause safely. Never push
-through the budget mid-wave.
-
-## Completion Signals
-
-Swarming is complete when either:
-
-- the current slice (the feature's open cells, not a plan section) is executed and more approved work remains → return to bee-planning for the **next batch of cells**; any `plan.md` stays frozen — planning shapes the next batch, it never re-opens it — or
-- the final slice is executed → tell the user: `Swarm execution complete for the final slice. Invoke bee-scribing.` Implementation is verified; review runs only on user request.
-
-Before declaring completion: all wave cells capped/blocked/dropped,
-`node .bee/bin/bee.mjs reservations list --active-only` is empty, and
-`.bee/state.json` `workers` is cleared.
-
-## Fresh-Session Handoff (silent, never a stop)
-
-When a cell or wave finishes (capped, verify green) and execution-approved
-work remains, continue with the next unit in this session — finishing a unit
-is never a reason to stop, ask, or wait. Only at real session exit: claim
-the next unit, write the `planned-next` handoff, end cleanly; the next fresh
-session adopts the carried claim automatically. Never stop to suggest or
-wait for `/clear`, never issue it yourself. Full contract:
-`references/swarming-reference.md` ("Fresh-session handoff in full").
-
-## Hard Rules
-
-- `standard`/`high-risk`: never implement cells yourself, not even a one-line fix — make it a cell and dispatch it (`tiny`/`small`: see Lane scaling).
-- Never spawn before Gate 2 approval.
-- Never let workers self-select cells; pass one explicit cell id each.
-- Never resolve file conflicts by "being careful"; fix reservations or cell scope.
-- Never paste session history into a worker dispatch.
+- Never spawn before the execution gate is approved; the orchestrator
+  never edits source in a `standard`/`high-risk` wave.
+- One cell per worker; workers never claim, browse, or self-select.
+- Conflicts are fixed in scope or reservations, never by being careful.
+- Never build on a red base — a red becomes its own fix-first cell.
 
 ## Headless
 
-`mode:headless`: waves run without check-ins; unrescuable blockers and
-anything needing user judgment go to an `Outstanding Questions` section
-instead of a blocking question. Gate 2 must already be approved — headless
-never grants or assumes it, and never self-approves Gate 4 at the end.
+Waves run without check-ins; unrescuable blockers and anything needing
+user judgment go to an `Outstanding Questions` section. Gates are never
+self-approved, in any mode.
 
-## Red Flags
+## References
 
-- spawning before Gate 2 approval
-- a worker choosing its own cell, or handling two
-- full session context forked into a routine worker
-- a worker spawned as another plugin's registered agent type instead of the default type + inline template
-- two in-flight workers holding overlapping paths
-- passive waiting while cells/reservations look unhealthy
-- state.json missing in-flight workers
-- orchestrator editing source files in a `standard`/`high-risk` wave
-- a WAVE of workers dispatched for a `tiny`/`small` lane (exactly one dispatched execution worker is correct there)
-
-## Reference Files
-
-| File | When to Load |
+| File | When to load |
 |---|---|
-| `references/swarming-reference.md` | Runtime spawn mechanics, worker prompt template, model tiers, worktree transaction, result formats, red flags |
-| `.bee/state.json` | Runtime worker and phase state |
-| `.bee/HANDOFF.json` | Pause/resume artifact |
+| `references/swarming-reference.md` | Tier rubric, worktree dispatch transaction, prompt template details, result formats |
+| `references/worker-details.md` | Deep worker mechanics: trace tiers, advisor consult, friction triggers, evidence rules |
+| `expertise/tests.md`, `expertise/debugging.md` | Authoring tests; hunting a red |

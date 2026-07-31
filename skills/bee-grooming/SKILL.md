@@ -65,7 +65,7 @@ Each kill candidate: **pain** (what it costs today) / **predicted impact** (what
 
 ## 4. Execute
 
-Approved kills run as normal tiny/small cells through the `bee-executing` worker loop — reserve, verify, cap. Grooming never edits files directly. §1/§2 mechanical scans delegate as extraction/generation-tier I/O workers per the Delegation contract (`bee-hive/references/routing-and-contracts.md`); dead-code proof stays generation; any other ad-hoc dispatch defaults to the generation slot model, and ceiling requires the `[bee-tier: ceiling]` marker plus a one-line justification.
+Approved kills run as normal tiny/small cells through the bee-swarming worker loop ("Execute") — reserve, verify, cap. Grooming never edits files directly. §1/§2 mechanical scans delegate as extraction/generation-tier I/O workers per the Delegation contract (`bee-hive/references/routing-and-contracts.md`); dead-code proof stays generation; any other ad-hoc dispatch defaults to the generation slot model, and ceiling requires the `[bee-tier: ceiling]` marker plus a one-line justification.
 
 One approved kill per cell. Approval of one kill is not approval of its "related" neighbors — never batch unapproved kills into an approved cell.
 
