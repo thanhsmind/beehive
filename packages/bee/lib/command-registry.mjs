@@ -2346,11 +2346,13 @@ export const COMMAND_REGISTRY = [
         cell: { type: 'string', description: 'Cell id — required when --kind cell; loaded for prompt context.' },
         worker: { type: 'string', description: 'Requesting worker identity — required when --kind cell; checked against the cell\'s status/trace.worker (claim-ownership guard).' },
         'force-ownership': { type: 'boolean', description: 'Override a claim-ownership refusal for --kind cell (audited into the prepare-time dispatch record). Ignored for every other kind.' },
+        claim: { type: 'boolean', description: 'One verb from "cell chosen" to "worker prompt in hand": claim the cell for --worker first (the same door as `cells claim` — refusals pass through unchanged), then reserve every path in the cell\'s files for that worker at the default TTL, then build the payload exactly as without the flag. On a reservation conflict the claim is unwound and the refusal names the conflicting paths and holder — state is left as it was found. The result gains {claimed: true, reserved: [paths]}. Only valid with --kind cell.' },
+        'session-id': { type: 'string', description: 'Session id the --claim claim is taken under (same optional/env-resolved convention as `cells claim`). Ignored without --claim.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of pretty-printed JSON (prepare always prints JSON; flag kept for surface consistency).' },
       },
       required: ['runtime', 'kind'],
     },
-    examples: ['bee dispatch prepare --runtime claude --kind gather --json', 'bee dispatch prepare --runtime claude --kind cell --cell demo-1 --worker exec-demo-1 --json'],
+    examples: ['bee dispatch prepare --runtime claude --kind gather --json', 'bee dispatch prepare --runtime claude --kind cell --cell demo-1 --worker exec-demo-1 --json', 'bee dispatch prepare --runtime claude --kind cell --cell claim-demo-1 --worker exec-claim-demo --claim --json'],
     deprecated: null,
   },
 
@@ -2386,6 +2388,31 @@ export const COMMAND_REGISTRY = [
       required: ['runtime'],
     },
     examples: ['bee doctor attest --runtime codex --json'],
+    deprecated: null,
+  },
+
+  // ─── close (porcelain, docs/specs/porcelain.md) — the feature close driver.
+  // One verb answering "what stands between this feature and done, and can we
+  // pay it now". The door predicates are the EXACT ones the existing close
+  // path enforces (FEATURE_DEBT_KINDS in lib/state.mjs, plus scribingDebt /
+  // captureQueue) — never a second implementation of any debt rule, and close
+  // never waives a door. ────────────────────────────────────────────────────
+  {
+    name: 'close',
+    invoke: 'bee close',
+    surface: 'porcelain',
+    description:
+      'Feature close driver: reports every close door — the pending feature-level verify, consolidated test coverage, scribing/capture debt — each with the exact command that settles it. --dry-run is a read-only report ({feature, doors:[{door, blocking, detail, command}]}). Without --dry-run, when the ONLY outstanding door is the feature verify and a verify command is recorded for the feature, close runs that command, records the pass/fail through `state feature-verify record`, and reports: on green the text names what remains (the capture checklist) and the next skill; on red the failing output tail is surfaced and nothing is recorded as passed. When any other door blocks, close reports it and runs nothing. Doors are never waived — debts close cannot pay are reported with their commands.',
+    parameters: {
+      type: 'object',
+      properties: {
+        feature: { type: 'string', description: 'Feature slug to drive toward close.' },
+        'dry-run': { type: 'boolean', description: 'Read-only: report the close doors and what settles each, without running anything.' },
+        json: { type: 'boolean', description: 'Emit the machine-readable door report instead of the one-line-per-door text.' },
+      },
+      required: ['feature'],
+    },
+    examples: ['bee close --feature demo --dry-run --json'],
     deprecated: null,
   },
 ];

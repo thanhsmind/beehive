@@ -77,6 +77,14 @@ import {
   // would rebuild the drift by hand, and test_bee_cli.mjs refuses it.
   isDebtGuardedDeparture,
   guardFeatureDebt,
+  // porcelain slice 2 (`bee close`): the KIND TABLE itself, imported for the
+  // close driver's per-door REPORT. This is not a second door asking a subset
+  // — close iterates the whole set through each kind's own detect/owed, so a
+  // kind added to FEATURE_DEBT_KINDS shows up in `bee close` with nothing
+  // edited here, and the gc-1 structural test (no direct per-kind detector
+  // call in bee.mjs) still holds: the detectors are only ever reached through
+  // the table.
+  FEATURE_DEBT_KINDS,
   checkCompoundingRunPhase,
   startFeature,
   hasStaleAdvisorKey,
@@ -1479,7 +1487,13 @@ async function handleCellsUpdate(root, flags) {
 // double-owning the cell. D3: --session-id is optional — resolveSessionId
 // falls back to CLAUDE_CODE_SESSION_ID, then to a legal sessionless claim
 // (single-session flow keeps working exactly as before, with no id at all).
-async function handleCellsClaim(root, flags) {
+// One claim door for cells.claim and dispatch.prepare --claim (porcelain
+// slice 2): both verbs run this exact body — write-policy resolution, the
+// claims.mjs claim-file-first sequence, the byte-identical claim refusal, and
+// the route soft-warning — so the claim door cannot diverge between them
+// (mirror of capCellFromFlags's cap/finish pattern above). Returns {policy}
+// on a write-policy redirect, else {cell, sessionId}.
+async function claimCellFromFlags(root, flags) {
   const id = requireFlag(flags, 'id');
   const worker = requireFlag(flags, 'worker');
   const sessionId = resolveSessionId({
@@ -1511,7 +1525,7 @@ async function handleCellsClaim(root, flags) {
     enforceIsolation: false,
   });
   if (policy.redirect) {
-    return { result: policy, text: policy.text };
+    return { policy };
   }
   // hardening-4b: claimCellCrossSession composes claimCell, now
   // withStoreLock-wrapped (async).
@@ -1529,7 +1543,15 @@ async function handleCellsClaim(root, flags) {
         'run "bee state route --set --class <c> --lane <l> --flags <f> --files <n>" to record the triage (D3, soft enforcement).\n',
     );
   }
-  return { result: result.cell, text: `Claimed ${result.cell.id} for ${result.cell.trace.worker}.` };
+  return { cell: result.cell, sessionId };
+}
+
+async function handleCellsClaim(root, flags) {
+  const outcome = await claimCellFromFlags(root, flags);
+  if (outcome.policy) {
+    return { result: outcome.policy, text: outcome.policy.text };
+  }
+  return { result: outcome.cell, text: `Claimed ${outcome.cell.id} for ${outcome.cell.trace.worker}.` };
 }
 
 // explicit-triage D3 helper: does `feature` already have a recorded route?
@@ -2006,26 +2028,27 @@ function handleCellsSchedule(root, flags) {
   return { result: schedule, text: lines.join('\n') };
 }
 
-async function handleReservationsReserve(root, flags) {
-  const ttl = flags.ttl !== undefined ? Number.parseInt(String(flags.ttl), 10) : undefined;
-  if (flags.ttl !== undefined && (!Number.isFinite(ttl) || ttl <= 0)) {
-    throw new Error('--ttl must be a positive integer (seconds).');
-  }
-  const requestedPath = requireFlag(flags, 'path');
+// One reserve door for reservations.reserve and dispatch.prepare --claim
+// (porcelain slice 2): both verbs run this exact atomic section, so the
+// foreign-hold check, the local reserve, and the mirror-insert cannot diverge
+// between them (mirror of capCellFromFlags/claimCellFromFlags). Returns
+// {refusal} (a foreign hold) or {reserveResult} (reserve()'s own ok/conflict
+// verdict) — presentation stays with each caller.
+async function reservePathAtomic(root, { agent, cell, path: requestedPath, ttl, session, kind }) {
   const topology = resolveHoldTopology(root);
 
   const doReserve = () =>
     reserve(root, {
-      agent: requireFlag(flags, 'agent'),
-      cell: requireFlag(flags, 'cell'),
+      agent,
+      cell,
       path: requestedPath,
       ...(ttl !== undefined ? { ttl } : {}),
-      ...(flags.session ? { session: String(flags.session) } : {}),
+      ...(session ? { session } : {}),
       // multisession-native-13 (D4): OPTIONAL --kind, forwarded verbatim so
       // reserve()'s own RESERVATION_KINDS validation is the single source of
       // truth. Omitted, this is byte-unchanged: reserve() defaults to
       // 'lease', exactly today's hard-conflict behavior.
-      ...(flags.kind ? { kind: String(flags.kind) } : {}),
+      ...(kind ? { kind } : {}),
     });
 
   // hardening-1-7-10 (D3): when a topology exists, the foreign-hold check,
@@ -2043,9 +2066,8 @@ async function handleReservationsReserve(root, flags) {
   // winner). reserve() only performs fs reads/writes, never spawns a child
   // process, so it is safe to run while holding this lock (never hold the
   // shared lock across a child-process spawn).
-  let sectionResult;
   if (topology) {
-    sectionResult = await withHoldsLock(topology.mainRoot, async () => {
+    return await withHoldsLock(topology.mainRoot, async () => {
       const foreignHolds = findForeignHolds(topology.mainRoot, topology.holder, [requestedPath]);
       if (foreignHolds.length > 0) {
         return { refusal: foreignHolds[0] };
@@ -2062,9 +2084,23 @@ async function handleReservationsReserve(root, flags) {
       }
       return { reserveResult };
     });
-  } else {
-    sectionResult = { reserveResult: await doReserve() };
   }
+  return { reserveResult: await doReserve() };
+}
+
+async function handleReservationsReserve(root, flags) {
+  const ttl = flags.ttl !== undefined ? Number.parseInt(String(flags.ttl), 10) : undefined;
+  if (flags.ttl !== undefined && (!Number.isFinite(ttl) || ttl <= 0)) {
+    throw new Error('--ttl must be a positive integer (seconds).');
+  }
+  const sectionResult = await reservePathAtomic(root, {
+    agent: requireFlag(flags, 'agent'),
+    cell: requireFlag(flags, 'cell'),
+    path: requireFlag(flags, 'path'),
+    ttl,
+    session: flags.session ? String(flags.session) : undefined,
+    kind: flags.kind ? String(flags.kind) : undefined,
+  });
 
   if (sectionResult.refusal) {
     const hold = sectionResult.refusal;
@@ -7693,7 +7729,63 @@ export function doctorNativeTransportUnlock(root, liveFeatures) {
 // native-transport probe; every other runtime passes classification
 // undefined, which prepareDispatch treats exactly like an unprobed host (D3:
 // "unprobed/unknown => native_budget_only") — inert for every non-native slot.
-function handleDispatchPrepare(root, flags) {
+// dispatch prepare --claim (porcelain slice 2): claim + reserve, sequenced
+// BEFORE the payload build so the worker-vs-claim-owner check passes by
+// construction (the claim was just created for that worker) without weakening
+// the non-claim path's check one bit. The claim runs through the SAME door as
+// `cells claim` (claimCellFromFlags — refusals byte-identical) and every
+// reservation through the SAME atomic section as `reservations reserve`
+// (reservePathAtomic, default TTL). On ANY reservation conflict — a live
+// reservation or a cross-worktree hold — everything this call created is
+// unwound (reservations released, the claim returned to open) and the refusal
+// names the conflicting paths and holders: state is left as it was found.
+async function claimAndReserveForDispatch(root, { cellId, worker, sessionFlag }) {
+  const claimFlags = { id: cellId, worker };
+  if (sessionFlag !== undefined) claimFlags['session-id'] = sessionFlag;
+  const outcome = await claimCellFromFlags(root, claimFlags);
+  if (outcome.policy) return { policy: outcome.policy };
+  const cell = outcome.cell;
+  const files = Array.isArray(cell.files) ? cell.files.filter((f) => typeof f === 'string' && f) : [];
+  const reserved = [];
+  for (const filePath of files) {
+    const section = await reservePathAtomic(root, { agent: worker, cell: cell.id, path: filePath });
+    const conflictLines = [];
+    if (section.refusal) {
+      const hold = section.refusal;
+      conflictLines.push(
+        `- checkout "${hold.holder}" holds "${hold.path}" (cross-worktree hold, feature ${hold.feature || 'unknown'}, cell ${hold.cell || 'unknown'})`,
+      );
+    } else if (!section.reserveResult.ok) {
+      for (const conflict of section.reserveResult.conflicts) {
+        conflictLines.push(`- ${conflict.agent} holds "${conflict.path}" (cell ${conflict.cell})`);
+      }
+    } else {
+      reserved.push(section.reserveResult.reservation.path);
+      continue;
+    }
+    // Conflict: unwind everything this call created, in reverse — release the
+    // reservations already taken, then return the claim to open — so the
+    // refusal below describes a repo in exactly its pre-call state.
+    let unwindNote = 'the claim was unwound and state restored as found';
+    try {
+      if (reserved.length > 0) await releaseReservationsForAgent(root, worker, cell.id);
+      await unclaimCell(root, cell.id, { sessionId: outcome.sessionId });
+    } catch (error) {
+      unwindNote =
+        `UNWIND FAILED (${error instanceof Error ? error.message : String(error)}) — restore by hand: ` +
+        `bee reservations release --agent ${worker} --cell ${cell.id} --json ; bee cells unclaim --id ${cell.id} --json`;
+    }
+    throw new Error(
+      [
+        `dispatch prepare --claim: reservation conflict on cell "${cell.id}" — nothing dispatched; ${unwindNote}:`,
+        ...conflictLines,
+      ].join('\n'),
+    );
+  }
+  return { reserved };
+}
+
+async function handleDispatchPrepare(root, flags) {
   const runtime = requireFlag(flags, 'runtime');
   const kind = requireFlag(flags, 'kind');
   const cellId = typeof flags.cell === 'string' && flags.cell ? flags.cell : null;
@@ -7706,9 +7798,32 @@ function handleDispatchPrepare(root, flags) {
   // logic was still live — the two must travel together.
   const worker = typeof flags.worker === 'string' && flags.worker ? flags.worker : null;
   const forceOwnership = flags['force-ownership'] === true;
+  const claim = flags.claim === true;
+  let claimOutcome = null;
+  if (claim) {
+    if (kind !== 'cell') {
+      throw new Error(
+        `dispatch prepare: --claim is only valid with --kind cell (got --kind ${kind}) — claiming and reserving are cell-execution moves; gather/reviewer/advisor dispatches never own a cell.`,
+      );
+    }
+    // Same malformed-call wording prepareDispatch itself uses — the flags are
+    // simply required EARLIER on this path, before any state is touched.
+    if (!cellId) throw new Error('dispatch prepare: --cell is required when --kind cell.');
+    if (!worker) throw new Error('dispatch prepare: --worker is required when --kind cell.');
+    claimOutcome = await claimAndReserveForDispatch(root, {
+      cellId,
+      worker,
+      sessionFlag: flags['session-id'] !== undefined ? String(flags['session-id']) : undefined,
+    });
+    if (claimOutcome.policy) return { result: claimOutcome.policy, text: claimOutcome.policy.text };
+  }
   const classification = runtime === 'codex' ? readNativeTransportClassification(root).classification : undefined;
   const out = prepareDispatch(root, { runtime, kind, cell: cellId, worker, forceOwnership, classification });
-  return { result: out, text: JSON.stringify(out, null, 2) };
+  // The claim/reservations are real state whichever way the payload build
+  // went, so the result names them even beside a typed payload refusal — the
+  // caller must be able to see what this call created.
+  const result = claimOutcome ? { ...out, claimed: true, reserved: claimOutcome.reserved } : out;
+  return { result, text: JSON.stringify(result, null, 2) };
 }
 
 function handleDoctor(root, flags) {
@@ -7759,6 +7874,213 @@ function handleDoctor(root, flags) {
     for (const reason of reasons) lines.push(`  - ${reason}`);
   }
   return { result, text: lines.join('\n') };
+}
+
+// ─── close (porcelain, docs/specs/porcelain.md): the feature close driver ──
+// "What stands between this feature and done, and can we pay it now." The
+// door predicates are NEVER reimplemented here: the unwaivable set is read
+// straight off FEATURE_DEBT_KINDS (the same table guardFeatureDebt asks —
+// gc-1's one-question law: the per-kind detectors are only ever reached
+// through the table, never called by name), and the report-only remainder
+// reuses scribingDebt + captureQueue, the exact functions status consults.
+// close never waives a door, and the ONLY state it ever writes goes through
+// the existing feature-verify recorder (handleStateFeatureVerifyRecord) on a
+// real verify run.
+
+const CLOSE_VERIFY_OUTPUT_TAIL_LINES = 20;
+
+// The record featureVerifyDebt reads its feature_verify off: the feature's
+// lane record when one exists, else the default record when it tracks this
+// feature — the same projection the existing doors are handed. A feature
+// neither tracks resolves to null: the detectors treat that as "no record",
+// exactly the honest answer.
+function closeFeatureRecord(root, feature) {
+  const lane = readLane(root, feature);
+  if (lane) return lane;
+  const state = readState(root);
+  return state && state.feature === feature ? state : null;
+}
+
+// The recorded verify command for this feature, when one exists — a red
+// record's command counts (D5's fix-cells-then-re-verify loop reruns the
+// same command); a record naming a DIFFERENT feature never does.
+function closeRecordedVerifyCommand(record, feature) {
+  const raw = record && record.feature_verify;
+  const rec = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+  if (!rec || typeof rec.command !== 'string' || !rec.command) return null;
+  if (rec.feature && rec.feature !== feature) return null;
+  return rec.command;
+}
+
+const CLOSE_FEATURE_VERIFY_RECORD_TEMPLATE =
+  'bee state feature-verify record --command "<verify cmd>" --output-file <captured-output> --result green --json';
+
+// The exact runnable command that settles a blocking debt door — the recorded
+// verify command for the feature-verify kind (else the record template), the
+// authoring/greening verb for the test-cell kind. A future kind reports with
+// no command rather than a guessed one.
+function closeDoorCommand(kindId, debt, recordedCommand) {
+  if (!debt) return null;
+  if (kindId === 'feature-verify') {
+    return recordedCommand ?? CLOSE_FEATURE_VERIFY_RECORD_TEMPLATE;
+  }
+  if (kindId === 'test-cell') {
+    if (debt.kind === 'missing') return 'bee cells add --stdin --json';
+    const offenderId = String(debt.offenders[0] || '').split(' ')[0];
+    return `bee cells verify --id ${offenderId} --command "<test cmd>" --output-file <captured-output> --passed true --json`;
+  }
+  return null;
+}
+
+function buildCloseDoors(root, feature) {
+  const record = closeFeatureRecord(root, feature);
+  const recordedCommand = closeRecordedVerifyCommand(record, feature);
+  const doors = [];
+  for (const kindDef of FEATURE_DEBT_KINDS) {
+    // detect() throws when the cell store is unreadable — unknown debt is
+    // never zero debt, so close lets that surface as a refusal.
+    const debt = kindDef.detect(root, record, feature);
+    doors.push({
+      door: kindDef.id,
+      blocking: Boolean(debt),
+      detail: debt ? `feature "${feature}" ${kindDef.owed(debt)}` : 'clear',
+      command: closeDoorCommand(kindDef.id, debt, recordedCommand),
+    });
+  }
+  // Scribing/capture debt: report-only doors — they are settled by
+  // bee-scribing AFTER the verify, so they never block running it, and close
+  // reports them rather than pretending they gate the run.
+  const scribing = scribingDebt(root, { feature });
+  doors.push({
+    door: 'scribing-debt',
+    blocking: false,
+    detail: scribing.count > 0 ? `${scribing.count} behavior_change cell(s) uncaptured (${scribing.cells.join(', ')})` : 'clear',
+    command: scribing.count > 0 ? 'invoke bee-scribing' : null,
+  });
+  const queue = captureQueue(root);
+  doors.push({
+    door: 'capture-queue',
+    blocking: false,
+    detail: queue.count > 0 ? `${queue.count} capture stub(s) pending flush` : 'clear',
+    command: queue.count > 0 ? 'invoke bee-scribing' : null,
+  });
+  return { record, recordedCommand, doors };
+}
+
+// Exactly one next: line, teach-at-point-of-contact — the other blocking door
+// first (close runs nothing past it), then the verify (runnable when a
+// command is recorded), then scribing.
+function closeNextLine(feature, doors, recordedCommand) {
+  const blockingOther = doors.find((d) => d.blocking && d.door !== 'feature-verify');
+  if (blockingOther) return `next: settle ${blockingOther.door} — ${blockingOther.command}`;
+  const fv = doors.find((d) => d.door === 'feature-verify');
+  if (fv && fv.blocking) {
+    return recordedCommand
+      ? `next: bee close --feature ${feature} — runs the recorded verify (${recordedCommand}) and records the result`
+      : `next: run the feature verify, capture its output to a file, then ${CLOSE_FEATURE_VERIFY_RECORD_TEMPLATE}`;
+  }
+  if (doors.some((d) => d.command)) return 'next: invoke bee-scribing';
+  return `next: feature "${feature}" is clear — invoke bee-scribing to leave swarming (state scribing-run)`;
+}
+
+function renderCloseDoorLines(doors) {
+  return doors.map((d) => {
+    if (!d.blocking && d.detail === 'clear') return `door ${d.door}: clear`;
+    return `door ${d.door}: ${d.blocking ? 'BLOCKING' : 'open'} — ${d.detail}${d.command ? ` | settle: ${d.command}` : ''}`;
+  });
+}
+
+async function handleClose(root, flags) {
+  const feature = requireFlag(flags, 'feature');
+  const { doors, recordedCommand } = buildCloseDoors(root, feature);
+  const doorLines = [...renderCloseDoorLines(doors), closeNextLine(feature, doors, recordedCommand)];
+  if (flags['dry-run'] === true) {
+    // Read-only report — always exit 0; the doors ARE the answer.
+    return { result: { feature, doors }, text: doorLines.join('\n') };
+  }
+  const blockingOthers = doors.filter((d) => d.blocking && d.door !== 'feature-verify');
+  const fv = doors.find((d) => d.door === 'feature-verify');
+  if (blockingOthers.length > 0) {
+    // Another door blocks: report every door with its command, run NOTHING.
+    return {
+      result: { feature, doors, ran_verify: false },
+      text: [
+        `close: refusing to run the feature verify for "${feature}" — ${blockingOthers.length} other door(s) still block, and close never waives a door:`,
+        ...doorLines,
+      ].join('\n'),
+      exitCode: 1,
+    };
+  }
+  if (!fv || !fv.blocking) {
+    // Nothing to run — the verify door is already clear; what remains (if
+    // anything) is scribing/capture work.
+    return { result: { feature, doors, ran_verify: false }, text: doorLines.join('\n') };
+  }
+  if (!recordedCommand) {
+    return {
+      result: { feature, doors, ran_verify: false },
+      text: [
+        `close: the feature verify is the only outstanding door, but no verify command is recorded for "${feature}" — close never invents one.`,
+        ...doorLines,
+      ].join('\n'),
+      exitCode: 1,
+    };
+  }
+  // The recorder below resolves its target exactly like `state feature-verify
+  // record` (session-bound lane else default) — refuse to run when that
+  // record does not track THIS feature, or the result would be stamped on the
+  // wrong record.
+  const target = resolveMutationTarget(root, null, 'close', { noLane: false });
+  if ((target.record.feature || null) !== feature) {
+    return {
+      result: { feature, doors, ran_verify: false },
+      text:
+        `close: refusing to run the verify — recording would land on the ${target.source} record tracking feature "${target.record.feature ?? 'none'}", not "${feature}". ` +
+        `Make "${feature}" the active feature (or bind this session to its lane), then re-run bee close --feature ${feature}.`,
+      exitCode: 1,
+    };
+  }
+  const startedAt = Date.now();
+  const run = spawnSync(recordedCommand, { shell: true, cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  let output = `${run.stdout || ''}${run.stderr || ''}`;
+  if (run.error) output += `\n[close] spawn error: ${run.error.message}\n`;
+  const outDir = path.join(root, '.bee', 'tmp');
+  fs.mkdirSync(outDir, { recursive: true });
+  const outFile = path.join(outDir, `close-verify-${Date.now()}.log`);
+  fs.writeFileSync(outFile, output || `(no output; exit ${run.status})\n`, 'utf8');
+  const green = !run.error && run.status === 0;
+  // The ONE write close ever makes, and it goes through the existing recorder
+  // verbatim — same validation, same lock, same workflow write-through.
+  const recorded = await handleStateFeatureVerifyRecord(root, {
+    command: recordedCommand,
+    'output-file': outFile,
+    result: green ? 'green' : 'red',
+  });
+  const durationS = Math.round((Date.now() - startedAt) / 1000);
+  if (!green) {
+    const tail = output.trim().split('\n').slice(-CLOSE_VERIFY_OUTPUT_TAIL_LINES);
+    return {
+      result: { feature, doors, ran_verify: true, verify: recorded.result, exit_status: run.status ?? null, output_file: outFile },
+      text: [
+        `Feature verify RED for "${feature}" (exit ${run.status ?? 'spawn-failed'}, ${durationS}s) — recorded as red; nothing recorded as passed. Output tail (full log: ${outFile}):`,
+        ...tail,
+        `next: the verify failed (${recordedCommand}) — open fix cells in "${feature}" (never un-cap a capped cell), then re-run bee close --feature ${feature}`,
+      ].join('\n'),
+      exitCode: 1,
+    };
+  }
+  // Green: the debt doors are paid — what remains is the capture checklist.
+  const after = buildCloseDoors(root, feature);
+  const scribing = after.doors.find((d) => d.door === 'scribing-debt');
+  const queue = after.doors.find((d) => d.door === 'capture-queue');
+  return {
+    result: { feature, doors: after.doors, ran_verify: true, verify: recorded.result, exit_status: run.status, output_file: outFile },
+    text: [
+      `Feature verify GREEN for "${feature}" (${durationS}s) — recorded: ${recordedCommand}.`,
+      `Remains before done — capture checklist: scribing ${scribing.detail === 'clear' ? 'clear' : scribing.detail}; capture queue ${queue.detail === 'clear' ? 'clear' : queue.detail}.`,
+      'next: invoke bee-scribing',
+    ].join('\n'),
+  };
 }
 
 // Per-group usage fallback (dispatcher-unify du-1): the shim always supplies
@@ -7937,6 +8259,7 @@ const GROUP_USAGE_FALLBACKS = {
 const HANDLERS = {
   status: handleStatus,
   orient: handleOrient,
+  close: handleClose,
   'cells.list': handleCellsList,
   'cells.ready': handleCellsReady,
   'cells.show': handleCellsShow,
@@ -8103,7 +8426,11 @@ const HANDLERS = {
 // --approved true --json` would consume `--approved` as `--merge`'s own
 // value (then choke on the bare `true` token next), the exact class of bug
 // every flag above guards against.
-export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief', 'feature-verify-pending', 'all-but-active', 'merge']);
+// `claim` (porcelain slice 2) is `dispatch prepare`'s flag-alone opt-in for
+// the claim+reserve+payload path — MUST be here or `dispatch prepare ...
+// --claim --json` would consume `--json` as `--claim`'s own value, the exact
+// class of bug every flag above guards against.
+export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief', 'feature-verify-pending', 'all-but-active', 'merge', 'claim']);
 
 export function splitCommandTokens(argv) {
   const leading = [];

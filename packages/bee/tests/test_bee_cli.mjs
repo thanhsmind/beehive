@@ -204,7 +204,7 @@ await check('registry names are unique and dot-namespaced by group (status, cell
   assert(new Set(names).size === names.length, `duplicate names in registry: ${names.join(', ')}`);
   const groups = new Set(names.map((n) => (n.includes('.') ? n.split('.')[0] : n)));
   for (const group of groups) {
-    assert(['status', 'orient', 'doctor', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent'].includes(group), `unexpected group "${group}"`);
+    assert(['status', 'orient', 'doctor', 'close', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent'].includes(group), `unexpected group "${group}"`);
   }
 });
 
@@ -306,14 +306,14 @@ await check('DA5 bijection: every runtime verb of bee.mjs cells/reservations/dec
   }
 });
 
-await check('DA5 bijection: the only dot-free registry entries are "status", "orient" and "doctor", and every entry\'s group is one of status|orient|doctor|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|config', async () => {
-  const allowedGroups = new Set(['status', 'orient', 'doctor', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent']);
-  const allowedDotFree = new Set(['status', 'orient', 'doctor']);
+await check('DA5 bijection: the only dot-free registry entries are "status", "orient", "doctor" and "close", and every entry\'s group is one of status|orient|doctor|close|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|config', async () => {
+  const allowedGroups = new Set(['status', 'orient', 'doctor', 'close', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent']);
+  const allowedDotFree = new Set(['status', 'orient', 'doctor', 'close']);
   for (const entry of COMMAND_REGISTRY) {
     const group = entry.name.includes('.') ? entry.name.split('.')[0] : entry.name;
-    assert(allowedGroups.has(group), `${entry.name}: group "${group}" is not one of status|orient|doctor|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|herding|config|dispatch|tmp`);
+    assert(allowedGroups.has(group), `${entry.name}: group "${group}" is not one of status|orient|doctor|close|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|herding|config|dispatch|tmp`);
     if (!entry.name.includes('.')) {
-      assert(allowedDotFree.has(entry.name), `dot-free registry entry "${entry.name}" is not one of status|orient|doctor — only those may be dot-free`);
+      assert(allowedDotFree.has(entry.name), `dot-free registry entry "${entry.name}" is not one of status|orient|doctor|close — only those may be dot-free`);
     }
   }
 });
@@ -3974,6 +3974,155 @@ await check('dispatch.prepare example runs through the real dispatcher', async (
   assert(out.economics && out.economics.channel === 'claude-agent', `expected channel claude-agent, got ${result.stdout}`);
 });
 
+// ─── dispatch prepare --claim (porcelain slice 2): claim + reserve + payload
+// in one verb. A dedicated Gate-3-approved temp repo (not the shared `root`,
+// whose demo cells the example chain above already claims/caps) — the
+// registry's own --claim example (examples[2]) runs against it for real, so
+// the example stays a tested contract like every other one. ────────────────
+const claimRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-dispatch-claim-'));
+fs.mkdirSync(path.join(claimRoot, '.bee'), { recursive: true });
+writeJsonAtomic(path.join(claimRoot, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+writeState(claimRoot, {
+  ...defaultState(),
+  phase: 'swarming',
+  feature: 'claimdemo',
+  approved_gates: { context: true, shape: true, execution: true, review: false },
+});
+
+await check('dispatch.prepare --claim example (examples[2]) claims the cell and reserves every file for the worker, then builds the payload (result gains {claimed, reserved})', async () => {
+  addCell(claimRoot, {
+    id: 'claim-demo-1',
+    feature: 'claimdemo',
+    title: 'Fixture cell for the dispatch prepare --claim example',
+    lane: 'small',
+    action: 'Exercise the --claim happy path against a real open cell.',
+    verify: 'node -e "process.exit(0)"',
+    files: ['src/claim-a.ts', 'src/claim-b.ts'],
+  });
+  const { entry, result } = await runExample('dispatch.prepare', { exampleIndex: 2, cwd: claimRoot });
+  assert(result.status === 0, `${entry.name} --claim example exited ${result.status}: stdout=${result.stdout} stderr=${result.stderr}`);
+  const out = JSON.parse(result.stdout);
+  assert(out.claimed === true, `result must gain claimed:true, got ${result.stdout}`);
+  assert(
+    JSON.stringify([...out.reserved].sort()) === JSON.stringify(['src/claim-a.ts', 'src/claim-b.ts']),
+    `reserved must name every cell file, got ${JSON.stringify(out.reserved)}`,
+  );
+  assert(out.tool === 'Agent' && typeof out.dispatch_id === 'string', `payload must be built exactly as without --claim, got ${result.stdout}`);
+  const cell = JSON.parse(fs.readFileSync(path.join(claimRoot, '.bee', 'cells', 'claim-demo-1.json'), 'utf8'));
+  assert(cell.status === 'claimed' && cell.trace.worker === 'exec-claim-demo', `the cell must be claimed for the worker, got status=${cell.status} worker=${cell.trace.worker}`);
+  const list = await runModuleWorker(BEE_MJS, { args: ['reservations', 'list', '--active-only', '--json'], cwd: claimRoot });
+  const active = JSON.parse(list.stdout).reservations.filter((r) => r.agent === 'exec-claim-demo');
+  assert(active.length === 2, `both files must hold live reservations for the worker, got ${JSON.stringify(active)}`);
+});
+
+await check('dispatch.prepare --claim on a reservation conflict unwinds the claim (state restored as found) and names the conflicting path and holder', async () => {
+  addCell(claimRoot, {
+    id: 'claim-demo-2',
+    feature: 'claimdemo',
+    title: 'Fixture cell for the --claim conflict unwind',
+    lane: 'small',
+    action: 'Prove a mid-list reservation conflict releases what was reserved and unclaims the cell.',
+    verify: 'node -e "process.exit(0)"',
+    // Conflict on the SECOND path deliberately: the first path is reserved
+    // before the conflict fires, so the unwind has real work to undo.
+    files: ['src/claim-c.ts', 'src/claim-shared.ts'],
+  });
+  const seed = await runModuleWorker(BEE_MJS, {
+    args: ['reservations', 'reserve', '--agent', 'other-holder', '--cell', 'other-cell', '--path', 'src/claim-shared.ts', '--json'],
+    cwd: claimRoot,
+  });
+  assert(seed.status === 0, `conflict seed reserve exited ${seed.status}: ${seed.stdout} ${seed.stderr}`);
+  const result = await runModuleWorker(BEE_MJS, {
+    args: ['dispatch', 'prepare', '--runtime', 'claude', '--kind', 'cell', '--cell', 'claim-demo-2', '--worker', 'exec-claim-demo-2', '--claim', '--json'],
+    cwd: claimRoot,
+  });
+  assert(result.status === 1, `a reservation conflict must refuse non-zero, got ${result.status}: ${result.stdout}`);
+  const error = JSON.parse(result.stdout).error;
+  assert(error.includes('src/claim-shared.ts') && error.includes('other-holder'), `the refusal must name the conflicting path and holder, got: ${error}`);
+  const cell = JSON.parse(fs.readFileSync(path.join(claimRoot, '.bee', 'cells', 'claim-demo-2.json'), 'utf8'));
+  assert(cell.status === 'open', `the claim must be unwound back to open, got ${cell.status}`);
+  const list = await runModuleWorker(BEE_MJS, { args: ['reservations', 'list', '--active-only', '--json'], cwd: claimRoot });
+  const reservations = JSON.parse(list.stdout).reservations;
+  assert(reservations.filter((r) => r.agent === 'exec-claim-demo-2').length === 0, `the worker's partial reservations must be released, got ${JSON.stringify(reservations)}`);
+  assert(reservations.filter((r) => r.agent === 'other-holder').length === 1, 'the foreign holder\'s reservation must be untouched');
+});
+
+await check('dispatch.prepare --claim with a non-cell kind is a validation error that touches nothing', async () => {
+  const result = await runModuleWorker(BEE_MJS, {
+    args: ['dispatch', 'prepare', '--runtime', 'claude', '--kind', 'gather', '--claim', '--json'],
+    cwd: claimRoot,
+  });
+  assert(result.status === 1, `--claim with --kind gather must refuse, got ${result.status}: ${result.stdout}`);
+  assert(JSON.parse(result.stdout).error.includes('--claim is only valid with --kind cell'), `got: ${result.stdout}`);
+});
+
+// ─── close (porcelain slice 2): the feature close driver ───────────────────
+
+await check('close example runs through the real dispatcher with the spec\'s {feature, doors:[{door, blocking, detail, command}]} dry-run shape', async () => {
+  const result = await assertExampleOk('close');
+  const out = JSON.parse(result.stdout);
+  assert(out.feature === 'demo', `expected feature demo, got ${result.stdout}`);
+  assert(Array.isArray(out.doors) && out.doors.length >= 4, `expected the full door set, got ${result.stdout}`);
+  for (const door of out.doors) {
+    assert(typeof door.door === 'string' && typeof door.blocking === 'boolean' && typeof door.detail === 'string' && 'command' in door,
+      `every door carries {door, blocking, detail, command}, got ${JSON.stringify(door)}`);
+  }
+  const names = out.doors.map((d) => d.door);
+  for (const expected of ['feature-verify', 'test-cell', 'scribing-debt', 'capture-queue']) {
+    assert(names.includes(expected), `door "${expected}" missing from ${names.join(', ')}`);
+  }
+});
+
+// A dedicated repo owing BOTH unwaivable debts, with a verify command already
+// recorded (a red record — its command is exactly what a re-verify reruns).
+const closeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-close-'));
+fs.mkdirSync(path.join(closeRoot, '.bee', 'cells'), { recursive: true });
+writeJsonAtomic(path.join(closeRoot, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+const CLOSE_FIXTURE_VERIFY_AT = '2026-01-01T00:00:00.000Z';
+writeJsonAtomic(path.join(closeRoot, '.bee', 'state.json'), {
+  phase: 'swarming',
+  feature: 'closedemo',
+  feature_verify: {
+    feature: 'closedemo',
+    command: 'node -e "process.exit(0)"',
+    output_sha256: 'a'.repeat(64),
+    result: 'red',
+    at: CLOSE_FIXTURE_VERIFY_AT,
+  },
+});
+writePendingCappedCell(closeRoot, 'closedemo-pending', 'closedemo', new Date().toISOString());
+writeCappedBehaviorCell(closeRoot, 'closedemo-behavior', 'closedemo');
+
+await check('close --dry-run reports every door read-only: both unwaivable debts BLOCKING, the recorded verify command on the feature-verify door, text ending with a next: line', async () => {
+  const jsonResult = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closedemo', '--dry-run', '--json'], cwd: closeRoot });
+  assert(jsonResult.status === 0, `dry-run is a report, never a refusal — got ${jsonResult.status}: ${jsonResult.stdout} ${jsonResult.stderr}`);
+  const out = JSON.parse(jsonResult.stdout);
+  const fv = out.doors.find((d) => d.door === 'feature-verify');
+  const tc = out.doors.find((d) => d.door === 'test-cell');
+  assert(fv.blocking === true && tc.blocking === true, `both debts must read BLOCKING, got ${jsonResult.stdout}`);
+  assert(fv.command === 'node -e "process.exit(0)"', `the feature-verify door must carry the recorded verify command, got ${fv.command}`);
+  assert(typeof tc.command === 'string' && tc.command.startsWith('bee cells'), `the test-cell door must carry a runnable bee verb, got ${tc.command}`);
+  const textResult = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closedemo', '--dry-run'], cwd: closeRoot });
+  assert(textResult.status === 0, `text dry-run exited ${textResult.status}: ${textResult.stderr}`);
+  const lines = textResult.stdout.trimEnd().split('\n');
+  assert(/^next: /.test(lines[lines.length - 1]), `dry-run text must end with a next: line, got "${lines[lines.length - 1]}"`);
+  assert(lines.filter((l) => l.startsWith('door ')).length === out.doors.length, `one line per door, got: ${textResult.stdout}`);
+});
+
+await check('close refuses to run the verify while another door blocks — reports the doors, runs nothing, records nothing', async () => {
+  const result = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closedemo', '--json'], cwd: closeRoot });
+  assert(result.status === 1, `close must refuse while test-cell debt blocks, got ${result.status}: ${result.stdout}`);
+  const out = JSON.parse(result.stdout);
+  assert(out.ran_verify === false, `close must run NOTHING past a blocking door, got ${result.stdout}`);
+  assert(out.doors.find((d) => d.door === 'test-cell').blocking === true, `the blocking door must be named, got ${result.stdout}`);
+  // The recorder was never touched: the fixture's red record is byte-stable.
+  const state = JSON.parse(fs.readFileSync(path.join(closeRoot, '.bee', 'state.json'), 'utf8'));
+  assert(
+    state.feature_verify.at === CLOSE_FIXTURE_VERIFY_AT && state.feature_verify.result === 'red',
+    `close must not have recorded anything, got ${JSON.stringify(state.feature_verify)}`,
+  );
+});
+
 // ─── worktree group examples: a REAL git repo + real `git worktree add`,
 // mirroring the fixture pattern scripts/test_worktree_cli.mjs already proved
 // end-to-end. A dedicated temp tree (not the shared `root` above, which has
@@ -5746,7 +5895,8 @@ await check('bee --help --json (default) is porcelain-only: exactly the surface-
   const porcelainNames = COMMAND_REGISTRY.filter((e) => e.surface === 'porcelain').map((e) => e.name).sort();
   const shownNames = manifest.commands.map((c) => c.name).sort();
   assert(JSON.stringify(shownNames) === JSON.stringify(porcelainNames), `default --help --json must show exactly the porcelain set, got ${shownNames.join(', ')}`);
-  assert(porcelainNames.length === 15, `the porcelain set is 15 verbs (docs/specs/porcelain.md), got ${porcelainNames.length}`);
+  assert(porcelainNames.length === 16, `the porcelain set is 16 verbs (docs/specs/porcelain.md), got ${porcelainNames.length}`);
+  assert(shownNames.includes('close'), 'close must be in the porcelain set');
   assert(!shownNames.includes('cells.cap'), 'plumbing (cells.cap) must be hidden from the default manifest');
 });
 
