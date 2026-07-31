@@ -6,20 +6,23 @@ the reasons. A decision record is the small, durable artifact that keeps
 a settled question settled. This guide covers which decisions deserve one,
 how to write one, and how to keep the record honest as the work moves.
 
-## Contents
+## Where to look
 
-- What is worth recording
-- The granularity test
-- Record at the moment of settlement
-- Anatomy of a good record
-- Anti-patterns
-- Locked versus open
-- Superseding, not editing
-- Deriving work from decisions
-- Decision drift and citations in prose
-- When not to record
+| Situation / goal | Entry |
+|---|---|
+| Unsure whether a decision deserves a record | The recurrence test |
+| A discussion produced several commitments | The granularity test |
+| A decision just landed in conversation | Record at the moment of settlement |
+| Writing the record itself | Anatomy of a good record |
+| Recognizing a record that carries no weight | Anti-patterns |
+| Downstream work meets a settled question | Locked versus open |
+| A locked decision no longer fits the budget or reality | Reinterpretation is quiet narrowing |
+| Changing a recorded decision | Superseding, not editing |
+| Writing a change that exists to honor a decision | Cite the decision at the work |
+| Referencing decisions in specs and guides | Prose states the rule; records hold the lineage |
+| Tempted to record everything | When not to record |
 
-## What is worth recording
+## The recurrence test
 
 Record a decision when it settles an ambiguity that someone — a teammate,
 a reviewer, a future implementer, you in six weeks — will hit again. That
@@ -34,10 +37,10 @@ dedupes), *what does this word mean here* ("account" is the billing
 entity, not the login). Each of these looks obvious for about a week
 after it is settled, and then it is a debate again.
 
-The rejected alternative is often the most valuable part. Code shows what
-was built; only the record shows that the other way was considered and
-why it lost — which is exactly what stops the next person from "fixing"
-the design back to the rejected option.
+**The rejected alternative is often the most valuable part.** Code shows
+what was built; only the record shows that the other way was considered
+and why it lost — which is exactly what stops the next person from
+"fixing" the design back to the rejected option.
 
 ## The granularity test
 
@@ -53,12 +56,16 @@ citable, because it does not say what the approach *is*. A record that
 cannot settle a disagreement on its own has recorded the meeting, not
 the decision.
 
-If a discussion produced three commitments, that is three records. Bundled
-records cannot be superseded independently: when one of the three changes
-later, the bundle becomes half-true, and half-true records are worse than
-none because they still get cited.
+**Never bundle.** If a discussion produced three commitments, that is
+three records. Bundled records cannot be superseded independently: when
+one of the three changes later, the bundle becomes half-true, and
+half-true records are worse than none because they still get cited.
 
 ## Record at the moment of settlement
+
+The trigger is audible: when you hear or say "okay, so we'll do X" →
+capture it before the conversation moves on. That sentence *is* the
+record, missing only its boundary and its why.
 
 Write the record when the decision lands — in the same working session,
 while the alternatives and the reason are still sharp — not in a cleanup
@@ -72,10 +79,6 @@ already loaded in your head. Six weeks later the same question costs the
 whole debate again — the same arguments, reheated, often landing on a
 *different* answer this time, which now silently disagrees with code
 built on the first one. One line now, or an incoherent system later.
-
-A practical trigger: the moment you hear or say "okay, so we'll do X" —
-that sentence *is* the record, missing only its boundary and its why.
-Capture it before the conversation moves on.
 
 ## Anatomy of a good record
 
@@ -122,6 +125,9 @@ downstream of a locked decision builds on it *without re-deriving it*,
 which is what lets many hands work in parallel without converging on
 different answers.
 
+## Reinterpretation is quiet narrowing
+
+When a locked decision turns out expensive → the words do not flex.
 Locked means locked against reinterpretation too, and reinterpretation is
 the subtle failure mode. "Support CSV export for all report types" does
 not become "the three most common report types" because the full set
@@ -135,7 +141,7 @@ words while shaving the meaning.
 ## Superseding, not editing
 
 Decisions change; records of them do not. When a locked decision is
-revisited, the owner supersedes it: a new record states the new choice
+revisited → the owner supersedes it: a new record states the new choice
 and points at the old one, and the old record stays, marked superseded.
 
 Never edit the old record in place. Work was built while it was in
@@ -145,13 +151,13 @@ unexplainable — a reviewer reading last quarter's diff finds it honoring
 a rule that apparently never existed. The supersede chain is the history
 of the system's mind changing, and that history is load-bearing.
 
-Superseding belongs to the decision's owner. Anyone can propose it;
+**Superseding belongs to the decision's owner.** Anyone can propose it;
 discovering mid-implementation that a decision is inconvenient is a
 reason to raise it, never a license to override it.
 
-## Deriving work from decisions
+## Cite the decision at the work
 
-When a change exists to honor a decision, say so where the work is
+When a change exists to honor a decision → say so where the work is
 described — in the plan item, the commit message, the PR description.
 "Cap retries at 5 (per the webhook-retry decision)" turns a reviewer's
 question from "why 5?" into a lookup. The citation completes a traceable
@@ -164,7 +170,7 @@ a locked decision is defended by that decision; the same change without
 the citation looks like an arbitrary preference, and arbitrary
 preferences get "improved" away.
 
-## Decision drift and citations in prose
+## Prose states the rule; records hold the lineage
 
 Citations belong at the *work* — commits, plans, reviews — not woven
 through long-lived prose. Documentation, guides, and specs should state

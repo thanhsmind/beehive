@@ -1,18 +1,22 @@
 # How to test
 
-Contents
+## Where to look
 
-- Why tests exist
-- Before you write: audit the coverage you already have
-- Test behavior, not structure
-- Isolation and determinism
-- Choosing cases
-- Proof discipline: red before green
-- Test the real code
-- What not to test
-- When production breaks despite green tests
+| Situation / goal | Entry |
+|---|---|
+| Judging whether a test is worth writing | Confidence, not coverage |
+| About to write a test for a change | The coverage audit |
+| Deciding what a test may assert | Test behavior, not structure |
+| Setting up fixtures and shared state | Every test owns its world |
+| A test touches time, network, randomness, or ordering | The four determinism leaks |
+| A test fails intermittently | Flaky is worse than missing |
+| Picking which cases to cover | Choosing cases |
+| Fixing a reported bug | Red before green |
+| The code under test is hard to reach | Test the real code, never the twin |
+| Tempted to test everything | What not to test |
+| A bug shipped despite a green suite | Every escaped bug is a missing test |
 
-## Why tests exist
+## Confidence, not coverage
 
 A test exists to buy confidence to change code. Each test encodes one
 scenario and one expectation: "given this input and this state, the system
@@ -23,10 +27,11 @@ nothing meaningful, or fails randomly — is not neutral. It costs maintenance
 and erodes trust in the suite. Judge every test you write by the confidence
 it adds, not by the coverage number it moves.
 
-## Before you write: audit the coverage you already have
+## The coverage audit
 
-Never author a test from the change alone. First find what already covers
-the behavior you touched, and cite it concretely — by file and by case name:
+Before authoring any test → never write it from the change alone. First
+find what already covers the behavior you touched, and cite it concretely —
+by file and by case name:
 
     Existing coverage for parseRange:
     - range.test: "parses open-ended upper bound"
@@ -38,19 +43,19 @@ the same scenario paying two maintenance bills, and when the behavior
 legitimately changes, every duplicate breaks at once and someone has to
 decide which assertions still express intent.
 
-"No new test needed" is a legitimate verdict — but only when backed by the
-citation above. "It's probably covered" is not a verdict; it is a skipped
-audit. If you cannot name the file and case that cover the scenario, the
-scenario is not covered.
+**"No new test needed" needs the citation.** It is a legitimate verdict —
+but only when backed by the citation above. "It's probably covered" is not
+a verdict; it is a skipped audit. If you cannot name the file and case that
+cover the scenario, the scenario is not covered.
 
 ## Test behavior, not structure
 
 Test what the code observably does — its return values, its emitted events,
-its persisted effects — not how it is internally arranged. The litmus test:
-a refactor that preserves behavior must not break tests. If renaming a
-private function, inlining a helper, or reordering internal calls turns the
-suite red, the tests were pinned to structure, and they now punish exactly
-the improvements they were supposed to enable.
+its persisted effects — not how it is internally arranged. **The refactor
+litmus:** a refactor that preserves behavior must not break tests. If
+renaming a private function, inlining a helper, or reordering internal
+calls turns the suite red, the tests were pinned to structure, and they now
+punish exactly the improvements they were supposed to enable.
 
 The common ways structure-coupling creeps in:
 
@@ -68,21 +73,22 @@ The common ways structure-coupling creeps in:
   network, clock, filesystem, third-party services — and let your own
   objects talk to each other for real.
 
-The exception: when the algorithm *is* the deliverable — a sort must be
-stable, a cache must evict least-recently-used, a retry must back off
+**The exception — when the algorithm *is* the deliverable:** a sort must
+be stable, a cache must evict least-recently-used, a retry must back off
 exponentially — those properties are the observable behavior, and asserting
 them is correct even though they describe "how." Assert the property (the
 output order, the eviction victim, the delay sequence), still not the
 private call graph.
 
-## Isolation and determinism
+## Every test owns its world
 
-Every test owns its world. It creates its own fixtures, and it cleans up
-after itself — or better, writes into a per-test temporary location that
-needs no cleanup. No test may depend on another test having run first, on
-shared mutable state, or on leftovers from a previous run. A suite whose
-tests pass in order but fail when filtered to one test is broken, even
-while it is green.
+Every test creates its own fixtures, and it cleans up after itself — or
+better, writes into a per-test temporary location that needs no cleanup.
+No test may depend on another test having run first, on shared mutable
+state, or on leftovers from a previous run. A suite whose tests pass in
+order but fail when filtered to one test is broken, even while it is green.
+
+## The four determinism leaks
 
 Determinism means the test's outcome depends only on the code under test.
 The usual leaks and their fixes:
@@ -94,9 +100,11 @@ The usual leaks and their fixes:
 - **Ordering**: never assert on the iteration order of an unordered
   collection; sort before comparing.
 
+## Flaky is worse than missing
+
 A flaky test is worse than a missing test: a missing test is a known blind
 spot, while a flaky test trains everyone to ignore red — and an ignored red
-is how real regressions ship. When a test flakes, stop and fix the
+is how real regressions ship. When a test flakes → stop and fix the
 nondeterminism now, or delete the test and record the lost coverage as a
 gap. Never retry-until-green, and never leave it flaking "for later."
 
@@ -113,33 +121,33 @@ that demonstrates it:
   modes the code claims to handle. Assert what the caller observes — the
   error type and message contract — not merely "it throws."
 
-Smallest demonstrating size matters: a bug in pagination shows up with
+**Smallest demonstrating size** matters: a bug in pagination shows up with
 three items and a page size of two. A 500-item fixture proves nothing more
 and hides the intent of the case.
 
-Compose rather than multiply. When behavior varies along independent
+**Compose rather than multiply.** When behavior varies along independent
 dimensions — say, three formats and four locales — do not write twelve
 tests. Test each dimension's variants where the other is held fixed, then
 add one test proving the dimensions are wired together. Combinatorial
 suites look thorough but bury the one interaction case that actually
 matters under repetition no one reads.
 
-## Proof discipline: red before green
+## Red before green
 
-A fix for a reported bug starts by reproducing the bug as a failing test.
-Write the test, run it, and watch it fail for the reported reason — the
-same wrong value, the same error — before touching the fix. A test written
-after the fix, that has never failed, proves nothing about the bug: it may
-be asserting the wrong thing, exercising the wrong path, or passing
-vacuously. The observed red is the evidence that this test detects this
-bug; the subsequent green is the evidence the fix works.
+When fixing a reported bug → start by reproducing the bug as a failing
+test. Write the test, run it, and watch it fail for the reported reason —
+the same wrong value, the same error — before touching the fix. A test
+written after the fix, that has never failed, proves nothing about the
+bug: it may be asserting the wrong thing, exercising the wrong path, or
+passing vacuously. The observed red is the evidence that this test detects
+this bug; the subsequent green is the evidence the fix works.
 
-The same honesty applies to reporting. Write "green," "passing," or
-"fixed" only next to actual command output from a run you just performed.
-"Tests should pass now" is a prediction, not a result. If you have not run
-it, say so.
+**Green only beside fresh output.** The same honesty applies to reporting:
+write "green," "passing," or "fixed" only next to actual command output
+from a run you just performed. "Tests should pass now" is a prediction,
+not a result. If you have not run it, say so.
 
-## Test the real code
+## Test the real code, never the twin
 
 Import and exercise the code that ships. Never test a copy of a function
 pasted into the test file, a simplified reimplementation, or a "test
@@ -169,13 +177,13 @@ Do not spend tests on:
 The moment any of these grows a branch, a transformation, or a default, it
 has logic, and logic gets a test.
 
-## When production breaks despite green tests
+## Every escaped bug is a missing test
 
-Every escaped bug is a missing test, identified for you at the cost of an
-incident. Before or with the fix, write the test that would have caught
-it — reproduce the production failure at the smallest size, watch it fail,
-then fix. Then ask the second question: what made this scenario invisible
-to the suite? An untested error path, an over-mocked boundary that hid the
-real interaction, an environment difference the tests never exercise. Close
-the class of gap, not just the instance, or the same hole ships the next
-bug too.
+When production breaks despite green tests → the incident has identified
+the missing test for you. Before or with the fix, write the test that
+would have caught it — reproduce the production failure at the smallest
+size, watch it fail, then fix. Then ask the second question: what made
+this scenario invisible to the suite? An untested error path, an
+over-mocked boundary that hid the real interaction, an environment
+difference the tests never exercise. **Close the class of gap, not just
+the instance**, or the same hole ships the next bug too.

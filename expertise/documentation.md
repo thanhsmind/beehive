@@ -4,16 +4,20 @@ Documentation is the system's contract written down. Its audience is a
 competent stranger with a question and no access to your memory. Every
 rule below follows from taking that stranger seriously.
 
-## Contents
+## Where to look
 
-- The rebuild test
-- Separate what from how
-- Write for the reader who wasn't there
-- Currency discipline
-- Precision
-- Structure for lookup, not narrative
-- What not to document
-- Honest gaps
+| Situation / goal | Entry |
+|---|---|
+| Judging whether a spec is good enough | The rebuild test |
+| Deciding where a sentence belongs | Separate what from how |
+| A sentence leans on meetings, chat, or shared context | Write for the reader who wasn't there |
+| Choosing tense and framing | Write in the timeless present |
+| Behavior changed and a spec covers it | Currency discipline |
+| A spec is wrong and cannot be fixed now | Stale docs are worse than no docs |
+| A rule could be read two ways | Precision |
+| Organizing or restructuring a document | Structure for lookup, not narrative |
+| Tempted to write everything down | What not to document |
+| Behavior is undecided, unmeasured, or unverified | Honest gaps |
 
 ## The rebuild test
 
@@ -59,10 +63,10 @@ separate section or file clearly marked as a snapshot: "Currently
 enforced via a TTL index; see the session store." When the refactor
 lands, the note dies and the contract stands untouched.
 
-The sorting question for every sentence: would this sentence still be
-true after a full rewrite that preserves behavior? If yes, it belongs in
-the spec. If no, it is an implementation note — date it, fence it off,
-or leave it out.
+**The sorting question**, for every sentence: would this sentence still
+be true after a full rewrite that preserves behavior? If yes, it belongs
+in the spec. If no, it is an implementation note — date it, fence it
+off, or leave it out.
 
 ## Write for the reader who wasn't there
 
@@ -84,10 +88,12 @@ for states, roles, phases — must be defined at first use, every
 document, even when it feels repetitive to you. It is not repetitive to
 the stranger, and the stranger is the audience.
 
-Write in the timeless present: "the service retries", not "the service
-will now retry" or "we changed it to retry". The words "now", "new",
-"recently", and "changed" in a spec are all the same bug: they
-timestamp the document instead of describing the system.
+## Write in the timeless present
+
+Write "the service retries", not "the service will now retry" or "we
+changed it to retry". The words "now", "new", "recently", and "changed"
+in a spec are all the same bug: they timestamp the document instead of
+describing the system.
 
 ## Currency discipline
 
@@ -95,22 +101,23 @@ A spec updated at the moment behavior changes stays alive. A spec
 updated "later" is already legacy — "later" is a queue that only grows,
 and by the time later comes, the person who knew what changed is gone.
 
-The rule that works is brutal and simple: the change and its spec
-update are one unit of work. The behavior change is not done until the
+The rule that works is brutal and simple: **the change and its spec
+update are one unit of work**. The behavior change is not done until the
 spec matches, the same way it is not done until the tests pass. Any
 process that reviews changes should ask "does a spec cover this
 behavior, and was it updated?" with the same weight as "are there
 tests?"
 
-Stale docs are worse than no docs. No docs send the reader to the code,
-skeptical and careful. Stale docs are trusted — that is their whole
-function — so the reader builds on the documented 30-minute timeout
-while the system enforces 15, and the resulting defect is one neither
-the code's author nor the doc's author can see, because each half is
-locally correct. A wrong spec is a defect with the blast radius of
-everyone who reads it.
+## Stale docs are worse than no docs
 
-If you find a spec you cannot afford to update, mark it dead at the
+No docs send the reader to the code, skeptical and careful. Stale docs
+are trusted — that is their whole function — so the reader builds on the
+documented 30-minute timeout while the system enforces 15, and the
+resulting defect is one neither the code's author nor the doc's author
+can see, because each half is locally correct. A wrong spec is a defect
+with the blast radius of everyone who reads it.
+
+When you find a spec you cannot afford to update → mark it dead at the
 top — "OUTDATED as of <date>; the code is authoritative" — so it stops
 collecting victims. Honest deletion beats confident rot.
 
@@ -128,7 +135,7 @@ units, and error behavior concretely:
 - Not "recent items", but "items created in the last 30 days, by
   creation timestamp, UTC."
 
-Attach an example to every rule that could be read two ways. Rules
+**Attach an example to every rule that could be read two ways.** Rules
 state the general case; examples pin the edge that the wording left
 open:
 
@@ -141,7 +148,7 @@ merely compared leniently. If you cannot construct a disambiguating
 example for a rule, you have not yet decided what the rule means —
 which is worth discovering while writing, not in production.
 
-Error behavior is part of the contract, not an appendix. For every
+**Error behavior is part of the contract**, not an appendix. For every
 operation: what happens on bad input, on timeout, on conflict, on
 partial failure? "Returns an error" is not an answer; which error, what
 the caller can do about it, and what state the system is left in are.
@@ -198,8 +205,8 @@ sentence that can rot. Omit:
   any practitioner would expect, silence is fine. Spend words where the
   system surprises.
 
-The cut test: if this sentence disappeared, would a rebuilder get the
-behavior wrong, or a maintainer make a worse decision? If neither,
+**The cut test:** if this sentence disappeared, would a rebuilder get
+the behavior wrong, or a maintainer make a worse decision? If neither,
 delete it.
 
 ## Honest gaps

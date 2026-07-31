@@ -5,26 +5,30 @@ its size, its order, its boundaries — before any of it exists. A good shape
 makes the work almost implement itself; a bad one guarantees rework no
 amount of careful coding can recover. This guide is about choosing well.
 
-## Contents
+## Where to look
 
-- The smallest honest shape
-- Reading risk before it reads you
-- What makes a good unit of work
-- Dependency thinking
-- Plan the current slice; headline the rest
-- The walking skeleton
-- The smaller-path question
-- Scope integrity: split, never shrink
-- Plans are contracts
-- The cold-pickup test
+| Situation / goal | Entry |
+|---|---|
+| Deciding how much process a request deserves | The smallest honest shape |
+| Judging whether a change is riskier than it looks | Reading risk before it reads you |
+| Tempted to give risky work a lighter shape | De-escalate on evidence, not optimism |
+| Breaking a plan into pickable, provable pieces | What makes a good unit of work |
+| Ordering units; deciding what to verify first | Build order versus discovery order |
+| Deciding how much detail later phases get | Plan the current slice; headline the rest |
+| Starting anything user-visible | The walking skeleton |
+| About to present a plan | The smaller-path question |
+| Agreed work will not fit the time or size | Scope integrity: split, never shrink |
+| Reality disagrees with an approved plan | Plans are contracts |
+| Checking whether planning is finished | The cold-pickup test |
 
 ## The smallest honest shape
 
-Match ceremony to real risk, not to how the request sounds. A one-line
-config change described in an excited paragraph is still a one-line config
-change. A "quick tweak" to session handling is not quick, no matter how it
-was phrased. The request's tone carries zero information about its risk;
-the touched surfaces carry all of it.
+When sizing any incoming request → match ceremony to real risk, not to how
+the request sounds. A one-line config change described in an excited
+paragraph is still a one-line config change. A "quick tweak" to session
+handling is not quick, no matter how it was phrased. The request's tone
+carries zero information about its risk; the touched surfaces carry all
+of it.
 
 "Honest" is the load-bearing word. The smallest shape is not the one with
 the least process — it is the smallest one that still covers what the work
@@ -38,7 +42,7 @@ to route around the process, and then the process protects nothing.
 ## Reading risk before it reads you
 
 Certain surfaces make work riskier than it looks, regardless of diff size.
-Treat any of these as a signal to escalate the shape:
+When the work touches any of these → escalate the shape:
 
 - **Auth, permissions, session handling.** Mistakes are silent and
   exploitable. There is no cosmetic change to an auth path.
@@ -59,9 +63,12 @@ like an afternoon. It touches the data model (migration), every query
 that lists users (a contract with each caller), and probably an index.
 The honest shape has a design step; the dishonest one has an incident.
 
-De-escalate only on evidence, never on optimism. "The migration is
-additive and no query filters on this column — verified by search" earns
-a lighter shape. "It's probably fine" earns nothing.
+## De-escalate on evidence, not optimism
+
+When a risk surface seems not to apply → earn the lighter shape with
+evidence, never with optimism. "The migration is additive and no query
+filters on this column — verified by search" earns a lighter shape. "It's
+probably fine" earns nothing.
 
 ## What makes a good unit of work
 
@@ -86,7 +93,7 @@ finishes, and proves. Four properties make one good:
 Size follows from these properties rather than from a line-count rule: a
 unit small enough to hold one outcome and one exit state is small enough.
 
-## Dependency thinking
+## Build order versus discovery order
 
 Two orders matter, and they are usually different:
 
@@ -98,19 +105,20 @@ Two orders matter, and they are usually different:
 Plans fail when they sequence only build order. If a decision in unit 4
 depends on a fact nobody has verified, that verification is itself a unit,
 and it goes first — usually as a spike with a written answer as its exit
-state. Front-load discovery: the most expensive dependency is the one you
-find at unit 4 that invalidates units 1 through 3.
+state. **Front-load discovery:** the most expensive dependency is the one
+you find at unit 4 that invalidates units 1 through 3.
 
-Draw the dependency edges explicitly, then look for what is *not* there:
-units with no edges between them can proceed in parallel, and pretending
-otherwise serializes work for no reason.
+**No edges means parallel.** Draw the dependency edges explicitly, then
+look for what is *not* there: units with no edges between them can proceed
+in parallel, and pretending otherwise serializes work for no reason.
 
 ## Plan the current slice; headline the rest
 
-Detail decays. Every specific decision made about phase 3 — file names,
-function signatures, edge-case handling — is a bet placed before phase 1
-has taught you anything. Most of those bets lose, and each loss costs
-twice: once to write, once to notice it is now wrong and misleading.
+When the plan reaches past the current slice → drop to headlines. Detail
+decays: every specific decision made about phase 3 — file names, function
+signatures, edge-case handling — is a bet placed before phase 1 has taught
+you anything. Most of those bets lose, and each loss costs twice: once to
+write, once to notice it is now wrong and misleading.
 
 So plan asymmetrically. The current slice gets full resolution: units,
 dependencies, files, exit states. Later slices get headlines — one line
@@ -157,7 +165,7 @@ you delete now is a unit nobody implements, reviews, or maintains.
 
 ## Scope integrity: split, never shrink
 
-When agreed work will not fit the time or size available, there are
+When agreed work will not fit the time or size available → there are
 exactly two honest moves: split it into slices, or renegotiate it with
 whoever owns the requirement. There is no third move where the plan
 quietly delivers less than what was agreed and hopes the gap goes
@@ -180,7 +188,7 @@ the only thing drift can be measured against. If the artifact quietly
 evolves under the work, "we followed the plan" becomes unfalsifiable.
 
 Reality will still disagree with the plan — that is expected and fine.
-When it does, the change is a new decision made in the open: state what
+When it does → the change is a new decision made in the open: state what
 changed, why, and what it displaces, and get the owner's yes. Then the
 plan is amended as a visible edit. What is never fine is discovering the
 change in the diff. An edited plan and a changed plan look identical in

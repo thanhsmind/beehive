@@ -1,15 +1,20 @@
 # How to debug
 
-Contents
+## Where to look
 
-- Reproduce first
-- Read the error before forming theories
-- State the hypothesis before the fix
-- Instrument before guessing
-- Bisection: three axes
-- Environment versus code
-- The fix is not done at "it works"
-- Cleanup
+| Situation / goal | Entry |
+|---|---|
+| A bug report just arrived | Reproduce first |
+| The failing input is large or noisy | Minimize the repro |
+| An error or stack trace is on screen | Read the error before forming theories |
+| You know where it crashed, not why | Crash site versus fault site |
+| About to change code to "fix" it | State the hypothesis before the fix |
+| The cause is unclear | Instrument before guessing |
+| The search space is large | Bisection: three axes |
+| The bug looks impossible | Environment versus code |
+| The symptom looks like one you've seen before | The familiarity trap |
+| The symptom just vanished | The fix is not done at "it works" |
+| Wrapping up the fix | Cleanup |
 
 ## Reproduce first
 
@@ -19,16 +24,18 @@ command, the exact input, the exact output. If a report says "sometimes
 fails on save," your first deliverable is a way to make it fail on
 purpose — not a theory about why it might.
 
+**The repro is also your finish line.** "I changed something and the
+report stopped coming in" is not a verified fix; "the repro failed before
+the change and passes after it" is.
+
+## Minimize the repro
+
 Then minimize. Strip the reproduction to the smallest input and shortest
 path that still fails: delete half the input and re-run; if it still
 fails, delete half again. A 3-line repro is worth an hour of shrinking,
 because every element that remains is now evidence — if removing a field
 makes the bug vanish, that field is implicated. A minimized repro often
 names the culprit before you open the code.
-
-The repro is also your finish line. "I changed something and the report
-stopped coming in" is not a verified fix; "the repro failed before the
-change and passes after it" is.
 
 ## Read the error before forming theories
 
@@ -39,19 +46,21 @@ why, not anything about `id`. "ENOENT: ./config/app.yaml" names the exact
 path it tried; compare it character by character with the path you think
 it should be using.
 
-In the stack trace, find the deepest frame that is your code — the frames
-inside libraries usually mark where your bad value was finally noticed,
-not where it was made. And in a stream of output, scroll to the first
-failure: errors cascade, and the twelfth message is usually debris from
-the first. Fixing the last error on screen is treating a symptom of a
-symptom.
+In the stack trace, **find the deepest frame that is your code** — the
+frames inside libraries usually mark where your bad value was finally
+noticed, not where it was made. And in a stream of output, **scroll to
+the first failure**: errors cascade, and the twelfth message is usually
+debris from the first. Fixing the last error on screen is treating a
+symptom of a symptom.
 
-Distinguish the crash site from the fault site. The crash is where the
-invalid state was detected; the fault is where it was created, often far
-earlier — a null returned three calls up, a config misread at startup, a
-cache poisoned yesterday. Trace the bad value backward to its origin, and
-fix it there. A null-check at the crash site silences the alarm and leaves
-the fault standing.
+## Crash site versus fault site
+
+The crash is where the invalid state was detected; the fault is where it
+was created, often far earlier — a null returned three calls up, a config
+misread at startup, a cache poisoned yesterday. When you know where it
+crashed → trace the bad value backward to its origin, and fix it there.
+A null-check at the crash site silences the alarm and leaves the fault
+standing.
 
 ## State the hypothesis before the fix
 
@@ -72,7 +81,7 @@ still there and you have stopped looking.
 
 ## Instrument before guessing
 
-When the cause is unclear, resist the speculative edit — the "maybe it's
+When the cause is unclear → resist the speculative edit — the "maybe it's
 this" change made in hope. Speculative edits mutate the crime scene: after
 three of them you no longer know whether the behavior you see is the bug,
 your edits, or an interaction between them.
@@ -89,10 +98,10 @@ Instead, add observation aimed at a question:
 - **Input probing**: vary one aspect of the input at a time and watch what
   the failure does.
 
-Each experiment tests exactly one hypothesis and has a predicted outcome
-before you run it. If you change two things and the behavior shifts, you
-have learned almost nothing — you cannot attribute the shift. Slow, single
-steps converge; broad flailing loops.
+**One experiment, one hypothesis.** Each experiment has a predicted
+outcome before you run it. If you change two things and the behavior
+shifts, you have learned almost nothing — you cannot attribute the shift.
+Slow, single steps converge; broad flailing loops.
 
 ## Bisection: three axes
 
@@ -107,7 +116,7 @@ are cheapest to test.
   change is a spotlight — the fault is in that diff.
 - **Over input — which part?** Feed half the failing input; if it still
   fails, halve again; if it passes, the trigger is in the other half.
-  This is the minimization from "Reproduce first," used as a search.
+  This is the minimization from "Minimize the repro," used as a search.
 - **Over the code path — which stage?** In a pipeline, check the
   intermediate value at the midpoint: correct there means the fault is
   downstream; wrong means upstream. Repeat inside the failing half until
@@ -129,9 +138,11 @@ because a large share of "impossible" bugs live there:
   line endings, whether symlinks can be created at all. "Works on my
   machine" is usually one of these wearing a mask.
 
-A related trap: pattern-matching a symptom to a remembered failure. "Last
-time this timeout meant the proxy config" is a hypothesis, not a
-diagnosis — the same symptom has many causes. Verify that the evidence in
+## The familiarity trap
+
+When a symptom matches a remembered failure → treat the match as a
+hypothesis, not a diagnosis. "Last time this timeout meant the proxy
+config" — the same symptom has many causes. Verify that the evidence in
 front of you supports *this* failure being that cause (does the log show
 the proxy path at all?) before applying last time's fix. Familiarity is
 where experienced debuggers lose the most time: they skip the verification
@@ -157,8 +168,9 @@ answer three questions:
   type that rules it out. If the answer is "nothing," the bug is on a
   round trip.
 
-Then look sideways once: does the same mechanism exist elsewhere? A bug
-found in one call site of a pattern usually has siblings in the others.
+**Then look sideways once:** does the same mechanism exist elsewhere? A
+bug found in one call site of a pattern usually has siblings in the
+others.
 
 ## Cleanup
 
@@ -170,8 +182,8 @@ started and justify every remaining line as part of the fix. A hardcoded
 residue; it is the next bug, planted by the person best positioned to
 prevent it.
 
-Two kinds of instrumentation may stay, deliberately: an assertion that
-documents a real invariant, and a log line at a boundary you will want
-visibility into next time — kept at an appropriate log level, with the
-context to be useful. Keep those on purpose, with intent, not because
+**Two kinds of instrumentation may stay, deliberately:** an assertion
+that documents a real invariant, and a log line at a boundary you will
+want visibility into next time — kept at an appropriate log level, with
+the context to be useful. Keep those on purpose, with intent, not because
 deleting them was forgotten. Everything else goes.

@@ -2,10 +2,10 @@
   "schema_version": "1.0",
   "bee_version": "1.20.3",
   "managed": {
-    "agents_block": "ac351c07e20dd896cbccd2b99109d308587ee28b8859996b57198d24833d7128",
+    "agents_block": "182726c0f73a532bfaba5b9b1b0e9da0bbb621b29f1ae3bc18dd2a4ae7bea916",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
     "helpers": {
-      "bee.mjs": "69b48fdf04246ae7e1e0002897e9fc6a96940e2adeb8ee40199a0f2c9ccb6e9d"
+      "bee.mjs": "944ae9dfad6ec9f7b6f619727e6b28ea36e3ba2267e5381859f32d8cc6ccb72f"
     },
     "lib": {
       "backlog.mjs": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
@@ -43,23 +43,26 @@
       "workflow-store.mjs": "f2e4988b7ecd278f220e7dfcd8d15f2e06a28312871f9291f1d890a1f669ad29",
       "workspace-store.mjs": "aa8017d71df1e3d35f40503b47bbe1aa1a2e110623b4a480fe66eb5bb1f3c3c1",
       "worktree-holds.mjs": "942d180f0c04c156adf19f76992652c7907320e708dfb91da4587de407a00b55",
-      "worktree-store.mjs": "fba5062d249c39c41c52ee4bb1ee91a958ae12d6021b61c380c129c153fb0d11"
+      "worktree-store.mjs": "103abd2cb02c5bd3faa361c5d73f9f71aa3b76d172f2281aee9b66f5834b505a"
     },
     "expertise": {
-      "README.md": "d44b519bb6a46527cb1f03e2409a8b57ca52e4ec1b75a92faa0f607222e94ac3",
-      "debugging.md": "e4fdc702d501c5716fff87c5fa700b42687008d4e033ad4e1c7a51a2fa1109fd",
-      "decisions.md": "1ef9bfec3ff5e7d539a6fb5eefde4a8ff22c0f3aa9f446cc621866b494b6dcc1",
-      "documentation.md": "00235c7f2e14546424d3963d7f20092cdd7d4af25e61a7d74f99ffac1b74f92f",
-      "planning.md": "531a84f5acc50320d35e5b98e1456a8402a6f47eced4a13fcae7084ef511d185",
-      "review.md": "fc22ab99f1944ffb3fc63bb34803f85009e934e78b5c81bf9d37692662f87cd1",
-      "tests.md": "16d7da030286f5e759702b017538d1c650d97b87f9486547546c4f031fe95f86"
+      "INDEX.md": "a1d21197b5b8e2e6942abb70cec97fd4d15cf6cd3fd69c2311af852ee75787b4",
+      "README.md": "5952cecfeb633c792ec72e799f497d0ae3f2bb14c9edb4afedae158802551e3a",
+      "architecture.md": "b71c018f47c78a0b5e1c55f9cb2ae4450281e1c4d3a625e87c1da096f1f50cca",
+      "debugging.md": "c19b8b92fadfb33b225fc47a99fdbe29b594531ad3d74e3f7d5c9712bec979fd",
+      "decisions.md": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
+      "documentation.md": "595957ca75796645c6c6d23d64f4ca25675b596c2651832f73866940d94a0e5c",
+      "planning.md": "41e02da1232203b6289add90524b045146e916d8bce6d3d1179bdf9ac32a00b9",
+      "review.md": "39b2974638433428abbfcbaac37730106571409388ba856b5d89f3b99befcad1",
+      "tests.md": "a20ef31a2b481f875fcef609f9223b7153d8b851d84b7e387a4372c542c08c33",
+      "thinking.md": "0e1387a6e94703c3873066dbc4f45d689d61e58ec3fe8dec8ecf87e9e5daa85a"
     },
     "repo_hooks": {
       "adapter.mjs": "e21c39e993390600cb2fe352078ae7554c74db0ee6ffd5bdb443c49192689dca",
       "bee-codex-subagent-audit.mjs": "f9f6900705aa20dfc0035a8c8c5c4b22fc56c9d0a4953e1b0ba3fd9466dec85e",
       "bee-session-init.mjs": "88eb00fc4893788637c5523d6b3217bb367c94d50bb9fcaa8962f8b94a089b20",
       "bee-prompt-context.mjs": "ba5d510509ea95cb0de3d4c437daf9501adedcaf7e26b28d35131696344feda7",
-      "bee-write-guard.mjs": "7a233425606df2027abb067a20bbdb284cd6a7a1acc3275cdeba06076e6bfd1a",
+      "bee-write-guard.mjs": "8b2460b4048b3e79c0bc684e62c845ef52bad8fa930b05860ed41ee5d41315fd",
       "tokenize-command.mjs": "e1da8db4a06525c92fb01495e718a0a2f94d87b2c7808458e306b480b353a77a",
       "bee-state-sync.mjs": "592d57221940816eee31951a96439679e89d1526db4a3280286965b59fe089d3",
       "bee-chain-nudge.mjs": "0e357a3fc427545fb6485eaaedb8458b210f41c2f53ff1c64e6c15d0f6b6f38e",
@@ -87,5 +90,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-31T13:34:50.351Z"
+  "updated_at": "2026-07-31T14:14:15.820Z"
 }
