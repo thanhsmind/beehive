@@ -6,6 +6,11 @@ Frame each probe as an outcome ("what should the user see when…"), not as a
 technical property. Cite existing repo patterns from the quick scout where they
 constrain the answer.
 
+Stop generating when 2–4 probes pass the materiality test
+(`shaping-reference.md`, "Materiality test"). The domain lists below are
+menus, never checklists — don't walk one top to bottom, and don't ask a
+probe whose answer the scout can already cite.
+
 ## Domain Probes
 
 ### SEE (user-visible surface)

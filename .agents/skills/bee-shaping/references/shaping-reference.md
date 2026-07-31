@@ -1,7 +1,33 @@
 # Shaping Reference — interview mechanics
 
-Deep mechanics for the Explore move. The body states the rules; this file
-carries the judgment detail.
+Deep mechanics for the Explore move. The body triages the request and
+shows the moves; this file carries the craft and judgment detail.
+
+## Interview craft
+
+- **One question per turn.** Each answer reframes what is worth asking
+  next; a batch buries the reframe. Broad questions lead — they are the
+  ones others hinge on.
+- **Propose, then invert.** Lead with a concrete recommendation the user
+  can accept in a word; then invert — "what must this NOT do?" — the
+  boundary is a decision too.
+- **Pin vocabulary.** When an answer settles a fuzzy domain word, confirm
+  the term back and pin it (see "Pinned terms" below).
+- **Teach before asking.** A user visibly guessing gets the 2–3 concepts
+  needed to answer well before the question (see "Blindspot pass" below).
+- **Ask only what passes the materiality test** (next section); what makes
+  a decision worth locking at all: `.bee/expertise/decisions.md`.
+
+## When to stop
+
+Stop when every locked decision can be written into CONTEXT.md without
+inventing intent and each remaining unknown is named as an Open
+Question. Effort matches the triage row, never a question quota: a
+clear bug report can lock from a single confirmation; only a genuinely
+vague idea earns the full 2–4 probes. Never ask the user how deep the
+interview should go, never ask "anything else?", and never pad with
+questions whose answers would not change scope, UX, data shape, or
+acceptance criteria.
 
 ## Materiality test
 

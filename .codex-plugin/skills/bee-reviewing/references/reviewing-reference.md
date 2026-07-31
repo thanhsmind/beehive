@@ -1,43 +1,105 @@
 # Reviewing Reference
 
-Companion to SKILL.md — judgment lives there; reviewer prompts, the
+Companion to SKILL.md — judgment lives there; reviewer role cards, the
 finding schema, and the acceptance wording live here.
 
-## Reviewer prompts
+## Reviewer roles
 
-Common shape, every reviewer:
+Every dispatched reviewer receives a role card in the same shape:
+**Purpose** (one line — the lens), **Scope** (set by the invoking
+layer: the frozen diff, the in-scope `CONTEXT.md` and `plan.md`,
+nothing else — never widened by the reviewer), and **Method** (the
+numbered steps below, whose quoted names resolve to entries in
+`.bee/expertise/review.md`). Role cards stay thin lens contracts — no
+failure-mode catalogs. The model already knows the domain; the trigger
+and the lens are the value.
+
+Dispatch prompt shape, every reviewer:
 
 ```text
-You are the <X> reviewer. Review only your focus area. Lead with findings.
-For each: severity, file/line evidence, failure scenario, smallest credible fix.
-Do not rewrite code.
+You are the <role> reviewer.
+Purpose: <the role's Purpose line>
+Scope: <the frozen scope the invoking layer hands you>
+Method: follow the reviewer method; your step-2 lens is your Purpose.
+Lead with findings. Do not rewrite code.
 ```
 
-Core four (always dispatched, parallel) — append the focus line to the
-common shape:
+### Reviewer method (shared by all roles)
 
-| Reviewer | Focus line |
-|---|---|
-| `code-quality` | Correctness, readability, type safety, error handling. Cite file/line evidence for every claim. |
-| `architecture` | Boundaries, coupling, API design, maintainability, drift from plan.md structure. |
-| `security` | Auth, authorization, secrets in code or logs, injection, permissions, data exposure. |
-| `test-coverage` | Missing edge cases, regression paths, weak or tautological assertions, untested behavior changes. |
+1. From the scope you were handed, write down what a correct change
+   must handle before reading the diff — "Adversarial reading".
+2. Read the diff through your Purpose's lens only, hunting what the
+   diff does not say: absent handling, the cases the author was least
+   likely to run, the edges just outside the changed region —
+   "Adversarial reading".
+3. Reproduce or trace every suspected defect before filing — "Verify
+   before reporting"; what qualifies as a finding at all — "What a
+   finding is".
+4. Set severity by consequence, not offense — "Severity calibration";
+   torn between two levels, take the lower and name the condition for
+   the higher — "Severity is a spent signal".
+5. Write each finding in the schema below: file/line, quoted behavior,
+   sketched fix — "Evidence standards"; label anything unverified —
+   "Label uncertainty exactly"; keep out-of-scope bugs in a separate
+   follow-up note, never against the verdict — "Scope discipline".
 
-Conditional reviewers — scan the diff once, mechanically (file paths and
-hunks, not vibes); spawn every matched trigger in the same parallel
-wave, same isolation contract, same prompt shape. Cap the wave at six
-total; if more triggers match, fold the extra lens into the closest core
-reviewer's focus line and say so in the synthesis.
+### Core roles — always dispatched, in parallel
 
-| Reviewer | Spawn when the diff touches | Focus line |
-|---|---|---|
-| `performance` | ORM/query calls inside loops, caching layers, pagination, hot-path data access | Query patterns, N+1 exposure, cache correctness, unbounded result sets. Flag only measurable risks with the triggering code cited. |
-| `api-contract` | routes, serializers, public response shapes, exported type signatures, versioned endpoints | Client-visible breaking changes, envelope drift, missing versioning, silent field removals — checked against locked decisions. |
-| `data-migration` | migration files or schema definitions only (`**/migrations/**`, `db/migrate/*`, `schema.*`, `*.sql` DDL) | Destructive DDL, backfills on large tables, NOT NULL without default, irreversibility, deploy-order coupling. |
-| `reliability` | retries, timeouts, queues, background jobs, webhooks, external service calls | Failure paths: what happens on timeout, partial failure, replay, and double delivery. Missing idempotency and dead-letter handling. |
+#### code-quality
 
-Personas stay thin lens contracts — no failure-mode catalogs. The model
-already knows the domain; the trigger and the lens are the value.
+- **Purpose:** Catch code that computes the wrong thing or mishandles failure — correctness, readability, type safety, error handling.
+- **Scope:** Set by the invoking layer. Cite file/line evidence for every claim.
+- **Method:** Reviewer method 1–5, step-2 lens as Purpose.
+
+#### architecture
+
+- **Purpose:** Catch structural damage — boundaries, coupling, API design, maintainability, drift from plan.md structure.
+- **Scope:** Set by the invoking layer; drift is judged against the in-scope plan.md, never against memory.
+- **Method:** Reviewer method 1–5, step-2 lens as Purpose.
+
+#### security
+
+- **Purpose:** Catch exposure — auth, authorization, secrets in code or logs, injection, permissions, data exposure.
+- **Scope:** Set by the invoking layer.
+- **Method:** Reviewer method 1–5, step-2 lens as Purpose; a verified exposure files at P1 — "Severity calibration".
+
+#### test-coverage
+
+- **Purpose:** Catch unproven behavior — missing edge cases, regression paths, weak or tautological assertions, untested behavior changes.
+- **Scope:** Set by the invoking layer.
+- **Method:** Reviewer method 1–5, step-2 lens as Purpose; a missing test is filed with the uncovered scenario named — "What a finding is".
+
+### Conditional roles — spawned by diff triggers
+
+Scan the diff once, mechanically — file paths and hunks, not vibes —
+and spawn every matched role in the same parallel wave, same isolation
+contract, same card shape. Cap the wave at six total; if more triggers
+match, fold the extra lens into the closest core role's Purpose and say
+so in the synthesis.
+
+#### performance
+
+- **Purpose:** Catch measurable slowdowns — query patterns, N+1 exposure, cache correctness, unbounded result sets.
+- **Scope:** Set by the invoking layer; spawned when the diff touches ORM/query calls inside loops, caching layers, pagination, or hot-path data access.
+- **Method:** Reviewer method 1–5; file only measurable risks, with the triggering code cited — "Evidence standards".
+
+#### api-contract
+
+- **Purpose:** Catch client-visible breakage — breaking changes, envelope drift, missing versioning, silent field removals.
+- **Scope:** Set by the invoking layer; spawned when the diff touches routes, serializers, public response shapes, exported type signatures, or versioned endpoints.
+- **Method:** Reviewer method 1–5; check every suspected break against the locked decisions in the in-scope CONTEXT.md before filing — "Verify before reporting".
+
+#### data-migration
+
+- **Purpose:** Catch irreversible schema damage — destructive DDL, backfills on large tables, NOT NULL without default, deploy-order coupling.
+- **Scope:** Set by the invoking layer; spawned only for migration files or schema definitions (`**/migrations/**`, `db/migrate/*`, `schema.*`, `*.sql` DDL).
+- **Method:** Reviewer method 1–5; state the rollback story for every flagged change — "Evidence standards".
+
+#### reliability
+
+- **Purpose:** Catch failure-path gaps — timeout, partial failure, replay, double delivery, missing idempotency and dead-letter handling.
+- **Scope:** Set by the invoking layer; spawned when the diff touches retries, timeouts, queues, background jobs, webhooks, or external service calls.
+- **Method:** Reviewer method 1–5; every finding states the concrete failure sequence, never "could fail" — "What a finding is".
 
 ## Finding schema
 

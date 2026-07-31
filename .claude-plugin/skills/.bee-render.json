@@ -28,11 +28,11 @@
     },
     {
       "name": "bee-reviewing",
-      "sha256": "197aa699c1cb41cc12ca44e581b149bcf5a1cd1c5cc6ee95f4cfbdab79d3a4ba"
+      "sha256": "fc55dbe5f4b29869a440087b3ce484c6afecc7049613737b3589e9ae5336e7e3"
     },
     {
       "name": "bee-shaping",
-      "sha256": "c81278ba36c8777c41f5d867a223d293de247abd078ac8ed878877fd10d6234c"
+      "sha256": "f59c52430427d4bb78f2fe7e7b0be02dae63e63497049a72a27226a827052811"
     },
     {
       "name": "bee-swarming",

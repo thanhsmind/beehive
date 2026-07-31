@@ -41,8 +41,9 @@ Spawn the core four in parallel — `code-quality`, `architecture`,
 `security`, `test-coverage` — plus any conditional reviewer whose
 trigger the diff matches, capped at six. A small scope takes one
 correctness reviewer; high-risk content (auth, migration, data loss,
-external providers) warrants the full wave. Prompts and focus lines:
-`references/reviewing-reference.md` ("Reviewer prompts"). Each reviewer
+external providers) warrants the full wave. Role cards — Purpose,
+Scope, Method — and the dispatch prompt shape:
+`references/reviewing-reference.md` ("Reviewer roles"). Each reviewer
 gets the cumulative diff, the in-scope features' `CONTEXT.md` and
 `plan.md`, and nothing else — never session history. Review-tier
 model, inline persona, never another plugin's agent type.
@@ -110,5 +111,5 @@ closes the review, not any feature; their already-closed state stays untouched.
 
 | File | When to load |
 |---|---|
-| `references/reviewing-reference.md` | Reviewer prompts and personas, finding schema, UAT wording |
+| `references/reviewing-reference.md` | Reviewer role cards (Purpose/Scope/Method), finding schema, UAT wording |
 | `.bee/expertise/review.md` | Finding quality, severity calibration, adversarial reading, verification |

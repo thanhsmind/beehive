@@ -22,61 +22,67 @@ plan when the lane earns one. `bee orient` shows which move the work needs.
 
 ## Explore (interactive)
 
-The craft is interviewing, not writing. Scout the code lightly first, then
-surface the 2–4 unstated *product* decisions planning would otherwise
-guess — states, error shape, who consumes the output
-(`references/gray-area-probes.md`). A question only the implementer cares
-about goes to planning, never to the user.
+The craft is interviewing, not writing. Scout the code lightly, then
+triage the request — effort follows the signal, never a fixed script:
 
-- **One question per turn.** Each answer reframes what is worth asking
-  next; a batch buries the reframe. Broad questions lead — they are the
-  ones others hinge on.
-- **Propose, then invert.** Lead with a concrete recommendation the user
-  can accept in a word; then invert — "what must this NOT do?" — the
-  boundary is a decision too.
-- **Pin vocabulary.** When an answer settles a fuzzy domain word, confirm
-  the term back and pin it; pinned terms ride into the decision record and
-  seed the spec's data dictionary.
-- **Teach before asking.** A user visibly guessing gets the 2–3 concepts
-  needed to answer well, outcome-framed, before the question — a decision
-  locked from a guess is fake. For a look the user knows-when-they-see-it,
-  a throwaway mock beats a description
-  (`references/shaping-reference.md`).
-- Ask only what is material, grounded, and answerable; what makes a
-  decision worth locking at all: `.bee/expertise/decisions.md`.
+| Request | Signal | Next step |
+|---|---|---|
+| Clear | Bug report or bounded ask; outcome and scope both stated | Confirm your one reading, then Lock — likely tiny/small lane |
+| Partially clear | Hedges ("probably", "I think"); named outcome with unstated states, errors, or consumers | Probe only the gray areas the hedges mark |
+| Vague | "What if we…"; a solution with no named problem; an aside dropped into a longer thread | Full interview — surface the 2–4 unstated product decisions |
 
-`bee decisions log` the moment each answer settles — never batched at the
-end. Scope creep is deferred with `bee backlog add`, then back to the
-current question. Never answer your own question, even when sure.
+Never ask how deep to go — the request's shape already answered. Ask
+only *product* decisions planning would otherwise guess — states, error
+shape, who consumes the output (`references/gray-area-probes.md`);
+implementer-only questions go to planning. Deeper craft — question
+cadence, teaching, pinned terms, the SEE mock — lives in
+`references/shaping-reference.md` ("Interview craft"). The moves sound like:
+
+> "You've used 'archived' and 'removed' for the same state. Is a
+> dismissed item (a) archived — recoverable from a list — or (b) gone
+> from every view? I'll pin whichever term you pick."
+
+> "You asked for retry, but `sync/runner.js:88` already retries three
+> times. Is the gap (a) invisible retries, or (b) too few attempts?"
+
+> "Turning it around: what must the export never include — soft-deleted
+> rows (a) stay out entirely, or (b) appear flagged?"
+
+Make each reasoning move in plain words — "let me check what we're
+assuming", not "applying First Principles"; the method names in
+`.bee/expertise/thinking.md` are your routing table, not conversation
+vocabulary. `bee decisions log` the moment each answer settles — never
+batched at the end. Scope creep is deferred with `bee backlog add`, then
+back to the current question. Never answer your own question.
+
+Stop when every locked decision can be written without inventing intent
+and each remaining unknown is a named Open Question; past that,
+questions are stalling — never ask "anything else?", present what's locked.
 
 ## Qualify (headless triage)
 
 The unattended front door for a new backlog item: judge whether it can
-proceed into planning or must wait for a human.
+proceed into planning or must wait for a human. No questions are asked
+on this path; everything unresolved is written down, never guessed.
 
 1. Gather real evidence first — the item's text, the code and docs it
    touches. Never judge from the row alone.
 2. Risk territory (auth, data loss, security, external providers,
-   validation removal) parks at any confidence — risk is a property of the
-   change, not of the assessor's certainty.
-3. Judge clarity and size with your own reasoning over the evidence —
-   never a keyword match; zero matches against a list proves nothing.
+   validation removal) parks at any confidence — risk is a property of
+   the change, not of the assessor's certainty.
+3. Judge clarity and size over the evidence with the triage table above —
+   your own reasoning, never a keyword match; a vague row parks here
+   instead of interviewing.
 4. `bee state route` records the call. Proceed → Lock, then planning.
-   Park → Lock writes the evidence and open questions into
-   `Outstanding Questions`, and the item waits for a human Explore pass —
-   which starts from that brief instead of re-gathering.
-
-No questions are asked on this path; everything unresolved is written
-down, never guessed.
+   Park → Lock writes the evidence and open questions into `Outstanding
+   Questions`; a later human Explore starts there, not from scratch.
 
 ## Lock (single writer)
 
-`docs/history/<feature>/CONTEXT.md`
-(`references/context-template.md`) is the one decision record, written
-here for both paths: boundary, locked decisions with stable D-IDs, pinned
-terms, scout paths, open questions, deferred ideas. Lock renders what
-Explore or Qualify resolved — it never originates a decision, term,
-boundary, or scope note. A section the input left silent is an Open
+`docs/history/<feature>/CONTEXT.md` (`references/context-template.md`)
+is the one decision record, written here for both paths. Lock renders
+what Explore or Qualify resolved — it never originates a decision, term,
+boundary, or scope note; a section the input left silent is an Open
 Question, never a guess. Concrete language only. Deferred ideas that are
 real future work get `bee backlog add` in the same turn. Downstream work
 cites D-IDs; it never reinterprets them.
@@ -85,35 +91,32 @@ cites D-IDs; it never reinterprets them.
 
 When the lane calls for one, render
 `docs/history/<feature>/implement-plan.md` — the one document human and
-agent review together at the gate. Full template for standard/high-risk
+agent review at the gate: full template for standard/high-risk
 (`references/implement-plan-template.md`), ~15-line mini-brief for small
-(`references/mini-brief-template.md`), none below that. Every section
-projects from a named source (CONTEXT.md, plan.md, cells, verify records);
-only Technical Design and Rollback are authored, and only from what the
-artifacts already imply — a choice they don't contain is an Open Question,
-never smuggled in as the plan. Feedback flows to the truth artifacts
-first, then the brief re-renders; the brief is never the sole change site.
-Post-ship, standard/high-risk features get a walkthrough reconstructed
-from execution records, never from the plan
-(`references/walkthrough-template.md`).
+(`references/mini-brief-template.md`), none below. Every section
+projects from a named source (CONTEXT.md, plan.md, cells, verify
+records); only Technical Design and Rollback are authored, and only
+from what those artifacts imply — a choice they don't contain is an
+Open Question, never smuggled in as the plan. Feedback lands on the
+truth artifacts first, then the brief re-renders — never the brief
+alone. Post-ship, standard/high-risk features get a walkthrough from
+execution records, never the plan (`references/walkthrough-template.md`).
 
 ## Hard rules
 
 - Lock and Brief render; they never originate scope, decisions, or
-  approach — inventing content to fill a section is the failure this
-  skill exists to prevent.
+  approach — invented filler is the failure this skill exists to prevent.
 - Explore locks product decisions only; implementation choices belong to
   planning. No architecture proposals, cells, or code — the one exception
   is a throwaway mock under `.bee/spikes/`.
-- Gates belong to the human: shaping ends by presenting one, never by
-  approving one.
+- Gates belong to the human: shaping presents one, never approves one.
 
 ## References
 
 | File | When to load |
 |---|---|
 | `references/gray-area-probes.md` | Generating gray-area questions per domain type |
-| `references/shaping-reference.md` | Interview mechanics: materiality, blindspot pass, SEE mock, pinned terms |
+| `references/shaping-reference.md` | Interview craft: materiality, blindspot pass, SEE mock, pinned terms, stopping |
 | `references/context-template.md` | Writing CONTEXT.md |
 | `references/implement-plan-template.md` | Full implement plan: template, section sources, writing guide |
 | `references/mini-brief-template.md` | The small-lane ~15-line brief |

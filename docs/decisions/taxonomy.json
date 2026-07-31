@@ -284,6 +284,7 @@
     "testing",
     "cross-cell-contracts",
     "vacuous-tests",
-    "fixtures"
+    "fixtures",
+    "distribution"
   ]
 }

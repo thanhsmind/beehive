@@ -12,6 +12,61 @@ It is distilled from seven upstream systems (khuym, claudekit, gsd-core, gstack,
 
 ---
 
+## Using bee
+
+### Get set up
+
+From a bee source checkout, point the onboarder at the project you want bee to work on:
+
+```bash
+node packages/bee/scripts/onboard_bee.mjs --repo-root /path/to/your-project --json --apply
+```
+
+That one run installs the whole frame into your project: `.bee/` (the vendored engine, its craft guides, and your project's workflow state), the lifecycle hooks, and the bee skills rendered into `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex). Re-running it later refreshes everything in place without touching your state. Then open your coding agent inside that project and describe what you want to build, fix, or explore. (No checkout handy? The one-line network installers under [Install](#install) end in the same place.)
+
+### What a session feels like
+
+You talk about the work; bee handles its own machinery. Describe what you want in plain words — you don't need a spec, a ticket, or any bee vocabulary. If the request has gray areas, bee interviews you first, one focused question at a time, and writes each answer down as a locked decision. It then shapes the work — the plan, the size, the reality check — and brings the shape back as a single plain-language question: *is this the right thing, and may I start editing files?* You answer gates and decision questions; the agent runs every bee command itself, so you never copy commands around or manage state by hand.
+
+```text
+You:  Add CSV export to the report screen.
+bee:  One thing to lock first: should the export include archived
+      rows, or exactly what the current filters show?
+You:  Just what the filters show.
+bee:  Locked. Shape: one slice — export button, endpoint, tests;
+      no schema changes. May I start editing files?
+You:  Yes.
+bee:  ▸ endpoint  ✓   ▸ button  ✓   ▸ tests  ✓
+      Done — verified green in its worktree. Say the word and I'll
+      land it on main, or ask for an independent review first.
+```
+
+Ceremony scales with the work: a typo fix takes one merged question and a light touch, while an auth change gets the full interview and a slower, prove-everything path. And if a session runs long, bee pauses cleanly at a saved handoff point — the next session surfaces it and waits for you rather than resuming on its own.
+
+### What bee does between your answers
+
+Once you approve the shape, bee cuts the work into small self-contained cells, dispatches workers to execute them inside the feature's own git worktree — your main checkout stays clean the whole time — and refuses to call any step done until its verification command actually passes. As behavior settles, bee writes it down as your project's memory under `docs/`: what each area does, what was decided and why, and what was learned along the way. Nothing you agreed on evaporates when the session ends.
+
+### How work lands
+
+A feature closes when everything is implemented and verified green inside its worktree. Landing is yours to call: when you say so, the agent runs `bee worktree merge` from the main checkout — it merges the worktree branch into main and re-runs your project's verify command against the merged tree. Independent multi-agent review is a separate pass that runs only when you ask for it ("review this feature"), and its findings gate the merge only then.
+
+### Where things live
+
+| Where | What it is |
+|---|---|
+| `.bee/` | The vendored engine, its craft guides, and your project's workflow state — managed by bee, driven through the agent, never hand-edited |
+| `.claude/skills/bee-*` · `.agents/skills/bee-*` | The rendered skills your agent loads — managed, refreshed by each onboard run |
+| `docs/specs/` · `docs/knowledge/` | **Your** project's memory: what each area does, in plain language, written and kept current by bee |
+| `docs/history/<feature>/` · `docs/backlog.md` | Per-feature decisions, plans, and reports; the live backlog |
+| `<repo>--wt--<feature>/` (branch `wt/<feature>`) | Sibling worktrees holding in-flight features until you land them |
+
+### Fewer approvals, when you're ready
+
+Gates default to human approval, every time. Once you trust bee in a repo, opt-in gate bypass runs the pipeline with fewer stops — it has levels, from auto-approving only low-risk work up to stopping for nothing at all. `bee-hive`'s "Gates" section owns the levels; details in [The three gates](#the-three-gates).
+
+---
+
 ## Why bee exists (the idea in plain words)
 
 Letting an AI write code freely is fast until it isn't. The usual failure modes:
@@ -422,7 +477,7 @@ Copied into every onboarded repo, so enforcement works even for agents that igno
 ### Onboarding — `packages/bee/scripts/onboard_bee.mjs`
 
 ```bash
-node onboard_bee.mjs --repo-root <path> [--apply] [--json] [--repo-hooks] [--claude-md] [--force-downgrade]
+node onboard_bee.mjs --repo-root <path> [--apply] [--json] [--repo-hooks] [--plugin-source] [--runtime claude|codex|both] [--no-claude-md] [--claude-md] [--global-skills] [--force-downgrade]
 ```
 
 Without `--apply` it only reports the plan. With `--apply` it installs/refreshes the AGENTS.md BEE block, `.bee/` runtime files, and the vendored helpers — **never** overwriting your `state.json`, `decisions.jsonl`, or `cells/`. Re-run after pulling a new bee version; it detects drift via managed hashes in `.bee/onboarding.json`.

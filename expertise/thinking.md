@@ -1,10 +1,11 @@
 # Thinking methods
 
 Named methods for examining a problem before committing to an answer.
-Each entry is a handle: name the method you are applying, so the
-reasoning is inspectable and the user can push back on the method as
-well as the conclusion. The default mode underneath all of them is
-Socratic questioning — ask before asserting.
+Each entry is a handle for your own routing: the move it names reaches
+the person you work with in plain words, and the reasoning stays
+inspectable because the move is visible — not because its name is
+spoken. The default mode underneath all of them is Socratic
+questioning — ask before asserting.
 
 ## Routing: goal → method
 
@@ -211,10 +212,12 @@ never has to answer; the explanation itself does the debugging.
 
 ## Choosing and combining
 
-Apply one method at a time, and say which one — "steelmanning the
-alternative first" or "running a pre-mortem on this" — so the person
-you are working with can challenge the choice of lens, not just the
-output. Methods chain: 5 Whys finds the root cause, Double Diamond
+Apply one method at a time, and phrase the move in plain words — "let
+me check what we're assuming," "before we commit, let's write the story
+of how this failed" — keeping the method's name as your internal
+handle. Name it explicitly only when the person asks how you are
+reasoning, or needs a handle to push back on the lens rather than the
+conclusion. Methods chain: 5 Whys finds the root cause, Double Diamond
 explores solutions to it, Pre-Mortem stress-tests the chosen one.
 They do not stack in a single breath — running three lenses at once
 produces mush from all of them. When two methods point the same way,
