@@ -1,0 +1,119 @@
+# Rust port — bee platform, Node → Rust (fluent-class single binary)
+
+Status: APPROVED 2026-08-01 — strangler strategy, hooks-first ordering, R6 distribution =
+host-side `cargo build` (no prebuilt binaries in repo). Campaign in progress from R0.
+Reference: fluent (D:\projects\tools\AI\harness\fluent) — structural reference only: single
+binary, clap CLI, serde state, assert_cmd black-box tests, hooks as subcommands. No text copied.
+
+## Goal
+
+One native `bee` binary replaces the entire Node runtime surface:
+
+- `bee.mjs` unified dispatcher + 9 thin shims → clap subcommand tree (same 16-verb porcelain,
+  docs/specs/porcelain.md unchanged).
+- 10 runtime hooks (`node .bee/hooks/*.mjs`) → `bee hook <name>` subcommands; claude-hooks.json
+  rewired to call the binary. Hook stdin/stdout contract unchanged.
+- statusline → `bee statusline`.
+- scripts (onboard, render trees, prompts renderer, verify_all) → `bee` maintenance subcommands
+  or a second dev-only binary in the same cargo workspace.
+
+Hosts no longer need Node at all. Vendored frame ships `.bee/bin/bee(.exe)` instead of mjs shims.
+
+## Why (measured, not vibes)
+
+1. **Hook latency.** PreToolUse hooks fire on Edit|Write|Bash|Read|Glob|Grep|AskUserQuestion —
+   i.e. nearly every tool call. Each firing pays Node cold-start (~50–120 ms on Windows).
+   A Rust binary starts in ~1–5 ms. This is the single largest daily UX win.
+2. **Distribution fit.** Decision 1f4262ca chose source-checkout per-project install, no
+   registry. A single static binary is the cleanest possible form of that decision: no Node
+   version drift on hosts, no ESM path bugs (the d:-drive ESM bug class disappears).
+3. **Known win-32 defect class dies.** The two filed chips (onboard entryIdentity Number-precision
+   inode collision → u64/u128 native; encodeProjectDir drive-colon) are Node-shaped bugs; the
+   port fixes both structurally.
+4. **Fluent parity.** Same architecture language across both harness tools; expertise/ guidance
+   transfers.
+
+## Inventory (measured 2026-08-01)
+
+| Area | LOC | Notes |
+|---|---|---|
+| lib/ (30 modules) | 29,803 | kernel: state 3.3k, cells 3.0k, command-registry 2.4k, guards 2.1k, worktree-store 2.1k, knowledge 2.0k |
+| scripts/ | 10,426 | onboard, render_plugin_skill_trees, verify_all, prompts renderer |
+| bee.mjs + shims + hooks + statusline + agents | ~5k | |
+| **Product total** | **~45–50k** | |
+| tests/ (37 files) | 37,403 | 34/37 import lib directly (white-box); 12 spawn subprocess |
+
+Runtime dependencies: **zero npm packages.** Node builtins only:
+path(33) fs(32) crypto(14) child_process(6) url(3) os(2)
+→ Rust: std::{fs,path,process}, sha2, serde/serde_json, clap, anyhow. No async runtime needed.
+
+## Strategy: strangler, not big-bang (recommended)
+
+A big-bang rewrite of 50k LOC parks the product for weeks with nothing shippable. Instead:
+the Rust binary grows verb-by-verb behind a dispatcher that falls back to `node bee.mjs`
+for unported verbs. Node and Rust interleave against the same `.bee/` state throughout.
+Precedent: DB2 already proved byte-identical-output migration works for this codebase.
+
+### Compatibility contracts (hold for the entire campaign)
+
+- **C1** `.bee/` state files stay format-identical — either runtime can read/write mid-campaign.
+- **C2** `--json` output byte-identical to Node (diff-harness enforced); human output identical
+  unless an improvement is deliberate and logged.
+- **C3** hooks.json is the only wiring change; hook payload contract untouched.
+- **C4** prompts renderer byte-identity pin (packages/bee/prompts/*.md) survives the port.
+- **C5** write-guard / worktree-first semantics (guards.mjs, docs/specs/worktree-first.md)
+  ported with paired tests before the Node guard is retired — never a window with no guard.
+
+### Phases
+
+- **R0 — scaffold + diff harness.** Cargo workspace `packages/bee-rs/` (binary name `bee`).
+  clap skeleton mirroring the porcelain tree. `xtask diff` harness: run Node and Rust on the
+  same fixture repo, byte-diff stdout/stderr/state. CI: build + test on win32 (primary) and
+  linux/mac (fluent hosts).
+- **R1 — state kernel.** path-identity, lock, atomic-write, state read model, serde types for
+  every `.bee/` file. Fix the two filed chips here (bigint inode → u64/u128; drive-colon encode).
+  This is the foundation everything imports.
+- **R2 — hooks (payoff first).** Port all 10 hooks to `bee hook <name>`; rewire
+  claude-hooks.json. Hooks are small, latency-critical, and already have contract tests
+  (test_hook_contracts, test_write_guard, test_model_guard) to port as the first Rust test suite.
+  After R2 the daily latency win is fully banked even though most verbs are still Node.
+- **R3 — porcelain verbs, dependency order.** status/orient → cells → reservations/claims →
+  dispatch (--claim prompt assembly incl. Learned-context block) → decisions/capture →
+  reviews/feedback/knowledge → finish/cap/close + `bee test` runner (keeps
+  .bee/logs/test-results.json contract and POSIX-sh execution). Each verb: port, diff-harness
+  green, flip dispatcher routing, port its white-box tests to Rust unit tests.
+- **R4 — dev surface.** onboard (vendoring, render), render_plugin_skill_trees, prompts
+  renderer (C4 pin re-verified byte-for-byte), verify_all → `cargo test` + thin driver.
+- **R5 — test completion.** Remaining white-box tests ported per-module (they land alongside
+  R3 flips, this phase is the sweep); subprocess-style tests become assert_cmd black-box tests.
+  Target: green suite with Node deleted, including the 6 formerly env-limited suites — Rust
+  removes the ESM/PATH/symlink excuses (EPERM atomic-write on win32 stays capability-skipped).
+- **R6 — cutover.** Delete Node runtime + shims; `.bee/bin/` ships the binary; INSTALL.md gains
+  the per-platform build step (`cargo build --release`, matching source-checkout distribution);
+  onboard re-render; docs sweep; memory updated.
+
+### Sizing (honest)
+
+Fluent is 78k LOC Rust for a comparable tool. Expect the finished port in the same class.
+This is a multi-week, multi-session campaign — R0+R1 ≈ 2–3 sessions, R2 ≈ 2, R3 is the long
+middle (≈ 8–12, one session per verb-cluster), R4–R6 ≈ 4–6. The strangler shape means every
+session ends shippable.
+
+## Risks
+
+- **Test debt is the real cost center** (37k LOC white-box). Mitigation: port tests with their
+  module (R3 rule), never as a detached backlog.
+- **guards.mjs subtlety** (2.1k lines of path/worktree edge cases). Mitigation: C5 — paired
+  tests first, longest diff-harness soak of any module.
+- **Two-runtime window confusion.** Mitigation: dispatcher owns routing; `bee --version` prints
+  which runtime served the verb; diff harness runs in CI until R6.
+- **Windows Git Bash dependency for `bee test`** (POSIX sh runner) — unchanged by the port;
+  explicitly out of scope.
+
+## Open decisions for owner
+
+1. Approve strangler strategy (vs big-bang)?
+2. R2-before-R3 ordering (hooks first for latency payoff) — confirm.
+3. Binary distribution at R6: commit prebuilt binaries per platform into the frame, or
+   require `cargo` on hosts (fits source-checkout decision 1f4262ca)? Recommendation: require
+   cargo; prebuilt binaries in-repo bloat history.
