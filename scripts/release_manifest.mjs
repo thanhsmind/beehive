@@ -4,6 +4,8 @@
 // Enumerates the release-identity file set for the bee distribution:
 //   - packages/bee/** (excl. any hooks/ subtree) -> role "package_payload"
 //   - .bee/bin/lib/*.mjs                    -> role "runtime_lib"
+//   - expertise/*.md                        -> role "expertise_guide"
+//   - .bee/expertise/*.md (vendored copy)   -> role "runtime_expertise"
 //   - skills/** and hooks/**                 -> canonical plugin package
 //   - both plugin manifests + marketplace   -> plugin metadata
 //   - both installers + distribution engine -> migration machinery
@@ -41,6 +43,12 @@ const MANIFEST_PATH = path.join(
 );
 
 const RUNTIME_LIB_DIR = path.join(REPO_ROOT, ".bee", "bin", "lib");
+// expertise-vendoring: the craft-guide layer. expertise/ is the SOURCE
+// (authored guides); .bee/expertise/ is this repo's own vendored copy,
+// produced by self-onboard exactly like .bee/bin/lib above — both enumerated
+// via readdir, never hand-listed (crit-pattern 20260714).
+const EXPERTISE_SOURCE_DIR = path.join(REPO_ROOT, "expertise");
+const RUNTIME_EXPERTISE_DIR = path.join(REPO_ROOT, ".bee", "expertise");
 // D9/cnr2-12: the committed per-runtime plugin skill-route trees (render at
 // packages/bee/scripts/onboard_bee.mjs::renderSkillBytes). Distinct roles
 // from "plugin_skill" (the canonical skills/ tree, still hashed unchanged for
@@ -116,16 +124,21 @@ function enumerateTree(dirAbsPath, role, { excludeTopDirNames = [] } = {}) {
   return records.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-/** Enumerate *.mjs files directly inside dirAbsPath (no recursion), sorted. */
-function enumerateMjsDir(dirAbsPath, role) {
+/** Enumerate files with `ext` directly inside dirAbsPath (no recursion), sorted. */
+function enumerateFlatDir(dirAbsPath, role, ext) {
   if (!fs.existsSync(dirAbsPath)) {
     throw new Error(`release_manifest: expected directory missing: ${dirAbsPath}`);
   }
   return fs
     .readdirSync(dirAbsPath, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".mjs"))
+    .filter((entry) => entry.isFile() && entry.name.endsWith(ext))
     .map((entry) => buildRecord(path.join(dirAbsPath, entry.name), role))
     .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/** Enumerate *.mjs files directly inside dirAbsPath (no recursion), sorted. */
+function enumerateMjsDir(dirAbsPath, role) {
+  return enumerateFlatDir(dirAbsPath, role, ".mjs");
 }
 
 /**
@@ -135,6 +148,8 @@ function enumerateMjsDir(dirAbsPath, role) {
 function buildCurrentRecords() {
   const records = [
     ...enumerateMjsDir(RUNTIME_LIB_DIR, "runtime_lib"),
+    ...enumerateFlatDir(EXPERTISE_SOURCE_DIR, "expertise_guide", ".md"),
+    ...enumerateFlatDir(RUNTIME_EXPERTISE_DIR, "runtime_expertise", ".md"),
     ...enumerateTree(path.join(REPO_ROOT, "packages", "bee"), "package_payload", {
       excludeTopDirNames: ["hooks"],
     }),

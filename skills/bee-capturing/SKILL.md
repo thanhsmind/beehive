@@ -39,7 +39,7 @@ announce what settled, then record it:
 
 Close every task — cell, docs write, quick fix — with a capture line
 or an explicit "nothing settled"; smallness is never the answer. What
-deserves a record at all, and at what grain: `expertise/decisions.md`.
+deserves a record at all, and at what grain: `.bee/expertise/decisions.md`.
 
 ## Scribe — keep area specs current
 
@@ -63,7 +63,7 @@ unanswered questions become Open Gaps, and a partial spec that states
 its gaps beats an invented-complete one.
 
 Spec craft — what to write, what to omit, honest gaps:
-`expertise/documentation.md`. Template and mechanics:
+`.bee/expertise/documentation.md`. Template and mechanics:
 `references/area-spec.md` ("Area Spec Template", "Merge Rules",
 "Harvest Interview", "Rebuild Checklist"). In a bundle repo the CLI
 names the write target and emits the frontmatter — ask it; never pick
@@ -122,4 +122,4 @@ questions, ambiguous merges, and critical promotions go to
 | `references/area-spec.md` | Area spec + system-overview templates, per-section and merge rules, harvest interview, bootstrap, rebuild checklist |
 | `references/citations.md` | Citation discipline: short8 decision ids in specs and backlog rows |
 | `references/promotion.md` | Learnings file template, promotion decision tree, critical promotion format, friction entries |
-| `expertise/documentation.md`, `expertise/decisions.md` | Spec craft; what deserves a decision record |
+| `.bee/expertise/documentation.md`, `.bee/expertise/decisions.md` | Spec craft; what deserves a decision record |

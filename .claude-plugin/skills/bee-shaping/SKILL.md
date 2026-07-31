@@ -43,7 +43,7 @@ about goes to planning, never to the user.
   a throwaway mock beats a description
   (`references/shaping-reference.md`).
 - Ask only what is material, grounded, and answerable; what makes a
-  decision worth locking at all: `expertise/decisions.md`.
+  decision worth locking at all: `.bee/expertise/decisions.md`.
 
 `bee decisions log` the moment each answer settles — never batched at the
 end. Scope creep is deferred with `bee backlog add`, then back to the
@@ -118,4 +118,4 @@ from execution records, never from the plan
 | `references/implement-plan-template.md` | Full implement plan: template, section sources, writing guide |
 | `references/mini-brief-template.md` | The small-lane ~15-line brief |
 | `references/walkthrough-template.md` | Post-ship walkthrough |
-| `expertise/decisions.md` | What makes a lockable decision |
+| `.bee/expertise/decisions.md` | What makes a lockable decision |

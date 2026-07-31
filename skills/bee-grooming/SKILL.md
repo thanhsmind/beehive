@@ -50,7 +50,7 @@ What you are hunting:
   reflection, config-driven loading, and external callers all count as
   use; "obviously dead" without evidence is a red flag, not a finding
 - stale docs that contradict the code — judging what counts as stale
-  and which side to fix: `expertise/documentation.md`
+  and which side to fix: `.bee/expertise/documentation.md`
 - stale, missing, or duplicated area truth (specs or knowledge bundle)
 - TODO/stub debris — each hit becomes a backlog item or a kill
   candidate, never a comment-shaped promise left in place
@@ -98,4 +98,4 @@ section. Headless never executes a kill and never deletes anything.
 | File | When to load |
 |---|---|
 | `references/grooming-reference.md` | Entropy counting rules, hunt checklists, proposal/outcome templates, slop-pattern list |
-| `expertise/documentation.md` | Judging stale docs and spec drift |
+| `.bee/expertise/documentation.md` | Judging stale docs and spec drift |

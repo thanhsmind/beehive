@@ -36,7 +36,7 @@ Every check below hunts the project's own files only, written up in plain projec
 
 **Dead code / unused exports** — for each suspect symbol: grep every reference (imports, dynamic `import()`, `require`, string-built paths, config and registry files, reflection); check the public API surface (package entry points, exported types); check test-only usage (test-only = candidate to *move*, not to keep). No reference anywhere = candidate. Any doubt = not a candidate.
 
-**Stale docs vs code** — compare README/docs claims (commands, file paths, flags, versions) against reality by running or resolving them; each mismatch is a candidate. Fix the doc, not the code — unless the code is the bug. Judging which side is wrong: `expertise/documentation.md`.
+**Stale docs vs code** — compare README/docs claims (commands, file paths, flags, versions) against reality by running or resolving them; each mismatch is a candidate. Fix the doc, not the code — unless the code is the bug. Judging which side is wrong: `.bee/expertise/documentation.md`.
 
 **Stale, missing, or duplicated area truth** — for each stale-specs hit, propose a documentation sync cell (tiny) that merges the missed behavior deltas into the area's spec or concept; a git-drift hit (files changed, no cell) gets the same cell, and "no behavioral delta — spec confirmed current" is a valid cheap outcome. An area with shipped behavior and no spec at all gets a harvest cell (small — it may need user interview time).
 

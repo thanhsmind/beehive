@@ -321,7 +321,7 @@ triad — happy path, edge cases, error paths — at its smallest
 demonstrating size. `edge-dimensions.md`'s twelve dimensions apply only at
 `high-risk`/hard-gate: read as a checklist they generate volume, and the
 question is "what is not yet proven?", never "what could I write?". Case
-selection and duplication judgment: `expertise/tests.md`.
+selection and duplication judgment: `.bee/expertise/tests.md`.
 
 Per-cell red-first/repro-first cells stay per-cell, never batched into the
 trailing cell; the machine computes which proof tier each cell owes and

@@ -16,7 +16,7 @@ metadata:
 # Planning — shape the work
 
 Turns locked decisions (`docs/history/<feature>/CONTEXT.md`) into a lane, a
-shape, and — after approval — current-slice cells. Craft: `expertise/planning.md`.
+shape, and — after approval — current-slice cells. Craft: `.bee/expertise/planning.md`.
 
 ## Route
 
@@ -54,7 +54,7 @@ territory or competing approaches dispatch `bee-researching`, findings merged in
 
 Draft the smallest honest shape — the smallest that still covers what the
 work endangers (decomposition, walking skeleton, dependency thinking:
-`expertise/planning.md`). Every locked decision lands in it, cited. By lane:
+`.bee/expertise/planning.md`). Every locked decision lands in it, cited. By lane:
 
 | Lane | Shape |
 |---|---|
@@ -91,7 +91,7 @@ Every slice with a code-touching behavior/api cell ends with one trailing
 `test` cell, `deps` naming every implementation cell, whose FIRST step is a
 coverage judgment, not authoring: cite existing tests by file and case, author
 only what is not already pinned — authoring nothing is fine, duplicated rows
-are the waste (`expertise/tests.md`). Machine-held debt: `bee close` refuses and names the fix.
+are the waste (`.bee/expertise/tests.md`). Machine-held debt: `bee close` refuses and names the fix.
 
 A cell's `verify` is the narrowest honest command over its change, never the
 full chain (`references/planning-reference.md` ("Verify scoping")); then
@@ -121,4 +121,4 @@ the gate — never self-approved. Ambiguities go to `Outstanding Questions`.
 |---|---|
 | `references/planning-reference.md` | plan.md/approach.md templates, cell quality rules + example JSON, merged-gate protocol, review wave, verify scoping, greenfield init lane |
 | `references/edge-dimensions.md` | 12 edge-case dimensions — high-risk/hard-gate test matrix only; standard and below use the triad |
-| `expertise/planning.md`, `expertise/tests.md` | Decomposition, walking skeleton, smaller path, cold pickup; coverage judgment, case selection, red-first |
+| `.bee/expertise/planning.md`, `.bee/expertise/tests.md` | Decomposition, walking skeleton, smaller path, cold pickup; coverage judgment, case selection, red-first |

@@ -154,8 +154,8 @@ try {
     .filter((e) => e.isDirectory() && e.name.startsWith("bee-"))
     .map((e) => e.name)
     .sort();
-  check(sourceBeeSkills.length === 17,
-    "source tree carries the expected 17 bee-* skills", JSON.stringify(sourceBeeSkills));
+  check(sourceBeeSkills.length === 9,
+    "source tree carries the expected 9 bee-* skills", JSON.stringify(sourceBeeSkills));
   for (const relRoot of [".claude/skills", ".agents/skills"]) {
     const rootAbs = path.join(tmp, ...relRoot.split("/"));
     const installed = fs.existsSync(rootAbs)
@@ -165,7 +165,7 @@ try {
           .sort()
       : [];
     check(JSON.stringify(installed) === JSON.stringify(sourceBeeSkills),
-      `fresh host apply materializes all 17 bee-* dirs under ${relRoot}`,
+      `fresh host apply materializes all 9 bee-* dirs under ${relRoot}`,
       JSON.stringify(installed));
   }
   const applyTargetKinds = (apply1.payload?.skills?.targets || []).map((t) => t.kind);
@@ -300,9 +300,9 @@ try {
     : "";
   check(agentsText.includes("<!-- BEE:START -->") && agentsText.includes("<!-- BEE:END -->"),
     "AGENTS.md contains BEE:START/END markers");
-  check(agentsText.includes("bee.mjs status --json"), "AGENTS block mentions bee.mjs status first step");
-  check(agentsText.includes("commands.verify") && agentsText.includes("never build on red"),
-    "AGENTS block carries the CI-status-gate startup step");
+  check(agentsText.includes("bee status --json"), "AGENTS block mentions the status routing step");
+  check(agentsText.includes("commands.test") && agentsText.includes("Never build on a red base"),
+    "AGENTS block carries the test-before-close and red-base rules");
 
   // --- 3a. minimal header above the block (D4, propose_agents_header) -------
   check(agentsText.startsWith(`# ${path.basename(tmp)}\n`),
@@ -482,10 +482,82 @@ try {
   check(!fs.existsSync(path.join(tmp, ".bee", "bin", "AGENTS.block.md")),
     "AGENTS.block.md is NOT copied into .bee/bin");
 
+  // --- 5b. vendored expertise guides (expertise-vendoring) -------------------
+  // A fresh apply mirrors every source expertise/*.md into .bee/expertise/
+  // byte-identical, so the skills' stable `.bee/expertise/<name>.md` pointers
+  // resolve in the host repo. Derived via readdirSync, never hardcoded names
+  // (same discipline as the helper/lib checks above).
+  const EXPERTISE_SOURCE_DIR = path.join(REPO_ROOT, "expertise");
+  const expertiseNames = fs.existsSync(EXPERTISE_SOURCE_DIR)
+    ? fs.readdirSync(EXPERTISE_SOURCE_DIR, { withFileTypes: true })
+        .filter((e) => e.isFile() && e.name.endsWith(".md"))
+        .map((e) => e.name)
+        .sort()
+    : [];
+  if (expertiseNames.length === 0) {
+    skip("expertise copy to .bee/expertise", "no expertise/*.md present in source");
+  } else {
+    for (const name of expertiseNames) {
+      const src = fs.readFileSync(path.join(EXPERTISE_SOURCE_DIR, name), "utf8");
+      const dst = path.join(tmp, ".bee", "expertise", name);
+      check(fs.existsSync(dst) && fs.readFileSync(dst, "utf8") === src,
+        `.bee/expertise/${name} copied verbatim on fresh apply`);
+    }
+    const onboardingLedger = JSON.parse(
+      fs.readFileSync(path.join(tmp, ".bee", "onboarding.json"), "utf8"));
+    check(JSON.stringify(Object.keys(onboardingLedger.managed?.expertise || {}).sort()) ===
+      JSON.stringify(expertiseNames),
+      "onboarding.json managed.expertise records every vendored guide",
+      JSON.stringify(Object.keys(onboardingLedger.managed?.expertise || {})));
+  }
+
   // --- 6. plan mode again -> up_to_date --------------------------------------
   const plan2 = await runOnboard(["--repo-root", tmp, "--json"], tmpHome);
   check(plan2.payload?.status === "up_to_date", "second plan run reports up_to_date",
     JSON.stringify(plan2.payload?.plan || []));
+
+  // --- 6b. expertise drift + stale removal (expertise-vendoring) -------------
+  // A stale .bee/expertise file the source no longer carries is planned as
+  // remove_expertise; a drifted guide is planned as copy_expertise. Plan mode
+  // reports both WITHOUT writing; --apply removes the stale file and restores
+  // the drifted guide byte-identical.
+  if (expertiseNames.length === 0) {
+    skip("expertise stale removal + drift repair", "no expertise/*.md present in source");
+  } else {
+    const staleExpertiseRel = ".bee/expertise/retired-guide.md";
+    const staleExpertiseAbs = path.join(tmp, ...staleExpertiseRel.split("/"));
+    fs.writeFileSync(staleExpertiseAbs, "# stale guide the source no longer has\n", "utf8");
+    const driftedName = expertiseNames[0];
+    const driftedAbs = path.join(tmp, ".bee", "expertise", driftedName);
+    fs.writeFileSync(driftedAbs, "TAMPERED EXPERTISE CONTENT\n", "utf8");
+
+    const planExp = await runOnboard(["--repo-root", tmp, "--json"], tmpHome);
+    check(planExp.payload?.status === "changes_needed",
+      "expertise: stale + drifted files report changes_needed",
+      `got: ${planExp.payload?.status}`);
+    check(planExp.payload?.plan?.some((i) =>
+      i.action === "remove_expertise" && i.path === staleExpertiseRel),
+      "expertise: plan lists remove_expertise for the stale file",
+      JSON.stringify(planExp.payload?.plan || []));
+    check(planExp.payload?.plan?.some((i) =>
+      i.action === "copy_expertise" && i.path === `.bee/expertise/${driftedName}`),
+      "expertise: plan lists copy_expertise for the drifted guide");
+    check(fs.existsSync(staleExpertiseAbs) &&
+      fs.readFileSync(driftedAbs, "utf8") === "TAMPERED EXPERTISE CONTENT\n",
+      "expertise: plan mode writes nothing (stale file intact, drift intact)");
+
+    const applyExp = await runOnboard(["--repo-root", tmp, "--apply", "--json"], tmpHome);
+    check(applyExp.payload?.status === "applied", "expertise: re-apply succeeds");
+    check(!fs.existsSync(staleExpertiseAbs),
+      "expertise: stale target file is removed on re-apply");
+    check(fs.readFileSync(driftedAbs, "utf8") ===
+      fs.readFileSync(path.join(EXPERTISE_SOURCE_DIR, driftedName), "utf8"),
+      "expertise: drifted guide restored byte-identical from source");
+    const planExpAfter = await runOnboard(["--repo-root", tmp, "--json"], tmpHome);
+    check(planExpAfter.payload?.status === "up_to_date",
+      "expertise: plan after repair reports up_to_date",
+      JSON.stringify(planExpAfter.payload?.plan || []));
+  }
 
   // --- 7. AGENTS block idempotency -------------------------------------------
   // User content outside the markers must survive; a tampered block inside the

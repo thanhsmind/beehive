@@ -48,7 +48,7 @@ gets the cumulative diff, the in-scope features' `CONTEXT.md` and
 model, inline persona, never another plugin's agent type.
 
 What a finding is, how to calibrate severity, and why every finding is
-verified before filing: `expertise/review.md`. Severity here:
+verified before filing: `.bee/expertise/review.md`. Severity here:
 
 - **P1** — security breach, data loss, breaking change, production
   blocker. Blocks approval.
@@ -111,4 +111,4 @@ closes the review, not any feature; their already-closed state stays untouched.
 | File | When to load |
 |---|---|
 | `references/reviewing-reference.md` | Reviewer prompts and personas, finding schema, UAT wording |
-| `expertise/review.md` | Finding quality, severity calibration, adversarial reading, verification |
+| `.bee/expertise/review.md` | Finding quality, severity calibration, adversarial reading, verification |

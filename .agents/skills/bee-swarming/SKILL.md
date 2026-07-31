@@ -69,7 +69,7 @@ outputs — when a verb refuses, its message names the fix.
 1. Read `AGENTS.md`, then the cell's `CONTEXT.md` and plan (paths in the
    prompt). Conform before you code: scout adjacent patterns, reuse
    existing helpers, match the codebase's idiom. Authoring tests? Judge
-   existing coverage first — `expertise/tests.md`.
+   existing coverage first — `.bee/expertise/tests.md`.
 2. Implement exactly the assigned cell. Reserve any additional path before
    writing (`bee reservations reserve`). Package installs and
    architectural changes are not yours to make — `[BLOCKED]` with the
@@ -111,4 +111,4 @@ self-approved, in any mode.
 |---|---|
 | `references/swarming-reference.md` | Tier rubric, worktree dispatch transaction, prompt template details, result formats |
 | `references/worker-details.md` | Deep worker mechanics: trace tiers, advisor consult, friction triggers, evidence rules |
-| `expertise/tests.md`, `expertise/debugging.md` | Authoring tests; hunting a red |
+| `.bee/expertise/tests.md`, `.bee/expertise/debugging.md` | Authoring tests; hunting a red |

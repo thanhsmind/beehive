@@ -101,6 +101,11 @@ const TEMPLATES_DIR = path.join(PLUGIN_ROOT, "packages", "bee");
 const TEMPLATES_LIB_DIR = path.join(TEMPLATES_DIR, "lib");
 const TEMPLATES_STATUSLINE_DIR = path.join(TEMPLATES_DIR, "statusline");
 const TEMPLATES_AGENTS_DIR = path.join(TEMPLATES_DIR, "agents");
+// Craft-guide layer (expertise-vendoring): repo-root expertise/*.md is the
+// SOURCE; onboarding vendors it to <host>/.bee/expertise/ so the skills'
+// stable `.bee/expertise/<name>.md` pointers resolve in every host repo.
+// Walked from PLUGIN_ROOT (like SKILLS_ROOT), never from ENGINE_DIR.
+const EXPERTISE_DIR = path.join(PLUGIN_ROOT, "expertise");
 const AGENTS_BLOCK_TEMPLATE = path.join(TEMPLATES_DIR, "AGENTS.block.md");
 
 const ONBOARDING_SCHEMA_VERSION = "1.0";
@@ -1823,6 +1828,21 @@ function listTemplateLibModules() {
     .sort();
 }
 
+// Same readdir discipline as listTemplateLibModules (crit-pattern 20260714:
+// never a hand-kept list): every top-level *.md in the source expertise/ dir
+// is a vendored guide. Absent dir -> [] (a source tree without the craft
+// layer plans no expertise items and never deletes a host's vendored copy).
+function listSourceExpertise() {
+  if (!fs.existsSync(EXPERTISE_DIR)) {
+    return [];
+  }
+  return fs
+    .readdirSync(EXPERTISE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => entry.name)
+    .sort();
+}
+
 function listTemplateStatusline() {
   if (!fs.existsSync(TEMPLATES_STATUSLINE_DIR)) {
     return [];
@@ -3071,6 +3091,43 @@ function computePlan(
     }
   }
 
+  // 3d. vendored expertise guides (expertise-vendoring): the craft-guide layer
+  // travels with the engine — <source>/expertise/*.md mirrors to
+  // <host>/.bee/expertise/ with the same byte-compare discipline as the
+  // helpers/lib vendoring above. Removal is enumeration-based, not
+  // ledger-based like 3c: .bee/expertise/ is wholly managed (like a bee-*
+  // skill dir — a file absent from source IS an intentional removal), so a
+  // stale guide is cleaned even when no ledger ever recorded it. Scoped to
+  // plain top-level *.md files only (dirent isFile(), so symlinks and
+  // subdirectories are never enumerated, unlinked, or deleted), and the whole
+  // removal pass is gated on the SOURCE dir existing — a source tree without
+  // the craft layer (pre-expertise checkout) must never read as "delete
+  // everything".
+  const currentExpertiseNames = new Set(listSourceExpertise());
+  for (const name of currentExpertiseNames) {
+    const source = fs.readFileSync(path.join(EXPERTISE_DIR, name), "utf8");
+    const target = path.join(repoRoot, ".bee", "expertise", name);
+    if (readTextIfExists(target) !== source) {
+      plan.push({ action: "copy_expertise", path: `.bee/expertise/${name}` });
+    }
+  }
+  if (fs.existsSync(EXPERTISE_DIR)) {
+    const expertiseTargetDir = path.join(repoRoot, ".bee", "expertise");
+    const staleExpertise = fs.existsSync(expertiseTargetDir)
+      ? fs
+          .readdirSync(expertiseTargetDir, { withFileTypes: true })
+          .filter(
+            (entry) =>
+              entry.isFile() && entry.name.endsWith(".md") && !currentExpertiseNames.has(entry.name),
+          )
+          .map((entry) => entry.name)
+          .sort()
+      : [];
+    for (const name of staleExpertise) {
+      plan.push({ action: "remove_expertise", path: `.bee/expertise/${name}` });
+    }
+  }
+
   // 3b. statusline pair (opt-in sync): only for repos whose settings.json
   // already points statusLine at .claude/statusline-command.sh. Byte-compare
   // like the vendored helpers; never creates the opt-in on other repos.
@@ -3280,11 +3337,16 @@ function buildManagedVersions(
   for (const name of listTemplateLibModules()) {
     lib[name] = hashFile(path.join(TEMPLATES_LIB_DIR, name));
   }
+  const expertise = {};
+  for (const name of listSourceExpertise()) {
+    expertise[name] = hashFile(path.join(EXPERTISE_DIR, name));
+  }
   const managed = {
     agents_block: sha256(renderedBlock),
     gitignore_block: sha256(renderedGitignoreBlock),
     helpers,
     lib,
+    expertise,
   };
   if (repoHooks) {
     managed.repo_hooks = buildHookVersions();
@@ -3334,6 +3396,7 @@ function subsetManaged(managed, repoHooks, statusline = false, codexHybrid = fal
     gitignore_block: src.gitignore_block || null,
     helpers: src.helpers || {},
     lib: src.lib || {},
+    expertise: src.expertise || {},
   };
   if (repoHooks) {
     out.repo_hooks = src.repo_hooks || {};
@@ -3476,14 +3539,15 @@ function applyPlan(
         beeVersion,
       };
       // P49: a forceable refusal names its blast radius beyond skills - the
-      // copy_lib/copy_helper paths a --force-downgrade would also overwrite
-      // under .bee/bin. Filtered from the already-computed `plan` verbatim,
+      // copy_lib/copy_helper/copy_expertise paths a --force-downgrade would
+      // also overwrite under .bee/. Filtered from the already-computed `plan` verbatim,
       // order preserved, never recomputed. Non-forceable refusals (unknown
       // version, blocked_no_source) omit the field entirely - it never
       // invites a force that can't happen.
       if (skillSync.blocked.forceable) {
         blockedResult.host_items = plan.filter(
-          ({ action }) => action === "copy_lib" || action === "copy_helper",
+          ({ action }) =>
+            action === "copy_lib" || action === "copy_helper" || action === "copy_expertise",
         );
       }
       return blockedResult;
@@ -3583,6 +3647,21 @@ function applyPlan(
         // .bee/bin/lib/<name>, derived from the ledger diff in section 3c
         // above, never host/user-supplied.
         if (path.dirname(item.path) === ".bee/bin/lib") {
+          fs.rmSync(target, { force: true });
+        }
+        break;
+      }
+      case "copy_expertise": {
+        const name = path.basename(item.path);
+        writeFileAtomic(target, fs.readFileSync(path.join(EXPERTISE_DIR, name), "utf8"));
+        break;
+      }
+      case "remove_expertise": {
+        // Same exact-path safety as remove_lib: item.path is always
+        // .bee/expertise/<name>, derived from the target-dir enumeration in
+        // section 3d above (plain top-level *.md files only), never
+        // host/user-supplied.
+        if (path.dirname(item.path) === ".bee/expertise") {
           fs.rmSync(target, { force: true });
         }
         break;
