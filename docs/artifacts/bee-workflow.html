@@ -239,9 +239,10 @@
     <div class="phase-head"><h2>Swarming — thực thi</h2><span class="skill">bee-swarming (Orchestrate + Execute)</span></div>
     <div class="phase-body">
       <ul class="steps">
-        <li><span class="who o">Phiên</span><span><span class="verb">bee cells add</span> slice hiện tại (+ 1 test cell đuôi slice, việc đầu tiên của nó là <b>phán quyết coverage</b>); <span class="verb">bee cells schedule</span> xếp thứ tự; <span class="verb">bee cells tier</span> chọn model.</span></li>
+        <li><span class="who o">Phiên</span><span><span class="verb">bee cells add</span> slice hiện tại — test là việc của writer trong từng cell, TDD-style, <b>phán quyết coverage trước khi viết</b>; <span class="verb">bee cells schedule</span> xếp thứ tự; <span class="verb">bee cells tier</span> chọn model.</span></li>
         <li><span class="who o">Phiên</span><span><span class="verb">bee dispatch prepare --cell … --worker … --claim</span> — <b>một verb</b>: claim + reserve files + prompt tự đủ (cell JSON inline; block <b>Prior rounds</b> máy lắp khi re-dispatch; block <b>Proof contract</b> cho cell red-first). Spawn đúng payload đó.</span></li>
-        <li><span class="who w">Worker</span><span>Đọc AGENTS + CONTEXT → conform trước khi code → implement đúng một cell (lệch thực tế: sửa-và-ghi-deviation, việc kiến trúc thì BLOCKED) → commit 1 lần → <span class="verb">bee cells finish</span> (cap + release trong một verb).</span></li>
+        <li><span class="who w">Worker</span><span>Đọc AGENTS + CONTEXT → conform trước khi code → implement đúng một cell (lệch thực tế: sửa-và-ghi-deviation, việc kiến trúc thì BLOCKED) → commit 1 lần → <span class="verb">bee cells finish</span>.</span></li>
+        <li><span class="who m">Máy</span><span><b>finish tự chạy test đã khai báo</b> (<code>commands.test</code>) bằng runner tất định, ghi record chuẩn hoá <code>test-results.json</code>: <b>xanh → cap + release; đỏ → từ chối cap</b> kèm failure excerpt ≤500 ký tự — cái đỏ chính là việc tiếp theo, re-dispatch tự cite excerpt.</span></li>
         <li><span class="who w">Worker</span><span>Trả đúng một token:</span></li>
       </ul>
       <div class="tokens">
@@ -254,21 +255,21 @@
   </div>
 
   <div class="phase" data-n="4">
-    <div class="phase-head"><h2>Close — trả nợ, chứng minh</h2><span class="skill">bee close</span></div>
+    <div class="phase-head"><h2>Close — chứng minh cả feature</h2><span class="skill">bee close</span></div>
     <div class="phase-body">
       <ul class="steps">
-        <li><span class="who o">Phiên</span><span><span class="verb">bee close --feature … --dry-run</span> — liệt kê từng <b>cửa nợ</b> (feature-verify, test-cell, scribing/capture) kèm đúng lệnh trả. Cửa không bao giờ được waive.</span></li>
-        <li><span class="who m">Máy</span><span>Chỉ còn cửa verify → <span class="verb">bee close</span> chạy lệnh verify đã ghi nhận, record xanh/đỏ qua đúng cơ chế cũ. Đỏ = surface output, không ghi gì là "pass".</span></li>
+        <li><span class="who m">Máy</span><span><span class="verb">bee close --feature …</span> chạy lại <b>toàn bộ test đã khai báo</b> (<span class="verb">bee test</span>) cho feature — một cửa duy nhất, không waive. Đỏ = surface excerpt, không có gì được ghi là "pass".</span></li>
+        <li><span class="who o">Phiên</span><span>Xanh → <b>capture ghi nhận là pending</b> (không chặn, không chạy ngay) và next là land: <span class="verb">bee worktree merge</span> từ main.</span></li>
       </ul>
     </div>
   </div>
 
   <div class="phase" data-n="5">
-    <div class="phase-head"><h2>Capturing — giữ lại thứ đã chốt</h2><span class="skill">bee-capturing (tự kích hoạt suốt phiên)</span></div>
+    <div class="phase-head"><h2>Capturing — tại trận ngay, tổng hợp sau</h2><span class="skill">bee-capturing</span></div>
     <div class="phase-body">
       <ul class="steps">
-        <li><span class="who o">Phiên</span><span><b>Ngay khi</b> một rule/giá trị chốt trong hội thoại: <span class="verb">bee decisions log</span> + <span class="verb">bee capture add</span> cùng lượt — không chờ ai nhắc.</span></li>
-        <li><span class="who o">Phiên</span><span><b>Compound</b> sau close xanh: flush capture queue vào spec, viết learnings, log quyết định, <span class="verb">bee reviews candidate add</span>. Specs = memory của <i>dự án host</i> dưới <code>docs/</code>.</span></li>
+        <li><span class="who o">Phiên</span><span><b>Tại trận (luôn ngay):</b> một rule/giá trị vừa chốt trong hội thoại → <span class="verb">bee decisions log</span> + <span class="verb">bee capture add</span> cùng lượt — không chờ ai nhắc.</span></li>
+        <li><span class="who h">Bạn</span><span><b>Compound (dồn lại, giống review):</b> sau close xanh chỉ là <i>nợ pending</i> — <span class="verb">bee orient</span> nhắc bền; bạn gọi lúc rảnh, <b>gộp nhiều feature một phiên</b>: flush stub vào spec, viết learnings, <span class="verb">bee reviews candidate add</span>. Specs = memory của <i>dự án host</i> dưới <code>docs/</code>.</span></li>
       </ul>
     </div>
   </div>
