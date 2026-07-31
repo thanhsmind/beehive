@@ -204,7 +204,7 @@ await check('registry names are unique and dot-namespaced by group (status, cell
   assert(new Set(names).size === names.length, `duplicate names in registry: ${names.join(', ')}`);
   const groups = new Set(names.map((n) => (n.includes('.') ? n.split('.')[0] : n)));
   for (const group of groups) {
-    assert(['status', 'doctor', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent'].includes(group), `unexpected group "${group}"`);
+    assert(['status', 'orient', 'doctor', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent'].includes(group), `unexpected group "${group}"`);
   }
 });
 
@@ -306,14 +306,14 @@ await check('DA5 bijection: every runtime verb of bee.mjs cells/reservations/dec
   }
 });
 
-await check('DA5 bijection: the only dot-free registry entries are "status" and "doctor", and every entry\'s group is one of status|doctor|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|config', async () => {
-  const allowedGroups = new Set(['status', 'doctor', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent']);
-  const allowedDotFree = new Set(['status', 'doctor']);
+await check('DA5 bijection: the only dot-free registry entries are "status", "orient" and "doctor", and every entry\'s group is one of status|orient|doctor|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|config', async () => {
+  const allowedGroups = new Set(['status', 'orient', 'doctor', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent']);
+  const allowedDotFree = new Set(['status', 'orient', 'doctor']);
   for (const entry of COMMAND_REGISTRY) {
     const group = entry.name.includes('.') ? entry.name.split('.')[0] : entry.name;
-    assert(allowedGroups.has(group), `${entry.name}: group "${group}" is not one of status|doctor|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|herding|config|dispatch|tmp`);
+    assert(allowedGroups.has(group), `${entry.name}: group "${group}" is not one of status|orient|doctor|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|herding|config|dispatch|tmp`);
     if (!entry.name.includes('.')) {
-      assert(allowedDotFree.has(entry.name), `dot-free registry entry "${entry.name}" is not one of status|doctor — only those may be dot-free`);
+      assert(allowedDotFree.has(entry.name), `dot-free registry entry "${entry.name}" is not one of status|orient|doctor — only those may be dot-free`);
     }
   }
 });
@@ -446,6 +446,82 @@ await check('cells.verify example runs through the real dispatcher', async () =>
 await check('cells.cap example runs through the real dispatcher', async () => {
   const result = await assertExampleOk('cells.cap');
   assert(JSON.parse(result.stdout).status === 'capped', 'demo-1 should now be capped');
+});
+
+// cells.finish (porcelain): its own fixture cell, prepared exactly like the
+// demo-1 chain (add -> claim -> reserve -> verify) so the registry example
+// runs against a claimed, verified cell holding a live reservation.
+await check('cells.finish example runs through the real dispatcher (cap + reservation release in one verb)', async () => {
+  addCell(root, {
+    id: 'demo-fin-1',
+    feature: 'demo',
+    title: 'Demo cell for the cells.finish registry example',
+    lane: 'small',
+    action: 'Exercise the cells.finish example against a real fixture cell.',
+    verify: 'node -e "process.exit(0)"',
+  });
+  for (const args of [
+    ['cells', 'claim', '--id', 'demo-fin-1', '--worker', 'worker-fin', '--json'],
+    ['reservations', 'reserve', '--agent', 'worker-fin', '--cell', 'demo-fin-1', '--path', 'src/demo-fin.ts', '--json'],
+    ['cells', 'verify', '--id', 'demo-fin-1', '--command', 'manual check', '--output', '0 failing', '--passed', 'true', '--json'],
+  ]) {
+    const setup = await runModuleWorker(BEE_MJS, { args, cwd: root });
+    assert(setup.status === 0, `finish fixture setup "${args.join(' ')}" exited ${setup.status}: ${setup.stdout} ${setup.stderr}`);
+  }
+  const result = await assertExampleOk('cells.finish');
+  const cell = JSON.parse(result.stdout);
+  assert(cell.status === 'capped', `demo-fin-1 should be capped by finish, got ${cell.status}`);
+  assert(
+    Array.isArray(cell.released) && cell.released.includes('src/demo-fin.ts'),
+    `finish must report the released reservation paths, got ${JSON.stringify(cell.released)}`,
+  );
+  const list = await runModuleWorker(BEE_MJS, { args: ['reservations', 'list', '--active-only', '--json'], cwd: root });
+  const active = JSON.parse(list.stdout).reservations.filter((r) => r.agent === 'worker-fin');
+  assert(active.length === 0, `worker-fin's reservation must be gone after finish, got ${JSON.stringify(active)}`);
+});
+
+await check('cells.finish on a cell that cannot cap passes the cap refusal through unchanged and releases nothing', async () => {
+  addCell(root, {
+    id: 'demo-fin-2',
+    feature: 'demo',
+    title: 'Demo cell for the cells.finish refusal path',
+    lane: 'small',
+    action: 'Prove finish refuses exactly like cap and never releases on refusal.',
+    verify: 'node -e "process.exit(0)"',
+  });
+  for (const args of [
+    ['cells', 'claim', '--id', 'demo-fin-2', '--worker', 'worker-fin2', '--json'],
+    ['reservations', 'reserve', '--agent', 'worker-fin2', '--cell', 'demo-fin-2', '--path', 'src/demo-fin2.ts', '--json'],
+  ]) {
+    const setup = await runModuleWorker(BEE_MJS, { args, cwd: root });
+    assert(setup.status === 0, `finish refusal fixture setup "${args.join(' ')}" exited ${setup.status}: ${setup.stdout} ${setup.stderr}`);
+  }
+  // No verify recorded — cap refuses; finish must refuse byte-identically.
+  const capArgs = ['--id', 'demo-fin-2', '--outcome', 'refusal probe', '--files', 'src/demo-fin2.ts', '--json'];
+  const capResult = await runModuleWorker(BEE_MJS, { args: ['cells', 'cap', ...capArgs], cwd: root });
+  const finishResult = await runModuleWorker(BEE_MJS, { args: ['cells', 'finish', ...capArgs], cwd: root });
+  assert(capResult.status === 1 && finishResult.status === 1, `both must refuse non-zero, got cap=${capResult.status} finish=${finishResult.status}`);
+  assert(
+    finishResult.stdout === capResult.stdout,
+    `finish's refusal must be byte-identical to cap's, got cap=${capResult.stdout} finish=${finishResult.stdout}`,
+  );
+  const cell = JSON.parse(fs.readFileSync(path.join(root, '.bee', 'cells', 'demo-fin-2.json'), 'utf8'));
+  assert(cell.status === 'claimed', `the refused cell must stay claimed, got ${cell.status}`);
+  const list = await runModuleWorker(BEE_MJS, { args: ['reservations', 'list', '--active-only', '--json'], cwd: root });
+  const active = JSON.parse(list.stdout).reservations.filter((r) => r.agent === 'worker-fin2');
+  assert(active.length === 1, `the reservation must survive a refused finish, got ${JSON.stringify(active)}`);
+  // Retire the fixture so the claimed cell never leaks into the schedule/
+  // claim-next assertions further down the chain.
+  const cleanup = await runModuleWorker(BEE_MJS, {
+    args: ['cells', 'drop', '--id', 'demo-fin-2', '--reason', 'finish refusal fixture retired', '--json'],
+    cwd: root,
+  });
+  assert(cleanup.status === 0, `fixture cleanup drop failed: ${cleanup.stdout} ${cleanup.stderr}`);
+  const releaseCleanup = await runModuleWorker(BEE_MJS, {
+    args: ['reservations', 'release', '--agent', 'worker-fin2', '--cell', 'demo-fin-2', '--json'],
+    cwd: root,
+  });
+  assert(releaseCleanup.status === 0, `fixture cleanup release failed: ${releaseCleanup.stdout} ${releaseCleanup.stderr}`);
 });
 
 await check('cells.judge example runs through the real dispatcher', async () => {
@@ -785,6 +861,58 @@ await check('decisions.render example runs through the real dispatcher (decision
 await check('status example runs through the real dispatcher', async () => {
   const result = await assertExampleOk('status');
   assert(JSON.parse(result.stdout).phase === 'swarming', 'status should reflect the fixture repo\'s phase');
+});
+
+// ─── orient (porcelain): the session-start packet — a reshape of the same
+// snapshot buildStatus renders, never a second state computation. ──────────
+
+await check('orient example runs through the real dispatcher with the spec\'s {where, decisions, work, next} shape', async () => {
+  const result = await assertExampleOk('orient');
+  const packet = JSON.parse(result.stdout);
+  assert(packet.where && packet.where.phase === 'swarming' && packet.where.feature === 'demo', `where must carry the fixture phase/feature, got ${JSON.stringify(packet.where)}`);
+  assert('mode' in packet.where && 'gates' in packet.where && 'gate_bypass_level' in packet.where, `where must carry mode/gates/gate_bypass_level, got ${JSON.stringify(packet.where)}`);
+  assert('context_md' in packet.decisions && typeof packet.decisions.active_count === 'number' && Array.isArray(packet.decisions.recent), `decisions must carry context_md/active_count/recent, got ${JSON.stringify(packet.decisions)}`);
+  assert(packet.decisions.recent.length <= 3, `recent is capped at 3 one-liners, got ${packet.decisions.recent.length}`);
+  assert(packet.work && packet.work.cells && ['open', 'claimed', 'capped'].every((k) => typeof packet.work.cells[k] === 'number'), `work.cells must carry open/claimed/capped counts, got ${JSON.stringify(packet.work)}`);
+  assert(Array.isArray(packet.work.ready) && packet.work.ready.length <= 5 && Array.isArray(packet.work.blockers), `work must carry ready (<=5) and blockers arrays, got ${JSON.stringify(packet.work)}`);
+  assert(packet.next && 'action' in packet.next && 'skill' in packet.next && 'command' in packet.next, `next must carry action/skill/command, got ${JSON.stringify(packet.next)}`);
+  assert(packet.next.skill === 'bee-swarming', `phase swarming must map to bee-swarming, got ${packet.next.skill}`);
+});
+
+await check('orient next.action reuses status\'s recommended next step, next.command names the runnable command, and CONTEXT.md is picked up from disk', async () => {
+  const statusPayload = JSON.parse((await runModuleWorker(BEE_MJS, { args: ['status', '--json'], cwd: root })).stdout);
+  fs.mkdirSync(path.join(root, 'docs', 'history', 'demo'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'docs', 'history', 'demo', 'CONTEXT.md'), '# demo context\n', 'utf8');
+  const result = await runModuleWorker(BEE_MJS, { args: ['orient', '--json'], cwd: root });
+  assert(result.status === 0, `orient exited ${result.status}: ${result.stderr}`);
+  const packet = JSON.parse(result.stdout);
+  assert(packet.next.action === statusPayload.recommended_next, `next.action must equal status's recommended_next, got "${packet.next.action}" vs "${statusPayload.recommended_next}"`);
+  assert(packet.decisions.context_md === 'docs/history/demo/CONTEXT.md', `context_md must name the on-disk CONTEXT.md, got ${packet.decisions.context_md}`);
+  // The fixture chain leaves ready cells at this point, so the recommended
+  // action names claimable work and the packet's command must be runnable.
+  if (packet.work.ready.length > 0) {
+    assert(packet.next.command === 'bee cells ready --json', `a ready-cells recommendation must carry the runnable command, got ${packet.next.command}`);
+  } else {
+    assert(packet.next.command === null || typeof packet.next.command === 'string', 'command is a string or null');
+  }
+});
+
+await check('orient text output is at most six lines and ends with "next: <action>"; phase planning maps to bee-planning', async () => {
+  const textResult = await runModuleWorker(BEE_MJS, { args: ['orient'], cwd: root });
+  assert(textResult.status === 0, `orient (text) exited ${textResult.status}: ${textResult.stderr}`);
+  const lines = textResult.stdout.trimEnd().split('\n');
+  assert(lines.length <= 6, `orient text must be at most six lines, got ${lines.length}: ${textResult.stdout}`);
+  assert(/^next: /.test(lines[lines.length - 1]), `orient text must end with "next: <action>", got "${lines[lines.length - 1]}"`);
+
+  const orientPlanning = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-orient-planning-'));
+  fs.mkdirSync(path.join(orientPlanning, '.bee'), { recursive: true });
+  writeJsonAtomic(path.join(orientPlanning, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+  writeState(orientPlanning, { ...defaultState(), phase: 'planning', feature: 'plan-demo' });
+  const planning = JSON.parse((await runModuleWorker(BEE_MJS, { args: ['orient', '--json'], cwd: orientPlanning })).stdout);
+  assert(planning.next.skill === 'bee-planning', `phase planning must map to bee-planning, got ${planning.next.skill}`);
+  writeState(orientPlanning, { ...defaultState(), phase: 'idle', feature: null });
+  const idle = JSON.parse((await runModuleWorker(BEE_MJS, { args: ['orient', '--json'], cwd: orientPlanning })).stdout);
+  assert(idle.next.skill === 'bee-hive', `an unmapped phase must fall back to bee-hive, got ${idle.next.skill}`);
 });
 
 // ─── lpsp-2 (P2): default `lanes` summarizes (active lane in full + counts +
@@ -5589,24 +5717,58 @@ await check('judgeStandardWarning tolerates malformed cell shapes without throwi
   assert(judgeStandardWarning({ id: 'jsw-bad', change_class: 'behavior', verify: null }) !== null, 'non-string verify must not throw, and behavior still warns without evidence');
 });
 
-// ─── end-to-end: --help / --help --json (D3 tool-schema manifest) ─────────
+// ─── end-to-end: --help / --help --json (D3 tool-schema manifest, split per
+// docs/specs/porcelain.md: default = porcelain only, --all = full registry) ─
 
-await check('bee --help --json parses as valid JSON and lists every existing subcommand', async () => {
+await check('bee --help --all --json parses as valid JSON and lists every existing subcommand, each carrying its surface value', async () => {
+  const result = await runBee(['--help', '--all', '--json']);
+  assert(result.status === 0, `exit ${result.status}: ${result.stderr}`);
+  const manifest = JSON.parse(result.stdout);
+  assert(manifest.schema_version === SCHEMA_VERSION, `schema_version: ${manifest.schema_version}`);
+  assert(manifest.total_commands === COMMAND_REGISTRY.length, `total_commands must count the full registry, got ${manifest.total_commands}`);
+  const names = new Set(manifest.commands.map((c) => c.name));
+  for (const entry of COMMAND_REGISTRY) {
+    assert(names.has(entry.name), `--help --all --json is missing "${entry.name}"`);
+  }
+  assert(manifest.commands.every((c) => c.surface === 'porcelain' || c.surface === 'plumbing'), 'every --all entry must carry a porcelain|plumbing surface value');
+  assert(manifest.commands.find((c) => c.name === 'cells.cap').surface === 'plumbing', 'an entry with no registry surface field must read as plumbing');
+  assert(manifest.commands.find((c) => c.name === 'orient').surface === 'porcelain', 'orient must read as porcelain');
+  assert(manifest.commands.every((c) => !('helper' in c)), 'the public manifest must never leak the internal `helper` dispatch field');
+});
+
+await check('bee --help --json (default) is porcelain-only: exactly the surface-tagged entries, total_commands counting the full registry', async () => {
   const result = await runBee(['--help', '--json']);
   assert(result.status === 0, `exit ${result.status}: ${result.stderr}`);
   const manifest = JSON.parse(result.stdout);
   assert(manifest.schema_version === SCHEMA_VERSION, `schema_version: ${manifest.schema_version}`);
-  const names = new Set(manifest.commands.map((c) => c.name));
-  for (const entry of COMMAND_REGISTRY) {
-    assert(names.has(entry.name), `--help --json is missing "${entry.name}"`);
-  }
-  assert(manifest.commands.every((c) => !('helper' in c)), 'the public manifest must never leak the internal `helper` dispatch field');
+  assert(manifest.surface === 'porcelain', `default manifest must declare surface "porcelain", got ${manifest.surface}`);
+  assert(manifest.total_commands === COMMAND_REGISTRY.length, `total_commands must count the full registry, got ${manifest.total_commands}`);
+  const porcelainNames = COMMAND_REGISTRY.filter((e) => e.surface === 'porcelain').map((e) => e.name).sort();
+  const shownNames = manifest.commands.map((c) => c.name).sort();
+  assert(JSON.stringify(shownNames) === JSON.stringify(porcelainNames), `default --help --json must show exactly the porcelain set, got ${shownNames.join(', ')}`);
+  assert(porcelainNames.length === 15, `the porcelain set is 15 verbs (docs/specs/porcelain.md), got ${porcelainNames.length}`);
+  assert(!shownNames.includes('cells.cap'), 'plumbing (cells.cap) must be hidden from the default manifest');
 });
 
-await check('bee --help renders non-empty prose naming known commands', async () => {
+await check('bee --help renders porcelain-only prose and ends with the hidden-command footer naming --all', async () => {
   const result = await runBee(['--help']);
   assert(result.status === 0, `exit ${result.status}: ${result.stderr}`);
   assert(result.stdout.includes('bee cells ready'), `expected "bee cells ready" invoke text, got: ${result.stdout}`);
+  assert(result.stdout.includes('bee orient'), `expected "bee orient" invoke text, got: ${result.stdout}`);
+  assert(!result.stdout.includes('bee cells cap\n'), `plumbing invokes must be hidden from default --help, got: ${result.stdout}`);
+  const hidden = COMMAND_REGISTRY.length - COMMAND_REGISTRY.filter((e) => e.surface === 'porcelain').length;
+  const lastLine = result.stdout.trimEnd().split('\n').pop();
+  assert(
+    lastLine === `${hidden} more command(s) are plumbing, hidden here — run "bee --help --all" for the full surface.`,
+    `default --help must end with the hidden-count footer naming --all, got: "${lastLine}"`,
+  );
+});
+
+await check('bee --help --all renders the full prose surface with per-entry surface lines', async () => {
+  const result = await runBee(['--help', '--all']);
+  assert(result.status === 0, `exit ${result.status}: ${result.stderr}`);
+  assert(result.stdout.includes('bee cells cap'), `--all must list plumbing invokes, got: ${result.stdout}`);
+  assert(result.stdout.includes('surface: plumbing') && result.stdout.includes('surface: porcelain'), '--all text must carry each entry\'s surface value');
 });
 
 // ─── group/command-scoped --help (GH #23) ──────────────────────────────────

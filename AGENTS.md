@@ -35,7 +35,8 @@ Three boundaries hold in every mode:
   `bee decisions log`; `docs/history/<feature>/CONTEXT.md` holds the
   locked ones — cite them, never reinterpret them.
 
-`bee --help --json` prints the whole CLI surface when you need it.
+`bee --help --json` prints the porcelain flow surface; `bee --help
+--all --json` prints everything.
 
 ## Judgment and deviation
 

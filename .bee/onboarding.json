@@ -2,17 +2,17 @@
   "schema_version": "1.0",
   "bee_version": "1.20.3",
   "managed": {
-    "agents_block": "f80eedc73cb923c919ea6625bb4b1576450981f629fdff1afb181e37b92560dd",
+    "agents_block": "1a83a9ae2f40e4d6e450491f40c6e6cc802e8182239c936c614d9a569e2e397b",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
     "helpers": {
-      "bee.mjs": "83c01187f8ea93f5956c54d18fab936a2435786b8578281e9881d366aab66b75"
+      "bee.mjs": "e45d0477694680bf2f49db766e0dbd4fade5736d0a39abc7332ac46b9cebf945"
     },
     "lib": {
       "backlog.mjs": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
       "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
       "cells.mjs": "46e5bd11b87c9c6b53b7f475baf8041560b21bceefc1d3cd563baed6bea3c0c7",
       "claims.mjs": "de7726a26b2354b65ee598d00f9179f04f71fe3d53f39a865b749da49e03623d",
-      "command-registry.mjs": "dcbf0893109fc212c84e6bbac36e317ec69a1d8115c59f640c6359a984ae5ea9",
+      "command-registry.mjs": "063855680da60446e5b836126b9a88532cea57be1039f2a8563d7df64d0a1462",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
@@ -50,7 +50,7 @@
       "bee-codex-subagent-audit.mjs": "f9f6900705aa20dfc0035a8c8c5c4b22fc56c9d0a4953e1b0ba3fd9466dec85e",
       "bee-session-init.mjs": "88eb00fc4893788637c5523d6b3217bb367c94d50bb9fcaa8962f8b94a089b20",
       "bee-prompt-context.mjs": "ba5d510509ea95cb0de3d4c437daf9501adedcaf7e26b28d35131696344feda7",
-      "bee-write-guard.mjs": "b156664297a0217a93bfe9c4220833f1b3b4a24dcb81e95bbdad5760b324a490",
+      "bee-write-guard.mjs": "7a233425606df2027abb067a20bbdb284cd6a7a1acc3275cdeba06076e6bfd1a",
       "tokenize-command.mjs": "e1da8db4a06525c92fb01495e718a0a2f94d87b2c7808458e306b480b353a77a",
       "bee-state-sync.mjs": "592d57221940816eee31951a96439679e89d1526db4a3280286965b59fe089d3",
       "bee-chain-nudge.mjs": "0520c71fad2513d93666ad4c3353b7196faeeac382430b1e1395fabd0febd9cb",
@@ -78,5 +78,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-31T08:48:39.478Z"
+  "updated_at": "2026-07-31T10:18:03.124Z"
 }

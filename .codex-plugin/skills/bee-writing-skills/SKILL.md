@@ -24,11 +24,14 @@ too — no exceptions, not for "simple additions," "just a section," or
 | RED | 3-5 pressure scenarios, ≥3 combined pressures, run WITHOUT the skill; record exact verbatim rationalizations, not paraphrases | HARD-GATE: no skill content written before this completes |
 | GREEN | Minimal SKILL.md addressing only the RED rationalizations (hypothetical content bloats and gets skipped); re-run the same scenarios WITH the skill | Still failing → the skill is unclear; revise, do not proceed |
 | REFACTOR | Any new rationalization → explicit negation + a rationalization-table row + a red-flag entry; re-run ALL scenarios | An agent violating a rule with the skill present is a skill bug, not agent error |
-| VALIDATE | Manual checklist below, end to end; `node --check` on any shipped scripts; write CREATION-LOG.md | No automated skill validator exists (v0.1) |
+| VALIDATE | Manual checklist below, end to end; `node --check` on any shipped scripts; write the creation log | No automated skill validator exists (v0.1) |
 
 Scenario templates, the 7 pressure types, and the meta-test:
 `references/pressure-test-template.md` ("The 7 Pressure Types").
-CREATION-LOG.md template: `references/creation-log-template.md`.
+Creation-log template: `references/creation-log-template.md`. The log is a
+development record, not product: write it to
+`docs/decisions/skills/<skill-name>-creation-log.md`, never inside the
+skill directory.
 
 ## SKILL.md checklist (bee conventions)
 
@@ -73,6 +76,6 @@ Skill pressure-tested, validated, and logged. Invoke bee-hive skill.
 | Reference | When to Load |
 |---|---|
 | `references/pressure-test-template.md` | the 7 pressure types, ready-to-use scenario templates, the meta-test |
-| `references/creation-log-template.md` | CREATION-LOG.md template documenting the TDD process |
+| `references/creation-log-template.md` | Creation-log template documenting the TDD process (written to `docs/decisions/skills/`) |
 | `references/checklist-examples.md` | description trap, dependency-metadata YAML, persuasion-principle table |
 | `references/rationalization-table.md` | common violation excuses and their reality, extended during REFACTOR |

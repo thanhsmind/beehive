@@ -1,6 +1,6 @@
 # Creation Log: [Skill Name]
 
-<!-- Copy this template to your skill directory as CREATION-LOG.md -->
+<!-- Copy this template to docs/decisions/skills/<skill-name>-creation-log.md — the log is a development record, never shipped inside the skill directory -->
 <!-- Complete every section — this is the evidence that TDD-for-skills was followed -->
 
 ## Table of Contents

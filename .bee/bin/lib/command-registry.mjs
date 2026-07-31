@@ -12,7 +12,11 @@
 // retired (shim-retire D1/D5) — `bee.mjs <group> <verb>` is now the sole
 // canonical and sole shipped CLI, so entries no longer carry an informational
 // `helper` field naming a shim; only {name, invoke, description, parameters,
-// examples, deprecated} make up an entry.
+// examples, deprecated} make up an entry, plus an optional `surface` field:
+// 'porcelain' marks the small flow-verb set the default `bee --help` shows
+// (docs/specs/porcelain.md); absent reads as 'plumbing' — still shipped,
+// still invocable, listed under `bee --help --all`. Presentation only:
+// manifest drift detection keeps hashing the FULL registry.
 //
 // `examples[]` are literal, runnable `bee <group> <verb> ...` argument
 // strings — the manifest-as-tested-contract discipline (every example is
@@ -33,11 +37,35 @@ export const SCHEMA_VERSION = '1.0';
 // need to update alongside cells.mjs itself.
 const CELL_STATUSES = ['open', 'claimed', 'capped', 'blocked', 'dropped'];
 
+// cells.cap and cells.finish share this one schema by construction: finish IS
+// the cap door (same proof rules, same refusals) plus reservation release —
+// never a weakened or extended restatement.
+const CELL_CAP_PARAMETERS = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', description: 'Cell id, e.g. auth-3.' },
+    outcome: { type: 'string', description: 'One-line outcome summary.' },
+    files: { type: 'string', description: 'Comma-separated list of files the worker changed.' },
+    'feature-verify-pending': { type: 'boolean', description: 'Cap through the feature-verify-pending path: no per-cell verify evidence demanded, trace.feature_verify stamped "pending". Refused when combined with per-cell evidence claims. The feature-level verify record (state feature-verify record --result green) is what later satisfies the close door.' },
+    'behavior-change': { type: 'boolean', description: 'Force behavior_change true (a cell-declared true cannot be unset by omitting this flag).' },
+    'evidence-stdin': { type: 'boolean', description: 'Read verification_evidence JSON from stdin (preferred — no evidence file is persisted).' },
+    'evidence-file': { type: 'string', description: 'Path to a verification_evidence JSON file (back-compat; prefer --evidence-stdin).' },
+    'deviations-file': { type: 'string', description: 'Path to a deviations list (JSON array or newline-delimited text).' },
+    friction: { type: 'string', description: 'One-line friction note, only when a friction trigger fired.' },
+    'override-judge': { type: 'string', description: 'Audited override reason — required to cap a cell whose latest semantic-judge verdict is NEEDS_REVISION (refused otherwise with JUDGE_REWORK_REQUIRED); recorded to trace.judge_overrides and logged as a decision.' },
+    'session-id': { type: 'string', description: 'Acting session identity, for the claim-ownership guard. Optional — resolves from CLAUDE_CODE_SESSION_ID when omitted.' },
+    'force-ownership': { type: 'boolean', description: 'Override a live claim owned by a different session (audited).' },
+    json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
+  },
+  required: ['id'],
+};
+
 export const COMMAND_REGISTRY = [
   // ─── status (bee_status.mjs — no subcommand, flags only) ─────────────────
   {
     name: 'status',
     invoke: 'bee status',
+    surface: 'porcelain',
     description:
       'Read-only snapshot: onboarding health, phase, gates, handoff, cell counts, reservations, active workers, decisions, staleness warnings, recommended next step. `lanes` is summarized by default: the ACTIVE lane (the one this session is bound to) in full, plus counts-by-phase and bare ids for every other lane record — pass --lanes-full for the full per-lane array. `workers` is a derived view — live-heartbeat sessions joined with their current cell claim — never state.json\'s hand-mutated `workers` array.',
     parameters: {
@@ -61,6 +89,24 @@ export const COMMAND_REGISTRY = [
     deprecated: null,
   },
 
+  // ─── orient (porcelain) — the session-start context packet ────────────────
+  {
+    name: 'orient',
+    invoke: 'bee orient',
+    surface: 'porcelain',
+    description:
+      'Read-only session-start context packet: where the work is ({phase, feature, mode, gates, gate_bypass_level}), the decisions in force (active count, up to 3 recent one-liners, the feature\'s CONTEXT.md path when one exists on disk), the work state (open/claimed/capped counts, up to 5 ready cell ids, blockers), and exactly one recommended next step ({action, skill, command}) — the skill to load for the current phase, and a runnable command when the action names one (null otherwise). Reshapes the same snapshot `bee status` builds; never a second state computation.',
+    parameters: {
+      type: 'object',
+      properties: {
+        json: { type: 'boolean', description: 'Emit the machine-readable packet ({where, decisions, work, next}) instead of the six-line text summary.' },
+      },
+      required: [],
+    },
+    examples: ['bee orient --json'],
+    deprecated: null,
+  },
+
   // ─── cells (bee_cells.mjs) ────────────────────────────────────────────────
   {
     name: 'cells.list',
@@ -81,6 +127,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'cells.ready',
     invoke: 'bee cells ready',
+    surface: 'porcelain',
     description: 'List open cells whose deps are all capped — claimable right now.',
     parameters: {
       type: 'object',
@@ -96,6 +143,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'cells.show',
     invoke: 'bee cells show',
+    surface: 'porcelain',
     description:
       'Show one cell by id, including its full trace. The output carries a `verify_owner` field (JSON and text alike) stating that the `verify` command is MAIN\'s — run once at feature close, never by the assigned worker.',
     parameters: {
@@ -112,6 +160,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'cells.add',
     invoke: 'bee cells add',
+    surface: 'porcelain',
     description:
       'Add a cell (or a whole-slice JSON array) from stdin, or from a JSON file. Prefer --stdin: pipe one cell object or an array for the whole slice in one call — no per-cell scratchpad files. Exactly one of --stdin / --file is required at call time (both satisfy the schema; the handler itself enforces the choice). A batch is validated WHOLE: schema, regen obligations, duplicate ids, and the dependency-cycle check are checked for every cell before any is written, so one call names every problem instead of stopping at the first. --dry-run runs that same whole-batch validation and reports {dry_run:true, ok, cells:[{id, ok, problems}]} without writing anything, clean or dirty — exit 0 when every cell is clean, non-zero otherwise.',
     parameters: {
@@ -195,26 +244,18 @@ export const COMMAND_REGISTRY = [
     name: 'cells.cap',
     invoke: 'bee cells cap',
     description: 'Cap a cell — refuses without a recorded passing verify (and, for small+ lanes, recorded output/evidence plus non-empty files_changed). Exception: --feature-verify-pending caps with NO per-cell verify evidence, stamping trace.feature_verify: "pending" — the proof is deliberately relocated to ONE feature-level verify (`bee state feature-verify record`), and leaving phase "swarming" is refused until a fresh green record covers every pending cap (no bypass level lifts it). Combining the flag with per-cell evidence claims (--evidence-file/--evidence-stdin, or an already-recorded passing verify) is refused — the two proof paths are exclusive.',
-    parameters: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', description: 'Cell id, e.g. auth-3.' },
-        outcome: { type: 'string', description: 'One-line outcome summary.' },
-        files: { type: 'string', description: 'Comma-separated list of files the worker changed.' },
-        'feature-verify-pending': { type: 'boolean', description: 'Cap through the feature-verify-pending path: no per-cell verify evidence demanded, trace.feature_verify stamped "pending". Refused when combined with per-cell evidence claims. The feature-level verify record (state feature-verify record --result green) is what later satisfies the close door.' },
-        'behavior-change': { type: 'boolean', description: 'Force behavior_change true (a cell-declared true cannot be unset by omitting this flag).' },
-        'evidence-stdin': { type: 'boolean', description: 'Read verification_evidence JSON from stdin (preferred — no evidence file is persisted).' },
-        'evidence-file': { type: 'string', description: 'Path to a verification_evidence JSON file (back-compat; prefer --evidence-stdin).' },
-        'deviations-file': { type: 'string', description: 'Path to a deviations list (JSON array or newline-delimited text).' },
-        friction: { type: 'string', description: 'One-line friction note, only when a friction trigger fired.' },
-        'override-judge': { type: 'string', description: 'Audited override reason — required to cap a cell whose latest semantic-judge verdict is NEEDS_REVISION (refused otherwise with JUDGE_REWORK_REQUIRED); recorded to trace.judge_overrides and logged as a decision.' },
-        'session-id': { type: 'string', description: 'Acting session identity, for the claim-ownership guard. Optional — resolves from CLAUDE_CODE_SESSION_ID when omitted.' },
-        'force-ownership': { type: 'boolean', description: 'Override a live claim owned by a different session (audited).' },
-        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
-      },
-      required: ['id'],
-    },
+    parameters: CELL_CAP_PARAMETERS,
     examples: ['bee cells cap --id demo-1 --outcome "demo cell capped" --files cell-demo-1.json --json'],
+    deprecated: null,
+  },
+  {
+    name: 'cells.finish',
+    invoke: 'bee cells finish',
+    surface: 'porcelain',
+    description:
+      'The worker\'s single completion verb: cap the cell through exactly the `cells cap` door — same parameters, same proof rules, refusals pass through unchanged — then, on a successful cap, release every reservation the cell\'s claiming agent holds for that cell. The result is cap\'s result plus `released` (the freed paths); the text ends by telling the worker what to return. A release failure never rolls the cap back — it is reported with the exact `bee reservations release` command to run manually. `cells cap` and `reservations release` stay available for stepwise completion.',
+    parameters: CELL_CAP_PARAMETERS,
+    examples: ['bee cells finish --id demo-fin-1 --outcome "demo cell finished" --files cell-demo-fin-1.json --json'],
     deprecated: null,
   },
   {
@@ -429,6 +470,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'reservations.reserve',
     invoke: 'bee reservations reserve',
+    surface: 'porcelain',
     description: "Reserve a file or glob path for a cell. A conflicting active reservation held by another agent returns ok:false with the holder(s). Optional --session stamps the reservation as owned by that cross-session identity, so the write guard's hold check (checkWrite) can deny another live session's write into the same path — a reservation made without --session keeps today's exact intra-swarm-only semantics. Optional --kind is 'intent' or 'lease' (default 'lease'): 'lease' is a worker's own write-time reservation and stays a hard conflict; 'intent' declares a broad/glob planning-time scope that the write guard only warns about (never hard-blocks) unless it collapses onto the exact write target.",
     parameters: {
       type: 'object',
@@ -500,6 +542,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'decisions.log',
     invoke: 'bee decisions log',
+    surface: 'porcelain',
     description:
       'Append a decision event to the append-only decision log. Rejects secret-shaped or instruction-like content. Once docs/decisions/taxonomy.json exists, a zero-tag event is refused (typed, names --tags); without that file it warns and proceeds. An unknown tag is always accepted and appended to the taxonomy\'s candidates[] in the same call — never refused, never a second call.',
     parameters: {
@@ -562,6 +605,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'decisions.active',
     invoke: 'bee decisions active',
+    surface: 'porcelain',
     description: 'List active (non-superseded, non-redacted) decisions, newest first. Optional structured filters narrow the list; --recent applies after filtering.',
     parameters: {
       type: 'object',
@@ -707,6 +751,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.gate',
     invoke: 'bee state gate',
+    surface: 'porcelain',
     description: 'Approve or unapprove a named gate, OR pass --merge instead of --name to approve/unapprove the MERGED shape+execution gate in ONE call (sets approved_gates.shape AND approved_gates.execution together, since bee now asks a single question at the end of briefing in place of separate Gate 2/Gate 3 questions). --merge and --name are mutually exclusive. This dedicated command does not accept routing --owner. Idempotent: the same call run twice yields an identical file. Target resolution (symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes. A --merge approval inherits the SAME high-risk advisor-consult precondition that already guards a --name execution approval — refuses when mode is high-risk and advisor_ref is missing or stale, before any write. Under --merge, both gates carry the approved_for_plan_rev stamp (a plain --name execution approval still stamps execution alone), so a later `state plan-rev bump` revokes both instead of leaving the merged gate half-revoked.',
     parameters: {
       type: 'object',
@@ -874,6 +919,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.route',
     invoke: 'bee state route',
+    surface: 'porcelain',
     description:
       'A validated route record — {class, lane, flags[], product_files, rationale, updated_at} — persisted on the ACTIVE feature\'s tracked record (session-bound lane when the calling session is bound, else the default record; refuses when no active feature). This verb never accepts a --lane TARGETING flag (unlike state set/gate/scribing-run) — --lane here is the route\'s OWN lane-classification value, not a feature router; targeting a non-active feature is not yet supported. --set requires --class (enum: feature/bugfix/docs/refactor/research/release/spike), --lane (enum: docs/tiny/small/spike/standard/high-risk), --flags (comma-separated; every entry must be one of the canonical triage flag names auth/authorization/data-model/audit-security/external-systems/public-contracts/cross-platform/covered-contract-change/proof-weakening/multi-domain; the empty string means zero flags, not a missing flag), --files (a non-negative integer); optional --rationale. Any enum/shape violation is a typed refusal naming the bad value and the legal set — free prose is never accepted, and nothing is written on refusal. --show is read-only: prints the currently recorded route (null when absent) without requiring any --set flag. `cells claim` warns on stderr, never refuses, when the claimed cell\'s feature has no route yet.',
     parameters: {
@@ -1278,6 +1324,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'backlog.add',
     invoke: 'bee backlog add',
+    surface: 'porcelain',
     description:
       'Validate then append one row to .bee/backlog.jsonl (the feedback-digest source lib/feedback.mjs\'s collectFeedback reads) — agents never hand-edit .bee state. --type must be a KIND_ALIASES key or an already-normalized NORMALIZED_KINDS value (lib/feedback.mjs), --severity is P1|P2|P3, --layer is a free non-empty string <=40 chars (no allowlist), --title is required and <=200 chars. Any rejection leaves the file untouched. The row is always appended regardless of --queue-submit; only the auto-commit is gated: --queue-submit defaults false and must be passed explicitly for a human queue-submission (the caller is always the agent process, but the flag marks intent — a new item for the processing queue vs. the agent logging its own friction/debt/finding about its own session). With --queue-submit, a merge in progress is detected up front and the commit is skipped with commit_skipped_reason:"merge_in_progress" plus a visible warning suffix in the text output; every other commit failure stays a silent committed:false as before.',
     parameters: {
@@ -1439,6 +1486,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'capture.add',
     invoke: 'bee capture add',
+    surface: 'porcelain',
     description: 'Append a capture-queue stub for a same-turn settlement; the full BA-grade spec merge happens later at flush. High-risk lane never queues.',
     parameters: {
       type: 'object',
@@ -2287,6 +2335,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'dispatch.prepare',
     invoke: 'bee dispatch prepare',
+    surface: 'porcelain',
     description:
       'Build a bee-owned dispatch payload (Agent tool / spawn_agent / an external cli executor) for the given runtime and purpose, plus an economics record (logical_tier, requested_model, channel, enforcement). kind "cell" resolves the generation tier for cell execution and requires --cell (loaded for prompt context) and --worker (checked against the cell\'s own status/claim owner); kinds "gather"/"reviewer" resolve read-only gather-shaped tiers (generation/review respectively); kind "advisor" resolves the configured advisor slot, never a bare tier. A cli-shaped resolution for kind "cell" is returned as a typed refusal ({ok:false, reason:"cli_tier_gather_only", ...}) — prepare never routes around it. For kind "cell", an unclaimed or foreign-claimed cell is refused as {ok:false, type:"refused", reason:"claim_ownership", code, status, owner, fix} naming the actual status/owner — --force-ownership overrides it and appends an audited ownership_override entry to the prepare-time dispatch record. A cli-shaped resolution for gather/reviewer/advisor builds an external-executor Bash payload instead of an Agent/spawn_agent one.',
     parameters: {
@@ -2308,6 +2357,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'doctor',
     invoke: 'bee doctor',
+    surface: 'porcelain',
     description:
       'Fail-closed runtime health report, a THREE-state verdict: overall_status is "blocked" when any mechanical row (hooks-file presence, capability-baseline byte match, hook-handler resolvability, skills-installed) is not ok; "degraded" when every mechanical row is ok but codex\'s hook-discovery/trust/project-trust/pending-review rows are still structurally unknown (per the capability matrix) and no valid attestation covers them; "ready" only with mechanical rows all ok AND, on codex, a currently-valid attestation (see "doctor attest") — claude has no trust-unknown rows, so mechanical green alone reaches ready there, no attestation required. Trust-row wording is version-scoped: a live codex --version other than the probed one reports "unprobed_version" instead of asserting the probed conclusions. Never "ready" from file presence alone. Performs zero writes anywhere, including the dispatcher\'s own pre-routing manifest-hash cache.',
     parameters: {

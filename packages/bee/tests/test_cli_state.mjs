@@ -3120,10 +3120,10 @@ await check('sqs-b3: state scribing-run --show works with NO --areas/--next-acti
   }
 });
 
-await check('sqs-b3: bee.mjs --help --json advertises scribing-run --show', async () => {
+await check('sqs-b3: bee.mjs --help --all --json advertises scribing-run --show', async () => {
   const dir = makeStateRepo('bee-scribing-show-registry-');
   try {
-    const result = await runModuleWorker(beeStateModulePath(), { args: ['--help', '--json'], cwd: dir });
+    const result = await runModuleWorker(beeStateModulePath(), { args: ['--help', '--all', '--json'], cwd: dir });
     assert(result.status === 0, `--help --json should succeed, got ${result.status}: ${result.stderr}`);
     const manifest = JSON.parse(result.stdout);
     const entry = manifest.commands.find((c) => c.name === 'state.scribing-run');

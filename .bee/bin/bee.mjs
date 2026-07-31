@@ -25,11 +25,14 @@
 //   bee feedback <digest|count|collect|rank> ... [--json]
 //   bee knowledge <check|index|list|context> ... [--json]
 //   bee tmp <sweep> ... [--json]
-//   bee --help [--json]
+//   bee --help [--all] [--json]
 //
-// D3: `bee --help --json` emits {schema_version, commands:[{name, invoke,
-// description, parameters, examples, deprecated}]} — the same JSON-Schema
-// tool-definition shape Claude Code's own tool/subagent surface uses.
+// D3 + porcelain split (docs/specs/porcelain.md): `bee --help --json` emits
+// {schema_version, surface:"porcelain", total_commands, commands:[{name,
+// invoke, description, parameters, examples, deprecated}]} — the porcelain
+// flow verbs only, in the same JSON-Schema tool-definition shape Claude
+// Code's own tool/subagent surface uses. `--help --all --json` emits the
+// full registry, each entry carrying its surface value.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1111,6 +1114,100 @@ function handleStatus(root, flags) {
   return { result: status, text: renderStatusText(status) };
 }
 
+// ─── orient (porcelain, docs/specs/porcelain.md): the session-start context
+// packet. A reshape of buildStatus's own snapshot — the where/decisions/work/
+// next fields are derived from the same builder status renders, never a
+// second state computation. ────────────────────────────────────────────────
+
+const ORIENT_PHASE_SKILL = {
+  exploring: 'bee-exploring',
+  planning: 'bee-planning',
+  swarming: 'bee-swarming',
+  scribing: 'bee-scribing',
+  compounding: 'bee-compounding',
+};
+
+// next.command is a runnable command only when the recommended action names
+// one; every other recommendation (gate approvals, skill invocations,
+// free-text next_action) resolves to null rather than a guess.
+function orientNextCommand(status, readyIds) {
+  if (status.handoff) return 'bee state handoff show --json';
+  if (readyIds.length > 0) return 'bee cells ready --json';
+  return null;
+}
+
+// A packet one-liner: first line only, capped at 160 chars — the packet
+// orients; `bee decisions active` is where the full text lives.
+function orientDecisionLine(decision) {
+  const line = String(decision).split('\n')[0].trim();
+  return line.length > 160 ? `${line.slice(0, 157)}...` : line;
+}
+
+function buildOrient(root) {
+  const status = buildStatus(root);
+  const feature = status.feature ?? null;
+  const contextMd =
+    feature && fs.existsSync(path.join(root, 'docs', 'history', feature, 'CONTEXT.md'))
+      ? `docs/history/${feature}/CONTEXT.md`
+      : null;
+  // readyCells is the SAME function buildStatus consults for its own
+  // recommendation; ids are capped at 5 for the packet.
+  const readyIds = readyCells(root, feature).map((c) => c.id).slice(0, 5);
+  // Blockers restate what status already reports — pending handoff, scribing
+  // debt, expired-unreleased reservations — no new detection.
+  const blockers = [];
+  if (status.handoff) blockers.push('pending handoff — surface it to the user and wait');
+  if (status.scribing_debt && status.scribing_debt.count > 0) {
+    blockers.push(`scribing debt: ${status.scribing_debt.count} behavior_change cell(s) uncaptured`);
+  }
+  for (const warning of status.staleness_warnings) {
+    if (warning.includes('reservation(s) expired')) blockers.push(warning);
+  }
+  return {
+    where: {
+      phase: status.phase,
+      feature,
+      mode: status.mode ?? null,
+      gates: status.gates,
+      gate_bypass_level: status.gate_bypass_level,
+    },
+    decisions: {
+      context_md: contextMd,
+      active_count: activeDecisions(root).length,
+      recent: status.recent_decisions.map((d) => orientDecisionLine(d.decision)),
+    },
+    work: {
+      cells: { open: status.cells.open, claimed: status.cells.claimed, capped: status.cells.capped },
+      ready: readyIds,
+      blockers,
+    },
+    next: {
+      action: status.recommended_next,
+      skill: ORIENT_PHASE_SKILL[status.phase] || 'bee-hive',
+      command: orientNextCommand(status, readyIds),
+    },
+  };
+}
+
+// At most six lines — one per section, blockers only when present — ending
+// with `next: <action>`.
+function renderOrientText(packet) {
+  const gates = GATE_NAMES.map((g) => (packet.where.gates?.[g] ? 'true' : 'false')).join('/');
+  return [
+    `where: phase=${packet.where.phase} feature=${packet.where.feature ?? 'none'} mode=${packet.where.mode ?? 'none'} gates=${gates} bypass=${packet.where.gate_bypass_level}`,
+    `decisions: ${packet.decisions.active_count} active${packet.decisions.context_md ? ` | context: ${packet.decisions.context_md}` : ''}`,
+    `work: open=${packet.work.cells.open} claimed=${packet.work.cells.claimed} capped=${packet.work.cells.capped}${packet.work.ready.length ? ` | ready: ${packet.work.ready.join(', ')}` : ''}`,
+    ...(packet.work.blockers.length ? [`blockers: ${packet.work.blockers.join('; ')}`] : []),
+    `skill: ${packet.next.skill}`,
+    `next: ${packet.next.action}`,
+  ].join('\n');
+}
+
+function handleOrient(root) {
+  const packet = buildOrient(root);
+  return { result: packet, text: renderOrientText(packet) };
+}
+
 function handleCellsList(root, flags) {
   const cells = listCells(root, {
     feature: flags.feature ? String(flags.feature) : null,
@@ -1614,7 +1711,9 @@ function computeDiffStats(root, filesChanged) {
   }
 }
 
-async function handleCellsCap(root, flags) {
+// One cap door for cells.cap and cells.finish: both verbs run this exact
+// body, so proof rules and refusals cannot diverge between them.
+async function capCellFromFlags(root, flags) {
   const id = requireFlag(flags, 'id');
   const deviations = flags['deviations-file'] ? parseDeviationsFile(String(flags['deviations-file'])) : [];
   const filesChanged = flags.files
@@ -1646,7 +1745,45 @@ async function handleCellsCap(root, flags) {
     ...ownershipFlags(flags),
   });
   emitJudgeStandardCapAdvisory(cell); // F5
+  return cell;
+}
+
+async function handleCellsCap(root, flags) {
+  const cell = await capCellFromFlags(root, flags);
   return { result: cell, text: `Capped ${cell.id} at ${cell.trace.capped_at}.` };
+}
+
+// cells.finish (porcelain): cap + reservation release in one verb. The cap
+// half is capCellFromFlags verbatim, so a cap refusal propagates untouched;
+// the release half frees every reservation the cell's claiming agent
+// (trace.worker, stamped at claim) holds for this cell. A release failure
+// never rolls the cap back — the result names the exact manual command.
+async function handleCellsFinish(root, flags) {
+  const cell = await capCellFromFlags(root, flags);
+  const agent = cell.trace && typeof cell.trace.worker === 'string' && cell.trace.worker ? cell.trace.worker : null;
+  let released = [];
+  let releaseFailure = null;
+  if (agent) {
+    try {
+      released = (await releaseReservationsForAgent(root, agent, cell.id)).paths;
+    } catch (error) {
+      releaseFailure = {
+        error: error instanceof Error ? error.message : String(error),
+        fix: `bee reservations release --agent ${agent} --cell ${cell.id} --json`,
+      };
+    }
+  }
+  const result = { ...cell, released, ...(releaseFailure ? { release_failed: releaseFailure } : {}) };
+  const lines = [
+    `Capped ${cell.id} at ${cell.trace.capped_at}.`,
+    releaseFailure
+      ? `Cap stands, but releasing reservations FAILED (${releaseFailure.error}) — run: ${releaseFailure.fix}`
+      : released.length
+        ? `Released ${released.length} reservation(s): ${released.join(', ')}.`
+        : 'No active reservations to release.',
+    'next: reply [DONE] with the one-line outcome, files touched, and the commit hash.',
+  ];
+  return { result, text: lines.join('\n') };
 }
 
 async function handleCellsBlock(root, flags) {
@@ -1958,10 +2095,9 @@ async function handleReservationsReserve(root, flags) {
   return { result, text, exitCode: result.ok ? 0 : 1 };
 }
 
-async function handleReservationsRelease(root, flags) {
-  const agent = requireFlag(flags, 'agent');
-  const cell = flags.cell ? String(flags.cell) : null;
-
+// Shared release body for reservations.release and cells.finish — one
+// agent+cell resolution, one ledger-scoping derivation, never two.
+async function releaseReservationsForAgent(root, agent, cell) {
   // xwh-2 hardening (found live, post-cap): a mirrored hold has NO agent
   // field — worktree-holds.mjs's shape is only {path, holder, feature,
   // session, cell, ttl_seconds, ...} — so in an ordinary checkout every
@@ -1994,10 +2130,13 @@ async function handleReservationsRelease(root, flags) {
   // and a session-bearing row on one cell still clears every session's hold
   // for that cell via the {cell, session:null} pair — inherent to the
   // mandated env/live-session fallback in resolveSessionId, not fixed here.
+  const matchedActive = listReservations(root, { activeOnly: true }).filter(
+    (r) => r.agent === agent && (!cell || r.cell === cell),
+  );
   const affectedCellSessionPairs = [
     ...new Map(
-      listReservations(root, { activeOnly: true })
-        .filter((r) => r.agent === agent && (!cell || r.cell === cell) && r.cell)
+      matchedActive
+        .filter((r) => r.cell)
         .map((r) => [`${r.cell}::${r.session || ''}`, { cell: r.cell, session: r.session || null }]),
     ).values(),
   ];
@@ -2020,6 +2159,13 @@ async function handleReservationsRelease(root, flags) {
     }
   }
 
+  return { result, holdsReleased, paths: [...new Set(matchedActive.map((r) => r.path))] };
+}
+
+async function handleReservationsRelease(root, flags) {
+  const agent = requireFlag(flags, 'agent');
+  const cell = flags.cell ? String(flags.cell) : null;
+  const { result, holdsReleased } = await releaseReservationsForAgent(root, agent, cell);
   return {
     result: { ...result, holds_released: holdsReleased },
     text: `Released ${result.released} reservation(s)${holdsReleased ? ` and ${holdsReleased} cross-worktree hold(s)` : ''}.`,
@@ -7755,7 +7901,7 @@ function knowledgeUsageFallback(leading) {
 // directly and parses this exact stderr line.
 function cellsUsageFallback(leading) {
   const verb = leading[1];
-  return `Unknown command "${verb || '(missing)'}". Use: list, ready, show, add, update, claim, verify, cap, block, drop, unclaim, reopen, tier, judge, claim-next, reset-budget, judge-record, schedule, archive, unarchive.`;
+  return `Unknown command "${verb || '(missing)'}". Use: list, ready, show, add, update, claim, verify, cap, finish, block, drop, unclaim, reopen, tier, judge, claim-next, reset-budget, judge-record, schedule, archive, unarchive.`;
 }
 
 function reservationsUsageFallback(leading) {
@@ -7790,6 +7936,7 @@ const GROUP_USAGE_FALLBACKS = {
 
 const HANDLERS = {
   status: handleStatus,
+  orient: handleOrient,
   'cells.list': handleCellsList,
   'cells.ready': handleCellsReady,
   'cells.show': handleCellsShow,
@@ -7798,6 +7945,7 @@ const HANDLERS = {
   'cells.claim': handleCellsClaim,
   'cells.verify': handleCellsVerify,
   'cells.cap': handleCellsCap,
+  'cells.finish': handleCellsFinish,
   'cells.block': handleCellsBlock,
   'cells.drop': handleCellsDrop,
   'cells.unclaim': handleCellsUnclaim,
@@ -8143,27 +8291,71 @@ function publicManifestEntries() {
   return toManifestEntries(COMMAND_REGISTRY);
 }
 
-function renderHelpText(entries = publicManifestEntries()) {
+// Porcelain/plumbing split (docs/specs/porcelain.md): the default help shows
+// only surface:'porcelain' entries; --all shows the full registry with each
+// entry's surface value (absent = plumbing). Presentation only — group-scoped
+// help and manifest drift hashing keep reading the full registry.
+function porcelainRegistryEntries() {
+  return COMMAND_REGISTRY.filter((e) => e.surface === 'porcelain');
+}
+
+function toSurfacedManifestEntries(entries) {
+  return entries.map((entry) => ({
+    ...toManifestEntries([entry])[0],
+    surface: entry.surface === 'porcelain' ? 'porcelain' : 'plumbing',
+  }));
+}
+
+function helpFooterLine() {
+  const hidden = COMMAND_REGISTRY.length - porcelainRegistryEntries().length;
+  return `${hidden} more command(s) are plumbing, hidden here — run "bee --help --all" for the full surface.`;
+}
+
+function renderHelpText(entries = publicManifestEntries(), footerLines = []) {
   const lines = [`bee — unified CLI dispatcher (schema_version ${SCHEMA_VERSION})`, ''];
   for (const entry of entries) {
     lines.push(entry.invoke);
     lines.push(`    ${entry.description}`);
     const required = entry.parameters?.required || [];
     if (required.length) lines.push(`    required: ${required.map((r) => `--${r}`).join(', ')}`);
+    if (entry.surface) lines.push(`    surface: ${entry.surface}`);
     if (entry.deprecated) {
       lines.push(`    DEPRECATED since ${entry.deprecated.since} — use "${entry.deprecated.use_instead}" instead.`);
     }
     lines.push('');
   }
-  return `${lines.join('\n').trimEnd()}\n`;
+  const body = lines.join('\n').trimEnd();
+  const footer = footerLines.length ? `\n\n${footerLines.join('\n')}` : '';
+  return `${body}${footer}\n`;
 }
 
-function handleHelp(json) {
+function handleHelp(json, all = false) {
+  if (all) {
+    const commands = toSurfacedManifestEntries(COMMAND_REGISTRY);
+    if (json) {
+      const manifest = {
+        schema_version: SCHEMA_VERSION,
+        surface: 'all',
+        total_commands: COMMAND_REGISTRY.length,
+        commands,
+      };
+      process.stdout.write(`${JSON.stringify(manifest, null, 2)}\n`);
+    } else {
+      process.stdout.write(renderHelpText(commands));
+    }
+    return 0;
+  }
+  const commands = toManifestEntries(porcelainRegistryEntries());
   if (json) {
-    const manifest = { schema_version: SCHEMA_VERSION, commands: publicManifestEntries() };
+    const manifest = {
+      schema_version: SCHEMA_VERSION,
+      surface: 'porcelain',
+      total_commands: COMMAND_REGISTRY.length,
+      commands,
+    };
     process.stdout.write(`${JSON.stringify(manifest, null, 2)}\n`);
   } else {
-    process.stdout.write(renderHelpText());
+    process.stdout.write(renderHelpText(commands, [helpFooterLine()]));
   }
   return 0;
 }
@@ -8198,7 +8390,7 @@ function emitError(message, useJson) {
 
 export async function main(argv) {
   if (argv[0] === '--help') {
-    return handleHelp(argv.includes('--json'));
+    return handleHelp(argv.includes('--json'), argv.includes('--all'));
   }
 
   const { leading, rest } = splitCommandTokens(argv);

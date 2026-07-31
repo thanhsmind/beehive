@@ -533,8 +533,8 @@ await check('CLI: human (no --json) output names each finding and ends with a su
   assert(/knowledge check:/.test(result.stdout), `expected the summary line, got ${result.stdout}`);
 });
 
-await check('CLI: knowledge.check appears in the bee --help --json manifest (test_bee_cli conformance)', async () => {
-  const result = await runBee(['--help', '--json'], makeRepo());
+await check('CLI: knowledge.check appears in the bee --help --all --json manifest (test_bee_cli conformance)', async () => {
+  const result = await runBee(['--help', '--all', '--json'], makeRepo());
   assert(result.status === 0, `--help --json must exit 0, got ${result.status}: ${result.stderr}`);
   const manifest = JSON.parse(result.stdout);
   const entry = manifest.commands.find((c) => c.name === 'knowledge.check');
@@ -708,8 +708,8 @@ await check('CLI: knowledge list filters --type/--lifecycle/--area narrow the ro
   assert(combined.count === 1 && combined.concepts[0].id === 'demo-overview', `combined filters must intersect, got ${JSON.stringify(combined)}`);
 });
 
-await check('CLI: knowledge.index and knowledge.list appear in the bee --help --json manifest (test_bee_cli conformance)', async () => {
-  const result = await runBee(['--help', '--json'], makeRepo());
+await check('CLI: knowledge.index and knowledge.list appear in the bee --help --all --json manifest (test_bee_cli conformance)', async () => {
+  const result = await runBee(['--help', '--all', '--json'], makeRepo());
   assert(result.status === 0, `--help --json must exit 0, got ${result.status}: ${result.stderr}`);
   const manifest = JSON.parse(result.stdout);
   for (const [name, invoke] of [['knowledge.index', 'bee knowledge index'], ['knowledge.list', 'bee knowledge list']]) {
@@ -891,8 +891,8 @@ await check('knowledge context: a bundle with no plan sibling and no decisions s
   assert(JSON.stringify(manifest.decisions) === JSON.stringify([]), `an empty decisions list stays empty, got ${JSON.stringify(manifest.decisions)}`);
 });
 
-await check('CLI: knowledge.context appears in the bee --help --json manifest with a runnable example (test_bee_cli conformance)', async () => {
-  const result = await runBee(['--help', '--json'], makeRepo());
+await check('CLI: knowledge.context appears in the bee --help --all --json manifest with a runnable example (test_bee_cli conformance)', async () => {
+  const result = await runBee(['--help', '--all', '--json'], makeRepo());
   assert(result.status === 0, `--help --json must exit 0, got ${result.status}: ${result.stderr}`);
   const manifest = JSON.parse(result.stdout);
   const entry = manifest.commands.find((c) => c.name === 'knowledge.context');
@@ -1178,8 +1178,8 @@ await check('knowledge promote: a work item with no capped cells still proposes 
   assert(parsed.ok && parsed.data.type === 'bee.delivery' && emitFrontmatter(parsed.data) === parsed.block, `the draft must still be canonical, got ${JSON.stringify(parsed)}`);
 });
 
-await check('CLI: knowledge.promote appears in the bee --help --json manifest with a runnable example (test_bee_cli conformance)', async () => {
-  const result = await runBee(['--help', '--json'], makeRepo());
+await check('CLI: knowledge.promote appears in the bee --help --all --json manifest with a runnable example (test_bee_cli conformance)', async () => {
+  const result = await runBee(['--help', '--all', '--json'], makeRepo());
   assert(result.status === 0, `--help --json must exit 0, got ${result.status}: ${result.stderr}`);
   const manifest = JSON.parse(result.stdout);
   const entry = manifest.commands.find((c) => c.name === 'knowledge.promote');

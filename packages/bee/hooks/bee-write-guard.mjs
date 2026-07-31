@@ -901,7 +901,7 @@ function checkCliShape(command, registry, validateFn) {
           reason:
             `bee CLI-shape guard: "${String(command).trim()}" ` +
             `does not match ${entry.name}'s schema — ${detail}${field ? ` (field: ${field})` : ""}. ` +
-            `Correction: run \`${entry.invoke}\` with the required parameters (see \`bee --help --json\`).`,
+            `Correction: run \`${entry.invoke}\` with the required parameters (see \`${entry.invoke} --help --json\`).`,
         };
       }
       break; // this segment resolved to one bee-cli call; move to the next segment

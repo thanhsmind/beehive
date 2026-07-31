@@ -1274,6 +1274,82 @@ await check('capCell on a verify-none cell in a declared no-test repo waives the
   }
 });
 
+// ─── cells finish (porcelain): cap + reservation release in one verb ───────
+
+await check('bee.mjs cells finish caps through the cap door, releases the claiming agent\'s reservations for the cell, and its text ends with the [DONE] reply instruction', async () => {
+  const dir = makeStateRepo('bee-cells-finish-');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+      schema_version: '1.0',
+      phase: 'swarming',
+      feature: 'demo',
+      mode: 'standard',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+      workers: [],
+    });
+    addCell(dir, makeCell('fin-1'));
+    await claimCell(dir, 'fin-1', 'worker-fin');
+    const reserved = await reserve(dir, { agent: 'worker-fin', cell: 'fin-1', path: 'src/fin.ts' });
+    assert(reserved.ok === true, `fixture reserve must succeed, got ${JSON.stringify(reserved)}`);
+    const verify = await runModuleWorker(beeBacklogModulePath(), {
+      args: ['cells', 'verify', '--id', 'fin-1', '--command', 'manual check', '--output', '0 failing', '--passed', 'true', '--json'],
+      cwd: dir,
+    });
+    assert(verify.status === 0, `fixture verify must succeed, got ${verify.status}: ${verify.stderr}`);
+
+    const finish = await runModuleWorker(beeBacklogModulePath(), {
+      args: ['cells', 'finish', '--id', 'fin-1', '--outcome', 'done', '--files', 'src/fin.ts'],
+      cwd: dir,
+    });
+    assert(finish.status === 0, `finish must exit 0, got ${finish.status}: ${finish.stdout} ${finish.stderr}`);
+    const capped = readCell(dir, 'fin-1');
+    assert(capped.status === 'capped', `finish must cap the cell, got ${capped.status}`);
+    const lines = finish.stdout.trimEnd().split('\n');
+    assert(
+      lines[lines.length - 1] === 'next: reply [DONE] with the one-line outcome, files touched, and the commit hash.',
+      `finish text must end with the [DONE] reply instruction, got "${lines[lines.length - 1]}"`,
+    );
+    assert(/Released 1 reservation\(s\): src\/fin\.ts/.test(finish.stdout), `finish text must name the released paths, got ${finish.stdout}`);
+
+    const finishJson = await runModuleWorker(beeBacklogModulePath(), {
+      args: ['reservations', 'list', '--active-only', '--json'],
+      cwd: dir,
+    });
+    const stillActive = JSON.parse(finishJson.stdout).reservations.filter((r) => r.agent === 'worker-fin');
+    assert(stillActive.length === 0, `the claiming agent's reservation must be released by finish, got ${JSON.stringify(stillActive)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('bee.mjs cells finish on an unverified cell refuses byte-identically to cells cap and leaves the reservation active', async () => {
+  const dir = makeStateRepo('bee-cells-finish-refuse-');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+      schema_version: '1.0',
+      phase: 'swarming',
+      feature: 'demo',
+      mode: 'standard',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+      workers: [],
+    });
+    addCell(dir, makeCell('fin-2'));
+    await claimCell(dir, 'fin-2', 'worker-fin2');
+    await reserve(dir, { agent: 'worker-fin2', cell: 'fin-2', path: 'src/fin2.ts' });
+    const args = ['--id', 'fin-2', '--outcome', 'probe', '--files', 'src/fin2.ts', '--json'];
+    const cap = await runModuleWorker(beeBacklogModulePath(), { args: ['cells', 'cap', ...args], cwd: dir });
+    const finish = await runModuleWorker(beeBacklogModulePath(), { args: ['cells', 'finish', ...args], cwd: dir });
+    assert(cap.status === 1 && finish.status === 1, `both must refuse non-zero, got cap=${cap.status} finish=${finish.status}`);
+    assert(finish.stdout === cap.stdout, `finish's refusal must pass cap's through byte-identical, got cap=${cap.stdout} finish=${finish.stdout}`);
+    assert(readCell(dir, 'fin-2').status === 'claimed', 'the refused cell stays claimed');
+    const list = await runModuleWorker(beeBacklogModulePath(), { args: ['reservations', 'list', '--active-only', '--json'], cwd: dir });
+    const active = JSON.parse(list.stdout).reservations.filter((r) => r.agent === 'worker-fin2');
+    assert(active.length === 1, `no release may happen on a refused finish, got ${JSON.stringify(active)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ─── cells add --dry-run (ce-2): whole-batch report, never persists ────────
 
 await check('bee.mjs cells add --dry-run: a clean batch reports ok:true, exit 0, and writes nothing', async () => {
