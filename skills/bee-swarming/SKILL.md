@@ -17,8 +17,7 @@ metadata:
 
 You are the orchestrator. Launch workers, tend results, handle rescues, keep
 the swarm moving. In `standard`/`high-risk` lanes you never implement cells
-yourself — workers load bee-executing and do the work. Rules stated bare —
-decision IDs: `references/provenance.md`.
+yourself — workers load bee-executing and do the work.
 
 ## Lane scaling — single worker vs full wave
 
@@ -62,7 +61,7 @@ exception. Protected pre-dispatch attestation, the three-check re-attest gate
 | 4. Judge tier + advisor | Judge the tier (extraction/generation/ceiling) per cell, record it (`cells tier`), resolve the advisor slot — add the `Advisor` line unless it's the same-model no-op. |
 | 5. Record | `state worker add` before results arrive. |
 | 6. Tend | Collect status tokens; silence ≠ failure — inspect cells/reservations before assuming stuck; no routine mid-flight pings. |
-| 7. Goal-check `[DONE]` | Smell-triggered verify re-run only — most cells cap pending; `cells judge` for undeclared-file hits; standard/high-risk: one semantic judge per slice at slice close over its `behavior_change` cells, verdicts recorded per cell (`cells judge-record`, exec-speed D8). A worker's word is never the evidence. |
+| 7. Goal-check `[DONE]` | Smell-triggered verify re-run only — most cells cap pending; `cells judge` for undeclared-file hits; standard/high-risk: one semantic judge per slice at slice close over its `behavior_change` cells, verdicts recorded per cell (`cells judge-record`). A worker's word is never the evidence. |
 | 8. Wave clean → next | Every cell capped, goal-checked, judge-intact — no suite run; final slice: run + record the ONE feature verify first, door-enforced. |
 
 Full per-step mechanics and tier rubric: `references/swarming-reference.md`
@@ -136,6 +135,5 @@ never grants or assumes it, and never self-approves Gate 4 at the end.
 | File | When to Load |
 |---|---|
 | `references/swarming-reference.md` | Runtime spawn mechanics, worker prompt template, model tiers, worktree transaction, result formats, red flags |
-| `references/provenance.md` | Decision IDs + rationale for every body rule |
 | `.bee/state.json` | Runtime worker and phase state |
 | `.bee/HANDOFF.json` | Pause/resume artifact |

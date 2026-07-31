@@ -11,9 +11,7 @@ metadata:
 # Writing Bee Skills (comb building)
 
 Skills are code. They have bugs. Test them before deploying —
-TDD-for-skills, from Superpowers via khuym. Rules stated bare — decision
-IDs: `references/provenance.md`; quoted headings resolve in the named
-reference.
+TDD-for-skills. Quoted headings resolve in the named reference.
 
 **THE IRON LAW: NO SKILL WITHOUT A FAILING TEST FIRST.** Applies to edits
 too — no exceptions, not for "simple additions," "just a section," or
@@ -78,4 +76,3 @@ Skill pressure-tested, validated, and logged. Invoke bee-hive skill.
 | `references/creation-log-template.md` | CREATION-LOG.md template documenting the TDD process |
 | `references/checklist-examples.md` | description trap, dependency-metadata YAML, persuasion-principle table |
 | `references/rationalization-table.md` | common violation excuses and their reality, extended during REFACTOR |
-| `references/provenance.md` | decision IDs + rationale behind each body rule |

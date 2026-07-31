@@ -39,7 +39,7 @@ export const COMMAND_REGISTRY = [
     name: 'status',
     invoke: 'bee status',
     description:
-      'Read-only snapshot: onboarding health, phase, gates, handoff, cell counts, reservations, active workers, decisions, staleness warnings, recommended next step. `lanes` is summarized by default (lpsp-2, payload-size): the ACTIVE lane (the one this session is bound to) in full, plus counts-by-phase and bare ids for every other lane record — pass --lanes-full for the full per-lane array. `workers` (D6, multisession-native-8) is a derived view — live-heartbeat sessions joined with their current cell claim — never state.json\'s hand-mutated `workers` array.',
+      'Read-only snapshot: onboarding health, phase, gates, handoff, cell counts, reservations, active workers, decisions, staleness warnings, recommended next step. `lanes` is summarized by default: the ACTIVE lane (the one this session is bound to) in full, plus counts-by-phase and bare ids for every other lane record — pass --lanes-full for the full per-lane array. `workers` is a derived view — live-heartbeat sessions joined with their current cell claim — never state.json\'s hand-mutated `workers` array.',
     parameters: {
       type: 'object',
       properties: {
@@ -52,7 +52,7 @@ export const COMMAND_REGISTRY = [
         brief: {
           type: 'boolean',
           description:
-            'status-diet D1: fast orientation path for worker startup. Reads ONLY the state layer (state.json + config-derived gate_bypass_level/ship_visibility) — no cell scan, no review/handoff resolution, no models/tier_mix. Emits exactly {phase, feature, mode, gates, gate_bypass_level, ship_visibility, route} (route null when absent); ignored together with --lanes-full (mutually exclusive fast/full paths — --brief wins). Full `status` (this flag omitted) is unchanged.',
+            'Fast orientation path for worker startup. Reads ONLY the state layer (state.json + config-derived gate_bypass_level/ship_visibility) — no cell scan, no review/handoff resolution, no models/tier_mix. Emits exactly {phase, feature, mode, gates, gate_bypass_level, ship_visibility, route} (route null when absent); ignored together with --lanes-full (mutually exclusive fast/full paths — --brief wins). Full `status` (this flag omitted) is unchanged.',
         },
       },
       required: [],
@@ -113,7 +113,7 @@ export const COMMAND_REGISTRY = [
     name: 'cells.add',
     invoke: 'bee cells add',
     description:
-      'Add a cell (or a whole-slice JSON array) from stdin, or from a JSON file. Prefer --stdin: pipe one cell object or an array for the whole slice in one call — no per-cell scratchpad files. Exactly one of --stdin / --file is required at call time (both satisfy the schema; the handler itself enforces the choice). A batch is validated WHOLE (ce-2): schema, regen obligations, duplicate ids, and the dependency-cycle check are checked for every cell before any is written, so one call names every problem instead of stopping at the first. --dry-run runs that same whole-batch validation and reports {dry_run:true, ok, cells:[{id, ok, problems}]} without writing anything, clean or dirty — exit 0 when every cell is clean, non-zero otherwise.',
+      'Add a cell (or a whole-slice JSON array) from stdin, or from a JSON file. Prefer --stdin: pipe one cell object or an array for the whole slice in one call — no per-cell scratchpad files. Exactly one of --stdin / --file is required at call time (both satisfy the schema; the handler itself enforces the choice). A batch is validated WHOLE: schema, regen obligations, duplicate ids, and the dependency-cycle check are checked for every cell before any is written, so one call names every problem instead of stopping at the first. --dry-run runs that same whole-batch validation and reports {dry_run:true, ok, cells:[{id, ok, problems}]} without writing anything, clean or dirty — exit 0 when every cell is clean, non-zero otherwise.',
     parameters: {
       type: 'object',
       properties: {
@@ -153,7 +153,7 @@ export const COMMAND_REGISTRY = [
     name: 'cells.claim',
     invoke: 'bee cells claim',
     description:
-      'Claim an open, dep-free cell for a worker. Refuses while Gate 3 (execution) is unapproved or deps are uncapped. D1 (msh-2): re-backed by the same O_EXCL claim file claim-next uses (claims.mjs claimCellFile, acquired before the cell JSON flips) — a losing concurrent claimant gets a typed CLAIMED refusal naming the owner + expiry instead of silently double-owning the cell. D3: --session-id is optional — resolves from CLAUDE_CODE_SESSION_ID when omitted, and falls back to a legal sessionless claim when neither is present (single-session use is unaffected).',
+      'Claim an open, dep-free cell for a worker. Refuses while Gate 3 (execution) is unapproved or deps are uncapped. Backed by the same O_EXCL claim file claim-next uses (claims.mjs claimCellFile, acquired before the cell JSON flips) — a losing concurrent claimant gets a typed CLAIMED refusal naming the owner + expiry instead of silently double-owning the cell. --session-id is optional — resolves from CLAUDE_CODE_SESSION_ID when omitted, and falls back to a legal sessionless claim when neither is present (single-session use is unaffected).',
     parameters: {
       type: 'object',
       properties: {
@@ -181,7 +181,7 @@ export const COMMAND_REGISTRY = [
         passed: { type: 'boolean', description: 'Whether the verify run passed ("true" or "false").' },
         output: { type: 'string', description: 'What the verify command printed (inline). Mutually exclusive with --output-file.' },
         'output-file': { type: 'string', description: 'Path to a file holding the verify command\'s output, for long output.' },
-        signature: { type: 'string', description: 'D1: explicit failure_signature for the revision ledger, overriding the mechanical normalizer (ignored when --passed true).' },
+        signature: { type: 'string', description: 'Explicit failure_signature for the revision ledger, overriding the mechanical normalizer (ignored when --passed true).' },
         'session-id': { type: 'string', description: 'Acting session identity, for the claim-ownership guard. Optional — resolves from CLAUDE_CODE_SESSION_ID when omitted.' },
         'force-ownership': { type: 'boolean', description: 'Override a live claim owned by a different session (audited).' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
@@ -194,14 +194,14 @@ export const COMMAND_REGISTRY = [
   {
     name: 'cells.cap',
     invoke: 'bee cells cap',
-    description: 'Cap a cell — refuses without a recorded passing verify (and, for small+ lanes, recorded output/evidence plus non-empty files_changed). Exception (main-verifies D1): --feature-verify-pending caps with NO per-cell verify evidence, stamping trace.feature_verify: "pending" — the proof is deliberately relocated to ONE feature-level verify (`bee state feature-verify record`), and leaving phase "swarming" is refused until a fresh green record covers every pending cap (D3, no bypass level lifts it). Combining the flag with per-cell evidence claims (--evidence-file/--evidence-stdin, or an already-recorded passing verify) is refused — the two proof paths are exclusive.',
+    description: 'Cap a cell — refuses without a recorded passing verify (and, for small+ lanes, recorded output/evidence plus non-empty files_changed). Exception: --feature-verify-pending caps with NO per-cell verify evidence, stamping trace.feature_verify: "pending" — the proof is deliberately relocated to ONE feature-level verify (`bee state feature-verify record`), and leaving phase "swarming" is refused until a fresh green record covers every pending cap (no bypass level lifts it). Combining the flag with per-cell evidence claims (--evidence-file/--evidence-stdin, or an already-recorded passing verify) is refused — the two proof paths are exclusive.',
     parameters: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Cell id, e.g. auth-3.' },
         outcome: { type: 'string', description: 'One-line outcome summary.' },
         files: { type: 'string', description: 'Comma-separated list of files the worker changed.' },
-        'feature-verify-pending': { type: 'boolean', description: 'Cap through the feature-verify-pending path (main-verifies D1): no per-cell verify evidence demanded, trace.feature_verify stamped "pending". Refused when combined with per-cell evidence claims. The feature-level verify record (state feature-verify record --result green) is what later satisfies the close door.' },
+        'feature-verify-pending': { type: 'boolean', description: 'Cap through the feature-verify-pending path: no per-cell verify evidence demanded, trace.feature_verify stamped "pending". Refused when combined with per-cell evidence claims. The feature-level verify record (state feature-verify record --result green) is what later satisfies the close door.' },
         'behavior-change': { type: 'boolean', description: 'Force behavior_change true (a cell-declared true cannot be unset by omitting this flag).' },
         'evidence-stdin': { type: 'boolean', description: 'Read verification_evidence JSON from stdin (preferred — no evidence file is persisted).' },
         'evidence-file': { type: 'string', description: 'Path to a verification_evidence JSON file (back-compat; prefer --evidence-stdin).' },
@@ -321,7 +321,7 @@ export const COMMAND_REGISTRY = [
     name: 'cells.claim-next',
     invoke: 'bee cells claim-next',
     description:
-      "Cross-session selection + claim (fresh-session-handoff fsh-11, D2/D4): sweeps stale claims (TTL expired AND heartbeat stale) in-pass first — this IS sweepExpiredClaims's production trigger — then picks the next open cell to claim: the acting session's own bound lane (or the default pipeline when unbound) first, ONLY when its execution gate is approved; empty or unapproved falls back to every OTHER pipeline whose OWN execution gate is approved (an unapproved lane is never touched), ordered by backlog rank then lane created_at. Cells whose files intersect another session's active reservation hold are skipped (the acting session's own holds never exclude a cell). Claims via the two-store sequence (claims.mjs claimCellFile then cells.mjs claimCell, unwound with a claim-file release on any claimCell throw). Refuses (non-zero exit) when nothing is claimable (NO_APPROVED_WORK), the claims-store race is lost (CLAIMED), or the session's lane binding is broken (LANE_INVALID/LANE_MISSING/LANE_CORRUPT). D3 (msh-2): --session-id is no longer required at the schema level — omit it and it resolves from CLAUDE_CODE_SESSION_ID instead; a session id is still functionally required (claim-next resolves the acting session's own lane from it), so a call with neither still refuses, just from the handler rather than arg validation.",
+      "Cross-session selection + claim: sweeps stale claims (TTL expired AND heartbeat stale) in-pass first — this IS sweepExpiredClaims's production trigger — then picks the next open cell to claim: the acting session's own bound lane (or the default pipeline when unbound) first, ONLY when its execution gate is approved; empty or unapproved falls back to every OTHER pipeline whose OWN execution gate is approved (an unapproved lane is never touched), ordered by backlog rank then lane created_at. Cells whose files intersect another session's active reservation hold are skipped (the acting session's own holds never exclude a cell). Claims via the two-store sequence (claims.mjs claimCellFile then cells.mjs claimCell, unwound with a claim-file release on any claimCell throw). Refuses (non-zero exit) when nothing is claimable (NO_APPROVED_WORK), the claims-store race is lost (CLAIMED), or the session's lane binding is broken (LANE_INVALID/LANE_MISSING/LANE_CORRUPT). --session-id is not required at the schema level — omit it and it resolves from CLAUDE_CODE_SESSION_ID instead; a session id is still functionally required (claim-next resolves the acting session's own lane from it), so a call with neither still refuses, just from the handler rather than arg validation.",
     parameters: {
       type: 'object',
       properties: {
@@ -340,7 +340,7 @@ export const COMMAND_REGISTRY = [
     name: 'cells.reset-budget',
     invoke: 'bee cells reset-budget',
     description:
-      'D2 + GH #27.4 (D-GHF-C): the ONLY door that reopens a cell whose claim door is closed by CELL_BUDGET_EXHAUSTED or REPEATED_FAILURE. Refuses (typed RESET_NOT_NEEDED) unless the cell is actually budget-blocked, and refuses without an actor (--operator, or the BEE_AGENT_NAME env fallback). Requires --reason (audited), logs a decision BEFORE writing the cell (the audit survives even if the write itself fails), and appends {reset_at, reason, by_session, by_actor} to the append-only trace.budget_resets — never rewrites or drops any trace.attempts ledger entry. gate_bypass never substitutes for this: the budget check itself never reads bypass config, so this verb is the only reopening path at any bypass level.',
+      'The ONLY door that reopens a cell whose claim door is closed by CELL_BUDGET_EXHAUSTED or REPEATED_FAILURE. Refuses (typed RESET_NOT_NEEDED) unless the cell is actually budget-blocked, and refuses without an actor (--operator, or the BEE_AGENT_NAME env fallback). Requires --reason (audited), logs a decision BEFORE writing the cell (the audit survives even if the write itself fails), and appends {reset_at, reason, by_session, by_actor} to the append-only trace.budget_resets — never rewrites or drops any trace.attempts ledger entry. gate_bypass never substitutes for this: the budget check itself never reads bypass config, so this verb is the only reopening path at any bypass level.',
     parameters: {
       type: 'object',
       properties: {
@@ -359,7 +359,7 @@ export const COMMAND_REGISTRY = [
     name: 'cells.judge-record',
     invoke: 'bee cells judge-record',
     description:
-      'D5 (self-correcting-loop): validates a judge-verdict/1 payload (--file) and appends it, stamped with model_independence, to the append-only trace.semantic_judge. Refuses (typed, non-zero exit) on free prose, an unknown verdict/status/fixability/confidence value, or a FAIL check missing failure_signature — never a silent pass. --builder-model/--judge-model (optional) mark that side PINNED for independence derivation: both present AND differing -> "confirmed"; both present AND equal -> "same-model" (honest — the judge still runs); either absent -> "unverified". Never reads .bee/logs/dispatch.jsonl (corroboration only, Δ6) — the models are caller-supplied from the orchestrator\'s own pinned dispatch params.',
+      'Validates a judge-verdict/1 payload (--file) and appends it, stamped with model_independence, to the append-only trace.semantic_judge. Refuses (typed, non-zero exit) on free prose, an unknown verdict/status/fixability/confidence value, or a FAIL check missing failure_signature — never a silent pass. --builder-model/--judge-model (optional) mark that side PINNED for independence derivation: both present AND differing -> "confirmed"; both present AND equal -> "same-model" (honest — the judge still runs); either absent -> "unverified". Never reads .bee/logs/dispatch.jsonl (corroboration only) — the models are caller-supplied from the orchestrator\'s own pinned dispatch params.',
     parameters: {
       type: 'object',
       properties: {
@@ -429,7 +429,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'reservations.reserve',
     invoke: 'bee reservations reserve',
-    description: "Reserve a file or glob path for a cell. A conflicting active reservation held by another agent returns ok:false with the holder(s). Optional --session (fresh-session-handoff D3) stamps the reservation as owned by that cross-session identity, so the write guard's hold check (checkWrite) can deny another live session's write into the same path — a reservation made without --session keeps today's exact intra-swarm-only semantics. Optional --kind (multisession-native-13, D4) is 'intent' or 'lease' (default 'lease'): 'lease' is a worker's own write-time reservation and stays a hard conflict; 'intent' declares a broad/glob planning-time scope that the write guard only warns about (never hard-blocks) unless it collapses onto the exact write target.",
+    description: "Reserve a file or glob path for a cell. A conflicting active reservation held by another agent returns ok:false with the holder(s). Optional --session stamps the reservation as owned by that cross-session identity, so the write guard's hold check (checkWrite) can deny another live session's write into the same path — a reservation made without --session keeps today's exact intra-swarm-only semantics. Optional --kind is 'intent' or 'lease' (default 'lease'): 'lease' is a worker's own write-time reservation and stays a hard conflict; 'intent' declares a broad/glob planning-time scope that the write guard only warns about (never hard-blocks) unless it collapses onto the exact write target.",
     parameters: {
       type: 'object',
       properties: {
@@ -437,7 +437,7 @@ export const COMMAND_REGISTRY = [
         cell: { type: 'string', description: 'Cell id the reservation is for.' },
         path: { type: 'string', description: 'File or directory path to reserve.' },
         ttl: { type: 'number', description: 'Time-to-live in seconds (default 3600).' },
-        session: { type: 'string', description: 'Owning cross-session identity (D3 hold). Omit to keep an intra-swarm-only reservation with no cross-session hold effect.' },
+        session: { type: 'string', description: 'Owning cross-session identity. Omit to keep an intra-swarm-only reservation with no cross-session hold effect.' },
         kind: { type: 'string', description: "'intent' or 'lease' (default 'lease'). 'intent' is advisory-only (warn, never hard-block) on overlap; 'lease' is a hard conflict, unchanged from before this flag existed." },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
@@ -501,7 +501,7 @@ export const COMMAND_REGISTRY = [
     name: 'decisions.log',
     invoke: 'bee decisions log',
     description:
-      'Append a decision event to the append-only decision log. Rejects secret-shaped or instruction-like content. Once docs/decisions/taxonomy.json exists, a zero-tag event is refused (typed, names --tags); without that file it warns and proceeds (decision-propagation D7b). An unknown tag is always accepted and appended to the taxonomy\'s candidates[] in the same call — never refused, never a second call.',
+      'Append a decision event to the append-only decision log. Rejects secret-shaped or instruction-like content. Once docs/decisions/taxonomy.json exists, a zero-tag event is refused (typed, names --tags); without that file it warns and proceeds. An unknown tag is always accepted and appended to the taxonomy\'s candidates[] in the same call — never refused, never a second call.',
     parameters: {
       type: 'object',
       properties: {
@@ -511,7 +511,7 @@ export const COMMAND_REGISTRY = [
         scope: { type: 'string', description: 'Decision scope (default "repo").' },
         source: { type: 'string', description: 'Who/what decided (default "user").' },
         confidence: { type: 'number', description: 'Confidence, 0-100.' },
-        tags: { type: 'array', description: 'Comma-separated lowercase slugs (e.g. "billing,nightly-job"), stored on the event for later --tag recall (decision-propagation D4a).' },
+        tags: { type: 'array', description: 'Comma-separated lowercase slugs (e.g. "billing,nightly-job"), stored on the event for later --tag recall.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: ['decision', 'rationale'],
@@ -525,15 +525,15 @@ export const COMMAND_REGISTRY = [
     name: 'decisions.supersede',
     invoke: 'bee decisions supersede',
     description:
-      'Replace an earlier decision with a new one; the earlier decision drops out of the active set. Runs a propagation sweep of docs/** for citations of the superseded id (decision-propagation D2) and queues a capture stub per hit. Tag/scope inheritance (D6) consults the OVERLAY-APPLIED target, so a legacy target classified only via a retro-tag event still counts as tagged. Once docs/decisions/taxonomy.json exists, the final (explicit-or-inherited) tag set follows the same zero-tag refusal / unknown-tag-accepted rule as `decisions log` (decision-propagation D7b).',
+      'Replace an earlier decision with a new one; the earlier decision drops out of the active set. Runs a propagation sweep of docs/** for citations of the superseded id and queues a capture stub per hit. Tag/scope inheritance consults the OVERLAY-APPLIED target, so a legacy target classified only via a retro-tag event still counts as tagged. Once docs/decisions/taxonomy.json exists, the final (explicit-or-inherited) tag set follows the same zero-tag refusal / unknown-tag-accepted rule as `decisions log`.',
     parameters: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Id of the decision being superseded.' },
         decision: { type: 'string', description: 'The replacement decision text.' },
         rationale: { type: 'string', description: 'Why the replacement supersedes the original.' },
-        tags: { type: 'array', description: 'Comma-separated lowercase slugs. Omit to inherit the superseded target\'s tags (decision-propagation D6).' },
-        scope: { type: 'string', description: 'Decision scope. Omit to inherit the superseded target\'s scope, falling back to "repo" for a metadata-less target (decision-propagation D6).' },
+        tags: { type: 'array', description: 'Comma-separated lowercase slugs. Omit to inherit the superseded target\'s tags.' },
+        scope: { type: 'string', description: 'Decision scope. Omit to inherit the superseded target\'s scope, falling back to "repo" for a metadata-less target.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: ['id', 'decision', 'rationale'],
@@ -562,7 +562,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'decisions.active',
     invoke: 'bee decisions active',
-    description: 'List active (non-superseded, non-redacted) decisions, newest first. Optional structured filters (decision-propagation D4a) narrow the list; --recent applies after filtering.',
+    description: 'List active (non-superseded, non-redacted) decisions, newest first. Optional structured filters narrow the list; --recent applies after filtering.',
     parameters: {
       type: 'object',
       properties: {
@@ -571,10 +571,10 @@ export const COMMAND_REGISTRY = [
         scope: { type: 'string', description: 'Exact scope match, case-insensitive (scope is the spec-area dimension).' },
         area: { type: 'string', description: 'Alias for --scope.' },
         since: { type: 'string', description: 'ISO date; only events on/after this date (inclusive).' },
-        all: { type: 'boolean', description: 'Also reach events archived by `decisions archive` (decision-propagation D4c) — a union read of the active store and .bee/decisions-archive.jsonl, de-duplicated by id. Omit for the default active-store-only read.' },
-        untagged: { type: 'boolean', description: 'List only events with no tags AFTER the dp-5 overlay is applied (decision-propagation D7d). Composable with every other filter, including --all.' },
-        cell: { type: 'string', description: 'Word-boundary text match for a cell id (e.g. "si-1") over decision/rationale/alternatives — a decide event has no structural cell field, so this is a token match, not substring: "si-1" excludes "si-10" (state-query-surface sqs-b1, D 5ca69717).' },
-        feature: { type: 'string', description: 'Word-boundary text match for a feature slug over decision/rationale/alternatives — same token-match discipline as --cell, not substring (state-query-surface sqs-b1, D 5ca69717).' },
+        all: { type: 'boolean', description: 'Also reach events archived by `decisions archive` — a union read of the active store and .bee/decisions-archive.jsonl, de-duplicated by id. Omit for the default active-store-only read.' },
+        untagged: { type: 'boolean', description: 'List only events with no tags AFTER the retro-tag overlay is applied. Composable with every other filter, including --all.' },
+        cell: { type: 'string', description: 'Word-boundary text match for a cell id (e.g. "si-1") over decision/rationale/alternatives — a decide event has no structural cell field, so this is a token match, not substring: "si-1" excludes "si-10".' },
+        feature: { type: 'string', description: 'Word-boundary text match for a feature slug over decision/rationale/alternatives — same token-match discipline as --cell, not substring.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a formatted list.' },
       },
       required: [],
@@ -586,7 +586,7 @@ export const COMMAND_REGISTRY = [
     name: 'decisions.search',
     invoke: 'bee decisions search',
     description:
-      'Search active decisions by multi-term text match and/or structured filters (decision-propagation D4a, D8b). --text is required only when no structured filter (--tag/--scope/--area/--since/--untagged) is given. --text is whitespace-split into terms, case-insensitive, OR across terms, matched over decision/rationale/alternatives AND (overlay-applied) tags — results are ranked by deterministic term-hit count descending, then date descending; a single term matches everything the old substring search matched, and more.',
+      'Search active decisions by multi-term text match and/or structured filters. --text is required only when no structured filter (--tag/--scope/--area/--since/--untagged) is given. --text is whitespace-split into terms, case-insensitive, OR across terms, matched over decision/rationale/alternatives AND (overlay-applied) tags — results are ranked by deterministic term-hit count descending, then date descending; a single term matches everything the old substring search matched, and more.',
     parameters: {
       type: 'object',
       properties: {
@@ -595,10 +595,10 @@ export const COMMAND_REGISTRY = [
         scope: { type: 'string', description: 'Exact scope match, case-insensitive (scope is the spec-area dimension).' },
         area: { type: 'string', description: 'Alias for --scope.' },
         since: { type: 'string', description: 'ISO date; only events on/after this date (inclusive).' },
-        all: { type: 'boolean', description: 'Also reach events archived by `decisions archive` (decision-propagation D4c) — a union read of the active store and .bee/decisions-archive.jsonl, de-duplicated by id. Omit for the default active-store-only read.' },
-        untagged: { type: 'boolean', description: 'List only events with no tags AFTER the dp-5 overlay is applied (decision-propagation D7d) — the classification-completeness check (should reach zero once a backfill is done). Composable with every other filter, including --all; satisfies the "at least one filter" requirement on its own.' },
-        cell: { type: 'string', description: 'Word-boundary text match for a cell id (e.g. "si-1") over decision/rationale/alternatives — a decide event has no structural cell field, so this is a token match, not substring: "si-1" excludes "si-10". Satisfies the "at least one filter" requirement on its own (state-query-surface sqs-b1, D 5ca69717).' },
-        feature: { type: 'string', description: 'Word-boundary text match for a feature slug over decision/rationale/alternatives — same token-match discipline as --cell, not substring. Satisfies the "at least one filter" requirement on its own (state-query-surface sqs-b1, D 5ca69717).' },
+        all: { type: 'boolean', description: 'Also reach events archived by `decisions archive` — a union read of the active store and .bee/decisions-archive.jsonl, de-duplicated by id. Omit for the default active-store-only read.' },
+        untagged: { type: 'boolean', description: 'List only events with no tags AFTER the retro-tag overlay is applied — the classification-completeness check (should reach zero once a backfill is done). Composable with every other filter, including --all; satisfies the "at least one filter" requirement on its own.' },
+        cell: { type: 'string', description: 'Word-boundary text match for a cell id (e.g. "si-1") over decision/rationale/alternatives — a decide event has no structural cell field, so this is a token match, not substring: "si-1" excludes "si-10". Satisfies the "at least one filter" requirement on its own.' },
+        feature: { type: 'string', description: 'Word-boundary text match for a feature slug over decision/rationale/alternatives — same token-match discipline as --cell, not substring. Satisfies the "at least one filter" requirement on its own.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a formatted list.' },
       },
       required: [],
@@ -609,7 +609,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'decisions.archive',
     invoke: 'bee decisions archive',
-    description: 'Move superseded/redacted decision events (always, regardless of age) plus decide events strictly older than --before from .bee/decisions.jsonl to .bee/decisions-archive.jsonl (decision-propagation D4c). --before is always required — there is no default age window. Refuses (typed) when zero events qualify. Use `decisions active --all` / `decisions search --all` to keep reaching archived events afterward.',
+    description: 'Move superseded/redacted decision events (always, regardless of age) plus decide events strictly older than --before from .bee/decisions.jsonl to .bee/decisions-archive.jsonl. --before is always required — there is no default age window. Refuses (typed) when zero events qualify. Use `decisions active --all` / `decisions search --all` to keep reaching archived events afterward.',
     parameters: {
       type: 'object',
       properties: {
@@ -629,7 +629,7 @@ export const COMMAND_REGISTRY = [
     name: 'decisions.tag',
     invoke: 'bee decisions tag',
     description:
-      'Append a retro-tag event (decision-propagation D7c) that overlays tags/scope onto an existing decide/supersede event WITHOUT rewriting its jsonl line — visible via `decisions active`/`decisions search` (including --all) at read time. --target accepts a full id or a unique short8 prefix. --stdin accepts a JSON array of {target, tags, scope?} for a batch: every entry is validated before any write, and one unresolvable target refuses the WHOLE batch (nothing appended). The latest tag event wins when several target the same decision; overlay REPLACES the whole tags array, and scope only when the tag event carries one.',
+      'Append a retro-tag event that overlays tags/scope onto an existing decide/supersede event WITHOUT rewriting its jsonl line — visible via `decisions active`/`decisions search` (including --all) at read time. --target accepts a full id or a unique short8 prefix. --stdin accepts a JSON array of {target, tags, scope?} for a batch: every entry is validated before any write, and one unresolvable target refuses the WHOLE batch (nothing appended). The latest tag event wins when several target the same decision; overlay REPLACES the whole tags array, and scope only when the tag event carries one.',
     parameters: {
       type: 'object',
       properties: {
@@ -650,11 +650,11 @@ export const COMMAND_REGISTRY = [
     name: 'decisions.render',
     invoke: 'bee decisions render',
     description:
-      'Render docs/decisions/index.md from the active decision store (decision-propagation D4b/D6, overlay-aware per D7/D8): grouped by scope then tag (untagged last), newest-first inside each group, one line per decision "short8 · YYYY-MM-DD · first line of decision text". Superseded/redacted events are always excluded; a supersede event renders under its inherited scope/tags (D6). Consumes the SAME overlay-applied read path as `decisions search`/`active`, so a retro-tagged legacy event renders under its overlaid scope/tags, never under "untagged". The file carries a provenance header and is deterministic (byte-identical for the same store) — it is regenerated only, never hand-edited.',
+      'Render docs/decisions/index.md from the active decision store (overlay-aware): grouped by scope then tag (untagged last), newest-first inside each group, one line per decision "short8 · YYYY-MM-DD · first line of decision text". Superseded/redacted events are always excluded; a supersede event renders under its inherited scope/tags. Consumes the SAME overlay-applied read path as `decisions search`/`active`, so a retro-tagged legacy event renders under its overlaid scope/tags, never under "untagged". The file carries a provenance header and is deterministic (byte-identical for the same store) — it is regenerated only, never hand-edited.',
     parameters: {
       type: 'object',
       properties: {
-        all: { type: 'boolean', description: 'Also reach events archived by `decisions archive` (decision-propagation D4c) — same union-read flag as `decisions search`/`active`. Omit to render the active store only.' },
+        all: { type: 'boolean', description: 'Also reach events archived by `decisions archive` — same union-read flag as `decisions search`/`active`. Omit to render the active store only.' },
         check: { type: 'boolean', description: 'Read-only: compute the index and compare it byte-for-byte against docs/decisions/index.md on disk, without writing. Exits non-zero (and never writes) when the on-disk file is missing or has drifted (e.g. hand-edited) from what the store would render.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
@@ -680,7 +680,7 @@ export const COMMAND_REGISTRY = [
     name: 'state.set',
     invoke: 'bee state set',
     description:
-      'Set one or more top-level routing fields; only the flags given are written and every other field is preserved. Every call requires explicit --owner equal to the selected default/lane record\'s valid pre-mutation phase; missing/mismatched ownership or a corrupt phase refuses before write, and a successful phase change rolls ownership forward without persisting an owner field. --phase is validated against the known-phase enum AND against the tail guard (chain-integrity D1-REVISED): "compounding" is never settable directly (only `state scribing-run` produces it), and "compounding-complete" is legal only from "compounding", only with zero scribing debt, and only with a FRESH recorded compounding run (compounding-gate D2: `state compounding-run`, matching feature, at >= last_scribing_run.at) — --waive-compounding permits the close without one, logging a decision. Every other transition, including all backward moves and --phase idle, stays permissive. Target resolution (i54-closeout D7, symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted (identity self-resolved at operation moment) > the default state.json for an unbound session. --no-lane forces the default record from a bound session. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes, never a silent fall-back to the default. --feature is rejected whenever the selected target is a lane record.',
+      'Set one or more top-level routing fields; only the flags given are written and every other field is preserved. Every call requires explicit --owner equal to the selected default/lane record\'s valid pre-mutation phase; missing/mismatched ownership or a corrupt phase refuses before write, and a successful phase change rolls ownership forward without persisting an owner field. --phase is validated against the known-phase enum AND against the tail guard: "compounding" is never settable directly (only `state scribing-run` produces it), and "compounding-complete" is legal only from "compounding", only with zero scribing debt, and only with a FRESH recorded compounding run (`state compounding-run`, matching feature, at >= last_scribing_run.at) — --waive-compounding permits the close without one, logging a decision. Every other transition, including all backward moves and --phase idle, stays permissive. Target resolution (symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted (identity self-resolved at operation moment) > the default state.json for an unbound session. --no-lane forces the default record from a bound session. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes, never a silent fall-back to the default. --feature is rejected whenever the selected target is a lane record.',
     parameters: {
       type: 'object',
       properties: {
@@ -692,8 +692,8 @@ export const COMMAND_REGISTRY = [
         owner: { type: 'string', description: 'Selected record\'s exact pre-mutation phase. Required for every state set mutation; never persisted.' },
         lane: { type: 'string', description: 'Route the mutation to this lane record instead of the default state.json. Refuses if the lane is missing or corrupt. Omitted: the calling session\'s bound lane is targeted automatically; unbound sessions target the default record.' },
         'no-lane': { type: 'boolean', description: 'Force the default state.json even when the calling session is bound to a lane. Cannot be combined with --lane.' },
-        'waive-scribing-debt': { type: 'boolean', description: 'Permit --phase compounding-complete while capped behavior_change cells are still unsynced to docs/specs/. Never silent: it logs a decision naming every waived cell (chain-integrity D4).' },
-        'waive-compounding': { type: 'boolean', description: 'Permit --phase compounding-complete without a fresh recorded `state compounding-run` (matching the last scribing run, same feature). Never silent: it logs a decision naming the feature (compounding-gate D2).' },
+        'waive-scribing-debt': { type: 'boolean', description: 'Permit --phase compounding-complete while capped behavior_change cells are still unsynced to docs/specs/. Never silent: it logs a decision naming every waived cell.' },
+        'waive-compounding': { type: 'boolean', description: 'Permit --phase compounding-complete without a fresh recorded `state compounding-run` (matching the last scribing run, same feature). Never silent: it logs a decision naming the feature.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: [],
@@ -707,16 +707,16 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.gate',
     invoke: 'bee state gate',
-    description: 'Approve or unapprove a named gate, OR — validation-diet D2 — pass --merge instead of --name to approve/unapprove the MERGED shape+execution gate in ONE call (sets approved_gates.shape AND approved_gates.execution together, since bee now asks a single question at the end of briefing in place of separate Gate 2/Gate 3 questions). --merge and --name are mutually exclusive. This dedicated command does not accept routing --owner. Idempotent: the same call run twice yields an identical file. Target resolution (i54-closeout D7, symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes. D14: a --merge approval inherits the SAME high-risk advisor-consult precondition that already guards a --name execution approval (AO3/AO13) — refuses when mode is high-risk and advisor_ref is missing or stale, before any write. D15: under --merge, both gates carry the approved_for_plan_rev stamp (a plain --name execution approval still stamps execution alone), so a later `state plan-rev bump` revokes both instead of leaving the merged gate half-revoked.',
+    description: 'Approve or unapprove a named gate, OR pass --merge instead of --name to approve/unapprove the MERGED shape+execution gate in ONE call (sets approved_gates.shape AND approved_gates.execution together, since bee now asks a single question at the end of briefing in place of separate Gate 2/Gate 3 questions). --merge and --name are mutually exclusive. This dedicated command does not accept routing --owner. Idempotent: the same call run twice yields an identical file. Target resolution (symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes. A --merge approval inherits the SAME high-risk advisor-consult precondition that already guards a --name execution approval — refuses when mode is high-risk and advisor_ref is missing or stale, before any write. Under --merge, both gates carry the approved_for_plan_rev stamp (a plain --name execution approval still stamps execution alone), so a later `state plan-rev bump` revokes both instead of leaving the merged gate half-revoked.',
     parameters: {
       type: 'object',
       properties: {
         name: { type: 'string', description: 'Gate name. Required unless --merge is set; refused together with --merge.', enum: [...GATE_NAMES] },
-        merge: { type: 'boolean', description: 'Validation-diet D2: approve/unapprove shape AND execution together in this one call, instead of a single named gate. Mutually exclusive with --name.' },
+        merge: { type: 'boolean', description: 'Approve/unapprove shape AND execution together in this one call, instead of a single named gate. Mutually exclusive with --name.' },
         approved: { type: 'string', description: 'Whether the gate(s) are approved ("true" or "false").' },
         lane: { type: 'string', description: 'Route the mutation to this lane record instead of the default state.json. Refuses if the lane is missing or corrupt. Omitted: the calling session\'s bound lane is targeted automatically; unbound sessions target the default record.' },
         'no-lane': { type: 'boolean', description: 'Force the default state.json even when the calling session is bound to a lane. Cannot be combined with --lane.' },
-        owner: { type: 'string', description: 'NOT accepted by this dedicated command — declared here only so the dispatcher\'s central unknown-flag check (packages-engine-move-3) still lets it through to this handler\'s own specific refusal ("--owner is not accepted..."); routing ownership protects generic `state set` fields only.' },
+        owner: { type: 'string', description: 'NOT accepted by this dedicated command — declared here only so the dispatcher\'s central unknown-flag check still lets it through to this handler\'s own specific refusal ("--owner is not accepted..."); routing ownership protects generic `state set` fields only.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: [],
@@ -731,12 +731,12 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.plan-rev.bump',
     invoke: 'bee state plan-rev bump',
-    description: "Bump a workflow's plan_rev by 1 (multisession-native-9, CONTEXT.md D7; advisor consult slice 2 C2, binding). plan_rev lives ONLY on the workflow record, so this verb targets a lane exactly like gate/set/scribing-run (explicit --lane > the calling session's bound lane) but REFUSES when resolution would land on the default (non-lane) record — that record's workflow is not yet kept in sync (C5 residual seam, multisession-native-10). The bump immediately rebuilds the lane's projection: any gate stamped with the PRE-bump plan_rev (the execution gate always; the shape gate too when it was approved via `state gate --merge` — D2/D15) now projects as unapproved in .bee/lanes/<feature>.json, so a subsequent `cells claim` against that lane's cells refuses right away. Never touches any other workflow's record (invariant 3) — context/review on THIS workflow are also untouched (D7 default: they are never rev-stamped, so they stay effective across a bump).",
+    description: "Bump a workflow's plan_rev by 1. plan_rev lives ONLY on the workflow record, so this verb targets a lane exactly like gate/set/scribing-run (explicit --lane > the calling session's bound lane) but REFUSES when resolution would land on the default (non-lane) record — that record's workflow is not yet kept in sync. The bump immediately rebuilds the lane's projection: any gate stamped with the PRE-bump plan_rev (the execution gate always; the shape gate too when it was approved via `state gate --merge`) now projects as unapproved in .bee/lanes/<feature>.json, so a subsequent `cells claim` against that lane's cells refuses right away. Never touches any other workflow's record — context/review on THIS workflow are also untouched (they are never rev-stamped, so they stay effective across a bump).",
     parameters: {
       type: 'object',
       properties: {
         lane: { type: 'string', description: 'Route the bump to this lane\'s workflow record. Refuses if the lane is missing/corrupt, or names no live workflow record. Omitted: the calling session\'s bound lane is targeted automatically.' },
-        'no-lane': { type: 'boolean', description: 'Force default-record resolution — always refused (plan_rev is not yet default-path-synced, C5). Named so the refusal is explicit rather than a silent fallback.' },
+        'no-lane': { type: 'boolean', description: 'Force default-record resolution — always refused (plan_rev is not yet default-path-synced). Named so the refusal is explicit rather than a silent fallback.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: [],
@@ -827,7 +827,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.scribing-run',
     invoke: 'bee state scribing-run',
-    description: 'Stamp last_scribing_run (date + ISO-precise at), mirror --next-action to the top-level next_action, and advance phase to compounding. Target resolution (i54-closeout D7, symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes. --show (sqs-b3) is a READ-ONLY query mode: it never appends to the scribing ledger and never advances phase, returning the most-recent recorded stamp overall, or for --feature <slug> if given; it needs neither --areas nor --next-action.',
+    description: 'Stamp last_scribing_run (date + ISO-precise at), mirror --next-action to the top-level next_action, and advance phase to compounding. Target resolution (symmetric with the read path): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes. --show is a READ-ONLY query mode: it never appends to the scribing ledger and never advances phase, returning the most-recent recorded stamp overall, or for --feature <slug> if given; it needs neither --areas nor --next-action.',
     parameters: {
       type: 'object',
       properties: {
@@ -852,7 +852,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.compounding-run',
     invoke: 'bee state compounding-run',
-    description: 'Stamp last_compounding_run (feature, date, ISO-precise at, learnings path, optional next-action) on the selected record. Legal ONLY from phase "compounding" (checkCompoundingRunPhase, compounding-gate D1) — refused from any other phase. Unlike scribing-run, this verb does NOT advance phase: bee-compounding runs entirely inside phase "compounding", produced earlier by `state scribing-run`. What it DOES do is satisfy a precondition `state set --phase compounding-complete` now enforces (compounding-gate D2): that transition refuses unless last_compounding_run exists, names the SAME feature as last_scribing_run, and was stamped at or after it. Target resolution (i54-closeout D7, symmetric with scribing-run): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes.',
+    description: 'Stamp last_compounding_run (feature, date, ISO-precise at, learnings path, optional next-action) on the selected record. Legal ONLY from phase "compounding" (checkCompoundingRunPhase) — refused from any other phase. Unlike scribing-run, this verb does NOT advance phase: bee-compounding runs entirely inside phase "compounding", produced earlier by `state scribing-run`. What it DOES do is satisfy a precondition `state set --phase compounding-complete` now enforces: that transition refuses unless last_compounding_run exists, names the SAME feature as last_scribing_run, and was stamped at or after it. Target resolution (symmetric with scribing-run): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes.',
     parameters: {
       type: 'object',
       properties: {
@@ -875,16 +875,16 @@ export const COMMAND_REGISTRY = [
     name: 'state.route',
     invoke: 'bee state route',
     description:
-      'explicit-triage CONTEXT.md D1: a validated route record — {class, lane, flags[], product_files, rationale, updated_at} — persisted on the ACTIVE feature\'s tracked record (session-bound lane when the calling session is bound, else the default record; refuses when no active feature). This verb never accepts a --lane TARGETING flag (unlike state set/gate/scribing-run) — --lane here is the route\'s OWN mode-gate lane value, not a feature router; targeting a non-active feature is deferred (CONTEXT.md Outstanding Questions). --set requires --class (enum: feature/bugfix/docs/refactor/research/release/spike), --lane (enum: docs/tiny/small/spike/standard/high-risk), --flags (comma-separated; every entry must be one of the canonical mode-gate flag names auth/authorization/data-model/audit-security/external-systems/public-contracts/cross-platform/covered-contract-change/proof-weakening/multi-domain; the empty string means zero flags, not a missing flag), --files (a non-negative integer); optional --rationale. Any enum/shape violation is a typed refusal naming the bad value and the legal set — free prose is never accepted, and nothing is written on refusal (D1: "an enum-validated record cannot be vibes"). --show is read-only: prints the currently recorded route (null when absent) without requiring any --set flag. `cells claim` (D3) warns on stderr, never refuses, when the claimed cell\'s feature has no route yet.',
+      'A validated route record — {class, lane, flags[], product_files, rationale, updated_at} — persisted on the ACTIVE feature\'s tracked record (session-bound lane when the calling session is bound, else the default record; refuses when no active feature). This verb never accepts a --lane TARGETING flag (unlike state set/gate/scribing-run) — --lane here is the route\'s OWN lane-classification value, not a feature router; targeting a non-active feature is not yet supported. --set requires --class (enum: feature/bugfix/docs/refactor/research/release/spike), --lane (enum: docs/tiny/small/spike/standard/high-risk), --flags (comma-separated; every entry must be one of the canonical triage flag names auth/authorization/data-model/audit-security/external-systems/public-contracts/cross-platform/covered-contract-change/proof-weakening/multi-domain; the empty string means zero flags, not a missing flag), --files (a non-negative integer); optional --rationale. Any enum/shape violation is a typed refusal naming the bad value and the legal set — free prose is never accepted, and nothing is written on refusal. --show is read-only: prints the currently recorded route (null when absent) without requiring any --set flag. `cells claim` warns on stderr, never refuses, when the claimed cell\'s feature has no route yet.',
     parameters: {
       type: 'object',
       properties: {
         set: { type: 'boolean', description: 'Write mode: record a new route (requires --class/--lane/--flags/--files).' },
         show: { type: 'boolean', description: 'Read-only mode: print the currently recorded route (null when absent).' },
         class: { type: 'string', description: 'Route class.' },
-        lane: { type: 'string', description: 'Route lane (the mode-gate lane classification — never a feature-routing flag).' },
-        flags: { type: 'string', description: 'Comma-separated mode-gate flag names; the empty string means zero flags.' },
-        files: { type: 'string', description: "Non-negative integer: the mode-gate's product file count." },
+        lane: { type: 'string', description: 'Route lane (the triage lane classification — never a feature-routing flag).' },
+        flags: { type: 'string', description: 'Comma-separated triage flag names; the empty string means zero flags.' },
+        files: { type: 'string', description: "Non-negative integer: the triage product-file count." },
         rationale: { type: 'string', description: 'Optional free-text rationale for the route.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
@@ -900,7 +900,7 @@ export const COMMAND_REGISTRY = [
     name: 'state.feature-verify.record',
     invoke: 'bee state feature-verify record',
     description:
-      'main-verifies D2: stamp the feature-level verify record — {feature, command, output_sha256, result, at} — on the ACTIVE feature\'s tracked record (session-bound lane else default, the same resolution as state route; no --lane targeting flag) AND its underlying workflow-store record. output_sha256 is computed by the verb from --output-file, never caller-supplied. --result is a closed green|red enum: red is storable (it documents the failure for the fix-cells-then-re-verify loop, D5) but NEVER satisfies the close door — leaving phase "swarming" (state set out, or state scribing-run) stays refused (guardFeatureVerifyDebt, D3, no gate_bypass level lifts it) while any cell capped via `cells cap --feature-verify-pending` lacks a green record stamped strictly newer than the newest pending cap. Refuses when no feature is active. --show is the read-only query mode (also available as `bee state feature-verify show`): prints the currently recorded feature_verify (null when absent) without writing.',
+      'Stamp the feature-level verify record — {feature, command, output_sha256, result, at} — on the ACTIVE feature\'s tracked record (session-bound lane else default, the same resolution as state route; no --lane targeting flag) AND its underlying workflow-store record. output_sha256 is computed by the verb from --output-file, never caller-supplied. --result is a closed green|red enum: red is storable (it documents the failure for the fix-cells-then-re-verify loop) but NEVER satisfies the close door — leaving phase "swarming" (state set out, or state scribing-run) stays refused (guardFeatureVerifyDebt — no gate_bypass level lifts it) while any cell capped via `cells cap --feature-verify-pending` lacks a green record stamped strictly newer than the newest pending cap. Refuses when no feature is active. --show is the read-only query mode (also available as `bee state feature-verify show`): prints the currently recorded feature_verify (null when absent) without writing.',
     parameters: {
       type: 'object',
       properties: {
@@ -922,7 +922,7 @@ export const COMMAND_REGISTRY = [
     name: 'state.feature-verify.show',
     invoke: 'bee state feature-verify show',
     description:
-      'Read-only: print the ACTIVE feature\'s recorded feature-verify record — {feature, command, output_sha256, result, at} (main-verifies D2) — or null when none is recorded. Same record `state feature-verify record --show` prints; never writes.',
+      'Read-only: print the ACTIVE feature\'s recorded feature-verify record — {feature, command, output_sha256, result, at} — or null when none is recorded. Same record `state feature-verify record --show` prints; never writes.',
     parameters: {
       type: 'object',
       properties: {
@@ -937,7 +937,7 @@ export const COMMAND_REGISTRY = [
     name: 'state.workflows.list',
     invoke: 'bee state workflows list',
     description:
-      "workflow-lifecycle wl-2 (rule-12 gap closed): read-only listing of every workflow record under .bee/runtime/workflows/ — {id, feature, status, phase, created_at, ...the full record} per entry, sorted newest-created first. Never writes. `status` is one of active/paused/closed (workflow-store.mjs STATUS_VALUES); MULTIPLE records can be status \"active\" at once (one per concurrently-running lane) — this verb is a plain inventory, not itself the pruning tool (see `state workflows close`).",
+      "Read-only listing of every workflow record under .bee/runtime/workflows/ — {id, feature, status, phase, created_at, ...the full record} per entry, sorted newest-created first. Never writes. `status` is one of active/paused/closed (workflow-store.mjs STATUS_VALUES); MULTIPLE records can be status \"active\" at once (one per concurrently-running lane) — this verb is a plain inventory, not itself the pruning tool (see `state workflows close`).",
     parameters: {
       type: 'object',
       properties: {
@@ -952,7 +952,7 @@ export const COMMAND_REGISTRY = [
     name: 'state.workflows.close',
     invoke: 'bee state workflows close',
     description:
-      'workflow-lifecycle wl-2 (rule-12 gap closed): closes zombie/stale workflow records without hand-editing .bee/runtime/workflows/*/state.json (rule 12\'s forbidden escape hatch). Requires EXACTLY ONE of three mutually exclusive modes: --feature <f> closes every live (non-closed) record whose feature equals <f>; --id <id> closes the single record with that id; --all-but-active closes every live record whose feature differs from the CALLING context\'s own active feature (the same session-bound-lane-else-default resolution `state route`/`state feature-verify` use), keeping that one. The currently active feature\'s record is NEVER closed by --feature or --all-but-active — only --id may name it explicitly, bypassing the protection on purpose. Refuses with a typed, zero-mutation error when a mode selects zero live records (already closed, unknown id, unknown feature, or nothing left besides the active feature). Prints the closed {id, feature} pairs on success.',
+      'Closes zombie/stale workflow records without hand-editing .bee/runtime/workflows/*/state.json. Requires EXACTLY ONE of three mutually exclusive modes: --feature <f> closes every live (non-closed) record whose feature equals <f>; --id <id> closes the single record with that id; --all-but-active closes every live record whose feature differs from the CALLING context\'s own active feature (the same session-bound-lane-else-default resolution `state route`/`state feature-verify` use), keeping that one. The currently active feature\'s record is NEVER closed by --feature or --all-but-active — only --id may name it explicitly, bypassing the protection on purpose. Refuses with a typed, zero-mutation error when a mode selects zero live records (already closed, unknown id, unknown feature, or nothing left besides the active feature). Prints the closed {id, feature} pairs on success.',
     parameters: {
       type: 'object',
       properties: {
@@ -973,7 +973,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.start-feature',
     invoke: 'bee state start-feature',
-    description: 'Guarded atomic feature start: fails closed with zero mutations unless the workspace is clean (idle/terminal phase, no handoff/active workers/reservations/claimed or nonterminal prior cells); on success sets feature/mode/phase and resets all four gates. "Active workers" (D6, multisession-native-8) is a derived view — live-heartbeat sessions joined with their current cell claim, never a hand-maintained list — so --session-id names the calling session on EITHER path (default or --as-lane) so its own heartbeat never counts against itself (C3); without --session-id every live session, including the caller\'s own if it has one, counts. Optional --as-lane (D2/D4) starts the feature as a per-feature lane record (.bee/lanes/<feature>.json) beside the default pipeline instead of mutating state.json; --paths is a comma-separated list of intended file paths checked against other sessions\' active claims/reservations before the lane starts (--as-lane only).',
+    description: 'Guarded atomic feature start: fails closed with zero mutations unless the workspace is clean (idle/terminal phase, no handoff/active workers/reservations/claimed or nonterminal prior cells); on success sets feature/mode/phase and resets all four gates. "Active workers" is a derived view — live-heartbeat sessions joined with their current cell claim, never a hand-maintained list — so --session-id names the calling session on EITHER path (default or --as-lane) so its own heartbeat never counts against itself; without --session-id every live session, including the caller\'s own if it has one, counts. Optional --as-lane starts the feature as a per-feature lane record (.bee/lanes/<feature>.json) beside the default pipeline instead of mutating state.json; --paths is a comma-separated list of intended file paths checked against other sessions\' active claims/reservations before the lane starts (--as-lane only).',
     parameters: {
       type: 'object',
       properties: {
@@ -981,7 +981,7 @@ export const COMMAND_REGISTRY = [
         mode: { type: 'string', description: 'Mode for the new feature.' },
         phase: { type: 'string', description: 'Entry phase (defaults to exploring).', enum: [...KNOWN_PHASES] },
         'as-lane': { type: 'boolean', description: 'Start this feature as a per-feature lane record instead of the default state.json.' },
-        'session-id': { type: 'string', description: 'Calling session id: excludes its own live heartbeat from the derived active-workers precondition on either path (C3), and — only meaningful with --as-lane and --paths — excludes its own active holds from the declared-paths conflict check.' },
+        'session-id': { type: 'string', description: 'Calling session id: excludes its own live heartbeat from the derived active-workers precondition on either path, and — only meaningful with --as-lane and --paths — excludes its own active holds from the declared-paths conflict check.' },
         paths: { type: 'string', description: 'Comma-separated declared file paths checked against other sessions\' active claims/reservations before the lane starts (only meaningful with --as-lane).' },
         isolate: { type: 'boolean', description: 'Route this feature start through the write-policy isolate-create path (a fresh worktree) instead of starting directly in this checkout. Only meaningful when the write-policy mode actually enforces isolation.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
@@ -997,7 +997,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.lanes',
     invoke: 'bee state lanes',
-    description: 'List every per-feature lane record (D2/D4) with its phase, gates, and which sessions are currently bound to it.',
+    description: 'List every per-feature lane record with its phase, gates, and which sessions are currently bound to it.',
     parameters: {
       type: 'object',
       properties: {
@@ -1011,7 +1011,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.rebuild-projections',
     invoke: 'bee state rebuild-projections',
-    description: 'Recovery verb (multisession-native-7, D1): rebuilds .bee/lanes/<feature>.json for every active workflow, entirely from .bee/runtime/workflows/ records — every lane mutation in this cell keeps its workflow record in sync, so this is always safe and lossless for lanes. Also rebuilds .bee/state.json\'s workflow-owned fields (phase/mode/feature/approved_gates/summary/next_action) from the newest ACTIVE workflow record, but ONLY while state.json is itself idle (no live default feature) — a live default record\'s own workflow record is not yet kept in sync by default-path writes (C5, multisession-native-10), so it is never overwritten. A no-op (authoritative:false in the JSON result) when zero workflow records exist anywhere yet, state.json has a live non-idle default feature, or a lane names no live workflow record — the legacy file is left exactly as it already was in every no-op case. Also unconditionally rebuilds .bee/reservations.json from lease-store.mjs\'s current active path leases (multisession-native-16) — never gated on workflow records, always overwrites. Safe to run any time.',
+    description: 'Recovery verb: rebuilds .bee/lanes/<feature>.json for every active workflow, entirely from .bee/runtime/workflows/ records — every lane mutation in this cell keeps its workflow record in sync, so this is always safe and lossless for lanes. Also rebuilds .bee/state.json\'s workflow-owned fields (phase/mode/feature/approved_gates/summary/next_action) from the newest ACTIVE workflow record, but ONLY while state.json is itself idle (no live default feature) — a live default record\'s own workflow record is not yet kept in sync by default-path writes, so it is never overwritten. A no-op (authoritative:false in the JSON result) when zero workflow records exist anywhere yet, state.json has a live non-idle default feature, or a lane names no live workflow record — the legacy file is left exactly as it already was in every no-op case. Also unconditionally rebuilds .bee/reservations.json from lease-store.mjs\'s current active path leases — never gated on workflow records, always overwrites. Safe to run any time.',
     parameters: {
       type: 'object',
       properties: {
@@ -1025,7 +1025,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.session.list',
     invoke: 'bee state session list',
-    description: 'List every session record (id, started_at, last_heartbeat, bound lane if any) — the cross-session identities lane claims key off (fresh-session-handoff fsh-1/fsh-3).',
+    description: 'List every session record (id, started_at, last_heartbeat, bound lane if any) — the cross-session identities lane claims key off.',
     parameters: {
       type: 'object',
       properties: {
@@ -1039,7 +1039,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.session.bind',
     invoke: 'bee state session bind',
-    description: "Bind a session to a lane (session→lane binding, D2/D4) so pipeline reads/writes for that session resolve to the named lane instead of the default state.json (resolvePipeline). Does not verify the lane record exists — a binding to a missing/invalid lane is a typed refusal at resolution time, not at bind time.",
+    description: "Bind a session to a lane (session→lane binding) so pipeline reads/writes for that session resolve to the named lane instead of the default state.json (resolvePipeline). Does not verify the lane record exists — a binding to a missing/invalid lane is a typed refusal at resolution time, not at bind time.",
     parameters: {
       type: 'object',
       properties: {
@@ -1070,7 +1070,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.handoff.write',
     invoke: 'bee state handoff write',
-    description: "Write a handoff through the guarded writer (fresh-session-handoff fsh-9, D1; multisession-native-15, D5). --kind is required and never guessed: 'pause' writes today's free-form fields (--cell/--files/--done/--remaining/--next-action/--feature/--phase/--mode, whichever apply) plus the kind — no new precondition, the same surface-and-wait record as always. 'planned-next' REFUSES (typed, zero mutation) unless --previous-cell is capped with a passing verify AND --next-cell already has a claim owned by --writer-session (the carried claim) — on success the record stores writer_session/previous_cell/next_cell alongside kind. When a workflow resolves (--lane names it, or the calling session/default record is bound to one), the record is written to that workflow's OWN mailbox (.bee/runtime/handoffs/<workflow-id>/<seq>.json, scoped by --target-role) instead of the single legacy .bee/HANDOFF.json — a repo with no workflow records keeps writing the legacy file, byte-identical to before.",
+    description: "Write a handoff through the guarded writer. --kind is required and never guessed: 'pause' writes today's free-form fields (--cell/--files/--done/--remaining/--next-action/--feature/--phase/--mode, whichever apply) plus the kind — no new precondition, the same surface-and-wait record as always. 'planned-next' REFUSES (typed, zero mutation) unless --previous-cell is capped with a passing verify AND --next-cell already has a claim owned by --writer-session (the carried claim) — on success the record stores writer_session/previous_cell/next_cell alongside kind. When a workflow resolves (--lane names it, or the calling session/default record is bound to one), the record is written to that workflow's OWN mailbox (.bee/runtime/handoffs/<workflow-id>/<seq>.json, scoped by --target-role) instead of the single legacy .bee/HANDOFF.json — a repo with no workflow records keeps writing the legacy file, byte-identical to before.",
     parameters: {
       type: 'object',
       properties: {
@@ -1086,9 +1086,9 @@ export const COMMAND_REGISTRY = [
         phase: { type: 'string', description: 'Phase to record on the handoff.' },
         mode: { type: 'string', description: 'Mode to record on the handoff.' },
         'next-action': { type: 'string', description: 'Saved next-action text.' },
-        lane: { type: 'string', description: 'multisession-native-15: name the target workflow by its lane feature explicitly, instead of resolving it from the calling session or the default record.' },
-        'target-role': { type: 'string', description: 'multisession-native-15: scope this mailbox record to a role (e.g. "reviewer") so it never clobbers another role\'s open handoff for the same workflow. Omitted = the default/unscoped slot.' },
-        'session-id': { type: 'string', description: 'multisession-native-15: the writing session id used ONLY to resolve which workflow this call targets when --lane is omitted (never required — BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID resolve it the usual way otherwise).' },
+        lane: { type: 'string', description: 'Name the target workflow by its lane feature explicitly, instead of resolving it from the calling session or the default record.' },
+        'target-role': { type: 'string', description: 'Scope this mailbox record to a role (e.g. "reviewer") so it never clobbers another role\'s open handoff for the same workflow. Omitted = the default/unscoped slot.' },
+        'session-id': { type: 'string', description: 'The writing session id used ONLY to resolve which workflow this call targets when --lane is omitted (never required — BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID resolve it the usual way otherwise).' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: ['kind'],
@@ -1102,13 +1102,13 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.handoff.adopt',
     invoke: 'bee state handoff adopt',
-    description: "Adopt a planned-next handoff's carried claim into --session-id (fresh-session-handoff fsh-9, D1; multisession-native-15, D5): transfers ownership of the handoff's next_cell claim to the adopting session, then clears the handoff — clear-after-adopt with idempotent recovery, not a single cross-file transaction (a crash between the two steps self-heals on the next call via a benign self-adopt). Refuses (typed, non-zero exit) when there is no handoff, the handoff is not kind planned-next (pause handoffs are never adopted — surface and wait instead), or the underlying claim adopt fails — every refusal leaves both the claim and the handoff untouched. When a workflow resolves (--lane, or --session-id's own bound lane/default record), this adopts from that workflow's mailbox instead of the single legacy .bee/HANDOFF.json.",
+    description: "Adopt a planned-next handoff's carried claim into --session-id: transfers ownership of the handoff's next_cell claim to the adopting session, then clears the handoff — clear-after-adopt with idempotent recovery, not a single cross-file transaction (a crash between the two steps self-heals on the next call via a benign self-adopt). Refuses (typed, non-zero exit) when there is no handoff, the handoff is not kind planned-next (pause handoffs are never adopted — surface and wait instead), or the underlying claim adopt fails — every refusal leaves both the claim and the handoff untouched. When a workflow resolves (--lane, or --session-id's own bound lane/default record), this adopts from that workflow's mailbox instead of the single legacy .bee/HANDOFF.json.",
     parameters: {
       type: 'object',
       properties: {
         'session-id': { type: 'string', description: 'Adopting session id — also used to resolve which workflow to adopt from when --lane is omitted.' },
-        lane: { type: 'string', description: 'multisession-native-15: name the target workflow by its lane feature explicitly.' },
-        'target-role': { type: 'string', description: 'multisession-native-15: adopt from this role\'s mailbox slot instead of the default/unscoped one.' },
+        lane: { type: 'string', description: 'Name the target workflow by its lane feature explicitly.' },
+        'target-role': { type: 'string', description: 'Adopt from this role\'s mailbox slot instead of the default/unscoped one.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: ['session-id'],
@@ -1119,13 +1119,13 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.handoff.show',
     invoke: 'bee state handoff show',
-    description: 'Show the current handoff, if any, with kind normalized for display (a missing/unknown kind reads as "pause" — fail-safe, D1). Reports "no handoff" when none exists. multisession-native-15 (D5): when a workflow resolves (--lane, or the calling --session-id/default record\'s own bound lane), shows that workflow\'s own mailbox instead of the single legacy .bee/HANDOFF.json.',
+    description: 'Show the current handoff, if any, with kind normalized for display (a missing/unknown kind reads as "pause" — fail-safe). Reports "no handoff" when none exists. When a workflow resolves (--lane, or the calling --session-id/default record\'s own bound lane), shows that workflow\'s own mailbox instead of the single legacy .bee/HANDOFF.json.',
     parameters: {
       type: 'object',
       properties: {
-        lane: { type: 'string', description: 'multisession-native-15: name the target workflow by its lane feature explicitly.' },
-        'target-role': { type: 'string', description: 'multisession-native-15: show this role\'s mailbox slot instead of the default/unscoped one.' },
-        'session-id': { type: 'string', description: 'multisession-native-15: resolve which workflow to show via this session\'s bound lane, when --lane is omitted.' },
+        lane: { type: 'string', description: 'Name the target workflow by its lane feature explicitly.' },
+        'target-role': { type: 'string', description: 'Show this role\'s mailbox slot instead of the default/unscoped one.' },
+        'session-id': { type: 'string', description: 'Resolve which workflow to show via this session\'s bound lane, when --lane is omitted.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line summary.' },
       },
       required: [],
@@ -1136,7 +1136,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.advisor-ref.record',
     invoke: 'bee state advisor-ref record',
-    description: "Record an AO3/AO13 advisor consult onto the selected record's advisor_ref (hive law 12: the Gate 3 high-risk precondition needs a state field AND a verb). The verb stamps the staleness anchors ITSELF — current feature, newest active decision id, and sha256 of that feature's plan.md — so anchors are never caller-supplied; the caller passes only --advisor (identity) and --digest-file (its first 500 chars are stored as digest_head for audit). Refuses when no feature is active (phase idle/compounding-complete or no feature). Target resolution (i54-closeout D7, symmetric with the read path): explicit --lane <feature> always wins > the calling session's bound lane when --lane is omitted > the default state.json for an unbound session; --no-lane forces the default record. A lane target — explicit or session-bound — records with anchors bound to the lane's own feature and plan.md, leaving the default state.json untouched; a missing or corrupt lane refuses loudly with zero writes. There is no clear verb — staleness makes an old ref inert.",
+    description: "Record an advisor consult onto the selected record's advisor_ref — the Gate 3 high-risk precondition needs a state field AND a verb. The verb stamps the staleness anchors ITSELF — current feature, newest active decision id, and sha256 of that feature's plan.md — so anchors are never caller-supplied; the caller passes only --advisor (identity) and --digest-file (its first 500 chars are stored as digest_head for audit). Refuses when no feature is active (phase idle/compounding-complete or no feature). Target resolution (symmetric with the read path): explicit --lane <feature> always wins > the calling session's bound lane when --lane is omitted > the default state.json for an unbound session; --no-lane forces the default record. A lane target — explicit or session-bound — records with anchors bound to the lane's own feature and plan.md, leaving the default state.json untouched; a missing or corrupt lane refuses loudly with zero writes. There is no clear verb — staleness makes an old ref inert.",
     parameters: {
       type: 'object',
       properties: {
@@ -1154,7 +1154,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.advisor-ref.show',
     invoke: 'bee state advisor-ref show',
-    description: 'Show the selected record\'s advisor_ref, if any, with its live AO13 staleness verdict (stale + reason list) computed against the current feature, newest active decision id, plan.md sha256, and the last execution-gate revocation. A missing or malformed advisor_ref reads as "no advisor_ref recorded", never a crash. Optional --lane <feature> shows the lane record instead of the default state.json.',
+    description: 'Show the selected record\'s advisor_ref, if any, with its live staleness verdict (stale + reason list) computed against the current feature, newest active decision id, plan.md sha256, and the last execution-gate revocation. A missing or malformed advisor_ref reads as "no advisor_ref recorded", never a crash. Optional --lane <feature> shows the lane record instead of the default state.json.',
     parameters: {
       type: 'object',
       properties: {
@@ -1178,7 +1178,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.compact-log',
     invoke: 'bee state compact-log',
-    description: "Append one compaction telemetry record (compaction-hardening D3/D4/D5) via lib/compaction.mjs's appendCompactionRecord — the durable write every compaction surface (the PreCompact hook, the SessionStart resume hook) and this verb both call, so the log stays reachable by command on any runtime whose hook execution is unconfirmed (D3's helper floor). --event is 'precompact' or 'resume'; compact_index/cell_compact_count follow D5's counting rule — only precompact records are counted, and only a precompact record counts itself. A write failure never changes the exit code (D4: fail-open, logged locally).",
+    description: "Append one compaction telemetry record via lib/compaction.mjs's appendCompactionRecord — the durable write every compaction surface (the PreCompact hook, the SessionStart resume hook) and this verb both call, so the log stays reachable by command on any runtime whose hook execution is unconfirmed. --event is 'precompact' or 'resume'; compact_index/cell_compact_count follow the counting rule — only precompact records are counted, and only a precompact record counts itself. A write failure never changes the exit code (fail-open, logged locally).",
     parameters: {
       type: 'object',
       properties: {
@@ -1194,7 +1194,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.compact-check',
     invoke: 'bee state compact-check',
-    description: "Read-only D12/D13 integrity sweep for a session (lib/compaction.mjs's compactCheck): session record, lane binding, claimed-cell ownership, execution gate, dependency capping, reservation holds, and intent-anchor presence. REPORTS ONLY — it never repairs, releases, or blocks, and it exits non-zero ONLY on a usage error, never on a detected mismatch (D13; a mismatch is reported data). The JSON output's checks[] always carries an `anchor_missing` entry naming the exact command the D10 nudge would name (ANCHOR_NUDGE_COMMAND), so the nudge stays reachable by command on a runtime that never executes a hook (D3's helper floor).",
+    description: "Read-only integrity sweep for a session (lib/compaction.mjs's compactCheck): session record, lane binding, claimed-cell ownership, execution gate, dependency capping, reservation holds, and intent-anchor presence. REPORTS ONLY — it never repairs, releases, or blocks, and it exits non-zero ONLY on a usage error, never on a detected mismatch (a mismatch is reported data). The JSON output's checks[] always carries an `anchor_missing` entry naming the exact command the anchor nudge would name (ANCHOR_NUDGE_COMMAND), so the nudge stays reachable by command on a runtime that never executes a hook.",
     parameters: {
       type: 'object',
       properties: {
@@ -1209,7 +1209,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.compact-capsule',
     invoke: 'bee state compact-capsule',
-    description: "Render the D6 compact capsule for a session (lib/compaction.mjs's buildCompactCapsule) — the narrow orientation body a SessionStart with source=compact emits INSTEAD of the full startup preamble: the D12 mismatch block, the onboarding-MISSING line, the HANDOFF block with its adoption-refusal reason, the gate-bypass banner, phase/mode/feature/lane, the claimed cell with its verify and dependency status, the first open gate, next_action, the recorded commands, the compaction survival count with D9's advisory, and a POINTER to the critical patterns (D7), in that order. It NEVER renders the intent anchor — the hook owns that (D19) — and no byte of it varies with anchor presence. Read-only, and reachable by command on any runtime whose hook execution is unconfirmed (D3's helper floor).",
+    description: "Render the compact capsule for a session (lib/compaction.mjs's buildCompactCapsule) — the narrow orientation body a SessionStart with source=compact emits INSTEAD of the full startup preamble: the state-mismatch block, the onboarding-MISSING line, the HANDOFF block with its adoption-refusal reason, the gate-bypass banner, phase/mode/feature/lane, the claimed cell with its verify and dependency status, the first open gate, next_action, the recorded commands, the compaction survival count with its advisory, and a POINTER to the critical patterns, in that order. It NEVER renders the intent anchor — the hook owns that — and no byte of it varies with anchor presence. Read-only, and reachable by command on any runtime whose hook execution is unconfirmed.",
     parameters: {
       type: 'object',
       properties: {
@@ -1248,7 +1248,7 @@ export const COMMAND_REGISTRY = [
     name: 'backlog.rank',
     invoke: 'bee backlog rank',
     description:
-      'P2 mechanical pass (dry-run reporting only): reports docs/backlog.md rows reordered by status group (in-flight, proposed, done). RETIRED: --write (backlog-unification D3) — "bee backlog render --write" now owns the generated view; passing --write refuses, naming render.',
+      'P2 mechanical pass (dry-run reporting only): reports docs/backlog.md rows reordered by status group (in-flight, proposed, done). RETIRED: --write — "bee backlog render --write" now owns the generated view; passing --write refuses, naming render.',
     parameters: {
       type: 'object',
       properties: {
@@ -1305,7 +1305,7 @@ export const COMMAND_REGISTRY = [
     name: 'backlog.propose',
     invoke: 'bee backlog propose',
     description:
-      'Submit a new product-backlog item (PBI) on demand — the human-facing front door onto "backlog pbi add", taking a story plus acceptance criteria with no id and no separate title. It appends one kind:\'pbi\' add event to the .bee/backlog.jsonl PBI fold with an auto-generated `p-<8hex>` id and Status=proposed; docs/backlog.md is the GENERATED view of that fold (backlog-unification D3), so run "bee backlog render --write" to refresh the table. The command stops at the proposal — it never auto-starts bee-qualifying/bee-exploring for the new item. --story is required, <=200 chars (stored as the PBI title); --cos (acceptance criteria) is required, <=2000 chars; --feature is optional and reports as "—" when omitted. Any validation rejection leaves the log untouched.',
+      'Submit a new product-backlog item (PBI) on demand — the human-facing front door onto "backlog pbi add", taking a story plus acceptance criteria with no id and no separate title. It appends one kind:\'pbi\' add event to the .bee/backlog.jsonl PBI fold with an auto-generated `p-<8hex>` id and Status=proposed; docs/backlog.md is the GENERATED view of that fold, so run "bee backlog render --write" to refresh the table. The command stops at the proposal — it never auto-starts bee-qualifying/bee-exploring for the new item. --story is required, <=200 chars (stored as the PBI title); --cos (acceptance criteria) is required, <=2000 chars; --feature is optional and reports as "—" when omitted. Any validation rejection leaves the log untouched.',
     parameters: {
       type: 'object',
       properties: {
@@ -1354,7 +1354,7 @@ export const COMMAND_REGISTRY = [
     name: 'backlog.pbi.status',
     invoke: 'bee backlog pbi status',
     description:
-      'Append a PBI "status" event, flipping --id to --to. --feature optionally stamps the feature slug in the same move (the exploring-D11a flip needs both at once). Refuses an unknown --id or an out-of-enum --to.',
+      'Append a PBI "status" event, flipping --id to --to. --feature optionally stamps the feature slug in the same move. Refuses an unknown --id or an out-of-enum --to.',
     parameters: {
       type: 'object',
       properties: {
@@ -1439,7 +1439,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'capture.add',
     invoke: 'bee capture add',
-    description: 'Append a capture-queue stub for a same-turn settlement (decision 0017); the full BA-grade spec merge happens later at flush. High-risk lane never queues.',
+    description: 'Append a capture-queue stub for a same-turn settlement; the full BA-grade spec merge happens later at flush. High-risk lane never queues.',
     parameters: {
       type: 'object',
       properties: {
@@ -1511,7 +1511,7 @@ export const COMMAND_REGISTRY = [
     name: 'intent.set',
     invoke: 'bee intent set',
     description:
-      "Write the intent anchor: the user's VERBATIM request plus what \"done\" means. Stored at .bee/intent/<key>.json, keyed by the active feature when one exists, else --session, else a shared default (D2 — work with no feature must still be anchorable). request/acceptance are immutable once set: re-setting the same request is idempotent, changing it refuses unless --force. Never paraphrase --request — verbatim IS the mechanism.",
+      "Write the intent anchor: the user's VERBATIM request plus what \"done\" means. Stored at .bee/intent/<key>.json, keyed by the active feature when one exists, else --session, else a shared default (work with no feature must still be anchorable). request/acceptance are immutable once set: re-setting the same request is idempotent, changing it refuses unless --force. Never paraphrase --request — verbatim IS the mechanism.",
     parameters: {
       type: 'object',
       properties: {
@@ -1538,7 +1538,7 @@ export const COMMAND_REGISTRY = [
     name: 'intent.show',
     invoke: 'bee intent show',
     description:
-      'Show the current intent anchor, or the rendered PreCompact/resume block for it. Emits nothing but a null/empty result when no anchor exists (D5 — a repo that never writes one behaves exactly as it did before).',
+      'Show the current intent anchor, or the rendered PreCompact/resume block for it. Emits nothing but a null/empty result when no anchor exists (a repo that never writes one behaves exactly as it did before).',
     parameters: {
       type: 'object',
       properties: {
@@ -1556,7 +1556,7 @@ export const COMMAND_REGISTRY = [
     name: 'intent.advance',
     invoke: 'bee intent advance',
     description:
-      'Move the anchor\'s next_action to the next step. Structurally cannot touch request or acceptance (D1) — the through-line is what survives, only the step advances. Refuses when no anchor exists.',
+      'Move the anchor\'s next_action to the next step. Structurally cannot touch request or acceptance — the through-line is what survives, only the step advances. Refuses when no anchor exists.',
     parameters: {
       type: 'object',
       properties: {
@@ -1602,7 +1602,7 @@ export const COMMAND_REGISTRY = [
     name: 'reviews.create',
     invoke: 'bee reviews create',
     description:
-      'Freeze a review scope (R5) into .bee/reviews/<id>.json. Runs the A10 verification-evidence preflight and A6 in-progress auto-exclusion BEFORE any write; fails closed with zero files written on missing evidence or an id that already exists (ids are never reused). Exactly one of --file / --stdin is required at call time (both satisfy the schema; the handler itself enforces the choice, same discipline as cells.add).',
+      'Freeze a review scope into .bee/reviews/<id>.json. Runs the verification-evidence preflight and in-progress auto-exclusion BEFORE any write; fails closed with zero files written on missing evidence or an id that already exists (ids are never reused). Exactly one of --file / --stdin is required at call time (both satisfy the schema; the handler itself enforces the choice, same discipline as cells.add).',
     parameters: {
       type: 'object',
       properties: {
@@ -1648,7 +1648,7 @@ export const COMMAND_REGISTRY = [
     name: 'reviews.record',
     invoke: 'bee reviews record',
     description:
-      'Set or append a sub-record on an existing session: manifest/preflight/decision SET the field, finding/uat APPEND one entry per call. Refuses any payload touching baseline/head/included/excluded — those are frozen at create (R5). Exactly one of --file / --stdin is required at call time (both satisfy the schema; the handler itself enforces the choice).',
+      'Set or append a sub-record on an existing session: manifest/preflight/decision SET the field, finding/uat APPEND one entry per call. Refuses any payload touching baseline/head/included/excluded — those are frozen at create. Exactly one of --file / --stdin is required at call time (both satisfy the schema; the handler itself enforces the choice).',
     parameters: {
       type: 'object',
       properties: {
@@ -1667,7 +1667,7 @@ export const COMMAND_REGISTRY = [
     name: 'reviews.candidate.add',
     invoke: 'bee reviews candidate add',
     description:
-      "Append one entry to .bee/review-candidates.jsonl for a closing feature. --mode is required and must be the closing feature's lane. When --cells is omitted, it auto-fills from the feature's capped cells so review coverage can match the candidate (GitHub #16).",
+      "Append one entry to .bee/review-candidates.jsonl for a closing feature. --mode is required and must be the closing feature's lane. When --cells is omitted, it auto-fills from the feature's capped cells so review coverage can match the candidate.",
     parameters: {
       type: 'object',
       properties: {
@@ -1701,7 +1701,7 @@ export const COMMAND_REGISTRY = [
     name: 'reviews.status',
     invoke: 'bee reviews status',
     description:
-      'Derived coverage summary (R10 — status is never stored): verified count plus the four coverage labels unreviewed/in review/reviewed/review stale, one line per candidate. A candidate reviewed by an unchanged approved session reports "reviewed (covered by <review-id>)" (A7).',
+      'Derived coverage summary (status is never stored): verified count plus the four coverage labels unreviewed/in review/reviewed/review stale, one line per candidate. A candidate reviewed by an unchanged approved session reports "reviewed (covered by <review-id>)".',
     parameters: {
       type: 'object',
       properties: {
@@ -1720,7 +1720,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'feedback.digest',
     invoke: 'bee feedback digest',
-    description: 'Build the allowlist feedback digest (P18) and write it to disk (default .bee/feedback-digest.json).',
+    description: 'Build the allowlist feedback digest and write it to disk (default .bee/feedback-digest.json).',
     parameters: {
       type: 'object',
       properties: {
@@ -1750,7 +1750,7 @@ export const COMMAND_REGISTRY = [
     name: 'feedback.collect',
     invoke: 'bee feedback collect',
     description:
-      "Merge the local digest with every configured dogfood repo's already-written digest (D2b — the consumer revalidates every foreign entry). With no dogfood_repos configured, returns the local digest only.",
+      "Merge the local digest with every configured dogfood repo's already-written digest (the consumer revalidates every foreign entry). With no dogfood_repos configured, returns the local digest only.",
     parameters: {
       type: 'object',
       properties: {
@@ -1785,12 +1785,12 @@ export const COMMAND_REGISTRY = [
     name: 'knowledge.check',
     invoke: 'bee knowledge check',
     description:
-      'Validate the docs/knowledge/ OKF v0.1 bundle. The walk never leaves docs/knowledge/ (D23); a missing or empty bundle is OK. Two levels (D4) — OKF errors: missing/unparseable frontmatter on a non-reserved .md, empty/absent type, frontmatter in a non-root index.md, a root index.md carrying any key but okf_version, a log.md date heading that is not ISO 8601. Profile warnings: type outside the nine D18 types, missing profile-required field, dangling required_context/supersedes target, duplicate bee.id, duplicate bee.authoritative_for, and a parse→re-emit byte mismatch (not_canonical — the round-trip guard against silent misparse). Exits non-zero only on OKF errors, or on any finding under --strict (D13).',
+      'Validate the docs/knowledge/ OKF v0.1 bundle. The walk never leaves docs/knowledge/; a missing or empty bundle is OK. Two levels — OKF errors: missing/unparseable frontmatter on a non-reserved .md, empty/absent type, frontmatter in a non-root index.md, a root index.md carrying any key but okf_version, a log.md date heading that is not ISO 8601. Profile warnings: type outside the nine profile types, missing profile-required field, dangling required_context/supersedes target, duplicate bee.id, duplicate bee.authoritative_for, and a parse→re-emit byte mismatch (not_canonical — the round-trip guard against silent misparse). Exits non-zero only on OKF errors, or on any finding under --strict.',
     parameters: {
       type: 'object',
       properties: {
-        strict: { type: 'boolean', description: 'Promote profile warnings to errors: any finding at all exits non-zero (D4).' },
-        json: { type: 'boolean', description: 'Emit machine-readable JSON ({okf:{errors},profile:{warnings},counts}) instead of one line per finding (D13).' },
+        strict: { type: 'boolean', description: 'Promote profile warnings to errors: any finding at all exits non-zero.' },
+        json: { type: 'boolean', description: 'Emit machine-readable JSON ({okf:{errors},profile:{warnings},counts}) instead of one line per finding.' },
       },
       required: [],
     },
@@ -1801,11 +1801,11 @@ export const COMMAND_REGISTRY = [
     name: 'knowledge.index',
     invoke: 'bee knowledge index',
     description:
-      'Generate the docs/knowledge/ index.md set (D21): one index per directory level whose subtree contains at least one concept, plus the root index.md — the sole carrier of okf_version frontmatter (OKF §9/D4); every generated index opens with an HTML-comment provenance header, and the root additionally carries a "## Critical patterns" section over every bee.critical: true concept. Byte-identical for identical bundle contents: path-sorted entries, LF endings, never a timestamp or any other wall-clock value. With --check, re-renders in memory and byte-compares against disk without writing: any drift (a stale or missing index) exits non-zero naming the file — the same freshness idiom as `bee decisions render --check`.',
+      'Generate the docs/knowledge/ index.md set: one index per directory level whose subtree contains at least one concept, plus the root index.md — the sole carrier of okf_version frontmatter (OKF §9); every generated index opens with an HTML-comment provenance header, and the root additionally carries a "## Critical patterns" section over every bee.critical: true concept. Byte-identical for identical bundle contents: path-sorted entries, LF endings, never a timestamp or any other wall-clock value. With --check, re-renders in memory and byte-compares against disk without writing: any drift (a stale or missing index) exits non-zero naming the file — the same freshness idiom as `bee decisions render --check`.',
     parameters: {
       type: 'object',
       properties: {
-        check: { type: 'boolean', description: 'Read-only freshness check: exit non-zero naming each stale index instead of writing (D21/D4 stale-generated-index).' },
+        check: { type: 'boolean', description: 'Read-only freshness check: exit non-zero naming each stale index instead of writing.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON ({written,count} or, with --check, {checked,stale,drift}) instead of a one-line summary.' },
       },
       required: [],
@@ -1817,12 +1817,12 @@ export const COMMAND_REGISTRY = [
     name: 'knowledge.list',
     invoke: 'bee knowledge list',
     description:
-      'List the bundle\'s concepts (D15): one row per concept — path, bee.id, type, bee.lifecycle, title — path-sorted, never file content. Filters are exact matches: --type on the concept type, --lifecycle on bee.lifecycle, --area on membership in bee.areas. A concept with missing or unparseable frontmatter still rows (null fields) — hiding files is not this verb\'s job; grading them is `knowledge check`\'s (D4).',
+      'List the bundle\'s concepts: one row per concept — path, bee.id, type, bee.lifecycle, title — path-sorted, never file content. Filters are exact matches: --type on the concept type, --lifecycle on bee.lifecycle, --area on membership in bee.areas. A concept with missing or unparseable frontmatter still rows (null fields) — hiding files is not this verb\'s job; grading them is `knowledge check`\'s.',
     parameters: {
       type: 'object',
       properties: {
-        type: { type: 'string', description: 'Keep only concepts whose type equals this value (e.g. bee.pattern — D18 vocabulary).' },
-        lifecycle: { type: 'string', description: 'Keep only concepts whose bee.lifecycle equals this value (draft|active|superseded|archived — D19).' },
+        type: { type: 'string', description: 'Keep only concepts whose type equals this value (e.g. bee.pattern).' },
+        lifecycle: { type: 'string', description: 'Keep only concepts whose bee.lifecycle equals this value (draft|active|superseded|archived).' },
         area: { type: 'string', description: 'Keep only concepts whose bee.areas array contains this value.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON ({concepts,count}) instead of one row per line.' },
       },
@@ -1835,13 +1835,13 @@ export const COMMAND_REGISTRY = [
     name: 'knowledge.context',
     invoke: 'bee knowledge context',
     description:
-      'Assemble the budget-aware context manifest for a work item (D27). Resolves --work <id> to the bee.work-item concept whose bee.id matches, then ranks: (1) the work item, (2) its bee.plan sibling in the same work/<id>/ directory, (3) bee.required_context walked TRANSITIVELY in BFS depth order — an already selected path is skipped silently, so a cycle is deduped and never an error, and a dangling or out-of-bundle link is tolerated (OKF §5; grading it is `knowledge check`\'s job), (4) the bee.critical: true concepts RANKED BY RELEVANCE to the work item and cut to the pinned keep (G5), (5) every bee.decision concept whose bee.areas overlaps the work item\'s. The ranked list is then cut at --budget <tokens>: the first entry that would overshoot ends the manifest, and it plus every lower-ranked entry is named in `truncated`. Relevance is the IDF-weighted fraction of a concept\'s own distinctive vocabulary that the work item\'s text covers, over title/description/tags and body, plus a small tag/area bonus — chosen by measurement over the live bundle (AUC 0.805 against hand labels; tag overlap alone scored 0.550 and left 48 of 49 patterns tied at zero, so it is disqualified as the signal). The top few criticals are a FLOOR whose cost is reserved out of the budget left after rank 1, so a universal lesson is never evicted by a long required_context chain and the work item is never displaced by its own floor; --budget remains a hard ceiling. Nothing is dropped silently (G11): every critical is accounted for exactly once across `entries` (whose reason names its score and rank), `truncated`, and `excluded` ({path, score, reason}), with `critical_total` stating the population. `zero_signal_count` is always reported, and a real population that is mostly zero FAILS with a typed zero_signal error — a ranking where most items tie at zero is a path sort wearing a relevance label. Ties break by path, so two runs are byte-identical. Sizes are estimated as bytes/4 and the output NAMES that estimator — bee vendors no tokenizer. The output is an ordered MANIFEST — per entry: repo-relative path, bytes, est_tokens, and a one-line inclusion reason — and NEVER file content; the agent decides what to read. `decisions` in the header is informational: the work item\'s own bee.decisions list, read from its frontmatter, never from a .bee/ store. An unresolvable --work id exits 1 with a typed unknown_work error.',
+      'Assemble the budget-aware context manifest for a work item. Resolves --work <id> to the bee.work-item concept whose bee.id matches, then ranks: (1) the work item, (2) its bee.plan sibling in the same work/<id>/ directory, (3) bee.required_context walked TRANSITIVELY in BFS depth order — an already selected path is skipped silently, so a cycle is deduped and never an error, and a dangling or out-of-bundle link is tolerated (OKF §5; grading it is `knowledge check`\'s job), (4) the bee.critical: true concepts RANKED BY RELEVANCE to the work item and cut to the pinned keep, (5) every bee.decision concept whose bee.areas overlaps the work item\'s. The ranked list is then cut at --budget <tokens>: the first entry that would overshoot ends the manifest, and it plus every lower-ranked entry is named in `truncated`. Relevance is the IDF-weighted fraction of a concept\'s own distinctive vocabulary that the work item\'s text covers, over title/description/tags and body, plus a small tag/area bonus — chosen by measurement over the live bundle (AUC 0.805 against hand labels; tag overlap alone scored 0.550 and left 48 of 49 patterns tied at zero, so it is disqualified as the signal). The top few criticals are a FLOOR whose cost is reserved out of the budget left after rank 1, so a universal lesson is never evicted by a long required_context chain and the work item is never displaced by its own floor; --budget remains a hard ceiling. Nothing is dropped silently: every critical is accounted for exactly once across `entries` (whose reason names its score and rank), `truncated`, and `excluded` ({path, score, reason}), with `critical_total` stating the population. `zero_signal_count` is always reported, and a real population that is mostly zero FAILS with a typed zero_signal error — a ranking where most items tie at zero is a path sort wearing a relevance label. Ties break by path, so two runs are byte-identical. Sizes are estimated as bytes/4 and the output NAMES that estimator — bee vendors no tokenizer. The output is an ordered MANIFEST — per entry: repo-relative path, bytes, est_tokens, and a one-line inclusion reason — and NEVER file content; the agent decides what to read. `decisions` in the header is informational: the work item\'s own bee.decisions list, read from its frontmatter, never from a .bee/ store. An unresolvable --work id exits 1 with a typed unknown_work error.',
     parameters: {
       type: 'object',
       properties: {
-        work: { type: 'string', description: 'The work item to assemble context for — matched against bee.id on a bee.work-item concept (D32: the id is identity).' },
-        budget: { type: 'number', description: 'Context budget in estimated tokens; sizes are bytes/4 (D27/D12 — no tokenizer dependency). Explicit --budget always wins over --lane when both are given.' },
-        lane: { type: 'string', enum: ['tiny', 'small', 'standard', 'high-risk'], description: 'i54-closeout D3: shorthand mapping to a lane-scaled budget preset (tiny 8000 / small 12000 / standard 20000 / high-risk 30000), resolved into --budget before this call reaches validate() — only when --budget is omitted. Omitting both --budget and --lane behaves exactly as before this option existed (required, missing).' },
+        work: { type: 'string', description: 'The work item to assemble context for — matched against bee.id on a bee.work-item concept (the id is identity).' },
+        budget: { type: 'number', description: 'Context budget in estimated tokens; sizes are bytes/4 (no tokenizer dependency). Explicit --budget always wins over --lane when both are given.' },
+        lane: { type: 'string', enum: ['tiny', 'small', 'standard', 'high-risk'], description: 'Shorthand mapping to a lane-scaled budget preset (tiny 8000 / small 12000 / standard 20000 / high-risk 30000), resolved into --budget before this call reaches validate() — only when --budget is omitted. Omitting both --budget and --lane behaves exactly as before this option existed (required, missing).' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON ({work,decisions,budget,estimator,total_est,entries,truncated,excluded,floor,critical_total,zero_signal_count}) instead of the human table.' },
       },
       required: ['work', 'budget'],
@@ -1856,11 +1856,11 @@ export const COMMAND_REGISTRY = [
     name: 'knowledge.promote',
     invoke: 'bee knowledge promote',
     description:
-      'Propose the knowledge a finished work item earned — and never write it (D38/D2). Resolves --work <id> to its bee.work-item concept, then READS the capped cell traces of that feature from .bee/cells/*.json (a read of the runtime store, which the bundle may perform; it is never a write path into one) and returns three PROPOSALS: (a) a DELIVERY DRAFT — a complete bee.delivery concept in canonical emitter form, ready to be saved as the work item\'s delivery.md sibling, carrying what shipped (each cell\'s recorded outcome), how it was verified (each cell\'s recorded verify command and evidence) and every recorded deviation; (b) AREA UPDATES — for each area named in the work item\'s bee.areas, the capped behavior_change cells whose files_changed touch that area\'s subject, as candidate spec-sync bullets each citing its cell id; (c) PATTERN CANDIDATES — every capped cell whose trace carries a deviation or a failure signature, shaped as a candidate bee.pattern concept with bee.polarity pitfall and bee.lifecycle draft, quoting the trace verbatim. Every proposed line traces to a cell trace or to the work item — nothing is invented (D10). promote proposes and never writes — not into docs/knowledge/, not into .bee/*.json(l), not anywhere: `writes` in the --json payload is always []; applying a proposal is a human or agent decision. An unresolvable --work id exits 1 with a typed unknown_work error.',
+      'Propose the knowledge a finished work item earned — and never write it. Resolves --work <id> to its bee.work-item concept, then READS the capped cell traces of that feature from .bee/cells/*.json (a read of the runtime store, which the bundle may perform; it is never a write path into one) and returns three PROPOSALS: (a) a DELIVERY DRAFT — a complete bee.delivery concept in canonical emitter form, ready to be saved as the work item\'s delivery.md sibling, carrying what shipped (each cell\'s recorded outcome), how it was verified (each cell\'s recorded verify command and evidence) and every recorded deviation; (b) AREA UPDATES — for each area named in the work item\'s bee.areas, the capped behavior_change cells whose files_changed touch that area\'s subject, as candidate spec-sync bullets each citing its cell id; (c) PATTERN CANDIDATES — every capped cell whose trace carries a deviation or a failure signature, shaped as a candidate bee.pattern concept with bee.polarity pitfall and bee.lifecycle draft, quoting the trace verbatim. Every proposed line traces to a cell trace or to the work item — nothing is invented. promote proposes and never writes — not into docs/knowledge/, not into .bee/*.json(l), not anywhere: `writes` in the --json payload is always []; applying a proposal is a human or agent decision. An unresolvable --work id exits 1 with a typed unknown_work error.',
     parameters: {
       type: 'object',
       properties: {
-        work: { type: 'string', description: 'The work item to propose knowledge for — matched against bee.id on a bee.work-item concept (D32: the id is identity).' },
+        work: { type: 'string', description: 'The work item to propose knowledge for — matched against bee.id on a bee.work-item concept (the id is identity).' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON ({work,work_item,cells,delivery,area_updates,pattern_candidates,writes}) instead of the human proposal document.' },
       },
       required: ['work'],
@@ -2016,7 +2016,7 @@ export const COMMAND_REGISTRY = [
     name: 'worktree.new',
     invoke: 'bee worktree new',
     description:
-      "Create AND register a fresh linked git worktree for an independent feature in ONE move (GH #21): runs `git worktree add ../<repo-basename>--wt--<feature> -b wt/<feature> [resolved baseRef sha]`, then grants and bootstraps it exactly as `worktree register` does (copies onboarding.json/config.json from the main store if present, writes a FRESH state.json — phase idle, every gate unapproved, feature set). Must be run from the MAIN checkout (an ordinary, non-worktree directory), never from inside another linked worktree. Typed, zero-mutation refusal when the feature slug is invalid, --base-ref does not resolve to a commit, the target sibling path or branch already exists, or a grant already exists for the derived id; `git worktree add` failing at runtime is caught and re-surfaced typed too, and a failure AFTER the worktree was created rolls back best-effort. With `--with-companion` (worktree-companion-hook), also runs the project-configured `commands.worktree_companion_start` and symlinks its result into the new worktree at `commands.worktree_companion_mount` — for a nested repo (its own `.git`, gitignored by this one) a bare worktree can't otherwise isolate; bee never assumes what the companion tool is, only that its start command prints JSON `{worktreePath, sessionId?}`. A companion-start failure rolls the whole worktree back, same as any other post-creation failure.",
+      "Create AND register a fresh linked git worktree for an independent feature in ONE move: runs `git worktree add ../<repo-basename>--wt--<feature> -b wt/<feature> [resolved baseRef sha]`, then grants and bootstraps it exactly as `worktree register` does (copies onboarding.json/config.json from the main store if present, writes a FRESH state.json — phase idle, every gate unapproved, feature set). Must be run from the MAIN checkout (an ordinary, non-worktree directory), never from inside another linked worktree. Typed, zero-mutation refusal when the feature slug is invalid, --base-ref does not resolve to a commit, the target sibling path or branch already exists, or a grant already exists for the derived id; `git worktree add` failing at runtime is caught and re-surfaced typed too, and a failure AFTER the worktree was created rolls back best-effort. With `--with-companion`, also runs the project-configured `commands.worktree_companion_start` and symlinks its result into the new worktree at `commands.worktree_companion_mount` — for a nested repo (its own `.git`, gitignored by this one) a bare worktree can't otherwise isolate; bee never assumes what the companion tool is, only that its start command prints JSON `{worktreePath, sessionId?}`. A companion-start failure rolls the whole worktree back, same as any other post-creation failure.",
     parameters: {
       type: 'object',
       properties: {
@@ -2034,7 +2034,7 @@ export const COMMAND_REGISTRY = [
     name: 'worktree.merge',
     invoke: 'bee worktree merge',
     description:
-      "Merge a granted worktree's branch back into the MAIN checkout (GH #21, decision D8) — `git merge --no-ff <branch>` run from MAIN, then the host project's configured commands.verify (if recorded) run against the merged tree. A textually-clean merge whose verify goes RED is the semantic-conflict alarm: behavior broke even though git found no conflict; the merge commit is NEVER rolled back. Must be run from the MAIN checkout (an ordinary, non-worktree directory) — running it from inside ANY linked worktree, including the one being merged, is refused (a worktree cannot merge itself). Typed, zero-mutation refusal when the id is unknown/ungranted, the MAIN or WORKTREE tree is dirty (a bootstrapped gitignored .bee store alone does not count as dirty), or the worktree is on a detached HEAD or a branch other than its expected `wt/<slug>`-style branch. With `--cleanup` and a green verify, cleanup runs unconditionally: `git worktree remove --force` (safe only because freshness was re-checked immediately before), `git branch -d` (never -D), then removeGrant — the same unregister D8 names as part of cleanup, so a merged-and-cleaned-up id never lingers in `bee worktree list`. A repo with no commands.verify recorded (verify:'skipped') is ALSO cleanup-eligible, but the result always carries a loud warning that nothing was semantically gated. Without `--cleanup` the result only suggests the cleanup command; cleanup never runs when the merge itself came back MERGE_CONFLICT or MERGE_VERIFY_RED, even with --cleanup passed. No flag needed for worktree-companion-hook teardown: if the worktree was created `--with-companion`, its marker alone is enough — commands.worktree_companion_end runs and the mounted symlink is removed BEFORE the dirty-tree check, regardless of --cleanup or how the merge itself resolves (an untracked companion symlink would otherwise read as a dirty worktree on every attempt). Queue-aware (multisession-native-22, D8 stage 5): every invocation enqueues through the shared integration queue (`controlRoot/.bee/runtime/integration/queue/`) and becomes the processor the instant the lease is free — an empty queue resolves immediately with byte-identical output to before this cell. A second concurrent merge against the same MAIN checkout waits its turn (bounded by --queue-wait-ms, default 180000) instead of racing the old dirty-tree refusal; on timeout the result is `ok:false, code:'INTEGRATION_QUEUE_TIMEOUT'` and the text unambiguously says the merge did NOT run, with the request's queue position — never a shape readable as success.",
+      "Merge a granted worktree's branch back into the MAIN checkout — `git merge --no-ff <branch>` run from MAIN, then the host project's configured commands.verify (if recorded) run against the merged tree. A textually-clean merge whose verify goes RED is the semantic-conflict alarm: behavior broke even though git found no conflict; the merge commit is NEVER rolled back. Must be run from the MAIN checkout (an ordinary, non-worktree directory) — running it from inside ANY linked worktree, including the one being merged, is refused (a worktree cannot merge itself). Typed, zero-mutation refusal when the id is unknown/ungranted, the MAIN or WORKTREE tree is dirty (a bootstrapped gitignored .bee store alone does not count as dirty), or the worktree is on a detached HEAD or a branch other than its expected `wt/<slug>`-style branch. With `--cleanup` and a green verify, cleanup runs unconditionally: `git worktree remove --force` (safe only because freshness was re-checked immediately before), `git branch -d` (never -D), then removeGrant — so a merged-and-cleaned-up id never lingers in `bee worktree list`. A repo with no commands.verify recorded (verify:'skipped') is ALSO cleanup-eligible, but the result always carries a loud warning that nothing was semantically gated. Without `--cleanup` the result only suggests the cleanup command; cleanup never runs when the merge itself came back MERGE_CONFLICT or MERGE_VERIFY_RED, even with --cleanup passed. No flag needed for companion teardown: if the worktree was created `--with-companion`, its marker alone is enough — commands.worktree_companion_end runs and the mounted symlink is removed BEFORE the dirty-tree check, regardless of --cleanup or how the merge itself resolves (an untracked companion symlink would otherwise read as a dirty worktree on every attempt). Queue-aware: every invocation enqueues through the shared integration queue (`controlRoot/.bee/runtime/integration/queue/`) and becomes the processor the instant the lease is free — an empty queue resolves immediately with the same output as an uncontended merge. A second concurrent merge against the same MAIN checkout waits its turn (bounded by --queue-wait-ms, default 180000) instead of racing the old dirty-tree refusal; on timeout the result is `ok:false, code:'INTEGRATION_QUEUE_TIMEOUT'` and the text unambiguously says the merge did NOT run, with the request's queue position — never a shape readable as success.",
     parameters: {
       type: 'object',
       properties: {
@@ -2065,7 +2065,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'worktree.unregister',
     invoke: 'bee worktree unregister',
-    description: "Remove a worktree's grant from the MAIN store's registry, so the resolver falls back to the main store (P40 default) for that id. Defaults to the CURRENT linked worktree's own id when --id is omitted.",
+    description: "Remove a worktree's grant from the MAIN store's registry, so the resolver falls back to the main store for that id. Defaults to the CURRENT linked worktree's own id when --id is omitted.",
     parameters: {
       type: 'object',
       properties: {
@@ -2097,7 +2097,7 @@ export const COMMAND_REGISTRY = [
     name: 'herding.enable',
     invoke: 'bee herding enable',
     description:
-      "Create the bee-herding dispatch loop's owner enable marker (<main-root>/.bee/tmp/bee-herding.enable) — the SAME marker `.claude/skills/bee-herding/scripts/dispatch-interlock.mjs` reads before dispatch may build any dispatchable set. The main checkout root is resolved via `git rev-parse --git-common-dir`, identically to dispatch-interlock.mjs. Idempotent: running this on an already-enabled marker is not an error. Human-only convenience (D4) — never call this from dispatch-interlock.mjs, bootstrap, dispatch, merge, or any other bee automation/skill/agent code.",
+      "Create the bee-herding dispatch loop's owner enable marker (<main-root>/.bee/tmp/bee-herding.enable) — the SAME marker `.claude/skills/bee-herding/scripts/dispatch-interlock.mjs` reads before dispatch may build any dispatchable set. The main checkout root is resolved via `git rev-parse --git-common-dir`, identically to dispatch-interlock.mjs. Idempotent: running this on an already-enabled marker is not an error. Human-only convenience — never call this from dispatch-interlock.mjs, bootstrap, dispatch, merge, or any other bee automation/skill/agent code.",
     parameters: {
       type: 'object',
       properties: {
@@ -2112,7 +2112,7 @@ export const COMMAND_REGISTRY = [
     name: 'herding.disable',
     invoke: 'bee herding disable',
     description:
-      "Remove the bee-herding dispatch loop's owner enable marker (<main-root>/.bee/tmp/bee-herding.enable), so `.claude/skills/bee-herding/scripts/dispatch-interlock.mjs` refuses to let dispatch build a dispatchable set again. Idempotent: running this on an already-absent marker is not an error. Human-only convenience (D4) — never call this from dispatch-interlock.mjs, bootstrap, dispatch, merge, or any other bee automation/skill/agent code.",
+      "Remove the bee-herding dispatch loop's owner enable marker (<main-root>/.bee/tmp/bee-herding.enable), so `.claude/skills/bee-herding/scripts/dispatch-interlock.mjs` refuses to let dispatch build a dispatchable set again. Idempotent: running this on an already-absent marker is not an error. Human-only convenience — never call this from dispatch-interlock.mjs, bootstrap, dispatch, merge, or any other bee automation/skill/agent code.",
     parameters: {
       type: 'object',
       properties: {
@@ -2194,7 +2194,7 @@ export const COMMAND_REGISTRY = [
         key: { type: 'string', description: 'Config key, dot-notation for nested (e.g. product_root, guards.idle_gate).' },
         value: { type: 'string', description: 'The value; parsed as JSON when possible (false -> boolean), else a string.' },
         string: { type: 'boolean', description: 'Force the value to be stored as a string (skip JSON coercion).' },
-        local: { type: 'boolean', description: 'Write to the machine-local overlay file (.bee/config.local.json) instead of the tracked config.json. guards.*/hooks.* keys are ALWAYS forced local regardless of this flag (D2, incident a7d2069).' },
+        local: { type: 'boolean', description: 'Write to the machine-local overlay file (.bee/config.local.json) instead of the tracked config.json. guards.*/hooks.* keys are ALWAYS forced local regardless of this flag.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: ['key', 'value'],
@@ -2210,7 +2210,7 @@ export const COMMAND_REGISTRY = [
       type: 'object',
       properties: {
         key: { type: 'string', description: 'Config key to remove, dot-notation for nested.' },
-        local: { type: 'boolean', description: 'Remove from the machine-local overlay file (.bee/config.local.json) instead of the tracked config.json. guards.*/hooks.* keys are ALWAYS forced local regardless of this flag (D2, same as config set).' },
+        local: { type: 'boolean', description: 'Remove from the machine-local overlay file (.bee/config.local.json) instead of the tracked config.json. guards.*/hooks.* keys are ALWAYS forced local regardless of this flag (same as config set).' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
       },
       required: ['key'],
@@ -2245,7 +2245,7 @@ export const COMMAND_REGISTRY = [
     name: 'recovery.scan',
     invoke: 'bee recovery scan',
     description:
-      'Detect recoverable crash candidates (D1): sessions whose heartbeat is stale, whose transcript exists and lacks the clean-end trio, and that show a work signal (bound lane in a non-terminal phase, an active claimed cell, or transcript activity newer than the last durable settlement). Cheap and side-effect-free — never triggers mining (D2).',
+      'Detect recoverable crash candidates: sessions whose heartbeat is stale, whose transcript exists and lacks the clean-end trio, and that show a work signal (bound lane in a non-terminal phase, an active claimed cell, or transcript activity newer than the last durable settlement). Cheap and side-effect-free — never triggers mining.',
     parameters: {
       type: 'object',
       properties: {
@@ -2260,7 +2260,7 @@ export const COMMAND_REGISTRY = [
     name: 'recovery.window',
     invoke: 'bee recovery window',
     description:
-      "For one crash-candidate session id, re-derive the bounded mining window (D3) and the down-tier miner prompt (D4): resolves the session's transcript, computes the window start from the last durable settlement (lane-scoped, global fallback, or the session's own started_at when nothing settled), applies the hard event cap, and returns {transcript, since_ts, event_count, window_truncated, prompt}. Never calls an LLM itself — the orchestrator dispatches the returned prompt to a down-tier worker.",
+      "For one crash-candidate session id, re-derive the bounded mining window and the down-tier miner prompt: resolves the session's transcript, computes the window start from the last durable settlement (lane-scoped, global fallback, or the session's own started_at when nothing settled), applies the hard event cap, and returns {transcript, since_ts, event_count, window_truncated, prompt}. Never calls an LLM itself — the orchestrator dispatches the returned prompt to a down-tier worker.",
     parameters: {
       type: 'object',
       properties: {
@@ -2288,14 +2288,14 @@ export const COMMAND_REGISTRY = [
     name: 'dispatch.prepare',
     invoke: 'bee dispatch prepare',
     description:
-      'Build a bee-owned dispatch payload (Agent tool / spawn_agent / an external cli executor) for the given runtime and purpose, plus an economics record (logical_tier, requested_model, channel, enforcement). kind "cell" resolves the generation tier for cell execution and requires --cell (loaded for prompt context) and --worker (checked against the cell\'s own status/claim owner — hardening-7); kinds "gather"/"reviewer" resolve read-only gather-shaped tiers (generation/review respectively); kind "advisor" resolves the configured advisor slot, never a bare tier. A cli-shaped resolution for kind "cell" is returned as a typed refusal ({ok:false, reason:"cli_tier_gather_only", ...}) — prepare never routes around it. For kind "cell", an unclaimed or foreign-claimed cell is refused as {ok:false, type:"refused", reason:"claim_ownership", code, status, owner, fix} naming the actual status/owner — --force-ownership overrides it and appends an audited ownership_override entry to the prepare-time dispatch record. A cli-shaped resolution for gather/reviewer/advisor builds an external-executor Bash payload instead of an Agent/spawn_agent one.',
+      'Build a bee-owned dispatch payload (Agent tool / spawn_agent / an external cli executor) for the given runtime and purpose, plus an economics record (logical_tier, requested_model, channel, enforcement). kind "cell" resolves the generation tier for cell execution and requires --cell (loaded for prompt context) and --worker (checked against the cell\'s own status/claim owner); kinds "gather"/"reviewer" resolve read-only gather-shaped tiers (generation/review respectively); kind "advisor" resolves the configured advisor slot, never a bare tier. A cli-shaped resolution for kind "cell" is returned as a typed refusal ({ok:false, reason:"cli_tier_gather_only", ...}) — prepare never routes around it. For kind "cell", an unclaimed or foreign-claimed cell is refused as {ok:false, type:"refused", reason:"claim_ownership", code, status, owner, fix} naming the actual status/owner — --force-ownership overrides it and appends an audited ownership_override entry to the prepare-time dispatch record. A cli-shaped resolution for gather/reviewer/advisor builds an external-executor Bash payload instead of an Agent/spawn_agent one.',
     parameters: {
       type: 'object',
       properties: {
         runtime: { type: 'string', description: 'Target runtime the payload is shaped for.', enum: ['codex', 'claude'] },
         kind: { type: 'string', description: 'Dispatch purpose.', enum: ['cell', 'gather', 'reviewer', 'advisor'] },
         cell: { type: 'string', description: 'Cell id — required when --kind cell; loaded for prompt context.' },
-        worker: { type: 'string', description: 'Requesting worker identity — required when --kind cell; checked against the cell\'s status/trace.worker (claim-ownership guard, hardening-7).' },
+        worker: { type: 'string', description: 'Requesting worker identity — required when --kind cell; checked against the cell\'s status/trace.worker (claim-ownership guard).' },
         'force-ownership': { type: 'boolean', description: 'Override a claim-ownership refusal for --kind cell (audited into the prepare-time dispatch record). Ignored for every other kind.' },
         json: { type: 'boolean', description: 'Emit machine-readable JSON instead of pretty-printed JSON (prepare always prints JSON; flag kept for surface consistency).' },
       },
@@ -2309,7 +2309,7 @@ export const COMMAND_REGISTRY = [
     name: 'doctor',
     invoke: 'bee doctor',
     description:
-      'Fail-closed runtime health report, a THREE-state verdict (g22-3, D4): overall_status is "blocked" when any mechanical row (hooks-file presence, capability-baseline byte match, hook-handler resolvability, skills-installed) is not ok; "degraded" when every mechanical row is ok but codex\'s hook-discovery/trust/project-trust/pending-review rows are still structurally unknown (capability matrix row F1) and no valid attestation covers them; "ready" only with mechanical rows all ok AND, on codex, a currently-valid attestation (see "doctor attest") — claude has no trust-unknown rows, so mechanical green alone reaches ready there, no attestation required. Trust-row wording is version-scoped (D6): a live codex --version other than the probed one reports "unprobed_version" instead of asserting the probed conclusions. Never "ready" from file presence alone. Performs zero writes anywhere, including the dispatcher\'s own pre-routing manifest-hash cache.',
+      'Fail-closed runtime health report, a THREE-state verdict: overall_status is "blocked" when any mechanical row (hooks-file presence, capability-baseline byte match, hook-handler resolvability, skills-installed) is not ok; "degraded" when every mechanical row is ok but codex\'s hook-discovery/trust/project-trust/pending-review rows are still structurally unknown (per the capability matrix) and no valid attestation covers them; "ready" only with mechanical rows all ok AND, on codex, a currently-valid attestation (see "doctor attest") — claude has no trust-unknown rows, so mechanical green alone reaches ready there, no attestation required. Trust-row wording is version-scoped: a live codex --version other than the probed one reports "unprobed_version" instead of asserting the probed conclusions. Never "ready" from file presence alone. Performs zero writes anywhere, including the dispatcher\'s own pre-routing manifest-hash cache.',
     parameters: {
       type: 'object',
       properties: {
@@ -2325,7 +2325,7 @@ export const COMMAND_REGISTRY = [
     name: 'doctor.attest',
     invoke: 'bee doctor attest',
     description:
-      'Record a static attestation (g22-3, D5-REVISED) that codex trust state was reviewed via the interactive /hooks TUI for THIS exact pairing of .codex/hooks.json content, codex --version, and repo identity. Written to the gitignored .bee/doctor-attest.json (never tracked state). "bee doctor --runtime codex" treats the attestation as valid only while all three legs still match the live state; any single drifted leg makes it inert and doctor reports "degraded" naming the stale reason (hash_changed / version_changed / identity_changed / no_attestation). --runtime codex only — claude has no trust-unknown rows to attest. No liveness leg exists: codex exposes no hook-fire event surface to observe, so this is a static record, not a health probe.',
+      'Record a static attestation that codex trust state was reviewed via the interactive /hooks TUI for THIS exact pairing of .codex/hooks.json content, codex --version, and repo identity. Written to the gitignored .bee/doctor-attest.json (never tracked state). "bee doctor --runtime codex" treats the attestation as valid only while all three legs still match the live state; any single drifted leg makes it inert and doctor reports "degraded" naming the stale reason (hash_changed / version_changed / identity_changed / no_attestation). --runtime codex only — claude has no trust-unknown rows to attest. No liveness leg exists: codex exposes no hook-fire event surface to observe, so this is a static record, not a health probe.',
     parameters: {
       type: 'object',
       properties: {

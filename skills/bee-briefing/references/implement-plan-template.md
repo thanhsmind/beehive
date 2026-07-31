@@ -1,6 +1,6 @@
 # Implement-Plan Reference
 
-Load after `bee-briefing` is selected. The workflow and the section→source map live in SKILL.md; the full template and the writing guide live here. Lineage: Google Antigravity's Implementation Plan artifact (`docs/sample-implement-plan.md`), bee-ified — present tense, projection-ruled, D-ID-cited, drop-empty, no fabricated validation.
+Load after `bee-briefing` is selected. The workflow and the section→source map live in SKILL.md; the full template and the writing guide live here. The template is present tense, projection-ruled, D-ID-cited, drop-empty, with no fabricated validation.
 
 Path: `docs/history/<feature>/implement-plan.md`. One file per feature, chosen at first render, updated in place forever. Never `-v2`/`-new`/dated.
 
@@ -117,8 +117,6 @@ If none: "No blocking open questions. Ready for review.">
 
 ## Writing guide (bee-specific; deduped against what the chain already enforces)
 
-Carried from Antigravity's agent guide, minus what bee enforces elsewhere:
-
 1. **Consolidate, do not originate.** Render from the truth artifacts; author only Technical Design and Rollback. Anything you cannot source is an Open Question.
 2. **Only real references.** Name only files/APIs/tables that exist or are marked "to be created" in a cell. No invented paths.
 3. **Separate facts from assumptions.** No plausibility language ("should work"). A guess is labeled a guess and lives in Open Questions.
@@ -126,7 +124,7 @@ Carried from Antigravity's agent guide, minus what bee enforces elsewhere:
 5. **Never claim validation ran** unless cell verify output or the feature-verify record exists; the Validation Plan links evidence, it does not assert green.
 6. **Status mirrors the gate.** Never `Approved` before the gate fires; flip to `Needs Revision` when a source changes after approval.
 
-**Dropped from Antigravity's guide as redundant with bee** (do not re-add): "do not modify files before approval" (the write-guard denies source writes before the merged Gate 2 approves execution), "inspect the codebase first" (exploring/planning own that), "always include validation steps" (cells cannot exist without a `verify` command).
+**Not restated here because bee enforces them elsewhere** (do not re-add): "do not modify files before approval" (the write-guard denies source writes before the merged Gate 2 approves execution), "inspect the codebase first" (exploring/planning own that), "always include validation steps" (cells cannot exist without a `verify` command).
 
 ## Rendering procedure (concise)
 

@@ -17,7 +17,7 @@
 
 ## Source Material
 
-**Origin:** [Where the technique/process came from — khuym, gsd-core, superpowers, claudekit, repository-harness, gstack, compound-engineering, internal, etc.]
+**Origin:** [Where the technique/process came from — an upstream skill library, another repo, prior internal practice, etc.]
 
 **What the source does:** [Core behavior of the source, 1–3 sentences]
 

@@ -6,7 +6,7 @@ You are the **bootstrap** role of the agent-pane-orchestration loop. Recognize t
 
 ### 1. Resolve the main checkout root
 
-Never assume your own cwd is main — resolve it explicitly, the same underlying constraint the dispatch and merge roles' own §0 rely on (D14 creates worktrees from main; none of this system's control panes run inside one):
+Never assume your own cwd is main — resolve it explicitly, the same underlying constraint the dispatch and merge roles' own §0 rely on (worktrees are created from main; none of this system's control panes run inside one):
 
 ```
 git rev-parse --path-format=absolute --git-common-dir
@@ -31,13 +31,13 @@ Three outcomes:
   Then stop this role without bootstrapping anything — the human runs those commands and re-invokes you.
 - **Anything else dirty.** List the dirty files, stop, and ask the human to clean main first. `bee worktree merge` refuses on a dirty main and the merge role runs inside main, so an unclean checkout would make every later merge fail once the loop starts.
 
-### 3. Pre-flight — `gate_bypass_level` must be `full` or `total` (D6)
+### 3. Pre-flight — `gate_bypass_level` must be `full` or `total`
 
 ```
 node <main-root>/.bee/bin/bee.mjs status --json
 ```
 
-Read `gate_bypass_level`. If it is not exactly `full` or `total`, stop here and tell the human to raise it (`bee-bypass-gate full`) — never change it yourself; this is a user-owned safety posture bootstrap does not get to decide on the human's behalf (D6). Below `full`, the dispatch loop would refuse to operate on every cycle once started (Dispatch role §2), so there is nothing to gain by bootstrapping anyway.
+Read `gate_bypass_level`. If it is not exactly `full` or `total`, stop here and tell the human to raise it (`bee-bypass-gate full`) — never change it yourself; this is a user-owned safety posture bootstrap does not get to decide on the human's behalf. Below `full`, the dispatch loop would refuse to operate on every cycle once started (Dispatch role §2), so there is nothing to gain by bootstrapping anyway.
 
 ### 4. Resolve the workspace id
 

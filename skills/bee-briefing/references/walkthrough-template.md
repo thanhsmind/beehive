@@ -1,6 +1,6 @@
 # Walkthrough Reference
 
-Load when `bee-briefing` runs in walkthrough mode (post-Gate-4, `standard`/`high-risk` only). Lineage: Google Antigravity's Walkthrough artifact — the post-implementation summary that closes the loop. bee-ified: reconstructed from execution records, evidence-honest, findings-transparent.
+Load when `bee-briefing` runs in walkthrough mode (post-Gate-4, `standard`/`high-risk` only). The walkthrough is the post-implementation summary that closes the loop: reconstructed from execution records, evidence-honest, findings-transparent.
 
 Path: `docs/history/<feature>/walkthrough.md`. One file per feature, written once at Gate 4, updated in place if the feature is reopened. Never forked.
 
@@ -72,7 +72,7 @@ polished is a violation, not a courtesy.>
 - <finding> — deferred to backlog `<id>` (`<severity>`)
 ```
 
-## Quiz (optional, P10 / decision 0020)
+## Quiz (optional)
 
 When presenting the walkthrough, offer: "Muốn kiểm tra nhanh 3–5 câu về thay đổi này trước khi chốt không?" On yes, append a `## Quiz` section — 3–5 questions whose answers come ONLY from the walkthrough's own sections (What shipped / How it was verified / Deviations / Known limitations). Good questions probe understanding the gate litmus cares about: "what does actor X observe now that they didn't before?", "which check was NOT run?", "what changed versus the plan, and why?". Grade conversationally, cite the section for each answer. A miss is a signal to walk that section together — never a blocker, never recorded as a failure.
 

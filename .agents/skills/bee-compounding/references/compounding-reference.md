@@ -29,7 +29,7 @@ caught it earlier. Return findings only; write no files.
 
 Tiers: pattern extractor = extraction; decision and failure analysts = generation; synthesis = ceiling (the orchestrator itself).
 
-**Spawn type & waiting (SKILL.md §2).** Dispatch each analyst as the runtime's **read-only** agent type (Claude Code: `Explore`), never `general-purpose` — the analysts only read evidence and return text, and "write no files" in the prompt is not a tool restriction (D1). Waiting is event-driven: launch all three, end the turn, let completions notify you; never poll liveness. A dispatch denied/errored at creation (e.g. model-guard on a missing `[bee-tier: …]` marker) created no subagent — surface it, fix the cause, re-dispatch that one **once**, then synthesize from whatever returned. Synthesis never requires three-of-three; never loop a failing dispatch or wait on a subagent that was never created (D2).
+**Spawn type & waiting (SKILL.md §2).** Dispatch each analyst as the runtime's **read-only** agent type (Claude Code: `Explore`), never `general-purpose` — the analysts only read evidence and return text, and "write no files" in the prompt is not a tool restriction. Waiting is event-driven: launch all three, end the turn, let completions notify you; never poll liveness. A dispatch denied/errored at creation (e.g. model-guard on a missing `[bee-tier: …]` marker) created no subagent — surface it, fix the cause, re-dispatch that one **once**, then synthesize from whatever returned. Synthesis never requires three-of-three; never loop a failing dispatch or wait on a subagent that was never created.
 
 ## Learnings File Template
 
@@ -66,7 +66,7 @@ tags: [tag1, tag2]
 
 Multiple findings from one feature go in one dated file as repeated Learning sections — not one file per finding.
 
-## Promotion Decision Tree (docs/09 item 3)
+## Promotion Decision Tree
 
 1. Seen twice (review finding, user correction, repeated deviation) AND it clears the three promotion criteria below? If not, it stays a learning entry.
 2. Mechanizable? A grep/lint line in a verify command, a `bin/lib` guard, a hook denial → **promote as the check**, note the check's location in the learnings file, done.
@@ -74,7 +74,7 @@ Multiple findings from one feature go in one dated file as repeated Learning sec
 
 ## Critical Promotion Format
 
-Only lessons passing all three criteria (multi-feature relevance, meaningful waste prevented, generalizable) get promoted. **With a bundle**, a promoted lesson is authored as a `bee.pattern` concept under `docs/knowledge/patterns/` and picked up by the generated root index's `## Critical patterns` section on the next `bee.mjs knowledge index` — never appended to the retired file, which is a pointer stub carrying no lessons once the patterns have migrated. **With no bundle**, today's guidance stands, unchanged: append the summary block below to `docs/history/learnings/critical-patterns.md`:
+Only lessons passing all three criteria (multi-feature relevance, meaningful waste prevented, generalizable) get promoted. **With a bundle**, a promoted lesson is authored as a `bee.pattern` concept under `docs/knowledge/patterns/` and picked up by the generated root index's `## Critical patterns` section on the next `bee.mjs knowledge index` — never appended to `critical-patterns.md`, which in a bundled repo is a pointer stub carrying no lessons. **With no bundle**, today's guidance stands, unchanged: append the summary block below to `docs/history/learnings/critical-patterns.md`:
 
 ```markdown
 ## [YYYYMMDD] <Learning Title>
@@ -100,7 +100,7 @@ node .bee/bin/bee.mjs decisions log --decision "..." --rationale "..." [--altern
 - To change a past decision: `node .bee/bin/bee.mjs decisions supersede --id UUID --decision D --rationale R`. Never rewrite the log.
 - The logger rejects secret-like content and injection patterns; do not try to work around a rejection — redact instead.
 
-## State-Layer Guard (decisions 0001, 0002)
+## State-Layer Guard
 
 The area-concept, area-spec, and reading-map templates live in `bee-scribing/references/scribing-reference.md` — compounding never writes the state layer itself (`docs/knowledge/` when the repo has a bundle, else `docs/specs/`). The guard check reads `.bee/state.json` for the feature's scribing record; absent while `behavior_change` cells were capped → invoke `bee-scribing`, then resume.
 
@@ -154,11 +154,11 @@ Merge these fields into `.bee/state.json`; do not drop `approved_gates` or other
 
 1. Check `.bee/state.json` for the feature's scribing record ("scribing: N specs synced" or "scribing: no sync needed").
 2. Record present → note it in the run summary and move on.
-3. Record absent while `behavior_change` cells were capped → **invoke bee-scribing now**, then resume compounding. Never merge specs inline "to save a step" — the BA-grade template, sources, and rebuild check live in scribing, and a shortcut sync produces exactly the shallow spec decision 0002 exists to prevent. **This is no longer only prose: `state set --phase compounding-complete` is REFUSED while any capped `behavior_change` cell is unscribed, and the refusal names every one (chain-integrity D2).** You cannot close around it. If the behavior genuinely belongs in no spec, `--waive-scribing-debt` is the sanctioned door — it permits the close and logs a decision naming every cell you waived.
+3. Record absent while `behavior_change` cells were capped → **invoke bee-scribing now**, then resume compounding. Never merge specs inline "to save a step" — the BA-grade template, sources, and rebuild check live in scribing, and a shortcut sync produces exactly the shallow spec this rule exists to prevent. **This is mechanically enforced: `state set --phase compounding-complete` is REFUSED while any capped `behavior_change` cell is unscribed, and the refusal names every one.** You cannot close around it. If the behavior genuinely belongs in no spec, `--waive-scribing-debt` is the sanctioned door — it permits the close and logs a decision naming every cell you waived.
 
-**Backlog done-flip fallback (D11b):** confirm the feature's `docs/backlog.md` row flipped to `done` with a `docs/history/<feature>/` link. Scribing owns that flip at sync; when scribing legitimately NOOPed (no `behavior_change` cell, nothing to sync), compounding is the last close point — do the done-flip here, under the identical per-clause CoS check as scribing, never looser (D1, decision `b9b9fee3`): enumerate every CoS clause and cite delivered evidence per clause. Any clause without evidence means no flip — the row stays `in-flight` with a `Delivered:`/`Remaining:` annotation naming the subset still owed, and the remainder may split into a new row when the delivered subset is independently shippable; silent full-flip on partial delivery is never allowed here either, so no shipped feature leaves a stale `in-flight` row wearing an unearned `done`. The backlog done-flip specifically remains prose-ruled (D7); the **scribing record** it sits next to is not — that one is now mechanically enforced at the close (chain-integrity D2).
+**Backlog done-flip fallback:** confirm the feature's `docs/backlog.md` row flipped to `done` with a `docs/history/<feature>/` link. Scribing owns that flip at sync; when scribing legitimately NOOPed (no `behavior_change` cell, nothing to sync), compounding is the last close point — do the done-flip here, under the identical per-clause CoS check as scribing, never looser: enumerate every CoS clause and cite delivered evidence per clause. Any clause without evidence means no flip — the row stays `in-flight` with a `Delivered:`/`Remaining:` annotation naming the subset still owed, and the remainder may split into a new row when the delivered subset is independently shippable; silent full-flip on partial delivery is never allowed here either, so no shipped feature leaves a stale `in-flight` row wearing an unearned `done`. The backlog done-flip is prose-ruled; the **scribing record** it sits next to is mechanically enforced at the close.
 
-**Review candidate at close (SPEC review-on-demand R3, flow 7.1 step 6):** the feature closes without independent review — that is the normal path, not a shortcut. Register the completed change set so it can be picked up by a later user-invoked review: `node .bee/bin/bee.mjs reviews candidate add --feature <feature> --head "$(git rev-parse HEAD)" --mode <lane>` (`<lane>` is the feature's lane — tiny/small/spike/standard/high-risk). Then post the completion line: "Completed and verified: N cells. Independent review not requested; the change set was added to review candidates." Never describe the close as reviewed or approved — the feature is truthfully `unreviewed` until a user-invoked review session covers this head (R10).
+**Review candidate at close:** the feature closes without independent review — that is the normal path, not a shortcut. Register the completed change set so it can be picked up by a later user-invoked review: `node .bee/bin/bee.mjs reviews candidate add --feature <feature> --head "$(git rev-parse HEAD)" --mode <lane>` (`<lane>` is the feature's lane — tiny/small/spike/standard/high-risk). Then post the completion line: "Completed and verified: N cells. Independent review not requested; the change set was added to review candidates." Never describe the close as reviewed or approved — the feature is truthfully `unreviewed` until a user-invoked review session covers this head.
 
 ## Feedback digest
 
@@ -168,7 +168,7 @@ After the learnings file is written, refresh the local feedback digest so the ev
 node .bee/bin/bee.mjs feedback digest
 ```
 
-Run this unprompted at every close — it is part of compounding, not an optional extra, and no user, teammate, or missing skill mention excuses skipping it. Per D1 the dogfood side stays zero-effort: this is a compounding side effect, never a task the host project has to think about.
+Run this unprompted at every close — it is part of compounding, not an optional extra, and no user, teammate, or missing skill mention excuses skipping it. The dogfood side stays zero-effort: this is a compounding side effect, never a task the host project has to think about.
 
 **Warn, never block.** A failing or absent refresh — the command throws, `bee.mjs` is missing, or the helper is not installed — is a one-line warning in the run summary and **nothing more**. It NEVER blocks, fails, delays, or reverses a host project's feature close. A host project's close must never fail because bee wanted telemetry; a thrown digest is bee's problem to file as friction (step 7), not the feature's problem. "Something threw during close, stop the line" does not apply here — the digest is side-channel telemetry, explicitly non-load-bearing for the feature's correctness.
 

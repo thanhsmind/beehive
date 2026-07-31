@@ -167,11 +167,10 @@ it crystal clear that [Option A] was the only acceptable answer?
 
 | Diagnosis | Fix |
 |---|---|
-| "The skill WAS clear, I chose to ignore it" | Add: "Violating the letter of the rules is violating the spirit of the rules." |
+| "The skill WAS clear, I chose to ignore it" | Add: "Deviate only with a named, recorded reason — silent deviation is the defect (Judgment contract)." |
 | "The skill should have said X" | Add their exact suggestion verbatim |
 | "I didn't see section Y" | Move the key point earlier; make it more prominent |
 
 ---
 
-*Origin: Superpowers framework testing-skills-with-subagents.md (obra/superpowers), via khuym:writing-khuym-skills.*
 *Persuasion research: Meincke et al. (2025), N=28,000 — University of Pennsylvania.*

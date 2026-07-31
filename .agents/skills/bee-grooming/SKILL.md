@@ -55,7 +55,7 @@ Exclude `.bee/`, `.claude/`, `.codex/`, `node_modules/`, build output (see Scope
 
 Prove non-use before calling anything dead: dynamic imports, reflection, config-driven loading, and external callers all count as use. "Obviously dead" without evidence is a red flag, not a finding.
 
-**Test-prune's hard gate:** the action is merging near-duplicate cases into one table-driven test, or deleting a genuinely dead case — never a raw line-count cut. Deleting a test changes guard *behavior*: every suite touched by the prune must run and show **green AFTER the prune, in the same batch** — proposed-now-verified-later is not ready to execute. The surviving case(s) must still demonstrably catch what the pruned duplicates caught. Citations: `references/provenance.md`.
+**Test-prune's hard gate:** the action is merging near-duplicate cases into one table-driven test, or deleting a genuinely dead case — never a raw line-count cut. Deleting a test changes guard *behavior*: every suite touched by the prune must run and show **green AFTER the prune, in the same batch** — proposed-now-verified-later is not ready to execute. The surviving case(s) must still demonstrably catch what the pruned duplicates caught.
 
 ## 3. Propose
 
@@ -65,7 +65,7 @@ Each kill candidate: **pain** (what it costs today) / **predicted impact** (what
 
 ## 4. Execute
 
-Approved kills run as normal tiny/small cells through the `bee-executing` worker loop — reserve, verify, cap. Grooming never edits files directly. §1/§2 mechanical scans delegate as extraction/generation-tier I/O workers per the Delegation contract (`bee-hive/references/routing-and-contracts.md`); dead-code proof stays generation; any other ad-hoc dispatch defaults to the generation slot model, and ceiling requires the `[bee-tier: ceiling]` marker plus a one-line justification. Citations: `references/provenance.md`.
+Approved kills run as normal tiny/small cells through the `bee-executing` worker loop — reserve, verify, cap. Grooming never edits files directly. §1/§2 mechanical scans delegate as extraction/generation-tier I/O workers per the Delegation contract (`bee-hive/references/routing-and-contracts.md`); dead-code proof stays generation; any other ad-hoc dispatch defaults to the generation slot model, and ceiling requires the `[bee-tier: ceiling]` marker plus a one-line justification.
 
 One approved kill per cell. Approval of one kill is not approval of its "related" neighbors — never batch unapproved kills into an approved cell.
 
@@ -101,4 +101,3 @@ Grooming pass complete: entropy score reported, approved kills executed, outcome
 | Reference | When to Load |
 |---|---|
 | `references/grooming-reference.md` | entropy counting rules, hunt checklists, proposal/outcome templates, slop-pattern list |
-| `references/provenance.md` | body rule → decision-ID map |

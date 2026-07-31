@@ -10,7 +10,7 @@ metadata:
 
 # planning
 
-Waggle dance: turns locked `CONTEXT.md` into mode, lane-scaled shape, and (post-approval) current-slice cells. `.bee/onboarding.json` missing/stale → stop, invoke `bee-hive`. Rules stated bare — decision IDs: `references/provenance.md`.
+Waggle dance: turns locked `CONTEXT.md` into mode, lane-scaled shape, and (post-approval) current-slice cells. `.bee/onboarding.json` missing/stale → stop, invoke `bee-hive`.
 
 ## Hard Gates
 
@@ -22,7 +22,7 @@ Waggle dance: turns locked `CONTEXT.md` into mode, lane-scaled shape, and (post-
 
 ## 1. Mode Gate — intake classification
 
-Cheap intake classification runs first: classify from the request text + at most 2 targeted reads — tiny work must not pay full context reads before it knows it's tiny (critical-patterns digest stays mandatory; D8 rescopes only *additional* reads).
+Cheap intake classification runs first: classify from the request text + at most 2 targeted reads — tiny work must not pay full context reads before it knows it's tiny (the critical-patterns digest stays mandatory; only *additional* reads scale down).
 
 Count risk flags — do not vibe it:
 
@@ -43,7 +43,7 @@ A covered bugfix keeping tests green + adding one scores **0** on the last two.
 
 Re-runs upward on new evidence; de-escalation needs cited evidence. Record lands: `tiny` → cell `action`; `small` → logged scoping decision; `standard`/`high-risk` → `plan.md`. Greenfield: one init cell first — `references/planning-reference.md` ("Greenfield init lane").
 
-**Spike lane is opt-in by change class, never a default.** Route to `spike` only for `migration`, `security`, an external side effect, or no in-repo precedent — mirrors R55's narrowing of red-first proof by change class. Everything else classifies on the flag count above and builds directly: no spike, no feasibility matrix, no delta rule (both gone, no replacement).
+**Spike lane is opt-in by change class, never a default.** Route to `spike` only for `migration`, `security`, an external side effect, or no in-repo precedent. Everything else classifies on the flag count above and builds directly — no spike.
 
 ## 2. Bootstrap, Discovery, Synthesis (lane-scaled)
 
@@ -59,7 +59,7 @@ Bootstrap scales to the lane: `tiny` = ≤2 reads only; `small` = bounded (`CONT
 
 `implement-plan.md` via `bee-briefing`: high-risk always, standard on-demand, small on request, tiny/spike none.
 
-**SMALLER PATH check — the sole reality-gate survivor, every lane.** Once the shape is drafted (`plan.md`, or the tiny/small cell(s) below): one inline question, one line of file/command evidence, never a report — *is there a cheaper shape than this one that still honors every locked `CONTEXT.md` decision?* The only reality-gate item that saves money, not spends it; every other check, plus the feasibility matrix and delta rule, are gone, no replacement. FAIL → redraft before presenting any gate, never persist-then-preview. PASS → straight into the review wave below, then the gate.
+**SMALLER PATH check — every lane.** Once the shape is drafted (`plan.md`, or the tiny/small cell(s) below): one inline question, one line of file/command evidence, never a report — *is there a cheaper shape than this one that still honors every locked `CONTEXT.md` decision?* The check saves money, not spends it. FAIL → redraft before presenting any gate, never persist-then-preview. PASS → straight into the review wave below, then the gate.
 
 **Review wave — dispatched when the shape is drafted, standard/high-risk.** Same moment as SMALLER PATH: dispatch the merged reviewer, one `bee-review`-class run covering **Structure** (requirement/decision coverage, cell completeness, dependency correctness, key links, scope sanity — BLOCKER/WARNING) and **Cold pickup** (could a zero-history worker implement each cell from `CONTEXT.md` + `plan.md` alone — CRITICAL/MINOR). Spec defects only; findings held until Gate 2, running *while* remaining prep happens, so cost is `max(reviewer, planning)`, never the sum. Scaling: `standard` ≤5 files, no hard-gate flag → inline; >5 files or a hard-gate flag, and every `high-risk` → dispatch (persona panel). `tiny`/`small` skip — cold pickup self-checks at the merged gate below. One shot, one blocker-scoped pass; a BLOCKER surviving both escalates with both positions. CRITICAL fixed before Gate 2; MINOR ships noted. Full: `references/planning-reference.md` ("Review Wave in full").
 
@@ -73,11 +73,11 @@ Never rewrite `plan.md` — frozen; prep only creates cells, current slice only,
 
 **Walking skeleton first.** Any user-visible surface (UI/API/CLI) → slice 1 is the thinnest end-to-end runnable path, one happy path, real behavior, no stubs; each slice's done-report owes one artifact proving it runs. Full rule: `bee-hive/references/routing-and-contracts.md` ("Ship visibility").
 
-**One trailing test cell per slice — coverage judgment first, authoring second.** Any slice with ≥1 code-touching `behavior`/`api` cell (instruction/knowledge text owes no test) emits exactly **one** `change_class: 'test'` cell, last, `deps` naming every implementation cell: a code-touching slice with no test cell is a planning defect. Its **first mandated step is a coverage judgment, not authoring** — cite the nearest existing tests by `file:line` and state whether they already cover the slice's acceptance criteria. Covered → the cell caps by running those tests green and recording "already covered, no new rows". Partly covered → it authors **only** the uncovered gap. **A test cell that authors no test is not a defect**; authoring rows that duplicate existing coverage is the waste this rule exists to stop. Worked instance: `docs/history/worker-conformance/reports/wc-3.md` — the judgment found all but one part of the story already pinned and closed only the real gap. Where rows are genuinely owed, the shape at `standard` and below is the triad — happy path, edge cases, error paths — at its smallest demonstrating size; `references/edge-dimensions.md` applies only at `high-risk`/hard-gate. Red-first cells stay per-cell, never batched — scoped as `requiredProofTier` computes it (`packages/bee/lib/cells.mjs:163-186`), not as "`bugfix`/`high-risk`": `security`/`migration` every lane, `bugfix`/`behavior`/`api` at `high-risk`, with `bugfix` below `high-risk` keeping repro-first at `targeted-green`; at `high-risk`, `refactor`/`formatting` are still `suite-green` and `test` still `targeted-green`, so the lane alone does not buy red-first. Full: `references/planning-reference.md` ("Slice-tail test batching in full").
+**One trailing test cell per slice — coverage judgment first, authoring second.** Any slice with ≥1 code-touching `behavior`/`api` cell (instruction/knowledge text owes no test) emits exactly **one** `change_class: 'test'` cell, last, `deps` naming every implementation cell: a code-touching slice with no test cell is a planning defect. Its **first mandated step is a coverage judgment, not authoring** — cite the nearest existing tests by `file:line` and state whether they already cover the slice's acceptance criteria. Covered → the cell caps by running those tests green and recording "already covered, no new rows". Partly covered → it authors **only** the uncovered gap. For a `tiny`/`small` slice whose net behavior is not a public contract and carries no hard-gate flag, verified transcripts recorded on the implementation cells satisfy the coverage judgment too: the cell caps by re-running the cited transcript commands green and recording "proven by transcript" with pointers — new rows only where a transcript cannot prove the criterion. **A test cell that authors no test is not a defect**; authoring rows that duplicate existing coverage is the waste this rule exists to stop. Where rows are genuinely owed, the shape at `standard` and below is the triad — happy path, edge cases, error paths — at its smallest demonstrating size; `references/edge-dimensions.md` applies only at `high-risk`/hard-gate. Red-first cells stay per-cell, never batched — scoped as the proof-tier rules compute it, not as "`bugfix`/`high-risk`": `security`/`migration` every lane, `bugfix`/`behavior`/`api` at `high-risk`, with `bugfix` below `high-risk` keeping repro-first at `targeted-green`; at `high-risk`, `refactor`/`formatting` are still `suite-green` and `test` still `targeted-green`, so the lane alone does not buy red-first. Full: `references/planning-reference.md` ("Slice-tail test batching in full").
 
-**Doctrine vs machine, recorded not fixed:** "never batched" above permits what the machine refuses. `testCellDebt` (`packages/bee/lib/state.mjs:2570`, keyed on the **feature**, not the slice) has **no lane exemption**, and its two kinds differ in what they require: *missing* (`:2653-2654`) needs capped code-touching `behavior`/`api` cells to exist (an unrecorded file list counts as code-touching) with no `test` cell at all — dropped counts as none; *not-green* (`:2656-2657`) fires from the offending `test` cell **alone**, no capped-behavior requirement — still open/claimed/blocked, capped with a failing verify, or capped `trace.proof: "unrecorded"`. Those three states (`:2604-2615`) are the whole predicate, **not** "capped green with recorded proof": a `test` cell capped on `--feature-verify-pending` with no failing verify recorded on it clears this door and is caught by `featureVerifyDebt` instead. No `gate_bypass` level lifts either kind. Until the predicate learns the exemption, plan one trailing test cell even on a `high-risk` feature whose cells each carry per-cell red-first proof, and let it cap green; that cell's coverage judgment is usually the whole of its work.
+**Test-cell debt has no lane exemption.** The test-cell debt check is keyed on the **feature**, not the slice, and its two kinds differ in what they require: *missing* needs capped code-touching `behavior`/`api` cells to exist (an unrecorded file list counts as code-touching) with no `test` cell at all — dropped counts as none; *not-green* fires from the offending `test` cell **alone**, no capped-behavior requirement — still open/claimed/blocked, capped with a failing verify, or capped `trace.proof: "unrecorded"`. Those three states are the whole predicate, **not** "capped green with recorded proof": a `test` cell capped on `--feature-verify-pending` with no failing verify recorded on it clears this door and is caught by the feature-verify debt check instead. No `gate_bypass` level lifts either kind. Plan one trailing test cell even on a `high-risk` feature whose cells each carry per-cell red-first proof, and let it cap green; that cell's coverage judgment is usually the whole of its work.
 
-Verify is scoped, never the full chain: `references/planning-reference.md` ("Verify scoping"). Hand off, every lane: `node .bee/bin/bee.mjs state set --owner planning --phase swarming --next-action "Invoke bee-swarming."` — the merged gate lives entirely inside phase `planning`; `validating` is no longer a phase-enum value.
+Verify is scoped, never the full chain: `references/planning-reference.md` ("Verify scoping"). Hand off, every lane: `node .bee/bin/bee.mjs state set --owner planning --phase swarming --next-action "Invoke bee-swarming."` — the merged gate lives entirely inside phase `planning`.
 
 ## Scope-Reduction Prohibition
 
@@ -91,7 +91,10 @@ Run intake, bootstrap, discovery, synthesis without questions. Standard/high-ris
 
 skipping critical-patterns, decisions, or `CONTEXT.md` · full-bootstrapping before the mode gate picks the lane · a mode chosen without counting flags · counting `.bee/**`/`docs/**`/projections against a lane cap · phases defaulted-to, unproven · editing `plan.md` after Gate 2 · a `plan.md` for tiny, or by default for small · persisting cells before merged-gate approval · cells/prep before Gate 2 · future-slice or pseudo-cells · vague exit states, missing deps, an unrunnable `verify` · swapping a locked decision for a "better" find · shrinking scope instead of SPLIT RECOMMENDED
 
-Violating the letter of the rules is violating the spirit of the rules.
+When a rule's letter stops serving its purpose here, say so out loud and
+deviate with a recorded reason — boundary rules (gates, state, secrets) hold
+as written; silent deviation is the defect (bee-hive routing reference,
+"Judgment contract").
 
 ## Reference Map
 
@@ -99,6 +102,5 @@ Violating the letter of the rules is violating the spirit of the rules.
 |---|---|
 | `references/planning-reference.md` | Templates, fan-out, cell quality, full bootstrap/discovery/gate/verify protocols |
 | `references/edge-dimensions.md` | The 12 edge-case test-matrix dimensions — `high-risk`/hard-gate only; `standard` and below use the triad |
-| `references/provenance.md` | Decision IDs + rationale for every body rule |
 
 Plan shaped, current-slice cells prepared. Invoke bee-swarming.

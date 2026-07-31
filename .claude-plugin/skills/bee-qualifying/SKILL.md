@@ -20,8 +20,7 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
 Qualifying is the pipeline's unattended front door: gather real evidence for a backlog
 item, self-assess whether it is genuinely clear, then complete the auto path into
 planning or park it with a brief for a human. No orchestrator is assumed — any caller
-that drives bee by invoking skills in sequence can call this stage. Rules stated bare —
-decision IDs and rationale: `references/provenance.md`.
+that drives bee by invoking skills in sequence can call this stage.
 
 ## Hard Gates
 
@@ -38,7 +37,7 @@ decision IDs and rationale: `references/provenance.md`.
 
 | Step | Action |
 |---|---|
-| 0. Enter feature | Fresh dispatch starts at phase `idle`. One atomic call: `state start-feature --feature "<slug>" --mode "<mode>"` (`idle → exploring`; qualifying stands in for exploring, D1) — sets feature/mode, resets all four gates. Do this first. Never hand-write `state set --owner exploring --phase exploring` from idle (the owner guard requires `--owner` to equal the pre-mutation phase, so it's refused). A feature already active (non-idle, non-terminal phase) → skip, you're resuming. |
+| 0. Enter feature | Fresh dispatch starts at phase `idle`. One atomic call: `state start-feature --feature "<slug>" --mode "<mode>"` (`idle → exploring`; qualifying stands in for exploring) — sets feature/mode, resets all four gates. Do this first. Never hand-write `state set --owner exploring --phase exploring` from idle (the owner guard requires `--owner` to equal the pre-mutation phase, so it's refused). A feature already active (non-idle, non-terminal phase) → skip, you're resuming. |
 | 1. Gather | Read the backlog row (`docs/backlog.md`) plus related code/docs/specs before judging anything. A production dispatch will not already have a CONTEXT.md — it's this pipeline's *output*, never an input to read the answer off of; finding one is not license to skip gathering. Domain-pattern recognition can substitute for a full code read when the category alone settles the call ("login form" + "skip re-entering" reads as auth/session territory by description alone — real evidence, sufficient to trigger step 2's park); reserve the fuller read for items the category doesn't settle. A hunt across >3 files, or content needed only as a digest, delegates as an I/O worker (`bee-hive/references/routing-and-contracts.md`); a single-row, single-file lookup stays inline. |
 | 2. Hard-gate check | Flags: auth, authorization, data loss, audit/security, external provider, validation removal (same set `bee-planning`'s mode gate uses for `high-risk`). Any flag present, any confidence → park (4b), full stop — never re-litigated by "but I'm sure this instance is safe"; risk is a property of the change, not of who is asking. No flag → step 3. |
 | 3. Self-assessment | Judge clarity/size as your own reasoning over step 1's evidence — never a keyword/regex/string-match classifier. A zero-match result against any keyword list is a weak negative filter, not a positive safety judgment — it never counts as proof alone. Genuinely clear (bounded, single concern, blast radius understood) → 4a. Ambiguous, large, or evidence incomplete → 4b. |
@@ -69,15 +68,12 @@ of a live prompt.
 - running the human Socratic dialogue directly instead of handing off to `bee-exploring`
 - writing CONTEXT.md directly instead of routing through `bee-context-locking`
 
-Violating the letter of the rules is violating the spirit of the rules.
+When a rule's letter stops serving its purpose here, say so out loud and
+deviate with a recorded reason — boundary rules (gates, state, secrets) hold
+as written; silent deviation is the defect (bee-hive routing reference,
+"Judgment contract").
 
 Clear item: planning invoked, both gates settled (auto or human), item marked in-flight —
 invoke bee-context-locking skill for the write, then bee-planning. Parked item: brief
 written into CONTEXT.md's Outstanding Questions via bee-context-locking, item left
 parked for a human to pick up through bee-exploring — no further skill invoked here.
-
-## Reference Files
-
-| File | When to Load |
-|---|---|
-| `references/provenance.md` | Decision IDs + rationale for every body rule |

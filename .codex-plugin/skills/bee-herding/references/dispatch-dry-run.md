@@ -1,16 +1,16 @@
 # Dispatch dry-run — recorded proof
 
-> Provenance: recorded in the contributor's upstream repo before adoption. The
+> Note: this recording was made in a different repo. The
 > workspace/pane ids, PBI ids, `--wt--` slugs and the `docs/history/<feature>/`
 > paths quoted below are that repo's, kept verbatim because the *method* — a
 > cold agent reaching the right decision from external state alone — is what
 > this proves, not the specific rows. They do not name files in this repo.
 
-Three recorded runs, verbatim, proving the cold-agent decision this feature's
+Three recorded runs, verbatim, proving the cold-agent decision this skill's
 design rests on: a fresh `bee-herding` invocation, with no
 memory of any earlier iteration, must reach the *right* decision from external state alone —
 "nothing to dispatch" when nothing is dispatchable, and a fail-closed refusal when a row is
-unsafe or unparseable. Every command below was actually run against the upstream
+unsafe or unparseable. Every command below was actually run against that
 repo's live state; nothing here is a description of what would happen.
 
 ## Run (a) — full dispatch role, `--dry-run`, against this repo's real state
@@ -23,12 +23,11 @@ the MAIN checkout** and treats a cwd containing `--wt--` as a fatal misconfigura
 stops the iteration before any dispatch logic runs. This session's cwd is exactly that kind
 of path (`git rev-parse --show-toplevel` → `/home/you/proj/repo--wt--agent-pane-orchestration`).
 A genuine cold iteration invoked from here would stop at §0 and report the anomaly, full
-stop. Because this cell's job is to prove the §5 dispatchable-set *decision* — the actual
-risk called out in the upstream feature's approach/risk map — the
+stop. Because this run's job is to prove the §5 dispatchable-set *decision*, the
 transcript below deliberately continues past §0 anyway, using reads that are correct
 regardless of cwd (the bee cell/worktree-grant store is keyed off `main_root`, not the
 caller's cwd; `herdr` talks to the live workspace directly). This is flagged as a scope
-choice for this proof, not a claim that a real unattended iteration would reach §5 from a
+choice for this proof only, not a claim that a real unattended iteration would reach §5 from a
 worktree checkout — it would not, and should not.
 
 ### §1 — Self-identify
@@ -44,7 +43,7 @@ it: **would run** `herdr pane rename w7:pN dispatch` — not run. The current la
 mechanism (the swarming session naming), not evidence of a bootstrapped cockpit pane —
 recorded as-is rather than reframed to look tidier.
 
-### §2 — Gate-bypass check (D6)
+### §2 — Gate-bypass check
 
 ```
 $ node .bee/bin/bee.mjs status --json
@@ -71,13 +70,13 @@ Real result: 4 panes in tab `w7:t1`:
 Leftmost excluding self: `x=36` ties between `pP` (`y=1`) and `pJ` (`y=37`) → break tie on
 smallest `y` → **chat pane = `w7:pP`**.
 
-Note: this workspace has not been bootstrapped with D13's cockpit tab/pane labels — that
-bootstrap is `agent-pane-orchestration-8`, a separate cell in progress concurrently with
-this one. `w7:pP` is, in reality, another live bee worker's session pane, not a purpose-built
+Note: this workspace has not been bootstrapped with the cockpit tab/pane labels — that
+bootstrap was separate work, in progress concurrently with
+this run. `w7:pP` is, in reality, another live bee worker's session pane, not a purpose-built
 chat pane. The §3 resolution *rule* was still exercised correctly against real geometry; the
 result is not claimed to be a real chat pane in a real cockpit.
 
-### §4 — Occupancy and anomalies (D5/D18/D20)
+### §4 — Occupancy and anomalies
 
 ```
 $ herdr tab list --workspace w7
@@ -93,7 +92,7 @@ $ herdr pane list --workspace w7   (filtered to tab w7:t5)
 Real result: one pane, `w7:pQ`, `agent_status: "done"`, **no `label` field at all**.
 
 Per §4: unlabelled → anomaly candidate, cannot be attributed to a PBI, does not count toward
-`occupied_count`. `occupied_count = 0`. A slot is free (well under D5's cap of 4).
+`occupied_count`. `occupied_count = 0`. A slot is free (well under the cap of 4).
 
 Anomaly dedup check, as §4 requires before sending anything:
 ```
@@ -108,7 +107,7 @@ this is a fresh anomaly, not a repeat. Under `--dry-run`, the line that would be
 
 No `herdr pane send-text` call was actually made.
 
-### §5 — Build the dispatchable set (D1) — the core of this proof
+### §5 — Build the dispatchable set — the core of this proof
 
 **(a) Ready — reverse index.**
 ```
@@ -121,7 +120,7 @@ docs/history/<upstream-feature>/CONTEXT.md:8:**Backlog:** PBI-043
 Inverted, the reverse index is `{ PBI-043: agent-pane-orchestration }` and nothing else.
 **No other PBI in `docs/backlog.md` has a `CONTEXT.md` at all**, so every other row fails
 condition (a) outright, regardless of its Status column — a human has to run `bee-exploring`
-on an item before the dispatcher can see it as "ready". This is D1 working as designed, not
+on an item before the dispatcher can see it as "ready". This is the readiness condition working as designed, not
 a gap: the dispatcher must never invent scope for an item nobody has explored yet.
 
 **(b) `in-flight`.** Reading `docs/backlog.md`'s Status column row by row: only `PBI-043` is
@@ -152,7 +151,7 @@ The key `herdr-gateway--wt--agent-pane-orchestration` ends with
 $ node .bee/bin/bee.mjs cells list --feature agent-pane-orchestration --json
 ```
 Real result: 10 cells, not zero — `agent-pane-orchestration-1..4` dropped,
-`-5..7` capped, `-8` and `-9` claimed (this cell, `agent-pane-orchestration-9`, is one of
+`-5..7` capped, `-8` and `-9` claimed (the run recording this proof among
 them), `-10` open. **PBI-043 fails condition (d) too**, for the same underlying reason as
 (c): this feature is mid-execution right now, and this very proof is part of that execution.
 
@@ -178,7 +177,7 @@ Two independent, structural reasons, both already surfaced in §5:
    Status to `in-flight`. The dispatcher has no mechanism, and must have none, to decide
    readiness on its own; that decision belongs to a human running exploring per item first.
 2. **The one item that passed (a) and (b) — PBI-043, this feature — is already under way.**
-   It holds a worktree grant and ten cells (this proof cell among them) precisely because
+   It holds a worktree grant and ten cells (this proof run among them) precisely because
    dispatch already happened for it, by a human, before this automated dispatcher existed.
    Conditions (c) and (d) exist to stop the dispatcher from double-starting work that is
    already running — seeing them fire here is the mechanism working, not failing.
@@ -193,7 +192,7 @@ The full dispatch role's §5 also needs a history root (`docs/history/*/CONTEXT.
 cells store that no isolated fixture can provide — a fixture backlog row with no matching
 `CONTEXT.md` and no cells would just fail (a)/(d) trivially, telling us nothing about the
 *classifier*. So runs (b)/(c) instead exercise exactly the layer that fixtures can isolate:
-`scripts/classify-lane.mjs`'s D6 lane-safety filter, run directly against two throwaway
+`scripts/classify-lane.mjs`'s lane-safety filter, run directly against two throwaway
 backlog files under `.bee/tmp/` (not `docs/backlog.md` — nothing there was touched).
 
 ### Fixture files (exact contents, reproducible)
@@ -264,30 +263,30 @@ reasons, and 1 pass — the full set this proof exists to demonstrate.
 **Proves:** a cold agent following SKILL.md's literal steps, reading only external state
 (git, bee's cell/worktree-grant store, the live herdr workspace, and the classifier script),
 reaches "nothing to dispatch" on this repo's real backlog today, for reasons traceable to
-D1's four conditions rather than a flaw in the reverse index, the grant check, or the cell
+the four dispatchability conditions rather than a flaw in the reverse index, the grant check, or the cell
 check — and reaches fail-closed, distinctly-reasoned refusals on both a hard-gate row and an
 unparseable row at the classifier level.
 
-**Does not prove:** the D13 cockpit layout (this workspace was not bootstrapped with
-`chat`/`dispatch`/`merge` labels — that is cell `agent-pane-orchestration-8`, in progress
+**Does not prove:** the cockpit layout (this workspace was not bootstrapped with
+`chat`/`dispatch`/`merge` labels — that bootstrap happened
 separately), or the `--pane current --current` vs `--pane layout --current` discrepancy
-noted in §3, which is an environment quirk observed here, not something this cell's scope
+noted in §3, which is an environment quirk observed here, not something this proof's scope
 covers investigating further.
 
 ---
 
-## Superseded: the reverse-index method used above (2026-07-22)
+## Superseded: the reverse-index method used above
 
 Run (a) above resolved the PBI→slug map by grepping `^\*\*Backlog:\*\*` across
 `docs/history/*/CONTEXT.md`, and concluded that no other PBI had a CONTEXT.md
-at all. **Both are wrong, and the independent review measured it:** exactly one
+at all. **Both are wrong, and it was measured:** exactly one
 of 24 CONTEXT.md files carried that line — this feature's own, hand-written —
 so the index only ever matched its own author, while **14** other backlog rows
 resolve to a CONTEXT.md that exists.
 
-The decision the transcript exercised has been amended: the slug now comes from
+The correct lookup is different: the slug comes from
 the backlog row's own `` Feature `<slug>` `` annotation, which 15 rows already
-carry. See `SKILL.md` §5(a) and the amendment note on D1 in `CONTEXT.md`.
+carry. See the dispatch role's §5(a).
 
 The transcript is kept because what it proves is still true and still the point:
 a cold agent, reading only external state, reached the correct decision and

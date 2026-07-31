@@ -1,6 +1,6 @@
 # CONTEXT.md Template
 
-Shared verbatim with `bee-exploring/references/context-template.md` (D8: both the
+Shared verbatim with `bee-exploring/references/context-template.md` (both the
 human path and the automatic path write through this same shape — keep the two
 copies in sync on any change). Write this to `docs/history/<feature-slug>/CONTEXT.md`.
 Remove unused optional sections. No TODOs, placeholders, or vague decisions. Decision

@@ -17,8 +17,7 @@ metadata:
 
 Captures reusable lessons from completed work into future exploring,
 planning, reviewing. Run after `bee-scribing`, or when work is abandoned with
-lessons. "The session feels done" is not a reason to skip it. Rules are
-stated bare — decision IDs: `references/provenance.md`.
+lessons. "The session feels done" is not a reason to skip it.
 
 ## 1. Gather Evidence
 
@@ -178,4 +177,3 @@ Compounding complete: learnings at `docs/history/learnings/YYYYMMDD-<slug>.md`,
 | Reference | When to Load |
 |---|---|
 | `references/compounding-reference.md` | analyst prompts, templates, promotion format, backlog format |
-| `references/provenance.md` | decision IDs + rationale for every body rule |

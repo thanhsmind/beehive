@@ -134,7 +134,7 @@ Stopping the loop alone does not clear the label.
 
 ## What it does NOT reliably do — read this
 
-- **The lane filter is NOT a hard-gate containment.** An earlier version of this guide claimed the loop "will not pick up hard-gate work." That is false, and was measured false: in an adversarial review the lane classifier passed **8 of 8** real backlog rows, including one whose story was "delete the entire JS runtime." It matches an English keyword list against a row and judges work by its title; most real rows are not in English. Treat a lane-safe verdict as "no obvious keyword hit," never as "safe." The dispatcher's own reading of each row (and its bias to refuse when unsure) is the real filter — and even that is advisory. What actually contains this system is the enable marker, merge being a gesture, worktree isolation, the slot cap, and the stop file — **not** the lane filter.
+- **The lane filter is NOT a hard-gate containment.** Do not assume the loop "will not pick up hard-gate work" — that was measured false: in an adversarial review the lane classifier passed **8 of 8** real backlog rows, including one whose story was "delete the entire JS runtime." It matches an English keyword list against a row and judges work by its title; most real rows are not in English. Treat a lane-safe verdict as "no obvious keyword hit," never as "safe." The dispatcher's own reading of each row (and its bias to refuse when unsure) is the real filter — and even that is advisory. What actually contains this system is the enable marker, merge being a gesture, worktree isolation, the slot cap, and the stop file — **not** the lane filter.
 
 ## Things worth knowing
 

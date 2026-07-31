@@ -2,11 +2,11 @@
 
 Load after `bee-scribing` is selected. The workflow lives in SKILL.md; the template, per-section rules, and protocols live here.
 
-**The templates below, through Reading Map, are written against the no-bundle spec tree** — `docs/specs/<area>.md`, `system-overview.md`, `reading-map.md` — exactly as they have always been (SKILL.md §2 states the single predicate; do not re-derive it here). **With a bundle**, the equivalent state layer is `docs/knowledge/areas/<area>/*.md` — one `bee.area` concept per subject, authored per SKILL.md §2a via `scribingTarget()`, with `emitFrontmatter` producing every frontmatter block and the full worked examples living in `docs/knowledge/areas/okf-profile/concept-model-and-authoring.md` §Templates. In that mode `docs/specs/` is the **read-only compatibility surface**: a legacy citation resolves through its pointer stub to the concept that owns the anchor now, and it is never written for new content. The nine sections, the rebuild bar, the tech-agnostic rule, and every per-section rule below are the same body contract in both modes (SKILL.md §3) — only the file layout and frontmatter mechanics differ, and each section below states its own bundle counterpart at the point where the two diverge.
+**The templates below, through Reading Map, are written against the no-bundle spec tree** — `docs/specs/<area>.md`, `system-overview.md`, `reading-map.md` (SKILL.md §2 states the single predicate; do not re-derive it here). **With a bundle**, the equivalent state layer is `docs/knowledge/areas/<area>/*.md` — one `bee.area` concept per subject, authored per SKILL.md §2a via `scribingTarget()`, with `emitFrontmatter` producing every frontmatter block and the full worked examples living in `docs/knowledge/areas/okf-profile/concept-model-and-authoring.md` §Templates. In that mode `docs/specs/` is the **read-only compatibility surface**: a legacy citation resolves through its pointer stub to the concept that owns the anchor now, and it is never written for new content. The nine sections, the rebuild bar, the tech-agnostic rule, and every per-section rule below are the same body contract in both modes (SKILL.md §3) — only the file layout and frontmatter mechanics differ, and each section below states its own bundle counterpart at the point where the two diverge.
 
 ## Delegation
 
-Gather sources, map deltas, render sections, harvest inventory, and reading-map refresh delegate as extraction/generation-tier I/O workers per the Delegation contract (D2/D3, `bee-hive/references/routing-and-contracts.md`); any other ad-hoc subagent dispatch scribing makes (for example, a harvest research pass) defaults to the generation slot model, and ceiling requires the `[bee-tier: ceiling]` marker plus a one-line justification.
+Gather sources, map deltas, render sections, harvest inventory, and reading-map refresh delegate as extraction/generation-tier I/O workers per the Delegation contract (`bee-hive/references/routing-and-contracts.md`); any other ad-hoc subagent dispatch scribing makes (for example, a harvest research pass) defaults to the generation slot model, and ceiling requires the `[bee-tier: ceiling]` marker plus a one-line justification.
 
 ## Gather Sources — What Each May Feed
 
@@ -69,7 +69,7 @@ An area is any long-lived unit with observable behavior: a screen/form, an API, 
 
 A section with genuinely no content for the area's shape gets one line — "Not applicable — <why>" — never silently deleted, so absence reads as a statement, not an oversight.
 
-## Area Spec Template (BA grade, decision 0002)
+## Area Spec Template (BA grade)
 
 **With a bundle**, this template's nine sections are the body contract for a `bee.area` concept — write `docs/knowledge/areas/<area>/<subject-slug>.md` (or `overview.md` for a new area) per SKILL.md §2a instead of the file below, and skip straight to Per-Section Rules for the section-by-section content rules, which are unchanged. **With no bundle**, today's guidance stands, unchanged:
 
@@ -160,7 +160,7 @@ they can see, do, call, or receive. Include anonymous visitors when relevant.>
 ## Business Rules
 
 <Numbered, one sentence each, citing the deciding D-ID and its short8 (Citation
-Discipline, D3). Rules live here even when the code enforces them only implicitly.>
+Discipline). Rules live here even when the code enforces them only implicitly.>
 
 - **R1.** A posting can never return from `closed` to any other status (per D4, `b9b9fee3`).
 - **R2.** … (per D7, `e230444a`)
@@ -178,7 +178,7 @@ who/what could answer it. Empty section + `coverage: full` = the rebuild bar is 
 
 ## Visuals
 
-<UI areas only (decision 0003). One line per settled screen:
+<UI areas only. One line per settled screen:
 `visuals/<area>/<screen>.png` — what it shows. Refreshed at sync when the screen
 visibly changed. No snapshot available → say so here or in Open Gaps, never silently.
 Backend areas: "Not applicable — no screen.">
@@ -193,7 +193,7 @@ Deleting this section must not remove any business meaning.>
 
 - **Purpose:** who uses it and what for. No feature history.
 - **Entry Points & Triggers:** if a link, screen, schedule, event, or call exists that this table doesn't explain, the spec fails the rebuild bar.
-- **Data Dictionary:** display order is part of the spec for UI areas (the owner's requirement: "field nào trước field nào sau"). Validation limits live in the Meaning/Values cells in business terms ("≤120 chars"), not as regexes. Config values whose numbers were *chosen* (thresholds, windows, retry counts) cite the deciding D-ID and its short8 (Citation Discipline, D3) — a tuned number without its why is half-lost knowledge.
+- **Data Dictionary:** display order is part of the spec for UI areas (which field comes before which). Validation limits live in the Meaning/Values cells in business terms ("≤120 chars"), not as regexes. Config values whose numbers were *chosen* (thresholds, windows, retry counts) cite the deciding D-ID and its short8 (Citation Discipline) — a tuned number without its why is half-lost knowledge.
 - **Behaviors & Operations:** the four sub-answers (blocked-when or runs-when / what changes / side effects / afterwards-per-actor) are mandatory for every action and operation; "afterwards" must name what EACH affected actor or consuming system observes, not just the acting user. System operations additionally state their failure behavior (what happens mid-run, what retries, what stays consistent).
 - **Actors & Access:** prefer one matrix; consuming/producing systems are actors too; footnote row-level subtleties ("owner of THIS posting, not any owner").
 - **Business Rules vs Behaviors:** a Behavior is what the system observably does; a Rule is the policy behind it. A rule approved but not yet shipped is marked "not yet implemented" with a backlog id — never written as a Behavior.
@@ -209,9 +209,9 @@ Deleting this section must not remove any business meaning.>
 - A delta that contradicts an existing line **replaces** it; do not keep both.
 - Update `updated`, append the feature to `sources`, reconcile `decisions` against the active set (`node .bee/bin/bee.mjs decisions active`) — cited by short8 id (see Citation Discipline below), so this reconcile step is itself sweepable.
 - Present tense only. "Was", "previously", "changed from" are banned words.
-- If the feature added/removed an area, or changed shared entities, the role model, or a cross-area flow: sync `system-overview.md` in the same pass (decision 0003). **With a bundle**, the same duty falls on the area's `overview` concept and the generated area index instead (SKILL.md §3).
+- If the feature added/removed an area, or changed shared entities, the role model, or a cross-area flow: sync `system-overview.md` in the same pass. **With a bundle**, the same duty falls on the area's `overview` concept and the generated area index instead (SKILL.md §3).
 - UI areas: when a delta made a screen visibly different, refresh its snapshot under `visuals/<area>/`; cannot produce one → Open Gap with the reason.
-- Standard commands are a Pointers-level fact: when a synced change alters how the project is set up, started, tested, or verified, update `.bee/config.json` `commands` in the same pass (docs/09 item 1) — one record, never a second location.
+- Standard commands are a Pointers-level fact: when a synced change alters how the project is set up, started, tested, or verified, update `.bee/config.json` `commands` in the same pass — one record, never a second location.
 - After merging, run the rebuild self-check (below) on every touched spec (or concept).
 
 ## Capture Mode in full
@@ -224,9 +224,9 @@ The trigger is **settlement**, not subject matter: whenever a discuss → build 
 
 If a settlement contradicts current shipped behavior, record it as a rule with a note "not yet implemented — see backlog" and file a backlog item; do NOT state it as current behavior.
 
-## Citation Discipline (D3)
+## Citation Discipline
 
-Any artifact that encodes a decision — a spec's Business Rules line, a `docs/backlog.md` row's Story/CoS, a CONTEXT/plan passage — cites the decision's **short8 id** (the log entry's id, first 8 hex chars, e.g. `b9b9fee3`) alongside any CONTEXT-local label (`D4`, `D11b`); the label alone is not enough. The `decisions supersede` propagation sweep (dp-2) matches short8 word-boundary hits across `docs/**` — it finds only what is cited that way, so a passage carrying only a `D4`-style label is invisible to the scan. An uncited embodiment is the residual risk: the decision changes, but nothing points a sweep at the passage that assumed it.
+Any artifact that encodes a decision — a spec's Business Rules line, a `docs/backlog.md` row's Story/CoS, a CONTEXT/plan passage — cites the decision's **short8 id** (the log entry's id, first 8 hex chars, e.g. `b9b9fee3`) alongside any CONTEXT-local label (`D4`, `D11b`); the label alone is not enough. The `decisions supersede` propagation sweep matches short8 word-boundary hits across `docs/**` — it finds only what is cited that way, so a passage carrying only a `D4`-style label is invisible to the scan. An uncited embodiment is the residual risk: the decision changes, but nothing points a sweep at the passage that assumed it.
 
 ## Harvest Interview Protocol
 
@@ -247,7 +247,7 @@ RECOMMENDATION: (b) — matches the exclusion already enforced in search.
 
 Budget the interview: batch the inventory first, then ask only the questions whose answers change the spec. Unanswered → Open Gaps + `coverage: partial`. Confirmed answers in harvest/capture mode are decisions — log them (`bee.mjs decisions log`) and cite the new D-ID in the spec.
 
-## Bootstrap Mode (D2 of harness10)
+## Bootstrap Mode
 
 **No-bundle only.** A repo with a bundle has no equivalent bootstrap: `docs/knowledge/index.md` and `docs/knowledge/areas/index.md` are pure functions of the bundle's own concepts, regenerated on demand with `node .bee/bin/bee.mjs knowledge index` — never hand-bootstrapped from a skeleton. Bootstrap exists for one situation: `docs/specs/` lacks `system-overview.md` or `reading-map.md` — typically a repo fresh from onboarding, before any harvest has run. It is **offered, never auto-run**: the agent names the missing file(s) and asks; only user approval starts the pass. Bootstrap creates ONLY the missing map file(s) — an existing `system-overview.md` or `reading-map.md` is never touched by bootstrap (in-place-never-fork holds; improving an existing map belongs to sync or harvest).
 
@@ -289,7 +289,7 @@ Cover the Pointers section and verify:
 
 Any failure: fix it now, or file it as an Open Gap with `coverage: partial` — silently shipping a hole is the red flag, not having one.
 
-## System Overview Spec (decision 0003)
+## System Overview Spec
 
 **With a bundle**, there is no separate system-overview file to author: the cross-area glue is the area's own `overview` concept plus the generated `docs/knowledge/areas/index.md`, kept current by regenerating the index (`bee.mjs knowledge index`) after any area or concept change — never hand-edited. Fresh sessions read the bundle's root index FIRST (`docs/knowledge/index.md`), before any area concept. **With no bundle**, today's guidance stands, unchanged:
 
@@ -356,7 +356,7 @@ Path (no bundle): `docs/specs/reading-map.md`. One line per location, grep-frien
 
 At sync time: add lines for locations the feature created or repurposed, fix lines it made wrong, delete lines for removed locations. Keep it a map, not documentation — one line each, no prose blocks.
 
-## Product Backlog (`docs/backlog.md`, D6, backlog-unification D1/D3)
+## Product Backlog (`docs/backlog.md`)
 
 `docs/backlog.md` is the **product backlog** — the human-first, priority-ordered view of product backlog items (PBIs): stories the product owner wants. It is a **generated view**, never a store: the ONE store is `.bee/backlog.jsonl`, where PBIs live as event-sourced records (`{ts, kind:"pbi", event:"add"|"status"|"amend", id, ...fields}`) in the same append-only stream that already holds friction/grooming events — one concept, one file, current state = fold by id, last-event-wins per field. `docs/backlog.md` is rendered from that fold by `node .bee/bin/bee.mjs backlog render --write`; it is never edited by hand and never edited by scribing directly — scribing's ownership of the product backlog is expressed entirely through the CLI verbs below, the same way it owns specs by writing through the tooling that owns the file.
 
@@ -373,20 +373,20 @@ At sync time: add lines for locations the feature created or repurposed, fix lin
 ```
 
 - **Columns:** `ID` (stable — legacy rows keep their `P<n>`; every new PBI gets a collision-free `p-<8hex>` generated by `backlog pbi add`, never a hand-picked next integer) · `Story` (one line, user-facing outcome) · `CoS` (Condition of Satisfaction — the one-line acceptance signal) · `Status` · `Feature` (the `docs/history/<feature>/` slug once opened, `—` while unstarted).
-- **Status enum — `proposed | in-flight | parked | done | declined`** (backlog-unification D4), five values, no others. This is `PBI_STATUSES` in `.bee/bin/lib/backlog.mjs`; do not invent a sixth status.
+- **Status enum — `proposed | in-flight | parked | done | declined`** — five values, no others. This is `PBI_STATUSES` in `.bee/bin/lib/backlog.mjs`; do not invent a sixth status.
 - **Priority order is the row order in the generated view** (`proposed`/`in-flight`/`parked` render as full rows; `done`/`declined` collapse to one-line links so the view stays short forever) — nothing here is hand-reordered.
 
 **Verbs (scribing-owned, specs pattern — CLI-owned, never hand-edited):**
 
 - **Append, never fork.** A new deferred request is captured with `node .bee/bin/bee.mjs backlog pbi add --title "<story>" --cos "<CoS>"` (prints the generated id) — an `add` event, `proposed` by default. There is never a second backlog file and never a hand-inserted row.
 - **In place forever.** A PBI's fields are updated by appending a new event for its id (`pbi amend` for title/cos, `pbi status` for status/feature); history lives in the event stream and in git, never in a "was proposed" note.
-- **Flip triggers are the only status writes (D11), and they are prose-ruled, never hook-enforced (D7):**
-  - **(a) exploring opens a feature matching a row** → `node .bee/bin/bee.mjs backlog pbi status --id <id> --to in-flight --feature <slug>` (one move, status + slug together); if the request never passed through the backlog, exploring runs `pbi add` first, then the status flip (D11a — owned by exploring).
-  - **(b) feature close** (scribing sync, or compounding when no `behavior_change` cell ran) → `node .bee/bin/bee.mjs backlog pbi status --id <id> --to done` once every CoS clause has cited evidence (D11b — owned by scribing at sync). Partial delivery never silently flips: leave the row `in-flight` and run `pbi amend --id <id> --cos "<original CoS> — Delivered: <clause(s) shipped>; Remaining: <clause(s) owed>"` instead; split the remainder into a new `pbi add` row when the delivered subset is independently shippable.
-- **No validation coupling.** A cell may carry an optional `pbi` field naming a row ID; a missing or stale reference is a grooming find, not a cap blocker (D9).
-- **Rendering:** after any event, `node .bee/bin/bee.mjs backlog render --write` regenerates `docs/backlog.md` from the current fold (deterministic, no timestamp); `backlog render --check` reports drift without writing. `backlog rank --write` is retired — the render owns the view now.
+- **Flip triggers are the only status writes, and they are prose-ruled, never hook-enforced:**
+  - **(a) exploring opens a feature matching a row** → `node .bee/bin/bee.mjs backlog pbi status --id <id> --to in-flight --feature <slug>` (one move, status + slug together); if the request never passed through the backlog, exploring runs `pbi add` first, then the status flip (owned by exploring).
+  - **(b) feature close** (scribing sync, or compounding when no `behavior_change` cell ran) → `node .bee/bin/bee.mjs backlog pbi status --id <id> --to done` once every CoS clause has cited evidence (owned by scribing at sync). Partial delivery never silently flips: leave the row `in-flight` and run `pbi amend --id <id> --cos "<original CoS> — Delivered: <clause(s) shipped>; Remaining: <clause(s) owed>"` instead; split the remainder into a new `pbi add` row when the delivered subset is independently shippable.
+- **No validation coupling.** A cell may carry an optional `pbi` field naming a row ID; a missing or stale reference is a grooming find, not a cap blocker.
+- **Rendering:** after any event, `node .bee/bin/bee.mjs backlog render --write` regenerates `docs/backlog.md` from the current fold (deterministic, no timestamp); `backlog render --check` reports drift without writing. The render owns the view.
 
-**Runnable surfaces already exist (shipped by harness10-6, retargeted by backlog-unification) — reference them, never re-describe machinery here:** `node .bee/bin/bee.mjs status --json` reports `pbi: { proposed, in_flight, parked, done, declined } | null`, and the session preamble carries one line naming the counts whenever `.bee/backlog.jsonl` holds `kind:"pbi"` events. The token-cheap query for current state is `node .bee/bin/bee.mjs backlog pbi list --json` (the fold — never a `docs/backlog.md` read). Drift (an `in-flight` row with no active feature, a `done` feature with no row, duplicate rows for one story) is caught by grooming's audit, not by any hook.
+**Runnable surfaces already exist — reference them, never re-describe machinery here:** `node .bee/bin/bee.mjs status --json` reports `pbi: { proposed, in_flight, parked, done, declined } | null`, and the session preamble carries one line naming the counts whenever `.bee/backlog.jsonl` holds `kind:"pbi"` events. The token-cheap query for current state is `node .bee/bin/bee.mjs backlog pbi list --json` (the fold — never a `docs/backlog.md` read). Drift (an `in-flight` row with no active feature, a `done` feature with no row, duplicate rows for one story) is caught by grooming's audit, not by any hook.
 
 ## State Record
 
@@ -402,15 +402,15 @@ At sync time: add lines for locations the feature created or repurposed, fix lin
 
 ## Bundle-mode gate and frontmatter
 
-**The gate has three layers, because exact string matching on free text can never be sufficient.** An independent judge broke the single-layer version four ways in one sitting:
+**The gate has three layers, because exact string matching on free text can never be sufficient.**
 
-1. **The match is a skeleton, not a string.** Subjects are compared after NFKC, lowercasing, accent stripping, a cross-script confusable fold, and punctuation/whitespace collapse. A trailing period and a Cyrillic `е` each bought a rival concept before this existed; neither can now.
+1. **The match is a skeleton, not a string.** Subjects are compared after NFKC, lowercasing, accent stripping, a cross-script confusable fold, and punctuation/whitespace collapse. Neither a trailing period nor a Cyrillic `е` can buy a rival concept.
 2. **Malformed input fails closed** — the three refusals and the throw in §2 above. A silently skipped claim is a fork with extra steps.
 3. **The bundle-wide backstop bites.** `duplicate_authoritative_for` is a chain-**failing** finding in `bee knowledge check` (no `--strict` needed), grouped by the same skeleton. Layer 1 cannot catch a genuine word-order paraphrase (`refunds and reversals` vs `reversals and refunds`) — nothing that compares strings can — so the bundle-wide check is what refuses to let two authorities coexist. `malformed_authoritative_for` fails the chain the same way.
 
 Do not soften any layer to get a write through. A refused write means the bundle is wrong, not the gate.
 
-**Frontmatter is ALWAYS produced by `emitFrontmatter`, never typed by hand** — hand-written blocks are caught `not_canonical` by the round-trip guard, repeatedly and including by orchestrators who knew the rule. Build the data object, emit, then write body under it:
+**Frontmatter is ALWAYS produced by `emitFrontmatter`, never typed by hand** — hand-written blocks are caught `not_canonical` by the round-trip guard. Build the data object, emit, then write body under it:
 
 ```
 node -e "import('./.bee/bin/lib/knowledge.mjs').then(m=>process.stdout.write(m.emitFrontmatter({type:'bee.area',title:'...',description:'...',tags:['...'],timestamp:'YYYY-MM-DD',bee:{id:'...',lifecycle:'active',areas:['<area>'],required_context:[],decisions:[],sources:[],authoritative_for:'<area>: <subject>'}})))"
@@ -426,14 +426,14 @@ Body sections, the rebuild bar, and the `bee.areas` vs `bee.authoritative_for` d
 - Every enum value in the Data Dictionary carries its business meaning ("`paused` — hidden from applicants, still editable by the owner"). A value without a meaning is an Open Gap, not a table row.
 - Every Behavior block answers: what triggers it, what blocks it, what changes, what side effects fire, and **what each actor or consuming system observes afterwards**.
 - Business Rules are numbered (R1, R2…) and cite the active D-ID that decided them.
-- UI areas: refresh the settled snapshot when the screen visibly changed (ask the user for one if you cannot produce it); a UI area with no current snapshot records that as an Open Gap, never silently (decision 0003). **With no bundle** the snapshot lives under `docs/specs/visuals/<area>/`, unchanged. **With a bundle there is no snapshot home yet, and this skill does not invent one:** the compatibility surface is read-only for new content (`scripts/okf_specs_fence.mjs` fails the chain, G2) and the bundle profile defines no visuals location. Until one is decided, record the missing snapshot as an **Open Gap** in the area's concept — naming the screen and stating that the bundle has no visuals home — and never write the image into the retired tree. The gap itself is tracked in `docs/knowledge/areas/okf-profile/concept-model-and-authoring.md` §Open Gaps.
+- UI areas: refresh the settled snapshot when the screen visibly changed (ask the user for one if you cannot produce it); a UI area with no current snapshot records that as an Open Gap, never silently. **With no bundle** the snapshot lives under `docs/specs/visuals/<area>/`, unchanged. **With a bundle there is no snapshot home yet, and this skill does not invent one:** the compatibility surface is read-only for new content (`scripts/okf_specs_fence.mjs` fails the chain) and the bundle profile defines no visuals location. Until one is decided, record the missing snapshot as an **Open Gap** in the area's concept — naming the screen and stating that the bundle has no visuals home — and never write the image into the retired tree. The gap itself is tracked in `docs/knowledge/areas/okf-profile/concept-model-and-authoring.md` §Open Gaps.
 - If the feature added or removed an area, or changed shared entities, the role model, or a cross-area flow: sync `docs/specs/system-overview.md` in the same pass (template in the reference). In bundle mode the same duty falls on the area's `overview` concept and the area index.
 - Update frontmatter: `updated`, append to `sources`, reconcile `decisions`, set `coverage: full | partial` honestly. In bundle mode this means re-emitting the whole block through `emitFrontmatter` with `timestamp` refreshed and `bee.sources`/`bee.decisions` extended — never hand-editing a line of it.
 
 ## Deferred requests
 
 
-The same unprompted-capture duty covers **deferred work**, not just settled truths. When the user pushes work out of the current scope — "để sau", "phase 2", "later", "not now" — or a Deferred Idea leaves exploring, the agent appends a `proposed` PBI **in the same turn, announce-then-do**: "ghi vào backlog: <story> (proposed)", then `node .bee/bin/bee.mjs backlog pbi add --title "<story>" --cos "<CoS>"` followed by `node .bee/bin/bee.mjs backlog render --write` so `docs/backlog.md` stays current. A user having to say "ghi vào backlog" means detection already failed once. `backlog pbi add`/`backlog render` are `.bee/`-layer writes through the CLI — allowed in every phase, no gate; `docs/backlog.md` itself is never hand-edited (it is CLI-owned, exact-path write-guard deny). The id/columns/verbs live in the reference's Product Backlog section; do not duplicate the table schema here. This is prose-ruled, never hook-enforced (D7).
+The same unprompted-capture duty covers **deferred work**, not just settled truths. When the user pushes work out of the current scope — "để sau", "phase 2", "later", "not now" — or a Deferred Idea leaves exploring, the agent appends a `proposed` PBI **in the same turn, announce-then-do**: "ghi vào backlog: <story> (proposed)", then `node .bee/bin/bee.mjs backlog pbi add --title "<story>" --cos "<CoS>"` followed by `node .bee/bin/bee.mjs backlog render --write` so `docs/backlog.md` stays current. A user having to say "ghi vào backlog" means detection already failed once. `backlog pbi add`/`backlog render` are `.bee/`-layer writes through the CLI — allowed in every phase, no gate; `docs/backlog.md` itself is never hand-edited (it is CLI-owned, exact-path write-guard deny). The id/columns/verbs live in the reference's Product Backlog section; do not duplicate the table schema here. This is prose-ruled, never hook-enforced.
 
-At sync, close the loop the other way: when this scribing run closes a feature that matches a backlog row, check the flip against the row's CoS before writing anything — enumerate every CoS clause and cite the delivered evidence per clause (D1, decision `b9b9fee3`). Only when every clause has cited evidence does the row flip via `node .bee/bin/bee.mjs backlog pbi status --id <id> --to done` and link `docs/history/<feature>/` (added via `pbi amend --id <id> --cos "..."` if the link belongs in the CoS text) (D11b) — the sync pass owns the done-flip. Any clause without evidence means the row does NOT flip: run `node .bee/bin/bee.mjs backlog pbi amend --id <id> --cos "<original CoS> — Delivered: <subset shipped>; Remaining: <subset owed>"` instead, leaving status `in-flight`; when the delivered subset is independently shippable, split the remainder into a new `pbi add` row rather than stranding it. Silent full-flip on partial delivery is never allowed. After any row flip, run `node .bee/bin/bee.mjs backlog render --write` so the generated view stays honest, and, when README carries the badge block, `node .bee/bin/bee.mjs backlog badges --write` (P3).
+At sync, close the loop the other way: when this scribing run closes a feature that matches a backlog row, check the flip against the row's CoS before writing anything — enumerate every CoS clause and cite the delivered evidence per clause. Only when every clause has cited evidence does the row flip via `node .bee/bin/bee.mjs backlog pbi status --id <id> --to done` and link `docs/history/<feature>/` (added via `pbi amend --id <id> --cos "..."` if the link belongs in the CoS text) — the sync pass owns the done-flip. Any clause without evidence means the row does NOT flip: run `node .bee/bin/bee.mjs backlog pbi amend --id <id> --cos "<original CoS> — Delivered: <subset shipped>; Remaining: <subset owed>"` instead, leaving status `in-flight`; when the delivered subset is independently shippable, split the remainder into a new `pbi add` row rather than stranding it. Silent full-flip on partial delivery is never allowed. After any row flip, run `node .bee/bin/bee.mjs backlog render --write` so the generated view stays honest, and, when README carries the badge block, `node .bee/bin/bee.mjs backlog badges --write`.
 

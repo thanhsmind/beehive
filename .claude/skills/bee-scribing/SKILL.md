@@ -15,7 +15,7 @@ metadata:
 
 # Scribing (scribe bees)
 
-Scribing is bee's BA — it owns the state layer. Rules stated bare — decision IDs: `references/provenance.md`; quoted headings resolve in `references/scribing-reference.md`.
+Scribing is bee's BA — it owns the state layer. Quoted headings resolve in `references/scribing-reference.md`.
 
 An **area is domain-general**: a screen, API, job, integration, pipeline, CLI command, or process — any unit with observable behavior. Code is the implementation; the spec is the *meaning*.
 
@@ -98,4 +98,3 @@ Scribing complete: <N> area specs synced (<coverage>), <M> open gaps, reading ma
 | Reference | When to Load |
 |---|---|
 | `references/scribing-reference.md` | spec template, merge rules, bundleMode routing, gather-sources, deferred-requests/harvest/bootstrap protocols, system-overview/reading-map/backlog machinery |
-| `references/provenance.md` | Decision IDs + rationale for every body rule |

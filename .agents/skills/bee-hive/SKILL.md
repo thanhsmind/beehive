@@ -15,8 +15,7 @@ metadata:
 
 # hive
 
-Load first in bee repos. Rules are stated bare — decision IDs:
-`references/provenance.md`; quoted headings resolve in `references/routing-and-contracts.md`.
+Load first in bee repos. Quoted headings resolve in `references/routing-and-contracts.md`.
 
 ## Lanes — triage first (the mode gate)
 
@@ -39,10 +38,10 @@ generated renders never count:
 | `high-risk` | 4+ flags or any hard-gate flag (auth, authorization, data loss, audit/security, external provider, validation removal) |
 
 - Record same turn: `state route --set` — `Route: class=<c> | lane=<l> | flags=<n> [<names>] | files=<n>`; re-lane updates in place ("Route record").
-- docs/tiny/small: nothing more — merged shape+execution gate, execution per lane (tiny: inline or dispatched, exec-speed D6; small: one dispatched execution worker), no `bee-planning`; standard/high-risk: the full chain.
+- docs/tiny/small: nothing more — merged shape+execution gate, execution per lane (tiny: inline or dispatched; small: one dispatched execution worker), no `bee-planning`; standard/high-risk: the full chain.
 - Uncertainty resolves downward, never up into skipping. One hard-gate flag = `high-risk` at one file; re-counting to dodge a threshold = already `standard`.
 - One re-lane checkpoint after first evidence: measured demotion only, never twice, never with a hard-gate flag; promotion always open ("Re-lane checkpoint").
-- Review is on demand — every lane closes `unreviewed`; one dispatched worker per lane; `small` SERIAL; standard: selective slice-close goal-check judge (smell / first slice from a worker / ~1-in-3 sample; NEEDS_REVISION escalates — proof-economy 2bb2cb27); high-risk: judge every slice (exec-speed D8, "Goal-check judge tier"); tiny/small: preview-then-persist, orchestrator-authored done-report ("Lane ceremony in full").
+- Review is on demand — every lane closes `unreviewed`; one dispatched worker per lane; `small` SERIAL; standard: selective slice-close goal-check judge (smell / first slice from a worker / ~1-in-3 sample; NEEDS_REVISION escalates); high-risk: judge every slice ("Goal-check judge tier"); tiny/small: preview-then-persist, orchestrator-authored done-report ("Lane ceremony in full").
 
 ## Onboarding
 
@@ -89,7 +88,7 @@ zero stops. `full`/`total` lift the high-risk floor — never re-erect it
 ("Gate bypass mode"); headless stops regardless, not bypass.
 
 - Gate 1: "Decisions locked. Approve CONTEXT.md before planning?"
-- Gate 2: "Work shape is ready. Approve before current-work preparation?" — approves `shape` AND `execution` together (`--merge`, D2); Gate 3 is retired.
+- Gate 2: "Work shape is ready. Approve before current-work preparation?" — approves `shape` AND `execution` together (`--merge`).
 - Gate 4: P1 > 0 → "P1 findings block merge. Fix before proceeding?"; P1 = 0 → "Review complete. Approve merge?"
 
 Gate 4 exists only inside a user-invoked review session — never automatic
@@ -140,6 +139,5 @@ form rules bend on judgment, never in silence ("Judgment contract").
 |---|---|
 | `references/routing-and-contracts.md` | Every exiled section — resolve quoted headings here; skill catalog, first-skill routing, contracts, quick references |
 | `references/go-mode.md` | `/go` runs: gate wording, slice loop, fallbacks, headless + bypass |
-| `references/provenance.md` | Decision IDs + rationale for every body rule |
 
 Session oriented. Invoke bee-<selected-skill> skill.

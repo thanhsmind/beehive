@@ -11,7 +11,6 @@ metadata:
 # exploring
 
 If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
-Rules stated bare — decision IDs: `references/provenance.md`.
 
 Turns fuzzy intent into locked decisions in `docs/history/<feature>/CONTEXT.md`.
 Scout bees find the flowers; they do not build the comb.
@@ -152,6 +151,6 @@ as written; silent deviation is the defect (bee-hive routing reference,
 "Judgment contract").
 
 References: `references/exploring-reference.md`, `references/gray-area-probes.md`,
-`references/context-template.md`, `references/provenance.md`.
+`references/context-template.md`.
 
 Decisions captured and CONTEXT.md written. Invoke bee-planning skill.

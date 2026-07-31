@@ -2,8 +2,7 @@
 
 Full text of the four cross-cutting rules the body only summarizes: permission
 posture, the runtime adapter seam, what actually contains this system, and
-stop/resume semantics. Provenance (decision IDs behind the `(D…)` tags below):
-`references/provenance.md`.
+stop/resume semantics.
 
 ## Permission posture
 
@@ -13,7 +12,7 @@ postures. The split is coupled and recorded here rather than decided silently.
 **Working agents — `bypassPermissions`, no allowlist. This is an accepted
 risk, owned by the operator.**
 
-> Accepted risk (owner decision D7-FINAL): every working agent this loop
+> Accepted risk (owner decision): every working agent this loop
 > spawns runs `claude --permission-mode bypassPermissions` with no tool
 > allowlist. It can run any command, edit any file, and reach anything the
 > machine's user can, unattended and unsupervised. This posture is accepted
@@ -30,7 +29,7 @@ risk, owned by the operator.**
 > is a sandbox.
 
 **Control panes — enumerated command surface, never `bypassPermissions`,
-never "read-only" (D7-FINAL).** `control-loop.sh` starts each control pane
+never "read-only".** `control-loop.sh` starts each control pane
 under an enumerated `--allowedTools` list sized to exactly what that role
 measurably does. It is not read-only, because both control roles genuinely
 write: **dispatch** runs `bee worktree new` (creates a worktree and registers
@@ -50,20 +49,20 @@ command, live in `control-loop.sh`.
 
 ## Runtime adapter
 
-Config-driven spawn commands (D4, i54-closeout-4). Both spawn points — the
+Config-driven spawn commands. Both spawn points — the
 working agent's trailing argv (Dispatch role §8), and the control pane's real
 invocation inside `control-loop.sh` — read from an optional `.bee/config.json`
 command-template seam instead of a hardcoded string. **With no `herding`
 config keys at all, every spawned command is BYTE-EQUIVALENT to what this
 skill has always run — zero behavior change.** This is an adapter seam, not a
 new runtime: full codex-native herding (its own event loop, its own pane
-protocol) stays out of scope (CONTEXT.md D4, out of scope).
+protocol) stays out of scope.
 
 Two independent keys, each a JSON array of argv-token strings:
 
 - **`herding.agent_command`** — the WORKING agent's spawn argv (the tail of
   `herdr agent start ... --`, Dispatch role §8 step 2). Placeholder:
-  `{MODEL}` (D4's fixed model, `sonnet`). Default when absent:
+  `{MODEL}` (the fixed model, `sonnet`). Default when absent:
   `["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"]`
   — exactly today's string.
 - **`herding.control_command`** — the CONTROL pane's real invocation inside
@@ -118,19 +117,19 @@ a claim that codex control panes work today.
 
 ## What actually contains this
 
-(D6, corrected). An earlier version of this skill claimed the loop "will not
-pick up hard-gate work." That was measured false: the lane-safety classifier
+Do not assume the loop "will not pick up hard-gate work" —
+that was measured false: the lane-safety classifier
 passed **8 of 8** real backlog rows in an adversarial review, including one
 whose story was "delete the entire JS runtime," because it matches an English
 keyword list against a row that judges work by its title, and most real rows
 are not in English. Do not rely on the lane filter as a containment. What
 actually contains this system, in descending order of load:
 
-1. **The enable interlock (Dispatch role §5, D10)** — dispatch builds nothing
+1. **The enable interlock (Dispatch role §5)** — dispatch builds nothing
    at all without the owner's `bee-herding.enable` marker. This is the gate
    that decides whether the loop does anything; everything else only matters
    once it is running.
-2. **Merge is an owner gesture, not a loop (D11)** — nothing lands in main
+2. **Merge is an owner gesture, not a loop** — nothing lands in main
    unattended. The single highest-authority action in the system requires a
    human present.
 3. **Worktree isolation** — each working agent's edits are confined to its

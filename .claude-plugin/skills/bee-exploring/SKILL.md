@@ -11,7 +11,6 @@ metadata:
 # exploring
 
 If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
-Rules stated bare — decision IDs: `references/provenance.md`.
 
 Turns fuzzy intent into locked decisions in `docs/history/<feature>/CONTEXT.md`.
 Scout bees find the flowers; they do not build the comb.
@@ -146,9 +145,12 @@ never self-approved — the report ends "awaiting Gate 1 approval".
 - CONTEXT.md with placeholders, or skipping the fresh-eyes review
 - skipping decision locking because "the user seemed to imply it"
 
-Violating the letter of the rules is violating the spirit of the rules.
+When a rule's letter stops serving its purpose here, say so out loud and
+deviate with a recorded reason — boundary rules (gates, state, secrets) hold
+as written; silent deviation is the defect (bee-hive routing reference,
+"Judgment contract").
 
 References: `references/exploring-reference.md`, `references/gray-area-probes.md`,
-`references/context-template.md`, `references/provenance.md`.
+`references/context-template.md`.
 
 Decisions captured and CONTEXT.md written. Invoke bee-planning skill.

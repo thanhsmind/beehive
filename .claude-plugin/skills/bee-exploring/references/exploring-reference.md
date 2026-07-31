@@ -1,7 +1,7 @@
 # Exploring Reference
 
 Full mechanics for rules the body states as a pointer. Cross-referenced from
-`SKILL.md`; decision IDs for every rule here live in `references/provenance.md`.
+`SKILL.md`.
 
 ## Batching mechanics
 

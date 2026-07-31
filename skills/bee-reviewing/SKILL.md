@@ -15,7 +15,7 @@ metadata:
 
 # Reviewing (inspector bees)
 
-Independent inspection session over a completed, immutable scope — the scrutiny a second team gives a pull request. Runs only on explicit request, never automatic. A cell can be verified and still `unreviewed`. Rules stated bare: `references/provenance.md`.
+Independent inspection session over a completed, immutable scope — the scrutiny a second team gives a pull request. Runs only on explicit request, never automatic. A cell can be verified and still `unreviewed`.
 
 ## Trigger — explicit user intent only
 
@@ -111,4 +111,3 @@ Record the decision and close the session — closes the REVIEW, not the feature
 | Reference | When to Load |
 |---|---|
 | `references/reviewing-reference.md` | Scope mechanics, specialist prompts, session-record schema, UAT wording, delta re-review + bypass |
-| `references/provenance.md` | Decision IDs + rationale per body rule |

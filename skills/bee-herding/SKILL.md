@@ -24,8 +24,7 @@ Managed `bee-*` plugin skill: source `skills/bee-herding/`, rendered to
 `.claude/skills/bee-herding/` and `.agents/skills/bee-herding/` at install.
 The `bee-` prefix is mandatory — distribution preflight hard-refuses any
 non-matching skill directory, and the plugin render copies only `bee-*`
-dirs, so a differently-named skill would install for nobody. Rules below
-are stated bare — provenance: `references/provenance.md`.
+dirs, so a differently-named skill would install for nobody.
 
 It drives three roles. A human invokes **bootstrap** directly — no
 `--role` — to pre-flight and turn the cockpit on; one-shot, run once to
@@ -143,4 +142,3 @@ the owner's next gesture) invokes the next iteration fresh.
 | `references/dispatch-dry-run.md` | Recorded dry-run proof |
 | `references/spawn-proof.md` | Recorded live spawn proof |
 | `references/dispatch-prompt.md`, `references/merge-prompt.md` | Control pane opening prompts |
-| `references/provenance.md` | Body rule -> decision tag map |

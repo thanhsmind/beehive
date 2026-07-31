@@ -21,7 +21,7 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
 
 ## The levels (say the chosen level's row when setting it)
 
-Gate 2 approves `shape` and `execution` together (`--merge`) — the retired Gate 3 has no question of its own, so "Gates 1-2" is the whole set below review. At any on-level the agent stops asking at bypassed gates and instead takes the RECOMMENDATION option, records the approval with `node .bee/bin/bee.mjs state gate --name context|shape|execution --approved true`, logs a one-line audit decision, and continues — posting a short `⚡ auto-approved Gate N` line, not a question. How far that reaches is the level:
+Gate 2 approves `shape` and `execution` together (`--merge`) — there is no separate Gate 3 question, so "Gates 1-2" is the whole set below review. At any on-level the agent stops asking at bypassed gates and instead takes the RECOMMENDATION option, records the approval with `node .bee/bin/bee.mjs state gate --name context|shape|execution --approved true`, logs a one-line audit decision, and continues — posting a short `⚡ auto-approved Gate N` line, not a question. How far that reaches is the level:
 
 | Level | `gate_bypass` | Auto-approves | Still stops for the human |
 |---|---|---|---|

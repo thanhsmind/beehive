@@ -22,7 +22,7 @@ work does not.
 
 Invoked by the human only, never triggered automatically, and never dispatched to an external
 CLI executor — self-modifying work stays on native tiers where the orchestrator's goal-check
-applies. Rules below are stated bare; decision IDs and rationale: `references/provenance.md`.
+applies.
 
 ```text
 Guard (bee repo?) -> Rank feedback -> Gate A (human picks) -> Fix via bee-writing-skills ->
@@ -157,7 +157,3 @@ Violating the letter of these rules is violating the spirit of these rules.
 
 Evolving loop complete: improvement shipped through both human gates (or cleanly stopped at one).
 Invoke bee-hive skill.
-
-| Reference | When to Load |
-|---|---|
-| `references/provenance.md` | Decision IDs + rationale for every body rule |

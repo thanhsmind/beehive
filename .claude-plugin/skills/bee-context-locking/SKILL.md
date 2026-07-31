@@ -16,7 +16,7 @@ metadata:
 # Context Locking (the shared scribe)
 
 `bee-context-locking` is the single place `docs/history/<feature>/CONTEXT.md` gets
-written (D8) — whether the input decisions came from `bee-exploring`'s human Socratic
+written — whether the input decisions came from `bee-exploring`'s human Socratic
 session or `bee-qualifying`'s automatic self-assessment. It renders; it does not
 decide. Precedent: `bee-briefing` (renders one artifact from truth artifacts, never
 originates content).
@@ -29,9 +29,9 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
   row, term, and boundary sentence comes from the caller's resolved input verbatim (or
   a light restatement of it) — inventing content to fill a section is the one failure
   this skill exists to prevent (mirrors `bee-briefing`'s own Hard Gate).
-- **Single writer (D8).** This is the only skill that writes `docs/history/<feature>/
+- **Single writer.** This is the only skill that writes `docs/history/<feature>/
   CONTEXT.md`. A caller about to write CONTEXT.md directly routes through here instead.
-- **Never invent a park-brief file format (D5).** A parked item's evidence and open
+- **Never invent a park-brief file format.** A parked item's evidence and open
   questions land in CONTEXT.md's existing `Outstanding Questions` section — never a
   new file, never a new section name.
 - **Never present a gate.** Gate 1 (and any Gate 2 the caller drives) stays the
@@ -42,8 +42,8 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
 
 | Mode | Caller | Trigger | Does |
 |---|---|---|---|
-| **lock** | `bee-exploring` (human path, D9) or `bee-qualifying` clear path (D4/4a.1) | resolved locked decisions ready | write/refresh `docs/history/<feature>/CONTEXT.md` from `references/context-template.md`; append `proposed` backlog rows for real Deferred Ideas; fresh-eyes review |
-| **park** | `bee-qualifying` park path (D5/4b.1-2) | evidence gathered, item judged ambiguous/large | write evidence + open questions into CONTEXT.md's `Outstanding Questions`; flip the item's `docs/backlog.md` `Status` row to `parked` (D13), same commit |
+| **lock** | `bee-exploring` (human path) or `bee-qualifying` clear path (step 4a.1) | resolved locked decisions ready | write/refresh `docs/history/<feature>/CONTEXT.md` from `references/context-template.md`; append `proposed` backlog rows for real Deferred Ideas; fresh-eyes review |
+| **park** | `bee-qualifying` park path (steps 4b.1-2) | evidence gathered, item judged ambiguous/large | write evidence + open questions into CONTEXT.md's `Outstanding Questions`; flip the item's `docs/backlog.md` `Status` row to `parked`, same commit |
 
 ## Flow — lock mode
 
@@ -58,8 +58,8 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
    CONTEXT.md list is the record for this feature, the backlog row is the durable
    product-level intent.
 3. **Fresh-eyes review.** Spawn one reviewer with no conversation history (slot:
-   `review`, decision 0021 — default opus on Claude, falls back to generation) — in
-   the background where the runtime supports it (decision 0017). It checks
+   `review` — default opus on Claude, falls back to generation) — in
+   the background where the runtime supports it. It checks
    completeness, contradictions, vague decisions, missing D-IDs, and blockers. Fix
    findings and re-review — max two loops, then hand remaining doubts back to the
    caller in the report (the caller decides whether to surface them to the user;
@@ -75,12 +75,12 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
    from the template first if this is the item's first pass), record what the
    caller gathered — the evidence and what is unclear. Reuse this existing
    structure verbatim; never a new file, never a new heading.
-2. **Flip Status to `parked` (D13).** In the same commit as the brief, set the
+2. **Flip Status to `parked`.** In the same commit as the brief, set the
    item's `docs/backlog.md` `Status` column to `parked`. This is the ONLY place a
    row becomes `parked` — mirrors the convention `bee-exploring` step 1 already
-   uses for `in-flight` (D11a), extended with the 4th status value.
+   uses for `in-flight`, extended with the 4th status value.
 3. **Return to the caller.** Report: CONTEXT.md path, backlog row updated.
-   `bee-qualifying` stops here (D5) — no further skill invoked; a human later picks
+   `bee-qualifying` stops here — no further skill invoked; a human later picks
    the item up via `bee-exploring`, which loads this brief instead of re-gathering.
 
 ## Red Flags
@@ -88,14 +88,17 @@ If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
 - inventing content for a section the caller's input left silent — Open Question,
   never a guess
 - writing CONTEXT.md, or the backlog `Status` column, from anywhere else in the
-  codebase (D8 — this is the single writer)
-- a new park-brief file or section instead of `Outstanding Questions` (D5)
+  codebase (this is the single writer)
+- a new park-brief file or section instead of `Outstanding Questions`
 - presenting or self-approving a gate — that is always the caller's job
 - skipping the fresh-eyes review, or treating an unresolved review doubt as resolved
 - flipping `Status` to anything other than `parked` in park mode, or touching
   `in-flight`/`done` (those stay each caller's own convention, untouched here)
 
-Violating the letter of the rules is violating the spirit of the rules.
+When a rule's letter stops serving its purpose here, say so out loud and
+deviate with a recorded reason — boundary rules (gates, state, secrets) hold
+as written; silent deviation is the defect (bee-hive routing reference,
+"Judgment contract").
 
 ## Handoff
 
@@ -106,4 +109,4 @@ Violating the letter of the rules is violating the spirit of the rules.
   (`bee-qualifying`) — no further skill invoked.
 
 Reference: `references/context-template.md` (kept in sync with `bee-exploring`'s
-copy of the same template, per D8).
+copy of the same template).

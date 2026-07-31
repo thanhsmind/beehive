@@ -15,7 +15,7 @@ metadata:
 
 # Reviewing (inspector bees)
 
-Independent inspection session over a completed, immutable scope — the scrutiny a second team gives a pull request. Runs only on explicit request, never automatic. A cell can be verified and still `unreviewed`. Rules stated bare: `references/provenance.md`.
+Independent inspection session over a completed, immutable scope — the scrutiny a second team gives a pull request. Runs only on explicit request, never automatic. A cell can be verified and still `unreviewed`.
 
 ## Trigger — explicit user intent only
 
@@ -106,9 +106,8 @@ Violating the letter of these rules is violating the spirit of these rules.
 
 ## Handoff
 
-Record the decision and close the session — closes the REVIEW, not the feature; every feature already closed independently. `standard`/`high-risk`: `bee-briefing` walkthrough mode writes `walkthrough.md` per feature. A P1 fix settling new behavior triggers `bee-scribing` (AGENTS.md rule 8): a settled decision, not a chain hop.
+Record the decision and close the session — closes the REVIEW, not the feature; every feature already closed independently. `standard`/`high-risk`: `bee-briefing` walkthrough mode writes `walkthrough.md` per feature. A P1 fix settling new behavior triggers `bee-scribing` (AGENTS.md, "Capture what settles"): a settled decision, not a chain hop.
 
 | Reference | When to Load |
 |---|---|
 | `references/reviewing-reference.md` | Scope mechanics, specialist prompts, session-record schema, UAT wording, delta re-review + bypass |
-| `references/provenance.md` | Decision IDs + rationale per body rule |

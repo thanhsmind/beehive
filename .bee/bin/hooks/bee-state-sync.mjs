@@ -11,83 +11,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import crypto from "node:crypto";
 import { readHookContext, logCrash, libModuleUrl } from "./adapter.mjs";
-// exec-speed D5 (es-5): fsutil.mjs is import-light (fs/path/crypto only, no
-// cells.mjs/lock.mjs/state-projection.mjs) — safe to import unconditionally
-// on the fast path below without pulling in the heavy store machinery this
-// cell exists to skip.
-import { readJson, writeJsonAtomic } from "../lib/fsutil.mjs";
 
 const HOOK_NAME = "state-sync";
-
-// exec-speed D5 (es-5) — cheap stat-only debounce for the listCells()
-// scan + rebuildStateProjection below. Mirrors the EXACT file set
-// lib/cells.mjs's listCells(root, {}) scans (top-level .bee/cells/*.json;
-// any directory entry, including `archive`, is explicitly skipped — same
-// discipline listCells itself documents) but never reads/parses a single
-// cell's JSON: stat only. A stamp is {count, newestMtimeMs, namesHash};
-// namesHash also catches a same-count add+delete swap that mtime/count
-// alone would miss.
-function cellsDirPath(root) {
-  return path.join(root, ".bee", "cells");
-}
-
-function stateSyncStampPath(root) {
-  return path.join(root, ".bee", "logs", "state-sync.stamp.json");
-}
-
-function computeCellsStamp(root) {
-  const dir = cellsDirPath(root);
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    entries = [];
-  }
-  const names = [];
-  let newestMtimeMs = 0;
-  for (const entry of entries) {
-    if (entry.isDirectory()) continue; // skip `archive` (or any dir), same as listCells
-    if (!entry.name.endsWith(".json")) continue;
-    names.push(entry.name);
-    try {
-      const stat = fs.statSync(path.join(dir, entry.name));
-      if (stat.mtimeMs > newestMtimeMs) newestMtimeMs = stat.mtimeMs;
-    } catch {
-      // vanished between readdir and stat — best-effort; the next run's own
-      // readdir will simply omit it, which already changes count/namesHash
-      // and forces the full path then.
-    }
-  }
-  names.sort();
-  const namesHash = crypto.createHash("sha256").update(names.join("\n")).digest("hex");
-  return { count: names.length, newestMtimeMs, namesHash };
-}
-
-function stampsEqual(a, b) {
-  return (
-    a &&
-    b &&
-    typeof a.count === "number" &&
-    typeof b.newestMtimeMs === "number" &&
-    typeof b.namesHash === "string" &&
-    a.count === b.count &&
-    a.newestMtimeMs === b.newestMtimeMs &&
-    a.namesHash === b.namesHash
-  );
-}
-
-// Fail-open by design (must_have): a stamp-write failure only costs one
-// extra full-path run next time — it must never surface as a hook crash or
-// block the store refresh that already succeeded.
-function writeStateSyncStamp(root, stamp) {
-  try {
-    writeJsonAtomic(stateSyncStampPath(root), stamp);
-  } catch {
-    // see comment above
-  }
-}
 
 async function main() {
   const ctx = await readHookContext(HOOK_NAME);
@@ -163,18 +89,6 @@ async function main() {
       }
     }
 
-    // exec-speed D5 (es-5) — the debounce gate: unchanged AND valid stamp
-    // means the cells store cannot have moved since the last full sync, so
-    // the scan + rebuild below (and their imports of cells.mjs/lock.mjs/
-    // state-projection.mjs) are skipped entirely. A missing or corrupt
-    // stamp reads as "unknown", never "unchanged" — it falls through to the
-    // full path below, same as any other tolerant reader in this codebase.
-    const stamp = computeCellsStamp(root);
-    const previousStamp = readJson(stateSyncStampPath(root), null);
-    if (stampsEqual(stamp, previousStamp)) {
-      return 0;
-    }
-
     const cellsLib = await import(libModuleUrl(root, "cells.mjs"));
 
     const counts = { open: 0, claimed: 0, capped: 0, blocked: 0 };
@@ -221,11 +135,6 @@ async function main() {
         },
         { maxAttempts: 1 },
       );
-      // exec-speed D5 (es-5): stamp only what actually got refreshed — a
-      // LockBusyError below skips this, so a busy run leaves the stamp
-      // stale on purpose and the NEXT invocation retries the full path
-      // instead of falsely believing this run already synced.
-      writeStateSyncStamp(root, stamp);
     } catch (error) {
       if (!(error instanceof lockLib.LockBusyError)) throw error;
     }

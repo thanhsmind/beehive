@@ -1,38 +1,38 @@
 # Swarming Reference
 
-Load after Gate 2 approval (merged shape+execution, D2), before spawning the first wave.
+Load after Gate 2 approval (merged shape+execution), before spawning the first wave.
 
 ## Single execution worker in full
 
 For `small`, the merged Gate 2+3 question and the frozen-judge
 check stay with the orchestrator, but implementation itself runs through
-**one dispatched execution worker** (AO14) — a lighter direct Agent dispatch
+**one dispatched execution worker** — a lighter direct Agent dispatch
 under the same execution contract as a swarm worker (same worker prompt
 template, same status-token protocol, same reservation and cap discipline),
 never a full bee-swarming wave: no wave analysis, no reviewers, no panels.
-`tiny` may instead execute inline in the orchestrator session (exec-speed
-D6 — same merged gate, cap discipline, and done-report; dispatch stays
-legal and, when chosen, follows this same contract).
-The orchestrator claims the cell itself (D1) before spawning — same as any
+`tiny` may instead execute inline in the orchestrator session — same merged
+gate, cap discipline, and done-report; dispatch stays legal and, when
+chosen, follows this same contract.
+The orchestrator claims the cell itself before spawning — same as any
 wave — then spawns it per the Operating Contract's Spawn step (param-carrying
 dispatch — a `model` param or a pinned agent type, never a bare marker) and
 the Delegation contract's execution-worker class
 (`bee-hive/references/routing-and-contracts.md`): it registers in the swarm
 registry (`state worker add`), validates the claim it was handed (against
-the inlined cell JSON in its prompt, exec-speed D7 — never `cells claim`)
+the inlined cell JSON in its prompt — never `cells claim`)
 and takes reservations under its own nickname,
 reads its `read_first`, implements within its `files`, commits, and caps it —
-by default through the pending path (`cells cap --feature-verify-pending`,
-main-verifies D4): no per-cell verify run, no `verification_evidence`. The
+by default through the pending path (`cells cap --feature-verify-pending`):
+no per-cell verify run, no `verification_evidence`. The
 classic evidenced path (verify run + `verification_evidence`/
 `red_failure_evidence`) still applies for spot use or other repos not on this
 doctrine. Then it releases its reservations and returns exactly one status
 token.
 
-**Parallel by default (hardening-7, D1):** a `small` lane's cells (1-3) fan
+**Parallel by default:** a `small` lane's cells (1-3) fan
 out to concurrent execution workers whenever every cell's *product* file set
 is disjoint — reservations are the proof and the police, 3-4 live workers is
-the ak-calibrated cap. Serial is the exception: it requires a named conflict
+the cap. Serial is the exception: it requires a named conflict
 recorded in the dispatch note, never assumed as the default. `tiny` stays
 single-cell by shape, so the concurrency question does not arise; `small`'s
 extra cells scale the WORK and, when disjoint, the concurrency too — never
@@ -56,9 +56,8 @@ After `[DONE]`, emit the cap tick, and when `ship_visibility` is active push
 the cap (first cap of a feature opens the draft PR) —
 `bee-hive/references/routing-and-contracts.md`, "Progress ticks" / "Ship
 visibility". Then — never the worker — author the done-report from the
-worker's verbatim diff plus the commit (main-verifies D4: no routine verify
-re-run; AO14, decision 0018's goal-check restated as authorship, not new
-mechanics — a re-run stays a smell-triggered judgment call, step 7 below),
+worker's verbatim diff plus the commit (no routine verify re-run — a re-run
+stays a smell-triggered judgment call, step 7 below),
 including the slice's demo artifact when one is owed. `tiny`/`small`'s one
 slice is also the feature's FINAL slice: before leaving swarming, run and
 record the ONE feature verify ("Feature verify at close, in full", below) —
@@ -67,7 +66,7 @@ off: both `tiny` and `small` present that done-report (diff + commit +
 feature-verify result + capture line) and invoke bee-scribing — no auto
 reviewer; the 1-correctness-reviewer contract lives inside a user-invoked
 session (implementation is verified; independent review runs only on user
-request, R1).
+request).
 
 The rest of this reference and the body's Operating Contract are the
 multi-worker wave protocol for `standard`/`high-risk`; a tiny/small dispatch
@@ -84,28 +83,27 @@ single worker — never wave analysis or multi-cell assignment.
    the schedule already auto-serializes file overlap into a later wave
    rather than refusing it. The schedule computation and verify-output
    capture delegate as extraction-tier I/O workers per the Delegation
-   contract (D2/D3, `bee-hive/references/routing-and-contracts.md`);
+   contract (`bee-hive/references/routing-and-contracts.md`);
    judgment (assignment, tier choice, goal-check verdicts, override
    decisions) stays on the orchestrator.
-2. **Assign and claim first (D1).** The orchestrator picks exactly **one
+2. **Assign and claim first.** The orchestrator picks exactly **one
    cell per worker**, then claims it itself — `cells claim-next` or `cells
    claim --id <id> --worker <nickname>` — before spawning; `--session-id` is
-   optional and self-derives from `CLAUDE_CODE_SESSION_ID` when omitted
-   (D3). Workers never claim their own cell, never self-select, browse the
+   optional and self-derives from `CLAUDE_CODE_SESSION_ID` when omitted.
+   Workers never claim their own cell, never self-select, browse the
    ready list, or take a second cell — a spawned worker only validates the
    claim it was handed (`cells show`).
 3. **Spawn with the isolation contract.** Each worker prompt contains: the
    cell id (already claimed under the worker's nickname per step 2), the
    path to `docs/history/<feature>/CONTEXT.md`, and — when the lane has one
-   — `docs/history/<feature>/plan.md`; for `tiny`/`small` (no `plan.md`,
-   D3/D4) cite the cell itself as the work spec instead. Also include the
+   — `docs/history/<feature>/plan.md`; for `tiny`/`small` (no `plan.md`)
+   cite the cell itself as the work spec instead. Also include the
    global constraints, its reservation identity (agent nickname), and the
    status-token protocol (`[DONE] [BLOCKED] [HANDOFF] [NOOP]`) — **nothing
-   else, never session history, never a literal session id (D3)**. Use the
+   else, never session history, never a literal session id**. Use the
    template below.
-<!-- bee:only claude -->
-   **Spawn the tier-matched pinned type when its rendered agent exists**
-   (W3, AO5/AO10/AO11): `subagent_type: "bee-gather"` for `generation`,
+   **Spawn the tier-matched pinned type when its rendered agent exists**:
+   `subagent_type: "bee-gather"` for `generation`,
    `"bee-extract"` for `extraction`, `"bee-review"` for `review` — these are
    bee's own rendered agent definitions (`.claude/agents/bee-*.md`,
    config-sourced at onboarding), never another plugin's type. `ceiling` has
@@ -113,21 +111,15 @@ single worker — never wave analysis or multi-cell assignment.
    default/general subagent type; the same default applies when the tier's
    slot is cli-shaped or otherwise has no rendered file. NEVER pair a
    `[bee-tier: generation|extraction|review]` marker with `subagent_type:
-   "general-purpose"` — `bee-model-guard` denies it (`generic-type-denied`,
-   decision 0023/AO5) precisely so this rule cannot be skipped by habit.
-<!-- bee:end -->
-<!-- bee:only codex -->
-   Codex has no per-agent `subagent_type` equivalent (AO11 asymmetry) — its
-   tier stays enforced as a read budget + output cap only, exactly as
-   before.
-<!-- bee:end -->
+   "general-purpose"` — `bee-model-guard` denies it (`generic-type-denied`)
+   precisely so this rule cannot be skipped by habit.
    NEVER spawn any OTHER plugin's agent type, even when the name matches the
    role: a same-named agent carries a different contract and makes the run
    depend on what happens to be installed.
 4. **Judge each cell's model tier at dispatch** — you (the orchestrator)
    assess the task in front of you and pick the fitting tier; it is NOT
-   fixed by planning (a planning `tier` is at most a hint you may override;
-   decision 0016). Rubric from the cell's lane + action + must_haves +
+   fixed by planning (a planning `tier` is at most a hint you may
+   override). Rubric from the cell's lane + action + must_haves +
    files:
    - **extraction** — pure retrieval or mechanical edits: rename, reformat,
      move a file, a one-line change, no design judgment.
@@ -144,9 +136,9 @@ single worker — never wave analysis or multi-cell assignment.
    `ceiling` scarce — if `bee_status` flags ceiling scarcity, re-judge
    routine cells downward before spawning.
 
-   **After the tier choice, resolve the advisor slot for this dispatch**
-   (AO4/AO5): `resolveAdvisor(root, runtime)`. The configured advisor IS the
-   advisor — no family test, no strength test, no self-judged skip (AO5);
+   **After the tier choice, resolve the advisor slot for this dispatch**:
+   `resolveAdvisor(root, runtime)`. The configured advisor IS the
+   advisor — no family test, no strength test, no self-judged skip;
    the orchestrator's only judgment is the one honest no-op below, never a
    hardcoded strength ladder. Add an `Advisor` line to the dispatch
    (template below) **only** when the advisor resolves AND passes that
@@ -170,33 +162,11 @@ single worker — never wave analysis or multi-cell assignment.
    and `node .bee/bin/bee.mjs reservations list --active-only` before
    assuming a worker is stuck. Do not send routine mid-flight pings;
    interrupt only for explicit user aborts or confirmed deadlocks.
-<!-- bee:only codex -->
-   For native Codex agents, a completed `wait_agent` call with no completion
-   is an **empty wait** and a timeout signal only. A `wait_agent`
-   timeout/no-completion result is only an empty wait; silence is not
-   failure. Never call `wait_agent` twice consecutively after an empty wait;
-   authority, urgency, and no-chatter instructions create no exception.
-   Before any later bounded wait, perform at least one material task-local
-   action when work remains; that one action satisfies the interval, and
-   exhausting all local work is not required. Only when no material work
-   remains, take exactly one `list_agents` snapshot. Handle any completion
-   that arrives during the interval exactly once, then recompute the
-   relevant live-agent set. Send one concise commentary update naming both
-   the live agent state and the next action. Only after this commentary may
-   a later bounded wait run, and only while the relevant live-agent set is
-   non-empty; zero live agents ends collection without another wait. No-op
-   work, repeated state reads, hidden reasoning, generic commentary, or
-   commentary alone do not qualify. Timeout never licenses interrupt,
-   duplicate dispatch, claim release, or reservation release; every running
-   agent, claim, and reservation stays owned. External process and artifact
-   polling remains outside this native-agent rule and stays governed by the
-   separate executor contract below.
-<!-- bee:end -->
-7. **Goal-check every `[DONE]` yourself (P12, decision 0018) — miss reruns,
-   hit ships.** A worker's word is never the evidence; the orchestrator
+7. **Goal-check every `[DONE]` yourself — miss reruns, hit ships.** A
+   worker's word is never the evidence; the orchestrator
    measures before the cell counts:
-   - **Re-run the verify — smell-triggered, not routine (main-verifies D4).**
-     Most cells now cap through the pending path with no per-cell verify to
+   - **Re-run the verify — smell-triggered, not routine.**
+     Most cells cap through the pending path with no per-cell verify to
      re-run; the ONE feature verify at final-slice close ("Feature verify at
      close, in full", below) is what proves the wave, not a per-`[DONE]`
      rerun. Re-run a cell's own verify yourself only on a smell — a
@@ -214,8 +184,7 @@ single worker — never wave analysis or multi-cell assignment.
      ask the worker's diff to justify each file or re-dispatch with
      corrected scope. A worker that rewrites the test is not passing the
      test.
-   - **Semantic judge, `standard`/`high-risk` only (D4, exec-speed D8,
-     proof-economy 2bb2cb27):** ONE checklist-judge dispatch per SLICE at
+   - **Semantic judge, `standard`/`high-risk` only:** ONE checklist-judge dispatch per SLICE at
      slice close, covering every capped `behavior_change` cell of that
      slice. `high-risk`: every slice. `standard`: selective — dispatch on
      smell, on a worker's/model's first slice of the feature, or on the
@@ -227,24 +196,23 @@ single worker — never wave analysis or multi-cell assignment.
      recorded with `cells judge-record` — per-cell records and cap teeth
      unchanged; a single-cell slice is identical to the old per-cell shape.
      This is goal-check verification, distinct from the no-auto-reviewer
-     stance above and from any user-invoked review session (565e68d0, Gate
-     4, and the candidates ledger stay untouched) —
+     stance above and from any user-invoked review session (Gate 4 and the
+     candidates ledger are separate) —
      `NEEDS_REVISION`/`automatic` means the cell is NOT done yet.
    - A `[DONE]` report carrying a **Consults** section is goal-checked
      exactly like any other — advice never substitutes for fresh verify
      output; re-run the verify yourself regardless of what the advisor said.
-8. **Wave clean → next wave (main-verifies D4).** A wave is clean once every
+8. **Wave clean → next wave.** A wave is clean once every
    cell is capped (pending or classic), goal-checked, and judge-intact (or
    explicitly flagged and carried to review) — no routine suite run gates
-   this step: the wave-close impacted run formerly required here is retired,
-   not relocated. Smell-triggered spot checks (step 7) stay the
+   this step. Smell-triggered spot checks (step 7) stay the
    orchestrator's judgment call. All waves clean → completion, **except** the
    feature's final slice, which additionally owes the ONE feature verify
    below before swarming may be left (the close-door guard enforces it).
 
-   **Test consolidation (slice-tail-test-batching P5, spec #80/#85).** The
+   **Test consolidation.** The
    done-report carries one line — `Test consolidation: <n> behavior cell(s)
-   | test cell <id> | <suite result>` — because authoring is now batched at
+   | test cell <id> | <suite result>` — because authoring is batched at
    the slice tail, so this is the only place the slice's coverage is visible
    at a glance. When the slice's `test` cell suite exposes a regression in
    an already-capped cell, open **fix cells in this same feature**; never
@@ -253,16 +221,16 @@ single worker — never wave analysis or multi-cell assignment.
    precondition no `gate_bypass` level (`total` included) and no headless
    run lifts.
 
-## Feature verify at close, in full (main-verifies D1-D5)
+## Feature verify at close, in full
 
-The per-cell proof requirement is deliberately relocated to the feature
+The per-cell proof requirement deliberately lives at the feature
 boundary: cells still commit and cap, but a pending cap's proof defers to
 ONE run over the feature's whole diff, made once the full picture exists —
 never per cell, never per wave.
 
 - **When:** at the FINAL slice's close, before leaving `swarming` (any
   `state set` phase transition out) or running `state scribing-run` — the
-  close door (`guardFeatureVerifyDebt`, D3, mirrors `guardTestCellDebt`)
+  close door (`guardFeatureVerifyDebt`)
   refuses both while any cell capped `--feature-verify-pending` lacks a
   green record newer than the newest pending cap; no `gate_bypass` level
   lifts it.
@@ -270,22 +238,21 @@ never per cell, never per wave.
   diff, cache-assisted (the content-hash suite-result cache makes a
   repeat/no-op run cheap). Capture the output to a file.
 - **Record:** `node .bee/bin/bee.mjs state feature-verify record --command
-  "<the command>" --output-file <f> --result green|red` (D2) — stamps
+  "<the command>" --output-file <f> --result green|red` — stamps
   `{feature, command, output_sha256, result, at}` on the active workflow
   record; `output_sha256` is computed from the file, never caller-supplied.
 - **Green** satisfies every pending cap recorded before it; the door opens.
-- **Red (D5):** storable — it documents the failure — but never satisfies
+- **Red:** storable — it documents the failure — but never satisfies
   the door. Open fix cells in the SAME feature, never un-cap a capped cell
   (the fix is new work), then re-verify. Per-cell commits + `git bisect`
   localize the regression across the feature's cells.
 - Read-only check anytime: `node .bee/bin/bee.mjs state feature-verify
   show`.
 - Bugfix cells never owe this locally either: the repro red proving a
-  bugfix cell's fix is MAIN-produced pre-dispatch (et-4 precedent) and cited
+  bugfix cell's fix is MAIN-produced pre-dispatch and cited
   in the cell — the worker fixes it, and the feature verify above is what
   later confirms the fix, never a worker-side re-proof.
 
-<!-- bee:only claude -->
 ## Native Worktree Integration Transaction
 
 This is the orchestrator-owned goal-check for an eligible Claude Code native
@@ -388,11 +355,9 @@ Acceptance tests use deterministic temporary Git repositories to inject identity
 mismatch, out-of-scope diff, merge conflict, targeted red, post-commit full red,
 `[BLOCKED]`, `[HANDOFF]`, abandonment, cleanup suppression, and revert behavior.
 No live checkout is used as a fault-injection target.
-<!-- bee:end -->
 
 ## Runtime Spawn Mechanics (side by side)
 
-<!-- bee:only claude -->
 | | Claude Code |
 |---|---|
 | Spawn | `Agent` tool, one call per worker; put the worker prompt in `prompt`; set `run_in_background: true` so the whole wave runs in parallel (send all spawns of a wave in one message) |
@@ -401,51 +366,15 @@ No live checkout is used as a fault-injection target.
 | Follow-up / rescue | `SendMessage` to the same agent id continues it with context intact; a new `Agent` call starts fresh |
 | Harness assist | `bee-chain-nudge` hook fires on SubagentStop: collect the status, update the cell, check reservations |
 | Isolation guarantee | Fresh context per Agent call; include only the contract fields |
-| Subagent type (W3, AO5/AO10/AO11) | `subagent_type: "bee-gather"`/`"bee-extract"`/`"bee-review"` for generation/extraction/review, when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling`, and any tier whose slot is cli-shaped or otherwise unrendered, use the runtime default (`general-purpose`) |
-<!-- bee:end -->
-<!-- bee:only codex -->
-| | Codex |
-|---|---|
-| Spawn | `spawn_agent({task_name: "<stable-name>", message: "<WORKER_PROMPT>", fork_turns: "none"})` (ORCH-01) — the live-probed codex 0.145.0 schema (i54-closeout D1): `task_name` + `message` required, no `agent_type` field; `bee dispatch prepare --runtime codex` emits exactly this shape, and the guard judges the `[bee-tier: <t>]` marker at the START of `message` for every `spawn_agent` payload |
-| Model tier | `config.models.codex[tier]` if set; today Codex cannot select a per-agent model → tier is enforced as a read budget + output cap in the prompt |
-| Result collection | Status tokens arrive in the parent thread; use `wait_agent(..., timeout_ms=60000)` only when a specific result is needed |
-| Follow-up / rescue | `followup_task({target: "<agent id or task name>", message: "..."})` to continue the same agent; a fresh `spawn_agent` only for a genuinely new task — no routine `send_input(...)` mid-flight |
-| Harness assist | None — the tend loop in this skill is the nudge |
-| Isolation guarantee | `fork_turns: "none"`; never fork the parent history for routine cells (ORCH-02) |
-| Subagent type (W3, AO5/AO10/AO11) | No per-agent subagent type — the tier is enforced as a read budget + output cap in the worker prompt regardless of what is spawned (documented asymmetry, not parity) |
-<!-- bee:end -->
+| Subagent type | `subagent_type: "bee-gather"`/`"bee-extract"`/`"bee-review"` for generation/extraction/review, when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling`, and any tier whose slot is cli-shaped or otherwise unrendered, use the runtime default (`general-purpose`) |
 
 On both runtimes the integrity rails are identical because they live in the helpers: `bee.mjs cells cap` refuses without a verify pass, and `bee.mjs reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
-<!-- bee:only claude -->
 On Claude Code, `bee-model-guard` additionally denies pairing a `[bee-tier: generation|extraction|review]` marker with `subagent_type: "general-purpose"` (`generic-type-denied`) — the pinned type above is not optional guidance, it is enforced at dispatch.
-<!-- bee:end -->
 
-<!-- bee:only codex -->
-### Native Codex timeout interval
 
-A `wait_agent` result with no completion is an **empty wait**, not a worker
-failure. A `wait_agent` timeout/no-completion result is only an empty wait;
-silence is not failure. Never call `wait_agent` twice consecutively after an
-empty wait; authority, urgency, and no-chatter instructions create no exception.
-Before any later bounded wait, perform at least one material task-local action
-when work remains; that one action satisfies the interval, and exhausting all
-local work is not required. Only when no material work remains, take exactly one
-`list_agents` snapshot. Handle any completion that arrives during the interval
-exactly once, then recompute the relevant live-agent set. Send one concise
-commentary update naming both the live agent state and the next action. Only
-after this commentary may a later bounded wait run, and only while the relevant
-live-agent set is non-empty; zero live agents ends collection without another
-wait. No-op work, repeated state reads, hidden reasoning, generic commentary, or
-commentary alone do not qualify. The timeout never licenses interrupt, duplicate
-dispatch, claim release, or reservation release: every running agent, claim, and
-reservation stays owned. Do not poll files or scratchpads for harness-managed
-native agents. External process and artifact polling stays governed by External
-Executors below and remains outside this native-agent rule.
-<!-- bee:end -->
+## Model Tiers — Config-Driven, Runtime-Keyed
 
-## Model Tiers — Config-Driven, Runtime-Keyed (decision 0012)
-
-Only the **cheaper** slots are configured, in `.bee/config.json` `models`, keyed by runtime first (bee is dual-runtime and each names models differently), then slot. **The ceiling is never configured** — it is always the session/orchestrator model (decision 0015). The default is the all-Claude role split (decision 0021) — session model orchestrates, opus reviews, sonnet implements, haiku extracts — and **every slot is editable to whatever models the user actually has** (only a Claude subscription → keep all-Claude; a Codex plan too → point slots at GPT via cli executors):
+Only the **cheaper** slots are configured, in `.bee/config.json` `models`, keyed by runtime first (bee is dual-runtime and each names models differently), then slot. **The ceiling is never configured** — it is always the session/orchestrator model. The default is the all-Claude role split — session model orchestrates, opus reviews, sonnet implements, haiku extracts — and **every slot is editable to whatever models the user actually has** (only a Claude subscription → keep all-Claude; a Codex plan too → point slots at GPT via cli executors):
 
 ```json
 "models": {
@@ -454,9 +383,9 @@ Only the **cheaper** slots are configured, in `.bee/config.json` `models`, keyed
 }
 ```
 
-A slot value may also be `{ "model": "opus", "effort": "xhigh" }` (P17 — per-agent reasoning effort, applied where the runtime supports it, silently recorded where it does not; levels: low/medium/high/xhigh/max) or `{ "kind": "cli", "command": "..." }` (external executor, section below — effort rides inside the command). The `review` slot is consumed by bee-reviewing's specialists, exploring's fresh-eyes, and bee-planning's merged reviewer (the review wave, D5 — Structure + cold-pickup cell review); `null` review falls back to generation. **Copy-paste presets** (all-claude, tuned, GPT adversarial review, codex-implements, antigravity/`agy`, opencode, budget): `docs/model-presets.md` in the bee repo — including the `bash -lc '… "$(cat)"'` wrapper every CLI that cannot read the prompt from stdin (`agy`, `opencode`) needs to satisfy the stdin transport in step 3 below.
+A slot value may also be `{ "model": "opus", "effort": "xhigh" }` (per-agent reasoning effort, applied where the runtime supports it, silently recorded where it does not; levels: low/medium/high/xhigh/max) or `{ "kind": "cli", "command": "..." }` (external executor, section below — effort rides inside the command). The `review` slot is consumed by bee-reviewing's specialists, exploring's fresh-eyes, and bee-planning's merged reviewer (the review wave — Structure + cold-pickup cell review); `null` review falls back to generation. **Copy-paste presets** (all-claude, tuned, GPT adversarial review, codex-implements, antigravity/`agy`, opencode, budget): `docs/model-presets.md` in the bee repo — including the `bash -lc '… "$(cat)"'` wrapper every CLI that cannot read the prompt from stdin (`agy`, `opencode`) needs to satisfy the stdin transport in step 3 below.
 
-- **ceiling** = the strongest model in play = **the session model itself** (no config entry). A ceiling cell inherits the session model — omit the `model` param **and** carry the `[bee-tier: ceiling]` marker, anchored to the first non-whitespace token of the prompt or the start of the description (decision 0023 — a marker anywhere else never counts). Keep it scarce: planning, integration, architecture, final review only. Touch it on every dispatch and the saving evaporates.
+- **ceiling** = the strongest model in play = **the session model itself** (no config entry). A ceiling cell inherits the session model — omit the `model` param **and** carry the `[bee-tier: ceiling]` marker, anchored to the first non-whitespace token of the prompt or the start of the description (a marker anywhere else never counts). Keep it scarce: planning, integration, architecture, final review only. Touch it on every dispatch and the saving evaporates.
 - **generation** = the mid worker that runs the loops (implementation, test writing). Where the bulk of dispatches go.
 - **extraction** = cheapest capable (retrieval, mechanical edits).
 - A **null** tier means the runtime cannot switch per-agent models (Codex today) → state the tier in the worker prompt and enforce it as a read budget + output cap. Set real ids (e.g. `"generation": "gpt-5"`) only if your runtime supports per-agent selection.
@@ -467,13 +396,13 @@ Resolve a tier for the active runtime before spawning:
 node .bee/bin/bee.mjs status --json    # .models shows both runtime maps
 ```
 
-Or in code: `resolveTier(root, tier, runtime, purpose?)` from `lib/state.mjs` returns a typed dispatch — `{type:'inherit'}` (ceiling → omit the model param and carry the anchored `[bee-tier: ceiling]` marker), `{type:'model', model}`, `{type:'budget'}` (prompt-enforced tier, anchored `[bee-tier: <tier>]` marker), `{type:'cli', command}` (external executor, below — only when `purpose` is the explicit `{for:'gather'}`), or `{type:'refused', reason:'cli_tier_gather_only', slot, fix}` (a cli-shaped tier resolving without `{for:'gather'}` — AO12/B1, plan 2A-ii). The optional 4th param `purpose` is shaped `{for:'gather'|'cell'}` and **defaults to `'cell'`** — the fail-safe side: every bare 3-arg call, and any missing/malformed `purpose`, resolves cli-shaped values as a refusal; only an explicit `{for:'gather'}` unlocks `{type:'cli'}`. Non-cli values ignore `purpose` entirely. The legacy `modelForTier` still returns a model name or `null` (it calls `resolveTier` with no purpose, so cli keeps degrading to `null` exactly as before this change). Two shapes, one map: keep the strongest model as `ceiling` and it stays scarce as the orchestrator (fan-out).
+Or in code: `resolveTier(root, tier, runtime, purpose?)` returns a typed dispatch — `{type:'inherit'}` (ceiling → omit the model param and carry the anchored `[bee-tier: ceiling]` marker), `{type:'model', model}`, `{type:'budget'}` (prompt-enforced tier, anchored `[bee-tier: <tier>]` marker), `{type:'cli', command}` (external executor, below — only when `purpose` is the explicit `{for:'gather'}`), or `{type:'refused', reason:'cli_tier_gather_only', slot, fix}` (a cli-shaped tier resolving without `{for:'gather'}`). The optional 4th param `purpose` is shaped `{for:'gather'|'cell'}` and **defaults to `'cell'`** — the fail-safe side: every bare 3-arg call, and any missing/malformed `purpose`, resolves cli-shaped values as a refusal; only an explicit `{for:'gather'}` unlocks `{type:'cli'}`. Non-cli values ignore `purpose` entirely. `modelForTier` returns a model name or `null` (it calls `resolveTier` with no purpose, so cli degrades to `null`). Two shapes, one map: keep the strongest model as `ceiling` and it stays scarce as the orchestrator (fan-out).
 
-Every dispatch carries an explicit tier marker (decision 0023, hardened per P1-1): `inherit` needs the [bee-tier: ceiling] marker anchored to the first non-whitespace token of the prompt, or the description must start with it; `budget` needs the matching [bee-tier: <tier>] marker anchored the same way, stated alongside the budget in the prompt. A marker anywhere else — embedded mid-prompt or mid-description — never satisfies the transport, and a bare dispatch with neither the model param nor an anchored marker is denied by the model-guard hook.
+Every dispatch carries an explicit tier marker: `inherit` needs the [bee-tier: ceiling] marker anchored to the first non-whitespace token of the prompt, or the description must start with it; `budget` needs the matching [bee-tier: <tier>] marker anchored the same way, stated alongside the budget in the prompt. A marker anywhere else — embedded mid-prompt or mid-description — never satisfies the transport, and a bare dispatch with neither the model param nor an anchored marker is denied by the model-guard hook.
 
-**Dispatch economics (GH #22 P1-6 D3):** `.bee/config.json` names the **requested** model for a tier — what should run, never a guarantee of what did. Every dispatch the guard evaluates (allowed or denied) now logs the honest split in `.bee/logs/dispatch.jsonl`: `logical_tier` (the declared tier), `requested_model` (what config names, when resolvable), `effective_model` + `effective_model_status`, `channel` (the transport family), and `enforcement` (the mechanism). A real structural `model` param on a claude Agent/Task dispatch is `pinned` — `effective_model` equals that param, because the param is something we actually watched the caller pass. A claude dispatch carrying only the `[bee-tier: <t>]` marker (no param — the prompt-budget style) is `unverified` — `requested_model` may still name the tier's configured model, informationally, but nothing pins the dispatch to it. On **codex-native** transport (`spawn_agent`), the effective model is `inherited-or-unknown` **always** — codex-cli 0.144.4 has no per-agent model selection at all, so this status never flips to `pinned` no matter what the tier resolves to; only a future capability probe proving per-agent selection would justify moving it. A **cli-exec** dispatch (external executor, below) is `unverified` too — the command names its own model in its own argv, outside this vocabulary, so `requested_model` is always `null` there.
+**Dispatch economics:** `.bee/config.json` names the **requested** model for a tier — what should run, never a guarantee of what did. Every dispatch the guard evaluates (allowed or denied) logs the honest split in `.bee/logs/dispatch.jsonl`: `logical_tier` (the declared tier), `requested_model` (what config names, when resolvable), `effective_model` + `effective_model_status`, `channel` (the transport family), and `enforcement` (the mechanism). A real structural `model` param on a claude Agent/Task dispatch is `pinned` — `effective_model` equals that param, because the param is something we actually watched the caller pass. A claude dispatch carrying only the `[bee-tier: <t>]` marker (no param — the prompt-budget style) is `unverified` — `requested_model` may still name the tier's configured model, informationally, but nothing pins the dispatch to it. On **codex-native** transport (`spawn_agent`), the effective model is `inherited-or-unknown` **always** — codex-cli 0.144.4 has no per-agent model selection at all, so this status never flips to `pinned` no matter what the tier resolves to; only a future capability probe proving per-agent selection would justify moving it. A **cli-exec** dispatch (external executor, below) is `unverified` too — the command names its own model in its own argv, outside this vocabulary, so `requested_model` is always `null` there.
 
-## External Executors — Multi-Provider Workers (P14, decision 0019)
+## External Executors — Multi-Provider Workers
 
 A configurable tier may name an **external CLI executor** instead of a model — that is how GPT/Codex, GLM, Kimi, or any other provider's CLI becomes a bee worker while Claude (or Codex) stays the orchestrator:
 
@@ -486,9 +415,9 @@ A configurable tier may name an **external CLI executor** instead of a model —
 }
 ```
 
-**Dispatch guard — what never routes to a cli executor** (codex-first field notes): a cell whose work needs the *session's* tools — MCP servers (browser, computer-use), credential managers, secrets reads, or anything only the orchestrating harness can reach — stays on a native tier; the external process cannot see those tools and will improvise instead of failing loudly. Destructive/irreversible operations (pushes, releases, external-system mutations) also never go external.
+**Dispatch guard — what never routes to a cli executor:** a cell whose work needs the *session's* tools — MCP servers (browser, computer-use), credential managers, secrets reads, or anything only the orchestrating harness can reach — stays on a native tier; the external process cannot see those tools and will improvise instead of failing loudly. Destructive/irreversible operations (pushes, releases, external-system mutations) also never go external.
 
-**Status (AO12/B1, plan 2A-ii/2A-iii):** `resolveTier` now purpose-scopes cli resolution — a bare/cell-purpose resolve of a cli-shaped tier **refuses** (`{type:'refused', reason:'cli_tier_gather_only'}`); only the explicit `resolveTier(root, slot, runtime, {for:'gather'})` reaches `{type:'cli'}`. Cli cell execution — the reserve/verify/cap/release worker contract described below — stays **gated behind W9's absolute-path dogfood** and is not dispatched today; a cli-shaped tier serves gathers only, through the Delegation contract's cli gather branch (`bee-hive/references/routing-and-contracts.md`), which has no reservation, no cap, and no `result.json` — stdout **is** the digest. This section documents the cell-execution contract for when W9 lands; do not dispatch a cell to a cli-shaped tier under the protocol below until then.
+**Status:** `resolveTier` purpose-scopes cli resolution — a bare/cell-purpose resolve of a cli-shaped tier **refuses** (`{type:'refused', reason:'cli_tier_gather_only'}`); only the explicit `resolveTier(root, slot, runtime, {for:'gather'})` reaches `{type:'cli'}`. Cli cell execution — the reserve/verify/cap/release worker contract described below — is not dispatched today; a cli-shaped tier serves gathers only, through the Delegation contract's cli gather branch (`bee-hive/references/routing-and-contracts.md`), which has no reservation, no cap, and no `result.json` — stdout **is** the digest. This section documents the cell-execution contract for when that path is enabled; until then, do not dispatch a cell to a cli-shaped tier under the protocol below.
 
 **Dispatch protocol** (`resolveTier(root, slot, runtime, {for:'gather'}).type === 'cli'`):
 
@@ -509,16 +438,16 @@ A configurable tier may name an **external CLI executor** instead of a model —
 3. **Spawn detached, output to files:** before launching — first dispatch or any resume round — delete any existing `.bee/workers/<cell-id>.result.json`; a stale result must never satisfy a later attempt. Run the configured command as a background process, prompt via stdin, final message to a dedicated file where the CLI supports it (codex: `-o .bee/workers/<cell-id>.result.md`), raw stream to a job log with stderr suppressed — thinking noise bloats the orchestrator's context; re-enable stderr only to debug a failing run. E.g. `<command> -o .bee/workers/<id>.result.md - < .bee/workers/<id>.prompt.md > .bee/workers/<id>.out.log 2>/dev/null`. Keep the launcher's job handle — its exit event is the "process ended" signal step 5 waits on. Record the worker (nickname, cell, `executor: cli`) in `.bee/state.json` as usual.
 4. **Tend by artifact, not by chat:** the external worker runs the same `.bee/bin` helpers (reserve → verify → cap → release) because they are plain node scripts — the cell status and reservations ARE the progress signal. Poll `node .bee/bin/bee.mjs cells show --id <id>` and read `.bee/workers/<cell-id>.result.json` for the final outcome; never parse the raw JSONL stream. A quiet run is not a dead run — do not kill on silence alone.
 5. **Accept by file, never by exit:** once the process ends, a cli run counts only if `result.json` exists, parses, and carries a valid outcome. Missing, unparseable, or invalid-outcome result = a failed run, routed to rescue (step 7) — never accepted, never silently waited on.
-6. **Trust boundary is decision 0018, doubly:** an external worker's `done` is never accepted on its word — the orchestrator ALWAYS re-runs the cell's verify itself and runs `bee.mjs cells judge --id <id>`. External executors never get the tiny/small spot-check relaxation; every external cell is goal-checked. The result file is a signal, never the evidence. On `standard`/`high-risk` `behavior_change` cells, the same semantic checklist judge from the tier table in `bee-hive/references/routing-and-contracts.md` ("Goal-check judge tier", D4) applies here too — verification, not the on-demand review session (565e68d0 untouched).
+6. **Trust boundary — never on its word:** an external worker's `done` is never accepted on its word — the orchestrator ALWAYS re-runs the cell's verify itself and runs `bee.mjs cells judge --id <id>`. External executors never get the tiny/small spot-check relaxation; every external cell is goal-checked. The result file is a signal, never the evidence. On `standard`/`high-risk` `behavior_change` cells, the same semantic checklist judge from the tier table in `bee-hive/references/routing-and-contracts.md` ("Goal-check judge tier") applies here too — verification, not the on-demand review session.
 7. **Rescue — resume before re-dispatch:** on a goal-check miss or a failed acceptance (step 5), prefer the CLI's session-resume (codex: `codex exec resume --last`, run from the repo dir; resume inherits the original session's sandbox/config — do not re-pass sandbox flags) with a short prompt carrying the diagnostic that applies — the failing verify output for a goal-check miss, or the acceptance failure (missing/unparseable/invalid `result.json`) for a step-5 reject — plus the contract path. It keeps the worker's context and costs far less than a fresh run. **After 2 failed resume rounds, stop ping-ponging:** mark `[BLOCKED]` and climb the normal rescue ladder (a stuck/garbled run is killed and re-dispatched; the tier rung may swap `cli` for a native model tier when the provider itself is failing).
 
-Constraints: the external CLI must be able to edit the repo working tree and run node (the `.bee/bin` contract); grant write access scoped to the repo only (codex: `-s workspace-write`) — never a machine-wide bypass (`--yolo`-style flags) as the house default; the 0018 goal-check exists so bee does not have to *trust* the worker, not so it can hand over the machine. Secrets: the external process gets only its own provider's credentials from the user's environment — bee passes none.
+Constraints: the external CLI must be able to edit the repo working tree and run node (the `.bee/bin` contract); grant write access scoped to the repo only (codex: `-s workspace-write`) — never a machine-wide bypass (`--yolo`-style flags) as the house default; the goal-check exists so bee does not have to *trust* the worker, not so it can hand over the machine. Secrets: the external process gets only its own provider's credentials from the user's environment — bee passes none.
 
-**Transient hygiene (workers-prune):** dispatch transients (`<cell-id>.prompt.md`, `.out*.log`, `.result.md|json`, reviewer/plan-check logs) accumulate in `.bee/workers/` and are never needed after the feature closes. At feature close — after review acceptance, before the closing commit — the orchestrator runs `node .bee/bin/bee.mjs state worker prune` (`--dry-run` to preview). Keep-rules protect transients of active workers and non-capped cells (re-read immediately before the destructive loop, C1), and files outside the transient suffix set (evidence snapshots, cell payloads, subdirectories) are never touched — but prune is still the orchestrator's feature-close verb, not something to race against an in-flight dispatch round.
+**Transient hygiene:** dispatch transients (`<cell-id>.prompt.md`, `.out*.log`, `.result.md|json`, reviewer/plan-check logs) accumulate in `.bee/workers/` and are never needed after the feature closes. At feature close — after review acceptance, before the closing commit — the orchestrator runs `node .bee/bin/bee.mjs state worker prune` (`--dry-run` to preview). Keep-rules protect transients of active workers and non-capped cells (re-read immediately before the destructive loop), and files outside the transient suffix set (evidence snapshots, cell payloads, subdirectories) are never touched — but prune is still the orchestrator's feature-close verb, not something to race against an in-flight dispatch round.
 
 ## Worker Prompt Template
 
-Nicknames are Minions character names (decision 3d55b976, human-confirmed f4c4a162) — recognizable,
+Nicknames are Minions character names — recognizable,
 consistent worker identities; the assigned cell stays authoritative for responsibilities.
 
 ```text
@@ -526,38 +455,36 @@ You are a bee worker subagent.
 
 Identity:
 - Agent nickname (reservation identity): <NICKNAME>
-- Assigned cell id: <CELL_ID> (ALREADY CLAIMED for you by the orchestrator before dispatch, per D1 — do NOT run `cells claim`; validate against the inlined cell JSON below, exec-speed D7)
+- Assigned cell id: <CELL_ID> (ALREADY CLAIMED for you by the orchestrator before dispatch — do NOT run `cells claim`; validate against the inlined cell JSON below)
 - Feature: <FEATURE>
 - Model tier: <extraction|generation|ceiling> (model: <MODEL_NAME>)
 - State at dispatch: phase=<PHASE> feature=<FEATURE> gates.execution=<BOOL> (copied from the orchestrator's own fresh read; the worker never re-fetches the full payload for this)
-- Advisor (optional — present only when the advisor resolves and is not the worker's own model, the same-model no-op, AO4/AO5): <ADVISOR_MODEL_OR_CLI_COMMAND> — consult via <TRANSPORT>
+- Advisor (optional — present only when the advisor resolves and is not the worker's own model, the same-model no-op): <ADVISOR_MODEL_OR_CLI_COMMAND> — consult via <TRANSPORT>
 
 Inputs — read these; nothing else will be provided:
 - docs/history/<FEATURE>/CONTEXT.md
 - docs/history/<FEATURE>/plan.md
 - Global constraints: <GLOBAL_CONSTRAINTS — locked D-IDs, prohibitions, budgets>
-- Your cell (inlined verbatim from the orchestrator's claim-time read — authoritative, exec-speed D7):
+- Your cell (inlined verbatim from the orchestrator's claim-time read — authoritative):
   <CELL_JSON — the full .bee/cells/<CELL_ID>.json content>
 
 Contract:
 - Load the bee-executing skill immediately and follow its loop exactly.
 - Execute only the assigned cell — it is already claimed under your nickname; never run `cells claim` yourself, never select or accept other work.
-- Reserve every file before writing, under your nickname; never pass a session id you were handed — reservation and claim verbs auto-derive one from your own environment when needed (D3).
+- Reserve every file before writing, under your nickname; never pass a session id you were handed — reservation and claim verbs auto-derive one from your own environment when needed.
 - Prefix write-heavy shell commands with BEE_AGENT_NAME="<NICKNAME>".
 - Return exactly one final status token: [DONE], [BLOCKED], [HANDOFF], or [NOOP],
   followed by the result fields. Report file only for [BLOCKED]/[HANDOFF]/consult-carrying
-  cells (exec-speed D10) — a routine [DONE] relies on the cap trace + this message.
+  cells — a routine [DONE] relies on the cap trace + this message.
 
-Startup (exec-speed D7 — two reads, zero CLI round-trips):
+Startup (two reads, zero CLI round-trips):
 1. Read AGENTS.md.
 2. Read docs/history/<FEATURE>/CONTEXT.md. Validate ownership against the INLINED cell JSON above (status claimed, worker <NICKNAME>) — never re-run `status --brief` or `cells show` at startup; the dispatch state line and inlined cell are authoritative, and ownership is re-enforced at cap by the claim guard. A prompt missing the inlined cell JSON is malformed → [BLOCKED].
 3. Reserve, implement, verify, cap, release, report.
 ```
 
-The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are no longer a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder (AO5). The same-model no-op is the orchestrator's, run at dispatch, never left to the worker (AO4 + AO5). When present, `<TRANSPORT>` states the proven transport verbatim, matching what bee-executing's Advisor Consult section tells the worker to run:
-<!-- bee:only claude -->
+The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are not a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder. The same-model no-op is the orchestrator's, run at dispatch, never left to the worker. When present, `<TRANSPORT>` states the proven transport verbatim, matching what bee-executing's Advisor Consult section tells the worker to run:
 for a **model-shaped** advisor, `your own Agent tool, model param <advisor-model>, description starting exactly "advisor-consult <CELL_ID>: <advisor-model>"` (fallback: headless `claude -p --model <advisor-model>`);
-<!-- bee:end -->
 for a **cli-shaped** advisor, `<the configured command>, evidence bundle on stdin` (External Executors output-capture discipline, above).
 
 Never include session history, other cells, or the orchestrator's reasoning. If a worker needs more than this contract, the cell failed cold-pickup review — route the gap back, do not widen the prompt with transcript.
@@ -615,15 +542,15 @@ node .bee/bin/bee.mjs reservations list --active-only
 When a cell or wave finishes (capped, verify green) and further
 execution-approved work remains — this lane or another Gate-3-approved one —
 continue with the next unit in this session: finishing a unit is never a
-reason to stop, ask, or wait. The planned-next handoff (fresh-session-handoff
-D1/D2) is a session-exit artifact, not an offer: only when this session is
+reason to stop, ask, or wait. The planned-next handoff is a session-exit
+artifact, not an offer: only when this session is
 actually ending (context budget reached, or the run is otherwise
 terminating), claim the next unit (`bee cells claim-next`), write the
 handoff (`bee state handoff write --kind planned-next --writer-session <id>
 --previous-cell <capped-id> --next-cell <claimed-id>`), and end cleanly —
 the next fresh session (a `/clear` or a fresh start) adopts the carried
 claim automatically and opens straight into the next cell, no confirmation
-asked (no-clear-stop D1). Never stop to suggest `/clear`, never wait for
+asked. Never stop to suggest `/clear`, never wait for
 one, and never issue `/clear` yourself.
 
 ## Red Flags
@@ -636,7 +563,6 @@ one, and never issue `/clear` yourself.
 - results collected but state.json / cells not updated
 - session history in a worker prompt
 
-<!-- bee:only claude -->
 
 ## Threat model and protected attestation
 
@@ -663,5 +589,4 @@ These are typed identity halts: stop integration, preserve the worktree and
 branch, and never reinterpret worker result wording as authority. Transactional
 merge, verification, revert, cleanup, and destructive-drop disposition remain the
 acceptance procedure owned by `worktree-isolation-4` and the swarming reference.
-<!-- bee:end -->
 

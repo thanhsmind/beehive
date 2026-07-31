@@ -418,72 +418,6 @@ function commitsSinceKey(ref) {
   return `since ${ref}`;
 }
 
-// --- persistent (sha,sha) git-answer cache (exec-speed status hot spot) ---
-// Measured: a full `bee status` spent ~860ms of its ~1.2s in this module's
-// candidate loop — one git spawn per unique (head, ref) pair across ~90
-// candidates, every invocation, answering questions whose answers cannot
-// change: `merge-base --is-ancestor A B` over two FIXED shas is immutable,
-// and `rev-list REF..HEAD --count` is immutable for a FIXED (HEAD, ref)
-// pair. So resolved answers persist across invocations in
-// .bee/logs/review-git-cache.json. UNRESOLVED answers (unknown sha, missing
-// git) are NOT immutable — a fetch can resolve them later — so they persist
-// only under the current HEAD generation and are dropped when HEAD moves
-// (which also drops every `since` entry, whose key embeds HEAD implicitly).
-// Fail-open everywhere: unreadable/corrupt cache = empty cache; a failed
-// write = nothing. The cache is BYPASSED whenever a caller injects `runGit`
-// (that seam exists so tests can count real git invocations) and when
-// BEE_REVIEW_GIT_CACHE=off.
-const GIT_CACHE_SCHEMA = 'review-git-cache/1';
-let gitCacheState = null; // { root, data, dirty } — one per process
-function gitCachePath(root) {
-  return path.join(root, '.bee', 'logs', 'review-git-cache.json');
-}
-function loadGitCache(root) {
-  if (gitCacheState && gitCacheState.root === root) return gitCacheState;
-  let head = null;
-  try {
-    const r = defaultRunGit(root, ['rev-parse', 'HEAD']);
-    if (r.status === 0) head = String(r.stdout).trim();
-  } catch {
-    /* fail-open: no git => cache still works for resolved entries */
-  }
-  let data = readJson(gitCachePath(root), null);
-  if (!data || typeof data !== 'object' || data.schema !== GIT_CACHE_SCHEMA) {
-    data = { schema: GIT_CACHE_SCHEMA, head, covered: {}, covered_gen: {}, since: {} };
-  } else if (data.head !== head) {
-    data = {
-      schema: GIT_CACHE_SCHEMA,
-      head,
-      covered: data.covered && typeof data.covered === 'object' ? data.covered : {},
-      covered_gen: {},
-      since: {},
-    };
-  }
-  if (!data.covered || typeof data.covered !== 'object') data.covered = {};
-  if (!data.covered_gen || typeof data.covered_gen !== 'object') data.covered_gen = {};
-  if (!data.since || typeof data.since !== 'object') data.since = {};
-  gitCacheState = { root, data, dirty: false };
-  return gitCacheState;
-}
-function flushGitCache(state, root) {
-  if (!state.dirty) return;
-  try {
-    writeJsonAtomic(gitCachePath(root), state.data);
-    state.dirty = false;
-  } catch {
-    /* fail-open: the cache is an optimization, never a source of truth */
-  }
-}
-function persistentGitCacheFor(root, runGit) {
-  if (runGit !== defaultRunGit) return null; // test seam: never dampen injected counters
-  if (process.env.BEE_REVIEW_GIT_CACHE === 'off') return null;
-  try {
-    return loadGitCache(root);
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Is `head` an ancestor of (or equal to) `ref` in `root`'s git history?
  * Returns { covered: true|false, unresolved: false } on a clean answer, or
@@ -494,27 +428,12 @@ function headCoveredBy(root, head, ref, memo, runGit = defaultRunGit) {
   if (head === ref) return { covered: true, unresolved: false };
   const key = memo ? coveredByKey(head, ref) : null;
   if (memo && memo.has(key)) return memo.get(key);
-  const persist = persistentGitCacheFor(root, runGit);
-  const pkey = `${head} ${ref}`;
-  if (persist) {
-    const hit = persist.data.covered[pkey] || persist.data.covered_gen[pkey];
-    if (hit) {
-      if (memo) memo.set(key, hit);
-      return hit;
-    }
-  }
   const result = runGit(root, ['merge-base', '--is-ancestor', head, ref]);
   let value;
   if (result.status === 0) value = { covered: true, unresolved: false };
   else if (result.status === 1) value = { covered: false, unresolved: false };
   else value = { covered: null, unresolved: true }; // null or e.g. exit 128 — unknown/invalid revision
   if (memo) memo.set(key, value);
-  if (persist) {
-    if (value.unresolved) persist.data.covered_gen[pkey] = value;
-    else persist.data.covered[pkey] = value;
-    persist.dirty = true;
-    flushGitCache(persist, root);
-  }
   return value;
 }
 
@@ -526,14 +445,6 @@ function headCoveredBy(root, head, ref, memo, runGit = defaultRunGit) {
 function commitsSince(root, ref, memo, runGit = defaultRunGit) {
   const key = memo ? commitsSinceKey(ref) : null;
   if (memo && memo.has(key)) return memo.get(key);
-  // Persisted per HEAD generation (the answer embeds HEAD): loadGitCache
-  // wipes `since` whenever HEAD moves, so a hit here is always current.
-  const persist = persistentGitCacheFor(root, runGit);
-  if (persist && persist.data.since[ref]) {
-    const hit = persist.data.since[ref];
-    if (memo) memo.set(key, hit);
-    return hit;
-  }
   const result = runGit(root, ['rev-list', `${ref}..HEAD`, '--count']);
   let value;
   if (result.status !== 0) {
@@ -543,11 +454,6 @@ function commitsSince(root, ref, memo, runGit = defaultRunGit) {
     value = Number.isFinite(count) ? { count, unresolved: false } : { count: null, unresolved: true };
   }
   if (memo) memo.set(key, value);
-  if (persist) {
-    persist.data.since[ref] = value;
-    persist.dirty = true;
-    flushGitCache(persist, root);
-  }
   return value;
 }
 

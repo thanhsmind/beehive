@@ -15,7 +15,7 @@ metadata:
 
 # Briefing (the beekeeper's brief)
 
-One artifact per feature: `docs/history/<feature>/implement-plan.md`. Consolidates truth artifacts (`CONTEXT.md`, `approach.md`, `plan.md`, cells, verify output); authors only Technical Design and Rollback Plan. Never originates a decision, scope, approach, or cell — inventing content to fill a section is the one failure this skill exists to prevent. Rules stated bare — decision IDs: `references/provenance.md`.
+One artifact per feature: `docs/history/<feature>/implement-plan.md`. Consolidates truth artifacts (`CONTEXT.md`, `approach.md`, `plan.md`, cells, verify output); authors only Technical Design and Rollback Plan. Never originates a decision, scope, approach, or cell — inventing content to fill a section is the one failure this skill exists to prevent.
 
 If `.bee/onboarding.json` is missing or stale, stop and invoke `bee-hive`.
 
@@ -83,7 +83,7 @@ Only two sections briefing writes from judgment — reading what the artifacts i
 ## Walkthrough (post-Gate-4)
 
 `standard`/`high-risk` only, after Gate 4; `tiny`/`spike`/`small` skip it (cap trace + commit are the record). Reconstructs from **execution reality** — capped cells' outcome/`files_changed`/deviations/`verify` output, review findings, UAT — never from the plan; where they differ, reality wins and the difference is named. Sections + quiz offer:
-`references/walkthrough-template.md` ("Template"), ("Quiz (optional, P10 / decision 0020)"). Then set `status: Shipped`.
+`references/walkthrough-template.md` ("Template"), ("Quiz (optional)"). Then set `status: Shipped`.
 
 ## Headless
 
@@ -105,4 +105,3 @@ Violating the letter of these rules is violating the spirit of these rules.
 | `references/implement-plan-template.md` | full template, writing guide, rendering procedure |
 | `references/mini-brief-template.md` | the `small`-lane ~15-line form |
 | `references/walkthrough-template.md` | post-Gate-4 sections, quiz protocol, reconstruct rules |
-| `references/provenance.md` | decision IDs + rationale for every body rule |

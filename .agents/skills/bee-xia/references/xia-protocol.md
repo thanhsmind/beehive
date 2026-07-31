@@ -1,6 +1,6 @@
 # xia Protocol — Step Rules
 
-Load only after `bee-xia` is active. Distilled from khuym's `xia` (decision 0005).
+Load only after `bee-xia` is active.
 
 ## Best For
 
@@ -9,7 +9,7 @@ Load only after `bee-xia` is active. Distilled from khuym's `xia` (decision 0005
 - capabilities that might already be supported by the repo or its framework
 - high-risk work where a wrong assumption is the expensive path
 
-Not for: tiny obvious edits, mechanical renames, product-decision locking (`bee-exploring`), feasibility proofs and spikes (the opt-in `spike` lane, D8), or re-research after a brief is accepted.
+Not for: tiny obvious edits, mechanical renames, product-decision locking (`bee-exploring`), feasibility proofs and spikes (the opt-in `spike` lane), or re-research after a brief is accepted.
 
 ## 1. Stack Ledger
 

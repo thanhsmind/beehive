@@ -1,13 +1,12 @@
 # Spawn Proof — one real worktree, one real pane, one real agent
 
-> Provenance: this is a recording made in the contributor's upstream repo
-> before adoption. Pane ids (`w7:pN`), PBI ids (`PBI-043`), the workspace name
+> Note: this is a recording made in a different repo.
+> Pane ids (`w7:pN`), PBI ids (`PBI-043`), the workspace name
 > and the `--wt--` slugs below are that repo's, not this one's; they are kept
-> verbatim because the *method* is what this document proves. Design-decision
-> tags (`D5`, `D14`, …) are this skill's own shorthand and resolve to no file.
+> verbatim because the *method* is what this document proves.
 
-This is the authoritative worked example for §8's spawn sequence (decisions
-D5, D14, D17, D22), run once for real with the throwaway slug
+This is the authoritative worked example for §8's spawn sequence,
+run once for real with the throwaway slug
 `apo-throwaway-spawn`, torn down completely afterward. All values below are
 observed, not descriptions.
 
@@ -57,10 +56,9 @@ First attempt (using a headless `-p` one-shot argv, see "Rejected first
 attempt" below) produced pane `w7:pS`, distinct from `w7:pR`. Left as
 written, §8's sequence therefore leaves the step-2 split pane (`w7:pR`)
 permanently empty and stray — it must be closed explicitly, or step 2 should
-be dropped and step 3 relied on alone to open the pane. This proof cell
-closed the stray pane (`herdr pane close w7:pR`) before continuing, and that
-correction should carry back into §8 (a follow-up to the dispatch skill, not
-made here — this document only records what was observed).
+be dropped and step 3 relied on alone to open the pane. This proof run
+closed the stray pane (`herdr pane close w7:pR`) before continuing; this
+document only records what was observed.
 
 **Rejected first attempt — headless `-p` self-terminates the pane before
 anything can be observed.** Passing `-p "<prompt>"` in the argv runs the
@@ -101,7 +99,7 @@ result (`result.argv`):
 `workspace_id: "w7"`, `name: "apo-throwaway-spawn"`,
 `cwd`/`foreground_cwd`: `/home/you/proj/repo--wt--apo-throwaway-spawn`.
 
-## Confirmed: self-naming (D17) and live session
+## Confirmed: self-naming and live session
 
 Polling `herdr pane get w7:pT` ~8s later:
 
@@ -125,8 +123,8 @@ Polling `herdr pane get w7:pT` ~8s later:
 ```
 
 - **Pane self-named to exactly the worktree name, nothing else appended**:
-  `label` = `apo-throwaway-spawn`, matching D17 ("a working agent labels its
-  pane with its worktree name").
+  `label` = `apo-throwaway-spawn`, matching the rule that a working agent
+  labels its pane with its worktree name.
 - **Live agent session confirmed**: real `agent_session.value`
   (`d43cd24b-d6b4-4e8a-839d-6b9e617fba69`), not a placeholder.
 - `herdr pane read w7:pT --source recent --lines 60` showed the agent ran
@@ -185,10 +183,10 @@ Observed results:
    instant the process exits, which is also why it would be the wrong shape
    for the real dispatch loop's runtime agents (they are meant to keep
    running, not exit after one turn).
-3. D17 self-naming is not automatic from `AGENTS.md`/`CLAUDE.md` alone in
+3. Self-naming is not automatic from `AGENTS.md`/`CLAUDE.md` alone in
    this proof run (no unprompted self-naming instruction fired before the
    bounded prompt drove it) — it happened here because the initial prompt
    explicitly told the agent to run `herdr pane current --current` then
    `herdr pane rename`. A real runtime agent (that reads `AGENTS.md` and
    picks up bee work on its own) still needs an explicit self-naming step
-   folded into its own onboarding instructions to satisfy D17 unattended.
+   folded into its own onboarding instructions to self-name unattended.

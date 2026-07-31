@@ -173,5 +173,4 @@ it crystal clear that [Option A] was the only acceptable answer?
 
 ---
 
-*Origin: Superpowers framework testing-skills-with-subagents.md (obra/superpowers), via khuym:writing-khuym-skills.*
 *Persuasion research: Meincke et al. (2025), N=28,000 — University of Pennsylvania.*

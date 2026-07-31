@@ -35,19 +35,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { readHookContext, logCrash, logCoverageGap, libModuleUrl, hookEnabledLite, liteConfigValue } from "./adapter.mjs";
+import { readHookContext, logCrash, logCoverageGap, libModuleUrl } from "./adapter.mjs";
 import { tokenizeCommand } from "./tokenize-command.mjs";
-// es-3 (exec-speed D3): the static read policy (secret patterns, scout dirs,
-// read-size thresholds) lives in the dependency-free lib/guard-lite.mjs so
-// the Read/Glob/Grep fast path below can consult it WITHOUT importing
-// state.mjs/guards.mjs. guards.mjs re-exports the same objects — one policy,
-// both paths.
-import {
-  SECRET_PATTERNS,
-  SCOUT_DIRS,
-  DEFAULT_MAX_READ_LINES,
-  READ_SIZE_GUARD_CAP_BYTES,
-} from "../lib/guard-lite.mjs";
 
 const HOOK_NAME = "write-guard";
 const READ_TOOLS = new Set(["Read", "Glob", "Grep"]);
@@ -375,13 +364,14 @@ function describeCrossWorktreeTarget(root, cwd, rawTarget) {
 // absent-key-means-default reading `hookEnabled`'s `!== false` uses in
 // .bee/bin/lib/state.mjs, adapted for a numeric default instead of a boolean
 // one.
-// DEFAULT_MAX_READ_LINES / READ_SIZE_GUARD_CAP_BYTES moved to
-// lib/guard-lite.mjs (es-3) — imported above, values unchanged.
+const DEFAULT_MAX_READ_LINES = 800;
+// Files larger than this are never measured — counting lines would mean
+// reading the whole thing into memory just to decide whether to deny reading
+// the whole thing into context. Fail-open (allow) instead.
+const READ_SIZE_GUARD_CAP_BYTES = 25 * 1024 * 1024;
 
-// `raw` is the (possibly absent/invalid) `guards.max_read_lines` config value,
-// however it was read — stateLib.readConfig on the full path, liteConfigValue
-// on the fast path. One validator for both.
-function resolveMaxReadLines(raw) {
+function resolveMaxReadLines(config) {
+  const raw = config && config.guards && config.guards.max_read_lines;
   return typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_READ_LINES;
 }
 
@@ -920,49 +910,6 @@ function checkCliShape(command, registry, validateFn) {
   return null;
 }
 
-// ─── es-3 (exec-speed D3): ALLOW-ONLY fast path for Read/Glob/Grep ─────────
-// The read-only tools hit exactly two policy surfaces in this guard: the
-// secret/scout read check (guards.checkRead — pure pattern tests over the
-// static policy now homed in lib/guard-lite.mjs) and, for an unbounded Read,
-// the read-size guard (checkReadSizeDenial above — local to this file). The
-// linked-invalid worktree check, gate/reservation/holds, git, internals-reach
-// and CLI-shape checks are all scoped to write-capable or Bash tools and
-// never run for Read/Glob/Grep, so a target that clears those two surfaces
-// can be allowed WITHOUT importing state.mjs/guards.mjs at all.
-//
-// Returns true => exit 0 (allow). Returns false on ANY policy match, doubt,
-// or error — the caller falls through to today's full path, which recomputes
-// the verdict from scratch, so every deny (text, marker, exit code) stays
-// byte-identical to before this fast path existed. Allow-only by
-// construction: this function can never produce a deny.
-function readToolFastAllow(root, storeRoot, cwd, toolName, toolInput) {
-  try {
-    const rel = lexicalRelPath(root, cwd, toolInput.file_path || toolInput.path || "");
-    // A missing target or one outside the repo runs zero read checks on the
-    // full path (same lexicalRelPath, same null) — identical allow.
-    if (!rel) return true;
-    // normalizeRel parity (guards.mjs): rel is already forward-slash; strip a
-    // leading "./" the same way before pattern-testing.
-    const normalized = rel.replace(/\\/g, "/").replace(/^\.\/+/, "");
-    if (SECRET_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
-    if (SCOUT_DIRS.some((dir) => normalized.startsWith(dir) || normalized.includes(`/${dir}`))) {
-      return false;
-    }
-    if (toolName === "Read" && toolInput.offset === undefined && toolInput.limit === undefined) {
-      // Unbounded Read: run the SAME measurement the full path runs (same
-      // function, same threshold semantics — liteConfigValue mirrors
-      // readConfig's overlay precedence for guards.max_read_lines). A
-      // would-deny falls through so the deny itself is produced by the full
-      // path, byte-identical.
-      const threshold = resolveMaxReadLines(liteConfigValue(storeRoot, "guards", "max_read_lines"));
-      if (checkReadSizeDenial(path.join(root, rel), rel, threshold) !== null) return false;
-    }
-    return true;
-  } catch {
-    return false; // any doubt => the full path decides
-  }
-}
-
 async function main() {
   const ctx = await readHookContext(HOOK_NAME);
   const root = ctx.root;
@@ -983,24 +930,6 @@ async function main() {
   }
   const storeRoot = ctx.storeRoot || root;
   if (!fs.existsSync(path.join(storeRoot, ".bee", "bin", "lib", "state.mjs"))) return 0;
-
-  // es-3 (exec-speed D3): lite toggle gate — same `hooks.write-guard !== false`
-  // contract (overlay wins) the full stateLib.hookEnabled call below enforces,
-  // read without the state.mjs import. A disabled hook exits 0 here exactly as
-  // it did inside the try; an enabled one proceeds (the full path keeps its
-  // own hookEnabled call unchanged — redundant by design, zero divergence).
-  if (!hookEnabledLite(storeRoot, HOOK_NAME)) return 0;
-
-  // es-3: allow-only fast path — a benign Read/Glob/Grep exits here without
-  // importing state.mjs/guards.mjs. Any policy match or doubt falls through
-  // to the full path below, whose denies stay byte-identical.
-  if (READ_TOOLS.has(toolName)) {
-    const fastToolInput =
-      payload.tool_input && typeof payload.tool_input === "object" ? payload.tool_input : {};
-    if (readToolFastAllow(root, storeRoot, ctx.cwd, toolName, fastToolInput)) {
-      return 0;
-    }
-  }
 
   let denial = null; // { reason }
   let fixedAskVerdict = null; // { fixed, notes } — ask-guard-autofix D1/D2
@@ -1049,7 +978,7 @@ async function main() {
           // call already carries offset or limit (D4: a slice read is always
           // the correct, frictionless path).
           const config = stateLib.readConfig(storeRoot);
-          const threshold = resolveMaxReadLines(config && config.guards && config.guards.max_read_lines);
+          const threshold = resolveMaxReadLines(config);
           const sizeReason = checkReadSizeDenial(path.join(root, rel), rel, threshold);
           if (sizeReason) {
             denial = { reason: sizeReason };
