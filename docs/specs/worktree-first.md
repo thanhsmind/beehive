@@ -29,9 +29,12 @@ store tiers, cross-worktree holds, `worktree new` / `register` /
 
 ## Machine changes
 
-1. **Feature start takes the branch.** Starting a non-exempt feature
-   (route recorded with a code-touching lane) creates and grants the
-   worktree in the same step and tells the session to move there —
+1. **Feature start takes the branch.** Recording a non-exempt route
+   (code-touching lane) in the main checkout names the worktree command
+   as the loud next action — `bee worktree new --feature <slug>` — and
+   the session opens at the created path. (Creation stays one explicit
+   command in this slice; folding auto-creation into the route step is a
+   follow-up once the refusal proves out.) —
    `bee orient` in the main checkout answers with the worktree path as
    `next.command` until the session runs there. No step in shaping or
    planning requires the main checkout.
@@ -56,6 +59,15 @@ store tiers, cross-worktree holds, `worktree new` / `register` /
 - Main is always releasable: nothing lands except through the merge
   gate's verify.
 - A abandoned feature is one `worktree remove` — no archaeology in main.
+
+## Follow-up decision (not in this change)
+
+Fluent additionally keeps main's history linear: land = rebase onto main
+then fast-forward merge, never a merge commit (see
+docs/REFs/learn-fluent.md §4). Whether `bee worktree merge` adopts
+rebase+ff-only is a separate owner decision — it changes conflict
+handling for long-lived features and is not required for the isolation
+this spec buys.
 
 ## Out of scope
 

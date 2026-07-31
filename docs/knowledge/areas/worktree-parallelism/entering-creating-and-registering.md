@@ -48,8 +48,9 @@ the ordinary main checkout:
   and the worktree's own feature field all derive from one slug at creation — so at that instant
   they agree by construction. The feature field is then freely rewritten afterwards by ordinary
   state handlers that have no worktree awareness at all, and the paved road makes a rename
-  near-certain: the routing rule tells the agent to create the worktree at **session-scout time**,
-  before exploring has settled what the feature is actually called. Bootstrapping therefore writes
+  near-certain: the worktree-first routing rule (docs/specs/worktree-first.md) tells the agent to
+  create the worktree at **feature start**, often before exploring has settled what the feature is
+  actually called. Bootstrapping therefore writes
   the creation slug once, write-if-absent, to a record the return path reads **in preference to**
   the mutable field.
 

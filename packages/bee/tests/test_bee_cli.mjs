@@ -4123,6 +4123,182 @@ await check('close refuses to run the verify while another door blocks — repor
   );
 });
 
+// ─── worktree-first (docs/specs/worktree-first.md machine changes 3+4):
+// orient knows both sides (main-with-granted-worktree redirects, a granted
+// worktree shows feature/branch/merge-back), and close inside a granted
+// worktree names `bee worktree merge --id <id>` as the next action. The
+// fixtures fabricate the linked-worktree topology with plain files (the same
+// bidirectional gitdir pointers resolveRoots/resolveWorktreeById validate) —
+// no real git needed. ──────────────────────────────────────────────────────
+
+// Fabricates a granted linked worktree for `mainDir`: git metadata pointers,
+// the main store's grant registry entry, and the worktree's own .bee store
+// (onboarding + state + immutable creation identity + HEAD for the branch).
+function seedFakeGrantedWorktree(mainDir, id, feature, { phase = 'idle', stateExtra = {} } = {}) {
+  const wtRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-wtf-wt-'));
+  const gitWorktreeDir = path.join(mainDir, '.git', 'worktrees', id);
+  fs.mkdirSync(gitWorktreeDir, { recursive: true });
+  fs.writeFileSync(path.join(gitWorktreeDir, 'gitdir'), `${path.join(wtRoot, '.git')}\n`);
+  fs.writeFileSync(path.join(gitWorktreeDir, 'HEAD'), `ref: refs/heads/wt/${feature}\n`);
+  fs.writeFileSync(path.join(wtRoot, '.git'), `gitdir: ${gitWorktreeDir}\n`);
+  fs.mkdirSync(path.join(mainDir, '.bee', 'runtime'), { recursive: true });
+  writeJsonAtomic(path.join(mainDir, '.bee', 'runtime', 'worktree-grants.json'), { [id]: true });
+  fs.mkdirSync(path.join(wtRoot, '.bee', 'runtime'), { recursive: true });
+  fs.mkdirSync(path.join(wtRoot, '.bee', 'cells'), { recursive: true });
+  writeJsonAtomic(path.join(wtRoot, '.bee', 'runtime', 'worktree-identity.json'), {
+    feature,
+    created_at: new Date().toISOString(),
+  });
+  writeJsonAtomic(path.join(wtRoot, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+  writeJsonAtomic(path.join(wtRoot, '.bee', 'state.json'), {
+    phase,
+    feature,
+    mode: null,
+    approved_gates: { context: false, shape: false, execution: false, review: false },
+    ...stateExtra,
+  });
+  return wtRoot;
+}
+
+await check('worktree-first orient (main side): a non-exempt active feature with a granted worktree turns next.command into the worktree path guidance', async () => {
+  const mainDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-wtf-orient-main-'));
+  let wtRoot = null;
+  try {
+    fs.mkdirSync(path.join(mainDir, '.bee'), { recursive: true });
+    writeJsonAtomic(path.join(mainDir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+    writeState(mainDir, {
+      ...defaultState(),
+      phase: 'planning',
+      feature: 'wtf-orient',
+      route: { class: 'feature', lane: 'standard', flags: [], product_files: 2, rationale: null, updated_at: new Date().toISOString() },
+    });
+    wtRoot = seedFakeGrantedWorktree(mainDir, 'wtf-orient-wt', 'wtf-orient');
+    const jsonResult = await runModuleWorker(BEE_MJS, { args: ['orient', '--json'], cwd: mainDir });
+    assert(jsonResult.status === 0, `orient exited ${jsonResult.status}: ${jsonResult.stderr}`);
+    const out = JSON.parse(jsonResult.stdout);
+    assert(out.worktree && out.worktree.location === 'main', `expected the main-side worktree block, got ${jsonResult.stdout}`);
+    assert(out.worktree.id === 'wtf-orient-wt', `the block must carry the granted id, got ${JSON.stringify(out.worktree)}`);
+    assert(
+      out.next.command === `open your session at ${out.worktree.path}`,
+      `next.command must be the worktree path guidance, got "${out.next.command}" vs path "${out.worktree.path}"`,
+    );
+    assert(
+      path.basename(out.worktree.path) === path.basename(wtRoot),
+      `the guidance must name the granted worktree's path, got ${out.worktree.path}`,
+    );
+    const textResult = await runModuleWorker(BEE_MJS, { args: ['orient'], cwd: mainDir });
+    assert(
+      /worktree: feature "wtf-orient" lives in worktree wtf-orient-wt — open your session at /.test(textResult.stdout),
+      `orient text must carry the worktree line, got: ${textResult.stdout}`,
+    );
+  } finally {
+    fs.rmSync(mainDir, { recursive: true, force: true });
+    if (wtRoot) fs.rmSync(wtRoot, { recursive: true, force: true });
+  }
+});
+
+await check('worktree-first orient (worktree side): inside a granted worktree the packet shows feature/branch/merge-back state', async () => {
+  const mainDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-wtf-orient-wt-'));
+  let wtRoot = null;
+  try {
+    fs.mkdirSync(path.join(mainDir, '.bee'), { recursive: true });
+    wtRoot = seedFakeGrantedWorktree(mainDir, 'wtf-orient2-wt', 'wtf-orient2');
+    const jsonResult = await runModuleWorker(BEE_MJS, { args: ['orient', '--json'], cwd: wtRoot });
+    assert(jsonResult.status === 0, `orient exited ${jsonResult.status}: ${jsonResult.stderr}`);
+    const out = JSON.parse(jsonResult.stdout);
+    assert(out.worktree && out.worktree.location === 'worktree', `expected the worktree-side block, got ${jsonResult.stdout}`);
+    assert(out.worktree.id === 'wtf-orient2-wt', `the block must carry the git-verified id, got ${JSON.stringify(out.worktree)}`);
+    assert(out.worktree.feature === 'wtf-orient2', `the block must carry the worktree's feature, got ${JSON.stringify(out.worktree)}`);
+    assert(out.worktree.branch === 'wt/wtf-orient2', `the block must carry the branch, got ${JSON.stringify(out.worktree)}`);
+    assert(
+      out.worktree.merge_command === 'bee worktree merge --id wtf-orient2-wt',
+      `the block must carry the merge-back command, got ${JSON.stringify(out.worktree)}`,
+    );
+    const textResult = await runModuleWorker(BEE_MJS, { args: ['orient'], cwd: wtRoot });
+    assert(
+      /worktree: wtf-orient2-wt \(branch wt\/wtf-orient2\) — merge back from main with bee worktree merge --id wtf-orient2-wt/.test(textResult.stdout),
+      `orient text must carry the worktree merge-back line, got: ${textResult.stdout}`,
+    );
+  } finally {
+    fs.rmSync(mainDir, { recursive: true, force: true });
+    if (wtRoot) fs.rmSync(wtRoot, { recursive: true, force: true });
+  }
+});
+
+await check('worktree-first close: --dry-run inside a granted worktree lists the merge as the last door-free step; close in main carries no merge-back line', async () => {
+  const mainDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-wtf-close-dry-'));
+  let wtRoot = null;
+  try {
+    fs.mkdirSync(path.join(mainDir, '.bee'), { recursive: true });
+    wtRoot = seedFakeGrantedWorktree(mainDir, 'wtf-close-wt', 'closewt', {
+      phase: 'swarming',
+      stateExtra: {
+        feature_verify: {
+          feature: 'closewt',
+          command: 'node -e "process.exit(0)"',
+          output_sha256: 'a'.repeat(64),
+          result: 'red',
+          at: '2026-01-01T00:00:00.000Z',
+        },
+      },
+    });
+    writePendingCappedCell(wtRoot, 'closewt-pending', 'closewt', '2026-01-02T00:00:00.000Z');
+    const dry = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closewt', '--dry-run'], cwd: wtRoot });
+    assert(dry.status === 0, `dry-run exited ${dry.status}: ${dry.stderr}`);
+    const lines = dry.stdout.trimEnd().split('\n');
+    const mergeIdx = lines.findIndex((l) => l.startsWith('merge-back: bee worktree merge --id wtf-close-wt'));
+    assert(mergeIdx !== -1, `dry-run in a worktree must list the merge-back step, got: ${dry.stdout}`);
+    assert(/door-free/.test(lines[mergeIdx]), `the merge-back step must read as door-free, got: ${lines[mergeIdx]}`);
+    assert(mergeIdx === lines.length - 2 && /^next: /.test(lines[lines.length - 1]),
+      `the merge-back step must be the LAST step before the next: line, got: ${dry.stdout}`);
+    // Close in main: byte-free of any merge-back mention (closeRoot is the
+    // ordinary main fixture the existing close rows use).
+    const mainDry = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closedemo', '--dry-run'], cwd: closeRoot });
+    assert(mainDry.status === 0, `main dry-run exited ${mainDry.status}: ${mainDry.stderr}`);
+    assert(!/merge-back|worktree merge/.test(mainDry.stdout), `close in main must carry no merge-back line, got: ${mainDry.stdout}`);
+  } finally {
+    fs.rmSync(mainDir, { recursive: true, force: true });
+    if (wtRoot) fs.rmSync(wtRoot, { recursive: true, force: true });
+  }
+});
+
+await check('worktree-first close: a GREEN close inside a granted worktree names bee worktree merge --id <id> on the next: line', async () => {
+  const mainDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-wtf-close-green-'));
+  let wtRoot = null;
+  try {
+    fs.mkdirSync(path.join(mainDir, '.bee'), { recursive: true });
+    wtRoot = seedFakeGrantedWorktree(mainDir, 'wtf-green-wt', 'closegreen', {
+      phase: 'swarming',
+      stateExtra: {
+        feature_verify: {
+          feature: 'closegreen',
+          command: 'node -e "process.exit(0)"',
+          output_sha256: 'a'.repeat(64),
+          result: 'red',
+          at: '2026-01-01T00:00:00.000Z',
+        },
+      },
+    });
+    // One pending cap arms the feature-verify door (the only blocking one:
+    // the cell carries no change_class, so no test-cell debt), and the
+    // recorded command exits 0 — close runs it and goes green. ONE text run:
+    // a second run would find the door already paid and never re-verify.
+    writePendingCappedCell(wtRoot, 'closegreen-pending', 'closegreen', '2026-01-02T00:00:00.000Z');
+    const textResult = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closegreen'], cwd: wtRoot });
+    assert(textResult.status === 0, `green close exited ${textResult.status}: ${textResult.stdout} ${textResult.stderr}`);
+    assert(/Feature verify GREEN for "closegreen"/.test(textResult.stdout), `expected a green verify run, got: ${textResult.stdout}`);
+    const lines = textResult.stdout.trimEnd().split('\n');
+    const nextLine = lines[lines.length - 1];
+    assert(
+      /^next: bee worktree merge --id wtf-green-wt — run from the main checkout/.test(nextLine),
+      `the green close next: line must name the merge command, got: "${nextLine}"`,
+    );
+  } finally {
+    fs.rmSync(mainDir, { recursive: true, force: true });
+    if (wtRoot) fs.rmSync(wtRoot, { recursive: true, force: true });
+  }
+});
+
 // ─── worktree group examples: a REAL git repo + real `git worktree add`,
 // mirroring the fixture pattern scripts/test_worktree_cli.mjs already proved
 // end-to-end. A dedicated temp tree (not the shared `root` above, which has

@@ -20,7 +20,7 @@ size and risk — a typo fix takes one cell and one merged question; an
 auth change takes the full chain. Independent review is a separate,
 user-invoked pass, never an automatic stage of that chain.
 
-Three boundaries hold in every mode:
+Four boundaries hold in every mode:
 
 - Do not edit source before the merged shape+execution gate is
   approved in `.bee/state.json`. An unblocked write is not an approved
@@ -34,6 +34,10 @@ Three boundaries hold in every mode:
   never by hand-editing `.bee/*.json(l)`. Log agreements with
   `bee decisions log`; `docs/history/<feature>/CONTEXT.md` holds the
   locked ones — cite them, never reinterpret them.
+- Code-touching feature work lives in its feature worktree from the
+  start (`bee worktree new --feature <slug>`); the main checkout takes
+  only integration, docs-lane, and release work — land through
+  `bee worktree merge`.
 
 `bee --help --json` prints the porcelain flow surface; `bee --help
 --all --json` prints everything.

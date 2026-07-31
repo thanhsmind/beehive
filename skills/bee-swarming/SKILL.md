@@ -21,7 +21,9 @@ where the work stands either way.
 
 ## Orchestrate
 
-You launch workers and tend results; you do not implement. A `tiny` cell
+You launch workers and tend results; you do not implement. The wave runs
+inside the feature's worktree (worktree-first — the main checkout stays
+clean for integration). A `tiny` cell
 may run inline in this session; `small` and up always dispatches — one
 worker for `tiny`/`small`, a wave for `standard`/`high-risk`.
 
@@ -53,7 +55,8 @@ worker's diagnosis. If it invalidates the plan, return to bee-planning.
 **Completion:** slice done with more approved work remaining → return to
 bee-planning for the next batch (an approved plan stays frozen; planning
 shapes the next batch, never reopens it). Final slice green → tell the
-user execution is complete and invoke bee-capturing. Before declaring done:
+user execution is complete and invoke bee-capturing; landing is
+`bee worktree merge` from main. Before declaring done:
 no active reservations, no in-flight workers recorded.
 
 At ~65% context, write `.bee/HANDOFF.json` and pause cleanly — never push

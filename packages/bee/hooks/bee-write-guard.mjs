@@ -351,6 +351,122 @@ function describeCrossWorktreeTarget(root, cwd, rawTarget) {
   }
 }
 
+// ─── worktree-first main-checkout refusal (docs/specs/worktree-first.md §2) ─
+// The routing default is inverted: code-touching feature work lives in its
+// granted worktree from feature start, and the MAIN checkout refuses feature
+// source writes while that worktree exists. Fires only when ALL of these
+// prove out, and returns null (allow) on absolutely every failure path — a
+// registry/state read error must never become a false deny:
+//   - the current checkout is the MAIN checkout (worktreeResolution
+//     'ordinary' — inside any linked worktree this check never runs, so the
+//     worktree itself always writes freely);
+//   - the active feature's recorded route is non-exempt (any lane except
+//     `docs`; a `tiny` feature that took a worktree is treated as non-exempt
+//     too — the grant existing IS the routing signal, so no live-session
+//     re-check is consulted here);
+//   - the target is one the gate guard already classifies as a source/
+//     product write — anything under GATE_ALLOWED_PREFIXES (.bee/, docs/,
+//     plans/, AGENTS.md), any *.md spelling, and the pathless broad-write
+//     sentinel "**" are all exempt (conservative: only concrete source
+//     paths deny; broad signals stay with checkWrite's own policy);
+//   - the feature holds a granted worktree (the same main-store registry +
+//     bidirectional gitdir resolution the containment enrichment above
+//     uses, plus the worktree's recorded feature — immutable creation
+//     identity preferred over the mutable state field);
+//   - the recorded off-switch is not set: `worktree_first: "off"` in
+//     .bee/config.json (read through the same readConfig every other config
+//     key uses, local overlay included) disables this refusal entirely.
+const WORKTREE_FIRST_FALLBACK_EXEMPT_PREFIXES = [".bee/", "docs/", "plans/", "AGENTS.md"];
+
+// The worktree's recorded feature: the immutable creation identity
+// (.bee/runtime/worktree-identity.json, written once at bootstrap) preferred
+// over the mutable .bee/state.json `feature` field — the same preference the
+// merge return path takes. Null on any failure.
+function readWorktreeRecordedFeature(worktreeRoot) {
+  try {
+    const identity = JSON.parse(
+      fs.readFileSync(path.join(worktreeRoot, ".bee", "runtime", "worktree-identity.json"), "utf8"),
+    );
+    if (identity && typeof identity.feature === "string" && identity.feature) return identity.feature;
+  } catch {
+    // fall through to the mutable field
+  }
+  try {
+    const state = JSON.parse(fs.readFileSync(path.join(worktreeRoot, ".bee", "state.json"), "utf8"));
+    if (state && typeof state.feature === "string" && state.feature) return state.feature;
+  } catch {
+    // unreadable worktree store: no recorded feature
+  }
+  return null;
+}
+
+// Registry lookup: the granted worktree holding `feature`, resolved through
+// the exact readGrantedWorktreeIds/resolveGrantedWorktreeRoot pair the
+// containment-denial enrichment above already uses. Null when no granted
+// worktree records this feature — or on ANY error (fail-open).
+function findFeatureWorktreeGrant(mainRoot, feature) {
+  try {
+    for (const id of readGrantedWorktreeIds(mainRoot)) {
+      const worktreeRoot = resolveGrantedWorktreeRoot(mainRoot, id);
+      if (worktreeRoot && readWorktreeRecordedFeature(worktreeRoot) === feature) {
+        return { id, worktreeRoot };
+      }
+    }
+  } catch {
+    // fail-open: an unreadable registry yields no match, never a deny
+  }
+  return null;
+}
+
+function worktreeFirstExemptRel(rel, allowedPrefixes) {
+  if (!rel || typeof rel !== "string") return true;
+  if (rel === "**") return true; // pathless broad-write sentinel: checkWrite's territory
+  if (rel.endsWith(".md")) return true; // docs-lane spelling outside docs/
+  return allowedPrefixes.some((prefix) =>
+    prefix.endsWith("/") ? rel === prefix.slice(0, -1) || rel.startsWith(prefix) : rel === prefix,
+  );
+}
+
+// Returns the denial reason string, or null to allow. Traps every throw of
+// its own — this check must never reach the hook's outer catch (which would
+// fail the WHOLE hook open) and must never deny because a read failed.
+function checkWorktreeFirstDenial({ worktreeResolution, root, storeRoot, state, relPaths, stateLib, guards }) {
+  try {
+    if (worktreeResolution !== "ordinary") return null; // only the MAIN checkout refuses
+    const feature = state && typeof state.feature === "string" && state.feature ? state.feature : null;
+    const route = state && state.route && typeof state.route === "object" ? state.route : null;
+    const lane = route && typeof route.lane === "string" && route.lane ? route.lane : null;
+    if (!feature || !lane || lane === "docs") return null;
+    let config = null;
+    try {
+      config = stateLib.readConfig(storeRoot);
+    } catch {
+      return null; // unreadable config: fail-open, never a deny
+    }
+    if (config && config.worktree_first === "off") return null; // the recorded off-switch
+    const allowedPrefixes =
+      guards && Array.isArray(guards.GATE_ALLOWED_PREFIXES) && guards.GATE_ALLOWED_PREFIXES.length > 0
+        ? guards.GATE_ALLOWED_PREFIXES
+        : WORKTREE_FIRST_FALLBACK_EXEMPT_PREFIXES;
+    const offender = relPaths.find((rel) => !worktreeFirstExemptRel(rel, allowedPrefixes));
+    if (!offender) return null;
+    const mainRoot = realpathOrNull(root);
+    if (!mainRoot) return null;
+    const grant = findFeatureWorktreeGrant(mainRoot, feature);
+    if (!grant) return null;
+    return (
+      `bee worktree-first guard: "${offender}" is a feature source write in the MAIN checkout, but the active ` +
+      `feature "${feature}" (lane "${lane}") holds granted worktree "${grant.id}" — code-touching feature work ` +
+      "lives in its worktree from the start; main stays clean for integration, docs-lane, and release work " +
+      `(docs/specs/worktree-first.md). FIX: open your session at ${grant.worktreeRoot} and make this edit there, ` +
+      `then land it from main with \`bee worktree merge --id ${grant.id}\`. Deliberate override: set ` +
+      `worktree_first: "off" in .bee/config.json to disable this refusal (a recorded, visible choice).`
+    );
+  } catch {
+    return null; // fail-open by contract: never a false deny
+  }
+}
+
 // ─── large-read guard (router-cost D1/D2/D3/D4) ────────────────────────────
 // Denies an unbounded Read of a file at/above a configurable line threshold.
 // Lives directly in this branch (not guards.mjs — checkRead is pattern-only,
@@ -1216,6 +1332,28 @@ async function main() {
           if (verdict && verdict.allow === true && verdict.warning) {
             reservationWarnings.push(verdict.warning);
           }
+        }
+      }
+
+      // worktree-first refusal (docs/specs/worktree-first.md machine change
+      // 2): the MAIN checkout refuses a feature source write when the active
+      // feature's route is non-exempt and the feature holds a granted
+      // worktree. Additive and first-hit-wins (`!denial` — a denial from the
+      // checks above keeps its own, more specific message), and every
+      // failure path inside checkWorktreeFirstDenial returns null: a
+      // registry/state/config read error can never become a false deny.
+      if (!denial && relPaths.length > 0) {
+        const worktreeFirstReason = checkWorktreeFirstDenial({
+          worktreeResolution: ctx.worktreeResolution,
+          root,
+          storeRoot,
+          state,
+          relPaths,
+          stateLib,
+          guards,
+        });
+        if (worktreeFirstReason) {
+          denial = { reason: worktreeFirstReason };
         }
       }
 

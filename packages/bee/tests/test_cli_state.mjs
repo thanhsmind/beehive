@@ -152,6 +152,130 @@ await check('codex-loop (advisor #54): start-feature hands off FORWARD — its n
   }
 });
 
+// ─── worktree-first (docs/specs/worktree-first.md machine change 1): route
+// --set from the MAIN checkout with a code-touching lane emits the loud
+// `worktree` block naming the exact `bee worktree new --feature <slug>`
+// command; docs and tiny+solo stay exempt; a feature that already holds a
+// granted worktree gets no creation nudge (orient owns "go there" instead);
+// and the block is derived guidance — never persisted into state.route. ────
+
+// Fabricates a granted linked worktree for `mainDir` without running git:
+// the bidirectional gitdir pointers resolveWorktreeById validates, the main
+// store's grant registry entry, and the worktree's own .bee store with the
+// immutable creation identity. Returns the worktree root.
+function seedGrantedWorktree(mainDir, id, feature) {
+  const wtRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-wtf-wt-'));
+  const gitWorktreeDir = path.join(mainDir, '.git', 'worktrees', id);
+  fs.mkdirSync(gitWorktreeDir, { recursive: true });
+  fs.writeFileSync(path.join(gitWorktreeDir, 'gitdir'), `${path.join(wtRoot, '.git')}\n`);
+  fs.writeFileSync(path.join(gitWorktreeDir, 'HEAD'), `ref: refs/heads/wt/${feature}\n`);
+  fs.writeFileSync(path.join(wtRoot, '.git'), `gitdir: ${gitWorktreeDir}\n`);
+  fs.mkdirSync(path.join(mainDir, '.bee', 'runtime'), { recursive: true });
+  writeJsonAtomic(path.join(mainDir, '.bee', 'runtime', 'worktree-grants.json'), { [id]: true });
+  fs.mkdirSync(path.join(wtRoot, '.bee', 'runtime'), { recursive: true });
+  writeJsonAtomic(path.join(wtRoot, '.bee', 'runtime', 'worktree-identity.json'), {
+    feature,
+    created_at: new Date().toISOString(),
+  });
+  writeJsonAtomic(path.join(wtRoot, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+  writeJsonAtomic(path.join(wtRoot, '.bee', 'state.json'), {
+    phase: 'idle',
+    feature,
+    mode: null,
+    approved_gates: { context: false, shape: false, execution: false, review: false },
+  });
+  return wtRoot;
+}
+
+await check('worktree-first: route --set with a code-touching lane in the main checkout emits the worktree block naming the exact creation command — and never persists it into state.route', async () => {
+  const dir = makeStateRepo('bee-state-wtf-route-');
+  try {
+    const started = await runBeeState(dir, ['start-feature', '--feature', 'wtf-demo']);
+    assert(started.status === 0, `start-feature failed: ${started.stderr}`);
+    const result = await runBeeState(dir, ['route', '--set', '--class', 'feature', '--lane', 'standard', '--flags', '', '--files', '2', '--json']);
+    assert(result.status === 0, `route --set should succeed, got ${result.status}: ${result.stdout}${result.stderr}`);
+    const parsed = JSON.parse(result.stdout);
+    assert(parsed.worktree && parsed.worktree.required === true, `expected the worktree block, got ${result.stdout}`);
+    assert(
+      parsed.worktree.command === 'bee worktree new --feature wtf-demo',
+      `the block must name the exact creation command, got ${JSON.stringify(parsed.worktree)}`,
+    );
+    // The loud text notice rides the non-JSON surface too.
+    const textResult = await runBeeState(dir, ['route', '--set', '--class', 'feature', '--lane', 'standard', '--flags', '', '--files', '2']);
+    assert(textResult.status === 0, `text route --set failed: ${textResult.stderr}`);
+    assert(/WORKTREE-FIRST/.test(textResult.stdout), `expected the loud WORKTREE-FIRST notice, got: ${textResult.stdout}`);
+    assert(/bee worktree new --feature wtf-demo/.test(textResult.stdout), `the notice must carry the runnable command, got: ${textResult.stdout}`);
+    // Derived guidance only — the persisted route record carries no worktree key.
+    const persisted = readStateFile(dir).route;
+    assert(persisted && persisted.lane === 'standard', `route persisted, got ${JSON.stringify(persisted)}`);
+    assert(!('worktree' in persisted), `state.route must NOT persist the worktree block, got ${JSON.stringify(persisted)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('worktree-first: docs lane and tiny+solo are exempt — no worktree block on either', async () => {
+  const dir = makeStateRepo('bee-state-wtf-exempt-');
+  try {
+    const started = await runBeeState(dir, ['start-feature', '--feature', 'wtf-exempt']);
+    assert(started.status === 0, `start-feature failed: ${started.stderr}`);
+    const docsResult = await runBeeState(dir, ['route', '--set', '--class', 'docs', '--lane', 'docs', '--flags', '', '--files', '0', '--json']);
+    assert(docsResult.status === 0, `docs route --set failed: ${docsResult.stdout}${docsResult.stderr}`);
+    assert(!('worktree' in JSON.parse(docsResult.stdout)), `docs lane must not emit the worktree block, got ${docsResult.stdout}`);
+    // tiny with NO other live session (no session records at all) stays in main.
+    const tinyResult = await runBeeState(dir, ['route', '--set', '--class', 'bugfix', '--lane', 'tiny', '--flags', '', '--files', '1', '--json']);
+    assert(tinyResult.status === 0, `tiny route --set failed: ${tinyResult.stdout}${tinyResult.stderr}`);
+    assert(!('worktree' in JSON.parse(tinyResult.stdout)), `tiny+solo must not emit the worktree block, got ${tinyResult.stdout}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('worktree-first: tiny with ANOTHER live session (D9a signal — live cross-session heartbeat + non-idle phase) DOES emit the worktree block', async () => {
+  const dir = makeStateRepo('bee-state-wtf-tiny-peer-');
+  try {
+    const started = await runBeeState(dir, ['start-feature', '--feature', 'wtf-tiny-peer']);
+    assert(started.status === 0, `start-feature failed: ${started.stderr}`);
+    // A live PEER session (fresh heartbeat, unbound — governed by the default
+    // record, which start-feature just moved to non-idle). The acting call
+    // names itself via BEE_SESSION_ID so the peer is never mistaken for self.
+    const peer = createSession(dir, { id: 'wtf-peer-session' });
+    assert(peer.ok === true, `peer session fixture failed: ${JSON.stringify(peer)}`);
+    const result = await runModuleWorker(beeStateModulePath(), {
+      args: ['state', 'route', '--set', '--class', 'bugfix', '--lane', 'tiny', '--flags', '', '--files', '1', '--json'],
+      cwd: dir,
+      env: { ...process.env, BEE_SESSION_ID: 'wtf-acting-session' },
+    });
+    assert(result.status === 0, `tiny route --set failed: ${result.stdout}${result.stderr}`);
+    const parsed = JSON.parse(result.stdout);
+    assert(
+      parsed.worktree && parsed.worktree.command === 'bee worktree new --feature wtf-tiny-peer',
+      `tiny with a live peer session must emit the worktree block, got ${result.stdout}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('worktree-first: a feature that ALREADY holds a granted worktree gets no creation nudge from route --set', async () => {
+  const dir = makeStateRepo('bee-state-wtf-granted-');
+  let wtRoot = null;
+  try {
+    const started = await runBeeState(dir, ['start-feature', '--feature', 'wtf-granted']);
+    assert(started.status === 0, `start-feature failed: ${started.stderr}`);
+    wtRoot = seedGrantedWorktree(dir, 'wtf-granted-wt', 'wtf-granted');
+    const result = await runBeeState(dir, ['route', '--set', '--class', 'feature', '--lane', 'standard', '--flags', '', '--files', '2', '--json']);
+    assert(result.status === 0, `route --set failed: ${result.stdout}${result.stderr}`);
+    assert(
+      !('worktree' in JSON.parse(result.stdout)),
+      `a feature with a granted worktree must not be told to create one, got ${result.stdout}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (wtRoot) fs.rmSync(wtRoot, { recursive: true, force: true });
+  }
+});
+
 await check('bee.mjs state set writes only the provided fields and creates state.json on a fresh repo', async () => {
   const dir = makeStateRepo('bee-state-set-');
   try {

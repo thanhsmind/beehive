@@ -1112,6 +1112,37 @@ function resolveWorktreeFeature(worktreeRoot) {
   return { feature: created ?? stateFeature, created, stateFeature };
 }
 
+/**
+ * worktree-first (docs/specs/worktree-first.md): does `feature` already hold
+ * a granted worktree? Walks the MAIN store's grant registry, resolves each
+ * granted id through the same bidirectional gitdir validation merge uses
+ * (resolveWorktreeById below), and matches the worktree's feature through
+ * resolveWorktreeFeature (immutable creation slug preferred over the mutable
+ * `state.feature`, same preference the merge return path takes). Returns
+ * `{ id, worktreeRoot, feature }` for the first match, else null. NEVER
+ * throws — the callers (route's worktree block, orient, the write guard's
+ * refusal) are all fail-open surfaces where a registry read error must read
+ * as "no worktree", never as a crash or a false deny.
+ */
+export function findGrantedWorktreeForFeature(mainRoot, feature) {
+  try {
+    if (typeof feature !== 'string' || !feature) return null;
+    const grants = readGrants(path.join(mainRoot, '.bee'));
+    for (const id of Object.keys(grants)) {
+      if (grants[id] !== true) continue;
+      const resolved = resolveWorktreeById(mainRoot, id);
+      if (!resolved) continue;
+      const identity = resolveWorktreeFeature(resolved.worktreeRoot);
+      if (identity.feature === feature) {
+        return { id, worktreeRoot: resolved.worktreeRoot, feature: identity.feature };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Pattern-only fallback when the worktree's own state.json has no readable
 // `feature` (e.g. a worktree adopted via `worktree register` whose state.json
 // predates this field, or was hand-edited) — still requires SOME "wt/<slug>"

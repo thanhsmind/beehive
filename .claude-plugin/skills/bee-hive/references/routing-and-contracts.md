@@ -19,8 +19,8 @@ Open this when the compact bootstrap in `SKILL.md` is not enough.
 | 11 | `bee-shaping` (Brief) | Render the one human-readable implement plan per feature, and the post-Gate-4 walkthrough (consolidator, not planner). | Planning shaped `small`+ work; a feature's implement plan needs (re)generating; a `standard`/`high-risk` feature passed Gate 4 |
 
 Gate bypass is set from `bee-hive` (Gates); developing bee itself
-(authoring skills, the self-improvement loop) is handbook territory, not
-product routing — `docs/handbook/writing-skills.md`, `docs/handbook/evolving.md`.
+(authoring skills, the self-improvement loop) is maintainer territory in
+the bee source repo's handbook, never product routing in a host repo.
 
 ## First-Skill Routing
 
@@ -322,7 +322,7 @@ Note the state layer in the orientation summary. Which layer that is depends on 
 
 ### Worktree routing
 
-If the scout is about to start NEW feature work in a checkout that already has another live session's active work — a live cross-session heartbeat plus a non-idle phase in the shared store, or active holds / live-owner lanes — the paved road is `bee worktree new --feature <slug>`, then opening the next session in the printed path. Docs-lane work, tiny fixes, and release machinery stay in the MAIN checkout — release always runs in main. Merge-back happens from main via `bee worktree merge --id <id>`; the merge is staged uncommitted (`git merge --no-ff --no-commit`) and the configured verify runs against that staged tree as the semantic-conflict gate before any commit exists — a red verify after a textually clean merge is the alarm to investigate, and it aborts the stage, leaving main byte-untouched, not a signal to roll back a commit (none was ever made).
+Code-touching feature work is worktree-first (docs/specs/worktree-first.md, 2026-07-31): the feature's worktree is created at feature start — `bee worktree new --feature <slug>`, then the next session opens in the printed path — by default, not only when the checkout turns out to be occupied. The MAIN checkout takes only integration, docs-lane work, release machinery, and a solo tiny fix (no other live session; with one, tiny takes a worktree too) — release always runs in main; `--in-main` at feature start is the recorded owner override, never silent. Merge-back happens from main via `bee worktree merge --id <id>`; the merge is staged uncommitted (`git merge --no-ff --no-commit`) and the configured verify runs against that staged tree as the semantic-conflict gate before any commit exists — a red verify after a textually clean merge is the alarm to investigate, and it aborts the stage, leaving main byte-untouched, not a signal to roll back a commit (none was ever made).
 
 ## Lane ceremony in full
 
@@ -351,7 +351,7 @@ Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 4 afte
 
 **THE ONLY LEGAL REASONS FOR SERIAL, exhaustive:** a declared file-set overlap (including a shared generated artifact not deferred by a wave barrier), a true data dependency (`deps`), a single scarce external resource, or an explicit human instruction. Nothing else is a reason — anything else fans out.
 
-**LANES, FIRST-CLASS:** before every feature start, check whether other ready feature work has disjoint declared paths — if so, the paved road is a lane, not a queue, whether or not another feature is already live — `bee state start-feature --feature <f> --mode <m> --as-lane --paths <declared>`; lane-scoped mutations take `--lane`. A worktree remains the answer only when the work needs its own checkout (a different branch state, a separate install) — disjoint paths alone never force one. A lane refusal (holder + expiry) means the paths were not disjoint after all — pick other ready work or wait for the hold to lapse — never work around it.
+**LANES, FIRST-CLASS:** before every feature start, check whether other ready feature work has disjoint declared paths — if so, the paved road is a lane, not a queue, whether or not another feature is already live — `bee state start-feature --feature <f> --mode <m> --as-lane --paths <declared>`; lane-scoped mutations take `--lane`. Lanes classify and coordinate; they no longer keep code in main — a code-touching feature branches into its own worktree at feature start regardless (worktree-first, docs/specs/worktree-first.md), its declared paths still coordinating through the shared store; only docs-lane and solo tiny work runs directly in the main checkout. A lane refusal (holder + expiry) means the paths were not disjoint after all — pick other ready work or wait for the hold to lapse — never work around it.
 
 **TICK:** the concurrency plan emits its own progress line per the Progress ticks catalog above — same silent-bookkeeping rule as every other tick, never suppressed by bypass.
 

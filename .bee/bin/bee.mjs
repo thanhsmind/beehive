@@ -210,7 +210,7 @@ import { findForeignHolds, releaseHolds, sweepExpiredHolds, withHoldsLock, inser
 // wraps its own body inside lib/state.mjs); CLI verbs WAIT normally, so no
 // maxAttempts override is ever passed here.
 import { withStoreLock } from './lib/lock.mjs';
-import { writeGrant, removeGrant, listGrants, bootstrapWorktreeStore, createFeatureWorktree, mergeFeatureWorktree } from './lib/worktree-store.mjs';
+import { writeGrant, removeGrant, listGrants, bootstrapWorktreeStore, createFeatureWorktree, mergeFeatureWorktree, findGrantedWorktreeForFeature } from './lib/worktree-store.mjs';
 // wcg-3 (D1a): the worktree-new-time half of the concurrency guard. The
 // directory-scan companion to the write-guard's point-check — reused here to
 // refuse `bee worktree new` (without --with-companion) when another session is
@@ -684,6 +684,116 @@ function ungrantedWorktreeNotice(root) {
   );
 }
 
+// ─── worktree-first (docs/specs/worktree-first.md) ─────────────────────────
+// The routing default is inverted: code-touching feature work branches at
+// feature start; the main checkout keeps only integration, docs-lane work,
+// and release machinery. The helpers below classify a route lane, detect the
+// D9a live-session signal, and locate the current checkout for the route
+// block / orient guidance / close next-action wired further down.
+
+// A lane is code-touching unless it is `docs`, or `tiny` while no OTHER live
+// session exists (the spec's table: "tiny lane, no other live session —
+// main checkout allowed"). `otherLiveSession` is only consulted for tiny.
+function isCodeTouchingLane(lane, otherLiveSession) {
+  if (!lane || lane === 'docs') return false;
+  if (lane === 'tiny' && !otherLiveSession) return false;
+  return true;
+}
+
+// The D9a live-session signal (worktree-parallelism routing rule): another
+// session's live cross-session heartbeat (activeWorkers over the control
+// root, the acting session excluded — same self-exclusion worktree new's
+// concurrency guard uses) whose governing record (bound lane, else the
+// shared default record) sits at a non-idle phase. Fails quiet to `false`:
+// this signal only ever WIDENS the tiny-lane exemption, so an unreadable
+// session store must read as "solo", never as a phantom peer.
+function otherLiveWorkPresent(root) {
+  try {
+    const ctrlRoot = controlRootFor(root);
+    const selfId = resolveSessionId({ root: ctrlRoot });
+    const others = activeWorkers(ctrlRoot, { excludeSessionId: selfId });
+    if (others.length === 0) return false;
+    return others.some((worker) => {
+      const record = worker.lane ? readLane(root, worker.lane) : readState(root);
+      const phase = record && record.phase;
+      return Boolean(phase && phase !== 'idle' && phase !== 'compounding-complete');
+    });
+  } catch {
+    return false;
+  }
+}
+
+// The loud block `state route --set` gains when a code-touching lane is
+// recorded from the MAIN checkout and the feature holds no granted worktree
+// yet. Deliberate first-slice deviation from the spec's "creates and grants
+// in the same step": the block NAMES the exact `bee worktree new` command as
+// the next action instead of auto-creating — `worktree new` already exists,
+// prints its own next_step, and creation stays one explicit command; folding
+// auto-creation into route can come later once the main-checkout refusal
+// (bee-write-guard) proves out. Returns null (no block) everywhere else:
+// inside any worktree, for exempt lanes, when the worktree already exists,
+// or on ANY resolution error — fail-quiet, the block is guidance, not a gate.
+function buildRouteWorktreeBlock(root, feature, lane) {
+  try {
+    let resolution;
+    try {
+      resolution = resolveRoots(process.cwd());
+    } catch {
+      return null;
+    }
+    if (resolution.worktreeResolution !== 'ordinary') return null;
+    if (!feature) return null;
+    if (!isCodeTouchingLane(lane, lane === 'tiny' ? otherLiveWorkPresent(root) : true)) return null;
+    const mainRoot = resolution.workRoot || root;
+    if (findGrantedWorktreeForFeature(mainRoot, feature)) return null;
+    const command = `bee worktree new --feature ${feature}`;
+    return {
+      required: true,
+      command,
+      reason: `lane "${lane}" is code-touching and this is the MAIN checkout — feature work branches at feature start (worktree-first)`,
+      notice:
+        `⚠ WORKTREE-FIRST: lane "${lane}" is code-touching and this is the MAIN checkout. ` +
+        `NEXT: run "${command}", then open your session at the printed worktree path — ` +
+        `main stays for integration, docs-lane, and release work; once the worktree is granted, ` +
+        `main refuses feature source edits.`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Best-effort branch read for a granted worktree (orient's merge-back
+// context): the linked worktree's HEAD lives at
+// <mainRoot>/.git/worktrees/<id>/HEAD. Null on any failure or detached HEAD.
+function readWorktreeBranch(mainRoot, id) {
+  try {
+    const head = fs.readFileSync(path.join(mainRoot, '.git', 'worktrees', id, 'HEAD'), 'utf8').trim();
+    const match = head.match(/^ref:\s*refs\/heads\/(.+)$/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+// The current checkout when it is a GRANTED linked worktree (its own store),
+// else null — the same granted test resolveHoldTopology applies, kept as its
+// own helper because orient/close need `{id, mainRoot}` with no holder
+// semantics attached. Never throws.
+function grantedWorktreeContext() {
+  try {
+    const resolution = resolveRoots(process.cwd());
+    if (resolution.worktreeResolution !== 'linked-valid' || !resolution.id || !resolution.mainRoot) return null;
+    const granted =
+      resolution.storeRoot &&
+      resolution.worktreeRoot &&
+      path.resolve(resolution.storeRoot) === path.resolve(resolution.worktreeRoot);
+    if (!granted) return null;
+    return { id: resolution.id, mainRoot: resolution.mainRoot, worktreeRoot: resolution.worktreeRoot };
+  } catch {
+    return null;
+  }
+}
+
 // multisession-native-4 (advisor consult stage 0-1, condition C4): bounded
 // tail-window summary of lock-contention telemetry
 // (.bee/logs/contention.jsonl, appended by lock.mjs's
@@ -1151,6 +1261,49 @@ function orientDecisionLine(decision) {
   return line.length > 160 ? `${line.slice(0, 157)}...` : line;
 }
 
+// worktree-first (docs/specs/worktree-first.md machine change 4): orient
+// knows both sides. In the MAIN checkout with a non-exempt active feature
+// that HAS a granted worktree, the answer is "go there" (the worktree path
+// becomes next.command). Inside a granted worktree, the packet carries the
+// feature/branch/merge-back state (the same registry-backed resolution the
+// worktree notices use). Null everywhere else — ordinary orients are
+// byte-unchanged. Never throws.
+function orientWorktreeContext(root, status) {
+  try {
+    const inWorktree = grantedWorktreeContext();
+    if (inWorktree) {
+      return {
+        location: 'worktree',
+        id: inWorktree.id,
+        feature: status.feature ?? null,
+        branch: readWorktreeBranch(inWorktree.mainRoot, inWorktree.id),
+        merge_command: `bee worktree merge --id ${inWorktree.id}`,
+      };
+    }
+    let resolution;
+    try {
+      resolution = resolveRoots(process.cwd());
+    } catch {
+      return null;
+    }
+    if (resolution.worktreeResolution !== 'ordinary') return null;
+    const feature = status.feature ?? null;
+    const lane = status.route ? status.route.lane : null;
+    if (!feature || !isCodeTouchingLane(lane, lane === 'tiny' ? otherLiveWorkPresent(root) : true)) return null;
+    const granted = findGrantedWorktreeForFeature(resolution.workRoot || root, feature);
+    if (!granted) return null;
+    return {
+      location: 'main',
+      id: granted.id,
+      feature,
+      path: granted.worktreeRoot,
+      guidance: `open your session at ${granted.worktreeRoot}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function buildOrient(root) {
   const status = buildStatus(root);
   const feature = status.feature ?? null;
@@ -1171,6 +1324,10 @@ function buildOrient(root) {
   for (const warning of status.staleness_warnings) {
     if (warning.includes('reservation(s) expired')) blockers.push(warning);
   }
+  // worktree-first: when the session is in the main checkout but the active
+  // feature lives in a granted worktree, next.command becomes the worktree
+  // path guidance — the one thing the session should actually do next.
+  const worktree = orientWorktreeContext(root, status);
   return {
     where: {
       phase: status.phase,
@@ -1189,23 +1346,33 @@ function buildOrient(root) {
       ready: readyIds,
       blockers,
     },
+    ...(worktree ? { worktree } : {}),
     next: {
       action: status.recommended_next,
       skill: ORIENT_PHASE_SKILL[status.phase] || 'bee-hive',
-      command: orientNextCommand(status, readyIds),
+      command: worktree && worktree.location === 'main' ? worktree.guidance : orientNextCommand(status, readyIds),
     },
   };
 }
 
 // At most six lines — one per section, blockers only when present — ending
-// with `next: <action>`.
+// with `next: <action>`. worktree-first adds one conditional `worktree:`
+// line, present only when the checkout/feature topology makes it relevant
+// (main-with-granted-worktree, or inside a granted worktree) — ordinary
+// orients keep the six-line cap byte-unchanged.
 function renderOrientText(packet) {
   const gates = GATE_NAMES.map((g) => (packet.where.gates?.[g] ? 'true' : 'false')).join('/');
+  const worktreeLine = packet.worktree
+    ? packet.worktree.location === 'main'
+      ? `worktree: feature "${packet.worktree.feature}" lives in worktree ${packet.worktree.id} — ${packet.worktree.guidance}`
+      : `worktree: ${packet.worktree.id}${packet.worktree.branch ? ` (branch ${packet.worktree.branch})` : ''} — merge back from main with ${packet.worktree.merge_command}`
+    : null;
   return [
     `where: phase=${packet.where.phase} feature=${packet.where.feature ?? 'none'} mode=${packet.where.mode ?? 'none'} gates=${gates} bypass=${packet.where.gate_bypass_level}`,
     `decisions: ${packet.decisions.active_count} active${packet.decisions.context_md ? ` | context: ${packet.decisions.context_md}` : ''}`,
     `work: open=${packet.work.cells.open} claimed=${packet.work.cells.claimed} capped=${packet.work.cells.capped}${packet.work.ready.length ? ` | ready: ${packet.work.ready.join(', ')}` : ''}`,
     ...(packet.work.blockers.length ? [`blockers: ${packet.work.blockers.join('; ')}`] : []),
+    ...(worktreeLine ? [worktreeLine] : []),
     `skill: ${packet.next.skill}`,
     `next: ${packet.next.action}`,
   ].join('\n');
@@ -4591,7 +4758,7 @@ async function handleStateRoute(root, flags) {
   rejectDryRun(flags);
   const routeObject = validateRouteSetFlags(flags);
 
-  const { route, targetLane } = await withMutationLock(root, null, false, async () => {
+  const { route, targetLane, routedFeature } = await withMutationLock(root, null, false, async () => {
     const target = resolveRouteTarget(root, 'route');
     const { record: state, write } = target;
     const phase = state.phase;
@@ -4622,12 +4789,20 @@ async function handleStateRoute(root, flags) {
     if (wf) {
       updateWorkflowAssumingLock(ctrlRoot, wf.id, { route: routeObject });
     }
-    return { route: routeObject, targetLane: target.lane };
+    return { route: routeObject, targetLane: target.lane, routedFeature: state.feature ?? target.lane ?? null };
   });
 
+  // worktree-first (docs/specs/worktree-first.md machine change 1): a route
+  // recorded with a code-touching lane from the MAIN checkout, for a feature
+  // with no granted worktree yet, gains a loud `worktree` block naming the
+  // exact creation command. Result-only: nothing here is persisted into
+  // `state.route` (the block is derived guidance, recomputed per call).
+  const worktreeBlock = buildRouteWorktreeBlock(root, routedFeature, route.lane);
   return {
-    result: route,
-    text: `Recorded route (class=${route.class} lane=${route.lane} flags=${route.flags.length} files=${route.product_files}).${targetLane ? ` (lane "${targetLane}")` : ''}`,
+    result: worktreeBlock ? { ...route, worktree: worktreeBlock } : route,
+    text:
+      `Recorded route (class=${route.class} lane=${route.lane} flags=${route.flags.length} files=${route.product_files}).${targetLane ? ` (lane "${targetLane}")` : ''}` +
+      (worktreeBlock ? `\n${worktreeBlock.notice}` : ''),
   };
 }
 
@@ -7992,8 +8167,19 @@ function renderCloseDoorLines(doors) {
 
 async function handleClose(root, flags) {
   const feature = requireFlag(flags, 'feature');
+  // worktree-first (docs/specs/worktree-first.md machine change 3): close
+  // inside a GRANTED worktree names `bee worktree merge --id <id>` — the one
+  // road back to main — as the step after green. Close in main is
+  // byte-unchanged (worktree is null there).
+  const worktree = grantedWorktreeContext();
   const { doors, recordedCommand } = buildCloseDoors(root, feature);
-  const doorLines = [...renderCloseDoorLines(doors), closeNextLine(feature, doors, recordedCommand)];
+  const doorLines = [
+    ...renderCloseDoorLines(doors),
+    ...(worktree
+      ? [`merge-back: bee worktree merge --id ${worktree.id} — door-free; run from the main checkout once close is green (the one road back to main)`]
+      : []),
+    closeNextLine(feature, doors, recordedCommand),
+  ];
   if (flags['dry-run'] === true) {
     // Read-only report — always exit 0; the doors ARE the answer.
     return { result: { feature, doors }, text: doorLines.join('\n') };
@@ -8078,7 +8264,12 @@ async function handleClose(root, flags) {
     text: [
       `Feature verify GREEN for "${feature}" (${durationS}s) — recorded: ${recordedCommand}.`,
       `Remains before done — capture checklist: scribing ${scribing.detail === 'clear' ? 'clear' : scribing.detail}; capture queue ${queue.detail === 'clear' ? 'clear' : queue.detail}.`,
-      'next: invoke bee-capturing',
+      // worktree-first: inside a granted worktree the next action after green
+      // is landing the feature — merge from main (after bee-capturing settles
+      // the capture checklist). In main: byte-unchanged.
+      worktree
+        ? `next: bee worktree merge --id ${worktree.id} — run from the main checkout to land this feature (invoke bee-capturing first to settle the capture checklist)`
+        : 'next: invoke bee-capturing',
     ].join('\n'),
   };
 }

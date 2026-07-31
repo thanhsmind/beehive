@@ -41,6 +41,9 @@ File caps count product files only — never `.bee/**`, `docs/**`, or plans.
 
 Record: `bee state route --set --class <c> --lane <l> --flags <f> --files <n>`;
 re-route upward on new evidence any time, de-escalate only on cited evidence.
+A code-touching route's next action includes creating the feature worktree —
+`bee worktree new --feature <slug>`, session opened there (worktree-first;
+`docs` and a solo `tiny` stay in main).
 
 ## Research
 

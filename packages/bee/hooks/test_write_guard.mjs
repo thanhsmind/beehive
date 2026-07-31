@@ -191,6 +191,58 @@ function buildLinkedFixture(prefix, { invalid = false, reservedPath = null, hold
   return { mainRoot, workRoot };
 }
 
+// --- worktree-first fixture (docs/specs/worktree-first.md §2) --------------
+// An ordinary MAIN checkout whose active feature has a recorded route AND a
+// granted sibling worktree: fabricated git-worktree pointers (the same
+// bidirectional gitdir shape resolveGrantedWorktreeRoot validates), the main
+// store's grant registry, and the worktree's own .bee store carrying the
+// immutable creation identity. The worktree side also gets a full vendored
+// lib + swarming state so "allows inside the worktree itself" can run the
+// hook FROM the worktree.
+function buildWorktreeFirstFixture(prefix, { lane = "standard", configOff = false } = {}) {
+  const root = buildFixture(prefix); // swarming, execution approved, feature "demo"
+  writeState(root, {
+    phase: "swarming",
+    mode: "standard",
+    feature: "demo",
+    route: { class: "feature", lane, flags: [], product_files: 2, rationale: null, updated_at: new Date().toISOString() },
+    approved_gates: { context: true, shape: true, execution: true, review: false },
+  });
+  if (configOff) {
+    fs.writeFileSync(path.join(root, ".bee", "config.json"), `${JSON.stringify({ worktree_first: "off" })}\n`);
+  }
+  const id = "wtf-demo-wt";
+  // Realpathed spellings in the pointer files: the adapter/guard realpath the
+  // checkout roots before comparing (macOS /var -> /private/var would
+  // otherwise break the bidirectional gitdir validation).
+  const rootReal = fs.realpathSync.native(root);
+  const wtRoot = fs.realpathSync.native(mkFixture(`${prefix}wt-`));
+  const gitWorktreeDir = path.join(rootReal, ".git", "worktrees", id);
+  fs.mkdirSync(gitWorktreeDir, { recursive: true });
+  fs.writeFileSync(path.join(gitWorktreeDir, "gitdir"), `${path.join(wtRoot, ".git")}\n`);
+  fs.writeFileSync(path.join(wtRoot, ".git"), `gitdir: ${gitWorktreeDir}\n`);
+  fs.mkdirSync(path.join(root, ".bee", "runtime"), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, ".bee", "runtime", "worktree-grants.json"),
+    `${JSON.stringify({ [id]: true })}\n`,
+  );
+  fs.mkdirSync(path.join(wtRoot, ".bee", "runtime"), { recursive: true });
+  fs.writeFileSync(
+    path.join(wtRoot, ".bee", "runtime", "worktree-identity.json"),
+    `${JSON.stringify({ feature: "demo", created_at: new Date().toISOString() })}\n`,
+  );
+  fs.writeFileSync(path.join(wtRoot, ".bee", "onboarding.json"), "{}\n");
+  copyLib(wtRoot);
+  writeState(wtRoot, {
+    phase: "swarming",
+    mode: "standard",
+    feature: "demo",
+    route: { class: "feature", lane, flags: [], product_files: 2, rationale: null, updated_at: new Date().toISOString() },
+    approved_gates: { context: true, shape: true, execution: true, review: false },
+  });
+  return { root, wtRoot, id };
+}
+
 // --- git-exemption fixture builders (D1/D3/D4, cell ige-2, P46 / GH #1) ----
 // A REAL git repo (not just a fixture directory) so `git diff --cached
 // --name-only` resolves against actual index state — the whole point of D4
@@ -308,6 +360,82 @@ async function main() {
   check(r1.stderr.includes("bee.mjs state"), "row1: stderr names bee.mjs state", r1.stderr);
   check(r1.stderr.includes("FIX"), "row1: stderr has a FIX element", r1.stderr);
   check(r1.stderr.includes("direct-edit"), "row1: stderr identifies the direct-edit guard", r1.stderr);
+
+  // --- worktree-first (docs/specs/worktree-first.md §2): the MAIN checkout
+  // refuses a feature source write when the active feature's route is
+  // non-exempt and the feature holds a granted worktree. Placed EARLY in this
+  // suite deliberately — the file's tail crashes on a known Windows symlink
+  // EPERM, and these rows must execute before it. -------------------------
+  {
+    const wtf = buildWorktreeFirstFixture("bee-write-guard-wtf-");
+
+    // deny: a plain source write in main, teaching message names what
+    // happened, the worktree path, the merge road and the off-switch.
+    const rWtfDeny = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "src/app.js" } },
+      wtf.root,
+    );
+    check(rWtfDeny.status === 2, "worktree-first: Edit src/app.js in main is denied (exit 2) when the feature holds a granted worktree", `status=${rWtfDeny.status} stderr=${rWtfDeny.stderr}`);
+    check(rWtfDeny.stderr.includes("worktree-first"), "worktree-first: the deny names the guard", rWtfDeny.stderr);
+    // realpath vs raw-tmpdir spellings may differ (macOS /var -> /private/var),
+    // so the path assertion pins the unique directory basename.
+    check(rWtfDeny.stderr.includes(path.basename(wtf.wtRoot)), "worktree-first: the deny names the granted worktree's path", rWtfDeny.stderr);
+    check(rWtfDeny.stderr.includes(`bee worktree merge --id ${wtf.id}`), "worktree-first: the deny names the merge-back command", rWtfDeny.stderr);
+    check(rWtfDeny.stderr.includes('worktree_first: "off"'), "worktree-first: the deny names the recorded config off-switch", rWtfDeny.stderr);
+    check(rWtfDeny.stderr.includes('"demo"') && rWtfDeny.stderr.includes('"standard"'), "worktree-first: the deny names the feature and lane", rWtfDeny.stderr);
+
+    // deny reaches Bash-extracted targets too.
+    const rWtfBash = await runHookPayload(
+      { tool_name: "Bash", tool_input: { command: "printf x > src/app.js" } },
+      wtf.root,
+    );
+    check(rWtfBash.status === 2, "worktree-first: a bash redirect into src/ in main is denied too", `status=${rWtfBash.status} stderr=${rWtfBash.stderr}`);
+
+    // allow: docs-lane paths and *.md spellings pass unchanged in main.
+    const rWtfDocs = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "docs/notes/plan.md" } },
+      wtf.root,
+    );
+    check(rWtfDocs.status === 0, "worktree-first: Edit docs/** in main still passes", `status=${rWtfDocs.status} stderr=${rWtfDocs.stderr}`);
+    const rWtfMd = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "README.md" } },
+      wtf.root,
+    );
+    check(rWtfMd.status === 0, "worktree-first: Edit README.md (a *.md outside docs/) in main still passes", `status=${rWtfMd.status} stderr=${rWtfMd.stderr}`);
+
+    // allow: inside the granted worktree itself the guard never fires.
+    const rWtfInside = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "src/app.js" } },
+      wtf.wtRoot,
+    );
+    check(rWtfInside.status === 0, "worktree-first: the same source write INSIDE the granted worktree passes", `status=${rWtfInside.status} stderr=${rWtfInside.stderr}`);
+
+    // allow: a docs-lane ROUTE is exempt even in main with a granted worktree.
+    const wtfDocsLane = buildWorktreeFirstFixture("bee-write-guard-wtf-docslane-", { lane: "docs" });
+    const rWtfDocsLane = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "src/app.js" } },
+      wtfDocsLane.root,
+    );
+    check(rWtfDocsLane.status === 0, "worktree-first: a docs-lane route never denies a main-checkout write", `status=${rWtfDocsLane.status} stderr=${rWtfDocsLane.stderr}`);
+
+    // allow: the recorded off-switch (worktree_first: "off" in .bee/config.json)
+    // disables the refusal entirely.
+    const wtfOff = buildWorktreeFirstFixture("bee-write-guard-wtf-off-", { configOff: true });
+    const rWtfOff = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "src/app.js" } },
+      wtfOff.root,
+    );
+    check(rWtfOff.status === 0, 'worktree-first: worktree_first: "off" in .bee/config.json disables the refusal', `status=${rWtfOff.status} stderr=${rWtfOff.stderr}`);
+
+    // fail-open: a corrupt grants registry must never produce a false deny.
+    const wtfCorrupt = buildWorktreeFirstFixture("bee-write-guard-wtf-corrupt-");
+    fs.writeFileSync(path.join(wtfCorrupt.root, ".bee", "runtime", "worktree-grants.json"), "{ not json", "utf8");
+    const rWtfCorrupt = await runHookPayload(
+      { tool_name: "Edit", tool_input: { file_path: "src/app.js" } },
+      wtfCorrupt.root,
+    );
+    check(rWtfCorrupt.status === 0, "worktree-first: an unreadable grants registry fails OPEN (no false deny)", `status=${rWtfCorrupt.status} stderr=${rWtfCorrupt.stderr}`);
+  }
 
   // --- 2. Write .bee/backlog.jsonl -> denied (exit 2), message names bee_backlog.mjs add
   const r2 = await runHookPayload(
