@@ -23,9 +23,11 @@ where the work stands either way.
 
 You launch workers and tend results; you do not implement. The wave runs
 inside the feature's worktree (worktree-first — the main checkout stays
-clean for integration). A `tiny` cell
-may run inline in this session; `small` and up always dispatches — one
-worker for `tiny`/`small`, a wave for `standard`/`high-risk`.
+clean for integration). A `tiny` cell may run inline in this session;
+`small` and up always dispatches — one worker per cell, parallel by
+default: disjoint cells fan out concurrently (reservations prove it,
+3-4 live workers cap it), serial needs a named file conflict. From two
+cells up, state the one-line concurrency plan before dispatching.
 
 1. `bee cells schedule --json` sets dispatch order — override only with a
    stated reason. Overlapping-file cells are fixed by scope or
