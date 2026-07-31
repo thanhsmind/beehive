@@ -9,6 +9,7 @@
 mod fsutil;
 mod js_fallback;
 mod jsjson;
+mod path_identity;
 mod registry;
 mod roots;
 mod router;
