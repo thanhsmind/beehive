@@ -12,12 +12,12 @@
       "capture.mjs": "4a7705e78a65636cdc2c16ae008b256c52a172219e84818cffae07267671cfeb",
       "cells.mjs": "46e5bd11b87c9c6b53b7f475baf8041560b21bceefc1d3cd563baed6bea3c0c7",
       "claims.mjs": "de7726a26b2354b65ee598d00f9179f04f71fe3d53f39a865b749da49e03623d",
-      "command-registry.mjs": "fed74735518933b02f38917ec82244782cee4e6f7d2136dccc2fb4b19d144a9c",
+      "command-registry.mjs": "532665a06c28374512dd8e7e8abe9ee992e50e0199adfc9ba284bb913ba484a1",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
       "dispatch-guard.mjs": "acabfef60de3ce6babeda8deee7ea5c1954cc655d5bc8dae4d62f3e0338911d0",
-      "dispatch-prepare.mjs": "4df88e5aef88ea9c1298bc71987d31f5220e91120b61ced145712e88d9376ca5",
+      "dispatch-prepare.mjs": "eb40275691d6d5c8862fd612f1dca97cee36680633ad163dae8139fd73bec09a",
       "feedback.mjs": "cf0e59fe1acba5b8ecd8922c311db4d1d40c0cff9843cedc9cffedf1584ae633",
       "fsutil.mjs": "c0a65d8aebfca7f7423f10cc9e13fa8ca43234c4a7b7e7ea1f05619b18e06af0",
       "guards.mjs": "615716039b59ebea29e7778475f27bfec8bf5b705ed1c72954e62b6a084cf8de",
@@ -54,7 +54,7 @@
       "documentation.md": "595957ca75796645c6c6d23d64f4ca25675b596c2651832f73866940d94a0e5c",
       "planning.md": "41e02da1232203b6289add90524b045146e916d8bce6d3d1179bdf9ac32a00b9",
       "review.md": "39b2974638433428abbfcbaac37730106571409388ba856b5d89f3b99befcad1",
-      "tests.md": "a20ef31a2b481f875fcef609f9223b7153d8b851d84b7e387a4372c542c08c33",
+      "tests.md": "fa7ce43b7dc3e0321e6768594c5830da68cd41786c8871d12aed24fdef2d3b15",
       "thinking.md": "548618d837d7d07fa1f966b5f16a9ff11ecc971bce20a9bfdcc0880f71cbcbac"
     },
     "repo_hooks": {
@@ -90,5 +90,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-31T14:31:19.805Z"
+  "updated_at": "2026-07-31T14:41:36.977Z"
 }

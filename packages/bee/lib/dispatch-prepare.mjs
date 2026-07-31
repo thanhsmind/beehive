@@ -33,7 +33,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveTier, resolveAdvisor } from './state.mjs';
-import { readCell } from './cells.mjs';
+import { readCell, deriveChangeClass, requiredProofTier } from './cells.mjs';
 import {
   PINNED_AGENT_TYPE,
   deriveEconomics,
@@ -115,6 +115,121 @@ function checkCellClaimOwnership(cell, worker) {
 // identity nobody else could recognize as theirs. `worker` is required
 // whenever `kind === 'cell'` (prepareDispatch already throws before this is
 // called if it is missing), so this is always a real, trimmed name here.
+// ─── prior-rounds digest (machine-assembled, conditional) ──────────────────
+// When the cell RECORD carries prior attempt history, the worker prompt gains
+// a compact, machine-assembled digest of it — the orchestrator never
+// re-narrates prior rounds by hand (fluent-mechanism 1: prior-round context
+// comes from records, assembled here, or not at all). Every event is a
+// ONE-LINER with a pointer; the cell id's record holds the rest — never a
+// file excerpt, never verify output. A cell with no recorded history
+// produces NO lines, so a first-dispatch prompt stays byte-identical.
+//
+// Sources, each an already-recorded cells.mjs trace field (read-only here):
+//   trace.attempts            — the D1 revision ledger (recordVerify appends
+//                               pass/fail, blockCell appends blocked+note);
+//                               only fail/blocked entries are events — a
+//                               prior PASS is not something to warn about.
+//   trace.deviations          — capCell's recorded deviations (survive a
+//                               reopen; the recording worker was cleared by
+//                               releaseTrace, so the actor reads
+//                               "(prior worker)").
+//   trace.semantic_judge      — recordJudgeVerdict's advisor/judge consult
+//                               ledger (verdict + failure_signature).
+//   trace.reopened_reason /   — reopenCell's and recordJudgeVerdict's
+//   trace.reopened_for_rework   recorded return-to-open events. (unclaimCell
+//                               itself records nothing on the trace — a
+//                               reopen record is the durable analog.)
+const PRIOR_ROUNDS_HEADER = 'Prior rounds (machine-assembled from the cell record):';
+const PRIOR_ROUNDS_CLOSER = 'Address what blocked the last round before anything else.';
+const PROOF_CONTRACT_HEADER = 'Proof contract (this cell):';
+// ~12-line cap on the digest: at most 12 event lines between header and
+// closer — overflow elides the OLDEST events behind one count line.
+const PRIOR_ROUNDS_MAX_EVENT_LINES = 12;
+
+function oneLine(text, max = 140) {
+  const flat = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max - 3)}...` : flat;
+}
+
+function priorRoundEventLines(cell) {
+  const trace = cell && cell.trace && typeof cell.trace === 'object' ? cell.trace : {};
+  const events = [];
+  for (const attempt of Array.isArray(trace.attempts) ? trace.attempts : []) {
+    if (!attempt || typeof attempt !== 'object') continue;
+    const worker = typeof attempt.worker === 'string' && attempt.worker ? attempt.worker : '(unknown worker)';
+    if (attempt.verdict === 'blocked') {
+      const reason = oneLine(attempt.note) || `failure signature ${attempt.failure_signature || '(none recorded)'}`;
+      events.push({ at: attempt.at || null, line: `- ${worker} blocked: ${reason}` });
+    } else if (attempt.verdict === 'fail') {
+      events.push({
+        at: attempt.at || null,
+        line: `- ${worker} failed verify: failure signature ${attempt.failure_signature || '(none recorded)'}`,
+      });
+    }
+  }
+  for (const deviation of Array.isArray(trace.deviations) ? trace.deviations : []) {
+    if (typeof deviation !== 'string' || !deviation.trim()) continue;
+    // Recorded at a prior cap; releaseTrace cleared that cap's worker on
+    // reopen, so the honest actor label is "(prior worker)".
+    events.push({ at: trace.capped_at || null, line: `- (prior worker) deviation: ${oneLine(deviation)}` });
+  }
+  for (const consult of Array.isArray(trace.semantic_judge) ? trace.semantic_judge : []) {
+    if (!consult || typeof consult !== 'object') continue;
+    const judge = typeof consult.judge_model === 'string' && consult.judge_model ? consult.judge_model : '(judge)';
+    const pointer = consult.failure_signature ? ` (failure signature ${oneLine(consult.failure_signature, 40)})` : '';
+    events.push({ at: consult.recorded_at || null, line: `- ${judge} consult: ${consult.verdict}${pointer}` });
+  }
+  if (typeof trace.reopened_reason === 'string' && trace.reopened_reason.trim()) {
+    events.push({ at: trace.reopened_at || null, line: `- (orchestrator) reopened: ${oneLine(trace.reopened_reason)}` });
+  }
+  if (trace.reopened_for_rework && typeof trace.reopened_for_rework === 'object') {
+    events.push({
+      at: trace.reopened_for_rework.at || null,
+      line: `- (judge) reopened for rework: ${oneLine(trace.reopened_for_rework.reason) || 'NEEDS_REVISION verdict after cap'}`,
+    });
+  }
+  // Chronological: ISO-8601 strings compare lexicographically; events with no
+  // recorded timestamp sink to the end in insertion order (sort is stable).
+  events.sort((a, b) => {
+    if (!a.at && !b.at) return 0;
+    if (!a.at) return 1;
+    if (!b.at) return -1;
+    return a.at < b.at ? -1 : a.at > b.at ? 1 : 0;
+  });
+  let lines = events.map((event) => event.line);
+  if (lines.length > PRIOR_ROUNDS_MAX_EVENT_LINES) {
+    const kept = PRIOR_ROUNDS_MAX_EVENT_LINES - 1; // one slot goes to the count line
+    const elided = lines.length - kept;
+    lines = [`- (${elided} earlier event(s) elided — the cell record holds the rest)`, ...lines.slice(-kept)];
+  }
+  return lines;
+}
+
+// Conditional add-only blocks (fluent-mechanism 2: prompt blocks keyed on the
+// work's class). Both return [] for a plain first-dispatch cell, keeping that
+// prompt byte-identical to the unconditional template above them.
+function priorRoundsBlock(cell) {
+  const lines = priorRoundEventLines(cell);
+  if (lines.length === 0) return [];
+  return ['', PRIOR_ROUNDS_HEADER, ...lines, PRIOR_ROUNDS_CLOSER];
+}
+
+// Proof-contract block: only the red-first tier (cells.mjs requiredProofTier
+// — security/migration in every lane; bugfix/behavior/api on lane high-risk)
+// gets a stated obligation. Every other tier adds NOTHING — the default
+// contract lines above already state that path — and nothing here restates
+// rules the CLI enforces beyond naming the obligation and the flags.
+function proofContractBlock(cell) {
+  const tier = requiredProofTier(deriveChangeClass(cell), cell.lane);
+  if (tier !== 'red-first') return [];
+  return [
+    '',
+    PROOF_CONTRACT_HEADER,
+    '- Required proof tier: red-first. Reproduce the failure FIRST and capture the failing output as evidence, then fix — never fix-then-assert.',
+    '- bee cells finish will require that evidence: instead of --feature-verify-pending, cap with --behavior-change and --evidence-stdin (or --evidence-file <path>) carrying JSON {"red_failure_evidence": "<the captured failing output / prior behavior, >=80 chars>"}.',
+  ];
+}
+
 function cellPromptBody(cell, worker) {
   return [
     `Nickname (reservation identity): ${worker}`,
@@ -137,6 +252,10 @@ function cellPromptBody(cell, worker) {
     '- Commit once: imperative-mood subject, cell id as the last body line.',
     `- Finish with: node .bee/bin/bee.mjs cells finish --id ${cell.id} --feature-verify-pending --outcome "<one line>" --files <a,b> (its refusals name what is missing; the cell's verify command is the orchestrator's, not yours).`,
     '- Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.',
+    // Conditional add-only blocks — both empty for a first-dispatch, plain
+    // cell, so that prompt stays byte-identical to the template above.
+    ...priorRoundsBlock(cell),
+    ...proofContractBlock(cell),
   ].join('\n');
 }
 

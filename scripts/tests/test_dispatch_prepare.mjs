@@ -684,6 +684,224 @@ await check("end-to-end via the real CLI: a native-configured advisor slot with 
   assert(out.detail === NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY, `expected detail native_budget_only (unprobed host, D3), got ${JSON.stringify(out)}`);
 });
 
+// ─── conditional worker-prompt blocks (fluent mechanisms): a machine-
+// assembled "Prior rounds" digest for cells with recorded attempt history,
+// and a "Proof contract" section for red-first-tier cells. Both are ADD-ONLY
+// and conditional — a first-dispatch, plain cell's prompt must stay
+// byte-identical to the unconditional template. ─────────────────────────────
+
+const PRIOR_ROUNDS_HEADER = "Prior rounds (machine-assembled from the cell record):";
+const PRIOR_ROUNDS_CLOSER = "Address what blocked the last round before anything else.";
+const PROOF_CONTRACT_HEADER = "Proof contract (this cell):";
+
+function claudeCellConfig(root) {
+  writeConfig(root, { claude: { extraction: "haiku", generation: "sonnet", review: "opus" } });
+}
+
+function prepareCellPrompt(root, id, worker) {
+  const out = prepareDispatch(root, { runtime: "claude", kind: "cell", cell: id, worker });
+  assert(out && out.tool === "Agent", `expected a real Agent payload, got ${JSON.stringify(out)}`);
+  return out.payload.prompt;
+}
+
+await check("a fresh first-dispatch cell's prompt carries NEITHER conditional block — it still ends on the unconditional status-token line (byte-identical pin)", async () => {
+  const root = mkFixture("dispatch-prepare-fresh-prompt-");
+  claudeCellConfig(root);
+  writeCellFixture(root, {
+    id: "fresh-1",
+    feature: "demo",
+    title: "Fresh cell",
+    action: "Do the demo thing.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    trace: { worker: "exec-fresh-1" },
+  });
+
+  const prompt = prepareCellPrompt(root, "fresh-1", "exec-fresh-1");
+  assert(!prompt.includes(PRIOR_ROUNDS_HEADER), `a fresh cell must get no Prior rounds block, got:\n${prompt}`);
+  assert(!prompt.includes(PRIOR_ROUNDS_CLOSER), `a fresh cell must get no Prior rounds closer, got:\n${prompt}`);
+  assert(!prompt.includes(PROOF_CONTRACT_HEADER), `an untier'd cell must get no Proof contract block, got:\n${prompt}`);
+  // Pin the add-only property: with both blocks absent, the LAST line is still
+  // the template's own final status-token line — nothing was appended after it.
+  const lines = prompt.split("\n");
+  assert(
+    lines[lines.length - 1].startsWith("- Return exactly one final status token:"),
+    `with no conditional blocks the prompt must still END on the status-token contract line, got last line: ${JSON.stringify(lines[lines.length - 1])}`,
+  );
+});
+
+await check("a cell with a recorded block + a recorded deviation gets the Prior rounds block: both events, chronological, one-liners, and the closing line", async () => {
+  const root = mkFixture("dispatch-prepare-prior-rounds-");
+  claudeCellConfig(root);
+  writeCellFixture(root, {
+    id: "prior-1",
+    feature: "demo",
+    title: "Re-dispatched cell",
+    action: "Do the demo thing.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    trace: {
+      worker: "exec-round-2",
+      // blockCell's real shape: an attempts-ledger entry (verdict blocked,
+      // note = reason) — trace.blocked_reason itself was cleared by reopen.
+      attempts: [
+        {
+          n: 1,
+          at: "2026-07-01T10:00:00.000Z",
+          worker: "exec-round-1",
+          verdict: "blocked",
+          failure_signature: "abc123def456",
+          note: "AGENTS.md forbids the package install this cell needs — proposal filed",
+        },
+      ],
+      // capCell's real shape: deviations replaced wholesale at cap, surviving
+      // the later reopen (releaseTrace never touches them).
+      deviations: ["skipped the fixture regen; the regen chain is not runnable on this host"],
+      capped_at: "2026-07-01T12:00:00.000Z",
+    },
+  });
+
+  const prompt = prepareCellPrompt(root, "prior-1", "exec-round-2");
+  assert(prompt.includes(PRIOR_ROUNDS_HEADER), `expected the Prior rounds header, got:\n${prompt}`);
+  assert(
+    prompt.includes("- exec-round-1 blocked: AGENTS.md forbids the package install this cell needs — proposal filed"),
+    `expected the blocked event line naming the prior worker and reason, got:\n${prompt}`,
+  );
+  assert(
+    prompt.includes("- (prior worker) deviation: skipped the fixture regen; the regen chain is not runnable on this host"),
+    `expected the deviation event line, got:\n${prompt}`,
+  );
+  assert(prompt.includes(PRIOR_ROUNDS_CLOSER), `expected the closing line, got:\n${prompt}`);
+  // Chronological: the block (10:00) precedes the deviation (capped 12:00).
+  assert(
+    prompt.indexOf("exec-round-1 blocked:") < prompt.indexOf("(prior worker) deviation:"),
+    `events must be chronological (blocked before deviation), got:\n${prompt}`,
+  );
+  // The closer follows the events, ending the block.
+  assert(
+    prompt.indexOf("(prior worker) deviation:") < prompt.indexOf(PRIOR_ROUNDS_CLOSER),
+    `the closing line must end the block, got:\n${prompt}`,
+  );
+});
+
+await check("the Prior rounds block caps at 12 event lines — oldest events elided behind one count line, newest kept", async () => {
+  const root = mkFixture("dispatch-prepare-prior-rounds-cap-");
+  claudeCellConfig(root);
+  const attempts = [];
+  for (let i = 1; i <= 15; i += 1) {
+    attempts.push({
+      n: i,
+      at: `2026-07-${String(i).padStart(2, "0")}T00:00:00.000Z`,
+      worker: `exec-a`,
+      verdict: "fail",
+      failure_signature: `sig-${String(i).padStart(3, "0")}`,
+      note: null,
+    });
+  }
+  writeCellFixture(root, {
+    id: "cap-1",
+    feature: "demo",
+    title: "Much-attempted cell",
+    action: "Do the demo thing.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    trace: { worker: "exec-a", attempts },
+  });
+
+  const prompt = prepareCellPrompt(root, "cap-1", "exec-a");
+  const lines = prompt.split("\n");
+  const headerIdx = lines.indexOf(PRIOR_ROUNDS_HEADER);
+  const closerIdx = lines.indexOf(PRIOR_ROUNDS_CLOSER);
+  assert(headerIdx !== -1 && closerIdx !== -1, `expected both header and closer, got:\n${prompt}`);
+  const eventLines = lines.slice(headerIdx + 1, closerIdx);
+  assert(eventLines.length === 12, `expected exactly 12 event lines (the cap), got ${eventLines.length}:\n${eventLines.join("\n")}`);
+  assert(
+    eventLines[0] === "- (4 earlier event(s) elided — the cell record holds the rest)",
+    `expected the oldest 4 of 15 elided behind a count line, got: ${JSON.stringify(eventLines[0])}`,
+  );
+  // Scoped to the block's own lines — the inlined cell JSON above the block
+  // legitimately still carries every attempt (the record holds the rest).
+  const blockText = eventLines.join("\n");
+  assert(!blockText.includes("sig-004"), `elided (old) events must not appear in the block, got:\n${blockText}`);
+  assert(blockText.includes("sig-005") && blockText.includes("sig-015"), `the newest 11 events must survive the cap, got:\n${blockText}`);
+});
+
+await check("a red-first-tier cell (change_class security) gets the Proof contract block naming the REAL finish flags; a fresh red-first cell still gets no Prior rounds block", async () => {
+  const root = mkFixture("dispatch-prepare-proof-red-first-");
+  claudeCellConfig(root);
+  writeCellFixture(root, {
+    id: "red-1",
+    feature: "demo",
+    title: "Security cell",
+    action: "Harden the demo thing.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    change_class: "security",
+    trace: { worker: "exec-red-1" },
+  });
+
+  const prompt = prepareCellPrompt(root, "red-1", "exec-red-1");
+  assert(prompt.includes(PROOF_CONTRACT_HEADER), `expected the Proof contract header, got:\n${prompt}`);
+  assert(prompt.includes("red-first"), `the block must name the tier, got:\n${prompt}`);
+  // The real cap-door flags (bee.mjs capCellFromFlags) and evidence field
+  // (cells.mjs red-first door): never invented names.
+  assert(prompt.includes("--behavior-change"), `expected the --behavior-change flag named, got:\n${prompt}`);
+  assert(prompt.includes("--evidence-stdin"), `expected the --evidence-stdin flag named, got:\n${prompt}`);
+  assert(prompt.includes("--evidence-file"), `expected the --evidence-file flag named, got:\n${prompt}`);
+  assert(prompt.includes("red_failure_evidence"), `expected the red_failure_evidence evidence field named, got:\n${prompt}`);
+  assert(!prompt.includes(PRIOR_ROUNDS_HEADER), `a fresh cell gets no Prior rounds block even when red-first, got:\n${prompt}`);
+
+  // The lane axis of the same tier: bugfix on lane high-risk is also
+  // red-first (cells.mjs requiredProofTier).
+  writeCellFixture(root, {
+    id: "red-2",
+    feature: "demo",
+    title: "High-risk bugfix cell",
+    action: "Fix the demo thing.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    lane: "high-risk",
+    change_class: "bugfix",
+    trace: { worker: "exec-red-2" },
+  });
+  const highRiskPrompt = prepareCellPrompt(root, "red-2", "exec-red-2");
+  assert(highRiskPrompt.includes(PROOF_CONTRACT_HEADER), `a high-risk bugfix cell is red-first and must get the block, got:\n${highRiskPrompt}`);
+});
+
+await check("a targeted-green-tier cell (bugfix outside high-risk) gets NO Proof contract block — the default contract lines already state that path", async () => {
+  const root = mkFixture("dispatch-prepare-proof-targeted-green-");
+  claudeCellConfig(root);
+  writeCellFixture(root, {
+    id: "green-1",
+    feature: "demo",
+    title: "Ordinary bugfix cell",
+    action: "Fix the demo thing.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    lane: "small",
+    change_class: "bugfix",
+    trace: { worker: "exec-green-1" },
+  });
+
+  const prompt = prepareCellPrompt(root, "green-1", "exec-green-1");
+  assert(!prompt.includes(PROOF_CONTRACT_HEADER), `a targeted-green cell must get no Proof contract block, got:\n${prompt}`);
+
+  // existing-targeted-green (behavior outside high-risk) also adds nothing.
+  writeCellFixture(root, {
+    id: "green-2",
+    feature: "demo",
+    title: "Ordinary behavior cell",
+    action: "Change the demo thing.",
+    verify: 'node -e "process.exit(0)"',
+    status: "claimed",
+    lane: "small",
+    change_class: "behavior",
+    trace: { worker: "exec-green-2" },
+  });
+  const behaviorPrompt = prepareCellPrompt(root, "green-2", "exec-green-2");
+  assert(!behaviorPrompt.includes(PROOF_CONTRACT_HEADER), `an existing-targeted-green cell must get no Proof contract block, got:\n${behaviorPrompt}`);
+});
+
 // ─── bad --runtime / --kind refuse loudly ──────────────────────────────────
 
 await check("an unknown --runtime is refused (non-zero exit)", async () => {

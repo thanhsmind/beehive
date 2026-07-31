@@ -177,6 +177,14 @@ Do not spend tests on:
 The moment any of these grows a branch, a transformation, or a default, it
 has logic, and logic gets a test.
 
+**When no new test is owed at all** — a change with no new behavior:
+doc-only edits, mechanical renames, compiler-enforced type updates,
+dead-code removal, a pure refactor already pinned by existing tests.
+State the reason when you skip. The boundary that never qualifies:
+"hard to test" is not "no behavior" — async paths, integration surfaces,
+and error handling have behavior, and difficulty setting them up is an
+argument for a better harness, never for skipping the test.
+
 ## Every escaped bug is a missing test
 
 When production breaks despite green tests → the incident has identified
