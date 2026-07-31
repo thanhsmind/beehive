@@ -71,9 +71,13 @@ paths or type frontmatter blocks by eye.
 
 ## Compound — close with what you learned
 
-Runs once per feature, after `bee close` goes green — or when work is
-abandoned with lessons worth keeping. "The session feels done" is
-never a reason to skip it.
+Deferred by design, like review: a green `bee close` records capture as
+pending (the capture queue plus uncaptured `behavior_change` cells are
+the signal; `bee orient` keeps the reminder) — Compound then runs when
+the owner chooses, batching several closed features into one session
+when that is cheaper. Deferred is never dropped: the reminder stands
+until this runs, and abandoning work with lessons worth keeping still
+runs it.
 
 1. Flush the capture queue: `bee capture list`, then oldest-first give
    each stub its full spec merge and `bee capture flush --id <id>

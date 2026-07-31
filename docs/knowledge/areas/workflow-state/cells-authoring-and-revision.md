@@ -137,7 +137,13 @@ areas/workflow-state/cells-completion-judge-and-archive.md B43).
   unit records a reasoned acknowledgement; the obligated roots are always
   derived from the regeneration tools themselves, never hard-coded in the
   guard (regen-obligation-derived D1/D2, 2026-07-23).
-- R94 — **Coverage judgement before coverage authoring.** The trailing test
+- R94 — *(Superseded 2026-07-31 — decision 412e9b3a,
+  docs/specs/test-simple.md: the trailing-test-unit-per-slice mandate is
+  deleted. Live rule: each unit's writer owns its tests TDD-style as part
+  of the unit's own work, and `bee cells finish` runs the declared suite.
+  The coverage-judgement-first discipline itself survives as craft in
+  `.bee/expertise/tests.md`. Kept below as the historical record.)*
+  **Coverage judgement before coverage authoring.** The trailing test
   unit per slice is unconditional, and its first mandated step is to cite the
   nearest existing tests and judge whether they already cover the slice's
   acceptance criteria; only the uncovered gap is authored. Concluding "already
@@ -147,12 +153,12 @@ areas/workflow-state/cells-completion-judge-and-archive.md B43).
   demonstrating size: happy path, edge cases, error paths.** The
   twelve-dimension edge checklist stops being the default at the standard lane
   and applies only to highest-risk and hard-gated work — read as a checklist
-  to fill, it generated volume rather than coverage. No numeric per-group test
-  cap is added: the existing brakes stand exactly as written (the volume
-  ceiling, the justification demanded for a genuinely new permanent suite, and
-  the outright refusal of a new test file on a refactor or formatting unit).
-  The triad is the shape guide; the ceiling is the volume brake — two brakes on
-  the same axis would contradict (worker-conformance D5/D6).
+  to fill, it generated volume rather than coverage. *(The mechanical brakes
+  this rule leaned on — the volume ceiling, the new-suite justification, and
+  the refactor new-test-file refusal — were deleted 2026-07-31 by decision
+  412e9b3a, docs/specs/test-simple.md; the triad shape and duplication
+  judgment survive as craft in `.bee/expertise/tests.md`, enforced by
+  review.)* (worker-conformance D5/D6).
 
 ## Edge Cases Settled
 
@@ -165,7 +171,11 @@ areas/workflow-state/cells-completion-judge-and-archive.md B43).
 
 ## Open Gaps
 
-- **The planning doctrine and the machine disagree about batching the trailing
+- *(Closed by supersession 2026-07-31 — decision 412e9b3a,
+  docs/specs/test-simple.md: both sides of this gap — the trailing-test-unit
+  mandate and the feature-level coverage door — are deleted, so the
+  disagreement no longer exists. Kept as the historical record.)*
+  **The planning doctrine and the machine disagree about batching the trailing
   test unit at the highest risk level, and the disagreement was recorded rather
   than resolved.** The doctrine says highest-risk work is never batched into a
   trailing test unit — each such unit proves itself red-first. The

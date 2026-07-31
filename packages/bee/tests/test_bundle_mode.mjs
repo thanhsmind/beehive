@@ -928,7 +928,7 @@ await check('preamble fallback: the scribing-debt nudge still names docs/specs/,
   assert(debt !== null, 'the fixture really does carry scribing debt');
   assert(
     debt[1] ===
-      '- demo-1 capped since the last scribing run — run bee-capturing capture now; settled behavior belongs in docs/specs/ before it evaporates (decision 0011).',
+      '- demo-1 capped since the last scribing run — capture pending (decision c8e25271): run bee-capturing when you choose; settled behavior belongs in docs/specs/.',
     `today's nudge, verbatim, got ${JSON.stringify(debt[1])}`,
   );
 });
@@ -1016,7 +1016,7 @@ await check('preamble bundle mode (D3): the scribing-debt nudge names the RESOLV
   assert(debt !== null, 'the fixture really does carry scribing debt');
   assert(
     debt[1] ===
-      '- demo-1 capped since the last scribing run — run bee-capturing capture now; settled behavior belongs in docs/knowledge/ before it evaporates (decision 0011).',
+      '- demo-1 capped since the last scribing run — capture pending (decision c8e25271): run bee-capturing when you choose; settled behavior belongs in docs/knowledge/.',
     `the bundle repo is told where its knowledge actually goes, got ${JSON.stringify(debt[1])}`,
   );
 });

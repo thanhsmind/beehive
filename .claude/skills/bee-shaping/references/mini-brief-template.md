@@ -25,7 +25,7 @@ decisions: [<D-IDs>]
 **Affected files**
 - `<path>` — <why>
 
-**Validation** — `<verify command>` → expected: <outcome>. Evidence: <link once the cell/feature verify runs; "pending" before>
+**Validation** — `<the declared test command>` → expected: <outcome>. Evidence: <link `.bee/logs/test-results.json` once the finish runs; "pending" before>
 
 **Risk** — <one line, or "none">
 **Rollback** — <one line: revert the cell's commit / disable the flag>

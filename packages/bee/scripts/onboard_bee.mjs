@@ -203,8 +203,8 @@ const GITIGNORE_BLOCK_PATTERNS = [
   ".claude-plugin/skills.old-*/",
   ".codex-plugin/skills.tmp-*/",
   ".codex-plugin/skills.old-*/",
-  // Legacy-flow debris (bee-gitignore-debris gi-1): pre-`--evidence-stdin`
-  // verify/evidence/deviations scratch a worker's flow used to write straight
+  // Legacy-flow debris (bee-gitignore-debris gi-1): early workers'
+  // verify/evidence/deviations scratch used to write straight
   // into the .bee ROOT (e.g. `.bee/tmp_verify_1710-4.txt`,
   // `.bee/tmp_evidence_1710-4.json`) before being read and discarded, plus
   // one-off `.bee/patch-cz*.json` hand patches applied outside the normal

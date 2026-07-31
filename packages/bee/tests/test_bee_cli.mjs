@@ -27,7 +27,7 @@ import { validate, isValidParameterSchema } from '../lib/validate-args.mjs';
 import { addCell, updateCell, deriveRegenGuards, regenObligationRefusal } from '../lib/cells.mjs';
 import { createSession, bindSessionLane } from '../lib/claims.mjs';
 import { writeJsonAtomic, hashFile, appendJsonl } from '../lib/fsutil.mjs';
-import { defaultState, writeState, writeLane, BEE_VERSION, GATE_NAMES, KNOWN_PHASES, FEATURE_DEBT_KINDS, bypassLevel } from '../lib/state.mjs';
+import { defaultState, writeState, writeLane, BEE_VERSION, GATE_NAMES, KNOWN_PHASES, bypassLevel } from '../lib/state.mjs';
 import { listWorkflows, createWorkflow } from '../lib/workflow-store.mjs';
 import { buildSessionPreamble } from '../lib/inject.mjs';
 import { mirrorHold, findForeignHolds } from '../lib/worktree-holds.mjs';
@@ -42,7 +42,6 @@ import {
   deprecatedRedirect,
   computeManifestHash,
   manifestLintWarning,
-  judgeStandardWarning,
 } from '../bee.mjs';
 
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -204,7 +203,7 @@ await check('registry names are unique and dot-namespaced by group (status, cell
   assert(new Set(names).size === names.length, `duplicate names in registry: ${names.join(', ')}`);
   const groups = new Set(names.map((n) => (n.includes('.') ? n.split('.')[0] : n)));
   for (const group of groups) {
-    assert(['status', 'orient', 'doctor', 'close', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent'].includes(group), `unexpected group "${group}"`);
+    assert(['status', 'orient', 'doctor', 'close', 'test', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent'].includes(group), `unexpected group "${group}"`);
   }
 });
 
@@ -213,7 +212,7 @@ await check('registry covers every subcommand of the 4 existing helpers', async 
   const expected = [
     'status',
     'cells.list', 'cells.ready', 'cells.show', 'cells.add', 'cells.update', 'cells.claim',
-    'cells.verify', 'cells.cap', 'cells.block', 'cells.drop', 'cells.tier', 'cells.judge',
+    'cells.cap', 'cells.block', 'cells.drop', 'cells.tier', 'cells.judge',
     'reservations.reserve', 'reservations.release', 'reservations.list', 'reservations.sweep',
     'decisions.log', 'decisions.supersede', 'decisions.redact', 'decisions.active', 'decisions.search',
   ];
@@ -306,14 +305,14 @@ await check('DA5 bijection: every runtime verb of bee.mjs cells/reservations/dec
   }
 });
 
-await check('DA5 bijection: the only dot-free registry entries are "status", "orient", "doctor" and "close", and every entry\'s group is one of status|orient|doctor|close|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|config', async () => {
-  const allowedGroups = new Set(['status', 'orient', 'doctor', 'close', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent']);
-  const allowedDotFree = new Set(['status', 'orient', 'doctor', 'close']);
+await check('DA5 bijection: the only dot-free registry entries are "status", "orient", "doctor", "close" and "test", and every entry\'s group is one of status|orient|doctor|close|test|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|config', async () => {
+  const allowedGroups = new Set(['status', 'orient', 'doctor', 'close', 'test', 'cells', 'reservations', 'decisions', 'state', 'backlog', 'capture', 'reviews', 'feedback', 'perf', 'worktree', 'herding', 'config', 'dispatch', 'recovery', 'tmp', 'knowledge', 'intent']);
+  const allowedDotFree = new Set(['status', 'orient', 'doctor', 'close', 'test']);
   for (const entry of COMMAND_REGISTRY) {
     const group = entry.name.includes('.') ? entry.name.split('.')[0] : entry.name;
     assert(allowedGroups.has(group), `${entry.name}: group "${group}" is not one of status|orient|doctor|close|cells|reservations|decisions|state|backlog|capture|reviews|feedback|perf|worktree|herding|config|dispatch|tmp`);
     if (!entry.name.includes('.')) {
-      assert(allowedDotFree.has(entry.name), `dot-free registry entry "${entry.name}" is not one of status|orient|doctor|close — only those may be dot-free`);
+      assert(allowedDotFree.has(entry.name), `dot-free registry entry "${entry.name}" is not one of status|orient|doctor|close|test — only those may be dot-free`);
     }
   }
 });
@@ -438,19 +437,16 @@ await check('cells.claim example runs through the real dispatcher', async () => 
   assert(JSON.parse(result.stdout).status === 'claimed', 'demo-1 should now be claimed');
 });
 
-await check('cells.verify example runs through the real dispatcher', async () => {
-  const result = await assertExampleOk('cells.verify');
-  assert(JSON.parse(result.stdout).trace.verify_passed === true, 'verify_passed should be true');
-});
-
 await check('cells.cap example runs through the real dispatcher', async () => {
   const result = await assertExampleOk('cells.cap');
   assert(JSON.parse(result.stdout).status === 'capped', 'demo-1 should now be capped');
 });
 
 // cells.finish (porcelain): its own fixture cell, prepared exactly like the
-// demo-1 chain (add -> claim -> reserve -> verify) so the registry example
-// runs against a claimed, verified cell holding a live reservation.
+// demo-1 chain (add -> claim -> reserve) so the registry example runs
+// against a claimed cell holding a live reservation (test-simple: no
+// per-cell verify step exists; this repo declares no commands.test, so
+// finish caps with the undeclared stamp).
 await check('cells.finish example runs through the real dispatcher (cap + reservation release in one verb)', async () => {
   addCell(root, {
     id: 'demo-fin-1',
@@ -463,7 +459,6 @@ await check('cells.finish example runs through the real dispatcher (cap + reserv
   for (const args of [
     ['cells', 'claim', '--id', 'demo-fin-1', '--worker', 'worker-fin', '--json'],
     ['reservations', 'reserve', '--agent', 'worker-fin', '--cell', 'demo-fin-1', '--path', 'src/demo-fin.ts', '--json'],
-    ['cells', 'verify', '--id', 'demo-fin-1', '--command', 'manual check', '--output', '0 failing', '--passed', 'true', '--json'],
   ]) {
     const setup = await runModuleWorker(BEE_MJS, { args, cwd: root });
     assert(setup.status === 0, `finish fixture setup "${args.join(' ')}" exited ${setup.status}: ${setup.stdout} ${setup.stderr}`);
@@ -480,24 +475,8 @@ await check('cells.finish example runs through the real dispatcher (cap + reserv
   assert(active.length === 0, `worker-fin's reservation must be gone after finish, got ${JSON.stringify(active)}`);
 });
 
-await check('cells.finish on a cell that cannot cap passes the cap refusal through unchanged and releases nothing', async () => {
-  addCell(root, {
-    id: 'demo-fin-2',
-    feature: 'demo',
-    title: 'Demo cell for the cells.finish refusal path',
-    lane: 'small',
-    action: 'Prove finish refuses exactly like cap and never releases on refusal.',
-    verify: 'node -e "process.exit(0)"',
-  });
-  for (const args of [
-    ['cells', 'claim', '--id', 'demo-fin-2', '--worker', 'worker-fin2', '--json'],
-    ['reservations', 'reserve', '--agent', 'worker-fin2', '--cell', 'demo-fin-2', '--path', 'src/demo-fin2.ts', '--json'],
-  ]) {
-    const setup = await runModuleWorker(BEE_MJS, { args, cwd: root });
-    assert(setup.status === 0, `finish refusal fixture setup "${args.join(' ')}" exited ${setup.status}: ${setup.stdout} ${setup.stderr}`);
-  }
-  // No verify recorded — cap refuses; finish must refuse byte-identically.
-  const capArgs = ['--id', 'demo-fin-2', '--outcome', 'refusal probe', '--files', 'src/demo-fin2.ts', '--json'];
+await check('cells.finish passes the cap refusal through unchanged (unknown cell id) — byte-identical to cells cap', async () => {
+  const capArgs = ['--id', 'demo-fin-ghost', '--outcome', 'refusal probe', '--files', 'src/ghost.ts', '--json'];
   const capResult = await runModuleWorker(BEE_MJS, { args: ['cells', 'cap', ...capArgs], cwd: root });
   const finishResult = await runModuleWorker(BEE_MJS, { args: ['cells', 'finish', ...capArgs], cwd: root });
   assert(capResult.status === 1 && finishResult.status === 1, `both must refuse non-zero, got cap=${capResult.status} finish=${finishResult.status}`);
@@ -505,23 +484,6 @@ await check('cells.finish on a cell that cannot cap passes the cap refusal throu
     finishResult.stdout === capResult.stdout,
     `finish's refusal must be byte-identical to cap's, got cap=${capResult.stdout} finish=${finishResult.stdout}`,
   );
-  const cell = JSON.parse(fs.readFileSync(path.join(root, '.bee', 'cells', 'demo-fin-2.json'), 'utf8'));
-  assert(cell.status === 'claimed', `the refused cell must stay claimed, got ${cell.status}`);
-  const list = await runModuleWorker(BEE_MJS, { args: ['reservations', 'list', '--active-only', '--json'], cwd: root });
-  const active = JSON.parse(list.stdout).reservations.filter((r) => r.agent === 'worker-fin2');
-  assert(active.length === 1, `the reservation must survive a refused finish, got ${JSON.stringify(active)}`);
-  // Retire the fixture so the claimed cell never leaks into the schedule/
-  // claim-next assertions further down the chain.
-  const cleanup = await runModuleWorker(BEE_MJS, {
-    args: ['cells', 'drop', '--id', 'demo-fin-2', '--reason', 'finish refusal fixture retired', '--json'],
-    cwd: root,
-  });
-  assert(cleanup.status === 0, `fixture cleanup drop failed: ${cleanup.stdout} ${cleanup.stderr}`);
-  const releaseCleanup = await runModuleWorker(BEE_MJS, {
-    args: ['reservations', 'release', '--agent', 'worker-fin2', '--cell', 'demo-fin-2', '--json'],
-    cwd: root,
-  });
-  assert(releaseCleanup.status === 0, `fixture cleanup release failed: ${releaseCleanup.stdout} ${releaseCleanup.stderr}`);
 });
 
 await check('cells.judge example runs through the real dispatcher', async () => {
@@ -1141,29 +1103,6 @@ await check('state.route example runs through the real dispatcher (registry-comp
       route.product_files === 7,
     `expected the route record to round-trip class/lane/flags/product_files, got ${result.stdout}`,
   );
-});
-
-// main-verifies D2 (cell mv-1): the registry-completeness invariant ("every
-// registry entry had its example executed at least once") demands at least
-// this much for the new feature-verify family — deeper coverage (the pending
-// cap path, both close-door refusals, red-never-satisfies, staleness, bypass
-// immunity) is mv-3's own cell. The record example's --output-file is seeded
-// here first: the verb computes output_sha256 from real captured bytes,
-// never a caller-supplied hash.
-await check('state.feature-verify.record example runs through the real dispatcher (registry-completeness — deeper coverage is mv-3\'s own cell)', async () => {
-  fs.writeFileSync(path.join(rootState, 'feature-verify-output.txt'), 'suites 25/25 green\n');
-  const result = await assertExampleOk('state.feature-verify.record', { cwd: rootState });
-  const rec = JSON.parse(result.stdout);
-  assert(
-    rec.result === 'green' && rec.feature === 'newf' && typeof rec.output_sha256 === 'string' && rec.output_sha256.length === 64,
-    `expected a green feature-verify record with a computed sha256, got ${result.stdout}`,
-  );
-});
-
-await check('state.feature-verify.show example round-trips the recorded feature-verify', async () => {
-  const result = await assertExampleOk('state.feature-verify.show', { cwd: rootState });
-  const rec = JSON.parse(result.stdout);
-  assert(rec && rec.result === 'green' && rec.feature === 'newf', `expected the recorded green feature-verify back, got ${result.stdout}`);
 });
 
 // workflow-lifecycle wl-5 (rule-12 gap closed by wl-2): the two new
@@ -2134,1501 +2073,6 @@ await check('a close with ZERO scribing debt passes and writes no waiver decisio
   }
 });
 
-// ─── main-verifies mv-3 (D1-D3): the feature-verify law's net behavior ─────
-// mv-1 (cell mv-1) relocated per-cell proof to the feature boundary: `cells
-// cap --feature-verify-pending` stamps trace.feature_verify: "pending" with
-// zero per-cell evidence, `state feature-verify record` stamps the ONE
-// feature-level proof, and guardFeatureVerifyDebt holds `swarming` shut at
-// both exits (state set + state scribing-run) until a fresh green record
-// covers every pending cap. This is the trailing net over that whole law:
-// the record verb's real computed sha256 round-trip, every door-refusal
-// shape, the pass/untouched cases, and proof that gate_bypass "total" does
-// NOT lift the door.
-
-// review-p1-fixes p1-3 (F3): `phase` is a parameter now — the door is not
-// swarming-only any more, so the fixture must be able to seat a feature in
-// any phase it can leave execution from.
-function makeFeatureVerifyRepo(feature, phase = 'swarming') {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-feature-verify-'));
-  fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
-  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
-  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase, feature });
-  return dir;
-}
-
-function writePendingCappedCell(dir, id, feature, cappedAtIso) {
-  writeJsonAtomic(path.join(dir, '.bee', 'cells', `${id}.json`), {
-    id,
-    feature,
-    status: 'capped',
-    trace: { feature_verify: 'pending', capped_at: cappedAtIso },
-  });
-}
-
-// worker-conformance D12 — the OTHER marker this door arms on: a cap that
-// recorded no proof at all. `verify_passed: true` with no output is exactly
-// the shape decision 0004 calls an assertion rather than evidence, and capCell
-// stamps `trace.proof = "unrecorded"` on it after the whole refusal chain has
-// run. Deliberately carries NO `feature_verify` field: the two markers are
-// independent, and a test that set both would prove nothing about the new one.
-function writeUnrecordedCappedCell(dir, id, feature, cappedAtIso, extra = {}) {
-  writeJsonAtomic(path.join(dir, '.bee', 'cells', `${id}.json`), {
-    id,
-    feature,
-    status: 'capped',
-    ...extra,
-    trace: { proof: 'unrecorded', verify_passed: true, capped_at: cappedAtIso, ...(extra.trace || {}) },
-  });
-}
-
-// A green feature-verify record stamped NOW, for fixtures that need the
-// feature-verify door satisfied so a later kind's refusal is the one under
-// test. Merges into the existing state rather than replacing it — the fixture
-// repo already seated a phase and a feature.
-function seedFreshGreenFeatureVerify(dir, feature) {
-  const statePath = path.join(dir, '.bee', 'state.json');
-  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-  state.feature_verify = {
-    feature,
-    command: 'node run_verify.mjs --impacted',
-    output_sha256: 'd'.repeat(64),
-    result: 'green',
-    at: new Date().toISOString(),
-  };
-  writeJsonAtomic(statePath, state);
-}
-
-await check('mv-3(c): state feature-verify record green/red round-trips with a REAL computed output_sha256, and --show reads it back', async () => {
-  const dir = makeFeatureVerifyRepo('mv3demo');
-  try {
-    const outFile = path.join(dir, 'verify-output.txt');
-    fs.writeFileSync(outFile, 'suite A: 12/12 green\n');
-    const expectedGreenSha = crypto.createHash('sha256').update(fs.readFileSync(outFile)).digest('hex');
-    const green = await runBee(
-      ['state', 'feature-verify', 'record', '--command', 'node run_verify.mjs --impacted', '--output-file', outFile, '--result', 'green', '--json'],
-      dir,
-    );
-    assert(green.status === 0, `green record must succeed, got: ${green.stdout}${green.stderr}`);
-    const greenRec = JSON.parse(green.stdout);
-    assert(greenRec.result === 'green' && greenRec.feature === 'mv3demo', `expected a green record for mv3demo, got ${green.stdout}`);
-    assert(
-      greenRec.output_sha256 === expectedGreenSha,
-      `output_sha256 must be computed from the real captured bytes, never caller-supplied, got ${greenRec.output_sha256} vs ${expectedGreenSha}`,
-    );
-
-    const show = await runBee(['state', 'feature-verify', 'show', '--json'], dir);
-    assert(show.status === 0, `show must succeed, got: ${show.stdout}${show.stderr}`);
-    const shown = JSON.parse(show.stdout);
-    assert(
-      shown.result === 'green' && shown.output_sha256 === expectedGreenSha,
-      `show must round-trip the exact recorded record, got ${show.stdout}`,
-    );
-
-    // Red round-trip: storable evidence of the failure, distinct from green.
-    fs.writeFileSync(outFile, 'suite A: 3 failing\n');
-    const expectedRedSha = crypto.createHash('sha256').update(fs.readFileSync(outFile)).digest('hex');
-    const red = await runBee(
-      ['state', 'feature-verify', 'record', '--command', 'node run_verify.mjs --impacted', '--output-file', outFile, '--result', 'red', '--json'],
-      dir,
-    );
-    assert(red.status === 0, `a red result must be RECORDABLE — it documents the failure (main-verifies D2), got: ${red.stdout}${red.stderr}`);
-    const redRec = JSON.parse(red.stdout);
-    assert(
-      redRec.result === 'red' && redRec.output_sha256 === expectedRedSha,
-      `expected the red record with its own freshly computed sha, got ${red.stdout}`,
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('mv-3(d): door refuses — a pending cap with NO feature-verify record at all names the pending cell and the missing record', async () => {
-  const dir = makeFeatureVerifyRepo('mv3door');
-  try {
-    writePendingCappedCell(dir, 'mv3d-1', 'mv3door', new Date().toISOString());
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
-    assert(refused.status !== 0, 'a pending cap with no record must refuse leaving swarming');
-    const out = refused.stdout + refused.stderr;
-    assert(/mv3d-1/.test(out), `refusal must name the pending cell, got: ${out}`);
-    assert(/NO feature-verify record exists/.test(out), `refusal must say no record exists, got: ${out}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'swarming',
-      'a refused departure must leave the phase untouched — no partial write',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('mv-3(d): door refuses — a RED feature-verify record documents the failure but never satisfies the door', async () => {
-  const dir = makeFeatureVerifyRepo('mv3door');
-  try {
-    writePendingCappedCell(dir, 'mv3d-2', 'mv3door', new Date(Date.now() - 60000).toISOString());
-    const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
-    state.feature_verify = { feature: 'mv3door', command: 'x', output_sha256: 'a'.repeat(64), result: 'red', at: new Date().toISOString() };
-    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
-    assert(refused.status !== 0, 'a red record must never satisfy the door, even though it is newer than the pending cap');
-    const out = refused.stdout + refused.stderr;
-    assert(/mv3d-2/.test(out) && /never satisfies this door/.test(out), `refusal must name the cell and explain red never satisfies, got: ${out}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('mv-3(d): door refuses — a GREEN record older than the newest pending cap is STALE, naming the gap', async () => {
-  const dir = makeFeatureVerifyRepo('mv3door');
-  try {
-    const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
-    state.feature_verify = {
-      feature: 'mv3door',
-      command: 'x',
-      output_sha256: 'b'.repeat(64),
-      result: 'green',
-      at: new Date(Date.now() - 120000).toISOString(),
-    };
-    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
-    // Capped AFTER the green record — the record never covered this cell.
-    writePendingCappedCell(dir, 'mv3d-3', 'mv3door', new Date().toISOString());
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
-    assert(refused.status !== 0, 'a stale green record must not satisfy the door');
-    const out = refused.stdout + refused.stderr;
-    assert(/mv3d-3/.test(out) && /STALE/.test(out), `refusal must name the cell and call out staleness, got: ${out}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('mv-3(d): door passes — a GREEN record strictly newer than the newest pending cap opens it, and the departure actually writes', async () => {
-  const dir = makeFeatureVerifyRepo('mv3door');
-  try {
-    writePendingCappedCell(dir, 'mv3d-4', 'mv3door', new Date(Date.now() - 60000).toISOString());
-    const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
-    state.feature_verify = { feature: 'mv3door', command: 'x', output_sha256: 'c'.repeat(64), result: 'green', at: new Date().toISOString() };
-    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
-    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
-    assert(ok.status === 0, `a fresh green record must open the door, got: ${ok.stdout}${ok.stderr}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'reviewing',
-      'the departure must actually write the target phase once the door opens',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('mv-3(d): door stays UNTOUCHED when no cell carries a pending marker — departs freely with no feature-verify record at all', async () => {
-  const dir = makeFeatureVerifyRepo('mv3door');
-  try {
-    // A normal, classically-capped cell — no feature_verify field at all.
-    writeJsonAtomic(path.join(dir, '.bee', 'cells', 'mv3d-5.json'), {
-      id: 'mv3d-5',
-      feature: 'mv3door',
-      status: 'capped',
-      trace: { capped_at: new Date().toISOString() },
-    });
-    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
-    assert(ok.status === 0, `zero pending cells must never engage this door, got: ${ok.stdout}${ok.stderr}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('mv-3(e): gate_bypass "total" does NOT lift the feature-verify close door — refused identically to no bypass at all', async () => {
-  const dir = makeFeatureVerifyRepo('mv3door');
-  try {
-    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total' });
-    writePendingCappedCell(dir, 'mv3d-6', 'mv3door', new Date().toISOString());
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
-    assert(refused.status !== 0, 'gate_bypass "total" must NOT lift this door — it is a mechanical precondition, not a gate');
-    const out = refused.stdout + refused.stderr;
-    assert(/mv3d-6/.test(out), `refusal must still name the pending cell under bypass total, got: ${out}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('mv-3: the SECOND door (state scribing-run) refuses identically — guardFeatureVerifyDebt is wired at both swarming exits (D3)', async () => {
-  const dir = makeFeatureVerifyRepo('mv3door2');
-  try {
-    writePendingCappedCell(dir, 'mv3d-7', 'mv3door2', new Date().toISOString());
-    const refused = await runBee(
-      ['state', 'scribing-run', '--feature', 'mv3door2', '--areas', 'demo', '--next-action', 'x', '--json'],
-      dir,
-    );
-    assert(refused.status !== 0, 'scribing-run must also refuse over a pending cap with no record');
-    const out = refused.stdout + refused.stderr;
-    assert(/mv3d-7/.test(out), `refusal must name the pending cell, got: ${out}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'swarming',
-      'a refused scribing-run must leave the phase untouched — no last_scribing_run stamped',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// ─── review-p1-fixes p1-3 (F3): the OTHER door + the wider phase set ───────
-// Two independent reviewers found the feature-verify guard covered the
-// phase-transition door only. `state set --feature <other>` walked away from
-// a feature holding pending caps with no green record at all — and since
-// every reader keys on record.feature, those caps are then read by no path,
-// ever again. The same guard's phase condition was also narrower than the set
-// of phases a feature can leave execution from (SCRIBING_RUN_FROM admits
-// reviewing and scribing), so a cap taken in either skipped BOTH doors.
-
-await check('p1-3(F3): the feature-SWAP door refuses — state set --feature over pending caps names the cell, and the swap never lands', async () => {
-  const dir = makeFeatureVerifyRepo('mv3swap');
-  try {
-    writePendingCappedCell(dir, 'p13-1', 'mv3swap', new Date().toISOString());
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--feature', 'someother', '--json'], dir);
-    assert(refused.status !== 0, 'swapping --feature away from a feature with pending caps must refuse');
-    const out = refused.stdout + refused.stderr;
-    // --json renders the refusal inside a JSON string, so the quotes around
-    // the feature name arrive escaped — match the words, not the quoting.
-    assert(/refusing to swap away from feature/.test(out) && /mv3swap/.test(out), `refusal must name the outgoing feature, got: ${out}`);
-    assert(/p13-1/.test(out), `refusal must name the pending cell, got: ${out}`);
-    assert(/NO feature-verify record exists/.test(out), `refusal must say why the door is shut, got: ${out}`);
-    assert(/feature-verify record/.test(out) && /--result green/.test(out), `refusal must carry the runnable FIX, got: ${out}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'mv3swap',
-      'a refused swap must leave the feature untouched — no partial write',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('p1-3(F3): gate_bypass "total" and --waive-scribing-debt both fail to lift the feature-SWAP door', async () => {
-  const dir = makeFeatureVerifyRepo('mv3swap2');
-  try {
-    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total' });
-    writePendingCappedCell(dir, 'p13-2', 'mv3swap2', new Date().toISOString());
-    const refused = await runBee(
-      ['state', 'set', '--owner', 'swarming', '--feature', 'someother', '--waive-scribing-debt', '--json'],
-      dir,
-    );
-    assert(
-      refused.status !== 0,
-      'the swap door is a mechanical precondition: neither bypass "total" nor the SCRIBING waiver may lift it',
-    );
-    const out = refused.stdout + refused.stderr;
-    assert(/p13-2/.test(out), `refusal must still name the pending cell, got: ${out}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'mv3swap2',
-      'nothing may be written when the swap door refuses under bypass',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('p1-3(F3): the swap door OPENS once a fresh green feature-verify covers the pending caps — a guard, not a blanket block', async () => {
-  const dir = makeFeatureVerifyRepo('mv3swap3');
-  try {
-    writePendingCappedCell(dir, 'p13-3', 'mv3swap3', new Date(Date.now() - 60000).toISOString());
-    const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
-    state.feature_verify = { feature: 'mv3swap3', command: 'x', output_sha256: 'd'.repeat(64), result: 'green', at: new Date().toISOString() };
-    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
-    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--feature', 'someother', '--json'], dir);
-    assert(ok.status === 0, `a fresh green record must open the swap door, got: ${ok.stdout}${ok.stderr}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'someother',
-      'the swap must actually write once the door opens',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-for (const fromPhase of ['reviewing', 'scribing']) {
-  await check(`p1-3(F3): a pending cap is still guarded when the feature leaves execution from "${fromPhase}", not only from swarming`, async () => {
-    const dir = makeFeatureVerifyRepo(`mv3phase-${fromPhase}`, fromPhase);
-    try {
-      writePendingCappedCell(dir, `p13-${fromPhase}`, `mv3phase-${fromPhase}`, new Date().toISOString());
-      const refused = await runBee(['state', 'set', '--owner', fromPhase, '--phase', 'idle', '--json'], dir);
-      assert(refused.status !== 0, `leaving execution from "${fromPhase}" over a pending cap must refuse`);
-      const out = refused.stdout + refused.stderr;
-      // Quotes arrive JSON-escaped under --json (\" is two characters), so
-      // match the phase names themselves rather than the quoting.
-      assert(
-        new RegExp(`refusing to leave phase \\W{0,2}${fromPhase}\\W{0,3} for \\W{0,2}idle`).test(out),
-        `refusal must name the real originating phase, got: ${out}`,
-      );
-      assert(new RegExp(`p13-${fromPhase}`).test(out), `refusal must name the pending cell, got: ${out}`);
-      assert(
-        JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === fromPhase,
-        'a refused departure must leave the phase untouched — no partial write',
-      );
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-}
-
-// ─── review-p1-fixes p2-1: guard every DEPARTURE; unreadable ≠ clean ───────
-//
-// p1-3 (above) patched the two doors the first panel named, and a delta
-// re-reviewer immediately walked through a third: the guard's ALLOWLIST of
-// origin phases (SCRIBING_RUN_FROM) did not include `compounding`, so a cell
-// capped `--feature-verify-pending` there left through
-// `compounding -> compounding-complete` and then `state start-feature`, which
-// destroyed the relocated proof outright. Two more of the same class came with
-// it: guardTestCellDebt still read `from !== 'swarming'` while its own
-// scribing-run call site fires from every SCRIBING_RUN_FROM phase, and both
-// guards treated an UNREADABLE cell store as "no debt".
-//
-// These checks pin the inverted rule rather than the three specific holes:
-// debt is cleared by EVIDENCE, never by the absence of evidence — so every
-// departure from every phase asks, every door asks the same question, and a
-// store bee cannot read is unknown debt, not zero debt.
-
-function writeTestClassCell(dir, id, feature, extra = {}) {
-  writeJsonAtomic(path.join(dir, '.bee', 'cells', `${id}.json`), {
-    id,
-    feature,
-    change_class: 'test',
-    status: 'open',
-    trace: {},
-    ...extra,
-  });
-}
-
-function writeCappedBehaviorCell(dir, id, feature) {
-  writeJsonAtomic(path.join(dir, '.bee', 'cells', `${id}.json`), {
-    id,
-    feature,
-    change_class: 'behavior',
-    status: 'capped',
-    files: ['src/thing.js'],
-    trace: { capped_at: new Date().toISOString(), verify_passed: true },
-  });
-}
-
-await check('p2-1: THE DELTA-REVIEW REPRO — a cap taken in `compounding` no longer walks out through `compounding -> compounding-complete` (and --waive-compounding does not lift it)', async () => {
-  const dir = makeFeatureVerifyRepo('p21repro', 'compounding');
-  try {
-    writePendingCappedCell(dir, 'p21-1', 'p21repro', new Date().toISOString());
-    const refused = await runBee(
-      ['state', 'set', '--owner', 'compounding', '--phase', 'compounding-complete', '--waive-compounding', '--json'],
-      dir,
-    );
-    assert(refused.status !== 0, 'the reviewer\'s exact repro must now be refused at the first door it reaches');
-    const out = refused.stdout + refused.stderr;
-    assert(/p21-1/.test(out), `refusal must name the pending cell, got: ${out}`);
-    assert(
-      /refusing to leave phase \W{0,2}compounding\W{0,3} for \W{0,2}compounding-complete/.test(out),
-      `refusal must name the real originating phase, not an allowlisted one, got: ${out}`,
-    );
-    assert(/NO feature-verify record exists/.test(out), `refusal must say why the door is shut, got: ${out}`);
-    assert(/--result green/.test(out), `refusal must carry the runnable FIX, got: ${out}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'compounding',
-      'a refused close must leave the phase untouched — no partial write',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// The guarded set is DERIVED (isDebtGuardedDeparture), so this is not a list
-// of the phases somebody remembered: it is every phase in the enum. A phase
-// added tomorrow inherits the door instead of escaping it.
-for (const fromPhase of KNOWN_PHASES) {
-  // Any target that is not `fromPhase` itself — a same-phase re-set is the one
-  // documented exemption, and is pinned by its own check below.
-  const targetPhase = fromPhase === 'idle' ? 'exploring' : 'idle';
-  await check(`p2-1: no phase escapes the feature-verify door — a pending cap blocks the departure from "${fromPhase}"`, async () => {
-    const dir = makeFeatureVerifyRepo(`p21all-${fromPhase}`, fromPhase);
-    try {
-      writePendingCappedCell(dir, `p21all-${fromPhase}`, `p21all-${fromPhase}`, new Date().toISOString());
-      const refused = await runBee(['state', 'set', '--owner', fromPhase, '--phase', targetPhase, '--json'], dir);
-      assert(refused.status !== 0, `a pending cap must block the departure from "${fromPhase}"`);
-      const out = refused.stdout + refused.stderr;
-      assert(new RegExp(`p21all-${fromPhase}`).test(out), `refusal must name the pending cell, got: ${out}`);
-      assert(
-        JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === fromPhase,
-        'a refused departure must leave the phase untouched',
-      );
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-}
-
-await check('p2-1: a no-op re-set is still not a departure — the same phase re-set passes over a pending cap', async () => {
-  const dir = makeFeatureVerifyRepo('p21noop', 'swarming');
-  try {
-    writePendingCappedCell(dir, 'p21noop-1', 'p21noop', new Date().toISOString());
-    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'swarming', '--json'], dir);
-    assert(ok.status === 0, `a literal no-op re-set must stay exempt, got: ${ok.stdout}${ok.stderr}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-for (const fromPhase of ['reviewing', 'scribing']) {
-  await check(`p2-1: the TEST-CELL door fires from "${fromPhase}" too — scribing-run refused over an open test cell (F2)`, async () => {
-    const dir = makeFeatureVerifyRepo(`p21tc-${fromPhase}`, fromPhase);
-    try {
-      writeCappedBehaviorCell(dir, `p21tc-b-${fromPhase}`, `p21tc-${fromPhase}`);
-      writeTestClassCell(dir, `p21tc-t-${fromPhase}`, `p21tc-${fromPhase}`);
-      const refused = await runBee(
-        ['state', 'scribing-run', '--feature', `p21tc-${fromPhase}`, '--areas', 'demo', '--next-action', 'x', '--json'],
-        dir,
-      );
-      assert(refused.status !== 0, `scribing-run from "${fromPhase}" must refuse over an open test cell`);
-      const out = refused.stdout + refused.stderr;
-      assert(new RegExp(`p21tc-t-${fromPhase}`).test(out), `refusal must name the open test cell, got: ${out}`);
-      assert(/not green/.test(out), `refusal must be the "not green" branch, got: ${out}`);
-      assert(
-        JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === fromPhase,
-        'a refused scribing-run must leave the phase untouched — no last_scribing_run stamped',
-      );
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-}
-
-await check('p2-1: a test cell capped with a FAILING recorded verify blocks scribing-run from `reviewing` exactly like an open one', async () => {
-  const dir = makeFeatureVerifyRepo('p21red', 'reviewing');
-  try {
-    writeCappedBehaviorCell(dir, 'p21red-b', 'p21red');
-    writeTestClassCell(dir, 'p21red-t', 'p21red', {
-      status: 'capped',
-      trace: { capped_at: new Date().toISOString(), verify_passed: false },
-    });
-    const refused = await runBee(
-      ['state', 'scribing-run', '--feature', 'p21red', '--areas', 'demo', '--next-action', 'x', '--json'],
-      dir,
-    );
-    assert(refused.status !== 0, 'a capped-RED test cell must block the scribing-run door');
-    const out = refused.stdout + refused.stderr;
-    assert(/p21red-t/.test(out) && /FAILING recorded verify/.test(out), `refusal must name the red test cell, got: ${out}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('p2-1: start-feature REFUSES while the outgoing feature holds pending feature-verify caps — closing must not erase the obligation', async () => {
-  const dir = makeFeatureVerifyRepo('p21out', 'compounding-complete');
-  try {
-    writePendingCappedCell(dir, 'p21out-1', 'p21out', new Date().toISOString());
-    const refused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
-    assert(refused.status !== 0, 'starting a new feature over the outgoing one\'s pending caps must refuse');
-    const out = refused.stdout + refused.stderr;
-    assert(/p21out-1/.test(out), `refusal must name the pending cell, got: ${out}`);
-    assert(/abandons feature/.test(out) && /p21out/.test(out), `refusal must name the outgoing feature, got: ${out}`);
-    assert(/--result green/.test(out), `refusal must carry the runnable FIX, got: ${out}`);
-    const after = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
-    assert(after.feature === 'p21out', `a refused start must make ZERO mutations, got feature ${after.feature}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('p2-1: start-feature REFUSES while the outgoing feature still owes its consolidated test cell', async () => {
-  const dir = makeFeatureVerifyRepo('p21outtc', 'compounding-complete');
-  try {
-    writeCappedBehaviorCell(dir, 'p21outtc-b', 'p21outtc');
-    const refused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
-    assert(refused.status !== 0, 'test-cell debt on the outgoing feature must block a new start too');
-    const out = refused.stdout + refused.stderr;
-    assert(/p21outtc-b/.test(out), `refusal must name the uncovered behavior cell, got: ${out}`);
-    assert(/NO consolidated test cell/.test(out), `refusal must be the "no test cell at all" branch, got: ${out}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'p21outtc',
-      'a refused start must make ZERO mutations',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('p2-1: start-feature still STARTS when the outgoing feature is debt-free — a guard, not a wall', async () => {
-  const dir = makeFeatureVerifyRepo('p21clean', 'compounding-complete');
-  try {
-    writeCappedBehaviorCell(dir, 'p21clean-b', 'p21clean');
-    writeTestClassCell(dir, 'p21clean-t', 'p21clean', {
-      status: 'capped',
-      trace: { capped_at: new Date().toISOString(), verify_passed: true },
-    });
-    const ok = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
-    assert(ok.status === 0, `a debt-free outgoing feature must not block the next start, got: ${ok.stdout}${ok.stderr}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'beta',
-      'the start must actually land once the door is clear',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('p2-1: an UNREADABLE cell store REFUSES the phase door, naming the store — unknown debt is never zero debt (F5 class)', async () => {
-  const dir = makeFeatureVerifyRepo('p21unread', 'swarming');
-  try {
-    writePendingCappedCell(dir, 'p21unread-1', 'p21unread', new Date().toISOString());
-    fs.writeFileSync(path.join(dir, '.bee', 'cells', 'p21unread-2.json'), '{ not json at all', 'utf8');
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
-    assert(refused.status !== 0, 'an unreadable cell store must refuse, never pass as "no debt"');
-    const out = refused.stdout + refused.stderr;
-    assert(/UNREADABLE/.test(out), `refusal must say the store is unreadable, got: ${out}`);
-    assert(/p21unread-2.json/.test(out) && /malformed JSON/.test(out), `refusal must name the unreadable file, got: ${out}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).phase === 'swarming',
-      'a refused departure must leave the phase untouched',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('p2-1: an UNREADABLE cell store REFUSES start-feature too — both doors ask the same question', async () => {
-  const dir = makeFeatureVerifyRepo('p21unread2', 'compounding-complete');
-  try {
-    fs.writeFileSync(path.join(dir, '.bee', 'cells', 'p21unread2-1.json'), '{ not json at all', 'utf8');
-    const refused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
-    assert(refused.status !== 0, 'start-feature must refuse over a store it cannot read');
-    const out = refused.stdout + refused.stderr;
-    assert(/UNREADABLE/.test(out) && /p21unread2-1.json/.test(out), `refusal must name the unreadable store, got: ${out}`);
-    assert(
-      JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8')).feature === 'p21unread2',
-      'a refused start must make ZERO mutations',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('p2-1: an unreadable cell DIRECTORY refuses as well — the failure mode the old `catch { return; }` swallowed', async () => {
-  if (typeof process.getuid === 'function' && process.getuid() === 0) return; // root reads through chmod 000
-  const dir = makeFeatureVerifyRepo('p21chmod', 'swarming');
-  try {
-    writePendingCappedCell(dir, 'p21chmod-1', 'p21chmod', new Date().toISOString());
-    fs.chmodSync(path.join(dir, '.bee', 'cells'), 0o000);
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
-    fs.chmodSync(path.join(dir, '.bee', 'cells'), 0o755);
-    assert(refused.status !== 0, 'an unreadable cells directory must refuse, never read as "no debt"');
-    const out = refused.stdout + refused.stderr;
-    assert(/UNREADABLE/.test(out) && /EACCES/.test(out), `refusal must name the directory failure, got: ${out}`);
-  } finally {
-    try {
-      fs.chmodSync(path.join(dir, '.bee', 'cells'), 0o755);
-    } catch {
-      /* already restored */
-    }
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('p2-1: a MISSING cell store is the one honest zero — a repo with no .bee/cells at all departs freely', async () => {
-  const dir = makeFeatureVerifyRepo('p21nostore', 'swarming');
-  try {
-    fs.rmSync(path.join(dir, '.bee', 'cells'), { recursive: true, force: true });
-    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'reviewing', '--json'], dir);
-    assert(ok.status === 0, `a store that never existed holds zero cells — that is evidence, got: ${ok.stdout}${ok.stderr}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('p2-1: gate_bypass "total" lifts none of it — the compounding close door and the start-feature door both still refuse', async () => {
-  const dir = makeFeatureVerifyRepo('p21bypass', 'compounding');
-  try {
-    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total' });
-    writePendingCappedCell(dir, 'p21bypass-1', 'p21bypass', new Date().toISOString());
-    const closeRefused = await runBee(
-      ['state', 'set', '--owner', 'compounding', '--phase', 'compounding-complete', '--waive-compounding', '--json'],
-      dir,
-    );
-    assert(closeRefused.status !== 0, 'bypass "total" must not lift the close door — it is a mechanical precondition');
-    assert(/p21bypass-1/.test(closeRefused.stdout + closeRefused.stderr), 'the close refusal must still name the pending cell');
-
-    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'compounding-complete', feature: 'p21bypass' });
-    const startRefused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
-    assert(startRefused.status !== 0, 'bypass "total" must not lift the start-feature door either');
-    assert(/p21bypass-1/.test(startRefused.stdout + startRefused.stderr), 'the start refusal must still name the pending cell');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// ─── guard-completion gc-1: EVERY DOOR × EVERY DEBT KIND, GENERATED ────────
-//
-// The checks above are hand-written pairs, and hand-written pairs are how this
-// P1 survived two rounds: p1-3 wrote {swap × feature-verify} and nobody wrote
-// {swap × test-cell}, so a feature with a capped `behavior` cell and NO test
-// cell was refused by the phase door (EXIT 1) and by start-feature (EXIT 1)
-// while `state set --feature beta --owner swarming --waive-scribing-debt`
-// carried it out at EXIT 0.
-//
-// So the pairs are not written here. They are GENERATED — every door below
-// crossed with every kind in FEATURE_DEBT_KINDS (imported from lib/state.mjs,
-// the same array the doors ask). A debt kind added next month is exercised
-// against all four doors the moment it is registered, and the fixture-coverage
-// check below fails loudly until it can be. A door added next month is one row
-// in DEBT_DOORS and inherits every kind. Each pair also asserts the refusal
-// wrote NOTHING, and each door gets a debt-free control so this stays a guard
-// and never becomes a wall.
-
-// One fixture per debt kind, keyed by the kind's own id — the only hand-
-// maintained mapping left, and the check below makes forgetting it a failure
-// rather than a silent gap.
-const DEBT_KIND_FIXTURES = {
-  'feature-verify': (dir, feature) =>
-    writePendingCappedCell(dir, `${feature}-pending`, feature, new Date().toISOString()),
-  'test-cell': (dir, feature) => writeCappedBehaviorCell(dir, `${feature}-behavior`, feature),
-};
-
-// worker-conformance D11/D12 — the SAME two kinds, armed by the OTHER marker.
-// This is a second fixture per kind rather than a third debt kind on purpose:
-// "this cell recorded no proof" is not a new species of debt, it is the same
-// debt reached by a second road, so it must ride the kinds and the doors that
-// already exist (and the coverage check below makes a future kind owe both
-// fixtures, not just the pending one).
-//
-// Each entry carries `seed` AND `refusal` — the regex that only THIS kind's
-// door text can satisfy. Without the discriminator the matrix row would pass
-// on any refusal at all: the 'test-cell' fixture has to satisfy the
-// feature-verify kind first (it seeds a fresh green record), and if that
-// seeding ever regressed, the earlier kind would refuse, the row would still
-// see a refusal naming the feature, and the test-cell door would go unproven
-// while the suite stayed green.
-const DEBT_KIND_UNRECORDED_FIXTURES = {
-  'feature-verify': {
-    seed: (dir, feature) => writeUnrecordedCappedCell(dir, `${feature}-unrecorded`, feature, new Date().toISOString()),
-    refusal: /awaiting the feature-level verify/,
-  },
-  // The feature-verify door is SATISFIED here (fresh green record, caps a
-  // minute older) precisely so the refusal under test is the test-cell one:
-  // the unrecorded test cell must fail to discharge its own debt on its own
-  // terms, not be rescued by the earlier kind refusing first.
-  'test-cell': {
-    seed: (dir, feature) => {
-      writeCappedBehaviorCell(dir, `${feature}-behavior`, feature);
-      writeTestClassCell(dir, `${feature}-test`, feature, {
-        status: 'capped',
-        trace: { capped_at: new Date(Date.now() - 60000).toISOString(), verify_passed: true, proof: 'unrecorded' },
-      });
-      seedFreshGreenFeatureVerify(dir, feature);
-    },
-    refusal: /consolidated test cell\(s\) not green/,
-  },
-};
-
-// Debt-free for EVERY kind at once: capped behavior work whose consolidated
-// test cell is capped green, and no cell awaiting the feature-level verify.
-function seedDebtFreeFeature(dir, feature) {
-  writeCappedBehaviorCell(dir, `${feature}-behavior`, feature);
-  writeTestClassCell(dir, `${feature}-test`, feature, {
-    status: 'capped',
-    trace: { capped_at: new Date().toISOString(), verify_passed: true },
-  });
-}
-
-// Every door that can walk a feature's debt out of reach. The swap row carries
-// --waive-scribing-debt deliberately: that is the reviewer's exact command,
-// and a waiver for the WAIVABLE debt must never carry an unwaivable one.
-const DEBT_DOORS = [
-  {
-    id: 'phase-departure (state set --phase)',
-    phase: 'swarming',
-    argv: () => ['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'],
-    untouched: (state, feature) => state.phase === 'swarming' && state.feature === feature,
-    landed: (state) => state.phase === 'scribing',
-  },
-  {
-    id: 'scribing-run (state scribing-run)',
-    phase: 'swarming',
-    argv: (feature) => ['state', 'scribing-run', '--feature', feature, '--areas', 'demo', '--next-action', 'x', '--json'],
-    untouched: (state) => state.phase === 'swarming' && !state.last_scribing_run,
-    landed: (state) => state.phase === 'compounding',
-  },
-  {
-    id: 'feature-swap (state set --feature, with --waive-scribing-debt)',
-    phase: 'swarming',
-    argv: () => ['state', 'set', '--owner', 'swarming', '--feature', 'beta', '--waive-scribing-debt', '--json'],
-    untouched: (state, feature) => state.feature === feature,
-    landed: (state) => state.feature === 'beta',
-  },
-  {
-    id: 'start-feature (state start-feature)',
-    phase: 'compounding-complete',
-    argv: () => ['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'],
-    untouched: (state, feature) => state.feature === feature,
-    landed: (state) => state.feature === 'beta',
-  },
-];
-
-const slug = (text) => text.replace(/[^a-z0-9]+/gi, '').slice(0, 12).toLowerCase();
-const readStateOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
-
-await check('gc-1: every registered debt kind has a matrix fixture — adding a kind to FEATURE_DEBT_KINDS fails HERE until every door is exercised against it', async () => {
-  const registered = FEATURE_DEBT_KINDS.map((kind) => kind.id);
-  const missing = registered.filter((id) => typeof DEBT_KIND_FIXTURES[id] !== 'function');
-  assert(
-    missing.length === 0,
-    `debt kind(s) [${missing.join(', ')}] are registered in lib/state.mjs but have no fixture here, so no door is proven to refuse them. FIX: add a DEBT_KIND_FIXTURES entry — the door matrix then covers the new kind at every door automatically.`,
-  );
-  const orphans = Object.keys(DEBT_KIND_FIXTURES).filter((id) => !registered.includes(id));
-  assert(orphans.length === 0, `fixture(s) [${orphans.join(', ')}] name debt kinds that no longer exist in FEATURE_DEBT_KINDS`);
-  assert(registered.length >= 2, `the unwaivable debt set must not silently shrink, got [${registered.join(', ')}]`);
-  // worker-conformance D11/D12 — every kind owes the unrecorded fixture too,
-  // for the same reason it owes the pending one: a kind that only ever sees
-  // the deliberate marker is a kind nobody proved against the accidental one.
-  const missingUnrecorded = registered.filter((id) => {
-    const entry = DEBT_KIND_UNRECORDED_FIXTURES[id];
-    return !entry || typeof entry.seed !== 'function' || !(entry.refusal instanceof RegExp);
-  });
-  assert(
-    missingUnrecorded.length === 0,
-    `debt kind(s) [${missingUnrecorded.join(', ')}] have no complete DEBT_KIND_UNRECORDED_FIXTURES entry ({seed, refusal}), so no door is proven to refuse them on the "no recorded proof" marker (trace.proof: "unrecorded"). FIX: add the entry — the unrecorded matrix then covers the kind at every door automatically. The \`refusal\` regex is required so the row cannot pass on some OTHER kind's refusal.`,
-  );
-  const unrecordedOrphans = Object.keys(DEBT_KIND_UNRECORDED_FIXTURES).filter((id) => !registered.includes(id));
-  assert(
-    unrecordedOrphans.length === 0,
-    `unrecorded fixture(s) [${unrecordedOrphans.join(', ')}] name debt kinds that no longer exist in FEATURE_DEBT_KINDS`,
-  );
-});
-
-await check('gc-1: no door in bee.mjs composes its own debt list — the per-kind detectors are unreachable from the door layer (structural: this is the drift that survived two rounds)', async () => {
-  const source = fs.readFileSync(fileURLToPath(new URL('../bee.mjs', import.meta.url)), 'utf8');
-  // Comments discuss these names on purpose (they are the history); only real
-  // CALL sites rebuild the per-door list, so strip comment lines first.
-  const code = source
-    .split('\n')
-    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
-    .join('\n');
-  for (const detector of ['featureVerifyDebt', 'testCellDebt']) {
-    assert(
-      !new RegExp(`\\b${detector}\\s*\\(`).test(code),
-      `bee.mjs calls ${detector}() directly — a door asking one debt kind by hand is exactly how the swap door came to skip another. FIX: ask guardFeatureDebt() and let FEATURE_DEBT_KINDS answer.`,
-    );
-  }
-  assert(/guardFeatureDebt\(/.test(code), 'the bee.mjs door layer must ask the shared question at least once');
-});
-
-for (const door of DEBT_DOORS) {
-  for (const kind of FEATURE_DEBT_KINDS) {
-    await check(`gc-1: door "${door.id}" REFUSES "${kind.id}" debt — one question, asked by every door`, async () => {
-      const feature = `gc1${slug(door.id)}${slug(kind.id)}`;
-      const dir = makeFeatureVerifyRepo(feature, door.phase);
-      try {
-        DEBT_KIND_FIXTURES[kind.id](dir, feature);
-        const refused = await runBee(door.argv(feature), dir);
-        assert(
-          refused.status !== 0,
-          `door "${door.id}" let "${kind.id}" debt walk out (exit ${refused.status}) — every door asks the whole debt set: ${refused.stdout}${refused.stderr}`,
-        );
-        const out = refused.stdout + refused.stderr;
-        assert(/FIX:/.test(out), `the refusal must carry a runnable FIX, got: ${out}`);
-        assert(new RegExp(feature).test(out), `the refusal must name the feature that owes, got: ${out}`);
-        assert(door.untouched(readStateOf(dir), feature), `a refused door must write NOTHING, state is now: ${JSON.stringify(readStateOf(dir))}`);
-      } finally {
-        fs.rmSync(dir, { recursive: true, force: true });
-      }
-    });
-  }
-
-  await check(`gc-1: door "${door.id}" OPENS for a debt-free feature — a guard, not a wall`, async () => {
-    const feature = `gc1clean${slug(door.id)}`;
-    const dir = makeFeatureVerifyRepo(feature, door.phase);
-    try {
-      seedDebtFreeFeature(dir, feature);
-      const ok = await runBee(door.argv(feature), dir);
-      assert(ok.status === 0, `a feature that owes nothing must pass door "${door.id}", got: ${ok.stdout}${ok.stderr}`);
-      assert(door.landed(readStateOf(dir)), `the change must actually land once the door is clear, state is: ${JSON.stringify(readStateOf(dir))}`);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-}
-
-// ─── worker-conformance wc-2: THE SAME MATRIX, ON THE UNRECORDED MARKER ────
-//
-// D1 of this feature makes the per-cell evidence doors non-blocking, so from
-// slice 2 onward a cell can cap having asserted `--passed true` with no output
-// at all. The ONLY thing that then stands between that cap and a closed
-// feature is this door — and it used to arm on exactly one marker,
-// `trace.feature_verify: "pending"`, which such a cap never carries. So every
-// door is crossed with every kind a SECOND time, on the second marker. The
-// generation is deliberate for the same reason as the block above: a door or a
-// kind added next month inherits both roads with nothing edited here.
-for (const door of DEBT_DOORS) {
-  for (const kind of FEATURE_DEBT_KINDS) {
-    await check(`wc-2: door "${door.id}" REFUSES "${kind.id}" debt armed by trace.proof "unrecorded" — absence of proof is debt, on every road`, async () => {
-      const feature = `wc2${slug(door.id)}${slug(kind.id)}`;
-      const dir = makeFeatureVerifyRepo(feature, door.phase);
-      try {
-        const fixture = DEBT_KIND_UNRECORDED_FIXTURES[kind.id];
-        fixture.seed(dir, feature);
-        const refused = await runBee(door.argv(feature), dir);
-        assert(
-          refused.status !== 0,
-          `door "${door.id}" let "${kind.id}" debt walk out on the unrecorded marker (exit ${refused.status}) — a cap with no recorded proof is unproven work, not clean work: ${refused.stdout}${refused.stderr}`,
-        );
-        const out = refused.stdout + refused.stderr;
-        assert(
-          fixture.refusal.test(out),
-          `the refusal must come from the "${kind.id}" door itself (${fixture.refusal}) — any other kind refusing first would leave this one unproven, got: ${out}`,
-        );
-        assert(/unrecorded/.test(out), `the refusal must name the marker it armed on, got: ${out}`);
-        assert(/FIX:/.test(out), `the refusal must carry a runnable FIX, got: ${out}`);
-        assert(new RegExp(feature).test(out), `the refusal must name the feature that owes, got: ${out}`);
-        assert(door.untouched(readStateOf(dir), feature), `a refused door must write NOTHING, state is now: ${JSON.stringify(readStateOf(dir))}`);
-      } finally {
-        fs.rmSync(dir, { recursive: true, force: true });
-      }
-    });
-  }
-}
-
-await check('wc-2: D12\'s union — a GREEN record newer than the newest PENDING cap but older than a newer UNRECORDED cap still refuses', async () => {
-  const dir = makeFeatureVerifyRepo('wc2union');
-  try {
-    // The exact interleaving D12 names: pending cap, then the green run, then
-    // a cap that recorded nothing. Reading the clock over the pending caps
-    // alone makes the record look fresh and opens the door on a cell the run
-    // never touched.
-    writePendingCappedCell(dir, 'wc2union-pending', 'wc2union', new Date(Date.now() - 180000).toISOString());
-    const state = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'state.json'), 'utf8'));
-    state.feature_verify = { feature: 'wc2union', command: 'x', output_sha256: 'e'.repeat(64), result: 'green', at: new Date(Date.now() - 120000).toISOString() };
-    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), state);
-    writeUnrecordedCappedCell(dir, 'wc2union-unrecorded', 'wc2union', new Date().toISOString());
-
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
-    assert(
-      refused.status !== 0,
-      `the freshness clock must run over the UNION of pending and unrecorded caps — a green run older than the newest unrecorded cap covered neither cell, got exit ${refused.status}: ${refused.stdout}${refused.stderr}`,
-    );
-    const out = refused.stdout + refused.stderr;
-    assert(/STALE/.test(out), `the refusal must be the staleness branch, got: ${out}`);
-    assert(/wc2union-unrecorded/.test(out), `the refusal must name the cap the green run never covered, got: ${out}`);
-    assert(readStateOf(dir).phase === 'swarming', 'a refused departure must write NOTHING');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('wc-2: a green record newer than BOTH caps opens the door — the union is a guard, not a wall', async () => {
-  const dir = makeFeatureVerifyRepo('wc2unionok');
-  try {
-    writePendingCappedCell(dir, 'wc2unionok-pending', 'wc2unionok', new Date(Date.now() - 180000).toISOString());
-    writeUnrecordedCappedCell(dir, 'wc2unionok-unrecorded', 'wc2unionok', new Date(Date.now() - 120000).toISOString());
-    seedFreshGreenFeatureVerify(dir, 'wc2unionok');
-    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
-    assert(ok.status === 0, `one green run newer than every owed cap must clear both markers, got: ${ok.stdout}${ok.stderr}`);
-    assert(readStateOf(dir).phase === 'scribing', 'the departure must land once the door is clear');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('wc-2: gate_bypass "total" lifts neither door on the unrecorded marker — the close door and start-feature both still refuse', async () => {
-  const dir = makeFeatureVerifyRepo('wc2bypass', 'compounding');
-  try {
-    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total' });
-    writeUnrecordedCappedCell(dir, 'wc2bypass-1', 'wc2bypass', new Date().toISOString());
-    const closeRefused = await runBee(
-      ['state', 'set', '--owner', 'compounding', '--phase', 'compounding-complete', '--waive-compounding', '--json'],
-      dir,
-    );
-    assert(closeRefused.status !== 0, 'bypass "total" must not lift the close door for a cap with no recorded proof');
-    assert(/wc2bypass-1/.test(closeRefused.stdout + closeRefused.stderr), 'the close refusal must name the unproven cell');
-
-    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), { phase: 'compounding-complete', feature: 'wc2bypass' });
-    const startRefused = await runBee(['state', 'start-feature', '--feature', 'beta', '--mode', 'small', '--json'], dir);
-    assert(startRefused.status !== 0, 'bypass "total" must not lift the start-feature door either');
-    assert(/wc2bypass-1/.test(startRefused.stdout + startRefused.stderr), 'the start refusal must name the unproven cell');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('wc-2: an unrecorded TEST cell gets the "not green" refusal, never the "no test cell at all" one — it exists, it just proved nothing', async () => {
-  const dir = makeFeatureVerifyRepo('wc2testcell');
-  try {
-    writeCappedBehaviorCell(dir, 'wc2testcell-b', 'wc2testcell');
-    writeTestClassCell(dir, 'wc2testcell-t', 'wc2testcell', {
-      status: 'capped',
-      trace: { capped_at: new Date(Date.now() - 60000).toISOString(), verify_passed: true, proof: 'unrecorded' },
-    });
-    seedFreshGreenFeatureVerify(dir, 'wc2testcell');
-    const refused = await runBee(['state', 'scribing-run', '--feature', 'wc2testcell', '--areas', 'demo', '--next-action', 'x', '--json'], dir);
-    assert(refused.status !== 0, 'a test cell whose pass was asserted with no output must not discharge the test-cell debt');
-    const out = refused.stdout + refused.stderr;
-    assert(/not green/.test(out) && !/NO consolidated test cell/.test(out), `it must be the "not green" branch — the cell exists, got: ${out}`);
-    assert(/wc2testcell-t/.test(out) && /unrecorded/.test(out), `the refusal must name the unproven test cell and the marker, got: ${out}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('wc-2: only the literal "unrecorded" arms it — a capped cell whose trace records real proof departs freely (negative control)', async () => {
-  const dir = makeFeatureVerifyRepo('wc2control');
-  try {
-    writeJsonAtomic(path.join(dir, '.bee', 'cells', 'wc2control-1.json'), {
-      id: 'wc2control-1',
-      feature: 'wc2control',
-      status: 'capped',
-      trace: { capped_at: new Date().toISOString(), verify_passed: true, verify_output: 'suite A: 12/12 green', proof: 'recorded' },
-    });
-    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
-    assert(
-      ok.status === 0,
-      `a cap holding real proof owes nothing at the feature boundary — this door must not widen into "every capped cell", got: ${ok.stdout}${ok.stderr}`,
-    );
-    assert(readStateOf(dir).phase === 'scribing', 'the departure must land');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// ─── wc-2: THE SEAM ITSELF — capCell WRITES it, the door READS it ──────────
-//
-// Everything above seeds `trace.proof: "unrecorded"` by hand, which is the
-// right shape for a door × kind matrix (cheap, exhaustive, no git) but proves
-// exactly one half of a two-party contract. The field is WRITTEN by capCell
-// (lib/cells.mjs, after its whole refusal chain) and READ by both predicates
-// in lib/state.mjs; with only hand-written fixtures, a rename or a shape
-// drift on either side leaves both suites green and the door silently dead.
-//
-// These two rows drive a REAL `cells cap` and then a REAL door in one run,
-// and they never write the marker themselves — the value under test is
-// whatever capCell chose to stamp. The mirror row is what stops the pair
-// passing vacuously: the SAME repo, the SAME door, one real verify output
-// away, must OPEN.
-//
-// Lane "tiny" is deliberate: decision 0004's "an assertion is not evidence"
-// refusal (cells.mjs:2159) is scoped to small+, so tiny is where a cap can
-// legally reach the marker today, before this feature's D1 loosens the same
-// door for the rest. That is precisely the hole D10 named — `cells verify
-// --passed true` with no --output is legal, and without the marker such a cap
-// would leave the feature closeable with zero tests executed anywhere.
-
-function makeRealCapRepo(feature) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-wc2-seam-'));
-  gitOk(dir, ['init', '-q', '-b', 'main']);
-  gitOk(dir, ['config', 'user.email', 's@e']);
-  gitOk(dir, ['config', 'user.name', 's']);
-  fs.writeFileSync(path.join(dir, 'src.js'), 'module.exports = 1;\n');
-  fs.mkdirSync(path.join(dir, '.bee', 'bin', 'lib'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.bee', 'bin', 'lib', 'mirror.mjs'), '// mirror placeholder\n');
-  gitOk(dir, ['add', '.']);
-  gitOk(dir, ['commit', '-q', '-m', 'init']);
-  fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
-  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
-  writeState(dir, {
-    ...defaultState(),
-    phase: 'swarming',
-    feature,
-    approved_gates: { context: true, shape: true, execution: true, review: false },
-  });
-  // A real tracked edit, so diff_stats is computed from real `git diff` output
-  // and the cap travels the same path a worker's cap does.
-  fs.writeFileSync(path.join(dir, 'src.js'), 'module.exports = 2; // changed\n');
-  return dir;
-}
-
-// Drives add → claim → verify → cap through the real CLI. `output` null means
-// the worker asserted a pass with nothing to show for it (the marker case);
-// a string means it recorded real proof (the mirror case). Returns the cell
-// as capCell left it on disk — the test asserts against THAT, never against
-// anything this helper wrote.
-// wc-4 widened `lane` and `behaviorChange` onto this helper: until D1 made the
-// behavior_change and decision-0004 doors non-blocking, a cap in either shape
-// was REFUSED, so the seam could only ever be driven at lane "tiny" with
-// behavior_change false. Both default to the pre-wc-4 values, so every row
-// above travels a byte-identical path.
-async function realCapThroughCli(
-  dir,
-  feature,
-  id,
-  { output = null, changeClass = 'refactor', lane = 'tiny', behaviorChange = false } = {},
-) {
-  const fixturePath = path.join(dir, `${id}.cell.json`);
-  fs.writeFileSync(
-    fixturePath,
-    JSON.stringify(
-      {
-        id,
-        feature,
-        title: 'wc-2 seam fixture — a real cap, driven end to end',
-        lane,
-        action: 'wc-2 seam fixture only.',
-        verify: 'node -e "process.exit(0)"',
-        change_class: changeClass,
-        ...(behaviorChange ? { behavior_change: true } : {}),
-        ...(lane === 'tiny' || lane === 'small'
-          ? {}
-          : { must_haves: { truths: [`${id}: seam fixture truth`], artifacts: [], key_links: [], prohibitions: [] } }),
-      },
-      null,
-      2,
-    ),
-    'utf8',
-  );
-  const added = await runBee(['cells', 'add', '--file', `${id}.cell.json`, '--json'], dir);
-  assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
-  const claimed = await runBee(['cells', 'claim', '--id', id, '--worker', 'w', '--json'], dir);
-  assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
-  const verified = await runBee(
-    ['cells', 'verify', '--id', id, '--command', 'node -e 0', '--passed', 'true', ...(output === null ? [] : ['--output', output]), '--json'],
-    dir,
-  );
-  assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
-  const capped = await runBee(['cells', 'cap', '--id', id, '--outcome', 'seam fixture', '--files', 'src.js', '--json'], dir);
-  assert(
-    capped.status === 0,
-    `the cap itself must succeed — this row is about what a SUCCESSFUL cap stamps, not about a refusal, got exit ${capped.status}: ${capped.stdout}${capped.stderr}`,
-  );
-  return JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'cells', `${id}.json`), 'utf8'));
-}
-
-await check('wc-2 SEAM: a REAL cap that recorded no proof stamps trace.proof "unrecorded" itself, and THAT cap — never a hand-written fixture — holds the close door shut', async () => {
-  const dir = makeRealCapRepo('wc2seam');
-  try {
-    const cell = await realCapThroughCli(dir, 'wc2seam', 'wc2seam-1', { output: null });
-    // Writer half: the value the door consumes was produced by capCell.
-    assert(cell.status === 'capped', `the cell must be capped, got ${cell.status}`);
-    assert(
-      cell.trace.proof === 'unrecorded',
-      `capCell must stamp trace.proof "unrecorded" on a cap holding neither verify output nor verification_evidence — if this fails, the WRITER half of the contract moved and every hand-written door fixture above is now testing a field nothing produces. Got trace: ${JSON.stringify(cell.trace)}`,
-    );
-    assert(
-      cell.trace.feature_verify !== 'pending',
-      `the two markers are independent — this cap never asked for the pending path, so it must not carry it, got trace: ${JSON.stringify(cell.trace)}`,
-    );
-
-    // Reader half, same run, same repo: the real door on the real cap.
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
-    assert(
-      refused.status !== 0,
-      `the close door must refuse on a cap capCell itself marked unproven (exit ${refused.status}) — writer and reader are only actually connected if this run refuses: ${refused.stdout}${refused.stderr}`,
-    );
-    const out = refused.stdout + refused.stderr;
-    assert(/awaiting the feature-level verify/.test(out), `it must be the feature-verify door that refused, got: ${out}`);
-    assert(/wc2seam-1/.test(out), `the refusal must name the cell the real cap left unproven, got: ${out}`);
-    assert(/unrecorded/.test(out), `the refusal must name the marker it armed on, got: ${out}`);
-    assert(/FIX:/.test(out), `the refusal must carry a runnable FIX, got: ${out}`);
-    assert(readStateOf(dir).phase === 'swarming', 'a refused departure must write NOTHING');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('wc-2 SEAM (mirror): the same real cap WITH recorded verify output carries no marker and the same door opens — the pair cannot pass vacuously', async () => {
-  const dir = makeRealCapRepo('wc2seamok');
-  try {
-    const cell = await realCapThroughCli(dir, 'wc2seamok', 'wc2seamok-1', { output: 'suite A: 12/12 green' });
-    assert(cell.status === 'capped', `the cell must be capped, got ${cell.status}`);
-    assert(
-      cell.trace.proof === undefined,
-      `capCell must NOT mark a cap that recorded real verify output — the marker is absence of proof, not presence of a cap, got trace: ${JSON.stringify(cell.trace)}`,
-    );
-
-    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
-    assert(
-      ok.status === 0,
-      `a feature whose only cap recorded real proof owes nothing at the boundary — without this row the refusal above could come from any cap at all, got: ${ok.stdout}${ok.stderr}`,
-    );
-    assert(readStateOf(dir).phase === 'scribing', 'the departure must land once the door is clear');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// The marker has TWO readers, not one — featureVerifyDebt (state.mjs) and
-// testCellDebt (state.mjs) — and the pair above only crosses the first. So the
-// same real cap is driven a second time as a `change_class: "test"` cell, with
-// the feature-verify door DELIBERATELY satisfied first (a real green record,
-// recorded through the CLI, stamped after the cap so it is genuinely fresher)
-// so that the refusal under test can only be the test-cell one. Same discipline
-// as the row above: nothing here hand-writes trace.proof.
-async function recordRealGreenFeatureVerify(dir) {
-  const outFile = path.join(dir, 'feature-verify-output.txt');
-  fs.writeFileSync(outFile, 'impacted suite: 12/12 green\n');
-  const rec = await runBee(
-    ['state', 'feature-verify', 'record', '--command', 'node run_verify.mjs --impacted', '--output-file', outFile, '--result', 'green', '--json'],
-    dir,
-  );
-  assert(rec.status === 0, `recording the feature-level green must succeed: ${rec.stdout}${rec.stderr}`);
-}
-
-await check('wc-2 SEAM (second reader): a REAL cap of a TEST-class cell with no recorded proof fails to discharge the test-cell debt — capCell\'s marker, read by the other predicate', async () => {
-  const dir = makeRealCapRepo('wc2seamtc');
-  try {
-    const cell = await realCapThroughCli(dir, 'wc2seamtc', 'wc2seamtc-1', { output: null, changeClass: 'test' });
-    assert(
-      cell.trace.proof === 'unrecorded',
-      `capCell must stamp the marker on a test-class cap holding no proof either — the marker is class-independent, got trace: ${JSON.stringify(cell.trace)}`,
-    );
-    // Clear the FIRST door honestly, so the second one is the one under test.
-    await recordRealGreenFeatureVerify(dir);
-
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
-    assert(
-      refused.status !== 0,
-      `a test cell whose pass was asserted with no output must not discharge the test-cell debt, even with the feature-level verify green (exit ${refused.status}): ${refused.stdout}${refused.stderr}`,
-    );
-    const out = refused.stdout + refused.stderr;
-    assert(
-      /consolidated test cell\(s\) not green/.test(out),
-      `it must be the TEST-CELL door that refused — the feature-verify door was satisfied on purpose so this row cannot be rescued by it, got: ${out}`,
-    );
-    assert(/wc2seamtc-1/.test(out), `the refusal must name the test cell that proved nothing, got: ${out}`);
-    assert(/unrecorded/.test(out), `the refusal must name the marker it armed on, got: ${out}`);
-    assert(readStateOf(dir).phase === 'swarming', 'a refused departure must write NOTHING');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('wc-2 SEAM (second reader, mirror): the same real TEST-class cap WITH recorded output discharges the debt and the door opens', async () => {
-  const dir = makeRealCapRepo('wc2seamtcok');
-  try {
-    const cell = await realCapThroughCli(dir, 'wc2seamtcok', 'wc2seamtcok-1', { output: 'suite A: 12/12 green', changeClass: 'test' });
-    assert(
-      cell.trace.proof === undefined,
-      `a test-class cap that recorded real output carries no marker, got trace: ${JSON.stringify(cell.trace)}`,
-    );
-
-    const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
-    assert(
-      ok.status === 0,
-      `a test cell capped on real recorded output IS the coverage this door holds out for — without this row the refusal above could come from any test cell at all, got: ${ok.stdout}${ok.stderr}`,
-    );
-    assert(readStateOf(dir).phase === 'scribing', 'the departure must land once both doors are clear');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// ─── wc-4: the seam the loosening OPENED — the same real cap, in the shapes
-// that were refused outright until D1 ─────────────────────────────────────────
-//
-// The wc-2 rows above had to use lane "tiny" with behavior_change false,
-// because decision 0004's door (small+) and the behavior_change door refused
-// every other shape before the cap could ever reach the marker — the comment
-// at the top of that block says so explicitly. wc-4 made both doors
-// non-blocking, so a small/standard/high-risk cap and a behavior_change cap
-// become markable for the FIRST time. That is exactly where a loosening could
-// go wrong in the way nothing above would catch: the cap now succeeds, and if
-// it succeeded WITHOUT stamping the marker, the feature would close green with
-// zero tests executed anywhere. So each shape is driven through the real CLI
-// (never a hand-written cell file) and then straight into the real close door.
-
-await check('wc-4 SEAM: the lanes D1 widened (small/standard/high-risk) now cap through the real CLI with no recorded proof — and every one of those caps holds the close door shut', async () => {
-  const cases = [
-    { lane: 'small', slug: 'wc4seamsm' },
-    { lane: 'standard', slug: 'wc4seamst' },
-    { lane: 'high-risk', slug: 'wc4seamhr' },
-  ];
-  for (const c of cases) {
-    const dir = makeRealCapRepo(c.slug);
-    try {
-      const cell = await realCapThroughCli(dir, c.slug, `${c.slug}-1`, { output: null, lane: c.lane });
-      assert(
-        cell.status === 'capped',
-        `lane ${c.lane}: the cap must now SUCCEED — before wc-4 decision 0004's door refused it outright, got ${cell.status}`,
-      );
-      assert(
-        cell.trace.proof === 'unrecorded',
-        `lane ${c.lane}: a cap the loosening let through must still be MARKED, or the feature closes green with nothing ever run. Got trace: ${JSON.stringify(cell.trace)}`,
-      );
-      const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
-      assert(
-        refused.status !== 0,
-        `lane ${c.lane}: the close door must refuse on the loosened cap (exit ${refused.status}) — the loosening only relocates the proof, it never removes it: ${refused.stdout}${refused.stderr}`,
-      );
-      const out = refused.stdout + refused.stderr;
-      assert(/awaiting the feature-level verify/.test(out), `lane ${c.lane}: it must be the feature-verify door, got: ${out}`);
-      assert(new RegExp(`${c.slug}-1`).test(out), `lane ${c.lane}: the refusal must name the unproven cell, got: ${out}`);
-      assert(readStateOf(dir).phase === 'swarming', `lane ${c.lane}: a refused departure must write NOTHING`);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
-
-await check('wc-4 SEAM: a behavior_change cap with NO verification_evidence — refused outright before D1 — now caps through the real CLI, carries the marker, and holds the close door shut', async () => {
-  const dir = makeRealCapRepo('wc4seambc');
-  try {
-    const cell = await realCapThroughCli(dir, 'wc4seambc', 'wc4seambc-1', { output: null, behaviorChange: true });
-    assert(cell.status === 'capped', `the behavior_change cap must now succeed, got ${cell.status}`);
-    assert(
-      cell.trace.behavior_change === true,
-      `the declared behavior_change must survive the cap, got trace: ${JSON.stringify(cell.trace)}`,
-    );
-    assert(
-      cell.trace.proof === 'unrecorded',
-      `a behavior_change cap holding no evidence at all is the loosest path this feature opens — it must be marked, got trace: ${JSON.stringify(cell.trace)}`,
-    );
-    assert(
-      (cell.trace.warnings || []).some((w) => w.includes('declares behavior_change but records no verification_evidence')),
-      `the loosened door must be VISIBLE in the real cap's own record, got ${JSON.stringify(cell.trace.warnings)}`,
-    );
-    const refused = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
-    assert(
-      refused.status !== 0,
-      `the close door must refuse on an evidence-less behavior_change cap (exit ${refused.status}): ${refused.stdout}${refused.stderr}`,
-    );
-    assert(/wc4seambc-1/.test(refused.stdout + refused.stderr), 'the refusal must name the cell');
-    assert(readStateOf(dir).phase === 'swarming', 'a refused departure must write NOTHING');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('wc-4 SEAM (mirror): the same widened shapes carrying REAL recorded output cap unmarked and the door opens — the loosening did not simply mark everything', async () => {
-  const cases = [
-    { lane: 'standard', slug: 'wc4seamstok', behaviorChange: false },
-    { lane: 'small', slug: 'wc4seambcok', behaviorChange: true },
-  ];
-  for (const c of cases) {
-    const dir = makeRealCapRepo(c.slug);
-    try {
-      const cell = await realCapThroughCli(dir, c.slug, `${c.slug}-1`, {
-        output: 'suite A: 12/12 green',
-        lane: c.lane,
-        behaviorChange: c.behaviorChange,
-      });
-      assert(
-        cell.trace.proof === undefined,
-        `${c.slug}: a widened cap that recorded real output must NOT be marked — otherwise the rows above pass for the wrong reason, got trace: ${JSON.stringify(cell.trace)}`,
-      );
-      const ok = await runBee(['state', 'set', '--owner', 'swarming', '--phase', 'scribing', '--json'], dir);
-      assert(ok.status === 0, `${c.slug}: the door must OPEN on a cap that recorded proof, got: ${ok.stdout}${ok.stderr}`);
-      assert(readStateOf(dir).phase === 'scribing', `${c.slug}: the departure must land`);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
-
-await check('gc-1: THE REVIEWER\'S REPRO — a capped behavior cell with NO test cell is refused at the feature-swap door, the one door that used to let it through at EXIT 0', async () => {
-  const dir = makeFeatureVerifyRepo('gc1repro', 'swarming');
-  try {
-    writeCappedBehaviorCell(dir, 'gc1repro-b', 'gc1repro');
-    const refused = await runBee(
-      ['state', 'set', '--owner', 'swarming', '--feature', 'beta', '--waive-scribing-debt', '--json'],
-      dir,
-    );
-    assert(refused.status !== 0, 'the reviewer\'s exact command must now refuse');
-    const out = refused.stdout + refused.stderr;
-    assert(/refusing to swap away from feature/.test(out), `it must refuse AT THE SWAP DOOR, got: ${out}`);
-    assert(/NO consolidated test cell/.test(out) && /gc1repro-b/.test(out), `the refusal must name the uncovered behavior cell, got: ${out}`);
-    assert(
-      readStateOf(dir).feature === 'gc1repro',
-      'the swap must not land — the scribing waiver never carries an unwaivable debt through',
-    );
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// ─── worker-conformance wc-2c: A WITHDRAWN TEST CELL OWES NOTHING, AND ────
-// ─── HIDES NOTHING — the same matrix, one status deeper ────────────────────
-//
-// Found live on THIS feature's own close-door: a `change_class: "test"` cell
-// that had been deliberately DROPPED was read twice over, and wrongly both
-// times. The test-class branch incremented `testCellCount` BEFORE it looked at
-// the status, so a withdrawn cell (a) counted as a test cell and therefore
-// suppressed the 'missing' kind, and (b) simultaneously landed in `offenders`
-// through the `status !== 'capped'` arm, reported as "not capped". One cell,
-// two contradictory readings: it was both the coverage the door was waiting
-// for and the reason the door stayed shut.
-//
-// Withdrawn work owes no coverage AND stands in for none. The ORDERING is the
-// whole fix and the whole guard against it becoming an escape hatch: the skip
-// happens BEFORE the counter increments, so a feature that drops its only test
-// cell falls through to the 'missing' kind rather than passing clean —
-// dropping the cell is never cheaper than writing it.
-//
-// Generated over DEBT_DOORS for the same reason as the two blocks above: a
-// door added next month inherits every row here with nothing edited.
-
-// Every other non-capped status is genuinely undischarged work — a cell
-// somebody still owes — and must keep refusing exactly as before. Only
-// 'dropped' is a withdrawal, and this list is what stops the exemption
-// widening into "any status that is not capped".
-const WC2C_UNDISCHARGED_STATUSES = ['open', 'claimed', 'blocked'];
-
-for (const door of DEBT_DOORS) {
-  await check(`wc-2c: door "${door.id}" REFUSES with the "missing" kind when the feature's ONLY test cell was DROPPED — a withdrawn cell never stands in for coverage`, async () => {
-    const feature = `wc2cdrop${slug(door.id)}`;
-    const dir = makeFeatureVerifyRepo(feature, door.phase);
-    try {
-      writeCappedBehaviorCell(dir, `${feature}-b`, feature);
-      writeTestClassCell(dir, `${feature}-t`, feature, { status: 'dropped' });
-      const refused = await runBee(door.argv(feature), dir);
-      assert(
-        refused.status !== 0,
-        `door "${door.id}" let a feature whose only test cell was DROPPED walk out clean (exit ${refused.status}) — dropping the cell must never be cheaper than writing it: ${refused.stdout}${refused.stderr}`,
-      );
-      const out = refused.stdout + refused.stderr;
-      assert(
-        /NO consolidated test cell/.test(out),
-        `it must be the "missing" kind — the dropped cell is withdrawn work, so this feature has no test cell at all, got: ${out}`,
-      );
-      assert(new RegExp(`${feature}-b`).test(out), `the refusal must name the uncovered behavior cell, got: ${out}`);
-      assert(
-        !new RegExp(`${feature}-t`).test(out),
-        `a withdrawn cell must not be reported as an offender — it owes nothing, got: ${out}`,
-      );
-      assert(!/not capped/.test(out), `a dropped cell is not "not capped" work, it is no work, got: ${out}`);
-      assert(/FIX:/.test(out), `the refusal must carry a runnable FIX, got: ${out}`);
-      assert(door.untouched(readStateOf(dir), feature), `a refused door must write NOTHING, state is now: ${JSON.stringify(readStateOf(dir))}`);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  await check(`wc-2c: door "${door.id}" OPENS when a dropped test cell sits beside a green capped one — the drop is inert, never fatal`, async () => {
-    const feature = `wc2cok${slug(door.id)}`;
-    const dir = makeFeatureVerifyRepo(feature, door.phase);
-    try {
-      seedDebtFreeFeature(dir, feature);
-      writeTestClassCell(dir, `${feature}-dropped`, feature, { status: 'dropped' });
-      const ok = await runBee(door.argv(feature), dir);
-      assert(
-        ok.status === 0,
-        `a dropped test cell beside a green capped one must not shut door "${door.id}" — the coverage exists and the withdrawal owes nothing, got: ${ok.stdout}${ok.stderr}`,
-      );
-      assert(door.landed(readStateOf(dir)), `the change must land once the door is clear, state is: ${JSON.stringify(readStateOf(dir))}`);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  for (const status of WC2C_UNDISCHARGED_STATUSES) {
-    await check(`wc-2c: door "${door.id}" still REFUSES a "${status}" test cell as not capped — only "dropped" is withdrawn work`, async () => {
-      const feature = `wc2c${status}${slug(door.id)}`;
-      const dir = makeFeatureVerifyRepo(feature, door.phase);
-      try {
-        writeCappedBehaviorCell(dir, `${feature}-b`, feature);
-        writeTestClassCell(dir, `${feature}-t`, feature, { status });
-        const refused = await runBee(door.argv(feature), dir);
-        assert(
-          refused.status !== 0,
-          `door "${door.id}" let an undischarged "${status}" test cell walk out (exit ${refused.status}) — the dropped exemption must not widen to any other status: ${refused.stdout}${refused.stderr}`,
-        );
-        const out = refused.stdout + refused.stderr;
-        assert(
-          !/NO consolidated test cell/.test(out),
-          `it must never be the "missing" kind — a "${status}" cell EXISTS and is owed, got: ${out}`,
-        );
-        assert(new RegExp(`${feature}-t`).test(out), `the refusal must name the undischarged test cell, got: ${out}`);
-        // `start-feature` owns an EARLIER guard of its own (nonterminal /
-        // claimed cells must be resolved before a new feature starts), so it
-        // legitimately answers before the debt door is ever asked. Every OTHER
-        // door reaches the debt door, so the debt door's exact wording is
-        // pinned there unconditionally.
-        //
-        // The branch is on the DOOR, never on the output text: keying it on
-        // `/not green/` would mean a refusal that ever lost that phrase
-        // silently skipped the strict assertion on ALL FOUR doors, leaving the
-        // rows passing on exit code and cell name alone (advisor finding).
-        if (!door.id.startsWith('start-feature')) {
-          assert(
-            new RegExp(`${feature}-t \\(status: ${status} — not capped\\)`).test(out),
-            `the debt door must name the undischarged test cell and its status, got: ${out}`,
-          );
-        }
-        assert(door.untouched(readStateOf(dir), feature), `a refused door must write NOTHING, state is now: ${JSON.stringify(readStateOf(dir))}`);
-      } finally {
-        fs.rmSync(dir, { recursive: true, force: true });
-      }
-    });
-  }
-}
-
-// ─── worker-conformance wc-3: THE BYPASS AXIS, GENERATED OVER EVERY DOOR ───
-//
-// wc-3 is this feature's consolidated test cell and its first mandated step
-// (CONTEXT D4) was a coverage judgment, not authoring. That judgment found the
-// net-behavior story already pinned everywhere EXCEPT here, and the honest
-// provenance matters more than a tidy comment: the bypass axis was NOT
-// uncovered. It was covered piecemeal, by hand, across three feature eras —
-// phase-departure at :2209 (mv-3(e), pending marker) and again inside the wc-2
-// pair at :2900 (unrecorded marker); feature-swap at :2274 (p1-3(F3), pending);
-// start-feature inside p2-1 at :2608 and the wc-2 pair at :2900. Three of the
-// four registered doors. `scribing-run` was crossed by no bypass row at all.
-//
-// One naked door is a small hole, but the SHAPE of the hole is the known one:
-// gc-1's comment above records that a hand-written pair is exactly how a P1
-// survived two rounds, because whoever writes the pairs writes them for the
-// doors they happen to have in hand. So this closes it the way this file has
-// already chosen three times — generated over DEBT_DOORS, so the door added
-// next month inherits the bypass question with nothing edited here.
-//
-// Scoped deliberately to ONE marker (`unrecorded`) and one kind. The edit this
-// block defends against is a handler-level `if (bypassLevel(root) === 'total')
-// return;` placed ABOVE guardFeatureDebt (state.mjs:2782) — and above that
-// seam a marker and a kind are indistinguishable, so crossing doors × markers ×
-// kinds would buy nothing but rows. The wc-2 matrix at :2830 already crosses
-// the kinds below the seam. The structural check at :2767 cannot see this edit:
-// it bans a door composing its own debt list, not a door returning early.
-//
-// Advisor consult (fable): every hand-written bypass row above shares one
-// weakness — if the config seeding silently failed (typo'd key, wrong path),
-// the row exercises the NO-bypass path and passes anyway. Each row here asserts
-// the level is actually live before it knocks, so the block cannot rot quietly.
-const WC3_UNRECORDED_FIXTURE = DEBT_KIND_UNRECORDED_FIXTURES['feature-verify'];
-
-for (const door of DEBT_DOORS) {
-  await check(`wc-3: door "${door.id}" REFUSES the unrecorded marker under gate_bypass "total", and still OPENS under it when nothing is owed`, async () => {
-    const feature = `wc3byp${slug(door.id)}`;
-    const dir = makeFeatureVerifyRepo(feature, door.phase);
-    try {
-      writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total' });
-      assert(
-        bypassLevel(dir) === 'total',
-        `the fixture must actually seat bypass "total" before the door is knocked on — a row whose config never took would exercise the NO-bypass path and pass vacuously, got "${bypassLevel(dir)}"`,
-      );
-      WC3_UNRECORDED_FIXTURE.seed(dir, feature);
-      const refused = await runBee(door.argv(feature), dir);
-      assert(
-        refused.status !== 0,
-        `door "${door.id}" let a cap with no recorded proof walk out under bypass "total" (exit ${refused.status}) — CONTEXT D3 locks this door as a mechanical precondition that NO bypass level lifts: ${refused.stdout}${refused.stderr}`,
-      );
-      const out = refused.stdout + refused.stderr;
-      assert(
-        WC3_UNRECORDED_FIXTURE.refusal.test(out),
-        `the refusal must come from the feature-verify door itself (${WC3_UNRECORDED_FIXTURE.refusal}) — another kind refusing first would leave the bypass question unproven at this door, got: ${out}`,
-      );
-      assert(/unrecorded/.test(out), `the refusal must name the marker it armed on, got: ${out}`);
-      assert(new RegExp(`${feature}-unrecorded`).test(out), `the refusal must name the unproven cell even under bypass, got: ${out}`);
-      assert(/FIX:/.test(out), `bypass must not cost the refusal its runnable FIX, got: ${out}`);
-      assert(door.untouched(readStateOf(dir), feature), `a refused door must write NOTHING, state is now: ${JSON.stringify(readStateOf(dir))}`);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-
-    // The other half, in its own repo: bypass "total" must not weld the door
-    // shut either. Without this, a bug that made every door refuse
-    // unconditionally under bypass would pass the half above. No debt-free
-    // crossing under bypass exists anywhere else in this file — :2886 and
-    // :3244 both run on a default config.
-    const okFeature = `wc3bok${slug(door.id)}`;
-    const okDir = makeFeatureVerifyRepo(okFeature, door.phase);
-    try {
-      writeJsonAtomic(path.join(okDir, '.bee', 'config.json'), { gate_bypass: 'total' });
-      assert(bypassLevel(okDir) === 'total', `the open half must seat bypass too, got "${bypassLevel(okDir)}"`);
-      seedDebtFreeFeature(okDir, okFeature);
-      const ok = await runBee(door.argv(okFeature), okDir);
-      assert(
-        ok.status === 0,
-        `door "${door.id}" must still OPEN under bypass "total" when nothing is owed — the door is a guard on real debt, not a wall bypass switches on, got: ${ok.stdout}${ok.stderr}`,
-      );
-      assert(door.landed(readStateOf(okDir)), `the change must land once the door is clear, state is: ${JSON.stringify(readStateOf(okDir))}`);
-    } finally {
-      fs.rmSync(okDir, { recursive: true, force: true });
-    }
-  });
-}
-
 // ─── review-p1-fixes p1-3 (F5): a failed resolution must NARROW, not widen ──
 // resolveActiveFeatureForWorkflowsClose swallowed every error into null, and
 // null is also the value meaning "no active feature to protect" — so a
@@ -3784,7 +2228,7 @@ async function runBeeReviewsFeedbackFixture(args) {
   return await runModuleWorker(BEE_MJS, { args, cwd: rootReviewsFeedback });
 }
 
-await check('reviews fixture setup: a capped behavior_change cell ("ok-1") with recorded verification_evidence exists in scope', async () => {
+await check('reviews fixture setup: a capped behavior_change cell ("ok-1") exists in scope (test-simple: no per-cell evidence machinery)', async () => {
   const cellFixture = {
     id: 'ok-1',
     feature: 'demo3',
@@ -3801,23 +2245,15 @@ await check('reviews fixture setup: a capped behavior_change cell ("ok-1") with 
   const claimed = await runBeeReviewsFeedbackFixture(['cells', 'claim', '--id', 'ok-1', '--worker', 'worker-rev', '--json']);
   assert(claimed.status === 0, `cells claim setup failed: ${claimed.status}: stdout=${claimed.stdout} stderr=${claimed.stderr}`);
 
-  const verified = await runBeeReviewsFeedbackFixture(['cells', 'verify', '--id', 'ok-1', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
-  assert(verified.status === 0, `cells verify setup failed: ${verified.status}: stdout=${verified.stdout} stderr=${verified.stderr}`);
-
   const capped = await runModuleWorker(BEE_MJS, {
-    args: ['cells', 'cap', '--id', 'ok-1', '--outcome', 'done', '--files', 'a.js', '--behavior-change', '--evidence-stdin', '--json'],
+    args: ['cells', 'cap', '--id', 'ok-1', '--outcome', 'done', '--files', 'a.js', '--json'],
     cwd: rootReviewsFeedback,
-    input: JSON.stringify({
-      red_failure_evidence:
-        'ok-1: prior behavior characterized before this reviews-fixture change, meeting the D3 anti-boilerplate floor (>=80 chars).',
-      verification_run: 'node -e 0',
-    }),
   });
   assert(capped.status === 0, `cells cap setup failed: ${capped.status}: stdout=${capped.stdout} stderr=${capped.stderr}`);
-  assert(JSON.parse(capped.stdout).trace.verification_evidence, 'ok-1 should carry recorded verification_evidence for the A10 preflight');
+  assert(JSON.parse(capped.stdout).status === 'capped', 'ok-1 should be capped for the review scope');
 });
 
-await check('reviews.create example runs through the real dispatcher (A10 preflight satisfied by the ok-1 fixture cell)', async () => {
+await check('reviews.create example runs through the real dispatcher (in-progress cells excluded; ok-1 capped fixture in scope)', async () => {
   const scope = {
     id: 'rev-example',
     requested_by: 'user',
@@ -4062,46 +2498,36 @@ await check('close example runs through the real dispatcher with the spec\'s {fe
   const result = await assertExampleOk('close');
   const out = JSON.parse(result.stdout);
   assert(out.feature === 'demo', `expected feature demo, got ${result.stdout}`);
-  assert(Array.isArray(out.doors) && out.doors.length >= 4, `expected the full door set, got ${result.stdout}`);
+  assert(Array.isArray(out.doors) && out.doors.length === 3, `expected the tests + scribing/capture door set, got ${result.stdout}`);
   for (const door of out.doors) {
     assert(typeof door.door === 'string' && typeof door.blocking === 'boolean' && typeof door.detail === 'string' && 'command' in door,
       `every door carries {door, blocking, detail, command}, got ${JSON.stringify(door)}`);
   }
   const names = out.doors.map((d) => d.door);
-  for (const expected of ['feature-verify', 'test-cell', 'scribing-debt', 'capture-queue']) {
+  for (const expected of ['tests', 'scribing-debt', 'capture-queue']) {
     assert(names.includes(expected), `door "${expected}" missing from ${names.join(', ')}`);
   }
 });
 
-// A dedicated repo owing BOTH unwaivable debts, with a verify command already
-// recorded (a red record — its command is exactly what a re-verify reruns).
+// A dedicated repo with a declared commands.test — the tests door is the ONE
+// blocking door close runs (test-simple, decision 412e9b3a).
 const closeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-close-'));
 fs.mkdirSync(path.join(closeRoot, '.bee', 'cells'), { recursive: true });
 writeJsonAtomic(path.join(closeRoot, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
-const CLOSE_FIXTURE_VERIFY_AT = '2026-01-01T00:00:00.000Z';
-writeJsonAtomic(path.join(closeRoot, '.bee', 'state.json'), {
-  phase: 'swarming',
-  feature: 'closedemo',
-  feature_verify: {
-    feature: 'closedemo',
-    command: 'node -e "process.exit(0)"',
-    output_sha256: 'a'.repeat(64),
-    result: 'red',
-    at: CLOSE_FIXTURE_VERIFY_AT,
-  },
+writeJsonAtomic(path.join(closeRoot, '.bee', 'state.json'), { phase: 'swarming', feature: 'closedemo' });
+writeJsonAtomic(path.join(closeRoot, '.bee', 'config.json'), {
+  commands: { test: 'node -e "console.error(\'FAIL closedemo assertion\');process.exit(1)"' },
 });
-writePendingCappedCell(closeRoot, 'closedemo-pending', 'closedemo', new Date().toISOString());
-writeCappedBehaviorCell(closeRoot, 'closedemo-behavior', 'closedemo');
 
-await check('close --dry-run reports every door read-only: both unwaivable debts BLOCKING, the recorded verify command on the feature-verify door, text ending with a next: line', async () => {
+await check('close --dry-run reports the doors read-only — the tests door names the declared run without spending it, text ends with a next: line', async () => {
   const jsonResult = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closedemo', '--dry-run', '--json'], cwd: closeRoot });
   assert(jsonResult.status === 0, `dry-run is a report, never a refusal — got ${jsonResult.status}: ${jsonResult.stdout} ${jsonResult.stderr}`);
   const out = JSON.parse(jsonResult.stdout);
-  const fv = out.doors.find((d) => d.door === 'feature-verify');
-  const tc = out.doors.find((d) => d.door === 'test-cell');
-  assert(fv.blocking === true && tc.blocking === true, `both debts must read BLOCKING, got ${jsonResult.stdout}`);
-  assert(fv.command === 'node -e "process.exit(0)"', `the feature-verify door must carry the recorded verify command, got ${fv.command}`);
-  assert(typeof tc.command === 'string' && tc.command.startsWith('bee cells'), `the test-cell door must carry a runnable bee verb, got ${tc.command}`);
+  const tests = out.doors.find((d) => d.door === 'tests');
+  assert(tests && tests.command === 'bee test', `the tests door must carry the runnable bee test command, got ${JSON.stringify(tests)}`);
+  assert(/commands\.test declared \(1 command\(s\)\)/.test(tests.detail), `the door must name the declared run, got ${tests.detail}`);
+  assert(/never trusted/.test(tests.detail), `the door must teach that a stale record is never trusted, got ${tests.detail}`);
+  assert(!fs.existsSync(path.join(closeRoot, '.bee', 'logs', 'test-results.json')), 'dry-run must not spend a suite run — no record written');
   const textResult = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closedemo', '--dry-run'], cwd: closeRoot });
   assert(textResult.status === 0, `text dry-run exited ${textResult.status}: ${textResult.stderr}`);
   const lines = textResult.stdout.trimEnd().split('\n');
@@ -4109,18 +2535,157 @@ await check('close --dry-run reports every door read-only: both unwaivable debts
   assert(lines.filter((l) => l.startsWith('door ')).length === out.doors.length, `one line per door, got: ${textResult.stdout}`);
 });
 
-await check('close refuses to run the verify while another door blocks — reports the doors, runs nothing, records nothing', async () => {
+await check('close runs the declared tests fresh: a RED run exits 1 with the failure excerpt and writes the normalized record (test-simple)', async () => {
   const result = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closedemo', '--json'], cwd: closeRoot });
-  assert(result.status === 1, `close must refuse while test-cell debt blocks, got ${result.status}: ${result.stdout}`);
+  assert(result.status === 1, `close on a red run must exit 1, got ${result.status}: ${result.stdout}`);
   const out = JSON.parse(result.stdout);
-  assert(out.ran_verify === false, `close must run NOTHING past a blocking door, got ${result.stdout}`);
-  assert(out.doors.find((d) => d.door === 'test-cell').blocking === true, `the blocking door must be named, got ${result.stdout}`);
-  // The recorder was never touched: the fixture's red record is byte-stable.
-  const state = JSON.parse(fs.readFileSync(path.join(closeRoot, '.bee', 'state.json'), 'utf8'));
-  assert(
-    state.feature_verify.at === CLOSE_FIXTURE_VERIFY_AT && state.feature_verify.result === 'red',
-    `close must not have recorded anything, got ${JSON.stringify(state.feature_verify)}`,
-  );
+  assert(out.ran_tests === true && out.tests && out.tests.green === false, `close must report the fresh red run, got ${result.stdout}`);
+  assert(out.doors.find((d) => d.door === 'tests').blocking === true, `the tests door must read BLOCKING on red, got ${result.stdout}`);
+  const record = JSON.parse(fs.readFileSync(path.join(closeRoot, '.bee', 'logs', 'test-results.json'), 'utf8'));
+  assert(record.green === false && record.commands[0].failure_excerpt.includes('FAIL closedemo assertion'), `the record carries the excerpt, got ${JSON.stringify(record)}`);
+  const textResult = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closedemo'], cwd: closeRoot });
+  assert(textResult.status === 1, 'text mode red close also exits 1');
+  assert(/Tests RED for "closedemo"/.test(textResult.stdout), `the text names the red, got ${textResult.stdout}`);
+  assert(/FAIL closedemo assertion/.test(textResult.stdout), `the text carries the excerpt, got ${textResult.stdout}`);
+  assert(/^next: the red is the work/m.test(textResult.stdout), `the next: line teaches the red is the work, got ${textResult.stdout}`);
+});
+
+await check('close on a GREEN declared run exits 0, reports the capture checklist as PENDING (deferred, never chained), and a repo with no commands.test proceeds with a teaching note', async () => {
+  writeJsonAtomic(path.join(closeRoot, '.bee', 'config.json'), {
+    commands: { test: 'node -e "console.log(\'closedemo green\')"' },
+  });
+  const green = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closedemo'], cwd: closeRoot });
+  assert(green.status === 0, `green close exits 0, got ${green.status}: ${green.stdout} ${green.stderr}`);
+  assert(/Tests GREEN for "closedemo"/.test(green.stdout), `the text names the green, got ${green.stdout}`);
+  assert(/Capture \(deferred/.test(green.stdout), `capture reads as deferred, got ${green.stdout}`);
+  assert(/^next: done — capture is recorded as pending/m.test(green.stdout), `close never chains into bee-capturing (decision c8e25271), got ${green.stdout}`);
+
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-close-undeclared-'));
+  try {
+    fs.mkdirSync(path.join(bare, '.bee', 'cells'), { recursive: true });
+    writeJsonAtomic(path.join(bare, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+    writeJsonAtomic(path.join(bare, '.bee', 'state.json'), { phase: 'swarming', feature: 'nodecl' });
+    const result = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'nodecl', '--json'], cwd: bare });
+    assert(result.status === 0, `an undeclared repo proceeds, got ${result.status}: ${result.stdout}`);
+    const out = JSON.parse(result.stdout);
+    assert(out.ran_tests === false && out.tests === null, `nothing ran with no declared path, got ${result.stdout}`);
+    const text = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'nodecl'], cwd: bare });
+    assert(/No commands\.test declared/.test(text.stdout), `the teaching note names the missing declaration, got ${text.stdout}`);
+  } finally {
+    fs.rmSync(bare, { recursive: true, force: true });
+  }
+});
+
+// ─── bee test (porcelain, test-simple): the deterministic runner surface ───
+
+await check('test example runs through the real dispatcher (registry-completeness — the shared root declares no commands.test, so the example reports undeclared)', async () => {
+  const result = await assertExampleOk('test');
+  const out = JSON.parse(result.stdout);
+  assert(out.undeclared === true && out.green === null, `the example must report the undeclared teaching shape, got ${result.stdout}`);
+});
+
+await check('bee test with no commands.test declared reports {green: null, undeclared: true} with a teaching text and runs nothing (exit 0)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-test-undeclared-'));
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+    const result = await runModuleWorker(BEE_MJS, { args: ['test', '--json'], cwd: dir });
+    assert(result.status === 0, `undeclared is not a failure, got ${result.status}: ${result.stdout} ${result.stderr}`);
+    const out = JSON.parse(result.stdout);
+    assert(out.green === null && out.undeclared === true, `expected {green: null, undeclared: true}, got ${result.stdout}`);
+    const text = await runModuleWorker(BEE_MJS, { args: ['test'], cwd: dir });
+    assert(/No commands\.test declared/.test(text.stdout) && /commands\.test/.test(text.stdout), `the teaching text names the declaration, got ${text.stdout}`);
+    assert(/^next: declare commands\.test/m.test(text.stdout), `exactly one next: line teaching the declaration, got ${text.stdout}`);
+    assert(!fs.existsSync(path.join(dir, '.bee', 'logs', 'test-results.json')), 'no record is written when nothing ran');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('bee test GREEN: runs every declared command in order, writes {ran_at, green, commands:[{command, exit, duration_ms, failure_excerpt}]}, one ✓ line per command, exit 0', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-test-green-'));
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), {
+      commands: { test: ['node -e "console.log(1)"', 'node -e "console.log(2)"'] },
+    });
+    const result = await runModuleWorker(BEE_MJS, { args: ['test', '--json'], cwd: dir });
+    assert(result.status === 0, `green run exits 0, got ${result.status}: ${result.stdout} ${result.stderr}`);
+    const out = JSON.parse(result.stdout);
+    assert(out.green === true && out.commands.length === 2, `both commands ran, got ${result.stdout}`);
+    const record = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'logs', 'test-results.json'), 'utf8'));
+    assert(typeof record.ran_at === 'string' && record.ran_at.includes('T'), `record carries an ISO ran_at, got ${JSON.stringify(record)}`);
+    assert(record.green === true, `record is green, got ${JSON.stringify(record)}`);
+    for (const c of record.commands) {
+      assert(typeof c.command === 'string' && c.exit === 0 && typeof c.duration_ms === 'number' && c.failure_excerpt === null,
+        `every passing command records {command, exit 0, duration_ms, failure_excerpt null}, got ${JSON.stringify(c)}`);
+    }
+    const text = await runModuleWorker(BEE_MJS, { args: ['test'], cwd: dir });
+    const lines = text.stdout.trimEnd().split('\n');
+    assert(lines.filter((l) => l.startsWith('✓ ')).length === 2, `one ✓ line per command, got ${text.stdout}`);
+    assert(/^next: green/.test(lines[lines.length - 1]), `the next: line reports green, got "${lines[lines.length - 1]}"`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('bee test runs a POSIX env-prefixed declared command (FOO=1 node ...) green on this machine — the runner spawns through a POSIX-capable shell when one is on PATH, so declared commands behave the same cross-platform', async () => {
+  // Gate: the whole point is the POSIX-shell seam. On a Windows box with no
+  // bash on PATH the runner falls back to cmd.exe, where an env prefix
+  // genuinely cannot work — skip loudly there rather than assert a red.
+  const bashProbe = spawnSync('bash', ['-c', 'exit 0'], { encoding: 'utf8', timeout: 10_000 });
+  if (bashProbe.error || bashProbe.status !== 0) {
+    console.log('SKIP  bee test env-prefix row: no POSIX shell (bash) on PATH — the fallback platform shell cannot parse env prefixes. Skipped loudly, not weakened.');
+    return;
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-test-envprefix-'));
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), {
+      commands: {
+        // POSIX env-prefix syntax, exactly the shape a host declares
+        // (e.g. BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs ...).
+        test: `BEE_TEST_PROBE=hello node -e "process.exit(process.env.BEE_TEST_PROBE === 'hello' ? 0 : 1)"`,
+      },
+    });
+    const result = await runModuleWorker(BEE_MJS, { args: ['test', '--json'], cwd: dir });
+    assert(result.status === 0, `an env-prefixed declared command must run green through the POSIX shell, got ${result.status}: ${result.stdout} ${result.stderr}`);
+    const out = JSON.parse(result.stdout);
+    assert(out.green === true && out.commands[0].exit === 0, `the env prefix must actually reach the child process, got ${result.stdout}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('bee test RED: exit 1 but the record is still written (red is a normal result), failure_excerpt capped at the LAST 500 chars, next: carries the first failure line', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-test-red-'));
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
+    // A red command with >500 chars of output: the excerpt must keep only the tail.
+    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), {
+      commands: {
+        test: [
+          'node -e "console.log(\'ok first\')"',
+          'node -e "console.error(\'PADSTART \'.repeat(80) + \'FAIL the-tail-line\');process.exit(2)"',
+        ],
+      },
+    });
+    const result = await runModuleWorker(BEE_MJS, { args: ['test', '--json'], cwd: dir });
+    assert(result.status === 1, `a red run exits 1, got ${result.status}: ${result.stdout} ${result.stderr}`);
+    const out = JSON.parse(result.stdout);
+    assert(out.green === false, `red run reports green false, got ${result.stdout}`);
+    const record = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'logs', 'test-results.json'), 'utf8'));
+    assert(record.green === false, 'the record is written on red too — red is a normal result');
+    assert(record.commands[0].failure_excerpt === null && record.commands[1].exit === 2, `pass/fail recorded per command, got ${JSON.stringify(record.commands)}`);
+    const excerpt = record.commands[1].failure_excerpt;
+    assert(typeof excerpt === 'string' && excerpt.length <= 500, `failure_excerpt is capped at 500 chars, got ${excerpt.length}`);
+    assert(excerpt.endsWith('FAIL the-tail-line'), `the excerpt keeps the LAST chars (the tail carries the failure), got ...${excerpt.slice(-60)}`);
+    const text = await runModuleWorker(BEE_MJS, { args: ['test'], cwd: dir });
+    const lines = text.stdout.trimEnd().split('\n');
+    assert(lines.some((l) => l.startsWith('✓ ')) && lines.some((l) => l.startsWith('✗ ')), `✓ and ✗ lines per command, got ${text.stdout}`);
+    assert(/^next: .*fix before capping$/.test(lines[lines.length - 1]), `the next: line ends with the fix-before-capping teach, got "${lines[lines.length - 1]}"`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // ─── worktree-first (docs/specs/worktree-first.md machine changes 3+4):
@@ -4230,19 +2795,8 @@ await check('worktree-first close: --dry-run inside a granted worktree lists the
   let wtRoot = null;
   try {
     fs.mkdirSync(path.join(mainDir, '.bee'), { recursive: true });
-    wtRoot = seedFakeGrantedWorktree(mainDir, 'wtf-close-wt', 'closewt', {
-      phase: 'swarming',
-      stateExtra: {
-        feature_verify: {
-          feature: 'closewt',
-          command: 'node -e "process.exit(0)"',
-          output_sha256: 'a'.repeat(64),
-          result: 'red',
-          at: '2026-01-01T00:00:00.000Z',
-        },
-      },
-    });
-    writePendingCappedCell(wtRoot, 'closewt-pending', 'closewt', '2026-01-02T00:00:00.000Z');
+    wtRoot = seedFakeGrantedWorktree(mainDir, 'wtf-close-wt', 'closewt', { phase: 'swarming' });
+    writeJsonAtomic(path.join(wtRoot, '.bee', 'config.json'), { commands: { test: 'node -e "process.exit(0)"' } });
     const dry = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closewt', '--dry-run'], cwd: wtRoot });
     assert(dry.status === 0, `dry-run exited ${dry.status}: ${dry.stderr}`);
     const lines = dry.stdout.trimEnd().split('\n');
@@ -4262,36 +2816,21 @@ await check('worktree-first close: --dry-run inside a granted worktree lists the
   }
 });
 
-await check('worktree-first close: a GREEN close inside a granted worktree names bee worktree merge --id <id> on the next: line', async () => {
+await check('worktree-first close: a GREEN close inside a granted worktree names bee worktree merge --id <id> on the next: line, with capture recorded as pending', async () => {
   const mainDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-wtf-close-green-'));
   let wtRoot = null;
   try {
     fs.mkdirSync(path.join(mainDir, '.bee'), { recursive: true });
-    wtRoot = seedFakeGrantedWorktree(mainDir, 'wtf-green-wt', 'closegreen', {
-      phase: 'swarming',
-      stateExtra: {
-        feature_verify: {
-          feature: 'closegreen',
-          command: 'node -e "process.exit(0)"',
-          output_sha256: 'a'.repeat(64),
-          result: 'red',
-          at: '2026-01-01T00:00:00.000Z',
-        },
-      },
-    });
-    // One pending cap arms the feature-verify door (the only blocking one:
-    // the cell carries no change_class, so no test-cell debt), and the
-    // recorded command exits 0 — close runs it and goes green. ONE text run:
-    // a second run would find the door already paid and never re-verify.
-    writePendingCappedCell(wtRoot, 'closegreen-pending', 'closegreen', '2026-01-02T00:00:00.000Z');
+    wtRoot = seedFakeGrantedWorktree(mainDir, 'wtf-green-wt', 'closegreen', { phase: 'swarming' });
+    writeJsonAtomic(path.join(wtRoot, '.bee', 'config.json'), { commands: { test: 'node -e "process.exit(0)"' } });
     const textResult = await runModuleWorker(BEE_MJS, { args: ['close', '--feature', 'closegreen'], cwd: wtRoot });
     assert(textResult.status === 0, `green close exited ${textResult.status}: ${textResult.stdout} ${textResult.stderr}`);
-    assert(/Feature verify GREEN for "closegreen"/.test(textResult.stdout), `expected a green verify run, got: ${textResult.stdout}`);
+    assert(/Tests GREEN for "closegreen"/.test(textResult.stdout), `expected a green tests run, got: ${textResult.stdout}`);
     const lines = textResult.stdout.trimEnd().split('\n');
     const nextLine = lines[lines.length - 1];
     assert(
-      /^next: bee worktree merge --id wtf-green-wt — run from the main checkout/.test(nextLine),
-      `the green close next: line must name the merge command, got: "${nextLine}"`,
+      /^next: bee worktree merge --id wtf-green-wt — land from main\. Capture is recorded as pending/.test(nextLine),
+      `the green close next: line must name the merge command with capture pending (decision c8e25271), got: "${nextLine}"`,
     );
   } finally {
     fs.rmSync(mainDir, { recursive: true, force: true });
@@ -5588,13 +4127,13 @@ await check('resolveCommand special-cases "status" (no subcommand) and dot-joins
   assert(bareGroup.commandName === 'cells' && bareGroup.extra.length === 0, 'a bare group with no action stays ungrouped (misses the registry -> nearest-match)');
 });
 
-await check('parseFlags treats json/stdin/behavior-change/evidence-stdin/active-only as flag-alone booleans', async () => {
+await check('parseFlags treats json/stdin/active-only (the FLAG_ALONE_BOOLEANS set) as flag-alone booleans', async () => {
   const { flags, json } = parseFlags(['--stdin', '--json']);
   assert(json === true, 'json should be stripped into the json flag');
   assert(flags.stdin === true, 'stdin should be boolean true with no value consumed');
 });
 
-await check('parseFlags requires an explicit value for a non-boolean-alone flag, even one the schema types boolean (cells.verify --passed)', async () => {
+await check('parseFlags requires an explicit value for a non-boolean-alone flag, even one a schema types boolean (--passed style)', async () => {
   const { flags, error } = parseFlags(['--id', 'demo-1', '--command', 'manual check', '--passed', 'true']);
   assert(!error, `unexpected parse error: ${JSON.stringify(error)}`);
   assert(flags.id === 'demo-1' && flags.command === 'manual check' && flags.passed === 'true', `flags: ${JSON.stringify(flags)}`);
@@ -5611,9 +4150,9 @@ await check('parseFlags returns a structured error for a stray non-flag argument
 });
 
 await check("parseFlags supports the --name=value form for any flag, taking precedence over the boolean-alone default", async () => {
-  const { flags } = parseFlags(['--id=demo-1', '--behavior-change=false']);
+  const { flags } = parseFlags(['--id=demo-1', '--dry-run=false']);
   assert(flags.id === 'demo-1', 'id should read from the = form');
-  assert(flags['behavior-change'] === 'false', '= form overrides flag-alone boolean handling, matching the original CLIs\' own eq-first parsing order');
+  assert(flags['dry-run'] === 'false', '= form overrides flag-alone boolean handling, matching the original CLIs\' own eq-first parsing order');
 });
 
 await check('nearestCommandName suggests the closest real command for a typo', async () => {
@@ -5989,59 +4528,6 @@ await check('measured against THIS checkout\'s real guard scripts (skipped where
   );
 });
 
-// ─── judgeStandardWarning (D3, self-correcting-loop): pure-logic unit tests
-// for the advisory judge-standard sufficiency matrix (F4) — add/update never
-// refuse, see the CLI-level end-to-end rows further down for the through-the-
-// dispatcher coverage, mirroring manifestLintWarning's own H2 layout above.
-
-await check('judgeStandardWarning is silent for an unclassified cell — no change_class, no behavior_change:true (D3: no matrix check at all)', async () => {
-  assert(judgeStandardWarning({ id: 'jsw-1', verify: 'node -e 0' }) === null, 'unclassified cell must never warn');
-  assert(judgeStandardWarning({ id: 'jsw-2', verify: 'node -e 0', behavior_change: false }) === null, 'behavior_change:false stays unclassified');
-});
-
-await check('judgeStandardWarning fires per class when the verify string is missing that class\'s named minimum (formatting/bugfix/api/security/migration)', async () => {
-  const cases = [
-    ['formatting', { id: 'jsw-fmt', change_class: 'formatting', verify: 'node -e 0' }],
-    ['bugfix', { id: 'jsw-bug', change_class: 'bugfix', verify: 'node -e 0' }],
-    ['api', { id: 'jsw-api', change_class: 'api', verify: 'node -e 0' }],
-    ['security', { id: 'jsw-sec', change_class: 'security', verify: 'node -e 0' }],
-    ['migration', { id: 'jsw-mig', change_class: 'migration', verify: 'node -e 0' }],
-  ];
-  for (const [cls, cell] of cases) {
-    const warning = judgeStandardWarning(cell);
-    assert(warning && warning.includes('JUDGE_STANDARD_INSUFFICIENT'), `expected a JUDGE_STANDARD_INSUFFICIENT warning for class "${cls}", got: ${warning}`);
-    assert(warning.includes(cell.id), `expected the warning to name the cell id for class "${cls}", got: ${warning}`);
-    assert(warning.includes(cls), `expected the warning to name the class "${cls}", got: ${warning}`);
-  }
-});
-
-await check('judgeStandardWarning stays silent per class once verify names that class\'s minimum', async () => {
-  assert(judgeStandardWarning({ id: 'jsw-fmt-ok', change_class: 'formatting', verify: 'npm run lint && npm run typecheck' }) === null, 'formatting: lint/typecheck present');
-  assert(judgeStandardWarning({ id: 'jsw-bug-ok', change_class: 'bugfix', verify: 'node tests/test_foo.mjs' }) === null, 'bugfix: a test path named');
-  assert(judgeStandardWarning({ id: 'jsw-api-ok', change_class: 'api', verify: 'node tests/test_contract.mjs' }) === null, 'api: a contract test named');
-  assert(judgeStandardWarning({ id: 'jsw-sec-ok', change_class: 'security', verify: 'node tests/test_negative_path.mjs' }) === null, 'security: a negative-path test named');
-  assert(judgeStandardWarning({ id: 'jsw-mig-ok', change_class: 'migration', verify: 'node migrate.mjs forward && node migrate.mjs rollback' }) === null, 'migration: forward + rollback both named');
-});
-
-await check('judgeStandardWarning fires for a behavior-class cell with no pre-attached red_failure_evidence, and is silent once one is present', async () => {
-  const warning = judgeStandardWarning({ id: 'jsw-behavior-1', behavior_change: true, verify: 'node -e 0' });
-  assert(warning && warning.includes('jsw-behavior-1') && warning.includes('behavior'), `expected a behavior-class warning, got: ${warning}`);
-  const silent = judgeStandardWarning({
-    id: 'jsw-behavior-2',
-    behavior_change: true,
-    verify: 'node -e 0',
-    verification_evidence: { red_failure_evidence: 'a pre-attached characterization of the prior behavior' },
-  });
-  assert(silent === null, 'a cell already carrying red_failure_evidence at authoring time must not warn');
-});
-
-await check('judgeStandardWarning tolerates malformed cell shapes without throwing', async () => {
-  assert(judgeStandardWarning(null) === null, 'null cell must not throw');
-  assert(judgeStandardWarning(undefined) === null, 'undefined cell must not throw');
-  assert(judgeStandardWarning({}) === null, 'empty object (unclassified) must not throw');
-  assert(judgeStandardWarning({ id: 'jsw-bad', change_class: 'behavior', verify: null }) !== null, 'non-string verify must not throw, and behavior still warns without evidence');
-});
-
 // ─── end-to-end: --help / --help --json (D3 tool-schema manifest, split per
 // docs/specs/porcelain.md: default = porcelain only, --all = full registry) ─
 
@@ -6071,8 +4557,9 @@ await check('bee --help --json (default) is porcelain-only: exactly the surface-
   const porcelainNames = COMMAND_REGISTRY.filter((e) => e.surface === 'porcelain').map((e) => e.name).sort();
   const shownNames = manifest.commands.map((c) => c.name).sort();
   assert(JSON.stringify(shownNames) === JSON.stringify(porcelainNames), `default --help --json must show exactly the porcelain set, got ${shownNames.join(', ')}`);
-  assert(porcelainNames.length === 16, `the porcelain set is 16 verbs (docs/specs/porcelain.md), got ${porcelainNames.length}`);
+  assert(porcelainNames.length === 17, `the porcelain set is 17 verbs (docs/specs/porcelain.md + test-simple's bee test), got ${porcelainNames.length}`);
   assert(shownNames.includes('close'), 'close must be in the porcelain set');
+  assert(shownNames.includes('test'), 'test must be in the porcelain set (test-simple)');
   assert(!shownNames.includes('cells.cap'), 'plumbing (cells.cap) must be hidden from the default manifest');
 });
 
@@ -6257,138 +4744,6 @@ await check('bee cells update stays silent when the patched cell keeps the manif
   const result = await runBee(['cells', 'update', '--id', 'demo-2-lint-listed', '--file', 'cell-lint-update-listed.json', '--json']);
   assert(result.status === 0, `exit ${result.status}: stdout=${result.stdout} stderr=${result.stderr}`);
   assert(!/WARNING/.test(result.stderr), `expected no WARNING, got stderr=${result.stderr}`);
-});
-
-// ─── D3 judge-standard matrix, through the dispatcher: `cells add`/`cells
-// update` warn (stderr, JUDGE_STANDARD_INSUFFICIENT) on an under-specified
-// change_class shape but never refuse the write (F4); `cells cap` warns when
-// a behavior-class cap rides the deliberate_exceptions door (F5). Separate
-// fixture cells from demo-2 so this block never disturbs demo-2's own
-// claim/verify/cap lifecycle below (H2 layout precedent). ─────────────────
-
-await check('bee cells add fires JUDGE_STANDARD_INSUFFICIENT on an under-specified api-class cell and still succeeds', async () => {
-  const cellFixture = {
-    id: 'demo-2-jsw-api',
-    feature: 'demo2',
-    title: 'D3 matrix fixture — api class, no contract/integration test named',
-    lane: 'small',
-    action: 'D3 matrix fixture only, never claimed/executed.',
-    verify: 'node -e "process.exit(0)"',
-    change_class: 'api',
-  };
-  fs.writeFileSync(path.join(root2, 'cell-jsw-api.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
-  const result = await runBee(['cells', 'add', '--file', 'cell-jsw-api.json', '--json']);
-  assert(result.status === 0, `the write must always succeed: exit ${result.status}: stdout=${result.stdout} stderr=${result.stderr}`);
-  assert(
-    /JUDGE_STANDARD_INSUFFICIENT/.test(result.stderr) && /demo-2-jsw-api/.test(result.stderr),
-    `expected a JUDGE_STANDARD_INSUFFICIENT warning naming the cell, got: ${result.stderr}`,
-  );
-});
-
-await check('bee cells add stays silent on the matrix when the verify already names the class minimum', async () => {
-  const cellFixture = {
-    id: 'demo-2-jsw-api-ok',
-    feature: 'demo2',
-    title: 'D3 matrix fixture — api class, contract test named',
-    lane: 'small',
-    action: 'D3 matrix fixture only, never claimed/executed.',
-    verify: 'node tests/test_contract.mjs',
-    change_class: 'api',
-  };
-  fs.writeFileSync(path.join(root2, 'cell-jsw-api-ok.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
-  const result = await runBee(['cells', 'add', '--file', 'cell-jsw-api-ok.json', '--json']);
-  assert(result.status === 0, `exit ${result.status}: stdout=${result.stdout} stderr=${result.stderr}`);
-  assert(!/JUDGE_STANDARD_INSUFFICIENT/.test(result.stderr), `expected no JUDGE_STANDARD_INSUFFICIENT warning, got stderr=${result.stderr}`);
-});
-
-await check('bee cells add stays silent on the matrix for an unclassified cell (no change_class, no behavior_change:true)', async () => {
-  const cellFixture = {
-    id: 'demo-2-jsw-unclassified',
-    feature: 'demo2',
-    title: 'D3 matrix fixture — unclassified',
-    lane: 'small',
-    action: 'D3 matrix fixture only, never claimed/executed.',
-    verify: 'node -e "process.exit(0)"',
-  };
-  fs.writeFileSync(path.join(root2, 'cell-jsw-unclassified.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
-  const result = await runBee(['cells', 'add', '--file', 'cell-jsw-unclassified.json', '--json']);
-  assert(result.status === 0, `exit ${result.status}: stdout=${result.stdout} stderr=${result.stderr}`);
-  assert(!/JUDGE_STANDARD_INSUFFICIENT/.test(result.stderr), `expected no warning for an unclassified cell, got stderr=${result.stderr}`);
-});
-
-await check('bee cells update fires JUDGE_STANDARD_INSUFFICIENT when a patch leaves the MERGED cell under-specified, and still succeeds', async () => {
-  const patch = { change_class: 'security' };
-  fs.writeFileSync(path.join(root2, 'cell-jsw-update.json'), JSON.stringify(patch, null, 2), 'utf8');
-  const result = await runBee(['cells', 'update', '--id', 'demo-2-jsw-unclassified', '--file', 'cell-jsw-update.json', '--json']);
-  assert(result.status === 0, `the write must always succeed: exit ${result.status}: stdout=${result.stdout} stderr=${result.stderr}`);
-  assert(
-    /JUDGE_STANDARD_INSUFFICIENT/.test(result.stderr) && /demo-2-jsw-unclassified/.test(result.stderr),
-    `expected the warning naming the cell, got: ${result.stderr}`,
-  );
-});
-
-await check('bee cells cap fires JUDGE_STANDARD_INSUFFICIENT (F5) when a behavior-class cap rides deliberate_exceptions, but still succeeds', async () => {
-  const cellFixture = {
-    id: 'demo-2-jsw-exception',
-    feature: 'demo2',
-    title: 'D3 F5 fixture — behavior class riding deliberate_exceptions',
-    lane: 'small',
-    action: 'D3 F5 fixture only.',
-    verify: 'node -e "process.exit(0)"',
-    change_class: 'behavior',
-  };
-  fs.writeFileSync(path.join(root2, 'cell-jsw-exception.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
-  const added = await runBee(['cells', 'add', '--file', 'cell-jsw-exception.json', '--json']);
-  assert(added.status === 0, `add setup failed: ${added.status}: stdout=${added.stdout} stderr=${added.stderr}`);
-  const claimed = await runBee(['cells', 'claim', '--id', 'demo-2-jsw-exception', '--worker', 'worker-jsw', '--json']);
-  assert(claimed.status === 0, `claim setup failed: ${claimed.status}: stdout=${claimed.stdout} stderr=${claimed.stderr}`);
-  const verified = await runBee([
-    'cells', 'verify', '--id', 'demo-2-jsw-exception', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json',
-  ]);
-  assert(verified.status === 0, `verify setup failed: ${verified.status}: stdout=${verified.stdout} stderr=${verified.stderr}`);
-
-  const capped = await runModuleWorker(BEE_MJS, {
-    args: ['cells', 'cap', '--id', 'demo-2-jsw-exception', '--outcome', 'done', '--files', 'a.js', '--evidence-stdin', '--json'],
-    cwd: root2,
-    input: JSON.stringify({ deliberate_exceptions: ['brand-new surface, no prior behavior to characterize'] }),
-  });
-  assert(capped.status === 0, `cap must succeed: exit ${capped.status}: stdout=${capped.stdout} stderr=${capped.stderr}`);
-  assert(
-    /JUDGE_STANDARD_INSUFFICIENT/.test(capped.stderr) && /demo-2-jsw-exception/.test(capped.stderr) && /deliberate_exceptions/.test(capped.stderr),
-    `expected the F5 advisory naming the cell and the exception door, got stderr=${capped.stderr}`,
-  );
-});
-
-await check('bee cells cap stays silent on the F5 advisory for a green-row behavior-class cap (sufficient, unique red_failure_evidence)', async () => {
-  const cellFixture = {
-    id: 'demo-2-jsw-green',
-    feature: 'demo2',
-    title: 'D3 F5 fixture — behavior class, sufficient evidence',
-    lane: 'small',
-    action: 'D3 F5 fixture only.',
-    verify: 'node -e "process.exit(0)"',
-    change_class: 'behavior',
-  };
-  fs.writeFileSync(path.join(root2, 'cell-jsw-green.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
-  const added = await runBee(['cells', 'add', '--file', 'cell-jsw-green.json', '--json']);
-  assert(added.status === 0, `add setup failed: ${added.status}: stdout=${added.stdout} stderr=${added.stderr}`);
-  const claimed = await runBee(['cells', 'claim', '--id', 'demo-2-jsw-green', '--worker', 'worker-jsw', '--json']);
-  assert(claimed.status === 0, `claim setup failed: ${claimed.status}: stdout=${claimed.stdout} stderr=${claimed.stderr}`);
-  const verified = await runBee([
-    'cells', 'verify', '--id', 'demo-2-jsw-green', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json',
-  ]);
-  assert(verified.status === 0, `verify setup failed: ${verified.status}: stdout=${verified.stdout} stderr=${verified.stderr}`);
-
-  const capped = await runModuleWorker(BEE_MJS, {
-    args: ['cells', 'cap', '--id', 'demo-2-jsw-green', '--outcome', 'done', '--files', 'a.js', '--evidence-stdin', '--json'],
-    cwd: root2,
-    input: JSON.stringify({
-      red_failure_evidence:
-        'demo-2-jsw-green: a genuinely unique characterization of the prior failing behavior before this change, clearing the D3 floor.',
-    }),
-  });
-  assert(capped.status === 0, `cap must succeed: exit ${capped.status}: stdout=${capped.stdout} stderr=${capped.stderr}`);
-  assert(!/JUDGE_STANDARD_INSUFFICIENT/.test(capped.stderr), `expected no F5 advisory on a green-row cap, got stderr=${capped.stderr}`);
 });
 
 await check('bee cells claim --id demo-2 --worker claims it', async () => {
@@ -6623,282 +4978,9 @@ await check('bee reservations reserve: sessionless call with TWO fresh live sess
   assert(parsed.ok === false && parsed.code === 'SESSION_REQUIRED', `expected typed SESSION_REQUIRED refusal, got ${result.stdout}`);
 });
 
-await check('bee cells verify --passed true (explicit "true" argument, not a bare flag) records a passing verify', async () => {
-  const result = await runBee([
-    'cells', 'verify', '--id', 'demo-2', '--command', 'manual check', '--output', '0 failing', '--passed', 'true', '--json',
-  ]);
-  assert(result.status === 0, `exit ${result.status}: stdout=${result.stdout} stderr=${result.stderr}`);
-  assert(JSON.parse(result.stdout).trace.verify_passed === true, `expected verify_passed true, got ${result.stdout}`);
-});
-
-// D1: --signature threads from bee.mjs's CLI flag through recordVerify into
-// the trace.attempts ledger — the worker-suppliable override, end to end
-// through the dispatcher (not just the direct lib call already covered above).
-await check('bee cells verify --signature overrides the mechanical normalizer through the dispatcher, and a --passed false verify without --signature appends a ledger entry', async () => {
-  addCell(root2, {
-    id: 'ledger-cli-1',
-    feature: 'demo2',
-    title: 'CLI ledger fixture',
-    lane: 'small',
-    action: 'Exercise the --signature flag through the dispatcher.',
-    verify: 'node -e "process.exit(0)"',
-  });
-  const failed = await runBee([
-    'cells', 'verify', '--id', 'ledger-cli-1', '--command', 'npm test', '--output', 'FAIL from dispatcher', '--passed', 'false', '--signature', 'cli-custom-sig', '--json',
-  ]);
-  assert(failed.status === 0, `exit ${failed.status}: stdout=${failed.stdout} stderr=${failed.stderr}`);
-  const afterFail = JSON.parse(failed.stdout);
-  assert(afterFail.trace.attempts.length === 1, `expected 1 ledger entry, got ${JSON.stringify(afterFail.trace.attempts)}`);
-  assert(afterFail.trace.attempts[0].failure_signature === 'cli-custom-sig', `expected the CLI --signature to win, got ${afterFail.trace.attempts[0].failure_signature}`);
-
-  const passed = await runBee([
-    'cells', 'verify', '--id', 'ledger-cli-1', '--command', 'npm test', '--output', 'ok', '--passed', 'true', '--json',
-  ]);
-  const afterPass = JSON.parse(passed.stdout);
-  assert(afterPass.trace.attempts.length === 2, `expected 2 ledger entries after the passing verify, got ${afterPass.trace.attempts.length}`);
-  assert(afterPass.trace.attempts[1].verdict === 'pass' && afterPass.trace.attempts[1].failure_signature === null, 'the passing entry carries no failure_signature');
-});
-
 await check('bee cells cap --id demo-2 caps the cell', async () => {
   const result = await runBee(['cells', 'cap', '--id', 'demo-2', '--outcome', 'dispatcher test cap', '--files', 'cell-demo-2.json', '--json']);
   assert(JSON.parse(result.stdout).status === 'capped', `expected capped, got ${result.stdout}`);
-});
-
-// ─── test-economy D1: the `cells cap` handler's computeDiffStats — real git
-// end-to-end (the `root`/`root2` fixtures above are deliberately never
-// `git init`-ed, so every cap example run against them ALREADY proves the
-// no-git fail-open path — see the no-git-specific assertion below for the
-// warning-log half of that same claim). These rows use a DEDICATED repo
-// with a real `git init` so the tracked/untracked detection, the
-// refactor/formatting new-test-file refusal (D1), and the 5-mirror dedupe
-// are exercised against real `git diff --numstat` / `git status
-// --porcelain` output, not a synthetic diff_stats object. ─────────────────
-
-function gitOk(cwd, args) {
-  const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
-  assert(r.status === 0, `git ${args.join(' ')} (cwd=${cwd}) failed: ${r.stderr}`);
-  return r.stdout;
-}
-
-function makeDiffStatsRepo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-diffstats-'));
-  gitOk(dir, ['init', '-q', '-b', 'main']);
-  gitOk(dir, ['config', 'user.email', 's@e']);
-  gitOk(dir, ['config', 'user.name', 's']);
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true });
-  fs.writeFileSync(path.join(dir, 'src.js'), 'module.exports = 1;\n');
-  fs.mkdirSync(path.join(dir, '.bee', 'bin', 'lib'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.bee', 'bin', 'lib', 'mirror.mjs'), '// mirror placeholder\n');
-  gitOk(dir, ['add', '.']);
-  gitOk(dir, ['commit', '-q', '-m', 'init']);
-  fs.mkdirSync(path.join(dir, '.bee'), { recursive: true });
-  writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
-  writeState(dir, {
-    ...defaultState(),
-    phase: 'swarming',
-    feature: 'diffstats',
-    approved_gates: { context: true, shape: true, execution: true, review: false },
-  });
-  return dir;
-}
-
-async function runDiffStatsRepo(dir, args) {
-  return await runModuleWorker(BEE_MJS, { args, cwd: dir });
-}
-
-await check('cells cap (D1 real git): a refactor-class cell caps clean when the diff touches only an existing tracked source file (no new test file)', async () => {
-  const dir = makeDiffStatsRepo();
-  try {
-    fs.writeFileSync(path.join(dir, 'src.js'), 'module.exports = 2; // changed\n');
-    const cellFixture = {
-      id: 'ds-refactor-green',
-      feature: 'diffstats',
-      title: 'D1 diff_stats fixture — refactor, tracked-only diff',
-      lane: 'small',
-      action: 'D1 diff_stats fixture only.',
-      verify: 'node -e "process.exit(0)"',
-      change_class: 'refactor',
-    };
-    fs.writeFileSync(path.join(dir, 'cell.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
-    const added = await runDiffStatsRepo(dir, ['cells', 'add', '--file', 'cell.json', '--json']);
-    assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
-    const claimed = await runDiffStatsRepo(dir, ['cells', 'claim', '--id', 'ds-refactor-green', '--worker', 'w', '--json']);
-    assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
-    const verified = await runDiffStatsRepo(dir, ['cells', 'verify', '--id', 'ds-refactor-green', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
-    assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
-    const capped = await runDiffStatsRepo(dir, ['cells', 'cap', '--id', 'ds-refactor-green', '--outcome', 'done', '--files', 'src.js', '--json']);
-    assert(capped.status === 0, `expected a clean cap over a tracked-only diff, got exit ${capped.status}: stdout=${capped.stdout} stderr=${capped.stderr}`);
-    assert(JSON.parse(capped.stdout).status === 'capped', `expected capped, got ${capped.stdout}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('cells cap (D1 real git): a refactor-class cell is REFUSED when its diff adds a real untracked test file, naming "refactor" — new_suite_reason does not override', async () => {
-  const dir = makeDiffStatsRepo();
-  try {
-    fs.writeFileSync(path.join(dir, 'tests', 'test_new_thing.mjs'), 'console.log("new suite");\n'.repeat(5));
-    const cellFixture = {
-      id: 'ds-refactor-newtest',
-      feature: 'diffstats',
-      title: 'D1 diff_stats fixture — refactor, new untracked test file',
-      lane: 'small',
-      action: 'D1 diff_stats fixture only.',
-      verify: 'node -e "process.exit(0)"',
-      change_class: 'refactor',
-    };
-    fs.writeFileSync(path.join(dir, 'cell.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
-    const added = await runDiffStatsRepo(dir, ['cells', 'add', '--file', 'cell.json', '--json']);
-    assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
-    const claimed = await runDiffStatsRepo(dir, ['cells', 'claim', '--id', 'ds-refactor-newtest', '--worker', 'w', '--json']);
-    assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
-    const verified = await runDiffStatsRepo(dir, ['cells', 'verify', '--id', 'ds-refactor-newtest', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
-    assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
-    const capped = await runModuleWorker(BEE_MJS, {
-      args: ['cells', 'cap', '--id', 'ds-refactor-newtest', '--outcome', 'done', '--files', 'tests/test_new_thing.mjs', '--evidence-stdin', '--json'],
-      cwd: dir,
-      input: JSON.stringify({ new_suite_reason: 'trying to override the refactor ban with a stated reason' }),
-    });
-    assert(capped.status !== 0, `expected the cap to be refused, got exit 0: stdout=${capped.stdout}`);
-    assert(/refactor/.test(capped.stdout + capped.stderr), `expected the refusal to name "refactor", got stdout=${capped.stdout} stderr=${capped.stderr}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('cells cap (D1 real git, mirror dedupe): a new untracked test-shaped file under a mirror prefix (.bee/bin/) is excluded from diff_stats — a refactor-class cap over it still succeeds', async () => {
-  const dir = makeDiffStatsRepo();
-  try {
-    fs.writeFileSync(path.join(dir, '.bee', 'bin', 'test_mirror_thing.mjs'), 'console.log("mirror-shaped, must be excluded");\n'.repeat(5));
-    const cellFixture = {
-      id: 'ds-refactor-mirror',
-      feature: 'diffstats',
-      title: 'D1 diff_stats fixture — refactor, new file under a mirror prefix',
-      lane: 'small',
-      action: 'D1 diff_stats fixture only.',
-      verify: 'node -e "process.exit(0)"',
-      change_class: 'refactor',
-    };
-    fs.writeFileSync(path.join(dir, 'cell.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
-    const added = await runDiffStatsRepo(dir, ['cells', 'add', '--file', 'cell.json', '--json']);
-    assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
-    const claimed = await runDiffStatsRepo(dir, ['cells', 'claim', '--id', 'ds-refactor-mirror', '--worker', 'w', '--json']);
-    assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
-    const verified = await runDiffStatsRepo(dir, ['cells', 'verify', '--id', 'ds-refactor-mirror', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
-    assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
-    const capped = await runDiffStatsRepo(dir, ['cells', 'cap', '--id', 'ds-refactor-mirror', '--outcome', 'done', '--files', '.bee/bin/test_mirror_thing.mjs', '--json']);
-    assert(capped.status === 0, `a mirror-prefixed new test file must be dedupe-excluded, so this cap must succeed — got exit ${capped.status}: stdout=${capped.stdout} stderr=${capped.stderr}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-await check('cells cap (D1 fail-open, no-git): a cap over a repo with no .git logs a computeDiffStats warning to .bee/logs/hooks.jsonl and still caps clean', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-cli-diffstats-nogit-'));
-  try {
-    fs.mkdirSync(path.join(dir, '.bee'), { recursive: true });
-    writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
-    writeState(dir, {
-      ...defaultState(),
-      phase: 'swarming',
-      feature: 'diffstats-nogit',
-      approved_gates: { context: true, shape: true, execution: true, review: false },
-    });
-    const cellFixture = {
-      id: 'ds-nogit-1',
-      feature: 'diffstats-nogit',
-      title: 'D1 fail-open fixture — no .git at all',
-      lane: 'small',
-      action: 'D1 fail-open fixture only.',
-      verify: 'node -e "process.exit(0)"',
-    };
-    fs.writeFileSync(path.join(dir, 'cell.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
-    const added = await runDiffStatsRepo(dir, ['cells', 'add', '--file', 'cell.json', '--json']);
-    assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
-    const claimed = await runDiffStatsRepo(dir, ['cells', 'claim', '--id', 'ds-nogit-1', '--worker', 'w', '--json']);
-    assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
-    const verified = await runDiffStatsRepo(dir, ['cells', 'verify', '--id', 'ds-nogit-1', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
-    assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
-
-    const hooksLog = path.join(dir, '.bee', 'logs', 'hooks.jsonl');
-    assert(!fs.existsSync(hooksLog), 'precondition: no hooks.jsonl warning yet');
-
-    const capped = await runDiffStatsRepo(dir, ['cells', 'cap', '--id', 'ds-nogit-1', '--outcome', 'done', '--files', 'src.js', '--json']);
-    assert(capped.status === 0, `a no-git repo must still cap cleanly (fail-open), got exit ${capped.status}: stdout=${capped.stdout} stderr=${capped.stderr}`);
-    assert(JSON.parse(capped.stdout).status === 'capped', `expected capped, got ${capped.stdout}`);
-
-    assert(fs.existsSync(hooksLog), 'expected computeDiffStats to append a warning line to .bee/logs/hooks.jsonl on git failure');
-    const lines = fs.readFileSync(hooksLog, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
-    const warning = lines.find((l) => l.hook === 'cells-cap-diff-stats');
-    assert(warning && warning.event === 'warning', `expected a cells-cap-diff-stats warning entry, got ${JSON.stringify(lines)}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// ─── test-economy D3: the D3 new_suite_reason + ratio-ceiling checks driven
-// by the SAME real-git computeDiffStats as the D1 rows above (not a
-// synthetic diff_stats object) — a behavior-class cell that adds a real
-// untracked test file and only lightly touches an existing tracked source
-// file, so the ratio genuinely exceeds the standard-lane ceiling.
-
-await check('cells cap (D3 real git): a behavior-class cell adding a new test file with a high test/source ratio is refused for the missing new_suite_reason first, then for the missing ratio_waiver, and caps once both are supplied', async () => {
-  const dir = makeDiffStatsRepo();
-  try {
-    // small tracked source churn (a couple of changed lines)...
-    fs.writeFileSync(path.join(dir, 'src.js'), 'module.exports = 2; // changed\n// a second changed line\n');
-    // ...next to a much larger new untracked test file, so the ratio (test
-    // lines added / source lines changed) genuinely clears the standard-lane
-    // ceiling of 4.
-    fs.writeFileSync(path.join(dir, 'tests', 'test_new_behavior.mjs'), 'console.log("new behavior suite");\n'.repeat(30));
-    const cellFixture = {
-      id: 'ds-behavior-ratio',
-      feature: 'diffstats',
-      title: 'D3 diff_stats fixture — behavior, new test file + high ratio',
-      lane: 'standard',
-      action: 'D3 diff_stats fixture only.',
-      verify: 'node -e "process.exit(0)"',
-      change_class: 'behavior',
-      must_haves: { truths: ['ds-behavior-ratio: D3 real-git fixture'] },
-    };
-    fs.writeFileSync(path.join(dir, 'cell.json'), JSON.stringify(cellFixture, null, 2), 'utf8');
-    const added = await runDiffStatsRepo(dir, ['cells', 'add', '--file', 'cell.json', '--json']);
-    assert(added.status === 0, `add failed: ${added.stdout}${added.stderr}`);
-    const claimed = await runDiffStatsRepo(dir, ['cells', 'claim', '--id', 'ds-behavior-ratio', '--worker', 'w', '--json']);
-    assert(claimed.status === 0, `claim failed: ${claimed.stdout}${claimed.stderr}`);
-    const verified = await runDiffStatsRepo(dir, ['cells', 'verify', '--id', 'ds-behavior-ratio', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
-    assert(verified.status === 0, `verify failed: ${verified.stdout}${verified.stderr}`);
-
-    const capArgs = ['cells', 'cap', '--id', 'ds-behavior-ratio', '--outcome', 'done', '--files', 'src.js,tests/test_new_behavior.mjs'];
-
-    // 1. no evidence at all -> refused for the missing new_suite_reason (D3 checks new_suite_reason before the ratio).
-    const noEvidence = await runModuleWorker(BEE_MJS, { args: [...capArgs, '--json'], cwd: dir });
-    assert(noEvidence.status !== 0, `expected the cap to be refused with no evidence, got exit 0: stdout=${noEvidence.stdout}`);
-    assert(/new_suite_reason/.test(noEvidence.stdout + noEvidence.stderr), `expected the refusal to name new_suite_reason, got stdout=${noEvidence.stdout} stderr=${noEvidence.stderr}`);
-
-    // 2. new_suite_reason supplied, but no ratio_waiver -> refused for the ratio ceiling.
-    const reasonOnly = await runModuleWorker(BEE_MJS, {
-      args: [...capArgs, '--evidence-stdin', '--json'],
-      cwd: dir,
-      input: JSON.stringify({ new_suite_reason: 'this behavior needed its own dedicated test suite file' }),
-    });
-    assert(reasonOnly.status !== 0, `expected the cap to still be refused without ratio_waiver, got exit 0: stdout=${reasonOnly.stdout}`);
-    assert(/ratio_waiver/.test(reasonOnly.stdout + reasonOnly.stderr), `expected the refusal to name ratio_waiver, got stdout=${reasonOnly.stdout} stderr=${reasonOnly.stderr}`);
-
-    // 3. both fields supplied -> caps clean.
-    const bothSupplied = await runModuleWorker(BEE_MJS, {
-      args: [...capArgs, '--evidence-stdin', '--json'],
-      cwd: dir,
-      input: JSON.stringify({
-        new_suite_reason: 'this behavior needed its own dedicated test suite file',
-        ratio_waiver: 'the new suite legitimately dwarfs the small source tweak it covers',
-      }),
-    });
-    assert(bothSupplied.status === 0, `expected the cap to succeed once both fields are supplied, got exit ${bothSupplied.status}: stdout=${bothSupplied.stdout} stderr=${bothSupplied.stderr}`);
-    assert(JSON.parse(bothSupplied.stdout).status === 'capped', `expected capped, got ${bothSupplied.stdout}`);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
 });
 
 // D-GHF-C (GH #27.5): `cells cap --override-judge` end to end through the
@@ -6916,8 +4998,6 @@ await check('bee cells cap refuses a NEEDS_REVISION-judged cell without --overri
   });
   const claimed = await runBee(['cells', 'claim', '--id', 'judge-cli-1', '--worker', 'worker-judge-cli', '--json']);
   assert(claimed.status === 0, `cells claim setup failed: ${claimed.status}: stdout=${claimed.stdout} stderr=${claimed.stderr}`);
-  const verified = await runBee(['cells', 'verify', '--id', 'judge-cli-1', '--command', 'node -e 0', '--output', 'ok', '--passed', 'true', '--json']);
-  assert(verified.status === 0, `cells verify setup failed: ${verified.status}: stdout=${verified.stdout} stderr=${verified.stderr}`);
 
   const verdictPath = path.join(root2, 'verdict-judge-cli-1.json');
   fs.writeFileSync(
@@ -6977,8 +5057,10 @@ await check('bee cells reset-budget --id --reason --operator runs through the di
   for (let i = 0; i < 3; i += 1) {
     const claimed = await runBee(['cells', 'claim', '--id', 'budget-cli-1', '--worker', 'w', '--session-id', `sess-cli-reset-${i}`, '--json']);
     assert(claimed.status === 0, `claim #${i + 1} should succeed: ${claimed.stderr}`);
-    await runBee(['cells', 'verify', '--id', 'budget-cli-1', '--command', 'node -e ok', '--output', 'ok', '--passed', 'true', '--session-id', `sess-cli-reset-${i}`, '--json']);
-    await runBee(['cells', 'unclaim', '--id', 'budget-cli-1', '--session-id', `sess-cli-reset-${i}`, '--json']);
+    // Seed one ledger attempt per claim epoch (block appends; distinct
+    // reasons keep the same-signature brake out of the way).
+    await runBee(['cells', 'block', '--id', 'budget-cli-1', '--reason', `stuck differently ${i}`, '--session-id', `sess-cli-reset-${i}`, '--json']);
+    await runBee(['cells', 'reopen', '--id', 'budget-cli-1', '--reason', 'retry', '--session-id', `sess-cli-reset-${i}`, '--json']);
   }
   const blocked = await runBee(['cells', 'claim', '--id', 'budget-cli-1', '--worker', 'w', '--session-id', 'sess-cli-reset-3']);
   assert(blocked.status !== 0, 'precondition: the door should be exhausted before reset');
@@ -7007,8 +5089,8 @@ await check('bee cells reset-budget --id X --reason refuses without an actor (no
   });
   for (let i = 0; i < 3; i += 1) {
     await runBee(['cells', 'claim', '--id', 'budget-cli-1b', '--worker', 'w', '--session-id', `sess-cli-noactor-${i}`, '--json']);
-    await runBee(['cells', 'verify', '--id', 'budget-cli-1b', '--command', 'node -e ok', '--output', 'ok', '--passed', 'true', '--session-id', `sess-cli-noactor-${i}`, '--json']);
-    await runBee(['cells', 'unclaim', '--id', 'budget-cli-1b', '--session-id', `sess-cli-noactor-${i}`, '--json']);
+    await runBee(['cells', 'block', '--id', 'budget-cli-1b', '--reason', `stuck differently ${i}`, '--session-id', `sess-cli-noactor-${i}`, '--json']);
+    await runBee(['cells', 'reopen', '--id', 'budget-cli-1b', '--reason', 'retry', '--session-id', `sess-cli-noactor-${i}`, '--json']);
   }
   // Explicit env with BEE_AGENT_NAME stripped — this refusal must not
   // depend on whatever happens to be set in the host shell running the
@@ -7036,8 +5118,8 @@ await check('bee cells claim --id refuses with typed CELL_BUDGET_EXHAUSTED once 
   for (let i = 0; i < 3; i += 1) {
     const claimed = await runBee(['cells', 'claim', '--id', 'budget-cli-2', '--worker', 'w', '--session-id', `sess-cli-budget-${i}`, '--json']);
     assert(claimed.status === 0, `claim #${i + 1} should succeed: ${claimed.stderr}`);
-    await runBee(['cells', 'verify', '--id', 'budget-cli-2', '--command', 'node -e ok', '--output', 'ok', '--passed', 'true', '--session-id', `sess-cli-budget-${i}`, '--json']);
-    await runBee(['cells', 'unclaim', '--id', 'budget-cli-2', '--session-id', `sess-cli-budget-${i}`, '--json']);
+    await runBee(['cells', 'block', '--id', 'budget-cli-2', '--reason', `stuck differently ${i}`, '--session-id', `sess-cli-budget-${i}`, '--json']);
+    await runBee(['cells', 'reopen', '--id', 'budget-cli-2', '--reason', 'retry', '--session-id', `sess-cli-budget-${i}`, '--json']);
   }
   // No --json here (matches the CLAIMED-refusal precedent above): the CLI's
   // own error() helper writes plain text to stderr only in the non-JSON

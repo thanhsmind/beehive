@@ -98,7 +98,13 @@ govern the working residue of a cell rather than its content.
   longer, never their combined length, with its findings held until the
   merged approval.
 - **R16c — Test runs are the scarce resource (test-runs-lean D1/D2,
-  2026-07-27).** Verify-once: in a serial tiny/small dispatch the worker's
+  2026-07-27).** *(Superseded in part 2026-07-31 — decision 412e9b3a,
+  docs/specs/test-simple.md: per-cell verify commands and the verify-once
+  economics are retired; `bee cells finish` now runs the one declared
+  `commands.test` at every cap and writes the result record the
+  orchestrator reads instead of re-running. The mutation-proof scoping
+  survives as craft. Kept as the historical record.)* Verify-once: in a
+  serial tiny/small dispatch the worker's
   recorded verify output is the cap evidence — the orchestrator repeats the
   command only when the report smells, the wave ran parallel workers, or the
   cell is high-risk/hard-gate; proof stays recorded output, it just is not paid
@@ -173,7 +179,10 @@ govern the working residue of a cell rather than its content.
   issue, never a local run), wave close and worktree merge both run the
   impact-registry-scoped `commands.test` instead of the full chain, and the
   full chain itself runs on push in CI, auto-filing a deduped `verify-red`
-  issue when red.
+  issue when red. *(Amended 2026-07-31 — decision 412e9b3a,
+  docs/specs/test-simple.md: `commands.test` now runs at every
+  `bee cells finish` and again at `bee close`; `bee worktree merge`
+  re-runs `commands.verify` on the merged tree as the last net.)*
 
   **The claim is still the trigger, not arrival.** It is stated claim-first,
   in the execution discipline rather than in any startup checklist, because a
@@ -203,7 +212,10 @@ govern the working residue of a cell rather than its content.
   red-first* — the red run executes only the tests the cell adds or changes;
   the full targeted verify chain runs exactly once, at the end, before cap
   (a full-suite red loop is the named waste: one audited worker ran 271 tests
-  per loop for 4 new assertions). (2) *The small-lane parallel criterion* —
+  per loop for 4 new assertions). *(Since 2026-07-31 / 412e9b3a the
+  end-of-cell run is the declared `commands.test` executed by
+  `bee cells finish`; red-before-green itself survives as craft in
+  `.bee/expertise/tests.md`, not as machinery.)* (2) *The small-lane parallel criterion* —
   serial stays the default; cells may run in parallel only when every cell's
   file set INCLUDING regen targets (release manifest, onboarding ledger,
   plugin mirrors) is provably disjoint; any shared generated artifact forces

@@ -90,14 +90,14 @@ After approval only: current-slice cells, one batched `bee cells add
 (`references/planning-reference.md` ("Cell quality rules")). A user-visible
 surface makes slice 1 a walking skeleton: end-to-end, real behavior, no stubs.
 
-Every slice with a code-touching behavior/api cell ends with one trailing
-`test` cell, `deps` naming every implementation cell, whose FIRST step is a
-coverage judgment, not authoring: cite existing tests by file and case, author
-only what is not already pinned — authoring nothing is fine, duplicated rows
-are the waste (`.bee/expertise/tests.md`). Machine-held debt: `bee close` refuses and names the fix.
+The writer owns tests TDD-style as part of each cell — coverage judgment
+first: cite existing tests by file and case, author only the gap
+(`.bee/expertise/tests.md`) — and `bee cells finish` runs the declared
+suite (`commands.test`) at every cap.
 
-A cell's `verify` is the narrowest honest command over its change, never the
-full chain (`references/planning-reference.md` ("Verify scoping")); then
+Cells run `commands.test` at finish; `commands.verify` is the close/merge
+chain, and CI owns the full estate (`references/planning-reference.md`
+("Verify scoping")); then
 `bee state set --owner planning --phase swarming --next-action "Invoke bee-swarming."`
 
 ## Scope integrity

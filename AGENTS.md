@@ -63,11 +63,10 @@ and wait — never auto-resume it. When the feature has knowledge under
 
 ## Prove, then say so
 
-- Cells cap with proof. The default path defers it: cap
-  `--feature-verify-pending`, paid off by ONE green feature verify at
-  close — leaving swarming without it is refused at every bypass
-  level. Never build on a red base; a red becomes its own fix-first
-  cell.
+- The project declares its tests once (`commands.test`); `bee cells
+  finish` runs them. Green caps the cell; red refuses the cap, quotes
+  the failing excerpt, and that red becomes the work. Never build on a
+  red base — a red is its own fix-first cell.
 - Write "done", "green", or "fixed" only beside fresh command output
   in the same message, naming the command or path first.
 - Evidence is what the build already emits — red test output, a diff,

@@ -10,7 +10,7 @@
   "lanes": {},
   "capabilities": {},
   "commands": {
-    "test": "BEE_VERIFY_CONCURRENCY=12 node scripts/run_verify.mjs --impacted-from-git",
+    "test": "node scripts/run_verify.mjs --impacted-from-git",
     "verify": "node scripts/run_verify.mjs"
   },
   "gate_bypass": "total",

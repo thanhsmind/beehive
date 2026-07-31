@@ -1237,38 +1237,20 @@ await check('addCell/updateCell refuse verify "none" in a repo with NO commands 
   }
 });
 
-await check('capCell on a verify-none cell in a declared no-test repo waives the passing-verify-result requirement and auto-records the waiver note', async () => {
+await check('capCell on a verify-none cell in a declared no-test repo caps directly (test-simple: no per-cell verify machinery), files_changed still owed', async () => {
   const dir = makeStateRepo('bee-no-test-cap-');
   try {
     writeJsonAtomic(path.join(dir, '.bee', 'config.json'), {
       commands: { verify: laneStore.NO_TEST_SENTINEL },
     });
     addCell(dir, makeCell('nt-cap-1', { verify: laneStore.NO_TEST_SENTINEL }));
-    // never claimed, never verified — capCell would ordinarily refuse "no
-    // passing verify result"; the waiver skips that requirement outright.
     await assertRejects(
       () => capCell(dir, 'nt-cap-1', { outcome: 'done' }),
       'files_changed',
-      'the waiver does not lift the files_changed requirement — --files is still owed',
+      'the files_changed requirement is not lifted — --files is still owed',
     );
     const capped = await capCell(dir, 'nt-cap-1', { outcome: 'done', files_changed: ['a.txt'] });
-    assert(capped.status === 'capped', 'cell caps under the waiver with no recorded verify');
-    assert(
-      capped.trace.verification_evidence === 'no-test repo: verification waived by repo declaration (commands.verify: none)',
-      `waiver note recorded verbatim, got: ${JSON.stringify(capped.trace.verification_evidence)}`,
-    );
-
-    // an explicitly supplied verification_evidence still wins over the auto note.
-    addCell(dir, makeCell('nt-cap-2', { verify: laneStore.NO_TEST_SENTINEL }));
-    const capped2 = await capCell(dir, 'nt-cap-2', {
-      outcome: 'done',
-      files_changed: ['b.txt'],
-      verification_evidence: 'explicit evidence supplied by the worker',
-    });
-    assert(
-      capped2.trace.verification_evidence === 'explicit evidence supplied by the worker',
-      'explicit verification_evidence overrides the auto waiver note',
-    );
+    assert(capped.status === 'capped', 'cell caps with no verify machinery involved');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1291,12 +1273,9 @@ await check('bee.mjs cells finish caps through the cap door, releases the claimi
     await claimCell(dir, 'fin-1', 'worker-fin');
     const reserved = await reserve(dir, { agent: 'worker-fin', cell: 'fin-1', path: 'src/fin.ts' });
     assert(reserved.ok === true, `fixture reserve must succeed, got ${JSON.stringify(reserved)}`);
-    const verify = await runModuleWorker(beeBacklogModulePath(), {
-      args: ['cells', 'verify', '--id', 'fin-1', '--command', 'manual check', '--output', '0 failing', '--passed', 'true', '--json'],
-      cwd: dir,
-    });
-    assert(verify.status === 0, `fixture verify must succeed, got ${verify.status}: ${verify.stderr}`);
 
+    // test-simple: no commands.test declared in this fixture, so finish caps
+    // with the {tests: 'undeclared'} stamp and no run happens.
     const finish = await runModuleWorker(beeBacklogModulePath(), {
       args: ['cells', 'finish', '--id', 'fin-1', '--outcome', 'done', '--files', 'src/fin.ts'],
       cwd: dir,
@@ -1304,6 +1283,7 @@ await check('bee.mjs cells finish caps through the cap door, releases the claimi
     assert(finish.status === 0, `finish must exit 0, got ${finish.status}: ${finish.stdout} ${finish.stderr}`);
     const capped = readCell(dir, 'fin-1');
     assert(capped.status === 'capped', `finish must cap the cell, got ${capped.status}`);
+    assert(capped.trace.tests === 'undeclared', `an undeclared repo caps with trace.tests "undeclared", got ${JSON.stringify(capped.trace.tests)}`);
     const lines = finish.stdout.trimEnd().split('\n');
     assert(
       lines[lines.length - 1] === 'next: reply [DONE] with the one-line outcome, files touched, and the commit hash.',
@@ -1322,7 +1302,7 @@ await check('bee.mjs cells finish caps through the cap door, releases the claimi
   }
 });
 
-await check('bee.mjs cells finish on an unverified cell refuses byte-identically to cells cap and leaves the reservation active', async () => {
+await check('bee.mjs cells finish/cap refuse byte-identically on a RED declared test run — excerpt in the refusal, tests-red attempt recorded, reservation left active (test-simple)', async () => {
   const dir = makeStateRepo('bee-cells-finish-refuse-');
   try {
     writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
@@ -1333,6 +1313,9 @@ await check('bee.mjs cells finish on an unverified cell refuses byte-identically
       approved_gates: { context: true, shape: true, execution: true, review: false },
       workers: [],
     });
+    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), {
+      commands: { test: 'node -e "console.error(\'FAIL the-one-red-line\');process.exit(1)"' },
+    });
     addCell(dir, makeCell('fin-2'));
     await claimCell(dir, 'fin-2', 'worker-fin2');
     await reserve(dir, { agent: 'worker-fin2', cell: 'fin-2', path: 'src/fin2.ts' });
@@ -1341,10 +1324,53 @@ await check('bee.mjs cells finish on an unverified cell refuses byte-identically
     const finish = await runModuleWorker(beeBacklogModulePath(), { args: ['cells', 'finish', ...args], cwd: dir });
     assert(cap.status === 1 && finish.status === 1, `both must refuse non-zero, got cap=${cap.status} finish=${finish.status}`);
     assert(finish.stdout === cap.stdout, `finish's refusal must pass cap's through byte-identical, got cap=${cap.stdout} finish=${finish.stdout}`);
-    assert(readCell(dir, 'fin-2').status === 'claimed', 'the refused cell stays claimed');
+    assert(/declared test run is RED/.test(finish.stdout + finish.stderr), `the refusal names the red run, got ${finish.stdout} ${finish.stderr}`);
+    assert(/FAIL the-one-red-line/.test(finish.stdout + finish.stderr), `the refusal carries the failure excerpt, got ${finish.stdout} ${finish.stderr}`);
+    assert(/re-run bee cells finish/.test(finish.stdout + finish.stderr), 'the refusal teaches the re-run (the red is the work)');
+    const cell = readCell(dir, 'fin-2');
+    assert(cell.status === 'claimed', 'the refused cell stays claimed');
+    const attempts = (cell.trace && cell.trace.attempts) || [];
+    assert(attempts.length === 2 && attempts.every((a) => a.verdict === 'tests-red'), `each refused cap/finish records one tests-red attempt, got ${JSON.stringify(attempts)}`);
+    assert(attempts[0].note === 'FAIL the-one-red-line', `the attempt note carries the excerpt first line, got ${JSON.stringify(attempts[0].note)}`);
+    // The one normalized record was written either way — red is a normal result.
+    const record = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'logs', 'test-results.json'), 'utf8'));
+    assert(record.green === false && Array.isArray(record.commands) && record.commands[0].failure_excerpt.includes('FAIL the-one-red-line'), `test-results.json records the red run, got ${JSON.stringify(record)}`);
     const list = await runModuleWorker(beeBacklogModulePath(), { args: ['reservations', 'list', '--active-only', '--json'], cwd: dir });
     const active = JSON.parse(list.stdout).reservations.filter((r) => r.agent === 'worker-fin2');
     assert(active.length === 1, `no release may happen on a refused finish, got ${JSON.stringify(active)}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await check('bee.mjs cells finish on a GREEN declared test run caps recording {tests: green, results, ran_at} on the trace (test-simple)', async () => {
+  const dir = makeStateRepo('bee-cells-finish-green-');
+  try {
+    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
+      schema_version: '1.0',
+      phase: 'swarming',
+      feature: 'demo',
+      mode: 'standard',
+      approved_gates: { context: true, shape: true, execution: true, review: false },
+      workers: [],
+    });
+    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), {
+      commands: { test: 'node -e "console.log(\'all green\')"' },
+    });
+    addCell(dir, makeCell('fin-3'));
+    await claimCell(dir, 'fin-3', 'worker-fin3');
+    const finish = await runModuleWorker(beeBacklogModulePath(), {
+      args: ['cells', 'finish', '--id', 'fin-3', '--outcome', 'done', '--files', 'src/fin3.ts', '--json'],
+      cwd: dir,
+    });
+    assert(finish.status === 0, `green finish must exit 0, got ${finish.status}: ${finish.stdout} ${finish.stderr}`);
+    const capped = readCell(dir, 'fin-3');
+    assert(capped.status === 'capped', `finish must cap on green, got ${capped.status}`);
+    assert(capped.trace.tests === 'green', `trace.tests must record green, got ${JSON.stringify(capped.trace.tests)}`);
+    assert(capped.trace.results === '.bee/logs/test-results.json', `trace.results must point at the record, got ${JSON.stringify(capped.trace.results)}`);
+    assert(typeof capped.trace.ran_at === 'string' && capped.trace.ran_at.includes('T'), `trace.ran_at carries the run's ISO stamp, got ${JSON.stringify(capped.trace.ran_at)}`);
+    const record = JSON.parse(fs.readFileSync(path.join(dir, '.bee', 'logs', 'test-results.json'), 'utf8'));
+    assert(record.green === true && record.ran_at === capped.trace.ran_at, `the trace stamp matches the record, got ${JSON.stringify(record)}`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

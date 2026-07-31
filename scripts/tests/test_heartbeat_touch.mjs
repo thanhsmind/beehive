@@ -466,7 +466,7 @@ function record(name, pass, note) {
 // opposite sides of the same boundary.
 {
   const cellsLib = await import(libUrl("cells.mjs"));
-  const { claimCellCrossSession, recordVerify, readCell, checkCellBudgets } = cellsLib;
+  const { claimCellCrossSession, recordTestsRedAttempt, readCell, checkCellBudgets } = cellsLib;
 
   const root = mkSandbox("bee-heartbeat-budget-");
   fs.mkdirSync(path.join(root, ".bee", "cells"), { recursive: true });
@@ -511,24 +511,14 @@ function record(name, pass, note) {
   const claimed = await claimCellCrossSession(root, { sessionId, worker: "worker-hb", cellId });
   record("hb-budget:claim-ok", Boolean(claimed.ok), `claimed=${JSON.stringify(claimed)}`);
 
-  await recordVerify(root, cellId, {
-    command: "node fail-1.mjs",
-    output: "fail one",
-    passed: false,
-    sessionId,
-    signature: "hb-budget-sig-1",
-  });
+  // test-simple: the attempt ledger's writer is recordTestsRedAttempt now
+  // (cells verify is deleted); distinct excerpt lines keep distinct signatures.
+  await recordTestsRedAttempt(root, cellId, { excerptLine: "FAIL hb-budget one" });
 
   const heartbeat = renewClaimTTL(root, sessionId, { now: Date.now() + 90_000 });
   record("hb-budget:heartbeat-renewed", heartbeat.renewed.includes(cellId), `heartbeat=${JSON.stringify(heartbeat)}`);
 
-  await recordVerify(root, cellId, {
-    command: "node fail-2.mjs",
-    output: "fail two",
-    passed: false,
-    sessionId,
-    signature: "hb-budget-sig-2",
-  });
+  await recordTestsRedAttempt(root, cellId, { excerptLine: "FAIL hb-budget two" });
 
   const cellAfter = readCell(root, cellId);
   const attempts = (cellAfter.trace && cellAfter.trace.attempts) || [];

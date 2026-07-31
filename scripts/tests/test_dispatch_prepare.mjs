@@ -826,8 +826,8 @@ await check("the Prior rounds block caps at 12 event lines — oldest events eli
   assert(blockText.includes("sig-005") && blockText.includes("sig-015"), `the newest 11 events must survive the cap, got:\n${blockText}`);
 });
 
-await check("a red-first-tier cell (change_class security) gets the Proof contract block naming the REAL finish flags; a fresh red-first cell still gets no Prior rounds block", async () => {
-  const root = mkFixture("dispatch-prepare-proof-red-first-");
+await check("test-simple: NO cell gets a Proof contract block any more — a security cell and a high-risk bugfix cell both carry only the one-door finish line", async () => {
+  const root = mkFixture("dispatch-prepare-no-proof-block-");
   claudeCellConfig(root);
   writeCellFixture(root, {
     id: "red-1",
@@ -839,20 +839,21 @@ await check("a red-first-tier cell (change_class security) gets the Proof contra
     change_class: "security",
     trace: { worker: "exec-red-1" },
   });
-
   const prompt = prepareCellPrompt(root, "red-1", "exec-red-1");
-  assert(prompt.includes(PROOF_CONTRACT_HEADER), `expected the Proof contract header, got:\n${prompt}`);
-  assert(prompt.includes("red-first"), `the block must name the tier, got:\n${prompt}`);
-  // The real cap-door flags (bee.mjs capCellFromFlags) and evidence field
-  // (cells.mjs red-first door): never invented names.
-  assert(prompt.includes("--behavior-change"), `expected the --behavior-change flag named, got:\n${prompt}`);
-  assert(prompt.includes("--evidence-stdin"), `expected the --evidence-stdin flag named, got:\n${prompt}`);
-  assert(prompt.includes("--evidence-file"), `expected the --evidence-file flag named, got:\n${prompt}`);
-  assert(prompt.includes("red_failure_evidence"), `expected the red_failure_evidence evidence field named, got:\n${prompt}`);
-  assert(!prompt.includes(PRIOR_ROUNDS_HEADER), `a fresh cell gets no Prior rounds block even when red-first, got:\n${prompt}`);
+  assert(!prompt.includes(PROOF_CONTRACT_HEADER), `the Proof contract block is deleted (test-simple), got:
+${prompt}`);
+  assert(!prompt.includes("--feature-verify-pending"), `the deleted pending flag must never be taught, got:
+${prompt}`);
+  assert(!prompt.includes("--evidence-stdin") && !prompt.includes("--evidence-file") && !prompt.includes("--behavior-change"), `deleted evidence flags must never be taught, got:
+${prompt}`);
+  assert(
+    prompt.includes("it runs the project's declared commands.test first: green caps the cell, red refuses the cap"),
+    `the finish line must teach the one test door, got:
+${prompt}`,
+  );
+  assert(!prompt.includes(PRIOR_ROUNDS_HEADER), `a fresh cell gets no Prior rounds block, got:
+${prompt}`);
 
-  // The lane axis of the same tier: bugfix on lane high-risk is also
-  // red-first (cells.mjs requiredProofTier).
   writeCellFixture(root, {
     id: "red-2",
     feature: "demo",
@@ -865,41 +866,44 @@ await check("a red-first-tier cell (change_class security) gets the Proof contra
     trace: { worker: "exec-red-2" },
   });
   const highRiskPrompt = prepareCellPrompt(root, "red-2", "exec-red-2");
-  assert(highRiskPrompt.includes(PROOF_CONTRACT_HEADER), `a high-risk bugfix cell is red-first and must get the block, got:\n${highRiskPrompt}`);
+  assert(!highRiskPrompt.includes(PROOF_CONTRACT_HEADER), `no lane/class combination gets the deleted block, got:
+${highRiskPrompt}`);
 });
 
-await check("a targeted-green-tier cell (bugfix outside high-risk) gets NO Proof contract block — the default contract lines already state that path", async () => {
-  const root = mkFixture("dispatch-prepare-proof-targeted-green-");
+await check("test-simple: a tests-red attempt (a finish refused on a red declared-test run) renders in the Prior rounds block as '<worker> tests red: <first line of excerpt>'", async () => {
+  const root = mkFixture("dispatch-prepare-tests-red-");
   claudeCellConfig(root);
   writeCellFixture(root, {
-    id: "green-1",
+    id: "red-run-1",
     feature: "demo",
-    title: "Ordinary bugfix cell",
-    action: "Fix the demo thing.",
+    title: "Cell whose last finish attempt hit a red test run",
+    action: "Do the demo thing.",
     verify: 'node -e "process.exit(0)"',
     status: "claimed",
-    lane: "small",
-    change_class: "bugfix",
-    trace: { worker: "exec-green-1" },
+    trace: {
+      worker: "exec-round-2",
+      attempts: [
+        {
+          n: 1,
+          at: "2026-07-30T10:00:00.000Z",
+          worker: "exec-round-1",
+          verdict: "tests-red",
+          failure_signature: "abc123def456",
+          note: "FAIL test_widget.mjs — expected 3, got 2",
+        },
+      ],
+    },
   });
-
-  const prompt = prepareCellPrompt(root, "green-1", "exec-green-1");
-  assert(!prompt.includes(PROOF_CONTRACT_HEADER), `a targeted-green cell must get no Proof contract block, got:\n${prompt}`);
-
-  // existing-targeted-green (behavior outside high-risk) also adds nothing.
-  writeCellFixture(root, {
-    id: "green-2",
-    feature: "demo",
-    title: "Ordinary behavior cell",
-    action: "Change the demo thing.",
-    verify: 'node -e "process.exit(0)"',
-    status: "claimed",
-    lane: "small",
-    change_class: "behavior",
-    trace: { worker: "exec-green-2" },
-  });
-  const behaviorPrompt = prepareCellPrompt(root, "green-2", "exec-green-2");
-  assert(!behaviorPrompt.includes(PROOF_CONTRACT_HEADER), `an existing-targeted-green cell must get no Proof contract block, got:\n${behaviorPrompt}`);
+  const prompt = prepareCellPrompt(root, "red-run-1", "exec-round-2");
+  assert(prompt.includes(PRIOR_ROUNDS_HEADER), `expected the Prior rounds block, got:
+${prompt}`);
+  assert(
+    prompt.includes("- exec-round-1 tests red: FAIL test_widget.mjs — expected 3, got 2"),
+    `expected the tests-red one-liner citing the excerpt first line, got:
+${prompt}`,
+  );
+  assert(prompt.includes(PRIOR_ROUNDS_CLOSER), `expected the closing line, got:
+${prompt}`);
 });
 
 // ─── bad --runtime / --kind refuse loudly ──────────────────────────────────

@@ -46,8 +46,8 @@ cells up, state the one-line concurrency plan before dispatching.
    `behavior_change` cells.
 6. Slice clean: `bee close --feature <slug> --dry-run` names every
    remaining door with the command that settles it; the final slice runs
-   `bee close --feature <slug>` to execute and record the feature verify.
-   Doors are never waived.
+   `bee close --feature <slug>`, which re-runs the declared tests
+   (`bee test`) for the feature. Doors are never waived.
 
 **`[BLOCKED]` rescue ladder:** (1) re-dispatch the same cell with the
 missing context; (2) next model tier up — the ceiling is this session, so
@@ -57,9 +57,10 @@ worker's diagnosis. If it invalidates the plan, return to bee-planning.
 **Completion:** slice done with more approved work remaining → return to
 bee-planning for the next batch (an approved plan stays frozen; planning
 shapes the next batch, never reopens it). Final slice green → tell the
-user execution is complete and invoke bee-capturing; landing is
-`bee worktree merge` from main. Before declaring done:
-no active reservations, no in-flight workers recorded.
+user execution is complete; capture is recorded as pending (bee-capturing
+runs later, at the owner's pace) and landing is `bee worktree merge` from
+main. Before declaring done: no active reservations, no in-flight
+workers recorded.
 
 At ~65% context, write `.bee/HANDOFF.json` and pause cleanly — never push
 through the budget mid-wave. When a unit finishes and approved work
@@ -86,10 +87,11 @@ outputs — when a verb refuses, its message names the fix.
    make the cell fit.
 4. Commit once: subject describes the change in imperative mood; the cell
    id rides the last line of the body.
-5. `bee cells finish --id <cell> --feature-verify-pending
-   --outcome "<one line>" --files <a,b>` — cap and release in one verb.
-   The cell's `verify` command belongs to the orchestrator at close, not
-   to you.
+5. `bee cells finish --id <cell> --outcome "<one line>" --files <a,b>` —
+   cap and release in one verb. Finish runs the declared tests
+   (`commands.test`): green caps; a red refuses, and the refusal carries
+   the failing test excerpt — that red is now your work. Tests run at
+   finish; close re-runs them for the feature.
 6. Return exactly one token, first thing in your final message:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
    diagnosis) · `[HANDOFF]` (at ~65% context — write `.bee/HANDOFF.json`
@@ -115,5 +117,5 @@ self-approved, in any mode.
 | File | When to load |
 |---|---|
 | `references/swarming-reference.md` | Tier rubric, worktree dispatch transaction, prompt template details, result formats |
-| `references/worker-details.md` | Deep worker mechanics: trace tiers, advisor consult, friction triggers, evidence rules |
+| `references/worker-details.md` | Deep worker mechanics: finish and its refusals, advisor consult, friction triggers |
 | `.bee/expertise/tests.md`, `.bee/expertise/debugging.md` | Authoring tests; hunting a red |

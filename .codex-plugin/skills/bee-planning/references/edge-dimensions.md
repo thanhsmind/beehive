@@ -5,13 +5,13 @@ test shape is the triad — happy path, edge cases, error paths — at its small
 demonstrating size; this file is not the checklist there and should not be
 reached from a standard lane. Read as a checklist to fill, twelve dimensions
 generate volume, which is the opposite of what a standard slice needs. See
-`planning-reference.md` ("Trailing test cell").
+`planning-reference.md` ("Tests ride the cell").
 
 At `high-risk`/hard-gate, use this during the planning test matrix (and again in
 reviewing coverage checks): written probes per applicable dimension, each mapped
-to a cell's `must_haves.truths` or the verify command. Even here, the trailing
-test cell judges existing coverage first and authors only the dimensions not
-already pinned by an existing test.
+to a cell's `must_haves.truths`. Even here, the cell's writer judges existing
+coverage first and authors only the dimensions not already pinned by an
+existing test.
 
 ## 1. User types
 

@@ -171,7 +171,6 @@ function runPreflight(root, included) {
   const stillIncluded = [];
   const autoExcluded = [];
   const checked = [];
-  const missingEvidence = [];
 
   for (const entry of included) {
     if (entry.type !== 'cell') {
@@ -190,22 +189,13 @@ function runPreflight(root, included) {
       continue;
     }
     stillIncluded.push(entry);
+    // test-simple (decision 412e9b3a): the per-cell verification_evidence
+    // preflight (A10) is deleted with the evidence machinery — a capped cell's
+    // proof event is the declared commands.test run recorded at finish
+    // (trace.tests), and review never re-litigates it. behavior_change caps
+    // are still counted so the stored preflight names what was in scope.
     const trace = cell.trace || {};
-    if (trace.behavior_change === true) {
-      checked.push(entry.id);
-      const evidence = trace.verification_evidence;
-      const hasEvidence =
-        evidence != null && (typeof evidence !== 'string' || evidence.trim().length > 0);
-      if (!hasEvidence) missingEvidence.push(entry.id);
-    }
-  }
-
-  if (missingEvidence.length > 0) {
-    // A10 — fail closed BEFORE any session file is written.
-    throw new Error(
-      `create: preflight failed — behavior_change cell(s) in scope have no recorded verification_evidence: ${missingEvidence.join(', ')}. ` +
-        'Review cannot substitute for missing verification; fix evidence at the cell (bee.mjs cells cap --evidence-stdin) or drop the entry from scope, then retry.',
-    );
+    if (trace.behavior_change === true) checked.push(entry.id);
   }
 
   return { included: stillIncluded, excluded: autoExcluded, checked };

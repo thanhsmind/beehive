@@ -55,9 +55,9 @@ approach.md exists, drop this section and point to it.>
 ## Test matrix
 <standard and below: the triad — happy path, edge cases, error paths — at
 its smallest demonstrating size. high-risk/hard-gate: the 12 dimensions of
-edge-dimensions.md, probes written per applicable dimension. Either way the
-trailing test cell judges existing coverage first and authors only what is
-not already pinned.>
+edge-dimensions.md, probes written per applicable dimension. Either way each
+cell's writer judges existing coverage first and authors only what is not
+already pinned (`.bee/expertise/tests.md`).>
 
 ## Out of scope
 <explicitly not solved; deferred ideas stay deferred>
@@ -122,16 +122,16 @@ history.
    scoping error — it only costs a wave (auto-serialized); prefer explicit
    paths or trailing-`*` patterns, since overlap detection treats mid-path
    globs as literals.
-3. **Testable exit.** `verify` is a real command that runs in this repo
-   today. "Manually check" is not a verify.
+3. **Testable exit.** The cell's outcome is provable by the declared
+   suite (`commands.test`) at finish — plan the cell so its tests exist
+   by cap time. "Manually check" is not an exit.
 4. **must_haves are contracts:** `truths` (observable behavior),
    `artifacts` (path + substantive description — no stub counts),
    `key_links` (wired, not just existing), `prohibitions` (what must NOT
    change). Required for `standard`/`high-risk`; `tiny` may omit.
 5. **behavior_change honesty.** Any cell changing observable behavior is
-   `behavior_change: true`. The flag decides the proof tier, the capture
-   debt, and review scrutiny — mislabeling is a production bug waiting to
-   happen.
+   `behavior_change: true`. The flag decides the capture debt and review
+   scrutiny — mislabeling is a production bug waiting to happen.
 6. **Deps are real.** `deps` lists cell ids whose output this cell needs.
    Ready = all deps capped.
 7. **Current slice only.** If the cell belongs to a later slice, it does
@@ -161,11 +161,10 @@ history.
     "key_links": ["router.ts imports and mounts authGuard"],
     "prohibitions": ["No change to public response envelope"]
   },
-  "verify": "npm test -- auth",
   "trace": {
     "worker": null, "outcome": null, "files_changed": [],
     "deviations": [], "friction": null, "capped_at": null,
-    "behavior_change": true, "verification_evidence": null
+    "behavior_change": true
   }
 }
 ```
@@ -184,14 +183,12 @@ never downgrade the lane to dodge validation.
 
 ## Verify scoping
 
-A cell's `verify` is the narrowest honest check covering its change — the
-specific test file(s) or pattern for the touched area, never the project's
-full test/verify chain by default. The full chain belongs to CI and to the
-feature close, not to per-cell caps. In a repo that has declared itself
-no-test (its recorded verify/test commands set to the sentinel `"none"`), a
-cell's own `verify` may itself be `"none"` — author it only there; never
-invent a fake check to satisfy the field, and never carry the sentinel into
-a repo with real commands.
+Cells run `commands.test` — the project's one declared test path — at
+finish; `commands.verify` is the close/merge chain; CI owns the full
+estate. A host keeps finish fast by pointing `commands.test` at its fast
+suite. In a repo that has declared itself no-test (`commands.test` set to
+the sentinel `"none"`), cells cap with `tests: undeclared` — never invent
+a fake check to satisfy the runner.
 
 ## Greenfield init lane
 
@@ -199,7 +196,8 @@ When the repo has no build and the init-lane offer was accepted at
 onboarding, the first slice is **one init cell** — `must_haves`: setup
 succeeds from scratch, one passing test exists, standard commands recorded
 in `.bee/config.json`, clean first commit — before any feature cell. Its
-verify is the recorded test command itself.
+proof is the recorded test command (`commands.test`) running green at
+finish.
 
 ## Tiny/small merged gate
 
@@ -254,7 +252,7 @@ cells (node .bee/bin/bee.mjs cells list --feature <feature>).
 MANDATE 1 — STRUCTURE. Verify exactly 5 dimensions:
 1. Requirement/decision coverage — every locked decision lands in at least one cell.
 2. Cell completeness — each cell has files, read_first, directive action, must_haves
-   (per lane tier), and a runnable verify.
+   (per lane tier), and a testable exit the declared suite can prove.
 3. Dependency correctness — deps form a DAG; no cell depends on a future slice.
 4. Key links — integration points named in plan.md are owned by a specific cell.
 5. Scope sanity — no cell is doing hidden architecture work or exceeds its lane.
@@ -265,7 +263,7 @@ MANDATE 2 — CELLS, COLD PICKUP. You have NO session history. For each cell, an
 could a worker who has read only CONTEXT.md, plan.md, and this cell implement and
 verify it without guessing?
 Flag CRITICAL: assumed context, vague acceptance, scope overload, unproven feasibility,
-broken verify command.
+an exit the declared suite cannot prove.
 Flag MINOR: missing rationale, implicit file assumption, fuzzy boundary, known tradeoff
 not recorded.
 
@@ -289,43 +287,17 @@ CLEAN CELLS: <cell-id>, <cell-id>
 SUMMARY: <2-3 sentences>
 ```
 
-## Trailing test cell
+## Tests ride the cell
 
-One per slice, whenever the slice holds ≥1 code-touching `behavior`/`api`
-cell — instruction/knowledge text owes no test. It lands last, `deps`
-naming every implementation cell; its `action` covers the slice's **net
-behavior** over the declared surfaces, never per-cell internals; its
-`verify` is the targeted suite over the slice's scope. Implementation
-cells do not author tests, so a code-touching slice with no test cell is a
-planning defect. What the cell is obliged to do is **judge, not author**.
-
-**Step 1 — the coverage judgment.** Before any row is written, cite the
-nearest existing tests by file and case — read them, never guess at them —
-and state, per acceptance criterion, whether they already cover it:
-
-| Verdict | The cell does | It caps by |
-|---|---|---|
-| covered | authors nothing | running the cited tests green; records "already covered, no new rows" |
-| partly covered | authors only the uncovered gap | targeted suite green over old rows + new |
-| not covered | authors the smallest set that demonstrates each criterion | targeted suite green |
-
-For a tiny/small slice whose net behavior is not a public contract and
-carries no hard-gate flag, verified transcripts recorded on the
-implementation cells satisfy the judgment too: the cell re-runs the cited
-transcript commands green and records "proven by transcript" — new rows
-only where a transcript cannot prove the criterion. Write the judgment
-down even when the verdict is "covered": the citation is the deliverable.
-
-**Step 2 — shape, only for what is owed.** At `standard` and below: the
-triad — happy path, edge cases, error paths — at its smallest
-demonstrating size. `edge-dimensions.md`'s twelve dimensions apply only at
-`high-risk`/hard-gate: read as a checklist they generate volume, and the
-question is "what is not yet proven?", never "what could I write?". Case
-selection and duplication judgment: `.bee/expertise/tests.md`.
-
-Per-cell red-first/repro-first cells stay per-cell, never batched into the
-trailing cell; the machine computes which proof tier each cell owes and
-refuses caps that miss it. Plan the trailing test cell in every lane —
-`bee close` holds the feature until it is capped clear — and expect its
-coverage judgment to find much of the story already pinned; that is the
-correct, cheap outcome.
+There is no trailing test cell and no per-slice test mandate. The cell's
+writer owns its tests, TDD-style, as part of the cell's own work —
+coverage judgment first: cite the nearest existing tests by file and
+case — read them, never guess at them — and author only what is not
+already pinned. Authoring nothing on a "covered" verdict is a legitimate,
+cheap outcome; duplicated rows are the waste. Shape at `standard` and
+below is the triad — happy path, edge cases, error paths — at its
+smallest demonstrating size; `edge-dimensions.md`'s twelve dimensions
+apply only at `high-risk`/hard-gate. Case selection, duplication
+judgment, and red-before-green: `.bee/expertise/tests.md`. `bee cells
+finish` runs the declared suite (`commands.test`) at every cap, and
+`bee close` re-runs it for the feature.

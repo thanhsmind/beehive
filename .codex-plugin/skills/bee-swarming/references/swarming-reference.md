@@ -21,13 +21,10 @@ the Delegation contract's execution-worker class
 registry (`state worker add`), validates the claim it was handed (against
 the inlined cell JSON in its prompt — never `cells claim`)
 and takes reservations under its own nickname,
-reads its `read_first`, implements within its `files`, commits, and caps it —
-by default through the pending path (`cells cap --feature-verify-pending`):
-no per-cell verify run, no `verification_evidence`. The
-classic evidenced path (verify run + `verification_evidence`/
-`red_failure_evidence`) still applies for spot use or other repos not on this
-doctrine. Then it releases its reservations and returns exactly one status
-token.
+reads its `read_first`, implements within its `files`, commits, and
+finishes it (`cells finish` — runs the declared tests, caps on green,
+refuses on red with the failing excerpt, and releases the reservations
+in the same verb). Then it returns exactly one status token.
 
 **Parallel by default:** a `small` lane's cells (1-3) fan
 out to concurrent execution workers whenever every cell's *product* file set
@@ -56,14 +53,14 @@ After `[DONE]`, emit the cap tick, and when `ship_visibility` is active push
 the cap (first cap of a feature opens the draft PR) —
 `bee-hive/references/routing-and-contracts.md`, "Progress ticks" / "Ship
 visibility". Then — never the worker — author the done-report from the
-worker's verbatim diff plus the commit (no routine verify re-run — a re-run
-stays a smell-triggered judgment call, step 7 below),
+worker's verbatim diff plus the commit (the finish already ran the declared
+tests; a re-run stays a smell-triggered judgment call, step 7 below),
 including the slice's demo artifact when one is owed. `tiny`/`small`'s one
-slice is also the feature's FINAL slice: before leaving swarming, run and
-record the ONE feature verify ("Feature verify at close, in full", below) —
-the close-door guard enforces this exactly as it does for a wave. Then hand
+slice is also the feature's FINAL slice: close it with `bee close`, which
+re-runs the declared tests over the feature ("Tests at finish and close, in
+full", below). Then hand
 off: both `tiny` and `small` present that done-report (diff + commit +
-feature-verify result + capture line) and invoke bee-capturing — no auto
+test result + capture line) and invoke bee-capturing — no auto
 reviewer; the 1-correctness-reviewer contract lives inside a user-invoked
 session (implementation is verified; independent review runs only on user
 request).
@@ -176,18 +173,15 @@ single worker — never wave analysis or multi-cell assignment.
 7. **Goal-check every `[DONE]` yourself — miss reruns, hit ships.** A
    worker's word is never the evidence; the orchestrator
    measures before the cell counts:
-   - **Re-run the verify — smell-triggered, not routine.**
-     Most cells cap through the pending path with no per-cell verify to
-     re-run; the ONE feature verify at final-slice close ("Feature verify at
-     close, in full", below) is what proves the wave, not a per-`[DONE]`
-     rerun. Re-run a cell's own verify yourself only on a smell — a
-     missing/garbled report, a `[DONE]` with no diff, a `high-risk`/hard-gate
-     cell, or a classic-path cap (a recorded verify, `--feature-verify-pending`
-     NOT used) — orchestrator judgment, never a routine step. Failure on a
-     spot-check → the cell is NOT done: re-dispatch to the same tier with the
-     failing output (a task miss is a rerun, never a silent tier escalation —
-     provider errors, not task errors, are what the rescue ladder's tier rung
-     is for).
+   - **Read the record; re-run only on smell.** Every finish already ran
+     the declared tests — `.bee/logs/test-results.json` is the evidence, and
+     quoting it satisfies the fresh-output rule. Re-run `bee test` yourself
+     only on a smell — a missing/garbled report, a `[DONE]` with no diff, a
+     `high-risk`/hard-gate cell — orchestrator judgment, never a routine
+     step. Failure on a spot-check → the cell is NOT done: re-dispatch to
+     the same tier with the failing excerpt (a task miss is a rerun, never a
+     silent tier escalation — provider errors, not task errors, are what the
+     rescue ladder's tier rung is for).
    - **Frozen judge:** `node .bee/bin/bee.mjs cells judge --id <id>`. Hits
      (undeclared test/CI/lockfile/verify-config changes) → the cell never
      auto-counts toward a clean wave: record the hits in the cell trace and
@@ -214,55 +208,41 @@ single worker — never wave analysis or multi-cell assignment.
      exactly like any other — advice never substitutes for fresh verify
      output; re-run the verify yourself regardless of what the advisor said.
 8. **Wave clean → next wave.** A wave is clean once every
-   cell is capped (pending or classic), goal-checked, and judge-intact (or
-   explicitly flagged and carried to review) — no routine suite run gates
-   this step. Smell-triggered spot checks (step 7) stay the
-   orchestrator's judgment call. All waves clean → completion, **except** the
-   feature's final slice, which additionally owes the ONE feature verify
-   below before swarming may be left (the close-door guard enforces it).
+   cell is finished green, goal-checked, and judge-intact (or
+   explicitly flagged and carried to review). Smell-triggered spot checks
+   (step 7) stay the orchestrator's judgment call. All waves clean →
+   completion; the feature's final slice closes through `bee close`, which
+   re-runs the declared tests over the feature ("Tests at finish and close,
+   in full", below).
 
-   **Test consolidation.** The
-   done-report carries one line — `Test consolidation: <n> behavior cell(s)
-   | test cell <id> | <suite result>` — because authoring is batched at
-   the slice tail, so this is the only place the slice's coverage is visible
-   at a glance. When the slice's `test` cell suite exposes a regression in
-   an already-capped cell, open **fix cells in this same feature**; never
-   un-cap a capped cell (the fix is new work). Leaving `swarming` while that
-   test cell is uncapped or red is refused by the CLI — a mechanical
-   precondition no `gate_bypass` level (`total` included) and no headless
-   run lifts.
+## Tests at finish and close, in full
 
-## Feature verify at close, in full
+One declared test path, one result record — supersedes the proof-economy
+tier system (decision 412e9b3a, docs/specs/test-simple.md, 2026-07-31).
 
-The per-cell proof requirement deliberately lives at the feature
-boundary: cells still commit and cap, but a pending cap's proof defers to
-ONE run over the feature's whole diff, made once the full picture exists —
-never per cell, never per wave.
-
-- **When:** at the FINAL slice's close, before leaving `swarming` (any
-  `state set` phase transition out) or running `state scribing-run` — the
-  close door (`guardFeatureVerifyDebt`)
-  refuses both while any cell capped `--feature-verify-pending` lacks a
-  green record newer than the newest pending cap; no `gate_bypass` level
-  lifts it.
-- **What:** `commands.test` — the impacted run over the feature's whole
-  diff, cache-assisted (the content-hash suite-result cache makes a
-  repeat/no-op run cheap). Capture the output to a file.
-- **Record:** `node .bee/bin/bee.mjs state feature-verify record --command
-  "<the command>" --output-file <f> --result green|red` — stamps
-  `{feature, command, output_sha256, result, at}` on the active workflow
-  record; `output_sha256` is computed from the file, never caller-supplied.
-- **Green** satisfies every pending cap recorded before it; the door opens.
-- **Red:** storable — it documents the failure — but never satisfies
-  the door. Open fix cells in the SAME feature, never un-cap a capped cell
-  (the fix is new work), then re-verify. Per-cell commits + `git bisect`
-  localize the regression across the feature's cells.
-- Read-only check anytime: `node .bee/bin/bee.mjs state feature-verify
-  show`.
-- Bugfix cells never owe this locally either: the repro red proving a
-  bugfix cell's fix is MAIN-produced pre-dispatch and cited
-  in the cell — the worker fixes it, and the feature verify above is what
-  later confirms the fix, never a worker-side re-proof.
+- **Declaration:** `.bee/config.json` `commands.test` is the single place
+  a project declares how it is tested (string or array of commands).
+  `commands.verify` remains the close/merge-time chain. Nothing else
+  declares test obligations.
+- **Runner:** `bee test` runs the declared commands in order and writes
+  ONE normalized record, `.bee/logs/test-results.json` — `{ran_at, green,
+  commands: [{command, exit, duration_ms, failure_excerpt}]}`. The runner
+  is a program; an agent's word is never the record.
+- **At finish:** `bee cells finish` runs `bee test` when `commands.test`
+  is declared. Green → the cap records `{tests: green}` plus the record
+  pointer; red → the cap is refused and the refusal carries the
+  `failure_excerpt` — the red becomes the work. A repo with no declared
+  `commands.test` caps with `tests: undeclared`.
+- **At close:** `bee close` re-runs the full declared suite for the
+  feature — green caps the close doors' test side; red is surfaced with
+  the failing excerpt and becomes fix cells in the SAME feature (never
+  un-cap a capped cell — the fix is new work). Per-cell commits +
+  `git bisect` localize a regression across the feature's cells.
+- **Merge:** `bee worktree merge` still re-runs `commands.verify` on the
+  merged tree — the last net. The full estate beyond that is CI-owned.
+- **Never build on red:** a red result is the next work item, never a
+  base. Re-dispatch prompts (Prior rounds) cite the `failure_excerpt`
+  directly.
 
 
 ## Runtime Spawn Mechanics (side by side)
@@ -277,7 +257,7 @@ never per cell, never per wave.
 | Isolation guarantee | `fork_turns: "none"`; never fork the parent history for routine cells |
 | Subagent type | No per-agent subagent type — the tier is enforced as a read budget + output cap in the worker prompt regardless of what is spawned (documented asymmetry, not parity) |
 
-On both runtimes the integrity rails are identical because they live in the helpers: `bee.mjs cells cap` refuses without a verify pass, and `bee.mjs reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
+On both runtimes the integrity rails are identical because they live in the helpers: `bee.mjs cells finish` refuses while the declared tests are red, and `bee.mjs reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
 
 ### Native Codex timeout interval
 
@@ -349,7 +329,7 @@ A configurable tier may name an **external CLI executor** instead of a model —
 
 **Dispatch protocol** (`resolveTier(root, slot, runtime, {for:'gather'}).type === 'cli'`):
 
-1. **Prompt file, never shell-quoted args:** write the standard worker prompt (Worker Prompt Template below, verbatim — same contract, same status tokens) **plus the cli-dispatch suffix from step 2** to `.bee/workers/<cell-id>.prompt.md`. The external worker starts with ZERO session context — the prompt carries goal, exact paths, constraints, non-goals, and the proof expected (the cell's verify command); spec quality decides success. The prompt file **is the contract**, at a stable path: it outlives the process, the worker re-reads it if it loses the thread, and rescue rounds reference it (`re-read .bee/workers/<cell-id>.prompt.md`) instead of re-pasting the spec. If dispatch ever runs in an isolated worktree, surface the same contract as a short block in that workspace's AGENTS.md — the one file external CLIs reliably read first.
+1. **Prompt file, never shell-quoted args:** write the standard worker prompt (Worker Prompt Template below, verbatim — same contract, same status tokens) **plus the cli-dispatch suffix from step 2** to `.bee/workers/<cell-id>.prompt.md`. The external worker starts with ZERO session context — the prompt carries goal, exact paths, constraints, non-goals, and the proof expected (the declared tests green at finish); spec quality decides success. The prompt file **is the contract**, at a stable path: it outlives the process, the worker re-reads it if it loses the thread, and rescue rounds reference it (`re-read .bee/workers/<cell-id>.prompt.md`) instead of re-pasting the spec. If dispatch ever runs in an isolated worktree, surface the same contract as a short block in that workspace's AGENTS.md — the one file external CLIs reliably read first.
 2. **Finish contract — the cli-dispatch suffix**, appended verbatim to the template:
 
    ```text
@@ -358,15 +338,15 @@ A configurable tier may name an **external CLI executor** instead of a model —
    - Your last FILE act, after capping and releasing but BEFORE returning the
      final status-token message: write .bee/workers/<CELL_ID>.result.json:
      { "cell_id": "<CELL_ID>", "outcome": "done|blocked|handoff|noop",
-       "verify_command": "<the cell verify command>", "verify_passed": true|false,
+       "verify_command": "<the declared test command>", "verify_passed": true|false,
        "files_changed": ["<paths>"], "notes": "<one line>" }
    ```
 
    The outcome vocabulary is exactly the four status tokens — `result.json` is the cli **transport** of the same worker contract as the native markdown results, never a second contract. Exiting is not signaling; a worker that only exits has not finished.
 3. **Spawn detached, output to files:** before launching — first dispatch or any resume round — delete any existing `.bee/workers/<cell-id>.result.json`; a stale result must never satisfy a later attempt. Run the configured command as a background process, prompt via stdin, final message to a dedicated file where the CLI supports it (codex: `-o .bee/workers/<cell-id>.result.md`), raw stream to a job log with stderr suppressed — thinking noise bloats the orchestrator's context; re-enable stderr only to debug a failing run. E.g. `<command> -o .bee/workers/<id>.result.md - < .bee/workers/<id>.prompt.md > .bee/workers/<id>.out.log 2>/dev/null`. Keep the launcher's job handle — its exit event is the "process ended" signal step 5 waits on. Record the worker (nickname, cell, `executor: cli`) in `.bee/state.json` as usual.
-4. **Tend by artifact, not by chat:** the external worker runs the same `.bee/bin` helpers (reserve → verify → cap → release) because they are plain node scripts — the cell status and reservations ARE the progress signal. Poll `node .bee/bin/bee.mjs cells show --id <id>` and read `.bee/workers/<cell-id>.result.json` for the final outcome; never parse the raw JSONL stream. A quiet run is not a dead run — do not kill on silence alone.
+4. **Tend by artifact, not by chat:** the external worker runs the same `.bee/bin` helpers (reserve → finish) because they are plain node scripts — the cell status and reservations ARE the progress signal. Poll `node .bee/bin/bee.mjs cells show --id <id>` and read `.bee/workers/<cell-id>.result.json` for the final outcome; never parse the raw JSONL stream. A quiet run is not a dead run — do not kill on silence alone.
 5. **Accept by file, never by exit:** once the process ends, a cli run counts only if `result.json` exists, parses, and carries a valid outcome. Missing, unparseable, or invalid-outcome result = a failed run, routed to rescue (step 7) — never accepted, never silently waited on.
-6. **Trust boundary — never on its word:** an external worker's `done` is never accepted on its word — the orchestrator ALWAYS re-runs the cell's verify itself and runs `bee.mjs cells judge --id <id>`. External executors never get the tiny/small spot-check relaxation; every external cell is goal-checked. The result file is a signal, never the evidence. On `standard`/`high-risk` `behavior_change` cells, the same semantic checklist judge from the tier table in `bee-hive/references/routing-and-contracts.md` ("Goal-check judge tier") applies here too — verification, not the on-demand review session.
+6. **Trust boundary — never on its word:** an external worker's `done` is never accepted on its word — the orchestrator ALWAYS re-runs the declared tests itself (`bee test`) and runs `bee.mjs cells judge --id <id>`. External executors never get the tiny/small spot-check relaxation; every external cell is goal-checked. The result file is a signal, never the evidence. On `standard`/`high-risk` `behavior_change` cells, the same semantic checklist judge from the tier table in `bee-hive/references/routing-and-contracts.md` ("Goal-check judge tier") applies here too — verification, not the on-demand review session.
 7. **Rescue — resume before re-dispatch:** on a goal-check miss or a failed acceptance (step 5), prefer the CLI's session-resume (codex: `codex exec resume --last`, run from the repo dir; resume inherits the original session's sandbox/config — do not re-pass sandbox flags) with a short prompt carrying the diagnostic that applies — the failing verify output for a goal-check miss, or the acceptance failure (missing/unparseable/invalid `result.json`) for a step-5 reject — plus the contract path. It keeps the worker's context and costs far less than a fresh run. **After 2 failed resume rounds, stop ping-ponging:** mark `[BLOCKED]` and climb the normal rescue ladder (a stuck/garbled run is killed and re-dispatched; the tier rung may swap `cli` for a native model tier when the provider itself is failing).
 
 Constraints: the external CLI must be able to edit the repo working tree and run node (the `.bee/bin` contract); grant write access scoped to the repo only (codex: `-s workspace-write`) — never a machine-wide bypass (`--yolo`-style flags) as the house default; the goal-check exists so bee does not have to *trust* the worker, not so it can hand over the machine. Secrets: the external process gets only its own provider's credentials from the user's environment — bee passes none.
@@ -408,7 +388,7 @@ Contract:
 Startup (two reads, zero CLI round-trips):
 1. Read AGENTS.md.
 2. Read docs/history/<FEATURE>/CONTEXT.md. Validate ownership against the INLINED cell JSON above (status claimed, worker <NICKNAME>) — never re-run `status --brief` or `cells show` at startup; the dispatch state line and inlined cell are authoritative, and ownership is re-enforced at cap by the claim guard. A prompt missing the inlined cell JSON is malformed → [BLOCKED].
-3. Reserve, implement, verify, cap, release, report.
+3. Reserve, implement, commit, finish (runs the declared tests), report.
 ```
 
 The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are not a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder. The same-model no-op is the orchestrator's, run at dispatch, never left to the worker. When present, `<TRANSPORT>` states the proven transport verbatim, matching what the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run:
@@ -425,7 +405,7 @@ Native subagents return these token-markdown reports as their final message. Cli
 Nickname: <name>
 Files modified: <paths>
 Reservations: reserved <paths>; released yes|no
-Verification: <command> -> passed
+Tests: green (finish run — .bee/logs/test-results.json) | undeclared
 Commit: <hash>
 Next action: <suggestion for the orchestrator>
 ```
@@ -466,7 +446,7 @@ node .bee/bin/bee.mjs reservations list --active-only
 
 ## Fresh-session handoff in full
 
-When a cell or wave finishes (capped, verify green) and further
+When a cell or wave finishes (capped, tests green) and further
 execution-approved work remains — this lane or another Gate-3-approved one —
 continue with the next unit in this session: finishing a unit is never a
 reason to stop, ask, or wait. The planned-next handoff is a session-exit

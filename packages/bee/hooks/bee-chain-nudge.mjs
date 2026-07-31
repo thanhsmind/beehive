@@ -97,18 +97,21 @@ async function main() {
         "(node .bee/bin/bee.mjs cells), and check/release its reservations " +
         "(node .bee/bin/bee.mjs reservations list --active-only). " +
         "When the wave is clean, move to the next wave or the next chain step.";
-      // Decision 0011: capture-mode spine — if behavior_change cells capped since
-      // the last scribing run, nudge capture in-flight, not only at feature close.
+      // Capture is DEFERRED (decision c8e25271, supersedes 0011's "capture
+      // now" urgency): behavior_change caps since the last scribing run are
+      // surfaced as a PENDING reminder, never a due-now instruction — the
+      // human batches captures whenever they choose; orient keeps the
+      // reminder alive.
       try {
         const cellsLib = await import(libModuleUrl(root, "cells.mjs"));
         const debt = cellsLib.scribingDebt(root);
         if (debt && debt.count > 0) {
           msg +=
-            `\n⚠ Scribing debt: ${debt.count} behavior_change cell(s) capped since the last capture ` +
-            `(${debt.cells.join(", ")}) — run bee-capturing capture now; don't wait for review (decision 0011).`;
+            `\n⚠ Capture pending: ${debt.count} behavior_change cell(s) uncaptured ` +
+            `(${debt.cells.join(", ")}) — recorded; run bee-capturing when you choose (batching features is fine).`;
         }
       } catch {
-        // fail-open: the debt nudge is advisory, never a blocker
+        // fail-open: the pending-capture reminder is advisory, never a blocker
       }
     }
     // else: not a bee-managed subagent -> silent.

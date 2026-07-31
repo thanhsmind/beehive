@@ -520,7 +520,7 @@ export function buildSessionPreamble(root, { sessionId = null, handoffOutcome = 
     lines.push('');
     lines.push(`### Scribing debt: ${debt.count} behavior_change cell(s) uncaptured`);
     lines.push(
-      `- ${debt.cells.join(', ')} capped since the last scribing run — run bee-capturing capture now; settled behavior belongs in ${bundle ? 'docs/knowledge/' : 'docs/specs/'} before it evaporates (decision 0011).`,
+      `- ${debt.cells.join(', ')} capped since the last scribing run — capture pending (decision c8e25271): run bee-capturing when you choose; settled behavior belongs in ${bundle ? 'docs/knowledge/' : 'docs/specs/'}.`,
     );
   }
 

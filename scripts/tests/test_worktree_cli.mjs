@@ -1223,20 +1223,19 @@ try {
     record('without --cleanup, the worktree was left in place', stillThere, suggestCreated.worktreeRoot);
   }
 
-  // ── cov-4 (ci-owned-verify D5): the merge gate command becomes
-  // `configCommands.test || configCommands.verify` — commands.test (the
-  // impacted/dev-loop command) is preferred when present, and merge still
-  // falls back to commands.verify when commands.test is absent (the
-  // verifySkipped path, and mainA's plain-commands.verify fixture above,
-  // stay byte-untouched). Both fixtures below write a distinct marker file
-  // from whichever script actually ran, so "which command executed" is
-  // proven by a file on disk rather than inferred from the green/red
-  // outcome alone. ────────────────────────────────────────────────────────
+  // ── test-simple (decision 412e9b3a, supersedes cov-4/D5): the merge gate
+  // is `commands.verify` — the last net over the merged tree — with a
+  // STRING commands.test as the fallback only when no verify is recorded.
+  // (commands.test may be an ARRAY for the dev-loop runner; an array is
+  // never spawned as one shell command here.) Both fixtures below write a
+  // distinct marker file from whichever script actually ran, so "which
+  // command executed" is proven by a file on disk rather than inferred from
+  // the green/red outcome alone. ────────────────────────────────────────
   {
     // commands.test AND commands.verify both configured, and they disagree:
     // commands.test exits 0 (would report green), commands.verify exits 1
-    // (would report red/MERGE_VERIFY_RED). A green merge result here is only
-    // possible if commands.test — not commands.verify — is what ran.
+    // (reports red/MERGE_VERIFY_RED). A RED merge result here is only
+    // possible if commands.verify — the merge-time chain — is what ran.
     const mainTestPref = path.join(mergeTmp, 'mainTestPref');
     fs.mkdirSync(mainTestPref, { recursive: true });
     git(mainTestPref, ['init', '-q', '-b', 'main']);
@@ -1273,13 +1272,13 @@ try {
       /* checked below */
     }
     {
-      const ok = prefResult.status === 0 && prefJson && prefJson.ok === true && prefJson.verify === 'green';
-      record('(cov-4) worktree merge with BOTH commands.test and commands.verify configured — a green result is only possible if commands.test ran, not commands.verify', ok, prefResult.stdout);
+      const ok = prefResult.status !== 0 && prefJson && prefJson.ok === false && prefJson.code === 'MERGE_VERIFY_RED';
+      record('(test-simple) worktree merge with BOTH commands.test and commands.verify configured — a RED result is only possible if commands.verify (the merge-time chain) ran, not commands.test', ok, prefResult.stdout);
     }
     {
       const testRan = fs.existsSync(path.join(mainTestPref, 'test-cmd-ran.txt'));
       const verifyRan = fs.existsSync(path.join(mainTestPref, 'verify-cmd-ran.txt'));
-      record('(cov-4) commands.test is preferred over commands.verify: the test-cmd marker exists and the verify-cmd marker does not', testRan && !verifyRan, `test-cmd-ran=${testRan} verify-cmd-ran=${verifyRan}`);
+      record('(test-simple) commands.verify is preferred over commands.test at merge: the verify-cmd marker exists and the test-cmd marker does not', verifyRan && !testRan, `test-cmd-ran=${testRan} verify-cmd-ran=${verifyRan}`);
     }
   }
   {

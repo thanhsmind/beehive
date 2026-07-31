@@ -38,7 +38,7 @@ export const SCHEMA_VERSION = '1.0';
 const CELL_STATUSES = ['open', 'claimed', 'capped', 'blocked', 'dropped'];
 
 // cells.cap and cells.finish share this one schema by construction: finish IS
-// the cap door (same proof rules, same refusals) plus reservation release —
+// the cap door (same test run, same refusals) plus reservation release —
 // never a weakened or extended restatement.
 const CELL_CAP_PARAMETERS = {
   type: 'object',
@@ -46,10 +46,6 @@ const CELL_CAP_PARAMETERS = {
     id: { type: 'string', description: 'Cell id, e.g. auth-3.' },
     outcome: { type: 'string', description: 'One-line outcome summary.' },
     files: { type: 'string', description: 'Comma-separated list of files the worker changed.' },
-    'feature-verify-pending': { type: 'boolean', description: 'Cap through the feature-verify-pending path: no per-cell verify evidence demanded, trace.feature_verify stamped "pending". Refused when combined with per-cell evidence claims. The feature-level verify record (state feature-verify record --result green) is what later satisfies the close door.' },
-    'behavior-change': { type: 'boolean', description: 'Force behavior_change true (a cell-declared true cannot be unset by omitting this flag).' },
-    'evidence-stdin': { type: 'boolean', description: 'Read verification_evidence JSON from stdin (preferred — no evidence file is persisted).' },
-    'evidence-file': { type: 'string', description: 'Path to a verification_evidence JSON file (back-compat; prefer --evidence-stdin).' },
     'deviations-file': { type: 'string', description: 'Path to a deviations list (JSON array or newline-delimited text).' },
     friction: { type: 'string', description: 'One-line friction note, only when a friction trigger fired.' },
     'override-judge': { type: 'string', description: 'Audited override reason — required to cap a cell whose latest semantic-judge verdict is NEEDS_REVISION (refused otherwise with JUDGE_REWORK_REQUIRED); recorded to trace.judge_overrides and logged as a decision.' },
@@ -219,31 +215,10 @@ export const COMMAND_REGISTRY = [
     deprecated: null,
   },
   {
-    name: 'cells.verify',
-    invoke: 'bee cells verify',
-    description: "Record a verify run's command, output, and pass/fail for a cell — the proof `cap` later requires.",
-    parameters: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', description: 'Cell id.' },
-        command: { type: 'string', description: 'The exact verify command that was run.' },
-        passed: { type: 'boolean', description: 'Whether the verify run passed ("true" or "false").' },
-        output: { type: 'string', description: 'What the verify command printed (inline). Mutually exclusive with --output-file.' },
-        'output-file': { type: 'string', description: 'Path to a file holding the verify command\'s output, for long output.' },
-        signature: { type: 'string', description: 'Explicit failure_signature for the revision ledger, overriding the mechanical normalizer (ignored when --passed true).' },
-        'session-id': { type: 'string', description: 'Acting session identity, for the claim-ownership guard. Optional — resolves from CLAUDE_CODE_SESSION_ID when omitted.' },
-        'force-ownership': { type: 'boolean', description: 'Override a live claim owned by a different session (audited).' },
-        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
-      },
-      required: ['id', 'command', 'passed'],
-    },
-    examples: ['bee cells verify --id demo-1 --command "manual check" --output "0 failing" --passed true --json'],
-    deprecated: null,
-  },
-  {
     name: 'cells.cap',
     invoke: 'bee cells cap',
-    description: 'Cap a cell — refuses without a recorded passing verify (and, for small+ lanes, recorded output/evidence plus non-empty files_changed). Exception: --feature-verify-pending caps with NO per-cell verify evidence, stamping trace.feature_verify: "pending" — the proof is deliberately relocated to ONE feature-level verify (`bee state feature-verify record`), and leaving phase "swarming" is refused until a fresh green record covers every pending cap (no bypass level lifts it). Combining the flag with per-cell evidence claims (--evidence-file/--evidence-stdin, or an already-recorded passing verify) is refused — the two proof paths are exclusive.',
+    description:
+      "Cap a cell (plumbing — `cells finish` is the porcelain completion verb and wraps this same door). When the repo declares commands.test in .bee/config.json, the declared commands run FIRST: green caps the cell and records {tests: 'green', results: '.bee/logs/test-results.json', ran_at} on the trace; red REFUSES the cap (exit 1) with the failing excerpt in the refusal and logs a tests-red attempt on the cell — the red is the work, fix it and re-run. No commands.test declared: the cap proceeds and the trace records {tests: 'undeclared'}. Small+ lanes still require non-empty --files (what the worker touched); high-risk still requires --outcome; a NEEDS_REVISION judge verdict still refuses without --override-judge.",
     parameters: CELL_CAP_PARAMETERS,
     examples: ['bee cells cap --id demo-1 --outcome "demo cell capped" --files cell-demo-1.json --json'],
     deprecated: null,
@@ -253,7 +228,7 @@ export const COMMAND_REGISTRY = [
     invoke: 'bee cells finish',
     surface: 'porcelain',
     description:
-      'The worker\'s single completion verb: cap the cell through exactly the `cells cap` door — same parameters, same proof rules, refusals pass through unchanged — then, on a successful cap, release every reservation the cell\'s claiming agent holds for that cell. The result is cap\'s result plus `released` (the freed paths); the text ends by telling the worker what to return. A release failure never rolls the cap back — it is reported with the exact `bee reservations release` command to run manually. `cells cap` and `reservations release` stay available for stepwise completion.',
+      "The worker's single completion verb: run the project's declared tests, cap, and release — one call. It runs the declared commands.test (when present) through exactly the `cells cap` door: green caps the cell recording {tests: 'green', results: '.bee/logs/test-results.json'}; red refuses the cap with the failing excerpt — the red is the work; fix it and re-run bee cells finish. A repo with no commands.test caps with {tests: 'undeclared'}. On a successful cap it releases every reservation the cell's claiming agent holds for that cell; a release failure never rolls the cap back — it is reported with the exact `bee reservations release` command to run manually.",
     parameters: CELL_CAP_PARAMETERS,
     examples: ['bee cells finish --id demo-fin-1 --outcome "demo cell finished" --files cell-demo-fin-1.json --json'],
     deprecated: null,
@@ -312,7 +287,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'cells.reopen',
     invoke: 'bee cells reopen',
-    description: 'Return a capped, blocked, or dropped cell to open for rework, with a reason. Clears the recorded verify so the reopened cell must re-verify before it can cap again. Use unclaim (not reopen) for a claimed cell.',
+    description: 'Return a capped, blocked, or dropped cell to open for rework, with a reason. Clears the claim (and any legacy verify fields) so the reopened cell goes back through the full finish door — including the declared commands.test run — before it can cap again. Use unclaim (not reopen) for a claimed cell.',
     parameters: {
       type: 'object',
       properties: {
@@ -943,43 +918,6 @@ export const COMMAND_REGISTRY = [
     deprecated: null,
   },
   {
-    name: 'state.feature-verify.record',
-    invoke: 'bee state feature-verify record',
-    description:
-      'Stamp the feature-level verify record — {feature, command, output_sha256, result, at} — on the ACTIVE feature\'s tracked record (session-bound lane else default, the same resolution as state route; no --lane targeting flag) AND its underlying workflow-store record. output_sha256 is computed by the verb from --output-file, never caller-supplied. --result is a closed green|red enum: red is storable (it documents the failure for the fix-cells-then-re-verify loop) but NEVER satisfies the close door — leaving phase "swarming" (state set out, or state scribing-run) stays refused (guardFeatureVerifyDebt — no gate_bypass level lifts it) while any cell capped via `cells cap --feature-verify-pending` lacks a green record stamped strictly newer than the newest pending cap. Refuses when no feature is active. --show is the read-only query mode (also available as `bee state feature-verify show`): prints the currently recorded feature_verify (null when absent) without writing.',
-    parameters: {
-      type: 'object',
-      properties: {
-        command: { type: 'string', description: 'The feature-verify command that was run (the impacted suite over the feature\'s whole diff).' },
-        'output-file': { type: 'string', description: 'Path to the captured verify output; the verb computes and stores its sha256.' },
-        result: { type: 'string', description: 'Verify outcome: green or red. Red is storable but never satisfies the close door.', enum: ['green', 'red'] },
-        show: { type: 'boolean', description: 'Read-only query mode: print the currently recorded feature_verify (null when absent) without writing; needs none of the write flags.' },
-        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line confirmation.' },
-      },
-      required: [],
-    },
-    examples: [
-      'bee state feature-verify record --command "node packages/bee/tests/run_verify.mjs --impacted" --output-file feature-verify-output.txt --result green --json',
-      'bee state feature-verify record --show --json',
-    ],
-    deprecated: null,
-  },
-  {
-    name: 'state.feature-verify.show',
-    invoke: 'bee state feature-verify show',
-    description:
-      'Read-only: print the ACTIVE feature\'s recorded feature-verify record — {feature, command, output_sha256, result, at} — or null when none is recorded. Same record `state feature-verify record --show` prints; never writes.',
-    parameters: {
-      type: 'object',
-      properties: {
-        json: { type: 'boolean', description: 'Emit machine-readable JSON instead of a one-line summary.' },
-      },
-      required: [],
-    },
-    examples: ['bee state feature-verify show --json'],
-    deprecated: null,
-  },
-  {
     name: 'state.workflows.list',
     invoke: 'bee state workflows list',
     description:
@@ -998,7 +936,7 @@ export const COMMAND_REGISTRY = [
     name: 'state.workflows.close',
     invoke: 'bee state workflows close',
     description:
-      'Closes zombie/stale workflow records without hand-editing .bee/runtime/workflows/*/state.json. Requires EXACTLY ONE of three mutually exclusive modes: --feature <f> closes every live (non-closed) record whose feature equals <f>; --id <id> closes the single record with that id; --all-but-active closes every live record whose feature differs from the CALLING context\'s own active feature (the same session-bound-lane-else-default resolution `state route`/`state feature-verify` use), keeping that one. The currently active feature\'s record is NEVER closed by --feature or --all-but-active — only --id may name it explicitly, bypassing the protection on purpose. Refuses with a typed, zero-mutation error when a mode selects zero live records (already closed, unknown id, unknown feature, or nothing left besides the active feature). Prints the closed {id, feature} pairs on success.',
+      'Closes zombie/stale workflow records without hand-editing .bee/runtime/workflows/*/state.json. Requires EXACTLY ONE of three mutually exclusive modes: --feature <f> closes every live (non-closed) record whose feature equals <f>; --id <id> closes the single record with that id; --all-but-active closes every live record whose feature differs from the CALLING context\'s own active feature (the same session-bound-lane-else-default resolution `state route` uses), keeping that one. The currently active feature\'s record is NEVER closed by --feature or --all-but-active — only --id may name it explicitly, bypassing the protection on purpose. Refuses with a typed, zero-mutation error when a mode selects zero live records (already closed, unknown id, unknown feature, or nothing left besides the active feature). Prints the closed {id, feature} pairs on success.',
     parameters: {
       type: 'object',
       properties: {
@@ -1116,13 +1054,13 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.handoff.write',
     invoke: 'bee state handoff write',
-    description: "Write a handoff through the guarded writer. --kind is required and never guessed: 'pause' writes today's free-form fields (--cell/--files/--done/--remaining/--next-action/--feature/--phase/--mode, whichever apply) plus the kind — no new precondition, the same surface-and-wait record as always. 'planned-next' REFUSES (typed, zero mutation) unless --previous-cell is capped with a passing verify AND --next-cell already has a claim owned by --writer-session (the carried claim) — on success the record stores writer_session/previous_cell/next_cell alongside kind. When a workflow resolves (--lane names it, or the calling session/default record is bound to one), the record is written to that workflow's OWN mailbox (.bee/runtime/handoffs/<workflow-id>/<seq>.json, scoped by --target-role) instead of the single legacy .bee/HANDOFF.json — a repo with no workflow records keeps writing the legacy file, byte-identical to before.",
+    description: "Write a handoff through the guarded writer. --kind is required and never guessed: 'pause' writes today's free-form fields (--cell/--files/--done/--remaining/--next-action/--feature/--phase/--mode, whichever apply) plus the kind — no new precondition, the same surface-and-wait record as always. 'planned-next' REFUSES (typed, zero mutation) unless --previous-cell is capped (the cap itself ran the declared commands.test) AND --next-cell already has a claim owned by --writer-session (the carried claim) — on success the record stores writer_session/previous_cell/next_cell alongside kind. When a workflow resolves (--lane names it, or the calling session/default record is bound to one), the record is written to that workflow's OWN mailbox (.bee/runtime/handoffs/<workflow-id>/<seq>.json, scoped by --target-role) instead of the single legacy .bee/HANDOFF.json — a repo with no workflow records keeps writing the legacy file, byte-identical to before.",
     parameters: {
       type: 'object',
       properties: {
         kind: { type: 'string', description: 'Handoff kind — required, never guessed.', enum: [...HANDOFF_KINDS] },
         'writer-session': { type: 'string', description: 'planned-next only: the writing session id, which must already own the claim on --next-cell.' },
-        'previous-cell': { type: 'string', description: 'planned-next only: the just-capped cell id (must be capped with trace.verify_passed true).' },
+        'previous-cell': { type: 'string', description: 'planned-next only: the just-capped cell id (must have status capped — cells finish ran the declared tests before that cap).' },
         'next-cell': { type: 'string', description: "planned-next only: the next cell id, whose claim must already be owned by --writer-session." },
         cell: { type: 'string', description: 'pause only: the cell mid-flight when the pause was written.' },
         files: { type: 'string', description: 'pause only: comma-separated files touched so far.' },
@@ -2392,17 +2330,16 @@ export const COMMAND_REGISTRY = [
   },
 
   // ─── close (porcelain, docs/specs/porcelain.md) — the feature close driver.
-  // One verb answering "what stands between this feature and done, and can we
-  // pay it now". The door predicates are the EXACT ones the existing close
-  // path enforces (FEATURE_DEBT_KINDS in lib/state.mjs, plus scribingDebt /
-  // captureQueue) — never a second implementation of any debt rule, and close
-  // never waives a door. ────────────────────────────────────────────────────
+  // One verb answering "what stands between this feature and done". The tests
+  // door is the SAME runner `bee test` and `cells finish` use
+  // (lib/test-runner.mjs) — never a second implementation; the
+  // scribing/capture doors reuse scribingDebt/captureQueue, report-only. ────
   {
     name: 'close',
     invoke: 'bee close',
     surface: 'porcelain',
     description:
-      'Feature close driver: reports every close door — the pending feature-level verify, consolidated test coverage, scribing/capture debt — each with the exact command that settles it. --dry-run is a read-only report ({feature, doors:[{door, blocking, detail, command}]}). Without --dry-run, when the ONLY outstanding door is the feature verify and a verify command is recorded for the feature, close runs that command, records the pass/fail through `state feature-verify record`, and reports: on green the text names what remains (the capture checklist) and the next skill; on red the failing output tail is surfaced and nothing is recorded as passed. When any other door blocks, close reports it and runs nothing. Doors are never waived — debts close cannot pay are reported with their commands.',
+      "Feature close driver — test-simple: the one blocking door is TESTS. Without --dry-run, close runs the FULL declared commands.test fresh (a stale .bee/logs/test-results.json is never trusted): green reports the remaining capture checklist (scribing/capture doors, report-only) and the next action; red exits 1 with the failing excerpt — the red is the work, fix it and re-run bee close. A repo with no commands.test declared proceeds with a teaching note. --dry-run is a read-only report ({feature, doors:[{door, blocking, detail, command}]}) that runs nothing. Inside a granted worktree the text also names the merge-back road (bee worktree merge — which still runs commands.verify, untouched).",
     parameters: {
       type: 'object',
       properties: {
@@ -2413,6 +2350,26 @@ export const COMMAND_REGISTRY = [
       required: ['feature'],
     },
     examples: ['bee close --feature demo --dry-run --json'],
+    deprecated: null,
+  },
+
+  // ─── test (porcelain, docs/specs/test-simple.md) — the deterministic test
+  // runner: one declared test path, one normalized record. The same runner
+  // cells finish and close consume. ──────────────────────────────────────────
+  {
+    name: 'test',
+    invoke: 'bee test',
+    surface: 'porcelain',
+    description:
+      "Run the project's ONE declared test path — .bee/config.json commands.test (a string or an array, run in order) — and write the normalized record .bee/logs/test-results.json: {ran_at, green, commands:[{command, exit, duration_ms, failure_excerpt}]} where failure_excerpt is the last ≤500 chars of a failing command's output (null on pass). The runner is a program; an agent's word is never the record. A red run exits 1 but is a NORMAL result — the record is still written and the red is the next work item (`cells finish` refuses to cap on it). Text output is one ✓/✗ line per command ending in exactly one next: line. No commands.test declared: reports {green: null, undeclared: true} with how to declare it, runs nothing, exits 0.",
+    parameters: {
+      type: 'object',
+      properties: {
+        json: { type: 'boolean', description: 'Emit the machine-readable run record instead of the per-command text lines.' },
+      },
+      required: [],
+    },
+    examples: ['bee test --json'],
     deprecated: null,
   },
 ];

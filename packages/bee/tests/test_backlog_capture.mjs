@@ -40,7 +40,7 @@ import {
   computeBacklogRenderContent,
 } from '../lib/backlog.mjs';
 import { collectFeedback } from '../lib/feedback.mjs';
-import { addCell, readCell, claimCell, recordVerify, capCell, scribingDebt } from '../lib/cells.mjs';
+import { addCell, readCell, claimCell, capCell, scribingDebt } from '../lib/cells.mjs';
 import { buildSessionPreamble } from '../lib/inject.mjs';
 import { addCaptureStub, pendingCaptureStubs, flushCaptureStub, captureQueue } from '../lib/capture.mjs';
 import { writeJsonAtomic } from '../lib/fsutil.mjs';
@@ -243,7 +243,6 @@ await check('BACKLOG_STATUSES is the locked D6 enum and matches its source liter
 await check('addCell persists an optional pbi string and cap ignores it (no validation coupling)', async () => {
   addCell(root, makeCell('pbi-1', { pbi: 'PBI-42' }));
   assert(readCell(root, 'pbi-1').pbi === 'PBI-42', 'pbi persisted verbatim on add');
-  await recordVerify(root, 'pbi-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
   const capped = await capCell(root, 'pbi-1', { outcome: 'done', files_changed: ['a.js'] });
   assert(capped.status === 'capped', 'a cell with pbi caps exactly like one without it');
   assert(capped.pbi === 'PBI-42', 'pbi survives the cap untouched');
@@ -275,24 +274,11 @@ await check('scribingDebt tracks behavior_change caps against the last scribing 
     verify: 'node -e "process.exit(0)"',
   });
   const cap = async (id, behaviorChange) => {
-    addCell(dRoot, mk(id));
+    // test-simple (decision 412e9b3a): behavior_change is declared on the
+    // CELL (capCell resolves it from the record; the CLI flag is deleted).
+    addCell(dRoot, { ...mk(id), ...(behaviorChange ? { behavior_change: true } : {}) });
     await claimCell(dRoot, id, 'w');
-    await recordVerify(dRoot, id, { command: 'x', output: 'ok', passed: true });
-    await capCell(
-      dRoot,
-      id,
-      behaviorChange
-        ? {
-            behavior_change: true,
-            verification_evidence: {
-              red_failure_evidence: `prior behavior characterized for cell "${id}" before this fixture cap, unique per id, meeting the D3 anti-boilerplate floor (>=80 chars).`,
-              verification_run: 'x',
-            },
-            files_changed: ['a.js'],
-            outcome: 'done',
-          }
-        : { files_changed: ['a.js'], outcome: 'done' },
-    );
+    await capCell(dRoot, id, { files_changed: ['a.js'], outcome: 'done' });
   };
   try {
     // idle (no feature in flight) → no debt

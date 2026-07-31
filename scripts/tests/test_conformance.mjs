@@ -277,18 +277,23 @@ async function scenarioStillAllowedPhases() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════
-// Scenario 6 — verify-red never caps -> cells cap refusal on a failed verify
-// record, in a fixture store (public entrypoint: bee.mjs cells verify / cap)
-// ═════════════════════════════════════════════════════════════════════════
+// Scenario 6 — tests-red never caps -> cells cap refusal on a RED declared
+// commands.test run, in a fixture store (public entrypoint: bee.mjs cells
+// cap; test-simple, decision 412e9b3a — the runner is the one test door)
+// ═════════════════════════════════════════════════════════════════════
 
 async function scenario6() {
   const root = buildStoreFixture("bee-conformance-s6-");
+  fs.writeFileSync(
+    path.join(root, ".bee", "config.json"),
+    JSON.stringify({ commands: { test: "node -e \"console.error('FAIL s6 fixture red'); process.exit(1)\"" } }),
+  );
   fs.writeFileSync(
     path.join(root, "cell.json"),
     JSON.stringify({
       id: "s6-1",
       feature: "conform-demo",
-      title: "fixture cell for scenario 6 (verify-red never caps)",
+      title: "fixture cell for scenario 6 (tests-red never caps)",
       lane: "small",
       action: "Fixture only — never actually run outside this suite.",
       verify: 'node -e "process.exit(1)"',
@@ -296,23 +301,19 @@ async function scenario6() {
   );
   const added = await runBee(root, ["cells", "add", "--file", "cell.json", "--json"]);
   const claimed = await runBee(root, ["cells", "claim", "--id", "s6-1", "--worker", "kevinb", "--json"]);
-  const verified = await runBee(root, [
-    "cells", "verify", "--id", "s6-1",
-    "--command", 'node -e "process.exit(1)"',
-    "--output", "exit 1 (red)", "--passed", "false", "--json",
-  ]);
   const capAttempt = await runBee(root, [
     "cells", "cap", "--id", "s6-1", "--outcome", "must never cap", "--files", "a.js", "--json",
   ]);
-  const refused = capAttempt.status === 1 && /no passing verify result/.test(capAttempt.stdout);
+  const refused = capAttempt.status === 1 && /declared test run is RED/.test(capAttempt.stdout);
   const shown = await runBee(root, ["cells", "show", "--id", "s6-1", "--json"]);
   const shownParsed = JSON.parse(shown.stdout);
   const nothingCapped = shownParsed.trace.capped_at === null && shownParsed.status !== "capped";
+  const redRecorded = Array.isArray(shownParsed.trace.attempts) && shownParsed.trace.attempts.some((a) => a.verdict === "tests-red");
   record(
     "scenario-6",
-    "cells cap refuses on a recorded failed (red) verify via the public entrypoint, and the cell stays uncapped",
-    added.status === 0 && claimed.status === 0 && verified.status === 0 && refused && nothingCapped,
-    `add=${added.status} claim=${claimed.status} verify=${verified.status} cap: status=${capAttempt.status} stdout=${capAttempt.stdout} trace=${JSON.stringify(shownParsed.trace)}`,
+    "cells cap refuses on a RED declared commands.test run via the public entrypoint, records the tests-red attempt, and the cell stays uncapped",
+    added.status === 0 && claimed.status === 0 && refused && nothingCapped && redRecorded,
+    `add=${added.status} claim=${claimed.status} cap: status=${capAttempt.status} stdout=${capAttempt.stdout} trace=${JSON.stringify(shownParsed.trace)}`,
   );
   rm(root);
 }

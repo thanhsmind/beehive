@@ -86,6 +86,10 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   transitive); mid-iteration, `run_verify --impacted-from-git --level 1`
   selects direct edges only (seconds), while the transitive impacted run
   (`commands.test`) stays the wave-close/merge gate (impacted-level1 D1).
+  *(Since 2026-07-31 — decision 412e9b3a, docs/specs/test-simple.md —
+  `commands.test` is the one declared test path, run by `bee cells finish`
+  at every cap and re-run by `bee close`; `bee worktree merge` re-runs
+  `commands.verify` on the merged tree instead.)*
 - **The transitive impacted run has a ceiling, and level-1 is exempt from
   it.** A single hot file (imported almost everywhere) can make the
   transitive impacted set balloon to nearly the whole suite pool, erasing
@@ -167,7 +171,13 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
 - **R3** — Check-count conservation is the required evidence for any test-file
   migration (counts recorded before/after; additive setup fixes allowed,
   weakened or dropped checks are not).
-- **R4** — Verify is two-tier, but the full tier moved off the machine
+- **R4** — *(Amended 2026-07-31 — decision 412e9b3a,
+  docs/specs/test-simple.md: per-cell `verify` commands are retired —
+  `bee cells finish` runs the declared `commands.test` at every cap and
+  `bee close` re-runs it for the feature; `bee worktree merge` re-runs
+  `commands.verify` on the merged tree; the full estate beyond that stays
+  CI-owned. The pre-amendment rule is kept below as the historical
+  record.)* Verify is two-tier, but the full tier moved off the machine
   (verify-scoping D2, superseded by ci-owned-verify D1/D5/D6): a cell's
   `verify` command is the narrowest honest scoped check covering its change
   (a direct test file or `--only` selection); the dev loop's own broader

@@ -63,7 +63,6 @@ import {
   updateCell,
   readCell,
   claimCell,
-  recordVerify,
   capCell,
   tierMix,
   ceilingScarcityWarning,
@@ -496,19 +495,20 @@ await check('buildSessionPreamble shows commands and CI status gate when verify 
 
 // ─── refusal-message contract: ERROR/WHY/FIX (07-contracts, docs/09 item 5) ──
 
-await check('cap-refusal message carries a FIX (the verify command to run)', async () => {
-  // Self-containment fix (cs-2a split): this used to reuse a "demo-2" cell
-  // left behind, unverified, by the cells section — that section now lives
-  // in its own file/root (test_cells.mjs), so this row seeds its own
-  // never-verified cell to reach the same refusal.
+await check('cap-refusal message carries the fix inline (the --files flag to record)', async () => {
+  const gates = readState(root);
+  gates.phase = 'swarming';
+  gates.approved_gates.execution = true;
+  writeState(root, gates);
   addCell(root, makeCell('refusal-fix-demo'));
+  await claimCell(root, 'refusal-fix-demo', 'w');
+  let message = null;
   try {
     await capCell(root, 'refusal-fix-demo', { outcome: 'x' });
-    throw new Error('expected cap to refuse');
   } catch (error) {
-    const text = String(error.message || error);
-    assert(/bee\.mjs cells verify/.test(text), `cap refusal names the fix command, got: ${text}`);
+    message = error.message;
   }
+  assert(message && /--files/.test(message), `cap refusal names the fix flag, got: ${message}`);
 });
 
 await check('gate-block reason carries a FIX (route to approval)', async () => {
@@ -970,21 +970,15 @@ const EXPECTED_STATE_EXPORTS = [
   'GATE_NAMES',
   'PHASES',
   'KNOWN_PHASES',
-  'isDebtGuardedDeparture',
   'isKnownPhase',
   // intake-gate-git-exemption D2 (cell ige-1): guards.*/hooks.* toggles are
   // machine-local and persist only to the gitignored .bee/config.local.json,
   // so a temporary safety lift can never be committed to the tracked config.
   'LOCAL_ONLY_CONFIG_NAMESPACES',
   'isLocalOnlyConfigKey',
-  'testCellDebt',
-  'testCellDebtFixTail',
-  // guard-completion gc-1: the SINGULAR debt question. Every door (phase
-  // departure, scribing-run, feature swap, start-feature) asks guardFeatureDebt
-  // and nothing else; FEATURE_DEBT_KINDS is the whole unwaivable debt set, and
-  // test_bee_cli.mjs iterates it to generate the door × kind matrix.
-  'FEATURE_DEBT_KINDS',
-  'guardFeatureDebt',
+  // test-simple (decision 412e9b3a): the debt core exports (testCellDebt,
+  // featureVerifyDebt, FEATURE_DEBT_KINDS, guardFeatureDebt, ...) are deleted
+  // with the proof economy.
   'trackedLocalOnlyKeyWarning',
   'COMMAND_KEYS',
   // worktree-companion-hook: separate from COMMAND_KEYS on purpose — see the
@@ -994,7 +988,6 @@ const EXPECTED_STATE_EXPORTS = [
   'CONFIGURABLE_TIERS',
   'CONFIGURABLE_SLOTS',
   'EFFORT_LEVELS',
-  'FEATURE_VERIFY_FIX_TAIL',
   'RUNTIMES',
   // config-validate (ao-2ai-1): the shared validator + its unsafe-flag
   // blocklist, read by both `bee config validate` and `bee status`.
@@ -1020,7 +1013,6 @@ const EXPECTED_STATE_EXPORTS = [
   'controlRootFor',
   'defaultState',
   'ensureWorkflowRecordForFeature',
-  'featureVerifyDebt',
   'statePath',
   'readState',
   'readStateStrict',
@@ -1028,7 +1020,6 @@ const EXPECTED_STATE_EXPORTS = [
   'gateApproved',
   'readHandoff',
   'readOnboarding',
-  'readFeatureCellsStrict',
   'readConfig',
   'hookEnabled',
   'BYPASS_LEVELS',
@@ -3211,7 +3202,6 @@ await check('trace.semantic_judge entries survive cap and resist updateCell (app
   state.approved_gates.execution = true;
   writeState(root, state);
   await claimCell(root, 'jr-2', 'worker-a');
-  await recordVerify(root, 'jr-2', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
   const capped = await capCell(root, 'jr-2', { files_changed: ['a.js'], outcome: 'shipped' });
   assert(
     Array.isArray(capped.trace.semantic_judge) && capped.trace.semantic_judge.length === 1,
@@ -3292,7 +3282,6 @@ await check('recordJudgeVerdict (hardening-1-7-10 D7): a NEEDS_REVISION verdict 
   // Case 1: NEEDS_REVISION on a CAPPED cell -> reopens to OPEN, clean slate.
   addCell(root, makeCell('jr-reopen-1'));
   await claimCell(root, 'jr-reopen-1', 'worker-e');
-  await recordVerify(root, 'jr-reopen-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
   await capCell(root, 'jr-reopen-1', { files_changed: ['a.js'], outcome: 'shipped' });
   const beforeReopen = readCell(root, 'jr-reopen-1');
   assert(beforeReopen.status === 'capped', 'precondition: cell must be capped before the reopening verdict');
@@ -3338,49 +3327,36 @@ await check('recordJudgeVerdict (hardening-1-7-10 D7): a NEEDS_REVISION verdict 
   // Case 3: PASS on a CAPPED cell -> status stays capped (no reopen for PASS).
   addCell(root, makeCell('jr-reopen-4'));
   await claimCell(root, 'jr-reopen-4', 'worker-g');
-  await recordVerify(root, 'jr-reopen-4', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
   await capCell(root, 'jr-reopen-4', { files_changed: ['a.js'], outcome: 'shipped' });
   const stillCapped = await recordJudgeVerdict(root, 'jr-reopen-4', VALID_VERDICT, {});
   assert(stillCapped.status === 'capped', `a PASS verdict on a capped cell must leave it capped, got ${JSON.stringify(stillCapped.status)}`);
 });
 
-await check('recordJudgeVerdict (hardening-1-7-10 D7, stale-evidence hole closed): after a NEEDS_REVISION reopen, capCell refuses to re-cap until a FRESH verify is recorded — a PASS verdict recorded with no new verify can never re-cap on the old (now-cleared) evidence; the honest reclaim -> reverify -> re-PASS path still caps cleanly', async () => {
+await check('recordJudgeVerdict (hardening-1-7-10 D7, test-simple narrowed): a NEEDS_REVISION reopen lands on "open" with legacy verify fields cleared; the rework path (re-claim, then a PASS verdict) re-caps cleanly', async () => {
   addCell(root, makeCell('jr-reopen-fresh'));
   await claimCell(root, 'jr-reopen-fresh', 'worker-fresh-1');
-  await recordVerify(root, 'jr-reopen-fresh', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
   await capCell(root, 'jr-reopen-fresh', { files_changed: ['a.js'], outcome: 'shipped' });
 
   await recordJudgeVerdict(root, 'jr-reopen-fresh', NEEDS_REVISION_VERDICT_EARLY, {});
   const afterReopen = readCell(root, 'jr-reopen-fresh');
   assert(afterReopen.status === 'open', `precondition: reopen must land on "open", got ${afterReopen.status}`);
-  assert(afterReopen.trace.verify_passed === null, 'precondition: verify_passed must already be cleared');
+  assert(afterReopen.trace.verify_passed === null, 'reopen clears any legacy verify fields (dead data hygiene)');
+  assert(afterReopen.trace.worker === null, 'reopen clears the claim — "open" never remembers who owned it');
 
-  // Recording a PASS verdict immediately — with NO new claim and NO new verify
-  // run at all — must never let capCell succeed on the stale (now-cleared)
-  // evidence. This is the exact hole D7 closes: before the fix, verify_passed
-  // survived the reopen as `true`, so this exact sequence re-capped for free.
+  // test-simple (decision 412e9b3a): capCell no longer gates on a per-cell
+  // verify — the test door is the declared commands.test run at the handler.
+  // What still gates the re-cap is the claim lifecycle and the judge verdict:
+  // record the PASS, re-claim, and the cap lands.
   await recordJudgeVerdict(root, 'jr-reopen-fresh', VALID_VERDICT, {});
-  await assertRejects(
-    () => capCell(root, 'jr-reopen-fresh', { files_changed: ['a.js'], outcome: 'reshipped without a fresh verify' }),
-    'no passing verify result',
-    'capCell must refuse to re-cap on stale/cleared verify evidence — a fresh verify is structurally required after a NEEDS_REVISION reopen',
-  );
-
-  // The honest, fully-reworked path still caps cleanly: re-claim (a
-  // DIFFERENT worker this time — "open" never remembers who owned it
-  // before), re-verify, and the PASS verdict already on record clears the
-  // judge gate.
   await claimCell(root, 'jr-reopen-fresh', 'worker-fresh-2');
-  await recordVerify(root, 'jr-reopen-fresh', { command: 'node -e "process.exit(0)"', output: 'ok, fresh run', passed: true });
   const recapped = await capCell(root, 'jr-reopen-fresh', { files_changed: ['a.js'], outcome: 'reshipped after real rework' });
-  assert(recapped.status === 'capped', `a fresh verify + the recorded PASS verdict must re-cap cleanly, got ${recapped.status}`);
+  assert(recapped.status === 'capped', `the reworked path must re-cap cleanly, got ${recapped.status}`);
 });
 
 await check('recordJudgeVerdict (hardening-1-7-10 D7): reopening a capped cell reconciles the claims-store defensively — a DIFFERENT session can claim the reopened cell with no orphaned claim file left behind', async () => {
   addCell(root, makeCell('jr-reopen-orphan'));
   const claimed = await claimCellCrossSession(root, { sessionId: 'sess-old', worker: 'worker-orphan-1', cellId: 'jr-reopen-orphan' });
   assert(claimed.ok === true, `precondition: cross-session claim must succeed, got ${JSON.stringify(claimed)}`);
-  await recordVerify(root, 'jr-reopen-orphan', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true, sessionId: 'sess-old' });
   await capCell(root, 'jr-reopen-orphan', { files_changed: ['a.js'], outcome: 'shipped', sessionId: 'sess-old' });
 
   // capCell already clears the claims-store file on cap (releaseClaimFileBestEffort).
@@ -3423,7 +3399,6 @@ await check('capCell (D-GHF-C, GH #27.5): refuses, typed JUDGE_REWORK_REQUIRED, 
   addCell(root, makeCell('judge-block-1'));
   await recordJudgeVerdict(root, 'judge-block-1', NEEDS_REVISION_VERDICT, {});
   await claimCell(root, 'judge-block-1', 'worker-a');
-  await recordVerify(root, 'judge-block-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
 
   let caught = null;
   try {
@@ -3442,7 +3417,6 @@ await check('capCell (D-GHF-C, GH #27.5): --override-judge caps despite a NEEDS_
   addCell(root, makeCell('judge-override-1'));
   await recordJudgeVerdict(root, 'judge-override-1', NEEDS_REVISION_VERDICT, {});
   await claimCell(root, 'judge-override-1', 'worker-b');
-  await recordVerify(root, 'judge-override-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
 
   const capped = await capCell(root, 'judge-override-1', {
     files_changed: ['a.js'],
@@ -3464,14 +3438,12 @@ await check('capCell (D-GHF-C, GH #27.5): a PASS verdict caps normally with no o
   addCell(root, makeCell('judge-pass-1'));
   await recordJudgeVerdict(root, 'judge-pass-1', VALID_VERDICT, {}); // VALID_VERDICT.verdict === 'PASS'
   await claimCell(root, 'judge-pass-1', 'worker-c');
-  await recordVerify(root, 'judge-pass-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
   const passCapped = await capCell(root, 'judge-pass-1', { files_changed: ['a.js'], outcome: 'shipped' });
   assert(passCapped.status === 'capped', 'a PASS verdict must never block cap');
   assert(!Array.isArray(passCapped.trace.judge_overrides) || passCapped.trace.judge_overrides.length === 0, 'no override was supplied, so judge_overrides stays empty');
 
   addCell(root, makeCell('judge-none-1'));
   await claimCell(root, 'judge-none-1', 'worker-d');
-  await recordVerify(root, 'judge-none-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
   const noJudgeCapped = await capCell(root, 'judge-none-1', { files_changed: ['a.js'], outcome: 'shipped' });
   assert(noJudgeCapped.status === 'capped', 'a cell with no semantic_judge entries at all must cap exactly as before ghf-6');
 });

@@ -355,10 +355,18 @@ its knowledge actually landed — the state and the specs can no longer disagree
   many slices and cells; one executing pass is a small part. Mid-feature,
   settlements are captured as same-turn one-line stubs (unchanged duty); the
   spec merge, knowledge sync, and learnings run exactly once, when the
-  feature's work fully completes — after the feature verify. One boundary,
-  three events: verify, sync, compound (feature-close-events fc-1, user
+  feature's work fully completes — after the close-time test run (since
+  2026-07-31 / 412e9b3a that run is `bee test` over the declared
+  `commands.test`, not the retired feature-verify record). One boundary,
+  three events: tests, sync, compound (feature-close-events fc-1, user
   philosophy decision 2026-07-28).
-- R82 — **The delegator verifies, at the shippable unit.** Workers implement,
+- R82 — *(Superseded 2026-07-31 — decision 412e9b3a,
+  docs/specs/test-simple.md: the pending-cap path, the feature-verify
+  record, and both debt markers are deleted. Live rule: `bee cells finish`
+  runs the declared `commands.test` at every cap — green caps, red refuses
+  with the failing excerpt — and `bee close` re-runs the full declared
+  suite for the feature. Kept below as the historical record.)*
+  **The delegator verifies, at the shippable unit.** Workers implement,
   commit, and report — they run no suites; a cell caps through the sanctioned
   pending path with no per-cell proof. MAIN produces all evidence: red proof
   (bugfix repro) before dispatch at authoring, and ONE feature-level verify

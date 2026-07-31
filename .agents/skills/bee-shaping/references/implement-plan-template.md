@@ -18,7 +18,7 @@ Every section projects from a named source; source silent → Open Question, nev
 | **Technical Design** | authored from `approach.md` + cells | narrative as implied; beyond → Open Question |
 | Affected Files | `approach.md`, then cells after prep | cells authoritative post-prep |
 | Implementation Steps | `plan.md` shape, then cells | project titles/deps after prep |
-| Validation Plan | cell `verify` + feature-verify record | describe + link evidence, never assert unrun |
+| Validation Plan | test-result records (`.bee/logs/test-results.json`) | describe + link evidence, never assert unrun |
 | Risks & Mitigation | `approach.md` risk map | as written |
 | **Rollback Plan** | authored | how *this* work reverts; undecided → Open Question |
 | Open Questions | `approach.md` + uncovered gaps | honest home for every gap/guess |
@@ -46,7 +46,7 @@ decisions: [<D-IDs cited below>]
 # Implementation Plan: <Feature>
 
 > Human-layer projection of the truth artifacts. Truth lives in CONTEXT.md
-> (decisions), plan.md + cells (work), and cell/feature verify output (evidence).
+> (decisions), plan.md + cells (work), and test-result records (evidence).
 > Feedback on this document flows back to those artifacts, then this re-renders.
 
 ## 1. Goal
@@ -112,12 +112,12 @@ Phase headers only if plan.md is phase-shaped — never invent phases.>
 
 ## 8. Validation Plan
 
-<Describe what WILL be checked. Link evidence from cell verify output / the
-feature-verify record once it exists. NEVER state a result that has not run.>
+<Describe what WILL be checked. Link evidence from the test-result record
+(`.bee/logs/test-results.json`) once it exists. NEVER state a result that has not run.>
 
-**Automated** — `<verify command from the cells>` → expected: <target outcome>
+**Automated** — `<the declared test command (commands.test)>` → expected: <target outcome>
 **Manual** — [ ] <check for SEE/CALL/RUN decisions>
-**Evidence** — <link to docs/history/<feature>/reports/… once cell/feature verify runs; "pending" before>
+**Evidence** — <link to docs/history/<feature>/reports/… once the declared tests run; "pending" before>
 
 ## 9. Risks & Mitigation
 
@@ -145,10 +145,10 @@ If none: "No blocking open questions. Ready for review.">
 2. **Only real references.** Name only files/APIs/tables that exist or are marked "to be created" in a cell. No invented paths.
 3. **Separate facts from assumptions.** No plausibility language ("should work"). A guess is labeled a guess and lives in Open Questions.
 4. **Present tense, projected.** "The sender retries on 5xx" — describe the planned system as the artifacts define it. Do not narrate history ("we changed…").
-5. **Never claim validation ran** unless cell verify output or the feature-verify record exists; the Validation Plan links evidence, it does not assert green.
+5. **Never claim validation ran** unless a test-result record (`.bee/logs/test-results.json`) exists; the Validation Plan links evidence, it does not assert green.
 6. **Status mirrors the gate.** Never `Approved` before the gate fires; flip to `Needs Revision` when a source changes after approval.
 
-**Not restated here because bee enforces them elsewhere** (do not re-add): "do not modify files before approval" (the write-guard denies source writes before the merged Gate 2 approves execution), "inspect the codebase first" (shaping/planning own that), "always include validation steps" (cells cannot exist without a `verify` command).
+**Not restated here because bee enforces them elsewhere** (do not re-add): "do not modify files before approval" (the write-guard denies source writes before the merged Gate 2 approves execution), "inspect the codebase first" (shaping/planning own that), "always include validation steps" (`bee cells finish` runs the declared suite at every cap).
 
 ## Rendering procedure (concise)
 

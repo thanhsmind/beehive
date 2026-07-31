@@ -185,18 +185,20 @@ async function runWorker(workerRole) {
       process.stdout.write(`${JSON.stringify(result)}\n`);
       process.exit(0);
     } else if (workerRole === 'verify-racer') {
-      // Real path: N racers calling the ACTUAL recordVerify (cells.mjs) on
-      // ONE cell. Pre-fix (no lock around its read-mutate-write body), real
-      // OS-process scheduling around the sub-millisecond critical section can
-      // silently drop a trace.attempts entry (GH #27). Post-fix, withStoreLock
-      // makes this deterministic with zero loss — same "no artificial
-      // widening needed once exclusion is structural" shape as scenario (a).
+      // Real path: N racers calling the ACTUAL attempt-ledger appender
+      // (recordTestsRedAttempt, cells.mjs — test-simple's writer; `cells
+      // verify` is deleted) on ONE cell. Pre-fix (no lock around the
+      // read-mutate-write body), real OS-process scheduling around the
+      // sub-millisecond critical section can silently drop a trace.attempts
+      // entry (GH #27). Post-fix, withStoreLock makes this deterministic with
+      // zero loss — same "no artificial widening needed once exclusion is
+      // structural" shape as scenario (a).
       const root = argVal('--root');
       const cellId = argVal('--cell');
       const id = argVal('--id');
-      const { recordVerify } = await import(CELLS_LIB_PATH);
+      const { recordTestsRedAttempt } = await import(CELLS_LIB_PATH);
       try {
-        const cell = await recordVerify(root, cellId, { command: 'x', output: `racer-${id}`, passed: true });
+        const cell = await recordTestsRedAttempt(root, cellId, { excerptLine: `FAIL racer-${id}` });
         process.stdout.write(`${JSON.stringify({ ok: true, id, attempts: cell.trace.attempts.length })}\n`);
       } catch (err) {
         process.stdout.write(`${JSON.stringify({ ok: false, id, error: String((err && err.message) || err) })}\n`);
@@ -656,8 +658,8 @@ async function runOrchestrator() {
     }
   }
 
-  // (e) LEDGER-LOCK — real path: N racers calling the ACTUAL recordVerify on
-  // ONE cell (GH #27.2, cell ghf-4). Every racer must succeed and every one
+  // (e) LEDGER-LOCK — real path: N racers calling the ACTUAL attempt-ledger
+  // appender (recordTestsRedAttempt) on ONE cell (GH #27.2, cell ghf-4). Every racer must succeed and every one
   // of its trace.attempts entries must survive — zero lost updates. Post-fix
   // this is deterministic (withStoreLock serializes the read-mutate-write
   // body), same "no artificial widening needed" shape as scenario (a)'s real
@@ -684,7 +686,7 @@ async function runOrchestrator() {
       const parsed = results.map((r) => lastJsonLine(r.stdout));
       const errored = parsed.filter((p) => !p || p.ok !== true);
       if (errored.length) {
-        failures.push(`(e) every recordVerify racer should succeed, got failure(s): ${JSON.stringify(errored)}`);
+        failures.push(`(e) every ledger-append racer should succeed, got failure(s): ${JSON.stringify(errored)}`);
       }
       const finalCell = readJson(path.join(dir, '.bee', 'cells', 'race-e.json'), null);
       const finalAttempts = finalCell && Array.isArray(finalCell.trace.attempts) ? finalCell.trace.attempts : [];

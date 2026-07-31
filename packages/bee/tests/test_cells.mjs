@@ -23,7 +23,6 @@ import {
   writeState,
   isKnownPhase,
   bypassLevel,
-  NO_TEST_SENTINEL,
 } from '../lib/state.mjs';
 import {
   addCell,
@@ -39,8 +38,8 @@ import {
   archivedSummary,
   readyCells,
   claimCell,
-  recordVerify,
   capCell,
+  recordTestsRedAttempt,
   blockCell,
   dropCell,
   unclaimCell,
@@ -56,7 +55,6 @@ import {
   checkCellBudgets,
   deriveChangeClass,
   CHANGE_CLASSES,
-  requiredProofTier,
 } from '../lib/cells.mjs';
 import { claimCellFile, readClaim, claimPath } from '../lib/claims.mjs';
 import { reserve } from '../lib/reservations.mjs';
@@ -661,7 +659,6 @@ await check('readyCells/depsAllCapped (pre-archive baseline): excludes an open c
     state.approved_gates.execution = true;
     writeState(aRoot, state);
     await claimCell(aRoot, 'arc-dep-base', 'worker-arc');
-    await recordVerify(aRoot, 'arc-dep-base', { command: 'true', output: 'ok', passed: true });
     await capCell(aRoot, 'arc-dep-base', { files_changed: ['x.txt'], outcome: 'done' });
 
     ready = readyCells(aRoot, 'arc-ready').map((c) => c.id);
@@ -1223,62 +1220,41 @@ await check('claimCellCrossSession with sessionId null/undefined is a legal sess
   assert(result.cell.status === 'claimed', 'the cell is claimed regardless of session');
 });
 
-// ─── cells: verify-gated capping ────────────────────────────────────────────
+// ─── cells: test-stamped capping (test-simple, decision 412e9b3a) ──────────
+// capCell no longer reads any per-cell verify/evidence machinery — the one
+// test door (the declared commands.test run) lives in bee.mjs's shared
+// cap/finish handler, which refuses BEFORE capCell on a red run and passes
+// the green/undeclared stamp through capCell's `tests` param.
 
-await check('capCell refuses without a passing verify result', async () => {
-  await assertRejects(() => capCell(root, 'demo-1', { outcome: 'done' }), 'verify', 'cap needs verify');
-});
-
-await check('capCell refuses when verify was recorded as failed', async () => {
-  await recordVerify(root, 'demo-1', { command: 'npm test', output: '1 failing', passed: false });
-  await assertRejects(() => capCell(root, 'demo-1', { outcome: 'done' }), 'verify', 'failed verify blocks cap');
-});
-
-// wc-4 (D1): this row guarded the behavior_change-without-evidence REFUSAL
-// until worker-conformance made that door non-blocking — asking a worker to
-// author evidence text in order to pass a gate is the exact drift the feature
-// removes. The assertion therefore moves from "it throws" to "it caps AND the
-// absence is recorded", which is the contract that replaced it; the door is
-// not merely deleted from the suite. The loosening runs on its own fixture so
-// demo-1 stays uncapped for the dependent-unlock row below, and demo-1 then
-// proves the door D1 explicitly KEPT still refuses in the very same call shape.
-await check('capCell RECORDS a behavior_change cap with no verification_evidence instead of refusing (wc-4 D1), while the files_changed door beside it still refuses', async () => {
-  addCell(root, makeCell('bc-loosened', { lane: 'small' }));
-  await claimCell(root, 'bc-loosened', 'worker-a');
-  await recordVerify(root, 'bc-loosened', { command: 'npm test', output: 'ok', passed: true });
-  const capped = await capCell(root, 'bc-loosened', {
-    behavior_change: true,
-    files_changed: ['src/x.js'],
-    outcome: 'done',
-  });
-  assert(capped.status === 'capped', 'a behavior_change cap with no evidence now succeeds (wc-4 D1)');
-  assert(
-    (capped.trace.warnings || []).some((w) => w.includes('declares behavior_change but records no verification_evidence')),
-    `the absence must be RECORDED, never silent (D8: a loosened guard stays visible), got ${JSON.stringify(capped.trace.warnings)}`,
-  );
-
-  await recordVerify(root, 'demo-1', { command: 'npm test', output: 'ok', passed: true });
-  await assertRejects(
-    () => capCell(root, 'demo-1', { behavior_change: true, outcome: 'done' }),
-    'files_changed',
-    'D1 kept this door: it asks what the worker touched, not for authored proof',
-  );
-});
-
-await check('capCell caps with passing verify + evidence, and unlocks dependents', async () => {
-  const cell = await capCell(root, 'demo-1', {
-    behavior_change: true,
-    verification_evidence: {
-      tests_added: ['x.test.js'],
-      red_failure_evidence: 'demo-1: prior behavior seen failing before this change — git-show of the old state, captured at cap time for the D3 anti-boilerplate floor.',
-      verification_run: 'npm test',
-    },
-    files_changed: ['src/x.js'],
-    outcome: 'done',
-  });
+await check('capCell caps a claimed cell directly (no per-cell verify machinery) and unlocks dependents', async () => {
+  const cell = await capCell(root, 'demo-1', { files_changed: ['src/x.js'], outcome: 'done' });
   assert(cell.status === 'capped', 'demo-1 capped');
   const ready = readyCells(root, 'demo').map((c) => c.id);
   assert(ready.includes('demo-2'), 'demo-2 becomes ready once its dep is capped');
+});
+
+await check('capCell stamps a green tests run verbatim on the trace (tests param, test-simple)', async () => {
+  addCell(root, makeCell('tests-stamp-1'));
+  await claimCell(root, 'tests-stamp-1', 'worker-t');
+  const capped = await capCell(root, 'tests-stamp-1', {
+    files_changed: ['a.js'],
+    outcome: 'done',
+    tests: { tests: 'green', results: '.bee/logs/test-results.json', ran_at: '2026-07-31T00:00:00.000Z' },
+  });
+  assert(capped.trace.tests === 'green', `trace.tests should be "green", got ${JSON.stringify(capped.trace.tests)}`);
+  assert(capped.trace.results === '.bee/logs/test-results.json', `trace.results should point at the record, got ${JSON.stringify(capped.trace.results)}`);
+  assert(capped.trace.ran_at === '2026-07-31T00:00:00.000Z', `trace.ran_at carried verbatim, got ${JSON.stringify(capped.trace.ran_at)}`);
+});
+
+await check('capCell stamps {tests: "undeclared"} for a no-commands.test repo, and stamps nothing when the tests param is absent', async () => {
+  addCell(root, makeCell('tests-stamp-2'));
+  await claimCell(root, 'tests-stamp-2', 'worker-t');
+  const undeclared = await capCell(root, 'tests-stamp-2', { files_changed: ['a.js'], outcome: 'done', tests: { tests: 'undeclared' } });
+  assert(undeclared.trace.tests === 'undeclared', `expected the undeclared stamp, got ${JSON.stringify(undeclared.trace.tests)}`);
+  addCell(root, makeCell('tests-stamp-3'));
+  await claimCell(root, 'tests-stamp-3', 'worker-t');
+  const bare = await capCell(root, 'tests-stamp-3', { files_changed: ['a.js'], outcome: 'done' });
+  assert(!('tests' in bare.trace), `a programmatic cap that ran nothing stamps no tests field, got ${JSON.stringify(bare.trace.tests)}`);
 });
 
 await check('capCell on a high-risk cell requires files_changed and outcome', async () => {
@@ -1290,150 +1266,56 @@ await check('capCell on a high-risk cell requires files_changed and outcome', as
     }),
   );
   await claimCell(root, 'hr-1', 'worker-b');
-  await recordVerify(root, 'hr-1', { command: 'npm test', output: '12 passing', passed: true });
   await assertRejects(() => capCell(root, 'hr-1', {}), 'high-risk', 'high-risk trace tier');
   await capCell(root, 'hr-1', { files_changed: ['src/auth.js'], outcome: 'auth guard added' });
   assert(readCell(root, 'hr-1').status === 'capped', 'hr-1 capped with full trace');
 });
 
-// wc-4 (D1): decision 0004's "an assertion is not evidence" REFUSAL is the
-// second of the two doors the feature made non-blocking. The principle it
-// carried is not dropped — an assertion is still not evidence — but it is now
-// enforced at the FEATURE boundary instead of the cell: the cap succeeds and
-// stamps trace.proof "unrecorded", which arms the close-door no bypass level
-// lifts. The row below therefore asserts the marker, not a throw.
-await check('capCell RECORDS a small cell whose verify has no output and no evidence, instead of refusing (wc-4 D1 relocates decision 0004 to the feature boundary)', async () => {
-  addCell(root, makeCell('ev-1'));
-  await claimCell(root, 'ev-1', 'worker-c');
-  await recordVerify(root, 'ev-1', { command: 'npm test', passed: true }); // assertion, no output
-  const capped = await capCell(root, 'ev-1', { files_changed: ['src/y.js'], outcome: 'done' });
-  assert(capped.status === 'capped', 'assertion-capping is no longer refused at the cell (wc-4 D1)');
-  assert(
-    capped.trace.proof === 'unrecorded',
-    `an assertion is still not evidence — it must be RECORDED as unproven so the feature-boundary door arms, got ${JSON.stringify(capped.trace.proof)}`,
-  );
-  assert(
-    (capped.trace.warnings || []).some((w) => w.includes('no recorded proof')),
-    `the loosened door must leave a visible warning, got ${JSON.stringify(capped.trace.warnings)}`,
-  );
-});
-
-await check('capCell refuses a small cell with proof but empty files_changed (decision 0004 — the door wc-4 D1 deliberately KEPT)', async () => {
+await check('capCell refuses a small cell with empty files_changed (the door test-simple deliberately KEPT: it asks what the worker touched)', async () => {
   addCell(root, makeCell('ev-2'));
   await claimCell(root, 'ev-2', 'worker-c');
-  await recordVerify(root, 'ev-2', { command: 'npm test', output: '3 passing', passed: true });
   await assertRejects(
     () => capCell(root, 'ev-2', { outcome: 'done' }),
     'files_changed',
     'empty files_changed must be refused for small+',
   );
   await capCell(root, 'ev-2', { files_changed: ['src/y.js'], outcome: 'done' });
-  assert(readCell(root, 'ev-2').status === 'capped', 'ev-2 caps once output + files recorded');
+  assert(readCell(root, 'ev-2').status === 'capped', 'ev-2 caps once files are recorded');
 });
 
-await check('tiny lane still caps on a passing verify alone (lanes scale strictness)', async () => {
+await check('tiny lane caps without files_changed (lanes scale strictness)', async () => {
   addCell(root, makeCell('tiny-1', { lane: 'tiny' }));
   await claimCell(root, 'tiny-1', 'worker-c');
-  await recordVerify(root, 'tiny-1', { command: 'node -e "process.exit(0)"', passed: true });
   await capCell(root, 'tiny-1', { outcome: 'typo fixed' });
   assert(readCell(root, 'tiny-1').status === 'capped', 'tiny cell capped without output/files');
 });
 
-await check('capCell honors the cell-declared behavior_change when the flag is omitted (grooming fix)', async () => {
+await check('capCell honors the cell-declared behavior_change (grooming fix — it classifies the cap for scribing debt)', async () => {
   addCell(root, makeCell('bc-decl', { behavior_change: true }));
   await claimCell(root, 'bc-decl', 'worker-c');
-  await recordVerify(root, 'bc-decl', { command: 'npm test', output: 'ok', passed: true });
-  // Omitting the flag must NOT drop the declared behavior_change. Until wc-4
-  // that resolution was observable as an evidence REFUSAL; D1 made that door
-  // non-blocking, so the same resolution is asserted where it still shows —
-  // the D1 warning fires on NO path except a cap that resolved bc true (see
-  // the bc-top-wins row below, which caps in the identical shape with bc
-  // false and must stay warning-free), plus trace.behavior_change itself.
   const capped = await capCell(root, 'bc-decl', { files_changed: ['a.js'], outcome: 'done' });
   assert(capped.trace.behavior_change === true, 'trace.behavior_change carried from the cell declaration');
-  assert(
-    (capped.trace.warnings || []).some((w) => w.includes('declares behavior_change but records no verification_evidence')),
-    `the flag-less cap must still RESOLVE behavior_change true — that warning fires on no other path, got ${JSON.stringify(capped.trace.warnings)}`,
-  );
 });
 
 // ─── E6 (derived-check-hardening): behavior_change resolves from either the
 // top-level field OR trace.behavior_change — live evidence was vd-9/vd-10/
-// vd-11, each authored with ONLY trace.behavior_change: true (no top-level
-// field) and each capped with the flag false, silently missing scribing-debt
-// detection and the semantic goal-check judge tier.
+// vd-11, each authored with ONLY trace.behavior_change: true and each capped
+// silently missing scribing-debt detection.
 
 await check('capCell resolves behavior_change from trace.behavior_change when the top-level field is unset (E6)', async () => {
   addCell(root, makeCell('bc-trace-only', { trace: { behavior_change: true } }));
   assert(readCell(root, 'bc-trace-only').behavior_change === undefined, 'fixture carries no top-level behavior_change');
   await claimCell(root, 'bc-trace-only', 'worker-e6');
-  await recordVerify(root, 'bc-trace-only', { command: 'npm test', output: 'ok', passed: true });
-  // Same wc-4 D1 re-anchoring as the row above: the trace-only declaration is
-  // still RESOLVED at cap, now observed through the recorded warning and
-  // trace.behavior_change rather than through the door D1 made non-blocking.
   const capped = await capCell(root, 'bc-trace-only', { files_changed: ['a.js'], outcome: 'done' });
   assert(capped.trace.behavior_change === true, 'trace-only declaration resolved to true at cap (E6 fix)');
-  assert(
-    (capped.trace.warnings || []).some((w) => w.includes('declares behavior_change but records no verification_evidence')),
-    `the trace-only declaration must still resolve true — that warning fires on no other path, got ${JSON.stringify(capped.trace.warnings)}`,
-  );
 });
 
 await check('capCell keeps an explicit top-level behavior_change:false even when trace.behavior_change is true (E6)', async () => {
   addCell(root, makeCell('bc-top-wins', { behavior_change: false, trace: { behavior_change: true } }));
   await claimCell(root, 'bc-top-wins', 'worker-e6');
-  await recordVerify(root, 'bc-top-wins', { command: 'npm test', output: 'ok', passed: true });
   const capped = await capCell(root, 'bc-top-wins', { files_changed: ['a.js'], outcome: 'done' });
-  assert(capped.status === 'capped', 'bc-top-wins caps with no behavior_change evidence demanded');
+  assert(capped.status === 'capped', 'bc-top-wins caps normally');
   assert(capped.trace.behavior_change === false, 'explicit top-level false wins over a conflicting trace value');
-  // wc-4 (D1) non-vacuity control for the two rows above: they now read the
-  // behavior_change resolution off the D1 warning, which is only meaningful
-  // if a cap in the IDENTICAL shape with bc false stays warning-free.
-  assert(
-    !(capped.trace.warnings || []).some((w) => w.includes('declares behavior_change')),
-    `a cap that resolved behavior_change FALSE must carry no behavior_change warning, got ${JSON.stringify(capped.trace.warnings)}`,
-  );
-});
-
-// ─── main-verifies mv-3 (D1): feature-verify-pending cap path ─────────────
-// Assertion (a): the pending path caps with ZERO per-cell verify evidence
-// demanded — no recordVerify call at all, no verification_evidence, no
-// files_changed/outcome floor tripped — and stamps trace.feature_verify:
-// "pending" for guardFeatureVerifyDebt (bee.mjs) to read at the close door.
-
-await check('mv-3(a): capCell --feature-verify-pending caps with NO verify recorded at all and stamps trace.feature_verify: "pending"', async () => {
-  addCell(root, makeCell('mv3-pend-1'));
-  await claimCell(root, 'mv3-pend-1', 'worker-mv3');
-  // Deliberately no recordVerify call — the pending path's whole point.
-  const capped = await capCell(root, 'mv3-pend-1', {
-    feature_verify_pending: true,
-    files_changed: ['src/mv3.js'],
-    outcome: 'pending cap, zero per-cell evidence',
-  });
-  assert(capped.status === 'capped', 'mv3-pend-1 capped through the pending path');
-  assert(capped.trace.feature_verify === 'pending', `expected trace.feature_verify "pending", got ${JSON.stringify(capped.trace.feature_verify)}`);
-  assert(capped.trace.verify_passed !== true, 'the pending path never claims a per-cell verify passed');
-  assert(!capped.trace.verification_evidence, 'the pending path attaches no verification_evidence');
-});
-
-// Assertion (b): the CLASSIC evidence path — feature_verify_pending omitted
-// (default false) — stays byte-identical: cap still refuses without a
-// passing verify, and once capped through the classic path the trace carries
-// NO trace.feature_verify field at all (the pending marker is stamped ONLY
-// on the pending path, never as a byproduct of the classic one).
-
-await check('mv-3(b): classic cap path is byte-identical — still refuses without verify, and a classically-capped cell carries no trace.feature_verify field', async () => {
-  addCell(root, makeCell('mv3-classic-1'));
-  await claimCell(root, 'mv3-classic-1', 'worker-mv3');
-  await assertRejects(
-    () => capCell(root, 'mv3-classic-1', { files_changed: ['src/mv3-classic.js'], outcome: 'done' }),
-    'verify',
-    'the classic path still demands a passing verify — untouched by D1',
-  );
-  await recordVerify(root, 'mv3-classic-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
-  const capped = await capCell(root, 'mv3-classic-1', { files_changed: ['src/mv3-classic.js'], outcome: 'done classically' });
-  assert(capped.status === 'capped', 'mv3-classic-1 capped through the classic path');
-  assert(!('feature_verify' in capped.trace), `classic cap must not stamp trace.feature_verify, got ${JSON.stringify(capped.trace.feature_verify)}`);
 });
 
 await check('isKnownPhase accepts the enum + terminal alias and rejects drift', async () => {
@@ -1470,44 +1352,39 @@ await check('normalizeFailureSignature prefers the first FAIL/Error/refus/denied
   assert(sig === normalizeFailureSignature('other run\nFAIL assertion mismatch on line 12\ndone'), 'the picked diagnostic line ignores unrelated surrounding noise');
 });
 
-await check('recordVerify appends a ledger entry on every outcome — fail then fail then pass — with claim_session/claimed_at from the live claim file (D1+Δ1)', async () => {
+await check('recordTestsRedAttempt appends a tests-red ledger entry — note carries the excerpt first line, failure_signature derives from it, claim_session/claimed_at from the live claim (test-simple)', async () => {
   addCell(root, makeCell('ledger-1'));
   const claimed = await claimCellCrossSession(root, { sessionId: 'sess-ledger-1', worker: 'worker-ledger', cellId: 'ledger-1' });
   assert(claimed.ok === true, `precondition: claim should succeed, got ${JSON.stringify(claimed)}`);
   const liveClaim = readClaim(root, 'ledger-1');
 
-  await recordVerify(root, 'ledger-1', { command: 'npm test', output: 'FAIL first attempt', passed: false, sessionId: 'sess-ledger-1' });
-  const afterFail1 = readCell(root, 'ledger-1');
-  assert(Array.isArray(afterFail1.trace.attempts) && afterFail1.trace.attempts.length === 1, `expected 1 attempt, got ${JSON.stringify(afterFail1.trace.attempts)}`);
-  const entry1 = afterFail1.trace.attempts[0];
+  await recordTestsRedAttempt(root, 'ledger-1', { excerptLine: 'FAIL first red run' });
+  const afterFirst = readCell(root, 'ledger-1');
+  assert(Array.isArray(afterFirst.trace.attempts) && afterFirst.trace.attempts.length === 1, `expected 1 attempt, got ${JSON.stringify(afterFirst.trace.attempts)}`);
+  const entry1 = afterFirst.trace.attempts[0];
   assert(entry1.n === 1, `first entry n should be 1, got ${entry1.n}`);
-  assert(entry1.verdict === 'fail', `first entry verdict should be fail, got ${entry1.verdict}`);
+  assert(entry1.verdict === 'tests-red', `first entry verdict should be tests-red, got ${entry1.verdict}`);
+  assert(entry1.note === 'FAIL first red run', `note carries the excerpt first line verbatim, got ${entry1.note}`);
+  assert(entry1.failure_signature === normalizeFailureSignature('FAIL first red run'), 'signature derives from the excerpt line via the shared normalizer');
   assert(entry1.claim_session === 'sess-ledger-1', `claim_session should come from the live claim, got ${entry1.claim_session}`);
-  assert(entry1.claimed_at === liveClaim.claimed_at, `claimed_at should be copied from the live claim file, got ${entry1.claimed_at} vs ${liveClaim.claimed_at}`);
+  assert(entry1.claimed_at === liveClaim.claimed_at, `claimed_at should be copied from the live claim file, got ${entry1.claimed_at}`);
   assert(entry1.worker === 'worker-ledger', `worker should carry the claiming worker, got ${entry1.worker}`);
-  assert(typeof entry1.failure_signature === 'string' && entry1.failure_signature.length > 0, 'a failed attempt must carry a failure_signature');
   assert('at' in entry1 && typeof entry1.at === 'string', 'entry carries its own timestamp');
 
-  await recordVerify(root, 'ledger-1', { command: 'npm test', output: 'FAIL second attempt', passed: false, sessionId: 'sess-ledger-1' });
-  const afterFail2 = readCell(root, 'ledger-1');
-  assert(afterFail2.trace.attempts.length === 2, `expected 2 attempts, got ${afterFail2.trace.attempts.length}`);
-  assert(afterFail2.trace.attempts[0].failure_signature === entry1.failure_signature, 'the first entry is never rewritten by a later append');
-  assert(afterFail2.trace.attempts[1].n === 2, `second entry n should be 2, got ${afterFail2.trace.attempts[1].n}`);
-
-  await recordVerify(root, 'ledger-1', { command: 'npm test', output: 'ok', passed: true, sessionId: 'sess-ledger-1' });
-  const afterPass = readCell(root, 'ledger-1');
-  assert(afterPass.trace.attempts.length === 3, `expected 3 attempts after the passing verify, got ${afterPass.trace.attempts.length}`);
-  const passEntry = afterPass.trace.attempts[2];
-  assert(passEntry.verdict === 'pass', `third entry verdict should be pass, got ${passEntry.verdict}`);
-  assert(passEntry.failure_signature === null, `a passing attempt must never carry a failure_signature, got ${passEntry.failure_signature}`);
+  await recordTestsRedAttempt(root, 'ledger-1', { excerptLine: 'FAIL second red run' });
+  const afterSecond = readCell(root, 'ledger-1');
+  assert(afterSecond.trace.attempts.length === 2, `expected 2 attempts, got ${afterSecond.trace.attempts.length}`);
+  assert(afterSecond.trace.attempts[0].failure_signature === entry1.failure_signature, 'the first entry is never rewritten by a later append');
+  assert(afterSecond.trace.attempts[1].n === 2, `second entry n should be 2, got ${afterSecond.trace.attempts[1].n}`);
 });
 
-await check('recordVerify --signature (worker-supplied) overrides the mechanical normalizer for a failed attempt', async () => {
-  addCell(root, makeCell('ledger-sig-1'));
-  await claimCell(root, 'ledger-sig-1', 'worker-sig');
-  await recordVerify(root, 'ledger-sig-1', { command: 'npm test', output: 'FAIL something', passed: false, signature: 'custom-sig-001' });
-  const entry = readCell(root, 'ledger-sig-1').trace.attempts[0];
-  assert(entry.failure_signature === 'custom-sig-001', `explicit --signature should win over the normalizer, got ${entry.failure_signature}`);
+await check('recordTestsRedAttempt tolerates a null excerpt (no output at all) and refuses an unknown cell id', async () => {
+  addCell(root, makeCell('ledger-red-noexcerpt'));
+  await claimCell(root, 'ledger-red-noexcerpt', 'worker-red');
+  await recordTestsRedAttempt(root, 'ledger-red-noexcerpt', {});
+  const entry = readCell(root, 'ledger-red-noexcerpt').trace.attempts[0];
+  assert(entry.verdict === 'tests-red' && entry.note === null && entry.failure_signature === null, `a null excerpt records a bare tests-red entry, got ${JSON.stringify(entry)}`);
+  await assertRejects(() => recordTestsRedAttempt(root, 'no-such-red-cell', { excerptLine: 'x' }), 'not found', 'unknown cell id refuses');
 });
 
 await check('blockCell appends a "blocked" ledger entry whose note is the block reason and whose failure_signature derives from it', async () => {
@@ -1524,7 +1401,7 @@ await check('a sessionless claim records claim_session null but still carries th
   addCell(root, makeCell('ledger-sessionless-1'));
   const claimed = await claimCellCrossSession(root, { sessionId: null, worker: 'worker-sl', cellId: 'ledger-sessionless-1' });
   assert(claimed.ok === true, `precondition: sessionless claim should succeed, got ${JSON.stringify(claimed)}`);
-  await recordVerify(root, 'ledger-sessionless-1', { command: 'npm test', output: 'FAIL x', passed: false });
+  await recordTestsRedAttempt(root, 'ledger-sessionless-1', { excerptLine: 'FAIL x' });
   const entry = readCell(root, 'ledger-sessionless-1').trace.attempts[0];
   assert(entry.claim_session === null, `sessionless claim must record claim_session null, got ${entry.claim_session}`);
   assert(typeof entry.claimed_at === 'string' && entry.claimed_at.length > 0, 'claimed_at is still copied from the live (sessionless) claim file');
@@ -1533,17 +1410,16 @@ await check('a sessionless claim records claim_session null but still carries th
 await check('trace.attempts entries survive capCell — appended to, never dropped by the trace spread', async () => {
   addCell(root, makeCell('ledger-cap-1'));
   await claimCell(root, 'ledger-cap-1', 'worker-cap');
-  await recordVerify(root, 'ledger-cap-1', { command: 'npm test', output: 'FAIL once', passed: false });
-  await recordVerify(root, 'ledger-cap-1', { command: 'npm test', output: 'ok', passed: true });
+  await recordTestsRedAttempt(root, 'ledger-cap-1', { excerptLine: 'FAIL once' });
+  await recordTestsRedAttempt(root, 'ledger-cap-1', { excerptLine: 'FAIL twice, differently' });
   const capped = await capCell(root, 'ledger-cap-1', { files_changed: ['a.js'], outcome: 'done' });
   assert(Array.isArray(capped.trace.attempts) && capped.trace.attempts.length === 2, `capCell must preserve every prior ledger entry, got ${JSON.stringify(capped.trace.attempts)}`);
-  assert(capped.trace.attempts[0].verdict === 'fail' && capped.trace.attempts[1].verdict === 'pass', 'entry order and verdicts survive cap byte-unchanged');
+  assert(capped.trace.attempts[0].verdict === 'tests-red' && capped.trace.attempts[1].verdict === 'tests-red', 'entry order and verdicts survive cap byte-unchanged');
 });
 
 await check('updateCell refuses a {trace:{...}} patch on an open cell — the ledger cannot be edited around (D1+F1: trace is already frozen wholesale)', async () => {
   addCell(root, makeCell('ledger-update-1'));
   await claimCell(root, 'ledger-update-1', 'worker-upd');
-  await recordVerify(root, 'ledger-update-1', { command: 'npm test', output: 'FAIL', passed: false });
   await blockCell(root, 'ledger-update-1', 'stuck', { sessionId: undefined });
   const file = path.join(root, '.bee', 'cells', 'ledger-update-1.json');
   const before = fs.readFileSync(file, 'utf8');
@@ -1573,7 +1449,7 @@ await check('claimCellCrossSession: 3 claims exhaust the default max_claims budg
   for (let i = 0; i < 3; i += 1) {
     const claimed = await claimCellCrossSession(root, { sessionId: `sess-budget-claims-${i}`, worker: 'w', cellId: 'budget-claims-1' });
     assert(claimed.ok === true, `claim #${i + 1} should succeed under the default budget of 3, got ${JSON.stringify(claimed)}`);
-    await recordVerify(root, 'budget-claims-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true, sessionId: `sess-budget-claims-${i}` });
+    await recordTestsRedAttempt(root, 'budget-claims-1', { excerptLine: `FAIL distinct red number ${i}` });
     await unclaimCell(root, 'budget-claims-1', { sessionId: `sess-budget-claims-${i}` });
   }
   const fourth = await claimCellCrossSession(root, { sessionId: 'sess-budget-claims-3', worker: 'w', cellId: 'budget-claims-1' });
@@ -1589,7 +1465,7 @@ await check('claimCellCrossSession: two failed attempts sharing an identical fai
   addCell(root, makeCell('budget-sig-1'));
   for (let i = 0; i < 2; i += 1) {
     await claimCellCrossSession(root, { sessionId: `sess-budget-sig-${i}`, worker: 'w', cellId: 'budget-sig-1' });
-    await recordVerify(root, 'budget-sig-1', { command: 'npm test', output: 'FAIL identical assertion', passed: false, sessionId: `sess-budget-sig-${i}` });
+    await recordTestsRedAttempt(root, 'budget-sig-1', { excerptLine: 'FAIL identical assertion' });
     await unclaimCell(root, 'budget-sig-1', { sessionId: `sess-budget-sig-${i}` });
   }
   const third = await claimCellCrossSession(root, { sessionId: 'sess-budget-sig-2', worker: 'w', cellId: 'budget-sig-1' });
@@ -1603,7 +1479,7 @@ await check('claimCellCrossSession: an explicit per-cell budgets override is hon
   addCell(root, makeCell('budget-custom-1', { budgets: { max_claims: 1, max_failed_attempts: 4, max_same_signature: 2 } }));
   const first = await claimCellCrossSession(root, { sessionId: 'sess-budget-custom-0', worker: 'w', cellId: 'budget-custom-1' });
   assert(first.ok === true, `first claim under a custom max_claims:1 should succeed, got ${JSON.stringify(first)}`);
-  await recordVerify(root, 'budget-custom-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true, sessionId: 'sess-budget-custom-0' });
+  await recordTestsRedAttempt(root, 'budget-custom-1', { excerptLine: 'FAIL custom budget red' });
   await unclaimCell(root, 'budget-custom-1', { sessionId: 'sess-budget-custom-0' });
   const second = await claimCellCrossSession(root, { sessionId: 'sess-budget-custom-1', worker: 'w', cellId: 'budget-custom-1' });
   assert(second.ok === false && second.code === 'CELL_BUDGET_EXHAUSTED', `a 2nd claim under a custom max_claims:1 must refuse, got ${JSON.stringify(second)}`);
@@ -1614,7 +1490,7 @@ await check('resetCellBudget: audited reset appends a budget_resets marker, logs
   addCell(root, makeCell('budget-reset-1'));
   for (let i = 0; i < 3; i += 1) {
     await claimCellCrossSession(root, { sessionId: `sess-budget-reset-${i}`, worker: 'w', cellId: 'budget-reset-1' });
-    await recordVerify(root, 'budget-reset-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true, sessionId: `sess-budget-reset-${i}` });
+    await recordTestsRedAttempt(root, 'budget-reset-1', { excerptLine: `FAIL reset-fixture red number ${i}` });
     await unclaimCell(root, 'budget-reset-1', { sessionId: `sess-budget-reset-${i}` });
   }
   const blocked = await claimCellCrossSession(root, { sessionId: 'sess-budget-reset-3', worker: 'w', cellId: 'budget-reset-1' });
@@ -1718,7 +1594,7 @@ await check('resetCellBudget (D-GHF-C): the BEE_AGENT_NAME env fallback supplies
   addCell(root, makeCell('budget-reset-envactor-1'));
   for (let i = 0; i < 3; i += 1) {
     await claimCellCrossSession(root, { sessionId: `sess-envactor-${i}`, worker: 'w', cellId: 'budget-reset-envactor-1' });
-    await recordVerify(root, 'budget-reset-envactor-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true, sessionId: `sess-envactor-${i}` });
+    await recordTestsRedAttempt(root, 'budget-reset-envactor-1', { excerptLine: `FAIL env-actor red number ${i}` });
     await unclaimCell(root, 'budget-reset-envactor-1', { sessionId: `sess-envactor-${i}` });
   }
   const blocked = await claimCellCrossSession(root, { sessionId: 'sess-envactor-3', worker: 'w', cellId: 'budget-reset-envactor-1' });
@@ -1749,6 +1625,12 @@ await check('resetCellBudget (D-GHF-C): writes the audit decision BEFORE the cel
     );
     return;
   }
+  if (process.platform === 'win32') {
+    console.log(
+      'SKIP  resetCellBudget audit-order chmod(0o555) write-failure simulation: Windows — chmod is a no-op on directories, so the forced write failure cannot fire. Skipped loudly, not weakened.',
+    );
+    return;
+  }
   const dir = makeStateRepo('bee-budget-audit-order-');
   try {
     writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
@@ -1762,7 +1644,7 @@ await check('resetCellBudget (D-GHF-C): writes the audit decision BEFORE the cel
     addCell(dir, makeCell('budget-audit-order-1'));
     for (let i = 0; i < 3; i += 1) {
       await claimCellCrossSession(dir, { sessionId: `sess-audit-order-${i}`, worker: 'w', cellId: 'budget-audit-order-1' });
-      await recordVerify(dir, 'budget-audit-order-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true, sessionId: `sess-audit-order-${i}` });
+      await recordTestsRedAttempt(dir, 'budget-audit-order-1', { excerptLine: `FAIL audit-order red number ${i}` });
       await unclaimCell(dir, 'budget-audit-order-1', { sessionId: `sess-audit-order-${i}` });
     }
     const blocked = await claimCellCrossSession(dir, { sessionId: 'sess-audit-order-3', worker: 'w', cellId: 'budget-audit-order-1' });
@@ -1901,25 +1783,6 @@ await check(
   },
 );
 
-// ─── D3 (self-correcting-loop): judge-standard matrix — authoring advisory
-// (bee.mjs handler layer, tested in test_bee_cli.mjs alongside
-// manifestLintWarning) + mechanical behavior-class cap teeth (this lib,
-// tested here). change_class:'behavior' is used explicitly (rather than
-// behavior_change:true) in the cap-teeth rows below so the teeth are proven
-// gated on the DERIVED CLASS, not on the `bc` flag — CONTEXT: "additive to
-// today's rules", not a replacement for the pre-existing Decision 0009 check.
-//
-// test-economy D1/D2 (narrowing, applied to the rows below): the red-first
-// "before" floor these rows exercise is no longer enforced for EVERY
-// behavior-class cap — only where requiredProofTier(effectiveClass, lane)
-// resolves 'red-first'. For change_class:'behavior' that is the high-risk
-// lane only (tiny/small/standard are now 'targeted-green', proven by the
-// dedicated D1/D2 rows further below). Every row in this block is therefore
-// updated to `lane: 'high-risk'` so it keeps proving red-first IS still
-// enforced in the scope test-economy D2 actually pins it to — this is the
-// "chiều giữ" (keep) side of the D8 negative-control pair; the "chiều nới"
-// (loosen) side lives in the new rows appended after this block.
-
 await check('deriveChangeClass resolves explicit change_class, the sole behavior_change=>behavior derivation, and null otherwise — no other auto-derivation (D3)', async () => {
   assert(deriveChangeClass({ change_class: 'api' }) === 'api', 'explicit change_class wins');
   assert(deriveChangeClass({ change_class: 'api', behavior_change: true }) === 'api', 'explicit change_class wins even over behavior_change:true');
@@ -1954,522 +1817,6 @@ await check('updateCell validates change_class the same way, and accepts null to
   assert(cleared.change_class === null, 'null un-sets change_class back to derivation');
   const revalidated = await updateCell(root, 'jsm-good-class', { change_class: 'security' });
   assert(revalidated.change_class === 'security', 'a subsequent valid change_class still applies');
-});
-
-await check('capCell refuses a behavior-class cap with no red_failure_evidence at all, naming the missing minimum — gated on change_class, independent of the behavior_change flag (D3)', async () => {
-  addCell(root, makeCell('jsm-missing-1', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-missing-1: high-risk truth fixture'] } }));
-  await claimCell(root, 'jsm-missing-1', 'worker-jsm');
-  await recordVerify(root, 'jsm-missing-1', { command: 'x', output: 'ok', passed: true });
-  await assertRejects(
-    () => capCell(root, 'jsm-missing-1', { files_changed: ['a.js'], outcome: 'done' }),
-    'red_failure_evidence',
-    'a behavior-class cap with no evidence at all must be refused by the D3 teeth even when behavior_change is never set',
-  );
-});
-
-await check('capCell refuses a behavior-class cap whose red_failure_evidence is under 80 chars, naming the length floor (D3)', async () => {
-  addCell(root, makeCell('jsm-short-1', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-short-1: high-risk truth fixture'] } }));
-  await claimCell(root, 'jsm-short-1', 'worker-jsm');
-  await recordVerify(root, 'jsm-short-1', { command: 'x', output: 'ok', passed: true });
-  await assertRejects(
-    () =>
-      capCell(root, 'jsm-short-1', {
-        files_changed: ['a.js'],
-        outcome: 'done',
-        verification_evidence: { red_failure_evidence: 'too short' },
-      }),
-    '80',
-    'short red_failure_evidence must be refused, naming the 80-char floor',
-  );
-});
-
-await check('capCell refuses a behavior-class cap whose red_failure_evidence is byte-identical to another cell\'s recorded evidence, naming the colliding cell id (D3+Δ5 anti-boilerplate)', async () => {
-  const sharedText =
-    'this exact red_failure_evidence text is reused verbatim across two different cells to trigger the D3 anti-boilerplate duplicate refusal.';
-  assert(sharedText.length >= 80, 'fixture text must clear the length floor on its own, so only the duplicate check fires');
-
-  addCell(root, makeCell('jsm-dup-a', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-dup-a: high-risk truth fixture'] } }));
-  await claimCell(root, 'jsm-dup-a', 'worker-jsm');
-  await recordVerify(root, 'jsm-dup-a', { command: 'x', output: 'ok', passed: true });
-  await capCell(root, 'jsm-dup-a', {
-    files_changed: ['a.js'],
-    outcome: 'done',
-    verification_evidence: { red_failure_evidence: sharedText },
-  });
-
-  addCell(root, makeCell('jsm-dup-b', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-dup-b: high-risk truth fixture'] } }));
-  await claimCell(root, 'jsm-dup-b', 'worker-jsm');
-  await recordVerify(root, 'jsm-dup-b', { command: 'x', output: 'ok', passed: true });
-  await assertRejects(
-    () =>
-      capCell(root, 'jsm-dup-b', {
-        files_changed: ['a.js'],
-        outcome: 'done',
-        verification_evidence: { red_failure_evidence: sharedText },
-      }),
-    'jsm-dup-a',
-    'a byte-identical red_failure_evidence must be refused, naming the colliding cell id',
-  );
-});
-
-await check('capCell caps a behavior-class cell whose red_failure_evidence clears the D3 floor and is unique (green row)', async () => {
-  addCell(root, makeCell('jsm-green-1', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-green-1: high-risk truth fixture'] } }));
-  await claimCell(root, 'jsm-green-1', 'worker-jsm');
-  await recordVerify(root, 'jsm-green-1', { command: 'x', output: 'ok', passed: true });
-  const capped = await capCell(root, 'jsm-green-1', {
-    files_changed: ['a.js'],
-    outcome: 'done',
-    verification_evidence: {
-      red_failure_evidence:
-        'jsm-green-1: a genuinely unique characterization of the prior failing behavior before this change, clearing the D3 floor.',
-    },
-  });
-  assert(capped.status === 'capped', 'a sufficiently long, unique red_failure_evidence caps cleanly');
-});
-
-await check('capCell caps a behavior-class cell riding deliberate_exceptions without the D3 length/duplicate floor — today\'s contract unchanged (F5 passthrough)', async () => {
-  addCell(root, makeCell('jsm-exception-1', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-exception-1: high-risk truth fixture'] } }));
-  await claimCell(root, 'jsm-exception-1', 'worker-jsm');
-  await recordVerify(root, 'jsm-exception-1', { command: 'x', output: 'ok', passed: true });
-  const capped = await capCell(root, 'jsm-exception-1', {
-    files_changed: ['a.js'],
-    outcome: 'done',
-    verification_evidence: { deliberate_exceptions: ['brand-new surface, no prior behavior to characterize'] },
-  });
-  assert(capped.status === 'capped', 'the exception door still caps without any red_failure_evidence — the D3 floor never applies to it');
-});
-
-await check('capCell tolerates a corrupt sibling cell file during the D3 duplicate scan — never throws, just skips it (Δ5)', async () => {
-  const corruptPath = path.join(root, '.bee', 'cells', 'jsm-corrupt-sibling.json');
-  fs.writeFileSync(corruptPath, '{ not valid json', 'utf8');
-  try {
-    addCell(root, makeCell('jsm-corrupt-check', { change_class: 'behavior', lane: 'high-risk', must_haves: { truths: ['jsm-corrupt-check: high-risk truth fixture'] } }));
-    await claimCell(root, 'jsm-corrupt-check', 'worker-jsm');
-    await recordVerify(root, 'jsm-corrupt-check', { command: 'x', output: 'ok', passed: true });
-    const capped = await capCell(root, 'jsm-corrupt-check', {
-      files_changed: ['a.js'],
-      outcome: 'done',
-      verification_evidence: {
-        red_failure_evidence:
-          'jsm-corrupt-check: unique red evidence text, long enough to clear the D3 anti-boilerplate floor despite a corrupt sibling cell file present on disk.',
-      },
-    });
-    assert(capped.status === 'capped', 'a corrupt sibling cell file must never crash or block the duplicate scan');
-  } finally {
-    fs.rmSync(corruptPath, { force: true });
-  }
-});
-
-await check('capCell applies NO teeth to non-behavior classes — an api-class cell caps normally without any verification_evidence (D3: only behavior gets hard teeth in v1)', async () => {
-  addCell(root, makeCell('jsm-api-1', { change_class: 'api' }));
-  await claimCell(root, 'jsm-api-1', 'worker-jsm');
-  await recordVerify(root, 'jsm-api-1', { command: 'x', output: 'ok', passed: true });
-  const capped = await capCell(root, 'jsm-api-1', { files_changed: ['a.js'], outcome: 'done' });
-  assert(capped.status === 'capped', 'a non-behavior change_class never gets D3 cap teeth');
-});
-
-// ─── test-economy D1/D2/D8: proof-tier matrix (requiredProofTier) + the
-// diff_stats-driven refactor/formatting new-test-file refusal, table-driven,
-// with paired negative controls — every loosened assertion above (the
-// jsm-* rows, now `lane: 'high-risk'`) keeps a "chiều giữ" (keep) partner
-// here proving red-first still fires exactly where test-economy D1/D2 pins
-// it (security/migration in any lane, or a behavior-bearing class in the
-// high-risk lane), alongside a "chiều nới" (loosen) partner proving the
-// newly-accepted targeted-green tiers actually cap.
-
-await check('requiredProofTier resolves the test-economy D1 proof-tier matrix, table-driven (D1)', () => {
-  const cases = [
-    ['security', 'tiny', 'red-first'],
-    ['security', 'standard', 'red-first'],
-    ['migration', 'small', 'red-first'],
-    ['migration', 'high-risk', 'red-first'],
-    ['refactor', 'standard', 'suite-green'],
-    ['refactor', 'high-risk', 'suite-green'], // plan.md pin: refactor never red-first, even high-risk
-    ['formatting', 'tiny', 'suite-green'],
-    ['formatting', 'high-risk', 'suite-green'],
-    // slice-tail-test-batching P3 — the bugfix row is UNCHANGED by P1. These
-    // three rows are the negative control for the whole amendment: the one
-    // way to get this change wrong is to over-read P1 as "every
-    // behavior-bearing class moved" and take repro-first away from bugfix.
-    ['bugfix', 'tiny', 'targeted-green'],
-    ['bugfix', 'small', 'targeted-green'],
-    ['bugfix', 'standard', 'targeted-green'],
-    // slice-tail-test-batching P1 — behavior/api outside high-risk cap on the
-    // EXISTING suite green; authoring moves to the slice's 'test' cell.
-    ['behavior', 'tiny', 'existing-targeted-green'],
-    ['behavior', 'small', 'existing-targeted-green'],
-    ['behavior', 'standard', 'existing-targeted-green'],
-    ['api', 'tiny', 'existing-targeted-green'],
-    ['api', 'small', 'existing-targeted-green'],
-    ['api', 'standard', 'existing-targeted-green'],
-    // High-risk keeps per-cell red-first for every behavior-bearing class,
-    // bugfix included — untouched by P1.
-    ['bugfix', 'high-risk', 'red-first'],
-    ['behavior', 'high-risk', 'red-first'],
-    ['api', 'high-risk', 'red-first'],
-    // slice-tail-test-batching P2 — the consolidated test cell caps on its own
-    // targeted suite passing, in every lane. Never red-first: it has no
-    // production change to characterize a "before" for.
-    ['test', 'tiny', 'targeted-green'],
-    ['test', 'small', 'targeted-green'],
-    ['test', 'standard', 'targeted-green'],
-    ['test', 'high-risk', 'targeted-green'],
-    [null, 'small', null],
-    [null, 'high-risk', null],
-    [undefined, 'standard', null],
-  ];
-  for (const [changeClass, lane, expected] of cases) {
-    const got = requiredProofTier(changeClass, lane);
-    assert(
-      got === expected,
-      `requiredProofTier(${JSON.stringify(changeClass)}, ${JSON.stringify(lane)}) expected ${JSON.stringify(expected)}, got ${JSON.stringify(got)}`,
-    );
-  }
-});
-
-// slice-tail-test-batching P3 (spec #80/#85) — bugfix repro-first, pinned as a
-// FIRST-CLASS row, not a side effect of the table above. P1 moved behavior/api
-// off 'targeted-green'; the single most likely way to get P1 wrong is to sweep
-// bugfix along with them, which would silently retire repro-first — the proof
-// that a bug was diagnosed rather than merely patched. This row exists to fail
-// loudly the moment that happens.
-await check('requiredProofTier: bugfix is UNCHANGED by the slice-tail P1 amendment — repro-first survives (P3 negative control)', () => {
-  for (const lane of ['tiny', 'small', 'standard']) {
-    const got = requiredProofTier('bugfix', lane);
-    assert(
-      got === 'targeted-green',
-      `bugfix x ${lane} must stay 'targeted-green' (the tier repro-first rides) — got ${JSON.stringify(got)}. P1 amended behavior/api ONLY.`,
-    );
-    assert(
-      got !== 'existing-targeted-green',
-      `bugfix x ${lane} must NOT have been swept into the P1 'existing-targeted-green' row — that would drop repro-first, which spec #85 P3 restates as unchanged.`,
-    );
-  }
-  assert(
-    requiredProofTier('bugfix', 'high-risk') === 'red-first',
-    'bugfix x high-risk stays red-first, exactly as before the amendment',
-  );
-});
-
-// slice-tail-test-batching P1 — the tier is only half the contract; the other
-// half is that capCell ACCEPTS it with no newly authored test, and still
-// refuses on a missing/failing verify record. 'existing-targeted-green' is not
-// 'red-first', so none of the red-first teeth fire on it.
-await check("capCell (slice-tail P1): a behavior cell on standard caps on EXISTING-suite-green evidence with no new test and no red_failure_evidence", async () => {
-  addCell(root, makeCell('stb-behavior-standard', { change_class: 'behavior', lane: 'standard', behavior_change: true, must_haves: { truths: ['stb-behavior-standard: the existing targeted suite stays green'] } }));
-  await claimCell(root, 'stb-behavior-standard', 'worker-stb');
-  await recordVerify(root, 'stb-behavior-standard', {
-    command: 'node scripts/run_verify.mjs --only test_cells',
-    output: 'existing suite green',
-    passed: true,
-  });
-  const capped = await capCell(root, 'stb-behavior-standard', {
-    files_changed: ['src/a.js'],
-    outcome: 'done',
-    // No new test files at all, and no red_failure_evidence — the whole point.
-    diff_stats: { new_test_files: [], test_lines_added: 0, source_lines_changed: 40 },
-    verification_evidence: { existing_suite: 'the cell\'s targeted scope of the existing suite stayed green' },
-  });
-  assert(capped.status === 'capped', 'existing-targeted-green caps with no authored test');
-  assert(
-    requiredProofTier('behavior', 'standard') === 'existing-targeted-green',
-    'the row this cap exercises really is the amended one',
-  );
-});
-
-await check("capCell (slice-tail P1): the amended tier does NOT relax decision 0004 — an absent verify record still refuses the cap", async () => {
-  addCell(root, makeCell('stb-behavior-noverify', { change_class: 'behavior', lane: 'standard', behavior_change: true, must_haves: { truths: ['stb-behavior-noverify: a cap without a recorded verify is refused'] } }));
-  await claimCell(root, 'stb-behavior-noverify', 'worker-stb');
-  await assertRejects(
-    () =>
-      capCell(root, 'stb-behavior-noverify', {
-        files_changed: ['src/a.js'],
-        outcome: 'done',
-        verification_evidence: { existing_suite: 'asserted green, never run' },
-      }),
-    'verify',
-    'existing-targeted-green still caps only on RECORDED proof — the tier moved authoring, never the proof requirement',
-  );
-});
-
-await check("capCell (slice-tail P2): a 'test' cell is a normal cell — it caps on its own targeted green, and D3's new_suite_reason still governs its new files", async () => {
-  addCell(root, makeCell('stb-test-cell', { change_class: 'test', lane: 'standard', must_haves: { truths: ['stb-test-cell: the slice consolidated suite passes'] } }));
-  await claimCell(root, 'stb-test-cell', 'worker-stb');
-  await recordVerify(root, 'stb-test-cell', { command: 'node scripts/run_verify.mjs --only test_new', output: 'green', passed: true });
-  // D5/D3 unchanged: a brand-new suite still owes new_suite_reason at the test
-  // cell — the economy rules RELOCATED here, they did not soften.
-  await assertRejects(
-    () =>
-      capCell(root, 'stb-test-cell', {
-        files_changed: ['tests/test_new.mjs'],
-        outcome: 'done',
-        diff_stats: { new_test_files: ['tests/test_new.mjs'], test_lines_added: 60, source_lines_changed: 0 },
-      }),
-    'new_suite_reason',
-    'the slice test cell inherits D3 unchanged — a new permanent CI suite still needs its stated reason',
-  );
-  const capped = await capCell(root, 'stb-test-cell', {
-    files_changed: ['tests/test_new.mjs'],
-    outcome: 'done',
-    diff_stats: { new_test_files: ['tests/test_new.mjs'], test_lines_added: 60, source_lines_changed: 0 },
-    verification_evidence: {
-      new_suite_reason: 'the slice introduced a surface with no existing suite covering it, so its consolidated cases need a home',
-      ratio_waiver: 'a consolidated test cell has near-zero source delta by construction; the ratio is measured against the slice aggregate',
-    },
-  });
-  assert(capped.status === 'capped', "a 'test' cell caps on targeted-green once D3 is satisfied");
-});
-
-await check('capCell (D2 loosen): bugfix x small and null-unclassified x standard bc=true cap on targeted-green — ordinary evidence, no red_failure_evidence required — table-driven (D2/D8)', async () => {
-  const cases = [
-    { id: 'te1-bugfix-small', lane: 'small', extra: { change_class: 'bugfix' } },
-    {
-      id: 'te1-null-standard-bc',
-      lane: 'standard',
-      extra: { must_haves: { truths: ['te1-null-standard-bc: targeted-green truth fixture'] } },
-    },
-  ];
-  for (const c of cases) {
-    addCell(root, makeCell(c.id, { lane: c.lane, ...c.extra }));
-    await claimCell(root, c.id, 'worker-te1');
-    await recordVerify(root, c.id, { command: 'x', output: 'ok', passed: true });
-    const capped = await capCell(root, c.id, {
-      files_changed: ['a.js'],
-      outcome: 'done',
-      behavior_change: true,
-      verification_evidence: { verification_run: `${c.id}: targeted test ran green, no red_failure_evidence attached` },
-    });
-    assert(capped.status === 'capped', `${c.id}: targeted-green tier must cap without red_failure_evidence`);
-  }
-});
-
-await check('capCell (D2 keep — negative control): security/migration (any lane) and null-unclassified high-risk bc=true STILL refuse without red_failure_evidence — table-driven (D2/D8)', async () => {
-  const cases = [
-    { id: 'te1-sec-tiny', lane: 'tiny', extra: { change_class: 'security' }, bc: undefined },
-    { id: 'te1-mig-small', lane: 'small', extra: { change_class: 'migration' }, bc: undefined },
-    {
-      id: 'te1-null-hr-bc',
-      lane: 'high-risk',
-      extra: { must_haves: { truths: ['te1-null-hr-bc: red-first truth fixture'] } },
-      bc: true,
-    },
-  ];
-  for (const c of cases) {
-    addCell(root, makeCell(c.id, { lane: c.lane, ...c.extra }));
-    await claimCell(root, c.id, 'worker-te1');
-    await recordVerify(root, c.id, { command: 'x', output: 'ok', passed: true });
-    await assertRejects(
-      () =>
-        capCell(root, c.id, {
-          files_changed: ['a.js'],
-          outcome: 'done',
-          behavior_change: c.bc,
-          verification_evidence: { verification_run: `${c.id}: targeted test ran green, no before-characterization` },
-        }),
-      'red_failure_evidence',
-      `${c.id}: red-first tier must still refuse without red_failure_evidence`,
-    );
-  }
-});
-
-await check('capCell (D2 pin — regression guard): null-unclassified high-risk bc=false caps with no matrix check at all, exactly like before test-economy (D2)', async () => {
-  addCell(
-    root,
-    makeCell('te1-null-hr-bc-false', {
-      lane: 'high-risk',
-      must_haves: { truths: ['te1-null-hr-bc-false: pin fixture'] },
-    }),
-  );
-  await claimCell(root, 'te1-null-hr-bc-false', 'worker-te1');
-  await recordVerify(root, 'te1-null-hr-bc-false', { command: 'x', output: 'ok', passed: true });
-  const capped = await capCell(root, 'te1-null-hr-bc-false', {
-    files_changed: ['a.js'],
-    outcome: 'done',
-    behavior_change: false,
-  });
-  assert(
-    capped.status === 'capped',
-    'an unclassified bc=false high-risk cell must cap with no matrix check, unchanged from pre-test-economy behavior',
-  );
-});
-
-await check('capCell (D1): a refactor-class cell whose diff_stats carries a new test file is refused, no new_suite_reason override, at standard AND high-risk — table-driven (D1/D8)', async () => {
-  const cases = ['standard', 'high-risk'];
-  for (const lane of cases) {
-    const id = `te1-refactor-newtest-${lane}`;
-    addCell(root, makeCell(id, { lane, change_class: 'refactor', must_haves: { truths: [`${id}: refactor truth fixture`] } }));
-    await claimCell(root, id, 'worker-te1');
-    await recordVerify(root, id, { command: 'x', output: 'ok', passed: true });
-    await assertRejects(
-      () =>
-        capCell(root, id, {
-          files_changed: ['a.js', 'tests/test_new_thing.mjs'],
-          outcome: 'done',
-          verification_evidence: { new_suite_reason: 'trying to override the refactor ban with a stated reason' },
-          diff_stats: { new_test_files: ['tests/test_new_thing.mjs'], test_lines_added: 40, source_lines_changed: 5 },
-        }),
-      'refactor',
-      `${id}: a refactor cap must refuse a new test file — new_suite_reason does not override (D1)`,
-    );
-  }
-});
-
-await check('capCell (D1 pin): a refactor-class cell caps clean at high-risk with no red-first and no new test file (suite-green applies in EVERY lane) (D1/D8)', async () => {
-  addCell(
-    root,
-    makeCell('te1-refactor-hr-green', {
-      lane: 'high-risk',
-      change_class: 'refactor',
-      must_haves: { truths: ['te1-refactor-hr-green: suite-green truth fixture'] },
-    }),
-  );
-  await claimCell(root, 'te1-refactor-hr-green', 'worker-te1');
-  await recordVerify(root, 'te1-refactor-hr-green', { command: 'x', output: 'ok', passed: true });
-  const capped = await capCell(root, 'te1-refactor-hr-green', {
-    files_changed: ['a.js'],
-    outcome: 'done',
-    behavior_change: false,
-    diff_stats: { new_test_files: [], test_lines_added: 0, source_lines_changed: 12 },
-  });
-  assert(
-    capped.status === 'capped',
-    'refactor never needs red-first, even in the high-risk lane — the existing suite staying green is proof enough',
-  );
-});
-
-await check('capCell (D1 fail-open): a refactor-class cell with diff_stats omitted (undefined — no git, or a legacy caller) skips the new-test-file check entirely (D1)', async () => {
-  addCell(root, makeCell('te1-refactor-nogit', { lane: 'small', change_class: 'refactor' }));
-  await claimCell(root, 'te1-refactor-nogit', 'worker-te1');
-  await recordVerify(root, 'te1-refactor-nogit', { command: 'x', output: 'ok', passed: true });
-  const capped = await capCell(root, 'te1-refactor-nogit', { files_changed: ['a.js'], outcome: 'done' });
-  assert(
-    capped.status === 'capped',
-    'diff_stats undefined must fail-open — the D1 refactor/new-test-file check never fires without it',
-  );
-});
-
-// ─── test-economy D3/D8: test-shape guard at cap — new_suite_reason for any
-// non-refactor/formatting class that adds a new test file, and the
-// test-lines/source-lines ratio ceiling (tiny/small warn, standard/high-risk
-// refuse-unless-waived). Table-driven, with the D8-required negative
-// controls (refactor still refuses even WITH a reason — the te-1 rows above
-// already prove this; diff_stats undefined still skips every D3 check here
-// too, not just D1's).
-
-await check('capCell (D3): a non-refactor/formatting class adding a new test file is refused without a JSON new_suite_reason (>=20 chars) — table-driven (D3/D8)', async () => {
-  const cases = [
-    { id: 'te2-newtest-noevidence', lane: 'standard', evidence: undefined, why: 'no evidence at all' },
-    { id: 'te2-newtest-prose', lane: 'standard', evidence: 'adding a new suite because it seemed useful', why: 'prose (non-JSON) evidence' },
-    { id: 'te2-newtest-shortreason', lane: 'small', evidence: { new_suite_reason: 'too short' }, why: 'a new_suite_reason under 20 chars' },
-    { id: 'te2-newtest-unrelated-json', lane: 'small', evidence: { verification_run: 'targeted test passed' }, why: 'a JSON evidence object missing the new_suite_reason field entirely' },
-  ];
-  for (const c of cases) {
-    addCell(root, makeCell(c.id, { lane: c.lane, change_class: 'behavior', must_haves: { truths: [`${c.id}: D3 fixture`] } }));
-    await claimCell(root, c.id, 'worker-te2');
-    await recordVerify(root, c.id, { command: 'x', output: 'ok', passed: true });
-    await assertRejects(
-      () =>
-        capCell(root, c.id, {
-          files_changed: ['a.js', 'tests/test_new_suite.mjs'],
-          outcome: 'done',
-          verification_evidence: c.evidence,
-          diff_stats: { new_test_files: ['tests/test_new_suite.mjs'], test_lines_added: 10, source_lines_changed: 8 },
-        }),
-      'new_suite_reason',
-      `${c.id}: a new test file with ${c.why} must be refused naming new_suite_reason`,
-    );
-    // D8 (keep the same failure legible): the refusal also names the JSON
-    // requirement, so a worker who supplied prose knows exactly what shape
-    // is owed instead of guessing.
-    await assertRejects(
-      () =>
-        capCell(root, c.id, {
-          files_changed: ['a.js', 'tests/test_new_suite.mjs'],
-          outcome: 'done',
-          verification_evidence: c.evidence,
-          diff_stats: { new_test_files: ['tests/test_new_suite.mjs'], test_lines_added: 10, source_lines_changed: 8 },
-        }),
-      'JSON',
-      `${c.id}: the refusal must tell the worker evidence is owed as JSON`,
-    );
-  }
-});
-
-await check('capCell (D3): a new test file WITH a JSON new_suite_reason (>=20 chars) caps clean (D3)', async () => {
-  addCell(root, makeCell('te2-newtest-ok', { lane: 'standard', change_class: 'behavior', must_haves: { truths: ['te2-newtest-ok: D3 fixture'] } }));
-  await claimCell(root, 'te2-newtest-ok', 'worker-te2');
-  await recordVerify(root, 'te2-newtest-ok', { command: 'x', output: 'ok', passed: true });
-  const capped = await capCell(root, 'te2-newtest-ok', {
-    files_changed: ['a.js', 'tests/test_new_suite.mjs'],
-    outcome: 'done',
-    verification_evidence: { new_suite_reason: 'the new table-driven cases needed their own fixture file' },
-    diff_stats: { new_test_files: ['tests/test_new_suite.mjs'], test_lines_added: 10, source_lines_changed: 8 },
-  });
-  assert(capped.status === 'capped', 'a new_suite_reason of >=20 chars must let the cap through');
-});
-
-await check('capCell (D3 ratio, tiny/small): a ratio over 3 appends a non-blocking warning, never refuses (D3)', async () => {
-  addCell(root, makeCell('te2-ratio-tiny-warn', { lane: 'tiny' }));
-  await claimCell(root, 'te2-ratio-tiny-warn', 'worker-te2');
-  await recordVerify(root, 'te2-ratio-tiny-warn', { command: 'x', output: 'ok', passed: true });
-  const capped = await capCell(root, 'te2-ratio-tiny-warn', {
-    files_changed: ['a.js'],
-    outcome: 'done',
-    // ratio 31/10 = 3.1 (> RATIO_WARN_CEILING of 3)
-    diff_stats: { new_test_files: [], test_lines_added: 31, source_lines_changed: 10 },
-  });
-  assert(capped.status === 'capped', 'a tiny/small ratio over 3 must still cap — warning only, never a refusal');
-  assert(
-    Array.isArray(capped.trace.warnings) && capped.trace.warnings.length === 1 && /ratio/.test(capped.trace.warnings[0]),
-    `expected exactly one ratio warning in trace.warnings, got ${JSON.stringify(capped.trace.warnings)}`,
-  );
-});
-
-await check('capCell (D3 ratio, standard/high-risk): a ratio over 4 is refused unless verification_evidence carries a JSON ratio_waiver (>=20 chars), and the waiver is audited as a decision (D3/D8)', async () => {
-  addCell(root, makeCell('te2-ratio-standard-refuse', { lane: 'standard', must_haves: { truths: ['te2-ratio-standard-refuse: D3 ratio fixture'] } }));
-  await claimCell(root, 'te2-ratio-standard-refuse', 'worker-te2');
-  await recordVerify(root, 'te2-ratio-standard-refuse', { command: 'x', output: 'ok', passed: true });
-  // ratio 41/10 = 4.1 (> RATIO_REFUSE_CEILING of 4)
-  await assertRejects(
-    () =>
-      capCell(root, 'te2-ratio-standard-refuse', {
-        files_changed: ['a.js'],
-        outcome: 'done',
-        diff_stats: { new_test_files: [], test_lines_added: 41, source_lines_changed: 10 },
-      }),
-    'ratio_waiver',
-    'a standard-lane ratio over 4 must refuse, naming ratio_waiver',
-  );
-
-  addCell(root, makeCell('te2-ratio-standard-waived', { lane: 'standard', must_haves: { truths: ['te2-ratio-standard-waived: D3 ratio fixture'] } }));
-  await claimCell(root, 'te2-ratio-standard-waived', 'worker-te2');
-  await recordVerify(root, 'te2-ratio-standard-waived', { command: 'x', output: 'ok', passed: true });
-  const capped = await capCell(root, 'te2-ratio-standard-waived', {
-    files_changed: ['a.js'],
-    outcome: 'done',
-    verification_evidence: { ratio_waiver: 'this cell legitimately rewrote its entire test fixture set' },
-    diff_stats: { new_test_files: [], test_lines_added: 41, source_lines_changed: 10 },
-  });
-  assert(capped.status === 'capped', 'a >=20 char ratio_waiver must let the cap through despite the ratio');
-  const decisions = activeDecisions(root, { recent: 1 });
-  assert(
-    decisions.length > 0 && decisions[0].decision.includes('te2-ratio-standard-waived') && /waived/.test(decisions[0].decision),
-    `using ratio_waiver must be audited as a decision naming the cell, got ${JSON.stringify(decisions)}`,
-  );
-});
-
-await check('capCell (D3 fail-open): diff_stats omitted skips BOTH new_suite_reason and the ratio ceiling — a behavior-class cell with no reason at all still caps (D3)', async () => {
-  addCell(root, makeCell('te2-nogit', { lane: 'standard', change_class: 'behavior', must_haves: { truths: ['te2-nogit: D3 fail-open fixture'] } }));
-  await claimCell(root, 'te2-nogit', 'worker-te2');
-  await recordVerify(root, 'te2-nogit', { command: 'x', output: 'ok', passed: true });
-  const capped = await capCell(root, 'te2-nogit', {
-    files_changed: ['a.js', 'tests/test_new_suite.mjs'],
-    outcome: 'done',
-    verification_evidence: { verification_run: 'targeted test passed, no new_suite_reason attached' },
-    // diff_stats intentionally omitted (undefined) — no git, or a legacy caller.
-  });
-  assert(capped.status === 'capped', 'diff_stats undefined must fail-open for D3 exactly as it does for D1');
-  assert(!capped.trace.warnings || capped.trace.warnings.length === 0, 'no ratio warning can be computed without diff_stats');
 });
 
 // ─── derived-check-hardening E1: cap-time impact-registry cross-check ──────
@@ -2525,11 +1872,6 @@ await check(
         }),
       );
       await claimCell(iRoot, 'e1-warn-1', 'worker-e1');
-      await recordVerify(iRoot, 'e1-warn-1', {
-        command: 'node packages/bee/tests/test_unrelated.mjs',
-        output: 'ok',
-        passed: true,
-      });
       const originalWrite = process.stderr.write;
       let stderrOut = '';
       process.stderr.write = (chunk) => {
@@ -2577,11 +1919,6 @@ await check('capCell (E1): a verify that already mentions the direct-edge suite 
       }),
     );
     await claimCell(iRoot, 'e1-clean-1', 'worker-e1');
-    await recordVerify(iRoot, 'e1-clean-1', {
-      command: 'node packages/bee/tests/test_thing_direct.mjs',
-      output: 'ok',
-      passed: true,
-    });
     const capped = await capCell(iRoot, 'e1-clean-1', {
       files_changed: ['src/registry-fixture/thing.mjs'],
       outcome: 'done',
@@ -2608,7 +1945,6 @@ await check('capCell (E1): a missing impact registry is a silent skip, never a t
       }),
     );
     await claimCell(iRoot, 'e1-missing-1', 'worker-e1');
-    await recordVerify(iRoot, 'e1-missing-1', { command: 'x', output: 'ok', passed: true });
     const capped = await capCell(iRoot, 'e1-missing-1', { files_changed: ['a.js'], outcome: 'done' });
     assert(capped.status === 'capped', 'a missing registry must never block a cap');
   } finally {
@@ -2628,7 +1964,6 @@ await check('capCell (E1): a malformed impact registry (invalid JSON) is a silen
       }),
     );
     await claimCell(iRoot, 'e1-malformed-1', 'worker-e1');
-    await recordVerify(iRoot, 'e1-malformed-1', { command: 'x', output: 'ok', passed: true });
     const capped = await capCell(iRoot, 'e1-malformed-1', { files_changed: ['a.js'], outcome: 'done' });
     assert(capped.status === 'capped', 'a malformed registry must never block a cap');
   } finally {
@@ -2648,8 +1983,7 @@ await check('capCell releases the claim file on cap (D1 Δ2)', async () => {
   await claimCellCrossSession(root, { sessionId: 'sess-rel-cap', worker: 'w', cellId: 'rel-cap-1' });
   assert(readClaim(root, 'rel-cap-1') !== null, 'precondition: claim file exists after claim');
   // D4 (msh-4): the owning session must now authenticate its own mutations —
-  // recordVerify/capCell run AS 'sess-rel-cap', the session that claimed it.
-  await recordVerify(root, 'rel-cap-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true, sessionId: 'sess-rel-cap' });
+  // capCell runs AS 'sess-rel-cap', the session that claimed it.
   await capCell(root, 'rel-cap-1', { files_changed: ['a.js'], outcome: 'done', sessionId: 'sess-rel-cap' });
   assert(readClaim(root, 'rel-cap-1') === null, 'cap must release the claim file');
 });
@@ -2677,48 +2011,30 @@ await check('capCell/unclaimCell/blockCell/dropCell/reopenCell never fail when t
   addCell(root, makeCell('rel-none-1'));
   assert(readClaim(root, 'rel-none-1') === null, 'precondition: no claim file (never claimed via claimCellCrossSession)');
   await claimCell(root, 'rel-none-1', 'worker-plain'); // the bare, file-less claim path
-  await recordVerify(root, 'rel-none-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
   const capped = await capCell(root, 'rel-none-1', { files_changed: ['a.js'], outcome: 'done' });
   assert(capped.status === 'capped', 'cap succeeds cleanly with no claim file to release');
 });
 
 // ─── D4 (msh-4): claim-ownership check on cell mutators + audited force
-// door. recordVerify/capCell/blockCell/unclaimCell/reopenCell now read the
+// door. capCell/blockCell/unclaimCell/reopenCell read the
 // live claim file: a LIVE claim carrying a session that differs from the
 // caller's resolved session refuses (typed, names owner + expiry); an
 // expired claim, an absent claim, a sessionless claim, or a matching session
 // proceeds unchanged (dropCell stays untouched — CONTEXT D4 names only
 // verify/cap/block/unclaim/reopen).
 
-await check('a live claim mismatch refuses recordVerify/capCell/blockCell/unclaimCell, naming owner and expiry', async () => {
+await check('a live claim mismatch refuses capCell/blockCell/unclaimCell, naming owner and expiry', async () => {
   addCell(root, makeCell('own-mismatch-1'));
   await claimCellCrossSession(root, { sessionId: 'sess-owner', worker: 'w', cellId: 'own-mismatch-1' });
-  await assertRejects(
-    () =>
-      recordVerify(root, 'own-mismatch-1', {
-        command: 'node -e "process.exit(0)"',
-        output: 'ok',
-        passed: true,
-        sessionId: 'sess-intruder',
-      }),
-    'sess-owner',
-    'recordVerify refuses a mismatched session',
-  );
-  await assertRejects(
-    () =>
-      recordVerify(root, 'own-mismatch-1', {
-        command: 'node -e "process.exit(0)"',
-        output: 'ok',
-        passed: true,
-        sessionId: 'sess-intruder',
-      }),
-    'expires',
-    'the refusal names the expiry too',
-  );
   await assertRejects(
     () => capCell(root, 'own-mismatch-1', { files_changed: ['a.js'], outcome: 'done', sessionId: 'sess-intruder' }),
     'sess-owner',
     'capCell refuses a mismatched session',
+  );
+  await assertRejects(
+    () => capCell(root, 'own-mismatch-1', { files_changed: ['a.js'], outcome: 'done', sessionId: 'sess-intruder' }),
+    'expires',
+    'the refusal names the expiry too',
   );
   await assertRejects(
     () => blockCell(root, 'own-mismatch-1', 'stuck', { sessionId: 'sess-intruder' }),
@@ -2732,7 +2048,6 @@ await check('a live claim mismatch refuses recordVerify/capCell/blockCell/unclai
   );
   const cell = readCell(root, 'own-mismatch-1');
   assert(cell.status === 'claimed', 'every refusal above left the cell untouched — still claimed');
-  assert(cell.trace.verify_passed !== true, 'the refused recordVerify never landed a partial write');
 });
 
 await check('reopenCell also refuses a live-claim mismatch, naming owner and expiry', async () => {
@@ -2746,7 +2061,7 @@ await check('reopenCell also refuses a live-claim mismatch, naming owner and exp
   assert(readCell(root, 'own-mismatch-reopen').status === 'blocked', 'reopenCell refusal leaves status untouched');
 });
 
-await check('an expired claim proceeds unchanged for verify/cap (rescue stays possible)', async () => {
+await check('an expired claim proceeds unchanged for cap (rescue stays possible)', async () => {
   addCell(root, makeCell('own-expired-1'));
   await claimCell(root, 'own-expired-1', 'worker-x'); // bare claim (status only)
   writeJsonAtomic(claimPath(root, 'own-expired-1'), {
@@ -2754,12 +2069,6 @@ await check('an expired claim proceeds unchanged for verify/cap (rescue stays po
     session: 'sess-gone',
     claimed_at: new Date(Date.now() - 7200 * 1000).toISOString(),
     ttl_seconds: 60,
-  });
-  await recordVerify(root, 'own-expired-1', {
-    command: 'node -e "process.exit(0)"',
-    output: 'ok',
-    passed: true,
-    sessionId: 'sess-rescuer',
   });
   const capped = await capCell(root, 'own-expired-1', { files_changed: ['a.js'], outcome: 'done', sessionId: 'sess-rescuer' });
   assert(capped.status === 'capped', 'cap proceeds through an expired claim without refusal');
@@ -2769,12 +2078,6 @@ await check('a sessionless claim proceeds unchanged — single-session use never
   addCell(root, makeCell('own-sessionless-1'));
   await claimCellCrossSession(root, { sessionId: null, worker: 'w', cellId: 'own-sessionless-1' });
   assert(readClaim(root, 'own-sessionless-1').session === undefined, 'precondition: sessionless claim omits the session key');
-  await recordVerify(root, 'own-sessionless-1', {
-    command: 'node -e "process.exit(0)"',
-    output: 'ok',
-    passed: true,
-    sessionId: 'sess-anyone',
-  });
   const capped = await capCell(root, 'own-sessionless-1', {
     files_changed: ['a.js'],
     outcome: 'done',
@@ -2784,37 +2087,28 @@ await check('a sessionless claim proceeds unchanged — single-session use never
 });
 
 await check(
-  '--force-ownership bypasses a live-claim mismatch and appends an audited trace.ownership_overrides row (never trace.deviations) that survives the subsequent cap',
+  '--force-ownership bypasses a live-claim mismatch and appends an audited trace.ownership_overrides row (never trace.deviations)',
   async () => {
     addCell(root, makeCell('own-force-1'));
     await claimCellCrossSession(root, { sessionId: 'sess-owner', worker: 'w', cellId: 'own-force-1' });
-    await recordVerify(root, 'own-force-1', {
-      command: 'node -e "process.exit(0)"',
-      output: 'ok',
-      passed: true,
-      sessionId: 'sess-forcer',
-      forceOwnership: true,
-    });
-    const afterVerify = readCell(root, 'own-force-1');
+    await blockCell(root, 'own-force-1', 'forced block over a foreign claim', { sessionId: 'sess-forcer', forceOwnership: true });
+    const afterBlock = readCell(root, 'own-force-1');
     assert(
-      Array.isArray(afterVerify.trace.ownership_overrides) && afterVerify.trace.ownership_overrides.length === 1,
-      `recordVerify force appends one override row, got ${JSON.stringify(afterVerify.trace.ownership_overrides)}`,
+      Array.isArray(afterBlock.trace.ownership_overrides) && afterBlock.trace.ownership_overrides.length === 1,
+      `blockCell force appends one override row, got ${JSON.stringify(afterBlock.trace.ownership_overrides)}`,
     );
-    const row = afterVerify.trace.ownership_overrides[0];
+    const row = afterBlock.trace.ownership_overrides[0];
     assert(
-      row.verb === 'recordVerify' && row.forced_by === 'sess-forcer' && row.owner_bypassed === 'sess-owner',
+      row.verb === 'blockCell' && row.forced_by === 'sess-forcer' && row.owner_bypassed === 'sess-owner',
       `override row names forcer and bypassed owner, got ${JSON.stringify(row)}`,
     );
-    assert(
-      !Array.isArray(afterVerify.trace.deviations) || afterVerify.trace.deviations.length === 0,
-      'the force audit never lands in trace.deviations (Δ5) — cap has not run yet to even populate it',
-    );
 
+    await reopenCell(root, 'own-force-1', 'retry after forced block', { sessionId: 'sess-forcer' });
+    await claimCell(root, 'own-force-1', 'w2');
     const capped = await capCell(root, 'own-force-1', {
       files_changed: ['a.js'],
       outcome: 'forced cap',
       deviations: ['unrelated planning deviation'], // capCell REPLACES deviations wholesale — proves ownership_overrides survives that wipe
-      sessionId: 'sess-forcer',
       forceOwnership: true,
     });
     assert(
@@ -2886,7 +2180,6 @@ await check('capCell --override-judge logs a tagged decision under a taxonomy, i
         },
       }),
     );
-    await recordVerify(dir, 'ovr-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
     await assertRejects(
       () => capCell(dir, 'ovr-1', { outcome: 'done' }),
       'NEEDS_REVISION',
@@ -2918,7 +2211,7 @@ await check('resetCellBudget logs a tagged decision under a taxonomy, instead of
     addCell(dir, makeCell('bud-1', { lane: 'tiny' }));
     for (let i = 0; i < 3; i += 1) {
       await claimCellCrossSession(dir, { sessionId: `sess-tax-bud-${i}`, worker: 'w', cellId: 'bud-1' });
-      await recordVerify(dir, 'bud-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true, sessionId: `sess-tax-bud-${i}` });
+      await recordTestsRedAttempt(dir, 'bud-1', { excerptLine: `FAIL taxonomy-fixture red number ${i}` });
       await unclaimCell(dir, 'bud-1', { sessionId: `sess-tax-bud-${i}` });
     }
     const blocked = await claimCellCrossSession(dir, { sessionId: 'sess-tax-bud-3', worker: 'w', cellId: 'bud-1' });
@@ -2946,7 +2239,6 @@ await check('recordJudgeVerdict reopening a capped cell on NEEDS_REVISION logs a
   const dir = makeTaxonomyRepo('bee-cells-taxonomy-judge-');
   try {
     addCell(dir, makeCell('jr-1', { lane: 'tiny' }));
-    await recordVerify(dir, 'jr-1', { command: 'node -e "process.exit(0)"', output: 'ok', passed: true });
     await capCell(dir, 'jr-1', { outcome: 'first pass' });
     assert(readCell(dir, 'jr-1').status === 'capped', 'precondition: jr-1 is capped');
 
@@ -3216,388 +2508,7 @@ await check('solo/main repos byte-identical: claimCellCrossSession behaves exact
   assert(readCell(root, 'topo-solo-1').status === 'claimed', 'cell file visible at the same root, unchanged');
 });
 
-// ---------------------------------------------------------------------------
-// worker-conformance wc-1 (D10/D12/D14): trace.proof = "unrecorded" — the
-// absence-of-proof marker capCell stamps AFTER the entire refusal chain has
-// run, on a cap that is about to succeed. It exists so a cap that recorded no
-// real proof arms D3's close-door instead of passing silently, and it is
-// DELIBERATELY a new, inert field: D12 forbids reusing trace.feature_verify =
-// "pending", whose local flag short-circuits six refusal sites and would have
-// voided D2's red-first tier and D6's brakes the moment the marker landed.
-// Read-first (test-economy D5): the nearest existing rows are the D2
-// loosen/keep pair above (same makeCell/claimCell/recordVerify/capCell
-// pipeline) and the mv-3(a) pending-path row — neither says anything about
-// whether a cap recorded proof, so these are new ROWS in this suite, not a
-// new file.
-
-await check('capCell (wc-1 D10/D12): a cap with no real verify output and no verification_evidence stamps trace.proof "unrecorded" — table-driven over every shape of absent output', async () => {
-  const cases = [
-    { id: 'wc1-out-absent', verify: { command: 'x', passed: true }, why: 'output field omitted entirely' },
-    { id: 'wc1-out-null', verify: { command: 'x', output: null, passed: true }, why: 'output explicitly null' },
-    { id: 'wc1-out-empty', verify: { command: 'x', output: '', passed: true }, why: 'output is the empty string' },
-    { id: 'wc1-out-blank', verify: { command: 'x', output: '   \n\t  ', passed: true }, why: 'output is whitespace only' },
-    // Advisor consult (fable): the Decision 0004 door at cells.mjs:2158 lists
-    // small/standard/high-risk, but LANES (cells.mjs:91) also carries "spike" —
-    // so spike, like tiny, walks past it and is markable TODAY. D12/D14 grant
-    // no lane exemption, so a proofless spike cap arms the door like any other.
-    { id: 'wc1-out-spike', lane: 'spike', verify: { command: 'x', passed: true }, why: 'lane "spike" is markable too — no lane exemption exists' },
-  ];
-  for (const c of cases) {
-    addCell(root, makeCell(c.id, { lane: c.lane || 'tiny' }));
-    await claimCell(root, c.id, 'worker-wc1');
-    await recordVerify(root, c.id, c.verify);
-    const capped = await capCell(root, c.id, { files_changed: ['a.js'], outcome: 'done' });
-    assert(capped.status === 'capped', `${c.id}: the cap itself must still succeed — wc-1 only ADDS a marker (${c.why})`);
-    assert(
-      capped.trace.proof === 'unrecorded',
-      `${c.id} (${c.why}): expected trace.proof "unrecorded", got ${JSON.stringify(capped.trace.proof)}`,
-    );
-    assert(
-      capped.trace.feature_verify === undefined,
-      `${c.id}: D12 — the marker must never be the feature_verify pending flag, got ${JSON.stringify(capped.trace.feature_verify)}`,
-    );
-  }
-});
-
-await check('capCell (wc-1 D14): a cap that holds real proof is never marked — one-line output, verification_evidence with an empty output, and the explicit --feature-verify-pending path — table-driven', async () => {
-  const cases = [
-    {
-      id: 'wc1-real-output',
-      cell: { lane: 'tiny' },
-      verify: { command: 'x', output: 'ok', passed: true },
-      cap: {},
-      featureVerify: undefined,
-      why: 'a one-line real verify output is proof — D14 marks only the absence of BOTH channels',
-    },
-    {
-      id: 'wc1-evidence-empty-output',
-      cell: { lane: 'tiny', change_class: 'security' },
-      verify: { command: 'x', output: '', passed: true },
-      cap: {
-        verification_evidence: {
-          red_failure_evidence:
-            'wc1-evidence-empty-output: before this cell, capCell stamped nothing at all when a cap recorded no proof, so an output-less pass closed silently',
-        },
-      },
-      featureVerify: undefined,
-      why: 'D14 — a tiny-lane security cell whose red_failure_evidence already passed the red-first door holds the strongest proof in the system, even with an empty verify_output',
-    },
-    {
-      id: 'wc1-pending-path',
-      cell: { lane: 'tiny' },
-      verify: null,
-      cap: { feature_verify_pending: true },
-      featureVerify: 'pending',
-      why: 'the explicit pending path already carries its own marker — trace.proof stays untouched',
-    },
-  ];
-  for (const c of cases) {
-    addCell(root, makeCell(c.id, c.cell));
-    await claimCell(root, c.id, 'worker-wc1');
-    if (c.verify) await recordVerify(root, c.id, c.verify);
-    const capped = await capCell(root, c.id, { files_changed: ['a.js'], outcome: 'done', ...c.cap });
-    assert(capped.status === 'capped', `${c.id}: expected a successful cap`);
-    assert(
-      capped.trace.proof === undefined,
-      `${c.id}: expected trace.proof unset (${c.why}), got ${JSON.stringify(capped.trace.proof)}`,
-    );
-    assert(
-      capped.trace.feature_verify === c.featureVerify,
-      `${c.id}: expected trace.feature_verify ${JSON.stringify(c.featureVerify)}, got ${JSON.stringify(capped.trace.feature_verify)}`,
-    );
-  }
-});
-
-await check('capCell (wc-1 D12): a repo that declared commands.verify "none" (decision 55b951e1) is never marked — its close-door could never be satisfied', async () => {
-  const cases = [
-    {
-      id: 'wc1-nt-sentinel',
-      cell: { lane: 'tiny', verify: NO_TEST_SENTINEL },
-      verify: null,
-      why: 'the verify-none waiver path has no verify output by construction',
-    },
-    {
-      id: 'wc1-nt-realverify',
-      cell: { lane: 'tiny' },
-      verify: { command: 'x', passed: true },
-      why: 'the exemption is the REPO declaration, not the individual cell — no feature verify can ever run here',
-    },
-  ];
-  for (const c of cases) {
-    const dir = makeStateRepo('bee-wc1-notest-');
-    writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
-      schema_version: '1.0',
-      phase: 'swarming',
-      feature: 'demo-feat',
-      mode: 'standard',
-      approved_gates: { context: true, shape: true, execution: true, review: false },
-      workers: [],
-    });
-    writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { commands: { verify: NO_TEST_SENTINEL } });
-    addCell(dir, makeCell(c.id, c.cell));
-    await claimCell(dir, c.id, 'worker-wc1');
-    if (c.verify) await recordVerify(dir, c.id, c.verify);
-    const capped = await capCell(dir, c.id, { files_changed: ['a.js'], outcome: 'done' });
-    assert(capped.status === 'capped', `${c.id}: a no-test repo must still cap`);
-    assert(
-      capped.trace.proof === undefined,
-      `${c.id}: expected NO marker in a declared no-test repo (${c.why}), got ${JSON.stringify(capped.trace.proof)}`,
-    );
-  }
-});
-
-await check('capCell (wc-1 negative control): the "unrecorded" shape buys NO door bypass — red-first still refuses without red_failure_evidence, and a new test file still needs new_suite_reason (D7/D12)', async () => {
-  const cases = [
-    {
-      id: 'wc1-nc-sec-tiny',
-      cell: { lane: 'tiny', change_class: 'security' },
-      cap: {},
-      expect: 'red_failure_evidence',
-      why: 'security is red-first in every lane — the marker is inert at cells.mjs:2135',
-    },
-    {
-      id: 'wc1-nc-behavior-hr',
-      cell: {
-        lane: 'high-risk',
-        change_class: 'behavior',
-        must_haves: { truths: ['wc1-nc-behavior-hr: red-first negative-control fixture'] },
-      },
-      cap: {},
-      expect: 'red_failure_evidence',
-      why: 'a behavior-bearing class in a high-risk lane is red-first — the marker buys nothing there either',
-    },
-    {
-      id: 'wc1-nc-newsuite',
-      cell: { lane: 'tiny', change_class: 'behavior' },
-      cap: {
-        diff_stats: { new_test_files: ['tests/test_wc1_new.mjs'], test_lines_added: 10, source_lines_changed: 10 },
-      },
-      expect: 'new_suite_reason',
-      why: 'D6 brake at cells.mjs:1999 still refuses a new permanent suite with no stated reason',
-    },
-  ];
-  for (const c of cases) {
-    addCell(root, makeCell(c.id, c.cell));
-    await claimCell(root, c.id, 'worker-wc1');
-    // Exactly the shape that earns the marker: a passing verify with no output at all.
-    await recordVerify(root, c.id, { command: 'x', passed: true });
-    await assertRejects(
-      () => capCell(root, c.id, { files_changed: ['a.js'], outcome: 'done', ...c.cap }),
-      c.expect,
-      `${c.id}: ${c.why}`,
-    );
-    assert(
-      readCell(root, c.id).status === 'claimed',
-      `${c.id}: the refused cap must leave the cell uncapped — no marker, no partial write`,
-    );
-  }
-});
-
-// ─── wc-4 (D1 + D7): the loosening, and the proof every heavier door still bites ──
-//
-// D1 makes exactly TWO throws in capCell non-blocking: the behavior_change-
-// without-evidence door (cells.mjs:1957) and decision 0004's "an assertion is
-// not evidence" door (:2165). D7 is why the pair below is not optional — a
-// guard loosened without a negative control is a guard nobody can prove still
-// exists. So: one cases array walking every path that now caps, and one walking
-// every tier that must STILL refuse, both driven in exactly the shape the
-// loosening created (a passing verify with no output, no evidence attached).
-// Read-first (test-economy D5): the nearest existing rows are the wc-1 marker
-// rows directly above — they assert what a cap STAMPS, and every one of them
-// had to use lane "tiny" precisely because these two doors refused everywhere
-// else. None of them asserts what a cap now ACCEPTS or still REFUSES, so these
-// are new ROWS in this suite, not a new file.
-
-await check('capCell (wc-4 D1): the two loosened doors now RECORD instead of refusing — behavior_change with no evidence, and small/standard/high-risk with a verify recorded but no output, all cap — table-driven', async () => {
-  const cases = [
-    {
-      id: 'wc4-w-bc-small',
-      cell: { lane: 'small' },
-      cap: { behavior_change: true },
-      verify: { command: 'x', passed: true },
-      proof: 'unrecorded',
-      warns: ['declares behavior_change but records no verification_evidence', 'no recorded proof'],
-      why: 'both loosened doors fire on one cap — before wc-4 the behavior_change door refused first',
-    },
-    {
-      id: 'wc4-w-bc-tiny',
-      cell: { lane: 'tiny' },
-      cap: { behavior_change: true },
-      verify: { command: 'x', output: 'suite A: 12/12 green', passed: true },
-      proof: undefined,
-      warns: ['declares behavior_change but records no verification_evidence'],
-      why: 'isolates the behavior_change door alone — decision 0004 never applied at tiny, and real output means D14 leaves the cap unmarked',
-    },
-    {
-      id: 'wc4-w-proof-small',
-      cell: { lane: 'small' },
-      cap: {},
-      verify: { command: 'x', passed: true },
-      proof: 'unrecorded',
-      warns: ['no recorded proof'],
-      why: 'isolates decision 0004 door at lane small',
-    },
-    {
-      id: 'wc4-w-proof-standard',
-      cell: { lane: 'standard', must_haves: { truths: ['wc4-w-proof-standard: loosened-door fixture'] } },
-      cap: {},
-      verify: { command: 'x', passed: true },
-      proof: 'unrecorded',
-      warns: ['no recorded proof'],
-      why: 'same door, lane standard',
-    },
-    {
-      id: 'wc4-w-proof-highrisk',
-      cell: { lane: 'high-risk', must_haves: { truths: ['wc4-w-proof-highrisk: loosened-door fixture'] } },
-      cap: {},
-      verify: { command: 'x', passed: true },
-      proof: 'unrecorded',
-      warns: ['no recorded proof'],
-      why: 'lane high-risk with no behavior-bearing class declared resolves to no proof tier, so decision 0004 was the only door here — D2 is untested by this row on purpose, the negative control below owns it',
-    },
-  ];
-  for (const c of cases) {
-    addCell(root, makeCell(c.id, c.cell));
-    await claimCell(root, c.id, 'worker-wc4');
-    await recordVerify(root, c.id, c.verify);
-    const capped = await capCell(root, c.id, { files_changed: ['a.js'], outcome: 'done', ...c.cap });
-    assert(capped.status === 'capped', `${c.id}: the cap must now SUCCEED (${c.why})`);
-    assert(
-      capped.trace.proof === c.proof,
-      `${c.id}: expected trace.proof ${JSON.stringify(c.proof)} (${c.why}), got ${JSON.stringify(capped.trace.proof)}`,
-    );
-    // The absence is RECORDED, never silent — D8's audited-exemption shape.
-    const warnings = Array.isArray(capped.trace.warnings) ? capped.trace.warnings.join('\n') : '';
-    for (const needle of c.warns) {
-      assert(
-        warnings.includes(needle),
-        `${c.id}: a loosened door must leave a visible warning mentioning "${needle}", got ${JSON.stringify(capped.trace.warnings)}`,
-      );
-    }
-  }
-});
-
-await check('capCell (wc-4 D7 negative control): every heavier door STILL refuses in the exact shape wc-4 widened — red-first any lane, high-risk any class, refactor + new test file, new suite with no reason, over-ratio, and the files_changed door D1 kept — table-driven', async () => {
-  const hrTruths = (id) => ({ truths: [`${id}: negative-control fixture`] });
-  const cases = [
-    // D2: security/migration are red-first in EVERY lane — no lane softens the row.
-    { id: 'wc4-nc-sec-tiny', cell: { lane: 'tiny', change_class: 'security' }, expect: 'red_failure_evidence', why: 'security is red-first at tiny' },
-    { id: 'wc4-nc-sec-std', cell: { lane: 'standard', change_class: 'security', must_haves: hrTruths('wc4-nc-sec-std') }, expect: 'red_failure_evidence', why: 'security is red-first at standard' },
-    { id: 'wc4-nc-sec-hr', cell: { lane: 'high-risk', change_class: 'security', must_haves: hrTruths('wc4-nc-sec-hr') }, expect: 'red_failure_evidence', why: 'security is red-first at high-risk' },
-    { id: 'wc4-nc-mig-tiny', cell: { lane: 'tiny', change_class: 'migration' }, expect: 'red_failure_evidence', why: 'migration is red-first at tiny' },
-    { id: 'wc4-nc-mig-small', cell: { lane: 'small', change_class: 'migration' }, expect: 'red_failure_evidence', why: 'migration is red-first at small' },
-    // D2: EVERY behavior-bearing class in lane high-risk stays red-first.
-    { id: 'wc4-nc-behavior-hr', cell: { lane: 'high-risk', change_class: 'behavior', must_haves: hrTruths('wc4-nc-behavior-hr') }, expect: 'red_failure_evidence', why: 'behavior is red-first at high-risk' },
-    { id: 'wc4-nc-api-hr', cell: { lane: 'high-risk', change_class: 'api', must_haves: hrTruths('wc4-nc-api-hr') }, expect: 'red_failure_evidence', why: 'api is red-first at high-risk' },
-    { id: 'wc4-nc-bugfix-hr', cell: { lane: 'high-risk', change_class: 'bugfix', must_haves: hrTruths('wc4-nc-bugfix-hr') }, expect: 'red_failure_evidence', why: 'bugfix is red-first at high-risk' },
-    // D6: the new-test-file rules — refused outright for refactor/formatting,
-    // and needing a stated reason for every other class.
-    {
-      id: 'wc4-nc-refactor-newtest',
-      cell: { lane: 'small', change_class: 'refactor' },
-      cap: { diff_stats: { new_test_files: ['tests/test_wc4_nc_a.mjs'], test_lines_added: 10, source_lines_changed: 10 } },
-      expect: 'must not need a new test suite',
-      why: 'a refactor adding a new test file is refused with NO override — new_suite_reason cannot rescue it',
-    },
-    {
-      id: 'wc4-nc-formatting-newtest',
-      cell: { lane: 'small', change_class: 'formatting' },
-      cap: { diff_stats: { new_test_files: ['tests/test_wc4_nc_b.mjs'], test_lines_added: 10, source_lines_changed: 10 } },
-      expect: 'must not need a new test suite',
-      why: 'formatting rides the same unconditional refusal as refactor',
-    },
-    {
-      id: 'wc4-nc-newsuite',
-      cell: { lane: 'small', change_class: 'behavior' },
-      cap: { diff_stats: { new_test_files: ['tests/test_wc4_nc_c.mjs'], test_lines_added: 10, source_lines_changed: 10 } },
-      expect: 'new_suite_reason',
-      why: 'any other class still owes a stated reason for a new permanent CI suite',
-    },
-    // D6: the ratio ceiling refuses at standard and above without a waiver.
-    {
-      id: 'wc4-nc-ratio-std',
-      cell: { lane: 'standard', must_haves: hrTruths('wc4-nc-ratio-std') },
-      cap: { diff_stats: { test_lines_added: 50, source_lines_changed: 1 } },
-      expect: 'ratio_waiver',
-      why: 'the volume brake still refuses at standard',
-    },
-    {
-      id: 'wc4-nc-ratio-hr',
-      cell: { lane: 'high-risk', must_haves: hrTruths('wc4-nc-ratio-hr') },
-      cap: { diff_stats: { test_lines_added: 50, source_lines_changed: 1 } },
-      expect: 'ratio_waiver',
-      why: 'and at high-risk',
-    },
-    // D1's explicitly-kept door: it asks what the worker TOUCHED, not for
-    // authored proof, so it is out of scope for the loosening and must refuse
-    // in exactly the shape that now passes the two doors beside it.
-    {
-      id: 'wc4-nc-files-small',
-      cell: { lane: 'small' },
-      cap: { files_changed: [] },
-      expect: 'files_changed',
-      why: 'the non-empty files_changed door (cells.mjs:2170) is NOT in D1 scope and stays refusing',
-    },
-    {
-      id: 'wc4-nc-files-hr',
-      cell: { lane: 'high-risk', must_haves: hrTruths('wc4-nc-files-hr') },
-      cap: { files_changed: [] },
-      expect: 'files_changed',
-      why: 'same door at high-risk',
-    },
-  ];
-  for (const c of cases) {
-    addCell(root, makeCell(c.id, c.cell));
-    await claimCell(root, c.id, 'worker-wc4');
-    // Exactly the shape wc-4 widened: a passing verify with no output at all,
-    // and no verification_evidence on the cap. If a loosening leaked past its
-    // two doors, this is the shape that would carry it.
-    await recordVerify(root, c.id, { command: 'x', passed: true });
-    await assertRejects(
-      () => capCell(root, c.id, { files_changed: ['a.js'], outcome: 'done', ...(c.cap || {}) }),
-      c.expect,
-      `${c.id}: ${c.why}`,
-    );
-    assert(
-      readCell(root, c.id).status === 'claimed',
-      `${c.id}: a refused cap must leave the cell uncapped — no marker, no partial write`,
-    );
-  }
-});
-
-await check('capCell (wc-4 D7): gate_bypass "total" passes NONE of the surviving refusals — capCell never reads the bypass level at all', async () => {
-  const cases = [
-    { id: 'wc4-bp-security', cell: { lane: 'tiny', change_class: 'security' }, cap: {}, expect: 'red_failure_evidence' },
-    { id: 'wc4-bp-files', cell: { lane: 'small' }, cap: { files_changed: [] }, expect: 'files_changed' },
-    {
-      id: 'wc4-bp-ratio',
-      cell: { lane: 'standard', must_haves: { truths: ['wc4-bp-ratio: bypass negative-control fixture'] } },
-      cap: { diff_stats: { test_lines_added: 50, source_lines_changed: 1 } },
-      expect: 'ratio_waiver',
-    },
-  ];
-  const dir = makeStateRepo('bee-wc4-bypass-');
-  writeJsonAtomic(path.join(dir, '.bee', 'state.json'), {
-    schema_version: '1.0',
-    phase: 'swarming',
-    feature: 'demo-feat',
-    mode: 'standard',
-    approved_gates: { context: true, shape: true, execution: true, review: false },
-    workers: [],
-  });
-  // The loudest level there is (decision 0010 / total-autopilot dcf01d7b).
-  writeJsonAtomic(path.join(dir, '.bee', 'config.json'), { gate_bypass: 'total', commands: { verify: 'node run_verify.mjs' } });
-  for (const c of cases) {
-    addCell(dir, makeCell(c.id, c.cell));
-    await claimCell(dir, c.id, 'worker-wc4');
-    await recordVerify(dir, c.id, { command: 'x', passed: true });
-    await assertRejects(
-      () => capCell(dir, c.id, { files_changed: ['a.js'], outcome: 'done', ...c.cap }),
-      c.expect,
-      `${c.id}: no bypass level buys a cap past a surviving refusal — bypass self-approves GATES, never proof`,
-    );
-    assert(readCell(dir, c.id).status === 'claimed', `${c.id}: the refused cap must write nothing`);
-  }
-});
+// test-simple (decision 412e9b3a): the wc-1/wc-4 proof-marker and
+// proof-door tables are deleted with trace.proof and the evidence doors.
 
 printSummaryAndExit();

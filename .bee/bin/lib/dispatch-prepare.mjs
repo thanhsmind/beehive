@@ -33,7 +33,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveTier, resolveAdvisor } from './state.mjs';
-import { readCell, deriveChangeClass, requiredProofTier } from './cells.mjs';
+import { readCell } from './cells.mjs';
 import {
   PINNED_AGENT_TYPE,
   deriveEconomics,
@@ -141,7 +141,6 @@ function checkCellClaimOwnership(cell, worker) {
 //                               reopen record is the durable analog.)
 const PRIOR_ROUNDS_HEADER = 'Prior rounds (machine-assembled from the cell record):';
 const PRIOR_ROUNDS_CLOSER = 'Address what blocked the last round before anything else.';
-const PROOF_CONTRACT_HEADER = 'Proof contract (this cell):';
 // ~12-line cap on the digest: at most 12 event lines between header and
 // closer — overflow elides the OLDEST events behind one count line.
 const PRIOR_ROUNDS_MAX_EVENT_LINES = 12;
@@ -160,7 +159,18 @@ function priorRoundEventLines(cell) {
     if (attempt.verdict === 'blocked') {
       const reason = oneLine(attempt.note) || `failure signature ${attempt.failure_signature || '(none recorded)'}`;
       events.push({ at: attempt.at || null, line: `- ${worker} blocked: ${reason}` });
+    } else if (attempt.verdict === 'tests-red') {
+      // test-simple (decision 412e9b3a): a finish attempt refused on a red
+      // declared-test run (recordTestsRedAttempt) — the one-liner carries the
+      // failure excerpt's first line so the re-dispatched worker starts from
+      // the actual red, not a summary of it.
+      events.push({
+        at: attempt.at || null,
+        line: `- ${worker} tests red: ${oneLine(attempt.note) || '(no excerpt recorded)'}`,
+      });
     } else if (attempt.verdict === 'fail') {
+      // Legacy `cells verify` ledger entries (the verb is deleted; old cell
+      // records may still carry these) — rendered so history stays readable.
       events.push({
         at: attempt.at || null,
         line: `- ${worker} failed verify: failure signature ${attempt.failure_signature || '(none recorded)'}`,
@@ -205,29 +215,16 @@ function priorRoundEventLines(cell) {
   return lines;
 }
 
-// Conditional add-only blocks (fluent-mechanism 2: prompt blocks keyed on the
-// work's class). Both return [] for a plain first-dispatch cell, keeping that
-// prompt byte-identical to the unconditional template above them.
+// Conditional add-only block (fluent-mechanism 2). Returns [] for a plain
+// first-dispatch cell, keeping that prompt byte-identical to the
+// unconditional template above it.
+// test-simple (decision 412e9b3a): the proof-contract block is deleted with
+// the proof-tier matrix — the finish line in the contract above states the
+// one test door every cell shares.
 function priorRoundsBlock(cell) {
   const lines = priorRoundEventLines(cell);
   if (lines.length === 0) return [];
   return ['', PRIOR_ROUNDS_HEADER, ...lines, PRIOR_ROUNDS_CLOSER];
-}
-
-// Proof-contract block: only the red-first tier (cells.mjs requiredProofTier
-// — security/migration in every lane; bugfix/behavior/api on lane high-risk)
-// gets a stated obligation. Every other tier adds NOTHING — the default
-// contract lines above already state that path — and nothing here restates
-// rules the CLI enforces beyond naming the obligation and the flags.
-function proofContractBlock(cell) {
-  const tier = requiredProofTier(deriveChangeClass(cell), cell.lane);
-  if (tier !== 'red-first') return [];
-  return [
-    '',
-    PROOF_CONTRACT_HEADER,
-    '- Required proof tier: red-first. Reproduce the failure FIRST and capture the failing output as evidence, then fix — never fix-then-assert.',
-    '- bee cells finish will require that evidence: instead of --feature-verify-pending, cap with --behavior-change and --evidence-stdin (or --evidence-file <path>) carrying JSON {"red_failure_evidence": "<the captured failing output / prior behavior, >=80 chars>"}.',
-  ];
 }
 
 function cellPromptBody(cell, worker) {
@@ -250,12 +247,11 @@ function cellPromptBody(cell, worker) {
     '- The cell\'s listed files are reserved under your nickname when dispatch claimed them; reserve any ADDITIONAL path before writing: node .bee/bin/bee.mjs reservations reserve --agent "<nickname>" --cell "<id>" --path "<path>"',
     '- Never reinterpret a locked CONTEXT.md decision; architectural changes and package installs return [BLOCKED] with a proposal.',
     '- Commit once: imperative-mood subject, cell id as the last body line.',
-    `- Finish with: node .bee/bin/bee.mjs cells finish --id ${cell.id} --feature-verify-pending --outcome "<one line>" --files <a,b> (its refusals name what is missing; the cell's verify command is the orchestrator's, not yours).`,
+    `- Finish with: node .bee/bin/bee.mjs cells finish --id ${cell.id} --outcome "<one line>" --files <a,b> — it runs the project's declared commands.test first: green caps the cell, red refuses the cap and quotes the failing excerpt. The red is the work: fix it and re-run finish; never build on a red base.`,
     '- Return exactly one final status token: [DONE] (outcome, files, commit), [BLOCKED] (what, why, diagnosis), [HANDOFF] (at ~65% context, after writing .bee/HANDOFF.json), or [NOOP] (cell missing/already capped). Never wait silently; never ask a blocking question.',
-    // Conditional add-only blocks — both empty for a first-dispatch, plain
-    // cell, so that prompt stays byte-identical to the template above.
+    // Conditional add-only block — empty for a first-dispatch, plain cell,
+    // so that prompt stays byte-identical to the template above.
     ...priorRoundsBlock(cell),
-    ...proofContractBlock(cell),
   ].join('\n');
 }
 

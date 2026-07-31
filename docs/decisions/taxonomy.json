@@ -285,6 +285,8 @@
     "cross-cell-contracts",
     "vacuous-tests",
     "fixtures",
-    "distribution"
+    "distribution",
+    "proof",
+    "simplification"
   ]
 }

@@ -175,11 +175,11 @@ function baseWorkflowDefaults() {
     // generic updateWorkflow/updateWorkflowAssumingLock patch mechanism
     // already gives this for free, same as every other top-level field here).
     route: null,
-    // main-verifies D2: the feature-level verify record — {feature, command,
-    // output_sha256, result, at} — set via `bee state feature-verify record`.
-    // Optional, defaults to null (no verify recorded yet); replaced wholesale
-    // on update exactly like `route` above, never merged field-by-field.
-    feature_verify: null,
+    // test-simple (decision 412e9b3a): the feature_verify record field is
+    // deleted with `state feature-verify record` — new records no longer
+    // carry it. A legacy record that still holds one is tolerated as inert
+    // dead data by every reader (readWorkflowRecord validates only the
+    // fields it knows; unknown keys pass through untouched).
   };
 }
 
@@ -320,12 +320,11 @@ export function createWorkflow(
       }
       const record = {
         // main-verifies mv-4: spread baseWorkflowDefaults() FIRST so every
-        // field readWorkflowRecord defaults on read (route, feature_verify,
-        // and any future addition) is also present on the record written
-        // here — created and read must be byte-symmetric. The explicit
-        // fields below override the spread with the caller's actual values;
-        // route/feature_verify have no create-time param (yet) so they keep
-        // their baseWorkflowDefaults() null.
+        // field readWorkflowRecord defaults on read (route, and any future
+        // addition) is also present on the record written here — created and
+        // read must be byte-symmetric. The explicit fields below override
+        // the spread with the caller's actual values; route has no
+        // create-time param (yet) so it keeps its baseWorkflowDefaults() null.
         ...baseWorkflowDefaults(),
         id: workflowId,
         feature: featureName,

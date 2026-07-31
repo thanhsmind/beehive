@@ -1694,7 +1694,7 @@ try {
       ".claude-plugin/skills.old-*/",
       ".codex-plugin/skills.tmp-*/",
       ".codex-plugin/skills.old-*/",
-      // Legacy-flow debris (bee-gitignore-debris gi-1): pre-`--evidence-stdin`
+      // Legacy-flow debris (bee-gitignore-debris gi-1): early workers'
       // verify/evidence/deviations scratch and one-off patch files that used
       // to land tracked at the .bee root (six such files removed by gi-1).
       ".bee/tmp_*",

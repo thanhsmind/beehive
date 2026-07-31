@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { runModuleWorker } from '../../../scripts/lib/run-module-worker.mjs';
 import { check, assert, assertThrows, printSummaryAndExit } from '../../../scripts/lib/test-fixture.mjs';
 import { defaultState, writeState } from '../lib/state.mjs';
-import { addCell, readCell, claimCell, recordVerify, capCell } from '../lib/cells.mjs';
+import { addCell, readCell, claimCell, capCell } from '../lib/cells.mjs';
 import {
   createReview,
   listReviews,
@@ -86,38 +86,14 @@ function reviewCell(id, extra = {}) {
   };
 }
 
-/** A capped behavior_change cell WITH recorded verification_evidence. */
+/** A capped behavior_change cell (test-simple: no evidence machinery). */
 async function seedCappedCellWithEvidence(dir, id) {
   addCell(dir, reviewCell(id, { behavior_change: true }));
   await claimCell(dir, id, 'worker-rev');
-  await recordVerify(dir, id, { command: 'node -e 0', output: 'ok', passed: true });
   await capCell(dir, id, {
-    behavior_change: true,
-    verification_evidence: {
-      red_failure_evidence: `prior behavior characterized for cell "${id}" before this reviews-fixture change, meeting the D3 anti-boilerplate floor (>=80 chars).`,
-      verification_run: 'node -e 0',
-    },
     files_changed: ['a.js'],
     outcome: 'done',
   });
-}
-
-/**
- * A hand-crafted "legacy" capped behavior_change cell with NO evidence —
- * capCell itself already refuses this shape (decision 0009), so the only way
- * to reach it is a legacy/hand-crafted trace (plan.md "A10 scope note").
- * That is exactly the case A10's preflight exists to catch defensively.
- */
-function seedLegacyCappedCellNoEvidence(dir, id) {
-  addCell(dir, reviewCell(id, { behavior_change: true }));
-  const file = path.join(dir, '.bee', 'cells', `${id}.json`);
-  const cell = readJson(file, null);
-  cell.status = 'capped';
-  cell.trace.behavior_change = true;
-  cell.trace.verify_passed = true;
-  cell.trace.verification_evidence = null;
-  cell.trace.capped_at = new Date().toISOString();
-  writeJsonAtomic(file, cell);
 }
 
 function baseScope(overrides = {}) {
@@ -156,16 +132,13 @@ await check('createReview: session roundtrip carries every SPEC §8 field, and s
   }
 });
 
-await check('createReview: A10 fails closed — a behavior_change cell with no verification_evidence refuses create and writes NO session file', async () => {
+await check('createReview (test-simple): the A10 evidence preflight is deleted — a capped behavior_change cell with no evidence fields is normal scope, and the stored preflight counts it', async () => {
   const dir = makeReviewRepo('bee-reviews-a10-');
   try {
-    seedLegacyCappedCellNoEvidence(dir, 'legacy-1');
-    assertThrows(
-      () => createReview(dir, baseScope({ id: 'rev-a10', included: [{ type: 'cell', id: 'legacy-1' }] })),
-      'verification_evidence',
-      'A10 preflight must name the missing-evidence cell',
-    );
-    assert(!fs.existsSync(reviewsDir(dir)), 'a fail-closed create writes zero files — not even the .bee/reviews/ dir');
+    await seedCappedCellWithEvidence(dir, 'legacy-1');
+    const session = createReview(dir, baseScope({ id: 'rev-a10', included: [{ type: 'cell', id: 'legacy-1' }] }));
+    assert(session.included.length === 1 && session.included[0].id === 'legacy-1', 'the evidence-less cap stays included — review never re-litigates the deleted evidence machinery');
+    assert(Array.isArray(session.verification_preflight.cells_checked) && session.verification_preflight.cells_checked.includes('legacy-1'), `the stored preflight still counts behavior_change caps in scope, got ${JSON.stringify(session.verification_preflight)}`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -466,14 +439,13 @@ await check('bee.mjs reviews create/show/list/record/candidate round-trip throug
   }
 });
 
-await check('bee.mjs reviews create exits non-zero and writes nothing when the A10 preflight fails', async () => {
+await check('bee.mjs reviews create exits non-zero and writes nothing when the preflight cannot resolve an included cell', async () => {
   const dir = makeReviewRepo('bee-reviews-cli-a10-');
   try {
-    seedLegacyCappedCellNoEvidence(dir, 'legacy-1');
-    const scopeFile = writeTempJson(dir, 'scope.json', baseScope({ id: 'rev-cli-a10', included: [{ type: 'cell', id: 'legacy-1' }] }));
+    const scopeFile = writeTempJson(dir, 'scope.json', baseScope({ id: 'rev-cli-a10', included: [{ type: 'cell', id: 'no-such-cell' }] }));
     const result = await runBeeReviews(dir, ['create', '--file', scopeFile]);
-    assert(result.status !== 0, 'A10 preflight failure exits non-zero via the CLI');
-    assert(/verification_evidence/.test(result.stderr), `error names the missing evidence, got ${result.stderr}`);
+    assert(result.status !== 0, 'an unresolvable included cell exits non-zero via the CLI');
+    assert(/no such cell/.test(result.stderr), `error names the unresolvable cell, got ${result.stderr}`);
     assert(!fs.existsSync(path.join(dir, '.bee', 'reviews')), 'no session file written on a fail-closed CLI create');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

@@ -1140,7 +1140,7 @@ function runCatalogDriftChecks() {
   // must be present on every codex-repo-target entry. The pre-1710-6 bare
   // `node .bee/bin/hooks/<f> --source=repo` form assumed the session cwd IS
   // the repo root — from a NESTED cwd it threw MODULE_NOT_FOUND (see the
-  // execution row below and red_failure_evidence at cap). The replacement is
+  // execution row below). The replacement is
   // a `node -e SCRIPT <script>` bootstrap that resolves the real git root
   // first (mirrors the POSIX command's own `git rev-parse
   // --show-toplevel`), so it is cwd-independent like the POSIX form.

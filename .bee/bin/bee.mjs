@@ -62,29 +62,10 @@ import {
   isKnownPhase,
   checkPhaseTransition,
   checkScribingRunPhase,
-  // review-p1-fixes p2-1: the DEBT CORE (see its header in state.mjs). p1-3
-  // reused SCRIBING_RUN_FROM here as "which phases can a feature leave
-  // execution from" — an allowlist of ORIGINS, which a second reviewer walked
-  // straight past through `compounding`. The set is derived now, the debt
-  // computation lives in exactly one place, and the doors below own only their
-  // refusal head.
-  //
-  // guard-completion gc-1: that last sentence was still not true — the doors
-  // also owned their own LIST of which debts to ask about, and the swap door's
-  // list was short by one. Exactly ONE debt symbol is imported here now:
-  // guardFeatureDebt, which asks the whole FEATURE_DEBT_KINDS set. Importing a
-  // per-kind detector (featureVerifyDebt / testCellDebt) into this file again
-  // would rebuild the drift by hand, and test_bee_cli.mjs refuses it.
-  isDebtGuardedDeparture,
-  guardFeatureDebt,
-  // porcelain slice 2 (`bee close`): the KIND TABLE itself, imported for the
-  // close driver's per-door REPORT. This is not a second door asking a subset
-  // — close iterates the whole set through each kind's own detect/owed, so a
-  // kind added to FEATURE_DEBT_KINDS shows up in `bee close` with nothing
-  // edited here, and the gc-1 structural test (no direct per-kind detector
-  // call in bee.mjs) still holds: the detectors are only ever reached through
-  // the table.
-  FEATURE_DEBT_KINDS,
+  // test-simple (decision 412e9b3a): the debt core (guardFeatureDebt /
+  // FEATURE_DEBT_KINDS and the per-kind detectors) is deleted — the one test
+  // door is the declared commands.test run (lib/test-runner.mjs), enforced
+  // at cells cap/finish and re-run fresh by `bee close`.
   checkCompoundingRunPhase,
   startFeature,
   hasStaleAdvisorKey,
@@ -170,8 +151,8 @@ import {
   previewAddCells,
   updateCell,
   claimCellCrossSession,
-  recordVerify,
   capCell,
+  recordTestsRedAttempt,
   blockCell,
   dropCell,
   unclaimCell,
@@ -187,14 +168,20 @@ import {
   ceilingScarcityWarning,
   claimNextCell,
   resetCellBudget,
-  deriveChangeClass,
-  parseVerificationEvidence,
-  evidenceRidesExceptionDoor,
   recordJudgeVerdict,
   archiveFeature,
   unarchiveFeature,
   archivedTotals,
 } from './lib/cells.mjs';
+// test-simple (decision 412e9b3a): the ONE deterministic test path — the
+// declared commands.test runner shared by `bee test`, the cells cap/finish
+// door, and `bee close`'s tests door. One runner, one record, three surfaces.
+import {
+  runDeclaredTests,
+  declaredTestCommands,
+  firstFailureLine,
+  TEST_RESULTS_RELATIVE,
+} from './lib/test-runner.mjs';
 import { reserve, release, listReservations, sweepExpired } from './lib/reservations.mjs';
 // xwh-2: wires the cross-worktree holds ledger (xwh-1, worktree-holds.mjs)
 // into the reservation seam below (handleReservationsReserve/Release/Sweep/
@@ -1159,10 +1146,10 @@ function renderStatusText(status) {
         ]
       : []),
     ...(status.scribing_debt && status.scribing_debt.count > 0
-      ? [`Scribing debt: ${status.scribing_debt.count} behavior_change cell(s) uncaptured (${status.scribing_debt.cells.join(', ')}) — run bee-capturing capture (decision 0011)`]
+      ? [`Capture pending: ${status.scribing_debt.count} behavior_change cell(s) uncaptured (${status.scribing_debt.cells.join(', ')}) — run bee-capturing when you choose (decision c8e25271; batching features is fine)`]
       : []),
     ...(status.capture_queue && status.capture_queue.count > 0
-      ? [`Capture queue: ${status.capture_queue.count} stub(s) pending flush — run bee-capturing flush at wrap-up, before compact/clear, or now if idle (decision 0017)`]
+      ? [`Capture queue pending: ${status.capture_queue.count} stub(s) awaiting flush — run bee-capturing when you choose (decision c8e25271), and before compact/clear`]
       : []),
     ...(status.pbi
       ? [`PBI: ${status.pbi.done} done / ${status.pbi.in_flight} in-flight / ${status.pbi.proposed} proposed`]
@@ -1469,96 +1456,10 @@ function emitManifestLintWarnings(cells) {
   }
 }
 
-// D3 (self-correcting-loop) — judge-standard sufficiency matrix (F4): advisory
-// WARNING at `cells add`/`cells update`, STDERR only, manifest-lint pattern
-// (pah-2 emitManifestLintWarnings precedent above) — NEVER folded into the
-// JSON result, NEVER a refusal at authoring (CONTEXT D3). change_class
-// resolution matches cells.mjs's own deriveChangeClass exactly: an
-// unclassified cell (no change_class, no behavior_change:true) gets no check
-// at all. Each class' minimum is checked against what is knowable at
-// authoring time — the cell's own `verify` string, or (for `behavior`) any
-// pre-attached verification_evidence; most `behavior` cells will warn at add
-// time since evidence is normally attached later at cap, which is expected
-// and harmless (advisory-only).
-// Plain case-insensitive substring checks, not \b-anchored regexes — verify
-// strings are free-form shell commands where the keyword often sits inside
-// an underscore-joined filename (e.g. "test_contract.mjs"), and \w includes
-// underscore, so a \b boundary silently fails to match right there. This is
-// an advisory heuristic (never a refusal), so a substring match is the right
-// amount of precision.
-function verifyMentions(cell, ...needles) {
-  const verify = String(cell.verify || '').toLowerCase();
-  return needles.some((needle) => verify.includes(needle));
-}
-
-const JUDGE_STANDARD_MINIMUMS = {
-  formatting: {
-    label: 'a lint/typecheck check present in verify',
-    test: (cell) => verifyMentions(cell, 'lint', 'typecheck', 'tsc'),
-  },
-  bugfix: {
-    label: 'verify names a test path',
-    test: (cell) => verifyMentions(cell, 'test', 'spec'),
-  },
-  behavior: {
-    label: 'red_failure_evidence attached (verification_evidence.red_failure_evidence)',
-    test: (cell) => {
-      const evidence = parseVerificationEvidence(cell.verification_evidence);
-      return typeof evidence.red_failure_evidence === 'string' && evidence.red_failure_evidence.trim().length > 0;
-    },
-  },
-  api: {
-    label: 'a contract/integration test named in verify',
-    test: (cell) => verifyMentions(cell, 'contract', 'integration'),
-  },
-  security: {
-    label: 'a negative-path/security test named in verify',
-    test: (cell) => verifyMentions(cell, 'security', 'negative'),
-  },
-  migration: {
-    label: 'forward + rollback checks named in verify',
-    test: (cell) => verifyMentions(cell, 'forward') && verifyMentions(cell, 'rollback', 'down', 'revert'),
-  },
-};
-
-// Tolerates every malformed shape silently, same discipline as
-// manifestLintWarning above — the advisory must never throw on a bad cell.
-export function judgeStandardWarning(cell) {
-  if (!cell || typeof cell !== 'object') return null;
-  const changeClass = deriveChangeClass(cell);
-  if (!changeClass) return null; // unclassified — no matrix check (CONTEXT D3)
-  const minimum = JUDGE_STANDARD_MINIMUMS[changeClass];
-  if (!minimum || minimum.test(cell)) return null;
-  const id = typeof cell.id === 'string' && cell.id ? cell.id : '(unknown id)';
-  return (
-    `JUDGE_STANDARD_INSUFFICIENT: cell "${id}" is change_class "${changeClass}" but is missing the matrix ` +
-    `minimum — ${minimum.label}. Advisory only (never a refusal at authoring); see CONTEXT.md D3 for the full matrix.`
-  );
-}
-
-function emitJudgeStandardWarnings(cells) {
-  for (const cell of Array.isArray(cells) ? cells : [cells]) {
-    const warning = judgeStandardWarning(cell);
-    if (warning) process.stderr.write(`${warning}\n`);
-  }
-}
-
-// F5: at CAP time (not authoring), a behavior-class cell that rode the
-// pre-existing deliberate_exceptions door skipped the D3 length/duplicate
-// floor entirely (capCell's own contract) — note that on STDERR so it is
-// never silent, without turning it into a refusal. Recomputed from the
-// returned (already-capped) cell, same recompute-not-side-channel discipline
-// as emitManifestLintWarnings/emitJudgeStandardWarnings above.
-function emitJudgeStandardCapAdvisory(cell) {
-  if (!cell || typeof cell !== 'object') return;
-  if (deriveChangeClass(cell) !== 'behavior') return;
-  const evidence = parseVerificationEvidence(cell.trace && cell.trace.verification_evidence);
-  if (!evidenceRidesExceptionDoor(evidence)) return;
-  process.stderr.write(
-    `JUDGE_STANDARD_INSUFFICIENT: behavior-class cell "${cell.id}" capped via the deliberate_exceptions door — ` +
-      `the D3 red_failure_evidence floor (>=80 chars, non-duplicate) was not enforced for this cap (F5).\n`,
-  );
-}
+// test-simple (decision 412e9b3a): the judge-standard sufficiency matrix
+// advisories (F4/F5) are deleted with the proof-tier matrix — change_class is
+// a descriptive field only, and the one test door is the declared
+// commands.test run.
 
 function handleCellsAdd(root, flags) {
   let text;
@@ -1601,7 +1502,6 @@ function handleCellsAdd(root, flags) {
   if (Array.isArray(cell)) {
     const added = addCells(root, cell);
     emitManifestLintWarnings(added);
-    emitJudgeStandardWarnings(added);
     return {
       result: added,
       text: added.map((c) => `Added ${summarizeCell(c)}`).join('\n'),
@@ -1609,7 +1509,6 @@ function handleCellsAdd(root, flags) {
   }
   const added = addCell(root, cell);
   emitManifestLintWarnings(added);
-  emitJudgeStandardWarnings(added);
   return { result: added, text: `Added ${summarizeCell(added)}` };
 }
 
@@ -1640,7 +1539,6 @@ async function handleCellsUpdate(root, flags) {
   // through the merge, and the trap is exactly as live post-update as it was
   // pre-update if the merged shape now qualifies.
   emitManifestLintWarnings(updated);
-  emitJudgeStandardWarnings(updated);
   return {
     result: updated,
     text: `Updated ${updated.id} (${Object.keys(patch).join(', ')}).`,
@@ -1748,160 +1646,22 @@ function ownershipFlags(flags) {
   };
 }
 
-async function handleCellsVerify(root, flags) {
-  const id = requireFlag(flags, 'id');
-  const command = requireFlag(flags, 'command');
-  const passedRaw = requireFlag(flags, 'passed');
-  if (passedRaw !== 'true' && passedRaw !== 'false') {
-    throw new Error('--passed must be "true" or "false".');
-  }
-  const output = flags['output-file']
-    ? readFileText(String(flags['output-file']), 'output')
-    : flags.output
-      ? String(flags.output)
-      : null;
-  // D1: --signature is the worker-suppliable override for the ledger's
-  // failure_signature; omitted, recordVerify falls back to the mechanical
-  // normalizer on `output`.
-  const signature = flags.signature !== undefined ? String(flags.signature) : null;
-  // GH #27.2 (ghf-4): recordVerify's read-mutate-write body now runs under
-  // withStoreLock, so it is async — every handler below awaits it (dispatch
-  // already does `await handler(...)`, so this only needed the local await).
-  const cell = await recordVerify(root, id, {
-    command,
-    output,
-    passed: passedRaw === 'true',
-    signature,
-    ...ownershipFlags(flags),
-  });
-  return { result: cell, text: `Recorded verify on ${cell.id}: passed=${cell.trace.verify_passed}.` };
-}
+// test-simple (decision 412e9b3a): `cells verify` (the per-cell verify
+// recorder) and the cap-time diff_stats machinery (ratio ceiling,
+// new-test-file detection) are DELETED — the one test door is the declared
+// commands.test run below.
 
-// test-economy D1: the 5 template-sync mirror trees (onboard --apply's
-// `.bee/bin/`, `.claude/skills/`, `.agents/skills/` + render_plugin_skill_
-// trees.mjs's `.claude-plugin/`, `.codex-plugin/`) are excluded from BOTH
-// the numerator and denominator of every diff_stats count below — a
-// template edit fans out to all 5 mirrors, and without this dedupe it would
-// look several-fold larger than the same logical change to an unmirrored
-// file (CONTEXT D1: "template edit không dedupe permissive ~6×").
-const DIFF_STATS_MIRROR_PREFIXES = ['.bee/bin/', '.claude/skills/', '.agents/skills/', '.claude-plugin/', '.codex-plugin/'];
-
-function isDiffStatsMirrorPath(filePath) {
-  return DIFF_STATS_MIRROR_PREFIXES.some((prefix) => filePath === prefix.slice(0, -1) || filePath.startsWith(prefix));
-}
-
-// test-economy D3 term (used by D1's new-test-file detection): a path
-// matching test[_-]*.mjs at any depth, or living under a tests/ directory
-// segment — the shape run_verify.mjs's discoverSuites auto-registers as a
-// permanent CI suite.
-const DIFF_STATS_TEST_FILE_RE = /(^|\/)test[_-][^/]*\.mjs$/;
-const DIFF_STATS_TESTS_DIR_RE = /(^|\/)tests\//;
-function isDiffStatsTestFilePath(filePath) {
-  return DIFF_STATS_TEST_FILE_RE.test(filePath) || DIFF_STATS_TESTS_DIR_RE.test(filePath);
-}
-
-function countFileLinesOnDisk(absPath) {
-  try {
-    const text = fs.readFileSync(absPath, 'utf8');
-    if (text === '') return 0;
-    return text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-  } catch {
-    return 0;
-  }
-}
-
-/** test-economy D1 — computes `{new_test_files, test_lines_added,
- * source_lines_changed}` for the `cells cap` handler below (the SOLE caller
- * of capCell — capCell itself has no child_process/git dependency, per
- * CONTEXT: "capCell không có child_process/git"). Tracked-file line churn
- * comes from `git diff --numstat HEAD` (same spawnSync('git', ..., { cwd,
- * encoding: 'utf8' }) shape as runBacklogGit above); numstat is blind to
- * untracked paths, so a brand-new file — the exact shape D1's new-test-file
- * check cares about — is separately detected via `git status --porcelain`
- * (`??`/staged-`A`) and its lines counted straight off disk instead.
- *
- * Returns undefined (never throws) the moment git itself is unusable — no
- * repo, no HEAD yet, git missing, any spawn error — and appends one warning
- * line to `.bee/logs/hooks.jsonl` so the failure stays visible without ever
- * blocking the cap (fail-open, the same philosophy every other hook here
- * uses). capCell treats `diff_stats: undefined` as "skip every diff_stats-
- * driven check" — this is what keeps the no-.git tmpdir fixtures already in
- * test_bee_cli.mjs (e.g. the main `root` fixture, never `git init`-ed) green
- * unchanged. */
-function computeDiffStats(root, filesChanged) {
-  const allFiles = Array.isArray(filesChanged) ? filesChanged.filter((f) => typeof f === 'string' && f) : [];
-  const files = allFiles.filter((f) => !isDiffStatsMirrorPath(f));
-  if (files.length === 0) {
-    return { new_test_files: [], test_lines_added: 0, source_lines_changed: 0 };
-  }
-  try {
-    const numstat = spawnSync('git', ['diff', '--numstat', 'HEAD', '--', ...files], { cwd: root, encoding: 'utf8' });
-    if (numstat.error || numstat.status !== 0) {
-      throw new Error(numstat.error ? numstat.error.message : `git diff --numstat exited ${numstat.status}: ${(numstat.stderr || '').trim()}`);
-    }
-    const statusResult = spawnSync('git', ['status', '--porcelain', '--', ...files], { cwd: root, encoding: 'utf8' });
-    if (statusResult.error || statusResult.status !== 0) {
-      throw new Error(statusResult.error ? statusResult.error.message : `git status --porcelain exited ${statusResult.status}: ${(statusResult.stderr || '').trim()}`);
-    }
-
-    const trackedChurn = new Map(); // path -> added+deleted lines (numstat)
-    for (const line of (numstat.stdout || '').split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const parts = trimmed.split('\t');
-      if (parts.length < 3) continue;
-      const added = parts[0] === '-' ? 0 : Number(parts[0]); // '-' marks a binary file
-      const deleted = parts[1] === '-' ? 0 : Number(parts[1]);
-      const filePath = parts.slice(2).join('\t');
-      const churn = (Number.isFinite(added) ? added : 0) + (Number.isFinite(deleted) ? deleted : 0);
-      trackedChurn.set(filePath, churn);
-    }
-
-    const newPaths = new Set();
-    for (const line of (statusResult.stdout || '').split('\n')) {
-      if (!line || line.length < 3) continue;
-      const code = line.slice(0, 2);
-      const filePath = line.slice(3).trim();
-      if (!filePath) continue;
-      // '??' untracked, any 'A' (staged-added, either column) — both are
-      // "new to this diff" in a way numstat's tracked-file delta never sees.
-      if (code.includes('?') || code.includes('A')) newPaths.add(filePath);
-    }
-
-    let testLinesAdded = 0;
-    let sourceLinesChanged = 0;
-    const newTestFiles = [];
-    const seen = new Set();
-    for (const filePath of files) {
-      if (seen.has(filePath)) continue;
-      seen.add(filePath);
-      const isNew = newPaths.has(filePath);
-      const churn = trackedChurn.has(filePath)
-        ? trackedChurn.get(filePath)
-        : isNew
-          ? countFileLinesOnDisk(path.join(root, filePath))
-          : 0;
-      if (isDiffStatsTestFilePath(filePath)) {
-        testLinesAdded += churn;
-        if (isNew) newTestFiles.push(filePath);
-      } else {
-        sourceLinesChanged += churn;
-      }
-    }
-    return { new_test_files: newTestFiles, test_lines_added: testLinesAdded, source_lines_changed: sourceLinesChanged };
-  } catch (error) {
-    appendJsonl(path.join(root, '.bee', 'logs', 'hooks.jsonl'), {
-      ts: new Date().toISOString(),
-      hook: 'cells-cap-diff-stats',
-      event: 'warning',
-      message: `computeDiffStats: git unavailable/failed — diff_stats skipped, cap proceeds fail-open (test-economy D1): ${error instanceof Error ? error.message : String(error)}`,
-    });
-    return undefined;
-  }
-}
 
 // One cap door for cells.cap and cells.finish: both verbs run this exact
-// body, so proof rules and refusals cannot diverge between them.
+// body, so the test door and every refusal cannot diverge between them.
+//
+// test-simple (decision 412e9b3a): when the repo declares `commands.test`,
+// the declared commands run HERE, BEFORE the cap — green proceeds and the
+// cap records {tests:'green', results:<pointer>, ran_at} on the trace; red
+// REFUSES the cap with the failure excerpt(s) in the refusal (the red IS the
+// work) and records a {verdict:'tests-red'} attempt on the cell so the next
+// dispatch's Prior-rounds block cites it. No declared commands.test: the cap
+// proceeds and the trace records {tests:'undeclared'}.
 async function capCellFromFlags(root, flags) {
   const id = requireFlag(flags, 'id');
   const deviations = flags['deviations-file'] ? parseDeviationsFile(String(flags['deviations-file'])) : [];
@@ -1911,40 +1671,54 @@ async function capCellFromFlags(root, flags) {
         .map((f) => f.trim())
         .filter(Boolean)
     : [];
-  // test-economy D1: computed BEFORE capCell so a git failure's fail-open
-  // (diff_stats: undefined) never depends on anything capCell itself does.
-  const diffStats = computeDiffStats(root, filesChanged);
+  // Cheap pre-checks BEFORE the (possibly long) test run: a missing or
+  // already-terminal cell must refuse without spending a suite run. Same
+  // wording capCell itself uses, so the refusal is identical either way.
+  const existing = readCell(root, id);
+  if (!existing) throw new Error(`capCell: cell "${id}" not found.`);
+  if (existing.status === 'capped') throw new Error(`capCell: cell "${id}" is already capped.`);
+  if (existing.status === 'dropped') throw new Error(`capCell: cell "${id}" was dropped.`);
+  const testsRun = runDeclaredTests(root);
+  if (!testsRun.undeclared && testsRun.green !== true) {
+    const failing = testsRun.commands.filter((c) => c.failure_excerpt);
+    const firstLine = firstFailureLine(testsRun);
+    // The failed attempt is recorded on the cell BEFORE refusing, so the
+    // Prior rounds block of the next dispatch cites this red directly.
+    await recordTestsRedAttempt(root, id, { excerptLine: firstLine });
+    const excerptBlocks = failing.map(
+      (c) => `--- ${c.command} (exit ${c.exit ?? 'spawn-failed'}) ---\n${c.failure_excerpt}`,
+    );
+    throw new Error(
+      [
+        `refusing to cap "${id}" — the declared test run is RED (${failing.length} of ${testsRun.commands.length} command(s) failed; record: ${TEST_RESULTS_RELATIVE}).`,
+        ...excerptBlocks,
+        `The red is the work: fix what the failing output names, then re-run bee cells finish --id ${id}. Never build on a red base.`,
+      ].join('\n'),
+    );
+  }
   const cell = await capCell(root, id, {
     outcome: flags.outcome ? String(flags.outcome) : undefined,
     files_changed: filesChanged,
-    behavior_change: flags['behavior-change'] === true ? true : undefined,
-    verification_evidence: flags['evidence-stdin']
-      ? fs.readFileSync(0, 'utf8')
-      : flags['evidence-file']
-        ? readFileText(String(flags['evidence-file']), 'evidence')
-        : null,
     deviations,
     friction: flags.friction ? String(flags.friction) : null,
     overrideJudge: flags['override-judge'] !== undefined ? String(flags['override-judge']) : null,
-    diff_stats: diffStats,
-    // main-verifies D1: the sanctioned evidence-free cap path — stamps
-    // trace.feature_verify: "pending"; capCell refuses combining it with
-    // per-cell evidence claims. Absent flag keeps the classic path untouched.
-    feature_verify_pending: flags['feature-verify-pending'] === true,
+    tests: testsRun.undeclared
+      ? { tests: 'undeclared' }
+      : { tests: 'green', results: TEST_RESULTS_RELATIVE, ran_at: testsRun.ran_at },
     ...ownershipFlags(flags),
   });
-  emitJudgeStandardCapAdvisory(cell); // F5
   return cell;
 }
 
 async function handleCellsCap(root, flags) {
   const cell = await capCellFromFlags(root, flags);
-  return { result: cell, text: `Capped ${cell.id} at ${cell.trace.capped_at}.` };
+  return { result: cell, text: `Capped ${cell.id} at ${cell.trace.capped_at} (tests: ${cell.trace.tests ?? 'not run'}).` };
 }
 
-// cells.finish (porcelain): cap + reservation release in one verb. The cap
-// half is capCellFromFlags verbatim, so a cap refusal propagates untouched;
-// the release half frees every reservation the cell's claiming agent
+// cells.finish (porcelain): tests + cap + reservation release in one verb.
+// The tests+cap half is capCellFromFlags verbatim (finish wraps cap, so the
+// test door lives once), a red test run's refusal propagates untouched; the
+// release half frees every reservation the cell's claiming agent
 // (trace.worker, stamped at claim) holds for this cell. A release failure
 // never rolls the cap back — the result names the exact manual command.
 async function handleCellsFinish(root, flags) {
@@ -1964,7 +1738,7 @@ async function handleCellsFinish(root, flags) {
   }
   const result = { ...cell, released, ...(releaseFailure ? { release_failed: releaseFailure } : {}) };
   const lines = [
-    `Capped ${cell.id} at ${cell.trace.capped_at}.`,
+    `Capped ${cell.id} at ${cell.trace.capped_at} (tests: ${cell.trace.tests ?? 'not run'}).`,
     releaseFailure
       ? `Cap stands, but releasing reservations FAILED (${releaseFailure.error}) — run: ${releaseFailure.fix}`
       : released.length
@@ -3257,11 +3031,8 @@ async function handleStateSet(root, flags) {
       const transition = checkPhaseTransition(state.phase, targetPhase, state, { waiveCompounding });
       if (!transition.ok) throw new Error(transition.reason);
       if (transition.waivedCompounding) waivedCompoundingFeature = state.feature || null;
-      // guard-completion gc-1 — ONE call, the whole unwaivable debt set
-      // (slice-tail test cells P4, main-verifies D3, and anything added to
-      // FEATURE_DEBT_KINDS later). Runs BEFORE any field is mutated and inside
-      // the mutation lock, so a refusal leaves the record byte-identical.
-      guardPhaseDepartureDebt(root, state, targetPhase);
+      // test-simple (decision 412e9b3a): the unwaivable phase-departure debt
+      // door is deleted — the test door lives at cells cap/finish instead.
       if (targetPhase === 'compounding-complete') {
         // scribing-integrity si-1 (D2): a lane close checks the LANE's own
         // feature debt (thresholded on the lane's own last_scribing_run) —
@@ -3281,11 +3052,8 @@ async function handleStateSet(root, flags) {
       const newFeature = String(flags.feature);
       if (state.feature && newFeature !== state.feature) {
         swapFromFeature = state.feature;
-        // review-p1-fixes p1-3 (F3) / guard-completion gc-1: the UNWAIVABLE
-        // debt set runs FIRST, before the waivable scribing one — an
-        // unwaivable mechanical precondition must never be reachable only
-        // through a run that also happened to pass (or waive) a softer check.
-        guardFeatureSwapDebt(root, state, newFeature);
+        // test-simple (decision 412e9b3a): the unwaivable swap debt door is
+        // deleted — only the waivable scribing door remains at a swap.
         waivedSwap = featureSwapGuardScribingDebt(root, state.feature, flags);
       }
     }
@@ -3409,145 +3177,12 @@ async function handleStateSet(root, flags) {
   };
 }
 
-// ─── slice-tail-test-batching P4 (spec #80/#85) — a slice can never close red ──
-//
-// Test AUTHORING moved to one consolidated cell at the slice tail (P1/P2). The
-// only thing that makes that safe is this: the work cannot walk past execution
-// while that cell is unwritten or red. So leaving phase `swarming` REFUSES
-// while the active feature holds a `change_class: 'test'` cell that is not
-// capped, or is capped with a FAILING recorded verify.
-//
-// fs-3 closed the half of that rule the first pass left open. Two branches now:
-//
-//   (a) a test cell EXISTS but is uncapped or capped-red  → refuse (original);
-//   (b) NO test cell exists at all, while the feature holds >= 1 CAPPED
-//       behavior/api cell                                  → refuse (fs-3).
-//
-// Without (b) the guarantee was only as good as planning remembering to emit
-// the cell — a feature that never scheduled one sailed through the door that
-// was built to stop exactly it. (b) is deliberately narrow: the trigger is a
-// CAPPED behavior/api cell, so a feature whose behavior work is all still open
-// is not walled in at its bootstrap, and a docs/refactor/formatting-only
-// feature — which authored no behavior and has nothing to consolidate — is
-// never asked for a test cell at all.
-//
-// THERE IS NO SLICE RECORD in this codebase — no id, no state file, no
-// schedule verb; slices live only in skill text. So the machine-checkable
-// expression of "the slice cannot close red" is the ACTIVE FEATURE's
-// test-class cells at the phase boundary. No slice entity is invented here.
-//
-// It lives at this bee.mjs choke point for the same reason closeGuardScribingDebt
-// does (below): the reader is in cells.mjs, and cells.mjs already imports
-// state.mjs, so checkPhaseTransition must stay pure.
-//
-// NOT A GATE. `gate_bypass` (any level, `total` included) and headless runs
-// approve HUMAN questions; this is a mechanical precondition, the same shape as
-// the AO3 advisor-consult throw on the execution gate. It therefore reads
-// neither bypassLevel nor any headless flag — deliberately, and the tests pin
-// that. There is no waiver flag either: the fix is to cap the test cell green,
-// or (when its suite exposed a regression) to open fix cells and cap it after.
-//
-// review-p1-fixes p2-1 — WHICH departures this guard covers. It used to read
-// `from !== 'swarming'` while its own scribing-run call site (below) fires
-// from every SCRIBING_RUN_FROM phase, so a test cell left open or capped RED
-// in `reviewing` or `scribing` walked out and shipped behavior whose tests
-// never passed. Rather than widen the allowlist by two names and wait for the
-// third, the guarded set is DERIVED (isDebtGuardedDeparture): debt lives on
-// cells, cells are phase-independent, so EVERY departure asks. The debt
-// computation itself is state.mjs's shared core — this function now owns only
-// the refusal head, so this door and the start-feature door cannot drift.
-// guard-completion gc-1 — the two phase-door guards (test-cell debt and
-// feature-verify debt) are ONE door asking ONE question. They were two
-// functions and two call sites per door, which is how the swap door came to
-// ask only one of them; the debt SET now lives in FEATURE_DEBT_KINDS
-// (state.mjs) and this function owns nothing but the refusal head and the
-// derived-departure test. A debt kind added there is refused here for free.
-function guardPhaseDepartureDebt(root, record, targetPhase) {
-  const from = record && record.phase;
-  if (!isDebtGuardedDeparture(from, targetPhase)) return; // a no-op re-set is not a departure
-  const feature = record && record.feature;
-  // Throws (never silently passes) when the cell store is unreadable: an
-  // unreadable store is unknown debt, not zero debt. A phase move does not
-  // abandon the feature, so no abandonment paragraph.
-  guardFeatureDebt(root, record, feature, {
-    subject: `set: refusing to leave phase "${from || 'unknown'}" for "${targetPhase}" — feature "${feature}"`,
-  });
-}
+// ─── test-simple (decision 412e9b3a): the phase-departure and feature-swap
+// debt doors (guardPhaseDepartureDebt / guardFeatureSwapDebt, backed by
+// featureVerifyDebt / testCellDebt) are DELETED — proof lives in the
+// declared commands.test run at cells cap/finish, not in per-feature debt
+// markers. The waivable scribing doors below are capture-side and stay. ───
 
-// ─── main-verifies D3 — the feature-verify debt, and WHY it is a door ──────
-//
-// guard-completion gc-1: there is no longer a feature-verify door FUNCTION.
-// This debt is one entry in FEATURE_DEBT_KINDS (state.mjs); every door asks it
-// — together with every other kind — through the single guardFeatureDebt call.
-// The rationale below is why the debt exists and what satisfies it (the D3
-// record), which is exactly the part that is NOT door-specific.
-//
-// D1 relocated per-cell proof to the feature boundary: a cell may cap
-// evidence-free through `cells cap --feature-verify-pending`, stamping
-// trace.feature_verify: "pending". The debt door is the relocated enforcement
-// point — without it the cap law's essence ("no ship without green
-// evidence") would be prose. It is asked at every door the test-cell debt is
-// asked at, because they are the same call now: same
-// placement BEFORE any field mutates, and — deliberately — the same
-// NOT-A-GATE posture: it reads neither bypassLevel nor any headless flag, so
-// NO gate_bypass level (including "total") lifts it, and there is no waiver
-// flag. The fix is always the same: run the ONE feature-level verify
-// (impacted over the feature's whole diff), record it via `bee state
-// feature-verify record ... --result green`, and retry.
-//
-// Satisfaction (CONTEXT "Agent's Discretion" — record timestamp, never
-// marker clearing): the pending markers are never rewritten; the door opens
-// when the selected record carries a feature_verify record that is (a) for
-// THIS feature, (b) result "green" — a red record is storable evidence of
-// the failure but never satisfies (D2) — and (c) stamped strictly NEWER
-// than the newest pending cap, so a cell capped after the last verify run
-// re-closes the door until the verify is re-run and re-recorded (D5's
-// fix-cells-then-re-verify loop at feature granularity).
-// review-p1-fixes p2-1 — the debt COMPUTATION and the shared FIX tail both
-// moved to state.mjs (see the DEBT CORE header there, and gc-1's registry
-// below it). They used to live here, which is exactly why
-// startFeature — the third door, in state.mjs, which could not import back
-// up to this file — had no feature-verify check at all, and `state
-// start-feature --feature beta` walked off with the outgoing feature's
-// relocated proof. One computation, every door.
-// review-p1-fixes p2-1 — WHICH departures this door guards. p1-3 widened
-// `from !== 'swarming'` to SCRIBING_RUN_FROM ('swarming', 'reviewing',
-// 'scribing'), and a delta re-reviewer walked through the very next phase
-// along: cap `--feature-verify-pending` in `compounding`, then
-// `state set --phase compounding-complete` — `from` is outside the allowlist,
-// the guard never runs, the pending caps are still pending, and the feature
-// closes. Widening an allowlist by one name loses the same way tomorrow, so
-// the origin test is gone entirely: isDebtGuardedDeparture (state.mjs) makes
-// EVERY phase change a guarded departure, derived from the fact that debt
-// lives on cells and cells are phase-independent. A phase invented next year
-// inherits this door instead of escaping it. The only exemption is a literal
-// no-op re-set (targetPhase === from), exactly as before.
-
-// ─── the FEATURE-SWAP door ─────────────────────────────────────────────────
-//
-// review-p1-fixes p1-3 (F3) built this door because a guard that covers one
-// door is a suggestion: `state set --feature <other> --owner swarming` walks
-// away from the current feature without touching the phase door at all, and
-// because every reader keys on record.feature, whatever that feature still
-// owed is then read by NO path, ever again.
-//
-// guard-completion gc-1 — and then this door asked only the feature-verify
-// half of the debt set, so the reviewer's repro (a capped `behavior` cell, no
-// test cell, `--waive-scribing-debt`) walked out through it at EXIT 0 while
-// both other doors refused the identical state at EXIT 1. It now asks the
-// WHOLE set through the one shared call and composes no list of its own.
-// Unlike its scribing twin below this door has NO waiver: --waive-scribing-
-// debt waives scribing debt and nothing else, and no gate_bypass level
-// (including "total") lifts a mechanical precondition — which is why this runs
-// BEFORE featureSwapGuardScribingDebt. Lanes never reach here (--feature is
-// already refused alongside --lane).
-function guardFeatureSwapDebt(root, record, newFeature) {
-  const feature = record && record.feature;
-  guardFeatureDebt(root, record, feature, {
-    subject: `set: refusing to swap away from feature "${feature}" to "${newFeature}" — "${feature}"`,
-    abandonedFor: newFeature,
-  });
-}
 
 // chain-integrity D2/D4 — the close boundary is the ONE place scribing debt is a
 // wall instead of a signal. It lives here, not in state.mjs: scribingDebt is in
@@ -4139,13 +3774,9 @@ async function handleStateScribingRun(root, flags) {
     if (stampedActive) {
       const phaseCheck = checkScribingRunPhase(state.phase);
       if (!phaseCheck.ok) throw new Error(phaseCheck.reason);
-      // The SECOND phase door, and the one the chain actually walks
-      // (scribing-run is the sole producer of phase=compounding): guarding
-      // only `state set` would leave the normal path wide open. Same single
-      // call over the same whole debt set (guard-completion gc-1). Refuses
-      // before last_scribing_run is stamped and before the ledger append, so
-      // nothing records a run that the refusal then undid.
-      guardPhaseDepartureDebt(root, state, 'compounding');
+      // test-simple (decision 412e9b3a): the phase-departure debt door that
+      // used to run here is deleted — the test door lives at cells
+      // cap/finish, and `bee close` re-runs the declared tests fresh.
       state.last_scribing_run = { feature, date, at, areas_synced: areas, next_action: nextAction };
       // "plus top-level phase/next_action" (bee-capturing SKILL.md).
       state.phase = 'compounding';
@@ -4806,113 +4437,12 @@ async function handleStateRoute(root, flags) {
   };
 }
 
-// ─── state feature-verify: main-verifies D2 — the feature-level proof record ─
-// The delegator's ONE verify over the feature's whole diff, recorded the same
-// discipline as advisor-ref: a machine-readable record the
-// debt doors (the 'feature-verify' kind in FEATURE_DEBT_KINDS, D3) read back
-// — {feature, command,
-// output_sha256, result, at}. `record` stamps it on the ACTIVE feature's
-// tracked record (session-bound lane else default, the same
-// resolveMutationTarget resolution `state route` uses — no --lane targeting
-// flag here either) AND on the underlying workflow-store record (route's own
-// belt-and-suspenders precedent). --result is a closed green|red enum: red is
-// STORABLE — it documents the failure for D5's fix-cells-then-re-verify loop
-// — but never satisfies the door. output_sha256 is computed HERE from
-// --output-file, never caller-supplied, so the record always names real
-// captured bytes (advisor-ref's stamp-it-yourself discipline).
+// ─── test-simple (decision 412e9b3a): `state feature-verify record/show` are
+// DELETED — the feature-level proof record is replaced by the declared
+// commands.test run (.bee/logs/test-results.json). A legacy feature_verify
+// field on an existing state/lane/workflow record is inert dead data:
+// loaders tolerate it, nothing reads or migrates it. ──────────────────────
 
-const FEATURE_VERIFY_RESULTS = ['green', 'red'];
-
-function featureVerifyRecordFor(state) {
-  const raw = state ? state.feature_verify : null;
-  return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
-}
-
-function featureVerifyShowPayload(root) {
-  const target = resolveMutationTarget(root, null, 'feature-verify show', { noLane: false });
-  const rec = featureVerifyRecordFor(target.record);
-  if (!rec) return { result: null, text: 'No feature-verify recorded.' };
-  return {
-    result: rec,
-    text:
-      `feature="${rec.feature}" result=${rec.result} command="${rec.command}" output_sha256=${rec.output_sha256} at=${rec.at}` +
-      `${target.lane ? ` (lane "${target.lane}")` : ''}`,
-  };
-}
-
-async function handleStateFeatureVerifyRecord(root, flags) {
-  // sqs-b3 precedent (scribing-run --show): read-only query mode returns
-  // ABOVE rejectDryRun/requireFlags — a read never supplies write-only flags.
-  if (flags.show === true) return featureVerifyShowPayload(root);
-  rejectDryRun(flags);
-  const { command, 'output-file': outputFile, result: resultRaw } = requireFlags(
-    flags,
-    [{ name: 'command' }, { name: 'output-file' }, { name: 'result' }],
-    exampleFor('state.feature-verify.record'),
-  );
-  const result = String(resultRaw);
-  if (!FEATURE_VERIFY_RESULTS.includes(result)) {
-    throw new Error(
-      `feature-verify record: invalid --result "${result}" — must be one of ${FEATURE_VERIFY_RESULTS.join('|')}. ` +
-        'A red record is storable (it documents the failure) but never satisfies the close door (main-verifies D2/D3).',
-    );
-  }
-  let outputBytes;
-  try {
-    outputBytes = fs.readFileSync(path.resolve(String(outputFile)));
-  } catch (err) {
-    throw new Error(
-      `feature-verify record: could not read --output-file "${outputFile}" (${err && err.code ? err.code : err}). ` +
-        'FIX: pass the path to the captured feature-verify output.',
-    );
-  }
-  const outputSha256 = crypto.createHash('sha256').update(outputBytes).digest('hex');
-  const { record, targetLane } = await withMutationLock(root, null, false, async () => {
-    const target = resolveMutationTarget(root, null, 'feature-verify record', { noLane: false });
-    const { record: state, write } = target;
-    const phase = state.phase;
-    if (!state.feature || phase === 'idle' || phase === 'compounding-complete') {
-      throw new Error(
-        `feature-verify record: refused — no active feature to attach the verify to (phase "${phase ?? 'idle'}", feature "${state.feature ?? 'none'}"). ` +
-          'FIX: the feature-level verify proves an in-flight feature; start one first.',
-      );
-    }
-    // Whole-record replace, never a field merge — route's D4 contract.
-    state.feature_verify = {
-      feature: state.feature,
-      command: String(command),
-      output_sha256: outputSha256,
-      result,
-      at: new Date().toISOString(),
-    };
-    await write(state);
-    // main-verifies D2 ("onto the ACTIVE feature's workflow record") — also
-    // patch the underlying workflow-store record, exactly handleStateRoute's
-    // belt-and-suspenders shape: `write` above already lands the field on
-    // the PROJECTION (state.json / lanes/<feature>.json) the door reads;
-    // this keeps the workflow record itself carrying it too. Already inside
-    // withMutationLock's workflow:<id> hold whenever a live workflow exists,
-    // so updateWorkflowAssumingLock is the correct, non-self-deadlocking form.
-    const ctrlRoot = controlRootFor(root);
-    const targetFeature = target.lane || state.feature;
-    const wf = listWorkflows(ctrlRoot).workflows.find((w) => w.feature === targetFeature && w.status !== 'closed');
-    if (wf) {
-      updateWorkflowAssumingLock(ctrlRoot, wf.id, { feature_verify: state.feature_verify });
-    }
-    return { record: state.feature_verify, targetLane: target.lane };
-  });
-  const redNote = result === 'red'
-    ? ' Red is recorded evidence of the failure — it never opens the close door; fix cells in this feature, re-verify, and record the green (main-verifies D5).'
-    : '';
-  return {
-    result: record,
-    text: `Recorded feature-verify (${result}) for "${record.feature}" at ${record.at}.${targetLane ? ` (lane "${targetLane}")` : ''}${redNote}`,
-  };
-}
-
-function handleStateFeatureVerifyShow(root, flags) {
-  return featureVerifyShowPayload(root);
-}
 
 // ─── state workflows: rule-12 gap closed (workflow-lifecycle wl-2) ─────────
 // Today the orchestrator had to hand-edit .bee/runtime/workflows/*/state.json
@@ -4940,7 +4470,7 @@ function handleStateFeatureVerifyShow(root, flags) {
 //
 // "The currently active feature" this verb protects is the CALLING
 // context's own active feature — the same session-bound-lane-else-default
-// resolution `state route`/`state feature-verify` use (resolveMutationTarget,
+// resolution `state route` uses (resolveMutationTarget,
 // read-only here: no target.write() is ever called, so no projection lock is
 // needed — exactly `state route --show`'s own precedent). A workflow
 // record's OWN `status: 'active'` field is NOT this: state.mjs's D1
@@ -6546,19 +6076,19 @@ async function handleWorktreeMerge(_root, flags) {
   }
   const mainRoot = resolution.workRoot;
   const configCommands = readConfig(mainRoot).commands;
-  // ci-owned-verify D5 (cov-4): prefer commands.test (the impacted/dev-loop
-  // command) over commands.verify (the full CI-owned run) as the
-  // semantic-conflict gate — impacted over the merge diff; the full pass
-  // lands in CI on push. Falls back to commands.verify when commands.test
-  // is unset, so a host project that only configured commands.verify keeps
-  // today's behavior unchanged.
+  // test-simple (decision 412e9b3a): `commands.verify` is the merge-time
+  // chain — the last net over the merged tree. A repo that declared only a
+  // STRING commands.test still gets it as the fallback gate (better than
+  // nothing); an ARRAY commands.test is the dev-loop runner's shape
+  // (test-runner.mjs) and is never spawned as one shell command here.
   // no-test-repos D1/D2 (decision 55b951e1): the resolved command may be the
   // literal sentinel string — it must NEVER be spawned as a shell command.
   // Map it to `undefined` so the existing verifySkipped loud-warning path
   // (mergeFeatureWorktree: verify: verifyCommand ? 'green' : 'skipped') fires
   // exactly as it already does for a repo with no verify command configured
   // at all — one gate, no new code path.
-  const resolvedVerifyCommand = configCommands.test || configCommands.verify || undefined;
+  const resolvedVerifyCommand =
+    configCommands.verify || (typeof configCommands.test === 'string' ? configCommands.test : undefined) || undefined;
   const verifyCommand = resolvedVerifyCommand === NO_TEST_SENTINEL ? undefined : resolvedVerifyCommand;
   // worktree-companion-hook: no --with-companion flag here — unlike `new`,
   // where a bare worktree is a real, valid choice, `merge` needs none: the
@@ -8052,110 +7582,53 @@ function handleDoctor(root, flags) {
 }
 
 // ─── close (porcelain, docs/specs/porcelain.md): the feature close driver ──
-// "What stands between this feature and done, and can we pay it now." The
-// door predicates are NEVER reimplemented here: the unwaivable set is read
-// straight off FEATURE_DEBT_KINDS (the same table guardFeatureDebt asks —
-// gc-1's one-question law: the per-kind detectors are only ever reached
-// through the table, never called by name), and the report-only remainder
-// reuses scribingDebt + captureQueue, the exact functions status consults.
-// close never waives a door, and the ONLY state it ever writes goes through
-// the existing feature-verify recorder (handleStateFeatureVerifyRecord) on a
-// real verify run.
+// "What stands between this feature and done, and can we pay it now."
+//
+// test-simple (decision 412e9b3a): the doors are now (a) TESTS — the full
+// declared commands.test run, executed FRESH by close itself through the
+// same runner `bee test` and `cells finish` use (a stale
+// .bee/logs/test-results.json record is never trusted at the close
+// boundary), and (b) the report-only scribing/capture reminder doors,
+// capture-side and unchanged. The featureVerifyDebt/testCellDebt doors are
+// deleted with the proof economy. `commands.verify` stays what
+// `bee worktree merge` runs — close never touches merge.
 
-const CLOSE_VERIFY_OUTPUT_TAIL_LINES = 20;
-
-// The record featureVerifyDebt reads its feature_verify off: the feature's
-// lane record when one exists, else the default record when it tracks this
-// feature — the same projection the existing doors are handed. A feature
-// neither tracks resolves to null: the detectors treat that as "no record",
-// exactly the honest answer.
-function closeFeatureRecord(root, feature) {
-  const lane = readLane(root, feature);
-  if (lane) return lane;
-  const state = readState(root);
-  return state && state.feature === feature ? state : null;
+// One line per declared command, shared by `bee test` and close: ✓/✗ +
+// duration (+ exit on a red), so the two surfaces can never render the same
+// run differently.
+function renderTestCommandLines(run) {
+  return (run.commands || []).map((c) => {
+    const secs = `${((c.duration_ms || 0) / 1000).toFixed(1)}s`;
+    return c.failure_excerpt == null
+      ? `✓ ${c.command} (${secs})`
+      : `✗ ${c.command} (${secs}, exit ${c.exit ?? 'spawn-failed'})`;
+  });
 }
 
-// The recorded verify command for this feature, when one exists — a red
-// record's command counts (D5's fix-cells-then-re-verify loop reruns the
-// same command); a record naming a DIFFERENT feature never does.
-function closeRecordedVerifyCommand(record, feature) {
-  const raw = record && record.feature_verify;
-  const rec = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
-  if (!rec || typeof rec.command !== 'string' || !rec.command) return null;
-  if (rec.feature && rec.feature !== feature) return null;
-  return rec.command;
-}
+const CLOSE_TESTS_UNDECLARED_DETAIL =
+  'no commands.test declared — close has no test door here; declare commands.test in .bee/config.json (string or array) to give it one';
 
-const CLOSE_FEATURE_VERIFY_RECORD_TEMPLATE =
-  'bee state feature-verify record --command "<verify cmd>" --output-file <captured-output> --result green --json';
-
-// The exact runnable command that settles a blocking debt door — the recorded
-// verify command for the feature-verify kind (else the record template), the
-// authoring/greening verb for the test-cell kind. A future kind reports with
-// no command rather than a guessed one.
-function closeDoorCommand(kindId, debt, recordedCommand) {
-  if (!debt) return null;
-  if (kindId === 'feature-verify') {
-    return recordedCommand ?? CLOSE_FEATURE_VERIFY_RECORD_TEMPLATE;
-  }
-  if (kindId === 'test-cell') {
-    if (debt.kind === 'missing') return 'bee cells add --stdin --json';
-    const offenderId = String(debt.offenders[0] || '').split(' ')[0];
-    return `bee cells verify --id ${offenderId} --command "<test cmd>" --output-file <captured-output> --passed true --json`;
-  }
-  return null;
-}
-
-function buildCloseDoors(root, feature) {
-  const record = closeFeatureRecord(root, feature);
-  const recordedCommand = closeRecordedVerifyCommand(record, feature);
+// The report-only capture-side doors (scribing debt + capture queue).
+// Capture is DEFERRED like review (decision c8e25271): close never chains
+// into bee-capturing — these doors are pending REMINDERS, settled whenever
+// the human chooses (orient keeps the reminder), never a due-now step.
+function buildCloseReportDoors(root, feature) {
   const doors = [];
-  for (const kindDef of FEATURE_DEBT_KINDS) {
-    // detect() throws when the cell store is unreadable — unknown debt is
-    // never zero debt, so close lets that surface as a refusal.
-    const debt = kindDef.detect(root, record, feature);
-    doors.push({
-      door: kindDef.id,
-      blocking: Boolean(debt),
-      detail: debt ? `feature "${feature}" ${kindDef.owed(debt)}` : 'clear',
-      command: closeDoorCommand(kindDef.id, debt, recordedCommand),
-    });
-  }
-  // Scribing/capture debt: report-only doors — they are settled by
-  // bee-capturing AFTER the verify, so they never block running it, and close
-  // reports them rather than pretending they gate the run.
   const scribing = scribingDebt(root, { feature });
   doors.push({
     door: 'scribing-debt',
     blocking: false,
-    detail: scribing.count > 0 ? `${scribing.count} behavior_change cell(s) uncaptured (${scribing.cells.join(', ')})` : 'clear',
-    command: scribing.count > 0 ? 'invoke bee-capturing' : null,
+    detail: scribing.count > 0 ? `pending — ${scribing.count} behavior_change cell(s) uncaptured (${scribing.cells.join(', ')}); settle later via bee-capturing` : 'clear',
+    command: null,
   });
   const queue = captureQueue(root);
   doors.push({
     door: 'capture-queue',
     blocking: false,
-    detail: queue.count > 0 ? `${queue.count} capture stub(s) pending flush` : 'clear',
-    command: queue.count > 0 ? 'invoke bee-capturing' : null,
+    detail: queue.count > 0 ? `pending — ${queue.count} capture stub(s) awaiting flush; settle later via bee-capturing` : 'clear',
+    command: null,
   });
-  return { record, recordedCommand, doors };
-}
-
-// Exactly one next: line, teach-at-point-of-contact — the other blocking door
-// first (close runs nothing past it), then the verify (runnable when a
-// command is recorded), then scribing.
-function closeNextLine(feature, doors, recordedCommand) {
-  const blockingOther = doors.find((d) => d.blocking && d.door !== 'feature-verify');
-  if (blockingOther) return `next: settle ${blockingOther.door} — ${blockingOther.command}`;
-  const fv = doors.find((d) => d.door === 'feature-verify');
-  if (fv && fv.blocking) {
-    return recordedCommand
-      ? `next: bee close --feature ${feature} — runs the recorded verify (${recordedCommand}) and records the result`
-      : `next: run the feature verify, capture its output to a file, then ${CLOSE_FEATURE_VERIFY_RECORD_TEMPLATE}`;
-  }
-  if (doors.some((d) => d.command)) return 'next: invoke bee-capturing';
-  return `next: feature "${feature}" is clear — invoke bee-capturing to leave swarming (state scribing-run)`;
+  return doors;
 }
 
 function renderCloseDoorLines(doors) {
@@ -8172,107 +7645,130 @@ async function handleClose(root, flags) {
   // road back to main — as the step after green. Close in main is
   // byte-unchanged (worktree is null there).
   const worktree = grantedWorktreeContext();
-  const { doors, recordedCommand } = buildCloseDoors(root, feature);
-  const doorLines = [
-    ...renderCloseDoorLines(doors),
-    ...(worktree
-      ? [`merge-back: bee worktree merge --id ${worktree.id} — door-free; run from the main checkout once close is green (the one road back to main)`]
-      : []),
-    closeNextLine(feature, doors, recordedCommand),
-  ];
+  const declared = declaredTestCommands(root);
+  const worktreeLine = worktree
+    ? [`merge-back: bee worktree merge --id ${worktree.id} — door-free; run from the main checkout once close is green (the one road back to main)`]
+    : [];
+
   if (flags['dry-run'] === true) {
-    // Read-only report — always exit 0; the doors ARE the answer.
-    return { result: { feature, doors }, text: doorLines.join('\n') };
-  }
-  const blockingOthers = doors.filter((d) => d.blocking && d.door !== 'feature-verify');
-  const fv = doors.find((d) => d.door === 'feature-verify');
-  if (blockingOthers.length > 0) {
-    // Another door blocks: report every door with its command, run NOTHING.
+    // Read-only report — always exit 0; the doors ARE the answer. The tests
+    // door reports what WOULD run: dry-run never spends a suite run, and it
+    // never consults the stale record either (a run, not a record, is the
+    // door).
+    const doors = [
+      {
+        door: 'tests',
+        blocking: false,
+        detail: declared
+          ? `commands.test declared (${declared.length} command(s)) — close runs the full declared suite fresh; a stale test-results record is never trusted`
+          : CLOSE_TESTS_UNDECLARED_DETAIL,
+        command: declared ? 'bee test' : null,
+      },
+      ...buildCloseReportDoors(root, feature),
+    ];
+    const nextLine = declared
+      ? `next: bee close --feature ${feature} — runs the declared tests and reports`
+      : `next: feature "${feature}" has no test door — close proceeds; capture stays pending for bee-capturing`;
     return {
-      result: { feature, doors, ran_verify: false },
+      result: { feature, doors },
+      text: [...renderCloseDoorLines(doors), ...worktreeLine, nextLine].join('\n'),
+    };
+  }
+
+  // The real run: the tests door is the full declared run, fresh.
+  const run = runDeclaredTests(root);
+  const reportDoors = buildCloseReportDoors(root, feature);
+  if (!run.undeclared && run.green !== true) {
+    const failing = run.commands.filter((c) => c.failure_excerpt);
+    const firstLine = firstFailureLine(run);
+    const doors = [
+      {
+        door: 'tests',
+        blocking: true,
+        detail: `the declared test run is RED (${failing.length} of ${run.commands.length} command(s) failed; record: ${TEST_RESULTS_RELATIVE})`,
+        command: 'bee test',
+      },
+      ...reportDoors,
+    ];
+    return {
+      result: { feature, doors, ran_tests: true, tests: { ran_at: run.ran_at, green: false, commands: run.commands, results: TEST_RESULTS_RELATIVE } },
       text: [
-        `close: refusing to run the feature verify for "${feature}" — ${blockingOthers.length} other door(s) still block, and close never waives a door:`,
-        ...doorLines,
+        `Tests RED for "${feature}" — close stops at the tests door (record: ${TEST_RESULTS_RELATIVE}):`,
+        ...renderTestCommandLines(run),
+        ...failing.map((c) => `--- ${c.command} (exit ${c.exit ?? 'spawn-failed'}) ---\n${c.failure_excerpt}`),
+        `next: the red is the work — fix it (${firstLine ?? 'see the excerpt above'}), then re-run bee close --feature ${feature}`,
       ].join('\n'),
       exitCode: 1,
     };
   }
-  if (!fv || !fv.blocking) {
-    // Nothing to run — the verify door is already clear; what remains (if
-    // anything) is scribing/capture work.
-    return { result: { feature, doors, ran_verify: false }, text: doorLines.join('\n') };
-  }
-  if (!recordedCommand) {
-    return {
-      result: { feature, doors, ran_verify: false },
-      text: [
-        `close: the feature verify is the only outstanding door, but no verify command is recorded for "${feature}" — close never invents one.`,
-        ...doorLines,
-      ].join('\n'),
-      exitCode: 1,
-    };
-  }
-  // The recorder below resolves its target exactly like `state feature-verify
-  // record` (session-bound lane else default) — refuse to run when that
-  // record does not track THIS feature, or the result would be stamped on the
-  // wrong record.
-  const target = resolveMutationTarget(root, null, 'close', { noLane: false });
-  if ((target.record.feature || null) !== feature) {
-    return {
-      result: { feature, doors, ran_verify: false },
-      text:
-        `close: refusing to run the verify — recording would land on the ${target.source} record tracking feature "${target.record.feature ?? 'none'}", not "${feature}". ` +
-        `Make "${feature}" the active feature (or bind this session to its lane), then re-run bee close --feature ${feature}.`,
-      exitCode: 1,
-    };
-  }
-  const startedAt = Date.now();
-  const run = spawnSync(recordedCommand, { shell: true, cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  let output = `${run.stdout || ''}${run.stderr || ''}`;
-  if (run.error) output += `\n[close] spawn error: ${run.error.message}\n`;
-  const outDir = path.join(root, '.bee', 'tmp');
-  fs.mkdirSync(outDir, { recursive: true });
-  const outFile = path.join(outDir, `close-verify-${Date.now()}.log`);
-  fs.writeFileSync(outFile, output || `(no output; exit ${run.status})\n`, 'utf8');
-  const green = !run.error && run.status === 0;
-  // The ONE write close ever makes, and it goes through the existing recorder
-  // verbatim — same validation, same lock, same workflow write-through.
-  const recorded = await handleStateFeatureVerifyRecord(root, {
-    command: recordedCommand,
-    'output-file': outFile,
-    result: green ? 'green' : 'red',
-  });
-  const durationS = Math.round((Date.now() - startedAt) / 1000);
-  if (!green) {
-    const tail = output.trim().split('\n').slice(-CLOSE_VERIFY_OUTPUT_TAIL_LINES);
-    return {
-      result: { feature, doors, ran_verify: true, verify: recorded.result, exit_status: run.status ?? null, output_file: outFile },
-      text: [
-        `Feature verify RED for "${feature}" (exit ${run.status ?? 'spawn-failed'}, ${durationS}s) — recorded as red; nothing recorded as passed. Output tail (full log: ${outFile}):`,
-        ...tail,
-        `next: the verify failed (${recordedCommand}) — open fix cells in "${feature}" (never un-cap a capped cell), then re-run bee close --feature ${feature}`,
-      ].join('\n'),
-      exitCode: 1,
-    };
-  }
-  // Green: the debt doors are paid — what remains is the capture checklist.
-  const after = buildCloseDoors(root, feature);
-  const scribing = after.doors.find((d) => d.door === 'scribing-debt');
-  const queue = after.doors.find((d) => d.door === 'capture-queue');
+
+  // Green (or no declared test path): what remains is the capture checklist.
+  const testsDoor = run.undeclared
+    ? { door: 'tests', blocking: false, detail: CLOSE_TESTS_UNDECLARED_DETAIL, command: null }
+    : { door: 'tests', blocking: false, detail: `GREEN — ${run.commands.length} command(s) passed (record: ${TEST_RESULTS_RELATIVE})`, command: null };
+  const doors = [testsDoor, ...reportDoors];
+  const scribing = reportDoors.find((d) => d.door === 'scribing-debt');
+  const queue = reportDoors.find((d) => d.door === 'capture-queue');
+  const headline = run.undeclared
+    ? `No commands.test declared for "${feature}" — nothing gated close; declare commands.test in .bee/config.json to give close a test door.`
+    : `Tests GREEN for "${feature}" — ${run.commands.length} command(s) passed (record: ${TEST_RESULTS_RELATIVE}).`;
   return {
-    result: { feature, doors: after.doors, ran_verify: true, verify: recorded.result, exit_status: run.status, output_file: outFile },
+    result: {
+      feature,
+      doors,
+      ran_tests: !run.undeclared,
+      tests: run.undeclared ? null : { ran_at: run.ran_at, green: true, commands: run.commands, results: TEST_RESULTS_RELATIVE },
+    },
     text: [
-      `Feature verify GREEN for "${feature}" (${durationS}s) — recorded: ${recordedCommand}.`,
-      `Remains before done — capture checklist: scribing ${scribing.detail === 'clear' ? 'clear' : scribing.detail}; capture queue ${queue.detail === 'clear' ? 'clear' : queue.detail}.`,
+      headline,
+      ...(run.undeclared ? [] : renderTestCommandLines(run)),
+      `Capture (deferred, decision c8e25271): scribing ${scribing.detail === 'clear' ? 'clear' : scribing.detail}; capture queue ${queue.detail === 'clear' ? 'clear' : queue.detail}.`,
+      ...worktreeLine,
       // worktree-first: inside a granted worktree the next action after green
-      // is landing the feature — merge from main (after bee-capturing settles
-      // the capture checklist). In main: byte-unchanged.
+      // is landing the feature — merge from main. Capture is deferred
+      // (decision c8e25271): recorded as pending, never chained here.
       worktree
-        ? `next: bee worktree merge --id ${worktree.id} — run from the main checkout to land this feature (invoke bee-capturing first to settle the capture checklist)`
-        : 'next: invoke bee-capturing',
+        ? `next: bee worktree merge --id ${worktree.id} — land from main. Capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder).`
+        : 'next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder).',
     ].join('\n'),
   };
 }
+
+// ─── test (porcelain, test-simple decision 412e9b3a): the deterministic test
+// runner surface. Runs the declared commands.test sequentially, writes the
+// ONE normalized record (.bee/logs/test-results.json), prints one ✓/✗ line
+// per command and exactly one next: line. A red run exits 1 but is a NORMAL
+// result — the record is still written; the red is the next work item. ─────
+
+async function handleTest(root, flags) {
+  const run = runDeclaredTests(root);
+  if (run.undeclared) {
+    return {
+      result: { green: null, undeclared: true },
+      text: [
+        'No commands.test declared — nothing ran.',
+        "bee test runs the project's ONE declared test path: set commands.test in .bee/config.json (a string, or an array run in order). Point it at the fast suite — the full chain stays on commands.verify (worktree merge / CI).",
+        'Once declared, it becomes the cap door: bee cells finish runs it before every cap, and bee close runs it as the tests door.',
+        'next: declare commands.test, then re-run bee test',
+      ].join('\n'),
+    };
+  }
+  const lines = renderTestCommandLines(run);
+  if (run.green) {
+    lines.push(`next: green (record: ${TEST_RESULTS_RELATIVE}) — back to what you were doing`);
+    return {
+      result: { green: true, undeclared: false, ran_at: run.ran_at, commands: run.commands, results: TEST_RESULTS_RELATIVE },
+      text: lines.join('\n'),
+    };
+  }
+  lines.push(`next: ${firstFailureLine(run) ?? 'see the failure excerpt in the record'} — fix before capping`);
+  return {
+    result: { green: false, undeclared: false, ran_at: run.ran_at, commands: run.commands, results: TEST_RESULTS_RELATIVE },
+    text: lines.join('\n'),
+    exitCode: 1,
+  };
+}
+
 
 // Per-group usage fallback (dispatcher-unify du-1): the shim always supplies
 // the group token, so the generic no-command path can never fire for helper
@@ -8308,19 +7804,13 @@ function stateUsageFallback(leading) {
     const sub = leading[2];
     return `Unknown plan-rev action "${sub || '(missing)'}". Use: bump.`;
   }
-  // feature-verify (main-verifies D2): the two-verb feature-level proof
-  // family, mirroring the advisor-ref branch above.
-  if (verb === 'feature-verify') {
-    const sub = leading[2];
-    return `Unknown feature-verify action "${sub || '(missing)'}". Use: record, show.`;
-  }
   // workflows (workflow-lifecycle wl-2, rule-12 gap): the two-verb list/close
-  // family, mirroring the feature-verify branch above.
+  // family, mirroring the advisor-ref branch above.
   if (verb === 'workflows') {
     const sub = leading[2];
     return `Unknown workflows action "${sub || '(missing)'}". Use: list, close.`;
   }
-  return `Unknown command "${verb || '(missing)'}". Use: set, gate, route, feature-verify, workflows, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, compact-log, compact-check, compact-capsule.`;
+  return `Unknown command "${verb || '(missing)'}". Use: set, gate, route, workflows, plan-rev bump, worker, scribing-run, compounding-run, start-feature, lanes, rebuild-projections, session, handoff, advisor-ref, compact-log, compact-check, compact-capsule.`;
 }
 
 function backlogUsageFallback(leading) {
@@ -8414,7 +7904,7 @@ function knowledgeUsageFallback(leading) {
 // directly and parses this exact stderr line.
 function cellsUsageFallback(leading) {
   const verb = leading[1];
-  return `Unknown command "${verb || '(missing)'}". Use: list, ready, show, add, update, claim, verify, cap, finish, block, drop, unclaim, reopen, tier, judge, claim-next, reset-budget, judge-record, schedule, archive, unarchive.`;
+  return `Unknown command "${verb || '(missing)'}". Use: list, ready, show, add, update, claim, cap, finish, block, drop, unclaim, reopen, tier, judge, claim-next, reset-budget, judge-record, schedule, archive, unarchive.`;
 }
 
 function reservationsUsageFallback(leading) {
@@ -8451,13 +7941,13 @@ const HANDLERS = {
   status: handleStatus,
   orient: handleOrient,
   close: handleClose,
+  test: handleTest,
   'cells.list': handleCellsList,
   'cells.ready': handleCellsReady,
   'cells.show': handleCellsShow,
   'cells.add': handleCellsAdd,
   'cells.update': handleCellsUpdate,
   'cells.claim': handleCellsClaim,
-  'cells.verify': handleCellsVerify,
   'cells.cap': handleCellsCap,
   'cells.finish': handleCellsFinish,
   'cells.block': handleCellsBlock,
@@ -8487,8 +7977,6 @@ const HANDLERS = {
   'state.set': handleStateSet,
   'state.gate': handleStateGate,
   'state.route': handleStateRoute,
-  'state.feature-verify.record': handleStateFeatureVerifyRecord,
-  'state.feature-verify.show': handleStateFeatureVerifyShow,
   'state.workflows.list': handleStateWorkflowsList,
   'state.workflows.close': handleStateWorkflowsClose,
   'state.plan-rev.bump': handleStatePlanRevBump,
@@ -8576,14 +8064,13 @@ const HANDLERS = {
 };
 
 // ─── argv parsing: "bee <group> [<action>] [--flag value|--flag=value ...]" ─
-// The flag-alone boolean set is the closed union of the helper files' own
-// hardcoded boolean-flag lists (bee_cells: json/stdin/behavior-change/
-// evidence-stdin; bee_reservations: json/active-only; bee_decisions: json;
-// bee_state: json/dry-run; bee_backlog: json/write) — every OTHER flag, even
-// one the registry declares as JSON-Schema type "boolean" (e.g. cells.verify's
-// --passed), takes an explicit "true"/"false" argument exactly as the
-// original CLIs parse it; this keeps `bee cells verify ... --passed true`
-// byte-parity-correct. `dry-run` MUST be here or `state worker prune
+// The flag-alone boolean set is the closed union of the retired helper
+// files' own hardcoded boolean-flag lists (bee_cells: json/stdin;
+// bee_reservations: json/active-only; bee_decisions: json; bee_state:
+// json/dry-run; bee_backlog: json/write) — every OTHER flag, even one the
+// registry declares as JSON-Schema type "boolean", takes an explicit
+// "true"/"false" argument exactly as the original CLIs parsed it.
+// `dry-run` MUST be here or `state worker prune
 // --dry-run --json` would consume `--json` as the value of `--dry-run`
 // (bee_state.mjs parsed it boolean-alone too); `write` MUST be here for the
 // same reason on `backlog rank --write --json` / `backlog badges --write --json`
@@ -8602,11 +8089,6 @@ const HANDLERS = {
 // `state route --set --class feature ...` would consume `--class`'s VALUE as
 // `--set`'s own value, the exact class of bug dry-run/write/as-lane/show
 // guard against.
-// `feature-verify-pending` (main-verifies D1) is `cells cap`'s flag-alone
-// opt-in for the evidence-free pending cap path — MUST be here or
-// `cells cap --id X --feature-verify-pending --outcome ...` would consume
-// `--outcome` as its value, the exact class of bug the flags above guard
-// against.
 // `all-but-active` (workflow-lifecycle wl-2) is `state workflows close`'s
 // third flag-alone mode selector, alongside its own `--feature`/`--id`
 // string flags — MUST be here or a trailing `--json` would be consumed as
@@ -8621,7 +8103,7 @@ const HANDLERS = {
 // the claim+reserve+payload path — MUST be here or `dispatch prepare ...
 // --claim --json` would consume `--json` as `--claim`'s own value, the exact
 // class of bug every flag above guards against.
-export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'behavior-change', 'evidence-stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief', 'feature-verify-pending', 'all-but-active', 'merge', 'claim']);
+export const FLAG_ALONE_BOOLEANS = new Set(['json', 'stdin', 'active-only', 'dry-run', 'write', 'as-lane', 'no-lane', 'waive-scribing-debt', 'waive-compounding', 'html', 'string', 'cleanup', 'force-ownership', 'local', 'all', 'untagged', 'check', 'with-companion', 'lanes-full', 'strict', 'queue-submit', 'show', 'isolate', 'set', 'brief', 'all-but-active', 'merge', 'claim']);
 
 export function splitCommandTokens(argv) {
   const leading = [];

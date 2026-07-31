@@ -114,103 +114,15 @@ export function deriveChangeClass(cell) {
   return cell.behavior_change === true ? 'behavior' : null;
 }
 
-// test-economy D1/D2 — the proof-tier matrix: given an ALREADY-RESOLVED
-// change_class (callers resolve null/behavior_change=>'behavior' via
-// deriveChangeClass BEFORE calling this — no derivation happens here) and a
-// lane, returns the minimum proof capCell enforces:
-//   'red-first'      — security/migration (every lane, regardless of lane or
-//                       bc), or a behavior-bearing class (bugfix/behavior/
-//                       api) riding the high-risk lane. The pre-existing
-//                       Decision 0009 "before" characterization + the D3
-//                       self-correcting-loop 80-char/anti-duplicate floor
-//                       both stay enforced ONLY where this tier applies —
-//                       CONTEXT test-economy D2's named supersession.
-//   'targeted-green'  — bugfix outside high-risk, and the slice 'test' cell
-//                       in every lane: a single targeted test passing
-//                       (ordinary verification_evidence) is proof enough, no
-//                       red_failure_evidence required. bugfix keeps its
-//                       repro-first discipline (the failing repro test IS the
-//                       diagnosis evidence) — slice-tail-test-batching P3
-//                       restates that row as UNCHANGED, and the 'test' cell
-//                       sits here because authoring is its whole mandate.
-//   'existing-targeted-green'
-//                     — behavior/api outside high-risk (slice-tail-test-
-//                       batching P1, spec #80/#85). Same targeted scope the
-//                       worker ran before; what changes is the suite's
-//                       CONTENT: the EXISTING suite (plus prior slices'
-//                       tests) staying green, with NO new-test authoring
-//                       obligation at this cell — that obligation moves to
-//                       the slice's one trailing 'test' cell. The cell's
-//                       `verify` is still a runnable command recorded with
-//                       output (decision 0004 is untouched), so every cap
-//                       still proves the cell did not break what exists.
-//                       Downstream it behaves exactly like 'targeted-green':
-//                       every teeth-bearing check below keys on
-//                       'red-first', which this tier is not.
-//   'suite-green'     — refactor/formatting, in EVERY lane including
-//                       high-risk (test-economy plan.md "Pin refactor/
-//                       formatting × high-risk": a refactor has no new
-//                       behavior to red-test — forcing red-first there would
-//                       just be pressure to misclassify). The existing suite
-//                       staying green is proof enough. Cap additionally
-//                       refuses outright if the diff adds a new test file
-//                       (see the diff_stats check in capCell) — no
-//                       new_suite_reason can override that (D1).
-//   null              — unclassified with behavior_change=false: NO matrix
-//                       check at all, today's pre-test-economy behavior,
-//                       untouched (CONTEXT: "muốn hưởng tier nhẹ hơn behavior
-//                       phải KHAI class, mặc định không nới").
-export function requiredProofTier(change_class, lane) {
-  if (change_class === 'security' || change_class === 'migration') return 'red-first';
-  if (change_class === 'refactor' || change_class === 'formatting') return 'suite-green';
-  // slice-tail-test-batching P2: the slice's consolidated test cell — its
-  // whole mandate IS authoring, so it caps on its own new targeted suite
-  // passing, in every lane. Never red-first: a test cell has no production
-  // change to characterize a "before" for.
-  if (change_class === 'test') return 'targeted-green';
-  // slice-tail-test-batching P3 — bugfix is SPLIT OUT and left EXACTLY as it
-  // was: 'targeted-green' outside high-risk, 'red-first' on high-risk. The
-  // repro-first discipline riding this row is diagnosis evidence, not
-  // coverage ceremony, and P1 deliberately does not touch it. Reading the P1
-  // amendment as "behavior-bearing classes all moved" would silently drop it
-  // — hence two statements instead of one shared branch.
-  if (change_class === 'bugfix') {
-    return lane === 'high-risk' ? 'red-first' : 'targeted-green';
-  }
-  // slice-tail-test-batching P1: behavior/api outside high-risk now cap on
-  // the EXISTING suite green; high-risk keeps red-first, unchanged.
-  if (change_class === 'behavior' || change_class === 'api') {
-    return lane === 'high-risk' ? 'red-first' : 'existing-targeted-green';
-  }
-  return null;
-}
-
-// Tolerant parse of `verification_evidence` shared by the D3 cap teeth below
-// and by bee.mjs's own F5 STDERR advisory (recomputed from the returned cell,
-// pah-2 precedent — never a side channel). Never throws: a string that fails
-// to parse, or a non-object shape, degrades to {} so callers see "no
-// evidence" rather than crashing on a malformed cell.
-export function parseVerificationEvidence(raw) {
-  let evidence = raw;
-  if (typeof evidence === 'string') {
-    try {
-      evidence = JSON.parse(evidence);
-    } catch {
-      return {};
-    }
-  }
-  return evidence && typeof evidence === 'object' && !Array.isArray(evidence) ? evidence : {};
-}
-
-// F5: a behavior-class cap riding the pre-existing deliberate_exceptions door
-// keeps today's contract untouched (no length/duplicate floor) — this just
-// answers "did it ride that door", shared by the cap teeth and the advisory.
-export function evidenceRidesExceptionDoor(evidence) {
-  const exceptions = evidence && evidence.deliberate_exceptions;
-  return Array.isArray(exceptions)
-    ? exceptions.some((e) => typeof e === 'string' && e.trim().length > 0)
-    : typeof exceptions === 'string' && exceptions.trim().length > 0;
-}
+// test-simple (decision 412e9b3a): the proof-tier matrix (requiredProofTier)
+// is DELETED wholesale. change_class stays a descriptive cell field only —
+// nothing derives a proof obligation from it anymore. The one test door is
+// the declared `commands.test` run (lib/test-runner.mjs), enforced by the
+// cells cap/finish handler in bee.mjs.
+// Legacy trace fields from the deleted proof economy (verification_evidence,
+// trace.proof, trace.feature_verify) may still sit inert in existing cell
+// files — loaders tolerate them as dead data; nothing reads, validates, or
+// migrates them.
 
 // ─── derived regen obligation (regen-obligation-derived D1/D2) ─────────────
 // A cell whose OWN `files` touch a path a standing repo-wide guard hashes
@@ -1745,69 +1657,34 @@ export async function claimCell(root, id, worker, { sessionId } = {}) {
   });
 }
 
-export async function recordVerify(
-  root,
-  id,
-  { command, output = null, passed, sessionId, forceOwnership = false, signature = null },
-) {
-  if (typeof command !== 'string' || !command.trim()) {
-    throw new Error('recordVerify: command is required.');
-  }
-  if (typeof passed !== 'boolean') {
-    throw new Error('recordVerify: passed must be true or false.');
-  }
+// test-simple (decision 412e9b3a): `cells verify` and its recordVerify
+// mutator are DELETED — the deterministic test path (lib/test-runner.mjs,
+// run by the cells cap/finish handler) is the one proof channel. Legacy
+// trace.verify_* fields in existing cell files are tolerated as dead data.
+
+/**
+ * recordTestsRedAttempt(root, id, {excerptLine}) — test-simple's failed-tests
+ * event source. When `cells finish`/`cells cap` refuses the cap because the
+ * declared test run came back red, this appends ONE attempt-ledger entry
+ * ({verdict: 'tests-red', at, note: <first line of the failure excerpt>}) so
+ * the next dispatch's Prior-rounds block can cite the failure directly
+ * (dispatch-prepare.mjs renders it as "<worker> tests red: <line>"). Uses the
+ * same append-only trace.attempts ledger blockCell writes to.
+ */
+export async function recordTestsRedAttempt(root, id, { excerptLine = null } = {}) {
   return withStoreLock(root, `cells:${id}`, () => {
-    assertNotArchived(root, 'recordVerify', id); // hardening-1: refuse before ever reading/writing
+    assertNotArchived(root, 'recordTestsRedAttempt', id);
     const cell = readCell(root, id);
-    if (!cell) throw new Error(`recordVerify: cell "${id}" not found.`);
+    if (!cell) throw new Error(`recordTestsRedAttempt: cell "${id}" not found.`);
     let trace = { ...defaultTrace(), ...(cell.trace || {}) };
-    trace = guardClaimOwnership(root, id, trace, 'recordVerify', { sessionId, forceOwnership }); // D4
-    trace.verify_command = command;
-    trace.verify_output = output;
-    trace.verify_passed = passed;
-    trace.verified_at = utcNow();
-    // D1: worker-suppliable --signature wins over the mechanical fallback; a
-    // passing verify never carries a failure signature at all.
-    const failureSignature = passed
-      ? null
-      : typeof signature === 'string' && signature.trim()
-        ? signature.trim()
-        : normalizeFailureSignature(output);
-    trace = appendAttempt(root, id, trace, { verdict: passed ? 'pass' : 'fail', failureSignature });
+    trace = appendAttempt(root, id, trace, {
+      verdict: 'tests-red',
+      failureSignature: excerptLine ? normalizeFailureSignature(excerptLine) : null,
+      note: excerptLine,
+    });
     cell.trace = trace;
     return writeCell(root, cell);
   });
-}
-
-// D3+Δ5 — the anti-boilerplate floor for behavior-class cap teeth: 80 chars,
-// and never byte-identical (sha256 of the trimmed text) to another cell's own
-// recorded red evidence. Reuses listCells' own tolerant readJson (Δ5: "the
-// cap-time duplicate scan tolerant-parses — skips unparseable sibling files,
-// never throws") instead of a second hand-rolled readdir/parse loop.
-const RED_EVIDENCE_MIN_CHARS = 80;
-
-// test-economy D3: the new-test-file justification floor and the
-// ratio-ceiling waiver floor share RED_EVIDENCE_MIN_CHARS's "evidence must be
-// JSON with this named field" shape above, just a lower bar (20 chars, a
-// one-line reason — no anti-boilerplate/anti-duplicate check like red
-// evidence gets). RATIO_WARN_CEILING/RATIO_REFUSE_CEILING are the "Ngưỡng &
-// pin chốt" numbers pinned in plan.md: tiny/small warns above 3, standard/
-// high-risk refuses above 4.
-const NEW_SUITE_REASON_MIN_CHARS = 20;
-const RATIO_WAIVER_MIN_CHARS = 20;
-const RATIO_WARN_CEILING = 3;
-const RATIO_REFUSE_CEILING = 4;
-
-function findDuplicateRedEvidence(root, id, trimmed) {
-  const hash = crypto.createHash('sha256').update(trimmed, 'utf8').digest('hex');
-  for (const sibling of listCells(root)) {
-    if (!sibling || sibling.id === id) continue;
-    const evidence = parseVerificationEvidence(sibling.trace && sibling.trace.verification_evidence);
-    const red = typeof evidence.red_failure_evidence === 'string' ? evidence.red_failure_evidence.trim() : '';
-    if (red.length < RED_EVIDENCE_MIN_CHARS) continue;
-    if (crypto.createHash('sha256').update(red, 'utf8').digest('hex') === hash) return sibling.id;
-  }
-  return null;
 }
 
 // E6 (derived-check-hardening): cells are commonly authored with
@@ -1832,23 +1709,19 @@ export async function capCell(
     files_changed = [],
     deviations = [],
     friction = null,
-    behavior_change,
-    verification_evidence = null,
     outcome,
     sessionId,
     forceOwnership = false,
     overrideJudge = null,
-    // test-economy D1: computed by the bee.mjs `cells cap` handler (the sole
-    // caller — capCell itself has no child_process/git dependency) from
-    // `files_changed` via git. undefined (the default — legacy callers,
-    // tests that don't pass it, or a git-lookup failure at the handler)
-    // means every diff_stats-driven check below skips outright: fail-open,
-    // never a false refusal for a repo/handler that couldn't compute it.
-    diff_stats = undefined,
-    // main-verifies D1: cap through the feature-verify-pending path — no
-    // per-cell verify evidence demanded, trace.feature_verify stamped
-    // "pending". Default false keeps the classic evidence path byte-unchanged.
-    feature_verify_pending = false,
+    // test-simple (decision 412e9b3a): the tests stamp, computed by the ONE
+    // caller that runs the declared test path (bee.mjs's shared cap/finish
+    // handler — capCell itself has no child_process dependency). A green run
+    // passes {tests: 'green', results: '.bee/logs/test-results.json', ran_at};
+    // a repo with no declared commands.test passes {tests: 'undeclared'}.
+    // undefined (programmatic callers) stamps nothing. capCell never runs
+    // tests itself and never refuses over this field — a red run is refused
+    // by the handler BEFORE capCell is reached.
+    tests = undefined,
   } = {},
 ) {
   const overrideReason = typeof overrideJudge === 'string' ? overrideJudge.trim() : '';
@@ -1860,61 +1733,15 @@ export async function capCell(
     assertNotArchived(root, 'capCell', id); // hardening-1: refuse before ever reading/writing
     const cell = readCell(root, id);
     if (!cell) throw new Error(`capCell: cell "${id}" not found.`);
-    // Honor the cell's declared behavior_change when the caller omits it — the CLI
-    // flag is opt-in, so a cell planned as behavior_change must not silently lose
-    // its evidence/before-state guards (and its scribing debt) at cap just because
-    // --behavior-change was not repeated. Explicit false/true from the caller wins.
-    // E6: the declared value itself may live at the top level or nested under
-    // trace.behavior_change — see resolveDeclaredBehaviorChange.
-    const bc =
-      behavior_change === undefined ? resolveDeclaredBehaviorChange(cell) : behavior_change === true;
+    // Honor the cell's declared behavior_change (it classifies the cap for
+    // scribing debt — capture-side, nothing to do with the deleted proof
+    // economy). E6: the declared value may live at the top level or nested
+    // under trace.behavior_change — see resolveDeclaredBehaviorChange.
+    const bc = resolveDeclaredBehaviorChange(cell);
     if (cell.status === 'capped') throw new Error(`capCell: cell "${id}" is already capped.`);
     if (cell.status === 'dropped') throw new Error(`capCell: cell "${id}" was dropped.`);
     let trace = { ...defaultTrace(), ...(cell.trace || {}) };
     trace = guardClaimOwnership(root, id, trace, 'capCell', { sessionId, forceOwnership }); // D4
-    // main-verifies D1: the sanctioned feature-verify-pending cap path. The
-    // cell caps with NO per-cell verify evidence at all, stamping
-    // trace.feature_verify: "pending" — its proof event is deliberately
-    // relocated to ONE feature-level verify (recorded via `bee state
-    // feature-verify record`), and the close-door guard in bee.mjs
-    // (guardFeatureVerifyDebt, D3) is what keeps that relocation honest: no
-    // departure from phase "swarming" while any pending marker lacks a
-    // fresh GREEN feature-verify record. Combining the flag with per-cell
-    // evidence claims is REFUSED — the two proof paths are exclusive, and a
-    // cap must never be ambiguous about which one vouched for it. The
-    // classic evidence path below is byte-unchanged when the flag is off.
-    const pendingFeatureVerify = feature_verify_pending === true;
-    if (pendingFeatureVerify) {
-      const evidenceSupplied =
-        verification_evidence != null &&
-        (typeof verification_evidence !== 'string' || verification_evidence.trim().length > 0);
-      if (evidenceSupplied) {
-        throw new Error(
-          `capCell: cell "${id}" cannot combine --feature-verify-pending with verification_evidence — the pending path defers ALL per-cell proof to the feature-level verify (main-verifies D1), so attaching per-cell evidence contradicts the deferral. FIX: drop --evidence-file/--evidence-stdin, or cap through the classic evidence path without --feature-verify-pending.`,
-        );
-      }
-      if (trace.verify_passed === true) {
-        throw new Error(
-          `capCell: cell "${id}" cannot combine --feature-verify-pending with a recorded PASSING verify — a green per-cell verify IS the classic evidence path (main-verifies D1); the pending marker would falsely defer proof this cell already holds. FIX: cap without --feature-verify-pending.`,
-        );
-      }
-    }
-    // no-test-repos D2 (decision 55b951e1): a verify-none cell in a
-    // repo that has declared itself no-test skips the passing-verify-result
-    // requirement below outright — there is no verify command that could
-    // ever have run. The auto note stands in as recorded evidence wherever
-    // else this function (and the lane-tier proof check further down) would
-    // otherwise expect one; an explicitly supplied verification_evidence
-    // still wins over the auto note.
-    const noTestWaiver = cell.verify === NO_TEST_SENTINEL && isNoTestRepo(readConfig(root));
-    if (noTestWaiver && !verification_evidence && !pendingFeatureVerify) {
-      verification_evidence = `no-test repo: verification waived by repo declaration (commands.verify: ${NO_TEST_SENTINEL})`;
-    }
-    if (!pendingFeatureVerify && trace.verify_passed !== true && !noTestWaiver) {
-      throw new Error(
-        `capCell: cell "${id}" has no passing verify result — run the cell's verify command and record it (bee.mjs cells verify --id ${id} --command CMD --passed true) before capping.`,
-      );
-    }
     // D-GHF-C (GH #27.5): a NEEDS_REVISION semantic-judge verdict (judge.mjs
     // JUDGE_VERDICTS — the enum has no 'FAIL', 'NEEDS_REVISION' is the fail
     // value) blocks cap unless an audited --override-judge reason is
@@ -1954,124 +1781,6 @@ export async function capCell(
       });
       trace = { ...trace, judge_overrides: [...overrides, overrideEntry] };
     }
-    // worker-conformance D1: this door — behavior_change declared with no
-    // verification_evidence — is NON-BLOCKING from here on. Asking a worker to
-    // *write* evidence text in order to pass a gate is authoring work, and
-    // authoring work drifts; the cap now succeeds and the absence is RECORDED
-    // instead (trace.proof "unrecorded", computed after the whole chain below
-    // per D12/D14), which arms the feature-boundary close-door — the sole
-    // blocking proof D3 keeps. Deliberately narrow: every heavier refusal
-    // below is untouched, so a bc cell resolving to the red-first tier
-    // (security/migration in every lane, every class in lane high-risk) still
-    // cannot cap without red_failure_evidence at the D3 red-first door below.
-    // This warning is the whole of the loosening, never a bypass.
-    let behaviorEvidenceWarning = null;
-    if (bc && !verification_evidence && !pendingFeatureVerify) {
-      // The text states only what is true on EVERY path that reaches it
-      // (advisor consult, wc-4): where the cap also recorded real verify
-      // output, D14 deliberately leaves it unmarked and the close-door opens,
-      // so this warning must not claim the door was armed.
-      behaviorEvidenceWarning = `capCell: cell "${id}" declares behavior_change but records no verification_evidence — worker-conformance D1 non-blocking warning (this was a refusal). Per-cell proof is deferred to the feature boundary; a cap that recorded NEITHER verify output nor evidence is additionally marked trace.proof "unrecorded", which arms the close-door. Either way this buys no per-cell door bypass.`;
-    }
-    // test-economy D1/D2: resolve the effective class (same derivation
-    // deriveChangeClass always used — null/bc=true -> 'behavior', nothing new
-    // introduced here) and its required proof tier ONCE, reused by both the
-    // Decision 0009 "before" check and the D3 self-correcting-loop floor
-    // below, plus the refactor/formatting new-test-file refusal further down.
-    const effectiveClass = deriveChangeClass({ ...cell, behavior_change: bc });
-    const proofTier = requiredProofTier(effectiveClass, cell.lane);
-    // test-economy D1: a refactor/formatting cell must never introduce a new
-    // test file — CONTEXT: "cấm tuyệt đối — new_suite_reason của D3 KHÔNG
-    // override được; refactor cần suite mới nghĩa là phân loại sai." Gated on
-    // diff_stats (undefined — no git, or a legacy caller — skips this check
-    // entirely, fail-open); the ratio/new_suite_reason checks for the OTHER
-    // classes belong to a later cell (test-economy D3) and are deliberately
-    // not added here.
-    if (
-      (effectiveClass === 'refactor' || effectiveClass === 'formatting') &&
-      diff_stats &&
-      Array.isArray(diff_stats.new_test_files) &&
-      diff_stats.new_test_files.length > 0
-    ) {
-      throw new Error(
-        `capCell: cell "${id}" is classified "${effectiveClass}" but its diff adds new test file(s) (${diff_stats.new_test_files.join(', ')}) — a refactor/formatting change must not need a new test suite (test-economy D1: no override, not even via new_suite_reason). Reclassify the cell (e.g. "behavior") or drop the new test file(s) from this diff.`,
-      );
-    }
-    // test-economy D3: any OTHER change_class (refactor/formatting are
-    // refused unconditionally just above — D1 wins over D3, new_suite_reason
-    // cannot rescue those) that introduces a new test file must justify it:
-    // verification_evidence must be a JSON object carrying `new_suite_reason`
-    // (>=20 chars) — a new test_*.mjs/tests/ path becomes a permanent
-    // CI-registered suite forever (run_verify.mjs's discoverSuites), so the
-    // decision to add one needs a stated reason, not silence. Gated on
-    // diff_stats the same way D1 is (undefined — no git, or a legacy caller —
-    // skips this check entirely, fail-open).
-    // main-verifies D1: the pending path skips this check — its justification
-    // channel IS verification_evidence, which the pending path refuses by
-    // construction; the feature-level verify (and the slice-tail test cell's
-    // own review) owns that scrutiny instead.
-    if (
-      !pendingFeatureVerify &&
-      effectiveClass !== 'refactor' &&
-      effectiveClass !== 'formatting' &&
-      diff_stats &&
-      Array.isArray(diff_stats.new_test_files) &&
-      diff_stats.new_test_files.length > 0
-    ) {
-      const newSuiteEvidence = parseVerificationEvidence(verification_evidence);
-      const newSuiteReason =
-        typeof newSuiteEvidence.new_suite_reason === 'string' ? newSuiteEvidence.new_suite_reason.trim() : '';
-      if (newSuiteReason.length < NEW_SUITE_REASON_MIN_CHARS) {
-        throw new Error(
-          `capCell: cell "${id}" adds new test file(s) (${diff_stats.new_test_files.join(', ')}) — evidence phải là JSON có field new_suite_reason (≥${NEW_SUITE_REASON_MIN_CHARS} ký tự) explaining why a new permanent CI suite is warranted (test-economy D3). Attach --evidence-file/--evidence-stdin with a JSON object like {"new_suite_reason": "..."}.`,
-        );
-      }
-    }
-    // test-economy D3: test-lines-added / source-lines-changed ratio ceiling
-    // (both counts already mirror-deduped upstream by bee.mjs's
-    // computeDiffStats, per plan.md's dedupe rule). tiny/small only ADD a
-    // non-blocking warning — collected into `ratioWarning` here, folded into
-    // `trace.warnings` near the bottom of this function. standard/high-risk
-    // REFUSE past the ceiling unless verification_evidence carries a JSON
-    // `ratio_waiver` (>=20 chars) — using the waiver is itself audited as a
-    // decision (D8: a loosened guard's use stays visible, never silent).
-    let ratioWarning = null;
-    if (
-      diff_stats &&
-      Number.isFinite(diff_stats.test_lines_added) &&
-      Number.isFinite(diff_stats.source_lines_changed)
-    ) {
-      const ratio = diff_stats.test_lines_added / Math.max(diff_stats.source_lines_changed, 1);
-      if ((cell.lane === 'tiny' || cell.lane === 'small') && ratio > RATIO_WARN_CEILING) {
-        ratioWarning = `capCell: cell "${id}" test-to-source line ratio is ${ratio.toFixed(2)} (>${RATIO_WARN_CEILING}) for lane "${cell.lane}" — test-economy D3 non-blocking warning.`;
-      } else if (pendingFeatureVerify && (cell.lane === 'standard' || cell.lane === 'high-risk') && ratio > RATIO_REFUSE_CEILING) {
-        // main-verifies D1: the pending path cannot carry a ratio_waiver (its
-        // waiver channel is verification_evidence, refused by construction),
-        // so past-ceiling stays VISIBLE as a recorded warning instead of an
-        // unsatisfiable refusal — the feature-level verify owns the proof.
-        ratioWarning = `capCell: cell "${id}" test-to-source line ratio is ${ratio.toFixed(2)} (>${RATIO_REFUSE_CEILING}) for lane "${cell.lane}" — recorded as a warning on the feature-verify-pending path (main-verifies D1; test-economy D3's waiver channel is per-cell evidence, which this path defers).`;
-      } else if ((cell.lane === 'standard' || cell.lane === 'high-risk') && ratio > RATIO_REFUSE_CEILING) {
-        const ratioEvidence = parseVerificationEvidence(verification_evidence);
-        const ratioWaiver =
-          typeof ratioEvidence.ratio_waiver === 'string' ? ratioEvidence.ratio_waiver.trim() : '';
-        if (ratioWaiver.length < RATIO_WAIVER_MIN_CHARS) {
-          throw new Error(
-            `capCell: cell "${id}" test-to-source line ratio is ${ratio.toFixed(2)} (>${RATIO_REFUSE_CEILING}) for lane "${cell.lane}" — evidence phải là JSON có field ratio_waiver (≥${RATIO_WAIVER_MIN_CHARS} ký tự) justifying the ratio, or shrink the diff (test-economy D3).`,
-          );
-        }
-        // D8: the waiver's use is audited the same way a judge override is
-        // (line ~1826 above) — the ceiling itself is never rewritten, only a
-        // decision record marks that this one cap was exempted, and why.
-        logDecision(root, {
-          decision: `«cells cap: cell "${id}" test-to-source ratio ${ratio.toFixed(2)} waived by ${trace.worker || 'unknown'} (lane ${cell.lane}) — ${ratioWaiver}»`,
-          rationale:
-            'Audited ratio_waiver over the test-economy D3 lane ceiling (standard/high-risk >4) — the ceiling itself is unchanged, only this cap is exempted with a recorded reason (D8: a loosened guard stays visible).',
-          scope: 'repo',
-          source: 'user',
-          tags: ['cells', 'test-economy'],
-        });
-      }
-    }
     // derived-check-hardening E1: cap-time cross-check of the cell's static
     // `verify` command against the impact registry's DIRECT-edge (level:1 —
     // a transitive sweep would name so many suites the warning becomes noise
@@ -2105,89 +1814,11 @@ export async function capCell(
       // a silent skip (E1: never a throw).
       impactWarning = null;
     }
-    // Decision 0009, NARROWED by test-economy D2: a behavior_change cell must
-    // record the "before" it changed — a characterization of prior behavior —
-    // not just an assertion that the new behavior works. This blocks
-    // assertion-capping at the source. test-economy D2 supersedes the
-    // original "every bc=true cell" scope: this "before" requirement now
-    // fires ONLY when the resolved proof tier is 'red-first' (security/
-    // migration in any lane, or a behavior-bearing class in a high-risk
-    // lane) — a targeted-green tier (e.g. bugfix/behavior/api outside
-    // high-risk) accepts ordinary verification_evidence with no
-    // red_failure_evidence at all.
-    if (proofTier === 'red-first' && verification_evidence) {
-      let evidence = verification_evidence;
-      if (typeof evidence === 'string') {
-        try {
-          evidence = JSON.parse(evidence);
-        } catch {
-          evidence = null; // freeform evidence — the non-empty check above already applies
-        }
-      }
-      if (evidence && typeof evidence === 'object' && !Array.isArray(evidence)) {
-        const before = evidence.red_failure_evidence;
-        const hasBefore = typeof before === 'string' && before.trim().length > 0;
-        const exceptions = evidence.deliberate_exceptions;
-        const hasException = Array.isArray(exceptions)
-          ? exceptions.some((e) => typeof e === 'string' && e.trim().length > 0)
-          : typeof exceptions === 'string' && exceptions.trim().length > 0;
-        if (!hasBefore && !hasException) {
-          throw new Error(
-            `capCell: behavior_change cell "${id}" needs a "before" characterization — set red_failure_evidence in the evidence (the prior behavior this change alters: a git-show of the old state, or a pre-change check that failed). If there is genuinely no prior behavior (a brand-new surface), say so in deliberate_exceptions. An assertion that the new behavior works is not evidence that behavior changed.`,
-          );
-        }
-      }
-    }
-    // D3 (self-correcting-loop) — behavior-class cap teeth, ADDITIVE to the
-    // Decision 0009 "before" check above. test-economy D1/D2: NARROWED from
-    // "effectiveClass === 'behavior'" to "proofTier === 'red-first'" — the
-    // same scope as the Decision 0009 check right above (security/migration
-    // in any lane, or a behavior-bearing class in a high-risk lane). F5: a
-    // cap riding the deliberate_exceptions door keeps today's contract
-    // untouched — no length/duplicate floor; the STDERR advisory noting that
-    // lives in bee.mjs's handler layer (F4 precedent), recomputed from the
-    // returned cell post-cap.
-    if (proofTier === 'red-first' && !pendingFeatureVerify) {
-      const evidence = parseVerificationEvidence(verification_evidence);
-      if (!evidenceRidesExceptionDoor(evidence)) {
-        const before = typeof evidence.red_failure_evidence === 'string' ? evidence.red_failure_evidence.trim() : '';
-        if (!before) {
-          throw new Error(
-            `capCell: behavior-class cell "${id}" (D3 judge-standard matrix) is missing verification_evidence.red_failure_evidence — the matrix minimum for a "behavior" change. FIX: attach red_failure_evidence (>=${RED_EVIDENCE_MIN_CHARS} chars characterizing the prior behavior) or record deliberate_exceptions.`,
-          );
-        }
-        if (before.length < RED_EVIDENCE_MIN_CHARS) {
-          throw new Error(
-            `capCell: behavior-class cell "${id}" red_failure_evidence is only ${before.length} char(s) — the D3 judge-standard matrix requires >=${RED_EVIDENCE_MIN_CHARS} chars (anti-boilerplate floor). FIX: expand the evidence to genuinely characterize the prior behavior, or record deliberate_exceptions.`,
-          );
-        }
-        const collision = findDuplicateRedEvidence(root, id, before);
-        if (collision) {
-          throw new Error(
-            `capCell: behavior-class cell "${id}" red_failure_evidence is byte-identical to cell "${collision}"'s recorded evidence — the D3 judge-standard matrix refuses reused boilerplate. FIX: write evidence specific to this cell's own prior behavior.`,
-          );
-        }
-      }
-    }
-    // Decision 0004: small+ lanes cap only on recorded proof, never on an
-    // assertion. worker-conformance D1: the "no recorded proof" half of this
-    // block is NON-BLOCKING from here on — same reasoning as the
-    // behavior_change door above, same replacement (a recorded absence plus a
-    // visible warning, with trace.proof arming the feature-boundary door).
-    // The non-empty files_changed half right below is EXPLICITLY out of scope
-    // and stays refusing (CONTEXT D1): it asks what the worker touched, not
-    // for authored proof, and a file list is not evidence a worker can drift
-    // into inventing.
-    let recordedProofWarning = null;
+    // The files_changed requirement stays: it asks what the worker touched,
+    // not for authored proof — a file list is not evidence a worker can
+    // drift into inventing, and a cell that changed nothing is a drop or a
+    // NOOP, not a cap.
     if (cell.lane === 'small' || cell.lane === 'standard' || cell.lane === 'high-risk') {
-      const output = trace.verify_output;
-      const hasOutput = typeof output === 'string' ? output.trim().length > 0 : output != null;
-      const hasEvidence =
-        verification_evidence != null &&
-        (typeof verification_evidence !== 'string' || verification_evidence.trim().length > 0);
-      if (!hasOutput && !hasEvidence && !pendingFeatureVerify) {
-        recordedProofWarning = `capCell: lane "${cell.lane}" cell "${id}" caps with a passing verify flag but no recorded proof — worker-conformance D1 non-blocking warning (this was decision 0004's refusal). An assertion is still not evidence: outside a repo that declared commands.verify "none", the absence is marked trace.proof "unrecorded" and arms the feature-boundary close-door, which no bypass level lifts.`;
-      }
       if (!Array.isArray(files_changed) || files_changed.length === 0) {
         throw new Error(
           `capCell: lane "${cell.lane}" cell "${id}" requires non-empty files_changed (--files a.js,b.js) — record what the worker actually touched. A cell that changed nothing is a drop or a NOOP, not a cap.`,
@@ -2199,50 +1830,6 @@ export async function capCell(
         throw new Error(`capCell: high-risk cell "${id}" requires an outcome summary.`);
       }
     }
-    // worker-conformance D10/D12/D14: the absence-of-proof marker. Computed
-    // HERE — after the ENTIRE refusal chain above has run, on a cap that is
-    // already going to succeed — so it can never decide whether a cap is
-    // refused, only describe one that isn't. D10's hole it closes: recordVerify
-    // (above) validates only `command` and `passed`, so `--passed true` with no
-    // output at all is legal; without a marker such a cap would leave the
-    // feature closeable with zero tests executed anywhere.
-    // D12: this is a NEW, inert field — never a reuse of the pending flag.
-    // `pendingFeatureVerify` is not neutral: it short-circuits six refusal
-    // sites (:1886-1899, :1912, :1999, :2032, :2135, :2164), so routing an
-    // unproven cap onto it would have voided D2's red-first tier and D6's
-    // brakes. `trace.proof` is read by nothing in this function.
-    // D14: "unrecorded" means NEITHER channel carried proof — a cell holding
-    // genuine verification_evidence (e.g. a tiny-lane security cell whose
-    // red_failure_evidence already passed the red-first door at :2135) is
-    // never marked, even when verify_output is empty.
-    // Exemptions: the explicit --feature-verify-pending path (it already
-    // carries its own marker), and a repo that declared `commands.verify:
-    // "none"` (decision 55b951e1) — a feature-level verify can never run
-    // there, so marking would arm a close-door that repo could never satisfy.
-    // Keyed on commands.verify alone, deliberately narrower than
-    // isNoTestRepo() at :1908: a repo with only `commands.test: "none"` can
-    // still run a real feature verify and must keep arming the door.
-    const proofOutput = trace.verify_output;
-    const hasProofOutput =
-      typeof proofOutput === 'string' ? proofOutput.trim().length > 0 : proofOutput != null;
-    const hasProofEvidence =
-      verification_evidence != null &&
-      (typeof verification_evidence !== 'string' || verification_evidence.trim().length > 0);
-    const proofUnrecorded =
-      !hasProofOutput &&
-      !hasProofEvidence &&
-      !pendingFeatureVerify &&
-      !isNoTestCommand((readConfig(root).commands || {}).verify);
-    // worker-conformance D1: the two loosened doors stay VISIBLE, not silent —
-    // an audited loosening, the same shape D8 gave new_suite_reason and
-    // ratio_waiver. Emitted HERE, after the entire refusal chain has run (the
-    // same discipline the trace.proof marker just above follows), so a cap
-    // that is still refused never prints a warning about a cap that did not
-    // happen. Stderr mirrors derived-check-hardening E1's impact warning so
-    // the absence shows up in the cap's own output, not only in the cell file.
-    for (const warning of [behaviorEvidenceWarning, recordedProofWarning]) {
-      if (warning) process.stderr.write(`${warning}\n`);
-    }
     cell.status = 'capped';
     cell.trace = {
       ...trace,
@@ -2250,27 +1837,17 @@ export async function capCell(
       deviations: Array.isArray(deviations) ? deviations : [],
       friction: friction ?? null,
       behavior_change: bc,
-      verification_evidence: verification_evidence ?? null,
       outcome: typeof outcome === 'string' && outcome.trim() ? outcome : trace.outcome,
       capped_at: utcNow(),
-      // test-economy D3: non-blocking ratio-ceiling warning (tiny/small
-      // only, computed above) — additive field, an empty array whenever
-      // diff_stats is absent or the ratio is within bounds, so existing
-      // consumers of trace see no schema break. derived-check-hardening E1
-      // folds the impact-registry warning (also computed above, also
-      // non-blocking) into the SAME array — same channel, same semantics.
-      // worker-conformance D1 appends its two loosened-door warnings to the
-      // SAME channel, at the END so any consumer keying on the existing
-      // positions sees no shift.
-      warnings: [ratioWarning, impactWarning, behaviorEvidenceWarning, recordedProofWarning].filter(Boolean),
-      // main-verifies D1: the pending marker guardFeatureVerifyDebt (bee.mjs)
-      // reads at both swarming exits. Stamped ONLY on the pending path — the
-      // classic evidence path's trace stays byte-identical to before.
-      ...(pendingFeatureVerify ? { feature_verify: 'pending' } : {}),
-      // worker-conformance D10/D12/D14 (computed just above): additive and
-      // absent whenever the cap recorded real proof, so every existing trace
-      // consumer sees a byte-identical record on the proved path.
-      ...(proofUnrecorded ? { proof: 'unrecorded' } : {}),
+      // derived-check-hardening E1: the non-blocking impact-registry warning
+      // (computed above) — an empty array when nothing warned, so existing
+      // consumers of trace see no schema break.
+      warnings: [impactWarning].filter(Boolean),
+      // test-simple (decision 412e9b3a): the tests stamp from the handler's
+      // declared-commands.test run — {tests:'green', results:<pointer>,
+      // ran_at} on a green run, {tests:'undeclared'} when the repo declares
+      // no test path. Absent for programmatic callers that ran nothing.
+      ...(tests && typeof tests === 'object' ? tests : {}),
     };
     return writeCell(root, cell);
   });
@@ -2321,10 +1898,9 @@ export async function dropCell(root, id, reason) {
   return saved;
 }
 
-// Clear the claim and any recorded verify from a trace, so a cell returned to
-// "open" must be re-claimed and re-verified before it can cap again — a stale
-// verify_passed must never let a later re-cap skip its proof (capCell gates on
-// trace.verify_passed === true). Keeps the rest of the trace for audit.
+// Clear the claim (and any legacy recorded verify fields — dead data from the
+// deleted per-cell verify path, cleared so a reopened cell carries no stale
+// pass marker) from a trace. Keeps the rest of the trace for audit.
 function releaseTrace(existing) {
   const trace = { ...defaultTrace(), ...(existing || {}) };
   trace.worker = null;
@@ -2784,8 +2360,15 @@ function attemptsSinceBudgetReset(cell) {
   return attempts.filter((a) => a && typeof a.at === 'string' && a.at > marker);
 }
 
+// test-simple (decision 412e9b3a): 'tests-red' (a finish refused on a red
+// declared-test run) counts as a failed attempt for every budget below —
+// re-running finish into the same red is exactly the loop the budgets exist
+// to brake. Legacy 'fail' entries (the deleted `cells verify` verb) still
+// count, so old ledgers keep their meaning.
+const FAILED_ATTEMPT_VERDICTS = new Set(['fail', 'blocked', 'tests-red']);
+
 function budgetExhaustedRefusal(id, name, limit, used, relevant) {
-  const failed = relevant.filter((a) => a.verdict === 'fail' || a.verdict === 'blocked').length;
+  const failed = relevant.filter((a) => FAILED_ATTEMPT_VERDICTS.has(a.verdict)).length;
   const passed = relevant.filter((a) => a.verdict === 'pass').length;
   return {
     ok: false,
@@ -2831,7 +2414,7 @@ export function checkCellBudgets(cell) {
     return budgetExhaustedRefusal(cell.id, 'max_claims', budgets.max_claims, claimsUsed, relevant);
   }
 
-  const failedAttempts = relevant.filter((a) => a.verdict === 'fail' || a.verdict === 'blocked').length;
+  const failedAttempts = relevant.filter((a) => FAILED_ATTEMPT_VERDICTS.has(a.verdict)).length;
   if (failedAttempts >= budgets.max_failed_attempts) {
     return budgetExhaustedRefusal(cell.id, 'max_failed_attempts', budgets.max_failed_attempts, failedAttempts, relevant);
   }
@@ -2843,7 +2426,7 @@ export function checkCellBudgets(cell) {
   // max_failed_attempts above.
   const signatureCounts = new Map();
   for (const a of relevant) {
-    if (a.verdict !== 'fail' && a.verdict !== 'blocked') continue;
+    if (!FAILED_ATTEMPT_VERDICTS.has(a.verdict)) continue;
     if (typeof a.failure_signature !== 'string' || !a.failure_signature) continue;
     signatureCounts.set(a.failure_signature, (signatureCounts.get(a.failure_signature) || 0) + 1);
   }

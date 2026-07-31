@@ -15,6 +15,21 @@ bee:
 
 # Workflow State — completion teeth, the judge verdict, and the archive transaction
 
+> **Superseded in part (2026-07-31 — decision 412e9b3a,
+> docs/specs/test-simple.md).** The proof-economy tier system this concept
+> describes — the proof-tier matrix (B30/B37/B38, R55–R57), the red-first
+> evidence doors, the deferred-proof/absence-of-proof markers and the
+> feature-boundary debt doors they arm (B41–B43, R89–R93), and the
+> test-volume brakes — is deleted wholesale. The current completion door is
+> one declared test path: `bee cells finish` runs `commands.test` through
+> the deterministic `bee test` runner and writes
+> `.bee/logs/test-results.json`; green caps, red refuses with the failing
+> excerpt, an undeclared suite caps `tests: undeclared`, and `bee close`
+> re-runs the full declared suite for the feature. The judge-verdict rules
+> (B31/B32, R48–R50) and the archive transaction (B34–B36, R53/R54) remain
+> current. Everything below about proof tiers is kept intact as the
+> historical record of the superseded system.
+
 Finishing a unit is a door, not a declaration. Three guards stand at it: proof
 that a behavior change fixed something real, a structured verdict from a judge
 whose independence is stamped honestly rather than assumed, and — for the unit
