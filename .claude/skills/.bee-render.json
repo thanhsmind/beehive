@@ -3,68 +3,40 @@
   "target_runtime": "claude",
   "skills": [
     {
-      "name": "bee-briefing",
-      "sha256": "a774ef4764c10311537a2857ce8258387b3e1e8289b6dc1380c6f85c42ed81c6"
-    },
-    {
-      "name": "bee-bypass-gate",
-      "sha256": "58d2bc1f67076bef0d924f96dce648b910a2b58980720952c3823b76bc0f6ef8"
-    },
-    {
-      "name": "bee-compounding",
-      "sha256": "6f744b947f5f19429df93c9ca31a8577418562ab2e5cb16adac6d548fe98e750"
-    },
-    {
-      "name": "bee-context-locking",
-      "sha256": "008ff0ee81d7f9c77467df96c207ad7208eb5e8a09407e4df1e4cfcd6af6cc09"
-    },
-    {
-      "name": "bee-evolving",
-      "sha256": "b5546b8ffaec5b24d00f62e90f841330e4eafa3ea067cf07204f22a5c11cb744"
-    },
-    {
-      "name": "bee-exploring",
-      "sha256": "3a7f02b869a641e586b669d5c9bf9fb5e48e12844aa05f36d3ff77101e45353c"
+      "name": "bee-capturing",
+      "sha256": "672816fd1ca445ad43f634734de55d636a4c7da461166fa019d94a9d8c155cb3"
     },
     {
       "name": "bee-grooming",
-      "sha256": "6bcb1057ecbee745fdc91e84c9e9ed9bae0f131f873fb8c2dfdc94366ce2a0e0"
+      "sha256": "159e9feabc978293aef0fe434fd025658e089631802070de7a05ba1f20332180"
     },
     {
       "name": "bee-herding",
-      "sha256": "0b957645bb2aa09ce57b33d4da9428b7e1ca25ef58fff007d39a6bd51b319764"
+      "sha256": "94a2dc1ebdf025e89be96c7f84323d9d4f8d4e2a6b7210e901f50b1ad623002b"
     },
     {
       "name": "bee-hive",
-      "sha256": "eecb908c3ca7efe7b8d7588015a58e76070f30bcbbc3d255b558c84bcd62e1b5"
+      "sha256": "7d45614c2b31e080ad66fec2dacf599a9c8c4dc12aa30f17b36392e865a857af"
     },
     {
       "name": "bee-planning",
-      "sha256": "3a03ee3262cb184723ba08438b23163b7305b12eaaf8e921de01d1219412f110"
+      "sha256": "d46f80ef296da1d2beee3ad8c1ae557db576dd2fc719d56f42c3c41d30276bc5"
     },
     {
-      "name": "bee-qualifying",
-      "sha256": "7384f5a60dbe60e7baeaae390e1c85821a6a09c0f2f3a967d5bd3496f4b808cf"
+      "name": "bee-researching",
+      "sha256": "ea4d1cfb65e8dcb8e5e2b7ed80df7e4b9913918109127019d1b9d76ed9af8803"
     },
     {
       "name": "bee-reviewing",
-      "sha256": "a6203af7550ed8c2235e2603d636fde6859c8fbdcb9d8bcb695bd3a1374fca8c"
+      "sha256": "95549b2a6292c6bea488256d03e3a927569ce2c08da0c950a6409c5ba5ce7fea"
     },
     {
-      "name": "bee-scribing",
-      "sha256": "3a1ab556e32db8a146042cd6ea552a3b525b3b0e155fa2b9b0f63e5063453792"
+      "name": "bee-shaping",
+      "sha256": "4d6c93846029689ffe1ecf80d6b493ea9d807397360019ae7d21f8d2ac76a1ab"
     },
     {
       "name": "bee-swarming",
-      "sha256": "d081976f348bed3a9dcfa26334bf409366e7392988f46176611a0dadfe09eea8"
-    },
-    {
-      "name": "bee-writing-skills",
-      "sha256": "c4966dc88731581b6fc0aa2eae81b043c82a2fe5e49ab188b4e595c29bfa428f"
-    },
-    {
-      "name": "bee-xia",
-      "sha256": "67faecb7d77affadbcd4b6b5d9182b0e0c94e486b975481f0a63e23aee312a1e"
+      "sha256": "a6677f641bf32b3a5f665e6f371ac485df478b490f98a2b8de3cd8d946a35f91"
     }
   ]
 }

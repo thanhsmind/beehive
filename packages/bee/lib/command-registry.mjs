@@ -887,8 +887,8 @@ export const COMMAND_REGISTRY = [
       required: [],
     },
     examples: [
-      'bee state scribing-run --feature newf --areas auth --next-action bee-compounding --json',
-      'bee state scribing-run --lane demo-lane --feature demo-lane --areas auth --next-action bee-compounding --json',
+      'bee state scribing-run --feature newf --areas auth --next-action bee-capturing --json',
+      'bee state scribing-run --lane demo-lane --feature demo-lane --areas auth --next-action bee-capturing --json',
       'bee state scribing-run --show --json',
       'bee state scribing-run --show --feature newf --json',
     ],
@@ -897,7 +897,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'state.compounding-run',
     invoke: 'bee state compounding-run',
-    description: 'Stamp last_compounding_run (feature, date, ISO-precise at, learnings path, optional next-action) on the selected record. Legal ONLY from phase "compounding" (checkCompoundingRunPhase) — refused from any other phase. Unlike scribing-run, this verb does NOT advance phase: bee-compounding runs entirely inside phase "compounding", produced earlier by `state scribing-run`. What it DOES do is satisfy a precondition `state set --phase compounding-complete` now enforces: that transition refuses unless last_compounding_run exists, names the SAME feature as last_scribing_run, and was stamped at or after it. Target resolution (symmetric with scribing-run): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes.',
+    description: 'Stamp last_compounding_run (feature, date, ISO-precise at, learnings path, optional next-action) on the selected record. Legal ONLY from phase "compounding" (checkCompoundingRunPhase) — refused from any other phase. Unlike scribing-run, this verb does NOT advance phase: bee-capturing runs entirely inside phase "compounding", produced earlier by `state scribing-run`. What it DOES do is satisfy a precondition `state set --phase compounding-complete` now enforces: that transition refuses unless last_compounding_run exists, names the SAME feature as last_scribing_run, and was stamped at or after it. Target resolution (symmetric with scribing-run): explicit --lane <feature> always wins > the calling session\'s bound lane when --lane is omitted > the default state.json for an unbound session. --no-lane forces the default record. A missing or corrupt lane — explicit or session-bound — refuses loudly with zero writes.',
     parameters: {
       type: 'object',
       properties: {
@@ -1352,7 +1352,7 @@ export const COMMAND_REGISTRY = [
     name: 'backlog.propose',
     invoke: 'bee backlog propose',
     description:
-      'Submit a new product-backlog item (PBI) on demand — the human-facing front door onto "backlog pbi add", taking a story plus acceptance criteria with no id and no separate title. It appends one kind:\'pbi\' add event to the .bee/backlog.jsonl PBI fold with an auto-generated `p-<8hex>` id and Status=proposed; docs/backlog.md is the GENERATED view of that fold, so run "bee backlog render --write" to refresh the table. The command stops at the proposal — it never auto-starts bee-qualifying/bee-exploring for the new item. --story is required, <=200 chars (stored as the PBI title); --cos (acceptance criteria) is required, <=2000 chars; --feature is optional and reports as "—" when omitted. Any validation rejection leaves the log untouched.',
+      'Submit a new product-backlog item (PBI) on demand — the human-facing front door onto "backlog pbi add", taking a story plus acceptance criteria with no id and no separate title. It appends one kind:\'pbi\' add event to the .bee/backlog.jsonl PBI fold with an auto-generated `p-<8hex>` id and Status=proposed; docs/backlog.md is the GENERATED view of that fold, so run "bee backlog render --write" to refresh the table. The command stops at the proposal — it never auto-starts bee-shaping for the new item. --story is required, <=200 chars (stored as the PBI title); --cos (acceptance criteria) is required, <=2000 chars; --feature is optional and reports as "—" when omitted. Any validation rejection leaves the log untouched.',
     parameters: {
       type: 'object',
       properties: {
@@ -1521,7 +1521,7 @@ export const COMMAND_REGISTRY = [
   {
     name: 'capture.flush',
     invoke: 'bee capture flush',
-    description: 'Mark a pending capture stub flushed (its content merged into a spec by bee-scribing). Refuses when the id names no pending stub.',
+    description: 'Mark a pending capture stub flushed (its content merged into a spec by bee-capturing). Refuses when the id names no pending stub.',
     parameters: {
       type: 'object',
       properties: {

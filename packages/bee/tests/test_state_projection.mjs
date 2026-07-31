@@ -39,7 +39,7 @@ function makeRoot() {
 
 // ─── validation-diet D2/D14/D15: the merged shape+execution gate, exercised
 // through the REAL bee.mjs CLI dispatcher (never a hand-rolled shortcut) —
-// D9 evidence discipline: this is the exact machinery bee-briefing calls at
+// D9 evidence discipline: this is the exact machinery bee-shaping calls at
 // the end of planning, not a throwaway probe. Mirrors test_cli_state.mjs's
 // pre-existing multisession-native-9 proof shape (lane workflow + gate +
 // plan-rev bump), extended to the merged verb.

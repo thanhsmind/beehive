@@ -1,5 +1,0 @@
-interface:
-  display_name: "Bee Xia"
-  short_description: "Evidence-labeled research scout for unfamiliar, ambiguous, or version-sensitive territory. Use when the user asks to research a topic, library, or approach with no feature underway; when planning discovery lands on L2/L3; or before high-risk work where the repo has no precedent. Not for locking product decisions, proving feasibility, or writing code."
-policy:
-  allow_implicit_invocation: true

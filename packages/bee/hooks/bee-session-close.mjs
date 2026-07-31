@@ -102,7 +102,7 @@ async function maybeDecisionNudge(root) {
 // than every docs/specs/*.md update AND every docs/knowledge/**/*.md concept
 // (okf-foundation D34 — the bundle is the state layer's new home as areas
 // migrate), warn (deduped) that something settled was never captured — invoke
-// bee-scribing capture before closing. Never blocks.
+// bee-capturing capture before closing. Never blocks.
 async function maybeCaptureNudge(root) {
   try {
     // docs/specs/ and the bundle are both PRODUCT doc trees — resolve against
@@ -180,14 +180,14 @@ async function maybeCaptureNudge(root) {
       return (
         "bee capture nudge (decision 0003): the newest decision is more recent than every " +
         "concept in the knowledge bundle (docs/knowledge/) — a settled outcome may exist only " +
-        "in the decision log and the chat. Before finishing, invoke bee-scribing capture to " +
+        "in the decision log and the chat. Before finishing, invoke bee-capturing capture to " +
         "author it as a concept in the touched area's bundle folder (or confirm no area is affected)."
       );
     }
     return ( // no-bundle branch: today's wording, byte for byte.
       "bee capture nudge (decision 0003): the newest decision is more recent than every " +
       "area spec under docs/specs/ — a settled outcome may exist only in the decision log " + // no-bundle branch
-      "and the chat. Before finishing, invoke bee-scribing capture to merge it into the " +
+      "and the chat. Before finishing, invoke bee-capturing capture to merge it into the " +
       "touched area's spec (or confirm no spec is affected)."
     );
   } catch {
@@ -217,7 +217,7 @@ async function maybeCaptureQueueNudge(root, { force = false } = {}) {
     }
     return (
       `bee capture queue (decision 0017): ${pending.length} settlement stub(s) are queued and ` +
-      "unflushed. Flush them now via bee-scribing (drain oldest-first, merge each into its " +
+      "unflushed. Flush them now via bee-capturing (drain oldest-first, merge each into its " +
       "area spec) — or they must survive into the next session's preamble, never be dropped."
     );
   } catch {

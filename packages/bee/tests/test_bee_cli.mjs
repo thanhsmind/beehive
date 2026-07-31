@@ -1992,7 +1992,7 @@ await check('intent.clear example removes the anchor and leaves show reporting n
 // the feature was marked closed anyway. That state used to be perfectly valid.
 
 function makeDebtRepo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-scribing-debt-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-capturing-debt-'));
   fs.mkdirSync(path.join(dir, '.bee', 'cells'), { recursive: true });
   writeJsonAtomic(path.join(dir, '.bee', 'onboarding.json'), { schema_version: '1.0', bee_version: '0.1.0' });
   // At `compounding`, so the tail-guard predecessor check passes and the DEBT

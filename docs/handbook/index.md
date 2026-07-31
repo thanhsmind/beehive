@@ -19,9 +19,16 @@ New to the system? Read [overview.md](overview.md) first.
 
 On-demand side skills (not chain stages, so no dedicated page): `bee-briefing`
 (render one implement plan), `bee-grooming` (hunt tech debt), `bee-qualifying`
-(auto-triage a backlog row), `bee-xia` (research scout), `bee-writing-skills`
-(author a skill), `bee-evolving` (self-improve from feedback), `bee-bypass-gate`
+(auto-triage a backlog row), `bee-xia` (research scout), `bee-bypass-gate`
 (toggle gate autopilot).
+
+## Maintainer guides (developing bee itself, not shipped product)
+
+- [writing-skills.md](writing-skills.md) — how bee skills are written and
+  pressure-tested (TDD-for-skills; supporting material in
+  [writing-skills-references/](writing-skills-references/)).
+- [evolving.md](evolving.md) — how bee's gated self-improvement loop runs over
+  its collected feedback digest (Gate A / Gate B, bee repo only).
 
 ## Route by intent
 

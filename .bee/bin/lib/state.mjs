@@ -85,7 +85,7 @@ function coerceLegacyPhase(phase) {
 // scribing AND compounding had run when neither had.
 //
 // Why not "compounding only from scribing": nothing in bee ever sets phase
-// `scribing` (zero hits repo-wide) — bee-scribing goes straight to `state
+// `scribing` (zero hits repo-wide) — bee-capturing goes straight to `state
 // scribing-run`, which produces `compounding` directly. That rule would have
 // made `compounding` unreachable. So instead:
 //   - `compounding` is not settable at all; only a real scribing run yields it
@@ -107,7 +107,7 @@ export const SCRIBING_RUN_FROM = ['swarming', 'reviewing', 'scribing'];
 // compounding-gate D1 (cell cg-1) — the compounding-run recorder's own phase
 // door, same shape as SCRIBING_RUN_FROM/checkScribingRunPhase below but for
 // the sibling verb `state compounding-run`. Unlike scribing-run, a
-// compounding run does NOT produce a phase transition — bee-compounding runs
+// compounding run does NOT produce a phase transition — bee-capturing runs
 // entirely INSIDE phase "compounding" (stamped by the prior scribing run), so
 // the only legal phase to record from is that one phase itself, not a set of
 // predecessors.
@@ -127,7 +127,7 @@ export function checkPhaseTransition(from, to, record, opts = {}) {
     return {
       ok: false,
       reason:
-        `set: phase "compounding-complete" may only be entered from "compounding" (current: "${current}"). That name asserts scribing ran, compounding ran, AND the compounding run was RECORDED — not merely asserted; setting it from "${current}" claims work that did not happen and shuts the intake gate on a feature that never closed. FIX: close the chain in order — bee-scribing (\`state scribing-run\`), then bee-compounding (\`state compounding-run\`).`,
+        `set: phase "compounding-complete" may only be entered from "compounding" (current: "${current}"). That name asserts scribing ran, compounding ran, AND the compounding run was RECORDED — not merely asserted; setting it from "${current}" claims work that did not happen and shuts the intake gate on a feature that never closed. FIX: close the chain in order — bee-capturing (\`state scribing-run\`), then bee-capturing (\`state compounding-run\`).`,
     };
   }
   if (to === 'compounding-complete') {
@@ -301,7 +301,7 @@ const DEFAULT_MODELS = {
 //     where the runtime has a per-agent effort switch (invalid efforts drop)
 //   { kind: "cli", command: "..." }    → an EXTERNAL executor: a separate CLI
 //     process (codex exec, a GLM/Kimi CLI, ...) dispatched by the orchestrator
-//     under the same bee-executing contract; effort rides inside the command.
+//     under the same bee-swarming contract; effort rides inside the command.
 // Invalid shapes are ignored (the default for that slot stays).
 function normalizeTierValue(value) {
   if (typeof value === 'string' && value.trim()) return value.trim();
@@ -2020,11 +2020,11 @@ export function bypassLevel(root) {
 export function bypassBanner(level) {
   switch (level) {
     case 'total':
-      return '⚡⚡⚡ GATE BYPASS: TOTAL AUTOPILOT — ZERO STOPS. Every gate (any lane, high-risk/hard-gate included), secret-file reads, and review P1 findings auto-proceed; NO human checkpoint remains. Turn off: bee-bypass-gate off';
+      return '⚡⚡⚡ GATE BYPASS: TOTAL AUTOPILOT — ZERO STOPS. Every gate (any lane, high-risk/hard-gate included), secret-file reads, and review P1 findings auto-proceed; NO human checkpoint remains. Turn off: bee-hive bypass off';
     case 'full':
-      return '⚡⚡ GATE BYPASS: FULL AUTOPILOT — ALL Gates 1-3 auto-approved including high-risk/hard-gate work; only secret-file reads and a review P1 finding still stop for the human. Turn off: bee-bypass-gate off';
+      return '⚡⚡ GATE BYPASS: FULL AUTOPILOT — ALL Gates 1-3 auto-approved including high-risk/hard-gate work; only secret-file reads and a review P1 finding still stop for the human. Turn off: bee-hive bypass off';
     case 'normal':
-      return '⚡ GATE BYPASS: NORMAL — Gates 1-3 auto-approved for tiny/small/standard work only; high-risk/hard-gate, secret reads, and Gate 4 UAT still stop. Turn off: bee-bypass-gate off';
+      return '⚡ GATE BYPASS: NORMAL — Gates 1-3 auto-approved for tiny/small/standard work only; high-risk/hard-gate, secret reads, and Gate 4 UAT still stop. Turn off: bee-hive bypass off';
     default:
       return '';
   }

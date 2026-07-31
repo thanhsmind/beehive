@@ -24,7 +24,7 @@ import {
 
 const metadataParityTest = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../../skills/bee-writing-skills/scripts/test_openai_metadata.mjs',
+  '../../../scripts/test_openai_metadata.mjs',
 );
 // This suite composes the metadata checks in-process so their own ordinary
 // renderer entrypoints can use the shared serialized Worker runner from the
@@ -252,7 +252,7 @@ await check('globalScribingDebt counts a capped behavior_change cell for a NON-a
     );
 
     // A durable ledger line for that feature written AFTER the cap is what
-    // "someone ran bee-scribing and stamped it after the fact" looks like —
+    // "someone ran bee-capturing and stamped it after the fact" looks like —
     // the sweep must honor it even though it never touched the default
     // record's last_scribing_run and there is no lane record either.
     fs.mkdirSync(path.join(gRoot, '.bee', 'logs'), { recursive: true });
@@ -574,7 +574,7 @@ await check('preamble shows the single warning line when neither map file exists
   assert(section.length === 2, `heading + exactly one warning line, got ${section.length}`);
   assert(/Project map missing/.test(section[1]), 'warning names the gap');
   assert(/Q1\/Q2/.test(section[1]), 'warning names the unanswerable questions');
-  assert(/bee-scribing bootstrap/.test(section[1]), 'warning names the one-command fix');
+  assert(/bee-capturing bootstrap/.test(section[1]), 'warning names the one-command fix');
 });
 
 await check('preamble warning still fires when area specs exist but neither map file does', async () => {
@@ -583,7 +583,7 @@ await check('preamble warning still fires when area specs exist but neither map 
   try {
     const section = projectMapSection(buildSessionPreamble(root));
     assert(section.length === 2, `heading + warning only, got ${section.length}`);
-    assert(/bee-scribing bootstrap/.test(section[1]), 'area specs alone do not answer Q1/Q2');
+    assert(/bee-capturing bootstrap/.test(section[1]), 'area specs alone do not answer Q1/Q2');
   } finally {
     fs.rmSync(specsFixtureDir, { recursive: true, force: true });
   }
@@ -1199,7 +1199,7 @@ await check('bypassLevel normalizes gate_bypass into off/normal/full/total (lega
       const banner = bypassBanner(level);
       assert(banner.length > 0, `${level} banner non-empty`);
       assert(banner.includes('GATE BYPASS'), `${level} banner names GATE BYPASS`);
-      assert(banner.includes('bee-bypass-gate off'), `${level} banner states how to turn off`);
+      assert(banner.includes('bee-hive bypass off'), `${level} banner states how to turn off`);
     }
     // full/total banners must advertise that high-risk is covered — that is the
     // whole point of the new levels over normal.
@@ -1824,7 +1824,7 @@ await check('frozenJudgeHits flags judge files changed outside the declared scop
   assert(FROZEN_JUDGE_PATTERNS.length >= 8, 'pattern table stays substantive');
 });
 
-// ─── vendored source hygiene (P18, bee-compounding mechanization) ────────────
+// ─── vendored source hygiene (P18, bee-capturing mechanization) ────────────
 // A NUL byte in lib/feedback.mjs's sortKey separator made grep/rg treat the
 // whole file as BINARY and print nothing — not even a zero count — so a
 // source-level drift guard silently matched nothing and briefly convinced an
@@ -2055,7 +2055,7 @@ await check('census: retired auto-review-trigger phrasing is absent from every l
   );
 });
 
-await check('census: the on-demand review contract carries its required anchors — AGENTS.block.md keeps the on-request bee-reviewing side entry, bee-compounding keeps the review-candidate close step', async () => {
+await check('census: the on-demand review contract carries its required anchors — AGENTS.block.md keeps the on-request bee-reviewing side entry, bee-capturing keeps the review-candidate close step', async () => {
   const packagesBeeRoot = fileURLToPath(new URL('..', import.meta.url));
   const repoRoot = findRepoRoot(packagesBeeRoot);
   if (!repoRoot) return; // no repo context to check against (bare checkout)
@@ -2068,12 +2068,12 @@ await check('census: the on-demand review contract carries its required anchors 
     'AGENTS.block.md must keep the "on user request: bee-reviewing" side-entry line (SPEC R1/R8, decision 565e68d0)',
   );
 
-  const compoundingPath = path.join(repoRoot, 'skills', 'bee-compounding', 'SKILL.md');
-  assert(fs.existsSync(compoundingPath), `bee-compounding/SKILL.md not found at ${compoundingPath}`);
-  const compoundingText = fs.readFileSync(compoundingPath, 'utf8');
+  const capturingPath = path.join(repoRoot, 'skills', 'bee-capturing', 'SKILL.md');
+  assert(fs.existsSync(capturingPath), `bee-capturing/SKILL.md not found at ${capturingPath}`);
+  const capturingText = fs.readFileSync(capturingPath, 'utf8');
   assert(
-    compoundingText.includes('candidate add'),
-    'bee-compounding/SKILL.md must keep the "candidate add" review-candidate step at feature close (SPEC 7.1 step 6)',
+    capturingText.includes('candidate add'),
+    'bee-capturing/SKILL.md must keep the "candidate add" review-candidate step at feature close',
   );
 });
 
@@ -2783,7 +2783,7 @@ await check('worktree dispatch contract: eligibility, protected attestation, con
   const swarmingReferencePath = path.join(repoRoot, 'skills', 'bee-swarming', 'references', 'swarming-reference.md');
   const swarmingReference = fs.readFileSync(swarmingReferencePath, 'utf8');
   const workerDetails = fs.readFileSync(
-    path.join(repoRoot, 'skills', 'bee-executing', 'references', 'worker-details.md'),
+    path.join(repoRoot, 'skills', 'bee-swarming', 'references', 'worker-details.md'),
     'utf8',
   );
 

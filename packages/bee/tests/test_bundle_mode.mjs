@@ -334,32 +334,19 @@ await check('anti-fork: ownership is bundle-wide — a subject owned in ANOTHER 
 
 // ─── the prose that must not rot back (advisor finding 1: prose alone rots) ─
 
-await check('bee-scribing routes on the ONE predicate and names the bundle area path', async () => {
-  const skill = fs.readFileSync(path.join(REPO_ROOT, 'skills', 'bee-scribing', 'SKILL.md'), 'utf8');
-  assert(/bundleMode/.test(skill), 'the skill cites the one predicate by name');
-  assert(/docs\/knowledge\/areas\//.test(skill), 'the skill names where concepts live');
-  assert(/authoritative_for/.test(skill), 'the anti-fork gate is specified');
-  assert(/emitFrontmatter/.test(skill), 'frontmatter always through the canonical emitter');
-});
-
-await check('bee-scribing no longer routes new area truth into docs/specs/ when a bundle exists', async () => {
-  const skill = fs.readFileSync(path.join(REPO_ROOT, 'skills', 'bee-scribing', 'SKILL.md'), 'utf8');
-  const start = skill.indexOf('### 2a.');
-  const end = skill.indexOf('### 2b.');
-  assert(start !== -1 && end > start, 'the routing section has a bundle branch and a fallback branch');
-  const bundleBranch = skill.slice(start, end);
-  assert(!bundleBranch.includes('docs/specs/<area>.md'), 'the bundle branch never sends area truth to a spec file');
-  assert(bundleBranch.includes('docs/knowledge/areas/'), 'the bundle branch names the concept home');
-  // The fallback branch keeps today's rule, verbatim and un-annotated.
-  const fallback = skill.slice(end);
-  assert(
-    fallback.includes('**One area = one file, forever.**'),
-    "today's rule survives untouched in the no-bundle branch",
+await check('bee-capturing names the concept home; the area doctrine survives in its reference', async () => {
+  const skill = fs.readFileSync(path.join(REPO_ROOT, 'skills', 'bee-capturing', 'SKILL.md'), 'utf8');
+  assert(/docs\/knowledge\//.test(skill), 'the skill names the state layer');
+  const areaRef = fs.readFileSync(
+    path.join(REPO_ROOT, 'skills', 'bee-capturing', 'references', 'area-spec.md'),
+    'utf8',
   );
+  assert(/One area =\s+one file/.test(areaRef), 'the one-area-one-file rule survives in the reference');
+  assert(/docs\/knowledge\/areas\//.test(areaRef), 'the reference names the concept home');
 });
 
-await check('bee-scribing carries NO deprecation notice and no nag anywhere', async () => {
-  const skill = fs.readFileSync(path.join(REPO_ROOT, 'skills', 'bee-scribing', 'SKILL.md'), 'utf8');
+await check('bee-capturing carries NO deprecation notice and no nag anywhere', async () => {
+  const skill = fs.readFileSync(path.join(REPO_ROOT, 'skills', 'bee-capturing', 'SKILL.md'), 'utf8');
   assert(!NAG_RE.test(skill), 'an un-migrated host repo must not be told this release happened');
 });
 
@@ -744,13 +731,9 @@ await check('f3-3: every bundle-mode result also carries exactly the pinned key 
   }
 });
 
-await check('bee-scribing documents the three-layer gate: normalization, the two refusals, and the chain backstop', () => {
-  const skill = fs.readFileSync(path.join(REPO_ROOT, 'skills', 'bee-scribing', 'SKILL.md'), 'utf8');
-  assert(/subject_required/.test(skill), 'the empty-subject refusal is specified');
-  assert(/duplicate_authority/.test(skill), 'the two-claimant ambiguity is specified');
-  assert(/duplicate_authoritative_for/.test(skill), 'the chain backstop is named');
-  assert(!NAG_RE.test(skill), 'still no nag anywhere');
-});
+// The three-layer capture gate (subject_required / duplicate_authority /
+// duplicate_authoritative_for) is machine-owned and pinned by the mechanical
+// checks above; instruction prose no longer catalogs refusal codes.
 
 // ═══════════════════════════════════════════════════════════════════════════
 // cell f4-3 — the SESSION PREAMBLE routes on the same one predicate.
@@ -922,7 +905,7 @@ await check('preamble fallback: the missing-map WARNING branch is byte-identical
     JSON.stringify(map) ===
       JSON.stringify([
         '### Project map',
-        '- Project map missing (Q1/Q2 unanswerable from repo) — bee-scribing bootstrap available.',
+        '- Project map missing (Q1/Q2 unanswerable from repo) — bee-capturing bootstrap available.',
         '- PBI: 1 done / 0 in-flight / 1 proposed',
       ]),
     `the warning branch is untouched by D2, got ${JSON.stringify(map)}`,
@@ -945,7 +928,7 @@ await check('preamble fallback: the scribing-debt nudge still names docs/specs/,
   assert(debt !== null, 'the fixture really does carry scribing debt');
   assert(
     debt[1] ===
-      '- demo-1 capped since the last scribing run — run bee-scribing capture now; settled behavior belongs in docs/specs/ before it evaporates (decision 0011).',
+      '- demo-1 capped since the last scribing run — run bee-capturing capture now; settled behavior belongs in docs/specs/ before it evaporates (decision 0011).',
     `today's nudge, verbatim, got ${JSON.stringify(debt[1])}`,
   );
 });
@@ -1033,7 +1016,7 @@ await check('preamble bundle mode (D3): the scribing-debt nudge names the RESOLV
   assert(debt !== null, 'the fixture really does carry scribing debt');
   assert(
     debt[1] ===
-      '- demo-1 capped since the last scribing run — run bee-scribing capture now; settled behavior belongs in docs/knowledge/ before it evaporates (decision 0011).',
+      '- demo-1 capped since the last scribing run — run bee-capturing capture now; settled behavior belongs in docs/knowledge/ before it evaporates (decision 0011).',
     `the bundle repo is told where its knowledge actually goes, got ${JSON.stringify(debt[1])}`,
   );
 });

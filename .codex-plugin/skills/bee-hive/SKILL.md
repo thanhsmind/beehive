@@ -1,9 +1,9 @@
 ---
 name: bee-hive
 description: >-
-  Bootstrap and route the bee workflow: gates, state, and the next skill. Use when starting or resuming any bee session, choosing the next bee skill, running go mode, checking onboarding state, or enforcing workflow gates.
+  Route the bee workflow: session start, the next skill, gates, and onboarding. Use when starting or resuming any bee session, choosing the next bee skill, running go mode, checking onboarding state, enforcing workflow gates, or setting/checking the gate-bypass level (off/normal/full/total).
 metadata:
-  version: '0.1'
+  version: '0.2'
   ecosystem: bee
   dependencies:
     nodejs-runtime:
@@ -13,131 +13,71 @@ metadata:
       reason: Onboarding and the vendored .bee/bin helpers run in Node.js 18+.
 ---
 
-# hive
+# Hive — the router
 
-Load first in bee repos. Quoted headings resolve in `references/routing-and-contracts.md`.
+## Start
 
-## Lanes — triage first (the mode gate)
+Run `bee orient` — it names the phase, the blockers, and the next skill; follow it.
+A pending handoff is presented to the user and never auto-resumed. Orient is for routing,
+starting, or resuming work; plain questions are already answered by the session preamble.
 
-Decide the lane from the request, before loading a second skill: count
-risk flags. Lane caps count product files only — `.bee/**`, docs, plans,
-generated renders never count:
+## Route
 
-> auth · authorization · data model · audit/security · external systems ·
-> public contracts · cross-platform · changes behavior an existing test asserts ·
-> weakening, deleting, or replacing existing proof · multi-domain (covered
-> bugfix keeping tests green + adding one: 0 on the last two)
+Lifecycle: shape → plan → swarm → capture — `bee orient`'s `next.skill` names the
+current stop. Out-of-band requests:
 
-| Lane | Trigger (from the request alone) |
+| Skill | When |
 |---|---|
-| `docs` | all touched files are knowledge, not runtime (docs, README, samples, plans) |
-| `tiny` | 0–1 flags, ≤2 product files, no API/data change, one direct task — cell is the micro-plan |
-| `spike` | one yes/no proof decides whether the plan is real — opt-in by change class, never a phase step |
-| `small` | 0–1 flags, ≤3 product files, no gray areas — logged scoping synthesis; plan.md is opt-in |
-| `standard` | 2–3 flags, story-sized behavior, or genuine row uncertainty |
-| `high-risk` | 4+ flags or any hard-gate flag (auth, authorization, data loss, audit/security, external provider, validation removal) |
+| `bee-shaping` | Gray areas or unlocked decisions — lock them (also backlog triage, parking, the implement-plan brief). |
+| `bee-planning` | Decisions locked, or scope already clear ("just fix this") — route the lane, shape the work, present the gate. |
+| `bee-swarming` | Merged shape+execution gate approved, cells open — orchestrate workers, or execute one assigned cell. |
+| `bee-capturing` | Execution done, an area needs documenting, or something just settled — sync specs, record learnings. |
+| `bee-reviewing` | Only on an explicit review request — never automatic. Merge/ship with unreviewed candidates: report count + risk, ask ONE question. |
+| `bee-researching` | Research a topic, library, or approach — standalone, or from planning discovery. |
+| `bee-grooming` | The user asks to clean up, audit, or hunt tech debt. |
+| `bee-herding` | The user invokes the cockpit: bootstrap, dispatch, or merge. |
+| docs-only change | No pipeline: announce, write, format-check, close with a capture line or "nothing settled". |
 
-- Record same turn: `state route --set` — `Route: class=<c> | lane=<l> | flags=<n> [<names>] | files=<n>`; re-lane updates in place ("Route record").
-- docs/tiny/small: nothing more — merged shape+execution gate, execution per lane (tiny: inline or dispatched; small: one dispatched execution worker), no `bee-planning`; standard/high-risk: the full chain.
-- Uncertainty resolves downward, never up into skipping. One hard-gate flag = `high-risk` at one file; re-counting to dodge a threshold = already `standard`.
-- One re-lane checkpoint after first evidence: measured demotion only, never twice, never with a hard-gate flag; promotion always open ("Re-lane checkpoint").
-- Review is on demand — every lane closes `unreviewed`; one dispatched worker per lane; `small` SERIAL; standard: selective slice-close goal-check judge (smell / first slice from a worker / ~1-in-3 sample; NEEDS_REVISION escalates); high-risk: judge every slice ("Goal-check judge tier"); tiny/small: preview-then-persist, orchestrator-authored done-report ("Lane ceremony in full").
+## Gates
+
+Never approve a gate yourself, in any mode — headless included. Gates belong to the user:
+`bee state gate` records their answer, presented as a plain-language layer plus the fixed
+question, report linked, never pasted ("Gate Presentation Contract").
+
+The one recorded exception is gate bypass — `.bee/config.json` `gate_bypass`, a level:
+`off` (`false`, default) · `normal` (`true` / `"on"` / `"normal"`; legacy `true` reads as
+`normal`) auto-approves Gates 1-2 for non-hard-gate work, while high-risk/hard-gate,
+secret reads, and Gate 4 UAT/P1 still stop · `full` (`"full"`) lifts the high-risk/
+hard-gate floor; secret reads and a review P1 still stop · `total` (`"total"`) stops for
+nothing, secret reads included. To change it: set the config value (preserve every other
+field; create it if absent), log a one-line audit decision, and state the level's row —
+what auto-approves, what still stops — in the same turn; never silently, and never
+`full`/`total` without the user's explicit instruction. Setting the level never approves a
+gate; bypass is not headless — headless still stops at every gate ("Gate bypass mode").
 
 ## Onboarding
 
-1. `node --version` below 18 or missing → stop.
-2. From the bee source root: `node packages/bee/scripts/onboard_bee.mjs --repo-root <root> --json`.
-3. `up_to_date` → continue; `changes_needed` → summarize, get approval, then `--apply` — never silent/outside BEE markers; `blocked_*` → zero mutations, surface `versions` to the user.
+`.bee/onboarding.json` missing or stale → from the bee source root:
+`node packages/bee/scripts/onboard_bee.mjs --repo-root <root> --json`. `changes_needed` →
+summarize, get approval, re-run with `--apply` — never silently; `blocked_*` → zero
+mutations, surface `versions`. Do not continue until it reports `up_to_date`.
 
-Incomplete onboarding → stop ("Onboarding Protocol"), ("Greenfield init lane").
+## Go mode
 
-## Session Scout
+`/go` or "run the full pipeline" → `references/go-mode.md`.
 
-Preamble first — never re-fetch what it told you; `bee.mjs status --json` only
-when routing work or the preamble is missing/stale.
-HANDOFF (missing kind = pause): pause → present, **wait, never auto-resume**;
-planned-next → adopt only at a fresh-session boundary; resumed/compacted
-wait like pause. One-line offers, never auto-run: capture-queue flush
-· crash-recovery mining ("Crash recovery") · orphaned scribing debt · review
-candidates (`high_risk_unreviewed`). More:
-("Session Scout in full"), ("State layer reading order"),
-("Worktree routing"), ("Delegation contract").
+## Hard rules
 
-## Routing
+- P1 review findings always block; never build on a red base.
+- At ~65% context, write `.bee/HANDOFF.json` and pause.
+- Locked decisions are cited, never reinterpreted; no source edits before the execution gate is approved.
+- "done/green/fixed" only beside fresh command output in the same message; every close carries a capture line or an explicit "nothing settled".
+- The agent runs every bee command ("The agent runs the machinery"); work language only, one tick line per visible step ("Progress ticks", "Communication contract"); a red line is never silenced.
+- Form rules bend out loud with a recorded reason; boundary rules never bend ("Judgment contract"). Lanes scale ceremony, never memory ("Re-lane checkpoint", "Capture discipline").
 
-Vague/new or in doubt → `bee-exploring` · clear scope or small fix →
-`bee-planning` (tiny/small) · docs-only → docs lane ("Docs lane") · explicit
-review request → `bee-reviewing` · merge/ship/release with unreviewed
-candidates → report count + risk, ask ONE question — only an explicit yes
-dispatches review · document an area / settled rule → `bee-scribing`
-· backlog-triage pass (explicit-only) → `bee-qualifying` · `/go`
-→ go mode (`references/go-mode.md`) · resume → surface HANDOFF, wait
-· before every feature start → disjoint paths lane not wait; own checkout → worktree
-("Concurrency law in full").
-Briefing, grooming, compounding, skill-writing, evolving,
-jump-to-planning: ("First-Skill Routing").
-
-## The Gates
-
-Never skipped, batched, or self-approved — any mode, headless
-included. Sole exception, the opt-in bypass level (`bee-bypass-gate`):
-`normal` auto-approves Gates 1-2 for tiny/small/standard
-(high-risk/hard-gate, secrets, Gate 4 UAT still stop); `full` extends to
-high-risk too (secret reads, review P1 still stop); `total`: everything,
-zero stops. `full`/`total` lift the high-risk floor — never re-erect it
-("Gate bypass mode"); headless stops regardless, not bypass.
-
-- Gate 1: "Decisions locked. Approve CONTEXT.md before planning?"
-- Gate 2: "Work shape is ready. Approve before current-work preparation?" — approves `shape` AND `execution` together (`--merge`).
-- Gate 4: P1 > 0 → "P1 findings block merge. Fix before proceeding?"; P1 = 0 → "Review complete. Approve merge?"
-
-Gate 4 exists only inside a user-invoked review session — never automatic
-after execution, never after an unreviewed close; bypass never *creates* one;
-`normal`/`full`: UAT items and any P1 always stop; `total` auto-proceeds.
-`docs`: no gates; `tiny`/`small`: the merged question above; Gates 1-2
-otherwise one at a time. Presentation: plain-language layer + fixed question;
-report linked, never pasted; the user can restate it
-("Gate Presentation Contract"); optional cross-model second opinion at Gates
-2/4, never auto-resolved. CI status gate before the first `cells claim`: red
-CI / open `verify-red` → a fix-first tiny cell, **never build on red**;
-impacted tests locally, full suite CI-owned ("CI status gate").
-
-## Priority Rules (hive law)
-
-The always-loaded `AGENTS.md` block carries the boundary rules
-(gate-before-source, proof at close, CLI-only state, reservations,
-concurrency, ids-never-lead); this list adds the router-side laws.
-
-1. P1 review findings always block.
-2. At ~65% context, write `.bee/HANDOFF.json` and pause.
-3. `CONTEXT.md` is truth; locked decisions cited, never reinterpreted.
-4. No source-editing execution before Gate 2 approves execution.
-5. Failed SMALLER PATH check or a NO spike → halt; redraft before the gate.
-6. Critical patterns + recent decisions before planning/executing (Session Scout).
-7. "done/passing/fixed" needs fresh command output in the same message.
-8. Lanes scale ceremony, never memory: scribing sync per `behavior_change` cap; capture on settle; every close: a capture line or "nothing settled" ("Capture discipline").
-9. The agent runs the machinery, never the user ("The agent runs the machinery").
-10. Work language only; every perceivable step emits one tick line, on by default (rule: `AGENTS.md` "Communicate in work language"; "Silent Bookkeeping", "Progress ticks").
-11. No hand-edits to `.bee/*.json(l)`; CLI verbs only; `state set` needs `--owner`; no verb → file friction first.
-12. Hooks are a safety net, never the authority; never retry a blocked action (`AGENTS.md` Guardrails).
-13. Headless: never ask; defer into `Outstanding Questions`; never self-approve a gate ("Headless mode").
-14. Session-end nudge: ask for a durable decision/learning; log via `decisions log`.
-
-## Red Flags
-
-docs-only change through the full pipeline · a gate with no plain-language
-layer · a gate the user cannot restate · a bee command handed to the user to
-run · a rule deviated from silently. When a rule's letter stops serving its
-purpose in the situation at hand, say so out loud and deviate with a named,
-recorded reason (decision log or deviation note) — boundary rules (gates,
-proof at close, CLI-only state, reservations, secrets) hold as written;
-form rules bend on judgment, never in silence ("Judgment contract").
-
-## Reference Map
+## References
 
 | File | When to load |
 |---|---|
-| `references/routing-and-contracts.md` | Every exiled section — resolve quoted headings here; skill catalog, first-skill routing, contracts, quick references |
+| `references/routing-and-contracts.md` | Every quoted heading in this body resolves here. Deep contracts: gates and bypass, lanes and ceremony, delegation, communication, judge tier, onboarding detail |
 | `references/go-mode.md` | `/go` runs: gate wording, slice loop, fallbacks, headless + bypass |
-
-Session oriented. Invoke bee-<selected-skill> skill.

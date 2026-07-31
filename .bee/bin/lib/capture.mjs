@@ -60,7 +60,7 @@ export function addCaptureStub(root, { outcome, dids = null, area = null, files 
   }
   if (lane === 'high-risk') {
     throw new Error(
-      'addCaptureStub: high-risk settlements never queue — run the full bee-scribing sync inline (decision 0017).',
+      'addCaptureStub: high-risk settlements never queue — run the full bee-capturing sync inline (decision 0017).',
     );
   }
   const stub = {
@@ -103,7 +103,7 @@ export function captureQueue(root) {
 }
 
 /**
- * Mark a stub flushed (its content merged into a spec by bee-scribing).
+ * Mark a stub flushed (its content merged into a spec by bee-capturing).
  * `into` names where it landed (e.g. "docs/specs/<area>.md").
  */
 export function flushCaptureStub(root, id, { into = null } = {}) {

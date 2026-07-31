@@ -261,7 +261,7 @@ const DEFAULT_CONFIG = {
   // Opt-in autopilot (decision 0010): when true, the agent auto-approves
   // Gates 1-3 for tiny/small/standard non-hard-gate work instead of stopping
   // for the human. High-risk/hard-gate work, secret reads, and Gate 4 UAT are
-  // never bypassed. Toggle with the bee-bypass-gate skill. Default off.
+  // never bypassed. Toggle through the bee-hive skill (gate bypass). Default off.
   gate_bypass: false,
   // Model tiers, runtime-keyed (decision 0012). swarming resolves tier → model
   // per dispatch so the strongest model stays scarce (ceiling) and cheap models
@@ -278,32 +278,32 @@ const DEFAULT_CONFIG = {
 const CRITICAL_PATTERNS_STUB = `# Critical Patterns
 
 Mandatory pre-planning / pre-execution context for this repository.
-bee-compounding appends hard-won patterns here; keep it short and current.
+bee-capturing appends hard-won patterns here; keep it short and current.
 
 (none captured yet)
 `;
 
-// State-layer skeletons (create-only, never overwritten): bee-scribing owns
+// State-layer skeletons (create-only, never overwritten): bee-capturing owns
 // the content; onboarding only guarantees the files exist so "read the spec
 // before the code" and "where does X live" have a landing page from day one.
 const READING_MAP_STUB = `# Reading Map
 
-Where each area of this project lives. bee-scribing owns this file: it is
+Where each area of this project lives. bee-capturing owns this file: it is
 updated whenever an area spec is created or moved. Read this before any broad
 search — it answers "where does X live" without a grep.
 
 | Area | Spec | Code entry points |
 |---|---|---|
-| (none mapped yet — run a bee-scribing bootstrap pass) | | |
+| (none mapped yet — run a bee-capturing bootstrap pass) | | |
 `;
 
 const SYSTEM_OVERVIEW_STUB = `# System Overview
 
 One-page, technology-agnostic description of what this system does and how its
-areas fit together. bee-scribing owns this file; it is the first read for any
+areas fit together. bee-capturing owns this file; it is the first read for any
 human or agent new to the repository.
 
-(not written yet — run a bee-scribing bootstrap pass to fill this in)
+(not written yet — run a bee-capturing bootstrap pass to fill this in)
 `;
 
 // CLAUDE.md @import fallback: Claude Code auto-loads CLAUDE.md but not
@@ -3090,7 +3090,7 @@ function computePlan(
   }
 
   // 4a. state-layer skeletons: reading-map + system-overview must exist after
-  // onboarding (create-only — bee-scribing owns the content and an existing
+  // onboarding (create-only — bee-capturing owns the content and an existing
   // file is NEVER touched, drifted or not).
   for (const name of ["reading-map.md", "system-overview.md"]) {
     if (!fs.existsSync(path.join(repoRoot, "docs", "specs", name))) {

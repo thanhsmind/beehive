@@ -333,7 +333,7 @@ A re-dispatched cell (rescue rung) starts a **fresh** budget — the 2-consult c
 
 **Evidence bundle — two shapes:**
 - **On-failure consult (this loop):** exact failing command, the failing output, your diagnosis, the relevant cited file excerpts, and the `CONTEXT.md` path — the advisor is debugging with you, it needs the evidence.
-- **Gate-time consult (the unconditional high-risk/hard-gate pre-cap consult, bee-executing step 6):** a COMPACT DIGEST only — cell id, one-paragraph change summary, file list with a one-liner per file, the `CONTEXT.md` path. Never full file excerpts: nothing failed, the advisor is sanity-checking shape and risk, and the semantic judge plus the feature verify independently backstop correctness.
+- **Gate-time consult (the unconditional high-risk/hard-gate pre-cap consult, bee-swarming "Execute", before the cap):** a COMPACT DIGEST only — cell id, one-paragraph change summary, file list with a one-liner per file, the `CONTEXT.md` path. Never full file excerpts: nothing failed, the advisor is sanity-checking shape and risk, and the semantic judge plus the feature verify independently backstop correctness.
 
 Either shape passes **inline in the consult prompt or via stdin — never a `/tmp` path**. Never include secrets or env values.
 

@@ -157,7 +157,7 @@ function specProjectMapLines(root) {
   if (present.length === 0) {
     // Area specs alone do not answer Q1/Q2 — the warning fires whenever both maps are missing.
     lines.push(
-      '- Project map missing (Q1/Q2 unanswerable from repo) — bee-scribing bootstrap available.',
+      '- Project map missing (Q1/Q2 unanswerable from repo) — bee-capturing bootstrap available.',
     );
     return lines;
   }
@@ -520,7 +520,7 @@ export function buildSessionPreamble(root, { sessionId = null, handoffOutcome = 
     lines.push('');
     lines.push(`### Scribing debt: ${debt.count} behavior_change cell(s) uncaptured`);
     lines.push(
-      `- ${debt.cells.join(', ')} capped since the last scribing run — run bee-scribing capture now; settled behavior belongs in ${bundle ? 'docs/knowledge/' : 'docs/specs/'} before it evaporates (decision 0011).`,
+      `- ${debt.cells.join(', ')} capped since the last scribing run — run bee-capturing capture now; settled behavior belongs in ${bundle ? 'docs/knowledge/' : 'docs/specs/'} before it evaporates (decision 0011).`,
     );
   }
 
@@ -534,7 +534,7 @@ export function buildSessionPreamble(root, { sessionId = null, handoffOutcome = 
     lines.push('');
     lines.push(`### Orphaned scribing debt: ${orphaned.count} cell(s) across ${orphaned.features.length} feature(s)`);
     lines.push(
-      `- ${orphaned.features.map((entry) => `${entry.feature} (${entry.cells.join(', ')})`).join('; ')} — capped with no scribing sync ever recorded for their feature; run bee-scribing for each, then \`bee state scribing-run --feature <feature> --areas "<a,b>" --next-action "<n>"\` to stamp the repair.`,
+      `- ${orphaned.features.map((entry) => `${entry.feature} (${entry.cells.join(', ')})`).join('; ')} — capped with no scribing sync ever recorded for their feature; run bee-capturing for each, then \`bee state scribing-run --feature <feature> --areas "<a,b>" --next-action "<n>"\` to stamp the repair.`,
     );
   }
 
@@ -544,7 +544,7 @@ export function buildSessionPreamble(root, { sessionId = null, handoffOutcome = 
     lines.push('');
     lines.push(`### Capture queue: ${queue.count} stub(s) pending flush`);
     lines.push(
-      '- Settlements were stubbed mid-flow (decision 0017) — offer the flush now before new work: bee-scribing drains the queue oldest-first and merges each stub into its area spec.',
+      '- Settlements were stubbed mid-flow (decision 0017) — offer the flush now before new work: bee-capturing drains the queue oldest-first and merges each stub into its area spec.',
     );
   }
 

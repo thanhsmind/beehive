@@ -2,27 +2,27 @@
   "schema_version": "1.0",
   "bee_version": "1.20.3",
   "managed": {
-    "agents_block": "a54d017da4616b27646c2f888e89e814d4ad54d55f7597d09349f79a0677a138",
+    "agents_block": "ac351c07e20dd896cbccd2b99109d308587ee28b8859996b57198d24833d7128",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
     "helpers": {
-      "bee.mjs": "4b648e266740dc995e95675cf519fd768d8a89a2037b75d9449a6b444c6a5941"
+      "bee.mjs": "69b48fdf04246ae7e1e0002897e9fc6a96940e2adeb8ee40199a0f2c9ccb6e9d"
     },
     "lib": {
       "backlog.mjs": "6f0944ee6b47c1ccda3c74d100b553d5b22e5d7a4c5c66fae6178dfec1074eca",
-      "capture.mjs": "3779fd6bd5b28c50b50e4b93cbc368d458123ebab1cbcb3cc34757af0d24f8fa",
+      "capture.mjs": "4a7705e78a65636cdc2c16ae008b256c52a172219e84818cffae07267671cfeb",
       "cells.mjs": "46e5bd11b87c9c6b53b7f475baf8041560b21bceefc1d3cd563baed6bea3c0c7",
       "claims.mjs": "de7726a26b2354b65ee598d00f9179f04f71fe3d53f39a865b749da49e03623d",
-      "command-registry.mjs": "4bdebe4e42ec342c7b93518d349f25ceb67388ca77e832350a934b9abd19d45b",
+      "command-registry.mjs": "fed74735518933b02f38917ec82244782cee4e6f7d2136dccc2fb4b19d144a9c",
       "commands_detect.mjs": "4724f404ef220c662bbda670e6393ae0a01cdbecc0beed6e12ad716b4f684acb",
       "compaction.mjs": "0c824c25556480b886457d9299e5d9baf3a94bdeef0ff0b1f6a24aefc5a69fc3",
       "decisions.mjs": "1e64a39def7d1311008ca8d788eb34079e74ac3990dcedf6dd49a0e551a04ddd",
       "dispatch-guard.mjs": "acabfef60de3ce6babeda8deee7ea5c1954cc655d5bc8dae4d62f3e0338911d0",
       "dispatch-prepare.mjs": "4df88e5aef88ea9c1298bc71987d31f5220e91120b61ced145712e88d9376ca5",
-      "feedback.mjs": "a38aabf50fc1fd597bddc208160b0f27bf270773c403de75a0c3b4783c95e02c",
+      "feedback.mjs": "cf0e59fe1acba5b8ecd8922c311db4d1d40c0cff9843cedc9cffedf1584ae633",
       "fsutil.mjs": "c0a65d8aebfca7f7423f10cc9e13fa8ca43234c4a7b7e7ea1f05619b18e06af0",
       "guards.mjs": "615716039b59ebea29e7778475f27bfec8bf5b705ed1c72954e62b6a084cf8de",
       "herding.mjs": "95a81c8f17a84e2b57a1f8081f5f4a3ec7703432e81b2741c8795bd30a181433",
-      "inject.mjs": "a31ef42107ccf358d7828944b730dea19cc43be7265f715804f69718493ac102",
+      "inject.mjs": "ce4ab6390c0f168893c76f058488584037e79dbeae8d6ce9f5610d3acce89353",
       "integration-queue.mjs": "149a03dfb4723a18008e3b0f3890e8dcd7b6fb660a2cf7dda3874e08fb8e172d",
       "intent.mjs": "acb9a427caf2e1aae106407a96a9fc0a2c16a087d31af057f704afa2619255e8",
       "judge.mjs": "5057e17a6bcd3dacff21fe479e13570620cfe1b9c821c0ff5c8254f39e3c6ed1",
@@ -38,7 +38,7 @@
       "scratch.mjs": "3b7ab2e104b3f4cee240a43fac49ee630df7ca2ed995eb71f403d25eae17afb0",
       "source-identity.mjs": "716740641e1f6bfbb5ccc5b4fe7827f1165c2a1f1127ee3800f52a47ac09fc7a",
       "state-projection.mjs": "0ff0a75338db7469bda508305ed13311b2dea07a0c8f61cf8161d03ec3096d9d",
-      "state.mjs": "0505aa56c3dd73dbed72b9faf52125245e2a725b52a5826c5a97d8f1acfa90fe",
+      "state.mjs": "d63a6159355ee4bbb483b8f47b46a14fac63f1ed3a4b4d8b92eb5e4a114ed1f2",
       "validate-args.mjs": "99a28f221deb373ee128a821a1463acafdf91413c377c04d56cbda5137c81b17",
       "workflow-store.mjs": "f2e4988b7ecd278f220e7dfcd8d15f2e06a28312871f9291f1d890a1f669ad29",
       "workspace-store.mjs": "aa8017d71df1e3d35f40503b47bbe1aa1a2e110623b4a480fe66eb5bb1f3c3c1",
@@ -53,8 +53,8 @@
       "bee-write-guard.mjs": "7a233425606df2027abb067a20bbdb284cd6a7a1acc3275cdeba06076e6bfd1a",
       "tokenize-command.mjs": "e1da8db4a06525c92fb01495e718a0a2f94d87b2c7808458e306b480b353a77a",
       "bee-state-sync.mjs": "592d57221940816eee31951a96439679e89d1526db4a3280286965b59fe089d3",
-      "bee-chain-nudge.mjs": "0520c71fad2513d93666ad4c3353b7196faeeac382430b1e1395fabd0febd9cb",
-      "bee-session-close.mjs": "b81097abbab641d0cd58ad5ccfd34bd927888bce7a28d9aeb81525371373c064",
+      "bee-chain-nudge.mjs": "0e357a3fc427545fb6485eaaedb8458b210f41c2f53ff1c64e6c15d0f6b6f38e",
+      "bee-session-close.mjs": "8e2f742ad2640e3479860ec74a05d35a6fd5bd12ba253917eb6771895b71be29",
       "bee-model-guard.mjs": "07c22de49b17c6d349bc2ae94ad35721471fd1437a49cdc0feaad3b2d061e829",
       "bee-tools-logger.mjs": "668634222153c37d858bd5cb8ac5183507bc0da643ef78929219dcf810a39224",
       ".codex/hooks.json": "882cb31457271a7e30de8a257de824e4da2eaa726d9f8af6b3e683969c3763ae"
@@ -78,5 +78,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-07-31T10:48:47.492Z"
+  "updated_at": "2026-07-31T13:00:49.571Z"
 }

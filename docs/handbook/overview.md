@@ -98,7 +98,9 @@ skills/                     the workflow, one SKILL.md per phase (instructions o
   bee-compounding/          capture learnings + decisions       → stages/compounding.md
   bee-reviewing/            on-demand independent review gate    → stages/reviewing.md
   (plus on-demand: bee-briefing, bee-grooming, bee-qualifying,
-   bee-xia, bee-writing-skills, bee-evolving, bee-bypass-gate)
+   bee-xia, bee-bypass-gate; maintainer guides for developing bee
+   itself live in docs/handbook/writing-skills.md and
+   docs/handbook/evolving.md)
 
 packages/bee/               the payload package (v1.18.0) — single standard code set
   scripts/bee.mjs           CLI source (vendored into host as .bee/bin/bee.mjs)

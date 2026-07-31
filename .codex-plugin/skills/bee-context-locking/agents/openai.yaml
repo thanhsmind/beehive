@@ -1,5 +1,0 @@
-interface:
-  display_name: "Bee Context Locking"
-  short_description: "Write docs/history/<feature>/CONTEXT.md from a caller's resolved decisions -- the single shared writer for both the human-interactive path (bee-exploring) and the automatic path (bee-qualifying). Two modes: lock (write/update locked decisions) and park (write evidence + open questions into Outstanding Questions, and flip the backlog row to parked). Do NOT use to originate decisions, scope, or approach -- those come from exploring/qualifying. Never presents a gate."
-policy:
-  allow_implicit_invocation: true

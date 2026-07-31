@@ -1,5 +1,0 @@
-interface:
-  display_name: "Bee Qualifying"
-  short_description: "Gather evidence for a new or unclassified backlog item and judge whether it can proceed unattended into planning or must be parked for a human. Use the moment a backlog item needs its first triage pass, before any bee-exploring or bee-planning work begins. Not for human-interactive gray-area resolution, cell creation, or code."
-policy:
-  allow_implicit_invocation: true

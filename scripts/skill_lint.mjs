@@ -131,11 +131,12 @@ function pointsTo(body, heading) {
   return false;
 }
 
-check('the three rules this slice moved to references are reachable from a body pointer', () => {
+check('the rules this slice moved to references are reachable from a body pointer', () => {
+  // bee-exploring's entry left with the skill itself (merged into bee-shaping,
+  // whose body no longer routes the re-lane checkpoint through a reference).
   const required = [
     ['bee-hive', 'Progress ticks'],
     ['bee-hive', 'Re-lane checkpoint'],
-    ['bee-exploring', 'Re-lane checkpoint'],
   ];
   const missing = [];
   for (const [skill, heading] of required) {

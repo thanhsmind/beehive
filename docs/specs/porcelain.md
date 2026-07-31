@@ -72,9 +72,8 @@ JSON shape:
 
 - `next.action` reuses status's recommended next step.
 - `next.skill` maps the phase to the skill to load (exploring →
-  bee-exploring, planning → bee-planning, swarming → bee-swarming,
-  scribing → bee-scribing, compounding → bee-compounding, otherwise
-  bee-hive).
+  bee-shaping, planning → bee-planning, swarming → bee-swarming,
+  scribing/compounding → bee-capturing, otherwise bee-hive).
 - `next.command` is the runnable command when one applies, else null.
 - Text output: at most six lines — one per section — ending with
   `next: <action>`.

@@ -2049,7 +2049,7 @@ function editPayload({ sessionId, cwd, filePath }) {
 const CAPTURE_NUDGE_NO_BUNDLE =
   "bee capture nudge (decision 0003): the newest decision is more recent than every " +
   "area spec under docs/specs/ — a settled outcome may exist only in the decision log " +
-  "and the chat. Before finishing, invoke bee-scribing capture to merge it into the " +
+  "and the chat. Before finishing, invoke bee-capturing capture to merge it into the " +
   "touched area's spec (or confirm no spec is affected).";
 
 function buildCaptureNudgeFixture(label, { withBundle }) {

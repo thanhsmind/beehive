@@ -53,7 +53,7 @@ worker's diagnosis. If it invalidates the plan, return to bee-planning.
 **Completion:** slice done with more approved work remaining → return to
 bee-planning for the next batch (an approved plan stays frozen; planning
 shapes the next batch, never reopens it). Final slice green → tell the
-user execution is complete and invoke bee-scribing. Before declaring done:
+user execution is complete and invoke bee-capturing. Before declaring done:
 no active reservations, no in-flight workers recorded.
 
 At ~65% context, write `.bee/HANDOFF.json` and pause cleanly — never push

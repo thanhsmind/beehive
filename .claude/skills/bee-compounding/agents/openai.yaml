@@ -1,5 +1,0 @@
-interface:
-  display_name: "Bee Compounding"
-  short_description: "Capture durable learnings and decisions so future work starts smarter. Use when scribing completes, or when work is intentionally abandoned with lessons worth keeping."
-policy:
-  allow_implicit_invocation: true

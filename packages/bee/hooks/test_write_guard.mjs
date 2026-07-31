@@ -942,7 +942,7 @@ async function main() {
   // --- 40. a plugin skill render stays allowed, again with a scratch-shaped
   // basename so the assertion proves the render-tree exemption fires
   const r40 = await runHookPayload(
-    { tool_name: "Write", tool_input: { file_path: ".claude-plugin/skills/bee-executing/probe-render.json", content: "{}\n" } },
+    { tool_name: "Write", tool_input: { file_path: ".claude-plugin/skills/bee-swarming/probe-render.json", content: "{}\n" } },
     root,
   );
   check(r40.status === 0, "row40: a plugin skill render write is allowed even with a scratch-shaped name", `status=${r40.status} stderr=${r40.stderr}`);

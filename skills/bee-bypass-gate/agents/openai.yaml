@@ -1,5 +1,0 @@
-interface:
-  display_name: "Bee Bypass Gate"
-  short_description: "Toggle opt-in gate-bypass autopilot, which now has levels. `normal` auto-approves Gates 1-2 for tiny/small/standard work (high-risk, secrets, and Gate 4 still stop); `full` also auto-approves high-risk/hard-gate work; `total` stops for nothing at all. Use when the user wants to run the pipeline without approving every gate, to widen how far bypass reaches, or to check or turn it off. Invocable as the command bee-bypass-gate with off / on / normal / full / total / status."
-policy:
-  allow_implicit_invocation: true

@@ -119,7 +119,7 @@ docs/history/<upstream-feature>/CONTEXT.md:8:**Backlog:** PBI-043
 ```
 Inverted, the reverse index is `{ PBI-043: agent-pane-orchestration }` and nothing else.
 **No other PBI in `docs/backlog.md` has a `CONTEXT.md` at all**, so every other row fails
-condition (a) outright, regardless of its Status column — a human has to run `bee-exploring`
+condition (a) outright, regardless of its Status column — a human has to run `bee-shaping` (Explore)
 on an item before the dispatcher can see it as "ready". This is the readiness condition working as designed, not
 a gap: the dispatcher must never invent scope for an item nobody has explored yet.
 
@@ -172,7 +172,7 @@ Two independent, structural reasons, both already surfaced in §5:
 
 1. **Only one backlog item has ever been promoted through exploring.** `docs/backlog.md`
    carries ~20 `proposed` rows (PBI-044 down to PBI-039 and others) that are completely
-   invisible to condition (a) until a human runs `bee-exploring` on each one — that is what
+   invisible to condition (a) until a human runs `bee-shaping` (Explore) on each one — that is what
    creates its `docs/history/<slug>/CONTEXT.md` and is the only thing that can flip its
    Status to `in-flight`. The dispatcher has no mechanism, and must have none, to decide
    readiness on its own; that decision belongs to a human running exploring per item first.

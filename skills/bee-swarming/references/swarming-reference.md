@@ -63,7 +63,7 @@ slice is also the feature's FINAL slice: before leaving swarming, run and
 record the ONE feature verify ("Feature verify at close, in full", below) —
 the close-door guard enforces this exactly as it does for a wave. Then hand
 off: both `tiny` and `small` present that done-report (diff + commit +
-feature-verify result + capture line) and invoke bee-scribing — no auto
+feature-verify result + capture line) and invoke bee-capturing — no auto
 reviewer; the 1-correctness-reviewer contract lives inside a user-invoked
 session (implementation is verified; independent review runs only on user
 request).

@@ -105,7 +105,7 @@ async function main() {
         if (debt && debt.count > 0) {
           msg +=
             `\n⚠ Scribing debt: ${debt.count} behavior_change cell(s) capped since the last capture ` +
-            `(${debt.cells.join(", ")}) — run bee-scribing capture now; don't wait for review (decision 0011).`;
+            `(${debt.cells.join(", ")}) — run bee-capturing capture now; don't wait for review (decision 0011).`;
         }
       } catch {
         // fail-open: the debt nudge is advisory, never a blocker

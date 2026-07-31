@@ -1049,10 +1049,10 @@ function renderStatusText(status) {
         ]
       : []),
     ...(status.scribing_debt && status.scribing_debt.count > 0
-      ? [`Scribing debt: ${status.scribing_debt.count} behavior_change cell(s) uncaptured (${status.scribing_debt.cells.join(', ')}) — run bee-scribing capture (decision 0011)`]
+      ? [`Scribing debt: ${status.scribing_debt.count} behavior_change cell(s) uncaptured (${status.scribing_debt.cells.join(', ')}) — run bee-capturing capture (decision 0011)`]
       : []),
     ...(status.capture_queue && status.capture_queue.count > 0
-      ? [`Capture queue: ${status.capture_queue.count} stub(s) pending flush — run bee-scribing flush at wrap-up, before compact/clear, or now if idle (decision 0017)`]
+      ? [`Capture queue: ${status.capture_queue.count} stub(s) pending flush — run bee-capturing flush at wrap-up, before compact/clear, or now if idle (decision 0017)`]
       : []),
     ...(status.pbi
       ? [`PBI: ${status.pbi.done} done / ${status.pbi.in_flight} in-flight / ${status.pbi.proposed} proposed`]
@@ -1128,11 +1128,11 @@ function handleStatus(root, flags) {
 // second state computation. ────────────────────────────────────────────────
 
 const ORIENT_PHASE_SKILL = {
-  exploring: 'bee-exploring',
+  exploring: 'bee-shaping',
   planning: 'bee-planning',
   swarming: 'bee-swarming',
-  scribing: 'bee-scribing',
-  compounding: 'bee-compounding',
+  scribing: 'bee-capturing',
+  compounding: 'bee-capturing',
 };
 
 // next.command is a runnable command only when the recommended action names
@@ -3394,7 +3394,7 @@ function closeGuardScribingDebt(root, flags) {
   throw new Error(
     `set: refusing to close this feature — ${debt.count} capped behavior_change cell(s) have not been synced to docs/specs/: ${debt.cells.join(', ')}.\n` +
       '"compounding-complete" asserts that scribing already ran for them. It has not.\n' +
-      'FIX: run bee-scribing to merge the settled behavior into its area spec, then `bee state scribing-run ...` to stamp it.\n' +
+      'FIX: run bee-capturing to merge the settled behavior into its area spec, then `bee state scribing-run ...` to stamp it.\n' +
       'If the behavior genuinely belongs in no spec, close with --waive-scribing-debt — it is permitted, but it logs a decision naming every cell you waived.',
   );
 }
@@ -3416,7 +3416,7 @@ function featureSwapGuardScribingDebt(root, currentFeature, flags) {
   throw new Error(
     `set: refusing to swap away from feature "${currentFeature}" — ${debt.count} capped behavior_change cell(s) have not been synced to docs/specs/: ${debt.cells.join(', ')}.\n` +
       `Setting --feature abandons "${currentFeature}" without ever reaching its close — the scribing debt would go silent, with no session left to hit the compounding-complete wall for it.\n` +
-      'FIX: run bee-scribing to merge the settled behavior into its area spec, then `bee state scribing-run ...` to stamp it.\n' +
+      'FIX: run bee-capturing to merge the settled behavior into its area spec, then `bee state scribing-run ...` to stamp it.\n' +
       'If the behavior genuinely belongs in no spec, swap with --waive-scribing-debt — it is permitted, but it logs a decision naming every cell you waived.',
   );
 }
@@ -3437,7 +3437,7 @@ function laneCloseGuardScribingDebt(root, laneRecord, flags) {
   throw new Error(
     `set: refusing to close lane "${laneRecord.feature}" — ${debt.count} capped behavior_change cell(s) have not been synced to docs/specs/: ${debt.cells.join(', ')}.\n` +
       '"compounding-complete" asserts that scribing already ran for them. It has not.\n' +
-      'FIX: run bee-scribing to merge the settled behavior into its area spec, then `bee state scribing-run --lane ' +
+      'FIX: run bee-capturing to merge the settled behavior into its area spec, then `bee state scribing-run --lane ' +
       `${laneRecord.feature} ...\` to stamp it.\n` +
       'If the behavior genuinely belongs in no spec, close with --waive-scribing-debt — it is permitted, but it logs a decision naming every cell you waived.',
   );
@@ -3980,7 +3980,7 @@ async function handleStateScribingRun(root, flags) {
       // nothing records a run that the refusal then undid.
       guardPhaseDepartureDebt(root, state, 'compounding');
       state.last_scribing_run = { feature, date, at, areas_synced: areas, next_action: nextAction };
-      // "plus top-level phase/next_action" (bee-scribing SKILL.md:112).
+      // "plus top-level phase/next_action" (bee-capturing SKILL.md).
       state.phase = 'compounding';
       state.next_action = nextAction;
       await write(state);
@@ -4008,7 +4008,7 @@ async function handleStateScribingRun(root, flags) {
 // compounding-gate D1 (cell cg-1) — the compounding-run recorder. Mirrors
 // handleStateScribingRun's SHAPE (lane target resolution, a phase-door check,
 // a stamped field, one write, all inside withMutationLock) but is far
-// smaller: this verb does NOT drive phase — bee-compounding runs entirely
+// smaller: this verb does NOT drive phase — bee-capturing runs entirely
 // INSIDE phase "compounding" (produced by the prior scribing run), so there
 // is no repair-path/stampedActive ambiguity to mirror (that machinery exists
 // in scribing-run only because IT is the sole producer of phase=compounding
@@ -5337,7 +5337,7 @@ function handleCaptureAdd(root, flags) {
   });
   return {
     result: stub,
-    text: `Queued capture stub ${stub.id}. Flush via bee-scribing at wrap-up, before compact/clear, or next session (decision 0017).`,
+    text: `Queued capture stub ${stub.id}. Flush via bee-capturing at wrap-up, before compact/clear, or next session (decision 0017).`,
   };
 }
 
@@ -7948,21 +7948,21 @@ function buildCloseDoors(root, feature) {
     });
   }
   // Scribing/capture debt: report-only doors — they are settled by
-  // bee-scribing AFTER the verify, so they never block running it, and close
+  // bee-capturing AFTER the verify, so they never block running it, and close
   // reports them rather than pretending they gate the run.
   const scribing = scribingDebt(root, { feature });
   doors.push({
     door: 'scribing-debt',
     blocking: false,
     detail: scribing.count > 0 ? `${scribing.count} behavior_change cell(s) uncaptured (${scribing.cells.join(', ')})` : 'clear',
-    command: scribing.count > 0 ? 'invoke bee-scribing' : null,
+    command: scribing.count > 0 ? 'invoke bee-capturing' : null,
   });
   const queue = captureQueue(root);
   doors.push({
     door: 'capture-queue',
     blocking: false,
     detail: queue.count > 0 ? `${queue.count} capture stub(s) pending flush` : 'clear',
-    command: queue.count > 0 ? 'invoke bee-scribing' : null,
+    command: queue.count > 0 ? 'invoke bee-capturing' : null,
   });
   return { record, recordedCommand, doors };
 }
@@ -7979,8 +7979,8 @@ function closeNextLine(feature, doors, recordedCommand) {
       ? `next: bee close --feature ${feature} — runs the recorded verify (${recordedCommand}) and records the result`
       : `next: run the feature verify, capture its output to a file, then ${CLOSE_FEATURE_VERIFY_RECORD_TEMPLATE}`;
   }
-  if (doors.some((d) => d.command)) return 'next: invoke bee-scribing';
-  return `next: feature "${feature}" is clear — invoke bee-scribing to leave swarming (state scribing-run)`;
+  if (doors.some((d) => d.command)) return 'next: invoke bee-capturing';
+  return `next: feature "${feature}" is clear — invoke bee-capturing to leave swarming (state scribing-run)`;
 }
 
 function renderCloseDoorLines(doors) {
@@ -8078,7 +8078,7 @@ async function handleClose(root, flags) {
     text: [
       `Feature verify GREEN for "${feature}" (${durationS}s) — recorded: ${recordedCommand}.`,
       `Remains before done — capture checklist: scribing ${scribing.detail === 'clear' ? 'clear' : scribing.detail}; capture queue ${queue.detail === 'clear' ? 'clear' : queue.detail}.`,
-      'next: invoke bee-scribing',
+      'next: invoke bee-capturing',
     ].join('\n'),
   };
 }

@@ -676,7 +676,7 @@ export function buildDigest(root, { now } = {}) {
  * D2b — THE CONSUMER REVALIDATES (decision 8cd4c84e, clause D2b). Merge the LOCAL
  * digest with each dogfood repo's ALREADY-WRITTEN .bee/feedback-digest.json. This
  * is the security heart of slice A: the producing repo's write-time scan protects
- * THAT repo, not bee. bee-evolving later edits bee's own source from these files,
+ * THAT repo, not bee. The bee-evolving process (re-homed to docs/handbook/) later edits bee's own source from these files,
  * and a foreign digest lives in a repo bee does not control — a hand-edited,
  * stale, or hostile feedback-digest.json is just JSON on disk. So for every entry
  * read from a FOREIGN digest this function:

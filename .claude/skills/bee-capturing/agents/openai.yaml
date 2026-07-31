@@ -1,0 +1,5 @@
+interface:
+  display_name: "Bee Capturing"
+  short_description: "Capture what settles into durable records — area specs, decisions, learnings. SELF-TRIGGERING: invoke this yourself, unprompted, the moment a rule, behavior, or value settles in discussion — the user never has to ask for knowledge to be recorded. Also use when execution completes, when documenting a screen/API/job/area, and when capturing learnings and decisions at feature close or on intentional abandon."
+policy:
+  allow_implicit_invocation: true

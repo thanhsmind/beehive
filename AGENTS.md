@@ -133,5 +133,6 @@ bypass mode; § Progress ticks; § Communication contract; § Judgment
 contract; § Goal-check judge tier; § Concurrency law in full;
 § Delegation contract; worktrees; § Native Codex subagent tending;
 plus the worker contract in `bee-swarming` ("Execute") and the capture discipline
-in `bee-scribing`.
+in `bee-capturing` ("Capture the moment it settles"). Independent review runs
+on user request: `bee-reviewing`, never as an automatic stage.
 <!-- BEE:END -->

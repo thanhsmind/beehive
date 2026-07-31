@@ -3,111 +3,112 @@ name: bee-reviewing
 description: >-
   Run the multi-agent review gate — severity findings, artifact verification, and user acceptance — over an immutable scope the user explicitly asked to review. Use only when the user requests an independent review: "review this", "review today's work", "review feature A and B", "review the diff from X to Y", "review everything unreviewed before release". A finished cell, slice, or feature is never a trigger by itself, and neither is "merge"/"ship"/"release" alone.
 metadata:
-  version: '0.1'
+  version: '0.2'
   ecosystem: bee
   dependencies:
     nodejs-runtime:
       kind: command
       command: node
       missing_effect: degraded
-      reason: Reads bee records (cells, state, backlog, reviews) via the vendored .bee/bin helpers.
+      reason: Review sessions and their records live in bee state, driven through the vendored .bee/bin CLI.
 ---
 
-# Reviewing (inspector bees)
+# Reviewing — independent inspection
 
-Independent inspection session over a completed, immutable scope — the scrutiny a second team gives a pull request. Runs only on explicit request, never automatic. A cell can be verified and still `unreviewed`.
+An independent review is the scrutiny a second team gives a pull
+request: fresh eyes over a completed, immutable scope, run only when
+the user explicitly asks for one. Finished work is never a trigger by
+itself, nor "merge"/"ship"/"release" alone — for those, report coverage
+(`bee reviews status`), ask one yes/no question, and let silence stay
+unreviewed. Gate bypass never creates or approves a review.
 
-## Trigger — explicit user intent only
+## Scope — the user owns the boundary
 
-- "review this / review this feature"
-- "review all of today's work"
-- "review feature A and B" (or any named list)
-- "review the diff from X to Y"
-- "review everything unreviewed before release"
+Resolve the request to one explicit boundary: named feature(s), a
+stated range, everything unreviewed since the last baseline, or a time
+window. Ambiguous → exactly one boundary question. Work still in
+progress is excluded with a stated reason, never swept in or waited for.
 
-Never a trigger: a cell/slice/feature/day finishing · "merge"/"ship"/"release" alone (report count+risk via `reviews status`, ask exactly ONE yes/no question, silence stays `unreviewed`) · gate bypass being on.
+`bee reviews create` freezes the scope — baseline, head, included,
+excluded — and checks verification evidence before any reviewer spends
+a token; if it refuses, surface its reason instead of dispatching
+reviewers to compensate. Show the user the preview before dispatch.
+From here the diff is immutable: findings land against a fixed target.
 
-## Flow
+## The wave
 
-| Step | What happens |
-|---|---|
-| Scope | user-owned boundary: named feature(s), unreviewed-since-baseline, explicit range, or time window; ambiguous → one question |
-| Freeze | scope JSON → `reviews create` (fails closed on missing evidence) → preview → record manifest; no dispatch before this |
-| Dispatch (§1) | 4 core + matched conditional reviewers, isolated context, review-tier model |
-| Synthesis (§2) | orchestrator only, after every reviewer returns |
-| Evidence gates (§3-4) | verification-evidence + frozen-judge + artifact checks |
-| UAT (§5) | every SEE/CALL/RUN decision, with the human |
-| Delta re-review (§6) | P1 fix caps → re-review delta + sweep defect class |
-| Finish (§7) | build/test/lint gates, file P2/P3, close session |
+Spawn the core four in parallel — `code-quality`, `architecture`,
+`security`, `test-coverage` — plus any conditional reviewer whose
+trigger the diff matches, capped at six. A small scope takes one
+correctness reviewer; high-risk content (auth, migration, data loss,
+external providers) warrants the full wave. Prompts and focus lines:
+`references/reviewing-reference.md` ("Reviewer prompts"). Each reviewer
+gets the cumulative diff, the in-scope features' `CONTEXT.md` and
+`plan.md`, and nothing else — never session history. Review-tier
+model, inline persona, never another plugin's agent type.
 
-Full mechanics + required inputs/delegation: `references/reviewing-reference.md` ("Scope Resolution", "Scope Freeze", "Required Inputs").
+What a finding is, how to calibrate severity, and why every finding is
+verified before filing: `expertise/review.md`. Severity here:
 
-## Lane Scaling
-
-| Scope risk | Review | Gate 4 |
-|---|---|---|
-| small | 1 correctness reviewer, isolated context | asked normally |
-| standard | 4 core reviewers | asked normally |
-| high-risk content (auth, authz, audit/security, migration, data loss, external provider) | full wave + conditionals, cap 6 | asked normally, UAT always |
-
-Never reduced by bypass or the feature's lane; `tiny`'s clean self-review stays inside `bee-swarming`'s done-report, never a session — reference ("Lane Scaling").
-
-## 1-2. Review & Synthesis
-
-Spawn every reviewer as the default subagent type + inline persona, never another plugin's type. Core four (parallel, review-tier, default `opus`): `code-quality`, `architecture`, `security`, `test-coverage`. Conditional (`performance`, `api-contract`, `data-migration`, `reliability`) join on a matched trigger; cap 6 total. Reference: ("Specialist Dispatch", "Conditional Reviewers").
-
-- **P1** — security breach, data loss, breaking change, production blocker. Blocks approval.
-- **P2** — real performance, architecture, reliability, or important test gap.
+- **P1** — security breach, data loss, breaking change, production
+  blocker. Blocks approval.
+- **P2** — real performance, architecture, reliability, or test gap.
 - **P3** — cleanup, docs, future debt.
 
-Orchestrator synthesizes only after every reviewer returns: uncertain → P2, corroboration promotes one level, disagreement takes the conservative route. `autofix_class` routes work, never bypasses judgment. Schema: reference ("Finding Schema").
+Synthesize only after every reviewer returns: deduplicate, independent
+corroboration promotes one level, disagreement takes the conservative
+route, uncertain lands at P2. Record each finding as it settles:
+`bee reviews record --kind finding`.
 
-## 3-4. Evidence Gates
+## Verify the artifacts, not the story
 
-Every capped `behavior_change: true` cell: inspect `verification_evidence` in the trace, never a parallel file. Missing/vague evidence is a P1 — no backfill doc. Frozen-judge flags (`cells judge --id <id>`) assume the judge moved, not passed — always P1. Detail: reference ("Verification-Evidence Gate", "Frozen-Judge Flags").
+- Every capped behavior-change cell: read the verification evidence in
+  its trace. Missing or vague ("covered by existing tests", no test
+  named) is a P1 — the behavior was never proven, and the remedy is
+  re-verifying, never a backfill document.
+- A judge flag on a cell means the judge may have been moved, not
+  passed: diff the flagged files for weakened assertions, skipped
+  tests, softened verify commands. A weakened judge is a P1.
+- Deliverables: exists + substantive + wired is OK; unwired P2; missing or hollow P1.
 
-Artifact check: EXISTS+SUBSTANTIVE+WIRED=OK; EXISTS+SUBSTANTIVE only=P2; missing/EXISTS-only=P1.
+## Acceptance — with the human
 
-## 5-6. UAT, Delta Re-Review
+Walk every SEE/CALL/RUN decision with the user, in the wording of
+`references/reviewing-reference.md` ("Human UAT"): fail → P1 fix cell,
+rerun the item after the fix caps; a skip needs a recorded reason;
+intermittent is a Fail. Record: `bee reviews record --kind uat`.
 
-Walk every SEE/CALL/RUN decision with the human; fail → P1 fix cell + rerun; a skip needs a recorded reason; intermittent failure is a Fail, not a Skip. Record: `reviews record --kind uat`. Wording: reference ("Human UAT").
+After a P1 fix caps, re-review the delta AND sweep the whole scope for
+that defect class — the same bug hides in siblings. A fix that crossed
+a boundary (a public contract, another feature's assumption) gets an
+expanded re-review proposed to the user, never silently chosen.
 
-After a P1 fix caps: re-review the delta AND sweep the scope for the defect class, not just the changed line. A localized fix needs only delta+sweep; a boundary-crossing fix gets an expanded re-review proposed to the user. Record: `reviews record --kind finding`. Protocol: reference ("Delta Re-Review").
+Then the merge question, verbatim — P1 > 0: "P1 findings block merge.
+Fix before proceeding?" · P1 = 0: "Review complete. Approve merge?"
+Silence is not acknowledgment; the session stays blocked until every
+P1's fix and delta re-review pass.
 
-## 7. Finishing
+## Finish
 
-1. Run build/test/lint gates; quote fresh output — never claim "passing" without it.
-2. P2/P3 → `backlog add --type review-finding --severity P2|P3 --layer <layer> --title "<finding>" --feature <feature>` (+ grooming cell if concrete), non-blocking.
-3. Filing fails anywhere → write to `docs/history/<feature>/reports/residual-findings.md`.
-4. Close: `reviews record --kind decision --file decision.json` (`pending`/`blocked`/`approved`). Closes the REVIEW, not any feature — every feature already closed independently; leave that state untouched, never `state set --phase ...` here.
+Run the project's build/test/lint gates and quote fresh output. P2/P3 go
+to the backlog (`bee backlog add`), never as blockers; if filing fails,
+write findings to `docs/history/<feature>/reports/residual-findings.md` —
+nothing evaporates. Close with `bee reviews record --kind decision`: that
+closes the review, not any feature; their already-closed state stays untouched.
 
-Checklist: reference ("Finishing Checklist").
+## Hard rules
 
-## Gate 4 (wording fixed) — lives only inside a session
+- No reviewer before the scope is frozen and previewed; no synthesis
+  before every reviewer returns.
+- The panel scales to the scope's risk — never reduced by bypass or by
+  the originating feature's lane; an unchanged, already-reviewed range
+  is never re-dispatched.
+- Merge is never self-approved: headless runs report-only, and the
+  merge question always belongs to the human.
 
-Exists ONLY inside a review session — never after a feature merely finishes. Plain-language layer first (built / found / consequence of merging now / the decision), findings linked from `docs/history/<feature>/reports/`, never pasted as a table. Then verbatim:
+## References
 
-- P1 > 0 → "P1 findings block merge. Fix before proceeding?"
-- P1 = 0 → "Review complete. Approve merge?"
-
-Never continue past open P1s without explicit acknowledgment — silence isn't acknowledgment; session stays `blocked` until every P1's fix + delta re-review pass. `tiny` exception: a clean self-review's Gate 4 is `bee-swarming`'s done-report — no merge question, never a review session.
-
-Bypass never covers session creation or approval — only an explicit request creates one. Once one exists, bypass may auto-approve only the merge question when P1 = 0 and every UAT item passed; any P1/UAT fail or skip stops Gate 4 normally, secret reads always need human approval. Mechanics: reference ("Gate 4 Bypass Mechanics").
-
-## Headless
-
-Report-only; still requires the explicit Trigger. Gate 4 still requires the human — never self-approves merge or invents a request. Full text: reference ("Headless").
-
-## Red Flags
-
-full wave for a small scope · reviewer dispatched before `reviews create`+preview · session or Gate 4 approved by bypass · finished work or bare merge/ship/release as a trigger · a defect waved through as "the fast path" · past a P1 with no acknowledgment · UAT passed with no confirm, or a skip with no reason · artifact check skipped because "cells are capped" · `behavior_change` accepted on vague evidence · synthesis before every reviewer returned · P2/P3 filed as blocking · full panel re-run inside an unchanged boundary, or a boundary-crossing fix re-reviewed only at the delta · reviewer given session history · reviewer spawned as another plugin's agent type · "should work" as evidence · re-dispatching an already-`reviewed`, unchanged range
-
-Violating the letter of these rules is violating the spirit of these rules.
-
-## Handoff
-
-Record the decision and close the session — closes the REVIEW, not the feature; every feature already closed independently. `standard`/`high-risk`: `bee-briefing` walkthrough mode writes `walkthrough.md` per feature. A P1 fix settling new behavior triggers `bee-scribing` (AGENTS.md, "Capture what settles"): a settled decision, not a chain hop.
-
-| Reference | When to Load |
+| File | When to load |
 |---|---|
-| `references/reviewing-reference.md` | Scope mechanics, specialist prompts, session-record schema, UAT wording, delta re-review + bypass |
+| `references/reviewing-reference.md` | Reviewer prompts and personas, finding schema, UAT wording |
+| `expertise/review.md` | Finding quality, severity calibration, adversarial reading, verification |

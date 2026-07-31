@@ -1,5 +1,0 @@
-interface:
-  display_name: "Bee Exploring"
-  short_description: "Turn a fuzzy feature request into locked decisions in docs/history/<feature>/CONTEXT.md. Use when a request has gray areas or unstated product decisions that would make planning guess. Not for implementation research, cell creation, or code."
-policy:
-  allow_implicit_invocation: true

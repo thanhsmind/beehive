@@ -1,0 +1,5 @@
+interface:
+  display_name: "Bee Researching"
+  short_description: "Evidence-labeled research into unfamiliar, ambiguous, or version-sensitive territory. Use when the user asks to research a topic, library, or approach; when planning discovery lands on L2 or deeper; or before high-risk work in a repo with no precedent for it. Not for locking product decisions, proving feasibility, or writing code."
+policy:
+  allow_implicit_invocation: true

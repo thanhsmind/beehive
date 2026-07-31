@@ -6,43 +6,43 @@ Open this when the compact bootstrap in `SKILL.md` is not enough.
 
 | # | Skill | One-line description | Load when... |
 |---|-------|----------------------|--------------|
-| 1 | `bee-hive` | Routing, go mode, gates, red flags. | Starting any session |
-| 2 | `bee-exploring` | Identify gray areas, lock decisions into `CONTEXT.md`. | Feature request is vague or new |
+| 1 | `bee-hive` | Routing, go mode, gates and the bypass level, red flags. | Starting any session; setting or checking gate bypass |
+| 2 | `bee-shaping` (Explore/Qualify/Lock) | Identify gray areas or triage a backlog item unattended; lock decisions into `CONTEXT.md`. | Feature request is vague or new; a backlog item needs its first triage pass |
 | 3 | `bee-planning` | Research, mode gate, approach, unified plan, current-slice cells; the SMALLER PATH reality check and the review wave run inline before its merged Gate 2. | Decisions are locked, or scope is already clear |
 | 4 | `bee-swarming` | Launch and tend bounded workers with reservations. | Gate 2 approved (merged shape+execution) |
 | 5 | `bee-swarming` ("Execute") | Bounded worker loop for one cell. | Spawned by swarming |
 | 6 | `bee-reviewing` | Parallel review gate with P1/P2/P3 findings, user-invoked over a scope the user chooses. | User explicitly requests review — never automatic after a final slice or feature close |
-| 7 | `bee-scribing` | BA-grade tech-agnostic area specs: sync, capture, harvest. | Review approved; documenting any area (UI/API/job); a settled outcome must be kept |
-| 8 | `bee-compounding` | Capture durable learnings and decisions. | Scribing done or work abandoned |
-| 9 | `bee-grooming` | Entropy audit, debt hunt, approved kills. | Cleanup/audit requested; hive idle |
-| 10 | `bee-writing-skills` | TDD-for-skills, pressure testing. | Authoring or editing a bee skill's `SKILL.md` content |
-| 11 | `bee-evolving` | Run bee's gated self-improvement loop over its own collected feedback digest (cluster → rank → Gate A → Iron Law hand-off → suites green → Gate B → push). Bee repo only, human-invoked, never auto-runs, never pushes on its own. | Human asks bee to evolve/improve itself from its own dogfood friction, in the bee repository |
-| 12 | `bee-briefing` | Render the one human-readable implement plan per feature, and the post-Gate-4 walkthrough (consolidator, not planner). | Planning shaped `small`+ work; a feature's implement plan needs (re)generating; a `standard`/`high-risk` feature passed Gate 4 |
-| 13 | `bee-bypass-gate` | Toggle opt-in gate-bypass autopilot (`on`/`off`/`status`): auto-approve Gates 1-2 for normal-lane work; high-risk/hard-gate, secrets, UAT always stop. | User wants to run without approving every gate, or to check/turn off bypass |
+| 7 | `bee-capturing` | Knowledge capture: BA-grade area specs (sync, capture, harvest) plus durable learnings and decisions. | Execution done; documenting any area (UI/API/job); a settled outcome must be kept; work abandoned with lessons |
+| 8 | `bee-grooming` | Entropy audit, debt hunt, approved kills. | Cleanup/audit requested; hive idle |
+| 9 | `bee-researching` | Evidence-labeled research scout. | Research a topic/library/approach; planning discovery L2/L3 |
+| 10 | `bee-herding` | Cockpit roles: bootstrap, dispatch, merge. | Human invokes the cockpit, or the control loop runs one iteration |
+| 11 | `bee-shaping` (Brief) | Render the one human-readable implement plan per feature, and the post-Gate-4 walkthrough (consolidator, not planner). | Planning shaped `small`+ work; a feature's implement plan needs (re)generating; a `standard`/`high-risk` feature passed Gate 4 |
+
+Gate bypass is set from `bee-hive` (Gates); developing bee itself
+(authoring skills, the self-improvement loop) is handbook territory, not
+product routing — `docs/handbook/writing-skills.md`, `docs/handbook/evolving.md`.
 
 ## First-Skill Routing
 
 | Request type | First skill | Notes |
 |---|---|---|
-| Vague/new feature | `bee-exploring` | Always start here if gray areas exist |
-| Research a topic/library/approach (no feature underway) | `bee-xia` | Standalone brief; suggests exploring or planning as next step |
-| (Re)generate or read a feature's implement plan or walkthrough | `bee-briefing` | Consolidates the truth artifacts into `docs/history/<feature>/implement-plan.md`, any phase; writes `walkthrough.md` post-Gate-4 for `standard`/`high-risk`; renders nothing for `tiny`/`spike` |
-| Research inside a scoped feature | `bee-planning` | Discovery L2/L3 invokes `bee-xia` in-chain |
+| Vague/new feature | `bee-shaping` (Explore) | Always start here if gray areas exist |
+| Research a topic/library/approach (no feature underway) | `bee-researching` | Standalone brief; suggests shaping or planning as next step |
+| (Re)generate or read a feature's implement plan or walkthrough | `bee-shaping` (Brief) | Consolidates the truth artifacts into `docs/history/<feature>/implement-plan.md`, any phase; writes `walkthrough.md` post-Gate-4 for `standard`/`high-risk`; renders nothing for `tiny`/`spike` |
+| Research inside a scoped feature | `bee-planning` | Discovery L2/L3 invokes `bee-researching` in-chain |
 | "Just fix this" / small change | `bee-planning` | Route in tiny or small mode |
 | Review code | `bee-reviewing` | Load directly — only on an explicit review request; never automatic after execution completes |
-| Document a screen/API/job/area; keep a settled outcome (rule agreed, behavior confirmed, value tuned); spec a legacy area | `bee-scribing` | Load directly, any phase — capture never waits for feature close |
+| Document a screen/API/job/area; keep a settled outcome (rule agreed, behavior confirmed, value tuned); spec a legacy area; capture learnings | `bee-capturing` | Load directly, any phase — capture never waits for feature close |
 | Clean up / tech debt / audit | `bee-grooming` | Load directly |
-| Capture learnings | `bee-compounding` | Load directly |
-| Author or edit a bee skill (`SKILL.md` content) | `bee-writing-skills` | Load directly |
-| Evolve bee from its own dogfood feedback (rank friction, ship a self-improvement) | `bee-evolving` | Load directly; bee repo only, never auto-runs, never pushes without Gate B |
+| Drive the cockpit (bootstrap/dispatch/merge) | `bee-herding` | Load directly |
 | `/go` / full pipeline | Go mode | See `go-mode.md` |
-| Turn gate-bypass on/off, or check it | `bee-bypass-gate` | Load directly, any phase; toggles `.bee/config.json` `gate_bypass` |
+| Turn gate-bypass on/off, widen it, or check it | `bee-hive` (Gates) | Any phase; the agent sets `.bee/config.json` `gate_bypass` on the user's instruction |
 | Resume session | Resume logic | Check `HANDOFF.json` first — kind-aware: pause waits, planned-next adopts only at a fresh-session boundary |
-| Explicit request to run the automatic backlog-triage pass on a `docs/backlog.md` row (a human or an external caller invoking the pipeline path directly — no auto-trigger exists yet) | `bee-qualifying` | Pipeline path, explicit invocation only |
+| Explicit request to run the automatic backlog-triage pass on a `docs/backlog.md` row (a human or an external caller invoking the pipeline path directly — no auto-trigger exists yet) | `bee-shaping` (Qualify) | Pipeline path, explicit invocation only |
 | Docs/spec/README/sample-only change | docs lane | "Docs lane" under Lane ceremony in full — announce, write, format-check, capture or "nothing settled"; no pipeline |
 | Merge/ship/release request while unreviewed or stale candidates exist | Report the candidate count + risk level, then ask ONE question: "Create a review session for this scope?" | Only an explicit yes dispatches `bee-reviewing` — never spawn a reviewer silently |
 
-**Surface-scope-earlier check** (runs before routing to exploring): the request contains concrete acceptance criteria AND references to existing patterns → offer "Found clear requirements. Jump straight to planning, or explore alternatives first?" On approval, planning receives a one-paragraph scoping synthesis whose decisions still carry D-IDs.
+**Surface-scope-earlier check** (runs before routing to `bee-shaping`): the request contains concrete acceptance criteria AND references to existing patterns → offer "Found clear requirements. Jump straight to planning, or explore alternatives first?" On approval, planning receives a one-paragraph scoping synthesis whose decisions still carry D-IDs.
 
 ## Onboarding Protocol
 
@@ -75,29 +75,13 @@ When the onboarding result carries the init-lane notice (first onboard, no detec
 
 ## State Bootstrap
 
-On every session start:
-
-1. Confirm onboarding is current via `.bee/onboarding.json` (see Onboarding Protocol above).
-2. Run `node .bee/bin/bee.mjs status --json`.
-3. If `.bee/HANDOFF.json` exists, check its kind: a pause handoff (or any kindless record) is presented and waited on — do not auto-resume. A planned-next handoff is adopted only at this fresh-session boundary (see Resume Logic below).
-4. **Critical patterns (bundleMode):** with a bundle, read `docs/knowledge/index.md`'s `## Critical patterns` section — the live equivalent, generated from the bundle. With no bundle: read `docs/history/learnings/critical-patterns.md` when present.
-5. Surface recent active decisions: `node .bee/bin/bee.mjs decisions active --recent 3`.
-6. Check active reservations when workers may be in flight: `node .bee/bin/bee.mjs reservations list --active-only`.
-
-Default `.bee/state.json` shape:
-
-```json
-{
-  "schema_version": "1.0",
-  "phase": "idle",
-  "feature": null,
-  "mode": null,
-  "approved_gates": { "context": false, "shape": false, "execution": false, "review": false },
-  "workers": [],
-  "summary": "",
-  "next_action": "Invoke bee-hive."
-}
-```
+`bee orient` is the session-start packet — phase, gates, blockers (pending
+handoff, debts, stale reservations), and the next action/skill in one call;
+its output supersedes any manual read-these-files order. A pending
+`.bee/HANDOFF.json` it surfaces follows Resume Logic below. Critical
+patterns come from the preamble digest; the full source is
+`docs/knowledge/index.md`'s `## Critical patterns` section with a bundle,
+else `docs/history/learnings/critical-patterns.md` when present.
 
 ## Resume Logic
 
@@ -164,7 +148,7 @@ Triage lanes the work from the request text alone, before any repo evidence, and
 
 | Path | Where it fires |
 |---|---|
-| exploring ran (standard and above) | `bee-exploring` step 3, once the quick scout's touch set is counted — before step 4's Socratic locking |
+| exploring ran (standard and above) | `bee-shaping` (Explore), once the quick scout's touch set is counted — before Socratic locking |
 | exploring was skipped | `bee-planning` §2, at the tail of the lane-scaled bootstrap — before §3 discovery |
 
 It fires on whichever path came first, and a feature that passed through exploring has already spent its checkpoint — planning does not get a second one.
@@ -333,8 +317,8 @@ The preamble's `### Critical patterns (digest)` and `### Recent decisions` secti
 
 Note the state layer in the orientation summary. Which layer that is depends on one predicate — `bundleMode` (`docs/knowledge/` holding at least one concept that actually parses; a directory alone is not a bundle). Both branches below are live guidance, not a migration path:
 
-- **With a bundle — the reading order is `bundle → decisions → history`.** Read `docs/knowledge/areas/<area>/` FIRST: its `index.md` names the area's concepts, and each concept states the subject it is authoritative for. Then decisions for the why; `docs/history/` only for archaeology. `docs/specs/` is named for exactly one job — the **read-only compatibility surface**: a legacy citation like `docs/specs/<area>.md#R7` resolves through that file's pointer stub (its anchor map) to the concept that owns the anchor now. Never send an agent there for current truth, and never write new content there — `scripts/okf_specs_fence.mjs` fails the chain when new prose lands under `docs/specs/`. `docs/specs/reading-map.md` stays the hand-written "where does X live" map and points at the bundle. When an area has no overview concept, offer a `bee-scribing` bootstrap pass to author one **in the bundle** — user-approved, never silent, never auto-run.
-- **With no bundle.** When `docs/specs/` exists, note it in the orientation summary. Before working in any area, the reading order is **spec → decisions → history**: read `docs/specs/<area>.md` (what the area does now) before its code, decisions for the why, `docs/history/` only for archaeology. `docs/specs/reading-map.md` answers "where does X live" before any broad grep. When `docs/specs/` lacks `system-overview.md` or `reading-map.md`, offer a `bee-scribing` bootstrap pass to skeleton the missing file(s) — user-approved, never silent, never auto-run. The fence never fires here and nothing in this branch mentions a bundle: a repo that never migrated keeps working exactly as before.
+- **With a bundle — the reading order is `bundle → decisions → history`.** Read `docs/knowledge/areas/<area>/` FIRST: its `index.md` names the area's concepts, and each concept states the subject it is authoritative for. Then decisions for the why; `docs/history/` only for archaeology. `docs/specs/` is named for exactly one job — the **read-only compatibility surface**: a legacy citation like `docs/specs/<area>.md#R7` resolves through that file's pointer stub (its anchor map) to the concept that owns the anchor now. Never send an agent there for current truth, and never write new content there — `scripts/okf_specs_fence.mjs` fails the chain when new prose lands under `docs/specs/`. `docs/specs/reading-map.md` stays the hand-written "where does X live" map and points at the bundle. When an area has no overview concept, offer a `bee-capturing` bootstrap pass to author one **in the bundle** — user-approved, never silent, never auto-run.
+- **With no bundle.** When `docs/specs/` exists, note it in the orientation summary. Before working in any area, the reading order is **spec → decisions → history**: read `docs/specs/<area>.md` (what the area does now) before its code, decisions for the why, `docs/history/` only for archaeology. `docs/specs/reading-map.md` answers "where does X live" before any broad grep. When `docs/specs/` lacks `system-overview.md` or `reading-map.md`, offer a `bee-capturing` bootstrap pass to skeleton the missing file(s) — user-approved, never silent, never auto-run. The fence never fires here and nothing in this branch mentions a bundle: a repo that never migrated keeps working exactly as before.
 
 ### Worktree routing
 
@@ -383,24 +367,23 @@ The draft cell(s) are rendered as a **preview inside the gate message** — neve
 
 ### Capture discipline
 
-Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-cell quick work included: a feature whose capped cells include `behavior_change` obliges ONE `bee-scribing` sync at feature close, covering all of them — tiny lanes included — and a settled discussion outcome (rule, behavior, tuned value; backend or frontend alike) is captured the moment it settles. Every task close carries either a decision-log/capture-stub line or an explicit "nothing settled" statement — a close with neither is not a close. **Settlement detection is the agent's duty, unprompted:** the routing row "user asks to document" is the fallback, not the norm — the norm is the agent noticing "this just settled", announcing it in one line, and capturing in the same turn without being asked. What same-turn capture costs is lane-scaled: high-risk = full spec sync inline; every other lane = decision log + a one-line capture stub (`bee.mjs capture add`), with the full merge at a flush point (wrap-up, PreCompact warning, or next session's offer). Capture writes only `docs/` + `.bee/` — no gate applies.
+Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-cell quick work included: a feature whose capped cells include `behavior_change` obliges ONE `bee-capturing` spec sync at feature close, covering all of them — tiny lanes included — and a settled discussion outcome (rule, behavior, tuned value; backend or frontend alike) is captured the moment it settles. Every task close carries either a decision-log/capture-stub line or an explicit "nothing settled" statement — a close with neither is not a close. **Settlement detection is the agent's duty, unprompted:** the routing row "user asks to document" is the fallback, not the norm — the norm is the agent noticing "this just settled", announcing it in one line, and capturing in the same turn without being asked. What same-turn capture costs is lane-scaled: high-risk = full spec sync inline; every other lane = decision log + a one-line capture stub (`bee.mjs capture add`), with the full merge at a flush point (wrap-up, PreCompact warning, or next session's offer). Capture writes only `docs/` + `.bee/` — no gate applies.
 
 ## Chaining Contract
 
 | Skill | Reads | Writes |
 |-------|-------|--------|
 | hive | onboarding, state, HANDOFF, critical-patterns, decisions | state routing updates only |
-| exploring | user conversation, critical-patterns, quick scout | `docs/history/<feature>/CONTEXT.md`, state update |
+| shaping (Explore/Qualify/Lock) | user conversation, backlog row, critical-patterns, quick scout | `docs/history/<feature>/CONTEXT.md` (lock or park), backlog row status, state update |
 | planning | CONTEXT.md, critical-patterns, active decisions, bee_status | `approach.md`, `plan.md` (frozen at Gate 2 — approval stamp only after approval; none for `tiny`, opt-in for `small`), current-slice cells via `bee.mjs cells add` |
-| briefing | CONTEXT.md, approach.md, frozen plan.md + cells (drift re-render triggers on cell changes only, since the plan cannot drift after approval), cell/feature verify output, state gates (render/refresh); capped cell traces, review findings, UAT (walkthrough) | `docs/history/<feature>/implement-plan.md` (projection; `high-risk` always, `standard` on-demand, `small` optional on request); `docs/history/<feature>/walkthrough.md` (post-Gate-4; `standard`/`high-risk`) |
-| swarming | Gate-2-approved cells, state, reservations | worker registry in state, HANDOFF at ~65%, wave results |
-| executing | assigned cell, CONTEXT.md, reservations | implementation commits (one per cell, cell id in message), cap (`--feature-verify-pending` by default; classic verify record for spot use), report in `docs/history/<feature>/reports/` |
+| shaping (Brief) | CONTEXT.md, approach.md, frozen plan.md + cells (drift re-render triggers on cell changes only, since the plan cannot drift after approval), cell/feature verify output, state gates (render/refresh); capped cell traces, review findings, UAT (walkthrough) | `docs/history/<feature>/implement-plan.md` (projection; `high-risk` always, `standard` on-demand, `small` optional on request); `docs/history/<feature>/walkthrough.md` (post-Gate-4; `standard`/`high-risk`) |
+| swarming (orchestrate) | Gate-2-approved cells, state, reservations | worker registry in state, HANDOFF at ~65%, wave results |
+| swarming ("Execute") | assigned cell, CONTEXT.md, reservations | implementation commits (one per cell, cell id in message), cap (`--feature-verify-pending` by default; classic verify record for spot use), report in `docs/history/<feature>/reports/` |
 | reviewing | user-selected immutable scope (a `bee_reviews` session — never triggered by phase or cell completion) | session findings (P1/P2/P3) and the Gate 4 decision recorded on that session, backlog items, `residual-findings.md` fallback |
-| scribing | `behavior_change` cells + verification evidence, CONTEXT.md, active decisions, UAT/worker reports, code + user interview (harvest) | with a bundle: `docs/knowledge/areas/<area>/` concepts (BA-grade merge); with no bundle: `docs/specs/<area>.md` (BA-grade merge), `docs/specs/reading-map.md`; either way: capture-mode decision log entries, state record |
-| compounding | feature history, traces, findings, commits, scribing state record | `docs/history/learnings/YYYYMMDD-<slug>.md`, critical-patterns promotions, decision log, backlog friction, state-layer guard verdict |
+| capturing | `behavior_change` cells + verification evidence, CONTEXT.md, active decisions, UAT/worker reports, feature history, traces, commits, code + user interview (harvest) | with a bundle: `docs/knowledge/areas/<area>/` concepts (BA-grade merge); with no bundle: `docs/specs/<area>.md` (BA-grade merge), `docs/specs/reading-map.md`; plus `docs/history/learnings/YYYYMMDD-<slug>.md`, critical-patterns promotions, decision log entries, backlog friction, state record |
 | grooming | entropy inputs, backlog, traces, diffs | kill proposals, tiny/small cells, outcome records |
 
-**Recommended-next after execution:** once a feature's execution work is done, the chain hands off to `bee-scribing` then `bee-compounding` directly — `bee_status`'s `recommended_next` and the session preamble report the review-candidate count instead of proposing `bee-reviewing`. The feature closes truthfully `unreviewed`; independent review remains available on request at any later point, over any scope the user names.
+**Recommended-next after execution:** once a feature's execution work is done, the chain hands off to `bee-capturing` directly — `bee_status`'s `recommended_next` and the session preamble report the review-candidate count instead of proposing `bee-reviewing`. The feature closes truthfully `unreviewed`; independent review remains available on request at any later point, over any scope the user names.
 
 Every skill ends with an explicit handoff: `[Outcome]. Invoke bee-<next-skill> skill.`
 
@@ -556,7 +539,7 @@ A question that "needs" a long header or >4 options is a signal to reshape it �
 
 ### Gate bypass mode (opt-in autopilot)
 
-Off by default. Turned on with the `bee-bypass-gate` skill, which sets `.bee/config.json` `gate_bypass` (persistent per-repo). When on at any level, the agent does **not** stop at a bypassed gate — it takes the RECOMMENDATION option itself and continues. This is the one deliberate exception to "gates are never self-approved"; **headless mode is not** — headless still stops at every gate.
+Off by default. Set from `bee-hive`'s Gates section — on the user's instruction the agent writes `.bee/config.json` `gate_bypass` (persistent per-repo), logs the change as a decision, and states the chosen level's row in the same turn. When on at any level, the agent does **not** stop at a bypassed gate — it takes the RECOMMENDATION option itself and continues. This is the one deliberate exception to "gates are never self-approved"; **headless mode is not** — headless still stops at every gate.
 
 **`gate_bypass` is a level.** The config value normalizes to a level, and the level decides how far bypass reaches. The whole point of the levels above `normal` is that the human said, in advance and explicitly, "when you have a recommended option I will always approve it — do not stop me; the result is what I care about." Honor that literally: at the chosen level, the recommended option IS the approval.
 
@@ -572,7 +555,7 @@ Legacy `true` maps to `normal`. At **Gate 1 or Gate 2** when the level bypasses 
 1. **Safety floor is level-scoped, not absolute.** Under `normal` the floor holds: a `high-risk` lane or any hard-gate flag (auth · authorization · data loss · audit/security · external provider · validation removal · database migration/schema change) is **NOT** bypassed — present it to the human normally. Under `full` and `total` the high-risk/hard-gate floor is **lifted** — the human lifted it by choosing the level — so those gates auto-approve too.
 2. Do not ask. Instead: select the option the RECOMMENDATION favors; set `approved_gates.<gate>` in `.bee/state.json` (same write the human's "yes" would trigger); still write the machine-layer report to `docs/history/<feature>/reports/`; log a one-line audit entry — `node .bee/bin/bee.mjs decisions log --decision "auto-approved Gate N (bypass): <choice>" --rationale "<the recommendation's why>"` — so the approval is never silent; then post a **short chat line** (not a question) — `⚡ auto-approved Gate N (bypass): <what/why in one plain sentence>` — and continue. The human sees what happened and can still interrupt.
 
-**Bypass suppresses approvals, never genuine information-gathering.** The point of the levels is to stop the agent asking merely to be *approved* — not to gag a real question. So distinguish two kinds of "question": an **approval** (the agent already has a confident best answer; the human would only rubber-stamp it) is suppressed under `full`/`total` — the agent takes its own answer and continues. An **information** question (the answer turns on a preference or knowledge only the human holds, and the agent cannot resolve it from evidence with a confident default) is still asked, even under `total`. This is where `bee-exploring`'s Socratic step still stops when it must (§4 materiality test + the information-vs-approval refinement): the human asked to keep being consulted for real information, only never for a rubber stamp. Litmus: *"do I already have a confident best answer?"* — yes → proceed; no, and only the human can supply it → ask.
+**Bypass suppresses approvals, never genuine information-gathering.** The point of the levels is to stop the agent asking merely to be *approved* — not to gag a real question. So distinguish two kinds of "question": an **approval** (the agent already has a confident best answer; the human would only rubber-stamp it) is suppressed under `full`/`total` — the agent takes its own answer and continues. An **information** question (the answer turns on a preference or knowledge only the human holds, and the agent cannot resolve it from evidence with a confident default) is still asked, even under `total`. This is where `bee-shaping`'s Socratic Explore step still stops when it must (its materiality test + the information-vs-approval refinement): the human asked to keep being consulted for real information, only never for a rubber stamp. Litmus: *"do I already have a confident best answer?"* — yes → proceed; no, and only the human can supply it → ask.
 
 **Gate 4 and secret reads follow the level.** Under `normal` and `full`, Gate 4 is never fully bypassed and bypass never creates a review session: a review only exists once the user invoked `bee-reviewing`, its UAT items are always presented, and any P1 always stops. Under `total`, a review the user started runs to completion without stopping — UAT items and P1 findings auto-proceed on the recommended resolution. **Secret-file reads** stop for the human under `off`/`normal`/`full`; only `total` auto-proceeds on them (the human accepted that credential contents may enter context/logs unprompted). Bypass still never *creates* a review session on its own at any level.
 
@@ -649,7 +632,7 @@ The swarming goal-check has a **semantic** judge tier by lane, layered on the fr
 | `standard` | SELECTIVE: the per-slice checklist judge — a pinned `bee-review` dispatch, review tier, read-only, covering every capped `behavior_change` cell of the slice in one dispatch — dispatches when ANY of: the goal-check smells, the slice contains a worker's (or model's) first cells of the feature, or the ~1-in-3 sample falls on it (state the sample choice in the slice-close tick; never silently skip). ESCALATION: any `NEEDS_REVISION` puts that worker's remaining slices on judge-every-slice for the rest of the feature. Unjudged slices still pass the frozen judge per cell — that stays universal and free | review-tier config | per judged cell, each verdict recorded via `cells judge-record`: `PASS` → counts; `NEEDS_REVISION` + `automatic` → cell NOT done, re-dispatch with the exact failing checks + a ledger entry; `NEEDS_REVISION` + `authority` → escalate to the user |
 | `high-risk` | same checklist judge as `standard` | independence preferred — model differs from the builder's resolved model; if equal, record `model_independence: "same-model"` honestly and the judge still runs | same verdict handling as `standard` |
 
-The judge returns the `judge-verdict/1` schema, recorded via `bee cells judge-record`; free-prose output is a failed judge run, re-dispatched once, then recorded `unverified`. This table is the single home for the judge-tier rule — every other surface (bee-swarming SKILL + reference, bee-hive SKILL both sites, go-mode, AGENTS.md + its template, bee-scribing SKILL) carries only a one-line pointer back here, never a repeated table.
+The judge returns the `judge-verdict/1` schema, recorded via `bee cells judge-record`; free-prose output is a failed judge run, re-dispatched once, then recorded `unverified`. This table is the single home for the judge-tier rule — every other surface (bee-swarming SKILL + reference, bee-hive SKILL, go-mode, AGENTS.md + its template, bee-capturing SKILL) carries only a one-line pointer back here, never a repeated table.
 
 ### Verify scope (targeted vs CI-owned)
 
@@ -707,22 +690,8 @@ docs/specs/
 
 ## Helper CLI Quick Reference
 
-`node .bee/bin/bee.mjs <group> <verb>` is the sole canonical and sole shipped
-form for all 9 groups (`status`, `cells`, `reservations`, `decisions`, `state`,
-`backlog`, `capture`, `reviews`, `feedback`) — one dispatcher, one registry.
-Legacy `bee_*.mjs` shims (one per group) do not ship in templates or host
-`.bee/bin` — `LEGACY_HELPER_RE` in the write-guard stays only as a
-transition guard for hosts mid-upgrade.
-
-```text
-node .bee/bin/bee.mjs status [--json]
-node .bee/bin/bee.mjs cells list [--feature F] [--status S] | ready [--feature F] | show --id ID
-node .bee/bin/bee.mjs cells add --stdin   # one cell object or a whole-slice JSON array (all-or-nothing); --file cell.json also accepted
-node .bee/bin/bee.mjs reservations list [--active-only] | sweep
-node .bee/bin/bee.mjs decisions active [--recent N] | search --text T
-node .bee/bin/bee.mjs state set --owner <selected pre-mutation phase> | gate | worker add/update/remove/clear/prune | scribing-run | start-feature
-node .bee/bin/bee.mjs backlog add | counts | rank | badges
-node .bee/bin/bee.mjs capture add | list | flush | count
-node .bee/bin/bee.mjs reviews create | list | show | record | candidate add | candidates | status
-node .bee/bin/bee.mjs feedback digest | count | collect | rank
-```
+`node .bee/bin/bee.mjs <group> <verb>` is the sole canonical form.
+`bee --help` prints the porcelain flow surface; `bee --help --all` prints
+the full registry — the help output is the command reference, not this
+file. Legacy `bee_*.mjs` shims do not ship; `LEGACY_HELPER_RE` in the
+write-guard stays only as a transition guard for hosts mid-upgrade.
