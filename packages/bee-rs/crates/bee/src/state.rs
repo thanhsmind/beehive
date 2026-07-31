@@ -155,6 +155,18 @@ pub fn read_config_raw(root: &Path) -> Result<Map<String, Value>, Bail> {
     Ok(merged)
 }
 
+/// hookEnabled: `config.hooks[name] !== false` over merged tracked+overlay
+/// config — enabled unless the file explicitly carries `false` (unknown
+/// names default enabled; DEFAULT_HOOKS are all true, so the merge with
+/// defaults never changes this predicate).
+pub fn hook_enabled(root: &Path, name: &str) -> Result<bool, Bail> {
+    let config = read_config_raw(root)?;
+    Ok(!matches!(
+        config.get("hooks").and_then(|h| h.get(name)),
+        Some(Value::Bool(false))
+    ))
+}
+
 pub fn bypass_level(config: &Map<String, Value>) -> &'static str {
     match config.get("gate_bypass") {
         Some(Value::String(s)) if s == "total" => "total",

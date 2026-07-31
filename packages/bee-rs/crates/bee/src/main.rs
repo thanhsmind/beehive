@@ -7,6 +7,7 @@
 // produced NO output — the Node run owns the command end to end.
 
 mod fsutil;
+mod hooks;
 mod js_fallback;
 mod jsjson;
 mod lock;

@@ -12,11 +12,14 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 /// Human-readable list for `bee rs-info` — keep in sync with the probes below.
-pub const PORTED: &[&str] = &["status --brief"];
+pub const PORTED: &[&str] = &["status --brief", "hook tools-logger", "hook codex-subagent-audit"];
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first().and_then(|a| a.to_str()) == Some("rs-info") {
         return Some(rs_info());
+    }
+    if let Some(code) = crate::hooks::try_native(args) {
+        return Some(code);
     }
     verbs::status_brief::try_native(args, t0)
 }
