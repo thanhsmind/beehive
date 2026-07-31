@@ -40,15 +40,47 @@ fn rs_info_reports_rust_runtime() {
 }
 
 #[test]
-fn delegation_is_byte_identical_to_node() {
+fn embedded_registry_payload_is_fresh() {
     if !node_available() {
-        eprintln!("SKIP (env-limited: node not on PATH) delegation_is_byte_identical_to_node");
+        eprintln!("SKIP (env-limited: node not on PATH) embedded_registry_payload_is_fresh");
+        return;
+    }
+    let root = repo_root();
+    let embedded = std::fs::read_to_string(
+        root.join("packages/bee-rs/crates/bee/src/generated/registry_payload.json"),
+    )
+    .expect("embedded payload file");
+    let script = "import('./packages/bee/lib/command-registry.mjs').then(m => process.stdout.write(JSON.stringify({ schema_version: m.SCHEMA_VERSION, commands: m.COMMAND_REGISTRY })))";
+    let out = std::process::Command::new("node")
+        .args(["-e", script])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "node payload export failed: {}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        embedded,
+        "registry payload is stale — re-run: node scripts/export_registry_payload.mjs, then rebuild bee-rs"
+    );
+}
+
+// For unported argv shapes this exercises delegation; for `status --brief`
+// it pits the NATIVE Rust implementation against Node — both must stay
+// byte-identical (contract C2).
+#[test]
+fn output_is_byte_identical_to_node() {
+    if !node_available() {
+        eprintln!("SKIP (env-limited: node not on PATH) output_is_byte_identical_to_node");
         return;
     }
     let entry = js_entry();
     assert!(entry.is_file(), "bee.mjs not found at {}", entry.display());
 
-    for args in [vec!["--help"], vec!["status", "--brief", "--json"]] {
+    for args in [
+        vec!["--help"],
+        vec!["status", "--brief", "--json"],
+        vec!["status", "--brief"],
+    ] {
         let js = std::process::Command::new("node")
             .arg(&entry)
             .args(&args)
