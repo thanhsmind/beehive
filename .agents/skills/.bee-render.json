@@ -23,10 +23,6 @@
       "sha256": "b5546b8ffaec5b24d00f62e90f841330e4eafa3ea067cf07204f22a5c11cb744"
     },
     {
-      "name": "bee-executing",
-      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
-    },
-    {
       "name": "bee-exploring",
       "sha256": "3a7f02b869a641e586b669d5c9bf9fb5e48e12844aa05f36d3ff77101e45353c"
     },

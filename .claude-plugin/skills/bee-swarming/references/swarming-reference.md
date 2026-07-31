@@ -153,7 +153,7 @@ single worker — never wave analysis or multi-cell assignment.
    - When it passes, the `Advisor` line names the advisor identity and
      states its proven transport verbatim (model-shaped vs cli-shaped, per
      the Worker Prompt Template below) — this must match what
-     bee-executing's Advisor Consult section tells the worker to run.
+     the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run.
 5. **Record workers** before results arrive: `node .bee/bin/bee.mjs state
    worker add --nickname <n> --cell <id> --tier <tier> --status <status>`
    per worker.
@@ -469,7 +469,7 @@ Inputs — read these; nothing else will be provided:
   <CELL_JSON — the full .bee/cells/<CELL_ID>.json content>
 
 Contract:
-- Load the bee-executing skill immediately and follow its loop exactly.
+- Load the bee-swarming skill (Execute section) and follow its loop exactly.
 - Execute only the assigned cell — it is already claimed under your nickname; never run `cells claim` yourself, never select or accept other work.
 - Reserve every file before writing, under your nickname; never pass a session id you were handed — reservation and claim verbs auto-derive one from your own environment when needed.
 - Prefix write-heavy shell commands with BEE_AGENT_NAME="<NICKNAME>".
@@ -483,7 +483,7 @@ Startup (two reads, zero CLI round-trips):
 3. Reserve, implement, verify, cap, release, report.
 ```
 
-The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are not a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder. The same-model no-op is the orchestrator's, run at dispatch, never left to the worker. When present, `<TRANSPORT>` states the proven transport verbatim, matching what bee-executing's Advisor Consult section tells the worker to run:
+The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are not a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder. The same-model no-op is the orchestrator's, run at dispatch, never left to the worker. When present, `<TRANSPORT>` states the proven transport verbatim, matching what the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run:
 for a **model-shaped** advisor, `your own Agent tool, model param <advisor-model>, description starting exactly "advisor-consult <CELL_ID>: <advisor-model>"` (fallback: headless `claude -p --model <advisor-model>`);
 for a **cli-shaped** advisor, `<the configured command>, evidence bundle on stdin` (External Executors output-capture discipline, above).
 

@@ -10,7 +10,7 @@ Open this when the compact bootstrap in `SKILL.md` is not enough.
 | 2 | `bee-exploring` | Identify gray areas, lock decisions into `CONTEXT.md`. | Feature request is vague or new |
 | 3 | `bee-planning` | Research, mode gate, approach, unified plan, current-slice cells; the SMALLER PATH reality check and the review wave run inline before its merged Gate 2. | Decisions are locked, or scope is already clear |
 | 4 | `bee-swarming` | Launch and tend bounded workers with reservations. | Gate 2 approved (merged shape+execution) |
-| 5 | `bee-executing` | Bounded worker loop for one cell. | Spawned by swarming |
+| 5 | `bee-swarming` ("Execute") | Bounded worker loop for one cell. | Spawned by swarming |
 | 6 | `bee-reviewing` | Parallel review gate with P1/P2/P3 findings, user-invoked over a scope the user chooses. | User explicitly requests review — never automatic after a final slice or feature close |
 | 7 | `bee-scribing` | BA-grade tech-agnostic area specs: sync, capture, harvest. | Review approved; documenting any area (UI/API/job); a settled outcome must be kept |
 | 8 | `bee-compounding` | Capture durable learnings and decisions. | Scribing done or work abandoned |
