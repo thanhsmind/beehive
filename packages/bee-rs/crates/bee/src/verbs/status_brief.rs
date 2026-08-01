@@ -9,8 +9,8 @@
 // Anything else — including linked-worktree roots and corrupt JSON inputs —
 // returns None before ANY output, and the whole command re-runs under Node.
 
-use crate::fsutil::append_jsonl;
 use crate::jsjson;
+use crate::verbs::{emit_no_root_error, record_timing};
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state::{bypass_level, read_config_raw, read_state_brief, ship_visibility, GATE_NAMES};
@@ -45,17 +45,7 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
         Roots::NeedsNode => return None,
-        Roots::None => {
-            // main()'s no-root emitError path, then the timing wrapper.
-            let msg = "No bee repo root found (no .bee/onboarding.json or .git up the tree). Run bee-hive onboarding.";
-            if use_json {
-                println!("{}", jsjson::stringify(&json!({ "error": msg })));
-            } else {
-                eprintln!("{msg}");
-            }
-            record_timing(&cwd, t0, false);
-            return Some(ExitCode::FAILURE);
-        }
+        Roots::None => return Some(emit_no_root_error(&cwd, "status", use_json, t0)),
     };
 
     let drift = check_manifest_drift(&root).ok()?;
@@ -80,7 +70,7 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
     } else {
         println!("{}", render_brief_text(&result));
     }
-    record_timing(&root, t0, true);
+    record_timing(&root, "status", t0, true);
     Some(ExitCode::SUCCESS)
 }
 
@@ -120,14 +110,3 @@ fn render_brief_text(result: &Map<String, Value>) -> String {
     )
 }
 
-/// The direct-run timing wrapper: append .bee/logs/timings.jsonl (fail-open)
-/// and always print the stderr line.
-fn record_timing(root: &Path, t0: Instant, ok: bool) {
-    let ms = t0.elapsed().as_millis() as u64;
-    let ts = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-    let _ = append_jsonl(
-        &root.join(".bee").join("logs").join("timings.jsonl"),
-        &json!({"ts": ts, "cmd": "status", "ms": ms, "ok": ok}),
-    );
-    eprintln!("[bee] status {ms}ms");
-}

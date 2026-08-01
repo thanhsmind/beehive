@@ -32,7 +32,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if let Some(code) = crate::hooks::try_native(args) {
         return Some(code);
     }
-    verbs::status_brief::try_native(args, t0)
+    verbs::try_native(args, t0)
 }
 
 fn rs_info() -> ExitCode {
