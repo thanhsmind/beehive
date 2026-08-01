@@ -30,24 +30,25 @@
 //     spread, so the on-disk bytes match Node's after every mutation, not
 //     just after the create.
 //
-// DELEGATION (Ex) — shapes whose Node bytes embed a V8 message and so cannot
-// be reproduced:
-//   - a workspace record that exists but does not parse (the refusal text
-//     interpolates `err.message` from JSON.parse)
-//   - a non-ENOENT read error (the refusal interpolates `err.code`, and the
-//     errno set is platform-open)
-//   - a record whose `id` field is an object/array (the refusal interpolates
-//     `${parsed.id}`, i.e. V8's own ToString for exotic values)
-//   - any fs write failure (a V8-worded throw in Node)
-// Every one of these is PROBED BEFORE the lock is taken (`probe_readable`),
-// so the normal path never delegates from inside a lock hold — delegating
-// there would double lock.rs's contention.jsonl telemetry (campaign rule 2).
-// The one accepted residual, identical in kind to verbs/worktree.rs's: a
-// record that becomes unreadable BETWEEN the probe and the in-lock read (or a
-// write that fails) still delegates late. Every step taken by then is
-// idempotent — registerWorkspace is idempotent by construction, and an
-// ownership decision that never wrote leaves the record untouched — so the
-// Node re-run reproduces the same answer over the same store.
+// CUTOVER (the `Ex` delegation class, retired). Four shapes used to return
+// `Ex` — "Node's bytes here embed a V8 message, so the caller must return
+// before emitting anything and let the whole command re-run under Node":
+//   - a workspace record that exists but does not parse (Node's refusal
+//     interpolated `err.message` from JSON.parse) — now the SAME
+//     WORKSPACE_CORRUPT refusal with our own parenthesised reason;
+//   - a non-ENOENT read error (Node interpolated `err.code`, and the errno set
+//     is platform-open) — now the same WORKSPACE_CORRUPT refusal naming Rust's
+//     portable error KIND;
+//   - a record whose `id` field is an object/array (Node interpolated
+//     `${parsed.id}`, V8's ToString) — `jsjson::js_to_string` already IS that
+//     coercion, so this arm turned out to need nothing at all;
+//   - any fs write failure (a V8-worded throw in Node) — now an untyped
+//     refusal on the same `emitError` channel and exit code.
+// With no arm left, `listWorkspaces` never abandons a scan either: a
+// formerly-unmodelable entry is skipped with its reason like any other, so the
+// skip list is complete rather than replaced by a delegation. `probe_readable`
+// survives in place (see its own note) purely to keep the id validation where
+// it always was relative to the lock acquire.
 //
 // Provenance: lib/workspace-store.mjs WorkspaceStoreError / TYPE_VALUES /
 // runtimeDir / workspacesDir / requireWorkspaceId / requireType /
@@ -70,11 +71,14 @@ pub(crate) const TYPE_VALUES: [&str; 2] = ["main", "worktree"];
 
 /// Every failure this module can produce.
 ///
-/// `Ex` = "Node's bytes here embed a V8 message" — the caller must return
-/// None before emitting anything and let the whole command re-run under Node.
 /// `Err` = a reproducible thrown Error: a typed WorkspaceStoreError (with its
 /// `code`, which callers switch on) or a LockBusyError (code `None`). bee.mjs
-/// surfaces both through the same `emitError(error.message)` seam.
+/// surfaced both through the same `emitError(error.message)` seam.
+///
+/// `Ex` meant "Node's bytes here embed a V8 message" — the caller returned
+/// None before emitting anything and the whole command re-ran under Node. It
+/// is RETIRED (see the cutover note in this file's header) and no longer
+/// constructed; the variant stays so callers' matches keep compiling.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WsErr {
     Ex,
@@ -220,30 +224,15 @@ fn spread_read_defaults(parsed: &Map<String, Value>, workspace_id: &str) -> Map<
     out
 }
 
-/// Would `read_workspace_record` be able to answer without delegating?
-/// Run BEFORE every lock acquire so the in-lock read is Ex-free (module
-/// header). `Ok(())` covers both "missing" and "readable and modelable".
+/// CUTOVER: this probe ran before every lock acquire so a DELEGATION could be
+/// decided outside the hold — delegating from inside one would have doubled
+/// lock.rs's contention telemetry (campaign rule 2). Every shape it probed for
+/// (`Ex`) is native now, so there is nothing left to decide and the probe has
+/// no arm that can fire. It is kept, and kept in its original position, so the
+/// id validation `workspace_path` performs still happens exactly when it did —
+/// removing it outright would move that refusal relative to the lock.
 fn probe_readable(root: &Path, workspace_id: &str) -> W<()> {
-    let file = workspace_path(root, workspace_id)?;
-    let bytes = match std::fs::read(&file) {
-        Ok(b) => b,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(_) => return Err(WsErr::Ex), // WORKSPACE_CORRUPT interpolates err.code
-    };
-    let text = String::from_utf8_lossy(&bytes).into_owned();
-    let parsed: Value = match serde_json::from_str(text.trim_start_matches('\u{feff}')) {
-        Ok(v) => v,
-        Err(_) => return Err(WsErr::Ex), // the refusal interpolates err.message
-    };
-    // Only the `${parsed.id}` interpolation of an exotic value is unmodelable;
-    // every other shape below is deterministic.
-    if let Value::Object(m) = &parsed {
-        match m.get("id") {
-            Some(Value::Object(_)) | Some(Value::Array(_)) => return Err(WsErr::Ex),
-            _ => {}
-        }
-    }
-    Ok(())
+    workspace_path(root, workspace_id).map(|_| ())
 }
 
 fn read_workspace_record(root: &Path, workspace_id: &str) -> W<Map<String, Value>> {
@@ -259,12 +248,39 @@ fn read_workspace_record(root: &Path, workspace_id: &str) -> W<Map<String, Value
                 ),
             ))
         }
-        Err(_) => return Err(WsErr::Ex),
+        // CUTOVER: a non-ENOENT read error was `Ex` (delegate) because Node's
+        // WORKSPACE_CORRUPT text interpolates `err.code` and the errno set is
+        // platform-open. Same typed refusal, same code, same FIX hint — the
+        // parenthesised cause is now Rust's portable error KIND rather than a
+        // libuv errno string.
+        Err(e) => {
+            return Err(WsErr::refuse(
+                "WORKSPACE_CORRUPT",
+                format!(
+                    "readWorkspace: could not read \"{file_str}\" ({}). The bee CLI refuses to guess \
+                     at a workspace record it cannot read — that could silently misreport write ownership. \
+                     FIX: inspect/restore the file (e.g. \"git checkout -- {}\").",
+                    e.kind(),
+                    path_relative(root, &file)
+                ),
+            ))
+        }
     };
     let text = String::from_utf8_lossy(&bytes).into_owned();
     let parsed: Value = match serde_json::from_str(text.trim_start_matches('\u{feff}')) {
         Ok(v) => v,
-        Err(_) => return Err(WsErr::Ex),
+        // CUTOVER: was `Ex` — Node interpolated V8's JSON.parse message here.
+        // Same code, same sentence, our parenthesised reason.
+        Err(e) => {
+            return Err(WsErr::refuse(
+                "WORKSPACE_CORRUPT",
+                format!(
+                    "readWorkspace: \"{file_str}\" exists but is not valid JSON (invalid JSON at line {} column {}).",
+                    e.line(),
+                    e.column()
+                ),
+            ))
+        }
     };
     let obj = match &parsed {
         Value::Object(m) => m,
@@ -288,8 +304,12 @@ fn read_workspace_record(root: &Path, workspace_id: &str) -> W<Map<String, Value
     };
     let id_matches = matches!(obj.get("id"), Some(Value::String(s)) if s == workspace_id);
     if !id_matches {
+        // CUTOVER: an object/array `id` was `Ex`, because Node's `${parsed.id}`
+        // is V8's own ToString for an exotic value. `jsjson::js_to_string`
+        // already implements exactly that coercion ("[object Object]" for an
+        // object, comma-joined for an array), so there was never anything here
+        // that needed an interpreter — the arm is simply gone.
         let shown = match obj.get("id") {
-            Some(Value::Object(_)) | Some(Value::Array(_)) => return Err(WsErr::Ex),
             Some(v) => jsjson::js_to_string(v),
             None => "undefined".to_string(),
         };
@@ -312,8 +332,24 @@ pub(crate) fn read_workspace(root: &Path, id: &str) -> W<Map<String, Value>> {
 
 fn write_workspace_file_atomic(root: &Path, id: &str, record: &Map<String, Value>) -> W<()> {
     let file = workspace_path(root, id)?;
-    std::fs::create_dir_all(workspaces_dir(root)).map_err(|_| WsErr::Ex)?;
-    write_json_atomic(&file, &Value::Object(record.clone())).map_err(|_| WsErr::Ex)
+    // CUTOVER: both write failures were `Ex` (Node threw a V8-worded fs
+    // error, which bee.mjs surfaced through emitError and exited 1). They are
+    // untyped refusals now — `code: None`, the same channel and exit code
+    // LockBusyError already travels on — with the error KIND named rather
+    // than a platform-specific errno string.
+    let write_failed = |what: &str, path: &Path, e: &std::io::Error| WsErr::Err {
+        code: None,
+        message: format!(
+            "registerWorkspace: could not {what} \"{}\" ({}).",
+            path.display(),
+            e.kind()
+        ),
+        holder: None,
+    };
+    let dir = workspaces_dir(root);
+    std::fs::create_dir_all(&dir).map_err(|e| write_failed("create", &dir, &e))?;
+    write_json_atomic(&file, &Value::Object(record.clone()))
+        .map_err(|e| write_failed("write", &file, &e))
 }
 
 // ─── register / unregister / list ─────────────────────────────────────────
@@ -384,8 +420,18 @@ pub(crate) fn unregister_workspace(root: &Path, id: &str) -> W<Value> {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 Ok(json!({ "ok": true, "removed": false }))
             }
-            // Node rethrows a non-ENOENT rmSync error (V8-worded).
-            Err(_) => Err(WsErr::Ex),
+            // CUTOVER: Node rethrew a non-ENOENT rmSync error (V8-worded) and
+            // this was `Ex`. Untyped refusal now — same channel, same exit
+            // code, error KIND instead of the errno string.
+            Err(e) => Err(WsErr::Err {
+                code: None,
+                message: format!(
+                    "unregisterWorkspace: could not remove \"{}\" ({}).",
+                    file.display(),
+                    e.kind()
+                ),
+                holder: None,
+            }),
         }
     })();
     guard.release();
@@ -394,12 +440,12 @@ pub(crate) fn unregister_workspace(root: &Path, id: &str) -> W<Value> {
 
 /// listWorkspaces — fail-open enumeration returning `(workspaces, skipped)`.
 ///
-/// DIVERGENCE, deliberate and identical in kind to workflow_store.rs's
-/// `list_workflows`: Node SKIPS an unreadable entry, pushes `{id, reason}`,
-/// and `console.warn`s the reason — and that reason can embed a V8 message.
-/// So an entry this port cannot model turns the whole call into `Ex`
-/// (delegate) rather than a silently different `skipped` list. When every
-/// entry is modelable the two agree exactly, including the skip list.
+/// Node SKIPS an unreadable entry, pushes `{id, reason}`, and `console.warn`s
+/// the reason. CUTOVER: a reason that would have embedded a V8 message used to
+/// turn the whole call into `Ex` (delegate) rather than produce a silently
+/// different `skipped` list. Those reasons are worded natively now, so every
+/// entry is skippable and the call never bails: the skip list is complete
+/// again, with our wording in the two formerly-unmodelable reasons.
 pub(crate) fn list_workspaces(root: &Path) -> W<(Vec<Map<String, Value>>, Vec<Value>)> {
     let entries = match std::fs::read_dir(workspaces_dir(root)) {
         Ok(e) => e,
@@ -426,7 +472,7 @@ pub(crate) fn list_workspaces(root: &Path) -> W<(Vec<Map<String, Value>>, Vec<Va
         let id = &name[..name.len() - ".json".len()];
         match read_workspace_record(root, id) {
             Ok(record) => workspaces.push(record),
-            Err(WsErr::Ex) => return Err(WsErr::Ex),
+            // Every reason is native now — nothing bails out of the loop.
             Err(e) => skipped.push(json!({ "id": id, "reason": e.message() })),
         }
     }
@@ -1032,18 +1078,43 @@ mod tests {
             format!("readWorkspace: \"{shown}\" exists but its id field (\"other\") does not match the requested workspace \"main\" — never trusted.")
         );
 
-        // Unparseable — the refusal embeds JSON.parse's V8 message.
+        // CUTOVER: unparseable used to be `Ex` (the refusal embedded
+        // JSON.parse's V8 message). It is the same typed refusal as every
+        // other corrupt shape now, worded by us.
         std::fs::write(&file, "{oops").unwrap();
-        assert_eq!(read_workspace(root, "main").unwrap_err(), WsErr::Ex);
-        // ...and the probe catches it BEFORE any lock is taken.
-        assert_eq!(probe_readable(root, "main").unwrap_err(), WsErr::Ex);
-        assert!(
-            !lock::lock_file_path(root, "workspace:main").exists(),
-            "no lock file is created on the delegated path"
+        let e = read_workspace(root, "main").unwrap_err();
+        assert_eq!(e.code(), Some("WORKSPACE_CORRUPT"));
+        assert_eq!(
+            e.message(),
+            format!(
+                "readWorkspace: \"{shown}\" exists but is not valid JSON (invalid JSON at line 1 column 2)."
+            )
         );
+        assert!(!e.message().contains("Unexpected"), "no V8 wording");
     }
 
-    /// listWorkspaces: fail-open per entry, and Ex for an unmodelable one.
+    /// An `id` field holding an object or an array: Node interpolated V8's own
+    /// ToString, which `jsjson::js_to_string` already reproduces — so this,
+    /// too, stopped needing an interpreter at cutover.
+    #[test]
+    fn an_exotic_id_field_is_coerced_the_way_js_coerces_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(workspaces_dir(root)).unwrap();
+        let file = workspaces_dir(root).join("main.json");
+        for (body, shown_id) in [("{\"id\":{}}", "[object Object]"), ("{\"id\":[1,2]}", "1,2")] {
+            std::fs::write(&file, body).unwrap();
+            let e = read_workspace(root, "main").unwrap_err();
+            assert_eq!(e.code(), Some("WORKSPACE_CORRUPT"));
+            assert!(
+                e.message().contains(&format!("its id field (\"{shown_id}\")")),
+                "{}",
+                e.message()
+            );
+        }
+    }
+
+    /// listWorkspaces: fail-open per entry, for EVERY entry.
     #[test]
     fn list_reports_skips_and_delegates_on_a_v8_shape() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1061,9 +1132,18 @@ mod tests {
         assert_eq!(skipped.len(), 1);
         assert_eq!(skipped[0]["id"], json!("bad"));
 
-        // A V8-worded one turns the whole call into a delegation.
+        // CUTOVER: a formerly-V8-worded entry used to abandon the whole call.
+        // It is now just another skip, so the list stays complete.
         std::fs::write(workspaces_dir(root).join("worse.json"), "{oops").unwrap();
-        assert_eq!(list_workspaces(root).unwrap_err(), WsErr::Ex);
+        let (workspaces, skipped) = list_workspaces(root).unwrap();
+        assert_eq!(workspaces.len(), 1, "the good record still comes back");
+        assert_eq!(skipped.len(), 2);
+        let reason = skipped
+            .iter()
+            .find(|s| s["id"] == json!("worse"))
+            .map(|s| s["reason"].as_str().unwrap_or_default().to_string())
+            .expect("the unparseable entry is reported as a skip");
+        assert!(reason.contains("is not valid JSON"), "{reason}");
     }
 
     /// The lock file this module contends on is Node's, by name — proven by

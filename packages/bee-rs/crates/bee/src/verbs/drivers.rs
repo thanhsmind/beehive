@@ -75,11 +75,23 @@
 //     file serves, so close's merge-back line is never rendered natively —
 //     the granted-worktree branch is Node's.
 //
-//   * Corrupt JSON anywhere on a read path (Node's readJson warns with the V8
-//     parse message), `dogfood_repos` entries (normalizeDogfoodRepos
-//     console.warns per dead repo), a configured non-empty `product_root`
-//     (repo-divorce topology), and every V8-only shape the lifted knowledge
-//     helpers already flag (see their provenance banner below).
+//   * `dogfood_repos` entries (normalizeDogfoodRepos console.warns per dead
+//     repo), a configured non-empty `product_root` (repo-divorce topology),
+//     and the remaining shapes the lifted knowledge helpers flag (bundle-path
+//     normalization, collation-sensitive ranking — see their provenance
+//     banner below).
+//
+//     CUTOVER (2026-08-01): corrupt JSON on a read path is NO LONGER one of
+//     them. `rj` (readJson(file, null)) warns once via
+//     crate::fsutil::warn_corrupt_json and returns the `null` fallback, so
+//     every caller treats the record exactly as it treats an absent one —
+//     which is what Node's own `!cell` / `?? null` guards did with that
+//     fallback. A corrupt `.bee/config.json` likewise reads as "no config"
+//     inside crate::state::read_config_raw, so `declared_test_commands`
+//     reports tests undeclared instead of routing the command to Node. And a
+//     lone-surrogate escape in a quoted frontmatter scalar — the one shape
+//     only V8 could decode — is now the typed `bad_quoted_string` failure
+//     every other undecodable quoted scalar already was.
 //
 //   * `close` without a POSIX shell on win32 (Node falls back to cmd.exe).
 //
@@ -608,9 +620,10 @@ fn normalize_models(raw: Option<&Value>) -> Map<String, Value> {
     out
 }
 
-/// The `models` slice of readConfig(root). Delegates on the two readConfig
-/// side effects this port does not reproduce: a corrupt config file (Node's
-/// readJson V8 warning) and normalizeDogfoodRepos' per-dead-repo console.warn.
+/// The `models` slice of readConfig(root). Delegates on the ONE readConfig
+/// side effect this port still does not reproduce: normalizeDogfoodRepos'
+/// per-dead-repo console.warn. (A corrupt config no longer delegates — it
+/// warns and reads as "no config", readJson's own fallback.)
 fn read_models(root: &Path) -> D<Map<String, Value>> {
     let config = read_config_raw(root)?;
     if let Some(Value::Array(items)) = config.get("dogfood_repos") {
@@ -882,11 +895,19 @@ fn id_pattern_ok(id: &str) -> bool {
 }
 
 /// provenance: fsutil.mjs readJson(file, null) (verbs/cells.rs:347
-/// read_cell_json) — corrupt is Node's V8-warning path, so it delegates.
+/// read_cell_json).
+///
+/// CUTOVER: corrupt used to be Node's V8-warning path and delegated. It now
+/// warns once and returns readJson's own `null` fallback, so every caller
+/// sees the record exactly as it saw an absent one — which is what Node's
+/// `!cell` / `?? null` guards did with that same fallback.
 fn rj(file: &Path) -> D<Option<Value>> {
     match read_json(file) {
         ReadJson::Missing => Ok(None),
-        ReadJson::Corrupt => Err(Delegate),
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(file);
+            Ok(None)
+        }
         ReadJson::Parsed(Value::Null) => Ok(None),
         ReadJson::Parsed(v) => Ok(Some(v)),
     }
@@ -1373,7 +1394,6 @@ fn bundle_mode(root: &Path) -> D<bool> {
                     return Ok(true);
                 }
             }
-            kctx::Fm::NeedsNode => return Err(Delegate),
             _ => {}
         }
     }
@@ -2906,29 +2926,15 @@ mod kctx {
         message: String,
         line: usize,
     },
-    /// A shape only V8 could decide (lone-surrogate escapes in a quoted
-    /// scalar) — the whole command must delegate.
-    NeedsNode,
+    // CUTOVER: a `NeedsNode` variant lived here for the one shape only V8
+    // could decide — an unpaired surrogate escape in a quoted scalar. It (and
+    // the `has_surrogate_escape` sniff that produced it) is retired: such a
+    // scalar is a `Failed { code: "bad_quoted_string" }` like any other
+    // undecodable one.
 }
 
     pub(super) fn fm_fail(code: &'static str, message: String, line: usize) -> Result<Value, Fm> {
     Err(Fm::Failed { code, message, line })
-}
-
-/// Lone-surrogate escape sniff (\uD800–\uDFFF): JSON.parse accepts them,
-/// serde rejects — same heuristic feedback.rs uses for jsonl rows.
-    pub(super) fn has_surrogate_escape(s: &str) -> bool {
-    let b = s.as_bytes();
-    for i in 0..b.len().saturating_sub(3) {
-        if b[i] == b'\\'
-            && (b[i + 1] == b'u' || b[i + 1] == b'U')
-            && (b[i + 2] == b'd' || b[i + 2] == b'D')
-            && matches!(b[i + 3], b'8' | b'9' | b'a'..=b'f' | b'A'..=b'F')
-        {
-            return true;
-        }
-    }
-    false
 }
 
     pub(super) fn parse_scalar_token(raw: &str, line_no: usize) -> Result<Value, Fm> {
@@ -2944,10 +2950,14 @@ mod kctx {
             Ok(_) => {
                 return fm_fail("bad_quoted_string", "quoted value did not decode to a string".to_string(), line_no)
             }
+            // CUTOVER: an unpaired surrogate escape used to answer
+            // `Fm::NeedsNode` — V8's JSON.parse decoded it where serde does
+            // not, so the whole command went to Node. Nothing in this process
+            // can hold such a string and there is no Node left to ask, so it
+            // is exactly what every other undecodable quoted scalar is: the
+            // typed bad_quoted_string failure, same code, same line, same
+            // exit path. `has_surrogate_escape` is retired with it.
             Err(_) => {
-                if has_surrogate_escape(raw) {
-                    return Err(Fm::NeedsNode);
-                }
                 return fm_fail(
                     "bad_quoted_string",
                     format!("quoted value {} is not one complete JSON string", js_quote_str(raw)),
@@ -3329,7 +3339,6 @@ mod kctx {
             Err(_) => Map::new(), // unreadable: keep the row with empty data
             Ok(text) => match parse_frontmatter(&text) {
                 Fm::Parsed { data, .. } => data,
-                Fm::NeedsNode => return None,
                 _ => Map::new(),
             },
         };
@@ -3426,7 +3435,6 @@ mod kctx {
     };
     match parse_frontmatter(&raw) {
         Fm::Parsed { body, .. } => Some(body),
-        Fm::NeedsNode => None,
         _ => Some(raw),
     }
 }
@@ -3842,6 +3850,43 @@ mod tests {
         w(&root, ".bee/onboarding.json", "{\"version\":1}");
         w(&root, ".bee/config.json", config);
         root
+    }
+
+    // ── CUTOVER: corrupt JSON on a read path ───────────────────────────────
+
+    /// `rj` (readJson(file, null)) used to answer Delegate on a corrupt file,
+    /// which sent the whole command to Node. It now warns and hands back the
+    /// `null` fallback, so a corrupt cell reads exactly like an absent one —
+    /// which is what Node's own `!cell` guard did with that same fallback.
+    #[test]
+    fn a_corrupt_cell_reads_as_absent_instead_of_delegating() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(&root, ".bee/cells/c-1.json", r#"{"id":"c-1","status":"open"}"#);
+        assert_eq!(read_cell(&root, "c-1").unwrap().unwrap()["status"], json!("open"));
+
+        w(&root, ".bee/cells/c-2.json", "{broken");
+        assert_eq!(read_cell(&root, "c-2").unwrap(), None, "corrupt reads as absent");
+        // A truly absent cell answers the same thing — that is the point.
+        assert_eq!(read_cell(&root, "c-3").unwrap(), None);
+        // …and the readable sibling is untouched by its neighbour.
+        assert_eq!(read_cell(&root, "c-1").unwrap().unwrap()["status"], json!("open"));
+    }
+
+    /// The lone-surrogate class in a quoted FRONTMATTER scalar: V8's
+    /// JSON.parse decoded it, serde cannot, and no Rust String can hold it.
+    /// It used to send the whole command to Node; it is now the same typed
+    /// `bad_quoted_string` failure any other undecodable scalar produces.
+    #[test]
+    fn a_lone_surrogate_frontmatter_scalar_is_a_typed_failure_not_a_delegation() {
+        let raw = format!("{}{}{}", "\"\\", "uD800", "\"");
+        match kctx::parse_scalar_token(&raw, 7) {
+            Err(kctx::Fm::Failed { code, line, .. }) => {
+                assert_eq!(code, "bad_quoted_string");
+                assert_eq!(line, 7);
+            }
+            _ => panic!("expected the typed bad_quoted_string failure"),
+        }
     }
 
     // ── C4: the prompt byte-identity pin ───────────────────────────────────
@@ -4601,9 +4646,12 @@ mod tests {
             r#"{"commands":{"test":"x"},"dogfood_repos":["Z:/gone"]}"#,
         );
         assert!(declared_test_commands(&root).is_err());
-        // Corrupt config bails to Node.
+        // CUTOVER: a corrupt config used to bail to Node (readJson's warning
+        // carried a V8 parse message). It now warns and reads as "no config",
+        // which is readJson's own `{}` fallback — so the declaration is
+        // simply absent and the close report says tests are undeclared.
         w(&root, ".bee/config.json", "{broken");
-        assert!(declared_test_commands(&root).is_err());
+        assert_eq!(declared_test_commands(&root).unwrap(), None);
     }
 
     #[test]

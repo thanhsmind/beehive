@@ -4,11 +4,22 @@
 // reviewing it nudges reviewer synthesis. Otherwise silent. Fail-open: any
 // miss or crash -> exit 0 (crash logged to .bee/logs/hooks.jsonl).
 //
-// Strangler rule (contract C2): every branch whose OBSERVABLE stdout/stderr
-// would embed a V8-specific message in Node (fsutil.mjs readJson's
-// corrupt-JSON console.warn quotes err.message) returns Outcome::Delegate
-// BEFORE any output; deterministic warns (readLane's corrupt-lane line) are
-// reproduced byte-for-byte natively.
+// CUTOVER (2026-08-01). Contract C2 once required byte-identical output with
+// Node, so every branch whose stderr would have embedded a V8-specific message
+// (fsutil.mjs readJson's corrupt-JSON console.warn quotes err.message)
+// returned Outcome::Delegate. Node is gone: those branches are now NATIVE and
+// print bee's own sentence via crate::fsutil::warn_corrupt_json (queued until
+// the run is committed to native — see below), with the
+// fail-open SEMANTICS unchanged — readJson's `null` fallback still means
+// "reads as absent", so a corrupt state.json still yields defaultState(), a
+// corrupt session/lane record still reads as "no record" (a corrupt lane still
+// gets readLane's SECOND, deterministic warn on top, exactly as Node did), and
+// a corrupt cell is still skipped, one warning per bad file.
+//
+// Still delegating (NOT V8/libuv text, so out of that cutover's scope):
+//   - readState's truthy-non-object `approved_gates`, which spreads exotic
+//     keys (string chars / array indices) in JS.
+//   - resolveProductRoot's warn conditions (non-string / missing directory).
 //
 // Ported lib functions (source file → private fn here):
 //   state.mjs readState/defaultState/coerceLegacyPhase → read_state/default_state
@@ -23,7 +34,7 @@
 //   cells.mjs readScribingLedger + fsutil.mjs readJsonl → read_jsonl
 //   state.mjs hookEnabled → crate::state::hook_enabled (already ported)
 
-use crate::fsutil::{read_json, ReadJson};
+use crate::fsutil::{read_json, warn_corrupt_json, ReadJson};
 use crate::hooks::adapter::{emit_hook_output, log_crash, read_hook_context, HookContext};
 use crate::hooks::Outcome;
 use crate::state::hook_enabled;
@@ -37,7 +48,46 @@ const HOOK_NAME: &str = "chain-nudge";
 /// re-run the .mjs wrapper with the same stdin.
 struct Delegate;
 
+// A run can still end in Delegate AFTER a corrupt file has been read (a bad
+// product_root or an exotic approved_gates is only discovered later), and a
+// delegating run must emit nothing. Warnings are therefore QUEUED here and
+// released once the run is committed to native.
+enum Warn {
+    /// crate::fsutil::warn_corrupt_json for this file.
+    CorruptJson(PathBuf),
+    /// A ready-made line (readLane's own deterministic warn).
+    Line(String),
+}
+
+thread_local! {
+    static QUEUED_WARNINGS: std::cell::RefCell<Vec<Warn>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn queue_warning(w: Warn) {
+    QUEUED_WARNINGS.with(|q| q.borrow_mut().push(w));
+}
+
+fn queue_corrupt_json(file: &Path) {
+    queue_warning(Warn::CorruptJson(file.to_path_buf()));
+}
+
+fn flush_queued_warnings() {
+    let queued = QUEUED_WARNINGS.with(|q| q.borrow_mut().drain(..).collect::<Vec<_>>());
+    for w in queued {
+        match w {
+            Warn::CorruptJson(file) => warn_corrupt_json(&file),
+            Warn::Line(line) => eprint!("{line}"),
+        }
+    }
+}
+
+fn clear_queued_warnings() {
+    QUEUED_WARNINGS.with(|q| q.borrow_mut().clear());
+}
+
 pub fn run(argv: &[String], stdin: &str) -> Outcome {
+    clear_queued_warnings(); // one queue per run (tests reuse the thread)
     let ctx = read_hook_context(HOOK_NAME, argv, stdin);
     let Some(root) = ctx.root.clone() else {
         return Outcome::Done(ExitCode::SUCCESS);
@@ -47,7 +97,10 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         return Outcome::Done(ExitCode::SUCCESS);
     }
     match run_gated(&ctx, &root) {
-        Ok(()) => Outcome::Done(ExitCode::SUCCESS),
+        Ok(()) => {
+            flush_queued_warnings();
+            Outcome::Done(ExitCode::SUCCESS)
+        }
         Err(Delegate) => Outcome::Delegate,
     }
 }
@@ -56,7 +109,8 @@ fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
     match hook_enabled(root, HOOK_NAME) {
         Ok(true) => {}
         Ok(false) => return Ok(()),
-        // Corrupt config: Node's readJson warns to stderr with the V8 message.
+        // read_config_raw warns and reads a corrupt config as absent, so this
+        // arm is unreachable; kept because the signature is still fallible.
         Err(_) => return Err(Delegate),
     }
 
@@ -240,13 +294,18 @@ fn default_state() -> Map<String, Value> {
 }
 
 /// state.mjs readState: `{ ...defaultState(), ...state }`, approved_gates
-/// re-merged, legacy 'validating' phase coerced to 'planning'. Corrupt file →
-/// Delegate (Node warns with the V8 message); a truthy non-object
-/// approved_gates spreads exotic keys in JS → Delegate too.
+/// re-merged, legacy 'validating' phase coerced to 'planning'. A corrupt file
+/// warns and reads as absent (readJson's `null` fallback → defaultState()),
+/// exactly the Missing arm; a truthy non-object approved_gates spreads exotic
+/// keys in JS → Delegate.
 fn read_state(root: &Path) -> Result<Map<String, Value>, Delegate> {
-    let file_state = match read_json(&root.join(".bee").join("state.json")) {
+    let state_file = root.join(".bee").join("state.json");
+    let file_state = match read_json(&state_file) {
         ReadJson::Missing => return Ok(default_state()),
-        ReadJson::Corrupt => return Err(Delegate),
+        ReadJson::Corrupt => {
+            queue_corrupt_json(&state_file);
+            return Ok(default_state());
+        }
         ReadJson::Parsed(Value::Object(m)) => m,
         ReadJson::Parsed(_) => return Ok(default_state()),
     };
@@ -424,21 +483,25 @@ fn well_formed_id(id: &str) -> bool {
     !id.contains('/') && !id.contains('\\') && !id.contains("..")
 }
 
-fn read_session(control_root: &Path, session_id: &str) -> Result<Option<Map<String, Value>>, Delegate> {
+fn read_session(control_root: &Path, session_id: &str) -> Option<Map<String, Value>> {
     if !well_formed_id(session_id) {
-        return Ok(None); // sessionPath's requireId throw reads as "no session"
+        return None; // sessionPath's requireId throw reads as "no session"
     }
     let file = control_root.join(".bee").join("sessions").join(format!("{session_id}.json"));
     let session = match read_json(&file) {
-        ReadJson::Missing => return Ok(None),
-        ReadJson::Corrupt => return Err(Delegate), // Node's readJson warns with the V8 message
+        ReadJson::Missing => return None,
+        // readJson's null fallback: warn, then the record reads as absent.
+        ReadJson::Corrupt => {
+            queue_corrupt_json(&file);
+            return None;
+        }
         ReadJson::Parsed(Value::Object(m)) => m,
-        ReadJson::Parsed(_) => return Ok(None),
+        ReadJson::Parsed(_) => return None,
     };
     if session.get("id") != Some(&Value::String(session_id.to_string())) {
-        return Ok(None);
+        return None;
     }
-    Ok(Some(session))
+    Some(session)
 }
 
 // ── state.mjs readLane / laneRecordFrom (phase + last_scribing_run only) ───
@@ -458,32 +521,37 @@ fn path_relative(root: &Path, file: &Path) -> String {
 
 fn warn_corrupt_lane(root: &Path, file: &Path) {
     let rel = path_relative(root, file);
-    eprintln!(
-        "readLane: skipping corrupt lane record \"{rel}\" for display \u{2014} mutations through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\")."
-    );
+    queue_warning(Warn::Line(format!(
+        "readLane: skipping corrupt lane record \"{rel}\" for display \u{2014} mutations through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\").\n"
+    )));
 }
 
 /// readLane(root, feature) for a plain string feature whose lane file exists.
-/// Returns the merged lane record (defaults + parsed, phase coerced), None on
-/// the corrupt-shape path (warn emitted, byte-identical), Delegate on corrupt
-/// JSON (Node's readJson V8-message warn).
+/// Returns the merged lane record (defaults + parsed, phase coerced), or None
+/// on the corrupt-shape path (deterministic warn). Corrupt JSON gets BOTH
+/// warns, as in Node: readJson's own line (now bee's wording), then
+/// laneRecordFrom(null) → readLane's corrupt-lane line.
 fn read_lane_record(
     root: &Path,
     feature: &str,
     file: &Path,
-) -> Result<Option<Map<String, Value>>, Delegate> {
+) -> Option<Map<String, Value>> {
     let parsed = match read_json(file) {
-        ReadJson::Missing => return Ok(None), // race: vanished between exists() and read
-        ReadJson::Corrupt => return Err(Delegate),
+        ReadJson::Missing => return None, // race: vanished between exists() and read
+        ReadJson::Corrupt => {
+            queue_corrupt_json(file);
+            warn_corrupt_lane(root, file);
+            return None;
+        }
         ReadJson::Parsed(v) => v,
     };
     let Value::Object(parsed) = parsed else {
         warn_corrupt_lane(root, file);
-        return Ok(None);
+        return None;
     };
     if parsed.get("feature") != Some(&Value::String(feature.to_string())) {
         warn_corrupt_lane(root, file);
-        return Ok(None);
+        return None;
     }
     // defaultLaneRecord + parsed spread; only phase (coerced) is consumed by
     // this hook, but the merge is kept whole for fidelity.
@@ -502,7 +570,7 @@ fn read_lane_record(
     if merged.get("phase") == Some(&json!("validating")) {
         merged.insert("phase".into(), json!("planning"));
     }
-    Ok(Some(merged))
+    Some(merged)
 }
 
 // ── state.mjs resolvePipeline (phase consumer view) ────────────────────────
@@ -536,7 +604,7 @@ fn resolve_pipeline_phase(
         Err(CtrlErr::Delegate) => return Err(PipelineErr::Delegate),
         Err(CtrlErr::Crash(msg)) => return Err(PipelineErr::Crash(msg)),
     };
-    let Some(session) = read_session(&control_root, sid).map_err(|_| PipelineErr::Delegate)? else {
+    let Some(session) = read_session(&control_root, sid) else {
         return defaults(root);
     };
     let bound = match session.get("lane") {
@@ -553,7 +621,7 @@ fn resolve_pipeline_phase(
     if !file.exists() {
         return Ok(PipelinePhase::FromState); // LANE_MISSING typed refusal
     }
-    match read_lane_record(&control_root, &bound, &file).map_err(|_| PipelineErr::Delegate)? {
+    match read_lane_record(&control_root, &bound, &file) {
         Some(record) => Ok(PipelinePhase::Record(record.get("phase").cloned().unwrap_or(Value::Null))),
         None => Ok(PipelinePhase::FromState), // LANE_CORRUPT typed refusal
     }
@@ -643,15 +711,16 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 }
 
 /// cells.mjs listCells(root, {feature, status}) — active-dir scan only (this
-/// hook never passes includeArchived), sorted by numeric-aware id compare.
-/// Corrupt cell JSON → Delegate (Node's readJson warns with the V8 message).
+/// hook never passes includeArchived), sorted by numeric-aware id compare. A
+/// corrupt cell warns and is skipped (readJson null → `if (!cell) continue`),
+/// once per bad file — the rest of the scan is unaffected.
 fn list_cells_filtered(
     root: &Path,
     feature: &Value,
     status: &str,
-) -> Result<Vec<Map<String, Value>>, Delegate> {
+) -> Vec<Map<String, Value>> {
     let dir = root.join(".bee").join("cells");
-    let Ok(rd) = std::fs::read_dir(&dir) else { return Ok(Vec::new()) };
+    let Ok(rd) = std::fs::read_dir(&dir) else { return Vec::new() };
     let mut cells: Vec<Map<String, Value>> = Vec::new();
     for entry in rd.flatten() {
         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
@@ -663,7 +732,10 @@ fn list_cells_filtered(
         }
         let cell = match read_json(&entry.path()) {
             ReadJson::Missing => continue,
-            ReadJson::Corrupt => return Err(Delegate),
+            ReadJson::Corrupt => {
+                queue_corrupt_json(&entry.path());
+                continue;
+            }
             ReadJson::Parsed(Value::Object(m)) => m,
             ReadJson::Parsed(_) => continue, // `typeof cell === 'object'` fails only for primitives; null is falsy
         };
@@ -685,7 +757,7 @@ fn list_cells_filtered(
             &js_string_or_undefined(b.get("id")),
         )
     });
-    Ok(cells)
+    cells
 }
 
 /// cells.mjs scribingRunStampMs: Date.parse(run.at || run.date).
@@ -709,7 +781,7 @@ fn best_scribing_stamp_ms(
     root: &Path,
     feature: &Value,
     state: &Map<String, Value>,
-) -> Result<Option<f64>, Delegate> {
+) -> Option<f64> {
     let ledger = read_jsonl(&root.join(".bee").join("logs").join("scribing-runs.jsonl"));
     let mut best: Option<f64> = None;
     let mut consider = |ms: Option<f64>| {
@@ -735,7 +807,7 @@ fn best_scribing_stamp_ms(
         if !name.is_empty() && well_formed_id(name) {
             let file = root.join(".bee").join("lanes").join(format!("{name}.json"));
             if file.exists() {
-                if let Some(lane) = read_lane_record(root, name, &file)? {
+                if let Some(lane) = read_lane_record(root, name, &file) {
                     consider(scribing_run_stamp_ms(lane.get("last_scribing_run")));
                 }
             }
@@ -752,22 +824,22 @@ fn best_scribing_stamp_ms(
             }
         }
     }
-    Ok(best)
+    best
 }
 
 /// cells.mjs scribingDebt(root) — no opts (the hook never passes any):
 /// behavior_change cells capped for the active feature since the last
 /// scribing run. Returns (count, ids). The .mjs call site wraps this in a
-/// silent try/catch, but no reachable branch here throws — only the
-/// corrupt-JSON delegate escapes (a Node warn, not a throw).
+/// silent try/catch, but no reachable branch here throws — corrupt JSON warns
+/// and reads as absent, and only readState's exotic-gates case still delegates.
 fn scribing_debt(root: &Path) -> Result<(usize, Vec<String>), Delegate> {
     let state = read_state(root)?;
     let feature = state.get("feature").cloned().unwrap_or(Value::Null);
     if !truthy(&feature) {
         return Ok((0, Vec::new()));
     }
-    let threshold = best_scribing_stamp_ms(root, &feature, &state)?.unwrap_or(0.0);
-    let cells = list_cells_filtered(root, &feature, "capped")?;
+    let threshold = best_scribing_stamp_ms(root, &feature, &state).unwrap_or(0.0);
+    let cells = list_cells_filtered(root, &feature, "capped");
     let mut ids = Vec::new();
     for cell in &cells {
         let trace = match cell.get("trace") {
@@ -842,8 +914,12 @@ mod tests {
         let s = read_state(tmp.path()).ok().unwrap();
         assert_eq!(s.get("phase"), Some(&json!("planning")));
         assert_eq!(s.get("workers"), Some(&json!([{"nickname":"w1"}])));
-        // Corrupt state delegates (Node warns with a V8 message).
+        // Corrupt state warns and reads as absent — same fallback as Missing.
         write_state_file(tmp.path(), "{broken");
+        let s = read_state(tmp.path()).ok().unwrap();
+        assert_eq!(s, default_state());
+        // Exotic approved_gates still delegates (JS spread of a string).
+        write_state_file(tmp.path(), r#"{"approved_gates":"ab"}"#);
         assert!(read_state(tmp.path()).is_err());
     }
 
@@ -877,14 +953,71 @@ mod tests {
     }
 
     #[test]
-    fn scribing_debt_empty_when_idle_and_delegates_on_corrupt_cell() {
+    fn scribing_debt_empty_when_idle_and_skips_corrupt_cell() {
         let tmp = setup_root();
         write_state_file(tmp.path(), r#"{"phase":"idle","feature":null}"#);
         assert_eq!(scribing_debt(tmp.path()).ok().unwrap(), (0, vec![]));
-        // Corrupt cell file: only reached when a feature is active.
+        // Corrupt cell file: only reached when a feature is active. It warns
+        // and is skipped; the readable cells still count.
         write_state_file(tmp.path(), r#"{"phase":"swarming","feature":"f1"}"#);
-        std::fs::write(tmp.path().join(".bee").join("cells").join("bad.json"), "{nope").unwrap();
-        assert!(scribing_debt(tmp.path()).is_err());
+        let cells = tmp.path().join(".bee").join("cells");
+        std::fs::write(cells.join("bad.json"), "{nope").unwrap();
+        std::fs::write(
+            cells.join("f1-1.json"),
+            serde_json::to_string(&json!({
+                "id":"f1-1","feature":"f1","status":"capped",
+                "trace":{"behavior_change":true,"capped_at":"2026-02-01T00:00:00.000Z"}
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let (count, ids) = scribing_debt(tmp.path()).ok().unwrap();
+        assert_eq!((count, ids), (1, vec!["f1-1".to_string()]));
+    }
+
+    #[test]
+    fn corrupt_session_and_lane_read_as_absent() {
+        let tmp = setup_root();
+        let sessions = tmp.path().join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(sessions.join("s1.json"), "{nope").unwrap();
+        assert!(read_session(tmp.path(), "s1").is_none());
+
+        // A corrupt lane record reads as "no lane" (both warns emitted).
+        let lanes = tmp.path().join(".bee").join("lanes");
+        std::fs::create_dir_all(&lanes).unwrap();
+        let lane_file = lanes.join("l1.json");
+        std::fs::write(&lane_file, "{nope").unwrap();
+        assert!(read_lane_record(tmp.path(), "l1", &lane_file).is_none());
+
+        // The whole pipeline still resolves: a corrupt session record leaves
+        // the hook on the default (state.json) phase, exit 0.
+        write_state_file(tmp.path(), r#"{"phase":"reviewing"}"#);
+        match resolve_pipeline_phase(tmp.path(), Some("s1")) {
+            Ok(PipelinePhase::Record(v)) => assert_eq!(v, json!("reviewing")),
+            _ => panic!("corrupt session must fall back to defaults(), not delegate"),
+        }
+    }
+
+    #[test]
+    fn corrupt_state_still_runs_the_hook_to_exit_zero() {
+        let tmp = setup_root();
+        // Vendored-lib presence gate + a corrupt state.json.
+        std::fs::create_dir_all(tmp.path().join(".bee").join("bin").join("lib")).unwrap();
+        std::fs::create_dir_all(tmp.path().join(".git")).unwrap();
+        std::fs::write(
+            tmp.path().join(".bee").join("bin").join("lib").join("state.mjs"),
+            "// stub",
+        )
+        .unwrap();
+        write_state_file(tmp.path(), "{broken");
+        let payload = json!({
+            "hook_event_name": "SubagentStop",
+            "cwd": tmp.path().to_string_lossy(),
+        })
+        .to_string();
+        // run() returns ExitCode::SUCCESS on every Ok arm — Done is exit 0.
+        assert!(matches!(run(&[], &payload), Outcome::Done(_)));
     }
 
     #[test]

@@ -6,14 +6,34 @@
 // STRANGLER SHAPE. The hook runs in two phases:
 //   1. plan() — a READ-ONLY preflight that mirrors every read the .mjs
 //      pipeline performs, in order, and computes every decision (reminder
-//      text/hash, inject decisions, anchor nudge). Any input Node handles
-//      via a V8-worded stderr warning (corrupt JSON reached through
-//      fsutil.mjs readJson / state.mjs readLane) or via the linked-worktree
-//      grant topology returns Outcome::Delegate BEFORE any output or write,
-//      so the Node wrapper re-runs with identical bytes.
+//      text/hash, inject decisions, anchor nudge). Inputs it still cannot
+//      serve natively (the linked-worktree grant topology, a non-object inject
+//      cache, a shape-wrong lane record) return Outcome::Delegate BEFORE any
+//      output or write.
 //   2. execute() — the side-effect phase in the .mjs's exact order:
 //      heartbeat touch + hold renewal (fail-open, crash-logged), then
 //      markInjected + stdout. Exit 0 always.
+//
+// CUTOVER (2026-08-01). Corrupt JSON used to be part of that delegate set,
+// because Node's fsutil.mjs readJson warning quoted V8's parse sentence. Node
+// is gone, so read_json_pf now prints bee's own line via
+// crate::fsutil::warn_corrupt_json and returns readJson's `null` fallback —
+// which every caller already treats exactly as "absent": a corrupt state.json
+// reads as defaultState(), a corrupt session/claim/cell/intent record reads as
+// absent (skipped, one warning per bad file), a corrupt inject cache falls
+// through to the legacy location and then to `{}`, and a corrupt lane record
+// takes readLane's own second warn and becomes the LANE_CORRUPT refusal, i.e.
+// the reminder falls back to readState and the nudge goes silent — the same
+// continuation LANE_MISSING already had.
+//
+// Because plan() and execute() BOTH read the session/claim stores, the two
+// pure preflight passes that existed only to spot corruption early (the
+// duplicate readSession pair and preflightClaimsDir) are DELETED — keeping
+// them would have warned the user twice for one bad file.
+//
+// plan() still has to be able to delegate having emitted nothing, so warnings
+// it discovers are QUEUED and released by execute() (see PLAN_WARNINGS);
+// execute-phase reads warn immediately.
 //
 // Ported lib functions (source file → private fn), each replicated with JS
 // semantics (truthiness, `??` vs `||`, template coercion, key order):
@@ -99,6 +119,7 @@ const LIB_CLOSURE: [&str; 21] = [
 ];
 
 /// Preflight signal: this input needs the Node runtime for byte parity.
+#[derive(Debug)]
 struct NeedsNode;
 type Pf<T> = Result<T, NeedsNode>;
 
@@ -106,6 +127,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     // Hand-parsed payload FIRST (mirrors adapter normalization) so a
     // delegated run performs no native writes at all — including the
     // adapter's own coverage-gap log lines, which Node will produce once.
+    clear_plan_warnings(); // one queue per run (tests reuse the thread)
     let payload = parse_payload(stdin);
     let cwd = payload
         .get("cwd")
@@ -137,6 +159,9 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         Err(NeedsNode) => return Outcome::Delegate,
         Ok(None) => {
             // Hook disabled: run the adapter for gap-log parity, then exit 0.
+            // (Reached before any warn-producing read, but the queue is
+            // released here too so no path can swallow a warning.)
+            flush_plan_warnings();
             let _ctx = read_hook_context(HOOK_NAME, argv, stdin);
             return Outcome::Done(ExitCode::SUCCESS);
         }
@@ -195,19 +220,9 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
         .filter(|s| !s.is_empty())
         .map(str::to_string);
 
-    // Preflight the session record + claims store the heartbeat path reads
-    // (readSession/renewClaimTTL go through readJson → corrupt warns). The
-    // heartbeat runs against the adapter's controlRoot (== root, ordinary)
-    // while resolvePipeline/attribution use state.mjs's controlRootFor —
-    // preflight both when they differ.
-    if let Some(sid) = &session_id {
-        let _ = read_session(&control_root, sid)?; // corrupt → delegate
-        let _ = read_session(root, sid)?;
-        preflight_claims_dir(&control_root)?;
-        if control_root != root {
-            preflight_claims_dir(root)?;
-        }
-    }
+    // (No session/claims pre-pass: the reads below and the heartbeat block in
+    // execute() are the .mjs's own reads, and each warns for itself. A probe
+    // here would double every corrupt-file warning.)
 
     // resolvePipeline(root, { sessionId }) — the record the reminder AND the
     // nudge read (fresh-session-handoff fsh-6 / codex-loop-p0).
@@ -253,6 +268,10 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
 // ─── execute (side effects in .mjs order) ───────────────────────────────────
 
 fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) -> ExitCode {
+    // Committed to native: release the warnings plan() queued. Everything read
+    // from here on warns immediately (there is no delegate left to protect).
+    flush_plan_warnings();
+
     // D5 heartbeat + hold renewal — own try/catch in the .mjs: a throw here
     // is crash-logged and never blocks the reminder.
     if let Some(sid) = &plan.session_id {
@@ -410,14 +429,74 @@ fn sha1_hex(input: &str) -> String {
 
 // ─── preflight-flavored JSON read ───────────────────────────────────────────
 
-/// fsutil.mjs readJson through the strangler lens: Missing → None; Corrupt
-/// → delegate (Node warns to stderr with the V8 message); Parsed → value.
+// plan() must still be able to return Delegate having emitted NOTHING (a
+// shape-wrong lane and a non-object inject cache both delegate AFTER other
+// reads have run), so a corrupt-JSON warning discovered during plan() is
+// QUEUED and released by execute(), the moment the run is committed to native.
+enum PlanWarn {
+    /// crate::fsutil::warn_corrupt_json for this file.
+    CorruptJson(PathBuf),
+    /// A ready-made line (readLane's own deterministic warn).
+    Line(String),
+}
+
+thread_local! {
+    static PLAN_WARNINGS: std::cell::RefCell<Vec<PlanWarn>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn queue_plan_warning(w: PlanWarn) {
+    PLAN_WARNINGS.with(|q| q.borrow_mut().push(w));
+}
+
+fn flush_plan_warnings() {
+    let queued = PLAN_WARNINGS.with(|q| q.borrow_mut().drain(..).collect::<Vec<_>>());
+    for w in queued {
+        match w {
+            PlanWarn::CorruptJson(file) => crate::fsutil::warn_corrupt_json(&file),
+            PlanWarn::Line(line) => eprint!("{line}"),
+        }
+    }
+}
+
+fn clear_plan_warnings() {
+    PLAN_WARNINGS.with(|q| q.borrow_mut().clear());
+}
+
+/// fsutil.mjs readJson: Missing → None; Corrupt → queue one warning and take
+/// the `null` fallback, which every caller here reads as "absent"; Parsed →
+/// value. (Still `Pf` because the callers that delegate for OTHER reasons — a
+/// non-object inject cache, a shape-wrong lane — thread their Err through it.)
 fn read_json_pf(file: &Path) -> Pf<Option<Value>> {
     match read_json(file) {
         ReadJson::Missing => Ok(None),
-        ReadJson::Corrupt => Err(NeedsNode),
+        ReadJson::Corrupt => {
+            queue_plan_warning(PlanWarn::CorruptJson(file.to_path_buf()));
+            Ok(None)
+        }
         ReadJson::Parsed(v) => Ok(Some(v)),
     }
+}
+
+/// Node path.relative for the shape readLane's warn needs (file under root).
+fn path_relative(root: &Path, file: &Path) -> String {
+    match file.strip_prefix(root) {
+        Ok(rel) => rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(std::path::MAIN_SEPARATOR_STR),
+        Err(_) => file.display().to_string(),
+    }
+}
+
+/// state.mjs readLane's own (deterministic, never V8-worded) skip warn, which
+/// Node prints ON TOP of readJson's when a lane record will not parse.
+fn queue_corrupt_lane_warning(root: &Path, file: &Path) {
+    let rel = path_relative(root, file);
+    queue_plan_warning(PlanWarn::Line(format!(
+        "readLane: skipping corrupt lane record \"{rel}\" for display \u{2014} mutations through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\").\n"
+    )));
 }
 
 // ─── state.mjs: readState / lanes / resolvePipeline ─────────────────────────
@@ -512,14 +591,26 @@ fn read_session(control_root: &Path, session_id: &str) -> Pf<Option<Map<String, 
     }
 }
 
-/// state.mjs laneRecordFrom + readLane: corrupt/mismatched lane records make
-/// Node warn (readJson or readLane's own console.warn) → delegate.
+/// state.mjs laneRecordFrom + readLane. Corrupt JSON is native: readJson's
+/// warn, then laneRecordFrom(null) → readLane's own warn, then null → the
+/// LANE_CORRUPT refusal, which this hook already handles exactly like
+/// LANE_MISSING (reminder falls back to readState, nudge silent). A record
+/// that PARSES but has the wrong shape still delegates — that arm is about
+/// JS-shape exotica, not V8 text.
 fn read_lane_record(control_root: &Path, feature: &str) -> Pf<Option<StateRecord>> {
     let file = control_root.join(".bee").join("lanes").join(format!("{feature}.json"));
     if !file.exists() {
         return Ok(None); // LANE_MISSING — typed refusal, no warning
     }
-    let Some(parsed) = read_json_pf(&file)? else { return Err(NeedsNode) }; // vanished mid-read: unreachable, be safe
+    let parsed = match read_json(&file) {
+        ReadJson::Missing => return Err(NeedsNode), // vanished mid-read: unreachable, be safe
+        ReadJson::Corrupt => {
+            queue_plan_warning(PlanWarn::CorruptJson(file.clone()));
+            queue_corrupt_lane_warning(control_root, &file);
+            return Ok(None); // LANE_CORRUPT → Pipeline::Refused
+        }
+        ReadJson::Parsed(v) => v,
+    };
     let Value::Object(lane) = parsed else { return Err(NeedsNode) }; // readLane warns
     if lane.get("feature").and_then(Value::as_str) != Some(feature) {
         return Err(NeedsNode); // feature mismatch → readLane warns
@@ -712,9 +803,11 @@ fn legacy_inject_cache_path(root: &Path) -> PathBuf {
 }
 
 /// inject.mjs's cache read chain:
-/// `readJson(new, null) || readJson(legacy, {}) || {}` — corrupt either
-/// location warns in Node → delegate; a non-object cache value would make
-/// strict-mode property assignment throw in markInjected → delegate.
+/// `readJson(new, null) || readJson(legacy, {}) || {}` — a corrupt cache warns
+/// and reads as absent, so the chain falls through to the legacy location and
+/// then to `{}` (every key re-injects once, which is the intended fail-open).
+/// A non-object cache value still delegates: strict-mode property assignment
+/// on it would THROW in markInjected, which is JS exotica, not V8 text.
 fn read_inject_cache(root: &Path) -> Pf<Map<String, Value>> {
     let primary = read_json_pf(&inject_cache_path(root))?;
     let value = match primary {
@@ -748,17 +841,22 @@ fn should_inject(cache: &Map<String, Value>, key: &str, hash: &str, now: i64) ->
 /// new location atomically, prunes the legacy file. Any write error maps to
 /// the .mjs's throw (caller crash-logs).
 fn mark_injected(root: &Path, key: &str, hash: &str) -> Result<(), String> {
-    // Re-read the same chain shouldInject uses (the .mjs reads afresh in
-    // both functions). Corrupt-at-this-instant can only happen via a
-    // concurrent writer racing our own earlier preflight — read leniently.
-    let primary = match read_json(&inject_cache_path(root)) {
-        ReadJson::Parsed(v) if js_truthy(&v) => Some(v),
-        _ => None,
+    // Re-read the same chain shouldInject uses — the .mjs reads afresh in both
+    // functions, so this readJson pair warns for itself just as Node's did.
+    let read_or_warn = |file: PathBuf| -> Option<Value> {
+        let read = read_json(&file);
+        if matches!(read, ReadJson::Corrupt) {
+            crate::fsutil::warn_corrupt_json(&file);
+        }
+        match read {
+            ReadJson::Parsed(v) if js_truthy(&v) => Some(v),
+            _ => None,
+        }
     };
-    let value = primary.unwrap_or_else(|| match read_json(&legacy_inject_cache_path(root)) {
-        ReadJson::Parsed(v) if js_truthy(&v) => v,
-        _ => Value::Object(Map::new()),
-    });
+    let primary = read_or_warn(inject_cache_path(root));
+    let value = primary
+        .or_else(|| read_or_warn(legacy_inject_cache_path(root)))
+        .unwrap_or_else(|| Value::Object(Map::new()));
     let mut cache = match value {
         Value::Object(m) => m,
         _ => return Err("TypeError: cannot set property on non-object inject cache".to_string()),
@@ -857,7 +955,7 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     }
 }
 
-/// claims.mjs readClaim — corrupt claim files warn in Node → delegate. An
+/// claims.mjs readClaim — a corrupt claim warns and reads as "no claim". An
 /// invalid id (requireId would throw) reads as None here; callers that need
 /// the throw handle it themselves.
 fn read_claim(control_root: &Path, cell_id: &str) -> Pf<Option<Value>> {
@@ -869,20 +967,6 @@ fn read_claim(control_root: &Path, cell_id: &str) -> Pf<Option<Value>> {
         Some(v) if js_truthy(&v) && (v.is_object() || v.is_array()) => Ok(Some(v)),
         _ => Ok(None),
     }
-}
-
-/// Preflight-parse every claim record so the heartbeat's renewClaimTTL and
-/// the nudge's attribution can never hit a Node-warned corrupt file late.
-fn preflight_claims_dir(control_root: &Path) -> Pf<()> {
-    let dir = control_root.join(".bee").join("claims");
-    let Ok(entries) = std::fs::read_dir(&dir) else { return Ok(()) };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if let Some(id) = name.strip_suffix(".json") {
-            let _ = read_claim(control_root, id)?;
-        }
-    }
-    Ok(())
 }
 
 /// cells.mjs readCell — active file first, then the archive fallback.
@@ -1471,20 +1555,24 @@ fn heartbeat_stale(session: Option<&Map<String, Value>>, now: i64, stale_seconds
     beat + stale_seconds * 1000 <= now
 }
 
-/// Lenient (non-preflight) session read for the execute phase: a record
-/// that turned corrupt mid-hook reads as absent (unreachable race).
+/// Session read for the execute phase (claims.mjs heartbeatTouch's own
+/// readSession — a SECOND readJson in the .mjs, so it warns for itself).
 fn read_session_lenient(control_root: &Path, sid: &str) -> Option<Map<String, Value>> {
     if !is_plain_id(sid) {
         return None;
     }
     let file = sessions_dir(control_root).join(format!("{}.json", sid.trim()));
-    match read_json(&file) {
+    let read = read_json(&file);
+    if matches!(read, ReadJson::Corrupt) {
+        crate::fsutil::warn_corrupt_json(&file);
+    }
+    match read {
         ReadJson::Parsed(Value::Object(m))
             if m.get("id").and_then(Value::as_str) == Some(sid.trim()) =>
         {
             Some(m)
         }
-        _ => None,
+        _ => None, // corrupt / shape-wrong / id-mismatch all read as "no session"
     }
 }
 
@@ -1557,9 +1645,15 @@ fn release_gate(root: &Path, cell: &str) {
     let _ = std::fs::remove_file(claims_dir(root).join(format!("{cell}.adopting")));
 }
 
+/// claims.mjs readClaim as renewClaimTTL calls it (its own readJson, so it
+/// warns for itself). A corrupt claim reads as "no claim" → never renewed.
 fn read_claim_lenient(root: &Path, cell: &str) -> Option<Value> {
     let file = claims_dir(root).join(format!("{cell}.json"));
-    match read_json(&file) {
+    let read = read_json(&file);
+    if matches!(read, ReadJson::Corrupt) {
+        crate::fsutil::warn_corrupt_json(&file);
+    }
+    match read {
         ReadJson::Parsed(v) if js_truthy(&v) && (v.is_object() || v.is_array()) => Some(v),
         _ => None,
     }
@@ -1877,15 +1971,76 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_state_or_config_delegates() {
+    fn corrupt_state_and_config_read_as_defaults_instead_of_delegating() {
         let tmp = tempfile::tempdir().unwrap();
         bee_repo(tmp.path());
         write(tmp.path(), ".bee/state.json", "{broken");
-        assert!(read_state(tmp.path()).is_err());
+        clear_plan_warnings();
+        // readJson's null fallback → defaultState(): idle, no feature, no
+        // gates — and one queued warning for the one bad file.
+        let record = read_state(tmp.path()).expect("must not delegate");
+        assert_eq!(record.phase, Value::String("idle".into()));
+        assert_eq!(record.feature, Value::Null);
+        assert_eq!(record.gates, default_gates());
+        assert_eq!(PLAN_WARNINGS.with(|q| q.borrow().len()), 1);
+        // The whole plan still runs natively: idle phase → no reminder text
+        // worth injecting is required, but crucially it is not a delegate.
+        let planned = plan(tmp.path(), &Map::new()).expect("corrupt state must stay native");
+        assert!(planned.is_some());
+        clear_plan_warnings();
+
+        // A corrupt CONFIG is native too (crate::state::read_config_raw warns
+        // and reads it as absent, so hookEnabled defaults to enabled).
         let tmp2 = tempfile::tempdir().unwrap();
         bee_repo(tmp2.path());
         write(tmp2.path(), ".bee/config.json", "{broken");
-        assert!(plan(tmp2.path(), &Map::new()).is_err());
+        assert!(plan(tmp2.path(), &Map::new()).expect("native").is_some());
+        clear_plan_warnings();
+    }
+
+    #[test]
+    fn corrupt_session_lane_and_cell_all_read_as_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        clear_plan_warnings();
+        write(tmp.path(), ".bee/state.json", r#"{"phase":"swarming","feature":"f1"}"#);
+        write(tmp.path(), ".bee/sessions/s1.json", "{broken");
+        // A corrupt session record reads as "no session": resolvePipeline
+        // falls back to readState instead of delegating.
+        assert!(read_session(tmp.path(), "s1").expect("native").is_none());
+        match resolve_pipeline(tmp.path(), tmp.path(), Some("s1")) {
+            Ok(Pipeline::Ok(rec)) => assert_eq!(rec.phase, Value::String("swarming".into())),
+            _ => panic!("corrupt session must fall back to readState"),
+        }
+        // A corrupt lane record is the LANE_CORRUPT refusal (both warns), not
+        // a delegate: same continuation LANE_MISSING already had.
+        write(tmp.path(), ".bee/sessions/s2.json", r#"{"id":"s2","lane":"l1"}"#);
+        write(tmp.path(), ".bee/lanes/l1.json", "{broken");
+        assert!(matches!(
+            resolve_pipeline(tmp.path(), tmp.path(), Some("s2")),
+            Ok(Pipeline::Refused)
+        ));
+        // A corrupt cell is skipped from listCells; readable ones survive.
+        write(tmp.path(), ".bee/cells/bad.json", "{broken");
+        write(tmp.path(), ".bee/cells/c1.json", r#"{"id":"c1","status":"claimed"}"#);
+        let cells = list_cells_top(tmp.path()).expect("native");
+        assert_eq!(cells.len(), 1);
+        clear_plan_warnings();
+    }
+
+    #[test]
+    fn corrupt_inject_cache_reads_as_empty_and_reinjects() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        clear_plan_warnings();
+        write(tmp.path(), ".bee/cache/inject-cache.json", "{broken");
+        let cache = read_inject_cache(tmp.path()).expect("native");
+        assert!(cache.is_empty());
+        assert!(should_inject(&cache, "prompt", "h1", now_ms()));
+        // A non-object cache is still a delegate (markInjected would throw).
+        write(tmp.path(), ".bee/cache/inject-cache.json", "[1,2]");
+        assert!(read_inject_cache(tmp.path()).is_err());
+        clear_plan_warnings();
     }
 
     #[test]

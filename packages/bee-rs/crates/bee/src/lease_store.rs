@@ -57,16 +57,15 @@
 // file path fed to the hash is the platform-native spelling `path.join`
 // produces, matching hooks/state_sync.rs's existing lock-name derivation.
 //
-// Refusal posture (campaign rule 2): every refusal this module produces is a
-// typed LeaseStoreError with DETERMINISTIC bytes and is therefore reproduced
-// natively — including the ones reached after a lock attempt (LEASE_MISSING,
-// LEASE_FENCE_STALE), which the rule requires be native so a delegation
-// cannot double the lock-contention telemetry. The ONE residual is
-// LEASE_CORRUPT, whose text interpolates the V8/libuv error message: this
-// port interpolates the Rust error instead, exactly as
-// hooks/state_sync.rs::renew_lease_path already does — the two ports agree
-// with each other, and the divergence from Node is confined to the
-// parenthesized cause of a message no automation matches on.
+// Refusal posture: every refusal this module produces is a typed
+// LeaseStoreError with DETERMINISTIC bytes and is reproduced natively —
+// including the ones reached after a lock attempt (LEASE_MISSING,
+// LEASE_FENCE_STALE), which campaign rule 2 required be native so a
+// delegation could not double the lock-contention telemetry. LEASE_CORRUPT
+// interpolated the V8/libuv error message in Node; this port interpolates the
+// Rust error instead, exactly as hooks/state_sync.rs::renew_lease_path does —
+// the two ports agree with each other, and at cutover there is no third
+// answer to agree with.
 
 // NOT YET WIRED TO A VERB — deliberately, and the reason is worth stating
 // rather than silencing. `bee` has no CLI surface that acquires a multi-
@@ -121,9 +120,14 @@ pub(crate) enum LeaseErr {
     Refused(LeaseRefusal),
     /// lock.mjs LockBusyError — deterministic bytes (lock.rs reproduces them).
     LockBusy(LockBusy),
-    /// Node would surface raw V8/libuv bytes here (an fs error other than the
-    /// modeled ones, or a JS relational compare against a non-number epoch).
-    /// A caller reached from a verb must DELEGATE on this.
+    /// An fs error other than the modeled ones, or a JS relational compare
+    /// against a non-number epoch — the cases where Node surfaced raw
+    /// V8/libuv bytes.
+    ///
+    /// CUTOVER: the instruction here used to be "a caller reached from a verb
+    /// must DELEGATE on this". There is no runtime to delegate to. This module
+    /// has no verb caller yet (see the not-yet-wired note above), so the first
+    /// one that lands must map this to a native refusal — never to a bail.
     Exotic,
 }
 

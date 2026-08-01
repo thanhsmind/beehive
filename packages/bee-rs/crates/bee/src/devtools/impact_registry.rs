@@ -28,9 +28,17 @@
 // this port cannot resolve is ABSENT, never guessed.
 //
 // STRANGLER ROUTING. `--write`, `--check`, `--query <file...> [--level 1]`.
-// A failure whose text is a V8 message (an unreadable/corrupt registry, an
-// unreadable source) returns None before any output; every deterministic
-// usage/refusal string is reproduced byte for byte.
+// Every deterministic usage/refusal string is reproduced byte for byte.
+//
+// CUTOVER: the I/O failures whose text was a V8 message (an unreadable or
+// corrupt registry, a failed write) used to return None before any output and
+// let Node answer. `bee dev` reports unknown-command on a None, so with Node
+// gone that would turn a corrupt registry into a nonsense error. Both now
+// print a native message and exit non-zero — the same OUTCOME as Node's
+// uncaught throw, in our own words. What still returns None is the source
+// PARSER's documented blind spots (call-indirection, env-pointed paths): an
+// edge this port cannot resolve is ABSENT, never guessed, exactly as the .mjs
+// behaved.
 
 use super::jspath;
 use crate::jsjson;
@@ -980,8 +988,14 @@ pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
         let registry = build_registry(&root)?;
         let json = serialize_registry(&registry);
         let count = registry["files"].as_object().map(Map::len).unwrap_or(0);
-        if std::fs::write(registry_path(&root), &json).is_err() {
-            return None;
+        // CUTOVER: a write failure used to return None (delegate). Node let
+        // the libuv error throw; say it ourselves and keep the exit code.
+        if let Err(e) = std::fs::write(registry_path(&root), &json) {
+            eprintln!(
+                "impact_registry --write: cannot write {REGISTRY_PATH_REL} ({}).",
+                e.kind()
+            );
+            return Some(ExitCode::FAILURE);
         }
         println!("impact_registry --write: wrote {REGISTRY_PATH_REL} ({count} files)");
         return Some(ExitCode::SUCCESS);
@@ -1037,9 +1051,25 @@ pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
             eprintln!("usage: node scripts/impact_registry.mjs --query <file...> [--level 1]");
             return Some(ExitCode::FAILURE);
         }
-        // A read/parse failure prints the V8 message — delegate instead.
-        let text = std::fs::read_to_string(registry_path(&root)).ok()?;
-        let registry: Value = serde_json::from_str(&text).ok()?;
+        // CUTOVER: Node let the read/parse throw, so the failure printed a V8
+        // message and the port returned None (delegate). There is nothing to
+        // delegate to, and `bee dev` falls through to unknown-command on a
+        // None — which would turn a corrupt registry into a nonsense error.
+        // Same outcome as Node's uncaught throw (stderr, non-zero exit), our
+        // wording.
+        let registry_file = registry_path(&root);
+        let Ok(text) = std::fs::read_to_string(&registry_file) else {
+            eprintln!(
+                "impact_registry --query: cannot read {REGISTRY_PATH_REL} — run `bee dev impact-registry --write` to build it."
+            );
+            return Some(ExitCode::FAILURE);
+        };
+        let Ok(registry) = serde_json::from_str::<Value>(&text) else {
+            eprintln!(
+                "impact_registry --query: {REGISTRY_PATH_REL} is not valid JSON — run `bee dev impact-registry --write` to rebuild it."
+            );
+            return Some(ExitCode::FAILURE);
+        };
         let ctx = Ctx::new(&root);
         let (mapped, unmapped) = query_registry(&ctx, &registry, &query_files, level);
         for u in &unmapped {

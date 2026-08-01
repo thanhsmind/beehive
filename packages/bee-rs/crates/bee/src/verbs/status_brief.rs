@@ -6,8 +6,14 @@
 //
 // Conservative routing: `try_native` accepts ONLY argv where every token
 // after `status` is exactly `--brief` or `--json` (with `--brief` present).
-// Anything else — including linked-worktree roots and corrupt JSON inputs —
-// returns None before ANY output, and the whole command re-runs under Node.
+// Anything else — including a linked-worktree root — returns None before ANY
+// output.
+//
+// CUTOVER: corrupt JSON inputs used to be on that list. `state::read_state_brief`
+// and `read_config_raw` warn natively and fall back to defaults now, so the
+// three `.ok()?` sites in `run` can no longer fire — a corrupt state.json
+// yields the default brief plus a warning on stderr, exactly the pair Node
+// produced.
 
 use crate::jsjson;
 use crate::verbs::{emit_no_root_error, record_timing};
@@ -16,7 +22,6 @@ use crate::roots::{resolve_store_root, Roots};
 use crate::state::{bypass_level, read_config_raw, read_state_brief, ship_visibility, GATE_NAMES};
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
-use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 

@@ -1,7 +1,17 @@
-// fsutil — Rust port of lib/fsutil.mjs's primitives, with one strangler
-// addition: readers distinguish `Corrupt` from `Missing` so a native verb can
-// bail to the Node runtime instead of replicating Node's parse-error warning
-// text (which embeds V8's own error messages).
+// fsutil — Rust port of lib/fsutil.mjs's primitives. Readers distinguish
+// `Corrupt` from `Missing` because the two mean different things to a caller:
+// an absent file is a normal state, a present-but-unparseable one is a defect
+// the user must hear about.
+//
+// CUTOVER (2026-08-01). While contract C2 bound the port to byte-identical
+// output, every `Corrupt` arm returned to Node, because Node's warning
+// interpolated V8's own `JSON.parse` message and no Rust string could match
+// it. Node is gone, so C2 no longer binds and those arms are native. The
+// warning below carries the SAME information Node's did — which file, that it
+// could not be parsed, that a fallback was used instead — in our own words,
+// plus the position, which V8's message buried in prose. The fail-open
+// SEMANTICS are unchanged: a caller that fell back still falls back, a caller
+// that refused still refuses.
 
 use crate::jsjson;
 use serde_json::Value;
@@ -10,10 +20,58 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 pub enum ReadJson {
     Missing,
-    /// Present but unreadable/unparseable. Node's readJson warns to stderr
-    /// with the V8 message and falls back — native verbs delegate instead.
+    /// Present but unreadable/unparseable. Callers warn via
+    /// [`warn_corrupt_json`] and take the fallback Node's readJson would have
+    /// returned.
     Corrupt,
     Parsed(Value),
+}
+
+/// The native replacement for `readJson`'s fail-open warn. Node printed
+///
+/// ```text
+/// bee: could not parse JSON at <file> — <V8 message>. Using fallback; fix the file.
+/// ```
+///
+/// and returned the caller's fallback. This prints the same sentence with our
+/// own reason in place of the interpreter's, and the caller still falls back.
+/// stderr, never stdout — stdout is reserved for `--json` output.
+pub fn warn_corrupt_json(file: &Path) {
+    eprintln!(
+        "bee: could not parse JSON at {} — {}. Using fallback; fix the file.",
+        file.display(),
+        corrupt_json_reason(file)
+    );
+}
+
+/// Why the file would not parse, in bee's words. Re-reads the file (it is
+/// already known bad, and this runs once per corrupt file) so `ReadJson`
+/// stays a payload-free enum every caller can match without churn.
+fn corrupt_json_reason(file: &Path) -> String {
+    let Ok(bytes) = std::fs::read(file) else {
+        return "the file could not be read".to_string();
+    };
+    let text = String::from_utf8_lossy(&bytes);
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+    match serde_json::from_str::<Value>(text) {
+        // Raced: it parses now. Say only what is still true.
+        Ok(_) => "invalid JSON".to_string(),
+        Err(e) if e.line() > 0 => {
+            format!("invalid JSON at line {} column {}", e.line(), e.column())
+        }
+        Err(_) => "invalid JSON".to_string(),
+    }
+}
+
+/// The JSONL sibling: one bad LINE inside an otherwise readable file. Node's
+/// readers skipped such a line silently or warned with the V8 message
+/// depending on the store; every native caller that skips says so here.
+pub fn warn_corrupt_jsonl_line(file: &Path, line_no: usize) {
+    eprintln!(
+        "bee: could not parse JSON at {} line {} — invalid JSON. Skipping that line; fix the file.",
+        file.display(),
+        line_no
+    );
 }
 
 pub fn read_json(file: &Path) -> ReadJson {
@@ -164,6 +222,25 @@ mod tests {
             .collect();
         assert!(leftovers.is_empty(), "a failed write must not leave a tmp behind");
         assert!(file.is_dir(), "the target must be untouched by the failure");
+    }
+
+    /// The native corrupt-JSON warning must carry every piece of information
+    /// Node's did — the path, that it could not be PARSED, and that a fallback
+    /// was used — without any V8 wording. Asserted on the reason half here;
+    /// the full sentence is fixed in `warn_corrupt_json` above.
+    #[test]
+    fn corrupt_json_reason_names_the_position_and_no_engine() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad = dir.path().join("bad.json");
+        std::fs::write(&bad, "{\n  \"a\": ,\n}").unwrap();
+        let reason = corrupt_json_reason(&bad);
+        assert!(reason.starts_with("invalid JSON at line 2 column"), "{reason}");
+        assert!(!reason.contains("Unexpected"), "no V8 wording: {reason}");
+        assert!(!reason.contains("JSON.parse"), "no V8 wording: {reason}");
+
+        // A file that vanished under us still yields a truthful reason.
+        let gone = dir.path().join("gone.json");
+        assert_eq!(corrupt_json_reason(&gone), "the file could not be read");
     }
 
     #[test]

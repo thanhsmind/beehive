@@ -47,25 +47,43 @@
 //   - every argv shape any ported verb cannot PROVE: unknown flags, missing
 //     required flags, --help, bad enum/number values (Node's validate()
 //     speaks there), non-flag tokens, non-UTF-8 argv.
-//   - any store shape whose Node rendering embeds V8 text: corrupt JSON
-//     reached through readJson (fsutil warns with the V8 parse message),
-//     JS-exotic spreads (string/array `trace`), non-f64-exact numbers.
-//     These delegate BEFORE any output or write — the drift-cache write is
-//     the one sanctioned pre-None write, exactly like the read-only slice.
+//   - JS-exotic store shapes this port cannot carry: an array where a cell/
+//     claim/session/lane record is expected (`typeof [] === 'object'` lets
+//     them through Node's guards into index-key spreads), a string/array
+//     `trace`, a non-string `feature` feeding path math. These delegate
+//     BEFORE any output or write — the drift-cache write is the one
+//     sanctioned pre-None write, exactly like the read-only slice.
+//
+// CUTOVER (2026-08-01) — CORRUPT JSON IS NATIVE. Contract C2 (byte-identical
+// output with Node) is retired with the Node runtime, so the arms that used
+// to hand a corrupt store back to Node — because Node's readJson warning
+// interpolated V8's own `JSON.parse` message — now do the work here:
+//   - readJson-backed reads (`read_cell_json` / `read_store_json`) warn via
+//     crate::fsutil::warn_corrupt_json and take the SAME fallback Node's
+//     readJson took (null / {} / the caller's default). Fail-open stays
+//     fail-open; nothing that refused before stops refusing.
+//   - the strict readers (readLaneStrict, readCellStrictForUpdate,
+//     recoverArchiveJournal) keep their own deterministic refusals, and the
+//     unreadable-file branches that used to embed a libuv errno now carry the
+//     Rust io error in the same sentence.
+//   - lone-surrogate escapes (`\uD800`-`\uDFFF`), which V8's JSON.parse
+//     accepted and serde refuses, are simply CORRUPT now: there is no second
+//     parser to defer to, so each site takes its own not-valid-JSON path.
+//   - |n| >= 1e21 no longer diverges at all — jsjson::js_f64_to_string
+//     implements the spec's exponential forms, so those arms are gone.
+// The pre-scan that walked the whole cell store just to make that delegation
+// decision is gone with them (it would have warned about files the command
+// never reads); `warn_corrupt_json_once` keeps the surviving probes from
+// double-warning about a file the real flow reads again.
 //
 // DOCUMENTED RESIDUAL DIVERGENCES (all pathological, none reachable from
 // well-formed bee stores; each noted again at its code site):
-//   - `--stdin` payloads: once stdin is consumed the probe can no longer
-//     delegate (the Node child would read EOF), so a lone-surrogate escape
-//     that V8's JSON.parse accepts, or a |n| >= 1e21 number, refuses
-//     natively instead of being written the way Node would write it.
 //   - hard mid-transaction filesystem failures (a failing rename inside the
-//     archive loop, a failing final writeCell): Node embeds the libuv errno
+//     archive loop, a failing final writeCell): Node embedded the libuv errno
 //     message; the native error text carries the Rust io message instead.
-//   - a store file that turns corrupt in the window between this port's
-//     pre-scan and its post-test re-read (cap/finish only): Node would print
-//     a readJson warning with V8 bytes; the native path takes the same
-//     control-flow fallback without that warning line.
+//   - a store file that turns corrupt in the window between a surviving
+//     probe and a post-test re-read (cap/finish only) warns once, not twice —
+//     `warn_corrupt_json_once` dedupes per path.
 //   - declared test commands producing > 64 MiB of combined output: Node's
 //     spawnSync maxBuffer kills the child (spawn error); the native runner
 //     captures it all.
@@ -358,15 +376,42 @@ fn id_pattern_ok(id: &str) -> bool {
 
 /// fsutil.mjs readJson(file, null) for a cell file, split three ways:
 /// - Ok(Some(v))  — parsed, non-null (JS `!== null`)
-/// - Ok(None)     — absent/unreadable (fallback), or a literal JSON `null`
-/// - Err(Delegate) — present but unparseable: Node warns to stderr with the
-///   embedded V8 message, so the native path must hand the whole command back.
+/// - Ok(None)     — absent/unreadable (fallback), a literal JSON `null`, or
+///   present-but-corrupt: readJson warns to stderr and returns the `null`
+///   fallback, and so does this (CUTOVER — see the file header).
+/// - Err(Delegate) is unreachable here now; the type stays so the JS-exotic
+///   arms in this module's callers keep one error channel.
 fn read_cell_json(file: &Path) -> Result<Option<Value>, Delegate> {
     match read_json(file) {
         ReadJson::Missing => Ok(None),
-        ReadJson::Corrupt => Err(Delegate),
+        ReadJson::Corrupt => {
+            warn_corrupt_json_once(file);
+            Ok(None) // readJson(file, null) fail-open — identical to Missing
+        }
         ReadJson::Parsed(Value::Null) => Ok(None),
         ReadJson::Parsed(v) => Ok(Some(v)),
+    }
+}
+
+/// `crate::fsutil::warn_corrupt_json`, at most once per path per process.
+///
+/// Node had no pre-scan: it warned once per readJson CALL, at the point the
+/// real flow read the file. This port keeps a few pre-lock probes that read
+/// the same file the flow reads again a moment later (they exist to bail
+/// BEFORE a store lock is acquired, not merely to decide delegation), so the
+/// raw helper would print the same sentence twice for one logical read.
+/// Deduping per path keeps the user-visible warning count at Node's.
+fn warn_corrupt_json_once(file: &Path) {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+    static SEEN: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+    let seen = SEEN.get_or_init(|| Mutex::new(HashSet::new()));
+    let mut guard = match seen.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if guard.insert(file.to_path_buf()) {
+        crate::fsutil::warn_corrupt_json(file);
     }
 }
 
@@ -432,7 +477,7 @@ fn list_cells(root: &Path, feature: Option<&str>, status: Option<&str>) -> Resul
 /// .bee/cells/<id>.json wins when it reads non-null; otherwise every
 /// .bee/cells/archive/<feature>/ directory is probed for <id>.json in
 /// directory order (readdirSync error -> null). Corrupt JSON anywhere on the
-/// probe path -> Delegate (Node's readJson warning).
+/// probe path warns and reads as absent, exactly like readJson's fallback.
 fn read_cell(root: &Path, id: &str) -> Result<Option<Value>, Delegate> {
     if id.is_empty() || !id_pattern_ok(id) {
         return Ok(None);
@@ -752,16 +797,22 @@ fn js_default_str_sort(items: &mut [String]) {
 }
 
 /// JSON.parse with JS number semantics. `strip_bom` mirrors readJson's BOM
-/// strip (the strict readers do NOT strip). Errors:
-/// - NotJson: both engines refuse (native refusal is faithful) — unless the
-///   text carries a \uD800-\uDFFF escape (V8 accepts lone surrogates where
-///   serde refuses) in which case Delegate.
-/// - Delegate: shapes whose JS value this port cannot carry (numbers with
-///   |n| >= 1e21 — jsjson would print them differently than V8).
+/// strip (the strict readers do NOT strip). Only two outcomes now:
+/// - Value: parsed and JS-number-normalized.
+/// - NotJson: the text is not JSON, and every caller takes its own
+///   not-valid-JSON path for it.
+///
+/// CUTOVER: this used to have a third `Delegate` outcome for the two shapes
+/// only V8 could settle — a `\uD800`-`\uDFFF` lone-surrogate escape (V8's
+/// JSON.parse accepted it, serde refuses) and a |n| >= 1e21 number (jsjson
+/// printed it differently than V8). The number case is fixed upstream
+/// (`js_f64_to_string` does the spec's exponential forms, `js_numberify` no
+/// longer rejects), and with no Node to defer to, a lone surrogate is just
+/// input this CLI cannot parse — i.e. NotJson, exactly like any other text
+/// serde refuses.
 enum JsParse {
     Value(Value),
     NotJson,
-    Delegate,
 }
 
 fn parse_json_js(text: &str, strip_bom: bool) -> JsParse {
@@ -773,51 +824,32 @@ fn parse_json_js(text: &str, strip_bom: bool) -> JsParse {
     }
     match serde_json::from_str::<Value>(t) {
         Ok(v) => match rsv::js_numberify(&v) {
+            // Unreachable from JSON text (no NaN/Infinity literals), but a
+            // parse helper must not panic on it either.
+            Err(_) => JsParse::NotJson,
             Ok(v) => JsParse::Value(v),
-            Err(_) => JsParse::Delegate,
         },
-        Err(_) => {
-            if has_lone_surrogate_escape(t) {
-                JsParse::Delegate // V8's JSON.parse would accept it
-            } else {
-                JsParse::NotJson
-            }
-        }
+        // Includes lone-surrogate escapes — see the doc comment above.
+        Err(_) => JsParse::NotJson,
     }
-}
-
-/// Detects `\uD800`..`\uDFFF` escapes (case-insensitive hex) — the one JSON
-/// grammar corner where V8 accepts what serde_json refuses.
-fn has_lone_surrogate_escape(text: &str) -> bool {
-    let b = text.as_bytes();
-    let mut i = 0usize;
-    while i + 5 < b.len() {
-        if b[i] == b'\\' && (b[i + 1] == b'u' || b[i + 1] == b'U') {
-            let hex = &b[i + 2..i + 6];
-            if hex.iter().all(|c| c.is_ascii_hexdigit()) {
-                let v = u16::from_str_radix(std::str::from_utf8(hex).unwrap_or("0"), 16).unwrap_or(0);
-                if (0xd800..=0xdfff).contains(&v) {
-                    return true;
-                }
-            }
-        }
-        i += 1;
-    }
-    false
 }
 
 // ─── store-file readers with JS-number normalization ───────────────────────
 
-/// readJson-backed store read (BOM-stripped, warn-on-corrupt in Node):
-/// Missing -> None; Corrupt -> Delegate; parsed value JS-number-normalized
-/// (Delegate on non-representable numbers).
+/// readJson-backed store read (BOM-stripped): Missing -> None; Corrupt ->
+/// warn + None, which is exactly readJson's fail-open `fallback` for every
+/// caller here (each one maps a missing file and its fallback to the same
+/// branch). Parsed values are JS-number-normalized.
 fn read_store_json(file: &Path) -> Result<Option<Value>, Delegate> {
     match read_json(file) {
         ReadJson::Missing => Ok(None),
-        ReadJson::Corrupt => Err(Delegate),
+        ReadJson::Corrupt => {
+            warn_corrupt_json_once(file);
+            Ok(None)
+        }
         ReadJson::Parsed(v) => match rsv::js_numberify(&v) {
             Ok(v) => Ok(Some(v)),
-            Err(_) => Err(Delegate),
+            Err(_) => Err(Delegate), // unreachable from JSON — see js_numberify
         },
     }
 }
@@ -987,9 +1019,9 @@ fn claim_gate_path(control: &Path, cell_id: &str) -> MR<PathBuf> {
     Ok(claims_dir(control).join(format!("{}.adopting", require_id(cell_id, "cell id")?)))
 }
 
-/// claims.mjs readClaim: readJson fallback null; falsy/non-object -> null.
-/// A JSON-array claim file would take JS property paths this port does not
-/// model — Delegate; corrupt JSON delegates (readJson's V8 warning).
+/// claims.mjs readClaim: readJson fallback null; falsy/non-object -> null
+/// (a corrupt file warns and lands in that same null). A JSON-array claim
+/// file would take JS property paths this port does not model — Delegate.
 fn read_claim(control: &Path, cell_id: &str) -> MR<Option<Map<String, Value>>> {
     let file = claim_path(control, cell_id)?;
     match read_store_json(&file)? {
@@ -1461,7 +1493,7 @@ fn release_claim(control: &Path, session: Option<&str>, cell_id: &str) -> MR<()>
 // ─── sessions (claims.mjs) ─────────────────────────────────────────────────
 
 /// claims.mjs readSession (fail-open flavor): malformed id -> None; corrupt
-/// record -> Delegate (readJson warning); id-mismatch -> None.
+/// record -> warn + None (readJson's fallback); id-mismatch -> None.
 fn read_session(control: &Path, session_id: &str) -> MR<Option<Map<String, Value>>> {
     let trimmed = js_trim(session_id);
     if trimmed.is_empty() || trimmed.contains('/') || trimmed.contains('\\') || trimmed.contains("..") {
@@ -2363,7 +2395,8 @@ struct Taxonomy {
     candidates: Vec<String>,
 }
 
-/// decisions.mjs loadTaxonomy — readJson-backed (corrupt -> Delegate).
+/// decisions.mjs loadTaxonomy — readJson-backed (corrupt -> warn + the same
+/// absent-file fallback).
 fn load_taxonomy(root: &Path) -> MR<Option<Taxonomy>> {
     match read_store_json(&taxonomy_path(root))? {
         None => Ok(None),
@@ -4028,9 +4061,9 @@ fn merged_lane_gates(parsed: &Map<String, Value>) -> MR<Map<String, Value>> {
 }
 
 /// lib/cells.mjs laneRecordForFeature — None (no lane record: default gate
-/// governs) | Some(approved_gates). readLaneStrict's corrupt refusal is a
-/// deterministic thrown message; its unreadable-file branch (embeds errno)
-/// delegates.
+/// governs) | Some(approved_gates). Both of readLaneStrict's refusals are
+/// deterministic thrown messages now; the unreadable-file one carries the
+/// Rust io error where Node interpolated the libuv errno.
 fn lane_record_gates(root: &Path, feature: Option<&Value>) -> MR<Option<Map<String, Value>>> {
     let Some(Value::String(feature)) = feature else { return Ok(None) };
     if js_trim(feature).is_empty() {
@@ -4044,7 +4077,15 @@ fn lane_record_gates(root: &Path, feature: Option<&Value>) -> MR<Option<Map<Stri
     let text = match std::fs::read(&file) {
         Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => return Err(Fail::Delegate), // message embeds errno — Node's
+        // readLaneStrict's unreadable branch. Node interpolated the libuv
+        // err.code; the sentence and the refusal are otherwise unchanged.
+        Err(e) => {
+            return Err(Fail::Thrown(format!(
+                "readLaneStrict: could not read lane record \"{}\" ({e}). The bee CLI refuses to mutate a lane it cannot read — that could silently clobber real lane state (gates, phase). FIX: inspect/restore the file (e.g. \"git checkout -- {}\"), then retry.",
+                file.display(),
+                lane_rel_path(&id)
+            )))
+        }
     };
     let corrupt = || {
         Fail::Thrown(format!(
@@ -4053,10 +4094,11 @@ fn lane_record_gates(root: &Path, feature: Option<&Value>) -> MR<Option<Map<Stri
             lane_rel_path(&id)
         ))
     };
+    // A lone-surrogate escape lands in NotJson now and takes this same
+    // deterministic corrupt refusal — the non-surrogate corrupt path.
     let parsed = match parse_json_js(&text, false) {
         JsParse::Value(v) => v,
         JsParse::NotJson => return Err(corrupt()),
-        JsParse::Delegate => return Err(Fail::Delegate),
     };
     let map = match parsed {
         Value::Object(m) => m,
@@ -4069,7 +4111,13 @@ fn lane_record_gates(root: &Path, feature: Option<&Value>) -> MR<Option<Map<Stri
 }
 
 /// state.mjs readLane (fail-open display read) — only `route` truthiness is
-/// consumed here (claimedFeatureHasRoute). Corrupt -> Delegate (Node warns).
+/// consumed here (claimedFeatureHasRoute).
+///
+/// CUTOVER: a corrupt/mismatched record used to delegate, NOT because
+/// readLane's own warning needed V8 (it is deterministic) but because it
+/// would have stacked on top of readJson's V8-worded one. Both warnings are
+/// ours now, so both are printed, in Node's order, and the read still fails
+/// open to null.
 fn read_lane_route(root: &Path, feature: &str) -> MR<Option<bool>> {
     let Some(id) = lane_feature_ok(feature) else { return Ok(None) };
     let file = lanes_dir(root).join(format!("{id}.json"));
@@ -4080,11 +4128,17 @@ fn read_lane_route(root: &Path, feature: &str) -> MR<Option<bool>> {
         Some(Value::Object(m)) if matches!(m.get("feature"), Some(Value::String(f)) if *f == id) => {
             Ok(Some(m.get("route").map(js_truthy).unwrap_or(false)))
         }
-        // Mismatched/corrupt-shaped record: readLane WARNS (deterministic
-        // line, but stacked after readJson's own possible warn) — delegate
-        // rather than model the warn cascade.
-        Some(_) => Err(Fail::Delegate),
-        None => Ok(None),
+        // laneRecordFrom returned falsy — a record that does not name this
+        // feature, or readJson's null fallback after a corrupt file (a
+        // MISSING file already returned above, so None here means corrupt).
+        // readLane warns and reads as "no lane".
+        _ => {
+            let rel = lane_rel_path(&id);
+            eprintln!(
+                "readLane: skipping corrupt lane record \"{rel}\" for display — mutations through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\")."
+            );
+            Ok(None)
+        }
     }
 }
 
@@ -4296,12 +4350,19 @@ fn holds_ledger_path(root: &Path) -> PathBuf {
     root.join(".bee").join("runtime").join("cross-worktree-holds.json")
 }
 
-/// worktree-holds.mjs readStore (fail-open shape, Delegate on corrupt/null
-/// entries).
+/// worktree-holds.mjs readStore — `readJson(path, null)` then a shape check
+/// that turns anything without an array `holds` into `{holds: []}`. A corrupt
+/// ledger warns and takes that same `{holds: []}` fallback (Node's `null`
+/// fallback reached it through `!store`). Null hold ENTRIES still delegate:
+/// that is a JS-exotic shape, not a parse failure.
 fn read_holds_store(root: &Path) -> MR<Value> {
-    let store = match read_json(&holds_ledger_path(root)) {
+    let ledger = holds_ledger_path(root);
+    let store = match read_json(&ledger) {
         ReadJson::Missing => None,
-        ReadJson::Corrupt => return Err(Fail::Delegate),
+        ReadJson::Corrupt => {
+            warn_corrupt_json_once(&ledger);
+            None
+        }
         ReadJson::Parsed(v) => Some(rsv::js_numberify(&v).map_err(|_| Fail::Delegate)?),
     };
     let ok_shape = store
@@ -4666,57 +4727,24 @@ fn impact_registry_warning(
 }
 
 // ─── delegation pre-scans ──────────────────────────────────────────────────
-// The mutators must never return None after an output or a write. Every
-// Delegate-class trigger (corrupt JSON behind a readJson warn, JS-exotic
-// number shapes) is probed up front; Thrown-class outcomes are ignored here
-// (the real flow reproduces them at Node's own point in the order).
+// The mutators must never return None after an output or a write, so the
+// JS-exotic store shapes that still delegate (an array where a record is
+// expected, a string/array `trace`) are probed up front; Thrown-class
+// outcomes are ignored here (the real flow reproduces them at Node's own
+// point in the order).
+//
+// CUTOVER: `prescan_cells_store` used to walk EVERY active and archived cell
+// file so a corrupt one could delegate before any output. Corrupt JSON is
+// native now, and that walk would have warned about cell files the command
+// never reads — so it is deleted rather than kept as a second, louder read.
+// The probes that survive read exactly the file the flow reads, and
+// `warn_corrupt_json_once` keeps that from printing twice.
 
 fn delegate_only<T>(result: MR<T>) -> MR<()> {
     match result {
         Err(Fail::Delegate) => Err(Fail::Delegate),
         _ => Ok(()),
     }
-}
-
-/// Probe every active + archived cell file for corrupt JSON / exotic numbers.
-fn prescan_cells_store(root: &Path) -> MR<()> {
-    let dir = cells_dir(root);
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                continue;
-            }
-            let name = entry.file_name();
-            let Some(name) = name.to_str() else { continue };
-            if !name.ends_with(".json") {
-                continue;
-            }
-            if let Some(v) = read_cell_json(&entry.path()).map_err(|_| Fail::Delegate)? {
-                rsv::js_numberify(&v).map_err(|_| Fail::Delegate)?;
-            }
-        }
-    }
-    let archive_root = dir.join(ARCHIVE_DIR_NAME);
-    if let Ok(entries) = std::fs::read_dir(&archive_root) {
-        for entry in entries.flatten() {
-            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                continue;
-            }
-            if let Ok(files) = std::fs::read_dir(entry.path()) {
-                for file in files.flatten() {
-                    let name = file.file_name();
-                    let Some(name) = name.to_str() else { continue };
-                    if !name.ends_with(".json") {
-                        continue;
-                    }
-                    if let Some(v) = read_cell_json(&file.path()).map_err(|_| Fail::Delegate)? {
-                        rsv::js_numberify(&v).map_err(|_| Fail::Delegate)?;
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 fn prescan_claim(root: &Path, id: &str) -> MR<()> {
@@ -4888,9 +4916,6 @@ fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     };
     dispatch("cells add", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
-        // Pre-scan every Delegate trigger BEFORE stdin is consumed (once
-        // read, the Node child would see EOF — no more None).
-        prescan_cells_store(&root)?;
         delegate_only(read_commands_slice(&root))?;
         let text = if stdin {
             read_stdin_text()?
@@ -4898,17 +4923,12 @@ fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
             let file = require_flag_native(&flags, "file")?;
             read_file_text(&file, "cell")?
         };
+        // Lone surrogates and |n| >= 1e21 used to fork here; both are gone
+        // (see parse_json_js), so every unparseable payload — file or stdin —
+        // takes the one refusal Node's `catch` threw.
         let payload = match parse_json_js(&text, false) {
             JsParse::Value(v) => v,
             JsParse::NotJson => return Err(Fail::Thrown("add: input is not valid JSON.".into())),
-            JsParse::Delegate => {
-                if stdin {
-                    // Residual (header note): stdin is consumed — refuse the
-                    // way a strict parse would rather than delegating.
-                    return Err(Fail::Thrown("add: input is not valid JSON.".into()));
-                }
-                return Err(Fail::Delegate);
-            }
         };
         if dry_run {
             let batch: Vec<Value> = match &payload {
@@ -5087,7 +5107,6 @@ fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode
     let stdin = bool_flag(&flags, "stdin")?;
     dispatch("cells update", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
-        prescan_cells_store(&root)?;
         delegate_only(read_commands_slice(&root))?;
         let text = if stdin {
             read_stdin_text()?
@@ -5099,12 +5118,6 @@ fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode
             JsParse::Value(v) => v,
             JsParse::NotJson => {
                 return Err(Fail::Thrown("update: patch input is not valid JSON.".into()))
-            }
-            JsParse::Delegate => {
-                if stdin {
-                    return Err(Fail::Thrown("update: patch input is not valid JSON.".into()));
-                }
-                return Err(Fail::Delegate);
             }
         };
         // updateCell — pure validation before the lock.
@@ -5151,7 +5164,15 @@ fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                     return Err(Fail::Thrown(format!("updateCell: cell \"{id}\" not found.")))
                 }
-                Err(_) => return Err(Fail::Delegate), // message embeds errno — Node's
+                // readCellStrictForUpdate's unreadable branch (lib/cells.mjs
+                // :1474). Node interpolated err.code; this carries the Rust
+                // io error in the same sentence, same refusal.
+                Err(e) => {
+                    return Err(Fail::Thrown(format!(
+                        "updateCell: could not read \"{}\" ({e}) — refusing to touch it. FIX: inspect/restore the file, then retry.",
+                        file.display()
+                    )))
+                }
             };
             let sep = std::path::MAIN_SEPARATOR;
             let rel = format!(".bee{sep}cells{sep}{id}.json");
@@ -5163,13 +5184,14 @@ fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode
                         file.display()
                     )))
                 }
+                // Lone surrogates land here too — a cell file this CLI cannot
+                // parse is corrupt, and the refusal is the same either way.
                 JsParse::NotJson => {
                     return Err(Fail::Thrown(format!(
                         "updateCell: \"{}\" exists but is not valid JSON — refusing to merge a patch over a corrupt cell. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\"), then retry.",
                         file.display()
                     )))
                 }
-                JsParse::Delegate => return Err(Fail::Delegate),
             };
             let status_ok = matches!(cell_map.get("status"), Some(Value::String(s)) if s == "open" || s == "blocked");
             if !status_ok {
@@ -5302,8 +5324,7 @@ pub(crate) fn claim_cell_from_flags(
             }
         }
         // Pre-scan: everything after claimCellFile's O_EXCL write must never
-        // delegate (the file would already exist for the Node re-run).
-        prescan_cells_store(&root)?;
+        // delegate (the file would already exist for a retry).
         prescan_claim(&root, &id)?;
         let control = control_root(&root)?;
         delegate_only(list_session_records(&control))?;
@@ -5316,9 +5337,9 @@ pub(crate) fn claim_cell_from_flags(
             }
             delegate_only(merge_trace(cell.get("trace")))?;
             delegate_only(lane_record_gates(&root, cell.get("feature")))?;
-            if let Some(Value::String(feature)) = cell.get("feature") {
-                delegate_only(read_lane_route(&root, feature))?;
-            }
+            // CUTOVER: the read_lane_route probe that stood here had exactly
+            // one delegating arm — a corrupt/mismatched lane record — which
+            // is native now. Keeping it would print readLane's warning twice.
             match cell.get("deps") {
                 None => {}
                 Some(deps) if !js_truthy(deps) => {}
@@ -5967,24 +5988,14 @@ fn ready_cells(root: &Path, feature: Option<&str>) -> MR<Vec<Value>> {
 /// probed BEFORE the sweep's first write. See the section header for why a
 /// residual post-sweep delegate is still byte-safe.
 fn prescan_claim_next(root: &Path, control: &Path) -> MR<()> {
-    prescan_cells_store(root)?;
     delegate_only(bstate::read_state_brief(root).map_err(|_| Fail::Delegate))?;
     delegate_only(list_session_records(control))?;
     delegate_only(read_holds_store(root))?;
-    // Lane records are probed SILENTLY here: readLane's corrupt-record warn is
-    // Node's, emitted at Node's own point in the order, so calling list_lanes
-    // in the pre-scan would double the line whenever resolvePipeline reads the
-    // same file. read_store_json covers the two delegating classes (V8-worded
-    // corrupt JSON, exotic numbers) without any output of its own.
-    if let Ok(entries) = std::fs::read_dir(crate::verbs::workflow_store::lanes_dir(root)) {
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if !name.ends_with(".json") {
-                continue;
-            }
-            read_store_json(&entry.path())?;
-        }
-    }
+    // CUTOVER: the lane-record walk that used to live here probed for exactly
+    // two things — corrupt JSON and |n| >= 1e21 numbers. Both are native now,
+    // so the walk has nothing left to decide, and keeping it would warn about
+    // lane files this command never reads. Deleted; resolvePipeline warns at
+    // its own read, once, like Node did.
     if crate::verbs::backlog::feature_backlog_rank(root).is_none() {
         return Err(Fail::Delegate);
     }
@@ -6007,14 +6018,17 @@ fn prescan_claim_next(root: &Path, control: &Path) -> MR<()> {
     }
     // The sweep's reset spreads `...(cellRecord.trace || {})`; a truthy
     // NON-object trace would spread JS-exotic index keys. Delegate up front
-    // rather than guess (no bee-written cell has that shape).
+    // rather than guess (no bee-written cell has that shape). Read RAW here,
+    // not through read_store_json: this walks every cell file, while the
+    // sweep only reads the ones it resets, so a corrupt file must not warn
+    // from the probe — its own read will warn if the sweep gets there.
     if let Ok(entries) = std::fs::read_dir(cells_dir(control)) {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
             if !name.ends_with(".json") {
                 continue;
             }
-            if let Some(Value::Object(m)) = read_store_json(&entry.path())? {
+            if let ReadJson::Parsed(Value::Object(m)) = read_json(&entry.path()) {
                 match m.get("trace") {
                     None | Some(Value::Null) | Some(Value::Object(_)) => {}
                     Some(t) if !js_truthy(t) => {}
@@ -6256,7 +6270,8 @@ fn parse_deviations_file(file: &str) -> MR<Vec<Value>> {
     match parse_json_js(&raw, false) {
         JsParse::Value(Value::Array(a)) => Ok(a),
         JsParse::Value(other) => Ok(vec![Value::String(jsjson::js_to_string(&other))]),
-        JsParse::Delegate => Err(Fail::Delegate),
+        // Node's `catch`: not JSON -> one deviation per non-blank line. A
+        // lone-surrogate escape now takes that same branch.
         JsParse::NotJson => Ok(raw
             .split('\n')
             .map(|l| l.strip_suffix('\r').unwrap_or(l))
@@ -6281,7 +6296,6 @@ struct CapFlags {
 fn cap_cell_from_flags(root: &Path, cwd: &Path, f: &CapFlags, finish: bool) -> MR<Value> {
     let id = &f.id;
     // Pre-scan (see the pre-scan section header).
-    prescan_cells_store(root)?;
     prescan_claim(root, id)?;
     let commands = read_commands_slice(root)?;
     if !f.override_reason.is_empty() {
@@ -6652,7 +6666,6 @@ fn mutate_cell(
     clear_claim_after: bool,
     mutate: impl FnOnce(&mut Map<String, Value>) -> MR<()>,
 ) -> MR<Value> {
-    prescan_cells_store(root)?;
     prescan_claim(root, id)?;
     let mut guard = acquire_named_lock(root, &format!("cells:{id}"))?;
     let saved = (|| -> MR<Value> {
@@ -6965,7 +6978,6 @@ fn run_reset_budget(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<Ex
             .filter(|o| !js_trim(o).is_empty())
             .map(|o| js_trim(o).to_string())
             .or_else(|| env_nonempty("BEE_AGENT_NAME"));
-        prescan_cells_store(&root)?;
         delegate_only(load_taxonomy(&root))?;
         let mut guard = acquire_named_lock(&root, &format!("cells:{id}"))?;
         let saved = (|| -> MR<Value> {
@@ -7047,8 +7059,9 @@ fn run_judge_record(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<Ex
         let raw = read_file_text(&file, "judge verdict")?;
         let verdict = match parse_json_js(&raw, false) {
             JsParse::Value(v) => v,
-            JsParse::NotJson => Value::String(raw.clone()), // free prose — validator rejects
-            JsParse::Delegate => return Err(Fail::Delegate),
+            // free prose — validator rejects it; a lone-surrogate escape is
+            // "not JSON this CLI can parse" and takes the same branch.
+            JsParse::NotJson => Value::String(raw.clone()),
         };
         let (ok, errors) = validate_judge_verdict(&verdict);
         if !ok {
@@ -7067,7 +7080,6 @@ fn run_judge_record(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<Ex
             judge_model.as_deref(),
             judge_model.as_deref().map(|_| PINNED_MODEL_STATUS),
         );
-        prescan_cells_store(&root)?;
         prescan_claim(&root, &id)?;
         delegate_only(load_taxonomy(&root))?;
         let mut reopened = false;
@@ -7266,8 +7278,15 @@ fn assert_valid_feature_slug(verb: &str, feature: &str) -> MR<String> {
 fn recover_archive_journal(root: &Path, feature: &str) -> MR<()> {
     let journal_path = archive_journal_path(root, feature);
     let journal = match read_json(&journal_path) {
-        ReadJson::Missing => return Ok(()),
-        ReadJson::Corrupt => return Err(Fail::Delegate), // readJson warns (V8)
+        ReadJson::Missing => return Ok(()), // removeFileIfExists on nothing
+        // readJson(journalPath, null) fails open to null, and `!journal`
+        // then DELETES the journal and returns — the file is present here,
+        // so the removal is what makes this arm equal to Node's.
+        ReadJson::Corrupt => {
+            warn_corrupt_json_once(&journal_path);
+            crate::fsutil::remove_file_if_exists(&journal_path);
+            return Ok(());
+        }
         ReadJson::Parsed(v) => v,
     };
     let planned = journal.get("planned");
@@ -7289,7 +7308,8 @@ fn recover_archive_journal(root: &Path, feature: &str) -> MR<()> {
     Ok(())
 }
 
-/// archivedSummary — {} on absent/shape-less, Delegate on corrupt.
+/// archivedSummary — {} on absent/shape-less, and on corrupt too (warn +
+/// readJson's `{}` fallback).
 fn archived_summary(root: &Path) -> MR<Map<String, Value>> {
     match read_store_json(&archive_summary_file(root))? {
         Some(Value::Object(m)) => Ok(m),
@@ -7325,7 +7345,6 @@ fn run_archive(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCod
             )));
         }
         let feature = assert_valid_feature_slug("archiveFeature", &feature)?;
-        prescan_cells_store(&root)?;
         let mut guard = acquire_named_lock(&root, "cells-archive")?;
         let outcome = (|| -> MR<(Vec<Value>, f64, f64)> {
             recover_archive_journal(&root, &feature)?;
@@ -7662,13 +7681,31 @@ mod tests {
     }
 
     #[test]
-    fn list_cells_delegates_on_corrupt_or_array_cell() {
+    fn list_cells_skips_corrupt_cell_and_delegates_on_array_cell() {
+        // CUTOVER: a corrupt cell file is no longer a delegation. readJson
+        // warns and returns null, `!cell` skips it, and the rest of the store
+        // still lists — exactly Node's fail-open.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         std::fs::create_dir_all(cells_dir(root)).unwrap();
         std::fs::write(cells_dir(root).join("bad.json"), "{nope").unwrap();
-        assert!(list_cells(root, None, None).is_err(), "corrupt JSON must delegate");
+        write_cell_fixture(root, "good-1", &cell("good-1", "open", "f", json!([])));
+        let listed = list_cells(root, None, None).expect("corrupt JSON must not delegate");
+        let ids: Vec<String> = listed.iter().map(|c| js_string_or_undefined(c.get("id"))).collect();
+        assert_eq!(ids, vec!["good-1"], "the corrupt file is skipped, the good one survives");
 
+        // A lone-surrogate escape (V8's JSON.parse took it; serde never can)
+        // is just corrupt input now — same skip, no delegation.
+        let tmp3 = tempfile::tempdir().unwrap();
+        let root3 = tmp3.path();
+        std::fs::create_dir_all(cells_dir(root3)).unwrap();
+        std::fs::write(cells_dir(root3).join("sur.json"), r#"{"id":"sur-1","title":"\ud800"}"#).unwrap();
+        write_cell_fixture(root3, "good-2", &cell("good-2", "open", "f", json!([])));
+        let listed = list_cells(root3, None, None).expect("lone surrogate must not delegate");
+        let ids: Vec<String> = listed.iter().map(|c| js_string_or_undefined(c.get("id"))).collect();
+        assert_eq!(ids, vec!["good-2"]);
+
+        // JS-exotic shapes are NOT in that class and still delegate.
         let tmp2 = tempfile::tempdir().unwrap();
         let root2 = tmp2.path();
         std::fs::create_dir_all(cells_dir(root2)).unwrap();
@@ -7824,12 +7861,23 @@ mod tests {
     }
 
     #[test]
-    fn show_delegates_on_corrupt_or_non_object_cell() {
+    fn show_reports_not_found_on_corrupt_cell_and_delegates_on_non_object() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         std::fs::create_dir_all(cells_dir(root)).unwrap();
+        // CUTOVER: readCell warns and falls back to null, so `show` reaches
+        // the SAME not-found refusal a missing cell reaches — no delegation.
         std::fs::write(cells_dir(root).join("bad-1.json"), "{nope").unwrap();
-        assert!(handle_show(root, "bad-1").is_err(), "corrupt cell delegates");
+        match handle_show(root, "bad-1").expect("corrupt cell must not delegate") {
+            Handled::Error(msg) => assert_eq!(msg, "Cell \"bad-1\" not found."),
+            _ => panic!("corrupt cell must take readCell's null fallback"),
+        }
+        // Same for a lone-surrogate escape.
+        std::fs::write(cells_dir(root).join("sur-1.json"), r#"{"id":"sur-1","t":"\udfff"}"#).unwrap();
+        match handle_show(root, "sur-1").expect("lone surrogate must not delegate") {
+            Handled::Error(msg) => assert_eq!(msg, "Cell \"sur-1\" not found."),
+            _ => panic!("lone-surrogate cell must take readCell's null fallback"),
+        }
         std::fs::write(cells_dir(root).join("num-1.json"), "5").unwrap();
         assert!(handle_show(root, "num-1").is_err(), "truthy non-object cell delegates");
     }
@@ -8387,9 +8435,98 @@ const C = path.join(REPO_ROOT, dynamic);
         recover_archive_journal(root, "f").unwrap();
         assert!(from.exists(), "completed move must be reversed");
         assert!(!archive_journal_path(root, "f").exists());
-        // Corrupt journal delegates (Node's readJson warning).
+        // CUTOVER: a corrupt journal warns and takes readJson's null
+        // fallback, which is the `!journal` branch — delete the journal and
+        // return, leaving nothing to recover. Same as Node, minus the V8 text.
         std::fs::write(archive_journal_path(root, "f"), "{nope").unwrap();
-        assert!(matches!(recover_archive_journal(root, "f"), Err(Fail::Delegate)));
+        recover_archive_journal(root, "f").expect("corrupt journal must not delegate");
+        assert!(
+            !archive_journal_path(root, "f").exists(),
+            "the unusable journal must be removed, exactly as `!journal` did"
+        );
+    }
+
+    // ── CUTOVER: corrupt JSON is served natively ──────────────────────────
+    #[test]
+    fn corrupt_store_reads_fail_open_to_the_same_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+
+        // read_store_json: corrupt reads exactly like missing (readJson's
+        // `fallback`), with a warning instead of a delegation.
+        let f = root.join(".bee").join("whatever.json");
+        std::fs::write(&f, "{ nope").unwrap();
+        assert!(read_store_json(&f).expect("corrupt must not delegate").is_none());
+        // …and so does a lone-surrogate escape.
+        std::fs::write(&f, r#"{"a":"\uD83D"}"#).unwrap();
+        assert!(read_store_json(&f).expect("lone surrogate must not delegate").is_none());
+
+        // archivedSummary: readJson(file, {}) — corrupt yields the same {}.
+        std::fs::create_dir_all(cells_dir(root).join(ARCHIVE_DIR_NAME)).unwrap();
+        std::fs::write(archive_summary_file(root), "not json at all {").unwrap();
+        assert!(archived_summary(root).expect("corrupt summary must not delegate").is_empty());
+
+        // worktree-holds readStore: corrupt falls into the `{holds: []}` shape
+        // fallback, so claim-next still runs with no cross-worktree holds.
+        std::fs::create_dir_all(root.join(".bee").join("runtime")).unwrap();
+        std::fs::write(holds_ledger_path(root), "{\"holds\": [").unwrap();
+        assert_eq!(
+            read_holds_store(root).expect("corrupt ledger must not delegate"),
+            json!({ "holds": [] })
+        );
+        // A null hold ENTRY is JS-exotic, not a parse failure — still delegates.
+        std::fs::write(holds_ledger_path(root), "{\"holds\": [null]}").unwrap();
+        assert!(matches!(read_holds_store(root), Err(Fail::Delegate)));
+    }
+
+    #[test]
+    fn corrupt_lane_record_throws_instead_of_delegating() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(lanes_dir(root)).unwrap();
+        let file = lanes_dir(root).join("f.json");
+
+        // readLaneStrict's own deterministic corrupt refusal — reached now by
+        // BOTH plain garbage and a lone-surrogate escape.
+        std::fs::write(&file, "{ nope").unwrap();
+        let feature = json!("f");
+        match lane_record_gates(root, Some(&feature)) {
+            Err(Fail::Thrown(msg)) => {
+                assert!(msg.starts_with("readLaneStrict: lane record "), "{msg}");
+                assert!(msg.contains("exists but is corrupt"), "{msg}");
+            }
+            other => panic!("expected a thrown corrupt refusal, got {other:?}"),
+        }
+        std::fs::write(&file, r#"{"feature":"f","x":"\ud800"}"#).unwrap();
+        match lane_record_gates(root, Some(&feature)) {
+            Err(Fail::Thrown(msg)) => assert!(msg.contains("exists but is corrupt"), "{msg}"),
+            other => panic!("lone surrogate must refuse, not delegate: {other:?}"),
+        }
+        // readLane (fail-open display read) takes readJson's null fallback.
+        assert_eq!(read_lane_route(root, "f").expect("must not delegate"), None);
+    }
+
+    #[test]
+    fn parse_json_js_treats_lone_surrogates_as_not_json() {
+        assert!(matches!(parse_json_js(r#"{"a":1}"#, false), JsParse::Value(_)));
+        assert!(matches!(parse_json_js(r#"{"a":"\ud800"}"#, false), JsParse::NotJson));
+        assert!(matches!(parse_json_js("nope", false), JsParse::NotJson));
+        // |n| >= 1e21 round-trips now — no delegation, no loss.
+        match parse_json_js("[1e21,1e-7]", false) {
+            JsParse::Value(v) => assert_eq!(jsjson::stringify(&v), "[1e+21,1e-7]"),
+            _ => panic!("large/small magnitudes must parse"),
+        }
+    }
+
+    #[test]
+    fn deviations_file_lone_surrogate_takes_the_free_prose_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("dev.json");
+        // Node's `catch`: not JSON -> one deviation per non-blank line.
+        std::fs::write(&file, "[\"\\ud800\"]").unwrap();
+        let out = parse_deviations_file(file.to_str().unwrap()).expect("must not delegate");
+        assert_eq!(out, vec![json!("[\"\\ud800\"]")]);
     }
 
     // ── trace helpers ─────────────────────────────────────────────────────

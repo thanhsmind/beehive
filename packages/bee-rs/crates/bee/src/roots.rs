@@ -71,9 +71,11 @@
 //     half proven, and several read the control plane (sessions, workflows,
 //     handoff mailboxes) as if it were `root`.
 //
-// Two arms stay `NeedsNode` for EVERY caller, worktree-native or not:
+// One arm stays `NeedsNode` for EVERY caller, worktree-native or not:
 // `LinkInvalid` (Node throws out of main()'s findRepoRoot, which also skips
-// the timings.jsonl append) and `Exotic` (a V8-worded ENOENT).
+// the timings.jsonl append). Its sibling `Exotic` (a V8-worded ENOENT from a
+// raced `.git` stat) was retired at cutover — see the single-stat note in
+// `resolve_roots_core`.
 //
 // The three resolvers a worktree-native verb may need are NOT the same walk,
 // and each is ported where its Node original lives:
@@ -99,9 +101,10 @@ pub enum Roots {
 
 /// state.mjs resolveRootsCore's full return shape. `Ordinary`/`LinkedValid`
 /// are its two `worktreeResolution` values, `LinkInvalid` is the throw,
-/// `Unresolved` is `{storeRoot: null, workRoot: null}`, and `Exotic` is the
-/// one place Node throws a V8-worded error (a `.git` that vanished between
-/// existsSync and statSync) — never reproduced natively, always delegated.
+/// `Unresolved` is `{storeRoot: null, workRoot: null}`, and `Exotic` WAS the
+/// one place Node threw a V8-worded error (a `.git` that vanished between
+/// existsSync and statSync). The port collapsed those two calls into one stat
+/// at cutover, so `Exotic` is no longer constructed.
 pub enum Resolution {
     Ordinary {
         store_root: PathBuf,
@@ -123,6 +126,10 @@ pub enum Resolution {
         message: String,
     },
     Unresolved,
+    /// Retired at cutover — no longer constructed. Kept so the `match` arms
+    /// below stay as documentation of a decision that no longer has to be
+    /// made.
+    #[allow(dead_code)]
     Exotic,
 }
 
@@ -309,12 +316,22 @@ pub fn resolve_roots_core(start: &Path) -> Resolution {
     }
 
     // locateGitRoot(startDir): nearest ancestor holding a `.git` marker.
-    let mut located: Option<(String, String)> = None;
+    //
+    // CUTOVER: Node did `existsSync(marker)` here and `statSync(marker)`
+    // below, and a marker that raced away between the two made statSync throw
+    // a V8-worded ENOENT out of findRepoRoot — the one arm this resolver could
+    // never reproduce, so it returned `Exotic` and the whole command went back
+    // to Node. There is no Node left. The two calls are now ONE stat, which
+    // removes the time-of-check/time-of-use window rather than deciding what
+    // to print inside it: a marker that is not there when we look is simply
+    // not a repo root, and the walk continues upward exactly as it would have
+    // if `existsSync` had returned false a moment later.
+    let mut located: Option<(String, String, std::fs::Metadata)> = None;
     let mut dir = start.clone();
     loop {
         let marker = join(&dir, ".git");
-        if exists(&marker) {
-            located = Some((dir.clone(), marker));
+        if let Ok(meta) = std::fs::metadata(&marker) {
+            located = Some((dir.clone(), marker, meta));
             break;
         }
         match parent_of(&dir) {
@@ -323,7 +340,7 @@ pub fn resolve_roots_core(start: &Path) -> Resolution {
         }
     }
 
-    let Some((work_root, marker)) = located else {
+    let Some((work_root, marker, marker_meta)) = located else {
         // No git anywhere: the nearest onboarding marker, else nothing.
         let mut dir = start.clone();
         loop {
@@ -341,18 +358,13 @@ pub fn resolve_roots_core(start: &Path) -> Resolution {
         return Resolution::Unresolved;
     };
 
-    match std::fs::metadata(&marker) {
-        // A `.git` DIRECTORY is an ordinary checkout, done.
-        Ok(m) if !m.is_file() => {
-            return Resolution::Ordinary {
-                store_root: PathBuf::from(&work_root),
-                work_root: PathBuf::from(&work_root),
-            }
-        }
-        // statSync threw (the marker raced away between existsSync and
-        // statSync): Node surfaces the V8 ENOENT message. Never reproduced.
-        Err(_) => return Resolution::Exotic,
-        Ok(_) => {}
+    // A `.git` DIRECTORY is an ordinary checkout, done. (Same stat the walk
+    // above already took — see its cutover note.)
+    if !marker_meta.is_file() {
+        return Resolution::Ordinary {
+            store_root: PathBuf::from(&work_root),
+            work_root: PathBuf::from(&work_root),
+        };
     }
 
     // ── linked worktree: `.git` is a FILE ─────────────────────────────────
@@ -464,7 +476,7 @@ impl StoreRoots {
 
 /// The `Roots` analogue for a verb that HAS ported its worktree-sensitive
 /// branches. Same three outcomes, but `linked-valid` is served instead of
-/// delegated. `LinkInvalid`/`Exotic` still delegate for everyone.
+/// delegated. `LinkInvalid` still delegates for everyone.
 pub enum RootsWt {
     Go(StoreRoots),
     NeedsNode,

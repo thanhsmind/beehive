@@ -28,13 +28,16 @@
 //
 // Delegation triggers inside the accepted shape (still no output first):
 //   - linked-worktree roots (roots::NeedsNode), corrupt manifest-hash cache
-//   - a corrupt .bee/cells/*.json (Node's readJson warns with the V8 parse
-//     message on stderr)
 //   - any resolveInScope realpath failure/containment violation (Node
 //     console.warns or throws with OS-specific text)
-//   - a JSONL line that fails serde parsing but looks JS-parseable (lone
-//     surrogate escapes / out-of-range numbers / extreme nesting)
 //   - non-UTF-8 directory entry names (JS sorts UTF-16 code units)
+//
+// CUTOVER (2026-08-01): a corrupt .bee/cells/*.json and a JSONL line only a
+// V8 JSON.parse might have read used to delegate, because Node's readJson
+// warning carried the V8 parse message. Both are native now: the cell warns
+// through fsutil::warn_corrupt_json and is skipped-and-counted (readJson's
+// null fallback leaves it trace-less), and the JSONL line is skipped exactly
+// as lib/fsutil.mjs readJsonl skipped every other corrupt line.
 //
 // This file also hosts the pub(crate) JS-parity helpers shared with the
 // capture.rs / backlog.rs ports: the argv mini-parser (bee.mjs parseFlags
@@ -101,11 +104,16 @@ pub(crate) fn utf16_len(s: &str) -> usize {
 }
 
 /// True when re-serializing this parsed value via jsjson is provably
-/// byte-identical to Node's JSON.stringify of ITS parse of the same source:
-/// every number must survive JS's f64 round-trip and print without JS's
-/// exponent notation (|v| >= 1e21 or 0 < |v| < 1e-6 prints "1e+21"-style in
-/// JS but plain decimal via Rust's Display). Values that fail this guard make
-/// the verb delegate rather than emit near-miss bytes.
+/// byte-identical to a JS `JSON.stringify` of ITS parse of the same source.
+/// What remains is the INTEGER-PRECISION limit: serde_json keeps a >2^53
+/// integer literal exactly, where a JS parse rounds it to the nearest f64, so
+/// echoing such a row verbatim would print digits JS never had.
+///
+/// CUTOVER: the magnitude bound (|v| >= 1e21 or 0 < |v| < 1e-6) is gone.
+/// It existed because jsjson printed those in plain decimal where JS uses
+/// exponent notation; `jsjson::js_f64_to_string` now implements the spec's
+/// exponential forms, so `1e300` renders `1e+300` and there is nothing left
+/// to dodge — and nothing left to dodge TO.
 pub(crate) fn value_js_safe(v: &Value) -> bool {
     const MAX_SAFE: u64 = 9_007_199_254_740_992; // 2^53
     match v {
@@ -116,13 +124,9 @@ pub(crate) fn value_js_safe(v: &Value) -> bool {
             if let Some(i) = n.as_i64() {
                 return i >= -(MAX_SAFE as i64);
             }
-            match n.as_f64() {
-                Some(f) => {
-                    let a = f.abs();
-                    (f.fract() == 0.0 && a < MAX_SAFE as f64) || (a >= 1e-6 && a < 1e21)
-                }
-                None => false,
-            }
+            // Already an f64 in the parse: it round-trips, whatever its
+            // magnitude.
+            n.as_f64().is_some()
         }
         Value::Array(items) => items.iter().all(value_js_safe),
         Value::Object(m) => m.values().all(value_js_safe),
@@ -217,29 +221,18 @@ pub(crate) struct JsonlRead {
     pub rows: Vec<Value>,
     /// Count of non-blank lines that failed to parse (skipped, like Node).
     pub bad_lines: usize,
-    /// A failed line MIGHT parse under V8 (lone surrogate escapes,
-    /// out-of-range numbers, extreme nesting) — the caller must delegate.
-    pub needs_node: bool,
 }
 
-fn line_maybe_js_parseable(line: &str, err: &serde_json::Error) -> bool {
-    // Lone surrogate escapes: JSON.parse accepts "\ud800", serde rejects it.
-    let bytes = line.as_bytes();
-    for i in 0..bytes.len().saturating_sub(3) {
-        if bytes[i] == b'\\'
-            && (bytes[i + 1] == b'u' || bytes[i + 1] == b'U')
-            && (bytes[i + 2] == b'd' || bytes[i + 2] == b'D')
-            && matches!(bytes[i + 3], b'8' | b'9' | b'a'..=b'f' | b'A'..=b'F')
-        {
-            return true;
-        }
-    }
-    let msg = err.to_string();
-    msg.contains("number out of range") || msg.contains("recursion limit exceeded")
-}
-
+/// CUTOVER (2026-08-01): this used to carry a `needs_node` flag for lines a
+/// V8 `JSON.parse` might have accepted where serde refuses — a lone-surrogate
+/// escape, an out-of-range number, extreme nesting — and every caller
+/// delegated the whole command when it was set. There is no second parser to
+/// defer to any more, so such a line is simply a line this CLI cannot parse:
+/// it is SKIPPED, silently, which is exactly what `readJsonl` in
+/// lib/fsutil.mjs did with every other corrupt line ("Skip corrupt lines
+/// rather than failing the whole read"). No new stderr bytes, no delegation.
 pub(crate) fn read_jsonl(file: &Path) -> JsonlRead {
-    let mut out = JsonlRead { rows: Vec::new(), bad_lines: 0, needs_node: false };
+    let mut out = JsonlRead { rows: Vec::new(), bad_lines: 0 };
     let bytes = match std::fs::read(file) {
         Ok(b) => b,
         Err(_) => return out,
@@ -253,12 +246,7 @@ pub(crate) fn read_jsonl(file: &Path) -> JsonlRead {
         }
         match serde_json::from_str::<Value>(trimmed) {
             Ok(v) => out.rows.push(v),
-            Err(e) => {
-                out.bad_lines += 1;
-                if line_maybe_js_parseable(trimmed, &e) {
-                    out.needs_node = true;
-                }
-            }
+            Err(_) => out.bad_lines += 1, // skipped, exactly like Node
         }
     }
     out
@@ -937,8 +925,9 @@ fn scan_title(title: &Value) -> Option<&'static str> {
 
 /// collectFeedback (lib/feedback.mjs) — every in-scope source's raw
 /// candidates plus the scanned/absent tally and the skipped count.
-/// None => delegate (a scope violation Node warns about, a corrupt cell,
-/// a V8-only JSONL line, a non-UTF-8 directory entry).
+/// None => delegate (a scope violation Node warns about, a non-UTF-8
+/// directory entry). Corrupt JSON no longer delegates: it warns and is
+/// skipped-and-counted, exactly as Node's readJson fallback made it.
 fn collect_feedback(root: &Path) -> Option<CollectData> {
     let real_root = dunce::canonicalize(root).ok()?; // Node throws its own message
     let mut scanned: Vec<&'static str> = Vec::new();
@@ -953,9 +942,9 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
         Scope::Ok(p) => {
             scanned.push(SRC_BACKLOG);
             let read = read_jsonl(&p);
-            if read.needs_node {
-                return None;
-            }
+            // CUTOVER: a line only V8 might have parsed used to delegate the
+            // whole command; read_jsonl now skips it like any other corrupt
+            // line and it lands in the same `skipped` tally Node counted.
             skipped += read.bad_lines;
             for row in read.rows {
                 match &row {
@@ -1022,7 +1011,13 @@ fn collect_feedback(root: &Path) -> Option<CollectData> {
                 };
                 let cell = match read_json(&resolved) {
                     ReadJson::Missing => Value::Null, // Node readJson fallback
-                    ReadJson::Corrupt => return None, // Node warns w/ V8 text
+                    // CUTOVER: warn and take the SAME null fallback — the
+                    // cell then has no `trace`, so it is skipped-and-counted
+                    // exactly as Node's `!trace` branch skipped it.
+                    ReadJson::Corrupt => {
+                        crate::fsutil::warn_corrupt_json(&resolved);
+                        Value::Null
+                    }
                     ReadJson::Parsed(v) => v,
                 };
                 // Only object cells expose .trace/.title/.id in JS property
@@ -2159,12 +2154,23 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_cell_json_delegates() {
+    fn corrupt_cell_json_is_warned_and_counted_as_skipped() {
+        // CUTOVER: this used to assert a delegation. readJson now warns and
+        // returns its null fallback, the trace-less cell is skipped AND
+        // counted — exactly Node's `!trace` branch — and the scan completes.
         let tmp = tempfile::tempdir().unwrap();
         let cells = tmp.path().join(".bee").join("cells");
         std::fs::create_dir_all(&cells).unwrap();
         std::fs::write(cells.join("bad.json"), "{broken").unwrap();
-        assert!(collect_counts(tmp.path()).is_none());
+        std::fs::write(cells.join("sur.json"), r#"{"id":"s","t":"\ud800"}"#).unwrap();
+        std::fs::write(
+            cells.join("ok.json"),
+            r#"{"id":"c-1","title":"t","trace":{"blocked_reason":"why","capped_at":"2026-01-01T00:00:00Z"}}"#,
+        )
+        .unwrap();
+        let data = collect_feedback(tmp.path()).expect("a corrupt cell must not delegate");
+        assert_eq!(data.skipped, 2, "both unparseable cells are skipped-and-counted");
+        assert_eq!(data.raw.len(), 1, "the readable cell still yields its candidate");
     }
 
     #[test]
@@ -2208,8 +2214,11 @@ mod tests {
         assert!(value_js_safe(&json!({"a": 1, "b": [1.5, "x"], "c": null})));
         assert!(value_js_safe(&json!(9007199254740992u64)));
         assert!(!value_js_safe(&json!(9007199254740993u64)));
-        let big: Value = serde_json::from_str("[1e300]").unwrap();
-        assert!(!value_js_safe(&big)); // JS prints 1e+300, Rust plain decimal
+        // CUTOVER: jsjson now prints the JS exponent forms, so a big/tiny
+        // magnitude round-trips and no longer forces a delegation.
+        let big: Value = serde_json::from_str("[1e300, 1e-7]").unwrap();
+        assert!(value_js_safe(&big));
+        assert_eq!(crate::jsjson::stringify(&big), "[1e+300,1e-7]");
     }
 
     #[test]
@@ -2228,16 +2237,20 @@ mod tests {
     }
 
     #[test]
-    fn read_jsonl_skips_corrupt_and_flags_js_only_lines() {
+    fn read_jsonl_skips_every_corrupt_line_including_lone_surrogates() {
         let tmp = tempfile::tempdir().unwrap();
         let f = tmp.path().join("q.jsonl");
         std::fs::write(&f, "{\"a\":1}\nnope\n\n{\"b\":2}\n").unwrap();
         let r = read_jsonl(&f);
         assert_eq!(r.rows.len(), 2);
         assert_eq!(r.bad_lines, 1);
-        assert!(!r.needs_node);
-        std::fs::write(&f, "{\"s\":\"\\ud800\"}\n").unwrap();
-        assert!(read_jsonl(&f).needs_node); // lone surrogate: V8 parses it
+        // CUTOVER: a lone-surrogate line used to set needs_node and delegate
+        // the whole command. It is now skipped like any other corrupt line,
+        // and the readable rows around it still come back.
+        std::fs::write(&f, "{\"s\":\"\\ud800\"}\n{\"ok\":true}\n").unwrap();
+        let r = read_jsonl(&f);
+        assert_eq!(r.rows, vec![json!({"ok": true})]);
+        assert_eq!(r.bad_lines, 1);
     }
 
     #[test]

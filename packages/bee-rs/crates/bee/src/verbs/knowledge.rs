@@ -15,7 +15,7 @@
 // refusals (missing_work / unknown_work) are deterministic, so both are
 // native. Its extra delegation triggers: a .bee/cells/*.json file serde
 // refuses but V8 might parse, and a trace `verification_evidence` string in
-// the same class.
+// the same class — BOTH RETIRED at the cutover below.
 //
 // Additional delegation triggers (None before any output/write):
 //   - --help anywhere, unknown flags, non-flag tokens, validate()-failing
@@ -25,11 +25,23 @@
 //   - corrupt .bee/config.json or state files (Node warns with V8 text)
 //   - bundle file/dir names carrying chars >= U+E000 (JS sorts by UTF-16
 //     code units; Rust by UTF-8 bytes — they disagree only across that range)
-//   - frontmatter quoted scalars that only V8 could parse (lone surrogates)
-//   - unreadable bundle files mid-walk (Node embeds the V8 error message)
 //   - --budget values outside the plain decimal/scientific grammar that JS
 //     Number() also accepts (hex, Infinity, ...)
 //   - any emitted value failing the JS number round-trip guard
+//
+// CUTOVER (2026-08-01) — the arms that existed only because Node's text
+// would have carried V8/libuv bytes are native now:
+//   - a frontmatter quoted scalar with a lone-surrogate escape (U+D800..
+//     U+DFFF) is no longer "a shape only V8 could decide": it is an
+//     undecodable quoted scalar, and takes the same bad_quoted_string
+//     finding every other one takes.
+//   - an unreadable bundle file mid-walk pushes checkBundle's own
+//     `unreadable` finding and keeps walking (the Rust io message stands
+//     where Node put the libuv one).
+//   - JSON-looking text that serde refuses — a cell file in promote's walk,
+//     a trace `verification_evidence` — takes Node's OWN catch branch
+//     (silently skipped / kept as raw text) instead of delegating: with one
+//     parser left, which branch ran is no longer in doubt.
 //
 // DIVERGENCE NOTES (documented, unreachable-different for real bee data):
 //   - relevance scores use Rust's libm ln() vs V8's fdlibm port — equal for
@@ -336,29 +348,10 @@ enum Fm {
         message: String,
         line: usize,
     },
-    /// A shape only V8 could decide (lone-surrogate escapes in a quoted
-    /// scalar) — the whole command must delegate.
-    NeedsNode,
 }
 
 fn fm_fail(code: &'static str, message: String, line: usize) -> Result<Value, Fm> {
     Err(Fm::Failed { code, message, line })
-}
-
-/// Lone-surrogate escape sniff (\uD800–\uDFFF): JSON.parse accepts them,
-/// serde rejects — same heuristic feedback.rs uses for jsonl rows.
-fn has_surrogate_escape(s: &str) -> bool {
-    let b = s.as_bytes();
-    for i in 0..b.len().saturating_sub(3) {
-        if b[i] == b'\\'
-            && (b[i + 1] == b'u' || b[i + 1] == b'U')
-            && (b[i + 2] == b'd' || b[i + 2] == b'D')
-            && matches!(b[i + 3], b'8' | b'9' | b'a'..=b'f' | b'A'..=b'F')
-        {
-            return true;
-        }
-    }
-    false
 }
 
 fn parse_scalar_token(raw: &str, line_no: usize) -> Result<Value, Fm> {
@@ -374,10 +367,12 @@ fn parse_scalar_token(raw: &str, line_no: usize) -> Result<Value, Fm> {
             Ok(_) => {
                 return fm_fail("bad_quoted_string", "quoted value did not decode to a string".to_string(), line_no)
             }
+            // CUTOVER: a lone-surrogate escape (U+D800..U+DFFF) used to
+            // return Fm::NeedsNode here — V8's JSON.parse accepted it where
+            // serde never can, so the whole command delegated. There is no
+            // second parser left, so it takes the SAME bad_quoted_string
+            // finding every other undecodable quoted scalar takes.
             Err(_) => {
-                if has_surrogate_escape(raw) {
-                    return Err(Fm::NeedsNode);
-                }
                 return fm_fail(
                     "bad_quoted_string",
                     format!("quoted value {} is not one complete JSON string", js_quote_str(raw)),
@@ -802,7 +797,6 @@ fn check_index_file(rel: &str, text: &str, errors: &mut Vec<Value>) -> Option<()
     }
     match parsed {
         Fm::Absent => Some(()),
-        Fm::NeedsNode => None,
         Fm::Failed { code, message, line } => {
             errors.push(finding(
                 rel,
@@ -905,7 +899,7 @@ struct Concept {
     data: Map<String, Value>,
 }
 
-/// None => delegate (walk/name issues, V8-only frontmatter).
+/// None => delegate (walk/name issues).
 fn collect_concepts(dir: &Path) -> Option<Vec<Concept>> {
     let mut concepts = Vec::new();
     for rel in list_bundle_markdown(dir)? {
@@ -917,7 +911,6 @@ fn collect_concepts(dir: &Path) -> Option<Vec<Concept>> {
             Err(_) => Map::new(), // unreadable: keep the row with empty data
             Ok(text) => match parse_frontmatter(&text) {
                 Fm::Parsed { data, .. } => data,
-                Fm::NeedsNode => return None,
                 _ => Map::new(),
             },
         };
@@ -1073,7 +1066,14 @@ fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         let base = rel.rsplit('/').next().unwrap_or(rel);
         let text = match read_file_lossy(&join_rel(dir, rel)) {
             Ok(t) => t,
-            Err(_) => return None, // Node embeds the V8 error message — delegate
+            // checkBundle's own catch: push an `unreadable` finding and keep
+            // walking. Node interpolated the libuv message; this carries the
+            // Rust io message in the same sentence. CUTOVER: this arm used to
+            // delegate purely because of those bytes.
+            Err(e) => {
+                errors.push(finding(rel, "unreadable", format!("could not read file: {e}")));
+                continue;
+            }
         };
         if is_reserved_basename(base) {
             if base == "index.md" {
@@ -1096,7 +1096,6 @@ fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
                 ));
                 continue;
             }
-            Fm::NeedsNode => return None,
             Fm::Failed { code, message, line } => {
                 errors.push(finding(
                     rel,
@@ -1452,7 +1451,6 @@ fn concept_body(dir: &Path, rel: &str) -> Option<String> {
     };
     match parse_frontmatter(&raw) {
         Fm::Parsed { body, .. } => Some(body),
-        Fm::NeedsNode => None,
         _ => Some(raw),
     }
 }
@@ -2286,16 +2284,8 @@ fn deviation_text(entry: &Value) -> String {
     }
 }
 
-/// A raw string that only V8 could decide about: serde refused it, but it
-/// still LOOKS like JSON, so Node's `try { JSON.parse } catch` outcome is not
-/// provable here — delegate rather than guess which branch ran.
-fn json_ish(trimmed: &str) -> bool {
-    matches!(trimmed.chars().next(), Some(c) if matches!(c, '{' | '[' | '"' | '-' | '0'..='9'))
-        || matches!(trimmed, "true" | "false" | "null")
-}
-
 /// verifySummary(trace): the first of verify_tail/verify_output/evidence/
-/// summary in the parsed evidence JSON, else the raw text. None => delegate.
+/// summary in the parsed evidence JSON, else the raw text.
 fn verify_summary(trace: &Value) -> Option<String> {
     let raw = match trace.get("verification_evidence") {
         Some(Value::String(s)) => s.as_str(),
@@ -2316,8 +2306,10 @@ fn verify_summary(trace: &Value) -> Option<String> {
             Some(one_line(raw, 200))
         }
         Ok(_) => Some(one_line(raw, 200)), // parsed, but not an object
-        Err(_) if json_ish(raw.trim_matches(js_is_space)) => None,
-        Err(_) => Some(one_line(raw, 200)), // Node's catch path, provably
+        // CUTOVER: JSON-looking text serde refuses used to delegate, because
+        // only V8 could say whether its own parse threw. Nothing else parses
+        // it here now, so the catch branch IS the answer: keep the raw text.
+        Err(_) => Some(one_line(raw, 200)),
     }
 }
 
@@ -2434,8 +2426,8 @@ fn cell_value(c: &CappedCell) -> Value {
     Value::Object(m)
 }
 
-/// readCappedCellTraces(root, feature). None => delegate (a cell file serde
-/// cannot parse but V8 might, or an unreadable entry).
+/// readCappedCellTraces(root, feature). None => delegate (an unreadable
+/// entry or a non-UTF-8 name; an unparseable cell is skipped, like Node).
 fn read_capped_cell_traces(root: &Path, feature: &str) -> Option<Vec<CappedCell>> {
     let dir = root.join(".bee").join("cells");
     let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -2463,10 +2455,10 @@ fn read_capped_cell_traces(root: &Path, feature: &str) -> Option<Vec<CappedCell>
         let text = String::from_utf8_lossy(&bytes).into_owned();
         let cell: Value = match serde_json::from_str(&text) {
             Ok(v) => v,
-            // Node silently skips an unparseable cell; serde and V8 agree on
-            // everything except the documented exotic grammar, so a failure on
-            // JSON-looking text delegates instead of guessing.
-            Err(_) if json_ish(text.trim_matches(js_is_space)) => return None,
+            // Node silently skips an unparseable cell. CUTOVER: the
+            // "JSON-looking text serde refuses" sub-case used to delegate
+            // rather than guess which V8 branch ran; there is no other branch
+            // now, so every unparseable cell is skipped, as Node skipped it.
             Err(_) => continue,
         };
         let Value::Object(cell_map) = &cell else { continue };
@@ -3062,8 +3054,12 @@ mod tests {
             Fm::Failed { code, .. } => assert_eq!(code, "unclosed_frontmatter"),
             _ => panic!("expected failure"),
         }
-        // A lone-surrogate escape only V8 can parse → NeedsNode, not a finding.
-        assert!(matches!(parse_frontmatter("---\ntitle: \"\\ud800\"\n---\n"), Fm::NeedsNode));
+        // CUTOVER: a lone-surrogate escape used to be NeedsNode (delegate).
+        // It is now the ordinary undecodable-quoted-scalar finding.
+        match parse_frontmatter("---\ntitle: \"\\ud800\"\n---\n") {
+            Fm::Failed { code, .. } => assert_eq!(code, "bad_quoted_string"),
+            _ => panic!("a lone surrogate must be a finding, not a delegation"),
+        }
     }
 
     #[test]
@@ -3364,9 +3360,11 @@ mod tests {
         assert_eq!(ev(r#"{"other":"x"}"#).unwrap(), r#"{"other":"x"}"#);
         assert_eq!(ev("just text  here").unwrap(), "just text here");
         assert_eq!(verify_summary(&json!({})).unwrap(), "");
-        // JSON-looking text serde refuses: only V8 knows which branch ran.
-        assert!(ev(r#"{"a":"\ud800"}"#).is_none());
-        assert!(ev("{not json").is_none());
+        // CUTOVER: JSON-looking text this CLI cannot parse used to delegate
+        // ("only V8 knows which branch ran"). With one parser left, the catch
+        // branch IS the answer — the raw text, one-lined.
+        assert_eq!(ev(r#"{"a":"\ud800"}"#).unwrap(), r#"{"a":"\ud800"}"#);
+        assert_eq!(ev("{not json").unwrap(), "{not json");
     }
 
     #[test]

@@ -14,7 +14,6 @@
 //
 // Additional delegation triggers (None before any output/write):
 //   - linked-worktree roots, corrupt manifest-hash cache
-//   - capture-queue rows only V8 could parse (lone surrogate escapes, ...)
 //   - stub/flush ids that are objects/arrays (JS Set identity semantics)
 //   - `capture list` when any pending stub can't be re-emitted byte-exactly:
 //     numbers outside the JS round-trip guard, a truthy non-array dids/files
@@ -48,13 +47,15 @@ fn queue_path(root: &Path) -> PathBuf {
 }
 
 /// pendingCaptureStubs (lib/capture.mjs): stub events minus flushed ids.
-/// None => delegate (V8-only rows, or an id whose JS Set semantics — object
-/// identity — a serialized key can't reproduce).
+/// None => delegate (an id whose JS Set semantics — object identity — a
+/// serialized key can't reproduce).
+///
+/// CUTOVER (2026-08-01): a queue row only V8's JSON.parse could read (a lone
+/// surrogate escape, ...) used to delegate the whole command. read_jsonl now
+/// skips it, which is precisely what lib/fsutil.mjs readJsonl did with every
+/// other corrupt line — the queue is read fail-open either way.
 fn pending_stubs(root: &Path) -> Option<Vec<Value>> {
     let read = read_jsonl(&queue_path(root));
-    if read.needs_node {
-        return None;
-    }
     // JS Set.has uses SameValueZero: strings/numbers/bools compare by value
     // (the compact-serialized key reproduces that exactly); objects/arrays
     // compare by identity, which serialization can NOT reproduce — delegate.

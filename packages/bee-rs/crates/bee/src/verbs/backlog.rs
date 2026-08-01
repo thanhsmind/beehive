@@ -26,7 +26,6 @@
 //
 // Additional delegation triggers (None before any output/write):
 //   - linked-worktree roots, corrupt manifest-hash cache/config
-//   - backlog.jsonl lines only V8 could parse (lone surrogate escapes, ...)
 //   - `pbi list` when any listed id falls outside ^p-[0-9a-f]+$ (Node sorts
 //     by localeCompare; lowercase-hex `p-` ids are the provably
 //     byte-order-identical subset — legacy `P<n>` ids delegate). `render`
@@ -91,13 +90,15 @@ struct Fold {
     has_events: bool,
 }
 
-/// foldPbis: last-event-wins fold over kind:'pbi' rows. None => delegate
-/// (a line only V8 could parse).
-fn fold_pbis(root: &Path) -> Option<Fold> {
+/// foldPbis: last-event-wins fold over kind:'pbi' rows.
+///
+/// CUTOVER (2026-08-01): this used to return None — delegate the whole
+/// command — for a backlog.jsonl line only V8's JSON.parse could read (a lone
+/// surrogate escape, ...). read_jsonl now skips such a line exactly as
+/// lib/fsutil.mjs readJsonl skipped every other corrupt line, so the fold
+/// always succeeds and the signature is infallible again.
+fn fold_pbis(root: &Path) -> Fold {
     let read = read_jsonl(&backlog_jsonl_path(root));
-    if read.needs_node {
-        return None;
-    }
     let mut fold = Fold { order: Vec::new(), items: HashMap::new(), has_events: false };
     for row in &read.rows {
         // JS lets arrays through `typeof row === 'object'`, but an array's
@@ -162,7 +163,7 @@ fn fold_pbis(root: &Path) -> Option<Fold> {
             _ => {}
         }
     }
-    Some(fold)
+    fold
 }
 
 /// The fold item as bee.mjs emits it: {id, title, cos, status, feature}.
@@ -179,10 +180,10 @@ fn pbi_value(p: &Pbi) -> Value {
 /// R6a: the PBI fold as `backlog pbi list --json` emits each record, for
 /// IN-PROCESS callers (`bee herding classify-lane`, which used to spawn that
 /// very command from Node). Fold order, not the list verb's sorted order —
-/// the only caller looks an id up. None => a JSONL line only V8 could parse,
-/// which the caller must treat as an unreadable fold.
+/// the only caller looks an id up. The Option is kept for the out-of-crate
+/// caller's shape; the fold itself can no longer fail (see fold_pbis).
 pub(crate) fn fold_pbi_records(root: &Path) -> Option<Vec<Value>> {
-    let fold = fold_pbis(root)?;
+    let fold = fold_pbis(root);
     Some(fold.order.iter().filter_map(|id| fold.items.get(id)).map(pbi_value).collect())
 }
 
@@ -462,13 +463,14 @@ fn add_pbi(
     let cos_trim = js_trim(cos);
     let feature_trim = feature.map(js_trim).filter(|s| !s.is_empty());
 
-    // Pre-lock delegation probe: a deterministic duplicate id (or a fold that
-    // only V8 can read) must delegate WITHOUT acquiring the lock — acquiring
-    // writes an "acquired" contention-telemetry row, and a write before
-    // returning None breaks the strangler contract. The same checks re-run
-    // under the lock below for the (vanishingly rare) racing-writer case.
+    // Pre-lock delegation probe: a deterministic duplicate id must delegate
+    // WITHOUT acquiring the lock — acquiring writes an "acquired"
+    // contention-telemetry row, and a write before returning None breaks the
+    // strangler contract. The same check re-runs under the lock below for the
+    // (vanishingly rare) racing-writer case. (The fold itself can no longer
+    // fail: an unparseable JSONL line is skipped, not delegated.)
     {
-        let Some(fold) = fold_pbis(root) else { return PbiAdd::Delegate };
+        let fold = fold_pbis(root);
         if let Some(id) = requested {
             if fold.items.contains_key(id) {
                 return PbiAdd::Delegate; // duplicate add refused — Node's text
@@ -491,7 +493,7 @@ fn add_pbi(
     };
 
     let outcome = (|| {
-        let Some(fold) = fold_pbis(root) else { return PbiAdd::Delegate };
+        let fold = fold_pbis(root);
         let final_id = match requested {
             Some(id) => {
                 if fold.items.contains_key(id) {
@@ -617,7 +619,7 @@ fn run_counts(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Err(code) => return Some(code),
         Ok(c) => c?,
     };
-    let fold = fold_pbis(&ctx.root)?;
+    let fold = fold_pbis(&ctx.root);
     let (result, text) = if fold.has_events {
         let counts = folded_counts(&fold);
         let text = counts_text(&counts);
@@ -652,10 +654,10 @@ fn run_findings(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Err(code) => return Some(code),
         Ok(c) => c?,
     };
+    // CUTOVER: a row only V8 could parse used to delegate here; read_jsonl
+    // skips it now, exactly as Node's readJsonl skipped any corrupt line, so
+    // the remaining rows still render.
     let read = read_jsonl(&backlog_jsonl_path(&ctx.root));
-    if read.needs_node {
-        return None;
-    }
     let findings: Vec<Value> = read
         .rows
         .into_iter()
@@ -852,7 +854,7 @@ fn run_pbi_status(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Err(code) => return Some(code),
         Ok(c) => c?,
     };
-    let fold = fold_pbis(&ctx.root)?;
+    let fold = fold_pbis(&ctx.root);
     let current = fold.items.get(id.as_str())?.clone(); // unknown id -> Node
     let feature_trim = feature_raw
         .as_deref()
@@ -912,7 +914,7 @@ fn run_pbi_amend(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Err(code) => return Some(code),
         Ok(c) => c?,
     };
-    let fold = fold_pbis(&ctx.root)?;
+    let fold = fold_pbis(&ctx.root);
     let current = fold.items.get(id.as_str())?.clone(); // unknown id -> Node
     // Event key order: ts, kind, event, id[, title][, cos].
     let mut event = Map::new();
@@ -959,7 +961,7 @@ fn run_pbi_list(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Err(code) => return Some(code),
         Ok(c) => c?,
     };
-    let fold = fold_pbis(&ctx.root)?;
+    let fold = fold_pbis(&ctx.root);
     let mut list: Vec<&Pbi> = fold.order.iter().map(|id| &fold.items[id]).collect();
     if let Some(s) = &status {
         if !s.is_empty() {
@@ -1116,7 +1118,7 @@ fn escape_cell(value: &str) -> String {
 /// computeBacklogRenderContent. None => delegate (unparseable rows, or an id
 /// outside the calibrated collation alphabet).
 fn compute_backlog_render_content(root: &Path) -> Option<String> {
-    let fold = fold_pbis(root)?;
+    let fold = fold_pbis(root);
     let mut all: Vec<&Pbi> = fold.order.iter().map(|id| &fold.items[id]).collect();
     if !all.iter().all(|p| collation_safe(&p.id)) {
         return None;
@@ -1260,11 +1262,11 @@ fn walk_backlog_id_rows(product_root: &Path) -> Option<Vec<RankRow>> {
 // rather than by row id. `cells claim-next`'s cross-lane pool is the only
 // caller — hence pub(crate).
 
-/// lib/backlog.mjs featureBacklogRank. `None` = delegate (a backlog.jsonl
-/// line only V8 parses, an unresolvable product_root, or a PBI id outside
-/// `id_sort_safe`'s proven localeCompare region).
+/// lib/backlog.mjs featureBacklogRank. `None` = delegate (an unresolvable
+/// product_root, or a PBI id outside `id_sort_safe`'s proven localeCompare
+/// region — an unparseable backlog.jsonl line is skipped, not delegated).
 pub(crate) fn feature_backlog_rank(root: &Path) -> Option<HashMap<String, usize>> {
-    let fold = fold_pbis(root)?;
+    let fold = fold_pbis(root);
     if fold.has_events {
         // `[...folded.items.values()]` — JS Map value order is insertion order.
         let mut rows: Vec<(Option<&str>, i32, &str)> = Vec::with_capacity(fold.order.len());
@@ -1412,7 +1414,7 @@ fn shields_escape(text: &str) -> String {
 /// renderBacklogBadges — fold-first status set, counts from
 /// readBacklogCounts. Ok(None) = Node's null (no counts at all).
 fn render_backlog_badges(root: &Path, product_root: &Path) -> Option<Option<String>> {
-    let fold = fold_pbis(root)?;
+    let fold = fold_pbis(root);
     let counts = if fold.has_events {
         folded_counts(&fold)
     } else {
@@ -1880,7 +1882,7 @@ mod tests {
                 "{\"type\":\"friction\",\"title\":\"not a pbi\"}\n",
             ),
         );
-        let fold = fold_pbis(tmp.path()).unwrap();
+        let fold = fold_pbis(tmp.path());
         assert!(fold.has_events);
         assert_eq!(fold.order, vec!["p-aa11bb22"]);
         let item = &fold.items["p-aa11bb22"];
@@ -1905,7 +1907,7 @@ mod tests {
                 "{\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"p-03\",\"title\":\"c\"}\n",
             ),
         );
-        let fold = fold_pbis(tmp.path()).unwrap();
+        let fold = fold_pbis(tmp.path());
         let counts = folded_counts(&fold);
         assert_eq!(
             jsjson::stringify(&Value::Object(counts.clone())),
@@ -2016,7 +2018,7 @@ mod tests {
             _ => panic!("expected Ok"),
         };
         assert!(id_sort_safe(&generated.id) && generated.id.len() == 10);
-        let fold = fold_pbis(tmp.path()).unwrap();
+        let fold = fold_pbis(tmp.path());
         assert_eq!(fold.order.len(), 2);
         // the written event carries the frozen key order
         let raw = std::fs::read_to_string(backlog_jsonl_path(tmp.path())).unwrap();

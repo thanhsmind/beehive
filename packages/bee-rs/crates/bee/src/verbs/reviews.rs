@@ -5,8 +5,8 @@
 // Verbs served natively (exact argv shapes only — see the probe):
 //   reviews list          [--json]
 //   reviews show          --id I [--json]
-//   reviews create        --file F [--json]              (--stdin delegates)
-//   reviews record        --id I --kind K --file F [--json]   (--stdin delegates)
+//   reviews create        (--file F | --stdin) [--json]
+//   reviews record        --id I --kind K (--file F | --stdin) [--json]
 //   reviews candidate add --feature F --head H --mode M [--baseline B]
 //                         [--cells C] [--json]
 //   reviews candidates    [--json]
@@ -15,21 +15,37 @@
 // requireFlag misses, invalid ids/kinds/modes, frozen-field payloads,
 // missing sessions/cells) are served natively byte-identical.
 //
-// PERMANENTLY DELEGATED SHAPES: any call carrying --stdin. The probe must
-// decide native-vs-Node BEFORE consuming stdin (a delegated Node process
-// re-reads the same pipe), so stdin-fed JSON can never be validated here
-// first — Node owns those calls end to end.
+// CUTOVER (2026-08-01) — `--stdin` IS NOW NATIVE, and so is corrupt JSON.
+// Both exclusions existed only to serve contract C2 (byte-identical output
+// with a Node runtime that no longer exists):
+//   - `--stdin` was permanently delegated because the probe had to choose
+//     native-vs-Node BEFORE the pipe was consumed — a delegated Node child
+//     would have re-read it and found EOF. With nowhere to delegate, that
+//     constraint is void: read_json_input reads the pipe and validates it
+//     here. `flags.stdin === true` stays STRICT (see its doc comment), and
+//     the labelled refusal "<label>: input is not valid JSON." is unchanged.
+//     `record --stdin` pre-scans the stored session id before consuming the
+//     pipe (see run_record); `create --stdin` has no payload-independent
+//     trigger left to pre-scan.
+//   - corrupt JSON on the READ path now warns via fsutil::warn_corrupt_json
+//     and takes the same readJson fallback (list skips the session with its
+//     own "skipping corrupt session file" line; show reports "not found";
+//     candidate rows are skipped like every other corrupt JSONL line), and
+//     readReviewStrict raises its OWN loud corrupt refusal — the byte-exact
+//     sentence Node's `catch` threw — instead of handing the command back.
+//     A lone-surrogate escape is covered by whichever of those the site uses.
+//   - the unreadable-file branches that interpolated a libuv err.code carry
+//     the Rust io error in the same sentence.
 //
-// Additional delegation triggers (None before any output/write):
+// Delegation triggers that remain (None before any output/write):
 //   - --help anywhere, unknown flags, non-flag tokens
-//   - corrupt JSON anywhere on the read path (session files, candidate rows,
-//     cell files, scope/payload files — Node warns with the V8 message, or
-//     V8's JSON grammar might accept what serde refused)
 //   - session ids whose String() form leaves the ASCII slug charset the
 //     ported localeCompare model is calibrated for
 //   - candidates that are strings/arrays (JS spread would explode them into
 //     index keys), or git args that are not strings (spawnSync TypeError)
-//   - numbers outside the JS round-trip emission guard
+//   - a cell file whose JSON is an ARRAY (typeof [] === 'object' exotica)
+//   - numbers outside the JS round-trip emission guard (integers > 2^53 read
+//     verbatim off disk; anything through js_numberify is already f64-exact)
 //   - writeJsonAtomic/appendJsonl failures (nothing durable written)
 //
 // DIVERGENCE NOTES (documented, unreachable-different for real bee data):
@@ -73,7 +89,8 @@ const RECORD_KINDS: [&str; 5] = ["manifest", "preflight", "finding", "uat", "dec
 const DECISION_STATUSES: [&str; 3] = ["pending", "blocked", "approved"];
 const IMMUTABLE_FIELDS: [&str; 4] = ["baseline", "head", "included", "excluded"];
 
-/// Delegate marker (Node owns the shape).
+/// Delegate marker (a shape this port still refuses to answer).
+#[derive(Debug)]
 struct Delegate;
 type R<T> = Result<T, Delegate>;
 
@@ -221,7 +238,9 @@ fn slug_sortable(s: &str) -> bool {
 // ─── session store reads ───────────────────────────────────────────────────
 
 /// listReviews — fail-open per file (deterministic warn), sorted by id.
-/// Corrupt JSON (V8-worded warn) => Delegate.
+/// A corrupt session file warns, takes readJson's null fallback, and is then
+/// skipped by the shape check with listReviews' OWN "skipping corrupt session
+/// file" line — exactly Node's two-warning sequence, minus the V8 bytes.
 fn list_reviews(root: &Path) -> R<Vec<Value>> {
     let dir = reviews_dir(root);
     let entries = match std::fs::read_dir(&dir) {
@@ -237,7 +256,10 @@ fn list_reviews(root: &Path) -> R<Vec<Value>> {
         }
         let session = match read_json(&entry.path()) {
             ReadJson::Missing => Value::Null, // unreadable → readJson fallback null, silently
-            ReadJson::Corrupt => return Err(Delegate), // Node's readJson warns with the V8 message
+            ReadJson::Corrupt => {
+                crate::fsutil::warn_corrupt_json(&entry.path());
+                Value::Null // readJson(file, null) — the skip below follows
+            }
             ReadJson::Parsed(v) => js_numberify(&v).map_err(|_| Delegate)?,
         };
         if !truthy(&session) || !matches!(session, Value::Object(_)) {
@@ -259,20 +281,26 @@ fn list_reviews(root: &Path) -> R<Vec<Value>> {
     Ok(idx.into_iter().map(|i| sessions[i].clone()).collect())
 }
 
-/// readReview — fail-open single read: invalid id or missing => null.
+/// readReview — fail-open single read: invalid id, missing, or corrupt =>
+/// null (readJson's fallback; corrupt warns first). `show` then reports the
+/// same "not found" it reports for an absent session, exactly as Node did.
 fn read_review(root: &Path, id: &str) -> R<Value> {
     if !id_pattern_ok(id) {
         return Ok(Value::Null);
     }
-    match read_json(&review_file(root, id)) {
+    let file = review_file(root, id);
+    match read_json(&file) {
         ReadJson::Missing => Ok(Value::Null),
-        ReadJson::Corrupt => Err(Delegate),
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(&file);
+            Ok(Value::Null)
+        }
         ReadJson::Parsed(v) => js_numberify(&v).map_err(|_| Delegate),
     }
 }
 
 /// readReviewStrict — the write-verb sibling. Ok(Err(msg)) carries the loud
-/// refusal; the outer Err delegates (io/V8-uncertain shapes).
+/// refusal — including, since the cutover, the corrupt-JSON one.
 fn read_review_strict(root: &Path, id: &str) -> R<Result<Map<String, Value>, String>> {
     if !id_pattern_ok(id) {
         return Ok(Err(format!(
@@ -288,12 +316,28 @@ fn read_review_strict(root: &Path, id: &str) -> R<Result<Map<String, Value>, Str
                 file.display()
             )));
         }
-        Err(_) => return Err(Delegate), // message embeds Node's err.code — Node owns it
+        // Node interpolated err.code here; the Rust io error stands in its
+        // place and the refusal is otherwise unchanged.
+        Err(e) => {
+            return Ok(Err(format!(
+                "readReviewStrict: could not read \"{}\" ({e}).",
+                file.display()
+            )));
+        }
     };
     let text = String::from_utf8_lossy(&bytes);
     let parsed = match serde_json::from_str::<Value>(&text) {
         Ok(v) => js_numberify(&v).map_err(|_| Delegate)?,
-        Err(_) => return Err(Delegate), // V8 might parse what serde refused — Node decides
+        // CUTOVER: this used to delegate because V8's JSON grammar might have
+        // accepted what serde refused (a lone-surrogate escape). Nothing else
+        // parses it now, so it takes readReviewStrict's OWN loud corrupt
+        // refusal — the same one Node's `catch` threw, byte for byte.
+        Err(_) => {
+            return Ok(Err(format!(
+                "readReviewStrict: \"{0}\" exists but is not valid JSON. The bee CLI refuses to mutate a present-but-corrupt review session — that could silently clobber real review state (findings, decision, scope). FIX: inspect/restore the file (e.g. \"git checkout -- {0}\"), then retry.",
+                file.display()
+            )));
+        }
     };
     match parsed {
         Value::Object(m) => Ok(Ok(m)),
@@ -315,12 +359,11 @@ fn typeof_word(v: &Value) -> &'static str {
     }
 }
 
-/// listCandidates — readJsonl (skip corrupt lines; V8-maybe lines delegate).
+/// listCandidates — readJsonl: every corrupt line is skipped, including the
+/// lone-surrogate lines that used to delegate the whole command. Fail-open
+/// stays fail-open, and nothing new is printed (Node's readJsonl was silent).
 fn list_candidates(root: &Path) -> R<Vec<Value>> {
     let read = read_jsonl(&candidates_path(root));
-    if read.needs_node {
-        return Err(Delegate);
-    }
     read.rows.iter().map(|r| js_numberify(r).map_err(|_| Delegate)).collect()
 }
 
@@ -334,7 +377,12 @@ fn cells_dir(root: &Path) -> PathBuf {
 fn read_cell_json(file: &Path) -> R<Option<Value>> {
     match read_json(file) {
         ReadJson::Missing => Ok(None),
-        ReadJson::Corrupt => Err(Delegate),
+        // readJson(file, null) fail-open: warn, then the null fallback, which
+        // every caller here already treats exactly like a missing file.
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(file);
+            Ok(None)
+        }
         ReadJson::Parsed(Value::Null) => Ok(None),
         ReadJson::Parsed(v) => Ok(Some(js_numberify(&v).map_err(|_| Delegate)?)),
     }
@@ -402,21 +450,89 @@ fn list_cells(root: &Path) -> R<Vec<Value>> {
     Ok(idx.into_iter().map(|i| cells[i].clone()).collect())
 }
 
-// ─── JSON input files (readReviewsJsonInput, --file branch only) ───────────
+// ─── JSON input (readReviewsJsonInput — BOTH branches) ─────────────────────
+
+/// bee.mjs readReviewsJsonInput (:5328):
+///
+/// ```js
+/// const text = flags.stdin === true ? fs.readFileSync(0, 'utf8')
+///                                   : readFileText(requireFlag(flags,'file'), label);
+/// try { return JSON.parse(text); }
+/// catch { throw new Error(`${label}: input is not valid JSON.`); }
+/// ```
+///
+/// Two details are load-bearing and preserved exactly:
+///   1. `flags.stdin === true` is STRICT. A bare `--stdin` parses to the
+///      boolean `true` (FlagV::Present) and reads the pipe; `--stdin=x` is a
+///      STRING, never `=== true`, so it falls through to the --file branch —
+///      and `requireFlag` then raises its own "Missing required flag --file."
+///      when no --file was given. `--stdin` together with `--file` reads
+///      stdin and never looks at --file (the ternary short-circuits, so
+///      requireFlag is not even evaluated).
+///   2. the parse failure is the caller's LABELLED refusal — "scope: input is
+///      not valid JSON." / "payload: input is not valid JSON." — not a
+///      readJson-style fail-open.
+///
+/// CUTOVER (2026-08-01): `--stdin` was permanently delegated because the
+/// native probe had to choose Node-vs-native BEFORE the pipe was consumed (a
+/// delegated Node child would have read EOF). With no runtime to delegate to,
+/// that constraint is gone: stdin is read and validated here.
+///
+/// Which side of readReviewsJsonInput's ternary this argv selects. Split out
+/// so the STRICT `=== true` rule is testable without touching a real pipe.
+#[derive(Debug, PartialEq)]
+enum JsonInput {
+    Stdin,
+    File(String),
+}
+
+fn json_input_source(flags: &Flags) -> Result<JsonInput, String> {
+    // `flags.stdin === true`: only a BARE --stdin is the boolean true.
+    if matches!(flags.get("stdin"), Some(FlagV::Present)) {
+        return Ok(JsonInput::Stdin);
+    }
+    // `--stdin=x` is a string, so the ternary takes the --file branch and
+    // requireFlag speaks for a missing --file exactly as it always did.
+    require_flag(flags, "file").map(JsonInput::File)
+}
+
+/// The `try { JSON.parse(text) } catch { throw \`${label}: …\` }` half.
+fn parse_json_input_text(text: &str, label: &str) -> R<Result<Value, String>> {
+    match serde_json::from_str::<Value>(text) {
+        Ok(v) => Ok(Ok(js_numberify(&v).map_err(|_| Delegate)?)),
+        // Includes the lone-surrogate escapes that used to delegate: with one
+        // parser left, "serde refused it" IS "input is not valid JSON".
+        Err(_) => Ok(Err(format!("{label}: input is not valid JSON."))),
+    }
+}
 
 /// Ok(Err(msg)) — the deterministic refusal; outer Err — delegate.
 fn read_json_input(root_flags: &Flags, label: &str) -> R<Result<Value, String>> {
-    let file = match require_flag(root_flags, "file") {
-        Ok(f) => f,
+    let text = match json_input_source(root_flags) {
         Err(msg) => return Ok(Err(msg)),
+        Ok(JsonInput::Stdin) => match read_stdin_text() {
+            Ok(t) => t,
+            // readFileSync(0) throwing is an unhandled error in Node too; it
+            // surfaces through the same emitError path this refusal takes.
+            Err(msg) => return Ok(Err(msg)),
+        },
+        Ok(JsonInput::File(file)) => match std::fs::read(&file) {
+            Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+            Err(_) => return Ok(Err(format!("Cannot read {label} file: {file}"))),
+        },
     };
-    let text = match std::fs::read(&file) {
-        Ok(b) => String::from_utf8_lossy(&b).into_owned(),
-        Err(_) => return Ok(Err(format!("Cannot read {label} file: {file}"))),
-    };
-    match serde_json::from_str::<Value>(&text) {
-        Ok(v) => Ok(Ok(js_numberify(&v).map_err(|_| Delegate)?)),
-        Err(_) => Err(Delegate), // V8's grammar might accept it — Node owns the answer
+    parse_json_input_text(&text, label)
+}
+
+/// `fs.readFileSync(0, 'utf8')` — the whole pipe, lossy-decoded like Node's
+/// utf8 read. Same shape as verbs/cells.rs read_stdin_text (module-private
+/// there; copied rather than re-exported, per the one-file rule).
+fn read_stdin_text() -> Result<String, String> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    match std::io::stdin().lock().read_to_end(&mut bytes) {
+        Ok(_) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
+        Err(e) => Err(format!("{e}")),
     }
 }
 
@@ -703,10 +819,10 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let pre_json = pre_json_scan(&toks);
     let (flags, json) = parse_flags(&toks)?;
 
-    // --stdin (any shape/value) delegates BEFORE stdin could be consumed.
-    if flags.get("stdin").is_some() {
-        return None;
-    }
+    // CUTOVER: `--stdin` no longer delegates. The blanket bail that used to
+    // stand here existed for one reason — the probe had to decide before the
+    // pipe was consumed — and `keys_known` below already confines the flag to
+    // create/record, the only two verbs whose Node handler reads stdin at all.
 
     let known: &[&str] = match cmd {
         "reviews list" | "reviews candidates" => &[],
@@ -947,6 +1063,21 @@ fn run_record(ctx: &GCtx, flags: &Flags) -> R<Out2> {
         Ok(v) => v,
         Err(msg) => return Ok(Out2::Thrown(msg)),
     };
+    // Pre-scan, BEFORE the pipe is consumed, the one remaining bail trigger
+    // that does not depend on the payload: writeReview writes to the STORED
+    // id, and an id outside the slug charset makes that target path
+    // unprovable (the check below, after the write decision, would be too
+    // late once stdin is gone). The Ok(Err(..)) refusal is deliberately
+    // IGNORED here — Node raises a missing/corrupt session only AFTER the
+    // payload is read, and that order is part of the contract.
+    if matches!(flags.get("stdin"), Some(FlagV::Present)) {
+        if let Ok(Ok(existing)) = read_review_strict(&ctx.root, &id) {
+            match existing.get("id") {
+                Some(Value::String(s)) if id_pattern_ok(s) => {}
+                _ => return Err(Delegate),
+            }
+        }
+    }
     let payload = match read_json_input(flags, "payload")? {
         Ok(v) => v,
         Err(msg) => return Ok(Out2::Thrown(msg)),
@@ -1258,9 +1389,14 @@ mod tests {
         let sessions = list_reviews(tmp.path()).ok().unwrap();
         let ids: Vec<&str> = sessions.iter().map(|s| s["id"].as_str().unwrap()).collect();
         assert_eq!(ids, vec!["rev-2", "rev-10"]); // numeric-aware order
-        // Corrupt JSON delegates.
+        // CUTOVER: corrupt JSON no longer delegates. readJson warns, returns
+        // null, and the shape check skips it with listReviews' own line —
+        // the listing stays fail-open and the good sessions still come back.
         std::fs::write(reviews_dir(tmp.path()).join("bad.json"), "{broken").unwrap();
-        assert!(list_reviews(tmp.path()).is_err());
+        std::fs::write(reviews_dir(tmp.path()).join("sur.json"), r#"{"id":"\ud800"}"#).unwrap();
+        let sessions = list_reviews(tmp.path()).expect("corrupt session must not delegate");
+        let ids: Vec<&str> = sessions.iter().map(|s| s["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, vec!["rev-2", "rev-10"]);
     }
 
     #[test]
@@ -1459,6 +1595,104 @@ mod tests {
     fn record_with(ctx: &GCtx, root: &Path, id: &str, kind: &str, payload: &Value) -> R<Out2> {
         let file = json_file(root, "payload.json", payload);
         run_record(ctx, &flags_of(&["--id", id, "--kind", kind, "--file", &file]))
+    }
+
+    // ─── CUTOVER: readReviewsJsonInput, both branches ──────────────────────
+
+    /// `--stdin` used to be permanently delegated. These pin the two halves
+    /// of readReviewsJsonInput (bee.mjs:5328) without touching a real pipe —
+    /// a unit test that read fd 0 would block on an interactive runner.
+    #[test]
+    fn stdin_is_selected_only_by_a_bare_flag_and_wins_over_file() {
+        // A valid payload parses and is handed back as-is.
+        let ok = parse_json_input_text(r#"{"id":"rev-1"}"#, "scope").unwrap();
+        assert_eq!(ok.unwrap(), json!({"id": "rev-1"}));
+        // An invalid payload is the LABELLED refusal, per label.
+        assert_eq!(
+            parse_json_input_text("{nope", "scope").unwrap().unwrap_err(),
+            "scope: input is not valid JSON."
+        );
+        assert_eq!(
+            parse_json_input_text("{nope", "payload").unwrap().unwrap_err(),
+            "payload: input is not valid JSON."
+        );
+        // A lone-surrogate escape — the shape V8 accepted and this CLI cannot
+        // — is that same refusal now, not a delegation.
+        assert_eq!(
+            parse_json_input_text(r#"{"a":"\ud800"}"#, "scope").unwrap().unwrap_err(),
+            "scope: input is not valid JSON."
+        );
+
+        // --stdin alone: the pipe.
+        assert_eq!(json_input_source(&flags_of(&["--stdin"])), Ok(JsonInput::Stdin));
+        // --stdin WITH --file: the ternary short-circuits, so stdin wins and
+        // requireFlag(flags,'file') is never even evaluated.
+        assert_eq!(
+            json_input_source(&flags_of(&["--stdin", "--file", "scope.json"])),
+            Ok(JsonInput::Stdin)
+        );
+        // `--stdin=x` is a STRING, never `=== true` — it falls through to the
+        // --file branch, which then raises its own required-flag refusal.
+        assert_eq!(
+            json_input_source(&flags_of(&["--stdin=yes"])),
+            Err("Missing required flag --file.".to_string())
+        );
+        assert_eq!(
+            json_input_source(&flags_of(&["--stdin=true", "--file", "s.json"])),
+            Ok(JsonInput::File("s.json".to_string()))
+        );
+        // No --stdin at all: unchanged.
+        assert_eq!(
+            json_input_source(&flags_of(&["--file", "s.json"])),
+            Ok(JsonInput::File("s.json".to_string()))
+        );
+        assert_eq!(
+            json_input_source(&flags_of(&[])),
+            Err("Missing required flag --file.".to_string())
+        );
+    }
+
+    /// The router must let a --stdin call through to the handler now (it used
+    /// to bail before g_prelude), and only for the two verbs that read it.
+    #[test]
+    fn stdin_is_accepted_by_create_and_record_and_rejected_elsewhere() {
+        let known = |cmd: &str| -> &[&str] {
+            match cmd {
+                "reviews create" => &["file", "stdin"],
+                "reviews record" => &["id", "kind", "file", "stdin"],
+                "reviews show" => &["id"],
+                _ => &[],
+            }
+        };
+        assert!(keys_known(&flags_of(&["--stdin"]), known("reviews create")));
+        assert!(keys_known(
+            &flags_of(&["--id", "r", "--kind", "finding", "--stdin"]),
+            known("reviews record")
+        ));
+        // list/show/candidates never took --stdin — still delegated there.
+        assert!(!keys_known(&flags_of(&["--id", "r", "--stdin"]), known("reviews show")));
+    }
+
+    #[test]
+    fn read_review_strict_refuses_corrupt_json_instead_of_delegating() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(reviews_dir(root)).unwrap();
+        std::fs::write(review_file(root, "rev-1"), "{ broken").unwrap();
+        let msg = read_review_strict(root, "rev-1")
+            .expect("corrupt session must not delegate")
+            .unwrap_err();
+        assert!(msg.starts_with("readReviewStrict: "), "{msg}");
+        assert!(msg.contains("exists but is not valid JSON."), "{msg}");
+        assert!(msg.contains("refuses to mutate a present-but-corrupt review session"), "{msg}");
+        // A lone-surrogate escape takes the identical refusal.
+        std::fs::write(review_file(root, "rev-2"), r#"{"id":"rev-2","t":"\udfff"}"#).unwrap();
+        let msg2 = read_review_strict(root, "rev-2")
+            .expect("lone surrogate must not delegate")
+            .unwrap_err();
+        assert!(msg2.contains("exists but is not valid JSON."), "{msg2}");
+        // …and the fail-open sibling reports the plain not-found instead.
+        assert_eq!(read_review(root, "rev-1").expect("must not delegate"), Value::Null);
     }
 
     // ─── createReview write path ───────────────────────────────────────────

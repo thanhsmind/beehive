@@ -30,15 +30,31 @@
 //     readSessionRecords, buildMatrixFromLog, renderMatrixHtml, writeReport,
 //     humanizeMs.
 //
+// CUTOVER (2026-08-01). Present-but-corrupt JSON used to be a strangler bail,
+// decided by a PRE-FLIGHT probe over every file the Stop path could read
+// (state/HANDOFF/inject caches/session record/bound lane/cells/perf sidecar
+// metas), because Node's readJson warning quoted V8's parse sentence. That
+// probe is DELETED — it would now warn about each bad file a second time — and
+// every corruption is handled at its real read, warning once in bee's own
+// words and taking readJson's `null` fallback: state.json reads as
+// defaultState(), HANDOFF.json reads as absent (so the mid-phase "hive door
+// open" warning still fires), a corrupt inject cache falls through to the
+// legacy location and then to `{}` (the nudge re-injects), a corrupt session
+// record reads as no session, a corrupt lane still takes readLane's second
+// warn and the LANE_CORRUPT refusal, a corrupt cell is skipped from the
+// claimed list, and a corrupt perf meta is skipped. The hook still exits 0.
+//
+// Warnings are QUEUED, not printed (see queue_corrupt_json_warning): the hook
+// buffers all output so that a run which later delegates has emitted nothing.
+//
 // Strangler bails (Outcome::Delegate), all decided BEFORE any write/output:
 //   - event == "PreCompact": the compaction path (intent anchor re-assert,
 //     compaction record, forced nudges) delegates to Node wholesale.
-//   - present-but-corrupt JSON in any file the Node path reads through
-//     fsutil's readJson (config/config.local/state/HANDOFF/inject caches/
-//     session record/bound lane/cells/*.json/perf sidecar metas): Node warns
-//     to stderr with V8's own parse-error text.
-//   - an inject cache whose parsed content is a non-object (Node's spread/
-//     assignment exotica).
+//   - an inject cache whose parsed content is a non-object, and a truthy
+//     non-object approved_gates (both Node spread/assignment exotica).
+// (A corrupt .bee/config.json is native, inside crate::state::read_config_raw;
+// that reader prints immediately rather than queueing, so a bad config plus a
+// non-object inject cache can leak that one line before the delegate.)
 // Accepted divergences (documented for the port record):
 //   - localeCompare('en', numeric) approximated for cell-id sorting (exact
 //     for lowercase alnum/hyphen slug ids).
@@ -63,6 +79,7 @@ const DECISION_RECENT_MS: f64 = 6.0 * 3600.0 * 1000.0;
 
 /// Internal control flow: Delegate = re-run the Node wrapper; Crash(msg) =
 /// the Node path would THROW here (main's catch → logCrash → advisory emit).
+#[derive(Debug)]
 enum Flow {
     Delegate,
     Crash(String),
@@ -90,12 +107,14 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
     }
 
     let session_id = get_session_id(&ctx.payload);
+    clear_corrupt_json_warnings(); // one queue per run (tests reuse the thread)
 
-    // ── corrupt-JSON pre-flight ─────────────────────────────────────────────
-    // Every file the Node path could read through fsutil.readJson (which warns
-    // to stderr with V8's message on corruption) is probed BEFORE any side
-    // effect, so a Delegate can never follow a native write.
-    let config = match preflight(&root, &ctx, session_id.as_deref()) {
+    // ── pre-flight ──────────────────────────────────────────────────────────
+    // Only the two remaining delegate classes are decided here (a corrupt
+    // CONFIG file, and a non-object inject cache), both BEFORE any side effect.
+    // Corrupt data files are no longer probed: each real read below warns for
+    // itself, exactly once, and fails open.
+    let config = match preflight(&root) {
         Ok(config) => config,
         Err(()) => return Err(()),
     };
@@ -138,6 +157,12 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
 
 fn flush(stdout: &str, stderr: &str) {
     use std::io::Write;
+    // Corrupt-JSON warnings first: that is where Node's readJson emitted them,
+    // ahead of anything the advisory itself wrote.
+    let corrupt = take_corrupt_json_warnings();
+    if !corrupt.is_empty() {
+        let _ = std::io::stderr().write_all(corrupt.as_bytes());
+    }
     if !stderr.is_empty() {
         let _ = std::io::stderr().write_all(stderr.as_bytes());
     }
@@ -255,73 +280,78 @@ reservations so the next session can resume cleanly."
     Ok(AdvisoryOutcome::Done)
 }
 
-// ─── pre-flight corrupt-JSON probe ─────────────────────────────────────────
+// ─── deferred corrupt-JSON warnings ────────────────────────────────────────
+// This hook buffers every byte it emits so a delegating run stays silent, so
+// the readJson warning cannot be printed at read time. It is queued here and
+// written by flush(), ahead of the advisory's own stderr.
 
-fn probe(file: &Path) -> Result<(), ()> {
-    match read_json(file) {
-        ReadJson::Corrupt => Err(()),
-        _ => Ok(()),
-    }
+thread_local! {
+    static CORRUPT_JSON_WARNINGS: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
-fn probe_dir_json(dir: &Path) -> Result<(), ()> {
-    let Ok(entries) = std::fs::read_dir(dir) else { return Ok(()) };
-    for entry in entries.flatten() {
-        let is_file = entry.file_type().map(|t| t.is_file()).unwrap_or(false);
-        if is_file && entry.file_name().to_string_lossy().ends_with(".json") {
-            probe(&entry.path())?;
+/// Queues the sentence crate::fsutil::warn_corrupt_json would have printed.
+fn queue_corrupt_json_warning(file: &Path) {
+    let reason = {
+        // Same derivation as fsutil.rs's private corrupt_json_reason.
+        match std::fs::read(file) {
+            Err(_) => "the file could not be read".to_string(),
+            Ok(bytes) => {
+                let text = String::from_utf8_lossy(&bytes);
+                let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+                match serde_json::from_str::<Value>(text) {
+                    Ok(_) => "invalid JSON".to_string(), // raced: it parses now
+                    Err(e) if e.line() > 0 => {
+                        format!("invalid JSON at line {} column {}", e.line(), e.column())
+                    }
+                    Err(_) => "invalid JSON".to_string(),
+                }
+            }
         }
-    }
-    Ok(())
+    };
+    CORRUPT_JSON_WARNINGS.with(|q| {
+        q.borrow_mut().push(format!(
+            "bee: could not parse JSON at {} — {reason}. Using fallback; fix the file.\n",
+            file.display()
+        ))
+    });
 }
 
-/// Probes every readJson-warned file the Stop path can touch; returns the
-/// merged tracked+overlay config (also Bail-checked) on success.
-fn preflight(root: &Path, ctx: &HookContext, session_id: Option<&str>) -> Result<Map<String, Value>, ()> {
+/// read_json plus the queued warning: Corrupt collapses onto Missing, which is
+/// what readJson's `null` fallback meant to every caller in this hook.
+fn read_json_failopen(file: &Path) -> ReadJson {
+    match read_json(file) {
+        ReadJson::Corrupt => {
+            queue_corrupt_json_warning(file);
+            ReadJson::Missing
+        }
+        other => other,
+    }
+}
+
+fn take_corrupt_json_warnings() -> String {
+    CORRUPT_JSON_WARNINGS.with(|q| q.borrow_mut().drain(..).collect::<Vec<_>>().join(""))
+}
+
+fn clear_corrupt_json_warnings() {
+    CORRUPT_JSON_WARNINGS.with(|q| q.borrow_mut().clear());
+}
+
+// ─── pre-flight (the two remaining delegate classes) ───────────────────────
+
+/// Returns the merged tracked+overlay config (read_config_raw warns and reads
+/// a corrupt file as absent, so its Err arm is unreachable) after screening the
+/// one non-V8 delegate this hook has left: an inject cache that PARSES to a
+/// non-object, whose spread/assignment is JS exotica.
+fn preflight(root: &Path) -> Result<Map<String, Value>, ()> {
     let bee = root.join(".bee");
     let config = read_config_raw(root).map_err(|_| ())?;
-    probe(&bee.join("state.json"))?;
-    probe(&bee.join("HANDOFF.json"))?;
-    probe(&bee.join("cache").join("inject-cache.json"))?;
-    probe(&bee.join(".inject-cache.json"))?;
-    // Non-object inject caches hit JS spread/assignment exotica — delegate.
     for cache in [bee.join("cache").join("inject-cache.json"), bee.join(".inject-cache.json")] {
+        // Deliberately plain read_json: a corrupt cache is NOT screened here
+        // (read_inject_cache warns for it), so this probe never double-warns.
         if let ReadJson::Parsed(v) = read_json(&cache) {
             if !matches!(v, Value::Object(_) | Value::Null | Value::Bool(false)) {
                 return Err(());
-            }
-        }
-    }
-    // Session record + bound lane (control-plane; only read with a valid id).
-    if let Some(sid) = session_id {
-        if is_plain_id(sid) && ctx.worktree_resolution != "linked-invalid" {
-            let ctl = control_root(root, ctx);
-            let session_file = ctl.join(".bee").join("sessions").join(format!("{sid}.json"));
-            probe(&session_file)?;
-            if let ReadJson::Parsed(Value::Object(session)) = read_json(&session_file) {
-                if let Some(lane) = session.get("lane").and_then(Value::as_str) {
-                    let lane = lane.trim();
-                    if !lane.is_empty() && is_plain_id(lane) {
-                        probe(&ctl.join(".bee").join("lanes").join(format!("{lane}.json")))?;
-                    }
-                }
-            }
-        }
-    }
-    // Cells are only read on the mid-phase warning branch, but probing is a
-    // pure read and over-probing only ever delegates (byte-safe).
-    probe_dir_json(&bee.join("cells"))?;
-    // Perf sidecar metas (walkSubagents readJson) when a transcript resolves.
-    if let Some(transcript) = resolve_transcript_for(root, session_id) {
-        let session_dir = strip_jsonl_suffix(&transcript);
-        let sub = session_dir.join("subagents");
-        if let Ok(entries) = std::fs::read_dir(&sub) {
-            for entry in entries.flatten() {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                if name.ends_with(".jsonl") {
-                    let meta = sub.join(format!("{}.meta.json", &name[..name.len() - ".jsonl".len()]));
-                    probe(&meta)?;
-                }
             }
         }
     }
@@ -439,9 +469,46 @@ struct Record {
     gates: Map<String, Value>,
 }
 
+/// state.mjs readState, reduced to the phase/mode/gates slice this hook uses.
+///
+/// Inlined rather than delegated to `crate::state::read_state_brief` because
+/// that reader PRINTS its corrupt-JSON warning immediately, and this hook must
+/// QUEUE its warnings — a delegating run (PreCompact) has to emit zero bytes
+/// first. Both readers agree on the outcome: readJson's `null` fallback →
+/// defaultState(). The exotic-gates arm below still delegates here, where
+/// state.rs now spreads it natively; this hook keeps the delegate because it
+/// still has a live delegate path to take.
 fn read_state_record(root: &Path) -> Result<Record, Flow> {
-    let brief = crate::state::read_state_brief(root).map_err(|_| Flow::Delegate)?;
-    Ok(Record { phase: brief.phase, mode: brief.mode, gates: brief.gates })
+    let defaults = || Record {
+        phase: Value::String("idle".into()),
+        mode: Value::Null,
+        gates: default_gates(),
+    };
+    let file = root.join(".bee").join("state.json");
+    let ReadJson::Parsed(Value::Object(state)) = read_json_failopen(&file) else {
+        // Missing, corrupt (warned) or a non-object parse — all defaultState().
+        return Ok(defaults());
+    };
+    // approved_gates: { ...defaults, ...(state.approved_gates || {}) }.
+    let gates = match state.get("approved_gates") {
+        None | Some(Value::Null) | Some(Value::Bool(false)) => default_gates(),
+        Some(Value::String(s)) if s.is_empty() => default_gates(),
+        Some(Value::Number(n)) if n.as_f64() == Some(0.0) => default_gates(),
+        Some(Value::Object(overlay)) => {
+            let mut merged = default_gates();
+            for (k, v) in overlay {
+                merged.insert(k.clone(), v.clone());
+            }
+            merged
+        }
+        // A truthy non-object spreads exotic key sets in JS — delegate.
+        Some(_) => return Err(Flow::Delegate),
+    };
+    let mut phase = state.get("phase").cloned().unwrap_or(Value::String("idle".into()));
+    if phase == Value::String("validating".into()) {
+        phase = Value::String("planning".into()); // coerceLegacyPhase (D13)
+    }
+    Ok(Record { phase, mode: state.get("mode").cloned().unwrap_or(Value::Null), gates })
 }
 
 fn default_gates() -> Map<String, Value> {
@@ -521,9 +588,11 @@ fn resolve_pipeline(
         return Ok(Pipeline::Ok { record: read_state_record(root)? });
     }
     let session_file = ctl.join(".bee").join("sessions").join(format!("{sid}.json"));
-    let session = match read_json(&session_file) {
+    // Corrupt → warned, then reads as "no session" (readJson's null fallback
+    // through readSession's `!session || session.id !== id` guard).
+    let session = match read_json_failopen(&session_file) {
         ReadJson::Missing => None,
-        ReadJson::Corrupt => return Err(Flow::Delegate),
+        ReadJson::Corrupt => unreachable!("read_json_failopen never returns Corrupt"),
         ReadJson::Parsed(Value::Object(m)) => {
             if m.get("id").and_then(Value::as_str) == Some(sid) {
                 Some(m)
@@ -552,9 +621,23 @@ fn resolve_pipeline(
     if !lane_file.exists() {
         return Ok(Pipeline::Refused); // LANE_MISSING
     }
-    match read_json(&lane_file) {
-        ReadJson::Corrupt => Err(Flow::Delegate),
-        ReadJson::Missing => Ok(Pipeline::Refused),
+    // A corrupt lane gets BOTH of Node's lines: readJson's (queued above by
+    // read_json_failopen) and then readLane's own, via the None arm below —
+    // laneRecordFrom(null) is null just like a shape-wrong record.
+    match read_json_failopen(&lane_file) {
+        ReadJson::Corrupt => unreachable!("read_json_failopen never returns Corrupt"),
+        ReadJson::Missing => {
+            // Vanished mid-read, or corrupt: laneRecordFrom(null) → readLane's
+            // warn → LANE_CORRUPT. (A genuinely absent file was already
+            // short-circuited by the exists() check above.)
+            let rel = format!(".bee{s}lanes{s}{bound}.json", s = std::path::MAIN_SEPARATOR);
+            stderr.push_str(&format!(
+                "readLane: skipping corrupt lane record \"{rel}\" for display — mutations \
+through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \
+\"git checkout -- {rel}\").\n"
+            ));
+            Ok(Pipeline::Refused)
+        }
         ReadJson::Parsed(parsed) => match lane_record_from(&bound, &parsed)? {
             Some(record) => Ok(Pipeline::Ok { record }),
             None => {
@@ -571,10 +654,13 @@ through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \
     }
 }
 
+/// state.mjs readHandoff, truthiness only. A corrupt HANDOFF.json warns and
+/// reads as absent — so the "hive door open" mid-phase warning still fires,
+/// which is the conservative half of readJson's fail-open here.
 fn read_handoff_truthy(root: &Path) -> Result<bool, Flow> {
-    match read_json(&root.join(".bee").join("HANDOFF.json")) {
+    match read_json_failopen(&root.join(".bee").join("HANDOFF.json")) {
         ReadJson::Missing => Ok(false),
-        ReadJson::Corrupt => Err(Flow::Delegate),
+        ReadJson::Corrupt => unreachable!("read_json_failopen never returns Corrupt"),
         ReadJson::Parsed(v) => Ok(js_truthy(&v)),
     }
 }
@@ -589,14 +675,16 @@ fn legacy_inject_cache_path(root: &Path) -> PathBuf {
     root.join(".bee").join(".inject-cache.json")
 }
 
-/// readJson(new, null) || readJson(legacy, {}) || {} — object caches only
-/// (non-object parses delegate; screened in preflight, re-checked here).
+/// readJson(new, null) || readJson(legacy, {}) || {} — object caches only. A
+/// corrupt cache warns and reads as absent, so the chain falls through to the
+/// legacy file and then to `{}` (the nudge simply re-injects once). Non-object
+/// parses still delegate; they are screened in preflight and re-checked here.
 fn read_inject_cache(root: &Path) -> Result<Map<String, Value>, Flow> {
     for (file, missing_falls_through) in
         [(inject_cache_path(root), true), (legacy_inject_cache_path(root), false)]
     {
-        match read_json(&file) {
-            ReadJson::Corrupt => return Err(Flow::Delegate),
+        match read_json_failopen(&file) {
+            ReadJson::Corrupt => unreachable!("read_json_failopen never returns Corrupt"),
             ReadJson::Missing => {
                 if !missing_falls_through {
                     return Ok(Map::new());
@@ -1080,8 +1168,9 @@ fn list_claimed_cells(root: &Path) -> Result<Vec<Map<String, Value>>, Flow> {
             if !name.ends_with(".json") {
                 continue;
             }
-            match read_json(&entry.path()) {
-                ReadJson::Corrupt => return Err(Flow::Delegate),
+            // A corrupt cell warns and is skipped (readJson null → `!cell`).
+            match read_json_failopen(&entry.path()) {
+                ReadJson::Corrupt => unreachable!("read_json_failopen never returns Corrupt"),
                 ReadJson::Missing => continue,
                 ReadJson::Parsed(Value::Object(cell)) => {
                     if cell.get("status") == Some(&Value::String("claimed".into())) {
@@ -1501,10 +1590,17 @@ fn global_perf_log_path() -> PathBuf {
     global_perf_dir().join("performance.jsonl")
 }
 
+/// encodeProjectDir: replace [\\/.:] with '-'.
+///
+/// Divergence from perf.mjs, taken deliberately AT CUTOVER (plans/rust-port.md,
+/// "the two filed win32 defects"): Node's `/[\\/.]/g` kept the Windows drive
+/// colon, spelling a transcript directory (`D:-projects-…`) that cannot exist
+/// on NTFS. Mapping ':' as well gives `D--projects-…`, the spelling Claude Code
+/// itself writes, so the perf rollup can finally find a transcript on win32.
 fn encode_project_dir(project_path: &str) -> String {
     project_path
         .chars()
-        .map(|c| if matches!(c, '\\' | '/' | '.') { '-' } else { c })
+        .map(|c| if matches!(c, '\\' | '/' | '.' | ':') { '-' } else { c })
         .collect()
 }
 
@@ -1781,6 +1877,12 @@ fn walk_subagents(session_dir: &Path) -> SubWalk {
         if stamps.is_empty() {
             continue;
         }
+        // perf.mjs reads `<name>.meta.json` here for agentType, which nothing
+        // downstream of this port consumes — but readJson still WARNS on a
+        // corrupt sidecar, so the read is kept for that one observable effect.
+        // (Was covered by the deleted corrupt-JSON pre-flight.)
+        let meta = sub_dir.join(format!("{}.meta.json", &name[..name.len() - ".jsonl".len()]));
+        let _ = read_json_failopen(&meta);
         let a_start = stamps.iter().cloned().fold(f64::INFINITY, f64::min);
         let a_end = stamps.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         if a_end < 0.0 {
@@ -2359,7 +2461,8 @@ mod tests {
         let ctx = read_hook_context(HOOK_NAME, &[], &stdin);
         let root = ctx.root.clone().expect("fixture root resolves");
         let session_id = get_session_id(&ctx.payload);
-        let config = preflight(&root, &ctx, session_id.as_deref())?;
+        clear_corrupt_json_warnings();
+        let config = preflight(&root)?;
         let mut parts = Vec::new();
         let mut stderr = String::new();
         let mut stdout = String::new();
@@ -2369,7 +2472,9 @@ mod tests {
             Err(Flow::Delegate) => return Err(()),
             Err(Flow::Crash(_)) => {}
         }
-        Ok((stdout, parts, stderr))
+        // flush() writes the queued corrupt-JSON warnings ahead of `stderr`;
+        // tests read them from the same string.
+        Ok((stdout, parts, format!("{}{stderr}", take_corrupt_json_warnings())))
     }
 
     #[test]
@@ -2549,17 +2654,105 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_state_or_precompact_delegates() {
+    fn corrupt_state_reads_as_defaults_and_precompact_still_delegates() {
         let fx = fixture();
         let root = fx.path();
         write_json_file(&root.join(".bee").join("config.json"), &json!({}));
         std::fs::write(root.join(".bee").join("state.json"), "{broken").unwrap();
-        assert!(run_stop(root, json!({})).is_err());
-        // PreCompact delegates in run_inner
+        let (stdout, parts, stderr) = run_stop(root, json!({})).expect("must run natively");
+        // defaultState() → phase idle → the decision-nudge branch, never the
+        // mid-phase warning; no block; the corruption is reported once.
+        assert_eq!(stdout, "");
+        assert!(!parts.iter().any(|p| p.contains("hive door open")));
+        // TWO lines, matching Node: bee-session-close.mjs reads state.json
+        // once itself and once more through resolvePipeline's defaults().
+        assert_eq!(stderr.matches("could not parse JSON at").count(), 2);
+        assert!(stderr.contains("Using fallback; fix the file."));
+        // PreCompact still delegates in run_inner.
         let fx2 = fixture();
         write_json_file(&fx2.path().join(".bee").join("config.json"), &json!({}));
         let body = json!({"hook_event_name": "PreCompact", "cwd": fx2.path().to_string_lossy()});
         assert!(run_inner(&[], &serde_json::to_string(&body).unwrap()).is_err());
+    }
+
+    #[test]
+    fn corrupt_handoff_still_raises_the_mid_phase_warning() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"phase": "swarming", "mode": "standard"}),
+        );
+        std::fs::write(root.join(".bee").join("HANDOFF.json"), "{broken").unwrap();
+        let (stdout, parts, stderr) = run_stop(root, json!({})).expect("must run natively");
+        assert_eq!(stdout, "");
+        // readHandoff's null fallback = "no handoff" → the door-open warning.
+        assert!(parts.iter().any(|p| p.contains("You are about to leave the hive door open")));
+        assert_eq!(stderr.matches("could not parse JSON at").count(), 1);
+    }
+
+    #[test]
+    fn corrupt_lane_record_refuses_and_falls_back_to_state() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_json_file(
+            &root.join(".bee").join("sessions").join("s-1.json"),
+            &json!({"id": "s-1", "lane": "l1"}),
+        );
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::write(root.join(".bee").join("lanes").join("l1.json"), "{broken").unwrap();
+        let (_, _, stderr) = run_stop(root, json!({"session_id": "s-1"})).expect("native");
+        // Both of Node's lines, in Node's order: readJson's, then readLane's.
+        let readjson_at = stderr.find("could not parse JSON at").unwrap();
+        let readlane_at = stderr.find("readLane: skipping corrupt lane record").unwrap();
+        assert!(readjson_at < readlane_at);
+        assert_eq!(stderr.matches("could not parse JSON at").count(), 1);
+    }
+
+    #[test]
+    fn corrupt_session_record_reads_as_no_session() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        std::fs::create_dir_all(root.join(".bee").join("sessions")).unwrap();
+        std::fs::write(root.join(".bee").join("sessions").join("s-1.json"), "{broken").unwrap();
+        let (stdout, _, stderr) = run_stop(root, json!({"session_id": "s-1"})).expect("native");
+        assert_eq!(stdout, "");
+        assert_eq!(stderr.matches("could not parse JSON at").count(), 1);
+    }
+
+    #[test]
+    fn corrupt_cell_is_skipped_from_the_claimed_list() {
+        let fx = fixture();
+        let root = fx.path();
+        let cells = root.join(".bee").join("cells");
+        write_json_file(&cells.join("c-1.json"), &json!({"id": "c-1", "status": "claimed"}));
+        std::fs::write(cells.join("bad.json"), "{broken").unwrap();
+        let listed = list_claimed_cells(root).expect("must not delegate");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].get("id"), Some(&json!("c-1")));
+        assert_eq!(take_corrupt_json_warnings().matches("bad.json").count(), 1);
+    }
+
+    #[test]
+    fn corrupt_inject_cache_falls_through_to_empty() {
+        let fx = fixture();
+        let root = fx.path();
+        clear_corrupt_json_warnings();
+        std::fs::create_dir_all(root.join(".bee").join("cache")).unwrap();
+        std::fs::write(inject_cache_path(root), "{broken").unwrap();
+        // Reads as absent → `{}` → every key is due for injection again.
+        let cache = read_inject_cache(root).expect("must not delegate");
+        assert!(cache.is_empty());
+        assert!(should_inject(root, "any-key", "h1").unwrap());
+        // A non-object cache is still a delegate (JS assignment exotica).
+        std::fs::write(inject_cache_path(root), "[1,2]").unwrap();
+        assert!(read_inject_cache(root).is_err());
+        clear_corrupt_json_warnings();
     }
 
     #[test]
@@ -2587,7 +2780,10 @@ mod tests {
 
     #[test]
     fn perf_helpers_match_node_shapes() {
-        assert_eq!(encode_project_dir("D:\\a\\b.c"), "D:-a-b-c");
+        // Cutover fix: the drive colon is encoded away too, so the name is
+        // legal on NTFS (Node spelled "D:-a-b-c", a component mkdir rejects).
+        assert_eq!(encode_project_dir("D:\\a\\b.c"), "D--a-b-c");
+        assert_eq!(encode_project_dir("/a/b.c"), "-a-b-c");
         assert_eq!(humanize_ms(3_723_000.0), "1h2m3s");
         assert_eq!(humanize_ms(0.0), "0s");
         assert_eq!(fmt_tokens(1_234.0), "1.2k");

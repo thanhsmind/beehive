@@ -29,9 +29,17 @@
 // the .mjs and it only ever ADDS a denial for a call Node left unguarded —
 // see cli_shape.rs's header.
 //
+// CORRUPT JSON IS NATIVE (cutover 2026-08-01): readJson()-level corruption
+// used to delegate because Node's warn quoted V8's parse message. It now warns
+// in bee's own words and takes readJson's `null` fallback — see read_json_g.
+// The warning is queued and flushed with the rest of the buffered output, so
+// the delegate contract below still holds byte-for-byte. A corrupt CONFIG file
+// is native too, inside crate::state::read_config_raw — but that reader prints
+// immediately, so a run that reads a bad config and THEN delegates for one of
+// the reasons below can leak that one line (accepted: the remaining delegates
+// are themselves being retired).
+//
 // DELEGATED BRANCHES (each justified at its site):
-//   - any readJson()-level corrupt JSON on the native path (Node warns to
-//     stderr with the V8 parse message — unreplicable bytes);
 //   - node -e/--eval/-p inline-eval commands (internals-reach regex);
 //   - companion-mount resolution when .bee/companion-session.json exists and
 //     the target already failed containment;
@@ -59,9 +67,16 @@ const HOOK_NAME: &str = "write-guard";
 // ─── strangler bail ────────────────────────────────────────────────────────
 
 /// "Needs Node": the branch's Rust equivalence is unproven — delegate.
+///
+/// pub(crate) since the wcg-3 port: `crate::nested_checkout` reuses this
+/// module's shared-nested-checkout primitives (the guard is the ONE place
+/// that verification lives — re-deriving it there would fork the guard, the
+/// drift C5 exists to prevent), so it has to be able to name the error type
+/// those primitives return. It maps `Nd` onto a native fail-closed refusal
+/// rather than a delegation; see that module's header.
 #[derive(Debug, Clone, Copy)]
-struct Nd;
-type R<T> = Result<T, Nd>;
+pub(crate) struct Nd;
+pub(crate) type R<T> = Result<T, Nd>;
 
 // ─── embedded vendored-lib byte gate ───────────────────────────────────────
 // The import closure of state.mjs + guards.mjs + validate-args.mjs +
@@ -471,7 +486,7 @@ fn realpath_any(p: &str) -> Option<String> {
 
 /// guards.mjs realpathOrNull flavor (F2): ENOENT → None, any other error is a
 /// JS throw — Nd here.
-fn realpath_f2(p: &str) -> R<Option<String>> {
+pub(crate) fn realpath_f2(p: &str) -> R<Option<String>> {
     match dunce::canonicalize(Path::new(p)) {
         Ok(b) => Ok(Some(b.to_string_lossy().into_owned())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -557,13 +572,67 @@ fn js_round(v: f64) -> f64 {
 }
 
 // ─── fsutil.mjs readJson (provenance: lib/fsutil.mjs readJson) ─────────────
-// Corrupt JSON is Nd: Node warns to stderr with the V8 message.
+// CUTOVER (2026-08-01): corrupt JSON used to be Nd, because Node's warn quoted
+// V8's parse sentence. It is native now — warn once, then take readJson's
+// `null` fallback, which every caller below already treats as "absent":
+// readState falls back to defaultState(), readSession/readClaim read as no
+// record, the worktree-holds ledger reads as zero holds, and a corrupt lane
+// record still takes readLane's own second warn and the LANE_CORRUPT refusal
+// (same reason text, same deny, same exit code as before).
+//
+// The warning is DEFERRED, not printed: this hook buffers every byte and
+// flushes only on the Done path, so a run that later returns Nd (the worktree
+// arms still do) must not have written to stderr already. read_json_g queues
+// the line here; flush() writes the queue ahead of emit.stderr, which puts
+// readJson's warn before the deny reason / readLane line it precedes in Node.
+
+thread_local! {
+    static CORRUPT_JSON_WARNINGS: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn take_corrupt_json_warnings() -> String {
+    CORRUPT_JSON_WARNINGS.with(|q| q.borrow_mut().drain(..).collect::<Vec<_>>().join(""))
+}
+
+fn clear_corrupt_json_warnings() {
+    CORRUPT_JSON_WARNINGS.with(|q| q.borrow_mut().clear());
+}
 
 fn read_json_g(file: &Path) -> R<Option<Value>> {
     match crate::fsutil::read_json(file) {
         crate::fsutil::ReadJson::Missing => Ok(None),
-        crate::fsutil::ReadJson::Corrupt => Err(Nd),
+        crate::fsutil::ReadJson::Corrupt => {
+            // Same sentence crate::fsutil::warn_corrupt_json prints, queued
+            // instead of written (see the note above).
+            CORRUPT_JSON_WARNINGS.with(|q| {
+                q.borrow_mut().push(format!(
+                    "bee: could not parse JSON at {} — {}. Using fallback; fix the file.\n",
+                    file.display(),
+                    corrupt_json_reason(file)
+                ))
+            });
+            Ok(None)
+        }
         crate::fsutil::ReadJson::Parsed(v) => Ok(Some(v)),
+    }
+}
+
+/// Why the file would not parse, in bee's words — the buffered twin of
+/// fsutil.rs's private `corrupt_json_reason` (copied because that helper is
+/// private to crate::fsutil and this hook cannot print at read time).
+fn corrupt_json_reason(file: &Path) -> String {
+    let Ok(bytes) = std::fs::read(file) else {
+        return "the file could not be read".to_string();
+    };
+    let text = String::from_utf8_lossy(&bytes);
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+    match serde_json::from_str::<Value>(text) {
+        Ok(_) => "invalid JSON".to_string(), // raced: it parses now
+        Err(e) if e.line() > 0 => {
+            format!("invalid JSON at line {} column {}", e.line(), e.column())
+        }
+        Err(_) => "invalid JSON".to_string(),
     }
 }
 
@@ -601,7 +670,8 @@ fn default_state() -> Map<String, Value> {
 }
 
 /// provenance: state.mjs readState — fail-open merge over defaultState with
-/// the D13 legacy-phase coercion. Corrupt file → Nd (readJson warn).
+/// the D13 legacy-phase coercion. A corrupt file warns and reads as absent,
+/// so the guards evaluate against defaultState() exactly as Node did.
 fn read_state(root: &Path) -> R<Map<String, Value>> {
     let file = root.join(".bee").join("state.json");
     let parsed = read_json_g(&file)?;
@@ -835,8 +905,8 @@ fn plain_id_ok(id: &str) -> bool {
     !t.is_empty() && !t.contains('/') && !t.contains('\\') && !t.contains("..")
 }
 
-/// provenance: claims.mjs readSession (strict=false). Corrupt → Nd (readJson
-/// warn); malformed id / missing / shape mismatch → None.
+/// provenance: claims.mjs readSession (strict=false). Corrupt → warn once and
+/// read as None; malformed id / missing / shape mismatch → None.
 fn read_session(root: &str, session_id: &str) -> R<Option<Map<String, Value>>> {
     if !plain_id_ok(session_id) {
         return Ok(None);
@@ -948,7 +1018,7 @@ fn is_concurrent_mode(root: &str, exclude: Option<&str>, strict: bool) -> R<bool
 /// provenance: claims.mjs activeWorkers — reduced to the live session-id
 /// view resolveLiveWorkerCount consumes (lane/cell fields are dead there),
 /// but the claims-directory scan is still performed so a corrupt claim file
-/// (which Node's readJson would WARN about) is caught → Nd.
+/// gets the same one-line warning Node's readJson gave it.
 fn active_worker_session_ids(control_root: &str, exclude: Option<&str>) -> R<Vec<String>> {
     let exclude = exclude.map(js_trim).unwrap_or("");
     let now = now_ms();
@@ -977,7 +1047,7 @@ fn active_worker_session_ids(control_root: &str, exclude: Option<&str>) -> R<Vec
             if !plain_id_ok(stem) {
                 continue; // requireId throw → caught/skipped in Node
             }
-            read_json_g(&claims_dir.join(&name))?; // Corrupt → Nd
+            read_json_g(&claims_dir.join(&name))?; // Corrupt → warn, read as no claim
         }
     }
     Ok(live)
@@ -2352,7 +2422,9 @@ fn resolve_write_record(
         });
     }
     // readLane(control2, bound).
-    let parsed = read_json_g(&file)?; // Corrupt JSON → Nd (readJson warn)
+    // readJson warns and yields null on corruption; laneRecordFrom(null) then
+    // takes the corrupt-shape arm below — LANE_CORRUPT, same deny, same code.
+    let parsed = read_json_g(&file)?;
     let lane_record = parsed.and_then(|v| match v {
         Value::Object(m) if m.get("feature") == Some(&Value::String(bound.clone())) => Some(m),
         _ => None,
@@ -3089,7 +3161,7 @@ fn lexical_abs_target(root: &str, cwd: &str, raw: &str) -> R<String> {
 }
 
 /// provenance: bee-write-guard.mjs isUnderRoot.
-fn is_under_root(parent_real: &str, child_real: &str) -> R<bool> {
+pub(crate) fn is_under_root(parent_real: &str, child_real: &str) -> R<bool> {
     if parent_real.is_empty() || child_real.is_empty() {
         return Ok(false);
     }
@@ -3415,7 +3487,7 @@ fn memory_root_hit(store_root: &Path) -> R<bool> {
 // silent, any other fs error is a JS throw → Nd, which delegates to Node's
 // typed fail-closed detection-error refusal) ───────────────────────────────
 
-fn has_git_node_f2(dir: &str) -> R<bool> {
+pub(crate) fn has_git_node_f2(dir: &str) -> R<bool> {
     match std::fs::metadata(Path::new(dir).join(".git")) {
         Ok(_) => Ok(true),
         Err(e) if io_err_is_enoent(&e) => Ok(false),
@@ -3447,7 +3519,12 @@ fn resolve_existing_realpath_f2(abs: &str) -> R<Option<String>> {
     }
 }
 
-fn resolve_verified_companion_mount_real(root: &str) -> R<Option<String>> {
+/// pub(crate) since the wcg-3 port (`crate::nested_checkout`): guards.mjs's
+/// own comment says this verification "lives in exactly one place", shared by
+/// the point-check (`target_inside_verified_companion_mount`) and the
+/// directory-scan (`hasAnySharedNestedCheckout`). Widening it is what keeps
+/// that true across the two Rust modules.
+pub(crate) fn resolve_verified_companion_mount_real(root: &str) -> R<Option<String>> {
     let marker_file = Path::new(root).join(".bee").join("companion-session.json");
     let raw = match std::fs::read(&marker_file) {
         Ok(b) => String::from_utf8_lossy(&b).into_owned(),
@@ -3518,7 +3595,7 @@ fn find_nested_checkout_dir(root_real: &str, abs_target: &str) -> R<Option<Strin
     }
 }
 
-fn is_registered_submodule(root_real: &str, nested_real: &str) -> R<bool> {
+pub(crate) fn is_registered_submodule(root_real: &str, nested_real: &str) -> R<bool> {
     let content = match std::fs::read(Path::new(root_real).join(".gitmodules")) {
         Ok(b) => String::from_utf8_lossy(&b).into_owned(),
         Err(e) if io_err_is_enoent(&e) => return Ok(false),
@@ -3877,6 +3954,12 @@ fn flush(emit: Emit, source: Option<&str>) -> Outcome {
     if !emit.stdout.is_empty() {
         let _ = std::io::stdout().write_all(emit.stdout.as_bytes());
     }
+    // Corrupt-JSON warnings precede everything the evaluation itself wrote,
+    // matching where Node's readJson emitted them.
+    let corrupt = take_corrupt_json_warnings();
+    if !corrupt.is_empty() {
+        let _ = std::io::stderr().write_all(corrupt.as_bytes());
+    }
     if !emit.stderr.is_empty() {
         let _ = std::io::stderr().write_all(emit.stderr.as_bytes());
     }
@@ -3910,6 +3993,7 @@ fn first_truthy<'a>(map: &'a Map<String, Value>, keys: &[&str]) -> Option<&'a Va
 }
 
 fn run_native(ctx: &HookContext) -> R<Emit> {
+    clear_corrupt_json_warnings(); // one queue per evaluation (tests reuse the thread)
     let mut emit = Emit::default();
     let Some(root_pb) = ctx.root.clone() else {
         return Ok(emit);
@@ -5407,11 +5491,30 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_state_json_delegates() {
+    fn corrupt_state_json_warns_and_guards_from_defaults() {
         let fx = build_fixture("swarming", true);
         std::fs::write(fx.root.join(".bee").join("state.json"), "{broken").unwrap();
-        // Node warns to stderr with the V8 message — unreplicable → Delegate.
-        expect_delegate(edit("src/app.js"), &fx.root);
+        // readJson's null fallback → defaultState(): phase idle, execution
+        // gate false. The guard decides NATIVELY and, because it no longer
+        // sees an approved execution gate, refuses the source edit.
+        let e = expect_done(edit("src/app.js"), &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+        // One warning per bad file, queued for flush() (never printed before
+        // the native/delegate decision is final).
+        let queued = take_corrupt_json_warnings();
+        assert_eq!(queued.matches("could not parse JSON at").count(), 1);
+        assert!(queued.ends_with("Using fallback; fix the file.\n"));
+    }
+
+    #[test]
+    fn corrupt_state_json_does_not_leak_output_on_a_delegating_run() {
+        // A run that still delegates (a `node -e` inline eval) must emit
+        // nothing even though it read the corrupt state.json on the way.
+        let fx = build_fixture("swarming", true);
+        std::fs::write(fx.root.join(".bee").join("state.json"), "{broken").unwrap();
+        expect_delegate(bash("node -e \"require('fs')\""), &fx.root);
+        // Whatever was queued is dropped with the run — flush() never ran.
+        take_corrupt_json_warnings();
     }
 
     #[test]

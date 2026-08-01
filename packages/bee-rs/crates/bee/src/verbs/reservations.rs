@@ -53,12 +53,19 @@
 // including its linked branch: it is where the LEASE files live, and it
 // answers mainRoot for a granted worktree from the git link alone.
 //
+// CUTOVER (2026-08-01): corrupt JSON no longer delegates. The cross-worktree
+// holds ledger and the session records both FAIL OPEN exactly as
+// `readJson(file, fallback)` did — one `bee: could not parse JSON at …` line
+// (crate::fsutil::warn_corrupt_json) and then the same fallback: an empty
+// `{ holds: [] }` ledger, or that one session record skipped. The
+// `|n| >= 1e21` class is retired too: jsjson::js_f64_to_string implements the
+// full ECMA Number::toString, so js_numberify accepts every finite number.
+//
 // Delegation rules beyond the argv shape (all pre-checked BEFORE any store
-// write): corrupt JSON that Node would warn about with a V8 message
-// (cross-worktree ledger, session records), `null` ledger entries (a JS
+// write): `null` ledger entries (a JS
 // property access crash), date strings outside the ISO subset this port
-// models (Date.parse's V8 fallback grammar), numbers at/above 1e21 (JS
-// exponent rendering), and unmodelable Windows path spellings. One accepted
+// models (Date.parse's V8 fallback grammar), and unmodelable Windows path
+// spellings. One accepted
 // residual: a prechecked file turning corrupt DURING the run (external,
 // non-locking writer) can still surface as a late None — the Node re-run
 // then operates on the partially-mutated store, the same outcome as two
@@ -222,15 +229,19 @@ pub(crate) fn js_round(v: f64) -> f64 {
 }
 
 /// Re-shape parsed JSON the way JSON.parse does in JS: every number becomes
-/// an f64 (big u64/i64 round exactly like V8 does). |n| >= 1e21 would print
-/// in exponent notation under JS — outside this port's formatter, Exotic.
+/// an f64 (big u64/i64 round exactly like V8 does). EVERY finite number is
+/// accepted — the `|n| >= 1e21` exponent-notation class is retired (see the
+/// CUTOVER note inside).
 pub(crate) fn js_numberify(v: &Value) -> Ex<Value> {
     match v {
         Value::Number(n) => {
             let f = n.as_f64().ok_or(Exotic)?;
-            if f.abs() >= 1e21 {
-                return Err(Exotic);
-            }
+            // CUTOVER: |n| >= 1e21 used to return Exotic here (jsjson printed
+            // such a number differently than V8, so the verb delegated rather
+            // than break C2). jsjson::js_f64_to_string now implements the
+            // spec's exponential form, so there is nothing left to dodge and
+            // no runtime left to dodge to. The remaining Err arms are
+            // unreachable from JSON, which carries no NaN/Infinity.
             Ok(Value::Number(Number::from_f64(f).ok_or(Exotic)?))
         }
         Value::Array(items) => items
@@ -974,13 +985,18 @@ fn holds_ledger_path(root: &Path) -> PathBuf {
     root.join(".bee").join("runtime").join("cross-worktree-holds.json")
 }
 
-/// provenance: worktree-holds.mjs readStore — a missing or shape-less file is
-/// an empty ledger; corrupt JSON (Node warns with the V8 message) and `null`
-/// entries (a JS property-access crash downstream) are Exotic.
+/// provenance: worktree-holds.mjs readStore — a missing, corrupt or
+/// shape-less file is an empty ledger. A corrupt file WARNS once and then
+/// takes `readJson(..., null)`'s fallback, which Node's `!store` guard turned
+/// into `{ holds: [] }` — identical result, one line of explanation.
+/// `null` entries (a JS property-access crash downstream) stay Exotic.
 fn read_holds_store(root: &Path) -> Ex<Value> {
     let store = match read_json(&holds_ledger_path(root)) {
         ReadJson::Missing => None,
-        ReadJson::Corrupt => return Err(Exotic),
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(&holds_ledger_path(root));
+            None
+        }
         ReadJson::Parsed(v) => Some(js_numberify(&v)?),
     };
     let ok_shape = store
@@ -1071,7 +1087,8 @@ fn hold_foreign_expiry(hold: &Value) -> Ex<String> {
 const HEARTBEAT_STALE_SECONDS: f64 = 900.0;
 
 /// provenance: claims.mjs listSessionRecords (fail-open flavor). A corrupt
-/// record would make Node's readJson warn — Exotic.
+/// record WARNS once and is skipped — `readJson(file, null)`'s fallback fails
+/// readSession's `!session` guard, so the scan continues over the rest.
 fn list_session_records(control_root: &str) -> Ex<Vec<Map<String, Value>>> {
     let dir = Path::new(control_root).join(".bee").join("sessions");
     let entries = match std::fs::read_dir(&dir) {
@@ -1091,9 +1108,15 @@ fn list_session_records(control_root: &str) -> Ex<Vec<Map<String, Value>>> {
         if id.is_empty() || id.contains('/') || id.contains('\\') || id.contains("..") {
             continue;
         }
-        match read_json(&dir.join(format!("{id}.json"))) {
+        let file = dir.join(format!("{id}.json"));
+        match read_json(&file) {
             ReadJson::Missing => continue,
-            ReadJson::Corrupt => return Err(Exotic), // Node warns (V8 message)
+            // readJson's `null` fallback fails readSession's `!session`
+            // guard, so the record is skipped and the scan continues.
+            ReadJson::Corrupt => {
+                crate::fsutil::warn_corrupt_json(&file);
+                continue;
+            }
             ReadJson::Parsed(v) => {
                 if let Value::Object(m) = js_numberify(&v)? {
                     if matches!(m.get("id"), Some(Value::String(s)) if s == id) {
@@ -1162,11 +1185,13 @@ fn is_concurrent_mode(control_root: &str) -> Ex<bool> {
 /// provenance: claims.mjs isConcurrentMode with `excludeSessionId` — the
 /// acting session's OWN heartbeat is never "another" live session.
 ///
-/// `strict` has no separate arm here: `list_session_records` already returns
-/// `Exotic` for an unreadable record (Node's non-strict form warns with a V8
-/// message), so this port is strict-equivalent by construction — a detection
-/// failure delegates rather than silently reading as "solo", which is exactly
-/// the fail-closed posture guards.mjs's strict mode was added for.
+/// `strict` has no separate arm here. CUTOVER: `list_session_records` used to
+/// answer `Exotic` for an unreadable record, which made this port
+/// strict-equivalent by construction. It now warns and SKIPS that record,
+/// matching Node's own non-strict readSession — so an unreadable record reads
+/// as "not a live session" and is loudly reported, rather than silently
+/// disappearing. (guards.mjs's strict mode, which throws instead, is a
+/// separate caller and is not reached from here.)
 ///
 /// pub(crate) since the `worktree new` port (bee.mjs's wcg-3 guard).
 pub(crate) fn is_concurrent_mode_excluding(
@@ -2403,14 +2428,20 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_ledger_or_null_hold_delegates() {
+    /// CUTOVER (was `corrupt_ledger_or_null_hold_delegates`): a CORRUPT
+    /// ledger no longer delegates — it warns and reads as the empty ledger,
+    /// `readJson(file, null)`'s own fallback through Node's `!store` guard.
+    /// A `null` HOLD still delegates: that one is a JS property-access crash,
+    /// not a V8-message matter, and is out of the cutover's scope.
+    fn corrupt_ledger_reads_empty_and_a_null_hold_still_delegates() {
         let tmp = fixture_root();
         std::fs::create_dir_all(tmp.path().join(".bee").join("runtime")).unwrap();
         std::fs::write(holds_ledger_path(tmp.path()), "{broken").unwrap();
-        assert!(read_holds_store(tmp.path()).is_err());
+        assert_eq!(read_holds_store(tmp.path()).ok().unwrap(), json!({"holds": []}));
         std::fs::write(holds_ledger_path(tmp.path()), "{\"holds\": [null]}").unwrap();
         assert!(read_holds_store(tmp.path()).is_err());
-        // Shape-less parses read as an empty ledger, like Node's readStore.
+        // Shape-less parses read as an empty ledger, like Node's readStore —
+        // which is exactly what the corrupt file now reads as, too.
         std::fs::write(holds_ledger_path(tmp.path()), "[1,2]").unwrap();
         let store = read_holds_store(tmp.path()).ok().unwrap();
         assert_eq!(store, json!({"holds": []}));
@@ -2931,5 +2962,44 @@ mod tests {
         )
         .unwrap();
         assert_eq!(stored["kind"], json!("intent"));
+    }
+
+    // ── CUTOVER: corrupt-JSON reads that used to delegate ─────────────────
+
+    /// worktree-holds.mjs readStore: a corrupt ledger reads as the EMPTY
+    /// ledger, which is `readJson(file, null)`'s own fallback through Node's
+    /// `!store` guard — same value, one warning of explanation.
+    #[test]
+    fn a_corrupt_holds_ledger_reads_as_an_empty_ledger() {
+        let tmp = fixture_root();
+        let ledger = holds_ledger_path(tmp.path());
+        std::fs::create_dir_all(ledger.parent().unwrap()).unwrap();
+        std::fs::write(&ledger, "{broken").unwrap();
+        assert_eq!(read_holds_store(tmp.path()).ok().unwrap(), json!({"holds": []}));
+        // A missing file answers the same thing, which is the point.
+        std::fs::remove_file(&ledger).unwrap();
+        assert_eq!(read_holds_store(tmp.path()).ok().unwrap(), json!({"holds": []}));
+    }
+
+    /// claims.mjs listSessionRecords: a corrupt session record is skipped and
+    /// the scan continues — the readable siblings still list.
+    #[test]
+    fn a_corrupt_session_record_is_skipped_not_delegated() {
+        let tmp = fixture_root();
+        let dir = tmp.path().join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("good.json"), r#"{"id":"good"}"#).unwrap();
+        std::fs::write(dir.join("bad.json"), "{broken").unwrap();
+        let records = list_session_records(tmp.path().to_str().unwrap()).ok().unwrap();
+        assert_eq!(records.len(), 1, "the corrupt record is skipped");
+        assert_eq!(records[0].get("id"), Some(&json!("good")));
+    }
+
+    /// The `|n| >= 1e21` delegate class is retired: js_numberify accepts every
+    /// finite number now that jsjson prints the full ECMA Number::toString.
+    #[test]
+    fn large_numbers_no_longer_delegate() {
+        let v: Value = serde_json::from_str("{\"n\":1e21}").unwrap();
+        assert!(js_numberify(&v).is_ok());
     }
 }

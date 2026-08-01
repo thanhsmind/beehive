@@ -26,8 +26,10 @@
 // argument is ignored there and here). Failures that are DETERMINISTIC in
 // Node (`throw new Error("release_manifest: …")`, surfaced as
 // `FAIL release_manifest: ${error.message}`) are reproduced byte for byte;
-// failures whose text is a V8/libuv message (a corrupt stored manifest, an
-// unreadable file) return None before any output.
+// failures whose text WAS a V8/libuv message (a corrupt stored manifest, an
+// unreadable file) refuse natively at cutover, in the same
+// `FAIL release_manifest: …` shape and with the same exit code, worded by us.
+// The one surviving None is a path outside the proven collation alphabet.
 
 use super::{rel_posix, sha256_hex, sort_by_locale};
 use crate::jsjson;
@@ -51,7 +53,11 @@ fn manifest_path(root: &Path) -> PathBuf {
 enum BuildErr {
     /// `FAIL release_manifest: ${message}` + exit 1.
     Refuse(String),
-    /// Unproven bytes — the probe returns None.
+    /// Unproven bytes — the probe returns None. CUTOVER: every I/O arm that
+    /// used this became a `Refuse` (see `io_refuse`). What remains is
+    /// `sort_records`, whose subject is `localeCompare` collation over free
+    /// prose — a different delegate class from V8 message text, and the one
+    /// this sweep deliberately left alone.
     Nd,
 }
 type R<T> = Result<T, BuildErr>;
@@ -93,10 +99,22 @@ fn mode_octal(meta: &std::fs::Metadata) -> String {
     format!("{bits:03o}")
 }
 
+/// A filesystem failure, worded by us. Node let the libuv error throw, which
+/// is why every one of these used to be `BuildErr::Nd` (delegate). The error
+/// KIND is named rather than the OS message string, which varies by platform
+/// and locale.
+fn io_refuse(action: &str, path: &Path, err: &std::io::Error) -> BuildErr {
+    BuildErr::Refuse(format!(
+        "release_manifest: cannot {action} {} ({})",
+        path.display(),
+        err.kind()
+    ))
+}
+
 /// provenance: release_manifest.mjs buildRecord (+ sha256File).
 fn build_record(root: &Path, abs: &Path, role: &str, with_package_path: bool) -> R<Record> {
-    let data = std::fs::read(abs).map_err(|_| BuildErr::Nd)?;
-    let meta = std::fs::metadata(abs).map_err(|_| BuildErr::Nd)?;
+    let data = std::fs::read(abs).map_err(|e| io_refuse("read", abs, &e))?;
+    let meta = std::fs::metadata(abs).map_err(|e| io_refuse("stat", abs, &e))?;
     let path = rel_posix(root, abs);
     Ok(Record {
         sha256: sha256_hex(&data),
@@ -138,10 +156,10 @@ fn walk(
     exclude_top: &[&str],
     out: &mut Vec<Record>,
 ) -> R<()> {
-    let entries = std::fs::read_dir(current).map_err(|_| BuildErr::Nd)?;
+    let entries = std::fs::read_dir(current).map_err(|e| io_refuse("list", current, &e))?;
     for entry in entries {
-        let entry = entry.map_err(|_| BuildErr::Nd)?;
-        let ft = entry.file_type().map_err(|_| BuildErr::Nd)?;
+        let entry = entry.map_err(|e| io_refuse("list", current, &e))?;
+        let ft = entry.file_type().map_err(|e| io_refuse("stat", &entry.path(), &e))?;
         let name = entry.file_name().to_string_lossy().into_owned();
         if current == top && ft.is_dir() && exclude_top.contains(&name.as_str()) {
             continue;
@@ -177,9 +195,9 @@ fn enumerate_flat_dir(root: &Path, dir: &Path, role: &str, ext: &str) -> R<Vec<R
         )));
     }
     let mut records = Vec::new();
-    for entry in std::fs::read_dir(dir).map_err(|_| BuildErr::Nd)? {
-        let entry = entry.map_err(|_| BuildErr::Nd)?;
-        let ft = entry.file_type().map_err(|_| BuildErr::Nd)?;
+    for entry in std::fs::read_dir(dir).map_err(|e| io_refuse("list", dir, &e))? {
+        let entry = entry.map_err(|e| io_refuse("list", dir, &e))?;
+        let ft = entry.file_type().map_err(|e| io_refuse("stat", &entry.path(), &e))?;
         let name = entry.file_name().to_string_lossy().into_owned();
         if ft.is_file() && name.ends_with(ext) {
             records.push(build_record(root, &entry.path(), role, false)?);
@@ -403,13 +421,23 @@ fn resolve<T>(r: R<T>) -> Result<T, Option<ExitCode>> {
 fn run_write(root: &Path) -> Result<ExitCode, Option<ExitCode>> {
     let records = resolve(build_current_records(root))?;
     let file = manifest_path(root);
+    // CUTOVER: both write failures used to delegate (Node printed a libuv
+    // message). They refuse natively now, same channel and exit code.
     if let Some(dir) = file.parent() {
-        if std::fs::create_dir_all(dir).is_err() {
-            return Err(None);
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            return Err(Some(fail(&format!(
+                "release_manifest: cannot create {} ({})",
+                dir.display(),
+                e.kind()
+            ))));
         }
     }
-    if std::fs::write(&file, manifest_bytes(&records)).is_err() {
-        return Err(None);
+    if let Err(e) = std::fs::write(&file, manifest_bytes(&records)) {
+        return Err(Some(fail(&format!(
+            "release_manifest: cannot write {} ({})",
+            file.display(),
+            e.kind()
+        ))));
     }
     println!("WROTE {}: {} file(s)", rel_posix(root, &file), records.len());
     Ok(ExitCode::SUCCESS)
@@ -423,9 +451,26 @@ fn read_stored(root: &Path) -> Result<Vec<Value>, Option<ExitCode>> {
             file.display()
         ))));
     }
-    // A read/parse failure is a V8/libuv message in Node — unreproducible.
-    let Ok(text) = std::fs::read_to_string(&file) else { return Err(None) };
-    let Ok(parsed) = serde_json::from_str::<Value>(&text) else { return Err(None) };
+    // CUTOVER: a read/parse failure was a V8/libuv message in Node, so this
+    // returned None (delegate). Both refuse natively now, through the same
+    // `FAIL release_manifest: …` channel and exit code as the missing and
+    // malformed cases above and below — only the wording is ours.
+    let text = match std::fs::read_to_string(&file) {
+        Ok(t) => t,
+        Err(e) => {
+            return Err(Some(fail(&format!(
+                "release_manifest: cannot read stored manifest: {} ({})",
+                file.display(),
+                e.kind()
+            ))))
+        }
+    };
+    let Ok(parsed) = serde_json::from_str::<Value>(&text) else {
+        return Err(Some(fail(&format!(
+            "release_manifest: stored manifest is not valid JSON: {}",
+            file.display()
+        ))));
+    };
     match parsed.get("files") {
         Some(Value::Array(files)) => Ok(files.clone()),
         _ => Err(Some(fail(&format!(
@@ -481,7 +526,12 @@ fn run_selftest(root: &Path) -> Result<ExitCode, Option<ExitCode>> {
         .unwrap_or(&baseline[0])
         .clone();
 
-    let Ok(temp_dir) = tempdir_for_selftest() else { return Err(None) };
+    let Ok(temp_dir) = tempdir_for_selftest() else {
+        // CUTOVER: was a delegate (Node's libuv message).
+        return Err(Some(fail(
+            "release_manifest --selftest: cannot create a scratch directory",
+        )));
+    };
     let real_abs = {
         let mut p = root.to_path_buf();
         for seg in target.path.split('/') {
@@ -497,10 +547,20 @@ fn run_selftest(root: &Path) -> Result<ExitCode, Option<ExitCode>> {
             .unwrap_or(target.path.as_str()),
     );
     let outcome = (|| -> Result<ExitCode, Option<ExitCode>> {
-        let Ok(mut content) = std::fs::read(&real_abs) else { return Err(None) };
+        // CUTOVER: both were delegates (Node's libuv messages).
+        let Ok(mut content) = std::fs::read(&real_abs) else {
+            return Err(Some(fail(&format!(
+                "release_manifest --selftest: cannot read {}",
+                real_abs.display()
+            ))));
+        };
         content.extend_from_slice(b"\n// release_manifest --selftest mutation marker\n");
-        if std::fs::write(&temp_copy, &content).is_err() {
-            return Err(None);
+        if let Err(e) = std::fs::write(&temp_copy, &content) {
+            return Err(Some(fail(&format!(
+                "release_manifest --selftest: cannot write {} ({})",
+                temp_copy.display(),
+                e.kind()
+            ))));
         }
         let mutated_hash = sha256_hex(&content);
         if mutated_hash == target.sha256 {

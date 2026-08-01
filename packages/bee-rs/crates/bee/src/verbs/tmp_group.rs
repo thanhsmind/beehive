@@ -7,10 +7,15 @@
 // shapes the deterministic refusals are served natively byte-identical: the
 // no-flag "no default purge" refusal and the invalid --before ISO refusal.
 //
+// CUTOVER (2026-08-01): a corrupt .bee/lanes/*.json no longer delegates. It
+// warns (crate::fsutil::warn_corrupt_json, then readLane's own
+// skipping-corrupt-lane-record line, both of which Node printed) and reads as
+// "no lane" — `readJson(file, null)`'s own fallback, so the sweep plan is
+// unchanged. A corrupt .bee/state.json fails open inside
+// crate::state::read_state_brief, which was converted in its own file.
+//
 // Additional delegation triggers (None before any output/write):
 //   - --help anywhere, unknown flags, non-flag tokens, --all=<not true/false>
-//   - corrupt .bee/state.json or .bee/lanes/*.json (Node warns with the V8
-//     parse message)
 //   - --before values outside the strict-ISO subset js_date_parse proves
 //     (V8's legacy Date fallback could still accept them)
 //   - paths that cannot be represented as UTF-8 strings for the result JSON
@@ -97,15 +102,19 @@ struct StateLite {
     feature: Value,
 }
 
-/// readState(root) — fail-open defaults; Err(()) => corrupt file, delegate.
+/// readState(root) — fail-open defaults. A corrupt file warns and reads as
+/// defaults inside crate::state::read_state_brief (converted in its own
+/// file), so `Err(())` is now unreachable for that cause.
 fn read_state_lite(root: &Path) -> Result<StateLite, ()> {
     let brief = read_state_brief(root).map_err(|_| ())?;
     Ok(StateLite { phase: brief.phase, feature: brief.feature })
 }
 
 /// readLane(root, feature) — fail-open display read; Ok(Some(phase)) when a
-/// matching lane record exists. Err(()) => corrupt JSON, delegate. The
-/// mismatched-record console.warn is replicated byte-identically.
+/// matching lane record exists. CUTOVER: corrupt JSON no longer delegates —
+/// it warns (readJson's line, then readLane's own) and reads as "no lane",
+/// which is readJson's `null` fallback. The mismatched-record console.warn is
+/// replicated byte-identically.
 fn read_lane_phase(root: &Path, feature: &str) -> Result<Option<Value>, ()> {
     // requireLaneFeature (throws are caught fail-open in readLane -> null).
     let trimmed = js_trim(feature);
@@ -118,7 +127,20 @@ fn read_lane_phase(root: &Path, feature: &str) -> Result<Option<Value>, ()> {
     }
     let parsed = match read_json(&file) {
         ReadJson::Missing => return Ok(None),
-        ReadJson::Corrupt => return Err(()), // Node's readJson warns with the V8 message
+        // CUTOVER: readJson's `null` fallback makes laneRecordFrom answer
+        // null, so Node printed ITS warning and then readLane's own line and
+        // returned null. Both lines are reproduced; the answer is unchanged.
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(&file);
+            let rel = format!(
+                ".bee{sep}lanes{sep}{trimmed}.json",
+                sep = std::path::MAIN_SEPARATOR
+            );
+            eprintln!(
+                "readLane: skipping corrupt lane record \"{rel}\" for display — mutations through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\")."
+            );
+            return Ok(None);
+        }
         ReadJson::Parsed(v) => v,
     };
     // laneRecordFrom: object, feature field must strictly equal the trimmed name.
@@ -269,7 +291,9 @@ fn count_files(abs: &Path) -> u64 {
 // ─── feature matching ──────────────────────────────────────────────────────
 
 /// matchFeature — exact name always; `<feature><sep>...` prefix unless the
-/// sibling is itself live. Err(()) => delegate (corrupt lane record).
+/// sibling is itself live. `Err(())` is now unreachable through the lane read
+/// (a corrupt record reads as absent); the signature is kept because
+/// read_state_brief still carries a Bail-shaped result.
 fn match_feature(
     root: &Path,
     state: &StateLite,
@@ -809,11 +833,26 @@ mod tests {
         // Mismatched feature field: deterministic warn, record skipped.
         write_lane(root, "f1", r#"{"feature":"other","phase":"executing"}"#);
         assert_eq!(read_lane_phase(root, "f1").unwrap(), None);
-        // Corrupt JSON: delegate.
+        // CUTOVER: corrupt JSON used to delegate (Node's readJson warning
+        // carried a V8 parse message). It now warns — readJson's line AND
+        // readLane's own — and reads as "no lane", readJson's null fallback.
         write_lane(root, "f2", "{broken");
-        assert!(read_lane_phase(root, "f2").is_err());
+        assert_eq!(read_lane_phase(root, "f2").unwrap(), None);
         // Path-separator names read as "no lane" without touching disk.
         assert_eq!(read_lane_phase(root, "a/b").unwrap(), None);
+    }
+
+    /// The sweep PLAN over a corrupt lane record: the run still succeeds and
+    /// the lane simply reads as absent, so the feature is not "live".
+    #[test]
+    fn a_corrupt_lane_record_no_longer_delegates_the_sweep() {
+        let repo = setup_repo();
+        let root = repo.path();
+        write_state(root, r#"{"phase":"idle","feature":null}"#);
+        write_lane(root, "f2", "{broken");
+        let state = read_state_lite(root).unwrap();
+        assert!(!is_live_feature(root, &state, "f2").unwrap());
+        assert!(!has_record(root, &state, "f2").unwrap());
     }
 
     // ─── whole-command contracts (oracle: packages/bee/tests/test_scratch.mjs) ─

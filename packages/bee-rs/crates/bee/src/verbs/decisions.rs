@@ -9,19 +9,28 @@
 //   decisions log     --decision D --rationale R [--alternatives A]
 //                     [--scope S] [--source S] [--confidence N] [--tags T]
 //                     [--json]
-//   decisions tag     --target ID --tags T [--scope S] [--json]   (no --stdin)
+//   decisions tag     --target ID --tags T [--scope S] [--json]
+//   decisions tag     --stdin [--json]        (the JSON batch protocol)
 //   decisions redact  --id ID --reason R [--json]
 //   decisions archive --before ISO [--json]
 //   decisions render  [--all] [--check] [--json]
 //   decisions supersede --id ID --decision D --rationale R [--tags T]
 //                     [--scope S] [--json]
 //
-// DELEGATED to Node (unprovable here, by design): `decisions tag --stdin`
-// (batch stdin protocol; a probe must decide before consuming the pipe).
-// Any unknown flag, missing required flag, or --help also delegates before
-// any output. `render`/`supersede` additionally delegate when a group key
-// or a superseded id leaves the calibrated region — see `collation_safe`
-// and run_supersede's ASCII guard.
+// `decisions tag --stdin` USED to be delegated: a probe had to choose native
+// vs Node before the pipe was consumed, and it could not choose without
+// reading it. With no Node to choose, the batch is read and validated here —
+// `flags.stdin === true` strictly, then handleDecisionsTag's two exact
+// refusals ("input is not valid JSON." / "input must be a JSON array of
+// {target, tags, scope?}.") and tagDecisionsBatch's per-row validation. Every
+// remaining delegate trigger (argv shape, `prelude`'s root resolution) is
+// settled BEFORE the read, as verbs/cells.rs run_add/run_update already do.
+//
+// Still delegating: any unknown flag, missing required flag, or --help, all
+// before any output. `render`/`supersede` additionally delegate when a group
+// key or a superseded id leaves the calibrated region — see `collation_safe`
+// and run_supersede's ASCII guard (localeCompare collation over free prose,
+// deliberately out of the corrupt-JSON cutover's scope).
 //
 // Provenance: bee.mjs handleDecisionsLog/Active/Search/Tag/Redact/Archive/
 // Supersede/Render + lib/decisions.mjs supersedeDecision/
@@ -58,14 +67,24 @@
 // exotic non-ASCII case pairs, e.g. U+017F — accepted approximation, noted
 // here). toLowerCase in filters uses Rust's Unicode lowercasing, which can
 // differ from JS on a handful of special-cased code points — same class of
-// documented approximation. Delegation beyond argv shape: unparseable jsonl
-// lines (Node's readJsonl silently skips them, but V8's JSON grammar is not
-// provably identical to serde's, so this port refuses to guess), `null`
-// events in the active store (a JS property-access crash in
-// activeDecisions' default branch), non-string/ non-ISO date values wherever
-// Date.parse runs, mixed finite/NaN dates feeding a sort comparator (V8's
-// TimSort with an inconsistent comparator is unspecified), corrupt
-// taxonomy.json (Node warns with the V8 message), and numbers >= 1e21.
+// documented approximation.
+//
+// CUTOVER (2026-08-01) — the corrupt-JSON delegations are gone:
+//   * an unparseable JSONL line is SKIPPED (Node's own readJsonl behavior)
+//     and reported once via crate::fsutil::warn_corrupt_jsonl_line. It used
+//     to delegate because serde's grammar and V8's differ on lone-surrogate
+//     escapes; nothing here can decode those, so they are corrupt.
+//   * a corrupt taxonomy.json warns once and reads as "no taxonomy" —
+//     `readJson(file, null)`'s own fallback, so classification stays
+//     optional and `decisions log` takes its warn-only branch, unchanged.
+//   * numbers >= 1e21 were retired upstream (jsjson::js_f64_to_string now
+//     implements the full ECMA Number::toString).
+// Delegation beyond argv shape that REMAINS: `null` events in the active
+// store (a JS property-access crash in activeDecisions' default branch),
+// non-string/non-ISO date values wherever Date.parse runs, and mixed
+// finite/NaN dates feeding a sort comparator (V8's TimSort with an
+// inconsistent comparator is unspecified) — none of these is a V8-text
+// matter.
 
 use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
@@ -73,7 +92,7 @@ use crate::lock::{self, AcquireOnce};
 use crate::verbs::reservations::{
     date_parse_val, finish, jget, js_date_parse, js_disp, js_disp_opt, js_is_ws, js_number_flag,
     js_numberify, js_quote, js_strict_eq, js_trim, keys_known, now_iso, parse_flags,
-    pseudo_uuid_v4, truthy, v_is_str, Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
+    pseudo_uuid_v4, truthy, v_is_str, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use serde_json::{json, Map, Number, Value};
 use sha2::{Digest, Sha256};
@@ -100,28 +119,40 @@ fn taxonomy_path(root: &Path) -> PathBuf {
 }
 
 // ─── fsutil.mjs readJsonl ──────────────────────────────────────────────────
-// Node skips unparseable lines silently; V8's JSON.parse and serde's grammar
-// are not provably identical (huge literals, lone-surrogate escapes), so a
-// serde-unparseable line delegates instead of guessing "skip".
+// Node skipped an unparseable LINE silently and read the rest of the file.
+//
+// CUTOVER (2026-08-01). This port used to delegate such a line instead,
+// because serde's JSON grammar and V8's are not provably identical (chiefly
+// lone-surrogate escapes, which V8 accepts and serde refuses) and guessing
+// "skip" could have dropped a record Node would have kept. There is no Node
+// left to hand it to, and no way to decode those escapes here, so the line is
+// CORRUPT: it is skipped, exactly as Node skipped its own unparseable lines,
+// and — unlike Node — it says so on stderr, because a silently dropped
+// decision record is precisely the failure fsutil's warn exists to prevent.
+// The RESULT is unchanged: the same event list, one line poorer.
 
-fn read_jsonl(file: &Path) -> Ex<Vec<Value>> {
+fn read_jsonl(file: &Path) -> Vec<Value> {
     let bytes = match std::fs::read(file) {
         Ok(b) => b,
-        Err(_) => return Ok(Vec::new()),
+        Err(_) => return Vec::new(),
     };
     let text = String::from_utf8_lossy(&bytes);
     let mut events = Vec::new();
-    for line in text.split('\n') {
+    // Node's readJsonl splits on /\r?\n/, so the line NUMBER the warning
+    // reports is this 1-based index into that same split.
+    for (idx, line) in text.split('\n').enumerate() {
         let trimmed = js_trim(line); // JS trim also strips \r and a BOM
         if trimmed.is_empty() {
             continue;
         }
         match serde_json::from_str::<Value>(trimmed) {
-            Ok(v) => events.push(js_numberify(&v)?),
-            Err(_) => return Err(Exotic),
+            // js_numberify only fails on a non-finite f64, which no parsed
+            // JSON value can hold; the raw value is the honest fallback.
+            Ok(v) => events.push(js_numberify(&v).unwrap_or(v)),
+            Err(_) => crate::fsutil::warn_corrupt_jsonl_line(file, idx + 1),
         }
     }
-    Ok(events)
+    events
 }
 
 // ─── decisions.mjs writeJsonlAtomic / appendJsonlBatch ─────────────────────
@@ -716,25 +747,11 @@ fn normalize_tags(tags: Option<Vec<String>>) -> Result<Option<Vec<String>>, Stri
     Ok(if cleaned.is_empty() { None } else { Some(cleaned) })
 }
 
-/// provenance: decisions.mjs normalizeTagEventTags (tag-event flavor:
-/// required, never empty).
-fn normalize_tag_event_tags(tags: &[String]) -> Result<Vec<String>, String> {
-    if tags.is_empty() {
-        return Err(
-            "decisions tag: --tags is required (at least one lowercase slug, e.g. \"billing,nightly-job\").".to_string(),
-        );
-    }
-    let cleaned: Vec<String> = tags.iter().map(|t| js_trim(t).to_string()).collect();
-    for tag in &cleaned {
-        if !tag_pattern_test(tag) {
-            return Err(format!(
-                "decisions tag: tag {} is not a valid lowercase slug (must match {TAG_PATTERN_DISPLAY}).",
-                js_quote(tag)
-            ));
-        }
-    }
-    Ok(cleaned)
-}
+// provenance: decisions.mjs normalizeTagEventTags (tag-event flavor:
+// required, never empty). The `&[String]` form that lived here is gone: both
+// callers now route through tagDecisionsBatch, so the RAW-value form
+// (`normalize_tag_event_tags_value`, beside the batch) is the only one, and
+// the flag path gets Node's own `tagDecision = batch([entry])[0]` shape.
 
 fn taxonomy_file_exists(root: &Path) -> bool {
     taxonomy_path(root).exists()
@@ -746,12 +763,18 @@ struct Taxonomy {
     candidates: Vec<String>,
 }
 
-/// provenance: decisions.mjs loadTaxonomy (readJson fail-open, but a corrupt
-/// file makes Node warn with the V8 message → Exotic here).
+/// provenance: decisions.mjs loadTaxonomy — `readJson(file, null)` fail-open.
+/// A corrupt taxonomy WARNS once and reads as "no taxonomy", which is the
+/// `null` fallback Node's `!raw` guard already turned into `null`. The
+/// downstream effect is unchanged: with no taxonomy, classification is not
+/// required and `decisions log` takes its warn-only branch.
 fn load_taxonomy(root: &Path) -> Ex<Option<Taxonomy>> {
     let raw = match read_json(&taxonomy_path(root)) {
         ReadJson::Missing => return Ok(None),
-        ReadJson::Corrupt => return Err(Exotic),
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(&taxonomy_path(root));
+            return Ok(None);
+        }
         ReadJson::Parsed(v) => js_numberify(&v)?,
     };
     let Value::Object(ref m) = raw else {
@@ -941,7 +964,7 @@ fn is_decide_or_supersede(e: &Value) -> bool {
 /// provenance: decisions.mjs activeDecisions (both branches; `recent` is
 /// applied by the callers, matching the handlers).
 fn active_decisions(root: &Path, all: bool) -> Ex<Vec<Value>> {
-    let events = read_jsonl(&decisions_path(root))?;
+    let events = read_jsonl(&decisions_path(root));
     let overlay = build_tag_overlay(&events)?;
     if !all {
         if events.iter().any(|e| e.is_null()) {
@@ -979,7 +1002,7 @@ fn active_decisions(root: &Path, all: bool) -> Ex<Vec<Value>> {
 
     // --all: union with the archive, de-dup by id (active copy wins), then
     // an explicit date-desc sort with original-position tiebreak.
-    let archived = read_jsonl(&decisions_archive_path(root))?;
+    let archived = read_jsonl(&decisions_archive_path(root));
     let mut by_id: Vec<(String, Value)> = Vec::new();
     for e in &events {
         if let Some(Value::String(id)) = jget(e, "id") {
@@ -1472,18 +1495,63 @@ fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     Ok(Out::Emit(event, text, 0))
 }
 
-// ─── decisions tag (flag form) ─────────────────────────────────────────────
+// ─── decisions tag (flag form AND --stdin batch) ───────────────────────────
+//
+// CUTOVER (2026-08-01). `--stdin` used to return None here — "let Node do
+// it" — because the strangler contract forbids consuming the pipe before the
+// native-vs-Node decision is made, and that decision could not be made
+// without the pipe's contents. With Node gone the decision does not exist, so
+// stdin is read and validated here, on bee.mjs handleDecisionsTag's own
+// wording. The precedent is verbs/cells.rs run_add/run_update: every
+// remaining delegate trigger is settled BEFORE the read, and nothing after it
+// may answer None.
 
 fn run_tag(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["target", "tags", "scope", "stdin"]) {
         return None;
     }
-    match flags.get("stdin") {
-        None => {}
-        Some(FlagV::Present) => return None, // --stdin batch: Node's
-        Some(FlagV::S(s)) if s == "true" || s == "false" => {} // !== true → flag form
+    // `flags.stdin === true` — STRICTLY. A bare `--stdin` is boolean true;
+    // `--stdin=true` is the STRING "true", which is not `=== true` and so
+    // takes the flag form; any other value fails validate() → delegate.
+    let stdin_batch = match flags.get("stdin") {
+        None => false,
+        Some(FlagV::Present) => true,
+        Some(FlagV::S(s)) if s == "true" || s == "false" => false,
         Some(FlagV::S(_)) => return None,
+    };
+
+    if stdin_batch {
+        // Everything that can still answer None runs FIRST: `prelude` (root
+        // resolution, --json plumbing) is the last such gate, and the batch
+        // body below has none. Only then is the pipe consumed.
+        let ctx = match crate::verbs::reservations::prelude("decisions tag", use_json, t0)? {
+            Pre::Go(c) => c,
+            Pre::Emitted(code) => return Some(code),
+        };
+        let out = (|| -> R2<Out> {
+            let text = read_stdin_text()?;
+            let entries = match parse_stdin_batch(&text) {
+                Ok(e) => e,
+                Err(msg) => return Ok(Out::Thrown(msg)),
+            };
+            let events = match tag_decisions_batch(
+                &ctx.root,
+                &entries,
+                DECISIONS_LOCK_RETRY_ATTEMPTS,
+            )? {
+                Ok(e) => e,
+                Err(msg) => return Ok(Out::Thrown(msg)),
+            };
+            let text = events
+                .iter()
+                .map(tag_event_summary)
+                .collect::<Vec<_>>()
+                .join("\n");
+            Ok(Out::Emit(Value::Array(events), text, 0))
+        })();
+        return finish(&ctx, out);
     }
+
     let target = flags.req_str("target")?.to_string();
     let tags = split_list(flags.req_str("tags")?);
     let scope = str_flag(&flags, "scope")?;
@@ -1496,6 +1564,217 @@ fn run_tag(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     finish(&ctx, out)
 }
 
+/// handleDecisionsTag's two stdin refusals, verbatim from bee.mjs:2461. The
+/// `JSON.parse` is modeled with serde — including the lone-surrogate escapes
+/// V8 accepted, which are simply "not valid JSON" here, since no Rust string
+/// can hold them and there is no Node left to hand them to.
+fn parse_stdin_batch(text: &str) -> Result<Vec<Value>, String> {
+    // No BOM strip: readFileSync(0, 'utf8') hands JSON.parse the raw text, so
+    // a leading BOM is a parse error in Node too.
+    let Ok(parsed) = serde_json::from_str::<Value>(text) else {
+        return Err("decisions tag --stdin: input is not valid JSON.".to_string());
+    };
+    let parsed = js_numberify(&parsed).unwrap_or(parsed);
+    match parsed {
+        Value::Array(entries) => Ok(entries),
+        _ => Err(
+            "decisions tag --stdin: input must be a JSON array of {target, tags, scope?}."
+                .to_string(),
+        ),
+    }
+}
+
+/// `fs.readFileSync(0, 'utf8')`. Copied from verbs/cells.rs `read_stdin_text`
+/// (private there, and that file belongs to another cell) — same lossy-utf8
+/// decode Node's 'utf8' encoding performs.
+fn read_stdin_text() -> Result<String, Err2> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    match std::io::stdin().lock().read_to_end(&mut bytes) {
+        Ok(_) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
+        Err(e) => Err(Err2::Msg(format!("decisions tag --stdin: could not read stdin ({e})."))),
+    }
+}
+
+/// bee.mjs tagEventSummary.
+fn tag_event_summary(event: &Value) -> String {
+    let scope_suffix = match jget(event, "scope") {
+        Some(v) if truthy(&v) => format!(" scope={}", js_disp(&v)),
+        _ => String::new(),
+    };
+    let tags = match jget(event, "tags") {
+        Some(Value::Array(a)) => a.iter().map(js_disp).collect::<Vec<_>>().join(", "),
+        _ => String::new(),
+    };
+    format!(
+        "Tagged {} with [{tags}]{scope_suffix}.",
+        js_disp_opt(jget(event, "target"))
+    )
+}
+
+/// decisions.mjs decisionTargetCandidates — the active+archive union keyed by
+/// id (a JS `Map`: active entries replace in place, archive entries only land
+/// for ids the active file does not carry), filtered to decide/supersede.
+fn decision_target_candidates(root: &Path) -> Vec<(String, Value)> {
+    let active_events = read_jsonl(&decisions_path(root));
+    let archived_events = read_jsonl(&decisions_archive_path(root));
+    let mut by_id: Vec<(String, Value)> = Vec::new();
+    for e in &active_events {
+        if let Some(Value::String(id)) = jget(e, "id") {
+            match by_id.iter_mut().find(|(k, _)| k.as_str() == id.as_str()) {
+                Some(slot) => slot.1 = e.clone(), // Map.set keeps the position
+                None => by_id.push((id.clone(), e.clone())),
+            }
+        }
+    }
+    for e in &archived_events {
+        if let Some(Value::String(id)) = jget(e, "id") {
+            if !by_id.iter().any(|(k, _)| k.as_str() == id.as_str()) {
+                by_id.push((id.clone(), e.clone()));
+            }
+        }
+    }
+    by_id.into_iter().filter(|(_, e)| is_decide_or_supersede(e)).collect()
+}
+
+/// decisions.mjs resolveTagTarget. `Err` carries the thrown message.
+fn resolve_tag_target(candidates: &[(String, Value)], target: Option<&Value>) -> Result<String, String> {
+    // `typeof target === 'string' ? target.trim() : ''`
+    let raw = match target {
+        Some(Value::String(s)) => js_trim(s),
+        _ => "",
+    };
+    if raw.is_empty() {
+        return Err("decisions tag: target id (full id or short8) is required.".to_string());
+    }
+    if let Some((id, _)) = candidates.iter().find(|(id, _)| id == raw) {
+        return Ok(id.clone());
+    }
+    // SHORT8_PATTERN /^[0-9a-f]{8}$/i
+    let is_short8 = raw.chars().count() == 8 && raw.chars().all(|c| c.is_ascii_hexdigit());
+    let mut matches: Vec<&String> = Vec::new();
+    if is_short8 {
+        let low = raw.to_ascii_lowercase();
+        for (id, _) in candidates {
+            if id.to_lowercase().starts_with(&low) {
+                matches.push(id);
+            }
+        }
+    }
+    match matches.len() {
+        1 => Ok(matches[0].clone()),
+        n if n > 1 => {
+            let list = matches.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
+            Err(format!(
+                "decisions tag: short id {} is ambiguous — matches {n} events ({list}); use the full id.",
+                js_quote(raw)
+            ))
+        }
+        _ => Err(format!(
+            "decisions tag: target {} does not resolve to any decide/supersede event in the active+archive union.",
+            js_quote(raw)
+        )),
+    }
+}
+
+/// decisions.mjs normalizeTagEventTags over a RAW JSON value — the batch form,
+/// where `entry.tags` is whatever the payload carried.
+fn normalize_tag_event_tags_value(tags: Option<&Value>) -> Result<Vec<String>, String> {
+    let items = match tags {
+        Some(Value::Array(a)) if !a.is_empty() => a,
+        _ => {
+            return Err(
+                "decisions tag: --tags is required (at least one lowercase slug, e.g. \"billing,nightly-job\").".to_string(),
+            )
+        }
+    };
+    // `String(tag).trim()` for every element, then TAG_PATTERN per element.
+    let cleaned: Vec<String> = items.iter().map(|t| js_trim(&js_disp(t)).to_string()).collect();
+    for tag in &cleaned {
+        if !tag_pattern_test(tag) {
+            return Err(format!(
+                "decisions tag: tag {} is not a valid lowercase slug (must match {TAG_PATTERN_DISPLAY}).",
+                js_quote(tag)
+            ));
+        }
+    }
+    Ok(cleaned)
+}
+
+/// decisions.mjs tagDecisionsBatch. Every event is built BEFORE the lock is
+/// taken (dp-3's lock doctrine) — the critical section is exactly the one
+/// appendJsonlBatch write. `Ok(Err(msg))` is a thrown refusal with zero
+/// writes; `Err(Err2::…)` is a lock refusal or an fs write failure.
+fn tag_decisions_batch(
+    root: &Path,
+    entries: &[Value],
+    lock_retries: u32,
+) -> R2<Result<Vec<Value>, String>> {
+    if entries.is_empty() {
+        return Ok(Err(
+            "decisions tag: at least one entry ({target, tags, scope?}) is required.".to_string(),
+        ));
+    }
+    let candidates = decision_target_candidates(root);
+    let now = now_iso(); // ONE `new Date().toISOString()` for the whole batch
+    let mut events: Vec<Value> = Vec::new();
+    for entry in entries {
+        // `!entry || typeof entry !== 'object' || Array.isArray(entry)`
+        let Value::Object(fields) = entry else {
+            return Ok(Err(format!(
+                "decisions tag: batch entry must be an object {{target, tags, scope?}}, got {}.",
+                jsjson::stringify(entry)
+            )));
+        };
+        let target_id = match resolve_tag_target(&candidates, fields.get("target")) {
+            Ok(id) => id,
+            Err(msg) => return Ok(Err(msg)),
+        };
+        let tags = match normalize_tag_event_tags_value(fields.get("tags")) {
+            Ok(t) => t,
+            Err(msg) => return Ok(Err(msg)),
+        };
+        // `entry.scope !== undefined && entry.scope !== null && String(entry.scope).trim()`
+        let scope: Option<String> = match fields.get("scope") {
+            None | Some(Value::Null) => None,
+            Some(v) => {
+                let s = js_disp(v);
+                let t = js_trim(&s).to_string();
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(t)
+                }
+            }
+        };
+        if let Err(msg) = assert_safe_content("scope", scope.as_deref()) {
+            return Ok(Err(msg));
+        }
+        let mut event = Map::new();
+        event.insert("id".into(), Value::String(pseudo_uuid_v4()));
+        event.insert("type".into(), Value::String("tag".into()));
+        event.insert("date".into(), Value::String(now.clone()));
+        event.insert("target".into(), Value::String(target_id));
+        event.insert(
+            "tags".into(),
+            Value::Array(tags.into_iter().map(Value::String).collect()),
+        );
+        if let Some(s) = scope {
+            event.insert("scope".into(), Value::String(s));
+        }
+        events.push(Value::Object(event));
+    }
+
+    let guard = acquire_decisions_lock(root, lock_retries).map_err(Err2::Msg)?;
+    let written = append_jsonl_batch(&decisions_path(root), &events);
+    drop(guard);
+    written.map_err(|_| Err2::Ex)?;
+    Ok(Ok(events))
+}
+
+/// bee.mjs handleDecisionsTag's flag form: `tagDecision` is literally
+/// `tagDecisionsBatch(root, [{target, tags, scope}])[0]`, so it runs the same
+/// body over a one-entry batch and emits the single event.
 fn do_tag(
     root: &Path,
     target: &str,
@@ -1503,107 +1782,22 @@ fn do_tag(
     scope: Option<&str>,
     lock_retries: u32,
 ) -> R2<Out> {
-    // decisionTargetCandidates: active+archive union, decide/supersede only.
-    let active_events = read_jsonl(&decisions_path(root))?;
-    let archived_events = read_jsonl(&decisions_archive_path(root))?;
-    let mut by_id: Vec<(String, Value)> = Vec::new();
-    for e in active_events.iter().chain(archived_events.iter()) {
-        if let Some(Value::String(id)) = jget(e, "id") {
-            if let Some(slot) = by_id.iter_mut().find(|(k, _)| k == id) {
-                // active file duplicates replace; archive entries only land
-                // when the id is not present yet — chain order handles both
-                // only if we skip replacement for archived events:
-                let from_active = active_events
-                    .iter()
-                    .any(|a| std::ptr::eq(a, e));
-                if from_active {
-                    slot.1 = e.clone();
-                }
-            } else {
-                by_id.push((id.clone(), e.clone()));
-            }
-        }
+    let mut entry = Map::new();
+    entry.insert("target".into(), Value::String(target.to_string()));
+    entry.insert(
+        "tags".into(),
+        Value::Array(tags.iter().cloned().map(Value::String).collect()),
+    );
+    if let Some(s) = scope {
+        entry.insert("scope".into(), Value::String(s.to_string()));
     }
-    let candidates: Vec<(String, Value)> = by_id
-        .into_iter()
-        .filter(|(_, e)| is_decide_or_supersede(e))
-        .collect();
-
-    // resolveTagTarget.
-    let raw = js_trim(target);
-    if raw.is_empty() {
-        return Ok(Out::Thrown(
-            "decisions tag: target id (full id or short8) is required.".into(),
-        ));
-    }
-    let resolved: String = if let Some((id, _)) = candidates.iter().find(|(id, _)| id == raw) {
-        id.clone()
-    } else {
-        let is_short8 = raw.chars().count() == 8 && raw.chars().all(|c| c.is_ascii_hexdigit());
-        let mut matches: Vec<&String> = Vec::new();
-        if is_short8 {
-            let low = raw.to_ascii_lowercase();
-            for (id, _) in &candidates {
-                if id.to_lowercase().starts_with(&low) {
-                    matches.push(id);
-                }
-            }
-        }
-        match matches.len() {
-            1 => matches[0].clone(),
-            n if n > 1 => {
-                let list = matches.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
-                return Ok(Out::Thrown(format!(
-                    "decisions tag: short id {} is ambiguous — matches {n} events ({list}); use the full id.",
-                    js_quote(raw)
-                )));
-            }
-            _ => {
-                return Ok(Out::Thrown(format!(
-                    "decisions tag: target {} does not resolve to any decide/supersede event in the active+archive union.",
-                    js_quote(raw)
-                )));
-            }
-        }
-    };
-
-    let cleaned_tags = match normalize_tag_event_tags(tags) {
-        Ok(t) => t,
+    let entries = [Value::Object(entry)];
+    let events = match tag_decisions_batch(root, &entries, lock_retries)? {
+        Ok(e) => e,
         Err(msg) => return Ok(Out::Thrown(msg)),
     };
-    let scope_resolved: Option<String> = match scope {
-        Some(s) if !js_trim(s).is_empty() => Some(js_trim(s).to_string()),
-        _ => None,
-    };
-    if let Err(msg) = assert_safe_content("scope", scope_resolved.as_deref()) {
-        return Ok(Out::Thrown(msg));
-    }
-
-    let mut event = Map::new();
-    event.insert("id".into(), Value::String(pseudo_uuid_v4()));
-    event.insert("type".into(), Value::String("tag".into()));
-    event.insert("date".into(), Value::String(now_iso()));
-    event.insert("target".into(), Value::String(resolved.clone()));
-    event.insert(
-        "tags".into(),
-        Value::Array(cleaned_tags.iter().cloned().map(Value::String).collect()),
-    );
-    if let Some(s) = &scope_resolved {
-        event.insert("scope".into(), Value::String(s.clone()));
-    }
-    let event = Value::Object(event);
-
-    let guard = acquire_decisions_lock(root, lock_retries).map_err(Err2::Msg)?;
-    append_jsonl_batch(&decisions_path(root), std::slice::from_ref(&event)).map_err(|_| Err2::Ex)?;
-    drop(guard);
-
-    let scope_suffix = scope_resolved
-        .map(|s| format!(" scope={s}"))
-        .unwrap_or_default();
-    let text = format!(
-        "Tagged {resolved} with [{}]{scope_suffix}.",
-        cleaned_tags.join(", ")
-    );
+    let event = events.into_iter().next().expect("a one-entry batch yields one event");
+    let text = tag_event_summary(&event);
     Ok(Out::Emit(event, text, 0))
 }
 
@@ -1667,7 +1861,7 @@ fn run_archive(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
             Ok(None) => return Ok(()), // Node's own "--before must be valid" throw
             Err(e) => return Err(e),
         };
-        let events = read_jsonl(&decisions_path(&ctx.root))?;
+        let events = read_jsonl(&decisions_path(&ctx.root));
         partition_archive(&events, before_ms)?;
         Ok(())
     })();
@@ -1746,7 +1940,7 @@ fn do_archive(root: &Path, before: &str, lock_retries: u32) -> R2<Out> {
 
     let guard = acquire_decisions_lock(root, lock_retries).map_err(Err2::Msg)?;
     let out = (|| -> R2<Out> {
-        let events = read_jsonl(&decisions_path(root))?;
+        let events = read_jsonl(&decisions_path(root));
         let (to_archive, to_keep) = partition_archive(&events, before_ms)?;
         if to_archive.is_empty() {
             return Ok(Out::Thrown(format!(
@@ -2380,7 +2574,7 @@ fn do_supersede(root: &Path, p: SupersedeParams, lock_retries: u32) -> R2<Out> {
     }
 
     // Scope/tag inheritance consults the OVERLAY-APPLIED target (dp-6 W3).
-    let events = read_jsonl(&decisions_path(root))?;
+    let events = read_jsonl(&decisions_path(root));
     let overlay = build_tag_overlay(&events)?;
     let raw_target = events
         .iter()
@@ -2675,7 +2869,7 @@ mod tests {
             panic!("expected log emit");
         };
         assert!(text.starts_with(&format!("Logged decision {}.", event["id"].as_str().unwrap())));
-        let events = read_jsonl(&decisions_path(tmp.path())).ok().unwrap();
+        let events = read_jsonl(&decisions_path(tmp.path()));
         assert_eq!(events.len(), 1);
         assert_eq!(events[0]["type"], "decide");
         assert_eq!(events[0]["tags"], json!(["billing", "recall"]));
@@ -2799,6 +2993,177 @@ mod tests {
         }
     }
 
+    // ── CUTOVER: the corrupt-JSON arms that used to delegate ──────────────
+
+    /// readJsonl skipped an unparseable LINE in Node and read the rest; this
+    /// port used to delegate instead. Now it skips (and says so), so the run
+    /// still succeeds over the surviving records.
+    #[test]
+    fn an_unparseable_jsonl_line_is_skipped_not_delegated() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[
+                r#"{"id":"a1","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"d1","rationale":"r"}"#,
+                "{not json",
+                r#"{"id":"a2","type":"decide","date":"2026-01-02T00:00:00.000Z","decision":"d2","rationale":"r"}"#,
+            ],
+        );
+        let events = read_jsonl(&decisions_path(tmp.path()));
+        assert_eq!(events.len(), 2, "the bad line is skipped, the good ones survive");
+        assert_eq!(events[0]["id"], "a1");
+        assert_eq!(events[1]["id"], "a2");
+        // And the verb still runs over what is left.
+        let Ok(Out::Emit(event, _, 0)) = do_tag(tmp.path(), "a2", &["billing".into()], None, 0)
+        else {
+            panic!("expected tag emit over the surviving records");
+        };
+        assert_eq!(event["target"], "a2");
+    }
+
+    /// A lone-surrogate escape is the class that made this arm delegate: V8's
+    /// JSON.parse accepted it, serde refuses, and no Rust String can hold it.
+    /// It is corrupt, so the line is skipped like any other bad line.
+    #[test]
+    fn a_lone_surrogate_jsonl_line_is_corrupt() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[
+                r#"{"id":"a1","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"\uD800","rationale":"r"}"#,
+                r#"{"id":"a2","type":"decide","date":"2026-01-02T00:00:00.000Z","decision":"d2","rationale":"r"}"#,
+            ],
+        );
+        let events = read_jsonl(&decisions_path(tmp.path()));
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["id"], "a2");
+    }
+
+    /// loadTaxonomy's `readJson(file, null)` fail-open: a corrupt taxonomy
+    /// reads as "no taxonomy", so classification stays optional and
+    /// `decisions log` takes its warn-only branch — the same run Node made.
+    #[test]
+    fn a_corrupt_taxonomy_reads_as_no_taxonomy() {
+        let tmp = fixture_root();
+        let tax = taxonomy_path(tmp.path());
+        std::fs::create_dir_all(tax.parent().unwrap()).unwrap();
+        std::fs::write(&tax, "{broken").unwrap();
+        assert!(load_taxonomy(tmp.path()).ok().unwrap().is_none());
+        // classifyDecisionTags cannot refuse without a taxonomy...
+        assert!(classify_decision_tags(tmp.path(), &["anything".to_string()], 0).is_ok());
+        // ...and logging still succeeds, exit code 0.
+        let p = LogParams {
+            decision: "d".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["billing".into()]),
+        };
+        assert!(matches!(do_log(tmp.path(), p, 0), Ok(Out::Emit(_, _, 0))));
+    }
+
+    // ── decisions tag --stdin (was delegated: a probe had to decide before
+    //    the pipe was consumed) ────────────────────────────────────────────
+
+    #[test]
+    fn tag_stdin_accepts_a_valid_batch() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[
+                r#"{"id":"a1","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"d1","rationale":"r"}"#,
+                r#"{"id":"a2","type":"decide","date":"2026-01-02T00:00:00.000Z","decision":"d2","rationale":"r"}"#,
+            ],
+        );
+        let entries = parse_stdin_batch(
+            r#"[{"target":"a1","tags":["billing"]},{"target":"a2","tags":["nightly-job"],"scope":" repo "}]"#,
+        )
+        .unwrap();
+        let events = tag_decisions_batch(tmp.path(), &entries, 0).unwrap().unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0]["target"], "a1");
+        assert_eq!(events[0]["tags"], json!(["billing"]));
+        assert!(events[0].get("scope").is_none(), "no scope key when absent");
+        assert_eq!(events[1]["target"], "a2");
+        assert_eq!(events[1]["scope"], "repo", "String(scope).trim()");
+        // ONE `new Date().toISOString()` for the whole batch.
+        assert_eq!(events[0]["date"], events[1]["date"]);
+        // Both landed in the store, appended after the two decide events.
+        let stored = read_jsonl(&decisions_path(tmp.path()));
+        assert_eq!(stored.len(), 4);
+        assert_eq!(stored[2]["type"], "tag");
+        assert_eq!(stored[3]["type"], "tag");
+        // handleDecisionsTag's text is the summaries joined by newline.
+        let text = events.iter().map(tag_event_summary).collect::<Vec<_>>().join("\n");
+        assert_eq!(text, "Tagged a1 with [billing].\nTagged a2 with [nightly-job] scope=repo.");
+    }
+
+    #[test]
+    fn tag_stdin_refuses_invalid_json_and_non_arrays() {
+        assert_eq!(
+            parse_stdin_batch("{not json").unwrap_err(),
+            "decisions tag --stdin: input is not valid JSON."
+        );
+        // A lone surrogate is the one shape V8 took and serde will not; with
+        // no Node left it is simply invalid input.
+        assert_eq!(
+            parse_stdin_batch(r#"["\uD800"]"#).unwrap_err(),
+            "decisions tag --stdin: input is not valid JSON."
+        );
+        for payload in [r#"{"target":"a1","tags":["x"]}"#, "42", "null", r#""a1""#] {
+            assert_eq!(
+                parse_stdin_batch(payload).unwrap_err(),
+                "decisions tag --stdin: input must be a JSON array of {target, tags, scope?}.",
+                "payload {payload}"
+            );
+        }
+    }
+
+    #[test]
+    fn tag_stdin_validates_every_row_and_writes_nothing_on_refusal() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[r#"{"id":"a1","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"d1","rationale":"r"}"#],
+        );
+        let before = std::fs::read_to_string(decisions_path(tmp.path())).unwrap();
+
+        // An empty array is tagDecisionsBatch's own refusal.
+        assert_eq!(
+            tag_decisions_batch(tmp.path(), &[], 0).unwrap().unwrap_err(),
+            "decisions tag: at least one entry ({target, tags, scope?}) is required."
+        );
+        // A non-object row names the offending value with JSON.stringify.
+        let entries = parse_stdin_batch(r#"[{"target":"a1","tags":["x"]},[1,2]]"#).unwrap();
+        assert_eq!(
+            tag_decisions_batch(tmp.path(), &entries, 0).unwrap().unwrap_err(),
+            "decisions tag: batch entry must be an object {target, tags, scope?}, got [1,2]."
+        );
+        // A row whose target does not resolve.
+        let entries = parse_stdin_batch(r#"[{"target":"nope","tags":["x"]}]"#).unwrap();
+        assert!(tag_decisions_batch(tmp.path(), &entries, 0)
+            .unwrap()
+            .unwrap_err()
+            .starts_with("decisions tag: target \"nope\" does not resolve"));
+        // A row with no usable tags.
+        let entries = parse_stdin_batch(r#"[{"target":"a1","tags":[]}]"#).unwrap();
+        assert!(tag_decisions_batch(tmp.path(), &entries, 0)
+            .unwrap()
+            .unwrap_err()
+            .starts_with("decisions tag: --tags is required"));
+        // A row with a non-slug tag.
+        let entries = parse_stdin_batch(r#"[{"target":"a1","tags":["Not A Slug"]}]"#).unwrap();
+        assert!(tag_decisions_batch(tmp.path(), &entries, 0)
+            .unwrap()
+            .unwrap_err()
+            .starts_with("decisions tag: tag \"Not A Slug\" is not a valid lowercase slug"));
+
+        // Zero writes on every refusal — the events are built BEFORE the lock.
+        assert_eq!(std::fs::read_to_string(decisions_path(tmp.path())).unwrap(), before);
+    }
+
     #[test]
     fn redact_appends_and_drops_target_from_active() {
         let tmp = fixture_root();
@@ -2848,7 +3213,7 @@ mod tests {
             .collect();
         assert!(leftovers.is_empty());
         // Archive holds the two moved events.
-        let archived = read_jsonl(&decisions_archive_path(tmp.path())).ok().unwrap();
+        let archived = read_jsonl(&decisions_archive_path(tmp.path()));
         assert_eq!(archived.len(), 2);
         // --all union still reaches the archived decide event.
         let all = active_decisions(tmp.path(), true).ok().unwrap();
@@ -3079,12 +3444,12 @@ mod tests {
         assert!(text.contains("Propagation sweep: 3 citation(s) found under docs/**"));
 
         // The event landed in the store exactly once, carrying the sweep.
-        let stored = read_jsonl(&decisions_path(tmp.path())).ok().unwrap();
+        let stored = read_jsonl(&decisions_path(tmp.path()));
         assert_eq!(stored.len(), 2);
         assert!(stored[1]["sweep"]["files"].as_array().unwrap().len() == 3);
 
         // One capture stub per citing line, source "supersede-sweep".
-        let queue = read_jsonl(&capture_queue_path(tmp.path())).ok().unwrap();
+        let queue = read_jsonl(&capture_queue_path(tmp.path()));
         assert_eq!(queue.len(), 3);
         assert_eq!(queue[0]["kind"], "stub");
         assert_eq!(queue[0]["source"], "supersede-sweep");

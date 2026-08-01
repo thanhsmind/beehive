@@ -29,9 +29,14 @@
 // Strangler rules honored here:
 //   - try_native accepts ONLY the six argv shapes below; --brief is handled
 //     upstream by status_brief; anything else -> None before any output.
-//   - Corrupt JSON anywhere on the snapshot path (any site where Node's
-//     readJson would print its V8-message warning) -> Ex::Bail -> None
-//     BEFORE any output (the manifest drift-cache write excepted).
+//   - Corrupt JSON anywhere on the snapshot path used to be Ex::Bail -> None
+//     BEFORE any output. CUTOVER (2026-08-01): it FAILS OPEN instead, exactly
+//     as `readJson(file, fallback)` did — `rj` buffers one
+//     `bee: could not parse JSON at …` line (our wording in place of V8's)
+//     and hands back the `null` fallback every caller's `!x` / `?? null`
+//     guard already handled. The snapshot, its exit code and its --json
+//     payload are unchanged; a corrupt lane record still emits BOTH lines
+//     Node emitted (readJson's, then readLane's own).
 //   - JS-exotic input (truthy non-object approved_gates spread, non-string
 //     git args, ...) -> Ex::Bail as well: the Node re-run owns the edge.
 //   - JS throw sites that Node CATCHES locally (buildReviewBlock /
@@ -47,6 +52,7 @@ use crate::roots::{resolve_store_root_worktree, LinkedRoots, RootsWt};
 use crate::state::{bypass_level, read_config_raw, Bail};
 use crate::verbs::{emit_no_root_error, record_timing};
 use serde_json::{json, Map, Value};
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -163,12 +169,19 @@ struct Ctx {
     linked: Option<LinkedRoots>,
     /// Buffered stderr lines (console.warn / process.stderr.write) in Node's
     /// emission order; printed at emit time, before the drift line.
-    stderr: Vec<String>,
+    ///
+    /// A `RefCell` so the READ helpers can warn through a shared `&Ctx`:
+    /// `readJson`'s corrupt-file warning is now native (see `rj`), and
+    /// threading `&mut Ctx` through every reader would have rippled into a
+    /// dozen signatures for no behavioral gain. Buffering still matters —
+    /// a run that bails to Node after a partial read must have emitted
+    /// nothing, or the re-run would print those lines a second time.
+    stderr: RefCell<Vec<String>>,
 }
 
 impl Ctx {
-    fn warn(&mut self, line: String) {
-        self.stderr.push(line);
+    fn warn(&self, line: String) {
+        self.stderr.borrow_mut().push(line);
     }
 
     /// The linked classification, only when the current checkout is a GRANTED
@@ -526,14 +539,49 @@ fn locale_cmp(a: &str, b: &str, numeric: bool) -> Ordering {
 
 // ─── fs primitives (fsutil.mjs / recovery.mjs) ─────────────────────────────
 
-/// readJson(file, fallback): Missing -> Ok(None); Corrupt (would print the
-/// V8-message warning in Node) -> Ex::Bail; Parsed -> Ok(Some(v)).
-fn rj(file: &Path) -> R<Option<Value>> {
+/// readJson(file, fallback): Missing -> Ok(None); Parsed -> Ok(Some(v)).
+///
+/// CUTOVER (2026-08-01). Corrupt used to be `Ex::Bail` — the whole snapshot
+/// went back to Node — because Node's warning interpolated V8's own
+/// `JSON.parse` message. It now WARNS (buffered, so a later bail still emits
+/// nothing) and returns readJson's `null` fallback, which is exactly what
+/// every caller's `!x` / `?? null` guard already handled. Same status, same
+/// exit code, one extra line of explanation on stderr.
+fn rj(ctx: &Ctx, file: &Path) -> R<Option<Value>> {
     match crate::fsutil::read_json(file) {
         crate::fsutil::ReadJson::Missing => Ok(None),
-        crate::fsutil::ReadJson::Corrupt => Err(Ex::Bail),
+        crate::fsutil::ReadJson::Corrupt => {
+            ctx.warn(corrupt_json_warn_line(file));
+            Ok(None)
+        }
         crate::fsutil::ReadJson::Parsed(v) => Ok(Some(v)),
     }
+}
+
+/// The line `crate::fsutil::warn_corrupt_json` PRINTS, returned as a string
+/// instead. Copied from fsutil (`warn_corrupt_json` + its private
+/// `corrupt_json_reason`) because this file buffers stderr rather than
+/// writing it, and fsutil offers no string-returning form.
+fn corrupt_json_warn_line(file: &Path) -> String {
+    let reason = match std::fs::read(file) {
+        Err(_) => "the file could not be read".to_string(),
+        Ok(bytes) => {
+            let text = String::from_utf8_lossy(&bytes).into_owned();
+            let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+            match serde_json::from_str::<Value>(text) {
+                // Raced: it parses now. Say only what is still true.
+                Ok(_) => "invalid JSON".to_string(),
+                Err(e) if e.line() > 0 => {
+                    format!("invalid JSON at line {} column {}", e.line(), e.column())
+                }
+                Err(_) => "invalid JSON".to_string(),
+            }
+        }
+    };
+    format!(
+        "bee: could not parse JSON at {} — {reason}. Using fallback; fix the file.",
+        file.display()
+    )
 }
 
 fn read_text_opt(file: &Path) -> Option<String> {
@@ -692,11 +740,20 @@ fn claude_projects_root() -> String {
     ))
 }
 
-/// perf.mjs encodeProjectDir: replace [\\/.] with '-'.
+/// encodeProjectDir: replace [\\/.:] with '-'.
+///
+/// Divergence from perf.mjs, taken deliberately AT CUTOVER (plans/rust-port.md,
+/// "the two filed win32 defects"): Node's regex was `/[\\/.]/g`, which leaves a
+/// Windows drive colon in the directory NAME (`D:-projects-…`). That component
+/// cannot exist on NTFS — `mkdir` fails EINVAL and the colon is taken as an
+/// alternate data stream on the parent — so every transcript-dependent path
+/// (recovery scan, perf rollup) was unreachable on win32 for BOTH runtimes.
+/// Mapping ':' too yields `D--projects-…`, which is what Claude Code itself
+/// writes, so the layout this names is the layout that actually exists.
 fn encode_project_dir(project_path: &str) -> String {
     project_path
         .chars()
-        .map(|c| if c == '\\' || c == '/' || c == '.' { '-' } else { c })
+        .map(|c| if matches!(c, '\\' | '/' | '.' | ':') { '-' } else { c })
         .collect()
 }
 
@@ -728,7 +785,7 @@ fn default_state() -> JMap {
 /// legacy 'validating' -> 'planning' coercion. Truthy non-object
 /// approved_gates spreads JS-exotically -> bail.
 fn read_state_full(ctx: &Ctx) -> R<JMap> {
-    let parsed = rj(&ctx.root.join(".bee").join("state.json"))?;
+    let parsed = rj(ctx, &ctx.root.join(".bee").join("state.json"))?;
     let file_state = match parsed {
         Some(Value::Object(m)) => Some(m),
         _ => None,
@@ -762,14 +819,14 @@ fn read_state_full(ctx: &Ctx) -> R<JMap> {
 
 /// state.mjs readOnboarding.
 fn read_onboarding(ctx: &Ctx) -> R<Option<Value>> {
-    rj(&ctx.root.join(".bee").join("onboarding.json"))
+    rj(ctx, &ctx.root.join(".bee").join("onboarding.json"))
 }
 
 /// state.mjs readHandoff — fail-open; non-object parses return verbatim; an
 /// object gets `kind` normalized (missing/unknown -> 'pause') at its original
 /// key position (JS `{...handoff, kind}` semantics).
 fn read_handoff(ctx: &Ctx) -> R<Option<Value>> {
-    let parsed = rj(&ctx.root.join(".bee").join("HANDOFF.json"))?;
+    let parsed = rj(ctx, &ctx.root.join(".bee").join("HANDOFF.json"))?;
     let Some(v) = parsed else { return Ok(Some(Value::Null)) }; // readJson fallback null
     match v {
         Value::Object(m) => {
@@ -1020,19 +1077,20 @@ fn bypass_banner(level: &str) -> &'static str {
 
 /// state.mjs hasStaleAdvisorKey — reads the TRACKED config.json raw.
 fn has_stale_advisor_key(ctx: &Ctx) -> R<bool> {
-    let raw = rj(&ctx.root.join(".bee").join("config.json"))?;
+    let raw = rj(ctx, &ctx.root.join(".bee").join("config.json"))?;
     Ok(matches!(raw, Some(Value::Object(m)) if m.contains_key("advisor")))
 }
 
 /// bee.mjs readRawConfigForValidation — None = no config file at all
-/// (undefined); Some(v) = whatever was parsed (fallback null on corrupt would
-/// warn in Node -> bail).
+/// (undefined); Some(v) = whatever was parsed. A corrupt file present on disk
+/// is `Some(Value::Null)`: readJson warned and returned its `null` fallback,
+/// which is precisely what validation then sees.
 fn read_raw_config_for_validation(ctx: &Ctx) -> R<Option<Value>> {
     let file = ctx.root.join(".bee").join("config.json");
     if !file.exists() {
         return Ok(None);
     }
-    Ok(Some(rj(&file)?.unwrap_or(Value::Null)))
+    Ok(Some(rj(ctx, &file)?.unwrap_or(Value::Null)))
 }
 
 struct Problem {
@@ -1571,11 +1629,12 @@ fn lane_record_from(feature: &str, parsed: Option<&Value>) -> R<Option<JMap>> {
     Ok(Some(merged))
 }
 
-/// state.mjs readLane — fail-open display read; a present-but-corrupt record
-/// warns in Node (both the readJson V8 warning AND readLane's own line) ->
-/// bail. A record that parses but mismatches feature warns readLane's line
-/// only — deterministic text, but it always accompanies a mismatch that Node
-/// still renders as null; replicated verbatim.
+/// state.mjs readLane — fail-open display read. A present-but-corrupt record
+/// produces BOTH lines Node produced, in Node's order: readJson's own
+/// could-not-parse warning (our wording) and then readLane's
+/// skipping-corrupt-lane-record line, because readJson's `null` fallback is
+/// what makes `laneRecordFrom` answer null. A record that parses but
+/// mismatches feature warns readLane's line only.
 fn read_lane(ctx: &mut Ctx, feature: &str) -> R<Option<JMap>> {
     let Ok(id) = require_lane_feature(feature) else {
         return Ok(None);
@@ -1584,7 +1643,9 @@ fn read_lane(ctx: &mut Ctx, feature: &str) -> R<Option<JMap>> {
     if !file.exists() {
         return Ok(None);
     }
-    let parsed = rj(&file)?; // corrupt -> bail (Node prints the V8 warning first)
+    // Corrupt: rj warns, then laneRecordFrom(null) is null, so readLane's own
+    // line follows — both of the lines Node printed, in Node's order.
+    let parsed = rj(ctx, &file)?;
     let trimmed = js_trim(feature).to_string();
     let record = lane_record_from(&trimmed, parsed.as_ref())?;
     if record.is_none() {
@@ -1652,7 +1713,7 @@ fn list_cells(ctx: &Ctx, feature: Option<&Value>, status: Option<&str>) -> R<Vec
             if !name.ends_with(".json") {
                 continue;
             }
-            let Some(cell) = rj(&entry.path())? else { continue };
+            let Some(cell) = rj(ctx, &entry.path())? else { continue };
             if !matches!(cell, Value::Object(_) | Value::Array(_)) {
                 continue; // `typeof cell !== 'object'` (null already skipped)
             }
@@ -1679,7 +1740,7 @@ fn read_cell(ctx: &Ctx, id: &Value) -> R<Option<Value>> {
     if !truthy(id) || !id_pattern_ok(&id_str) {
         return Ok(None);
     }
-    let active = rj(&cells_dir(ctx).join(format!("{id_str}.json")))?;
+    let active = rj(ctx, &cells_dir(ctx).join(format!("{id_str}.json")))?;
     if active.is_some() {
         return Ok(active);
     }
@@ -1692,7 +1753,7 @@ fn read_cell(ctx: &Ctx, id: &Value) -> R<Option<Value>> {
             continue;
         }
         let candidate = entry.path().join(format!("{id_str}.json"));
-        if let Some(v) = rj(&candidate)? {
+        if let Some(v) = rj(ctx, &candidate)? {
             return Ok(Some(v));
         }
     }
@@ -1702,7 +1763,7 @@ fn read_cell(ctx: &Ctx, id: &Value) -> R<Option<Value>> {
 /// cells.mjs archivedTotals over the archive summary ledger.
 fn archived_totals(ctx: &Ctx) -> R<JMap> {
     let file = cells_dir(ctx).join(ARCHIVE_DIR_NAME).join("summary.json");
-    let summary = match rj(&file)? {
+    let summary = match rj(ctx, &file)? {
         Some(Value::Object(m)) => m,
         _ => JMap::new(),
     };
@@ -1997,12 +2058,12 @@ fn require_id(value: &str) -> Result<String, ()> {
 }
 
 /// claims.mjs readSession (strict=false).
-fn read_session(root: &Path, session_id: &str) -> R<Option<JMap>> {
+fn read_session(ctx: &Ctx, root: &Path, session_id: &str) -> R<Option<JMap>> {
     let Ok(id) = require_id(session_id) else {
         return Ok(None);
     };
     let file = sessions_dir(root).join(format!("{id}.json"));
-    let Some(session) = rj(&file)? else { return Ok(None) };
+    let Some(session) = rj(ctx, &file)? else { return Ok(None) };
     let Value::Object(m) = session else { return Ok(None) };
     if !str_eq(m.get("id"), js_trim(session_id)) {
         return Ok(None);
@@ -2011,7 +2072,7 @@ fn read_session(root: &Path, session_id: &str) -> R<Option<JMap>> {
 }
 
 /// claims.mjs listSessionRecords (strict=false), directory order.
-fn list_session_records(root: &Path) -> R<Vec<JMap>> {
+fn list_session_records(ctx: &Ctx, root: &Path) -> R<Vec<JMap>> {
     let Ok(entries) = std::fs::read_dir(sessions_dir(root)) else {
         return Ok(Vec::new());
     };
@@ -2019,7 +2080,7 @@ fn list_session_records(root: &Path) -> R<Vec<JMap>> {
     for entry in entries.filter_map(|e| e.ok()) {
         let name = entry.file_name().to_string_lossy().into_owned();
         let Some(stem) = name.strip_suffix(".json") else { continue };
-        if let Some(record) = read_session(root, stem)? {
+        if let Some(record) = read_session(ctx, root, stem)? {
             sessions.push(record);
         }
     }
@@ -2037,7 +2098,7 @@ fn heartbeat_stale(session: &JMap, now_ms_v: f64) -> bool {
 
 /// claims.mjs resolveSessionId — flag(unused here)/env/env-legacy, then the
 /// D5 single-live-session adoption when `root` is supplied.
-fn resolve_session_id(root: Option<&Path>) -> R<Option<String>> {
+fn resolve_session_id(ctx: &Ctx, root: Option<&Path>) -> R<Option<String>> {
     for var in ["BEE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"] {
         if let Ok(v) = std::env::var(var) {
             if !js_trim(&v).is_empty() {
@@ -2047,7 +2108,7 @@ fn resolve_session_id(root: Option<&Path>) -> R<Option<String>> {
     }
     if let Some(root) = root {
         let now = now_ms();
-        let fresh: Vec<JMap> = list_session_records(root)?
+        let fresh: Vec<JMap> = list_session_records(ctx, root)?
             .into_iter()
             .filter(|s| !heartbeat_stale(s, now))
             .collect();
@@ -2059,11 +2120,11 @@ fn resolve_session_id(root: Option<&Path>) -> R<Option<String>> {
 }
 
 /// claims.mjs readClaim.
-fn read_claim(root: &Path, cell_id: &str) -> R<Option<JMap>> {
+fn read_claim(ctx: &Ctx, root: &Path, cell_id: &str) -> R<Option<JMap>> {
     let Ok(id) = require_id(cell_id) else {
         return Err(Ex::Thrown); // claimPath's requireId throw
     };
-    let Some(claim) = rj(&claims_dir(root).join(format!("{id}.json")))? else {
+    let Some(claim) = rj(ctx, &claims_dir(root).join(format!("{id}.json")))? else {
         return Ok(None);
     };
     match claim {
@@ -2088,10 +2149,10 @@ fn is_claim_active(claim: &JMap, now_ms_v: f64) -> bool {
 
 /// claims.mjs activeWorkers — live-heartbeat sessions joined with their
 /// first active claim, one row per session.
-fn active_workers(root: &Path, exclude_session_id: Option<&str>) -> R<Vec<JMap>> {
+fn active_workers(ctx: &Ctx, root: &Path, exclude_session_id: Option<&str>) -> R<Vec<JMap>> {
     let exclude = exclude_session_id.map(js_trim).unwrap_or("");
     let now = now_ms();
-    let live: Vec<JMap> = list_session_records(root)?
+    let live: Vec<JMap> = list_session_records(ctx, root)?
         .into_iter()
         .filter(|s| !str_eq(s.get("id"), exclude) && !heartbeat_stale(s, now))
         .collect();
@@ -2103,7 +2164,7 @@ fn active_workers(root: &Path, exclude_session_id: Option<&str>) -> R<Vec<JMap>>
         for entry in entries.filter_map(|e| e.ok()) {
             let name = entry.file_name().to_string_lossy().into_owned();
             let Some(stem) = name.strip_suffix(".json") else { continue };
-            let claim = match read_claim(root, stem) {
+            let claim = match read_claim(ctx, root, stem) {
                 Ok(c) => c,
                 Err(Ex::Thrown) => continue, // "not a plain cell id" filename
                 Err(e) => return Err(e),
@@ -2628,9 +2689,11 @@ fn read_backlog_counts(ctx: &mut Ctx) -> R<Option<JMap>> {
 
 // ─── reviews (reviews.mjs) ─────────────────────────────────────────────────
 
-/// reviews.mjs listReviews — fail-open per file; a corrupt session file would
-/// print the readJson V8 warning in Node -> bail. A file that parses to a
-/// non-object prints only the deterministic skip warning; replicated.
+/// reviews.mjs listReviews — fail-open per file. A corrupt session file now
+/// warns twice, as Node did: readJson's could-not-parse line (our wording),
+/// then the deterministic skip line, because readJson's `null` fallback lands
+/// in the same non-object branch. A file that parses to a non-object prints
+/// only the skip warning.
 fn list_reviews(ctx: &mut Ctx) -> R<Vec<Value>> {
     let dir = ctx.root.join(".bee").join("reviews");
     let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -2642,7 +2705,7 @@ fn list_reviews(ctx: &mut Ctx) -> R<Vec<Value>> {
         if !name.ends_with(".json") {
             continue;
         }
-        let session = rj(&entry.path())?;
+        let session = rj(ctx, &entry.path())?;
         match session {
             Some(v @ Value::Object(_)) => sessions.push(v),
             _ => {
@@ -3118,14 +3181,14 @@ fn last_durable_settlement(
 }
 
 /// recovery.mjs sessionHasActiveClaim (control-root claims).
-fn session_has_active_claim(control_root: &Path, session_id: &Value, now: f64) -> R<bool> {
+fn session_has_active_claim(ctx: &Ctx, control_root: &Path, session_id: &Value, now: f64) -> R<bool> {
     let Ok(entries) = std::fs::read_dir(claims_dir(control_root)) else {
         return Ok(false);
     };
     for entry in entries.filter_map(|e| e.ok()) {
         let name = entry.file_name().to_string_lossy().into_owned();
         let Some(stem) = name.strip_suffix(".json") else { continue };
-        let claim = match read_claim(control_root, stem) {
+        let claim = match read_claim(ctx, control_root, stem) {
             Ok(c) => c,
             // readClaim's requireId throw propagates in Node (no local catch
             // here) — buildRecoveryBlock's own catch absorbs it.
@@ -3155,7 +3218,7 @@ fn detect_crash_candidates(ctx: &mut Ctx, projects_root: &str) -> R<Vec<Value>> 
         found
     };
     let control_root = control_root_for(ctx)?;
-    let sessions = list_session_records(&control_root)?;
+    let sessions = list_session_records(ctx, &control_root)?;
     if sessions.is_empty() {
         return Ok(Vec::new());
     }
@@ -3254,7 +3317,7 @@ fn detect_crash_candidates(ctx: &mut Ctx, projects_root: &str) -> R<Vec<Value>> 
         }
         if work_signal.is_none() {
             let sid = session.get("id").cloned().unwrap_or(Value::Null);
-            if session_has_active_claim(&control_root, &sid, now)? {
+            if session_has_active_claim(ctx, &control_root, &sid, now)? {
                 work_signal = Some("claimed_cells");
             }
         }
@@ -3714,8 +3777,8 @@ fn is_code_touching_lane(lane: Option<&Value>, other_live_session: bool) -> bool
 fn other_live_work_present(ctx: &mut Ctx) -> R<bool> {
     let attempt = |ctx: &mut Ctx| -> R<bool> {
         let ctrl_root = control_root_for(ctx)?;
-        let self_id = resolve_session_id(Some(&ctrl_root))?;
-        let others = active_workers(&ctrl_root, self_id.as_deref())?;
+        let self_id = resolve_session_id(ctx, Some(&ctrl_root))?;
+        let others = active_workers(ctx, &ctrl_root, self_id.as_deref())?;
         if others.is_empty() {
             return Ok(false);
         }
@@ -3751,7 +3814,7 @@ fn other_live_work_present(ctx: &mut Ctx) -> R<bool> {
 fn build_lane_rows(ctx: &mut Ctx) -> R<Vec<JMap>> {
     let lanes = list_lanes(ctx)?;
     let ctrl_root = control_root_for(ctx)?;
-    let sessions = list_session_records(&ctrl_root)?;
+    let sessions = list_session_records(ctx, &ctrl_root)?;
     let mut bound_by: HashMap<String, Vec<Value>> = HashMap::new();
     for session in &sessions {
         if let Some(Value::String(lane)) = session.get("lane") {
@@ -3785,10 +3848,10 @@ fn build_lane_summary(ctx: &mut Ctx) -> R<JMap> {
         return Ok(out);
     }
     let ctrl_root = control_root_for(ctx)?;
-    let session_id = resolve_session_id(Some(&ctrl_root))?;
+    let session_id = resolve_session_id(ctx, Some(&ctrl_root))?;
     let mut active: Option<JMap> = None;
     if let Some(session_id) = session_id {
-        if let Some(session) = read_session(&ctrl_root, &session_id)? {
+        if let Some(session) = read_session(ctx, &ctrl_root, &session_id)? {
             if let Some(Value::String(lane)) = session.get("lane") {
                 if !lane.is_empty() {
                     active = lanes
@@ -4107,7 +4170,7 @@ fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
     );
     {
         let ctrl_root = control_root_for(ctx)?; // readConfig inside resolveContext
-        let workers = active_workers(&ctrl_root, None)?;
+        let workers = active_workers(ctx, &ctrl_root, None)?;
         status.insert(
             "workers".into(),
             Value::Array(workers.into_iter().map(Value::Object).collect()),
@@ -4846,7 +4909,7 @@ fn run(verb: Verb, lanes_full: bool, use_json: bool, t0: Instant) -> Option<Exit
     // Drift check first (its cache write is the one permitted pre-bail side
     // effect — Node performs it before routing too).
     let drift = check_manifest_drift(&root).ok()?;
-    let mut ctx = Ctx { root, cwd, linked: roots.linked, stderr: Vec::new() };
+    let mut ctx = Ctx { root, cwd, linked: roots.linked, stderr: RefCell::new(Vec::new()) };
     let (payload, text) = match verb {
         Verb::Status => {
             let status = build_status(&mut ctx, lanes_full).ok()?;
@@ -4861,7 +4924,7 @@ fn run(verb: Verb, lanes_full: bool, use_json: bool, t0: Instant) -> Option<Exit
     };
     // Emission order (per stream): handler warnings, then the drift line on
     // stderr; the payload on stdout; the timing line last.
-    for line in &ctx.stderr {
+    for line in ctx.stderr.borrow().iter() {
         eprintln!("{line}");
     }
     if drift.manifest_changed {
@@ -4887,7 +4950,7 @@ mod tests {
             root: root.to_path_buf(),
             cwd: root.to_path_buf(),
             linked: None,
-            stderr: Vec::new(),
+            stderr: RefCell::new(Vec::new()),
         }
     }
 
@@ -4902,6 +4965,70 @@ mod tests {
         let mut h = Sha256::new();
         h.update(s.as_bytes());
         format!("{:x}", h.finalize())
+    }
+
+    // ── CUTOVER: corrupt JSON on the snapshot path ─────────────────────────
+
+    /// `rj` used to bail the whole snapshot to Node on any corrupt file. It
+    /// now warns (buffered) and returns readJson's `null` fallback, so the
+    /// status still builds — with defaults where the file was unreadable,
+    /// exactly the shape Node produced from that fallback.
+    #[test]
+    fn a_corrupt_state_file_warns_and_falls_back_to_defaults() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", "{broken");
+        let ctx = ctx_for(root);
+        let state = read_state_full(&ctx).unwrap();
+        assert_eq!(state.get("phase"), Some(&json!("idle")), "defaultState()");
+        assert_eq!(state.get("feature"), Some(&Value::Null));
+        let warns = ctx.stderr.borrow();
+        assert_eq!(warns.len(), 1, "exactly one warning per read: {warns:?}");
+        assert!(warns[0].starts_with("bee: could not parse JSON at "), "{warns:?}");
+        assert!(warns[0].ends_with("Using fallback; fix the file."), "{warns:?}");
+        assert!(!warns[0].contains("Unexpected token"), "no V8 text: {warns:?}");
+    }
+
+    /// The whole snapshot survives a corrupt config/handoff/onboarding, and
+    /// `--json` still renders. Previously any one of these returned None.
+    #[test]
+    fn build_status_survives_every_corrupt_file_on_the_read_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write(root, ".bee/config.json", "{broken");
+        write(root, ".bee/HANDOFF.json", "{broken");
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).expect("the snapshot must still build");
+        assert_eq!(status.get("phase"), Some(&json!("idle")));
+        assert_eq!(status.get("handoff"), Some(&Value::Null), "readJson's null fallback");
+        assert_eq!(status.get("gate_bypass_level"), Some(&json!("off")), "no config -> off");
+        assert!(
+            ctx.stderr.borrow().iter().any(|l| l.starts_with("bee: could not parse JSON at ")),
+            "the corrupt reads are reported: {:?}",
+            ctx.stderr.borrow()
+        );
+    }
+
+    /// readLane's two lines, in Node's order: readJson's own warning first
+    /// (its null fallback is what makes laneRecordFrom answer null), then
+    /// readLane's skipping-corrupt-lane-record line.
+    #[test]
+    fn a_corrupt_lane_record_emits_both_of_nodes_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/lanes/feat-x.json", "{broken");
+        let mut ctx = ctx_for(root);
+        assert_eq!(read_lane(&mut ctx, "feat-x").unwrap(), None);
+        let warns = ctx.stderr.borrow();
+        assert_eq!(warns.len(), 2, "{warns:?}");
+        assert!(warns[0].starts_with("bee: could not parse JSON at "), "{warns:?}");
+        assert!(
+            warns[1].starts_with("readLane: skipping corrupt lane record "),
+            "{warns:?}"
+        );
     }
 
     #[test]
@@ -4974,14 +5101,14 @@ mod tests {
             ".bee/claims/cell-1.json",
             r#"{"cell":"cell-1","session":"live-1","claimed_at":"2020-01-01T00:00:00.000Z","ttl_seconds":1}"#,
         );
-        let rows = active_workers(root, None).ok().unwrap();
+        let rows = active_workers(&ctx_for(root), root, None).ok().unwrap();
         assert_eq!(rows.len(), 1);
         let row = &rows[0];
         assert_eq!(row.get("session_id"), Some(&json!("live-1")));
         assert_eq!(row.get("lane"), Some(&json!("feat-x")));
         assert_eq!(row.get("cell"), Some(&json!("cell-7")));
         // Excluding the live session leaves zero rows.
-        assert!(active_workers(root, Some("live-1")).ok().unwrap().is_empty());
+        assert!(active_workers(&ctx_for(root), root, Some("live-1")).ok().unwrap().is_empty());
     }
 
     #[test]
@@ -5272,7 +5399,7 @@ mod tests {
                 root: r.root,
                 cwd: cwd.to_path_buf(),
                 linked: r.linked,
-                stderr: Vec::new(),
+                stderr: RefCell::new(Vec::new()),
             },
             _ => panic!("expected a resolvable root at {}", cwd.display()),
         }
@@ -5332,12 +5459,12 @@ mod tests {
             &format!("{{\"id\":\"sess-live\",\"started_at\":\"{now}\",\"last_heartbeat\":\"{now}\"}}"),
         );
         let ctrl = control_root_for(&mut ctx_at(&granted)).unwrap();
-        let workers = active_workers(&ctrl, None).unwrap();
+        let workers = active_workers(&ctx_at(&granted), &ctrl, None).unwrap();
         assert_eq!(workers.len(), 1);
         assert_eq!(workers[0].get("session_id"), Some(&json!("sess-live")));
         // Reading the worktree's own root instead would find nothing — this
         // is exactly the bug the `controlRoot == root` assumption caused.
-        assert!(active_workers(&granted, None).unwrap().is_empty());
+        assert!(active_workers(&ctx_at(&granted), &granted, None).unwrap().is_empty());
     }
 
     /// reservations.mjs's own cycle-safe control-root walk (LEASE files) also
@@ -5355,7 +5482,7 @@ mod tests {
         let orphan = tmp.path().join("orphan");
         std::fs::create_dir_all(&orphan).unwrap();
         std::fs::write(orphan.join(".git"), "gitdir: nowhere").unwrap();
-        let ctx = Ctx { root: orphan.clone(), cwd: orphan.clone(), linked: None, stderr: Vec::new() };
+        let ctx = Ctx { root: orphan.clone(), cwd: orphan.clone(), linked: None, stderr: RefCell::new(Vec::new()) };
         assert_eq!(n(&reservations_control_root(&ctx)), n(&orphan));
     }
 
@@ -5989,8 +6116,10 @@ mod tests {
 
     /// test_recovery.mjs: "zero stale sessions never touches the
     /// decisions/capture/cells stores". Node spies on fs; the Rust port is
-    /// probed with a TRIPWIRE instead — a corrupt cell file that makes
-    /// `list_cells` bail. Reaching the shared-store block is then loud.
+    /// probed with a TRIPWIRE instead — a corrupt cell file whose READ is
+    /// observable. CUTOVER: that read used to BAIL the snapshot, so the
+    /// tripwire was an `Ex::Bail`; it now warns and falls back, so the
+    /// tripwire is the warning line itself. Same proof, louder evidence.
     #[test]
     fn zero_stale_sessions_never_reads_the_settlement_stores() {
         let _guard = session_env_lock();
@@ -6003,8 +6132,11 @@ mod tests {
         write_jsonl_file(&transcript, &dirty_end_events(now - 500_000.0));
         append_decision(root, "d1", &to_iso(now - 1_500_000.0));
         append_capture_stub(root, "c1", &to_iso(now - 1_500_000.0), None);
-        // The tripwire: any read of the cells store bails.
+        // The tripwire: any read of the cells store warns about this file.
         write(root, ".bee/cells/tripwire.json", "{not json");
+        let tripped = |ctx: &Ctx| -> bool {
+            ctx.stderr.borrow().iter().any(|l| l.contains("tripwire.json"))
+        };
         let projects_root = root.join("projects").to_string_lossy().into_owned();
 
         // Fresh heartbeat -> the fast path returns before the stores.
@@ -6016,12 +6148,12 @@ mod tests {
             None,
             Some(&transcript.to_string_lossy()),
         );
+        let mut fresh_ctx = ctx_for(root);
         assert!(
-            detect_crash_candidates(&mut ctx_for(root), &projects_root)
-                .unwrap()
-                .is_empty(),
-            "fresh heartbeat -> no candidates AND no store read"
+            detect_crash_candidates(&mut fresh_ctx, &projects_root).unwrap().is_empty(),
+            "fresh heartbeat -> no candidates"
         );
+        assert!(!tripped(&fresh_ctx), "fresh heartbeat -> the cells store is never read");
 
         // Control: the identical fixture with a STALE heartbeat reaches the
         // shared-store block and trips the wire.
@@ -6033,11 +6165,13 @@ mod tests {
             None,
             Some(&transcript.to_string_lossy()),
         );
+        let mut stale_ctx = ctx_for(root);
         assert!(
-            matches!(
-                detect_crash_candidates(&mut ctx_for(root), &projects_root),
-                Err(Ex::Bail)
-            ),
+            detect_crash_candidates(&mut stale_ctx, &projects_root).is_ok(),
+            "a corrupt cell no longer bails the snapshot"
+        );
+        assert!(
+            tripped(&stale_ctx),
             "a stale session MUST reach the cells store — otherwise the fast-path assertion above proves nothing"
         );
     }
@@ -6058,7 +6192,7 @@ mod tests {
         assert_eq!(roots[0].path, projects_root);
         assert!(!roots[0].scanned);
         assert_eq!(roots[0].reason.as_deref(), Some("ENOENT"));
-        assert!(ctx.stderr.is_empty(), "stderr was {:?}", ctx.stderr);
+        assert!(ctx.stderr.borrow().is_empty(), "stderr was {:?}", ctx.stderr.borrow());
 
         // (b) a healthy configured root is scanned, silently.
         let tmp = tempfile::tempdir().unwrap();
@@ -6084,7 +6218,7 @@ mod tests {
         assert_eq!(roots[1].path, extra.to_string_lossy());
         assert!(roots[1].scanned);
         assert!(roots[1].reason.is_none());
-        assert!(ctx.stderr.is_empty(), "stderr was {:?}", ctx.stderr);
+        assert!(ctx.stderr.borrow().is_empty(), "stderr was {:?}", ctx.stderr.borrow());
 
         // (c) a missing CONFIGURED root degrades to scanned:false + reason,
         // with exactly one warning naming the offending path.
@@ -6107,9 +6241,9 @@ mod tests {
         assert_eq!(roots.len(), 2);
         assert!(!roots[1].scanned);
         assert_eq!(roots[1].reason.as_deref(), Some("ENOENT"));
-        assert_eq!(ctx.stderr.len(), 1, "stderr was {:?}", ctx.stderr);
-        assert!(ctx.stderr[0].contains(&*missing.to_string_lossy()));
-        assert!(ctx.stderr[0].contains("recovery.transcript_roots"));
+        assert_eq!(ctx.stderr.borrow().len(), 1, "stderr was {:?}", ctx.stderr.borrow());
+        assert!(ctx.stderr.borrow()[0].contains(&*missing.to_string_lossy()));
+        assert!(ctx.stderr.borrow()[0].contains("recovery.transcript_roots"));
 
         // (d) malformed entries (missing runtime/path, non-object junk) are
         // ignored silently — only the Claude default survives.
@@ -6127,7 +6261,7 @@ mod tests {
         let mut ctx = ctx_for(root);
         let roots = scan_transcript_roots(&mut ctx, &projects_root).unwrap();
         assert_eq!(roots.len(), 1);
-        assert!(ctx.stderr.is_empty(), "stderr was {:?}", ctx.stderr);
+        assert!(ctx.stderr.borrow().is_empty(), "stderr was {:?}", ctx.stderr.borrow());
     }
 
     /// test_recovery.mjs: a configured extra-runtime root that PREFIXES the
@@ -6178,33 +6312,47 @@ mod tests {
         );
     }
 
-    /// Can this filesystem actually hold `encodeProjectDir`'s spelling as a
-    /// directory? On NTFS the drive colon turns the component into an
-    /// alternate data stream, and both `create_dir_all` and `Path::exists`
-    /// LIE about it (Ok / true) while the PARENT silently becomes a file — so
-    /// the only truthful probe enumerates the parent.
-    fn encoded_project_dir_capable(encoded: &str) -> bool {
-        let Ok(tmp) = tempfile::tempdir() else { return false };
+    /// The cutover fix proved: an absolute root's encoded name is now a legal
+    /// directory component on every host, drive letter included. Before the
+    /// fix this assertion could not be made at all — the name kept the drive
+    /// colon, NTFS took it as an alternate data stream on the parent, and
+    /// `create_dir_all`/`Path::exists` both LIED about it (Ok / true) while the
+    /// PARENT silently became a file. The only truthful probe enumerates the
+    /// parent, which is exactly what this test does.
+    #[test]
+    fn encoded_project_dir_is_a_nameable_directory_component() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let encoded = encode_project_dir(&root.to_string_lossy());
+        assert!(!encoded.contains(':'), "drive colon must be encoded away: {encoded}");
         let parent = tmp.path().join("projects");
-        if std::fs::create_dir_all(parent.join(encoded)).is_err() {
-            return false;
-        }
-        match std::fs::read_dir(&parent) {
-            Ok(entries) => entries
-                .filter_map(|e| e.ok())
-                .any(|e| e.file_name().to_string_lossy() == encoded),
-            Err(_) => false,
-        }
+        std::fs::create_dir_all(parent.join(&encoded)).unwrap();
+        let listed = std::fs::read_dir(&parent)
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|e| e.file_name().to_string_lossy() == encoded);
+        assert!(listed, "encoded project dir must really exist: {encoded}");
+    }
+
+    /// A Windows absolute path encodes to the spelling Claude Code itself
+    /// writes — `D--projects-…`, not Node's illegal `D:-projects-…`.
+    #[test]
+    fn encode_project_dir_matches_claude_codes_own_spelling() {
+        assert_eq!(
+            encode_project_dir("D:\\projects\\tools\\AI\\harness"),
+            "D--projects-tools-AI-harness"
+        );
+        assert_eq!(encode_project_dir("/home/u/p.roj"), "-home-u-p-roj");
     }
 
     /// test_recovery.mjs: with NO stored transcript_path the resolver falls
     /// back to perf.mjs layout math — `<projectsRoot>/<encodeProjectDir(root)>/
     /// <sid>.jsonl` — and the candidate is tagged runtime "claude".
     ///
-    /// `encodeProjectDir` maps only [\\/.] to '-', so an absolute Windows root
-    /// keeps its drive colon and the encoded directory is unnameable on NTFS
-    /// (plans/rust-port.md). Probe the capability with the exact name this
-    /// case needs; skip loudly if the filesystem refuses it.
+    /// Formerly capability-skipped on win32: `encodeProjectDir` mapped only
+    /// [\\/.] to '-', so an absolute Windows root kept its drive colon and the
+    /// encoded directory was unnameable on NTFS. The cutover fix encodes ':'
+    /// too, so the case runs everywhere now.
     #[test]
     fn crash_candidate_resolves_through_the_encoded_layout_root() {
         let _guard = session_env_lock();
@@ -6214,17 +6362,6 @@ mod tests {
         let sid = "sess-layout";
 
         let encoded_name = encode_project_dir(&root.to_string_lossy());
-        if !encoded_project_dir_capable(&encoded_name) {
-            eprintln!(
-                "SKIP (env: this filesystem cannot hold the directory name \
-                 encodeProjectDir() spells for an absolute root — it keeps the \
-                 drive colon, so \"{encoded_name}\" is silently taken as an NTFS \
-                 alternate data stream on its parent; needs a filesystem that \
-                 permits ':' in a path component) — \
-                 crash_candidate_resolves_through_the_encoded_layout_root"
-            );
-            return;
-        }
         let projects_root = root.join("projects");
         let encoded = projects_root.join(&encoded_name);
         std::fs::create_dir_all(&encoded).unwrap();
@@ -6779,7 +6916,7 @@ mod tests {
             }
             let mut ctx = ctx_for(root);
             let status = build_status(&mut ctx, false).unwrap();
-            (status, ctx.stderr.clone())
+            (status, ctx.stderr.borrow().clone())
         };
 
         // draft-pr survives; nothing is written to stderr about it.

@@ -94,15 +94,37 @@
 // no lock (read-only on state). All waits are lock.rs's 100×50ms
 // withStoreLock, with LockBusyError's bytes reproduced natively.
 //
+// CUTOVER (2026-08-01) — the corrupt-JSON delegations are GONE. Contract C2
+// required byte-identical output with Node, so every read whose warning or
+// refusal would have interpolated a V8 `JSON.parse` message or a libuv errno
+// string returned "ask Node" instead of doing the work. Node is being
+// deleted, so those arms are native now, with our own wording and the SAME
+// semantics:
+//   * readState / readSession / readClaim / readHandoff / listAllCellsForStart
+//     and writeHandoff's previous-cell peek all FAIL OPEN exactly as
+//     `readJson(file, fallback)` did — one `bee: could not parse JSON at …`
+//     warning per read (crate::fsutil::warn_corrupt_json), then the same
+//     fallback (defaultState / null / skip-the-record).
+//   * readStateStrict still REFUSES with the same typed message and exit
+//     code; only the `(EISDIR)`-style parenthetical is now an engine-free
+//     category (`io_read_reason`), and every errno class gets one instead of
+//     half of them delegating.
+//   * parse_json_v8 no longer delegates on lone-surrogate "\u" escapes —
+//     nothing in this process can decode them, so such input is CORRUPT and
+//     takes each caller's corrupt branch.
+//
 // Known accepted approximations (documented, delegation guards the rest):
-// unreadable-file errno strings map only EISDIR/EPERM (others delegate);
-// serde-vs-V8 JSON grammar gaps (lone-surrogate escapes) delegate via the
-// "\u"-escape heuristic; prune's mid-loop rmSync failure message is
-// reconstructed from the errno class; the scribing-ledger append-failure
-// warning (embeds a Node error message) is not replicated — the append
-// virtually never fails and the verb's own success output is unaffected.
+// prune's mid-loop rmSync failure message is reconstructed from the errno
+// class; the scribing-ledger append-failure warning (embeds a Node error
+// message) is not replicated — the append virtually never fails and the
+// verb's own success output is unaffected. STILL delegating and out of this
+// cutover's scope: JS spread exotica (`approved_gates` holding a string or
+// array — see spread_gates), the passing-close / feature-swap / high-risk
+// approval doors, and fs WRITE failures after the preflight.
 
-use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, ReadJson};
+use crate::fsutil::{
+    append_jsonl, ensure_dir, read_json, warn_corrupt_json, write_json_atomic, ReadJson,
+};
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
 use crate::verbs::reservations::{
@@ -208,19 +230,35 @@ pub(crate) enum ParsedJson {
     Unparseable,
 }
 
-/// JSON.parse modeled: serde parse + js_numberify. When serde fails but the
-/// text carries "\u" escapes, V8 might still parse it (lone surrogates) —
-/// delegate instead of guessing.
+/// JSON.parse modeled: serde parse + js_numberify.
+///
+/// CUTOVER. This used to answer `Err(Exotic)` — "ask Node" — whenever serde
+/// refused text containing a "\u" escape, because V8's JSON.parse accepts a
+/// LONE SURROGATE escape (\uD800-\uDFFF unpaired) where serde_json does not.
+/// There is no Node to ask any more, and nothing in this process can decode
+/// such a string into a Rust `String`, so that input is now simply
+/// UNPARSEABLE: every caller takes the same branch it takes for any other
+/// corrupt file. The practical population is a hand-corrupted or truncated
+/// record, which is corrupt either way.
 pub(crate) fn parse_json_v8(text: &str) -> Ex<ParsedJson> {
     match serde_json::from_str::<Value>(text) {
         Ok(v) => Ok(ParsedJson::Parsed(js_numberify(&v)?)),
-        Err(_) => {
-            if text.contains("\\u") {
-                Err(Exotic)
-            } else {
-                Ok(ParsedJson::Unparseable)
-            }
-        }
+        Err(_) => Ok(ParsedJson::Unparseable),
+    }
+}
+
+/// A portable, engine-free category for a failed `std::fs::read`, for the
+/// refusals that used to interpolate a libuv errno code (`EISDIR`, `EPERM`,
+/// …). The OS message string is deliberately NOT used: it varies by platform
+/// and locale, so a refusal built from it would not be reproducible.
+pub(crate) fn io_read_reason(file: &Path, err: &std::io::Error) -> &'static str {
+    if file.is_dir() {
+        return "the path is a directory";
+    }
+    match err.kind() {
+        std::io::ErrorKind::PermissionDenied => "permission denied",
+        std::io::ErrorKind::NotFound => "the file is missing",
+        _ => "the file could not be read",
     }
 }
 
@@ -423,17 +461,14 @@ pub(crate) fn read_state_strict(root: &Path) -> Result<Map<String, Value>, Err2>
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(default_state()),
         Err(e) => {
-            // err.code interpolation: map the two codes seen in practice; any
-            // other errno class delegates rather than guessing Node's string.
-            let code = if file.is_dir() {
-                "EISDIR"
-            } else if e.kind() == std::io::ErrorKind::PermissionDenied {
-                "EPERM"
-            } else {
-                return Err(Err2::Ex);
-            };
+            // CUTOVER. Node interpolated `err.code` — a libuv errno string —
+            // and this port reproduced only EISDIR/EPERM, delegating the rest.
+            // The refusal, its typed shape and its exit code are unchanged;
+            // only the parenthetical is now ours, and EVERY read failure gets
+            // one instead of half of them delegating.
             return Err(Err2::Msg(format!(
-                "readStateStrict: could not read \"{file_disp}\" ({code}). {tail_read} {fix}"
+                "readStateStrict: could not read \"{file_disp}\" ({}). {tail_read} {fix}",
+                io_read_reason(&file, &e)
             )));
         }
     };
@@ -466,11 +501,16 @@ pub(crate) fn read_state_strict(root: &Path) -> Result<Map<String, Value>, Err2>
     merge_state_with_defaults(&obj).map_err(|_| Err2::Ex)
 }
 
-/// readState — the fail-open peek (corrupt → Node's V8-worded warn → delegate).
+/// readState — the fail-open peek. A corrupt file WARNS (readJson's own
+/// sentence, our wording) and reads as `defaultState()`, exactly the fallback
+/// `readJson(statePath, null)` handed Node's `!state` guard.
 pub(crate) fn read_state_peek(root: &Path) -> Ex<Map<String, Value>> {
     match read_json(&state_path(root)) {
         ReadJson::Missing => Ok(default_state()),
-        ReadJson::Corrupt => Err(Exotic),
+        ReadJson::Corrupt => {
+            warn_corrupt_json(&state_path(root));
+            Ok(default_state())
+        }
         ReadJson::Parsed(v) => match js_numberify(&v)? {
             Value::Object(m) => merge_state_with_defaults(&m),
             _ => Ok(default_state()),
@@ -600,16 +640,21 @@ fn require_id(value: &str, label: &str) -> Result<String, Err2> {
     Ok(id.to_string())
 }
 
-/// readSession — fail-open (malformed id / missing → None); corrupt JSON
-/// delegates (Node warns with the V8 message).
+/// readSession — fail-open (malformed id / missing → None). A corrupt record
+/// WARNS and reads as "no session", the fallback `readJson(file, null)` fed
+/// Node's `!session` guard.
 fn read_session(root: &Path, session_id: &str) -> Ex<Option<Map<String, Value>>> {
     let id = js_trim(session_id);
     if id.is_empty() || id.contains('/') || id.contains('\\') || id.contains("..") {
         return Ok(None);
     }
-    match read_json(&sessions_dir(root).join(format!("{id}.json"))) {
+    let file = sessions_dir(root).join(format!("{id}.json"));
+    match read_json(&file) {
         ReadJson::Missing => Ok(None),
-        ReadJson::Corrupt => Err(Exotic),
+        ReadJson::Corrupt => {
+            warn_corrupt_json(&file);
+            Ok(None)
+        }
         ReadJson::Parsed(v) => match js_numberify(&v)? {
             Value::Object(m) => {
                 // session.id !== String(sessionId).trim() → null
@@ -723,11 +768,16 @@ fn claims_dir(root: &Path) -> PathBuf {
 }
 
 /// readClaim — `!claim || typeof claim !== 'object'` → null. Arrays pass
-/// typeof in JS; the callers here treat them as Exotic when spread.
+/// typeof in JS; the callers here treat them as Exotic when spread. A corrupt
+/// file WARNS and reads as "no claim" (readJson's `null` fallback).
 pub(crate) fn read_claim(root: &Path, cell: &str) -> Ex<Option<Value>> {
-    match read_json(&claims_dir(root).join(format!("{cell}.json"))) {
+    let file = claims_dir(root).join(format!("{cell}.json"));
+    match read_json(&file) {
         ReadJson::Missing => Ok(None),
-        ReadJson::Corrupt => Err(Exotic),
+        ReadJson::Corrupt => {
+            warn_corrupt_json(&file);
+            Ok(None)
+        }
         ReadJson::Parsed(v) => match js_numberify(&v)? {
             v @ (Value::Object(_) | Value::Array(_)) => Ok(Some(v)),
             _ => Ok(None),
@@ -824,7 +874,12 @@ pub(crate) fn handoff_path(root: &Path) -> PathBuf {
 fn read_handoff(root: &Path) -> Ex<Option<Value>> {
     match read_json(&handoff_path(root)) {
         ReadJson::Missing => Ok(None),
-        ReadJson::Corrupt => Err(Exotic),
+        // Corrupt: warn, then `readJson(..., null)`'s fallback flows straight
+        // through Node's `!handoff` guard and is RETURNED as-is — null.
+        ReadJson::Corrupt => {
+            warn_corrupt_json(&handoff_path(root));
+            Ok(None)
+        }
         ReadJson::Parsed(v) => {
             let v = js_numberify(&v)?;
             match v {
@@ -884,9 +939,15 @@ fn write_handoff(root: &Path, input: &Map<String, Value>, kind: &str) -> Result<
     if !cell_path_modelable(&previous_cell) {
         return Err(Err2::Ex);
     }
-    let previous = match read_json(&root.join(".bee").join("cells").join(format!("{previous_cell}.json"))) {
+    let prev_file = root.join(".bee").join("cells").join(format!("{previous_cell}.json"));
+    let previous = match read_json(&prev_file) {
         ReadJson::Missing => None,
-        ReadJson::Corrupt => return Err(Err2::Ex), // Node's readJson warns (V8 bytes)
+        // Corrupt: warn, then readJson's `null` fallback — the cell reads as
+        // absent, so the refusal below reports status "missing", unchanged.
+        ReadJson::Corrupt => {
+            warn_corrupt_json(&prev_file);
+            None
+        }
         ReadJson::Parsed(v) => Some(js_numberify(&v)?),
     };
     let prev_capped = previous
@@ -992,16 +1053,20 @@ fn scribing_ledger_path(root: &Path) -> PathBuf {
     root.join(".bee").join("logs").join("scribing-runs.jsonl")
 }
 
-/// readJsonl — corrupt lines are skipped silently in Node; a line serde can't
-/// parse but V8 might ("\u" escapes) delegates.
+/// readJsonl — a corrupt LINE is skipped and the rest of the file is read,
+/// exactly as Node's readJsonl did. CUTOVER: a line serde could not parse but
+/// V8 might have ("\u" lone-surrogate escapes) used to delegate; it is now
+/// simply one more corrupt line, reported once so a silently dropped ledger
+/// row cannot masquerade as an absent one.
 fn read_scribing_ledger(root: &Path) -> Ex<Vec<Value>> {
-    let bytes = match std::fs::read(scribing_ledger_path(root)) {
+    let file = scribing_ledger_path(root);
+    let bytes = match std::fs::read(&file) {
         Ok(b) => b,
         Err(_) => return Ok(Vec::new()),
     };
     let text = String::from_utf8_lossy(&bytes);
     let mut events = Vec::new();
-    for line in text.split('\n') {
+    for (idx, line) in text.split('\n').enumerate() {
         let line = line.strip_suffix('\r').unwrap_or(line);
         let trimmed = js_trim(line);
         if trimmed.is_empty() {
@@ -1009,7 +1074,9 @@ fn read_scribing_ledger(root: &Path) -> Ex<Vec<Value>> {
         }
         match parse_json_v8(trimmed)? {
             ParsedJson::Parsed(v) => events.push(v),
-            ParsedJson::Unparseable => continue, // Node skips corrupt lines
+            ParsedJson::Unparseable => {
+                crate::fsutil::warn_corrupt_jsonl_line(&file, idx + 1);
+            }
         }
     }
     Ok(events)
@@ -3142,7 +3209,10 @@ const EXAMPLE_ROUTE: &str =
 /// reservations.rs's `js_number_flag` (which is Number.parseInt and would read
 /// "2.5" as 2). `Ok(None)` is NaN (Node then reports the invalid-flag refusal);
 /// `Err` is a spelling JS converts but this port does not model (hex/binary/
-/// octal literals, Infinity, |n| >= 1e21) — delegate, Node owns the answer.
+/// octal literals, Infinity). CUTOVER: `|n| >= 1e21` used to be on that list
+/// because jsjson printed such a number differently than V8; jsjson now
+/// implements the full ECMA Number::toString, so a large FINITE value is
+/// simply accepted.
 fn js_number_full(raw: &str) -> Ex<Option<f64>> {
     let t = js_trim(raw);
     if t.is_empty() {
@@ -3196,8 +3266,8 @@ fn js_number_full(raw: &str) -> Ex<Option<f64>> {
         return Ok(None); // trailing junk → NaN
     }
     let num: f64 = t.parse().map_err(|_| Exotic)?;
-    if !num.is_finite() || num.abs() >= 1e21 {
-        return Err(Exotic); // JS exponent rendering this port does not model
+    if !num.is_finite() {
+        return Err(Exotic); // Number("1e400") === Infinity — unmodeled downstream
     }
     Ok(Some(num))
 }
@@ -3717,8 +3787,8 @@ fn run_rebuild_projections(flags: Flags, use_json: bool, t0: Instant) -> Option<
 // store.
 
 /// state.mjs listAllCellsForStart — `.bee/cells/*.json`, objects only. A
-/// corrupt cell makes fsutil's readJson WARN with a V8 message, so it is
-/// classified as Exotic and delegated by the preflight.
+/// corrupt cell WARNS and is skipped: readJson hands back `null`, which
+/// Node's `!cell` guard drops from the list. Same list, same order.
 fn list_all_cells_for_start(root: &Path) -> Ex<Vec<Map<String, Value>>> {
     let Ok(entries) = std::fs::read_dir(root.join(".bee").join("cells")) else {
         return Ok(Vec::new());
@@ -3736,9 +3806,13 @@ fn list_all_cells_for_start(root: &Path) -> Ex<Vec<Map<String, Value>>> {
         if !name.ends_with(".json") {
             continue;
         }
-        let parsed = match read_json(&root.join(".bee").join("cells").join(&name)) {
+        let cell_file = root.join(".bee").join("cells").join(&name);
+        let parsed = match read_json(&cell_file) {
             ReadJson::Missing => continue,
-            ReadJson::Corrupt => return Err(Exotic),
+            ReadJson::Corrupt => {
+                warn_corrupt_json(&cell_file);
+                continue;
+            }
             ReadJson::Parsed(v) => js_numberify(&v)?,
         };
         // `!cell || typeof cell !== 'object' || Array.isArray(cell)`
@@ -4262,6 +4336,10 @@ fn apply_write_policy(
         control_root,
         &isolate_feature,
         None,
+        // startFeature's isolation worktree never takes a companion — bee.mjs
+        // passes neither companion option here (only handleWorktreeNew's
+        // --with-companion does).
+        crate::verbs::worktree::CompanionSpec::default(),
         &mut lock_busy,
     ) {
         Ok(c) => c,
@@ -5009,10 +5087,12 @@ mod tests {
         assert_eq!(others[0].session_id, "live-1");
     }
 
-    /// listAllCellsForStart reads objects only, and a CORRUPT cell is Exotic
-    /// (Node's readJson would warn with a V8 message) — the preflight's job.
+    /// listAllCellsForStart reads objects only. CUTOVER: a CORRUPT cell used
+    /// to be Exotic (Node's readJson warned with a V8 message); it is now
+    /// warned about and SKIPPED, which is the same list `readJson`'s `null`
+    /// fallback produced in Node — so the preflight no longer delegates.
     #[test]
-    fn cells_for_start_skips_non_objects_and_delegates_on_corrupt() {
+    fn cells_for_start_skips_non_objects_and_warns_past_a_corrupt_record() {
         let tmp = tmp_root();
         let root = tmp.path();
         std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
@@ -5021,8 +5101,63 @@ mod tests {
         std::fs::write(root.join(".bee/cells/notes.txt"), "ignored").unwrap();
         assert_eq!(ok(list_all_cells_for_start(root)).len(), 1);
         std::fs::write(root.join(".bee/cells/c-3.json"), "{oops").unwrap();
-        assert!(list_all_cells_for_start(root).is_err());
-        assert!(preflight(root, root).is_err());
+        let cells = ok(list_all_cells_for_start(root));
+        assert_eq!(cells.len(), 1, "the corrupt record is skipped, the good one survives");
+        assert_eq!(cells[0].get("id"), Some(&json!("c-1")));
+        assert!(preflight(root, root).is_ok(), "a corrupt cell no longer delegates");
+    }
+
+    /// The lone-surrogate class: V8's JSON.parse accepted `"\uD800"`, serde
+    /// refuses it, and no Rust `String` can hold it — so it is CORRUPT and
+    /// takes each caller's corrupt branch instead of delegating.
+    #[test]
+    fn lone_surrogate_escapes_are_corrupt_not_delegated() {
+        assert!(matches!(parse_json_v8("{\"a\":\"\\uD800\"}"), Ok(ParsedJson::Unparseable)));
+        let tmp = tmp_root();
+        write_state_file(tmp.path(), "{\"phase\":\"\\uD800\"}");
+        // The fail-open peek falls back to defaults, as any corrupt file does.
+        assert_eq!(ok(read_state_peek(tmp.path())).get("phase"), Some(&json!("idle")));
+        // The strict read still REFUSES, with the unparseable message.
+        match read_state_strict(tmp.path()) {
+            Err(Err2::Msg(m)) => assert!(m.contains("exists but is not valid JSON"), "{m}"),
+            _ => panic!("expected the unparseable refusal"),
+        }
+    }
+
+    /// Every fail-open reader warns ONCE and takes readJson's own fallback.
+    #[test]
+    fn corrupt_reads_fail_open_with_one_warning_each() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(root, "{broken");
+        assert_eq!(ok(read_state_peek(root)).get("phase"), Some(&json!("idle")));
+
+        std::fs::create_dir_all(root.join(".bee").join("sessions")).unwrap();
+        std::fs::write(root.join(".bee/sessions/s-1.json"), "{broken").unwrap();
+        assert!(ok(read_session(root, "s-1")).is_none());
+
+        std::fs::create_dir_all(root.join(".bee").join("claims")).unwrap();
+        std::fs::write(root.join(".bee/claims/c-1.json"), "{broken").unwrap();
+        assert!(ok(read_claim(root, "c-1")).is_none());
+
+        std::fs::write(handoff_path(root), "{broken").unwrap();
+        assert!(ok(read_handoff(root)).is_none());
+    }
+
+    /// The read-failure refusal keeps its typed shape; only the parenthetical
+    /// is ours now, and a DIRECTORY in the file's place no longer delegates.
+    #[test]
+    fn read_state_strict_unreadable_names_an_engine_free_category() {
+        let tmp = tmp_root();
+        std::fs::create_dir_all(tmp.path().join(".bee").join("state.json")).unwrap();
+        match read_state_strict(tmp.path()) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.starts_with("readStateStrict: could not read "), "{m}");
+                assert!(m.contains("(the path is a directory)"), "{m}");
+                assert!(!m.contains("EISDIR"), "no libuv errno string: {m}");
+            }
+            _ => panic!("expected the unreadable refusal"),
+        }
     }
 
     // ── gate-door rules (checkPhaseTransition) ────────────────────────────

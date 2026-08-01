@@ -62,8 +62,16 @@
 //     `{...current, feature: undefined}` is dropped by JSON.stringify), where
 //     the hook writes `null`. Unreachable for any bee-created record.
 //   * list_workflows REPRODUCES the skip warn natively (the hook's copy still
-//     delegates on any skip). Only the two arms whose reason embeds a V8 parse
-//     message or a libuv errno string route back to Node — see its own comment.
+//     delegates on any skip). CUTOVER (2026-08-01): the last two arms — the
+//     one whose Node reason embedded a V8 parse message and the one whose
+//     reason embedded a libuv errno string — are native too, so NO skip
+//     routes back to Node and the pre-pass that kept a delegating scan silent
+//     is deleted. Same sentence, same skip-and-continue, one warn per bad
+//     record. readLane / listHandoffMailbox / writeMailboxHandoff's
+//     previous-cell peek likewise fail open on a corrupt file (one
+//     `crate::fsutil::warn_corrupt_json` line, then readJson's own fallback),
+//     and readLaneStrict's unreadable refusal now names an engine-free
+//     category instead of an errno code.
 //
 // Locking: identical lock-name strings to Node so both runtimes interoperate
 // mid-campaign — `workflow:<id>` (workflow-store.mjs withWorkflowLock),
@@ -85,8 +93,8 @@ use crate::verbs::reservations::{
     truthy, Err2, Ex, Exotic,
 };
 use crate::verbs::state_group::{
-    adopt_claim, coerce_legacy_phase, default_gates, handoff_path, parse_json_v8, read_claim,
-    read_state_peek, spread_gates, write_state, AdoptOutcome, ParsedJson,
+    adopt_claim, coerce_legacy_phase, default_gates, handoff_path, io_read_reason, parse_json_v8,
+    read_claim, read_state_peek, spread_gates, write_state, AdoptOutcome, ParsedJson,
 };
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
@@ -208,12 +216,13 @@ fn base_workflow_defaults() -> Map<String, Value> {
 
 // ─── record read ───────────────────────────────────────────────────────────
 
-/// Why listWorkflows would skip an entry. `Reason` bytes are deterministic;
-/// `Delegate` covers the two classes whose warn embeds a V8/errno string.
-enum WfSkip {
-    Reason(String),
-    Delegate,
-}
+/// Why listWorkflows would skip an entry — always a reason we can author.
+///
+/// CUTOVER: this used to carry a second variant, `Delegate`, for the two
+/// classes whose Node reason embedded a V8 parse message or a libuv errno
+/// string. Both are native now (see `read_workflow_record`), so every skip
+/// is a `Reason` and nothing about this read can send a run to Node.
+struct WfSkip(String);
 
 /// typeof-style label for the not-an-object refusal.
 fn found_kind(v: &Value) -> &'static str {
@@ -228,35 +237,51 @@ fn found_kind(v: &Value) -> &'static str {
 
 /// workflow-store.mjs readWorkflowRecord. Raw read + JSON.parse (no BOM
 /// strip), then `{...baseWorkflowDefaults(), ...parsed, id, gates}`.
+///
+/// CUTOVER: the two refusals Node built out of engine text are ours now. The
+/// WORKFLOW_CORRUPT sentence, its skip-vs-throw role, and the FIX line are
+/// unchanged — only the parenthetical cause is reworded:
+///   * `(${err.message})`, a V8 parse message → dropped; the sentence already
+///     says "is not valid JSON", which is the whole truth we can tell, and it
+///     matches readStateStrict's sibling refusal byte for byte in shape.
+///   * `(${err.code})`, a libuv errno string → an `io_read_reason` category.
 fn read_workflow_record(root: &Path, id: &str) -> Result<Map<String, Value>, WfSkip> {
     let file = workflow_state_path(root, id);
     let file_str = file.display().to_string();
     let rel = path_relative(root, &file);
     let bytes = match std::fs::read(&file) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(WfSkip::Reason(format!(
+            return Err(WfSkip(format!(
                 "readWorkflow: no workflow record at \"{file_str}\". FIX: createWorkflow first, or check the id."
             )));
         }
-        // `(${err.code})` — an errno string this port does not reproduce.
-        Err(_) => return Err(WfSkip::Delegate),
+        Err(e) => {
+            return Err(WfSkip(format!(
+                "readWorkflow: could not read \"{file_str}\" ({}). The bee CLI refuses to guess at a workflow record it cannot read — that could silently clobber real state (gates, phase). FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\").",
+                io_read_reason(&file, &e)
+            )));
+        }
         Ok(b) => b,
     };
     let text = String::from_utf8_lossy(&bytes).into_owned();
     let parsed = match parse_json_v8(&text) {
-        Err(Exotic) => return Err(WfSkip::Delegate),
-        // `(${err.message})` — a V8 parse message.
-        Ok(ParsedJson::Unparseable) => return Err(WfSkip::Delegate),
+        // Includes the lone-surrogate escapes V8 accepted and serde refuses:
+        // unreadable here means unreadable, so it is reported as corrupt.
+        Err(Exotic) | Ok(ParsedJson::Unparseable) => {
+            return Err(WfSkip(format!(
+                "readWorkflow: \"{file_str}\" exists but is not valid JSON. The bee CLI refuses to rebuild a workflow from defaults over a present-but-corrupt file — that would silently clobber real state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\")."
+            )));
+        }
         Ok(ParsedJson::Parsed(v)) => v,
     };
     let Value::Object(parsed_map) = parsed else {
-        return Err(WfSkip::Reason(format!(
+        return Err(WfSkip(format!(
             "readWorkflow: \"{file_str}\" exists but is not a JSON object (found {}).",
             found_kind(&parsed)
         )));
     };
     if !matches!(parsed_map.get("id"), Some(Value::String(s)) if s == id) {
-        return Err(WfSkip::Reason(format!(
+        return Err(WfSkip(format!(
             "readWorkflow: \"{file_str}\" exists but its id field (\"{}\") does not match the requested workflow \"{id}\" — never trusted. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\").",
             js_disp_opt(parsed_map.get("id"))
         )));
@@ -281,35 +306,28 @@ pub(crate) fn skip_warn_line(id: &str, reason: &str) -> String {
 /// order. A corrupt or unreadable entry is SKIPPED (never guessed at, never
 /// thrown for the whole list) and reported with a `console.warn` per skip.
 ///
-/// SKIP TOLERANCE IS NATIVE (R6 blocker closed). The reason bytes come
-/// straight from `read_workflow_record`'s own refusals, so the three ordinary
-/// skips — missing record, not-a-JSON-object, id mismatch — warn here exactly
-/// as Node does. The repeat count needs no modelling: this function is called
-/// from the same places `listWorkflows` is (the mutation-lock scope read, the
-/// write-through, and each rebuild*), so a verb that calls it 2–4 times emits
-/// the stream 2–4 times by construction. `state_lanes_over_a_broken_workflow_
-/// record_warns_once_per_call` pins that.
+/// SKIP TOLERANCE IS FULLY NATIVE. The reason bytes come straight from
+/// `read_workflow_record`'s own refusals, so ALL FIVE skips — missing record,
+/// unreadable file, unparseable JSON, not-a-JSON-object, id mismatch — warn
+/// here in the same sentence Node used, one line per bad record, in
+/// directory-read order. The repeat count needs no modelling: this function is
+/// called from the same places `listWorkflows` is (the mutation-lock scope
+/// read, the write-through, and each rebuild*), so a verb that calls it 2–4
+/// times emits the stream 2–4 times by construction.
+/// `state_lanes_over_a_broken_workflow_record_warns_once_per_call` pins that.
 ///
-/// WHAT STILL DELEGATES — two arms, both because the reason embeds bytes this
-/// port cannot author (rust-port.md campaign rule 2, "refusals delegate unless
-/// their bytes are deterministic"):
-///   1. `readWorkflow: "<file>" exists but is not valid JSON (${err.message})`
-///      — a V8 parse message.
-///   2. `readWorkflow: could not read "<file>" (${err.code})` — a libuv errno
-///      string for a non-ENOENT read failure (EISDIR/EACCES/EPERM). Node's
-///      mapping of a Win32 error to that code is not reproducible from
-///      `std::io::Error` (a directory read is ACCESS_DENIED on Win32 and
-///      libuv rewrites it to EISDIR only in some paths).
-/// Both are decided in a PRE-PASS: the whole directory is classified before a
-/// single warn is written, so a delegating run still emits zero bytes first
-/// (`Outcome`-equivalent for verbs: `try_native` must produce no output before
-/// returning None).
+/// CUTOVER: two of those five used to be decided in a PRE-PASS that buffered
+/// every warn until the whole directory was known warn-reproducible, so a
+/// delegating run could emit zero bytes before returning None. With their
+/// reasons native there is nothing left to decide, so the pre-pass is gone and
+/// each warn fires at its own record, exactly as the ordinary skips always
+/// did. The one surviving `Exotic` is a non-UTF-8 directory name, which is not
+/// a corrupt-JSON matter at all.
 pub(crate) fn list_workflows(root: &Path) -> Ex<Vec<Map<String, Value>>> {
     let Ok(rd) = std::fs::read_dir(workflows_dir(root)) else {
         return Ok(Vec::new());
     };
     let mut out = Vec::new();
-    let mut warns: Vec<String> = Vec::new();
     for entry in rd.flatten() {
         if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
             continue; // `if (!entry.isDirectory()) continue` — silent, no warn
@@ -319,13 +337,8 @@ pub(crate) fn list_workflows(root: &Path) -> Ex<Vec<Map<String, Value>>> {
         };
         match read_workflow_record(root, &id) {
             Ok(record) => out.push(record),
-            Err(WfSkip::Reason(reason)) => warns.push(skip_warn_line(&id, &reason)),
-            Err(WfSkip::Delegate) => return Err(Exotic), // see the doc comment
+            Err(WfSkip(reason)) => eprintln!("{}", skip_warn_line(&id, &reason)),
         }
-    }
-    // Emitted only once the whole scan is known warn-reproducible.
-    for line in warns {
-        eprintln!("{line}");
     }
     Ok(out)
 }
@@ -415,8 +428,9 @@ pub(crate) fn update_workflow_assuming_lock_with(
     let workflow_id = require_workflow_id(id)?;
     let current = match read_workflow_record(root, &workflow_id) {
         Ok(c) => c,
-        Err(WfSkip::Reason(msg)) => return Err(Err2::Msg(msg)),
-        Err(WfSkip::Delegate) => return Err(Err2::Ex),
+        // Every WORKFLOW_MISSING/WORKFLOW_CORRUPT refusal is authorable now,
+        // so the strict read throws for all five instead of two delegating.
+        Err(WfSkip(msg)) => return Err(Err2::Msg(msg)),
     };
     let patch = updater(&current)?;
     check_patch_status(&patch)?;
@@ -659,9 +673,11 @@ pub(crate) fn lane_record_from(feature: &str, parsed: &Value) -> Ex<Option<Map<S
     Ok(Some(merged))
 }
 
-/// state.mjs readLane — the fail-open DISPLAY read. Corrupt-but-valid-JSON
-/// records get the deterministic warn + skip; JSON-corrupt files delegate
-/// (Node's readJson warns first with the V8 message).
+/// state.mjs readLane — the fail-open DISPLAY read. Every corrupt shape warns
+/// and reads as "no lane". A JSON-corrupt file produces TWO lines, exactly as
+/// Node did: readJson's own `could not parse JSON at …` (our wording) and
+/// then readLane's `skipping corrupt lane record …`, because `readJson`'s
+/// `null` fallback is what makes `laneRecordFrom` answer null.
 pub(crate) fn read_lane_display(root: &Path, raw_feature: &str) -> Ex<Option<Map<String, Value>>> {
     let feature = js_trim(raw_feature);
     if feature.is_empty()
@@ -687,7 +703,11 @@ pub(crate) fn read_lane_display(root: &Path, raw_feature: &str) -> Ex<Option<Map
             warn();
             Ok(None)
         }
-        ReadJson::Corrupt => Err(Exotic),
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(&file);
+            warn();
+            Ok(None)
+        }
         ReadJson::Parsed(v) => {
             let v = crate::verbs::reservations::js_numberify(&v)?;
             match lane_record_from(feature, &v)? {
@@ -734,17 +754,13 @@ pub(crate) fn read_lane_strict(
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => {
-            // `(${err.code})` — only the two errno classes seen in practice are
-            // reproduced; anything else delegates rather than guessing.
-            let code = if file.is_dir() {
-                "EISDIR"
-            } else if e.kind() == std::io::ErrorKind::PermissionDenied {
-                "EPERM"
-            } else {
-                return Err(Err2::Ex);
-            };
+            // CUTOVER: `(${err.code})` was a libuv errno string, so only
+            // EISDIR/EPERM were reproduced and every other class delegated.
+            // Same refusal, same exit code — an engine-free category now, for
+            // EVERY read failure.
             return Err(Err2::Msg(format!(
-                "readLaneStrict: could not read lane record \"{file_str}\" ({code}). The bee CLI refuses to mutate a lane it cannot read — that could silently clobber real lane state (gates, phase). FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\"), then retry."
+                "readLaneStrict: could not read lane record \"{file_str}\" ({}). The bee CLI refuses to mutate a lane it cannot read — that could silently clobber real lane state (gates, phase). FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\"), then retry.",
+                io_read_reason(&file, &e)
             )));
         }
     };
@@ -1124,7 +1140,12 @@ pub(crate) fn list_handoff_mailbox(root: &Path, workflow_id: &str) -> Ex<Vec<Map
         let file = dir.join(format!("{:0width$}.json", seq, width = HANDOFF_SEQ_WIDTH));
         let raw = match read_json(&file) {
             ReadJson::Missing => continue,
-            ReadJson::Corrupt => return Err(Exotic), // readJson warns with the V8 message
+            // readJson's `null` fallback fails Node's `!raw` guard: the record
+            // is skipped, the rest of the mailbox is listed as before.
+            ReadJson::Corrupt => {
+                crate::fsutil::warn_corrupt_json(&file);
+                continue;
+            }
             ReadJson::Parsed(v) => crate::verbs::reservations::js_numberify(&v)?,
         };
         let Value::Object(mut m) = raw else { continue };
@@ -1241,11 +1262,15 @@ pub(crate) fn write_mailbox_handoff(
         if !cell_path_modelable(&previous_cell) {
             return Err(Err2::Ex);
         }
-        let previous = match read_json(
-            &root.join(".bee").join("cells").join(format!("{previous_cell}.json")),
-        ) {
+        let prev_file = root.join(".bee").join("cells").join(format!("{previous_cell}.json"));
+        let previous = match read_json(&prev_file) {
             ReadJson::Missing => None,
-            ReadJson::Corrupt => return Err(Err2::Ex), // readJson warns (V8 bytes)
+            // readJson's `null` fallback: the cell reads as absent, so the
+            // not-capped refusal below reports status "missing" unchanged.
+            ReadJson::Corrupt => {
+                crate::fsutil::warn_corrupt_json(&prev_file);
+                None
+            }
             ReadJson::Parsed(v) => Some(crate::verbs::reservations::js_numberify(&v)?),
         };
         let capped = previous
@@ -1609,13 +1634,13 @@ mod tests {
         assert!(rec.contains_key("gates"));
         write_workflow(tmp.path(), "wf-2", json!({"id":"other","feature":"f2"}));
         match read_workflow_record(tmp.path(), "wf-2") {
-            Err(WfSkip::Reason(m)) => assert!(m.contains("does not match the requested workflow \"wf-2\"")),
+            Err(WfSkip(m)) => assert!(m.contains("does not match the requested workflow \"wf-2\"")),
             _ => panic!("expected the id-mismatch skip"),
         }
         // Missing record: WORKFLOW_MISSING reason.
         std::fs::create_dir_all(workflows_dir(tmp.path()).join("wf-3")).unwrap();
         match read_workflow_record(tmp.path(), "wf-3") {
-            Err(WfSkip::Reason(m)) => assert!(m.starts_with("readWorkflow: no workflow record at")),
+            Err(WfSkip(m)) => assert!(m.starts_with("readWorkflow: no workflow record at")),
             _ => panic!("expected WORKFLOW_MISSING"),
         }
     }
@@ -1668,7 +1693,7 @@ checkout -- {}\").",
         // ...and each skip reason is the exact WorkflowStoreError message.
         for (id, reason) in ["wf-missing", "wf-array", "wf-wrongid"].iter().zip(&reasons) {
             match read_workflow_record(tmp.path(), id) {
-                Err(WfSkip::Reason(m)) => assert_eq!(&m, reason, "reason bytes for {id}"),
+                Err(WfSkip(m)) => assert_eq!(&m, reason, "reason bytes for {id}"),
                 _ => panic!("expected an ordinary (native) skip for {id}"),
             }
         }
@@ -1692,46 +1717,157 @@ workflow record at \"{}\". FIX: createWorkflow first, or check the id.",
         );
     }
 
+    /// CUTOVER (was `only_the_two_v8_worded_arms_still_delegate`). The two
+    /// residue arms are native: each is an ordinary skip with a reason we
+    /// author, the listing survives, and nothing routes back to Node.
     #[test]
-    fn only_the_two_v8_worded_arms_still_delegate() {
+    fn the_two_residue_arms_are_ordinary_native_skips() {
         let tmp = tmp_root();
         write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1"}));
-        // (1) unparseable JSON — the reason embeds V8's own parse message.
+
+        // (1) unparseable JSON — was `(${err.message})`, a V8 parse message.
         let dir = workflows_dir(tmp.path()).join("wf-badjson");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("state.json"), "{not json").unwrap();
-        assert!(
-            matches!(read_workflow_record(tmp.path(), "wf-badjson"), Err(WfSkip::Delegate)),
-            "a V8 parse message must stay Node's"
-        );
-        assert!(list_workflows(tmp.path()).is_err(), "and it routes the whole call back");
+        match read_workflow_record(tmp.path(), "wf-badjson") {
+            Err(WfSkip(m)) => {
+                assert_eq!(
+                    m,
+                    format!(
+                        "readWorkflow: \"{}\" exists but is not valid JSON. The bee CLI refuses to \
+rebuild a workflow from defaults over a present-but-corrupt file — that would silently clobber real \
+state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g. \"git checkout -- \
+{}\").",
+                        workflow_state_path(tmp.path(), "wf-badjson").display(),
+                        format!(".bee{0}runtime{0}workflows{0}wf-badjson{0}state.json", MAIN_SEPARATOR)
+                    )
+                );
+                assert!(!m.contains("Unexpected token"), "no V8 text: {m}");
+            }
+            _ => panic!("expected a native skip"),
+        }
+        let listed = ok(list_workflows(tmp.path()));
+        assert_eq!(listed.len(), 1, "the readable record survives the corrupt one");
+        assert_eq!(wf_id(&listed[0]), "wf-1");
 
-        // (2) present-but-unreadable — the reason embeds a libuv errno string.
-        // A directory in place of state.json is the portable way to reach it.
+        // (2) present-but-unreadable — was `(${err.code})`, a libuv errno
+        // string. A directory in place of state.json reaches it portably.
         std::fs::remove_dir_all(&dir).unwrap();
         let d2 = workflows_dir(tmp.path()).join("wf-eisdir");
         std::fs::create_dir_all(d2.join("state.json")).unwrap();
-        assert!(
-            matches!(read_workflow_record(tmp.path(), "wf-eisdir"), Err(WfSkip::Delegate)),
-            "an errno-worded refusal must stay Node's"
-        );
-        assert!(list_workflows(tmp.path()).is_err());
+        match read_workflow_record(tmp.path(), "wf-eisdir") {
+            Err(WfSkip(m)) => {
+                assert!(m.starts_with("readWorkflow: could not read "), "{m}");
+                assert!(m.contains("(the path is a directory)"), "{m}");
+                assert!(!m.contains("EISDIR") && !m.contains("EACCES"), "no errno string: {m}");
+                assert!(m.contains("refuses to guess at a workflow record it cannot read"), "{m}");
+            }
+            _ => panic!("expected a native skip"),
+        }
+        let listed = ok(list_workflows(tmp.path()));
+        assert_eq!(listed.len(), 1);
+        assert_eq!(wf_id(&listed[0]), "wf-1");
     }
 
+    /// CUTOVER (was `a_delegating_scan_emits_no_warn_before_it_bails`). The
+    /// pre-pass existed only to keep a delegating scan silent; with nothing
+    /// left to decide it is gone, and each bad record warns exactly ONCE per
+    /// call — the corrupt and unreadable ones alongside the ordinary three.
     #[test]
-    fn a_delegating_scan_emits_no_warn_before_it_bails() {
-        // The pre-pass contract: a directory holding BOTH an ordinary skip and
-        // a delegating one must produce zero output, or the Node re-run would
-        // print that warn a second time. Proven structurally — the classifier
-        // is run to completion and only then are the lines emitted — and
-        // observably by the child-process byte-diff in
-        // scripts (see the cell's harness), which sees an empty stderr here.
+    fn every_bad_record_warns_exactly_once_per_scan() {
         let tmp = tmp_root();
-        seed_the_three_ordinary_skips(tmp.path()); // three warnable entries
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1"}));
+        let ordinary = seed_the_three_ordinary_skips(tmp.path());
         let bad = workflows_dir(tmp.path()).join("wf-badjson");
         std::fs::create_dir_all(&bad).unwrap();
         std::fs::write(bad.join("state.json"), "{not json").unwrap();
-        assert!(list_workflows(tmp.path()).is_err());
+        let unreadable = workflows_dir(tmp.path()).join("wf-eisdir");
+        std::fs::create_dir_all(unreadable.join("state.json")).unwrap();
+
+        let listed = ok(list_workflows(tmp.path()));
+        assert_eq!(listed.len(), 1, "one good record survives five skips");
+        assert_eq!(wf_id(&listed[0]), "wf-1");
+
+        // One warn line per bad record, in the same sentence Node used.
+        let mut lines: Vec<String> = Vec::new();
+        for id in ["wf-missing", "wf-array", "wf-wrongid", "wf-badjson", "wf-eisdir"] {
+            match read_workflow_record(tmp.path(), id) {
+                Err(WfSkip(m)) => lines.push(skip_warn_line(id, &m)),
+                _ => panic!("expected a skip for {id}"),
+            }
+        }
+        assert_eq!(lines.len(), 5);
+        for (line, id) in lines.iter().zip([
+            "wf-missing", "wf-array", "wf-wrongid", "wf-badjson", "wf-eisdir",
+        ]) {
+            assert!(
+                line.starts_with(&format!("listWorkflows: skipping unreadable workflow \"{id}\" — ")),
+                "{line}"
+            );
+        }
+        // The three ordinary reasons are byte-unchanged by the cutover.
+        for (line, reason) in lines.iter().take(3).zip(&ordinary) {
+            assert!(line.ends_with(reason.as_str()), "{line}");
+        }
+    }
+
+    /// state.mjs readLane (display): a corrupt file used to delegate. It now
+    /// reads as "no lane" — readJson's `null` fallback — after printing the
+    /// two lines Node printed.
+    #[test]
+    fn a_corrupt_lane_record_reads_as_no_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let dir = lanes_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("feat-x.json"), "{broken").unwrap();
+        assert!(ok(read_lane_display(root, "feat-x")).is_none());
+        // The strict sibling still REFUSES, with the same typed message.
+        match read_lane_strict(root, "feat-x") {
+            Err(Err2::Msg(m)) => {
+                assert!(m.contains("exists but is corrupt"), "{m}");
+                assert!(!m.contains("Unexpected token"), "no V8 text: {m}");
+            }
+            _ => panic!("expected the corrupt-lane refusal"),
+        }
+        // A readable lane beside it is unaffected.
+        std::fs::write(dir.join("feat-y.json"), r#"{"feature":"feat-y","phase":"planning"}"#).unwrap();
+        let lane = ok(read_lane_display(root, "feat-y")).unwrap();
+        assert_eq!(lane.get("phase"), Some(&json!("planning")));
+    }
+
+    /// readLaneStrict's unreadable arm: the refusal keeps its shape and exit
+    /// path, with an engine-free category in place of the libuv errno code.
+    #[test]
+    fn read_lane_strict_unreadable_names_an_engine_free_category() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(lanes_dir(root).join("feat-d.json")).unwrap();
+        match read_lane_strict(root, "feat-d") {
+            Err(Err2::Msg(m)) => {
+                assert!(m.starts_with("readLaneStrict: could not read lane record "), "{m}");
+                assert!(m.contains("(the path is a directory)"), "{m}");
+                assert!(!m.contains("EISDIR"), "no errno string: {m}");
+            }
+            _ => panic!("expected the unreadable refusal"),
+        }
+    }
+
+    /// listHandoffMailbox: a corrupt record is skipped (readJson's `null`
+    /// fallback fails Node's `!raw` guard) and the rest of the mailbox lists.
+    #[test]
+    fn a_corrupt_mailbox_record_is_skipped_not_delegated() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let dir = handoff_mailbox_dir(root, "wf-1").unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("0001.json"), r#"{"kind":"pause","note":"first"}"#).unwrap();
+        std::fs::write(dir.join("0002.json"), "{broken").unwrap();
+        std::fs::write(dir.join("0003.json"), r#"{"kind":"pause","note":"third"}"#).unwrap();
+        let records = ok(list_handoff_mailbox(root, "wf-1"));
+        assert_eq!(records.len(), 2, "the corrupt record is skipped");
+        assert_eq!(records[0].get("seq"), Some(&json!(1)));
+        assert_eq!(records[1].get("seq"), Some(&json!(3)));
     }
 
     #[test]
@@ -2265,9 +2401,10 @@ workflow record at \"{}\". FIX: createWorkflow first, or check the id.",
     //
     // The oracle's "listWorkflows … tolerant of an unreadable entry
     // (skip+report, never throws)" row is now ported too — see § listWorkflows
-    // skip tolerance above. Only the two V8/errno-worded reasons still
-    // delegate; `only_the_two_v8_worded_arms_still_delegate` pins exactly
-    // which, so the residue can never quietly widen.
+    // skip tolerance above. CUTOVER: the last two reasons (a V8 parse message
+    // and a libuv errno string) are native, so NOTHING here delegates;
+    // `the_two_residue_arms_are_ordinary_native_skips` and
+    // `every_bad_record_warns_exactly_once_per_scan` pin both.
 
     // ══ createWorkflow (workflow-store.mjs) ════════════════════════════════
 

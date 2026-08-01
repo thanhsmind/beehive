@@ -21,13 +21,17 @@
 // withStoreLock(repo, "plugin-render") critical section.
 //
 // STRANGLER ROUTING. Takes no arguments (neither does the .mjs), so any
-// argument returns None. Every failure detectable BEFORE output — a symlink
-// in the skill source, an unsupported dirent, an unreadable file, a source
-// tree that isn't there — also returns None rather than inventing bytes for
-// what Node reports as a V8 stack. Once the lock is held and writing has
-// begun, a failure prints `render_plugin_skill_trees: <message>` and exits 1
-// where Node prints the same message followed by `at` frames (see the
-// devtools/mod.rs header on this documented error-path divergence).
+// argument returns None.
+//
+// CUTOVER: every failure detectable BEFORE output — a symlink in the skill
+// source, an unsupported dirent, an unreadable file — used to return None as
+// well, so Node could print the V8 stack. Node is gone, and a None here falls
+// through to unknown-command, so each of those now refuses natively with its
+// own reason through the same `render_plugin_skill_trees: <message>` line and
+// exit 1 the post-lock failures already used — Node printed that same message
+// followed by `at` frames (see the devtools/mod.rs header on this documented
+// error-path divergence). The one case still returning None is "this is not a
+// bee source checkout", which is routing, not failure.
 
 use super::{rel_platform, sha256_hex, sort_by_locale};
 use crate::jsjson;
@@ -59,9 +63,19 @@ fn source_root(root: &Path) -> PathBuf {
 
 /// "Needs Node": a shape this port has not proven — the caller returns None
 /// before any output.
+///
+/// CUTOVER: this used to be a payload-free marker that made the caller return
+/// None (delegate to Node), because Node reported these failures as a V8
+/// stack. It carries its own message now, and `run` prints it through the same
+/// `render_plugin_skill_trees: <message>` channel with the same exit code —
+/// only the interpreter's `at` frames are gone.
 #[derive(Debug)]
-struct Nd;
+struct Nd(String);
 type R<T> = Result<T, Nd>;
+
+fn nd(message: impl Into<String>) -> Nd {
+    Nd(message.into())
+}
 
 // ═══ marker grammar (onboard_bee.mjs) ══════════════════════════════════════
 
@@ -414,11 +428,17 @@ fn sidecar_bytes(runtime: &str, rendered: &[(String, Vec<u8>)]) -> Vec<u8> {
 /// provenance: render_plugin_skill_trees.mjs listBeeSkillDirs — directories
 /// (never symlinks) named `bee-*`, `.sort()`ed (code units, NOT localeCompare).
 fn list_bee_skill_dirs(src: &Path) -> R<Vec<String>> {
-    let Ok(entries) = std::fs::read_dir(src) else { return Err(Nd) };
+    let Ok(entries) = std::fs::read_dir(src) else {
+        return Err(nd(format!("cannot list {}", src.display())));
+    };
     let mut names = Vec::new();
     for entry in entries {
-        let Ok(entry) = entry else { return Err(Nd) };
-        let Ok(ft) = entry.file_type() else { return Err(Nd) };
+        let Ok(entry) = entry else {
+            return Err(nd(format!("cannot list {}", src.display())));
+        };
+        let Ok(ft) = entry.file_type() else {
+            return Err(nd(format!("cannot stat {}", entry.path().display())));
+        };
         let name = entry.file_name().to_string_lossy().into_owned();
         if ft.is_dir() && !ft.is_symlink() && name.starts_with("bee-") {
             names.push(name);
@@ -431,17 +451,28 @@ fn list_bee_skill_dirs(src: &Path) -> R<Vec<String>> {
 /// provenance: render_plugin_skill_trees.mjs walkFiles — depth-first over
 /// `readdirSync(...).sort((a,b) => a.name.localeCompare(b.name))`. A symlink
 /// or an unsupported entry is a loud refusal in Node (a thrown stack); here
-/// it is `Err(Nd)` so the probe returns None before any output.
+/// it refuses natively with that same reason (cutover: it used to be a
+/// payload-free `Err(Nd)` so the probe returned None before any output).
 fn walk_files(dir: &Path, rel_prefix: &str, out: &mut Vec<(String, PathBuf)>) -> R<()> {
-    let Ok(read) = std::fs::read_dir(dir) else { return Err(Nd) };
+    let Ok(read) = std::fs::read_dir(dir) else {
+        return Err(nd(format!("cannot list {}", dir.display())));
+    };
     let mut entries: Vec<(String, PathBuf, std::fs::FileType)> = Vec::new();
     for entry in read {
-        let Ok(entry) = entry else { return Err(Nd) };
-        let Ok(ft) = entry.file_type() else { return Err(Nd) };
+        let Ok(entry) = entry else {
+            return Err(nd(format!("cannot list {}", dir.display())));
+        };
+        let Ok(ft) = entry.file_type() else {
+            return Err(nd(format!("cannot stat {}", entry.path().display())));
+        };
         entries.push((entry.file_name().to_string_lossy().into_owned(), entry.path(), ft));
     }
     if !sort_by_locale(&mut entries, |e| e.0.as_str()) {
-        return Err(Nd); // a name outside the proven collation alphabet
+        // NOT a V8-text arm: localeCompare collation over free prose is its
+        // own delegate class, left as-is by the cutover sweep. It now refuses
+        // natively rather than delegating, because there is nothing to
+        // delegate to.
+        return Err(nd("skill name outside the proven collation alphabet"));
     }
     for (name, abs, ft) in entries {
         let rel = if rel_prefix.is_empty() {
@@ -450,14 +481,14 @@ fn walk_files(dir: &Path, rel_prefix: &str, out: &mut Vec<(String, PathBuf)>) ->
             format!("{rel_prefix}/{name}")
         };
         if ft.is_symlink() {
-            return Err(Nd); // "symlink forbidden in skill source" (a V8 stack in Node)
+            return Err(nd(format!("symlink forbidden in skill source: {}", abs.display())));
         }
         if ft.is_dir() {
             walk_files(&abs, &rel, out)?;
         } else if ft.is_file() {
             out.push((rel, abs));
         } else {
-            return Err(Nd); // "unsupported entry"
+            return Err(nd(format!("unsupported entry: {}", abs.display())));
         }
     }
     Ok(())
@@ -481,7 +512,9 @@ fn canonical_files(root: &Path) -> R<Vec<(String, PathBuf)>> {
 fn validate_whole_tree(files: &[(String, PathBuf)]) -> R<Vec<String>> {
     let mut errors = Vec::new();
     for (skill_rel, abs) in files {
-        let Ok(bytes) = std::fs::read(abs) else { return Err(Nd) };
+        let Ok(bytes) = std::fs::read(abs) else {
+            return Err(nd(format!("cannot read {}", abs.display())));
+        };
         let text = String::from_utf8_lossy(&bytes);
         for e in validate_skill_markers(&text) {
             errors.push(format!("{skill_rel}: {e}"));
@@ -494,7 +527,9 @@ fn validate_whole_tree(files: &[(String, PathBuf)]) -> R<Vec<String>> {
 fn render_tree(runtime: &str, files: &[(String, PathBuf)]) -> R<Vec<(String, Vec<u8>)>> {
     let mut out = Vec::with_capacity(files.len());
     for (skill_rel, abs) in files {
-        let Ok(bytes) = std::fs::read(abs) else { return Err(Nd) };
+        let Ok(bytes) = std::fs::read(abs) else {
+            return Err(nd(format!("cannot read {}", abs.display())));
+        };
         out.push((skill_rel.clone(), render_skill_bytes(&bytes, runtime)));
     }
     Ok(out)
@@ -653,8 +688,18 @@ pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
     }
 
     // provenance: main() — validate the WHOLE tree before any write.
-    let files = canonical_files(&root).ok()?;
-    let errors = validate_whole_tree(&files).ok()?;
+    // CUTOVER: these three used to `.ok()?` — a pre-write failure returned
+    // None so Node could print its V8 stack. There is no Node; each one now
+    // reports its own reason through `fail`, the same channel and exit code
+    // the post-lock failures already used.
+    let files = match canonical_files(&root) {
+        Ok(f) => f,
+        Err(Nd(m)) => return Some(fail(&m)),
+    };
+    let errors = match validate_whole_tree(&files) {
+        Ok(e) => e,
+        Err(Nd(m)) => return Some(fail(&m)),
+    };
     if !errors.is_empty() {
         eprintln!(
             "render_plugin_skill_trees: refused (marker grammar):\n{}",
@@ -666,7 +711,10 @@ pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
     // file is still a "return None before any output" failure.
     let mut trees = Vec::new();
     for runtime in RENDER_RUNTIMES {
-        trees.push((runtime, render_tree(runtime, &files).ok()?));
+        match render_tree(runtime, &files) {
+            Ok(t) => trees.push((runtime, t)),
+            Err(Nd(m)) => return Some(fail(&m)),
+        }
     }
 
     for runtime in RENDER_RUNTIMES {

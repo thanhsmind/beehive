@@ -5,15 +5,29 @@
 // with the try-once/never-wait lock posture. ALWAYS silent on stdout.
 // Fail-open: any miss or crash -> exit 0 (crash logged to .bee/logs/hooks.jsonl).
 //
-// Strangler rule (contract C2): stdout is always empty, so the only
-// observable divergence risk is stderr. Every branch where Node would emit a
+// CUTOVER (2026-08-01). Under contract C2 every branch where Node would emit a
 // V8-specific message (fsutil.mjs readJson's corrupt-JSON warn; a corrupt
 // workflow record's JSON.parse message inside listWorkflows' skip warn)
-// delegates via a PRE-FLIGHT scan that runs BEFORE any write, so a delegated
-// run never double-writes. Deterministic warns (listWorkflows' shape-error
-// skips) are reproduced natively. Log-file lines match in shape/field-order;
-// `error` text for crash logs approximates Node's `String(err.stack || err)`
-// without the V8 stack frames (documented divergence, log-only).
+// delegated via a PRE-FLIGHT scan over state.json, the cells dir, the claims
+// dir, the cross-worktree ledger and the workflow records. Node is gone, so
+// those scans are DELETED and each corruption is handled at its real read —
+// which is also the only way to warn exactly ONCE per file, since the probe
+// and the real read would otherwise both report it. Semantics are unchanged:
+// readJson's `null` fallback means "reads as absent", so a corrupt state.json
+// still projects from defaultState(), a corrupt cell is still skipped from the
+// counts, a corrupt claim still reads as unowned, a corrupt cross-worktree
+// ledger still reads as `{holds: []}`, and a corrupt workflow record is still
+// skipped with listWorkflows' own per-record warn (one line per bad record,
+// its `(...)` reason now serde's instead of V8's).
+//
+// The pre-flight still exists for the delegations that were never about V8
+// text: readState's truthy-non-object `approved_gates` (JS spread exotica) and
+// resolveProductRoot's warn conditions. (A corrupt .bee/config.json is native
+// too, inside crate::state::read_config_raw — it warns and reads as absent.)
+//
+// Log-file lines match in shape/field-order; `error` text for crash logs
+// approximates Node's `String(err.stack || err)` without the V8 stack frames
+// (documented divergence, log-only).
 //
 // Ported lib functions (source file → private fn here):
 //   claims.mjs heartbeatTouch                     → heartbeat_block (inlined)
@@ -76,7 +90,8 @@ fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
     match hook_enabled(root, HOOK_NAME) {
         Ok(true) => {}
         Ok(false) => return Ok(()),
-        // Corrupt config: Node's readJson warns to stderr with the V8 message.
+        // read_config_raw warns and reads a corrupt config as absent, so this
+        // arm is unreachable; kept because the signature is still fallible.
         Err(_) => return Err(Delegate),
     }
 
@@ -133,57 +148,23 @@ struct Plan {
 }
 
 fn preflight(ctx: &HookContext, root: &Path) -> Result<Plan, Delegate> {
-    // rebuildStateProjection's readState: corrupt state.json → Node warns with
-    // the V8 message; a truthy non-object approved_gates spreads exotic keys.
+    // rebuildStateProjection's readState: a truthy non-object approved_gates
+    // spreads exotic keys. (Corruption is NOT probed here — it is warned about
+    // and failed open at the real read, so the user hears it exactly once.)
     read_state_strict_for_delegate(root)?;
-    // listCells (counts): every corrupt cell .json would warn.
-    scan_dir_for_corrupt_json(&root.join(".bee").join("cells"))?;
 
     let ctrl = match control_root_for(root) {
         Ok(p) => Ok(p),
         Err(CtrlErr::Delegate) => return Err(Delegate),
         Err(CtrlErr::Crash(msg)) => Err(msg),
     };
-    if let Ok(ctrl_root) = &ctrl {
-        scan_workflows_for_corrupt(ctrl_root)?;
-    }
-
-    let sid = get_session_id(&ctx.payload);
-    if let Some(sid) = &sid {
-        if well_formed_id(sid) {
-            let ctrl_hb = ctx.control_root.clone().unwrap_or_else(|| root.to_path_buf());
-            // heartbeatTouch's readSession: corrupt session record would warn.
-            let record = read_session(&ctrl_hb, sid)?;
-            let now_ms = Utc::now().timestamp_millis() as f64;
-            if heartbeat_stale(record.as_ref(), now_ms, HEARTBEAT_TOUCH_THROTTLE_SECONDS) {
-                // renewClaimTTL previews EVERY claims/*.json via readClaim.
-                scan_dir_for_corrupt_json(&ctrl_hb.join(".bee").join("claims"))?;
-                // worktree-holds readStore reads the MAIN checkout's ledger.
-                let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                if let Ok(core) = resolve_roots_core(&cwd) {
-                    let main_root = match core {
-                        RootsCore::LinkedValid { main_root, .. } => main_root,
-                        _ => root.to_path_buf(),
-                    };
-                    let ledger = main_root
-                        .join(".bee")
-                        .join("runtime")
-                        .join("cross-worktree-holds.json");
-                    if matches!(read_json(&ledger), ReadJson::Corrupt) {
-                        return Err(Delegate);
-                    }
-                }
-            }
-        }
-    }
-    Ok(Plan { ctrl, sid })
+    Ok(Plan { ctrl, sid: get_session_id(&ctx.payload) })
 }
 
-/// readState's delegate conditions only (result discarded; the projection
-/// re-reads inside the lock like the .mjs does).
+/// readState's remaining delegate condition only (result discarded; the
+/// projection re-reads inside the lock like the .mjs does).
 fn read_state_strict_for_delegate(root: &Path) -> Result<(), Delegate> {
     match read_json(&root.join(".bee").join("state.json")) {
-        ReadJson::Corrupt => Err(Delegate),
         ReadJson::Parsed(Value::Object(m)) => match m.get("approved_gates") {
             // Truthy non-object spreads exotic keys (string chars / array
             // indices) in JS — those states delegate; everything else is safe.
@@ -191,50 +172,10 @@ fn read_state_strict_for_delegate(root: &Path) -> Result<(), Delegate> {
             Some(Value::Array(a)) if !a.is_empty() => Err(Delegate),
             _ => Ok(()),
         },
+        // Corrupt reads as absent (readState's `null` fallback → defaultState),
+        // which has no exotic gates. read_state_failopen does the warning.
         _ => Ok(()),
     }
-}
-
-fn scan_dir_for_corrupt_json(dir: &Path) -> Result<(), Delegate> {
-    let Ok(rd) = std::fs::read_dir(dir) else { return Ok(()) };
-    for entry in rd.flatten() {
-        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if !name.ends_with(".json") {
-            continue;
-        }
-        if matches!(read_json(&entry.path()), ReadJson::Corrupt) {
-            return Err(Delegate);
-        }
-    }
-    Ok(())
-}
-
-/// workflow-store.mjs readWorkflowRecord parses RAW file content (no BOM
-/// strip); a JSON-corrupt record's listWorkflows skip-warn embeds the V8
-/// parse message → delegate. Shape errors warn deterministically → native.
-fn scan_workflows_for_corrupt(ctrl_root: &Path) -> Result<(), Delegate> {
-    let dir = ctrl_root.join(".bee").join("runtime").join("workflows");
-    let Ok(rd) = std::fs::read_dir(&dir) else { return Ok(()) };
-    for entry in rd.flatten() {
-        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-            continue;
-        }
-        let file = entry.path().join("state.json");
-        match std::fs::read(&file) {
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return Err(Delegate), // read-error warn embeds an errno string
-            Ok(bytes) => {
-                let text = String::from_utf8_lossy(&bytes);
-                if serde_json::from_str::<Value>(&text).is_err() {
-                    return Err(Delegate);
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 // ── payload / vendored-module helpers ──────────────────────────────────────
@@ -398,12 +339,18 @@ fn default_state() -> Map<String, Value> {
     m
 }
 
-/// state.mjs readState, fail-open flavor for the execution phase: corrupt and
-/// exotic-gates inputs were already delegated in pre-flight, so here they
-/// collapse to defaults (a race-window-only divergence, never the plan).
+/// state.mjs readState, fail-open flavor for the execution phase: a corrupt
+/// state.json warns once and collapses to defaultState() exactly as readJson's
+/// `null` fallback did. (Exotic-gates inputs are still delegated in pre-flight,
+/// so the gates merge below only ever sees objects outside a race window.)
 fn read_state_failopen(root: &Path) -> Map<String, Value> {
-    let file_state = match read_json(&root.join(".bee").join("state.json")) {
+    let state_file = root.join(".bee").join("state.json");
+    let file_state = match read_json(&state_file) {
         ReadJson::Parsed(Value::Object(m)) => m,
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(&state_file);
+            return default_state();
+        }
         _ => return default_state(),
     };
     let mut merged = default_state();
@@ -563,30 +510,27 @@ fn control_root_for(root: &Path) -> Result<PathBuf, CtrlErr> {
 
 // ── claims.mjs: sessions, heartbeats, claim TTL renewal ────────────────────
 
-/// claims.mjs readSession (fail-open display read). Delegate on a corrupt
-/// record — Node's readJson warns with the V8 message.
-fn read_session(
-    control_root: &Path,
-    session_id: &str,
-) -> Result<Option<Map<String, Value>>, Delegate> {
+/// claims.mjs readSession (fail-open display read). A corrupt record warns and
+/// reads as "no session" — readJson's `null` fallback, then the
+/// `!session || session.id !== id` guard.
+fn read_session_failopen(control_root: &Path, session_id: &str) -> Option<Map<String, Value>> {
     if !well_formed_id(session_id) {
-        return Ok(None); // sessionPath's requireId throw reads as "no session"
+        return None; // sessionPath's requireId throw reads as "no session"
     }
     let file = control_root.join(".bee").join("sessions").join(format!("{session_id}.json"));
     let session = match read_json(&file) {
-        ReadJson::Missing => return Ok(None),
-        ReadJson::Corrupt => return Err(Delegate),
+        ReadJson::Missing => return None,
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(&file);
+            return None;
+        }
         ReadJson::Parsed(Value::Object(m)) => m,
-        ReadJson::Parsed(_) => return Ok(None),
+        ReadJson::Parsed(_) => return None,
     };
     if session.get("id") != Some(&Value::String(session_id.to_string())) {
-        return Ok(None);
+        return None;
     }
-    Ok(Some(session))
-}
-
-fn read_session_failopen(control_root: &Path, session_id: &str) -> Option<Map<String, Value>> {
-    read_session(control_root, session_id).unwrap_or(None) // corrupt was pre-delegated; race-only
+    Some(session)
 }
 
 /// claims.mjs heartbeatStale.
@@ -706,10 +650,16 @@ fn renew_claim_ttl(ctrl: &Path, sid: &str, now: &DateTime<Utc>) -> Result<(), St
 }
 
 /// claims.mjs readClaim: fail-open readJson; non-objects read as "no claim".
+/// A corrupt claim warns and reads as "no claim", so renewClaimTTL leaves it
+/// strictly alone (it can never be proven ours).
 fn read_claim(file: &Path) -> Option<Map<String, Value>> {
     match read_json(file) {
         ReadJson::Parsed(Value::Object(m)) => Some(m),
-        _ => None, // corrupt claims were pre-delegated; race-only here
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(file);
+            None
+        }
+        _ => None,
     }
 }
 
@@ -920,8 +870,15 @@ fn renew_cross_worktree_holds(root: &Path, sid: &str) -> Result<(), String> {
                     .join(".bee")
                     .join("runtime")
                     .join("cross-worktree-holds.json");
-                // readStore: missing/invalid shape reads as an empty ledger.
-                let mut store = match read_json(&ledger) {
+                // readStore: missing/invalid shape reads as an empty ledger. A
+                // corrupt ledger warns first, then takes that same fallback —
+                // renewing nothing, and (renewed == 0) writing nothing back,
+                // so the corrupt file is never clobbered.
+                let read = read_json(&ledger);
+                if matches!(read, ReadJson::Corrupt) {
+                    crate::fsutil::warn_corrupt_json(&ledger);
+                }
+                let mut store = match read {
                     ReadJson::Parsed(Value::Object(m))
                         if matches!(m.get("holds"), Some(Value::Array(_))) =>
                     {
@@ -994,7 +951,14 @@ fn count_cells(root: &Path) -> Map<String, Value> {
             if !name.ends_with(".json") {
                 continue;
             }
-            let ReadJson::Parsed(Value::Object(cell)) = read_json(&entry.path()) else {
+            // A corrupt cell warns and is skipped (readJson null → `!cell`),
+            // one line per bad file; the surviving cells still count.
+            let read = read_json(&entry.path());
+            if matches!(read, ReadJson::Corrupt) {
+                crate::fsutil::warn_corrupt_json(&entry.path());
+                continue;
+            }
+            let ReadJson::Parsed(Value::Object(cell)) = read else {
                 continue;
             };
             if let Some(Value::String(status)) = cell.get("status") {
@@ -1072,8 +1036,12 @@ fn found_kind(v: &Value) -> &'static str {
 }
 
 /// workflow-store.mjs readWorkflowRecord. Err(reason) carries the exact
-/// WorkflowStoreError message listWorkflows quotes in its skip warn (the
-/// JSON-corrupt/read-error variants were delegated in pre-flight).
+/// WorkflowStoreError message listWorkflows quotes in its skip warn. The
+/// read-error and JSON-corrupt variants used to delegate because Node
+/// interpolated libuv's errno / V8's parse sentence into `(...)`; they are
+/// native now, with std::io::Error / serde_json's own deterministic text in
+/// that slot. The refusal itself is unchanged — the record is still skipped,
+/// never rebuilt from defaults over a file we could not read.
 fn read_workflow_record(ctrl_root: &Path, id: &str) -> Result<Map<String, Value>, String> {
     let file = ctrl_root
         .join(".bee")
@@ -1090,7 +1058,6 @@ fn read_workflow_record(ctrl_root: &Path, id: &str) -> Result<Map<String, Value>
             ));
         }
         Err(e) => {
-            // Pre-flight delegates this class; race-window-only approximation.
             return Err(format!(
                 "readWorkflow: could not read \"{file_str}\" ({e}). The bee CLI refuses to guess at a workflow record it cannot read \u{2014} that could silently clobber real state (gates, phase). FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\")."
             ));
@@ -1099,7 +1066,6 @@ fn read_workflow_record(ctrl_root: &Path, id: &str) -> Result<Map<String, Value>
     };
     let text = String::from_utf8_lossy(&bytes);
     let parsed: Value = serde_json::from_str(&text).map_err(|e| {
-        // Pre-flight delegates this class; race-window-only approximation.
         format!(
             "readWorkflow: \"{file_str}\" exists but is not valid JSON ({e}). The bee CLI refuses to rebuild a workflow from defaults over a present-but-corrupt file \u{2014} that would silently clobber real state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\")."
         )
@@ -1538,6 +1504,130 @@ mod tests {
         assert_eq!(after["holds"][1]["mirrored_at"], json!(active_at)); // released: untouched
         assert_eq!(after["holds"][2]["mirrored_at"], json!(active_at)); // other session
         assert_eq!(after["holds"][3]["mirrored_at"], json!(expired_at)); // expired: untouched
+    }
+
+    // ── corrupt-JSON fail-open (was: pre-flight Delegate) ──────────────────
+
+    #[test]
+    fn corrupt_state_projects_from_defaults_and_still_writes() {
+        let tmp = setup_root();
+        std::fs::write(tmp.path().join(".bee/state.json"), "{broken").unwrap();
+        // The pre-flight no longer delegates on corruption…
+        assert!(read_state_strict_for_delegate(tmp.path()).is_ok());
+        // …and the read collapses to defaultState(), exactly like an absent file.
+        assert_eq!(read_state_failopen(tmp.path()), default_state());
+        // Zero workflows → overrides-only write over the defaults.
+        let counts = count_cells(tmp.path());
+        rebuild_state_projection(tmp.path(), &Ok(tmp.path().to_path_buf()), &counts, "T").unwrap();
+        let out: Value = serde_json::from_str(
+            &std::fs::read_to_string(tmp.path().join(".bee/state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(out["phase"], json!("idle"));
+        assert_eq!(out["last_activity"], json!("T"));
+    }
+
+    #[test]
+    fn exotic_approved_gates_still_delegates() {
+        let tmp = setup_root();
+        std::fs::write(tmp.path().join(".bee/state.json"), r#"{"approved_gates":"ab"}"#).unwrap();
+        assert!(read_state_strict_for_delegate(tmp.path()).is_err());
+    }
+
+    #[test]
+    fn corrupt_cell_is_skipped_from_the_counts() {
+        let tmp = setup_root();
+        write_cell(tmp.path(), "a", "open");
+        write_cell(tmp.path(), "b", "capped");
+        std::fs::write(tmp.path().join(".bee/cells/bad.json"), "{nope").unwrap();
+        let counts = count_cells(tmp.path());
+        assert_eq!(
+            crate::jsjson::stringify(&Value::Object(counts)),
+            r#"{"open":1,"claimed":0,"capped":1,"blocked":0}"#
+        );
+    }
+
+    #[test]
+    fn corrupt_claim_reads_as_unowned_and_is_never_touched() {
+        let tmp = setup_root();
+        let claims = tmp.path().join(".bee").join("claims");
+        std::fs::create_dir_all(&claims).unwrap();
+        std::fs::write(claims.join("bad.json"), "{nope").unwrap();
+        std::fs::write(
+            claims.join("c1.json"),
+            r#"{"cell":"c1","session":"s1","claimed_at":"2020-01-01T00:00:00.000Z"}"#,
+        )
+        .unwrap();
+        assert!(read_claim(&claims.join("bad.json")).is_none());
+        renew_claim_ttl(tmp.path(), "s1", &Utc::now()).unwrap();
+        // The corrupt file is byte-for-byte untouched; the good one renewed.
+        assert_eq!(std::fs::read_to_string(claims.join("bad.json")).unwrap(), "{nope");
+        let c1: Value =
+            serde_json::from_str(&std::fs::read_to_string(claims.join("c1.json")).unwrap())
+                .unwrap();
+        assert_ne!(c1["claimed_at"], json!("2020-01-01T00:00:00.000Z"));
+        assert!(!claims.join("bad.adopting").exists());
+    }
+
+    #[test]
+    fn corrupt_session_record_reads_as_missing() {
+        let tmp = setup_root();
+        let sessions = tmp.path().join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(sessions.join("s1.json"), "{nope").unwrap();
+        assert!(read_session_failopen(tmp.path(), "s1").is_none());
+        // No record → stale → heartbeatSession runs and finds SESSION_MISSING,
+        // which is a typed result, never a throw: Ok, and no file written.
+        assert!(heartbeat_stale(None, Utc::now().timestamp_millis() as f64, 60.0));
+        heartbeat_session(tmp.path(), "s1", &Utc::now()).unwrap();
+        assert_eq!(std::fs::read_to_string(sessions.join("s1.json")).unwrap(), "{nope");
+    }
+
+    #[test]
+    fn corrupt_cross_worktree_ledger_reads_as_empty_and_is_not_clobbered() {
+        let tmp = setup_root();
+        let lib = tmp.path().join(".bee").join("bin").join("lib");
+        std::fs::create_dir_all(&lib).unwrap();
+        std::fs::write(lib.join("worktree-holds.mjs"), "// vendored").unwrap();
+        let runtime = tmp.path().join(".bee").join("runtime");
+        std::fs::create_dir_all(&runtime).unwrap();
+        std::fs::write(runtime.join("cross-worktree-holds.json"), "{nope").unwrap();
+        renew_cross_worktree_holds(tmp.path(), "s1").unwrap();
+        // Nothing renewable → renewed == 0 → no write: the file survives.
+        assert_eq!(
+            std::fs::read_to_string(runtime.join("cross-worktree-holds.json")).unwrap(),
+            "{nope"
+        );
+    }
+
+    #[test]
+    fn corrupt_workflow_record_is_skipped_not_delegated() {
+        let tmp = setup_root();
+        std::fs::write(tmp.path().join(".bee/state.json"), r#"{"phase":"idle"}"#).unwrap();
+        let bad = tmp.path().join(".bee/runtime/workflows/wf-bad");
+        std::fs::create_dir_all(&bad).unwrap();
+        std::fs::write(bad.join("state.json"), "{nope").unwrap();
+        write_workflow(
+            tmp.path(),
+            "wf-ok",
+            json!({"id":"wf-ok","feature":"f-ok","status":"active","phase":"swarming",
+                   "mode":"standard","plan_rev":0,"summary":"s","next_action":"n",
+                   "created_at":"2026-01-01T00:00:00.000Z","gates":{}}),
+        );
+        // Corrupt record refuses (skipped) with our own reason; the good one
+        // is still listed, so the projection still adopts it.
+        assert!(read_workflow_record(tmp.path(), "wf-bad")
+            .unwrap_err()
+            .contains("exists but is not valid JSON"));
+        let listed = list_workflows(tmp.path());
+        assert_eq!(listed.len(), 1);
+        let counts = count_cells(tmp.path());
+        rebuild_state_projection(tmp.path(), &Ok(tmp.path().to_path_buf()), &counts, "T").unwrap();
+        let out: Value = serde_json::from_str(
+            &std::fs::read_to_string(tmp.path().join(".bee/state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(out["feature"], json!("f-ok"));
     }
 
     #[test]

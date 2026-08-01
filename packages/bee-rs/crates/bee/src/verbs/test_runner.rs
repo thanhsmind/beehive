@@ -30,11 +30,16 @@
 //
 // Strangler routing: only `bee test` and `bee test --json` (bare --json
 // tokens) are served natively. Everything else — other flags, --json=x
-// forms, positionals, non-unicode argv, linked-worktree roots, corrupt
-// config/drift-cache JSON (Node's warn-with-V8-message paths), and win32
+// forms, positionals, non-unicode argv, linked-worktree roots, and win32
 // hosts without a POSIX shell (Node's cmd.exe fallback) — returns None
-// before ANY output and before the drift-cache write, so the Node re-run
-// owns the whole command including the manifest_changed line.
+// before ANY output and before the drift-cache write.
+//
+// CUTOVER: corrupt config / drift-cache JSON used to be on that list (Node's
+// warn-with-V8-message paths). `state::read_config_raw` and
+// `registry::check_manifest_drift` warn natively and fall back now, so the two
+// `.ok()?` sites below can no longer fire — a corrupt config reads as no
+// config and `bee test` reports "undeclared", exactly as Node did after its
+// own warning.
 //
 // Known divergences (documented, unreachable in practice): a spawn error
 // AFTER the successful shell probe embeds Rust's io error text where Node
@@ -465,9 +470,14 @@ mod tests {
         // Non-object commands -> {} -> undeclared.
         write_config(root, r#"{"commands":["x"]}"#);
         assert!(declared_test_commands(root).ok().unwrap().is_none());
-        // Corrupt config bails to Node.
+        // CUTOVER: a corrupt config used to bail to Node. readConfig warned
+        // and returned {}, so `bee test` reported "undeclared" — that is what
+        // the native read does now, warning on stderr in our own words.
         write_config(root, "{broken");
-        assert!(declared_test_commands(root).is_err());
+        assert!(
+            declared_test_commands(root).ok().unwrap().is_none(),
+            "a corrupt config reads as no config, and no config is undeclared"
+        );
     }
 
     #[test]

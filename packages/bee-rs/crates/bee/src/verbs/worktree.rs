@@ -5,33 +5,33 @@
 //   worktree list                       [--json]
 //   worktree register   --feature F     [--json]
 //   worktree unregister [--id ID]       [--json]
-//   worktree new    --feature F [--base-ref R]  [--json]   see the gates below
-//   worktree merge  --id ID [--cleanup]         [--json]   see the gates below
+//   worktree new    --feature F [--base-ref R] [--with-companion] [--json]
+//   worktree merge  --id ID [--cleanup] [--queue-wait-ms N]        [--json]
 //
 // `worktree new` — NATIVE (R6), including the creating path from the MAIN
 // checkout: createFeatureWorktree whole, inside ONE 'worktree-admin' hold —
 // the eight zero-mutation refusals, the real `git worktree add`, the post-add
 // block (git-verified id, grant write, store bootstrap, `rev-parse HEAD`,
-// registerWorkspace, skill-tree sync) and the ORDER-SENSITIVE rollback
-// ladder. The port that unblocked it is verbs/workspace_store.rs: the
-// registerWorkspace/unregisterWorkspace pair the post-add block and rungs
-// R1/R2 of the ladder need, with Node's `workspace:<id>` lock name.
+// registerWorkspace, COMPANION START, skill-tree sync) and the
+// ORDER-SENSITIVE rollback ladder. The port that unblocked it is
+// verbs/workspace_store.rs: the registerWorkspace/unregisterWorkspace pair the
+// post-add block and rungs R1/R2 of the ladder need, with Node's
+// `workspace:<id>` lock name.
 //
-// Two gates return None BEFORE any lock, git spawn or write:
-//   * `--with-companion` — runCompanionStart's failure arms all fire AFTER
-//     `git worktree add`, and two of them embed V8 bytes (JSON.parse's own
-//     message, plus up to 500 raw bytes of the child's stdout). Once the
-//     worktree exists nothing can delegate, so the shape never starts here.
-//   * ANY other live session (wcg-3's shared-nested-checkout guard). The
-//     guard short-circuits to `false` — no filesystem scan at all — when no
-//     other session is concurrently live, which is the only shape served
-//     natively. With a second live session both remaining arms are
-//     unprovable from this crate: guards.mjs's `scanForNestedCheckout` (a
-//     depth-limited tree walk with no Rust counterpart) and
-//     `resolveVerifiedCompanionMountReal` (private to hooks/write_guard.rs —
-//     re-deriving it here would fork the guard, the exact drift C5 exists to
-//     prevent), and the detection-failure refusal interpolates a V8 message.
-// A bare `--base-ref` (no value) also delegates: Node stringifies `true` into
+// Both of `new`'s former gates are CLOSED (R6 cutover wave):
+//   * `--with-companion` is native. runCompanionStart spawns the project's own
+//     `commands.worktree_companion_start`, symlinks the declared worktreePath
+//     at `<worktreeRoot>/<commands.worktree_companion_mount>` and writes the
+//     `.bee/companion-session.json` marker; every failure arm folds into the
+//     SAME post-add rollback ladder. It could not delegate because all of
+//     those arms fire AFTER `git worktree add`, so the two that embed a
+//     Node-only string are DIVERGENCES now, named below.
+//   * wcg-3's shared-nested-checkout guard is native, whole, via
+//     crate::nested_checkout — which imports guards.mjs's verification
+//     predicates from hooks/write_guard.rs (widened to pub(crate) for exactly
+//     this) rather than re-deriving them, so the two enforcement surfaces
+//     cannot drift apart (C5).
+// A bare `--base-ref` (no value) still delegates: Node stringifies `true` into
 // a ref name, an unproven shape.
 //
 // `worktree merge` — NATIVE (R6), the whole three-phase staged transaction
@@ -87,30 +87,51 @@
 //     Node's `status: null` verdict but carries Rust's io text instead of
 //     libuv's, exactly as `node_fs_error_message` approximates elsewhere here.
 //
-// DELEGATED, by design, inside `merge`:
-//   * a COMPANION worktree (a parsed `.bee/companion-session.json` marker).
-//     `teardownCompanionIfPresent` spawns `commands.worktree_companion_end`
-//     and unlinks the mount after every zero-mutation refusal has cleared but
-//     BEFORE the merge is staged, and the worktree dirty-check switches to
-//     `gitStatusPorcelainExcluding`'s pathspec form. Once the mount is gone
-//     nothing can fall back, so — same posture as `new --with-companion` —
-//     the shape never starts natively. Decided by a read-only probe before
-//     any lock.
-//   * `--queue-wait-ms`. A `type:"number"` flag through validate() and then
-//     `Number(...)` with a finite-and-positive filter; only the default
-//     180 000 ms wait bound runs natively.
+// Both of `merge`'s former gates are CLOSED too (same wave):
+//   * a COMPANION worktree (a parsed `.bee/companion-session.json` marker) is
+//     native. `teardownCompanionIfPresent` spawns
+//     `commands.worktree_companion_end` and unlinks the mount after every
+//     zero-mutation refusal has cleared but BEFORE the merge is staged, and
+//     the worktree dirty-check switches to `gitStatusPorcelainExcluding`'s
+//     pathspec form (which has to be a pathspec, never text filtering — see
+//     that function). On a companion worktree the TEARDOWN, not the staged
+//     merge, is the first mutation, so every `MErr::Ex` probe in `run_merge`
+//     is what keeps the no-fallback-after-mutation rule true.
+//   * `--queue-wait-ms` is native: `js_string_to_number` is the full
+//     `Number(string)` conversion, validate()'s finiteness gate is reproduced,
+//     and the handler's positive-only filter decides whether the value
+//     replaces DEFAULT_WAIT_BOUND_MS. Only a value validate() itself REFUSES
+//     (a bare flag, an empty string, `Infinity`, a non-numeric literal) still
+//     returns before any output — that is the dispatcher's own generic
+//     machinery, shared by every verb, not this flag's arm.
+//
+// A BROKEN linked-worktree link (WorktreeLinkInvalidError) is native for all
+// five verbs here, through crate::link_invalid — see that module for why the
+// timing wrapper made it undelegatable-but-unreproducible before, and for the
+// single named timing-line divergence.
 //
 // DELEGATED to Node, by design:
 //
-//   * Anything reached through a WorktreeLinkInvalidError: main()'s own
-//     findRepoRoot throws before dispatch, and that throw ALSO escapes the
-//     timings.jsonl append inside bee.mjs's recordTiming try-block. The
-//     shared timing wrapper here always appends, so the whole command goes
-//     back to Node rather than emit a subtly different side effect.
 //   * A grants registry file that exists but does not parse with serde:
 //     Node's readGrants swallows the parse error and reads `{}`, but V8's
 //     JSON grammar is not provably identical to serde's, so "unparseable
 //     here" cannot be turned into "Node saw {} too".
+//   * An `Exotic` root resolution (a `.git` that vanished between existsSync
+//     and statSync) — a V8-worded ENOENT.
+//
+// THREE MORE DOCUMENTED DIVERGENCES, all of them companion arms that fire
+// after a mutation and therefore could never have been delegations:
+//   * runCompanionStart's unparseable-stdout refusal interpolates serde's
+//     parse message where Node interpolates V8's. Every other byte of that
+//     sentence, including the 500-UTF-16-unit raw-stdout tail, is Node's.
+//   * runCompanionStart's symlink failure carries an errno-CLASS-accurate
+//     approximation of libuv's message (`EPERM: operation not permitted,
+//     symlink '<target>' -> '<path>'` for a win32 host without
+//     SeCreateSymbolicLinkPrivilege) — same class as `node_fs_error_message`.
+//   * a companion marker that parses to a truthy value with no string
+//     `mountPath` makes the .mjs die with a V8 TypeError from
+//     `mountPath.replace(...)`; here it is an explicit typed refusal
+//     (WORKTREE_MERGE_COMPANION_MARKER_INVALID) taken before any mutation.
 //
 // What IS native is the part the linked-worktree root port unlocked: all
 // three grant-registry verbs, plus the two "you are inside a worktree"
@@ -205,8 +226,20 @@ fn prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Pre> {
             id,
             main_root,
         } => (store_root, "linked-valid", Some(id), Some(main_root), work_root),
-        // main()'s findRepoRoot throws these; see the module header.
-        Resolution::LinkInvalid { .. } | Resolution::Exotic => return None,
+        // A BROKEN link. Node's main() catches its own findRepoRoot throw and
+        // emits the message like any other refusal; only the direct-run timing
+        // wrapper's SECOND findRepoRoot call (which also throws, skipping the
+        // timings.jsonl append) made this unreproducible through the shared
+        // wrapper. crate::link_invalid owns that exact shape now — see its
+        // header for the one named timing-line divergence.
+        Resolution::LinkInvalid { message } => {
+            return Some(Pre::Emitted(crate::link_invalid::emit_link_invalid(
+                &message, cmd, use_json, t0,
+            )))
+        }
+        // A `.git` that vanished between existsSync and statSync: Node's own
+        // throw is V8-worded. Still delegated.
+        Resolution::Exotic => return None,
         Resolution::Unresolved => {
             return Some(Pre::Emitted(emit_no_root_error(&cwd, cmd, use_json, t0)))
         }
@@ -652,6 +685,26 @@ impl GitOut {
     fn status_disp(&self) -> String {
         self.status.map_or_else(|| "null".to_string(), |c| c.to_string())
     }
+
+    /// `(stderr || stdout || '').trim() || '(no output)'` — the companion
+    /// hooks' variant of the fallback chain below (same `||` semantics, a
+    /// different tail). Fully deterministic even for a never-launched spawn:
+    /// spawnSync leaves every field null there, so both halves fall through to
+    /// the literal "(no output)".
+    fn no_output_text(&self) -> String {
+        let first = self
+            .stderr
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .or_else(|| self.stdout.as_deref().filter(|s| !s.is_empty()))
+            .unwrap_or("");
+        let trimmed = js_trim(first);
+        if trimmed.is_empty() {
+            "(no output)".to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }
     /// The `(stderr || stdout || '').trim() || `exit ${status}`` fallback
     /// chain three refusals share, byte-for-byte (JS `||` on '' is falsy).
     fn fail_text(&self) -> String {
@@ -738,14 +791,139 @@ fn js_path_resolve(base: &Path, segment: &str) -> PathBuf {
 /// read. Same class as verbs/state_group.rs's "prune's mid-loop rmSync
 /// failure message is reconstructed from the errno class".
 fn node_fs_error_message(err: &std::io::Error, syscall: &str, path: &Path) -> String {
+    let (code, text) = node_errno_class(err);
+    format!("{code}: {text}, {syscall} '{}'", p(path))
+}
+
+/// The errno class behind both formatters. `EPERM` is broken out from `EACCES`
+/// because it is the one a companion mount actually hits on win32: creating a
+/// directory symlink without SeCreateSymbolicLinkPrivilege fails with
+/// ERROR_PRIVILEGE_NOT_HELD (1314), which libuv maps to EPERM, and Rust
+/// surfaces it as an uncategorized error rather than PermissionDenied.
+fn node_errno_class(err: &std::io::Error) -> (&'static str, &'static str) {
     use std::io::ErrorKind::*;
-    let (code, text) = match err.kind() {
+    // ERROR_PRIVILEGE_NOT_HELD — the win32 symlink case. Every other win32
+    // code keeps the kind()-based mapping below (ERROR_ACCESS_DENIED is
+    // EACCES in libuv too, which PermissionDenied already produces).
+    if cfg!(windows) && err.raw_os_error() == Some(1314) {
+        return ("EPERM", "operation not permitted");
+    }
+    match err.kind() {
         NotFound => ("ENOENT", "no such file or directory"),
         PermissionDenied => ("EACCES", "permission denied"),
+        AlreadyExists => ("EEXIST", "file already exists"),
         IsADirectory => ("EISDIR", "illegal operation on a directory"),
         _ => ("EIO", "i/o error"),
+    }
+}
+
+/// `fs.symlinkSync(target, path, 'dir')`'s uv error message shape —
+/// `EPERM: operation not permitted, symlink '<target>' -> '<path>'`. Only
+/// reachable AFTER `git worktree add` has succeeded, so it can never be
+/// delegated.
+///
+/// The TARGET is reported the way Node reports it: `preprocessSymlinkDestination`
+/// resolves it (win32 `path.resolve`) and rewrites `/` as `\` before the call,
+/// so the error carries the RESOLVED spelling, not the raw config string.
+/// Measured against a live Node oracle on a host without
+/// SeCreateSymbolicLinkPrivilege: `EPERM: operation not permitted, symlink
+/// 'E:\…\shared' -> 'E:\…\vendor\companion'`.
+fn node_symlink_error_message(err: &std::io::Error, target: &str, path: &Path) -> String {
+    let (code, text) = node_errno_class(err);
+    format!(
+        "{code}: {text}, symlink '{}' -> '{}'",
+        js_path_resolve_from_cwd(target),
+        p(path)
+    )
+}
+
+/// `path.resolve(p)` — the win32 flavor on win32 (a rooted-but-driveless path
+/// keeps the cwd's drive; every separator becomes `\`; `.`/`..` are folded
+/// lexically), the identity on posix, where Node passes the target through
+/// untouched.
+fn js_path_resolve_from_cwd(raw: &str) -> String {
+    if !cfg!(windows) {
+        return raw.to_string();
+    }
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let cwd_s = cwd.to_string_lossy().into_owned();
+    let b = raw.as_bytes();
+    let has_drive = b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':';
+    let rooted = !b.is_empty() && (b[0] == b'/' || b[0] == b'\\');
+    let joined = if has_drive && b.len() > 2 && (b[2] == b'/' || b[2] == b'\\') {
+        raw.to_string()
+    } else if rooted {
+        // Node keeps the cwd's DRIVE for a rooted-but-driveless path.
+        let drive = if cwd_s.as_bytes().len() >= 2 && cwd_s.as_bytes()[1] == b':' {
+            cwd_s[..2].to_string()
+        } else {
+            String::new()
+        };
+        format!("{drive}{raw}")
+    } else {
+        format!("{cwd_s}\\{raw}")
     };
-    format!("{code}: {text}, {syscall} '{}'", p(path))
+    // Lexical normalization over the unified separator.
+    let unified = joined.replace('/', "\\");
+    let (prefix, rest) = if unified.as_bytes().len() >= 2 && unified.as_bytes()[1] == b':' {
+        (unified[..2].to_string(), &unified[2..])
+    } else {
+        (String::new(), unified.as_str())
+    };
+    let absolute = rest.starts_with('\\');
+    let mut parts: Vec<&str> = Vec::new();
+    for seg in rest.split('\\') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            s => parts.push(s),
+        }
+    }
+    let mut out = prefix;
+    if absolute {
+        out.push('\\');
+    }
+    out.push_str(&parts.join("\\"));
+    out
+}
+
+/// `path.join(base, rel)` with win32 separator normalization: a config value
+/// spelled `vendor/companion` becomes `vendor\companion` there, which is what
+/// Node's own `path.join` produces and therefore what every message that
+/// interpolates the mount path must print.
+fn js_path_join(base: &Path, rel: &str) -> PathBuf {
+    if cfg!(windows) {
+        base.join(rel.replace('/', "\\"))
+    } else {
+        base.join(rel)
+    }
+}
+
+/// `fs.symlinkSync(target, path, 'dir')` — a DIRECTORY symlink on every
+/// platform (never a junction: Node only falls back to a junction for
+/// `type: 'junction'`, which this call site does not pass).
+fn symlink_dir(target: &str, link: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_dir(target, link)
+    }
+    #[cfg(not(windows))]
+    {
+        std::os::unix::fs::symlink(target, link)
+    }
+}
+
+/// `fs.unlinkSync(p)` for a path that may be a DIRECTORY symlink. libuv's
+/// uv_fs_unlink detects a directory reparse point on win32 and calls
+/// RemoveDirectory; `std::fs::remove_file` does not, so the second attempt is
+/// what keeps a companion mount removable there. Best-effort at both call
+/// sites (Node wraps each in its own try/catch), exactly like Node.
+fn unlink_maybe_dir_symlink(path: &Path) {
+    if std::fs::remove_file(path).is_err() {
+        let _ = std::fs::remove_dir(path);
+    }
 }
 
 /// `/^gitdir:\s*(.+)$/` applied to an ALREADY-TRIMMED pointer file: no `/m`,
@@ -889,6 +1067,351 @@ fn sync_worktree_skills(main_root: &Path, worktree_root: &Path) -> Value {
     })
 }
 
+// ─── worktree-companion-hook (worktree-store.mjs) ─────────────────────────
+//
+// The companion pair — `runCompanionStart` (called from inside
+// createFeatureWorktree's post-add block) and `teardownCompanionIfPresent`
+// (called from mergeFeatureWorktreeStage, after every zero-mutation refusal
+// has cleared and immediately before the merge is staged). Both were the last
+// reason `worktree new --with-companion` and a companion `worktree merge`
+// delegated: each one MUTATES (spawns a project-configured child, creates or
+// unlinks a real symlink) at a point where nothing can fall back any more.
+//
+// bee never hardcodes what the companion tool is: `commands.
+// worktree_companion_start` / `_mount` / `_end` in the host project's own
+// `.bee/config.json` hold every tool-specific fact, and the ONLY contract on
+// the start command's stdout is JSON carrying a non-empty `worktreePath`
+// (plus an optional `sessionId`, carried through to the marker for `merge` to
+// substitute into `_end`).
+
+/// worktree-store.mjs COMPANION_MARKER_REL — `path.join('.bee',
+/// 'companion-session.json')`, so the separator is the platform's. It is
+/// deliberately NOT under `.bee/runtime/` (which is gitignored everywhere),
+/// which is exactly why merge has to exclude it from the dirty-check by git
+/// pathspec rather than rely on it already being gone.
+fn companion_marker_rel() -> String {
+    format!(".bee{MAIN_SEPARATOR}companion-session.json")
+}
+
+fn companion_marker_file(worktree_root: &Path) -> PathBuf {
+    worktree_root.join(".bee").join("companion-session.json")
+}
+
+/// `spawnSync(command, { cwd, shell: true, encoding: 'utf8' })` with Node's
+/// own null semantics for a spawn that never launched — the same GitOut shape
+/// `run_git` produces, so the `(stderr || stdout || '').trim() || …` fallback
+/// chains are shared rather than re-spelled.
+///
+/// No `shell_launchable()` pre-check is needed for either companion command:
+/// unlike `runVerifyChild`, whose spawn-`error` event surfaces libuv's own
+/// `spawn cmd.exe ENOENT` text, spawnSync's failure here collapses to
+/// `status: null` with null pipes, which both call sites render as the fully
+/// deterministic `(exit null): (no output)`.
+fn shell_sync(command: &str, cwd: &Path) -> GitOut {
+    match shell_child(command)
+        .current_dir(cwd)
+        .stdin(std::process::Stdio::null())
+        .output()
+    {
+        Ok(out) => GitOut {
+            status: out.status.code(),
+            stdout: Some(String::from_utf8_lossy(&out.stdout).into_owned()),
+            stderr: Some(String::from_utf8_lossy(&out.stderr).into_owned()),
+        },
+        Err(_) => GitOut { status: None, stdout: None, stderr: None },
+    }
+}
+
+/// `String.prototype.slice(0, n)` — UTF-16 code units, not chars or bytes.
+fn js_slice_utf16(s: &str, n: usize) -> String {
+    let units: Vec<u16> = s.encode_utf16().collect();
+    if units.len() <= n {
+        return s.to_string();
+    }
+    String::from_utf16_lossy(&units[..n])
+}
+
+/// `haystack.replace('<needle>', replacement)` with a STRING pattern: the
+/// FIRST occurrence only, and `$`-substitution patterns in the replacement are
+/// honored exactly as JS does (`$$`, `$&`, `` $` ``, `$'`; `$n` is left
+/// literal because a string pattern has no capture groups).
+fn js_replace_first(haystack: &str, needle: &str, replacement: &str) -> String {
+    let Some(at) = haystack.find(needle) else {
+        return haystack.to_string();
+    };
+    let prefix = &haystack[..at];
+    let suffix = &haystack[at + needle.len()..];
+    let mut expanded = String::new();
+    let mut chars = replacement.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '$' {
+            expanded.push(c);
+            continue;
+        }
+        match chars.peek() {
+            Some('$') => {
+                chars.next();
+                expanded.push('$');
+            }
+            Some('&') => {
+                chars.next();
+                expanded.push_str(needle);
+            }
+            Some('`') => {
+                chars.next();
+                expanded.push_str(prefix);
+            }
+            Some('\'') => {
+                chars.next();
+                expanded.push_str(suffix);
+            }
+            _ => expanded.push('$'),
+        }
+    }
+    format!("{prefix}{expanded}{suffix}")
+}
+
+/// worktree-store.mjs validateCompanionMountPath — a typed, ZERO-MUTATION
+/// refusal, same posture as every other pre-check in
+/// createFeatureWorktreeLocked. The value becomes a symlink target INSIDE the
+/// new worktree, so an absolute path or a `..` segment would place (or escape)
+/// it somewhere the worktree does not own.
+fn validate_companion_mount_path(mount_path: &str) -> Result<String, CErr> {
+    if js_trim(mount_path).is_empty() {
+        return Err(refuse(
+            "WORKTREE_COMPANION_CONFIG_INVALID",
+            format!(
+                "commands.worktree_companion_mount must be a non-empty relative path string, got {}.",
+                jsjson::stringify(&Value::String(mount_path.to_string()))
+            ),
+        ));
+    }
+    let normalized = js_trim(mount_path).to_string();
+    if js_path_is_absolute(&normalized) || normalized.split(['\\', '/']).any(|seg| seg == "..") {
+        return Err(refuse(
+            "WORKTREE_COMPANION_CONFIG_INVALID",
+            format!(
+                "commands.worktree_companion_mount {} must be a relative path inside the worktree (no leading \"/\" and no \"..\" segments).",
+                jsjson::stringify(&Value::String(normalized.clone()))
+            ),
+        ));
+    }
+    Ok(normalized)
+}
+
+/// `path.isAbsolute` — the win32 flavor on win32 (a leading separator, or a
+/// drive letter FOLLOWED by a separator; `C:foo` is drive-relative, not
+/// absolute), the posix one elsewhere.
+fn js_path_is_absolute(p: &str) -> bool {
+    let b = p.as_bytes();
+    if b.is_empty() {
+        return false;
+    }
+    if cfg!(windows) {
+        if b[0] == b'/' || b[0] == b'\\' {
+            return true;
+        }
+        b.len() > 2
+            && b[0].is_ascii_alphabetic()
+            && b[1] == b':'
+            && (b[2] == b'/' || b[2] == b'\\')
+    } else {
+        b[0] == b'/'
+    }
+}
+
+/// worktree-store.mjs runCompanionStart. Runs with `mainRoot` as cwd — the
+/// same root the command was resolved from, so the configured command owns its
+/// own `cd` into whatever nested tree it isolates (mirroring `commands.verify`).
+///
+/// `Err(message)` is folded by the caller into the SAME post-add rollback
+/// ladder as any other failure after `git worktree add` succeeded: a worktree
+/// is never left created-but-half-configured.
+///
+/// ONE DELIBERATE DIVERGENCE (cutover class — C2 is retired once Node is
+/// gone). Node's unparseable-stdout arm interpolates V8's own `JSON.parse`
+/// message; serde's message goes there instead. Every other byte of that
+/// sentence — including the 500-UTF-16-unit raw-stdout tail — is Node's. The
+/// symlink arm's uv message is approximated the same way `node_fs_error_message`
+/// already approximates elsewhere in this file; its errno CLASS (EPERM for a
+/// win32 host without SeCreateSymbolicLinkPrivilege) is exact.
+fn run_companion_start(
+    main_root: &Path,
+    worktree_root: &Path,
+    companion_start_command: &str,
+    mount_path: &str,
+) -> Result<Value, String> {
+    let spawned = shell_sync(companion_start_command, main_root);
+    if spawned.status != Some(0) {
+        return Err(format!(
+            "commands.worktree_companion_start failed (exit {}): {}",
+            spawned.status_disp(),
+            spawned.no_output_text()
+        ));
+    }
+    let stdout = spawned.stdout.clone().unwrap_or_default();
+    let parsed: Value = match serde_json::from_str(&stdout) {
+        Ok(v) => v,
+        Err(e) => {
+            return Err(format!(
+                "commands.worktree_companion_start must print JSON with a \"worktreePath\" field to stdout — got unparseable output ({e}). Raw stdout: {}",
+                js_slice_utf16(&stdout, 500)
+            ))
+        }
+    };
+    let worktree_path = match parsed.get("worktreePath") {
+        Some(Value::String(s)) if !s.is_empty() => s.clone(),
+        _ => {
+            return Err(format!(
+                "commands.worktree_companion_start's JSON output must include a non-empty \"worktreePath\" string — got {}.",
+                jsjson::stringify(&parsed)
+            ))
+        }
+    };
+    let session_id = match parsed.get("sessionId") {
+        Some(Value::String(s)) if !s.is_empty() => Value::String(s.clone()),
+        _ => Value::Null,
+    };
+
+    let mount_full_path = js_path_join(worktree_root, mount_path);
+    if let Some(dir) = mount_full_path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| node_fs_error_message(&e, "mkdir", dir))?;
+    }
+    symlink_dir(&worktree_path, &mount_full_path)
+        .map_err(|e| node_symlink_error_message(&e, &worktree_path, &mount_full_path))?;
+
+    let marker_path = companion_marker_file(worktree_root);
+    if let Some(dir) = marker_path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| node_fs_error_message(&e, "mkdir", dir))?;
+    }
+    let marker = json!({
+        "sessionId": session_id,
+        "worktreePath": worktree_path,
+        "mountPath": mount_path,
+    });
+    std::fs::write(
+        &marker_path,
+        format!("{}\n", jsjson::stringify_pretty(&marker)),
+    )
+    .map_err(|e| node_fs_error_message(&e, "open", &marker_path))?;
+
+    Ok(marker)
+}
+
+/// worktree-store.mjs readCompanionMarker — a bare `JSON.parse(readFileSync)`
+/// in a try, so a missing OR unparseable marker both read as "no companion
+/// here". A parsed FALSY value (`null`, `false`, `0`, `""`) is treated as
+/// absent too: every consumer guards with `if (!marker)` / `companionMarker ?`.
+fn read_companion_marker(worktree_root: &Path) -> Option<Value> {
+    let raw = std::fs::read(companion_marker_file(worktree_root)).ok()?;
+    let parsed: Value = serde_json::from_slice(&raw).ok()?;
+    if js_truthy(&parsed) {
+        Some(parsed)
+    } else {
+        None
+    }
+}
+
+/// JS truthiness of a parsed JSON value (an absent key is the caller's None).
+fn js_truthy(v: &Value) -> bool {
+    match v {
+        Value::Null => false,
+        Value::Bool(b) => *b,
+        Value::Number(n) => n.as_f64().map(|f| f != 0.0 && !f.is_nan()).unwrap_or(true),
+        Value::String(s) => !s.is_empty(),
+        Value::Array(_) | Value::Object(_) => true,
+    }
+}
+
+/// `marker.mountPath` as the string every downstream use requires.
+///
+/// EXPLICIT NATIVE REFUSAL (no Node original). A marker that parses to a
+/// truthy value WITHOUT a string `mountPath` makes the .mjs reach
+/// `mountPath.replace(...)` / `path.join(root, undefined)` and die with a V8
+/// `TypeError: Cannot read properties of undefined (reading 'replace')`, which
+/// bee.mjs's dispatcher then surfaces verbatim and integration-queue.mjs
+/// persists into the queue record. That text cannot be reproduced and can no
+/// longer be delegated, so the shape becomes a typed, zero-mutation refusal
+/// that says what is actually wrong. Reached only by a hand-edited or
+/// truncated marker: `runCompanionStart` always writes all three fields.
+fn companion_mount_path(marker: &Value) -> Result<String, MErr> {
+    match marker.get("mountPath") {
+        Some(Value::String(s)) => Ok(s.clone()),
+        other => Err(refuse_merge(
+            "WORKTREE_MERGE_COMPANION_MARKER_INVALID",
+            format!(
+                "the companion marker at .bee/companion-session.json has no usable \"mountPath\" string (got {}) — merge cannot exclude the mounted symlink from the worktree dirty-check, and refuses rather than guess. FIX: repair or delete the marker (and unlink the mount by hand), then retry.",
+                jsjson::stringify(&other.cloned().unwrap_or(Value::Null))
+            ),
+        )),
+    }
+}
+
+/// worktree-store.mjs teardownCompanionIfPresent. Runs ONLY after every
+/// zero-mutation refusal has cleared and immediately before the merge is
+/// staged — running it earlier destroyed the mount even for a merge about to
+/// be refused; running it later would let the companion session outlive a
+/// merge attempt that is actually proceeding.
+///
+/// Never throws: a missing/failed `_end` command is carried as `.warning` on
+/// the returned object, and the symlink + marker are removed best-effort
+/// either way. No flag gates it — the marker's presence IS the signal.
+fn teardown_companion_if_present(
+    main_root: &Path,
+    worktree_root: &Path,
+    companion_end_command: Option<&str>,
+    marker: Option<&Value>,
+) -> Option<Value> {
+    let marker = marker?;
+    let mut warning: Option<String> = None;
+    if let Some(command) = companion_end_command {
+        // `companionEndCommand.replace('<id>', marker.sessionId || '')` — a
+        // falsy sessionId (absent, null, '', 0, false) substitutes the empty
+        // string; anything else goes through ToString.
+        let replacement = match marker.get("sessionId") {
+            Some(v) if js_truthy(v) => jsjson::js_to_string(v),
+            _ => String::new(),
+        };
+        let substituted = js_replace_first(command, "<id>", &replacement);
+        let spawned = shell_sync(&substituted, main_root);
+        if spawned.status != Some(0) {
+            warning = Some(format!(
+                "commands.worktree_companion_end failed (exit {}): {} — the mounted symlink was still removed so the merge itself is not blocked; the companion session may need manual teardown.",
+                spawned.status_disp(),
+                spawned.no_output_text()
+            ));
+        }
+    } else {
+        warning = Some(
+            "a companion marker exists on this worktree but commands.worktree_companion_end is not configured — the mounted symlink was removed so the merge is not blocked, but the companion session (if the tool has one) was never explicitly ended."
+                .to_string(),
+        );
+    }
+
+    // Both unlinks are best-effort: already gone, or never a real symlink —
+    // either way the dirty-check that already ran is the authoritative signal.
+    if let Some(Value::String(mount)) = marker.get("mountPath") {
+        unlink_maybe_dir_symlink(&js_path_join(worktree_root, mount));
+    }
+    unlink_maybe_dir_symlink(&companion_marker_file(worktree_root));
+
+    // Node's key order: { ended, sessionId, warning } — `warning: undefined`
+    // is dropped by JSON.stringify, so an ended-cleanly companion carries only
+    // the first two keys.
+    let mut out = Map::new();
+    out.insert("ended".into(), Value::Bool(warning.is_none()));
+    // `sessionId: marker.sessionId || null` — the raw value when truthy.
+    let session_id = match marker.get("sessionId") {
+        Some(v) if js_truthy(v) => v.clone(),
+        _ => Value::Null,
+    };
+    out.insert("sessionId".into(), session_id);
+    if let Some(w) = warning {
+        out.insert("warning".into(), Value::String(w));
+    }
+    Some(Value::Object(out))
+}
+
 // ─── worktree-store.mjs createFeatureWorktree ─────────────────────────────
 
 /// `refuse(code, message)` throws a WorktreeCreateError whose `.message` is
@@ -912,7 +1435,20 @@ pub(crate) struct Created {
     base_ref: Option<String>,
     base_ref_sha: Option<String>,
     bootstrap: Map<String, Value>,
+    /// `null`, or runCompanionStart's `{sessionId, worktreePath, mountPath}`.
+    companion: Value,
     skills_sync: Value,
+}
+
+/// The `--with-companion` pair, both-or-neither. Node passes the two as
+/// separate options and re-checks the pairing inside
+/// createFeatureWorktreeLocked; this keeps that check reachable (see
+/// WORKTREE_COMPANION_CONFIG_INCOMPLETE there) by carrying them as two
+/// independent `Option`s rather than collapsing them into one.
+#[derive(Default, Clone, Copy)]
+pub(crate) struct CompanionSpec<'a> {
+    pub(crate) start_command: Option<&'a str>,
+    pub(crate) mount_path: Option<&'a str>,
 }
 
 /// FEATURE_SLUG_RE = /^[a-z0-9][a-z0-9-]*$/.
@@ -930,15 +1466,15 @@ fn feature_slug_ok(feature: &str) -> bool {
 /// ladder — runs inside ONE `worktree-admin` hold on mainRoot, exactly as
 /// Node's `withStoreLock(mainRoot, 'worktree-admin', ...)` wrapper does.
 ///
-/// `companionStartCommand`/`companionMountPath` are structurally absent here:
-/// `run_new` delegates every `--with-companion` invocation before reaching
-/// this function, so the WORKTREE_COMPANION_CONFIG_INCOMPLETE refusal, the
-/// mount validation and runCompanionStart are all unreachable — and the
-/// returned `companion` is always `null`, which is what bee.mjs prints.
+/// `companion` carries `--with-companion`'s two config strings (both-or-
+/// neither, re-checked below exactly as Node re-checks them): with it present
+/// the post-add block also runs `runCompanionStart`, whose failure enters the
+/// SAME rollback ladder as any other post-add failure.
 pub(crate) fn create_feature_worktree(
     main_root: &Path,
     feature: &str,
     base_ref: Option<&str>,
+    companion: CompanionSpec<'_>,
     lock_busy: &mut Option<String>,
 ) -> Result<Created, CErr> {
     let main_store_root = main_root.join(".bee");
@@ -955,7 +1491,7 @@ pub(crate) fn create_feature_worktree(
             return Err(CErr::Ex); // signalled to the caller through lock_busy
         }
     };
-    let out = create_feature_worktree_locked(main_root, feature, base_ref);
+    let out = create_feature_worktree_locked(main_root, feature, base_ref, companion);
     guard.release();
     out
 }
@@ -964,6 +1500,7 @@ fn create_feature_worktree_locked(
     main_root: &Path,
     feature: &str,
     base_ref: Option<&str>,
+    companion: CompanionSpec<'_>,
 ) -> Result<Created, CErr> {
     // (1) slug.
     if !feature_slug_ok(feature) {
@@ -976,7 +1513,23 @@ fn create_feature_worktree_locked(
         ));
     }
 
-    // (2) companion both-or-neither — unreachable, see the doc comment.
+    // (2) companion both-or-neither. The CLI handler already refuses each
+    // half's absence when --with-companion is passed; this is the defensive
+    // invariant for any OTHER caller, and it is a zero-mutation refusal.
+    // JS truthiness: an empty string counts as absent on both sides.
+    let start_command = companion.start_command.filter(|s| !s.is_empty());
+    let mount_path_raw = companion.mount_path.filter(|s| !s.is_empty());
+    let mut companion_mount: Option<String> = None;
+    if start_command.is_some() || mount_path_raw.is_some() {
+        let (Some(_), Some(mount)) = (start_command, mount_path_raw) else {
+            return Err(refuse(
+                "WORKTREE_COMPANION_CONFIG_INCOMPLETE",
+                "commands.worktree_companion_start and commands.worktree_companion_mount must both be configured to use --with-companion — only one was found."
+                    .to_string(),
+            ));
+        };
+        companion_mount = Some(validate_companion_mount_path(mount)?);
+    }
 
     // (3) base ref. `baseRef !== undefined && !== null && !== ''`, so an
     // empty --base-ref is treated as absent, exactly like Node.
@@ -1073,6 +1626,7 @@ fn create_feature_worktree_locked(
         base_ref,
         base_ref_sha.as_deref(),
         grants,
+        start_command.zip(companion_mount.as_deref()),
         &mut id,
     );
     match attempt {
@@ -1101,6 +1655,7 @@ fn post_add(
     base_ref: Option<&str>,
     base_ref_sha: Option<&str>,
     grants: Map<String, Value>,
+    companion: Option<(&str, &str)>,
     id_out: &mut Option<String>,
 ) -> Result<Created, String> {
     // 10.1 — the authoritative id. `id` stays None if this throws, so the
@@ -1159,7 +1714,16 @@ fn post_add(
         ws::WsErr::Ex => "EIO: i/o error, open".to_string(),
     })?;
 
-    // 10.6 — companion: structurally absent (run_new delegates --with-companion).
+    // 10.6 — companion. Deliberately INSIDE this fallible block: a companion
+    // start failure folds into the exact same post-add rollback as any other
+    // failure after `git worktree add` succeeded, so a worktree is never left
+    // created-and-registered but silently missing the companion it asked for.
+    let companion = match companion {
+        Some((command, mount)) => {
+            run_companion_start(main_root, worktree_root, command, mount)?
+        }
+        None => Value::Null,
+    };
 
     // 10.7 — skills: best-effort, never fatal, never in the ladder.
     let skills_sync = sync_worktree_skills(main_root, worktree_root);
@@ -1171,6 +1735,7 @@ fn post_add(
         base_ref: base_ref.filter(|s| !s.is_empty()).map(str::to_string),
         base_ref_sha: base_ref_sha.map(str::to_string),
         bootstrap,
+        companion,
         skills_sync,
     })
 }
@@ -1288,6 +1853,42 @@ fn git_status_porcelain(cwd: &Path) -> Result<String, String> {
 
 fn is_tree_dirty(cwd: &Path) -> Result<bool, String> {
     Ok(!js_trim(&git_status_porcelain(cwd)?).is_empty())
+}
+
+/// gitStatusPorcelainExcluding — `git status --porcelain -- :(exclude)<p> …`.
+///
+/// Deliberately NOT post-hoc text filtering: porcelain COLLAPSES an untracked
+/// directory (or a symlink-to-directory, which is exactly what a companion
+/// mount is) to one summary line for its top-level name, so a mount at
+/// `vendor/companion` shows only as `?? vendor/` and a text filter for the
+/// mount path would never match — the merge would refuse forever. Asking git
+/// itself never to report those paths removes them at the source, at any
+/// depth and under any quoting. Multiple `:(exclude)` pathspecs with no
+/// positive pathspec among them still mean "everything else in the tree"
+/// (git's own pathspec-magic contract), so excluding two is not a narrowing.
+///
+/// Pathspecs are `/`-only even on Windows, hence the `\` → `/` rewrite.
+fn git_status_porcelain_excluding(cwd: &Path, exclude_paths: &[String]) -> Result<String, String> {
+    let pathspecs: Vec<String> = exclude_paths
+        .iter()
+        .map(|p| format!(":(exclude){}", p.replace('\\', "/")))
+        .collect();
+    let mut args: Vec<&str> = vec!["status", "--porcelain", "--"];
+    args.extend(pathspecs.iter().map(String::as_str));
+    let r = run_git(cwd, &args);
+    if r.status != Some(0) {
+        return Err(format!(
+            "\"git status --porcelain -- {}\" failed in {}: {}",
+            pathspecs.join(" "),
+            p(cwd),
+            r.fail_text()
+        ));
+    }
+    Ok(r.stdout.unwrap_or_default())
+}
+
+fn is_tree_dirty_excluding(cwd: &Path, exclude_paths: &[String]) -> Result<bool, String> {
+    Ok(!js_trim(&git_status_porcelain_excluding(cwd, exclude_paths)?).is_empty())
 }
 
 /// The three-part "main was left byte-untouched" proof (decision D2-REVISED)
@@ -1767,6 +2368,9 @@ struct Staged {
     pre_merge_head: String,
     merge_head_file: PathBuf,
     staged_tree_hash: String,
+    /// teardownCompanionIfPresent's `{ended, sessionId, warning?}`, carried
+    /// across the released lock so P3's results can spread it too.
+    companion: Option<Value>,
 }
 
 enum StageOut {
@@ -1776,7 +2380,12 @@ enum StageOut {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn merge_stage(main_root: &Path, id: &str, cleanup: bool) -> MR<StageOut> {
+fn merge_stage(
+    main_root: &Path,
+    id: &str,
+    cleanup: bool,
+    companion_end_command: Option<&str>,
+) -> MR<StageOut> {
     // `typeof id !== 'string' || !id` is already enforced by run_merge's
     // requireFlag gate, so WORKTREE_MERGE_INVALID_ID is unreachable here.
     if !is_ordinary_checkout(main_root) {
@@ -1812,10 +2421,12 @@ fn merge_stage(main_root: &Path, id: &str, cleanup: bool) -> MR<StageOut> {
         ));
     };
 
-    // A companion marker is pre-checked away by run_merge (see the module
-    // header), so `companionMarker` is always null here: the worktree
-    // dirty-check is the plain one and teardownCompanionIfPresent is a no-op
-    // returning null, which is why no result below carries a `companion` key.
+    // worktree-companion-hook: READ (never delete) the marker up front so its
+    // mountPath can be excluded from the worktree dirty-check right below via
+    // a git pathspec. Actual teardown is deferred until every zero-mutation
+    // refusal in this function has cleared — see teardown_companion_if_present
+    // for the full ordering rationale.
+    let companion_marker = read_companion_marker(&worktree_root);
 
     if is_tree_dirty(main_root).map_err(MErr::Thrown)? {
         return Err(refuse_merge(
@@ -1826,7 +2437,18 @@ fn merge_stage(main_root: &Path, id: &str, cleanup: bool) -> MR<StageOut> {
             ),
         ));
     }
-    if is_tree_dirty(&worktree_root).map_err(MErr::Thrown)? {
+    // A present companion mount AND its marker file are both untracked (and
+    // the marker, unlike the rest of a bootstrapped `.bee` store, is not
+    // gitignored either) — either alone would trip this check, so both are
+    // excluded by git pathspec rather than by deletion-before-check.
+    let worktree_dirty = match &companion_marker {
+        Some(marker) => is_tree_dirty_excluding(
+            &worktree_root,
+            &[companion_mount_path(marker)?, companion_marker_rel()],
+        ),
+        None => is_tree_dirty(&worktree_root),
+    };
+    if worktree_dirty.map_err(MErr::Thrown)? {
         return Err(refuse_merge(
             "WORKTREE_MERGE_WORKTREE_DIRTY",
             format!(
@@ -1880,8 +2502,23 @@ fn merge_stage(main_root: &Path, id: &str, cleanup: bool) -> MR<StageOut> {
         ));
     }
 
-    // ── everything above is zero-mutation; the staged merge below is the
-    // first real write. NOTHING from here on may return MErr::Ex. ──────────
+    // worktree-companion-hook: every zero-mutation refusal above (both
+    // dirty-tree checks, detached-HEAD, branch-mismatch) has now cleared, so
+    // it is safe to tear the companion down. It cannot run any earlier (that
+    // would destroy the mount even for a merge about to be refused) or any
+    // later (the companion session must not outlive a merge attempt that is
+    // actually proceeding). On a COMPANION worktree this — not the staged
+    // merge — is the first real mutation, so NOTHING from this line on may
+    // return MErr::Ex; run_merge's read-only probes are what keep that true.
+    let companion = teardown_companion_if_present(
+        main_root,
+        &worktree_root,
+        companion_end_command,
+        companion_marker.as_ref(),
+    );
+
+    // ── every REFUSAL above is zero-mutation; the staged merge below is the
+    // first write to MAIN. ────────────────────────────────────────────────
     let pre_merge_head =
         js_trim(&run_git(main_root, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
     let merge_head_file = main_root.join(".git").join("MERGE_HEAD");
@@ -1914,6 +2551,10 @@ fn merge_stage(main_root: &Path, id: &str, cleanup: bool) -> MR<StageOut> {
             merge_result.stdout.clone().unwrap_or_default(),
             merge_result.stderr.clone().unwrap_or_default()
         )));
+        // `...(companion ? { companion } : {})` — last, after `output`.
+        if let Some(companion) = companion {
+            result.insert("companion".into(), companion);
+        }
         return Ok(StageOut::Done(MergeAnswer { result, ok: false }));
     }
 
@@ -1931,6 +2572,11 @@ fn merge_stage(main_root: &Path, id: &str, cleanup: bool) -> MR<StageOut> {
             "\"{branch}\" is already up to date with {} — nothing to merge.",
             p(main_root)
         )));
+        // `...(companion ? { companion } : {})` — after `message`, BEFORE the
+        // cleanup keys attachCleanupOutcome appends next.
+        if let Some(companion) = companion {
+            result.insert("companion".into(), companion);
+        }
         // verifySkipped is deliberately FALSE here (see the .mjs comment).
         attach_cleanup_outcome(
             &mut result,
@@ -1954,6 +2600,7 @@ fn merge_stage(main_root: &Path, id: &str, cleanup: bool) -> MR<StageOut> {
         pre_merge_head,
         merge_head_file,
         staged_tree_hash,
+        companion,
     })))
 }
 
@@ -1977,6 +2624,7 @@ fn merge_finish(
         pre_merge_head,
         merge_head_file,
         staged_tree_hash,
+        companion,
     } = state;
 
     let mut committed = false;
@@ -2007,6 +2655,10 @@ fn merge_finish(
                 p(main_root)
             )));
             result.insert("output_tail".into(), Value::String(tail));
+            // `...(companion ? { companion } : {})` — last, after output_tail.
+            if let Some(companion) = companion {
+                result.insert("companion".into(), companion.clone());
+            }
             return Ok(MergeAnswer { result, ok: false });
         }
 
@@ -2058,6 +2710,11 @@ fn merge_finish(
         result.insert("worktreeRoot".into(), json!(p(worktree_root)));
         let verify_field = if verify.ran { "green" } else { "skipped" };
         result.insert("verify".into(), json!(verify_field));
+        // `...(companion ? { companion } : {})` — after `verify`, BEFORE the
+        // post-commit `warning` and the cleanup keys.
+        if let Some(companion) = companion {
+            result.insert("companion".into(), companion.clone());
+        }
 
         // Post-commit guard (D2-REVISED).
         let post_commit_status = run_git(
@@ -2103,11 +2760,12 @@ fn merge_feature_worktree(
     id: &str,
     cleanup: bool,
     verify_command: Option<&str>,
+    companion_end_command: Option<&str>,
     hooks: Option<&crate::integration_queue::Hooks<'_>>,
 ) -> MR<MergeAnswer> {
     let mut guard = lock::acquire_store_lock(main_root, WORKTREE_ADMIN_LOCK, lock::MAX_ATTEMPTS)
         .map_err(|b| MErr::Thrown(b.message()))?;
-    let staged = merge_stage(main_root, id, cleanup);
+    let staged = merge_stage(main_root, id, cleanup, companion_end_command);
     guard.release();
     let staged = match staged? {
         StageOut::Done(answer) => return Ok(answer),
@@ -2181,14 +2839,7 @@ fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !bool_flag_ok(&flags, "with-companion") {
         return None; // validate() rejects a non-boolean value first
     }
-    // --with-companion delegates WHOLE (see the module header): every arm of
-    // runCompanionStart that can fail does so AFTER `git worktree add`, and
-    // two of them embed V8 bytes (JSON.parse's message, up to 500 raw child
-    // bytes) — unreachable-by-delegation once the worktree exists, so the
-    // shape never starts natively.
-    if bool_flag_true(&flags, "with-companion") {
-        return None;
-    }
+    let with_companion = bool_flag_true(&flags, "with-companion");
     // requireFlag(flags, 'feature') runs before the resolution check.
     let feature = match flags.get("feature") {
         Some(FlagV::S(s)) if !s.is_empty() => s.clone(),
@@ -2214,23 +2865,71 @@ fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     }
     let main_root = ctx.work_root.clone();
 
-    // wcg-3 (D1a/D3/D4): the shared-nested-checkout guard. It short-circuits
-    // to `false` — a pure no-op, no filesystem scan at all — whenever no
-    // OTHER session is concurrently live, which is the only shape served
-    // natively here. The instant a second session IS live the whole verb goes
-    // back to Node, because both remaining arms are unprovable from this
-    // crate: guards.mjs's `scanForNestedCheckout` (a depth-limited walk with
-    // no Rust counterpart) and `resolveVerifiedCompanionMountReal` (private
-    // to hooks/write_guard.rs — re-deriving it here would fork the guard, the
-    // exact drift C5 exists to prevent), plus the detection-failure refusal,
-    // which interpolates the caught error's V8 message.
+    // wcg-3 (D1a/D3/D4): the shared-nested-checkout guard, whole. Fires BEFORE
+    // any mutation, hard fail-closed with no override (D3), and teaches the
+    // paved road (D4 — a NEW companion-mounted worktree, never an in-place
+    // conversion). Both of its shapes now run natively: the marker-verified
+    // companion mount comes from THE write guard's own
+    // `resolveVerifiedCompanionMountReal` and the nested-`.git` down-scan from
+    // crate::nested_checkout (which is the only thing that module holds — see
+    // its header for why the predicates are imported rather than re-derived).
+    //
+    // `!withCompanion && …` short-circuits in the .mjs, so `--with-companion`
+    // never even runs the scan: the guard exists to push a caller toward that
+    // flag, and is never a refusal for someone who already passed it.
+    //
+    // A solo checkout stays a pure no-op (D6): nobody else live, no scan.
     let main_root_s = p(&main_root);
     let ctrl_root = crate::verbs::reservations::control_root_for(&main_root_s).ok()?;
     let session_id = crate::verbs::reservations::resolve_session_id(None, &ctrl_root).ok()?;
-    if crate::verbs::reservations::is_concurrent_mode_excluding(&ctrl_root, session_id.as_deref())
-        .ok()?
-    {
-        return None;
+    let shared_nested_found = if with_companion {
+        false
+    } else {
+        match crate::nested_checkout::has_any_shared_nested_checkout(
+            &main_root,
+            &ctrl_root,
+            session_id.as_deref(),
+        ) {
+            Ok(found) => found,
+            // The detection check itself errored. Node's message interpolates
+            // the caught error's V8 `.message`; this port supplies its own
+            // deterministic reason in the same slot (crate::nested_checkout's
+            // header documents the divergence). Everything else — fail CLOSED,
+            // zero mutation, same wording, same exit — is Node's.
+            Err(detect) => {
+                return Some(ctx.fail(&format!(
+                    "refusing to create a worktree: could not determine whether {main_root_s} holds a shared nested checkout another live session could reach — the detection check itself errored ({}). This guard fails CLOSED on a detection error rather than risk silently allowing an unguarded worktree. FIX: resolve the underlying filesystem error, then retry.",
+                    detect.reason
+                )))
+            }
+        }
+    };
+    if shared_nested_found {
+        return Some(ctx.fail(&format!(
+            "refusing to create a worktree: another session is concurrently live on {main_root_s} and it contains a shared nested checkout a companion mount must cover — running unguarded is how one session silently ate another's work. Re-run with \"bee worktree new --feature {feature} --with-companion\" so the shared checkout is mounted and tracked (the paved road for concurrent shared-checkout work — AGENTS.md rule 13). This creates a NEW companion-mounted worktree; it does not retrofit the checkout you are in."
+        )));
+    }
+
+    // worktree-companion-hook: resolved HERE from readConfig(mainRoot).commands
+    // and passed down as plain strings (worktree-store.mjs stays zero-deps),
+    // and refused HERE — before any worktree is created — rather than surfacing
+    // later as a confusing symlink failure.
+    let mut companion_start: Option<String> = None;
+    let mut companion_mount: Option<String> = None;
+    if with_companion {
+        let commands = read_worktree_commands(&main_root)?; // corrupt config -> Node
+        companion_start = commands.companion_start;
+        companion_mount = commands.companion_mount;
+        if companion_start.is_none() {
+            return Some(ctx.fail(
+                "--with-companion requires commands.worktree_companion_start to be set in .bee/config.json.",
+            ));
+        }
+        if companion_mount.is_none() {
+            return Some(ctx.fail(
+                "--with-companion requires commands.worktree_companion_mount to be set in .bee/config.json.",
+            ));
+        }
     }
 
     let mut lock_busy: Option<String> = None;
@@ -2238,6 +2937,10 @@ fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
         &main_root,
         &feature,
         base_ref.as_deref(),
+        CompanionSpec {
+            start_command: companion_start.as_deref(),
+            mount_path: companion_mount.as_deref(),
+        },
         &mut lock_busy,
     ) {
         Ok(c) => c,
@@ -2269,7 +2972,15 @@ fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
         created.base_ref_sha.clone().map_or(Value::Null, Value::String),
     );
     result.insert("skillsSync".into(), created.skills_sync.clone());
-    result.insert("companion".into(), Value::Null);
+    // `companion: created.companion || null`.
+    result.insert(
+        "companion".into(),
+        if js_truthy(&created.companion) {
+            created.companion.clone()
+        } else {
+            Value::Null
+        },
+    );
     result.insert("next_step".into(), json!(next_step));
 
     let skills_line = if created.skills_sync.get("applied") == Some(&Value::Bool(true)) {
@@ -2307,7 +3018,9 @@ fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
             created.bootstrap.get("reason").map(jsjson::js_to_string).unwrap_or_default()
         )
     };
-    let text = [
+    // `.filter((line) => line !== null)` — the companion line is present only
+    // when a companion was actually mounted.
+    let mut lines = vec![
         format!(
             "Created worktree for feature \"{feature}\": {}",
             p(&created.worktree_root)
@@ -2315,9 +3028,27 @@ fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
         branch_line,
         bootstrap_line,
         skills_line,
-        next_step,
-    ]
-    .join("\n");
+    ];
+    if js_truthy(&created.companion) {
+        let field = |k: &str| {
+            created
+                .companion
+                .get(k)
+                .map(jsjson::js_to_string)
+                .unwrap_or_default()
+        };
+        let session = match created.companion.get("sessionId") {
+            Some(v) if js_truthy(v) => format!(", session {}", jsjson::js_to_string(v)),
+            _ => String::new(),
+        };
+        lines.push(format!(
+            "  companion:   mounted at {} ({}{session}).",
+            field("mountPath"),
+            field("worktreePath")
+        ));
+    }
+    lines.push(next_step);
+    let text = lines.join("\n");
     Some(ctx.emit(&Value::Object(result), &text))
 }
 
@@ -2326,20 +3057,28 @@ fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
 /// SOME non-empty session_id string.
 const WORKTREE_MERGE_SESSIONLESS_ID: &str = "bee-worktree-merge-sessionless";
 
-/// readConfig(mainRoot).commands, narrowed to the three keys merge reads.
-/// normalizeCommands trims every string value and keeps `test`'s ARRAY shape
-/// distinct from its string shape — which matters, because merge's verify
-/// fallback is `typeof commands.test === 'string'`, so an array `test` is
-/// never spawned as one shell command.
-struct MergeCommands {
+/// readConfig(mainRoot).commands, narrowed to the five keys the worktree verbs
+/// read. normalizeCommands trims every string value, drops empties, and keeps
+/// `test`'s ARRAY shape distinct from its string shape — which matters,
+/// because merge's verify fallback is `typeof commands.test === 'string'`, so
+/// an array `test` is never spawned as one shell command.
+struct WorktreeCommands {
     verify: Option<String>,
     test_string: Option<String>,
+    companion_start: Option<String>,
+    companion_mount: Option<String>,
     companion_end: Option<String>,
 }
 
-fn read_merge_commands(main_root: &Path) -> Option<MergeCommands> {
+fn read_worktree_commands(main_root: &Path) -> Option<WorktreeCommands> {
     let config = crate::state::read_config_raw(main_root).ok()?;
-    let mut out = MergeCommands { verify: None, test_string: None, companion_end: None };
+    let mut out = WorktreeCommands {
+        verify: None,
+        test_string: None,
+        companion_start: None,
+        companion_mount: None,
+        companion_end: None,
+    };
     let Some(Value::Object(raw)) = config.get("commands") else {
         return Some(out);
     };
@@ -2351,21 +3090,97 @@ fn read_merge_commands(main_root: &Path) -> Option<MergeCommands> {
     };
     out.verify = trimmed("verify");
     out.test_string = trimmed("test");
+    out.companion_start = trimmed("worktree_companion_start");
+    out.companion_mount = trimmed("worktree_companion_mount");
     out.companion_end = trimmed("worktree_companion_end");
     Some(out)
 }
 
-/// worktree-store.mjs COMPANION_MARKER_REL — `.bee/companion-session.json`.
-fn companion_marker_present(worktree_root: &Path) -> bool {
-    // readCompanionMarker is `JSON.parse(readFileSync(...))` in a try: a file
-    // that exists but does not parse reads as "no companion". Only a
-    // successfully-parsed marker changes any behavior, so only that shape
-    // needs the delegation gate.
-    std::fs::read(worktree_root.join(".bee").join("companion-session.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
-        .map(|v| !matches!(v, Value::Null | Value::Bool(false)))
-        .unwrap_or(false)
+/// `Number(string)` — ECMA-262 StringNumericLiteral, whole: leading/trailing
+/// whitespace stripped, an empty (or all-whitespace) string is 0, `Infinity`
+/// with an optional sign, the 0x/0o/0b integer literals (no sign allowed on
+/// those), and the ordinary decimal grammar with an optional exponent.
+/// Anything else is NaN.
+///
+/// This is the FULL conversion, unlike verbs/reservations.rs's
+/// `js_number_flag`, which models the same grammar but returns
+/// `Number.parseInt`'s answer for its own call sites.
+fn js_string_to_number(raw: &str) -> f64 {
+    let t = js_trim(raw);
+    if t.is_empty() {
+        return 0.0; // Number('') === 0, Number('   ') === 0
+    }
+    // Radix literals: no sign, at least one digit.
+    if let Some(rest) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
+        return radix_value(rest, 16);
+    }
+    if let Some(rest) = t.strip_prefix("0o").or_else(|| t.strip_prefix("0O")) {
+        return radix_value(rest, 8);
+    }
+    if let Some(rest) = t.strip_prefix("0b").or_else(|| t.strip_prefix("0B")) {
+        return radix_value(rest, 2);
+    }
+    let (sign, body) = match t.strip_prefix('-') {
+        Some(rest) => (-1.0, rest),
+        None => (1.0, t.strip_prefix('+').unwrap_or(t)),
+    };
+    if body == "Infinity" {
+        return sign * f64::INFINITY;
+    }
+    // [digits][.[digits]] | .digits, then optional [eE][+-]digits.
+    let bytes = body.as_bytes();
+    let mut i = 0usize;
+    let int_start = i;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    let int_len = i - int_start;
+    let mut frac_len = 0usize;
+    if i < bytes.len() && bytes[i] == b'.' {
+        i += 1;
+        let fs = i;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        frac_len = i - fs;
+    }
+    if int_len == 0 && frac_len == 0 {
+        return f64::NAN;
+    }
+    if i < bytes.len() && (bytes[i] == b'e' || bytes[i] == b'E') {
+        i += 1;
+        if matches!(bytes.get(i), Some(b'+') | Some(b'-')) {
+            i += 1;
+        }
+        let es = i;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i == es {
+            return f64::NAN;
+        }
+    }
+    if i != bytes.len() {
+        return f64::NAN;
+    }
+    // Rust's f64 parser accepts exactly this grammar and rounds the same way
+    // (both are correctly-rounded IEEE-754); an out-of-range literal saturates
+    // to ±Infinity in both.
+    body.parse::<f64>().map(|v| sign * v).unwrap_or(f64::NAN)
+}
+
+fn radix_value(digits: &str, radix: u32) -> f64 {
+    if digits.is_empty() {
+        return f64::NAN;
+    }
+    let mut acc = 0.0f64;
+    for c in digits.chars() {
+        match c.to_digit(radix) {
+            Some(d) => acc = acc * f64::from(radix) + f64::from(d),
+            None => return f64::NAN,
+        }
+    }
+    acc
 }
 
 fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -2375,12 +3190,30 @@ fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !bool_flag_ok(&flags, "cleanup") {
         return None;
     }
-    if flags.get("queue-wait-ms").is_some() {
-        // A `type:"number"` flag through validate(), then `Number(...)` with a
-        // finite-and-positive filter. Unported (nothing in the campaign's own
-        // fixtures exercises a non-default wait bound) — the default
-        // 180_000 ms path is what runs natively.
-        return None;
+    // `--queue-wait-ms`: a registry `type:"number"` flag. validate() runs
+    // first (typeMatches: a non-empty string whose `Number(...)` is FINITE),
+    // then the handler keeps the value only when it is also POSITIVE —
+    // anything else silently keeps DEFAULT_WAIT_BOUND_MS rather than refusing.
+    let mut queue_wait_bound_ms = crate::integration_queue::DEFAULT_WAIT_BOUND_MS;
+    match flags.get("queue-wait-ms") {
+        None => {}
+        // A bare `--queue-wait-ms` parses to `true`, which fails
+        // typeMatches('number') — the dispatcher's own generic validate()
+        // refusal, shared by every verb and not this flag's arm; it is the one
+        // shape here that still returns before any output.
+        Some(FlagV::Present) => return None,
+        Some(FlagV::S(raw)) => {
+            if js_trim(raw).is_empty() {
+                return None; // validate(): `value.trim() !== ''`
+            }
+            let n = js_string_to_number(raw);
+            if !n.is_finite() {
+                return None; // validate(): `Number.isFinite(Number(value))`
+            }
+            if n > 0.0 {
+                queue_wait_bound_ms = n;
+            }
+        }
     }
     let id = match flags.get("id") {
         Some(FlagV::S(s)) if !s.is_empty() => s.clone(),
@@ -2406,7 +3239,7 @@ fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     // taken after one would leave a doubled row in the `.bee/` tree — a C1
     // break, not just noisy telemetry. Each probe below is read-only.
 
-    let commands = read_merge_commands(&main_root)?; // corrupt config -> Node
+    let commands = read_worktree_commands(&main_root)?; // corrupt config -> Node
     // test-simple (412e9b3a) + no-test-repos D1/D2: `commands.verify ||
     // (typeof commands.test === 'string' ? commands.test : undefined)`, with
     // the literal "none" sentinel mapped to "no verify configured".
@@ -2415,21 +3248,11 @@ fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
         .clone()
         .or_else(|| commands.test_string.clone())
         .filter(|c| c != "none");
-
-    // A COMPANION worktree delegates whole, the same posture `worktree new
-    // --with-companion` takes and for the same reason: teardownCompanion-
-    // IfPresent runs AFTER every zero-mutation refusal has cleared but BEFORE
-    // the merge is staged, it spawns `commands.worktree_companion_end` and
-    // unlinks the mount, and the dirty-check switches to a pathspec-excluding
-    // form — an arm no fixture in this campaign exercises and one that cannot
-    // fall back once the mount is gone. `companion_end` is read only to keep
-    // that gate honest about what it is skipping.
-    let _ = &commands.companion_end;
-    if let Some(worktree_root) = resolve_worktree_by_id(&main_root, &id) {
-        if companion_marker_present(&worktree_root) {
-            return None;
-        }
-    }
+    // worktree-companion-hook: resolved unconditionally (cheap) — there is no
+    // `--with-companion` on the merge side, because the worktree's own marker
+    // IS the signal. A worktree WITH a marker is torn down even when this
+    // invocation opted in to nothing; there is nothing to opt in to.
+    let companion_end_command = commands.companion_end.clone();
 
     // readGrants is consulted twice (P1's grant check, P3's fence); an
     // unparseable registry delegates here rather than from inside a hold.
@@ -2472,7 +3295,7 @@ fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
         &id,
         &session_id,
         "main",
-        crate::integration_queue::DEFAULT_WAIT_BOUND_MS,
+        queue_wait_bound_ms,
         crate::integration_queue::DEFAULT_POLL_INTERVAL_MS,
         crate::integration_queue::DEFAULT_PROCESSOR_TTL_SECONDS,
         crate::integration_queue::DEFAULT_RENEW_INTERVAL_MS,
@@ -2482,6 +3305,7 @@ fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
                 &id,
                 cleanup,
                 verify_command.as_deref(),
+                companion_end_command.as_deref(),
                 Some(hooks),
             ) {
                 Ok(answer) => {
@@ -2562,8 +3386,21 @@ fn merge_text_lines(id: &str, main_root: &Path, answer: &MergeAnswer) -> Vec<Str
             ));
             lines.push(format!("  verify: {}", s("verify")));
         }
-        // `companion` is structurally absent (run_merge delegates a companion
-        // worktree), so its two lines are unreachable here.
+        // The companion block, shared by BOTH ok outcomes (issues-46-53 D3).
+        if let Some(companion) = r.get("companion").filter(|v| js_truthy(v)) {
+            lines.push(match companion.get("warning").filter(|w| js_truthy(w)) {
+                Some(warning) => {
+                    format!("  companion: WARNING — {}", jsjson::js_to_string(warning))
+                }
+                None => {
+                    let session = match companion.get("sessionId").filter(|v| js_truthy(v)) {
+                        Some(v) => format!(" (session {})", jsjson::js_to_string(v)),
+                        None => String::new(),
+                    };
+                    format!("  companion: ended{session}.")
+                }
+            });
+        }
         if let Some(warning) = r.get("warning") {
             lines.push(format!(
                 "  WARNING ({}): {}",
@@ -2885,6 +3722,513 @@ mod tests {
         let before = std::fs::read_to_string(&file).unwrap();
         release_all_for_holder(tmp.path(), "wt-nobody");
         assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+    }
+
+    // ── worktree-companion-hook, over REAL `git worktree add` fixtures ─────
+    //
+    // The mount is a real symlink and win32 denies symlink creation without
+    // SeCreateSymbolicLinkPrivilege, so every test that must CREATE one probes
+    // the capability and skips LOUDLY, naming it. The tests that only need a
+    // mount to EXIST use a plain untracked file instead: the dirty-check
+    // exclusion and the teardown unlink are indifferent to the node type
+    // (porcelain collapses a symlink-to-directory and a plain file into the
+    // same "?? <top-level>/" summary line, which is the whole reason the
+    // exclusion has to be a git pathspec), so the companion merge path runs
+    // natively here on any host.
+
+    const SYMLINK_CAP: &str = "symlink creation denied — needs SeCreateSymbolicLinkPrivilege \
+(Developer Mode or an elevated shell)";
+
+    fn symlink_capable() -> bool {
+        use std::sync::OnceLock;
+        static CAP: OnceLock<bool> = OnceLock::new();
+        *CAP.get_or_init(|| {
+            let dir = tempfile::tempdir().unwrap();
+            let target = dir.path().join("t");
+            std::fs::create_dir(&target).unwrap();
+            symlink_dir(&target.to_string_lossy(), &dir.path().join("l")).is_ok()
+        })
+    }
+
+    fn git_ok(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixtures");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A MAIN checkout with one commit and a host-shaped `.gitignore`: the
+    /// whole `.bee` store is ignored EXCEPT the companion marker, which is the
+    /// real-world shape COMPANION_MARKER_REL's own comment describes (it sits
+    /// outside the gitignored `.bee/runtime/` prefix, so it is untracked AND
+    /// not ignored — and therefore has to be excluded by pathspec).
+    fn main_repo(tmp: &Path) -> PathBuf {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(main.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            main.join(".gitignore"),
+            ".bee/*\n!.bee/companion-session.json\n",
+        )
+        .unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        git_ok(&main, &["config", "user.email", "a@b.c"]);
+        git_ok(&main, &["config", "user.name", "t"]);
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "init"]);
+        main
+    }
+
+    /// A shell command that prints `file`'s bytes verbatim — the portable way
+    /// to give `commands.worktree_companion_start` a fixed JSON stdout through
+    /// the same `shell: true` spawn production uses.
+    fn cat_command(file: &Path) -> String {
+        if cfg!(windows) {
+            format!("type \"{}\"", file.to_string_lossy())
+        } else {
+            format!("cat \"{}\"", file.to_string_lossy())
+        }
+    }
+
+    /// The whole `--with-companion` creation path: the configured child runs,
+    /// its declared worktreePath is mounted as a real symlink at the
+    /// configured relative mount, and the marker records all three fields.
+    #[test]
+    fn companion_start_mounts_the_declared_path_and_writes_the_marker() {
+        if !symlink_capable() {
+            eprintln!("SKIP (env-limited: {SYMLINK_CAP}) — worktree new --with-companion mounts and marks");
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let companion = tmp.path().join("shared-checkout");
+        std::fs::create_dir_all(&companion).unwrap();
+        let payload = tmp.path().join("payload.json");
+        std::fs::write(
+            &payload,
+            jsjson::stringify(&json!({
+                "worktreePath": companion.to_string_lossy(),
+                "sessionId": "sess-1",
+            })),
+        )
+        .unwrap();
+
+        let command = cat_command(&payload);
+        let mut lock_busy = None;
+        let created = create_feature_worktree(
+            &main,
+            "demo",
+            None,
+            CompanionSpec {
+                start_command: Some(&command),
+                mount_path: Some("vendor/companion"),
+            },
+            &mut lock_busy,
+        )
+        .unwrap_or_else(|e| match e {
+            CErr::Refuse(m) => panic!("refused: {m}"),
+            CErr::Ex => panic!("delegated"),
+        });
+
+        assert_eq!(
+            created.companion.get("sessionId"),
+            Some(&json!("sess-1")),
+            "{:?}",
+            created.companion
+        );
+        assert_eq!(created.companion.get("mountPath"), Some(&json!("vendor/companion")));
+
+        // The mount is a real link to the declared path.
+        let mount = created.worktree_root.join("vendor").join("companion");
+        assert!(std::fs::symlink_metadata(&mount).unwrap().file_type().is_symlink());
+        assert_eq!(
+            dunce::canonicalize(&mount).unwrap(),
+            dunce::canonicalize(&companion).unwrap()
+        );
+
+        // The marker is Node's bytes: 2-space JSON + a trailing newline.
+        let marker = std::fs::read_to_string(companion_marker_file(&created.worktree_root)).unwrap();
+        assert!(marker.ends_with("}\n"), "{marker}");
+        let parsed: Value = serde_json::from_str(&marker).unwrap();
+        assert_eq!(
+            parsed.as_object().unwrap().keys().collect::<Vec<_>>(),
+            vec!["sessionId", "worktreePath", "mountPath"]
+        );
+    }
+
+    /// A companion start failure fires AFTER `git worktree add`, so it enters
+    /// the post-add rollback ladder: worktree gone, branch gone, grant gone,
+    /// and the typed refusal names the child's exit. Needs no symlink — the
+    /// child dies before the mount is ever created.
+    #[test]
+    fn a_failed_companion_start_rolls_the_worktree_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let err = create_feature_worktree(
+            &main,
+            "demo",
+            None,
+            CompanionSpec {
+                start_command: Some("exit 7"),
+                mount_path: Some("vendor/companion"),
+            },
+            &mut lock_busy,
+        )
+        .err()
+        .expect("a failing companion start must refuse");
+        let CErr::Refuse(message) = err else {
+            panic!("a companion start failure must never delegate")
+        };
+        assert!(
+            message.starts_with("[WORKTREE_POST_ADD_FAILED] "),
+            "{message}"
+        );
+        assert!(
+            message.contains("commands.worktree_companion_start failed (exit 7): (no output)"),
+            "{message}"
+        );
+        assert!(message.contains("it has been rolled back"), "{message}");
+
+        // The ladder unwound in Node's order: nothing survives.
+        assert!(!tmp.path().join("main--wt--demo").exists());
+        assert_eq!(
+            read_grants_strict(&main.join(".bee")).unwrap(),
+            Map::new(),
+            "the grant is rolled back"
+        );
+        let branches = run_git(&main, &["branch", "--list", "wt/demo"]);
+        assert_eq!(js_trim(&branches.stdout.unwrap_or_default()), "");
+    }
+
+    /// Unparseable child stdout is a typed post-add refusal too. Node's
+    /// parenthetical carries V8's JSON.parse message and this port carries
+    /// serde's (the module header's documented divergence); every other byte —
+    /// including the raw-stdout tail — is Node's.
+    #[test]
+    fn unparseable_companion_stdout_refuses_with_the_raw_tail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let payload = tmp.path().join("payload.txt");
+        std::fs::write(&payload, "not json at all").unwrap();
+        let mut lock_busy = None;
+        let err = create_feature_worktree(
+            &main,
+            "demo",
+            None,
+            CompanionSpec {
+                start_command: Some(&cat_command(&payload)),
+                mount_path: Some("vendor/companion"),
+            },
+            &mut lock_busy,
+        )
+        .err()
+        .unwrap();
+        let CErr::Refuse(message) = err else { panic!("must not delegate") };
+        assert!(message.contains(
+            "commands.worktree_companion_start must print JSON with a \"worktreePath\" field to stdout — got unparseable output ("
+        ), "{message}");
+        assert!(message.contains("Raw stdout: not json at all"), "{message}");
+        assert!(!tmp.path().join("main--wt--demo").exists());
+    }
+
+    /// JSON that parses but carries no usable worktreePath is a FULLY
+    /// deterministic refusal — `JSON.stringify(parsed)` and nothing else.
+    #[test]
+    fn companion_stdout_without_a_worktree_path_refuses_deterministically() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let payload = tmp.path().join("payload.json");
+        std::fs::write(&payload, "{\"sessionId\":\"s\"}").unwrap();
+        let mut lock_busy = None;
+        let err = create_feature_worktree(
+            &main,
+            "demo",
+            None,
+            CompanionSpec {
+                start_command: Some(&cat_command(&payload)),
+                mount_path: Some("vendor/companion"),
+            },
+            &mut lock_busy,
+        )
+        .err()
+        .unwrap();
+        let CErr::Refuse(message) = err else { panic!("must not delegate") };
+        assert!(message.contains(
+            "commands.worktree_companion_start's JSON output must include a non-empty \"worktreePath\" string — got {\"sessionId\":\"s\"}."
+        ), "{message}");
+    }
+
+    /// The two zero-mutation companion config refusals, with their exact
+    /// `[CODE] …` bytes — neither ever reaches `git worktree add`.
+    #[test]
+    fn companion_config_refusals_are_zero_mutation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+
+        let only_one = create_feature_worktree(
+            &main,
+            "demo",
+            None,
+            CompanionSpec { start_command: Some("true"), mount_path: None },
+            &mut lock_busy,
+        )
+        .err()
+        .unwrap();
+        let CErr::Refuse(message) = only_one else { panic!() };
+        assert_eq!(
+            message,
+            "[WORKTREE_COMPANION_CONFIG_INCOMPLETE] commands.worktree_companion_start and commands.worktree_companion_mount must both be configured to use --with-companion — only one was found."
+        );
+
+        for bad in ["/abs/mount", "..\\escape", "a/../b"] {
+            let mut lock_busy = None;
+            let err = create_feature_worktree(
+                &main,
+                "demo",
+                None,
+                CompanionSpec { start_command: Some("true"), mount_path: Some(bad) },
+                &mut lock_busy,
+            )
+            .err()
+            .unwrap();
+            let CErr::Refuse(message) = err else { panic!() };
+            assert!(
+                message.starts_with("[WORKTREE_COMPANION_CONFIG_INVALID] "),
+                "{bad}: {message}"
+            );
+        }
+        assert!(!tmp.path().join("main--wt--demo").exists(), "zero mutation");
+    }
+
+    /// The companion MERGE path, end to end, on a real worktree: the mount and
+    /// the marker are both excluded from the dirty-check by pathspec (without
+    /// that the merge refuses WORKTREE_MERGE_WORKTREE_DIRTY), the configured
+    /// `_end` command runs, both are unlinked, and `companion` rides the result.
+    #[test]
+    fn a_companion_worktree_merges_and_tears_the_mount_down() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+
+        // Real work on the branch, so the merge has something to do.
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["commit", "-qam", "work"]);
+
+        // A companion mount + marker, exactly as runCompanionStart leaves them.
+        // A plain untracked file stands in for the symlink (see the block
+        // comment above) so this runs on every host.
+        std::fs::create_dir_all(wt.join("vendor")).unwrap();
+        std::fs::write(wt.join("vendor").join("companion"), "mount").unwrap();
+        std::fs::write(
+            companion_marker_file(&wt),
+            format!(
+                "{}\n",
+                jsjson::stringify_pretty(&json!({
+                    "sessionId": "sess-1",
+                    "worktreePath": tmp.path().join("shared").to_string_lossy(),
+                    "mountPath": "vendor/companion",
+                }))
+            ),
+        )
+        .unwrap();
+
+        // Both are genuinely dirt without the exclusion — prove it, so the
+        // pathspec below is doing real work.
+        assert!(is_tree_dirty(&wt).unwrap(), "the mount+marker read as dirty");
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, Some("exit 0"), None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            answer.result["companion"],
+            json!({ "ended": true, "sessionId": "sess-1" }),
+            "an ended-cleanly companion carries no `warning` key"
+        );
+        // `companion` sits directly after `verify`, before the cleanup keys.
+        let keys: Vec<&String> = answer.result.keys().collect();
+        let vi = keys.iter().position(|k| *k == "verify").unwrap();
+        assert_eq!(keys[vi + 1], "companion");
+
+        assert!(!wt.join("vendor").join("companion").exists(), "mount unlinked");
+        assert!(!companion_marker_file(&wt).exists(), "marker unlinked");
+
+        let lines = merge_text_lines(&created.id, &main, &answer);
+        assert!(
+            lines.iter().any(|l| l == "  companion: ended (session sess-1)."),
+            "{lines:?}"
+        );
+    }
+
+    /// With no `commands.worktree_companion_end` configured, teardown still
+    /// removes the mount (so the merge is never blocked) but says so LOUDLY.
+    #[test]
+    fn teardown_without_an_end_command_warns_and_still_unlinks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let wt = tmp.path().join("wt");
+        std::fs::create_dir_all(wt.join(".bee")).unwrap();
+        std::fs::create_dir_all(wt.join("vendor")).unwrap();
+        std::fs::write(wt.join("vendor").join("companion"), "mount").unwrap();
+        let marker = json!({"sessionId": Value::Null, "mountPath": "vendor/companion"});
+        std::fs::write(companion_marker_file(&wt), jsjson::stringify(&marker)).unwrap();
+
+        let out = teardown_companion_if_present(tmp.path(), &wt, None, Some(&marker)).unwrap();
+        assert_eq!(out["ended"], Value::Bool(false));
+        assert_eq!(out["sessionId"], Value::Null);
+        assert!(
+            jsjson::js_to_string(&out["warning"]).starts_with(
+                "a companion marker exists on this worktree but commands.worktree_companion_end is not configured"
+            ),
+            "{out:?}"
+        );
+        assert!(!wt.join("vendor").join("companion").exists());
+        assert!(!companion_marker_file(&wt).exists());
+    }
+
+    /// A failing `_end` command never blocks the merge — the mount still goes,
+    /// and the failure rides the result as a warning with the child's exit.
+    #[test]
+    fn a_failed_end_command_warns_but_never_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let wt = tmp.path().join("wt");
+        std::fs::create_dir_all(wt.join(".bee")).unwrap();
+        std::fs::write(wt.join("mount"), "m").unwrap();
+        let marker = json!({"sessionId": "sess-9", "mountPath": "mount"});
+        std::fs::write(companion_marker_file(&wt), jsjson::stringify(&marker)).unwrap();
+
+        let out =
+            teardown_companion_if_present(tmp.path(), &wt, Some("exit 3"), Some(&marker)).unwrap();
+        assert_eq!(out["ended"], Value::Bool(false));
+        assert_eq!(out["sessionId"], json!("sess-9"));
+        assert!(
+            jsjson::js_to_string(&out["warning"])
+                .starts_with("commands.worktree_companion_end failed (exit 3): (no output) — "),
+            "{out:?}"
+        );
+        assert!(!wt.join("mount").exists());
+    }
+
+    /// The `<id>` substitution is JS `String.replace` with a STRING pattern:
+    /// first occurrence only, `$`-patterns honored.
+    #[test]
+    fn the_end_command_substitutes_the_session_id_like_js() {
+        assert_eq!(js_replace_first("end <id> then <id>", "<id>", "s1"), "end s1 then <id>");
+        assert_eq!(js_replace_first("end <id>", "<id>", ""), "end ");
+        assert_eq!(js_replace_first("no token", "<id>", "s1"), "no token");
+        // $$ -> literal $, $& -> the matched text, $` / $' -> the surroundings.
+        assert_eq!(js_replace_first("a<id>b", "<id>", "$$"), "a$b");
+        assert_eq!(js_replace_first("a<id>b", "<id>", "$&"), "a<id>b");
+        assert_eq!(js_replace_first("a<id>b", "<id>", "$`|$'"), "aa|bb");
+        // $1 has no capture group behind a string pattern — left literal.
+        assert_eq!(js_replace_first("a<id>b", "<id>", "$1"), "a$1b");
+    }
+
+    /// The dirty-check exclusion has to be a git PATHSPEC: porcelain collapses
+    /// an untracked nested path to its top-level directory, so text-filtering
+    /// for `vendor/companion` would never match and the merge would refuse
+    /// forever. This pins the behavior that makes that true.
+    #[test]
+    fn the_dirty_check_exclusion_is_a_pathspec_not_a_text_filter() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        std::fs::create_dir_all(main.join("vendor")).unwrap();
+        std::fs::write(main.join("vendor").join("companion"), "m").unwrap();
+
+        // Porcelain names only the TOP-LEVEL dir, never the nested path.
+        let plain = git_status_porcelain(&main).unwrap();
+        assert!(plain.contains("?? vendor/"), "{plain:?}");
+        assert!(!plain.contains("vendor/companion"), "{plain:?}");
+        assert!(is_tree_dirty(&main).unwrap());
+
+        // The pathspec removes it at the source, nested depth and all.
+        assert!(!is_tree_dirty_excluding(
+            &main,
+            &["vendor/companion".to_string(), companion_marker_rel()]
+        )
+        .unwrap());
+    }
+
+    /// A truthy marker with no string `mountPath` is an EXPLICIT NATIVE
+    /// REFUSAL: the .mjs dies here with a V8 TypeError, which can neither be
+    /// reproduced nor (post-cutover) delegated.
+    #[test]
+    fn a_marker_without_a_mount_path_is_a_typed_refusal() {
+        let MErr::Thrown(message) = companion_mount_path(&json!({"sessionId": "s"})).unwrap_err()
+        else {
+            panic!("must be a typed refusal")
+        };
+        assert!(
+            message.starts_with(
+                "[WORKTREE_MERGE_COMPANION_MARKER_INVALID] the companion marker at .bee/companion-session.json has no usable \"mountPath\" string (got null)"
+            ),
+            "{message}"
+        );
+        assert_eq!(
+            companion_mount_path(&json!({"mountPath": "m"})).map_err(|_| ()),
+            Ok("m".to_string())
+        );
+    }
+
+    /// A marker that is missing, unparseable, or parses FALSY all read as "no
+    /// companion here" — the .mjs's bare `JSON.parse` in a try, plus every
+    /// consumer's `if (!marker)` guard.
+    #[test]
+    fn marker_reads_match_nodes_falsy_contract() {
+        let tmp = tempfile::tempdir().unwrap();
+        let wt = tmp.path();
+        std::fs::create_dir_all(wt.join(".bee")).unwrap();
+        assert_eq!(read_companion_marker(wt), None, "missing");
+        for falsy in ["{oops", "null", "false", "0", "\"\""] {
+            std::fs::write(companion_marker_file(wt), falsy).unwrap();
+            assert_eq!(read_companion_marker(wt), None, "{falsy}");
+        }
+        std::fs::write(companion_marker_file(wt), "{\"mountPath\":\"m\"}").unwrap();
+        assert_eq!(
+            read_companion_marker(wt),
+            Some(json!({"mountPath": "m"}))
+        );
+    }
+
+    /// `--queue-wait-ms` is `Number(string)`, whole — the conversion
+    /// validate()'s finiteness gate and the handler's positive filter both run
+    /// against.
+    #[test]
+    fn queue_wait_ms_uses_js_number_semantics() {
+        assert_eq!(js_string_to_number("5000"), 5000.0);
+        assert_eq!(js_string_to_number("  5000  "), 5000.0);
+        assert_eq!(js_string_to_number("5e3"), 5000.0);
+        assert_eq!(js_string_to_number("1.5"), 1.5);
+        assert_eq!(js_string_to_number(".5"), 0.5);
+        assert_eq!(js_string_to_number("-1"), -1.0);
+        assert_eq!(js_string_to_number("0x10"), 16.0);
+        assert_eq!(js_string_to_number("0b101"), 5.0);
+        assert_eq!(js_string_to_number("0o17"), 15.0);
+        assert_eq!(js_string_to_number(""), 0.0);
+        assert_eq!(js_string_to_number("   "), 0.0);
+        assert!(js_string_to_number("Infinity").is_infinite());
+        assert!(js_string_to_number("-Infinity").is_infinite());
+        assert!(js_string_to_number("1e400").is_infinite()); // overflow, like V8
+        for nan in ["abc", "5px", "0x", "1..2", "1e", "--1", "+"] {
+            assert!(js_string_to_number(nan).is_nan(), "{nan}");
+        }
     }
 
     /// The lock file this module contends on is Node's, by name.

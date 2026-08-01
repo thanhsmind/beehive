@@ -13,10 +13,15 @@
 // Additional delegation triggers (None before any output/write):
 //   - --help anywhere, unknown flags, non-flag tokens, missing required
 //     flags (validate()'s structured stdout refusal stays Node's)
-//   - corrupt .bee/state.json or .bee/intent/*.json (Node warns with the V8
-//     parse message before falling back)
 //   - a writeJsonAtomic failure (Node throws the V8 io message; nothing
 //     durable has been written when this port bails)
+//
+// CUTOVER (2026-08-01): a corrupt .bee/intent/*.json no longer delegates. It
+// warns once (crate::fsutil::warn_corrupt_json) and reads as "no anchor at
+// this key" — `normalizeAnchor(readJson(file, null), key)` is null for that
+// fallback, so the candidate walk and every downstream refusal are unchanged.
+// A corrupt .bee/state.json fails open inside crate::state::read_state_brief,
+// converted in its own file.
 //
 // Within the accepted shapes the deterministic refusals ARE served natively,
 // byte-identical: writeIntent's request/acceptance immutability errors, the
@@ -202,11 +207,20 @@ fn normalize_anchor(raw: &Value, key: &str) -> Option<Map<String, Value>> {
     Some(anchor)
 }
 
-/// One candidate file read + normalize. Err(()) => corrupt JSON, delegate.
+/// One candidate file read + normalize.
+///
+/// CUTOVER: a corrupt anchor used to delegate because Node's readJson warning
+/// carried a V8 parse message. It now warns once and reads as "no anchor
+/// here" — `normalizeAnchor(readJson(file, null), key)` is exactly `null` for
+/// the fallback, so the candidate walk moves on to the next key unchanged.
 fn read_anchor_at(root: &Path, key: &str) -> Result<Option<Map<String, Value>>, ()> {
-    match read_json(&intent_path(root, key)) {
+    let file = intent_path(root, key);
+    match read_json(&file) {
         ReadJson::Missing => Ok(None),
-        ReadJson::Corrupt => Err(()), // Node's readJson warns with the V8 message
+        ReadJson::Corrupt => {
+            crate::fsutil::warn_corrupt_json(&file);
+            Ok(None)
+        }
         ReadJson::Parsed(v) => Ok(normalize_anchor(&v, key)),
     }
 }
@@ -775,9 +789,24 @@ mod tests {
         let anchor = read_intent(tmp.path(), None, Some("missing-sess")).unwrap().unwrap();
         assert_eq!(anchor.get("request"), Some(&json!("fallback req")));
         assert_eq!(anchor.get("key"), Some(&json!("default")));
-        // Corrupt candidate file → delegate (Err), never a silent skip.
+        // CUTOVER: a corrupt candidate file used to delegate (Err). It now
+        // warns once and reads as "no anchor at this key" —
+        // normalizeAnchor(readJson(file, null), key) is null for that
+        // fallback — so the candidate walk simply moves on.
         std::fs::write(dir.join("bad.json"), "{nope").unwrap();
-        assert!(read_intent(tmp.path(), Some("bad"), None).is_err());
+        assert!(read_anchor_at(tmp.path(), "bad").unwrap().is_none());
+        // The candidate walk skips it and lands on the DEFAULT key, exactly
+        // as it does for a candidate whose file is absent.
+        let anchor = read_intent(tmp.path(), Some("bad"), None).unwrap().unwrap();
+        assert_eq!(anchor.get("key"), Some(&json!("default")));
+        assert_eq!(
+            locate_intent_key(tmp.path(), Some("bad"), None).unwrap(),
+            Some("default".to_string())
+        );
+        // With no usable candidate at all, the whole walk answers "no anchor".
+        std::fs::remove_file(dir.join("default.json")).unwrap();
+        assert!(read_intent(tmp.path(), Some("bad"), None).unwrap().is_none());
+        assert!(locate_intent_key(tmp.path(), Some("bad"), None).unwrap().is_none());
     }
 
     // ─── whole-command contracts (oracle: packages/bee/tests/test_intent.mjs) ─
@@ -944,9 +973,8 @@ mod tests {
 
     /// Oracle: "D5 — a missing anchor reads as null and both renderers return
     /// '' (never throw)" + "D5 — a CORRUPT anchor reads exactly like a missing
-    /// one". A record that does not parse at all is NOT covered here: this
-    /// port delegates that arm to Node (read_anchor_at → Err), which
-    /// read_intent_walks_candidates_and_skips_unusable pins.
+    /// one". CUTOVER: a record that does not PARSE at all is covered here
+    /// too now (case 4) — it used to delegate to Node.
     #[test]
     fn missing_and_half_written_anchors_read_as_absent_and_render_empty() {
         let repo = setup_cli_repo();
@@ -978,6 +1006,12 @@ mod tests {
         // 3. A non-object record.
         std::fs::write(anchor_file(root), r#"["an","array"]"#).unwrap();
         assert_absent("non-object record");
+        assert!(read_intent(root, None, None).unwrap().is_none());
+
+        // 4. A record that does not parse at all — same answer, and the run
+        //    still succeeds instead of routing the command to Node.
+        std::fs::write(anchor_file(root), "{nope").unwrap();
+        assert_absent("unparseable record");
         assert!(read_intent(root, None, None).unwrap().is_none());
 
         // CONTROL — a real anchor renders a labelled, non-empty block through

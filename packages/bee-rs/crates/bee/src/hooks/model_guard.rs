@@ -13,10 +13,17 @@
 //     resolveAdvisor, modelForTier (inlined into configured_model_set),
 //     hookEnabled (over the merged tracked+overlay config).
 //
-// Strangler bails (Outcome::Delegate, all before any output/log write):
-//   - a present-but-corrupt .bee/config.json or .bee/config.local.json — the
-//     Node readJson warns to stderr embedding V8's own parse-error message,
-//     once per readConfig call (the call count varies by decision branch).
+// CUTOVER (2026-08-01). The one strangler bail this hook had — a
+// present-but-corrupt .bee/config.json or .bee/config.local.json, whose Node
+// readJson warning embedded V8's own parse-error message — is NATIVE now, in
+// crate::state::read_config_raw: it warns in bee's own words and takes
+// readConfig's fallback, so the unreadable file reads as absent and the merge
+// proceeds from whatever survives (the sibling overlay still applies). The
+// guard therefore evaluates against the same config Node would have used, and
+// still denies/allows identically.
+//
+// Strangler bails (Outcome::Delegate, all before any output/log write): none
+// remain.
 // Known accepted divergence (not detectable natively): a vendored state.mjs /
 // dispatch-guard.mjs that PARSES as present but throws on import (Node:
 // crash-log + exit 0). A wholly MISSING dispatch-guard.mjs is handled: crash
@@ -76,9 +83,11 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String), ()> {
     // Reachable only with a string toolName ("Agent"/"Task"/"spawn_agent").
     let tool_name = tool_name.expect("dispatch tools are string-named");
 
-    // hookEnabled over the merged config; corrupt config => Node's readJson
-    // warning (V8 message) => delegate.
-    let config = read_config_raw(&root).map_err(|_| ())?;
+    // hookEnabled over the merged config. read_config_raw warns and treats an
+    // unparseable file as absent (readConfig's readJson fallback), so this can
+    // no longer bail — the `Err` arm is kept only because the signature is
+    // still fallible.
+    let config = read_config_raw(&root).unwrap_or_default();
     if matches!(config.get("hooks").and_then(|h| h.get(HOOK_NAME)), Some(Value::Bool(false))) {
         return Ok((0, String::new()));
     }
@@ -1044,12 +1053,40 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_config_delegates() {
+    fn corrupt_config_warns_and_reads_as_absent() {
+        // The tracked config will not parse: readConfig's readJson fallback
+        // makes it read as absent, so the guard evaluates against the DEFAULT
+        // model set — it still decides natively and still denies a bare
+        // dispatch, with the default generation model named in the FIX.
         let fx = fixture(&repo_config());
         std::fs::write(fx.path().join(".bee").join("config.json"), "{broken").unwrap();
-        let mut body = json!({"tool_name": "Agent", "tool_input": {"prompt": "bare"}});
-        body["cwd"] = json!(fx.path().to_string_lossy());
-        assert!(run_inner(&[], &serde_json::to_string(&body).unwrap()).is_err());
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "bare"}}),
+        );
+        assert_eq!(code, 2, "a corrupt config must not soften the guard");
+        assert!(stderr.contains("bee-tier") && stderr.contains("FIX"));
+        // The repo's own "sonnet" mapping is gone with the unreadable file.
+        assert!(!stderr.contains("haiku"));
+    }
+
+    #[test]
+    fn corrupt_tracked_config_still_honours_a_readable_overlay() {
+        // readJson fails open PER FILE: the overlay survives its sibling's
+        // corruption, so a hook disabled there is still disabled.
+        let fx = fixture(&repo_config());
+        std::fs::write(fx.path().join(".bee").join("config.json"), "{broken").unwrap();
+        std::fs::write(
+            fx.path().join(".bee").join("config.local.json"),
+            r#"{"hooks":{"model-guard":false}}"#,
+        )
+        .unwrap();
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "bare"}}),
+        );
+        assert_eq!(code, 0);
+        assert_eq!(stderr, "");
     }
 
     #[test]

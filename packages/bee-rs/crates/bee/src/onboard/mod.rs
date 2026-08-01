@@ -44,18 +44,16 @@
 //     ever a Map key, never emitted, so no output byte changes: this fixes
 //     WHICH skills get blocked, not how a block is reported.
 //
-// (2) **encodeProjectDir drive colon — NOT FIXED HERE; not in this file.**
+// (2) **encodeProjectDir drive colon — FIXED AT CUTOVER; never lived here.**
 //     The second filed win32 defect (the encoded transcript-directory name
-//     keeps the drive colon, e.g. "D:-projects-…", which is an illegal NTFS
-//     directory name, so recovery/transcript resolution is unreachable on
-//     win32) lives in packages/bee/lib/perf.mjs `encodeProjectDir`, not in
-//     onboard_bee.mjs — this engine never encodes a project dir. Its two
-//     Rust mirrors are verbs/status_full.rs::encode_project_dir and
-//     hooks/session_close.rs::encode_project_dir, both outside this port's
-//     touchable file set. The fix is a one-line change at each of those
-//     three sites (also map ':' to '-', giving "D--projects-…", which is
-//     what Claude Code itself writes); it is reported upward rather than
-//     smuggled in as dead code here.
+//     kept the drive colon, e.g. "D:-projects-…", an illegal NTFS directory
+//     name, so recovery/transcript resolution was unreachable on win32) lived
+//     in packages/bee/lib/perf.mjs `encodeProjectDir`, not in onboard_bee.mjs
+//     — this engine never encodes a project dir. Its two Rust mirrors,
+//     verbs/status_full.rs::encode_project_dir and
+//     hooks/session_close.rs::encode_project_dir, now map ':' to '-' as well,
+//     giving "D--projects-…" — what Claude Code itself writes. The fix was
+//     held until cutover because it means diverging from Node.
 //
 // (3) **Node-runtime preflight is structurally unreachable.** main()'s
 //     `nodeRuntimeStatus()` check (`missing_runtime`, exit 1) inspects

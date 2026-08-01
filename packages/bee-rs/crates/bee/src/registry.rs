@@ -34,7 +34,9 @@ pub struct Drift {
     pub hint: &'static str,
 }
 
-const HINT: &str = "Command registry content changed since the last bee.mjs call — re-run \"bee --help --json\" to refresh the manifest.";
+/// CUTOVER wording change: Node's hint said "since the last bee.mjs call",
+/// naming an entry point that no longer exists. It names the command instead.
+const HINT: &str = "Command registry content changed since the last bee call — re-run \"bee --help --json\" to refresh the manifest.";
 
 /// checkManifestDrift (write path — the doctor-only skipWrite branch stays
 /// with Node until doctor ports). ISO timestamp matches Date.toISOString().
@@ -45,7 +47,13 @@ pub fn check_manifest_drift(root: &Path) -> Result<Drift, Bail> {
     let read_prior = |file: &Path| -> Result<Option<Value>, Bail> {
         match read_json(file) {
             ReadJson::Missing => Ok(None),
-            ReadJson::Corrupt => Err(Bail::NeedsNode), // Node warns with the V8 message
+            // CUTOVER: readJson(file, null) warned and returned null, and the
+            // caller treated that as "no prior hash recorded" — i.e. exactly
+            // the Missing arm. Same fallback, our wording.
+            ReadJson::Corrupt => {
+                crate::fsutil::warn_corrupt_json(file);
+                Ok(None)
+            }
             ReadJson::Parsed(v) => Ok(Some(v)),
         }
     };
@@ -77,4 +85,47 @@ pub fn check_manifest_drift(root: &Path) -> Result<Drift, Bail> {
         manifest_changed: matches!(&prior_hash, Some(h) if h != &current),
         hint: HINT,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write(file: &Path, content: &str) {
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, content).unwrap();
+    }
+
+    /// CUTOVER: a corrupt cache used to bail to Node. Node's readJson warned
+    /// and returned null, and a null prior hash means "nothing recorded yet"
+    /// — NOT drift. The native path must reach the same conclusion, and must
+    /// still rewrite the cache so the next call is clean.
+    #[test]
+    fn corrupt_hash_cache_reads_as_no_prior_hash_and_reports_no_drift() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(&cache_hash_path(tmp.path()), "{broken");
+        let drift = check_manifest_drift(tmp.path()).ok().expect("must fail open");
+        assert!(!drift.manifest_changed, "an unreadable cache is not drift");
+        // The cache was repaired in place by the best-effort write.
+        let repaired = std::fs::read_to_string(cache_hash_path(tmp.path())).unwrap();
+        assert!(repaired.contains(&manifest_hash()));
+    }
+
+    /// A corrupt CACHE still falls through to the legacy file, exactly as
+    /// `readJson(cache, null) || readJson(legacy, null)` did.
+    #[test]
+    fn corrupt_cache_falls_through_to_the_legacy_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(&cache_hash_path(tmp.path()), "{broken");
+        write(&legacy_hash_path(tmp.path()), r#"{"hash":"stale-hash"}"#);
+        let drift = check_manifest_drift(tmp.path()).ok().unwrap();
+        assert!(drift.manifest_changed, "the legacy hash differs — that IS drift");
+    }
+
+    /// The hint names the binary, never a script that no longer ships.
+    #[test]
+    fn drift_hint_names_the_binary() {
+        assert!(!HINT.contains(".mjs"), "{HINT}");
+        assert!(HINT.contains("since the last bee call"), "{HINT}");
+    }
 }

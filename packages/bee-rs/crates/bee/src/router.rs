@@ -2,9 +2,15 @@
 //
 // Native verbs register a `try_native(args, t0) -> Option<ExitCode>` probe:
 // returning None (for any reason — unrecognized flag shape, linked-worktree
-// root, corrupt JSON input) falls through to the Node delegate BEFORE any
-// output is produced. `bee rs-info` is a diagnostic outside the porcelain
-// namespace, so it can never collide with a Node-surface command.
+// root) falls through to the Node delegate BEFORE any output is produced.
+// `bee rs-info` is a diagnostic outside the porcelain namespace, so it can
+// never collide with a Node-surface command.
+//
+// CUTOVER: "corrupt JSON input" used to be on that list of reasons. It no
+// longer is — a corrupt store file warns natively (fsutil::warn_corrupt_json)
+// and takes the fallback Node's readJson would have returned, so no probe
+// declines a command over one. Nothing that a running bee can encounter in its
+// own state should reach the delegate, because there is no runtime behind it.
 
 use crate::verbs;
 use std::ffi::OsString;
