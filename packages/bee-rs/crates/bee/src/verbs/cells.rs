@@ -27,6 +27,33 @@
 //     cross-worktree foreign-hold selection filters (findSessionConflicts /
 //     findForeignHolds over the full worktree topology). Every argv shape
 //     for claim-next returns None.
+//
+//     R6 STATUS (re-measured while closing the other per-verb coverage
+//     debts). The CLAIM half is already here — `run_claim` carries
+//     claimCellFile's O_EXCL protocol, the budget unwind, the `cells:<id>`
+//     store-locked claimCell with its gate/status/deps refusals, and the
+//     route warning — so what claim-next still needs is the SELECTION half
+//     plus the sweep, none of which exists anywhere in this crate yet:
+//       1. sweepExpiredClaims (claims.mjs): the per-cell gate + a SESSIONS
+//          lock + a `cells:<id>` store lock, a claimed->open cell reset whose
+//          trace records swept_at/swept_from_session, and a best-effort
+//          logDecision row per reset. Every one of those writes lands before
+//          any output, so a mid-sweep delegate would double-write.
+//       2. resolvePipeline (state.mjs) — session->lane resolution with the
+//          four typed LANE_INVALID/LANE_MISSING/LANE_CORRUPT refusals whose
+//          text embeds path.relative(controlRoot, lanePath).
+//       3. the pooling pass: readState + listLanes + listSessionRecords/
+//          heartbeatStale (GH#20 live-owner skip) + featureBacklogRank
+//          (the docs/backlog.md Feature-column walk, or the PBI fold's own
+//          `a.id.localeCompare(b.id)` ordering — verbs/backlog.rs's
+//          `locale_cmp` is the calibrated model that arm would reuse) +
+//          the created_at tiebreak.
+//       4. the per-candidate filters: findSessionConflicts (reservations.mjs
+//          listReservations + pathsOverlap) and findForeignHolds over
+//          resolveHoldTopology's granted/ordinary worktree arms.
+//     Attempting the sweep without (1)-(4) all present is not shippable: the
+//     sweep mutates before selection even runs, so a partial port cannot
+//     fall back to Node afterwards. Left wholly delegated on purpose.
 //   - every argv shape any ported verb cannot PROVE: unknown flags, missing
 //     required flags, --help, bad enum/number values (Node's validate()
 //     speaks there), non-flag tokens, non-UTF-8 argv.

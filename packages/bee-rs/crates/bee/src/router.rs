@@ -76,6 +76,13 @@ pub const PORTED: &[&str] = &[
     "dev statusline",
     "dev impact-registry --write|--check|--query <file...> [--level 1]",
     "dev release-manifest --write|--check|--selftest",
+    // R3 wave 4 — the last per-group debts
+    "state set|gate|scribing-run|compounding-run|plan-rev bump|handoff (ALL repo shapes)",
+    "state workflows list|close",
+    "decisions supersede|render",
+    "backlog rank|badges|render",
+    "feedback digest|collect|rank",
+    "knowledge promote",
 ];
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
