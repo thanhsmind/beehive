@@ -130,10 +130,13 @@ fn output_is_byte_identical_to_node() {
 
 #[test]
 fn missing_entry_fails_with_127_and_hint() {
+    // `close` is still Node-delegated; `status` (the previous probe) is now
+    // served natively end to end (status_full.rs), including the no-root
+    // error path, so it never reaches the delegate.
     let tmp = tempfile::tempdir().unwrap();
     Command::cargo_bin("bee")
         .unwrap()
-        .arg("status")
+        .arg("close")
         .env("BEE_JS_ENTRY", tmp.path().join("nope.mjs"))
         .current_dir(tmp.path())
         .assert()
