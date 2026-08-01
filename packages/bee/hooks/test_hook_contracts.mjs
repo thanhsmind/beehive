@@ -986,8 +986,18 @@ function runCatalogDriftChecks() {
     ).length,
     0,
   );
+  // rust-port R6: the plugin projection prefers the native binary and keeps
+  // the node wrapper as the fallback arm of the SAME one-line command (see
+  // catalog.mjs pluginCommand). Pinned whole, because the binary candidate
+  // ORDER is the contract: the host repo's own .bee/bin first (the
+  // deployment-true location — the binary is machine-local, never shipped in
+  // a plugin root), then the plugin root for a built-in-place source
+  // checkout, then node.
   const expectedPluginAuditCommand =
-    'node "${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-codex-subagent-audit.mjs"';
+    'for b in "$CLAUDE_PROJECT_DIR/.bee/bin/bee" "$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe" ' +
+    '"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee" "${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe"; ' +
+    'do [ -x "$b" ] && exec "$b" hook codex-subagent-audit; done; ' +
+    'exec node "${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-codex-subagent-audit.mjs"';
   const pluginTopologyOk =
     codexStartAudit.length === 1 &&
     codexStopAudit.length === 1 &&
@@ -1029,6 +1039,16 @@ function runCatalogDriftChecks() {
   const launchesSourceWrappers = repoCommands.every((c) =>
     /exec node "\$r"\/\.bee\/bin\/hooks\/bee-[a-z-]+\.mjs --source=repo$/m.test(c),
   );
+  // rust-port R6: the repo transport tries the vendored native binary FIRST
+  // and only falls through to the wrapper above when the host carries none.
+  // Both arms are asserted: dropping the binary arm silently re-Nodes every
+  // Codex hook, dropping the node arm breaks every host that has not built
+  // the binary yet.
+  const prefersVendoredBinary = repoCommands.every((c) =>
+    /^for b in "\$r"\/\.bee\/bin\/bee "\$r"\/\.bee\/bin\/bee\.exe; do \[ -x "\$b" \] && exec "\$b" hook [a-z-]+ --source=repo; done$/m.test(
+      c,
+    ),
+  );
   const visibleFailOpen = repoCommands.every(
     (c) =>
       c.includes(`echo "${REPO_TRANSPORT_UNAVAILABLE_DIAGNOSTIC}" >&2`) &&
@@ -1047,6 +1067,7 @@ function runCatalogDriftChecks() {
   const transportOk =
     repoCommands.length === 13 &&
     noClaudeVars &&
+    prefersVendoredBinary &&
     launchesSourceWrappers &&
     visibleFailOpen &&
     repoStartAudit.length === 1 &&
@@ -1056,9 +1077,10 @@ function runCatalogDriftChecks() {
       "codex-repo-target-generated-topology",
       transportOk,
       transportOk
-        ? `all ${repoCommands.length} generated repo commands carry no Claude root variable, include paired audit events, launch .bee/bin/hooks/bee-*.mjs with --source=repo, and fail open visibly`
+        ? `all ${repoCommands.length} generated repo commands carry no Claude root variable, include paired audit events, prefer .bee/bin/bee[.exe] hook <name> --source=repo with the .bee/bin/hooks/bee-*.mjs wrapper as fallback, and fail open visibly`
         : `repo transport contract violated: commands=${repoCommands.length} (expected 13) ` +
-            `noClaudeVars=${noClaudeVars} launchesSourceWrappers=${launchesSourceWrappers} ` +
+            `noClaudeVars=${noClaudeVars} prefersVendoredBinary=${prefersVendoredBinary} ` +
+            `launchesSourceWrappers=${launchesSourceWrappers} ` +
             `visibleFailOpen=${visibleFailOpen} startAudit=${repoStartAudit.length} stopAudit=${repoStopAudit.length}`,
     ),
   );
@@ -1144,10 +1166,17 @@ function runCatalogDriftChecks() {
   // a `node -e SCRIPT <script>` bootstrap that resolves the real git root
   // first (mirrors the POSIX command's own `git rev-parse
   // --show-toplevel`), so it is cwd-independent like the POSIX form.
-  // NODE_WINDOWS_BOOTSTRAP pins the exact structural shape (require both
-  // node builtins with SINGLE quotes, resolve the git root, join
-  // .bee/bin/hooks, spawnSync with inherited stdio, exit with the child's
-  // status, trailing hook filename argv); FORBIDDEN_WINDOWS_CHARS
+  // NODE_WINDOWS_BOOTSTRAP pins the exact structural shape (require the node
+  // builtins with SINGLE quotes, resolve the git root, prefer
+  // .bee/bin/bee[.exe] `hook <name>` and fall back to the .bee/bin/hooks
+  // wrapper, spawnSync with inherited stdio, exit with the child's status,
+  // trailing hook NAME argv — rust-port R6 replaced the wrapper filename argv
+  // with the name both arms derive from). This is the ONE hook surface where
+  // Node cannot be feature-detected away: the same ban on `$`, `%` and
+  // backtick that makes the string shell-agnostic also bans command
+  // substitution, so the command itself cannot ask git for the repo root, and
+  // the binary can only resolve its own root once something has launched it
+  // from a root-dependent path. FORBIDDEN_WINDOWS_CHARS
   // independently asserts none of `$`, `%`, or a backtick appear ANYWHERE —
   // cmd.exe treats `%` as a variable sigil and PowerShell treats `$`/backtick
   // specially even inside double quotes, so any of the three breaks one of
@@ -1159,7 +1188,7 @@ function runCatalogDriftChecks() {
     .flat()
     .flatMap((g) => g.hooks);
   const NODE_WINDOWS_BOOTSTRAP =
-    /^node -e "var cp=require\('child_process'\);var path=require\('path'\);var hook=process\.argv\[1\];var root='';try\{root=cp\.execSync\('git rev-parse --show-toplevel',\{stdio:\['ignore','pipe','ignore'\]\}\)\.toString\(\)\.trim\(\);\}catch\(e\)\{root='';\}if\(!root\)\{process\.exit\(0\);\}var target=path\.join\(root,'\.bee','bin','hooks',hook\);var r=cp\.spawnSync\(process\.execPath,\[target,'--source=repo'\],\{stdio:'inherit'\}\);if\(r\.error\)\{process\.exit\(1\);\}process\.exit\(r\.status===null\?1:r\.status\);" bee-[a-z-]+\.mjs$/;
+    /^node -e "var cp=require\('child_process'\);var path=require\('path'\);var fs=require\('fs'\);var hook=process\.argv\[1\];var root='';try\{root=cp\.execSync\('git rev-parse --show-toplevel',\{stdio:\['ignore','pipe','ignore'\]\}\)\.toString\(\)\.trim\(\);\}catch\(e\)\{root='';\}if\(!root\)\{process\.exit\(0\);\}var bin=path\.join\(root,'\.bee','bin','bee\.exe'\);if\(!fs\.existsSync\(bin\)\)\{bin=path\.join\(root,'\.bee','bin','bee'\);\}var r=fs\.existsSync\(bin\)\?cp\.spawnSync\(bin,\['hook',hook,'--source=repo'\],\{stdio:'inherit'\}\):cp\.spawnSync\(process\.execPath,\[path\.join\(root,'\.bee','bin','hooks','bee-'\+hook\+'\.mjs'\),'--source=repo'\],\{stdio:'inherit'\}\);if\(r\.error\)\{process\.exit\(1\);\}process\.exit\(r\.status===null\?1:r\.status\);" [a-z-]+$/;
   const FORBIDDEN_WINDOWS_CHARS = /[$%`]/;
   const repoCommandWindowsOk =
     repoCommandWindowsEntries.length > 0 &&
@@ -1184,7 +1213,7 @@ function runCatalogDriftChecks() {
       "codex-repo-commandWindows-contract",
       commandWindowsContractOk,
       commandWindowsContractOk
-        ? `all ${repoCommandWindowsEntries.length} codex-repo-target entries carry the git-root-resolving "node -e SCRIPT <script>" commandWindows bootstrap (no $, %, or backtick anywhere); claude and codex-plugin entries carry none`
+        ? `all ${repoCommandWindowsEntries.length} codex-repo-target entries carry the git-root-resolving, binary-first "node -e SCRIPT <name>" commandWindows bootstrap (no $, %, or backtick anywhere); claude and codex-plugin entries carry none`
         : `DRIFT: commandWindows contract violated: repoOk=${repoCommandWindowsOk} ` +
             `claudeAbsent=${claudeCommandWindowsAbsent} codexPluginAbsent=${codexPluginCommandWindowsAbsent}`,
     ),
@@ -1259,14 +1288,62 @@ function runCatalogDriftChecks() {
         nonGitResult.status === 0 &&
         !(nonGitResult.stdout || "").trim() &&
         !(nonGitResult.stdout || "").includes(MARKER);
-      const pass = nestedOk && nonGitOk;
+      // rust-port R6 third arm: with a vendored binary present the bootstrap
+      // must take the BINARY, never the wrapper. Proven by planting a stand-in
+      // binary that prints its own marker — the wrapper's MARKER must not
+      // appear. Skipped (not failed) where a stand-in cannot be made
+      // executable, so this row never turns red on a platform quirk.
+      const BIN_MARKER = "COMMAND_WINDOWS_BINARY_ARM_MARKER";
+      let binaryArm = "skipped";
+      let binaryResult = null;
+      // On POSIX a stand-in shell script IS an executable, so the arm can be
+      // proven with a marker of its own. On win32 only a real PE image can be
+      // spawned, so the arm borrows this repo's own built .bee/bin/bee.exe
+      // when it exists (machine-local by decision 1f4262ca — absent on a
+      // fresh clone, hence a skip rather than a failure) and asserts the
+      // wrapper MARKER never appears.
+      const vendoredBinary = path.join(REPO_ROOT, ".bee", "bin", "bee.exe");
+      const planted =
+        process.platform === "win32"
+          ? fs.existsSync(vendoredBinary)
+            ? (() => {
+                const p = path.join(fixtureRoot, ".bee", "bin", "bee.exe");
+                fs.copyFileSync(vendoredBinary, p);
+                return { path: p, expectMarker: null };
+              })()
+            : null
+          : (() => {
+              const p = path.join(fixtureRoot, ".bee", "bin", "bee");
+              fs.writeFileSync(p, `#!/bin/sh\nprintf '%s\\n' "${BIN_MARKER}"\nexit 0\n`);
+              fs.chmodSync(p, 0o755);
+              return { path: p, expectMarker: BIN_MARKER };
+            })();
+      if (planted) {
+        binaryResult = spawnSync(ROUTE_SHELL, ["-lc", sampleEntry.commandWindows], {
+          cwd: nestedDir,
+          encoding: "utf8",
+          input: "",
+          timeout: SPAWN_TIMEOUT_MS,
+          maxBuffer: SPAWN_MAX_BUFFER,
+        });
+        const stdout = binaryResult.stdout || "";
+        binaryArm =
+          binaryResult.status === 0 &&
+          !stdout.includes(MARKER) &&
+          (planted.expectMarker === null || stdout.includes(planted.expectMarker))
+            ? "ok"
+            : "failed";
+        fs.rmSync(planted.path, { force: true });
+      }
+      const pass = nestedOk && nonGitOk && binaryArm !== "failed";
       return catalogDriftRow(
         "codex-commandWindows-nested-cwd-execution",
         pass,
         pass
-          ? "commandWindows bootstrap executed from a NESTED fixture cwd resolves the git root and runs the real hook; outside any git repo it exits 0 silently"
+          ? `commandWindows bootstrap executed from a NESTED fixture cwd resolves the git root and runs the real hook; outside any git repo it exits 0 silently; binary-preference arm: ${binaryArm}`
           : `commandWindows execution failed: nested(status=${nestedResult.status}, stdout=${truncate(nestedResult.stdout, 300)}, stderr=${truncate(nestedResult.stderr, 300)}) ` +
-              `nonGit(status=${nonGitResult.status}, stdout=${truncate(nonGitResult.stdout, 300)}, stderr=${truncate(nonGitResult.stderr, 300)})`,
+              `nonGit(status=${nonGitResult.status}, stdout=${truncate(nonGitResult.stdout, 300)}, stderr=${truncate(nonGitResult.stderr, 300)}) ` +
+              `binaryArm=${binaryArm}(status=${binaryResult?.status}, stdout=${truncate(binaryResult?.stdout, 300)})`,
       );
     } finally {
       fs.rmSync(fixtureRoot, { recursive: true, force: true });

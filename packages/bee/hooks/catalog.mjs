@@ -67,23 +67,74 @@ const CODEX_ONLY = Object.freeze([RUNTIMES.CODEX]);
 export const REPO_TRANSPORT_UNAVAILABLE_DIAGNOSTIC =
   "bee: hook transport unavailable (no git root)";
 
+// rust-port R6: `bee hook <name>` on the native binary is the same handler the
+// wrapper .mjs files front, so every rendered command PREFERS the binary and
+// keeps the node wrapper only as a fallback arm. Detection is a runtime
+// `[ -x ]` test inside the command string, not a render-time probe: unlike
+// onboard's repo-hook renderer (which knows its target repo and can
+// feature-detect while rendering — onboard_bee.mjs's vendoredBeeBinary), these
+// projections are rendered ONCE into checked-in files and then shipped to
+// every host, so the only place the question "does this host carry a binary?"
+// can be asked is at hook time, in the host's own shell.
+//
+// The binary is machine-local by decision 1f4262ca (.gitignore excludes
+// .bee/bin/bee[.exe]) — a plugin root cloned from a marketplace therefore
+// NEVER carries one, and the deployment-true location is the HOST repo's own
+// .bee/bin/, built per platform at install (plans/rust-port.md R6). The plugin
+// root is still probed second, for a source checkout used as its own plugin
+// root (--plugin-source) that has been built in place.
+//
+// A host with no binary keeps the exact node command it had before, so the
+// .mjs tree stays load-bearing until it is deleted; the deletion step drops
+// the fallback arm from the three renderers below and re-renders.
+function hookName(script) {
+  return script.replace(/^bee-/, "").replace(/\.mjs$/, "");
+}
+
 // Pre-wrapper transport setup for the repo target: resolve the git root from
 // the session cwd. `git rev-parse` fails the same way whether git is absent
 // from PATH or the cwd is not a repository — both leave $r empty, both take
-// the visible fail-open arm (exit 0), and NEITHER reaches node. That arm is
-// load-bearing, not decorative: without it, the same command in a non-git cwd
-// crashes with exactly the MODULE_NOT_FOUND this cell repairs.
+// the visible fail-open arm (exit 0), and NEITHER reaches a handler. That arm
+// is load-bearing, not decorative: without it, the same command in a non-git
+// cwd crashes with exactly the MODULE_NOT_FOUND this cell repairs.
+//
+// The git-root resolve stays even though the BINARY resolves its own root
+// (hooks/adapter.rs walks up from cwd): the resolve is what LOCATES the binary
+// from a nested session cwd, and it is what the visible fail-open diagnostic
+// is keyed on.
 function repoCommand(script) {
+  const name = hookName(script);
   return [
     'r="$(git rev-parse --show-toplevel 2>/dev/null)"',
     `[ -n "$r" ] || { echo "${REPO_TRANSPORT_UNAVAILABLE_DIAGNOSTIC}" >&2; exit 0; }`,
+    `for b in "$r"/.bee/bin/bee "$r"/.bee/bin/bee.exe; do [ -x "$b" ] && exec "$b" hook ${name} --source=repo; done`,
     `exec node "$r"/.bee/bin/hooks/${script} --source=repo`,
   ].join("\n");
 }
 
+// The plugin target runs with the host's ${CLAUDE_PLUGIN_ROOT} exported, so it
+// needs no root resolve of its own — but the binary it prefers lives in the
+// HOST repo (see the block comment above), which Claude Code exports as
+// $CLAUDE_PROJECT_DIR. Rendered as ONE `;`-joined line, never newline-joined:
+// a single line is unambiguous under every hook runner, and this projection is
+// the widest-blast-radius surface bee ships.
+function pluginCommand(script) {
+  const name = hookName(script);
+  const candidates = [
+    '"$CLAUDE_PROJECT_DIR/.bee/bin/bee"',
+    '"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe"',
+    '"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee"',
+    '"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe"',
+  ].join(" ");
+  return (
+    `for b in ${candidates}; do [ -x "$b" ] && exec "$b" hook ${name}; done; ` +
+    `exec node "\${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/${script}"`
+  );
+}
+
 function commandFor(script, target) {
   if (target === TARGETS.REPO) return repoCommand(script);
-  return `node "\${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/${script}"`;
+  return pluginCommand(script);
 }
 
 // Windows override for the repo target's Codex projection (Codex hook schema
@@ -115,20 +166,41 @@ function commandFor(script, target) {
 // itself is running under) with stdio 'inherit' — this MUST be inherited,
 // never piped, because hooks read their JSON payload from stdin — then
 // process.exit with the child's status (1 if the spawn itself errored).
+//
+// rust-port R6: the bootstrap now LAUNCHES THE BINARY (`<root>/.bee/bin/
+// bee[.exe] hook <name> --source=repo`) and only falls back to spawning the
+// .mjs wrapper under process.execPath when no binary is present. Its trailing
+// argv is the HOOK NAME (`write-guard`), not the wrapper filename, because the
+// name is what both arms are derived from.
+//
+// This is the ONE surface where the Node dependency cannot be feature-detected
+// away: the ban on `$`, `%` and backtick (so cmd.exe and powershell.exe parse
+// the string identically) also bans every form of command substitution, so the
+// command STRING cannot ask git where the repo root is — and the binary can
+// only resolve its own root once something has launched it from a path that
+// depends on that root. `node -e` is therefore still required here as a ~10
+// line launcher on Codex + native Windows, even after every line of bee logic
+// is native. Deleting the .mjs tree does NOT break this leg (it stops at the
+// binary arm); removing Node from such a host does.
 function windowsBootstrap(script) {
+  const name = hookName(script);
   const body = [
     "var cp=require('child_process');",
     "var path=require('path');",
+    "var fs=require('fs');",
     "var hook=process.argv[1];",
     "var root='';",
     "try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}",
     "if(!root){process.exit(0);}",
-    "var target=path.join(root,'.bee','bin','hooks',hook);",
-    "var r=cp.spawnSync(process.execPath,[target,'--source=repo'],{stdio:'inherit'});",
+    "var bin=path.join(root,'.bee','bin','bee.exe');",
+    "if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}",
+    "var r=fs.existsSync(bin)",
+    "?cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'})",
+    ":cp.spawnSync(process.execPath,[path.join(root,'.bee','bin','hooks','bee-'+hook+'.mjs'),'--source=repo'],{stdio:'inherit'});",
     "if(r.error){process.exit(1);}",
     "process.exit(r.status===null?1:r.status);",
   ].join("");
-  return 'node -e "' + body + '" ' + script;
+  return 'node -e "' + body + '" ' + name;
 }
 
 function commandWindowsFor(script, target) {

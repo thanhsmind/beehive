@@ -120,15 +120,22 @@ Pick your runner's changed-only/related mode for `test`; `verify` is whatever ru
 
 | Language | `commands.test` (scoped) | `commands.verify` (full) |
 |---|---|---|
-| **Node** | `npx jest --onlyChanged` (jest) · `npx vitest related --run <files>` (vitest) · in bee's own repo: `node scripts/run_verify.mjs --impacted-from-git` | `npm test` / `npm run build && npm test` |
+| **Node** | `npx jest --onlyChanged` (jest) · `npx vitest related --run <files>` (vitest) | `npm test` / `npm run build && npm test` |
 | **Go** | `go test ./internal/<changed-pkg>/...` — derive the package set from the diff (`go list ./... \| grep …`, or reverse-deps via `go list -deps`) | `go test ./...` |
 | **Rust** | `cargo test -p <changed-crate>` (workspace: one crate) · `cargo test <module>::` (one module path) | `cargo test --workspace` |
 | **Python** | `pytest tests/test_<area>.py` (by path) · `pytest -k <expr>` (by name) · `pytest --testmon` (coverage-map impacted, needs pytest-testmon) | `pytest` |
 | **PHP** | `vendor/bin/phpunit --filter <TestClass>` · `vendor/bin/phpunit tests/<Area>/` (by dir) · Laravel: `php artisan test --filter <name>` | `vendor/bin/phpunit` (hoặc `composer test`) |
 | **No tests** | `"none"` (sentinel — declares the repo deliberately test-free) | `"none"` (either key alone is sufficient; setting both is fine) |
 
+bee's own repo is a Rust project since the port (plans/rust-port.md): both keys are
+`PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml`.
+The `PATH` prefix is deliberate and portable — rustup installs to `$CARGO_HOME`/`~/.cargo/bin`, and an
+agent session started before rustup (or before a PATH change) otherwise fails the cap door with
+`cargo: command not found` rather than a real red. `test` and `verify` are the same command here
+because the Rust suite has no impacted-only mode; the split above still holds for host projects.
+
 Notes:
-- A command that takes the changed-file list from git itself (jest `--onlyChanged`, testmon, bee's `--impacted-from-git`) is the best `test` value — it stays correct with zero per-change editing. Where the runner has no such mode (Go, Rust, PHP), record the *narrow invocation shape* and let the session substitute the changed package/crate/class per change — the doctrine cares that the dev loop never runs the full suite, not which selector you use.
+- A command that takes the changed-file list from git itself (jest `--onlyChanged`, testmon) is the best `test` value — it stays correct with zero per-change editing. Where the runner has no such mode (Go, Rust, PHP), record the *narrow invocation shape* and let the session substitute the changed package/crate/class per change — the doctrine cares that the dev loop never runs the full suite, not which selector you use.
 - CI should run `commands.verify` verbatim (bee's own `ci.yml` does exactly that via `scripts/verify_all.mjs`, and files a deduped `verify-red` issue on red).
 - Where the "which tests relate to this file" answer needs a lookup: bee's own repo ships a derived impact registry (`.bee/bin/bee dev impact-registry --query <file>`); other languages use their native graph (Go: `go list -deps` reversed; Rust: the crate graph; Python: testmon's coverage map).
 

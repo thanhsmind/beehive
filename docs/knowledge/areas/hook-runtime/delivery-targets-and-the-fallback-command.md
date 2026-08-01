@@ -116,6 +116,22 @@ capable of denial).
   only and never appears in a rendered fallback command (codex-command-windows
   cell 2, author decision).
 
+- R8c — **Every rendered checkpoint command, at both delivery targets and in
+  both transport forms, prefers the NATIVE EXECUTABLE and keeps the
+  interpreter-script handler only as a fallback arm of the same command**
+  (rust-port R6). Two facts force the preference to be decided at launch time
+  rather than at render time: the executable is machine-local (built per host,
+  never committed or packaged), and these projections are rendered once into
+  checked-in files and then shipped unchanged to every host — so the only
+  place the question "does this host carry the executable?" can be asked is in
+  the host's own shell, when the checkpoint fires. A host that has not built
+  it yet keeps the interpreter command it always had, byte-for-byte. The
+  executable is searched for in the HOST project's own tool directory first
+  (the deployment-true location), then in the packaged delivery root, for a
+  source checkout that was built in place. Both arms are pinned by contract
+  test: losing the executable arm silently re-interprets every checkpoint;
+  losing the fallback arm breaks every host that has not built one.
+
 - R9 — A fallback checkpoint's pre-handoff launch-setup failure fails open
   visibly today — one diagnostic on the error stream, nothing on the output
   stream, success exit — while the shared handler's own decision (ordinary
@@ -176,3 +192,17 @@ capable of denial).
   shell (e.g., fish, nu) still receives the POSIX command through the
   login-shell transport and has no declared equivalent; that narrower gap
   remains open (codex-command-windows closed only the Windows half).
+- **The shell-agnostic Windows form is the one surface the interpreter cannot
+  leave** (R8c residue, rust-port R6). R8a's own ban on the three shell sigils
+  — what makes one string parse identically under both native Windows shells —
+  is also a ban on command substitution, so the command text itself cannot ask
+  the version-control tool where the project root is. The native executable
+  resolves its own root, but only once something has launched it, and locating
+  it needs exactly the root resolution the command cannot perform. So the
+  Windows form keeps a ~10-line interpreter bootstrap whose only job is
+  resolve-root-then-launch: after it, everything is native. Deleting the
+  interpreter-script tree does not break this form (it stops at the executable
+  arm); removing the interpreter itself from such a host does. Closing this
+  properly needs one of: a guarantee that the second runtime's Windows working
+  directory IS the project root (then the command is a plain relative launch),
+  or the executable placed on the host's search path at install.

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-init.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook session-init; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-init.mjs\"",
             "statusMessage": "bee: session bootstrap"
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-prompt-context.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook prompt-context; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-prompt-context.mjs\"",
             "statusMessage": "bee: phase reminder"
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-write-guard.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook write-guard; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-write-guard.mjs\"",
             "statusMessage": "bee: write guard"
           }
         ]
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-model-guard.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook model-guard; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-model-guard.mjs\"",
             "statusMessage": "bee: model-tier guard"
           }
         ]
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook state-sync; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
             "statusMessage": "bee: state sync"
           }
         ]
@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-tools-logger.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook tools-logger; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-tools-logger.mjs\"",
             "statusMessage": "bee: tools logger"
           }
         ]
@@ -71,12 +71,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook state-sync; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
             "statusMessage": "bee: state sync"
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-chain-nudge.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook chain-nudge; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-chain-nudge.mjs\"",
             "statusMessage": "bee: chain nudge"
           }
         ]
@@ -87,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-close.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook session-close; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-close.mjs\"",
             "statusMessage": "bee: pre-compact flush check"
           }
         ]
@@ -98,12 +98,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook state-sync; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-state-sync.mjs\"",
             "statusMessage": "bee: state sync"
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-close.mjs\"",
+            "command": "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee\" \"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"; do [ -x \"$b\" ] && exec \"$b\" hook session-close; done; exec node \"${CLAUDE_PLUGIN_ROOT}/packages/bee/hooks/bee-session-close.mjs\"",
             "statusMessage": "bee: session close check"
           }
         ]
