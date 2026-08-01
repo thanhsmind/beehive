@@ -9,8 +9,15 @@
 // bytes — the strangler bail, at hook granularity.
 
 pub mod adapter;
+pub mod chain_nudge;
 pub mod codex_subagent_audit;
+pub mod model_guard;
+pub mod prompt_context;
+pub mod session_close;
+pub mod session_init;
+pub mod state_sync;
 pub mod tools_logger;
+pub mod write_guard;
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -73,6 +80,12 @@ fn hook_js_path(name: &str) -> Option<PathBuf> {
 }
 
 fn delegate_to_node(name: &str, argv_rest: &[String], stdin: &[u8]) -> ExitCode {
+    // Test tripwire: prove a hook ran NATIVE (a delegation under this env is
+    // loud instead of silently byte-identical-by-construction).
+    if std::env::var_os("BEE_HOOK_NO_DELEGATE").is_some() {
+        eprintln!("bee(rs): hook {name} DELEGATED (BEE_HOOK_NO_DELEGATE tripwire)");
+        return ExitCode::from(42);
+    }
     let Some(script) = hook_js_path(name) else {
         // A hook must NEVER fail closed over infrastructure: exit 0 silently,
         // matching the wrappers' own fail-open posture.
@@ -111,6 +124,13 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     let outcome = match name.as_str() {
         "tools-logger" => tools_logger::run(&rest, &stdin_str),
         "codex-subagent-audit" => codex_subagent_audit::run(&rest, &stdin_str),
+        "chain-nudge" => chain_nudge::run(&rest, &stdin_str),
+        "state-sync" => state_sync::run(&rest, &stdin_str),
+        "prompt-context" => prompt_context::run(&rest, &stdin_str),
+        "session-init" => session_init::run(&rest, &stdin_str),
+        "session-close" => session_close::run(&rest, &stdin_str),
+        "model-guard" => model_guard::run(&rest, &stdin_str),
+        "write-guard" => write_guard::run(&rest, &stdin_str),
         _ => {
             eprintln!("bee hook: unknown hook \"{name}\"");
             return Some(ExitCode::FAILURE);

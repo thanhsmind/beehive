@@ -12,7 +12,18 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 /// Human-readable list for `bee rs-info` — keep in sync with the probes below.
-pub const PORTED: &[&str] = &["status --brief", "hook tools-logger", "hook codex-subagent-audit"];
+pub const PORTED: &[&str] = &[
+    "status --brief",
+    "hook tools-logger",
+    "hook codex-subagent-audit",
+    "hook chain-nudge",
+    "hook state-sync",
+    "hook prompt-context",
+    "hook session-init",
+    "hook model-guard",
+    "hook session-close",
+    "hook write-guard",
+];
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first().and_then(|a| a.to_str()) == Some("rs-info") {
