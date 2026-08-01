@@ -23,6 +23,9 @@ pub const PORTED: &[&str] = &[
     "hook model-guard",
     "hook session-close",
     "hook write-guard",
+    "cells list",
+    "cells ready",
+    "cells show",
 ];
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
