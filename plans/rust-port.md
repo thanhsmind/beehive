@@ -132,9 +132,21 @@ Each entry is a branch that currently returns to Node and therefore blocks delet
   `backlog rank|badges|render`, `feedback digest|collect|rank`, plus every `--stdin` shape
   (a probe must decide before consuming the pipe, so stdin can never be validated natively first).
 - **Cross-cutting delegate classes:** corrupt-JSON reads whose warning embeds a V8 message;
-  linked-worktree roots (the gitdir+grants half of `resolveRootsCore` is unported); collation
-  over free prose (`localeCompare` on titles); `session-init`'s preamble and `session-close`'s
-  PreCompact branch.
+  collation over free prose (`localeCompare` on titles); `session-init`'s preamble and
+  `session-close`'s PreCompact branch.
+- **Linked worktrees — classification done, routing deliberately NOT flipped.** `roots.rs` now
+  carries both arms of `resolveRootsCore` (gitdir read, namespace shape, bidirectional
+  back-pointer, the four `WorktreeLinkInvalidError` messages, grant lookup), pinned against a
+  Node harness over real `git worktree add` fixtures. But `resolve_store_root` still answers
+  `NeedsNode` for a linked worktree ON PURPOSE: every verb ported so far encodes the invariant
+  "the native path only ever holds an ordinary classification" — `status_full.rs` hardcodes
+  `worktree_notice: None` and ports only the ordinary half of `orientWorktreeContext`,
+  `reservations.rs` treats `resolveMainRoot`/`resolveHoldTopology` as constants, and several
+  ports assume `controlRoot == root`. Flipping the mapping was tried and measured: inside a
+  granted worktree `orient --json` lost its whole `worktree` block, and inside an ungranted one
+  `status --json` lost `worktree_notice`. That is a C2 break, not a coverage win. The flip is
+  therefore per-verb: a verb opts in by calling `resolve_roots_core` once its own
+  worktree-sensitive branches are ported. `verbs/worktree.rs` is the first such caller.
 
 ### Sizing (honest)
 
