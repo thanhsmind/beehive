@@ -56,15 +56,21 @@ if [ -n "$week_pct" ]; then
   line="${line}${sep}${c}7d: ${w}%${reset}"
 fi
 
-# Per-model token/cost (main session + subagents) — fail-open, never breaks the line
-NODE=$(command -v node || true)
-for cand in /usr/local/bin/node /usr/bin/node; do
-  [ -n "$NODE" ] && break
-  [ -x "$cand" ] && NODE="$cand"
+# Per-model token/cost (main session + subagents) - fail-open, never breaks
+# the line. R6 CUTOVER: this shelled out to `node statusline-usage.mjs`; that
+# script is now `bee dev statusline`, read from the repo's own vendored
+# binary. No binary (or no repo) simply drops the segment, exactly as a
+# missing node did.
+BEE=""
+for cand in "${CLAUDE_PROJECT_DIR:-.}/.bee/bin/bee" "${CLAUDE_PROJECT_DIR:-.}/.bee/bin/bee.exe"; do
+  [ -n "$BEE" ] && break
+  [ -x "$cand" ] && BEE="$cand"
 done
-if [ -n "$NODE" ]; then
-  usage_seg=$(echo "$input" | "$NODE" "$(dirname "${BASH_SOURCE[0]}")/statusline-usage.mjs" 2>/dev/null)
-  [ -n "$usage_seg" ] && line="${line}\n${yellow}${usage_seg}${reset}"
+[ -n "$BEE" ] || BEE=$(command -v bee || true)
+if [ -n "$BEE" ]; then
+  usage_seg=$(echo "$input" | "$BEE" dev statusline 2>/dev/null)
+  [ -n "$usage_seg" ] && line="${line}
+${yellow}${usage_seg}${reset}"
 fi
 
 printf '%b\n' "$line"

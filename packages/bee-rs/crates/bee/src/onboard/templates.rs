@@ -144,6 +144,10 @@ pub fn claude_md_template() -> String {
 
 pub const CODEX_TRANSPORT_DIAGNOSTIC: &str = "bee: hook transport unavailable (no git root)";
 
+/// rust-port R6: the binary is the only runtime, so "no binary" is its own
+/// visible fail-open arm rather than a silent node fallback.
+pub const CODEX_BINARY_MISSING_DIAGNOSTIC: &str = "bee: hook binary missing (.bee/bin/bee)";
+
 pub const CODEX_STATUS_LINE_BLOCK: &str = "status_line = [\"current-dir\", \"git-branch\", \"model-with-reasoning\", \"context-remaining\", \"five-hour-limit\", \"weekly-limit\", \"used-tokens\"]\nstatus_line_use_colors = true\n";
 
 /// onboard_bee.mjs COMMAND_KEYS (l. 2592) — its own copy of state.mjs's list.

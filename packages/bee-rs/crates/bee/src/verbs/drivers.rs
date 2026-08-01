@@ -172,7 +172,7 @@ use crate::state::read_config_raw;
 use crate::verbs::reservations::{
     finish, js_is_ws, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
 };
-use crate::verbs::emit_no_root_error;
+use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{
     release_reservations_for_agent, reserve_path_atomic, Err2, ReserveOutcome,
 };
@@ -1105,7 +1105,7 @@ fn check_cell_claim_ownership(cell: &Value, worker: &str) -> Ownership {
             status,
             owner: Value::Null,
             reason: format!(
-                "cell \"{id}\" is \"{status_str}\", not \"claimed\" — dispatch prepare requires a claimed cell (run bee.mjs cells claim or cells claim-next first). Pass --force-ownership to override (audited)."
+                "cell \"{id}\" is \"{status_str}\", not \"claimed\" — dispatch prepare requires a claimed cell (run bee cells claim or bee cells claim-next first). Pass --force-ownership to override (audited)."
             ),
         };
     }
@@ -1971,7 +1971,9 @@ fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "dispatch prepare", use_json, t0, &why));
+        }
         Roots::None => {
             return Some(emit_no_root_error(&cwd, "dispatch prepare", use_json, t0));
         }
@@ -2785,7 +2787,9 @@ fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "close", use_json, t0, &why))
+        }
         Roots::None => return Some(emit_no_root_error(&cwd, "close", use_json, t0)),
     };
     if feature_has_lane_record(&root, &feature) {
@@ -4063,7 +4067,7 @@ mod tests {
         let o = check_cell_claim_ownership(&open, "w");
         assert!(!o.ok);
         assert_eq!(o.code, Some("not_claimed"));
-        assert_eq!(o.reason, "cell \"c-1\" is \"open\", not \"claimed\" — dispatch prepare requires a claimed cell (run bee.mjs cells claim or cells claim-next first). Pass --force-ownership to override (audited).");
+        assert_eq!(o.reason, "cell \"c-1\" is \"open\", not \"claimed\" — dispatch prepare requires a claimed cell (run bee cells claim or bee cells claim-next first). Pass --force-ownership to override (audited).");
 
         let foreign = json!({"id": "c-1", "status": "claimed", "trace": {"worker": "other"}});
         let o = check_cell_claim_ownership(&foreign, "w");

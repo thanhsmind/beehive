@@ -317,7 +317,7 @@ The preamble's `### Critical patterns (digest)` and `### Recent decisions` secti
 
 Note the state layer in the orientation summary. Which layer that is depends on one predicate — `bundleMode` (`docs/knowledge/` holding at least one concept that actually parses; a directory alone is not a bundle). Both branches below are live guidance, not a migration path:
 
-- **With a bundle — the reading order is `bundle → decisions → history`.** Read `docs/knowledge/areas/<area>/` FIRST: its `index.md` names the area's concepts, and each concept states the subject it is authoritative for. Then decisions for the why; `docs/history/` only for archaeology. `docs/specs/` is named for exactly one job — the **read-only compatibility surface**: a legacy citation like `docs/specs/<area>.md#R7` resolves through that file's pointer stub (its anchor map) to the concept that owns the anchor now. Never send an agent there for current truth, and never write new content there — `scripts/okf_specs_fence.mjs` fails the chain when new prose lands under `docs/specs/`. `docs/specs/reading-map.md` stays the hand-written "where does X live" map and points at the bundle. When an area has no overview concept, offer a `bee-capturing` bootstrap pass to author one **in the bundle** — user-approved, never silent, never auto-run.
+- **With a bundle — the reading order is `bundle → decisions → history`.** Read `docs/knowledge/areas/<area>/` FIRST: its `index.md` names the area's concepts, and each concept states the subject it is authoritative for. Then decisions for the why; `docs/history/` only for archaeology. `docs/specs/` is named for exactly one job — the **read-only compatibility surface**: a legacy citation like `docs/specs/<area>.md#R7` resolves through that file's pointer stub (its anchor map) to the concept that owns the anchor now. Never send an agent there for current truth, and never write new content there. `docs/specs/reading-map.md` stays the hand-written "where does X live" map and points at the bundle. When an area has no overview concept, offer a `bee-capturing` bootstrap pass to author one **in the bundle** — user-approved, never silent, never auto-run.
 - **With no bundle.** When `docs/specs/` exists, note it in the orientation summary. Before working in any area, the reading order is **spec → decisions → history**: read `docs/specs/<area>.md` (what the area does now) before its code, decisions for the why, `docs/history/` only for archaeology. `docs/specs/reading-map.md` answers "where does X live" before any broad grep. When `docs/specs/` lacks `system-overview.md` or `reading-map.md`, offer a `bee-capturing` bootstrap pass to skeleton the missing file(s) — user-approved, never silent, never auto-run. The fence never fires here and nothing in this branch mentions a bundle: a repo that never migrated keeps working exactly as before.
 
 ### Worktree routing
@@ -576,7 +576,7 @@ in `references/go-mode.md` ("Headless Go Mode").
 
 ### CI status gate (before the first claim)
 
-**Before your first `cells claim`, never on arrival.** Not one of the four gates, and not a scout step: the trigger is the *claim*. Before your first `cells claim` of a session, if `.bee/config.json` records `commands.verify`, check CI instead of running it locally — the latest full-verify run on the base branch (`gh run list`/`gh api`) plus any open `verify-red` issue. Red on either is surfaced to the user and becomes its own fix-first tiny cell — **never build on red**. No local full-suite run is ever owed: the dev loop runs registry-scoped tests only (`commands.test` / `run_verify.mjs --impacted`), and the full suite is CI-owned on the host workflow's own cadence, auto-filing a `verify-red` issue when red. A session that claims no cell owes no CI check. When no commands are recorded, `bee_status` warns and the capture belongs to exploring or onboarding, never to guesswork.
+**Before your first `cells claim`, never on arrival.** Not one of the four gates, and not a scout step: the trigger is the *claim*. Before your first `cells claim` of a session, if `.bee/config.json` records `commands.verify`, check CI instead of running it locally — the latest full-verify run on the base branch (`gh run list`/`gh api`) plus any open `verify-red` issue. Red on either is surfaced to the user and becomes its own fix-first tiny cell — **never build on red**. No local full-suite run is ever owed: the dev loop runs `commands.test` only, and the full suite is CI-owned on the host workflow's own cadence, auto-filing a `verify-red` issue when red. A session that claims no cell owes no CI check. When no commands are recorded, `bee status` warns and the capture belongs to exploring or onboarding, never to guesswork.
 
 ### Delegation contract (fan-out: decide-altitude vs gather-altitude)
 
@@ -640,6 +640,7 @@ Cells run `commands.test` — the project's one declared test path — at finish
 
 **Suite rent.** A suite is not immortal: every guard suite pays rent by catching real defects. A suite that has not caught one in ~6 months is a demotion candidate — moved out of the local/impacted hot path to the CI/nightly tier by a RECORDED decision (never a silent delete; the suite still runs, just not on every developer loop). `bee-grooming` owns the audit: read the verify logs for which suites have gone red for a real defect (environment reds don't count as rent paid), list the never-fired tenants, and propose demotions. Institutional/meta guards (fences, parity checks, doctrine gates) are the usual tenants — product-behavior suites earn rent more often and mostly stay.
 
+<!-- bee:only codex -->
 ### Native Codex subagent tending
 
 For every bee-owned native Codex subagent flow, including ordinary delegated
@@ -662,6 +663,7 @@ reservation release; every running agent, claim, and reservation stays owned.
 This refines, rather than replaces, the ban on file/scratchpad polling for
 harness-managed subagents. External process and artifact polling keeps its own
 contract and remains outside this native-agent rule.
+<!-- bee:end -->
 
 ## Question Format
 

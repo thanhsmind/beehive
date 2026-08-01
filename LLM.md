@@ -12,7 +12,7 @@
 This repository is managed by **bee** — a lean, gated agent workflow harness. bee's central law:
 **no source code is touched without first routing through the bee workflow.** This is not
 etiquette; it is enforced mechanically — by hooks on Claude Code and by the vendored
-`bee.mjs` CLI on every runtime. An edit a guard failed to block is still **not** an approved edit.
+`bee` binary on every runtime. An edit a guard failed to block is still **not** an approved edit.
 
 If `.bee/onboarding.json` exists, bee is installed here — operate under §2–§4. If it does not,
 bee is not installed yet — go to **§5 (Install)** first.
@@ -42,7 +42,7 @@ the cell(s), pass the gates, then execute. A tiny fix stays tiny — but it stil
 3. **Capping requires proof.** A cell caps only with a passing, *recorded* verify — a runnable
    command and what it printed — plus a non-empty `--files` list on small+ lanes.
 4. **One commit per cell**, with the cell id in the commit message.
-5. **Never hand-edit `.bee/*.json(l)`.** Every state change goes through its `bee.mjs` CLI verb.
+5. **Never hand-edit `.bee/*.json(l)`.** Every state change goes through its `bee` CLI verb.
 6. **Reserve files before write-heavy swarm work**; on conflict, return `[BLOCKED]` — never
    write anyway.
 7. **Read the spec before the code:** `docs/specs/<area>.md` → decisions → history.
@@ -58,7 +58,7 @@ the cell(s), pass the gates, then execute. A tiny fix stays tiny — but it stil
 ## 4. Your first five minutes (session start / after compaction)
 
 1. Read [`AGENTS.md`](AGENTS.md) (and again after any context compaction).
-2. `node .bee/bin/bee.mjs status --json` — orient on phase, mode, gates, cells, warnings.
+2. `.bee/bin/bee status --json` — orient on phase, mode, gates, cells, warnings.
 3. If `.bee/config.json` records `commands.verify`, run it once as a **baseline** before
    claiming any cell. A red baseline is its own fix-first cell — never build on red.
 4. If `.bee/HANDOFF.json` exists, surface it and **wait** — never auto-resume a pause handoff.
@@ -69,7 +69,9 @@ decision answers, and privacy approvals — everything mechanical is yours to ru
 
 ## 5. Installing bee correctly
 
-Requirement: **Node.js 18+** on `PATH` (`node --version`). Full guide: [`INSTALL.md`](INSTALL.md).
+Requirement: **a Rust toolchain** (`cargo --version`). bee ships as one native binary and is
+built from the source checkout per machine — no prebuilt binaries live in the repo
+(decision 1f4262ca). Node.js is NOT required. Full guide: [`INSTALL.md`](INSTALL.md).
 
 **One command (recommended)** — `cd` into your target project first; it shows the plan and asks
 before writing (`-y` skips prompts):
@@ -83,12 +85,20 @@ Windows PowerShell and all flags (`--dry-run`, `--runtime`, `--no-hooks`, …): 
 **From a local checkout of bee**, onboard a repo directly (plan first, then apply):
 
 ```bash
-node packages/bee/scripts/onboard_bee.mjs --repo-root <your-repo> --json    # plan, writes nothing
-node packages/bee/scripts/onboard_bee.mjs --repo-root <your-repo> --apply   # install
+cargo build --release --manifest-path packages/bee-rs/Cargo.toml            # build the binary once
+BEE=packages/bee-rs/target/release/bee                                      # (bee.exe on Windows)
+$BEE onboard --repo-root <your-repo> --json    # plan, writes nothing
+$BEE onboard --repo-root <your-repo> --apply   # install
+```
+
+Then put the binary where the host repo's hooks look for it:
+
+```bash
+cp packages/bee-rs/target/release/bee <your-repo>/.bee/bin/bee   # bee.exe on Windows
 ```
 
 Onboarding installs: the `AGENTS.md` BEE block (content outside the markers untouched), a
-`CLAUDE.md` `@AGENTS.md` import, `.bee/` (runtime + vendored `bee.mjs`), and the `bee-*` skills
+`CLAUDE.md` `@AGENTS.md` import, `.bee/` (runtime + the vendored `bee` binary), and the `bee-*` skills
 into `<repo>/.claude/skills` (Claude Code) and `<repo>/.agents/skills` (Codex). It is
 idempotent — re-running reports `up_to_date`. Existing state, decisions, and cells are never
 overwritten.
@@ -96,11 +106,11 @@ overwritten.
 **Verify the install:**
 
 ```bash
-node .bee/bin/bee.mjs status --json          # expect onboarding.installed: true
-node .bee/bin/bee.mjs cells claim --id x --worker w1   # expect refusal: gate "execution" not approved  ✔ CLI is armed
+.bee/bin/bee status --json          # expect onboarding.installed: true
+.bee/bin/bee cells claim --id x --worker w1   # expect refusal: gate "execution" not approved  ✔ CLI is armed
 ```
 
-**Update:** pull the new bee, re-run `onboard_bee.mjs … --apply` per repo (it detects drift and
+**Update:** pull the new bee, rebuild (`cargo build --release`), re-run `bee onboard … --apply` per repo (it detects drift and
 refreshes). Keep hosts on the same version as the bee source.
 
 ## 6. Compliance litmus

@@ -237,9 +237,6 @@ fn prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Pre> {
                 &message, cmd, use_json, t0,
             )))
         }
-        // A `.git` that vanished between existsSync and statSync: Node's own
-        // throw is V8-worded. Still delegated.
-        Resolution::Exotic => return None,
         Resolution::Unresolved => {
             return Some(Pre::Emitted(emit_no_root_error(&cwd, cmd, use_json, t0)))
         }

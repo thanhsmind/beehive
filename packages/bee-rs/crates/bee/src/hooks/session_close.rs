@@ -97,7 +97,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
     let Some(root) = ctx.root.clone() else {
         return Ok(());
     };
-    if !root.join(".bee").join("bin").join("lib").join("state.mjs").exists() {
+    if !crate::hooks::adapter::bee_installed(&root) {
         return Ok(());
     }
     // PreCompact (intent anchor + compaction record + forced nudges): the
@@ -185,8 +185,6 @@ fn advisory(
     parts: &mut Vec<String>,
     stderr: &mut String,
 ) -> Result<AdvisoryOutcome, Flow> {
-    let lib = |name: &str| root.join(".bee").join("bin").join("lib").join(name);
-
     // hookEnabled (config.hooks['session-close'] !== false).
     if matches!(config.get("hooks").and_then(|h| h.get(HOOK_NAME)), Some(Value::Bool(false))) {
         return Ok(AdvisoryOutcome::Disabled);
@@ -194,17 +192,17 @@ fn advisory(
 
     // GitHub #18 — the mechanical bypass net takes precedence over every
     // advisory; when it fires we emit ONLY the block.
-    if let Some(reason) = maybe_bypass_block(root, ctx, config, session_id, &lib, stderr)? {
+    if let Some(reason) = maybe_bypass_block(root, ctx, config, session_id, stderr)? {
         return Ok(AdvisoryOutcome::Block(reason));
     }
 
     // (PreCompact-only anchor/record parts never run here — that event
     // delegates to Node before this function.)
 
-    if let Some(msg) = maybe_capture_queue_nudge(root, &lib)? {
+    if let Some(msg) = maybe_capture_queue_nudge(root)? {
         parts.push(msg);
     }
-    if let Some(msg) = maybe_capture_nudge(root, config, &lib, stderr)? {
+    if let Some(msg) = maybe_capture_nudge(root, config, stderr)? {
         parts.push(msg);
     }
 
@@ -217,18 +215,11 @@ fn advisory(
     let phase = if js_truthy(&phase_val) { phase_val } else { Value::String("idle".into()) };
 
     if phase == Value::String("idle".into()) || phase == Value::String("compounding-complete".into()) {
-        if let Some(msg) = maybe_decision_nudge(root, &lib)? {
+        if let Some(msg) = maybe_decision_nudge(root)? {
             parts.push(msg);
         }
     } else if !read_handoff_truthy(root)? {
-        // Dynamic imports of cells.mjs / reservations.mjs: a missing vendored
-        // module throws in Node → main's catch (crash log + emit collected).
-        if !lib("cells.mjs").exists() {
-            return Err(Flow::Crash("Error: Cannot find module .bee/bin/lib/cells.mjs".into()));
-        }
-        if !lib("reservations.mjs").exists() {
-            return Err(Flow::Crash("Error: Cannot find module .bee/bin/lib/reservations.mjs".into()));
-        }
+        // CUTOVER: cells.mjs / reservations.mjs presence gates stood here.
         let claimed = list_claimed_cells(root)?;
         let active = list_active_reservations(root, ctx);
 
@@ -803,12 +794,7 @@ fn pending_capture_stub_ids(root: &Path) -> Vec<String> {
 
 fn maybe_capture_queue_nudge(
     root: &Path,
-    lib: &impl Fn(&str) -> PathBuf,
 ) -> Result<Option<String>, Flow> {
-    // Dynamic imports: capture.mjs then inject.mjs — missing => caught => null.
-    if !lib("capture.mjs").exists() || !lib("inject.mjs").exists() {
-        return Ok(None);
-    }
     let pending = pending_capture_stub_ids(root);
     if pending.is_empty() {
         return Ok(None);
@@ -924,7 +910,6 @@ fn newest_md(dir: &Path, recursive: bool) -> Result<f64, ()> {
 fn maybe_capture_nudge(
     root: &Path,
     config: &Map<String, Value>,
-    lib: &impl Fn(&str) -> PathBuf,
     stderr: &mut String,
 ) -> Result<Option<String>, Flow> {
     // state.mjs is import-gated by the wrapper already; resolveProductRoot may
@@ -934,9 +919,6 @@ fn maybe_capture_nudge(
     let knowledge_dir = product_root.join("docs").join("knowledge");
     if !specs_dir.exists() && !knowledge_dir.exists() {
         return Ok(None);
-    }
-    if !lib("decisions.mjs").exists() || !lib("inject.mjs").exists() {
-        return Ok(None); // dynamic import throw → catch → null
     }
     let Some((id, date)) = newest_active_decision(root) else { return Ok(None) };
     let decision_ts = if js_truthy(&date) { js_date_parse_value(&date) } else { None };
@@ -958,9 +940,6 @@ fn maybe_capture_nudge(
     mark_injected(root, "capture-nudge", &hash)?;
     // knowledge.mjs is imported AFTER the mark in the .mjs — a missing module
     // throws there and the nudge is consumed without being emitted.
-    if !lib("knowledge.mjs").exists() {
-        return Ok(None);
-    }
     if bundle_mode(root, config, stderr) {
         return Ok(Some(
             "bee capture nudge (decision 0003): the newest decision is more recent than every \
@@ -1025,7 +1004,7 @@ fn nudge_allowed(path: &str) -> bool {
     path.starts_with(".bee/") || path.starts_with("docs/") || path.starts_with("plans/") || path == "AGENTS.md"
 }
 
-fn maybe_decision_nudge(root: &Path, lib: &impl Fn(&str) -> PathBuf) -> Result<Option<String>, Flow> {
+fn maybe_decision_nudge(root: &Path) -> Result<Option<String>, Flow> {
     let Ok(out) = git_status_porcelain(root) else { return Ok(None) };
     let mut changed: Vec<String> = out
         .split('\n')
@@ -1047,9 +1026,6 @@ fn maybe_decision_nudge(root: &Path, lib: &impl Fn(&str) -> PathBuf) -> Result<O
     if changed.is_empty() {
         return Ok(None);
     }
-    if !lib("decisions.mjs").exists() || !lib("inject.mjs").exists() {
-        return Ok(None);
-    }
     let last_ts = newest_active_decision(root)
         .and_then(|(_, date)| if js_truthy(&date) { js_date_parse_value(&date) } else { Some(0.0) })
         .unwrap_or(0.0);
@@ -1066,7 +1042,7 @@ fn maybe_decision_nudge(root: &Path, lib: &impl Fn(&str) -> PathBuf) -> Result<O
     Ok(Some(format!(
         "bee decision review: {count} source file(s) changed with no bee flow active \
 and no recent decision logged. Before finishing, ask the user: is there a durable \
-decision or convention here worth recording? If yes: node .bee/bin/bee.mjs decisions log \
+decision or convention here worth recording? If yes: bee decisions log \
 --decision \"...\" --rationale \"...\" (or a dated learning in docs/history/learnings/). \
 If not, carry on."
     )))
@@ -1089,7 +1065,6 @@ fn maybe_bypass_block(
     ctx: &HookContext,
     config: &Map<String, Value>,
     session_id: Option<&str>,
-    lib: &impl Fn(&str) -> PathBuf,
     stderr: &mut String,
 ) -> Result<Option<String>, Flow> {
     if ctx.event != "Stop" {
@@ -1118,10 +1093,6 @@ fn maybe_bypass_block(
     if record.gates.get(gate) == Some(&Value::Bool(true)) {
         return Ok(None); // gate already passed — nothing to force
     }
-    // Dynamic inject.mjs import — a missing module throws to main's catch.
-    if !lib("inject.mjs").exists() {
-        return Err(Flow::Crash("Error: Cannot find module .bee/bin/lib/inject.mjs".into()));
-    }
     let key = "bypass-stop-net";
     let hash = format!("{}:{phase}:{gate}:{level}", session_id.unwrap_or("nosession"));
     if !should_inject(root, key, &hash)? {
@@ -1133,7 +1104,7 @@ fn maybe_bypass_block(
     let consult_sentence = if mode == Value::String("high-risk".into()) {
         "High-risk execution requires a live advisor consult first: resolve the advisor from \
 config (models.<runtime>.advisor), run it read-only with the evidence bundle on stdin, then \
-record it via node .bee/bin/bee.mjs state advisor-ref record --advisor \"<identity>\" \
+record it via bee state advisor-ref record --advisor \"<identity>\" \
 --digest-file <path> (the gate throws without a non-stale advisor_ref, per AO3/AO13) — do \
 this BEFORE setting the gate. "
     } else {
@@ -1143,8 +1114,8 @@ this BEFORE setting the gate. "
         "⚡ GATE BYPASS ({level}): you are stopping mid-{phase} with Gate {gate_no} \
 ({gate}) still pending, but bypass level \"{level}\" requires auto-approval at \
 this lane — do NOT ask the human. {consult_sentence}Set the gate yourself now: \
-node .bee/bin/bee.mjs state gate --name {gate} --approved true ; log a one-line \
-audit decision (node .bee/bin/bee.mjs decisions log --decision \"auto-approved Gate \
+bee state gate --name {gate} --approved true ; log a one-line \
+audit decision (bee decisions log --decision \"auto-approved Gate \
 {gate_no} (bypass): <choice>\" --rationale \"<why>\"); post the short \"⚡ auto-approved \
 Gate {gate_no} (bypass)\" line; then CONTINUE to the next phase. Do not re-emit the \
 gate question. (If you genuinely need information only the human holds — not a \

@@ -72,7 +72,7 @@
 
 mod agents;
 mod apply;
-mod hooks_wiring;
+pub(crate) mod hooks_wiring;
 mod merge;
 mod migration;
 mod notices;

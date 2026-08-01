@@ -369,3 +369,81 @@ session ends shippable.
 3. Binary distribution at R6: commit prebuilt binaries per platform into the frame, or
    require `cargo` on hosts (fits source-checkout decision 1f4262ca)? Recommendation: require
    cargo; prebuilt binaries in-repo bloat history.
+
+## R6 cutover — what landed, and the one step that did NOT (2026-08-01)
+
+**Landed and green (969 Rust tests, `cargo test --release -- --test-threads=1`).**
+
+1. **The fourth wiring surface is closed.** `renderCodexHookEntries` — the HOST
+   Codex projection — launches the binary on both legs, in BOTH twins
+   (`packages/bee/scripts/onboard_bee.mjs` and
+   `crates/bee/src/onboard/hooks_wiring.rs`), proven byte-identical by running
+   each against its own fixture repo and diffing `.codex/hooks.json`. The
+   recognizer (`isBeeCodexHookEntry` / `is_bee_codex_hook_entry`) was widened to
+   the binary spelling in both, so a re-render REPLACES the old node entry
+   instead of stacking a double-firing twin. Idempotence and stale-entry
+   migration proven on a real fixture.
+   The Claude repo projection (`repoHookCommand`) lost its node arm too: a host
+   with no binary now gets the same runtime-detecting `for b in …` loop the
+   plugin projection uses, ending in a VISIBLE `bee: hook binary missing`.
+
+2. **The delegate is gone.** `js_fallback.rs` is deleted; `main.rs` ends at
+   `router::emit_unsupported_shape`, which names the attempted argv, adds the
+   owning group's real sub-verb list read out of `REGISTRY_PAYLOAD`, and exits
+   1 (`{"error": …}` on stdout when `--json` was asked for). `state show` and
+   `backlog list` — the two shapes found in live use — now answer with `bee
+   state takes: set, gate, …`. The hook delegate became `emit_undecidable`:
+   exit 0 (a hook may never fail closed on infrastructure) with a loud stderr
+   line saying the guard did NOT run on that payload.
+
+   `roots.rs` grew a third door and lost `NeedsNode` entirely:
+   * FULL (`resolve_store_root_worktree`) — worktree/status/orient/reservations.
+   * WIDE (`resolve_store_root_any`, new) — help, status --brief, capture,
+     backlog, feedback, knowledge, intent, reviews, tmp, test. Audited to read
+     nothing but the store root, so both grant states are served.
+   * NARROW (`resolve_store_root`) — state, close, cells, dispatch prepare,
+     decisions. Now SERVES an ungranted worktree (where `storeRoot == mainRoot`,
+     making it identical to an ordinary checkout at mainRoot — a proof, not a
+     widening) and REFUSES a granted one by name, printing the main checkout to
+     run from. `bee worktree new` produces an ungranted checkout, so the refusal
+     only fires after an explicit `bee worktree register`.
+   * `LinkInvalid` is EMITTED everywhere now (Node's own message, including the
+     timings.jsonl append Node skipped) instead of delegated. `Exotic` retired.
+
+3. **Distribution.** INSTALL.md, LLM.md and README require a Rust toolchain and
+   a `cargo build --release`; the Node 18+ preflight is gone from both
+   installers, replaced by a cargo preflight, a real `cargo build --release`,
+   and a copy of the built binary into `<target>/.bee/bin/`. `.github/workflows`
+   run cargo (canary.yml deleted with the `.mjs` probe it existed to run;
+   windows.yml now runs the WHOLE suite, unexcluded). The statusline scripts
+   call `bee dev statusline`.
+
+4. **catalog.mjs — DECIDED: ported to Rust**, not kept and not hand-maintained.
+   `crates/bee/src/devtools/hook_manifests.rs` owns the catalog; `bee dev
+   render-hook-manifests --write|--check` regenerates the three projections and
+   `hook_manifests_match_disk` is the drift gate inside `cargo test`. All three
+   files were re-rendered with no `exec node …` arm. The Codex REPO projection
+   now CALLS onboard's renderer instead of duplicating it, so the
+   "two-renderers-one-file" trap that once broke a release cannot fire.
+
+**NOT DONE — the physical deletion of the `.mjs` trees.** Stopped deliberately
+at a clean boundary: the tree is green, and every wiring surface, hook and
+runtime path has been moved OFF the Node tree (nothing consults it any more),
+but the files are still on disk. Deleting them today breaks the build and
+silently guts several checks. Remaining blockers, each measured:
+
+| # | Blocker | Why it blocks |
+|---|---|---|
+| 1 | `devtools/prompts.rs:53` `include_str!(lib/prompt-renderer.mjs)` | build error; its pin test goes with it |
+| 2 | `devtools::bee_source_root()` markers = `packages/bee/lib/state.mjs` + `scripts/run_verify.mjs` | every `bee dev …` verb silently becomes "unsupported command shape" |
+| 3 | `onboard::source::locate()` marker = `packages/bee/scripts/onboard_bee.mjs`; `read_source_release_identity` reads `BEE_VERSION` out of `lib/state.mjs`; `onboard/skills.rs` uses the same file as its identity anchor | `bee onboard` becomes unreachable. **Needs an owner decision: where does `BEE_VERSION` live now?** (`.claude-plugin/plugin.json` is the obvious candidate — the installer already reads it.) |
+| 4 | onboard's vendoring plan (`plan.rs` `list_template_helpers` / `list_template_lib_modules` / `list_plugin_hooks`) | the lists go empty. `remove_lib` then DELETES every host's `.bee/bin/lib/*.mjs` (correct, and wanted) — but there is no `remove_repo_hook` action at all, so stale `.bee/bin/hooks/*.mjs` linger on hosts forever |
+| 5 | `devtools/release_manifest.rs` inventory roots: `.bee/bin/lib/*.mjs` (REQUIRED) and `scripts/tests/test_verify_manifest.mjs` + `test_release_tuple.mjs` (REQUIRED) | hard refuse. Needs its scope redrawn and `docs/history/codex-harness-hardening/release-manifest.json` (248 `.mjs` records) regenerated |
+| 6 | `devtools/impact_registry.rs` derives its suite list by PARSING `scripts/run_verify.mjs` | the impact registry has no subject once the `.mjs` suites are gone. **Decision needed: retire the tool + `scripts/impact-registry.json` + `verify-cache-inputs.json`, or re-point it at the cargo suite** |
+| 7 | `verbs/cells.rs` `REGEN_GUARDS` parses `scripts/release_manifest.mjs` and `scripts/ledger_parity.mjs` source to derive covered roots | the regen obligation on `cells cap` silently stops firing |
+| 8 | `devtools/skill_trees.rs` walks `skills/**` for all file types | deleting `skills/bee-herding/scripts/*.mjs` fails `render_matches_the_committed_trees` unless the four rendered projections are regenerated in the same change |
+| 9 | `tests/instruction_laws.rs` `SCRIPT_TREE` (`min_files: 10` over `scripts/**.mjs`) | `scripts/` survives (install.sh/.ps1/JSON), so the floor fires `IMPLAUSIBLY SMALL` rather than skipping — two laws go red, and a third (`SELF_REFERENTIAL`) goes half-vacuous |
+| 10 | `tests/hook_contracts.rs` `copy_vendored_lib` panics on the real `.bee/bin/lib/*.mjs` | the whole hook-contract matrix dies |
+| 11 | `scripts/install.sh` / `install.ps1` still call `plugin_distribution.mjs` (unported) and use inline `node -e` for JSON | the installers cannot be Node-free until that helper is ported |
+
+Blockers 3, 5 and 6 carry owner-facing decisions; the rest are mechanical.

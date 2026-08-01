@@ -1,17 +1,19 @@
-// bee — Rust front door for the bee harness (strangler port, plans/rust-port.md).
+// bee — native front door for the bee harness (plans/rust-port.md, R6 cutover).
 //
-// Routing rule: argv shapes a native verb probe accepts are served in Rust;
-// everything else is delegated verbatim to `node packages/bee/bee.mjs` with
-// argv, stdin, stdout, stderr, and exit code passed through untouched
-// (contract C2: byte-identical output). A native probe that returns None has
-// produced NO output — the Node run owns the command end to end.
+// There is no second runtime. Until the cutover an argv shape no native probe
+// claimed was handed to `node packages/bee/bee.mjs`; that tree is gone, so a
+// probe returning None is now the END of the line and must SAY SO. Every door
+// in the tree follows the same rule: refuse out loud, never fall silent.
+//
+// Routing rule (unchanged): a verb serves only the argv shapes its port has
+// proven. What changed is the consequence of "not proven" — an emitted
+// `unsupported command shape` with a non-zero exit instead of a delegation.
 
 mod devtools;
 mod fsutil;
 mod herding;
 mod hooks;
 mod integration_queue;
-mod js_fallback;
 mod jsjson;
 mod lease_store;
 mod link_invalid;
@@ -35,6 +37,6 @@ fn main() -> ExitCode {
 
     match router::try_native(&args, t0) {
         Some(code) => code,
-        None => js_fallback::delegate(&args),
+        None => router::emit_unsupported_shape(&args),
     }
 }

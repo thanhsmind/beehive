@@ -638,7 +638,7 @@ pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
         .filter(|f| args.contains(f))
         .collect();
     if flags.len() != 1 {
-        eprintln!("usage: release_manifest.mjs (--write | --check | --selftest)");
+        eprintln!("usage: bee dev release-manifest (--write | --check | --selftest)");
         return Some(ExitCode::FAILURE);
     }
     let result = match flags[0] {
@@ -747,7 +747,7 @@ mod tests {
             // Same condition Node's `--check` reports; recorded, not hidden.
             eprintln!(
                 "note: committed manifest lags the tree on {hash_lag} file(s) — \
-                 `node scripts/release_manifest.mjs --check` reports the same set"
+                 `bee dev release-manifest --check` reports the same set"
             );
         }
     }

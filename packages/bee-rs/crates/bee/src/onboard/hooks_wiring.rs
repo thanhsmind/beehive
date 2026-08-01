@@ -14,7 +14,9 @@
 // vendored `.bee/bin/bee[.exe]` keeps byte-identical node wiring, and a
 // re-render replaces EITHER spelling instead of stacking duplicates.
 
-use super::templates::{CODEX_STATUS_LINE_BLOCK, CODEX_TRANSPORT_DIAGNOSTIC};
+use super::templates::{
+    CODEX_BINARY_MISSING_DIAGNOSTIC, CODEX_STATUS_LINE_BLOCK, CODEX_TRANSPORT_DIAGNOSTIC,
+};
 use super::util::{
     exists, home_dir, lstat_if_exists, read_json_if_exists, read_text_if_exists, split_lines,
 };
@@ -35,14 +37,22 @@ fn vendored_bee_binary(repo_root: &Path) -> Option<&'static str> {
 }
 
 /// repoHookCommand (l. 2249).
+///
+/// CUTOVER: both arms now name the binary. A host that ALREADY carries one
+/// keeps the exact single-token command R2 gave it (so a re-onboard of a
+/// post-R2 host is byte-unchanged); a host that has not built one yet gets the
+/// same runtime-detecting loop the plugin projection uses, ending in a VISIBLE
+/// fail-open. The old `node …/.bee/bin/hooks/<file>.mjs` arm is gone with the
+/// wrapper it named — rendering it would wire a hook that does nothing.
 fn repo_hook_command(file_name: &str, repo_root: Option<&Path>) -> String {
-    let binary = repo_root.and_then(vendored_bee_binary);
-    if let Some(binary) = binary {
-        let hook_name =
-            file_name.strip_prefix("bee-").unwrap_or(file_name).strip_suffix(".mjs").unwrap_or(file_name);
+    let hook_name =
+        file_name.strip_prefix("bee-").unwrap_or(file_name).strip_suffix(".mjs").unwrap_or(file_name);
+    if let Some(binary) = repo_root.and_then(vendored_bee_binary) {
         return format!("\"$CLAUDE_PROJECT_DIR\"/.bee/bin/{binary} hook {hook_name}");
     }
-    format!("node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/{file_name}")
+    format!(
+        "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\";          do [ -x \"$b\" ] && exec \"$b\" hook {hook_name}; done;          echo \"{CODEX_BINARY_MISSING_DIAGNOSTIC}\" >&2; exit 0"
+    )
 }
 
 fn repo_entry(file_name: &str, repo_root: Option<&Path>) -> Value {
@@ -177,10 +187,21 @@ pub fn merge_repo_settings(settings_path: &Path) -> Merged {
 
 // ── Codex repo projection (.codex/hooks.json) ──────────────────────────────
 
-/// repoOwnsHookCatalog (l. 2344): a repo that ships hooks/catalog.mjs IS bee,
-/// and that catalog — not this projection — owns its .codex/hooks.json.
+/// repoOwnsHookCatalog (l. 2344): a repo that ships the hook catalog IS bee,
+/// and that catalog — not this projection — owns its `.codex/hooks.json`.
+/// Writing this HOST projection into bee's own repo silently clobbers the
+/// catalog rendering; that is how a release once broke, and this self-skip is
+/// what prevents it.
+///
+/// CUTOVER: the catalog moved into the binary
+/// (devtools/hook_manifests.rs), so the marker is now the plugin projection it
+/// generates — `packages/bee/hooks/claude-hooks.json`, a file only bee ships.
+/// The two `catalog.mjs` locations stay as OR arms so a checkout still on an
+/// older bee (pre-cutover, or pre packages-restructure) is correctly
+/// self-identified: backward-compatible detection, never forceable.
 pub fn repo_owns_hook_catalog(repo_root: &Path) -> bool {
-    exists(&repo_root.join("packages").join("bee").join("hooks").join("catalog.mjs"))
+    exists(&repo_root.join("packages").join("bee").join("hooks").join("claude-hooks.json"))
+        || exists(&repo_root.join("packages").join("bee").join("hooks").join("catalog.mjs"))
         || exists(&repo_root.join("hooks").join("catalog.mjs"))
 }
 
@@ -189,33 +210,62 @@ pub fn runtime_covers_codex(runtime: &str) -> bool {
     runtime == "codex" || runtime == "both"
 }
 
-fn codex_hook_command(file_name: &str) -> String {
+/// `bee-write-guard.mjs` -> `write-guard`. Both arms derive from the hook
+/// NAME now that neither names a wrapper file.
+fn codex_hook_name(file_name: &str) -> &str {
+    file_name.strip_prefix("bee-").unwrap_or(file_name).strip_suffix(".mjs").unwrap_or(file_name)
+}
+
+/// codexHookCommand (l. 2364).
+///
+/// rust-port R6 (cutover): the HOST Codex projection was the FOURTH wiring
+/// surface and the last one still naming node. It launches the vendored
+/// binary — the only runtime — with a VISIBLE fail-open arm when the host has
+/// not built one, matching the no-git-root arm's discipline (spec R2:
+/// fail-open must be visible, never silent). Detection is at HOOK TIME, in the
+/// host's own shell, because `$r` does not exist until the command runs.
+pub(crate) fn codex_hook_command(file_name: &str) -> String {
+    let name = codex_hook_name(file_name);
     [
         "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"".to_string(),
         format!("[ -n \"$r\" ] || {{ echo \"{CODEX_TRANSPORT_DIAGNOSTIC}\" >&2; exit 0; }}"),
-        format!("exec node \"$r\"/.bee/bin/hooks/{file_name} --source=repo"),
+        format!(
+            "for b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook {name} --source=repo; done"
+        ),
+        format!("echo \"{CODEX_BINARY_MISSING_DIAGNOSTIC}\" >&2; exit 0"),
     ]
     .join("\n")
 }
 
-/// codexWindowsBootstrap (l. 2400): `node -e SCRIPT <fileName>` — the SCRIPT
+/// codexWindowsBootstrap (l. 2400): `node -e SCRIPT <name>` — the SCRIPT
 /// uses only single quotes and no `$`/`%`/backtick, so cmd.exe and
 /// powershell.exe parse the outer double-quoted argument identically.
-fn codex_hook_command_windows(file_name: &str) -> String {
+///
+/// rust-port R6: it now LAUNCHES THE BINARY and exits 0 silently when the host
+/// carries none — there is no wrapper left to spawn. This `node -e` launcher
+/// is the ONE surface Node cannot leave: the ban on `$`, `%` and backtick is
+/// also a ban on command substitution, so the command STRING cannot ask git
+/// for the repo root, and the binary can only resolve its own root once
+/// launched from a root-dependent path.
+pub(crate) fn codex_hook_command_windows(file_name: &str) -> String {
+    let name = codex_hook_name(file_name);
     let body = [
         "var cp=require('child_process');",
         "var path=require('path');",
+        "var fs=require('fs');",
         "var hook=process.argv[1];",
         "var root='';",
         "try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}",
         "if(!root){process.exit(0);}",
-        "var target=path.join(root,'.bee','bin','hooks',hook);",
-        "var r=cp.spawnSync(process.execPath,[target,'--source=repo'],{stdio:'inherit'});",
+        "var bin=path.join(root,'.bee','bin','bee.exe');",
+        "if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}",
+        "if(!fs.existsSync(bin)){process.exit(0);}",
+        "var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});",
         "if(r.error){process.exit(1);}",
         "process.exit(r.status===null?1:r.status);",
     ]
     .concat();
-    format!("node -e \"{body}\" {file_name}")
+    format!("node -e \"{body}\" {name}")
 }
 
 fn codex_entry(file_name: &str, status_message: &str) -> Value {
@@ -296,8 +346,14 @@ fn matches_codex_bee_command(command: &str) -> bool {
     false
 }
 
+/// rust-port R6: also recognizes the BINARY spelling (`.bee/bin/bee … hook
+/// <name>`), which carries no wrapper filename at all — without this arm a
+/// re-render stacks a second copy beside the first and every event
+/// double-fires.
 fn is_bee_codex_hook_entry(entry: &Value) -> bool {
-    entry_hook_commands(entry).iter().any(|c| matches_codex_bee_command(c))
+    entry_hook_commands(entry)
+        .iter()
+        .any(|c| matches_codex_bee_command(c) || (c.contains(".bee/bin/bee") && c.contains(" hook ")))
 }
 
 /// mergeCodexHooks (l. 2504).
@@ -472,13 +528,17 @@ fn bare_repo_relative(command: &str) -> bool {
 mod tests {
     use super::*;
 
+    /// CUTOVER: a host with no binary yet gets a runtime-detecting loop that
+    /// SAYS SO rather than a `node …bee-write-guard.mjs` command with nothing
+    /// behind it.
     #[test]
-    fn node_wiring_is_used_without_a_vendored_binary() {
+    fn a_host_without_a_binary_gets_a_detecting_loop_and_a_visible_diagnostic() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(
-            repo_hook_command("bee-write-guard.mjs", Some(dir.path())),
-            "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-write-guard.mjs"
-        );
+        let cmd = repo_hook_command("bee-write-guard.mjs", Some(dir.path()));
+        assert!(!cmd.contains(".mjs"), "{cmd}");
+        assert!(!cmd.contains("node "), "{cmd}");
+        assert!(cmd.contains("exec \"$b\" hook write-guard"), "{cmd}");
+        assert!(cmd.contains("bee: hook binary missing"), "{cmd}");
     }
 
     #[test]
@@ -606,6 +666,59 @@ mod tests {
             .unwrap()
             .starts_with("node -e \"var cp=require('child_process');"));
         std::fs::create_dir_all(hooks.parent().unwrap()).unwrap();
+        std::fs::write(&hooks, &merged.text).unwrap();
+        assert!(!merge_codex_hooks(&hooks).changed);
+    }
+
+    /// rust-port R6 — the FOURTH wiring surface. Both legs must name the
+    /// binary and NEITHER may name a `.mjs` wrapper: after the cutover there
+    /// is no wrapper to launch, so a surviving `exec node …/bee-*.mjs` arm is
+    /// a hook that silently does nothing on every event.
+    #[test]
+    fn codex_host_projection_launches_the_binary_on_both_legs() {
+        let posix = codex_hook_command("bee-write-guard.mjs");
+        assert_eq!(
+            posix,
+            concat!(
+                "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n",
+                "[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\n",
+                "for b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook write-guard --source=repo; done\n",
+                "echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0"
+            )
+        );
+        let win = codex_hook_command_windows("bee-write-guard.mjs");
+        assert!(win.ends_with("\" write-guard"), "{win}");
+        assert!(win.contains("'.bee','bin','bee.exe'"), "{win}");
+        assert!(win.contains("['hook',hook,'--source=repo']"), "{win}");
+        for leg in [&posix, &win] {
+            assert!(!leg.contains(".mjs"), "wrapper spelling survived: {leg}");
+            assert!(!leg.contains("/.bee/bin/hooks/"), "wrapper path survived: {leg}");
+        }
+        // R8a: one string, two shells. `$`, `%` and backtick are banned in the
+        // Windows leg or cmd.exe and powershell.exe stop agreeing on it.
+        for ch in ['$', '%', '`'] {
+            assert!(!win.contains(ch), "banned {ch:?} in commandWindows: {win}");
+        }
+    }
+
+    /// The whole point of the recognizer widening: a host whose
+    /// `.codex/hooks.json` still carries the OLD node wiring gets it REPLACED,
+    /// not stacked beside the new one.
+    #[test]
+    fn a_stale_node_codex_entry_is_replaced_not_stacked() {
+        let dir = tempfile::tempdir().unwrap();
+        let hooks = dir.path().join(".codex").join("hooks.json");
+        std::fs::create_dir_all(hooks.parent().unwrap()).unwrap();
+        std::fs::write(
+            &hooks,
+            r#"{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"exec node \"$r\"/.bee/bin/hooks/bee-prompt-context.mjs --source=repo"}]}]}}"#,
+        )
+        .unwrap();
+        let merged = merge_codex_hooks(&hooks);
+        let v: Value = serde_json::from_str(&merged.text).unwrap();
+        assert_eq!(v["hooks"]["UserPromptSubmit"].as_array().unwrap().len(), 1);
+        assert!(!merged.text.contains(".mjs"));
+        // …and the fresh render is itself idempotent.
         std::fs::write(&hooks, &merged.text).unwrap();
         assert!(!merge_codex_hooks(&hooks).changed);
     }

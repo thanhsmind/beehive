@@ -10,146 +10,39 @@ concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# R6 CUTOVER. This workflow used to run a hand-curated SUBSET of the .mjs
+# verify chain on windows-latest — the suites that had been read end to end
+# for path-separator and spawnSync assumptions — with a four-file
+# BEE_VERIFY_EXCLUDE of known-red ones. That whole apparatus existed because
+# the Node suites were the product's tests and only some of them were
+# Windows-honest.
+#
+# The Rust suite has no such split: it is ONE suite, it is the same
+# `commands.verify` a local session runs, and win32 is bee's primary platform
+# (the port fixed the two filed win32 defects outright). So this lane now runs
+# the entire suite, unexcluded. A Windows-only failure is a real failure here,
+# not a suite to add to a skip list.
+
 jobs:
-  # Only suites that were actually read end-to-end for path-separator and
-  # spawnSync assumptions run here. The bee-hive template suites (below),
-  # `test_portable_paths.mjs`, and `test_config_validate.mjs` all use
-  # node:path (path.join/path.resolve) consistently, never a hardcoded "/"
-  # or "\\" separator, and their only child_process calls are argv-array
-  # `spawnSync('git', [...])` / `spawnSync(process.execPath, [...])` (never a
-  # POSIX-shaped shell string) or in-process `node:worker_threads` — confirmed
-  # by reading the full source of each file plus its non-trivial imports
-  # (e.g. .bee/bin/lib/commands_detect.mjs already branches on
-  # `process.platform === 'win32'` for its own direct-invocation check).
-  #
-  # EXCLUDED from this lane — present in .bee/config.json `commands.verify`
-  # but NOT proven on Windows path/git semantics yet, honestly left out
-  # rather than shipped as assumed-green:
-  #   - scripts/test_worktree_store.mjs
-  #   - scripts/test_worktree_cli.mjs
-  #   - scripts/test_worktree_grant_resolve.mjs
-  #     (git worktree store/CLI/grant-resolve — worktree path handling
-  #     across drives/UNC paths is untested on Windows)
-  #   - scripts/test_installers_e2e.mjs (installer E2E — invokes install.sh,
-  #     bash-shaped, not install.ps1)
-  #   - packages/bee/hooks/test_hook_contracts.mjs
-  #   - packages/bee/hooks/test_write_guard.mjs
-  #   - packages/bee/hooks/test_model_guard.mjs
-  #     (hook contract suites — not yet read for Windows path assumptions)
-  #   - every other scripts/test_*.mjs and skills/*/scripts/test_*.mjs in
-  #     the verify chain not named above
-  # Add any of these to the matrix only after a real windows-latest run
-  # confirms it green. A full install.ps1 end-to-end run (actually invoking
-  # the installer against a scratch checkout, not just a syntax check) is a
-  # named backlog item, not covered by this workflow yet.
-  portable-suites:
+  verify-windows:
     runs-on: windows-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [20, 22]
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
         with:
-          node-version: ${{ matrix.node-version }}
+          workspaces: packages/bee-rs
 
-      - name: bee-hive template suites (auto-discovered, windows-portable subset)
-        # The former test suite monolith run in this job for a long time (and
-        # already vetted portable) was split into per-topic suites under
-        # packages/bee/tests/ (contention-split, cs-1/cs-2). The
-        # split relocated code — it did not rewrite it — so re-auditing every
-        # resulting suite for the same two hazards this job has always
-        # checked confirms the portability guarantee carries over: every file
-        # uses node:path (never a hardcoded "/" or "\\" separator), and the
-        # only child_process calls anywhere in the set are argv-array
-        # `spawnSync('git', [...])` / `spawnSync(process.execPath, [...])`
-        # (never a POSIX-shaped shell string); multi-process CLI/race
-        # fixtures use in-process `node:worker_threads` instead of real
-        # spawns, which has no shell or path-separator dependency at all.
-        #
-        # BEE_VERIFY_ROOT_FILTER reuses run_verify.mjs's own suite discovery,
-        # restricted to this one root, so a new suite added under
-        # packages/bee/tests/ is picked up here automatically —
-        # zero hand-maintained list to fall out of date, same as the
-        # unfiltered run. The zero-match guard in run_verify.mjs (refuses a
-        # silent trivial-green run if the root filter or the exclude list
-        # below ever empties the active suite set) stays intact — untouched
-        # by the exclusion added here.
-        #
-        # ============================================================
-        # LOUD WINDOWS-ONLY EXCLUSION (rel1710rc-2, v1.7.10-rc)
-        # STATUS as of windows-path-identity/wpi-3 (2026-07-27): NOT a
-        # single cause, still all 4 excluded, one contributing cause fixed.
-        # ============================================================
-        # The FIRST real windows-latest run of this job (windows.yml fix,
-        # cell 1710-1) exposed genuine, pre-existing Windows portability bugs
-        # in exactly these 4 suites — never proven broken before because
-        # nothing had ever actually run them on Windows. The windows-path-
-        # identity feature (wpi-1/wpi-2/wpi-3) later investigated these under
-        # the hypothesis "one mechanism, path-string identity" — that
-        # hypothesis was WRONG for two of the four, corrected below. Each
-        # suite is excluded here ONLY for this job, ONLY these 4, nothing
-        # else:
-        #   - packages/bee/tests/test_bee_cli.mjs
-        #     FIXED (wpi-1, packages/bee/lib/worktree-store.mjs:1110): the
-        #     linked-worktree reverse gitdir pointer mismatch on C:\ paths,
-        #     via canonicalPathsEqual (packages/bee/lib/path-identity.mjs).
-        #     STILL UNFIXED, path-identity never touched these — three
-        #     distinct, undiagnosed failure classes named in the original
-        #     P1 row, each its own backlog row filed by wpi-3:
-        #       - doctor-wording failures
-        #       - recovery-window/recovery-scan failures
-        #       - registry-example failures
-        #   - packages/bee/tests/test_bee_write_guard_hook.mjs
-        #     NO DIAGNOSED CAUSE. Never path-identity — that attribution in
-        #     the original finding was assertion, not evidence. Backlog row
-        #     filed by wpi-3 records the absence of a diagnosis as the
-        #     finding.
-        #   - packages/bee/tests/test_cells.mjs
-        #     DIAGNOSED, NOT FIXED (out of scope for windows-path-identity):
-        #     an independent PERMISSION-MODEL cause, not path-string.
-        #     test_cells.mjs:1634-1639 skips its write-failure simulation
-        #     when `process.geteuid?.() === 0`; `geteuid` is undefined on
-        #     win32 so the skip never fires, and Node's `chmod` on Windows
-        #     only sets the read-only attribute — it does not stop directory
-        #     entry creation — so the forced write succeeds and the
-        #     assertion fails. Backlog row filed by wpi-3 with this anchor.
-        #   - packages/bee/tests/test_misc.mjs
-        #     NO DIAGNOSED CAUSE, same as test_bee_write_guard_hook.mjs above.
-        # Reference: P1 backlog row filed 2026-07-21 ("4 template suites fail
-        # on real Windows: worktree gitdir pointer path, write-guard hook,
-        # cells, misc" — .bee/backlog.jsonl, CI run 29799623217); windows-
-        # path-identity's own backlog rows filed 2026-07-27 give each
-        # remaining cause (or its absence) its own row. Removing ANY one of
-        # these 4 from BEE_VERIFY_EXCLUDE is gated on a real windows-latest
-        # CI run showing that specific suite green — a local Linux pass is
-        # NOT evidence: these suites are excluded here precisely because
-        # Windows differs, so passing on Linux proves nothing about them —
-        # do NOT silently extend or shrink this list without a matching
-        # backlog row and, for a removal, a green Windows run to cite.
-        # ============================================================
-        env:
-          # Windows spawn overhead runs the git-heavy suites 2-4x slower than
-          # Linux (run 30270865821: test_worktree_store killed at the 300s
-          # default while green on Node 22; test_reviews 265s). 600s per suite;
-          # the job-level timeout-minutes still bounds the whole run.
-          BEE_VERIFY_SUITE_TIMEOUT_MS: "600000"
-          BEE_VERIFY_ROOT_FILTER: packages/bee/tests
-          BEE_VERIFY_EXCLUDE: >-
-            packages/bee/tests/test_bee_cli.mjs,
-            packages/bee/tests/test_bee_write_guard_hook.mjs,
-            packages/bee/tests/test_cells.mjs,
-            packages/bee/tests/test_misc.mjs
-        run: node scripts/run_verify.mjs
-
-      - name: portable paths guard
-        run: node scripts/tests/test_portable_paths.mjs
-
-      - name: config validate
-        run: node scripts/tests/test_config_validate.mjs
+      # `bee test` and several worktree suites shell out through POSIX sh;
+      # Git Bash ships with the runner. NOTE (found during the port): a bare
+      # `bash` spawn on Windows resolves through System32 first and launches
+      # WSL bash, not Git Bash — the runner passes an explicit PATH to the
+      # child for exactly this reason.
+      - name: Verify chain (full suite, no exclusions)
+        run: cargo test --release --manifest-path packages/bee-rs/Cargo.toml -- --test-threads=1
 
   install-ps1-syntax:
     runs-on: windows-latest

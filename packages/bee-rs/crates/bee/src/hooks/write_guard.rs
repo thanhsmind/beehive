@@ -78,50 +78,24 @@ const HOOK_NAME: &str = "write-guard";
 pub(crate) struct Nd;
 pub(crate) type R<T> = Result<T, Nd>;
 
-// ─── embedded vendored-lib byte gate ───────────────────────────────────────
-// The import closure of state.mjs + guards.mjs + validate-args.mjs +
-// command-registry.mjs (computed from the `from './x.mjs'` graph). Each entry
-// is byte-compared against <storeRoot>/.bee/bin/lib/<name> at runtime.
-
-const EMBEDDED_LIB: &[(&str, &str)] = &[
-    ("backlog.mjs", include_str!("../../../../../bee/lib/backlog.mjs")),
-    ("capture.mjs", include_str!("../../../../../bee/lib/capture.mjs")),
-    ("cells.mjs", include_str!("../../../../../bee/lib/cells.mjs")),
-    ("claims.mjs", include_str!("../../../../../bee/lib/claims.mjs")),
-    ("command-registry.mjs", include_str!("../../../../../bee/lib/command-registry.mjs")),
-    ("compaction.mjs", include_str!("../../../../../bee/lib/compaction.mjs")),
-    ("decisions.mjs", include_str!("../../../../../bee/lib/decisions.mjs")),
-    ("dispatch-guard.mjs", include_str!("../../../../../bee/lib/dispatch-guard.mjs")),
-    ("fsutil.mjs", include_str!("../../../../../bee/lib/fsutil.mjs")),
-    ("guards.mjs", include_str!("../../../../../bee/lib/guards.mjs")),
-    ("inject.mjs", include_str!("../../../../../bee/lib/inject.mjs")),
-    ("intent.mjs", include_str!("../../../../../bee/lib/intent.mjs")),
-    ("judge.mjs", include_str!("../../../../../bee/lib/judge.mjs")),
-    ("knowledge.mjs", include_str!("../../../../../bee/lib/knowledge.mjs")),
-    ("lease-store.mjs", include_str!("../../../../../bee/lib/lease-store.mjs")),
-    ("lock.mjs", include_str!("../../../../../bee/lib/lock.mjs")),
-    ("path-identity.mjs", include_str!("../../../../../bee/lib/path-identity.mjs")),
-    ("reservations.mjs", include_str!("../../../../../bee/lib/reservations.mjs")),
-    ("reviews.mjs", include_str!("../../../../../bee/lib/reviews.mjs")),
-    ("schedule.mjs", include_str!("../../../../../bee/lib/schedule.mjs")),
-    ("state.mjs", include_str!("../../../../../bee/lib/state.mjs")),
-    ("validate-args.mjs", include_str!("../../../../../bee/lib/validate-args.mjs")),
-    ("workflow-store.mjs", include_str!("../../../../../bee/lib/workflow-store.mjs")),
-    ("workspace-store.mjs", include_str!("../../../../../bee/lib/workspace-store.mjs")),
-    ("worktree-holds.mjs", include_str!("../../../../../bee/lib/worktree-holds.mjs")),
-    ("worktree-store.mjs", include_str!("../../../../../bee/lib/worktree-store.mjs")),
-];
-
-fn lib_byte_gate(store_root: &Path) -> R<()> {
-    let lib_dir = store_root.join(".bee").join("bin").join("lib");
-    for (name, embedded) in EMBEDDED_LIB {
-        match std::fs::read(lib_dir.join(name)) {
-            Ok(bytes) if bytes == embedded.as_bytes() => {}
-            _ => return Err(Nd),
-        }
-    }
-    Ok(())
-}
+// ─── the retired vendored-lib byte gate (CUTOVER) ──────────────────────────
+//
+// The `.mjs` guard dynamically imported vendored lib modules from
+// `<storeRoot>/.bee/bin/lib/*.mjs`, so this port embedded that whole import
+// closure (state + guards + validate-args + command-registry, 26 files) and
+// byte-compared it at runtime: if a host's vendored copy differed by one byte,
+// the native semantics were unproven and the run delegated. That gate was
+// correct for the whole two-runtime window and is WRONG the moment the window
+// closes — there is no vendored lib to compare against, so every comparison
+// would fail, every run would delegate, and the delegation would fail open.
+// A guard that fails open on every single event is not a guard.
+//
+// Its activation probe went the same way, and that one was the sharper hazard:
+// the wrapper began `if (!existsSync(storeRoot/.bee/bin/lib/state.mjs)) return
+// 0;` — "bee is not installed here, decide nothing". Left alone, that line
+// alone would have switched the write guard OFF in every repo on earth. The
+// replacement asks the same question against the install shape that exists
+// now: `.bee/onboarding.json`, the marker roots.rs already stops its walk on.
 
 // ─── JS string / value helpers ─────────────────────────────────────────────
 
@@ -1501,11 +1475,11 @@ fn under_allowed_prefix(rel: &str) -> bool {
 /// provenance: guards.mjs DIRECT_EDIT_DENY.
 fn direct_edit_verb(normalized: &str) -> Option<&'static str> {
     match normalized {
-        ".bee/state.json" => Some("bee.mjs state set --owner <selected pre-mutation phase>, or the dedicated state gate/worker/scribing-run verb"),
-        ".bee/backlog.jsonl" => Some("bee.mjs backlog add"),
-        "docs/backlog.md" => Some("bee.mjs backlog pbi add / bee.mjs backlog pbi status / bee.mjs backlog pbi amend to change data, or bee.mjs backlog render --write to regenerate the view"),
-        ".bee/runtime/cross-worktree-holds.json" => Some("bee.mjs reservations reserve/release (holds are mirrored into the ledger automatically)"),
-        ".bee/runtime/worktree-grants.json" => Some("bee.mjs worktree register / unregister"),
+        ".bee/state.json" => Some("bee state set --owner <selected pre-mutation phase>, or the dedicated state gate/worker/scribing-run verb"),
+        ".bee/backlog.jsonl" => Some("bee backlog add"),
+        "docs/backlog.md" => Some("bee backlog pbi add / bee backlog pbi status / bee backlog pbi amend to change data, or bee backlog render --write to regenerate the view"),
+        ".bee/runtime/cross-worktree-holds.json" => Some("bee reservations reserve/release (holds are mirrored into the ledger automatically)"),
+        ".bee/runtime/worktree-grants.json" => Some("bee worktree register / unregister"),
         ".bee/companion-session.json" => Some("bee worktree new --with-companion (started/ended automatically by the companion lifecycle)"),
         _ => None,
     }
@@ -2405,7 +2379,7 @@ fn resolve_write_record(
     if bound.contains('/') || bound.contains('\\') || bound.contains("..") {
         return Ok(RecordResolution::Fail {
             reason: format!(
-                "bee lane guard: session \"{}\" is bound to lane \"{}\", which is not a valid lane name (lane feature must be a plain id (no path separators).) — never guessed back to the default pipeline. FIX: rebind or unbind the session (claims.mjs bindSessionLane/unbindSessionLane).",
+                "bee lane guard: session \"{}\" is bound to lane \"{}\", which is not a valid lane name (lane feature must be a plain id (no path separators).) — never guessed back to the default pipeline. FIX: rebind or unbind the session (claims bindSessionLane/unbindSessionLane).",
                 session_id_disp, bound
             ),
         });
@@ -2718,7 +2692,7 @@ unowned. FIX: inspect/restore the workspace record, then retry.",
                             "bee write-policy: workspace \"{}\" is write-owned by session \"{}\" \
 — a second write-capable session defaults to isolation, never a shared write into the same checkout. \
 FIX: coordinate with that session, wait for its heartbeat to go stale, or start your own feature with \
-`bee.mjs state start-feature --isolate` (or set guards.auto_isolate to true in .bee/config.json) to work \
+`bee state start-feature --isolate` (or set guards.auto_isolate to true in .bee/config.json) to work \
 in a fresh worktree instead.",
                             ws_id, owner
                         )));
@@ -4025,12 +3999,13 @@ FIX: repair or recreate the Git worktree before retrying; no worktree-local .bee
     let store_root_pb = ctx.store_root.clone().unwrap_or_else(|| root_pb.clone());
     let store_root = store_root_pb.to_string_lossy().into_owned();
     np_check_modelable(&store_root)?;
-    if !store_root_pb.join(".bee").join("bin").join("lib").join("state.mjs").is_file() {
+    // bee-write-guard.mjs l. 1048, re-keyed at cutover (see the byte-gate note
+    // above): "is bee installed at this store root?" The old answer was a
+    // vendored `.bee/bin/lib/state.mjs`; the answer now is the onboarding
+    // marker, which every install writes and nothing else does.
+    if !store_root_pb.join(".bee").join("onboarding.json").is_file() {
         return Ok(emit);
     }
-
-    // Native semantics are proven only against byte-identical vendored lib.
-    lib_byte_gate(&store_root_pb)?;
 
     if !hook_enabled(&store_root_pb, HOOK_NAME).map_err(|_| Nd)? {
         return Ok(emit);
@@ -4353,8 +4328,10 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
 
 // ─── tests ─────────────────────────────────────────────────────────────────
 // Mirrors packages/bee/hooks/test_write_guard.mjs's decision table with
-// tempfile fixtures (fixture lib vendored from the EMBEDDED set, exactly the
-// bytes the gate demands — the same copyLib discipline the Node tests use).
+// tempfile fixtures. `copy_lib` used to vendor the embedded `.mjs` closure so
+// the byte gate would pass; with the gate retired it writes the onboarding
+// marker instead — the fixture's job is still "make this look like a repo
+// where bee is installed", only the marker changed.
 
 #[cfg(test)]
 mod tests {
@@ -4366,11 +4343,12 @@ mod tests {
         root: PathBuf,
     }
 
+    /// "bee is installed at this root" — the guard's activation probe.
     fn copy_lib(root: &Path) {
-        let lib = root.join(".bee").join("bin").join("lib");
-        std::fs::create_dir_all(&lib).unwrap();
-        for (name, content) in EMBEDDED_LIB {
-            std::fs::write(lib.join(name), content).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        if !root.join(".bee").join("onboarding.json").is_file() {
+            std::fs::write(root.join(".bee").join("onboarding.json"), "{}
+").unwrap();
         }
     }
 
@@ -4485,7 +4463,7 @@ mod tests {
         let fx = build_fixture("swarming", true);
         let e = expect_done(edit(".bee/state.json"), &fx.root);
         assert_eq!(e.code, 2);
-        assert!(e.stderr.contains("bee.mjs state"));
+        assert!(e.stderr.contains("bee state"));
         assert!(e.stderr.contains("FIX"));
         assert!(e.stderr.contains("direct-edit"));
     }
@@ -4498,7 +4476,7 @@ mod tests {
             &fx.root,
         );
         assert_eq!(e.code, 2);
-        assert!(e.stderr.contains("bee.mjs backlog add"));
+        assert!(e.stderr.contains("bee backlog add"));
     }
 
     #[test]
@@ -4506,7 +4484,7 @@ mod tests {
         let fx = build_fixture("swarming", true);
         let e = expect_done(bash("cat notes.txt >> .bee/backlog.jsonl"), &fx.root);
         assert_eq!(e.code, 2);
-        assert!(e.stderr.contains("bee.mjs backlog add"));
+        assert!(e.stderr.contains("bee backlog add"));
     }
 
     #[test]
@@ -4514,7 +4492,7 @@ mod tests {
         let fx = build_fixture("swarming", true);
         let e = expect_done(bash("sed -i \"s/idle/swarming/\" .bee/state.json"), &fx.root);
         assert_eq!(e.code, 2);
-        assert!(e.stderr.contains("bee.mjs state"));
+        assert!(e.stderr.contains("bee state"));
     }
 
     #[test]
@@ -4526,10 +4504,10 @@ mod tests {
         );
         assert_eq!(e.code, 2);
         for needle in [
-            "bee.mjs backlog pbi add",
-            "bee.mjs backlog pbi status",
-            "bee.mjs backlog pbi amend",
-            "bee.mjs backlog render --write",
+            "bee backlog pbi add",
+            "bee backlog pbi status",
+            "bee backlog pbi amend",
+            "bee backlog render --write",
             "direct-edit",
         ] {
             assert!(e.stderr.contains(needle), "missing {needle}: {}", e.stderr);
@@ -4555,7 +4533,7 @@ mod tests {
         let fx = build_fixture("idle", true);
         let e = expect_done(edit(".bee/state.json"), &fx.root);
         assert_eq!(e.code, 2);
-        assert!(e.stderr.contains("bee.mjs state"));
+        assert!(e.stderr.contains("bee state"));
         let e2 = expect_done(edit(".bee/cells/demo-1.json"), &fx.root);
         assert_eq!(e2.code, 0);
     }
@@ -4630,30 +4608,26 @@ mod tests {
         );
     }
 
+    /// CUTOVER — replaces `a_tampered_registry_still_delegates…` and
+    /// `tampered_vendored_lib_delegates`, whose whole subject was the retired
+    /// vendored-lib byte gate: a host whose `command-registry.mjs` or
+    /// `guards.mjs` differed by a byte used to push the guard back to Node.
+    /// There is no vendored lib to tamper with any more, and the property that
+    /// mattered — the guard NEVER goes quiet on a host it does not recognise —
+    /// is now carried by these two arms instead.
     #[test]
-    fn a_tampered_registry_still_delegates_before_check_d_can_answer() {
-        // The byte gate is what licenses resolving against the EMBEDDED
-        // registry: a host whose command-registry.mjs differs by one byte
-        // never reaches a native check-(d) verdict.
+    fn a_stray_vendored_lib_no_longer_changes_any_verdict() {
         let fx = build_fixture("swarming", true);
-        std::fs::write(
-            fx.root.join(".bee").join("bin").join("lib").join("command-registry.mjs"),
-            "export const COMMAND_REGISTRY = [];\n",
-        )
-        .unwrap();
-        expect_delegate(bash("node .bee/bin/bee_cells.mjs cap --outcome \"done\""), &fx.root);
-    }
-
-    #[test]
-    fn tampered_vendored_lib_delegates() {
-        let fx = build_fixture("swarming", true);
-        std::fs::write(
-            fx.root.join(".bee").join("bin").join("lib").join("guards.mjs"),
-            "throw new Error('boom');\n",
-        )
-        .unwrap();
-        // row7's fixture shape: the byte gate refuses to prove equivalence.
-        expect_delegate(edit(".bee/state.json"), &fx.root);
+        // A leftover .bee/bin/lib from a pre-cutover install is inert: the
+        // guard reads its own compiled-in semantics and denies exactly as it
+        // would with the directory absent.
+        let lib = fx.root.join(".bee").join("bin").join("lib");
+        std::fs::create_dir_all(&lib).unwrap();
+        std::fs::write(lib.join("guards.mjs"), "throw new Error('boom');\n").unwrap();
+        std::fs::write(lib.join("command-registry.mjs"), "export const COMMAND_REGISTRY = [];\n")
+            .unwrap();
+        let e = expect_done(edit(".bee/state.json"), &fx.root);
+        assert_eq!(e.code, 2, "the guard still decides: {}", e.stderr);
     }
 
     #[test]
@@ -4734,7 +4708,7 @@ mod tests {
             &fx.root,
         );
         assert_eq!(e.code, 2);
-        assert!(e.stderr.contains("bee.mjs state"));
+        assert!(e.stderr.contains("bee state"));
     }
 
     #[test]
@@ -4745,7 +4719,7 @@ mod tests {
             &fx.root,
         );
         assert_eq!(e.code, 2);
-        assert!(e.stderr.contains("bee.mjs backlog add"));
+        assert!(e.stderr.contains("bee backlog add"));
     }
 
     #[test]
@@ -4761,7 +4735,7 @@ mod tests {
             &fx.root,
         );
         assert_eq!(deny.code, 2);
-        assert!(deny.stderr.contains("bee.mjs state"));
+        assert!(deny.stderr.contains("bee state"));
     }
 
     #[test]
@@ -4772,7 +4746,7 @@ mod tests {
             &fx.root,
         );
         assert_eq!(e.code, 2);
-        assert!(e.stderr.contains("bee.mjs state"));
+        assert!(e.stderr.contains("bee state"));
         let ok = expect_done(
             patch("*** Begin Patch\n*** Add File: src/a.txt\n+content\n*** Update File: src/b.txt\n@@\n-x\n+y\n*** Delete File: src/c.txt\n*** End Patch"),
             &fx.root,
@@ -5468,14 +5442,24 @@ mod tests {
     // ── misc plumbing rows ─────────────────────────────────────────────────
 
     #[test]
-    fn missing_lib_presence_gate_exits_zero() {
+    fn a_root_where_bee_is_not_installed_decides_nothing() {
+        // The activation probe, re-keyed at cutover: `.bee/onboarding.json`
+        // absent means "bee is not installed here" and the guard returns no
+        // verdict — the same posture the `.mjs` took for a missing vendored
+        // `.bee/bin/lib/state.mjs`. A `.bee/` directory alone is not an
+        // install: a bare state.json (a fixture, a copy, a scratch dir) must
+        // NOT switch the guard on.
         let dir = tempfile::tempdir().unwrap();
         let root = dunce::canonicalize(dir.path()).unwrap();
         std::fs::create_dir_all(root.join(".bee")).unwrap();
-        std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
         write_state(&root, &swarming_state(true));
         let e = expect_done(edit(".bee/state.json"), &root);
-        assert_eq!(e.code, 0); // no vendored lib: fail-open like the .mjs
+        assert_eq!(e.code, 0);
+        // …and the SAME root with the marker present denies, so the arm above
+        // is proving the gate rather than a broken fixture.
+        std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        let e = expect_done(edit(".bee/state.json"), &root);
+        assert_eq!(e.code, 2, "installed root must decide: {}", e.stderr);
     }
 
     #[test]
@@ -5555,7 +5539,7 @@ mod tests {
         let fx = build_fixture("swarming", true);
         let e = expect_done(bash("printf x > '.bee/state'\".json\""), &fx.root);
         assert_eq!(e.code, 2);
-        assert!(e.stderr.contains("bee.mjs state"));
+        assert!(e.stderr.contains("bee state"));
     }
 
     // ── Node path-port vectors (generated from node:path win32) ────────────

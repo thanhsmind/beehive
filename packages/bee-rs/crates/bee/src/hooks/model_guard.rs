@@ -30,7 +30,7 @@
 // line + exit 0, like Node's failed dynamic import (log text differs, shape
 // matches).
 
-use crate::hooks::adapter::{append_hook_log, log_crash, now_iso, read_hook_context};
+use crate::hooks::adapter::{append_hook_log, now_iso, read_hook_context};
 use crate::hooks::Outcome;
 use crate::jsjson;
 use crate::state::read_config_raw;
@@ -63,7 +63,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String), ()> {
     };
 
     // Vendored-lib presence gate (fs.existsSync — any file type counts).
-    if !root.join(".bee").join("bin").join("lib").join("state.mjs").exists() {
+    if !crate::hooks::adapter::bee_installed(&root) {
         return Ok((0, String::new()));
     }
 
@@ -92,17 +92,9 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String), ()> {
         return Ok((0, String::new()));
     }
 
-    // dispatch-guard.mjs dynamic import: a missing module throws in Node and
-    // lands in the fail-open catch (crash log + exit 0).
-    if !root.join(".bee").join("bin").join("lib").join("dispatch-guard.mjs").exists() {
-        log_crash(
-            Some(&root),
-            HOOK_NAME,
-            "Error: Cannot find module .bee/bin/lib/dispatch-guard.mjs",
-            ctx.source,
-        );
-        return Ok((0, String::new()));
-    }
+    // CUTOVER: a dispatch-guard.mjs presence gate stood here — a missing
+    // vendored module threw in Node and landed in the fail-open catch. The
+    // guard is compiled in now.
 
     let models = normalize_models(config.get("models"));
     let tool_input = ctx.payload.get("tool_input").cloned().unwrap_or(Value::Null);
@@ -1038,8 +1030,7 @@ mod tests {
         // state.mjs): a host mid-vendoring gets no verdict rather than a
         // wrong one.
         let fx = fixture(&repo_config());
-        std::fs::remove_file(fx.path().join(".bee").join("bin").join("lib").join("state.mjs"))
-            .unwrap();
+        std::fs::remove_file(fx.path().join(".bee").join("onboarding.json")).unwrap();
         let (code, stderr) = run_payload(
             fx.path(),
             json!({"tool_name": "Agent", "tool_input": {"prompt": "bare"}}),

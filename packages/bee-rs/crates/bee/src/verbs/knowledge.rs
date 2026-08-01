@@ -75,9 +75,9 @@
 
 use crate::jsjson;
 use crate::registry::check_manifest_drift;
-use crate::roots::{resolve_store_root, Roots};
+use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::read_config_raw;
-use crate::verbs::emit_no_root_error;
+use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{js_trim, keys_known, parse_flags, FlagV, Flags};
 use serde_json::{json, Map, Number, Value};
 use std::collections::HashSet;
@@ -110,7 +110,9 @@ pub(crate) fn g_prelude(cmd: &'static str, json: bool, pre_json: bool, t0: Insta
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
+        Roots::Unsupported(why) => {
+            return Some(GPre::Emitted(emit_unsupported_root(&cwd, cmd, pre_json, t0, &why)))
+        }
         Roots::None => return Some(GPre::Emitted(emit_no_root_error(&cwd, cmd, pre_json, t0))),
     };
     let Ok(drift) = check_manifest_drift(&root) else { return None };

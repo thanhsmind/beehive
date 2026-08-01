@@ -50,7 +50,7 @@ use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_worktree, LinkedRoots, RootsWt};
 use crate::state::{bypass_level, read_config_raw, Bail};
-use crate::verbs::{emit_no_root_error, record_timing};
+use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -3950,7 +3950,7 @@ fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
     }
     if expired_unreleased > 0 {
         staleness.push(json!(format!(
-            "{expired_unreleased} reservation(s) expired but never released — run bee_reservations.mjs sweep."
+            "{expired_unreleased} reservation(s) expired but never released — run bee reservations sweep."
         )));
     }
     if has_stale_advisor_key(ctx)? {
@@ -4902,7 +4902,9 @@ fn run(verb: Verb, lanes_full: bool, use_json: bool, t0: Instant) -> Option<Exit
     // worktrees themselves. A BROKEN link still delegates.
     let roots = match resolve_store_root_worktree(&cwd) {
         RootsWt::Go(r) => r,
-        RootsWt::NeedsNode => return None,
+        RootsWt::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, cmd, use_json, t0, &why))
+        }
         RootsWt::None => return Some(emit_no_root_error(&cwd, cmd, use_json, t0)),
     };
     let root = roots.root;

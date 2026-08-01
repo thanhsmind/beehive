@@ -59,9 +59,10 @@ fi
 # Per-model token/cost (main session + subagents) — fail-open, never breaks the line.
 # The native binary is preferred when the host carries one (rust-port): same
 # stdin/stdout contract, same shared signature cache, no interpreter startup.
-# The node script stays as the fallback so a host without a vendored binary
-# keeps working unchanged. Both legs are silenced and optional — a statusline
-# must never be the reason a prompt fails to render.
+# R6 CUTOVER: the `node statusline-usage.mjs` fallback that stood beside it is
+# gone with the runtime it needed. The leg is silenced and optional — a
+# statusline must never be the reason a prompt fails to render, so a host with
+# no binary simply renders the line without the usage segment.
 usage_seg=""
 SELF_DIR=$(dirname "${BASH_SOURCE[0]}")
 for bee_bin in "$SELF_DIR/../bee" "$SELF_DIR/../bee.exe" "$SELF_DIR/../../bee" "$SELF_DIR/../../bee.exe"; do
@@ -70,16 +71,6 @@ for bee_bin in "$SELF_DIR/../bee" "$SELF_DIR/../bee.exe" "$SELF_DIR/../../bee" "
     break
   fi
 done
-if [ -z "$usage_seg" ]; then
-  NODE=$(command -v node || true)
-  for cand in /usr/local/bin/node /usr/bin/node; do
-    [ -n "$NODE" ] && break
-    [ -x "$cand" ] && NODE="$cand"
-  done
-  if [ -n "$NODE" ]; then
-    usage_seg=$(echo "$input" | "$NODE" "$SELF_DIR/statusline-usage.mjs" 2>/dev/null)
-  fi
-fi
 [ -n "$usage_seg" ] && line="${line}\n${yellow}${usage_seg}${reset}"
 
 printf '%b\n' "$line"

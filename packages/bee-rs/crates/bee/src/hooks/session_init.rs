@@ -77,7 +77,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     let Some(root) = ctx.root.clone() else {
         return Outcome::Done(ExitCode::SUCCESS);
     };
-    if !root.join(".bee").join("bin").join("lib").join("state.mjs").is_file() {
+    if !crate::hooks::adapter::bee_installed(&root) {
         return Outcome::Done(ExitCode::SUCCESS);
     }
     if !hook_enabled_failopen(&root) {
@@ -354,10 +354,6 @@ pub(crate) fn resolve_context(cwd: &Path) -> Result<BeeContext, String> {
             })
         }
         Resolution::LinkInvalid { message } => Err(format!("WorktreeLinkInvalidError: {message}")),
-        Resolution::Exotic => Err(
-            "resolveRootsCore: the .git marker vanished between the existence test and the stat."
-                .to_string(),
-        ),
     }
 }
 
@@ -541,11 +537,11 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// A repo where bee IS installed — the marker the activation gate reads.
     fn vendored_repo(dir: &Path) {
-        std::fs::create_dir_all(dir.join(".bee").join("bin").join("lib")).unwrap();
+        std::fs::create_dir_all(dir.join(".bee")).unwrap();
         std::fs::create_dir_all(dir.join(".git")).unwrap();
-        std::fs::write(dir.join(".bee").join("bin").join("lib").join("state.mjs"), "// stub")
-            .unwrap();
+        std::fs::write(dir.join(".bee").join("onboarding.json"), "{}\n").unwrap();
     }
 
     fn payload_for(dir: &Path) -> String {

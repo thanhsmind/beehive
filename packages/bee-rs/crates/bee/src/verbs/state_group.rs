@@ -961,7 +961,7 @@ fn write_handoff(root: &Path, input: &Map<String, Value>, kind: &str) -> Result<
             Some(v) => js_disp(v),
         };
         return Err(Err2::Msg(format!(
-            "writeHandoff: refused — previous cell \"{previous_cell}\" is not capped (found status \"{status_disp}\"). A planned-next handoff may only follow a capped cell. FIX: finish \"{previous_cell}\" first (bee.mjs cells finish), then retry."
+            "writeHandoff: refused — previous cell \"{previous_cell}\" is not capped (found status \"{status_disp}\"). A planned-next handoff may only follow a capped cell. FIX: finish \"{previous_cell}\" first (bee cells finish), then retry."
         )));
     }
     // readClaim(controlRootFor(root), nextCell) — claimPath's requireId throws.
@@ -983,7 +983,7 @@ fn write_handoff(root: &Path, input: &Map<String, Value>, kind: &str) -> Result<
             ),
         };
         return Err(Err2::Msg(format!(
-            "writeHandoff: refused — next cell \"{next_cell}\" has no claim owned by writer session \"{writer_session}\" (found {found}). The next cell must already be claimed by the writing session before a planned-next handoff carries it. FIX: claim \"{next_cell}\" as session \"{writer_session}\" first (claims.mjs claimCellFile), then retry."
+            "writeHandoff: refused — next cell \"{next_cell}\" has no claim owned by writer session \"{writer_session}\" (found {found}). The next cell must already be claimed by the writing session before a planned-next handoff carries it. FIX: claim \"{next_cell}\" as session \"{writer_session}\" first (bee cells claim), then retry."
         )));
     }
     let mut record = input.clone();
@@ -2067,7 +2067,7 @@ fn read_prune_keep_set(root: &Path) -> Result<Vec<String>, Err2> {
         Some(Value::Array(a)) => a.clone(),
         Some(_) => {
             return Err(Err2::Msg(
-                "worker prune: state.workers is not an array — refusing to prune against a malformed keep set (a destructive verb fails closed). FIX: repair .bee/state.json via the bee_state.mjs worker verbs first.".to_string(),
+                "worker prune: state.workers is not an array — refusing to prune against a malformed keep set (a destructive verb fails closed). FIX: repair .bee/state.json via the bee state worker verbs first.".to_string(),
             ));
         }
     };
@@ -3848,7 +3848,7 @@ fn check_no_same_feature_claimed_cells(
         return None;
     }
     Some(format!(
-        "startFeature: refused — feature \"{feature}\" already has claimed cell(s): {}. FIX: cap or drop them first (bee.mjs cells cap / bee.mjs cells drop).",
+        "startFeature: refused — feature \"{feature}\" already has claimed cell(s): {}. FIX: cap or drop them first (bee cells cap / bee cells drop).",
         claimed.join(", ")
     ))
 }
@@ -4171,7 +4171,7 @@ enum Policy {
 fn write_policy_isolate_one_liner(verb_hint: &str) -> String {
     let verb = if js_trim(verb_hint).is_empty() { "<verb>" } else { js_trim(verb_hint) };
     format!(
-        "bee.mjs {verb} --isolate (creates a fresh worktree for this session), or set guards.auto_isolate to true in .bee/config.json to always auto-isolate on contention."
+        "bee {verb} --isolate (creates a fresh worktree for this session), or set guards.auto_isolate to true in .bee/config.json to always auto-isolate on contention."
     )
 }
 
@@ -4231,7 +4231,7 @@ fn apply_write_policy(
         if !missing.is_empty() {
             let list: Vec<&str> = missing.iter().map(|p| p.as_str()).collect();
             return Err(Err2::Msg(format!(
-                "bee write-policy (shared-disjoint): no exact-path lease held for: {}. A broad/glob reservation never satisfies shared-disjoint — an exact-path lease is mandatory before write. FIX: bee.mjs reservations reserve --agent <worker> --cell <id> --path <path>{} for each path, then retry.",
+                "bee write-policy (shared-disjoint): no exact-path lease held for: {}. A broad/glob reservation never satisfies shared-disjoint — an exact-path lease is mandatory before write. FIX: bee reservations reserve --agent <worker> --cell <id> --path <path>{} for each path, then retry.",
                 list.join(", "),
                 match session_id {
                     Some(sid) => format!(" --session-id {sid}"),
@@ -4435,7 +4435,7 @@ fn start_lane(
         .collect();
     if !nonterminal.is_empty() {
         return Ok(Err(format!(
-            "startFeature: refused — feature \"{feature}\" already has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee.mjs cells drop --id ID --reason R). FIX: cap or drop each listed cell, then retry.",
+            "startFeature: refused — feature \"{feature}\" already has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee cells drop --id ID --reason R). FIX: cap or drop each listed cell, then retry.",
             nonterminal.join(", ")
         )));
     }
@@ -4484,7 +4484,7 @@ fn start_lane(
             .collect();
         if !reservation_holds.is_empty() {
             return Ok(Err(format!(
-                "startFeature: refused — declared path(s) overlap active reservation hold(s): {}. FIX: wait for release/expiry (bee.mjs reservations release), or start the lane over non-overlapping paths.",
+                "startFeature: refused — declared path(s) overlap active reservation hold(s): {}. FIX: wait for release/expiry (bee reservations release), or start the lane over non-overlapping paths.",
                 reservation_holds.join(", ")
             )));
         }
@@ -4554,7 +4554,7 @@ fn start_default(
         && !js_strict_eq(&current_phase, &json!("compounding-complete"))
     {
         return Ok(Err(format!(
-            "startFeature: refused — current phase is \"{}\", not idle or the terminal alias \"compounding-complete\". A prior feature must finish or be explicitly wound down before a new feature starts. FIX: resume/close the current feature through its normal chain, or drop its remaining cells (bee.mjs cells drop), then retry.",
+            "startFeature: refused — current phase is \"{}\", not idle or the terminal alias \"compounding-complete\". A prior feature must finish or be explicitly wound down before a new feature starts. FIX: resume/close the current feature through its normal chain, or drop its remaining cells (bee cells drop), then retry.",
             js_disp_opt(Some(&current_phase))
         )));
     }
@@ -4577,7 +4577,7 @@ fn start_default(
     let active_reservations = list_reservations(&root_s, true, now_ms())?;
     if !active_reservations.is_empty() {
         return Ok(Err(format!(
-            "startFeature: refused — {} active reservation(s) remain ({}). FIX: release them first (bee.mjs reservations release).",
+            "startFeature: refused — {} active reservation(s) remain ({}). FIX: release them first (bee reservations release).",
             active_reservations.len(),
             active_reservations.iter().map(resv_disp).collect::<Vec<_>>().join(", ")
         )));
@@ -4591,7 +4591,7 @@ fn start_default(
         .collect();
     if !claimed.is_empty() {
         return Ok(Err(format!(
-            "startFeature: refused — claimed cell(s) remain: {}. FIX: cap or drop them first (bee.mjs cells cap / bee.mjs cells drop).",
+            "startFeature: refused — claimed cell(s) remain: {}. FIX: cap or drop them first (bee cells cap / bee cells drop).",
             claimed.join(", ")
         )));
     }
@@ -4612,7 +4612,7 @@ fn start_default(
             .collect();
         if !nonterminal.is_empty() {
             return Ok(Err(format!(
-                "startFeature: refused — prior feature \"{}\" has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee.mjs cells drop --id ID --reason R) — startFeature never auto-clears cells as cleanup. FIX: cap or drop each listed cell, then retry.",
+                "startFeature: refused — prior feature \"{}\" has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee cells drop --id ID --reason R) — startFeature never auto-clears cells as cleanup. FIX: cap or drop each listed cell, then retry.",
                 js_disp_opt(Some(&prior_feature)),
                 nonterminal.join(", ")
             )));
@@ -5023,7 +5023,7 @@ mod tests {
         assert_eq!(check_no_same_feature_claimed_cells("g2", &cells), None);
         assert_eq!(
             check_no_same_feature_claimed_cells("f", &cells).unwrap(),
-            "startFeature: refused — feature \"f\" already has claimed cell(s): c-1. FIX: cap or drop them first (bee.mjs cells cap / bee.mjs cells drop)."
+            "startFeature: refused — feature \"f\" already has claimed cell(s): c-1. FIX: cap or drop them first (bee cells cap / bee cells drop)."
         );
     }
 

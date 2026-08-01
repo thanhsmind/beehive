@@ -47,10 +47,29 @@ The script uses the manual-copy route for skills. If you prefer the Claude Code 
 
 bee installs in two layers:
 
-1. **Repo layer** (once per project, the default): onboarding installs the `AGENTS.md` BEE block, the `.bee/` runtime directory, the vendored `bee.mjs` CLI, a `CLAUDE.md` `@AGENTS.md` import, and a per-project copy of the `bee-*` skills into the repo itself — `<repo>/.claude/skills` for Claude Code, `<repo>/.agents/skills` for Codex. These skill trees are committed to the host repo (same policy as the vendored CLI), so every teammate and CI job sees identical skills without any machine-wide install; re-onboarding refreshes them.
+1. **Repo layer** (once per project, the default): onboarding installs the `AGENTS.md` BEE block, the `.bee/` runtime directory, the vendored `bee` binary, a `CLAUDE.md` `@AGENTS.md` import, and a per-project copy of the `bee-*` skills into the repo itself — `<repo>/.claude/skills` for Claude Code, `<repo>/.agents/skills` for Codex. These skill trees are committed to the host repo (same policy as the vendored CLI), so every teammate and CI job sees identical skills without any machine-wide install; re-onboarding refreshes them.
 2. **Runtime layer** (opt-in, once per machine): a legacy global copy of the `bee-*` skills into `~/.claude/skills` and/or `~/.codex/skills`. Nothing in this layer is touched unless you pass `--global-skills` (`-GlobalSkills`) — the per-project copy above is what agents actually discover by default. On Claude Code, the hook skeleton still needs one of the routes below (the plugin, or `--repo-hooks` during onboarding).
 
-Requirement for both: **Node.js 18+** on PATH (`node --version`).
+Requirement for both: **a Rust toolchain** (`cargo --version`, stable). bee ships
+as a single native binary and, by decision 1f4262ca, no prebuilt binaries live in
+the repo — you build it once per machine from the source checkout:
+
+```bash
+cargo build --release --manifest-path packages/bee-rs/Cargo.toml
+```
+
+Then copy (or symlink) the result into the repo that will use it:
+
+```bash
+cp packages/bee-rs/target/release/bee     <your-repo>/.bee/bin/bee      # macOS / Linux
+cp packages/bee-rs/target/release/bee.exe <your-repo>/.bee/bin/bee.exe  # Windows
+```
+
+`.bee/bin/bee[.exe]` is machine-local and git-ignored. **Node.js is no longer
+required** — the entire runtime (CLI, hooks, statusline, dev tools) is that one
+binary. The single exception is Codex on native Windows, whose hook transport
+uses a ~10-line `node -e` launcher to find the repo root before handing off to
+the binary; every other transport is Node-free.
 
 > Path used in the examples: `D:\projects\tools\AI\bee`. Replace with wherever this plugin lives (a local clone of `thanhsmind/beegog` or the git URL).
 
@@ -103,7 +122,7 @@ For Codex builds with plugin support, install from the plugin directory/repo; th
 
 ### Option B — manual skills copy (always works)
 
-Onboarding (step 3 below) populates the repo-level path by default — no manual step needed. Codex's **repo-level** skill discovery path is `<repo>/.agents/skills/` (cwd up to the repo root), **not** `.codex/skills` — that repo-level location is not a Codex discovery path at all. `~/.codex/skills` (`$CODEX_HOME/skills/`, default `~/.codex/skills/`) is the legacy **global** location; it's opt-in via `--global-skills` and is only populated by the install scripts (`install.sh`/`install.ps1`), not by `onboard_bee.mjs` directly.
+Onboarding (step 3 below) populates the repo-level path by default — no manual step needed. Codex's **repo-level** skill discovery path is `<repo>/.agents/skills/` (cwd up to the repo root), **not** `.codex/skills` — that repo-level location is not a Codex discovery path at all. `~/.codex/skills` (`$CODEX_HOME/skills/`, default `~/.codex/skills/`) is the legacy **global** location; it's opt-in via `--global-skills` and is only populated by the install scripts (`install.sh`/`install.ps1`), not by `bee onboard` directly.
 
 To copy by hand instead:
 
@@ -117,7 +136,7 @@ Copy-Item -Recurse D:\projects\tools\AI\bee\skills\* <repo>\.agents\skills\     
 Copy-Item -Recurse D:\projects\tools\AI\bee\skills\* $env:USERPROFILE\.codex\skills\  # legacy global
 ```
 
-Codex loads project hooks from `.codex/hooks.json` (8 lifecycle events shipped: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStart, SubagentStop, PreCompact, Stop) — the earlier claim that Codex lacked hook support was stale. Bootstrap still comes from the `AGENTS.md` BEE block (installed in step 3) regardless of hook state, and every gate- and integrity-critical rule is enforced by the vendored `bee.mjs` CLI, identically to Claude Code — hooks are a second belt, not the only one. See §4 below for the Codex hook verify procedure and [docs/06-runtime-integration.md](docs/06-runtime-integration.md) for the parity matrix.
+Codex loads project hooks from `.codex/hooks.json` (8 lifecycle events shipped: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStart, SubagentStop, PreCompact, Stop) — the earlier claim that Codex lacked hook support was stale. Bootstrap still comes from the `AGENTS.md` BEE block (installed in step 3) regardless of hook state, and every gate- and integrity-critical rule is enforced by the vendored `bee` binary, identically to Claude Code — hooks are a second belt, not the only one. See §4 below for the Codex hook verify procedure and [docs/06-runtime-integration.md](docs/06-runtime-integration.md) for the parity matrix.
 
 ### Codex permission policy vs bee gate_bypass
 
@@ -139,13 +158,13 @@ This repo's own working copy keeps `approval_policy = "never"` locally (`.codex/
 From any terminal, plan first (dry-run, changes nothing):
 
 ```bash
-node D:\projects\tools\AI\bee\packages\bee\scripts\onboard_bee.mjs --repo-root <your-repo> --json
+bee onboard --repo-root <your-repo> --json
 ```
 
 Review the reported plan, then apply:
 
 ```bash
-node D:\projects\tools\AI\bee\packages\bee\scripts\onboard_bee.mjs --repo-root <your-repo> --apply
+bee onboard --repo-root <your-repo> --apply
 ```
 
 Flags:
@@ -165,7 +184,7 @@ What onboarding installs:
 <repo>/AGENTS.md          ← BEE block between <!-- BEE:START --> / <!-- BEE:END --> (content outside markers untouched)
 <repo>/CLAUDE.md          ← @AGENTS.md import, appended once (default; opt out with --no-claude-md)
 <repo>/.bee/              ← onboarding.json, state.json, config.json (+ empty cells/, logs/)
-<repo>/.bee/bin/          ← bee_status / bee_cells / bee_reservations / bee_decisions + lib/
+<repo>/.bee/bin/          ← bee[.exe] (the binary, machine-local) + prompts/
 <repo>/.claude/skills/    ← bee-* skills, per-project copy for Claude Code (committed to the repo)
 <repo>/.agents/skills/    ← bee-* skills, per-project copy for Codex repo-level discovery (committed to the repo)
 <repo>/docs/history/learnings/critical-patterns.md   ← stub if missing
@@ -173,7 +192,7 @@ What onboarding installs:
 
 Existing `state.json`, `decisions.jsonl`, and `cells/` are **never** overwritten; re-running is idempotent and reports `up_to_date`.
 
-Alternatively, do it conversationally: open a session in the repo and say **"Onboard this repository for bee"** — `bee-hive` runs the same script and asks before `--apply`.
+Alternatively, do it conversationally: open a session in the repo and say **"Onboard this repository for bee"** — `bee-hive` runs the same command and asks before `--apply`.
 
 ---
 
@@ -182,7 +201,7 @@ Alternatively, do it conversationally: open a session in the repo and say **"Onb
 In the onboarded repo:
 
 ```bash
-node .bee/bin/bee.mjs status --json
+.bee/bin/bee status --json
 ```
 
 Expect `onboarding.installed: true`, `phase: "idle"`, all gates `false`.
@@ -199,12 +218,12 @@ Each should list all 15 `bee-*` skill dirs. If you passed `--global-skills`, als
 Claude Code (plugin route) — start a new session in the repo: the session should begin with the bee preamble (phase, gates, critical-patterns digest) injected by `bee-session-init`. Quick hook check by hand:
 
 ```bash
-echo '{"tool_name":"Write","tool_input":{"file_path":"src/x.ts"}}' | node .bee/bin/hooks/bee-write-guard.mjs
+echo '{"tool_name":"Write","tool_input":{"file_path":"src/x.ts"}}' | .bee/bin/bee hook write-guard
 ```
 
 (with `--repo-hooks` install; for the plugin route the hooks run from the plugin directory — just watch the session preamble instead).
 
-Codex — start a session in the repo: the agent should follow the AGENTS.md BEE block and run `bee.mjs status` as its first scout step. Then try: "Route this through bee: fix the typo in README" → expect tiny-lane routing, not ceremony.
+Codex — start a session in the repo: the agent should follow the AGENTS.md BEE block and run `bee status` as its first scout step. Then try: "Route this through bee: fix the typo in README" → expect tiny-lane routing, not ceremony.
 
 Codex hook verify procedure — three-state model, `hooks_file_present ≠ hooks_discovered ≠ hooks_trusted_and_observed`; a file shipping in `.codex/hooks.json` is never by itself evidence that a hook ran:
 
@@ -215,7 +234,7 @@ Codex hook verify procedure — three-state model, `hooks_file_present ≠ hooks
 Smoke the enforcement (any runtime, any agent):
 
 ```bash
-node .bee/bin/bee.mjs cells claim --id anything --worker w1
+.bee/bin/bee cells claim --id anything --worker w1
 # → refuses: gate "execution" is not approved  ✔ the CLI is armed
 ```
 
@@ -239,6 +258,7 @@ node .bee/bin/bee.mjs cells claim --id anything --worker w1
 | Codex doesn't see bee skills | Repo-level discovery is `.agents/skills`, not `.codex/skills` — check that path was populated by onboarding; `~/.codex/skills` is legacy/global and only exists if you passed `--global-skills` to the install script |
 | `install.ps1` fails to parse on Windows PowerShell 5.1 | Historically caused by non-ASCII bytes (em-dashes) in a UTF-8-no-BOM file decoding as cp1252 smart quotes, which terminate strings mid-line. `install.ps1` is ASCII-only now and a repo test guards `scripts/*.ps1` against non-ASCII bytes — report this as a regression if you still hit it |
 | No session preamble in Claude Code | Repo not onboarded (`.bee/onboarding.json` missing — hooks self-arm only after onboarding), or hook disabled in `.bee/config.json → hooks.session-init` |
-| `claim`/`cap` refuse unexpectedly | Working as designed: check `bee.mjs status` for gate states — execution must be approved (Gate 3), cells must have a passing recorded verify before capping |
+| `claim`/`cap` refuse unexpectedly | Working as designed: check `bee status` for gate states — execution must be approved (Gate 3), cells must have a passing recorded verify before capping |
 | Hook crash suspected | Hooks are fail-open; check `.bee/logs/hooks.jsonl` |
-| `node` not found | Install Node 18+ and reopen the terminal/session |
+| `cargo` not found | Install Rust (rustup) and reopen the terminal/session; the binary is built from source per machine (decision 1f4262ca) |
+| `bee: command not found`, or hooks print `bee: hook binary missing (.bee/bin/bee)` | The binary has not been built or copied into `<repo>/.bee/bin/`. Run the `cargo build --release` + copy from the Requirements section above |

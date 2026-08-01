@@ -96,7 +96,7 @@ use crate::roots::{resolve_store_root, Roots};
 use crate::state as bstate;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
-use crate::verbs::{emit_no_root_error, record_timing};
+use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Number, Value};
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
@@ -220,7 +220,9 @@ fn run(verb: Verb, flags: Flags, t0: Instant) -> Option<ExitCode> {
 
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, verb.cmd(), use_json, t0, &why))
+        }
         Roots::None => return Some(emit_no_root_error(&cwd, verb.cmd(), use_json, t0)),
     };
 
@@ -896,7 +898,7 @@ fn resolve_cell_file(root: &Path, id: &str) -> Option<PathBuf> {
 /// lib/cells.mjs CellArchivedError message.
 fn cell_archived_error(verb: &str, id: &str) -> String {
     format!(
-        "{verb}: cell \"{id}\" is archived — unarchive its feature first (bee.mjs cells unarchive --feature <feature>)."
+        "{verb}: cell \"{id}\" is archived — unarchive its feature first (bee cells unarchive --feature <feature>)."
     )
 }
 
@@ -2563,7 +2565,7 @@ const REGEN_GUARDS: [RegenGuardDef; 2] = [
         covers: "the release manifest hashes",
         required: "release_manifest.mjs --check",
         command: "node scripts/release_manifest.mjs --check",
-        regen: "node scripts/render_plugin_skill_trees.mjs, then node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply, then node scripts/release_manifest.mjs --write (in that order)",
+        regen: "bee dev render-skill-trees, then bee onboard --repo-root . --apply, then bee dev release-manifest --write (in that order)",
         derive: derive_manifest_scope,
     },
     RegenGuardDef {
@@ -2571,7 +2573,7 @@ const REGEN_GUARDS: [RegenGuardDef; 2] = [
         covers: "the .bee/onboarding.json managed-hash ledger covers",
         required: "ledger_parity.mjs --check",
         command: "node scripts/ledger_parity.mjs --check",
-        regen: "node packages/bee/scripts/onboard_bee.mjs --repo-root . --apply",
+        regen: "bee onboard --repo-root . --apply",
         derive: derive_ledger_scope,
     },
 ];
@@ -4822,7 +4824,7 @@ fn emit_manifest_lint_warnings(cells: &[Value]) {
             _ => "(unknown id)".to_string(),
         };
         eprintln!(
-            "WARNING: cell \"{id}\" verify mentions release_manifest but files is missing \"{RELEASE_MANIFEST_LINT_PATH}\" — a cold worker will hit red verify with no sanctioned fix. FIX: add the manifest path to files; regenerate it only via \"node scripts/release_manifest.mjs --write\"."
+            "WARNING: cell \"{id}\" verify mentions release_manifest but files is missing \"{RELEASE_MANIFEST_LINT_PATH}\" — a cold worker will hit red verify with no sanctioned fix. FIX: add the manifest path to files; regenerate it only via \"bee dev release-manifest --write\"."
         );
     }
 }
@@ -5094,7 +5096,7 @@ fn update_frozen_hint(key: &str) -> Option<&'static str> {
         "feature" => Some("a cell never moves between features — drop and re-add instead"),
         "status" => Some("status moves only through claim/verify/cap/block/drop"),
         "trace" => Some("the trace is the frozen audit record — claim/verify/cap own it"),
-        "tier" => Some("use the tier verb (bee.mjs cells tier --id ID --tier T)"),
+        "tier" => Some("use the tier verb (bee cells tier --id ID --tier T)"),
         _ => None,
     }
 }
@@ -5397,7 +5399,7 @@ pub(crate) fn claim_cell_from_flags(
                         .map(|s| format!(" --session-id {s}"))
                         .unwrap_or_default();
                     return Err(Fail::Thrown(format!(
-                        "bee write-policy (shared-disjoint): no exact-path lease held for: {}. A broad/glob reservation never satisfies shared-disjoint — an exact-path lease is mandatory before write. FIX: bee.mjs reservations reserve --agent <worker> --cell <id> --path <path>{session_suffix} for each path, then retry.",
+                        "bee write-policy (shared-disjoint): no exact-path lease held for: {}. A broad/glob reservation never satisfies shared-disjoint — an exact-path lease is mandatory before write. FIX: bee reservations reserve --agent <worker> --cell <id> --path <path>{session_suffix} for each path, then retry.",
                         missing.join(", ")
                     )));
                 }
@@ -5528,7 +5530,7 @@ fn claim_cell_cross_session(
                 let status_open = matches!(cell.get("status"), Some(Value::String(s)) if s == "open");
                 if !status_open {
                     return Err(Fail::Thrown(format!(
-                        "claimCell: cell \"{cell_id}\" is \"{}\", not \"open\" — only open cells can be claimed. Run bee.mjs cells ready to list claimable cells.",
+                        "claimCell: cell \"{cell_id}\" is \"{}\", not \"open\" — only open cells can be claimed. Run bee cells ready to list claimable cells.",
                         js_string_or_undefined(cell.get("status"))
                     )));
                 }
@@ -5836,7 +5838,7 @@ fn resolve_pipeline(root: &Path, control: &Path, session_id: &str) -> MR<Pipelin
         return Ok(Pipeline::Refused {
             code: "LANE_INVALID",
             reason: format!(
-                "session \"{session_disp}\" is bound to lane \"{bound}\", which is not a valid lane name ({detail}) \u{2014} never guessed back to the default pipeline. FIX: rebind or unbind the session (claims.mjs bindSessionLane/unbindSessionLane)."
+                "session \"{session_disp}\" is bound to lane \"{bound}\", which is not a valid lane name ({detail}) \u{2014} never guessed back to the default pipeline. FIX: rebind or unbind the session (claims bindSessionLane/unbindSessionLane)."
             ),
         });
     };
@@ -6424,7 +6426,7 @@ fn cap_cell_from_flags(root: &Path, cwd: &Path, f: &CapFlags, finish: bool) -> M
         );
         if latest_needs_revision && f.override_reason.is_empty() {
             return Err(Fail::Thrown(format!(
-                "capCell: cell \"{id}\" has a NEEDS_REVISION semantic-judge verdict — rework the cell and record a PASS verdict (bee.mjs cells judge-record), or cap with an audited override (bee.mjs cells cap --id {id} --override-judge \"<reason>\")."
+                "capCell: cell \"{id}\" has a NEEDS_REVISION semantic-judge verdict — rework the cell and record a PASS verdict (bee cells judge-record), or cap with an audited override (bee cells cap --id {id} --override-judge \"<reason>\")."
             )));
         }
         if !f.override_reason.is_empty() {
@@ -6799,7 +6801,7 @@ pub(crate) fn unclaim_cell(
             let claimed = matches!(cell_map.get("status"), Some(Value::String(s)) if s == "claimed");
             if !claimed {
                 return Err(Fail::Thrown(format!(
-                    "unclaimCell: cell \"{id2}\" is \"{}\", not \"claimed\" — only a claimed cell can be unclaimed (returned to open). For a capped/blocked/dropped cell use bee.mjs cells reopen.",
+                    "unclaimCell: cell \"{id2}\" is \"{}\", not \"claimed\" — only a claimed cell can be unclaimed (returned to open). For a capped/blocked/dropped cell use bee cells reopen.",
                     js_string_or_undefined(cell_map.get("status"))
                 )));
             }
@@ -6844,7 +6846,7 @@ fn run_reopen(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode
                 }
                 Some(Value::String(s)) if s == "claimed" => {
                     return Err(Fail::Thrown(format!(
-                        "reopenCell: cell \"{id2}\" is \"claimed\" — use bee.mjs cells unclaim to release the claim back to open."
+                        "reopenCell: cell \"{id2}\" is \"claimed\" — use bee cells unclaim to release the claim back to open."
                     )))
                 }
                 _ => {}
@@ -8396,7 +8398,7 @@ const C = path.join(REPO_ROOT, dynamic);
         std::fs::write(arch.join("z-1.json"), "{\"id\":\"z-1\"}").unwrap();
         assert_eq!(
             thrown(write_cell(root, &json!({"id": "z-1"}))),
-            "writeCell: cell \"z-1\" is archived — unarchive its feature first (bee.mjs cells unarchive --feature <feature>)."
+            "writeCell: cell \"z-1\" is archived — unarchive its feature first (bee cells unarchive --feature <feature>)."
         );
         // live archive lock -> CELLS_ARCHIVE_BUSY
         let _held = lock::acquire_store_lock(root, "cells-archive", 1).ok().unwrap();
@@ -8589,7 +8591,7 @@ const C = path.join(REPO_ROOT, dynamic);
         assert_eq!(update_field_problem("behavior_change", &json!(true)), None);
         assert_eq!(
             update_frozen_hint("tier"),
-            Some("use the tier verb (bee.mjs cells tier --id ID --tier T)")
+            Some("use the tier verb (bee cells tier --id ID --tier T)")
         );
         assert_eq!(update_frozen_hint("status"), Some("status moves only through claim/verify/cap/block/drop"));
         assert_eq!(update_frozen_hint("nonsense"), None);

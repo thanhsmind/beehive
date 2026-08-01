@@ -79,7 +79,7 @@ use crate::jsjson;
 use crate::lock;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, resolve_store_root_worktree, Roots, RootsWt, StoreRoots};
-use crate::verbs::{emit_no_root_error, record_timing};
+use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Number, Value};
 use sha2::{Digest, Sha256};
 use std::ffi::OsString;
@@ -1230,7 +1230,9 @@ pub(crate) fn prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
+        Roots::Unsupported(why) => {
+            return Some(Pre::Emitted(emit_unsupported_root(&cwd, cmd, use_json, t0, &why)))
+        }
         Roots::None => return Some(Pre::Emitted(emit_no_root_error(&cwd, cmd, use_json, t0))),
     };
     let drift = check_manifest_drift(&root).ok()?;
@@ -1247,10 +1249,11 @@ pub(crate) fn prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<
 /// The WORKTREE-NATIVE prelude, used ONLY by this module's four verbs.
 ///
 /// Deliberately separate from `prelude` above: verbs/decisions.rs,
-/// verbs/cells.rs and verbs/drivers.rs share that one, and none of them has
-/// had its worktree-sensitive branches ported — widening the shared door
-/// would flip them silently. They keep `resolve_store_root`'s
-/// `LinkedValid => NeedsNode` arm; only the reservations verbs opt in here.
+/// verbs/cells.rs, verbs/state_group.rs and verbs/drivers.rs share that one,
+/// and none of them carries the granted-worktree half (control-root re-rooting
+/// and hold topology). At cutover the shared door stopped delegating and
+/// started REFUSING that one shape by name; only the reservations verbs, which
+/// do carry it, opt in here.
 pub(crate) enum PreWt {
     Go(Ctx, StoreRoots),
     Emitted(ExitCode),
@@ -1260,7 +1263,9 @@ fn prelude_worktree(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Pr
     let cwd = std::env::current_dir().ok()?;
     let roots = match resolve_store_root_worktree(&cwd) {
         RootsWt::Go(r) => r,
-        RootsWt::NeedsNode => return None,
+        RootsWt::Unsupported(why) => {
+            return Some(PreWt::Emitted(emit_unsupported_root(&cwd, cmd, use_json, t0, &why)))
+        }
         RootsWt::None => return Some(PreWt::Emitted(emit_no_root_error(&cwd, cmd, use_json, t0))),
     };
     let drift = check_manifest_drift(&roots.root).ok()?;

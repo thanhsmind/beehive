@@ -16,9 +16,9 @@
 // produced.
 
 use crate::jsjson;
-use crate::verbs::{emit_no_root_error, record_timing};
+use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use crate::registry::check_manifest_drift;
-use crate::roots::{resolve_store_root, Roots};
+use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::{bypass_level, read_config_raw, read_state_brief, ship_visibility, GATE_NAMES};
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -49,7 +49,9 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
 
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "status", use_json, t0, &why))
+        }
         Roots::None => return Some(emit_no_root_error(&cwd, "status", use_json, t0)),
     };
 

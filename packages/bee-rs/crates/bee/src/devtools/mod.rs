@@ -33,6 +33,7 @@
 // byte-for-byte. Failure shapes that can be detected BEFORE any output (a
 // symlink in the skill source, a missing input tree) return None instead.
 
+mod hook_manifests;
 mod impact_registry;
 mod jspath;
 mod prompts;
@@ -59,6 +60,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "statusline" => statusline::run(flags),
         "impact-registry" => impact_registry::run(flags),
         "release-manifest" => release_manifest::run(flags),
+        "render-hook-manifests" => hook_manifests::run(flags),
         _ => None,
     }
 }

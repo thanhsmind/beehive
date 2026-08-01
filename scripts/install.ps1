@@ -271,15 +271,12 @@ function Invoke-PluginTransitionFailure([string]$Message) {
 
 # ---------- prerequisites ----------
 
-$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-if (-not $nodeCmd) { Fail 'Node.js 18+ is required (node not found on PATH).' }
-# Parse `node --version` in PowerShell itself: passing a quoted JS expression to
-# `node -p` breaks in Windows PowerShell 5.1 (embedded quotes are stripped for
-# native commands), which made this check fail even on new Node versions.
-$nodeVersionRaw = (node --version | Select-Object -First 1).Trim()
-$nodeMajor = 0
-if ($nodeVersionRaw -match '^v?(\d+)') { $nodeMajor = [int]$Matches[1] }
-if ($nodeMajor -lt 18) { Fail "Node.js 18+ is required (found $nodeVersionRaw)." }
+# R6 CUTOVER: bee is a single native binary. The Node 18+ preflight that stood
+# here is gone - what the installer needs now is a Rust toolchain, because
+# decision 1f4262ca keeps prebuilt binaries OUT of the repo and builds one per
+# machine from the source checkout.
+$cargoCmd = Get-Command cargo -ErrorAction SilentlyContinue
+if (-not $cargoCmd) { Fail 'A Rust toolchain is required (cargo not found on PATH). Install rustup: https://rustup.rs' }
 
 # ---------- resolve bee source (local checkout or clone) ----------
 
@@ -323,8 +320,16 @@ try {
     }
   }
 
-  $onboard = Join-Path $beeSrc 'packages\bee\scripts\onboard_bee.mjs'
-  if (-not (Test-Path $onboard)) { Fail "Not a bee checkout (missing packages/bee/scripts/onboard_bee.mjs): $beeSrc" }
+  # Build the binary from the resolved source checkout. This IS the install:
+  # the repo ships no binary, so every host compiles its own once.
+  $cargoToml = Join-Path $beeSrc 'packages\bee-rs\Cargo.toml'
+  if (-not (Test-Path $cargoToml)) { Fail "Not a bee checkout (missing packages/bee-rs/Cargo.toml): $beeSrc" }
+  Write-Host 'build    cargo build --release (packages/bee-rs) - first build takes a few minutes'
+  cargo build --release --manifest-path $cargoToml
+  if ($LASTEXITCODE -ne 0) { Fail 'cargo build --release failed. Fix the build, then re-run the installer.' }
+  $beeBin = Join-Path $beeSrc 'packages\bee-rs\target\release\bee.exe'
+  if (-not (Test-Path $beeBin)) { $beeBin = Join-Path $beeSrc 'packages\bee-rs\target\release\bee' }
+  if (-not (Test-Path $beeBin)) { Fail 'cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]' }
   $distributionHelper = Join-Path $beeSrc 'packages\bee\scripts\plugin_distribution.mjs'
   $releaseManifest = Join-Path $beeSrc 'docs\history\codex-harness-hardening\release-manifest.json'
   if (-not (Test-Path $distributionHelper)) { Fail "Not a bee release (missing plugin_distribution.mjs): $beeSrc" }
@@ -396,8 +401,8 @@ try {
   $preStateFile = Join-Path $stateTempDir 'pre-state.json'
   Copy-Item $stateFile $preStateFile -Force
 
-  Write-Host "plan     onboard_bee.mjs $($onboardFlags -join ' ') (dry-run first)"
-  node $onboard --repo-root $Directory @onboardFlags
+  Write-Host "plan     bee onboard $($onboardFlags -join ' ') (dry-run first)"
+  & $beeBin onboard --repo-root $Directory @onboardFlags
   if ($LASTEXITCODE -ne 0) { Fail 'Onboarding plan failed.' }
 
   if ($DryRun) {
@@ -447,7 +452,7 @@ try {
   #    write preflight in onboard_bee.mjs applyPlan refusing because
   #    .codex/hooks.json or .bee/bin/hooks/ can't be written) names the
   #    concrete way out below, then rolls the plugin transition back.
-  $applyOutput = node $onboard --repo-root $Directory --apply @onboardFlags
+  $applyOutput = & $beeBin onboard --repo-root $Directory --apply @onboardFlags
   if ($LASTEXITCODE -ne 0) {
     Write-Host ($applyOutput -join "`n")
     Write-Host '  fix options:'
@@ -463,14 +468,21 @@ try {
 
   # ---------- verify ----------
 
+  # Put the binary where the host's own hooks and agents look for it, THEN
+  # verify through that copy - the thing this repo will actually run from now on.
+  $hostBinDir = Join-Path $Directory '.bee\bin'
+  if (-not (Test-Path $hostBinDir)) { New-Item -ItemType Directory -Force $hostBinDir | Out-Null }
+  Copy-Item $beeBin (Join-Path $hostBinDir (Split-Path $beeBin -Leaf)) -Force
+  $hostBee = Join-Path $hostBinDir (Split-Path $beeBin -Leaf)
+
   Push-Location $Directory
   try {
-    $statusJson = node .bee\bin\bee.mjs status --json
-    if ($LASTEXITCODE -ne 0) { Fail 'Verification failed: bee.mjs status did not run.' }
+    $statusJson = & $hostBee status --json
+    if ($LASTEXITCODE -ne 0) { Fail 'Verification failed: bee status did not run.' }
     # Join first: PS 5.1 pipes a multi-line array into ConvertFrom-Json line by line.
     $status = ($statusJson -join "`n") | ConvertFrom-Json
     if (-not $status.onboarding -or $status.onboarding.installed -ne $true) {
-      Fail 'Verification failed: bee.mjs status reports not installed.'
+      Fail 'Verification failed: bee status reports not installed.'
     }
     $expectedVersion = (Get-Content (Join-Path $beeSrc '.claude-plugin\plugin.json') -Raw | ConvertFrom-Json).version
     if ($status.onboarding.bee_version -ne $expectedVersion -or
@@ -487,8 +499,8 @@ try {
   Write-Host 'bee installed.'
   Write-Host "  next: open an agent session in $Directory"
   Write-Host '  - Claude Code: the session preamble appears via hooks; or say "Route this through bee: <task>"'
-  Write-Host '  - Codex: the AGENTS.md BEE block bootstraps; first step is bee.mjs status'
-  Write-Host '  - scout any time: node .bee/bin/bee.mjs status --json'
+  Write-Host '  - Codex: the AGENTS.md BEE block bootstraps; first step is bee status'
+  Write-Host '  - scout any time: .bee/bin/bee status --json'
 } finally {
   if ($cleanupDir -and (Test-Path $cleanupDir)) {
     Remove-Item -Recurse -Force $cleanupDir -ErrorAction SilentlyContinue

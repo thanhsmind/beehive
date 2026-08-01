@@ -144,9 +144,11 @@ case "$DISTRIBUTION_MODE" in plugin-first|repo-copy) ;; *) fail "--distribution 
 
 # ---------- prerequisites ----------
 
-command -v node >/dev/null 2>&1 || fail "Node.js 18+ is required (node not found on PATH)."
-NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-[ "$NODE_MAJOR" -ge 18 ] || fail "Node.js 18+ is required (found $(node --version))."
+# R6 CUTOVER: bee is a single native binary. The Node 18+ preflight that stood
+# here is gone — what the installer needs now is a Rust toolchain, because
+# decision 1f4262ca keeps prebuilt binaries OUT of the repo and builds one per
+# machine from the source checkout.
+command -v cargo >/dev/null 2>&1 || fail "A Rust toolchain is required (cargo not found on PATH). Install rustup: https://rustup.rs"
 
 # ---------- resolve bee source (local checkout or clone) ----------
 
@@ -172,8 +174,14 @@ else
   BEE_SRC="$CLEANUP_DIR/bee"
 fi
 
-ONBOARD="$BEE_SRC/packages/bee/scripts/onboard_bee.mjs"
-[ -f "$ONBOARD" ] || fail "Not a bee checkout (missing packages/bee/scripts/onboard_bee.mjs): $BEE_SRC"
+# Build the binary from the resolved source checkout. This is the install: the
+# repo ships no binary, so every host compiles its own once.
+[ -f "$BEE_SRC/packages/bee-rs/Cargo.toml" ] || fail "Not a bee checkout (missing packages/bee-rs/Cargo.toml): $BEE_SRC"
+log "build    cargo build --release (packages/bee-rs) — first build takes a few minutes"
+cargo build --release --manifest-path "$BEE_SRC/packages/bee-rs/Cargo.toml" >&2   || fail "cargo build --release failed. Fix the build, then re-run the installer."
+BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee"
+[ -x "$BEE_BIN" ] || BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee.exe"
+[ -x "$BEE_BIN" ] || fail "cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]"
 DIST_HELPER="$BEE_SRC/packages/bee/scripts/plugin_distribution.mjs"
 RELEASE_MANIFEST="$BEE_SRC/docs/history/codex-harness-hardening/release-manifest.json"
 [ -f "$DIST_HELPER" ] || fail "Not a bee release (missing plugin_distribution.mjs): $BEE_SRC"
@@ -401,7 +409,7 @@ fi
 
 # onboard_plan_json prints the onboarding plan as JSON (plan mode, writes nothing).
 onboard_plan_json() {
-  node "$ONBOARD" --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>/dev/null
+  "$BEE_BIN" onboard --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>/dev/null
 }
 # plan_field <json> <field> — extract one string field, or "parse_error" on bad JSON.
 plan_field() {
@@ -413,7 +421,7 @@ plan_field() {
 #    before any confirmation, transition, or target/home write. onboard_bee reports
 #    a refusal as a non-`changes_needed`/`up_to_date` status (and may still exit 0),
 #    so status — not exit code alone — is the gate.
-log "plan     onboard_bee.mjs ${ONBOARD_FLAGS[*]:-} (preview, writes nothing)"
+log "plan     bee onboard ${ONBOARD_FLAGS[*]:-} (preview, writes nothing)"
 PREVIEW_JSON="$(onboard_plan_json)" || fail "Onboarding plan failed."
 PREVIEW_STATUS="$(plan_field "$PREVIEW_JSON" status)"
 case "$PREVIEW_STATUS" in
@@ -465,7 +473,7 @@ APPLY_STATUS="$(plan_field "$APPLY_JSON" status)"
 case "$APPLY_STATUS" in
   up_to_date) log "onboard  already current — no managed files rewritten" ;;
   changes_needed)
-    APPLY_OUTPUT="$(node "$ONBOARD" --repo-root "$TARGET_DIR" --apply ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>&1)" || {
+    APPLY_OUTPUT="$("$BEE_BIN" onboard --repo-root "$TARGET_DIR" --apply ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>&1)" || {
       printf '%s\n' "$APPLY_OUTPUT" >&2
       apply_failure_fix_options
       handle_transition_failure "Onboarding apply failed"
@@ -484,11 +492,17 @@ fi
 # Success requires exact source/onboarding/runtime/projection version equality,
 # no drift, and an immediate up_to_date recheck — not merely an "installed" flag.
 
-STATUS="$(cd "$TARGET_DIR" && node .bee/bin/bee.mjs status --json 2>/dev/null)" \
-  || fail "Verification failed: bee.mjs status did not run."
+# Put the binary where the host's own hooks and agents look for it, THEN verify
+# through that copy — the thing this repo will actually run from now on.
+mkdir -p "$TARGET_DIR/.bee/bin"
+cp "$BEE_BIN" "$TARGET_DIR/.bee/bin/$(basename "$BEE_BIN")" \
+  || fail "Could not install the binary into $TARGET_DIR/.bee/bin/"
+HOST_BEE="$TARGET_DIR/.bee/bin/$(basename "$BEE_BIN")"
+STATUS="$(cd "$TARGET_DIR" && "$HOST_BEE" status --json 2>/dev/null)" \
+  || fail "Verification failed: bee status did not run."
 printf '%s' "$STATUS" | node -e '
   const s = JSON.parse(require("fs").readFileSync(0, "utf8"));
-  if (!s.onboarding || s.onboarding.installed !== true) { console.error("bee.mjs status reports not installed"); process.exit(1); }
+  if (!s.onboarding || s.onboarding.installed !== true) { console.error("bee status reports not installed"); process.exit(1); }
   const expected = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).version;
   if (s.onboarding.bee_version !== expected || s.onboarding.plugin_version !== expected) {
     console.error(`version parity failed: expected ${expected}, got bee=${s.onboarding.bee_version}, plugin=${s.onboarding.plugin_version}, drift=${s.onboarding.drift}`);
@@ -535,5 +549,5 @@ log ""
 log "bee installed."
 log "  next: open an agent session in $TARGET_DIR"
 log "  - Claude Code: the session preamble appears via hooks; or say \"Route this through bee: <task>\""
-log "  - Codex: the AGENTS.md BEE block bootstraps; first step is bee.mjs status"
-log "  - scout any time: node .bee/bin/bee.mjs status --json"
+log "  - Codex: the AGENTS.md BEE block bootstraps; first step is bee status"
+log "  - scout any time: .bee/bin/bee status --json"

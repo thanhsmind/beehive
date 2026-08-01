@@ -10,65 +10,79 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# R6 CUTOVER. This workflow used to install Node on a [18, 20, 22] matrix and
+# run three .mjs entry points (verify_all, impact_registry --check,
+# ci_verify_issue). All three are gone with the Node runtime. What replaced
+# them:
+#   * the verify chain           -> `cargo test --release`, which IS
+#                                   .bee/config.json `commands.verify`
+#   * impact-registry freshness  -> `bee dev impact-registry --check`
+#   * the verify-red issue filer -> `gh issue` (the runner ships gh)
+# The Node matrix is deleted rather than replaced by a Rust one: bee ships a
+# single binary built from one toolchain, so "does it work on three runtimes"
+# is no longer a question this repo has.
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # issues: write is scoped to this job only, for scripts/ci_verify_issue.mjs
-    # (D2) to file/comment on a verify-red issue when the chain goes red;
-    # contents: read must be listed explicitly too — specifying any
-    # permission here resets every unlisted scope to `none`, and
-    # actions/checkout below still needs it.
+    # issues: write is scoped to this job only, so a red chain can file or
+    # comment on a verify-red issue; contents: read must be listed explicitly
+    # too — specifying any permission here resets every unlisted scope to
+    # `none`, and actions/checkout below still needs it.
     permissions:
       contents: read
       issues: write
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [18, 20, 22]
     steps:
-      # fetch-depth: 0 — the OKF pin suite (scripts/test_okf_pins.mjs) verifies
-      # that each content-addressed pin resolves through git (`git show
-      # <blob>:<path>`), not only through its committed-copy fallback. A default
-      # shallow (depth-1) checkout cannot reach the old pinned blobs, so those
-      # git-resolution assertions fail on CI while passing locally. Full history
-      # gives the suite what it asserts against; the production fallback keeps a
-      # real --depth 1 host working regardless (that path is its own test).
+      # fetch-depth: 0 — the OKF pin checks verify that each content-addressed
+      # pin resolves through git (`git show <blob>:<path>`), not only through
+      # its committed-copy fallback. A default shallow (depth-1) checkout
+      # cannot reach the old pinned blobs, so those git-resolution assertions
+      # fail on CI while passing locally.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
         with:
-          node-version: ${{ matrix.node-version }}
+          workspaces: packages/bee-rs
 
-      # scripts/verify_all.mjs reads .bee/config.json `commands.verify` and
-      # runs it verbatim — this is the single source of truth for the verify
-      # chain, so CI can never drift from what a local session runs. Output
-      # is additionally teed to a file so a red run has a tail to attach to
-      # the auto-filed issue below — the invocation itself (still exactly
-      # `node scripts/verify_all.mjs`, still the full commands.verify chain)
-      # is unchanged.
+      - name: Build the binary
+        run: cargo build --release --manifest-path packages/bee-rs/Cargo.toml
+
+      # This is .bee/config.json `commands.verify` verbatim — the single
+      # source of truth for the verify chain, so CI can never drift from what
+      # a local session runs. Output is teed so a red run has a tail to attach
+      # to the auto-filed issue below.
       - name: Run verify chain
-        run: node scripts/verify_all.mjs 2>&1 | tee verify-output.log
+        run: |
+          cargo test --release --manifest-path packages/bee-rs/Cargo.toml -- --test-threads=1 \
+            2>&1 | tee verify-output.log
 
-      # D3: registry freshness only matters on the green path — the default
-      # step condition already skips this after the verify step above fails.
+      # Freshness only matters on the green path — the default step condition
+      # already skips this after the verify step above fails.
       - name: Check impact registry freshness
-        run: node scripts/impact_registry.mjs --check
+        run: ./packages/bee-rs/target/release/bee dev impact-registry --check
 
-      # D2 + plan-check P3: exactly one matrix leg files/comments the issue.
-      # fail-fast: false means all three legs go red together on a real
-      # failure, so without this gate all three would race to file/comment;
-      # node 20 is the arbitrary single leg. Scoped to `github.event_name !=
-      # 'pull_request'` — this workflow no longer triggers on pull_request at
-      # all (schedule + workflow_dispatch only), but the negative form keeps
-      # scheduled and manual runs filing issues even if a pull_request
-      # trigger is ever reintroduced, without re-opening the fork-PR
-      # read-only GITHUB_TOKEN hazard the original scoping avoided.
+      - name: Check hook manifests are in sync with the catalog
+        run: ./packages/bee-rs/target/release/bee dev render-hook-manifests --check
+
       - name: File verify-red issue on failure
-        if: failure() && github.event_name != 'pull_request' && matrix.node-version == 20
+        if: failure() && github.event_name != 'pull_request'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERIFY_TAIL_FILE: verify-output.log
-        run: node scripts/ci_verify_issue.mjs
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="verify chain red on ${{ github.ref_name }}"
+          tail="$(tail -n 60 verify-output.log 2>/dev/null || echo '(no output captured)')"
+          body="$(printf 'Run: %s/%s/actions/runs/%s\n\n```\n%s\n```\n' \
+            "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}" "$tail")"
+          existing="$(gh issue list --state open --search "$title in:title" --json number \
+            --jq '.[0].number' 2>/dev/null || true)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --label verify-red || \
+              gh issue create --title "$title" --body "$body"
+          fi

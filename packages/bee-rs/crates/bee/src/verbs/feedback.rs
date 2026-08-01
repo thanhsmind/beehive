@@ -49,8 +49,8 @@
 use crate::fsutil::{read_json, ReadJson};
 use crate::jsjson;
 use crate::registry::{check_manifest_drift, Drift};
-use crate::roots::{resolve_store_root, Roots};
-use crate::verbs::{emit_no_root_error, record_timing};
+use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
+use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -1383,7 +1383,9 @@ fn run_count(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "feedback count", parsed.pre_json, t0, &why))
+        }
         Roots::None => {
             return Some(emit_no_root_error(&cwd, "feedback count", parsed.pre_json, t0))
         }
@@ -1659,7 +1661,9 @@ fn run_digest(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "feedback digest", parsed.pre_json, t0, &why))
+        }
         Roots::None => {
             return Some(emit_no_root_error(&cwd, "feedback digest", parsed.pre_json, t0))
         }
@@ -1716,7 +1720,9 @@ fn run_collect(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "feedback collect", parsed.pre_json, t0, &why))
+        }
         Roots::None => {
             return Some(emit_no_root_error(&cwd, "feedback collect", parsed.pre_json, t0))
         }
@@ -1968,7 +1974,9 @@ fn run_rank(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "feedback rank", parsed.pre_json, t0, &why))
+        }
         Roots::None => {
             return Some(emit_no_root_error(&cwd, "feedback rank", parsed.pre_json, t0))
         }

@@ -194,6 +194,21 @@ pub fn resolve_roots(start: &Path) -> HookRoots {
 
 // --- fail-open logging -----------------------------------------------------
 
+/// CUTOVER — the install probe every hook opens with.
+///
+/// Each `.mjs` wrapper began `if (!existsSync(<root>/.bee/bin/lib/state.mjs))
+/// return 0;` — "bee is not installed at this root, decide nothing". That
+/// probe named a vendored file the cutover deletes, so left alone it would
+/// have answered "not installed" in every repo on earth and switched every
+/// hook — including the write guard — permanently off, silently.
+///
+/// The question is unchanged; only the marker moved, onto the one file every
+/// install writes and nothing else does. roots.rs already stops its walk-up
+/// there, so the two agree by construction.
+pub(crate) fn bee_installed(root: &std::path::Path) -> bool {
+    root.join(".bee").join("onboarding.json").is_file()
+}
+
 pub fn now_iso() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }

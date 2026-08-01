@@ -52,7 +52,7 @@ fn run_inner(argv: &[String], stdin: &str) -> ExitCode {
     };
     // Vendored-lib presence gate, kept for behavior parity on hosts without
     // a .bee/bin frame.
-    if !root.join(".bee").join("bin").join("lib").join("state.mjs").is_file() {
+    if !crate::hooks::adapter::bee_installed(root) {
         return ExitCode::SUCCESS;
     }
     let enabled = match hook_enabled(root, HOOK_NAME) {

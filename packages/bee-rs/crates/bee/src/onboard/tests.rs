@@ -538,11 +538,15 @@ fn repo_hooks_wires_both_projections_and_preserves_foreign_entries() {
     assert!(raw.ends_with("}\n"));
     assert!(raw.contains("\n  \"hooks\": {"));
 
-    // Node wiring, because this repo has no vendored binary.
-    assert_eq!(
-        settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"],
-        "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-prompt-context.mjs"
-    );
+    // CUTOVER: a repo with no vendored binary yet gets the runtime-detecting
+    // loop plus a VISIBLE fail-open, never a `node …bee-prompt-context.mjs`
+    // command with nothing behind it.
+    let cmd = settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+        .as_str()
+        .unwrap();
+    assert!(!cmd.contains(".mjs"), "{cmd}");
+    assert!(cmd.contains("exec \"$b\" hook prompt-context"), "{cmd}");
+    assert!(cmd.contains("bee: hook binary missing"), "{cmd}");
     // Codex projection landed too.
     assert!(fx.repo.join(".codex").join("hooks.json").exists());
     assert!(fx.repo.join(".bee").join("bin").join("hooks").join("bee-write-guard.mjs").exists());

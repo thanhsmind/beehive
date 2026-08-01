@@ -1,12 +1,16 @@
-// hooks — `bee hook <name>` subcommands: the Rust replacements for the
-// `node .bee/hooks/bee-<name>.mjs` wrapper scripts. claude-hooks.json is the
-// only wiring change (contract C3); each hook's stdin/stdout/exit contract
-// is byte-identical to its .mjs original.
+// hooks — `bee hook <name>` subcommands: the native replacements for the
+// former `node .bee/bin/hooks/bee-<name>.mjs` wrapper scripts. hooks.json
+// wiring is the only host-visible change (contract C3); each hook's
+// stdin/stdout/exit contract is unchanged.
 //
-// stdin is read ONCE here and handed to the hook impl; a native hook that
-// meets a genuinely-rare edge it cannot replicate byte-for-byte returns
-// `Outcome::Delegate` and the ORIGINAL .mjs wrapper re-runs with the same
-// bytes — the strangler bail, at hook granularity.
+// stdin is read ONCE here and handed to the hook impl. A hook that meets an
+// edge it cannot decide returns `Outcome::Delegate` — which, since the
+// cutover, no longer means "re-run the .mjs wrapper" (there is none). It means
+// UNDECIDABLE, and `emit_undecidable` below resolves it the only way a hook
+// may: fail OPEN (exit 0, the tool call proceeds) with a VISIBLE diagnostic on
+// stderr. Failing closed on infrastructure would let a hook bug block every
+// tool call in a session; failing open silently would let a guard stop
+// guarding without anyone noticing. Loud and open is the only safe pair.
 
 pub mod adapter;
 pub mod chain_nudge;
@@ -23,13 +27,16 @@ pub mod tools_logger;
 pub mod write_guard;
 
 use std::ffi::OsString;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub enum Outcome {
     Done(ExitCode),
-    /// Re-run the Node wrapper with the same stdin. Native code must have
-    /// produced NO output before returning this.
+    /// This hook cannot decide the payload it was given. Native code must have
+    /// produced NO output before returning this; `emit_undecidable` then fails
+    /// open, loudly. (Named `Delegate` for its whole history — kept so the
+    /// hundreds of sites that return it keep reading the same, and because
+    /// "delegate" still describes what happens: the decision is handed back to
+    /// the host, which is now the only place left to hand it.)
     Delegate,
 }
 
@@ -40,85 +47,29 @@ fn read_stdin_once() -> Vec<u8> {
     buf
 }
 
-fn hook_js_path(name: &str) -> Option<PathBuf> {
-    if let Some(dir) = std::env::var_os("BEE_HOOK_JS_DIR") {
-        let p = PathBuf::from(dir).join(format!("bee-{name}.mjs"));
-        return p.is_file().then_some(p);
-    }
-    if let Some(root) = std::env::var_os("CLAUDE_PLUGIN_ROOT") {
-        let p = PathBuf::from(root)
-            .join("packages")
-            .join("bee")
-            .join("hooks")
-            .join(format!("bee-{name}.mjs"));
-        if p.is_file() {
-            return Some(p);
-        }
-    }
-    // Repo-checkout fallback: walk up from the exe, then cwd.
-    let mut starts: Vec<PathBuf> = Vec::new();
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            starts.push(dir.to_path_buf());
-        }
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        starts.push(cwd);
-    }
-    for start in starts {
-        let mut dir: Option<&std::path::Path> = Some(&start);
-        while let Some(d) = dir {
-            // Vendored host layout first (deployment-true), then the bee
-            // repo checkout layout.
-            let vendored = d
-                .join(".bee")
-                .join("bin")
-                .join("hooks")
-                .join(format!("bee-{name}.mjs"));
-            if vendored.is_file() {
-                return Some(vendored);
-            }
-            let repo = d
-                .join("packages")
-                .join("bee")
-                .join("hooks")
-                .join(format!("bee-{name}.mjs"));
-            if repo.is_file() {
-                return Some(repo);
-            }
-            dir = d.parent();
-        }
-    }
-    None
-}
-
-fn delegate_to_node(name: &str, argv_rest: &[String], stdin: &[u8]) -> ExitCode {
-    // Test tripwire: prove a hook ran NATIVE (a delegation under this env is
-    // loud instead of silently byte-identical-by-construction).
+/// CUTOVER: a hook that cannot decide fails OPEN and SAYS SO.
+///
+/// Before the cutover this spawned the `.mjs` wrapper with the same stdin.
+/// There is no wrapper any more, and the two remaining choices are both worse
+/// if taken silently: a non-zero exit on a PreToolUse hook BLOCKS the tool
+/// call (a guard bug would freeze a whole session), and a silent exit 0 lets a
+/// guard stop guarding with nothing in the transcript to show for it. So:
+/// exit 0, with one line on stderr naming the hook and the payload shape it
+/// could not decide. Same posture the rendered hook commands take when the
+/// binary is missing (`bee: hook binary missing`) — visible fail-open, spec R2.
+///
+/// `BEE_HOOK_NO_DELEGATE` stays: it is the test tripwire that proves a hook ran
+/// NATIVE, and it turns this arm into a loud exit 42 that no fixture can
+/// mistake for success.
+fn emit_undecidable(name: &str) -> ExitCode {
     if std::env::var_os("BEE_HOOK_NO_DELEGATE").is_some() {
-        eprintln!("bee(rs): hook {name} DELEGATED (BEE_HOOK_NO_DELEGATE tripwire)");
+        eprintln!("bee(rs): hook {name} UNDECIDABLE (BEE_HOOK_NO_DELEGATE tripwire)");
         return ExitCode::from(42);
     }
-    let Some(script) = hook_js_path(name) else {
-        // A hook must NEVER fail closed over infrastructure: exit 0 silently,
-        // matching the wrappers' own fail-open posture.
-        return ExitCode::SUCCESS;
-    };
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-    let child = Command::new("node")
-        .arg(&script)
-        .args(argv_rest)
-        .stdin(Stdio::piped())
-        .spawn();
-    let Ok(mut child) = child else { return ExitCode::SUCCESS };
-    if let Some(mut pipe) = child.stdin.take() {
-        let _ = pipe.write_all(stdin);
-    }
-    match child.wait() {
-        Ok(s) => ExitCode::from(s.code().unwrap_or(0).clamp(0, 255) as u8),
-        Err(_) => ExitCode::SUCCESS,
-    }
+    eprintln!(
+        "bee: hook {name} could not decide this payload — allowing the operation (fail-open).          The guard did NOT run on it."
+    );
+    ExitCode::SUCCESS
 }
 
 /// Dispatch `bee hook <name> [args...]`. Returns None when argv is not a
@@ -151,6 +102,6 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     };
     Some(match outcome {
         Outcome::Done(code) => code,
-        Outcome::Delegate => delegate_to_node(&name, &rest, &stdin),
+        Outcome::Delegate => emit_undecidable(&name),
     })
 }

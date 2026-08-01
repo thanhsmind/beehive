@@ -50,9 +50,9 @@ use crate::fsutil::append_jsonl;
 use crate::jsjson;
 use crate::lock::{acquire_store_lock_once, AcquireOnce};
 use crate::registry::{check_manifest_drift, Drift};
-use crate::roots::{resolve_store_root, Roots};
+use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::read_config_raw;
-use crate::verbs::emit_no_root_error;
+use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -573,7 +573,9 @@ fn preamble(cmd: &str, pre_json: bool, t0: Instant) -> Result<Option<Ctx>, ExitC
     let Ok(cwd) = std::env::current_dir() else { return Ok(None) };
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return Ok(None),
+        Roots::Unsupported(why) => {
+            return Err(emit_unsupported_root(&cwd, cmd, pre_json, t0, &why))
+        }
         Roots::None => return Err(emit_no_root_error(&cwd, cmd, pre_json, t0)),
     };
     let Ok(drift) = check_manifest_drift(&root) else { return Ok(None) };

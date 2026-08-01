@@ -93,7 +93,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         return Outcome::Done(ExitCode::SUCCESS);
     };
     // Vendored-lib presence gate, byte-parity with the .mjs's existsSync check.
-    if !root.join(".bee").join("bin").join("lib").join("state.mjs").exists() {
+    if !crate::hooks::adapter::bee_installed(&root) {
         return Outcome::Done(ExitCode::SUCCESS);
     }
     match run_gated(&ctx, &root) {
@@ -160,14 +160,15 @@ conservative), then present Gate 4."
         let mut m = format!(
             "bee chain-nudge: {who} returned - collect its [STATUS] token \
 ([DONE]/[BLOCKED]/[HANDOFF]/[NOOP]), update the cell \
-(node .bee/bin/bee.mjs cells), and check/release its reservations \
-(node .bee/bin/bee.mjs reservations list --active-only). \
+(bee cells), and check/release its reservations \
+(bee reservations list --active-only). \
 When the wave is clean, move to the next wave or the next chain step."
         );
-        // Deferred-capture reminder. The .mjs dynamic-imports cells.mjs inside
-        // its own silent try/catch — a missing vendored module skips the
-        // reminder without a trace, replicated by the presence gate below.
-        if root.join(".bee").join("bin").join("lib").join("cells.mjs").exists() {
+        // Deferred-capture reminder. The .mjs dynamic-imported cells.mjs
+        // inside its own silent try/catch, and a missing vendored module
+        // skipped the reminder without a trace; the module is compiled in now,
+        // so the reminder always runs.
+        {
             let (count, cells) = scribing_debt(root)?;
             if count > 0 {
                 m.push_str(&format!(

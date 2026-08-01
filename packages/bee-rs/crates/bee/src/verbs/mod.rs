@@ -102,6 +102,42 @@ pub(crate) fn record_timing(root: &Path, cmd: &str, t0: Instant, ok: bool) {
     eprintln!("[bee] {cmd} {ms}ms");
 }
 
+/// CUTOVER: the shared emission for every `Roots::Unsupported` arm. There is
+/// no runtime behind the binary any more, so a door that cannot serve a root
+/// shape must SAY SO — never return None into silence.
+///
+/// * `LinkInvalid` is not a refusal at all, it is Node's own
+///   `WorktreeLinkInvalidError` emission reproduced byte-for-byte (message,
+///   stream, exit code, and the timings.jsonl append it skips).
+/// * `GrantedWorktree` is a real refusal, and it names the checkout to run
+///   from rather than leaving the caller to guess.
+pub(crate) fn emit_unsupported_root(
+    cwd: &Path,
+    cmd: &str,
+    use_json: bool,
+    t0: Instant,
+    why: &crate::roots::Unsupported,
+) -> ExitCode {
+    match why {
+        crate::roots::Unsupported::LinkInvalid(message) => {
+            crate::link_invalid::emit_link_invalid(message, cmd, use_json, t0)
+        }
+        crate::roots::Unsupported::GrantedWorktree { main_root } => {
+            let msg = format!(
+                "bee {cmd}: refused inside a granted feature worktree — this command reads the shared control plane (sessions, claims, workers, workflows, handoff), which lives in the main checkout. FIX: run it from {}.",
+                main_root.display()
+            );
+            if use_json {
+                println!("{}", jsjson::stringify(&json!({ "error": msg })));
+            } else {
+                eprintln!("{msg}");
+            }
+            record_timing(cwd, cmd, t0, false);
+            ExitCode::FAILURE
+        }
+    }
+}
+
 /// main()'s no-root emitError path + timing, for any verb.
 pub(crate) fn emit_no_root_error(cwd: &Path, cmd: &str, use_json: bool, t0: Instant) -> ExitCode {
     let msg = "No bee repo root found (no .bee/onboarding.json or .git up the tree). Run bee-hive onboarding.";

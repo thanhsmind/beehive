@@ -2345,6 +2345,16 @@ function mergeRepoSettings(settingsPath) {
 
 const CODEX_TRANSPORT_DIAGNOSTIC = "bee: hook transport unavailable (no git root)";
 
+// rust-port R6: the binary is the only runtime, so "no binary" is now its own
+// visible fail-open arm rather than a silent node fallback.
+const CODEX_BINARY_MISSING_DIAGNOSTIC = "bee: hook binary missing (.bee/bin/bee)";
+
+// `bee-write-guard.mjs` -> `write-guard`: the hook NAME is what both the POSIX
+// and the Windows arm derive from now that neither names a wrapper file.
+function codexHookName(fileName) {
+  return fileName.replace(/^bee-/, "").replace(/\.mjs$/, "");
+}
+
 // A repo that ships hooks/catalog.mjs IS bee, and that catalog — not this file —
 // is the authority for its own .codex/hooks.json (TARGETS.REPO renders
 // `"$r"/hooks/<script>`, because bee's hooks live in hooks/). renderCodexHookEntries()
@@ -2376,11 +2386,20 @@ function runtimeCoversCodex(runtime) {
   return runtime === "codex" || runtime === "both";
 }
 
+// rust-port R6 (cutover): the HOST Codex projection is the FOURTH wiring
+// surface and was the last one still naming node. It now launches the
+// vendored binary — the only runtime — with a VISIBLE fail-open arm when the
+// host has not built it, matching the no-git-root arm's discipline (spec R2:
+// fail-open must be visible, never silent). Detection is at HOOK TIME, in the
+// host's own shell, for the same reason the catalog's repoCommand does it
+// there: `$r` does not exist until the command runs.
 function codexHookCommand(fileName) {
+  const name = codexHookName(fileName);
   return [
     'r="$(git rev-parse --show-toplevel 2>/dev/null)"',
     `[ -n "$r" ] || { echo "${CODEX_TRANSPORT_DIAGNOSTIC}" >&2; exit 0; }`,
-    `exec node "$r"/.bee/bin/hooks/${fileName} --source=repo`,
+    `for b in "$r"/.bee/bin/bee "$r"/.bee/bin/bee.exe; do [ -x "$b" ] && exec "$b" hook ${name} --source=repo; done`,
+    `echo "${CODEX_BINARY_MISSING_DIAGNOSTIC}" >&2; exit 0`,
   ].join("\n");
 }
 
@@ -2412,20 +2431,33 @@ function codexHookCommand(fileName) {
 // running under) with stdio 'inherit' (hooks read their JSON payload from
 // stdin — this must be inherited, never piped), then process.exit's with
 // the child's status (1 if the spawn itself errored).
+//
+// rust-port R6 (cutover): the bootstrap now LAUNCHES THE BINARY and exits 0
+// silently when the host carries none — there is no wrapper left to spawn.
+// Its trailing argv is the HOOK NAME (`write-guard`), not a wrapper filename.
+// This `node -e` launcher is the ONE surface Node cannot leave: R8a's ban on
+// `$`, `%` and backtick (what makes one string parse identically under
+// cmd.exe and powershell.exe) is also a ban on command substitution, so the
+// command STRING cannot ask git for the repo root, and the binary can only
+// resolve its own root once launched from a root-dependent path.
 function codexWindowsBootstrap(fileName) {
+  const name = codexHookName(fileName);
   const body = [
     "var cp=require('child_process');",
     "var path=require('path');",
+    "var fs=require('fs');",
     "var hook=process.argv[1];",
     "var root='';",
     "try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}",
     "if(!root){process.exit(0);}",
-    "var target=path.join(root,'.bee','bin','hooks',hook);",
-    "var r=cp.spawnSync(process.execPath,[target,'--source=repo'],{stdio:'inherit'});",
+    "var bin=path.join(root,'.bee','bin','bee.exe');",
+    "if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}",
+    "if(!fs.existsSync(bin)){process.exit(0);}",
+    "var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});",
     "if(r.error){process.exit(1);}",
     "process.exit(r.status===null?1:r.status);",
   ].join("");
-  return 'node -e "' + body + '" ' + fileName;
+  return 'node -e "' + body + '" ' + name;
 }
 
 function codexHookCommandWindows(fileName) {
@@ -2505,11 +2537,15 @@ function renderCodexHookEntries() {
 // All of them are bee-shipped wiring and must be REPLACED by the canonical
 // render, never preserved beside it (a preserved stale twin double-fires
 // every event).
+// rust-port R6: also recognizes the BINARY spelling (`.bee/bin/bee … hook
+// <name>`), which carries no wrapper filename at all — without this arm a
+// re-render would stack a second copy beside the first and every event would
+// double-fire.
 function isBeeCodexHookEntry(entry) {
   for (const hook of entry?.hooks || []) {
-    if (/hooks\/bee-[a-z-]+\.mjs/.test(String(hook?.command || ""))) {
-      return true;
-    }
+    const command = String(hook?.command || "");
+    if (/hooks\/bee-[a-z-]+\.mjs/.test(command)) return true;
+    if (command.includes(".bee/bin/bee") && command.includes(" hook ")) return true;
   }
   return false;
 }

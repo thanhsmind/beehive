@@ -1,16 +1,21 @@
 // Routing: which argv shapes are served natively.
 //
 // Native verbs register a `try_native(args, t0) -> Option<ExitCode>` probe:
-// returning None (for any reason — unrecognized flag shape, linked-worktree
-// root) falls through to the Node delegate BEFORE any output is produced.
-// `bee rs-info` is a diagnostic outside the porcelain namespace, so it can
-// never collide with a Node-surface command.
+// returning None (for any reason — an unrecognized flag shape, an argv the
+// port never proved) means NO output has been produced and no verb claimed the
+// command. `bee rs-info` is a diagnostic outside the porcelain namespace, so
+// it can never collide with a porcelain command.
 //
-// CUTOVER: "corrupt JSON input" used to be on that list of reasons. It no
-// longer is — a corrupt store file warns natively (fsutil::warn_corrupt_json)
-// and takes the fallback Node's readJson would have returned, so no probe
-// declines a command over one. Nothing that a running bee can encounter in its
-// own state should reach the delegate, because there is no runtime behind it.
+// CUTOVER: None used to mean "hand it to `node bee.mjs`". The Node tree is
+// gone, so None now ends at `emit_unsupported_shape` below — a named refusal
+// on stderr with a non-zero exit. Silence is the one outcome forbidden here:
+// a dispatcher that neither serves nor complains is indistinguishable from a
+// command that succeeded and did nothing.
+//
+// "Corrupt JSON input" used to be on the list of decline reasons. It no longer
+// is — a corrupt store file warns natively (fsutil::warn_corrupt_json) and
+// takes the fallback Node's readJson would have returned, so no probe declines
+// a command over one.
 
 use crate::verbs;
 use std::ffi::OsString;
@@ -138,12 +143,72 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     verbs::try_native(args, t0)
 }
 
+/// The end of the line. Reached only when no probe claimed the argv and no
+/// probe emitted anything — the shape is either a command this binary has no
+/// spelling for, or a flag combination the owning verb never proved.
+///
+/// Deliberately generic. bee.mjs's dispatcher carried a nearest-match
+/// suggester and per-group `Use: …` usage lines; campaign rule 1 kept that
+/// machinery out of the port on purpose (a verb served only proven shapes and
+/// Node owned every error path). Reproducing it now would be inventing an
+/// error surface, not porting one — so this says exactly what is true and
+/// points at the two help surfaces that ARE native and complete.
+///
+/// `--json` is honoured: a script that asked for JSON gets `{"error": …}` on
+/// stdout rather than an unparseable empty document.
+pub fn emit_unsupported_shape(args: &[OsString]) -> ExitCode {
+    let shown: Vec<String> =
+        args.iter().map(|a| a.to_string_lossy().into_owned()).collect();
+    let attempted = if shown.is_empty() { "(no command)".to_string() } else { shown.join(" ") };
+    let msg = format!(
+        "bee: unsupported command shape: `bee {attempted}`.{} FIX: `bee --help` for the flow surface, `bee --help --all` for every command.",
+        group_hint(shown.first().map(String::as_str))
+    );
+    let json = shown.iter().any(|a| a == "--json" || a.starts_with("--json="));
+    if json {
+        println!("{}", crate::jsjson::stringify(&serde_json::json!({ "error": msg })));
+    } else {
+        eprintln!("{msg}");
+    }
+    ExitCode::FAILURE
+}
+
+/// The one thing worth reconstructing from bee.mjs's error machinery: when the
+/// first token IS a known group, say what that group actually takes. This is
+/// what turned `bee state show` and `bee backlog list` — the two shapes the
+/// cutover found in live use — from a bare "unsupported" into a usable answer,
+/// and it costs nothing: the sub-verb list is read straight out of
+/// `REGISTRY_PAYLOAD`, the same bytes `--help` renders from.
+fn group_hint(first: Option<&str>) -> String {
+    let Some(group) = first.filter(|g| !g.starts_with('-')) else { return String::new() };
+    let Ok(payload) =
+        serde_json::from_str::<serde_json::Value>(crate::registry::REGISTRY_PAYLOAD)
+    else {
+        return String::new();
+    };
+    let Some(commands) = payload.get("commands").and_then(|c| c.as_array()) else {
+        return String::new();
+    };
+    let prefix = format!("{group}.");
+    let mut subs: Vec<String> = commands
+        .iter()
+        .filter_map(|c| c.get("name").and_then(|n| n.as_str()))
+        .filter_map(|n| n.strip_prefix(&prefix))
+        .map(|rest| rest.replace('.', " "))
+        .collect();
+    if subs.is_empty() {
+        return String::new();
+    }
+    subs.dedup();
+    format!(" `bee {group}` takes: {}.", subs.join(", "))
+}
+
 fn rs_info() -> ExitCode {
     let info = serde_json::json!({
         "runtime": "rust",
         "version": env!("CARGO_PKG_VERSION"),
         "ported": PORTED,
-        "fallback": "node bee.mjs",
+        "fallback": null,
     });
     println!("{}", serde_json::to_string_pretty(&info).unwrap());
     ExitCode::SUCCESS

@@ -104,19 +104,14 @@ const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
 const NO_WORK_PHASES: [&str; 2] = ["idle", "compounding-complete"];
 // compaction.mjs ANCHOR_NUDGE_KEY / ANCHOR_NUDGE_COMMAND
 const ANCHOR_NUDGE_KEY: &str = "anchor-missing-nudge";
-const ANCHOR_NUDGE_COMMAND: &str = "node .bee/bin/bee.mjs intent set --request \"<the user's VERBATIM request>\" --acceptance \"<what done means>\"";
+const ANCHOR_NUDGE_COMMAND: &str = ".bee/bin/bee intent set --request \"<the user's VERBATIM request>\" --acceptance \"<what done means>\"";
 
-// The vendored-lib transitive import closure the .mjs pipeline dynamically
-// imports (state/claims/reservations/inject/compaction/intent + deps). A
-// repo missing ANY of these makes Node's `await import` throw with a
-// V8-worded crash log — delegate instead of replicating the message.
-const LIB_CLOSURE: [&str; 21] = [
-    "backlog.mjs", "capture.mjs", "cells.mjs", "claims.mjs", "compaction.mjs",
-    "decisions.mjs", "dispatch-guard.mjs", "fsutil.mjs", "inject.mjs", "intent.mjs",
-    "judge.mjs", "knowledge.mjs", "lease-store.mjs", "lock.mjs", "path-identity.mjs",
-    "reservations.mjs", "schedule.mjs", "state.mjs", "workflow-store.mjs",
-    "workspace-store.mjs", "worktree-holds.mjs",
-];
+// CUTOVER: a 21-module `LIB_CLOSURE` preflight used to live here. The .mjs
+// pipeline dynamically imported that closure, so a repo missing any one of
+// them made Node's `await import` throw with a V8-worded crash log, and this
+// port delegated rather than invent the message. The closure is compiled into
+// the binary now — it cannot be partially present, so there is nothing left to
+// preflight.
 
 /// Preflight signal: this input needs the Node runtime for byte parity.
 #[derive(Debug)]
@@ -140,7 +135,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         // No root: Node logs nothing and exits 0 — byte-identical natively.
         return Outcome::Done(ExitCode::SUCCESS);
     };
-    if !root.join(".bee").join("bin").join("lib").join("state.mjs").is_file() {
+    if !crate::hooks::adapter::bee_installed(&root) {
         // Presence gate (bee-prompt-context.mjs:59) — still run the shared
         // adapter so coverage gaps are logged exactly as Node would.
         let _ctx = read_hook_context(HOOK_NAME, argv, stdin);
@@ -149,9 +144,6 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     if roots.worktree_resolution != "ordinary" {
         // Linked-worktree topology pulls the grants/control-root surface —
         // delegated wholesale for now.
-        return Outcome::Delegate;
-    }
-    if !LIB_CLOSURE.iter().all(|m| root.join(".bee").join("bin").join("lib").join(m).is_file()) {
         return Outcome::Delegate;
     }
 
@@ -1867,11 +1859,10 @@ mod tests {
     use serde_json::json;
 
     fn bee_repo(dir: &Path) {
-        std::fs::create_dir_all(dir.join(".bee").join("bin").join("lib")).unwrap();
+        std::fs::create_dir_all(dir.join(".bee")).unwrap();
         std::fs::create_dir_all(dir.join(".git")).unwrap();
-        for m in LIB_CLOSURE {
-            std::fs::write(dir.join(".bee").join("bin").join("lib").join(m), "// stub").unwrap();
-        }
+        std::fs::write(dir.join(".bee").join("onboarding.json"), "{}
+").unwrap();
     }
 
     fn write(dir: &Path, rel: &str, content: &str) {

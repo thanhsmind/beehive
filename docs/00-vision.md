@@ -39,7 +39,7 @@ bee reassembles these into one opinionated chain, sized for a single developer r
 
 ## Non-goals
 
-- **Not a runtime, not a binary.** No Rust CLI, no daemon, no database migrations. State is JSON/JSONL + markdown; helpers are small Node scripts vendored into the repo (like khuym's `.codex/*.mjs`).
+- **Not a daemon, not a database.** No background service, no schema migrations. State stays JSON/JSONL + markdown, readable and diffable by hand. *(Revised at the R6 cutover: this non-goal used to read "not a binary — no Rust CLI", and the helpers WERE small vendored Node scripts. They are one native binary now (plans/rust-port.md): hook latency, not architecture taste, is what moved it — a PreToolUse hook fires on nearly every tool call and paid ~50–120 ms of Node cold start each time. The parts this bullet actually protects — plain-text state, no daemon, no migrations — are unchanged.)*
 - **Not 20 runtimes.** Claude Code and Codex only. The abstraction must make a third runtime cheap later, but bee does not pay for it now.
 - **Not 40 skills.** Twelve skills today; additions are decision-gated, not counted — a new skill requires a decision record in `docs/decisions/` naming the workflow gap no existing skill covers (decision 0002 lifted the original ten-skill hard cap this way). Domain skills (frontend, deploy, DB…) remain out of scope — that's what other plugins are for.
 - **Not a benchmark rig.** Health is measured by internal signals (entropy score, friction backlog, predicted-vs-actual), not an external benchmark harness.

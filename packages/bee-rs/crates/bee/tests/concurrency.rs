@@ -15,19 +15,21 @@
 //   scripts/tests/test_worktree_holds_race.mjs    → every_mirrored_hold_survives_*
 //
 // PROVING THE NATIVE PATH RAN (expertise/tests/patterns/
-// proving-the-code-under-test-ran.md). A race against a verb that DELEGATES to
-// `node bee.mjs` proves nothing about the Rust code: Node would answer
-// correctly and every assertion below would pass while testing the wrong
-// runtime. There is no verb-level BEE_HOOK_NO_DELEGATE equivalent, so this
-// file uses the other shape from that pattern — SABOTAGE THE FALLBACK. Every
-// child runs with `BEE_JS_ENTRY` pointed at a file that does not exist;
-// js_fallback.rs treats a set-but-wrong BEE_JS_ENTRY as a hard error, so ANY
-// delegation dies with exit 127 and the distinctive line
-// "bee(rs): BEE_JS_ENTRY points to a missing file". Each race first probes its
-// verb once, sequentially: a probe that delegates prints a loud SKIP naming
-// the unported verb instead of a silent return, and a delegation observed
-// mid-race is a hard failure (it means the race pushed a native verb off its
-// native path — worth knowing, never worth passing quietly).
+// proving-the-code-under-test-ran.md). A race against a verb the binary does
+// not actually serve proves nothing: before the cutover such a verb answered
+// out of `node bee.mjs` and every assertion below passed while testing the
+// wrong runtime, and the guard against that was a SABOTAGED `BEE_JS_ENTRY`
+// (any delegation died with a named exit 127).
+//
+// CUTOVER: there is no fallback left to sabotage, and none is needed — an
+// unserved argv shape now ends at router.rs's own refusal, `bee: unsupported
+// command shape`, exit 1. That refusal IS the tripwire, and it is a stronger
+// one than the old sabotage: it fires on the real shipped binary with no env
+// rigging at all. Each race still probes its verb once, sequentially: a probe
+// that comes back unserved prints a loud SKIP naming the verb instead of a
+// silent return, and an unserved answer observed mid-race is a hard failure
+// (it means the race pushed a native verb off its native path — worth
+// knowing, never worth passing quietly).
 //
 // WHY REAL PROCESSES FOR THE GREEN PATH AND THREADS FOR THE RED CONTROLS.
 // The product path is always raced as N genuinely concurrent OS processes
@@ -68,8 +70,11 @@ const RACERS: usize = 8;
 /// budget (lock.rs MAX_ATTEMPTS * RETRY_DELAY_MS); anything past this is a
 /// wedge, and a wedge must fail loudly rather than hang the suite.
 const CHILD_LIMIT: Duration = Duration::from_secs(90);
-/// js_fallback.rs's exit code for a set-but-missing BEE_JS_ENTRY.
-const DELEGATE_EXIT: i32 = 127;
+/// router.rs's exit code for an argv shape no probe claimed.
+const UNSERVED_EXIT: i32 = 1;
+/// The distinctive half of that refusal — exit 1 alone is also a legitimate
+/// typed refusal, so the tripwire keys on the text.
+const UNSERVED_MARK: &str = "unsupported command shape";
 
 fn bee_bin() -> PathBuf {
     assert_cmd::cargo::cargo_bin("bee")
@@ -84,18 +89,13 @@ fn bee_bin() -> PathBuf {
 // an execution-approved phase, which `cells claim` requires before it will
 // reach its claim protocol at all.
 //
-// Unlike hook_contracts.rs this needs no `copy_vendored_lib`: the vendored
-// `.bee/bin/lib/` gate is a HOOK concern (the write guard byte-compares the
-// closure). The five verbs raced here read only the store, which is why a
-// fixture without it still exercises their real paths — confirmed by the
-// delegation probe each test runs before racing.
+// The five verbs raced here read only the store, which is why a bare fixture
+// still exercises their real paths — confirmed by the unserved probe each test
+// runs before racing.
 
 struct Fixture {
     _dir: tempfile::TempDir,
     root: PathBuf,
-    /// The sabotaged Node entry — an absolute path that provably does not
-    /// exist, so any delegation exits 127 and names itself.
-    missing_entry: PathBuf,
 }
 
 const PRISTINE_STATE: &str = r#"{
@@ -116,9 +116,7 @@ fn fixture() -> Fixture {
     }
     std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
     std::fs::write(root.join(".bee").join("state.json"), PRISTINE_STATE).unwrap();
-    let missing_entry = root.join(".bee").join("no-such-bee-entry.mjs");
-    assert!(!missing_entry.exists(), "the delegation tripwire must point at a MISSING file");
-    Fixture { _dir: dir, root, missing_entry }
+    Fixture { _dir: dir, root }
 }
 
 /// An open cell, shaped like test_claim_race.mjs's makeCell.
@@ -170,8 +168,8 @@ impl Racer {
             .unwrap_or_default();
         format!("{from_json}\n{}\n{}", self.stdout, self.stderr)
     }
-    fn delegated(&self) -> bool {
-        self.code == DELEGATE_EXIT && self.stderr.contains("BEE_JS_ENTRY points to a missing file")
+    fn unserved(&self) -> bool {
+        self.code == UNSERVED_EXIT && self.stderr.contains(UNSERVED_MARK)
     }
 }
 
@@ -179,7 +177,6 @@ fn bee_cmd(fx: &Fixture, args: &[String]) -> Command {
     let mut cmd = Command::new(bee_bin());
     cmd.args(args)
         .current_dir(&fx.root)
-        .env("BEE_JS_ENTRY", &fx.missing_entry)
         .env_remove("BEE_RS_TRACE")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -254,15 +251,15 @@ fn race(fx: &Fixture, argvs: Vec<Vec<String>>, label: &str) -> Vec<Racer> {
     })
 }
 
-/// The delegation probe. Runs the verb ONCE, sequentially, with the tripwire
-/// armed. Returns false (and prints a loud SKIP naming the verb) when the verb
-/// is not served natively — never a silent return.
+/// The native probe. Runs the verb ONCE, sequentially. Returns false (and
+/// prints a loud SKIP naming the verb) when the binary does not serve that
+/// argv shape at all — never a silent return.
 fn native_probe(fx: &Fixture, args: &[&str], scenario: &str) -> bool {
     let out = run_bee(fx, args, "probe");
-    if out.delegated() {
+    if out.unserved() {
         eprintln!(
-            "SKIP (unported: `bee {}` still delegates to `node bee.mjs` on this argv shape — \
-             BEE_JS_ENTRY sabotage tripwire, exit {DELEGATE_EXIT}) — racing it would prove \
+            "SKIP (unserved: `bee {}` is refused by the front door on this argv shape — \
+             exit {UNSERVED_EXIT}) — racing it would prove \
              nothing about the Rust store, so scenario \"{scenario}\" is not run",
             args.join(" ")
         );
@@ -271,15 +268,15 @@ fn native_probe(fx: &Fixture, args: &[&str], scenario: &str) -> bool {
     true
 }
 
-/// A delegation observed DURING a race is never acceptable: the probe already
-/// proved the verb is native, so a 127 here means concurrency pushed it off
-/// its native path and the scenario silently stopped testing Rust.
+/// An unserved answer DURING a race is never acceptable: the probe already
+/// proved the verb is native, so this means concurrency pushed it off its own
+/// path and the scenario silently stopped testing what it claims to.
 fn assert_all_native(racers: &[Racer], scenario: &str) {
     for r in racers {
         assert!(
-            !r.delegated(),
-            "{scenario}: racer {} fell back to Node MID-RACE (exit {DELEGATE_EXIT}) — the \
-             sequential probe was native, so concurrency drove this verb off the Rust path. \
+            !r.unserved(),
+            "{scenario}: racer {} came back UNSERVED MID-RACE (exit {UNSERVED_EXIT}) — the \
+             sequential probe was native, so concurrency drove this verb off its own path. \
              stderr: {}",
             r.label,
             r.stderr
@@ -388,26 +385,29 @@ where
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn the_delegation_tripwire_actually_bites() {
-    // Harness self-check. Every `native_probe` above is only meaningful if a
-    // real delegation is actually detectable — a tripwire that never fires
-    // would silently turn every race in this file into a test of `node
-    // bee.mjs`. An argv shape nothing in router.rs claims must therefore come
-    // back as the named 127, not as a passing command.
+fn the_unserved_tripwire_actually_bites() {
+    // Harness self-check. Every `native_probe` above is only meaningful if an
+    // unserved shape is actually detectable — a tripwire that never fires
+    // would silently turn every race in this file into a test of nothing. An
+    // argv shape nothing in router.rs claims must therefore come back as the
+    // named refusal, not as a passing command and NOT as silence.
     let fx = fixture();
     let out = run_bee(&fx, &["definitely-not-a-bee-verb"], "tripwire-self-check");
     assert_eq!(
-        out.code, DELEGATE_EXIT,
-        "an unported argv shape must die on the sabotaged BEE_JS_ENTRY (exit {DELEGATE_EXIT}); \
-         got exit {} — the delegation detector is broken and every race here is vacuous. \
-         stdout={} stderr={}",
+        out.code, UNSERVED_EXIT,
+        "an unserved argv shape must exit {UNSERVED_EXIT}; got exit {} — the detector is \
+         broken and every race here is vacuous. stdout={} stderr={}",
         out.code, out.stdout, out.stderr
     );
     assert!(
-        out.delegated(),
-        "the delegation must NAME itself so a SKIP line can say which verb was unported; \
+        out.unserved(),
+        "the refusal must NAME itself so a SKIP line can say which verb was unserved; \
          stderr was: {}",
         out.stderr
+    );
+    assert!(
+        !out.stderr.is_empty(),
+        "an unserved shape must never exit quietly — silence is indistinguishable from success"
     );
 }
 
@@ -583,7 +583,7 @@ fn distinct_paths_all_survive_a_concurrent_reserve() {
     }
 
     let list = run_bee(&fx, &["reservations", "list", "--active-only", "--json"], "list");
-    assert!(!list.delegated(), "reservations list delegated: {}", list.stderr);
+    assert!(!list.unserved(), "reservations list was unserved: {}", list.stderr);
     let rows = list.json().expect("reservations list emits JSON");
     let active: Vec<&Value> = rows["reservations"]
         .as_array()
@@ -870,7 +870,7 @@ fn a_live_held_store_lock_refuses_with_a_typed_busy_naming_the_holder() {
     let out = run_bee(&fx, &["state", "worker", "add", "--nickname", "wx", "--cell", "cx", "--json"], "busy");
     let elapsed = started.elapsed();
 
-    assert!(!out.delegated(), "the busy path must stay native: {}", out.stderr);
+    assert!(!out.unserved(), "the busy path must stay native: {}", out.stderr);
     assert_ne!(out.code, 0, "a live-held lock must refuse, never succeed: {}", out.stdout);
     let msg = out.message();
     assert!(msg.contains("busy: held by"), "the refusal must be the typed LOCK_BUSY: {msg}");

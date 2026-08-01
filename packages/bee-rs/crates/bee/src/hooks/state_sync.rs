@@ -77,7 +77,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
         return Outcome::Done(ExitCode::SUCCESS);
     };
     // Vendored-lib presence gate, byte-parity with the .mjs's existsSync check.
-    if !root.join(".bee").join("bin").join("lib").join("state.mjs").exists() {
+    if !crate::hooks::adapter::bee_installed(&root) {
         return Outcome::Done(ExitCode::SUCCESS);
     }
     match run_gated(&ctx, &root) {
@@ -105,19 +105,13 @@ fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
         }
     }
 
-    // `await import(libModuleUrl(root, "cells.mjs"))` — a missing vendored
-    // module throws into the outer catch: logCrash, exit 0, nothing further.
-    if !lib_exists(root, "cells.mjs") {
-        log_crash(Some(root), HOOK_NAME, &module_not_found(root, "cells.mjs"), ctx.source);
-        return Ok(());
-    }
+    // CUTOVER: three `await import(libModuleUrl(root, …))` presence gates
+    // stood here (cells / lock / state-projection). Node threw
+    // ERR_MODULE_NOT_FOUND into the outer catch when a host's vendored copy
+    // was incomplete; a compiled-in module cannot be incomplete, so the gates
+    // and their fabricated V8 crash-log text are gone.
     let counts = count_cells(root);
-
-    for module in ["lock.mjs", "state-projection.mjs"] {
-        if !lib_exists(root, module) {
-            log_crash(Some(root), HOOK_NAME, &module_not_found(root, module), ctx.source);
-            return Ok(());
-        }
+    {
     }
 
     // D3-amended: the state read-modify-write runs under the 'state' store
@@ -187,18 +181,6 @@ fn get_session_id(payload: &Map<String, Value>) -> Option<String> {
     }
 }
 
-fn lib_exists(root: &Path, name: &str) -> bool {
-    root.join(".bee").join("bin").join("lib").join(name).exists()
-}
-
-/// Log-shape approximation of Node's ERR_MODULE_NOT_FOUND for a missing
-/// vendored module (crash-log text only; stdout/stderr are unaffected).
-fn module_not_found(root: &Path, name: &str) -> String {
-    format!(
-        "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '{}'",
-        root.join(".bee").join("bin").join("lib").join(name).display()
-    )
-}
 
 // ── JS semantics helpers ────────────────────────────────────────────────────
 
@@ -546,9 +528,6 @@ fn heartbeat_stale(record: Option<&Map<String, Value>>, now_ms: f64, stale_secon
 /// would logCrash (silently — never stdout/stderr).
 fn heartbeat_block(ctx: &HookContext, root: &Path, sid: &str) -> Result<(), String> {
     let ctrl = ctx.control_root.clone().unwrap_or_else(|| root.to_path_buf());
-    if !lib_exists(root, "claims.mjs") {
-        return Err(module_not_found(root, "claims.mjs"));
-    }
     let now = Utc::now();
     let now_ms = now.timestamp_millis() as f64;
 
@@ -560,9 +539,6 @@ fn heartbeat_block(ctx: &HookContext, root: &Path, sid: &str) -> Result<(), Stri
     heartbeat_session(&ctrl, sid, &now)?;
     renew_claim_ttl(&ctrl, sid, &now)?;
     // touched: true → renew this session's path-lease reservations…
-    if !lib_exists(root, "reservations.mjs") {
-        return Err(module_not_found(root, "reservations.mjs"));
-    }
     renew_holds_by_session(root, sid)?;
     // …and (hardening-1-7-10 D3, own try/catch) its cross-worktree holds.
     if let Err(msg) = renew_cross_worktree_holds(root, sid) {
@@ -855,9 +831,6 @@ fn renew_cross_worktree_holds(root: &Path, sid: &str) -> Result<(), String> {
         Ok(_) => root.to_path_buf(),
         Err(msg) => return Err(format!("WorktreeLinkInvalidError: {msg}")),
     };
-    if !lib_exists(root, "worktree-holds.mjs") {
-        return Err(module_not_found(root, "worktree-holds.mjs"));
-    }
     let lock_name = "cross-worktree-holds";
     match acquire_store_lock_once(&main_root, lock_name) {
         AcquireOnce::Busy { holder } => Err(format!(

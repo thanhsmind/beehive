@@ -1017,7 +1017,7 @@ pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
                 format!("impact_registry --check: {REGISTRY_PATH_REL} is STALE (drift detected).")
             }
         );
-        eprintln!("FIX: node scripts/impact_registry.mjs --write");
+        eprintln!("FIX: bee dev impact-registry --write");
         return Some(ExitCode::FAILURE);
     }
 
@@ -1036,7 +1036,7 @@ pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
                         None => "undefined".to_string(),
                     };
                     eprintln!(
-                        "usage: node scripts/impact_registry.mjs --query <file...> [--level 1] (got --level {shown})"
+                        "usage: bee dev impact-registry --query <file...> [--level 1] (got --level {shown})"
                     );
                     return Some(ExitCode::FAILURE);
                 }
@@ -1048,7 +1048,7 @@ pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
             i += 1;
         }
         if query_files.is_empty() {
-            eprintln!("usage: node scripts/impact_registry.mjs --query <file...> [--level 1]");
+            eprintln!("usage: bee dev impact-registry --query <file...> [--level 1]");
             return Some(ExitCode::FAILURE);
         }
         // CUTOVER: Node let the read/parse throw, so the failure printed a V8
@@ -1082,7 +1082,7 @@ pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
     }
 
     eprintln!(
-        "usage: node scripts/impact_registry.mjs --write | --check | --query <file...> [--level 1]"
+        "usage: bee dev impact-registry --write | --check | --query <file...> [--level 1]"
     );
     Some(ExitCode::from(2))
 }

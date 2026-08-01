@@ -19,7 +19,8 @@ It is distilled from seven upstream systems (khuym, claudekit, gsd-core, gstack,
 From a bee source checkout, point the onboarder at the project you want bee to work on:
 
 ```bash
-node packages/bee/scripts/onboard_bee.mjs --repo-root /path/to/your-project --json --apply
+cargo build --release --manifest-path packages/bee-rs/Cargo.toml
+packages/bee-rs/target/release/bee onboard --repo-root /path/to/your-project --json --apply
 ```
 
 That one run installs the whole frame into your project: `.bee/` (the vendored engine, its craft guides, and your project's workflow state), the lifecycle hooks, and the bee skills rendered into `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex). Re-running it later refreshes everything in place without touching your state. Then open your coding agent inside that project and describe what you want to build, fix, or explore. (No checkout handy? The one-line network installers under [Install](#install) end in the same place.)
@@ -213,14 +214,14 @@ Think of it as a self-contained work ticket that is *executable* and *machine-ch
 
 The rules that make a cell trustworthy:
 
-- **Capping requires proof, not an assertion.** `bee.mjs cells cap` **refuses** to close a cell unless a passing `verify` result is recorded. For `small`/`standard`/`high-risk` it also requires the verify's recorded output (or evidence) and a non-empty list of changed files — "verify_passed: true" with no output and no files is rejected.
+- **Capping requires proof, not an assertion.** `bee cells cap` **refuses** to close a cell unless a passing `verify` result is recorded. For `small`/`standard`/`high-risk` it also requires the verify's recorded output (or evidence) and a non-empty list of changed files — "verify_passed: true" with no output and no files is rejected.
 - **Behavior changes need a "before".** If a cell changes observable behavior (`behavior_change: true`), capping also refuses without a *characterization of the prior behavior* — `red_failure_evidence` such as a `git show` of the old state, or a pre-change check that failed. This blocks "it works now" being accepted as proof that behavior actually changed, and it's captured at cap time (one command away) rather than backfilled later (decision 0009).
-- **Ready = all deps capped.** `bee.mjs cells ready` lists claimable cells. Only the orchestrator assigns them; workers never self-select.
+- **Ready = all deps capped.** `bee cells ready` lists claimable cells. Only the orchestrator assigns them; workers never self-select.
 - **Evidence lives in one place.** The cell's `trace` is the single source of verification evidence. Reports link to it; they never duplicate it.
 - **Lane scales strictness.** A `tiny` cell may skip `must_haves` and record a one-line trace; a `high-risk` cell needs full `must_haves`, spike evidence, and a detailed trace.
 - **One commit per cell**, with the cell id in the message.
 
-`bee.mjs status` and every downstream skill read the cell trace, so "what happened" is always machine-readable, never buried in chat.
+`bee status` and every downstream skill read the cell trace, so "what happened" is always machine-readable, never buried in chat.
 
 ---
 
@@ -236,7 +237,7 @@ Gates are **human** approvals, and two of them are enforced by code — the agen
 
 Gate 2 used to be two separate approvals ("Is this the right thing" then "may I start editing") — validation-diet merged them into one call (`bee state gate --merge`) that flips `approved_gates.shape` and `approved_gates.execution` together; there is no standalone validating skill or `validating` phase left to earn a third gate.
 
-Enforcement, not etiquette: until Gate 2's execution component is approved, `bee.mjs cells claim` throws and the write-guard hook **denies source edits** (while keeping `.bee/`, `docs/`, `.spikes/`, and `AGENTS.md` writable). Gate 4 never auto-merges past an open P1.
+Enforcement, not etiquette: until Gate 2's execution component is approved, `bee cells claim` throws and the write-guard hook **denies source edits** (while keeping `.bee/`, `docs/`, `.spikes/`, and `AGENTS.md` writable). Gate 4 never auto-merges past an open P1.
 
 ### Gate bypass (opt-in autopilot)
 
@@ -309,7 +310,7 @@ Not every step needs your most capable (most expensive) model. The costly loops 
 - **extraction** — cheapest capable (retrieval, mechanical edits).
 - `null` = the runtime can't select a per-agent model (Codex today) → the tier is enforced as a read budget + output cap in the worker prompt. Set real ids (e.g. `"generation": "gpt-5"`) if your runtime supports switching.
 
-The **orchestrator judges each cell's tier when it dispatches** (decision 0016) — mechanical → extraction, normal → generation, integration/architecture/high-risk → ceiling — not a label fixed at planning. It records the choice (`bee.mjs cells tier`), then `modelForTier` resolves it: `generation`/`extraction` to the configured alias, `ceiling` to "inherit the session model". `bee.mjs status` and the preamble **warn when too many cells sit on the ceiling tier** (the cost lever erodes when the strongest model touches most dispatches).
+The **orchestrator judges each cell's tier when it dispatches** (decision 0016) — mechanical → extraction, normal → generation, integration/architecture/high-risk → ceiling — not a label fixed at planning. It records the choice (`bee cells tier`), then `modelForTier` resolves it: `generation`/`extraction` to the configured alias, `ceiling` to "inherit the session model". `bee status` and the preamble **warn when too many cells sit on the ceiling tier** (the cost lever erodes when the strongest model touches most dispatches).
 
 The orchestrator pattern keeps the strongest model scarce:
 
@@ -324,7 +325,7 @@ The orchestrator pattern keeps the strongest model scarce:
 bee has two layers that always work together:
 
 1. **Runtime layer** (per machine) — the 9 `bee-*` skills the agent loads, plus (Claude Code) 6 lifecycle hooks.
-2. **Repo layer** (per project) — the `AGENTS.md` BEE block, `.bee/` state, and the vendored `bee.mjs` CLI that *mechanically* enforces the workflow for any agent, on any runtime.
+2. **Repo layer** (per project) — the `AGENTS.md` BEE block, `.bee/` state, and the vendored `bee` binary that *mechanically* enforces the workflow for any agent, on any runtime.
 
 ```
 you                         agent                              on disk
@@ -365,7 +366,7 @@ If a session runs long, bee writes `.bee/HANDOFF.json` at ~65% context and pause
 
 ## Install
 
-Requirement: **Node.js 18+** on PATH. One command installs everything — the per-project skills (`.claude/skills/` for Claude Code, `.agents/skills/` for Codex), `CLAUDE.md`, the `AGENTS.md` BEE block, the `.bee/` runtime + vendored helpers, and the runtime hook wiring for both Claude Code and Codex.
+Requirement: **a Rust toolchain** (`cargo`) — bee is one native binary, built from the source checkout per machine (decision 1f4262ca: no prebuilt binaries in the repo). Node.js is not required. One command installs everything — the per-project skills (`.claude/skills/` for Claude Code, `.agents/skills/` for Codex), `CLAUDE.md`, the `AGENTS.md` BEE block, the `.bee/` runtime + vendored helpers, and the runtime hook wiring for both Claude Code and Codex.
 
 ### Brownfield — existing project (copy, paste, done)
 
@@ -402,10 +403,10 @@ iwr -useb https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/insta
 ### Verify / update
 
 ```bash
-node .bee/bin/bee.mjs status --json     # expect onboarding.installed: true
+.bee/bin/bee status --json     # expect onboarding.installed: true
 ```
 
-**Update to the latest bee:** re-run the same install command (or `onboard_bee.mjs --apply`) — drift detection refreshes `AGENTS.md`, `CLAUDE.md`, helpers, hooks, and both skill trees in place; your state and everything outside the managed markers stay untouched.
+**Update to the latest bee:** re-run the same install command (or `bee onboard --apply`) — drift detection refreshes `AGENTS.md`, `CLAUDE.md`, helpers, hooks, and both skill trees in place; your state and everything outside the managed markers stay untouched.
 
 Useful flags: `--global-skills`/`-GlobalSkills` (also install the legacy global copies under `~/.claude/skills` + `~/.codex/skills`), `--no-claude-md`/`-NoClaudeMd`, `--no-hooks`/`-NoHooks`, `--source <local-checkout>`/`-Source`. Full options, the Claude Code plugin route (`/plugin marketplace add thanhsmind/beegog` + `/plugin install bee@bee`), manual installs, uninstall: [INSTALL.md](INSTALL.md).
 
@@ -436,7 +437,7 @@ bee is driven conversationally — you talk, the skills and helpers do the bookk
 
 | You say | What happens |
 |---|---|
-| "Onboard this repository for bee" | `bee-hive` runs `onboard_bee.mjs` (plan first, asks before `--apply`) |
+| "Onboard this repository for bee" | `bee-hive` runs `bee onboard` (plan first, asks before `--apply`) |
 | "Add CSV export to the report screen" | routed through the full chain, gated at 1–4 |
 | "Fix the typo in the footer" | `tiny` lane: one cell, one worker, no epic ceremony |
 | "Research: what's the best way to do X here?" | `bee-researching` writes an evidence-labeled brief (every claim tagged Local/Upstream/Docs/Inference, reuse-first) |
@@ -444,17 +445,17 @@ bee is driven conversationally — you talk, the skills and helpers do the bookk
 | "Review this branch" | `bee-reviewing`: multi-agent review, P1/P2/P3 findings, UAT |
 | "Turn on gate bypass" | `bee-hive` ("Gates") flips the bypass level → autopilot for low-risk gates (safety floor stays at `normal`) |
 | "Clean up tech debt" / "audit the hive" | `bee-grooming` hunts drift, dead work, stale reservations |
-| "What did we decide about auth?" | reads the decision log (`bee.mjs decisions search --text auth`) |
+| "What did we decide about auth?" | reads the decision log (`bee decisions search --text auth`) |
 
 Poke the state directly from any terminal — the same commands the agents use:
 
 ```bash
-node .bee/bin/bee.mjs status --json            # where am I? phase, gates, cells, bypass, next action
-node .bee/bin/bee.mjs cells list               # all cells; `ready` = open cells with deps capped
-node .bee/bin/bee.mjs decisions active         # decisions currently in force
+.bee/bin/bee status --json            # where am I? phase, gates, cells, bypass, next action
+.bee/bin/bee cells list               # all cells; `ready` = open cells with deps capped
+.bee/bin/bee decisions active         # decisions currently in force
 
 # verify the enforcement is armed (expected to refuse before Gate 2's execution approval):
-node .bee/bin/bee.mjs cells claim --id anything --worker w1
+.bee/bin/bee cells claim --id anything --worker w1
 # → error: gate "execution" is not approved   ✔
 ```
 
@@ -462,22 +463,22 @@ node .bee/bin/bee.mjs cells claim --id anything --worker w1
 
 ## Under the hood
 
-Everything is Node 18+ ESM, **zero npm dependencies**, atomic writes, Windows-safe paths. Helpers exit non-zero with a one-line `{error}` JSON on `--json`; hooks never break a session (fail-open, crash-logged to `.bee/logs/hooks.jsonl`).
+Everything is one statically-linked Rust binary — **no runtime dependencies at all**, atomic writes, Windows-safe paths. Helpers exit non-zero with a one-line `{error}` JSON on `--json`; hooks never break a session (fail-open, crash-logged to `.bee/logs/hooks.jsonl`).
 
-### Vendored CLI — `<repo>/.bee/bin/bee.mjs` (source: `packages/bee/`)
+### Vendored CLI — `<repo>/.bee/bin/bee[.exe]` (source: `packages/bee-rs/`)
 
-Copied into every onboarded repo, so enforcement works even for agents that ignore instructions. `bee.mjs <group> <verb>` is the sole shipped CLI. `bee --help` shows the porcelain surface — 16 flow verbs, opening with `bee orient` (the session-start context packet: where am I, what is locked, what is next); `bee --help --all` lists the full plumbing registry. The core groups:
+Copied into every onboarded repo, so enforcement works even for agents that ignore instructions. `bee <group> <verb>` is the sole shipped CLI. `bee --help` shows the porcelain surface — 16 flow verbs, opening with `bee orient` (the session-start context packet: where am I, what is locked, what is next); `bee --help --all` lists the full plumbing registry. The core groups:
 
 - **`status`** — one-shot situational scout: onboarding health, phase/mode/feature, gate states, **gate-bypass state**, cell counts, **scribing debt** (uncaptured behavior changes), **model-tier map**, reservations, recent decisions, staleness warnings, recommended next action. First command of every session.
 - **`cells`** — the cell lifecycle: `list` / `ready` / `show` / `add` / `claim` (throws unless Gate 2's execution component is approved + deps capped) / `verify` / `cap` (refuses without recorded proof; `behavior_change` cells also require a before-state) / `block` / `drop`.
 - **`reservations`** — file-level conflict prevention between parallel workers: `reserve` / `release` / `list` / `sweep` (release expired TTLs). On overlap → `{ok:false, conflicts}`; the caller must return `[BLOCKED]`.
 - **`decisions`** — append-only decision log (rejects secrets and injection patterns): `log` / `supersede` / `redact` / `active` / `search`.
-- plus **`state`**, **`backlog`**, **`capture`**, **`reviews`**, **`feedback`** — see `node .bee/bin/bee.mjs --help --all --json` for the full manifest (`--help --json` alone prints just the porcelain flow verbs).
+- plus **`state`**, **`backlog`**, **`capture`**, **`reviews`**, **`feedback`** — see `.bee/bin/bee --help --all --json` for the full manifest (`--help --json` alone prints just the porcelain flow verbs).
 
-### Onboarding — `packages/bee/scripts/onboard_bee.mjs`
+### Onboarding — `bee onboard`
 
 ```bash
-node onboard_bee.mjs --repo-root <path> [--apply] [--json] [--repo-hooks] [--plugin-source] [--runtime claude|codex|both] [--no-claude-md] [--claude-md] [--global-skills] [--force-downgrade]
+bee onboard --repo-root <path> [--apply] [--json] [--repo-hooks] [--plugin-source] [--runtime claude|codex|both] [--no-claude-md] [--claude-md] [--global-skills] [--force-downgrade]
 ```
 
 Without `--apply` it only reports the plan. With `--apply` it installs/refreshes the AGENTS.md BEE block, `.bee/` runtime files, and the vendored helpers — **never** overwriting your `state.json`, `decisions.jsonl`, or `cells/`. Re-run after pulling a new bee version; it detects drift via managed hashes in `.bee/onboarding.json`.
@@ -490,14 +491,14 @@ Self-arming (silent unless the repo has `.bee/onboarding.json`); per-repo kill s
 
 | Hook | Fires on | Does |
 |---|---|---|
-| `bee-session-init.mjs` | session start/resume/compact | prints the bee preamble (phase, gates, handoff, critical patterns, bypass warning) |
-| `bee-prompt-context.mjs` | each user prompt | short reminder of phase/next action, deduped |
-| `bee-write-guard.mjs` | before Edit/Write/Bash/Read/… | denies source writes pre-Gate-3, unreserved conflicting writes while swarming, and secret-file reads |
-| `bee-state-sync.mjs` | after task tools / stop | refreshes cell counts + last activity into `state.json` |
-| `bee-chain-nudge.mjs` | subagent stop | nudges the orchestrator to collect worker status / synthesize reviews |
-| `bee-session-close.mjs` | session stop | warns about claimed-uncapped cells, missing HANDOFF, or unlogged decisions |
+| `bee hook session-init` | session start/resume/compact | prints the bee preamble (phase, gates, handoff, critical patterns, bypass warning) |
+| `bee hook prompt-context` | each user prompt | short reminder of phase/next action, deduped |
+| `bee hook write-guard` | before Edit/Write/Bash/Read/… | denies source writes pre-Gate-3, unreserved conflicting writes while swarming, and secret-file reads |
+| `bee hook state-sync` | after task tools / stop | refreshes cell counts + last activity into `state.json` |
+| `bee hook chain-nudge` | subagent stop | nudges the orchestrator to collect worker status / synthesize reviews |
+| `bee hook session-close` | session stop | warns about claimed-uncapped cells, missing HANDOFF, or unlogged decisions |
 
-The six core hooks are tabled above; `bee-model-guard.mjs`, `bee-tools-logger.mjs` and `bee-codex-subagent-audit.mjs` complete the 9-script set. Both runtimes are wired from the same shared catalog — `.codex/hooks.json` (8 lifecycle events) for Codex, `packages/bee/hooks/claude-hooks.json` (7) for Claude Code. Whether an installed Codex CLI actually executes its hooks is unverified, so the *helpers* remain the enforcement floor regardless of hook state, and the AGENTS.md block covers bootstrap either way. Parity matrix: [docs/06-runtime-integration.md](docs/06-runtime-integration.md).
+The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-logger` and `bee hook codex-subagent-audit` complete the 9-hook set. Both runtimes are wired from the same shared catalog — `.codex/hooks.json` (8 lifecycle events) for Codex, `packages/bee/hooks/claude-hooks.json` (7) for Claude Code. Whether an installed Codex CLI actually executes its hooks is unverified, so the *helpers* remain the enforcement floor regardless of hook state, and the AGENTS.md block covers bootstrap either way. Parity matrix: [docs/06-runtime-integration.md](docs/06-runtime-integration.md).
 
 ### Runtime files — `<repo>/.bee/`
 

@@ -228,7 +228,7 @@ backlog files under `.bee/tmp/` (not `docs/backlog.md` — nothing there was tou
 ### Run (b) — ordinary row, expect `lane_safe: true`
 
 ```
-$ node .claude/skills/bee-herding/scripts/classify-lane.mjs FX-001 --backlog .bee/tmp/fixture-ordinary.md
+$ bee herding classify-lane FX-001 --backlog .bee/tmp/fixture-ordinary.md
 ```
 Verbatim output:
 ```json
@@ -239,7 +239,7 @@ Verbatim output:
 ### Run (c) — hard-gate row + empty-text row, expect `lane_safe: false` for both, distinct reasons
 
 ```
-$ node .claude/skills/bee-herding/scripts/classify-lane.mjs FX-002 --backlog .bee/tmp/fixture-refusals.md
+$ bee herding classify-lane FX-002 --backlog .bee/tmp/fixture-refusals.md
 ```
 Verbatim output:
 ```json
@@ -247,7 +247,7 @@ Verbatim output:
 ```
 
 ```
-$ node .claude/skills/bee-herding/scripts/classify-lane.mjs FX-003 --backlog .bee/tmp/fixture-refusals.md
+$ bee herding classify-lane FX-003 --backlog .bee/tmp/fixture-refusals.md
 ```
 Verbatim output:
 ```json

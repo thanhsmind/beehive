@@ -42,8 +42,8 @@
 // ANY output and the whole command re-runs under Node.
 
 use crate::jsjson;
-use crate::roots::{resolve_store_root, Roots};
-use crate::verbs::record_timing;
+use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
+use crate::verbs::{emit_unsupported_root, record_timing};
 use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::ffi::OsString;
@@ -100,12 +100,15 @@ fn registry() -> Option<&'static ParsedRegistry> {
 fn top_level(json: bool, all: bool, t0: Instant) -> Option<ExitCode> {
     let reg = registry()?;
     // Timing root exactly as the wrapper computes it: findRepoRoot(cwd) ||
-    // cwd. Linked worktrees (grant-registry half) stay with Node.
+    // cwd. CUTOVER: help reads NOTHING but the embedded registry, so the WIDE
+    // door serves both grant states; only a broken link is left to emit.
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::None => cwd,
-        Roots::NeedsNode => return None,
+        Roots::None => cwd.clone(),
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "unknown", json, t0, &why))
+        }
     };
 
     let total = reg.commands.len();
@@ -194,8 +197,12 @@ fn group_scoped(argv: &[&str], t0: Instant) -> Option<ExitCode> {
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
-        Roots::None => cwd,
-        Roots::NeedsNode => return None,
+        Roots::None => cwd.clone(),
+        Roots::Unsupported(why) => {
+            let cmd = command_name.replace('.', " ");
+            let j = rest.iter().any(|t| *t == "--json");
+            return Some(emit_unsupported_root(&cwd, &cmd, j, t0, &why));
+        }
     };
 
     // jsonRequested: rest.some(t === '--json' || t.startsWith('--json=')) —

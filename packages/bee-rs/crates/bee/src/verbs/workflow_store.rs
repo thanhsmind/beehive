@@ -1283,7 +1283,7 @@ pub(crate) fn write_mailbox_handoff(
                 Some(v) => js_disp(v),
             };
             return Err(Err2::Msg(format!(
-                "writeMailboxHandoff: refused — previous cell \"{previous_cell}\" is not capped (found status \"{status_disp}\"). A planned-next handoff may only follow a capped cell. FIX: finish \"{previous_cell}\" first (bee.mjs cells finish), then retry."
+                "writeMailboxHandoff: refused — previous cell \"{previous_cell}\" is not capped (found status \"{status_disp}\"). A planned-next handoff may only follow a capped cell. FIX: finish \"{previous_cell}\" first (bee cells finish), then retry."
             )));
         }
         let claim = read_claim(root, &next_cell)?;
@@ -1299,7 +1299,7 @@ pub(crate) fn write_mailbox_handoff(
                 Some(c) => format!("owner \"{}\"", js_disp_opt(jget(c, "session"))),
             };
             return Err(Err2::Msg(format!(
-                "writeMailboxHandoff: refused — next cell \"{next_cell}\" has no claim owned by writer session \"{writer_session}\" (found {found}). The next cell must already be claimed by the writing session before a planned-next handoff carries it. FIX: claim \"{next_cell}\" as session \"{writer_session}\" first (claims.mjs claimCellFile), then retry."
+                "writeMailboxHandoff: refused — next cell \"{next_cell}\" has no claim owned by writer session \"{writer_session}\" (found {found}). The next cell must already be claimed by the writing session before a planned-next handoff carries it. FIX: claim \"{next_cell}\" as session \"{writer_session}\" first (bee cells claim), then retry."
             )));
         }
         let claim_epoch = match claim.as_ref().and_then(|c| jget(c, "fence_epoch")) {
