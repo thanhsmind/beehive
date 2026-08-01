@@ -6,11 +6,11 @@ metadata:
   version: '0.2'
   ecosystem: bee
   dependencies:
-    nodejs-runtime:
+    bee-cli:
       kind: command
-      command: node
+      command: .bee/bin/bee
       missing_effect: degraded
-      reason: Computes the entropy score from bee records via the vendored .bee/bin helpers.
+      reason: Computes the entropy score from bee records via the vendored bee binary. The binary is vendored into the repo by onboarding; no Node runtime is involved.
 ---
 
 # Grooming — hunt the project's debt

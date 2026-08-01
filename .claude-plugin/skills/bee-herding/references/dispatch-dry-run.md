@@ -46,7 +46,7 @@ recorded as-is rather than reframed to look tidier.
 ### §2 — Gate-bypass check
 
 ```
-$ node .bee/bin/bee.mjs status --json
+$ .bee/bin/bee status --json
 ```
 Real result (relevant field): `"gate_bypass_level": "full"`. `full` clears the `>= full`
 bar from §2 — the role may proceed to build a dispatchable set.
@@ -130,7 +130,7 @@ reach conditions (c)/(d).
 
 **(c) No worktree grant.**
 ```
-$ node .bee/bin/bee.mjs worktree list --json
+$ .bee/bin/bee worktree list --json
 ```
 Real result:
 ```json
@@ -148,7 +148,7 @@ The key `herdr-gateway--wt--agent-pane-orchestration` ends with
 
 **(d) Zero cells.**
 ```
-$ node .bee/bin/bee.mjs cells list --feature agent-pane-orchestration --json
+$ .bee/bin/bee cells list --feature agent-pane-orchestration --json
 ```
 Real result: 10 cells, not zero — `agent-pane-orchestration-1..4` dropped,
 `-5..7` capped, `-8` and `-9` claimed (the run recording this proof among
@@ -188,11 +188,20 @@ grant check, or the cell check is broken.
 
 ## Runs (b) and (c) — classifier level, against `.bee/tmp/` fixtures
 
+> **The transcript below is a verbatim historical record — do not run its commands.**
+> Two things have changed since it was recorded. The classifier now lives in the bee
+> binary as `.bee/bin/bee herding classify-lane <PBI-ID>` (R6a retired the standalone
+> Node script), and it reads the event-sourced PBI fold rather than a markdown backlog
+> file, so the `--backlog <file>` flag and the `"row text"` wording in the outputs below
+> no longer exist. What the runs prove — pass, hard-gate refusal, and unreadable-record
+> refusal, with textually distinct reasons — is unchanged and still holds against the
+> current verb.
+
 The full dispatch role's §5 also needs a history root (`docs/history/*/CONTEXT.md`) and a
 cells store that no isolated fixture can provide — a fixture backlog row with no matching
 `CONTEXT.md` and no cells would just fail (a)/(d) trivially, telling us nothing about the
 *classifier*. So runs (b)/(c) instead exercise exactly the layer that fixtures can isolate:
-`scripts/classify-lane.mjs`'s lane-safety filter, run directly against two throwaway
+the lane-safety filter, run directly against two throwaway
 backlog files under `.bee/tmp/` (not `docs/backlog.md` — nothing there was touched).
 
 ### Fixture files (exact contents, reproducible)

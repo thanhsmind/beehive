@@ -239,6 +239,33 @@ mod tests {
         assert_eq!(jsjson::stringify(&merged), r#"{"gate_bypass":"full","o":{"a":1,"b":3}}"#);
     }
 
+    // R5 port of scripts/tests/test_ship_visibility.mjs — the normalizer had
+    // no test at all; only its absent→"off" case was incidentally asserted
+    // from the status renderer.
+    #[test]
+    fn ship_visibility_passes_the_two_known_values_and_normalizes_the_rest() {
+        let cfg = |v: Value| -> Map<String, Value> {
+            let mut m = Map::new();
+            m.insert("ship_visibility".into(), v);
+            m
+        };
+        assert_eq!(ship_visibility(&Map::new()), "off", "absent is off");
+        assert_eq!(ship_visibility(&cfg(json!(null))), "off", "null is off");
+        assert_eq!(ship_visibility(&cfg(json!("off"))), "off");
+        assert_eq!(
+            ship_visibility(&cfg(json!("draft-pr"))),
+            "draft-pr",
+            "draft-pr must survive — the whole point of the setting"
+        );
+        // Unrecognized values of every JS type normalize to off. (The warning
+        // line's bytes are a pinned contract, but it goes to the process's
+        // real stderr, so it is asserted at the status surface rather than
+        // here; this case pins the VALUE half.)
+        for bad in [json!("DRAFT-PR"), json!("on"), json!(true), json!(3), json!({"a":1})] {
+            assert_eq!(ship_visibility(&cfg(bad.clone())), "off", "unrecognized: {bad}");
+        }
+    }
+
     #[test]
     fn bypass_levels_normalize() {
         let mk = |v: Value| {

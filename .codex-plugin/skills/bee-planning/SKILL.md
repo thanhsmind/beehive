@@ -6,11 +6,11 @@ metadata:
   version: '0.3'
   ecosystem: bee
   dependencies:
-    nodejs-runtime:
+    bee-cli:
       kind: command
-      command: node
+      command: .bee/bin/bee
       missing_effect: unavailable
-      reason: Route, gate, and cell records are written through the vendored .bee/bin CLI.
+      reason: Route, gate, and cell records are written through the vendored bee binary. The binary is vendored into the repo by onboarding; no Node runtime is involved.
 ---
 
 # Planning — shape the work

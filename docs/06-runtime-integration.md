@@ -54,7 +54,7 @@ Codex now loads its own project hooks from `.codex/hooks.json` (SessionStart, Us
 
 | Automation | Claude Code (hooks) | Codex (helpers + AGENTS.md) |
 |---|---|---|
-| Session bootstrap & routing | `bee-session-init` injects it | `AGENTS.md` BEE block: "run `node .bee/bin/bee.mjs status --json` first, re-read after compaction"; `compact_prompt` recovery instructions (khuym pattern) |
+| Session bootstrap & routing | `bee-session-init` injects it | `AGENTS.md` BEE block: "run `.bee/bin/bee status --json` first, re-read after compaction"; `compact_prompt` recovery instructions (khuym pattern) |
 | HANDOFF surfacing, never auto-resume | Hook injects the handoff and the wait rule | `bee.mjs status` prints the handoff block first in its output; AGENTS.md rule |
 | Phase/gate reminder per prompt | `bee-prompt-context` (deduped) | Skill preambles: every stage skill's first step is "run bee.mjs status, verify the expected gate state" |
 | Gate 2 "no execution before its approval" (folds in the old standalone Gate 3) | `bee-write-guard` blocks source writes pre-approval | `bee.mjs cells claim` refuses while `approved_gates.execution: false`; workers only act on claimed cells; AGENTS.md red-flag rule |

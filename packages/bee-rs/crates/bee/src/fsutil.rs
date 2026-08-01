@@ -125,6 +125,47 @@ mod tests {
         assert!(leftovers.is_empty());
     }
 
+    // R5 port of the non-race half of scripts/tests/test_state_write_concurrency.mjs.
+    // The race itself lives in tests/concurrency.rs; what is testable in
+    // process is the property the race depends on — two writers never pick
+    // the same tmp name, so one can never rename another's half-written file
+    // into place.
+    #[test]
+    fn every_atomic_write_picks_a_distinct_tmp_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("state.json");
+        let names: std::collections::BTreeSet<String> = (0..512)
+            .map(|_| tmp_path_for(&file).file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names.len(), 512, "tmp names collided within one process");
+        for n in &names {
+            assert!(n.starts_with("state.json."), "tmp stays beside its target: {n}");
+            assert!(n.ends_with(".tmp"), "tmp keeps its suffix: {n}");
+        }
+        // And it lands in the SAME directory — a rename across filesystems is
+        // not atomic, which is the whole reason for the sibling-tmp shape.
+        assert_eq!(tmp_path_for(&file).parent(), file.parent());
+    }
+
+    #[test]
+    fn a_failed_atomic_write_leaves_no_tmp_and_no_partial_target() {
+        // Provenance: writeJsonAtomic's failed-rename arm — the tmp is
+        // unlinked best-effort and the ORIGINAL error propagates.
+        let dir = tempfile::tempdir().unwrap();
+        // A directory where the target file should be: the rename must fail.
+        let file = dir.path().join("blocked.json");
+        std::fs::create_dir(&file).unwrap();
+        let err = write_json_atomic(&file, &json!({"a": 1}));
+        assert!(err.is_err(), "renaming over an existing directory must fail");
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "a failed write must not leave a tmp behind");
+        assert!(file.is_dir(), "the target must be untouched by the failure");
+    }
+
     #[test]
     fn read_json_strips_bom_and_flags_corrupt() {
         let dir = tempfile::tempdir().unwrap();

@@ -8,6 +8,7 @@
 
 mod devtools;
 mod fsutil;
+mod herding;
 mod hooks;
 mod js_fallback;
 mod jsjson;

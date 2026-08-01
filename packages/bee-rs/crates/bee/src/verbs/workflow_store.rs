@@ -1986,4 +1986,130 @@ mod tests {
             r#"{"context":{"approved":true},"shape":{"approved":true},"execution":{"approved":true},"review":{"approved":false}}"#
         );
     }
+
+    // ── R5 test migration: locking + absent-store enumeration ─────────────
+    //
+    // NOT PORTABLE, and deliberately absent here: the createWorkflow rows of
+    // test_workflow_store.mjs (full-schema write, refusal to overwrite an
+    // existing id, refusal when id === feature). workflow-store.mjs
+    // createWorkflow has NO Rust counterpart — this module's provenance table
+    // covers readWorkflowRecord/listWorkflows/updateWorkflow*/withWorkflowLock
+    // only, and record creation is still Node's. There is nothing to exercise.
+    //
+    // Likewise the oracle's "listWorkflows … tolerant of an unreadable entry
+    // (skip+report, never throws)" row: this port turns that tolerance into a
+    // DELEGATION on purpose (see list_workflows' doc comment), pinned by
+    // `list_workflows_delegates_when_any_entry_would_be_skipped` above.
+
+    /// Oracle: "listWorkflows on an absent .bee/runtime/workflows/ directory
+    /// returns an empty, non-throwing result".
+    #[test]
+    fn list_workflows_over_an_absent_store_is_empty_and_creates_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        assert!(!workflows_dir(root).exists());
+        assert!(ok(list_workflows(root)).is_empty(), "no workflows dir -> empty list");
+        assert!(
+            !workflows_dir(root).exists(),
+            "listWorkflows never creates the directory as a side effect of listing"
+        );
+        // An EXISTING but empty store is the same answer, still without
+        // inventing entries.
+        std::fs::create_dir_all(workflows_dir(root)).unwrap();
+        assert!(ok(list_workflows(root)).is_empty());
+        // Control: the enumeration is not simply always-empty.
+        write_workflow(root, "wf-1", json!({"id":"wf-1","feature":"f1"}));
+        let listed = ok(list_workflows(root));
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].get("id"), Some(&json!("wf-1")));
+    }
+
+    /// Oracle: "updateWorkflowAssumingLock (multisession-native-10, C4):
+    /// succeeds through an externally-held workflow:<id> lock that DENIES
+    /// updateWorkflow itself — proves it takes no lock of its own".
+    ///
+    /// The negative control runs the real self-locking form against the real
+    /// retry loop, so it spends MAX_ATTEMPTS × RETRY_DELAY (~5s) before
+    /// reporting busy; Node's oracle short-circuits it with {maxAttempts: 1},
+    /// which this port does not expose.
+    #[test]
+    fn update_assuming_lock_writes_through_an_externally_held_workflow_lock() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_workflow(root, "wf-1", json!({"id":"wf-1","feature":"assuming-lock-deadlock-proof"}));
+
+        let held = lock::acquire_store_lock(root, "workflow:wf-1", 1)
+            .unwrap_or_else(|b| panic!("precondition: the test must hold workflow:wf-1 — {}", b.message()));
+
+        // Negative control: the SELF-LOCKING form is denied while that same
+        // lock is held — the shape that would deadlock a caller already
+        // inside its own withWorkflowLock hold.
+        let mut patch = Map::new();
+        patch.insert("phase".into(), json!("planning"));
+        match update_workflow(root, "wf-1", patch) {
+            Err(Err2::Msg(m)) => assert!(
+                m.starts_with("lock \"workflow:wf-1\" busy: held by "),
+                "expected the LOCK_BUSY refusal, got {m}"
+            ),
+            other => panic!("updateWorkflow must be denied under a held lock, got {}", match other {
+                Ok(_) => "Ok".to_string(),
+                Err(_) => "a non-message error".to_string(),
+            }),
+        }
+        // …and the denial wrote nothing.
+        assert_eq!(read_back(&workflow_state_path(root, "wf-1")).get("phase"), None);
+
+        // The real proof: the assuming-lock form succeeds THROUGH the same
+        // held lock, because it never tries to acquire it.
+        let mut patch = Map::new();
+        patch.insert("phase".into(), json!("planning"));
+        let updated = ok(update_workflow_assuming_lock(root, "wf-1", patch));
+        assert_eq!(updated.get("phase"), Some(&json!("planning")));
+        assert_eq!(read_back(&workflow_state_path(root, "wf-1"))["phase"], json!("planning"));
+
+        // Release, and the self-locking form works again — so the denial
+        // above was the lock, not a broken record.
+        drop(held);
+        let mut patch = Map::new();
+        patch.insert("phase".into(), json!("swarming"));
+        assert_eq!(ok(update_workflow(root, "wf-1", patch)).get("phase"), Some(&json!("swarming")));
+    }
+
+    /// Oracle: "withWorkflowLock is a thin named wrapper: two ids run their
+    /// bodies without either blocking the other".
+    ///
+    /// Node proves independence by interleaving two async bodies; the Rust
+    /// wrapper is an RAII guard, so the same property is proved without a
+    /// scheduler: with `workflow:wf-p` held, a DIFFERENT id is granted on its
+    /// very first attempt while the SAME id is denied on its first attempt.
+    #[test]
+    fn workflow_locks_for_two_ids_never_block_each_other() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let held_p = ok(acquire_workflow_lock(root, "wf-p"));
+
+        // Independent name: granted with zero retries, while wf-p is held.
+        let held_q = lock::acquire_store_lock(root, "workflow:wf-q", 1)
+            .unwrap_or_else(|b| panic!("a distinct id must not queue behind wf-p — {}", b.message()));
+        // Control: the SAME name is refused on that same single attempt, so
+        // the grant above is independence and not a disabled lock.
+        let same = lock::acquire_store_lock(root, "workflow:wf-p", 1);
+        assert!(same.is_err(), "workflow:wf-p must be denied while it is held");
+        // A third, still-distinct id is likewise granted with both held.
+        let held_r = lock::acquire_store_lock(root, "workflow:wf-r", 1)
+            .unwrap_or_else(|b| panic!("a third distinct id must not queue — {}", b.message()));
+
+        assert!(lock::lock_file_path(root, "workflow:wf-p").exists());
+        assert!(lock::lock_file_path(root, "workflow:wf-q").exists());
+        assert!(lock::lock_file_path(root, "workflow:wf-r").exists());
+        drop(held_q);
+        drop(held_r);
+        drop(held_p);
+        // Every guard released its own file and only its own.
+        for id in ["wf-p", "wf-q", "wf-r"] {
+            assert!(!lock::lock_file_path(root, &format!("workflow:{id}")).exists());
+        }
+        // …and wf-p is takeable again once released.
+        ok(lock::acquire_store_lock(root, "workflow:wf-p", 1));
+    }
 }

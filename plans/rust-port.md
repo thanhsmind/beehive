@@ -156,6 +156,25 @@ Two campaign rules that emerged from practice and now govern every port:
   assert the broken spelling — including `test_bee_cli.mjs`'s `RECOVERY_LAYOUT_UNREPRESENTABLE`
   skip, which exists solely because of this bug.
 
+#### Hard blockers for deleting the Node runtime (found by R5, 2026-08-01)
+
+The test migration turned up gaps that are missing CODE, not missing tests. Deleting `bee.mjs`
+before these are closed does not "lose coverage" — it loses behavior:
+
+- **Seven contracts have no Rust implementation at all**: `createWorkflow`, `renewLease` /
+  `LEASE_MISSING`, `LEASE_FENCE_STALE`, `CLAIM_FENCE_STALE`, `adoptClaim`, multi-resource batch
+  acquire, and homoglyph folding of an authority subject. Each is named at its site in the Rust
+  tree rather than faked green.
+- **Two behaviors are pinned as deliberate delegations, so they have no native owner once
+  `bee.mjs` is gone**: write-guard's CLI-shape check (d), and `listWorkflows`' skip tolerance.
+  These are the sharpest blockers — today the delegation IS the implementation.
+- **Two laws go vacuously green at deletion.** `test_instruction_size_law` and
+  `test_scan_set_hygiene` scan `scripts/**` and `packages/bee/**`; once those trees are gone the
+  laws pass because their subject vanished, not because the law holds. Re-point or retire them
+  deliberately — a green check over an empty set is worse than no check.
+- **`scribingTarget` (~35 contracts) has no plan entry anywhere.** Confirm whether it is live
+  surface before porting it; if it is dead, say so and delete it rather than porting by inertia.
+
 #### Coverage debts R6 must close (a delegated path is fine until Node is deleted)
 
 Tracked here because "the verb is ported" is not the same as "every repo shape runs native".

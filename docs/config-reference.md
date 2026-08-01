@@ -7,11 +7,11 @@ Every onboarded repo has a `.bee/config.json`. Any key you leave out uses a buil
 You do not have to hand-edit the JSON. Set/read/remove any key through the CLI (validated on write, dot-notation for nested keys):
 
 ```bash
-node .bee/bin/bee.mjs config get   --key product_root
-node .bee/bin/bee.mjs config set   --key product_root --value repo
-node .bee/bin/bee.mjs config set   --key guards.idle_gate --value false   # nested key
-node .bee/bin/bee.mjs config unset --key guards.idle_gate                 # remove (prunes the empty parent)
-node .bee/bin/bee.mjs config validate                                     # check models/cli-tier config
+.bee/bin/bee config get   --key product_root
+.bee/bin/bee config set   --key product_root --value repo
+.bee/bin/bee config set   --key guards.idle_gate --value false   # nested key
+.bee/bin/bee config unset --key guards.idle_gate                 # remove (prunes the empty parent)
+.bee/bin/bee config validate                                     # check models/cli-tier config
 ```
 
 The value is parsed as JSON when it parses (`false` → boolean, `12` → number, `{...}` → object), otherwise kept as a string (`repo` → `"repo"`); pass `--string` to force a string. `set`/`unset` refuse to write if the change would make the models/cli-tier config invalid, or if the existing file is unparseable (it is never silently clobbered).
@@ -130,7 +130,7 @@ Pick your runner's changed-only/related mode for `test`; `verify` is whatever ru
 Notes:
 - A command that takes the changed-file list from git itself (jest `--onlyChanged`, testmon, bee's `--impacted-from-git`) is the best `test` value — it stays correct with zero per-change editing. Where the runner has no such mode (Go, Rust, PHP), record the *narrow invocation shape* and let the session substitute the changed package/crate/class per change — the doctrine cares that the dev loop never runs the full suite, not which selector you use.
 - CI should run `commands.verify` verbatim (bee's own `ci.yml` does exactly that via `scripts/verify_all.mjs`, and files a deduped `verify-red` issue on red).
-- Where the "which tests relate to this file" answer needs a lookup: bee's own repo ships a derived impact registry (`node scripts/impact_registry.mjs --query <file>`); other languages use their native graph (Go: `go list -deps` reversed; Rust: the crate graph; Python: testmon's coverage map).
+- Where the "which tests relate to this file" answer needs a lookup: bee's own repo ships a derived impact registry (`.bee/bin/bee dev impact-registry --query <file>`); other languages use their native graph (Go: `go list -deps` reversed; Rust: the crate graph; Python: testmon's coverage map).
 
 ## Removed keys
 
@@ -183,7 +183,7 @@ unchanged. The `apply_patch` tool path never honors a memory root.
 
 Other repos running bee whose collected friction should feed into ranking here. Accepts a bare path
 array or `{path,label}` objects (both normalize to objects); each entry is `realpath`-contained and
-must have its own `.bee/feedback-digest.json` already written (`node .bee/bin/bee.mjs feedback
+must have its own `.bee/feedback-digest.json` already written (`.bee/bin/bee feedback
 digest` in that repo). A configured repo that is missing, unreadable, or dead is **skipped with a
 warning**, never thrown:
 

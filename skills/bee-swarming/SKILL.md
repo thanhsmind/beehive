@@ -6,11 +6,11 @@ metadata:
   version: '0.2'
   ecosystem: bee
   dependencies:
-    nodejs-runtime:
+    bee-cli:
       kind: command
-      command: node
+      command: .bee/bin/bee
       missing_effect: unavailable
-      reason: Both roles drive the work through the vendored .bee/bin CLI.
+      reason: Both roles drive the work through the vendored bee binary. The binary is vendored into the repo by onboarding; no Node runtime is involved.
 ---
 
 # Swarming — run the approved work

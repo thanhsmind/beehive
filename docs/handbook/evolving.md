@@ -38,7 +38,7 @@ it, never by moving the loop.
 ## 1. Rank the feedback — merged view only
 
 ```bash
-node .bee/bin/bee.mjs feedback rank --json
+.bee/bin/bee feedback rank --json
 ```
 
 Merges the local digest with any configured `dogfood_repos` digests through `mergeDigests`

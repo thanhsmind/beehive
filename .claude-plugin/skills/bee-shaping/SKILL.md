@@ -6,11 +6,11 @@ metadata:
   version: '0.1'
   ecosystem: bee
   dependencies:
-    nodejs-runtime:
+    bee-cli:
       kind: command
-      command: node
+      command: .bee/bin/bee
       missing_effect: degraded
-      reason: Records decisions, routes, and backlog items through the vendored .bee/bin CLI.
+      reason: Records decisions, routes, and backlog items through the vendored bee binary. The binary is vendored into the repo by onboarding; no Node runtime is involved.
 ---
 
 # Shaping — from fuzzy intent to a reviewable plan

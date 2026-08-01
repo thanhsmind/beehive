@@ -6,11 +6,11 @@ metadata:
   version: '0.2'
   ecosystem: bee
   dependencies:
-    nodejs-runtime:
+    bee-cli:
       kind: command
-      command: node
+      command: .bee/bin/bee
       missing_effect: unavailable
-      reason: Onboarding and the vendored .bee/bin helpers run in Node.js 18+.
+      reason: Onboarding (`bee onboard`) and every state read/write run through the vendored bee binary. The binary is vendored into the repo by onboarding; no Node runtime is involved.
 ---
 
 # Hive — the router
@@ -58,7 +58,7 @@ gate; bypass is not headless — headless still stops at every gate ("Gate bypas
 ## Onboarding
 
 `.bee/onboarding.json` missing or stale → from the bee source root:
-`node packages/bee/scripts/onboard_bee.mjs --repo-root <root> --json`. `changes_needed` →
+`.bee/bin/bee onboard --repo-root <root> --json`. `changes_needed` →
 summarize, get approval, re-run with `--apply` — never silently; `blocked_*` → zero
 mutations, surface `versions`. Do not continue until it reports `up_to_date`.
 

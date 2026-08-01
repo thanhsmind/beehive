@@ -261,21 +261,10 @@ STOP_FILE="$(resolve_main_root)/.bee/tmp/bee-herding.stop"
 # byte-equivalent command).
 read_command_template() {
   local key="$1"
-  local config_path
-  config_path="$(resolve_main_root)/.bee/config.json"
-  [ -f "$config_path" ] || return 0
-  node -e '
-    var NL = String.fromCharCode(10);
-    var raw;
-    try { raw = require("fs").readFileSync(process.argv[2], "utf8"); } catch (e) { process.exit(0); }
-    var cfg;
-    try { cfg = JSON.parse(raw); } catch (e) { process.exit(0); }
-    var tmpl = cfg && cfg.herding && cfg.herding[process.argv[1]];
-    var ok = Array.isArray(tmpl) && tmpl.length > 0 &&
-      tmpl.every(function (t) { return typeof t === "string" && t.indexOf(NL) === -1; });
-    if (!ok) { process.exit(0); }
-    tmpl.forEach(function (t) { console.log(t); });
-  ' "$key" "$config_path"
+  local main_root
+  main_root="$(resolve_main_root)"
+  [ -f "$main_root/.bee/config.json" ] || return 0
+  "$main_root/.bee/bin/bee" herding command-template "$key" --main-root "$main_root"
 }
 
 # substitute_placeholders CMD_ARRAY_NAME - replaces the {PROMPT}, {MODEL},
@@ -305,19 +294,20 @@ allowed_tools_for() {
   case "$1" in
     dispatch)
       # herdr           : every pane/tab/agent action (§1-§8)
-      # bee.mjs         : status, worktree list, cells list, AND worktree new
+      # .bee/bin/bee    : status, worktree list, cells list, AND worktree new
       #                   (+grant registration) - the write that makes this
       #                   not read-only
-      # classify-lane   : §6 key-1 lane-safety script (both skill roots)
-      # dispatch-interlock : §5 owner-enable gate (both skill roots)
+      #                   The same binary serves `herding interlock`
+      #                   (§5 owner-enable gate) and `herding classify-lane`
+      #                   (§6 key-1 lane safety), so one prefix covers them.
       # git rev-parse/status/-C : §0/§4 read-only worktree state checks
       # Read            : docs/backlog.md, docs/history/<slug>/CONTEXT.md, JSON
       printf '%s' \
-        'Bash(herdr:*),Bash(node .bee/bin/bee.mjs:*),Bash(node .claude/skills/bee-herding/scripts/classify-lane.mjs:*),Bash(node .agents/skills/bee-herding/scripts/classify-lane.mjs:*),Bash(node .claude/skills/bee-herding/scripts/dispatch-interlock.mjs:*),Bash(node .agents/skills/bee-herding/scripts/dispatch-interlock.mjs:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read'
+        'Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git rev-parse:*),Bash(git status:*),Bash(git -C:*),Read'
       ;;
     merge)
       # herdr           : pane current/rename/layout/list/send-text/close
-      # bee.mjs         : worktree list/status, cells list, AND worktree merge
+      # .bee/bin/bee    : worktree list/status, cells list, AND worktree merge
       #                   --cleanup (the merge + cleanup writes)
       # git             : `git -C <main> rev-parse --verify MERGE_HEAD` and
       #                   `git -C <main> merge --abort` (a real write to main),
@@ -326,7 +316,7 @@ allowed_tools_for() {
       # ls/mkdir/touch  : red-stop marker check + write under .bee/tmp
       # Read            : JSON outputs, worktree state
       printf '%s' \
-        'Bash(herdr:*),Bash(node .bee/bin/bee.mjs:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read'
+        'Bash(herdr:*),Bash(.bee/bin/bee:*),Bash(git:*),Bash(ls:*),Bash(mkdir:*),Bash(touch:*),Read'
       ;;
   esac
 }

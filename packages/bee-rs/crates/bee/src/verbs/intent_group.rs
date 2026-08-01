@@ -572,6 +572,119 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    // ─── whole-command harness ─────────────────────────────────────────────
+    //
+    // `try_native` runs the real dispatch frame, and g_prelude resolves the
+    // repo root from the PROCESS cwd. Mutating cwd in-process would race every
+    // other test sharing this binary, so each command runs in a child copy of
+    // THIS test binary (always the freshly built code under test — never a
+    // possibly stale target/<profile>/bee executable) with cwd set to the
+    // fixture. The child brackets bee's own streams with markers so the parent
+    // can lift them out of libtest's chatter.
+
+    const ARGV_ENV: &str = "BEE_RS_INTENT_GROUP_TEST_ARGV";
+    const CHILD_TEST: &str = "verbs::intent_group::tests::intent_child_process";
+    const OUT_OPEN: &str = "<<<bee-stdout";
+    const OUT_CLOSE: &str = "bee-stdout>>>";
+    const ERR_OPEN: &str = "<<<bee-stderr";
+    const ERR_CLOSE: &str = "bee-stderr>>>";
+    /// Tripwire: printed only when the router declined and Node would have
+    /// served the command. `run_intent` refuses to let that pass for a green.
+    const DELEGATED: &str = "__DELEGATED_TO_NODE__";
+
+    #[test]
+    #[ignore = "child process of run_intent(): needs a fixture cwd, never runs in-process"]
+    fn intent_child_process() -> ExitCode {
+        let raw = std::env::var(ARGV_ENV).expect("child spawned without an argv env var");
+        let argv: Vec<OsString> = raw.split('\u{1f}').map(OsString::from).collect();
+        println!("{OUT_OPEN}");
+        eprintln!("{ERR_OPEN}");
+        let code = match try_native(&argv, Instant::now()) {
+            Some(code) => code,
+            None => {
+                println!("{DELEGATED}");
+                ExitCode::SUCCESS
+            }
+        };
+        println!("{OUT_CLOSE}");
+        eprintln!("{ERR_CLOSE}");
+        code
+    }
+
+    struct Run {
+        /// The command exited non-zero (ctx.fail), as Node's `status !== 0`.
+        refused: bool,
+        stdout: String,
+        #[allow(dead_code)]
+        stderr: String,
+    }
+
+    impl Run {
+        fn json(&self) -> Value {
+            serde_json::from_str(&self.stdout)
+                .unwrap_or_else(|e| panic!("stdout is not JSON ({e}): {:?}", self.stdout))
+        }
+    }
+
+    fn between(hay: &str, open: &str, close: &str, whole: &str) -> String {
+        let start = match hay.find(open) {
+            Some(i) => i + open.len(),
+            None => panic!("child never printed {open} — full child output:\n{whole}"),
+        };
+        let end = match hay[start..].find(close) {
+            Some(i) => start + i,
+            None => panic!("child never printed {close} — full child output:\n{whole}"),
+        };
+        hay[start..end].trim().to_string()
+    }
+
+    fn run_intent(root: &Path, args: &[&str]) -> Run {
+        let exe = std::env::current_exe().expect("test binary path");
+        let out = std::process::Command::new(exe)
+            .args([CHILD_TEST, "--exact", "--ignored", "--nocapture"])
+            .env(ARGV_ENV, args.join("\u{1f}"))
+            .current_dir(root)
+            .output()
+            .expect("spawn the child test binary");
+        let raw_out = String::from_utf8_lossy(&out.stdout).into_owned();
+        let raw_err = String::from_utf8_lossy(&out.stderr).into_owned();
+        let whole = format!("--- stdout ---\n{raw_out}\n--- stderr ---\n{raw_err}");
+        let stdout = between(&raw_out, OUT_OPEN, OUT_CLOSE, &whole);
+        let stderr = between(&raw_err, ERR_OPEN, ERR_CLOSE, &whole);
+        assert!(
+            !stdout.contains(DELEGATED),
+            "`bee {}` fell through to the Node delegate — the native path under test never ran",
+            args.join(" ")
+        );
+        Run { refused: !out.status.success(), stdout, stderr }
+    }
+
+    /// A fixture the WHOLE command can run against: `resolve_store_root` needs
+    /// an onboarding marker before g_prelude will hand a verb a root.
+    fn setup_cli_repo() -> tempfile::TempDir {
+        let repo = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(repo.path().join(".bee")).unwrap();
+        std::fs::write(
+            repo.path().join(".bee").join("onboarding.json"),
+            r#"{"schema_version":"1.0","bee_version":"0.1.0"}"#,
+        )
+        .unwrap();
+        repo
+    }
+
+    /// The user's own words: long, punctuated, and with an embedded newline,
+    /// so "verbatim" means more than "a substring survived" (test_intent.mjs).
+    const REQUEST: &str = "Make the /orders endpoint idempotent under retries — the same Idempotency-Key must never\ncreate a second order, and please do NOT change the existing response shape.";
+    const ACCEPTANCE: &str = "Replaying an identical POST /orders with the same Idempotency-Key returns the first order and creates no second row.";
+
+    fn anchor_file(root: &Path) -> PathBuf {
+        intent_path(root, DEFAULT_INTENT_KEY)
+    }
+
+    fn on_disk(root: &Path) -> Value {
+        serde_json::from_str(&std::fs::read_to_string(anchor_file(root)).unwrap()).unwrap()
+    }
+
     #[test]
     fn sanitize_key_matches_node_pipeline() {
         assert_eq!(sanitize_intent_key("my feature!"), "my-feature");
@@ -665,5 +778,225 @@ mod tests {
         // Corrupt candidate file → delegate (Err), never a silent skip.
         std::fs::write(dir.join("bad.json"), "{nope").unwrap();
         assert!(read_intent(tmp.path(), Some("bad"), None).is_err());
+    }
+
+    // ─── whole-command contracts (oracle: packages/bee/tests/test_intent.mjs) ─
+
+    /// Oracle: "D1 — re-setting the SAME request is idempotent; a DIFFERENT
+    /// one refuses without --force".
+    #[test]
+    fn set_is_idempotent_for_the_same_objective_and_refuses_a_changed_one() {
+        let repo = setup_cli_repo();
+        let root = repo.path();
+        let set = |req: &str, acc: &str| -> Run {
+            run_intent(root, &["intent", "set", "--request", req, "--acceptance", acc, "--json"])
+        };
+
+        let first = set(REQUEST, ACCEPTANCE);
+        assert!(!first.refused, "the first set must be served: {:?}", first.stdout);
+        let anchor = first.json();
+        assert_eq!(anchor["key"], json!(DEFAULT_INTENT_KEY));
+        assert_eq!(anchor["request"], json!(REQUEST), "the request round-trips verbatim");
+        assert_eq!(on_disk(root)["request"], json!(REQUEST), "…newline and all, on disk");
+
+        // Idempotent: the same objective again is allowed, not a refusal.
+        let again = set(REQUEST, ACCEPTANCE);
+        assert!(!again.refused, "re-setting the same objective must be allowed: {:?}", again.stdout);
+        assert_eq!(again.json()["request"], json!(REQUEST));
+
+        // A DIFFERENT request refuses with the typed D1 message…
+        let changed = set("something else entirely", ACCEPTANCE);
+        assert!(changed.refused, "a different request must refuse: {:?}", changed.stdout);
+        let msg = changed.json()["error"].as_str().unwrap_or_default().to_string();
+        assert!(msg.contains("request is immutable once set (D1)"), "{msg}");
+        assert!(msg.contains("an anchor already exists at \"default\""), "{msg}");
+        assert_eq!(on_disk(root)["request"], json!(REQUEST), "a refused write changes nothing");
+
+        // …and so does a different acceptance, with its own typed message.
+        let reworded = set(REQUEST, "a different definition of done");
+        assert!(reworded.refused, "different acceptance must refuse: {:?}", reworded.stdout);
+        let msg = reworded.json()["error"].as_str().unwrap_or_default().to_string();
+        assert!(msg.contains("acceptance is immutable once set (D1)"), "{msg}");
+        assert_eq!(on_disk(root)["acceptance"], json!(ACCEPTANCE), "…and changed nothing");
+
+        // CONTROL — `--force true` replaces the objective deliberately, so the
+        // refusals above are the immutability gate and not a stuck writer.
+        let forced = run_intent(
+            root,
+            &[
+                "intent", "set",
+                "--request", "a genuinely new objective",
+                "--acceptance", "the new objective is met",
+                "--force", "true",
+                "--json",
+            ],
+        );
+        assert!(!forced.refused, "--force must replace the objective: {:?}", forced.stdout);
+        assert_eq!(on_disk(root)["request"], json!("a genuinely new objective"));
+        assert_eq!(on_disk(root)["acceptance"], json!("the new objective is met"));
+    }
+
+    /// Oracle: "D1 — advance() moves next_action ONLY; request and acceptance
+    /// cannot be mutated".
+    #[test]
+    fn advance_moves_next_action_only_and_leaves_every_other_field_alone() {
+        let repo = setup_cli_repo();
+        let root = repo.path();
+        let set = run_intent(
+            root,
+            &[
+                "intent", "set",
+                "--request", REQUEST,
+                "--acceptance", ACCEPTANCE,
+                "--next-action", "step one",
+                "--lane", "standard",
+                "--cell", "oi-2",
+                "--do-not-reverse", "the response shape stays byte-identical, Idempotency-Key stays the dedupe key",
+                "--json",
+            ],
+        );
+        assert!(!set.refused, "{:?}", set.stdout);
+        let before = on_disk(root);
+
+        let adv = run_intent(root, &["intent", "advance", "--next-action", "step two", "--json"]);
+        assert!(!adv.refused, "advance must be served: {:?}", adv.stdout);
+        let payload = adv.json();
+        assert_eq!(payload["next_action"], json!("step two"), "next_action advanced");
+        assert!(
+            payload["advanced_at"].as_str().is_some_and(|s| !s.is_empty()),
+            "advance stamps advanced_at: {payload}"
+        );
+
+        // The durable record, not just the payload: everything except
+        // next_action (moved) and advanced_at (stamped) is byte-for-byte the
+        // record that was written — request and acceptance included.
+        let after = on_disk(root);
+        assert_eq!(after["request"], json!(REQUEST), "request is immutable through advance");
+        assert_eq!(after["acceptance"], json!(ACCEPTANCE), "acceptance too");
+        let mut b = before.as_object().unwrap().clone();
+        let mut a = after.as_object().unwrap().clone();
+        assert_eq!(b.remove("next_action"), Some(json!("step one")));
+        assert_eq!(a.remove("next_action"), Some(json!("step two")));
+        assert!(a.remove("advanced_at").is_some());
+        assert_eq!(
+            Value::Object(a),
+            Value::Object(b),
+            "advance touched a field other than next_action/advanced_at"
+        );
+    }
+
+    /// Oracle: "D1 — advance() on a repo with no anchor returns null rather
+    /// than inventing one" (the CLI arm of the same contract is the typed
+    /// refusal).
+    #[test]
+    fn advance_without_an_anchor_refuses_and_invents_nothing() {
+        let repo = setup_cli_repo();
+        let root = repo.path();
+
+        let miss = run_intent(root, &["intent", "advance", "--next-action", "anything", "--json"]);
+        assert!(miss.refused, "advance with no anchor must refuse: {:?}", miss.stdout);
+        assert_eq!(
+            miss.json()["error"],
+            json!("intent advance: no intent anchor exists to advance — run `bee intent set` first.")
+        );
+        assert!(!anchor_file(root).exists(), "a refused advance must never invent an anchor");
+
+        // CONTROL — once an anchor exists the identical command is served, so
+        // the refusal is the missing anchor and not a broken argv shape.
+        let set = run_intent(
+            root,
+            &["intent", "set", "--request", REQUEST, "--acceptance", ACCEPTANCE, "--json"],
+        );
+        assert!(!set.refused, "{:?}", set.stdout);
+        let ok = run_intent(root, &["intent", "advance", "--next-action", "anything", "--json"]);
+        assert!(!ok.refused, "the same advance must be served once an anchor exists: {:?}", ok.stdout);
+        assert_eq!(ok.json()["next_action"], json!("anything"));
+    }
+
+    /// Oracle: "clear() removes the anchor and is idempotent".
+    #[test]
+    fn clear_removes_the_anchor_and_is_idempotent() {
+        let repo = setup_cli_repo();
+        let root = repo.path();
+        let set = run_intent(
+            root,
+            &["intent", "set", "--request", REQUEST, "--acceptance", ACCEPTANCE, "--json"],
+        );
+        assert!(!set.refused, "{:?}", set.stdout);
+        assert_eq!(locate_intent_key(root, None, None).unwrap().as_deref(), Some(DEFAULT_INTENT_KEY));
+
+        let first = run_intent(root, &["intent", "clear", "--json"]);
+        assert!(!first.refused, "{:?}", first.stdout);
+        let first = first.json();
+        assert_eq!(first["cleared"], json!(true), "the first clear removes it");
+        assert_eq!(first["key"], json!(DEFAULT_INTENT_KEY));
+        assert!(!anchor_file(root).exists(), "the anchor file is gone");
+
+        let second = run_intent(root, &["intent", "clear", "--json"]);
+        assert!(!second.refused, "a second clear is a no-op, never an error: {:?}", second.stdout);
+        assert_eq!(second.json()["cleared"], json!(false));
+
+        // Nothing reads back afterwards, through the real show path.
+        let show = run_intent(root, &["intent", "show", "--json"]);
+        assert!(!show.refused, "{:?}", show.stdout);
+        assert_eq!(show.json(), Value::Null);
+    }
+
+    /// Oracle: "D5 — a missing anchor reads as null and both renderers return
+    /// '' (never throw)" + "D5 — a CORRUPT anchor reads exactly like a missing
+    /// one". A record that does not parse at all is NOT covered here: this
+    /// port delegates that arm to Node (read_anchor_at → Err), which
+    /// read_intent_walks_candidates_and_skips_unusable pins.
+    #[test]
+    fn missing_and_half_written_anchors_read_as_absent_and_render_empty() {
+        let repo = setup_cli_repo();
+        let root = repo.path();
+
+        let assert_absent = |label: &str| {
+            for render in ["precompact", "resume"] {
+                let run = run_intent(root, &["intent", "show", "--render", render, "--json"]);
+                assert!(!run.refused, "{label}/{render}: {:?}", run.stdout);
+                let payload = run.json();
+                assert_eq!(payload["anchor"], Value::Null, "{label}/{render}: {payload}");
+                assert_eq!(payload["block"], json!(""), "{label}/{render}: {payload}");
+            }
+            let text = run_intent(root, &["intent", "show", "--render", "precompact"]);
+            assert_eq!(text.stdout, "(no intent anchor)", "{label}: text render");
+        };
+
+        // 1. No anchor file at all.
+        assert_absent("missing");
+        assert!(read_intent(root, None, None).unwrap().is_none());
+
+        // 2. Parseable, but not an anchor: a record with no request is not
+        //    half an objective, it is no objective.
+        std::fs::create_dir_all(anchor_file(root).parent().unwrap()).unwrap();
+        std::fs::write(anchor_file(root), r#"{"acceptance":"only this"}"#).unwrap();
+        assert_absent("request-less record");
+        assert!(read_intent(root, None, None).unwrap().is_none());
+
+        // 3. A non-object record.
+        std::fs::write(anchor_file(root), r#"["an","array"]"#).unwrap();
+        assert_absent("non-object record");
+        assert!(read_intent(root, None, None).unwrap().is_none());
+
+        // CONTROL — a real anchor renders a labelled, non-empty block through
+        // the same two renderers, so the empties above are the absence and not
+        // a renderer that never emits anything.
+        std::fs::remove_file(anchor_file(root)).unwrap();
+        let set = run_intent(
+            root,
+            &["intent", "set", "--request", REQUEST, "--acceptance", ACCEPTANCE, "--json"],
+        );
+        assert!(!set.refused, "{:?}", set.stdout);
+        let pre = run_intent(root, &["intent", "show", "--render", "precompact", "--json"]).json();
+        let block = pre["block"].as_str().unwrap();
+        assert!(block.starts_with(PRECOMPACT_HEADER), "{block}");
+        assert!(block.ends_with(PRECOMPACT_FOOTER), "{block}");
+        assert!(block.contains(REQUEST), "the verbatim request survives, newline and all: {block}");
+        let res = run_intent(root, &["intent", "show", "--render", "resume", "--json"]).json();
+        let block = res["block"].as_str().unwrap();
+        assert!(block.starts_with(RESUME_HEADER), "{block}");
+        assert!(block.contains(REQUEST), "{block}");
     }
 }

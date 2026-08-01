@@ -173,7 +173,7 @@ Create the whole slice with one batched stdin call (a JSON array; a single
 object works for a one-cell slice — no per-cell scratchpad files):
 
 ```bash
-node .bee/bin/bee.mjs cells add --stdin <<'EOF'
+.bee/bin/bee cells add --stdin <<'EOF'
 [ { ...cell 1... }, { ...cell 2... } ]
 EOF
 ```
@@ -247,7 +247,7 @@ Reviewer prompt:
 ```text
 You are a merged plan reviewer. Two mandates. Assume the work is flawed until proven so.
 Inputs: docs/history/<feature>/CONTEXT.md, approach.md, plan.md, and the current-work
-cells (node .bee/bin/bee.mjs cells list --feature <feature>).
+cells (.bee/bin/bee cells list --feature <feature>).
 
 MANDATE 1 — STRUCTURE. Verify exactly 5 dimensions:
 1. Requirement/decision coverage — every locked decision lands in at least one cell.

@@ -970,6 +970,79 @@ mod tests {
         assert_eq!(d["tier"], "advisor");
     }
 
+    // R5 port of test_model_guard.mjs rows 11/12/15/16 — the fail-open arms
+    // the existing malformed-input test never reaches, because `run_payload`
+    // always hands the hook a well-formed JSON object with a cwd.
+    #[test]
+    fn rows11_16_unparseable_and_non_object_stdin_fail_open() {
+        let fx = fixture(&repo_config());
+        let cwd = fx.path().to_string_lossy().into_owned();
+        for (row, stdin) in [
+            ("row11: junk stdin", "not json at all {{{".to_string()),
+            ("row11b: empty stdin", String::new()),
+            ("row15: top-level null", "null".to_string()),
+            ("row16: top-level array", "[]".to_string()),
+            // A well-formed object whose cwd is not a string: the root
+            // resolver must degrade, not panic.
+            ("object cwd", json!({"cwd": {"not": "a string"}}).to_string()),
+            // The dispatch shape is present but the envelope is not an
+            // object — the tool_name read must not reach into a non-map.
+            (
+                "row16b: array carrying a dispatch-shaped element",
+                json!([{"tool_name": "Agent", "tool_input": {"prompt": "bare"}, "cwd": cwd}])
+                    .to_string(),
+            ),
+        ] {
+            let (code, stderr) = run_inner(&[], &stdin).expect("must decide natively");
+            assert_eq!(code, 0, "{row} must fail open");
+            assert_eq!(stderr, "", "{row} must stay silent");
+        }
+    }
+
+    #[test]
+    fn row12_no_repo_root_is_silent_success() {
+        // A bare temp dir with no `.bee/` at all: there is no repo to read a
+        // model set from, so the guard has no verdict to give.
+        let dir = tempfile::tempdir().unwrap();
+        let body = json!({
+            "tool_name": "Agent",
+            "tool_input": { "prompt": "bare dispatch, no marker, no model" },
+            "cwd": dir.path().to_string_lossy(),
+        });
+        let (code, stderr) =
+            run_inner(&[], &serde_json::to_string(&body).unwrap()).expect("native");
+        assert_eq!(code, 0);
+        assert_eq!(stderr, "");
+        // Control: the SAME payload inside a real fixture repo denies — so
+        // the exit 0 above is the missing root, not a toothless guard.
+        let fx = fixture(&repo_config());
+        let (denied, _) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "bare dispatch, no marker, no model"}}),
+        );
+        assert_eq!(denied, 2);
+    }
+
+    #[test]
+    fn missing_vendored_lib_is_silent_success() {
+        // Presence gate (bee-model-guard.mjs's existsSync on the vendored
+        // state.mjs): a host mid-vendoring gets no verdict rather than a
+        // wrong one.
+        let fx = fixture(&repo_config());
+        std::fs::remove_file(fx.path().join(".bee").join("bin").join("lib").join("state.mjs"))
+            .unwrap();
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "bare"}}),
+        );
+        assert_eq!(code, 0);
+        assert_eq!(stderr, "");
+        assert!(
+            !dispatch_log(fx.path()).exists(),
+            "a gated-off run must not leave dispatch telemetry"
+        );
+    }
+
     #[test]
     fn corrupt_config_delegates() {
         let fx = fixture(&repo_config());

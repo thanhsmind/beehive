@@ -2591,4 +2591,251 @@ mod tests {
                 .unwrap();
         assert!(ledger["holds"][0]["released_at"].is_string());
     }
+
+    // ── R5 test migration from packages/bee/tests/test_lease_store.mjs ─────
+    //
+    // WHAT IS NOT HERE, AND WHY — the lease store this file ports is the
+    // SINGLE-resource path-lease half that reservations.mjs drives
+    // (acquire one lease under O_EXCL, release by agent/cell, sweep by
+    // expiry). These oracle contracts have NO Rust counterpart anywhere this
+    // module can reach, so they are named rather than faked:
+    //
+    //   * renewLease / renewLeasesBySession and the LEASE_MISSING refusal.
+    //     reservations.rs never renews. (A narrowed renew lives in
+    //     src/hooks/state_sync.rs `renew_lease_path` and in
+    //     src/hooks/prompt_context.rs — both module-private and outside this
+    //     file, so their tests belong there.)
+    //   * LEASE_FENCE_STALE on renew AND release, the "file is never removed
+    //     on a fenced refusal" property, and the legacy no-`presentedEpoch`
+    //     arm. Nothing in the Rust tree reads or compares `epoch`:
+    //     reserve_locked STAMPS `epoch: 0` and no code path ever presents,
+    //     bumps or checks it.
+    //   * multi-resource partial-acquire rollback, and the hash-sorted
+    //     deterministic acquire order that makes a batch deadlock-free.
+    //     There is no batch: reserve_locked acquires exactly one resource.
+    //     The single-resource echo of "zero residue" IS ported below.
+    //   * LEASE_INVALID_REQUEST as a typed batch validation error. The
+    //     single-resource echo — every malformed request refused before any
+    //     file is created — is ported below.
+
+    /// Reads the whole path-lease directory as a set of file names, so a test
+    /// can assert nothing was added or left behind.
+    fn lease_files(root_s: &str) -> Vec<String> {
+        let dir = Path::new(root_s)
+            .join(".bee")
+            .join("runtime")
+            .join("leases")
+            .join("paths");
+        let mut names: Vec<String> = match std::fs::read_dir(&dir) {
+            Ok(rd) => rd.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect(),
+            Err(_) => Vec::new(),
+        };
+        names.sort();
+        names
+    }
+
+    fn write_lease_file(root_s: &str, path: &str, expires_at: Value) {
+        let file = path_lease_file(root_s, path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let record = json!({
+            "resource": format!("path:{}", res_normalize_path(path)),
+            "mode": "write",
+            "workflow_id": "c",
+            "session_id": "s",
+            "workspace_id": "agent:a",
+            "epoch": 0,
+            "acquired_at": "2020-01-01T00:00:00.000Z",
+            "expires_at": expires_at,
+            "kind": "lease",
+        });
+        std::fs::write(&file, format!("{}\n", jsjson::stringify_pretty(&record))).unwrap();
+    }
+
+    fn write_holds_ledger(root: &Path, holds: Value) {
+        std::fs::create_dir_all(holds_ledger_path(root).parent().unwrap()).unwrap();
+        std::fs::write(holds_ledger_path(root), jsjson::stringify(&json!({"holds": holds}))).unwrap();
+    }
+
+    /// Oracle: "sweepExpiredLeases deletes only expired leases; never-expiring
+    /// (ttl<=0) leases are never swept (TTL semantics)".
+    ///
+    /// computeExpiresAt stores `expires_at: null` for a non-positive ttl
+    /// (reserve_locked's own non-positive-ttl branch), and both the sweep and
+    /// the active-only listing must read that as "never expires".
+    #[test]
+    fn never_expiring_leases_and_holds_survive_a_sweep_that_takes_the_expired_ones() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        write_lease_file(&root_s, "src/expired.ts", json!("2020-01-01T01:00:00.000Z"));
+        write_lease_file(&root_s, "src/fresh.ts", json!("2999-01-01T00:00:00.000Z"));
+        write_lease_file(&root_s, "src/forever.ts", Value::Null);
+        assert_eq!(lease_files(&root_s).len(), 3);
+
+        // ttl_seconds 0 and -5 are both "never expires"; 60s from 2020 is long
+        // expired — the control that the sweep is doing anything at all.
+        write_holds_ledger(
+            tmp.path(),
+            json!([
+                {"path": "src/expired.ts", "holder": "main", "feature": null, "session": null,
+                 "cell": "c", "ttl_seconds": 60, "mirrored_at": "2020-01-01T00:00:00.000Z", "released_at": null},
+                {"path": "src/forever.ts", "holder": "main", "feature": null, "session": null,
+                 "cell": "c", "ttl_seconds": 0, "mirrored_at": "2020-01-01T00:00:00.000Z", "released_at": null},
+                {"path": "src/forever-neg.ts", "holder": "main", "feature": null, "session": null,
+                 "cell": "c", "ttl_seconds": -5, "mirrored_at": "2020-01-01T00:00:00.000Z", "released_at": null},
+            ]),
+        );
+
+        let Ok(Out::Emit(result, text, 0)) = sweep_exec(tmp.path(), &root_s, 1) else {
+            panic!("expected sweep emit");
+        };
+        assert_eq!(result["released"], json!(1.0), "exactly the expired lease");
+        assert_eq!(result["holds_released"], json!(1.0), "exactly the expired hold");
+        assert_eq!(
+            text,
+            "Swept 1 expired reservation(s) and 1 expired cross-worktree hold(s)."
+        );
+        assert!(!path_lease_file(&root_s, "src/expired.ts").exists());
+        assert!(path_lease_file(&root_s, "src/fresh.ts").exists(), "an unexpired lease survives");
+        assert!(
+            path_lease_file(&root_s, "src/forever.ts").exists(),
+            "a never-expiring (expires_at null) lease survives"
+        );
+        let ledger: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(tmp.path())).unwrap()).unwrap();
+        assert!(ledger["holds"][0]["released_at"].is_string(), "the expired hold was marked");
+        assert_eq!(ledger["holds"][1]["released_at"], Value::Null, "ttl 0 never expires");
+        assert_eq!(ledger["holds"][2]["released_at"], Value::Null, "a negative ttl never expires");
+
+        // The active-only listing agrees, and reports the never-expiring lease
+        // with reservations.mjs's ttl_seconds sentinel of 0.
+        let mut rows = list_reservations(&root_s, true, now_ms()).ok().unwrap();
+        rows.sort_by(|a, b| a.path.cmp(&b.path));
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].path, "src/forever.ts");
+        assert_eq!(rows[0].ttl_seconds, Some(0.0));
+        assert_eq!(rows[1].path, "src/fresh.ts");
+
+        // A second sweep is a no-op: nothing left is expired.
+        let Ok(Out::Emit(result, _, 0)) = sweep_exec(tmp.path(), &root_s, 1) else {
+            panic!("expected sweep emit");
+        };
+        assert_eq!(result["released"], json!(0.0));
+        assert_eq!(result["holds_released"], json!(0.0));
+    }
+
+    /// The single-resource echo of the oracle's "partial acquire rolls back
+    /// fully … zero residue": a reserve that loses its resource must leave the
+    /// lease directory and the mirrored ledger exactly as it found them.
+    #[test]
+    fn a_lost_reserve_leaves_zero_residue_in_the_lease_dir_and_the_ledger() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        assert!(matches!(
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+        let files_before = lease_files(&root_s);
+        // Semantic snapshot: the ledger must be unchanged as a RECORD SET, not
+        // merely as bytes a rewrite happened to reproduce.
+        let ledger_before: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(tmp.path())).unwrap()).unwrap();
+        assert_eq!(files_before.len(), 1);
+        assert_eq!(ledger_before["holds"].as_array().unwrap().len(), 1);
+
+        // Overlap conflict on the exact same resource.
+        let Ok(Out::Emit(result, _, 1)) =
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-b", "cell-2", "src/x.ts"), 1)
+        else {
+            panic!("expected the conflict refusal");
+        };
+        assert_eq!(result["ok"], Value::Bool(false));
+        // Overlap conflict on a path that only OVERLAPS an existing lease.
+        assert!(matches!(
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-b", "cell-2", "src/x.ts/inner"), 1),
+            Ok(Out::Emit(_, _, 1))
+        ));
+        assert_eq!(lease_files(&root_s), files_before, "no lease file survived a refusal");
+        let ledger_after: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(tmp.path())).unwrap()).unwrap();
+        assert_eq!(ledger_after, ledger_before, "no hold row survived a refusal");
+
+        // Control: a non-overlapping resource DOES add exactly one of each, so
+        // the zero-residue assertions above are not vacuous.
+        assert!(matches!(
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-b", "cell-2", "src/y.ts"), 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+        assert_eq!(lease_files(&root_s).len(), 2);
+        let ledger_final: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(tmp.path())).unwrap()).unwrap();
+        assert_eq!(ledger_final["holds"].as_array().unwrap().len(), 2);
+    }
+
+    /// The single-resource echo of the oracle's LEASE_INVALID_REQUEST row
+    /// ("missing fields, bad type … refuses before any file is created") and
+    /// of "kind defaults to lease when omitted; an explicit intent is stamped
+    /// verbatim; an invalid kind refuses before any file is created".
+    #[test]
+    fn a_malformed_reserve_request_is_refused_before_any_lease_file_is_created() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+
+        // Refusal wording is a pinned contract on this verb (bee.mjs serves
+        // reserve()'s throws byte-identical) — hence the exact comparisons.
+        let cases: [(ReserveParams, &str); 4] = [
+            (params("  ", "cell-1", "src/x.ts"), "reserve: agent is required."),
+            (params("worker-a", "", "src/x.ts"), "reserve: cell id is required."),
+            (params("worker-a", "cell-1", "   "), "reserve: path is required."),
+            (
+                {
+                    let mut p = params("worker-a", "cell-1", "src/x.ts");
+                    p.kind = Some("exclusive".into());
+                    p
+                },
+                "reserve: kind must be one of intent/lease (got \"exclusive\").",
+            ),
+        ];
+        for (p, expected) in cases {
+            match reserve_exec(main_topo(tmp.path()), &root_s, &p, 1) {
+                Ok(Out::Thrown(msg)) => assert_eq!(msg, expected),
+                other => panic!(
+                    "expected a thrown refusal for {expected:?}, got {}",
+                    match other {
+                        Ok(Out::Emit(v, _, _)) => jsjson::stringify(&v),
+                        Ok(Out::Thrown(m)) => m,
+                        Err(_) => "an error".to_string(),
+                    }
+                ),
+            }
+            assert!(lease_files(&root_s).is_empty(), "a refused request created a lease file");
+        }
+        assert!(
+            !holds_ledger_path(tmp.path()).exists(),
+            "a refused request never writes the mirrored ledger"
+        );
+
+        // Control: the same request with every field valid succeeds, and the
+        // stored record carries the DEFAULTED kind.
+        assert!(matches!(
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+        let stored: Value = serde_json::from_str(
+            &std::fs::read_to_string(path_lease_file(&root_s, "src/x.ts")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(stored["kind"], json!("lease"), "an omitted kind defaults to lease");
+        // …and an explicit kind is stamped verbatim.
+        let mut intent = params("planner", "cell-p", "src/api/*");
+        intent.kind = Some("intent".into());
+        assert!(matches!(
+            reserve_exec(main_topo(tmp.path()), &root_s, &intent, 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+        let stored: Value = serde_json::from_str(
+            &std::fs::read_to_string(path_lease_file(&root_s, "src/api/*")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(stored["kind"], json!("intent"));
+    }
 }

@@ -76,6 +76,12 @@ pub const PORTED: &[&str] = &[
     "dev statusline",
     "dev impact-registry --write|--check|--query <file...> [--level 1]",
     "dev release-manifest --write|--check|--selftest",
+    // R6a — the bee-herding cockpit's executable helpers, ported off Node
+    "herding classify-lane <PBI-ID>",
+    "herding interlock [--main-root PATH]",
+    "herding command-template <key> [--main-root PATH]",
+    "herding herdr-result <dotted.path> [--context NAME]",
+    "herding herdr-pane-id --label <label>",
     // R3 wave 4 — the last per-group debts
     "state set|gate|scribing-run|compounding-run|plan-rev bump|handoff (ALL repo shapes)",
     "state workflows list|close",
@@ -114,6 +120,13 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     // verb tree; a `dev` shape it does not serve returns None with no output
     // and the delegate reports unknown-command exactly as Node does.
     if let Some(code) = crate::devtools::try_native(args) {
+        return Some(code);
+    }
+    // `bee herding …` is the R6a home of the bee-herding cockpit's two
+    // executable helpers (classify-lane, interlock), ported off their .mjs.
+    // No Node command ever spelled `herding`, so like onboard and dev it
+    // probes ahead of the verb tree and cannot shadow a delegated verb.
+    if let Some(code) = crate::herding::try_native(args) {
         return Some(code);
     }
     verbs::try_native(args, t0)

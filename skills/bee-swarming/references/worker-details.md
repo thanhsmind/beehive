@@ -32,9 +32,9 @@ not by flags.
 Startup runs ZERO of these: the dispatch prompt inlines the cell JSON and the state line — `status --brief` and `cells show` are post-compaction recovery verbs only, never startup verbs.
 
 ```text
-node .bee/bin/bee.mjs reservations reserve --agent "<name>" --cell "<id>" --path "<path>" --ttl 3600
-node .bee/bin/bee.mjs cells finish --id <id> [--outcome TEXT] [--files a,b] [--deviations-file F] [--friction TEXT]
-node .bee/bin/bee.mjs decisions active --recent 3
+.bee/bin/bee reservations reserve --agent "<name>" --cell "<id>" --path "<path>" --ttl 3600
+.bee/bin/bee cells finish --id <id> [--outcome TEXT] [--files a,b] [--deviations-file F] [--friction TEXT]
+.bee/bin/bee decisions active --recent 3
 ```
 
 `cells finish` caps the cell and releases its reservations in one verb, running the declared tests on the way; `bee test` alone re-runs the suite when you want the record in front of you before retrying.
@@ -180,8 +180,8 @@ Reread, in order:
 
 1. `AGENTS.md`
 2. `docs/history/<feature>/CONTEXT.md`
-3. `node .bee/bin/bee.mjs cells show --id <id>`
-4. `node .bee/bin/bee.mjs reservations list --active-only`
+3. `.bee/bin/bee cells show --id <id>`
+4. `.bee/bin/bee reservations list --active-only`
 
 ## Advisor consult in full
 

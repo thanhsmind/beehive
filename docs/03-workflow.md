@@ -73,7 +73,7 @@ Rule of use: **the least workflow that honestly protects the work**. A tiny fix 
 
 ### bee-hive (bootstrap & routing)
 
-- **On every session start / after compaction:** verify onboarding (`.bee/onboarding.json`), run `node .bee/bin/bee.mjs status --json`, surface `HANDOFF.json` if present and **wait**, read `critical-patterns.md`, surface recent active decisions.
+- **On every session start / after compaction:** verify onboarding (`.bee/onboarding.json`), run `.bee/bin/bee status --json`, surface `HANDOFF.json` if present and **wait**, read `critical-patterns.md`, surface recent active decisions.
 - **Routing:** vague/new feature → shaping; clear-scope research → planning; small fix → planning in tiny/small mode; review request → reviewing; "clean up / debt / audit" → grooming; capture learnings → capturing; improve bee's own skills → the maintainer guide [handbook/writing-skills.md](handbook/writing-skills.md); `/go` → go mode (full chain with the three gates).
 - **Surface scope earlier** (compound-engineering): if the request already contains concrete acceptance criteria *and* references to existing patterns, offer to skip the Explore step — "Found clear requirements. Jump straight to planning, or explore alternatives first?" — and on approval route to planning with a one-paragraph scoping synthesis in place of CONTEXT.md gray-area work (the decisions still get D-IDs).
 - **Scout contract (just-enough reading):** phase × lane matrix with token budgets — tiny ≈ 2K tokens of harness context, standard ≈ 5K, high-risk ≈ 10K. Retrieval triggers, not reading lists: "touching schema → read schema decisions first", "touching auth → read auth decisions + high-risk template".

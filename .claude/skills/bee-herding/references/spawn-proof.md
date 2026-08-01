@@ -17,7 +17,7 @@ sandbox; pane counts include those other panes throughout).
 ## Step 1 — create the worktree (MAIN checkout only)
 
 ```
-node .bee/bin/bee.mjs worktree new --feature apo-throwaway-spawn --json
+.bee/bin/bee worktree new --feature apo-throwaway-spawn --json
 ```
 Run from `/home/you/proj/repo` (never from inside a linked
 worktree — it refuses). Result:
@@ -147,7 +147,7 @@ Polling `herdr pane get w7:pT` ~8s later:
 herdr pane close w7:pT
 git worktree remove --force /home/you/proj/repo--wt--apo-throwaway-spawn
 git branch -d wt/apo-throwaway-spawn
-node .bee/bin/bee.mjs worktree unregister --id herdr-gateway--wt--apo-throwaway-spawn
+.bee/bin/bee worktree unregister --id herdr-gateway--wt--apo-throwaway-spawn
 ```
 
 Observed results:
@@ -160,12 +160,12 @@ Observed results:
   wt/apo-throwaway-spawn (was 35732b6).` (plain `-d`, not `-D`, succeeded —
   the branch had zero commits beyond the base it forked from, so it was
   trivially merged).
-- `node .bee/bin/bee.mjs worktree unregister --id
+- `.bee/bin/bee worktree unregister --id
   herdr-gateway--wt--apo-throwaway-spawn` → `Removed worktree grant for id
   herdr-gateway--wt--apo-throwaway-spawn.`
 - `git worktree list` afterward: no `apo-throwaway-spawn` row.
 - `git branch --list 'wt/apo-throwaway-spawn'`: empty.
-- `node .bee/bin/bee.mjs worktree list --json` afterward: `grants` has no
+- `.bee/bin/bee worktree list --json` afterward: `grants` has no
   key containing `apo-throwaway-spawn` (other concurrent worktrees' grants
   in this live workspace are unrelated and untouched).
 

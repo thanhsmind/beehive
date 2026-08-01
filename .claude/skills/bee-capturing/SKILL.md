@@ -6,11 +6,11 @@ metadata:
   version: '0.1'
   ecosystem: bee
   dependencies:
-    nodejs-runtime:
+    bee-cli:
       kind: command
-      command: node
+      command: .bee/bin/bee
       missing_effect: degraded
-      reason: Logs decisions, queues captures, and syncs state through the vendored .bee/bin CLI.
+      reason: Logs decisions, queues captures, and syncs state through the vendored bee binary. The binary is vendored into the repo by onboarding; no Node runtime is involved.
 ---
 
 # Capturing — keep what settles

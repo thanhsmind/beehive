@@ -12,7 +12,7 @@ compaction. Re-entered whenever a routing or mode-gate decision is needed.
   critical-patterns digest, recent decisions) — read it, don't re-fetch it.
 - [`state.json`](../register.md#beestatejson), [`onboarding.json`](../register.md#beeonboardingjson),
   [`HANDOFF.json`](../register.md#beehandoffjson).
-- `node .bee/bin/bee.mjs status --json` — only when about to *route work*.
+- `.bee/bin/bee status --json` — only when about to *route work*.
 - `docs/knowledge/index.md` (critical patterns) or `docs/history/learnings/critical-patterns.md`.
 
 ## Outputs

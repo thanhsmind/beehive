@@ -6,11 +6,11 @@ metadata:
   version: '0.2'
   ecosystem: bee
   dependencies:
-    nodejs-runtime:
+    bee-cli:
       kind: command
-      command: node
+      command: .bee/bin/bee
       missing_effect: unavailable
-      reason: The dispatchable-set build, lane classification, and the merge role's worktree-finished checks all run through the vendored .bee/bin helpers and scripts/classify-lane.mjs.
+      reason: The dispatchable-set build, lane classification, the enable interlock, and the merge role's worktree-finished checks all run through the vendored bee binary (`bee herding classify-lane`, `bee herding interlock`, `bee worktree ...`). The binary is vendored into the repo by onboarding; no Node runtime is involved.
     herdr-cli:
       kind: command
       command: herdr

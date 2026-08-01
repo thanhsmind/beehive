@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "bee_version": "1.20.3",
   "managed": {
-    "agents_block": "e5e9bcd9c9277910656a25b5cb9d25b15f3a8b2c45b01461e571ffebf2d3b9d9",
+    "agents_block": "7520888a768056c2a22d967645e65d6ed70780cc07de3cad8bc679cfe963c4d6",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
     "helpers": {
       "bee.mjs": "5488c27d651458d075b9480bb8b5cc47e81437d64e18a36cf3dc48dda5c46d3c"
@@ -69,7 +69,7 @@
       "advisor.md": "cc970fc08c6aa0bdccb77351926b481baa7b6176a281efdbeb5c4f1a3383a05e",
       "gather.md": "593521c49a0983b1a50ad437f89905ded6cc1ee588730e6402920ae585eeb622",
       "reviewer.md": "0c830dcb1ee67b8b27ea823984e487c1e16c31d5554d1e49f51a4562526e197c",
-      "worker-cell.md": "463b5fde29121c3f92f7eed408ad84cb8efc8cd61a9f156eb83048c420a4206e"
+      "worker-cell.md": "f2e443e627c60773f4a338f9c66e6beed859fc2fdaf9e49943b0c6485654d667"
     },
     "repo_hooks": {
       "adapter.mjs": "e21c39e993390600cb2fe352078ae7554c74db0ee6ffd5bdb443c49192689dca",
@@ -104,5 +104,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-01T06:39:37.959Z"
+  "updated_at": "2026-08-01T08:54:52.600Z"
 }

@@ -8381,4 +8381,487 @@ const C = path.join(REPO_ROOT, dynamic);
         let bare = json!({"id":"x2","status":"open","feature":"f"});
         assert!(candidate_ok(root, root, "mine", &bare, now).ok().unwrap());
     }
+
+    // ── claims (R5): the sweep's gate discipline ──────────────────────────
+    // Oracle: test_claims.mjs "sweep: TTL expired AND heartbeat stale IS
+    // reclaimed; no gate file leaks", "sweep: TTL expired but heartbeat FRESH
+    // is never reclaimed (20260710 — no steal on a stall signal)", and the
+    // sweep half of "sweep and adopt skip/refuse while the per-claim gate is
+    // held — typed GATE_HELD, never wait". (adoptClaim itself is not part of
+    // this port's surface — see the module header's claims subset.)
+    #[test]
+    fn sweep_skips_a_gated_claim_and_leaks_no_gate_file() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+        let fresh = rsv::iso_from_ms(now).ok().unwrap();
+        let claimed = |session: &str| {
+            json!({"id":"x","status":"claimed","feature":"f","trace":{"worker":"w","claim_session":session}})
+        };
+
+        // (a) expired + stale owner, but another process holds the per-claim
+        //     gate: skipped on the spot (GATE_HELD), never waited out.
+        write_cell_fixture(root, "held", &claimed("dead"));
+        write_claim_fixture(root, "held", Some("dead"), 60.0, OLD);
+        let held_gate = claim_gate_path(root, "held").unwrap();
+        std::fs::write(&held_gate, "{}").unwrap(); // another process mid-adopt
+
+        // (b) the SAME shape with a free gate — the control that IS reclaimed.
+        write_cell_fixture(root, "free", &claimed("dead"));
+        write_claim_fixture(root, "free", Some("dead"), 60.0, OLD);
+
+        // (c) expired TTL but a FRESH owner heartbeat: never reclaimed, and
+        //     the gate is never even taken (the heartbeat test precedes
+        //     acquireGate).
+        write_cell_fixture(root, "alive", &claimed("live"));
+        write_claim_fixture(root, "alive", Some("live"), 60.0, OLD);
+
+        write_session_fixture(root, "dead", OLD, None);
+        write_session_fixture(root, "live", &fresh, None);
+
+        sweep_expired_claims(root, now).ok().unwrap();
+
+        let claim_file = |id: &str| claims_dir(root).join(format!("{id}.json"));
+        let status = |id: &str| match read_cell_norm(root, id).ok().unwrap() {
+            Some(Value::Object(m)) => js_string_or_undefined(m.get("status")),
+            _ => panic!("cell {id}"),
+        };
+
+        assert!(claim_file("held").exists(), "a gated claim is skipped, never stolen");
+        assert_eq!(status("held"), "claimed", "a skipped claim's cell is never reset");
+        assert_eq!(
+            std::fs::read_to_string(&held_gate).unwrap(),
+            "{}",
+            "the other process's gate file is left exactly as found"
+        );
+
+        assert!(!claim_file("free").exists(), "expired + stale owner IS reclaimed");
+        assert_eq!(status("free"), "open");
+        assert!(
+            !claim_gate_path(root, "free").unwrap().exists(),
+            "a completed sweep leaves no gate file behind"
+        );
+
+        assert!(claim_file("alive").exists(), "a fresh heartbeat is never swept");
+        assert_eq!(status("alive"), "claimed");
+        assert!(
+            !claim_gate_path(root, "alive").unwrap().exists(),
+            "the heartbeat check runs before the gate is ever taken"
+        );
+    }
+
+    // ── claims (R5): releaseClaim's owner ladder ──────────────────────────
+    // Oracle: test_claims.mjs "releaseClaim: NOT_OWNER for the old session
+    // after adoption, owner release removes the file, NOT_FOUND after". This
+    // port returns () — the typed codes are the half the unwind caller
+    // ignores — so the ladder is asserted through its disk effect.
+    #[test]
+    fn release_claim_owner_ladder_and_gate_hygiene() {
+        let tmp = tempfile::tempdir().unwrap();
+        let control = tmp.path();
+        match claim_cell_file(control, Some("owner-a"), "r-1", None).unwrap() {
+            ClaimFileOutcome::Ok { .. } => {}
+            _ => panic!("precondition: r-1 claimed by owner-a"),
+        }
+        let file = claims_dir(control).join("r-1.json");
+        let gate = claim_gate_path(control, "r-1").unwrap();
+        let parse = |p: &Path| -> Value {
+            serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
+        };
+        let before = parse(&file);
+
+        // NOT_OWNER: a foreign session's release changes nothing.
+        release_claim(control, Some("owner-b"), "r-1").unwrap();
+        assert!(file.exists(), "a denied release never removes the claim");
+        assert_eq!(parse(&file), before, "a denied release never rewrites the claim");
+        assert!(!gate.exists(), "a denied release leaks no gate file");
+
+        // A sessionless release is not the owner here either.
+        release_claim(control, None, "r-1").unwrap();
+        assert!(file.exists(), "sessionless != owner \"owner-a\"");
+        assert_eq!(parse(&file), before);
+
+        // The owner's release removes it, gate-clean.
+        release_claim(control, Some("owner-a"), "r-1").unwrap();
+        assert!(!file.exists(), "the owner's release removes the claim file");
+        assert!(!gate.exists(), "the owner's release leaks no gate file");
+
+        // NOT_FOUND: releasing again is a no-op that never takes the gate.
+        release_claim(control, Some("owner-a"), "r-1").unwrap();
+        assert!(!file.exists());
+        assert!(!gate.exists());
+    }
+
+    // ── claims D5 (R5): the Codex session bridge ──────────────────────────
+    // Oracle: test_claims.mjs "claimCellFile (hardening-1-7-10 D5 — Codex
+    // session bridge): a sessionless claim with EXACTLY ONE fresh live session
+    // auto-adopts that session's identity", and its twin "…with TWO OR MORE
+    // fresh live sessions still refuses typed SESSION_REQUIRED".
+    #[test]
+    fn sessionless_claim_adopts_one_live_session_and_refuses_two() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let fresh = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+        let claim_ok = |id: &str, session: Option<&str>| -> Value {
+            match claim_cell_file(root, session, id, Some(60.0)).unwrap() {
+                ClaimFileOutcome::Ok { claim } => claim,
+                ClaimFileOutcome::Refused { code, reason } => {
+                    panic!("{id}: expected a claim, got {code}: {reason}")
+                }
+            }
+        };
+
+        // Zero live sessions: a genuinely solo claim stays sessionless and is
+        // never marked adopted.
+        let solo = claim_ok("d5-solo", None);
+        assert!(solo.get("session").is_none(), "a solo sessionless claim omits the session key");
+        assert!(solo.get("adopted").is_none(), "nothing was adopted");
+
+        // Exactly one fresh session: its identity is adopted rather than refused.
+        write_session_fixture(root, "only-live", &fresh, None);
+        let adopted = claim_ok("d5-one", None);
+        assert_eq!(adopted.get("session"), Some(&json!("only-live")));
+        assert_eq!(adopted.get("adopted"), Some(&json!(true)));
+        let on_disk = read_claim(root, "d5-one").unwrap().unwrap();
+        assert_eq!(on_disk.get("session"), Some(&json!("only-live")));
+        assert_eq!(
+            on_disk.get("adopted"),
+            Some(&json!(true)),
+            "the on-disk record carries the audit marker too"
+        );
+
+        // A STALE second session is not ambiguity — one FRESH is still one.
+        write_session_fixture(root, "long-gone", OLD, None);
+        assert_eq!(claim_ok("d5-still-one", None).get("session"), Some(&json!("only-live")));
+
+        // Two fresh sessions: real ambiguity is refused, never guessed.
+        write_session_fixture(root, "second-live", &fresh, None);
+        match claim_cell_file(root, None, "d5-two", Some(60.0)).unwrap() {
+            ClaimFileOutcome::Refused { code, reason } => {
+                assert_eq!(code, "SESSION_REQUIRED");
+                // Both identity routes are a pinned part of this refusal —
+                // the message is what tells a stuck agent how to proceed.
+                assert!(reason.contains("--session-id"), "reason: {reason}");
+                assert!(reason.contains("BEE_SESSION_ID"), "reason: {reason}");
+            }
+            ClaimFileOutcome::Ok { claim } => panic!("two live sessions must refuse, got {claim}"),
+        }
+        assert!(
+            !claims_dir(root).join("d5-two.json").exists(),
+            "the refusal leaves no claim file behind"
+        );
+
+        // Control: an explicit session id still claims fine, and is never
+        // marked adopted (adoption is only ever an inference).
+        let explicit = claim_ok("d5-two", Some("second-live"));
+        assert_eq!(explicit.get("session"), Some(&json!("second-live")));
+        assert!(explicit.get("adopted").is_none());
+    }
+
+    // ── claims (R5): resolveSessionId's ordered chain ─────────────────────
+    // Oracle: test_claims.mjs "resolveSessionId: explicit flag wins over env;
+    // a blank flag falls through to env" + "(hardening-4a): BEE_SESSION_ID
+    // wins over legacy CLAUDE_CODE_SESSION_ID".
+    const SESSION_CHAIN_CHILD: &str = "verbs::cells::tests::session_id_env_chain_child";
+
+    /// Runs ONLY as a child of the test below, which hands it a controlled
+    /// environment. `#[ignore]` keeps it out of the normal pass: this
+    /// process's env is shared with every other test in the binary (
+    /// state_group's fixtures resolve BEE_SESSION_ID / CLAUDE_CODE_SESSION_ID
+    /// live, and the CI runner really does export the latter), so the ordered
+    /// chain is exercised out-of-process instead of by mutating env under them.
+    #[test]
+    #[ignore = "spawned by resolve_session_id_precedence_flag_beats_bee_beats_legacy"]
+    fn session_id_env_chain_child() {
+        let want = std::env::var("BEE_TEST_EXPECT").unwrap_or_default();
+        assert_eq!(
+            resolve_session_flag_env(None).unwrap_or_default(),
+            want,
+            "no-flag resolution"
+        );
+        // An explicit flag outranks whatever the env says, in every combination.
+        assert_eq!(
+            resolve_session_flag_env(Some("sess-from-flag")).as_deref(),
+            Some("sess-from-flag")
+        );
+        // A blank / whitespace-only flag is NOT an explicit empty session: it
+        // falls through to the same answer the env alone gives.
+        assert_eq!(resolve_session_flag_env(Some("")).unwrap_or_default(), want);
+        assert_eq!(resolve_session_flag_env(Some("   ")).unwrap_or_default(), want);
+    }
+
+    #[test]
+    fn resolve_session_id_precedence_flag_beats_bee_beats_legacy() {
+        // The env-free half runs in-process: whatever this machine's ambient
+        // env says, an explicit flag wins and a blank one falls through to it.
+        assert_eq!(
+            resolve_session_flag_env(Some("sess-from-flag")).as_deref(),
+            Some("sess-from-flag")
+        );
+        let ambient = resolve_session_flag_env(None);
+        assert_eq!(resolve_session_flag_env(Some("")), ambient, "blank flag falls through");
+        assert_eq!(resolve_session_flag_env(Some("   ")), ambient);
+
+        // The ordered env half needs a controlled environment — child process.
+        // (bee, legacy, expected)
+        let cases: &[(Option<&str>, Option<&str>, &str)] = &[
+            (None, Some("sess-legacy"), "sess-legacy"),
+            (Some("sess-bee"), Some("sess-legacy"), "sess-bee"),
+            (Some("   "), Some("sess-legacy"), "sess-legacy"),
+            (Some("sess-bee"), None, "sess-bee"),
+            (None, None, ""),
+        ];
+        let exe = std::env::current_exe().expect("test binary path");
+        for (bee, legacy, want) in cases {
+            let mut cmd = std::process::Command::new(&exe);
+            cmd.args(["--exact", SESSION_CHAIN_CHILD, "--ignored", "--test-threads", "1"]);
+            cmd.env_remove("BEE_SESSION_ID").env_remove("CLAUDE_CODE_SESSION_ID");
+            if let Some(v) = bee {
+                cmd.env("BEE_SESSION_ID", v);
+            }
+            if let Some(v) = legacy {
+                cmd.env("CLAUDE_CODE_SESSION_ID", v);
+            }
+            cmd.env("BEE_TEST_EXPECT", want);
+            let out = cmd.output().expect("spawn the test binary");
+            let text = format!(
+                "{}{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            // Tripwire: a filter that matched nothing ALSO exits 0, so the
+            // pass count — not the status — is what proves the case ran.
+            assert!(
+                text.contains("1 passed"),
+                "child never ran the case (bee={bee:?} legacy={legacy:?}):\n{text}"
+            );
+            assert!(
+                out.status.success(),
+                "chain case failed (bee={bee:?} legacy={legacy:?} want={want:?}):\n{text}"
+            );
+        }
+    }
+
+    // ── cells add (R5): whole-batch report ────────────────────────────────
+    // Oracle: test_cells.mjs "addCells aggregates EVERY failing cell in one
+    // refusal", "addCells refuses a duplicate id within the batch",
+    // "addCells refuses an in-batch cycle", "previewAddCells: a clean batch
+    // reports ok:true …and writes nothing", "previewAddCells: a dirty batch
+    // names EVERY failing cell", "previewAddCells folds a batch-wide cycle
+    // into the cells it touches (ce-2)". buildAddCellsReport is the one
+    // engine `cells add` and `cells add --dry-run` share.
+    fn addable(id: &str) -> Value {
+        json!({
+            "id": id, "feature": "batch", "title": format!("title {id}"),
+            "action": "do the thing", "verify": "echo ok", "lane": "tiny",
+        })
+    }
+
+    #[test]
+    fn add_cells_report_aggregates_every_failure_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let unwritten = |ids: &[&str]| {
+            for id in ids {
+                assert!(
+                    read_cell_norm(root, id).ok().unwrap().is_none(),
+                    "{id} must not exist — the report never writes"
+                );
+            }
+        };
+
+        // A clean batch: every verdict ok, normalized cells handed back, and
+        // still nothing on disk (the --dry-run "nothing written" contract).
+        let clean = vec![addable("b-1"), addable("b-2")];
+        let (ok, rows, normalized) = build_add_cells_report(root, &clean).unwrap();
+        assert!(ok);
+        assert_eq!(rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), vec!["b-1", "b-2"]);
+        assert!(rows.iter().all(|r| r.ok && r.problems.is_empty()));
+        assert_eq!(normalized.as_ref().map(Vec::len), Some(2));
+        unwritten(&["b-1", "b-2"]);
+
+        // A dirty batch does NOT stop at the first bad cell: both bad cells
+        // carry their own problem, the good one still verdicts ok, and no
+        // normalized list comes back — that absence is the all-or-nothing
+        // mechanism the writer loop depends on.
+        let mut bad_lane = addable("d-2");
+        bad_lane["lane"] = json!("huge");
+        let mut blank_title = addable("d-3");
+        blank_title["title"] = json!("");
+        let dirty = vec![addable("d-1"), bad_lane, blank_title];
+        let (ok, rows, normalized) = build_add_cells_report(root, &dirty).unwrap();
+        assert!(!ok);
+        assert!(rows[0].ok && rows[0].problems.is_empty(), "the valid cell still verdicts ok");
+        assert!(!rows[1].ok);
+        assert!(rows[1].problems.iter().any(|p| p.contains("lane")), "{:?}", rows[1].problems);
+        assert!(!rows[2].ok);
+        assert!(
+            rows[2].problems.iter().any(|p| p.contains("\"title\"")),
+            "the SECOND bad cell is named too, never swallowed by the first: {:?}",
+            rows[2].problems
+        );
+        assert!(normalized.is_none(), "a dirty batch yields nothing to write");
+        unwritten(&["d-1", "d-2", "d-3"]);
+
+        // The per-cell verdict shape the dry-run payload renders.
+        let payload = add_report_rows_value(&rows);
+        let cells = payload.as_array().unwrap();
+        assert_eq!(cells.len(), 3);
+        assert_eq!(
+            cells[0].as_object().unwrap().keys().collect::<Vec<_>>(),
+            vec!["id", "ok", "problems"]
+        );
+        assert_eq!(cells[0]["id"], json!("d-1"));
+        assert_eq!(cells[0]["ok"], json!(true));
+        assert_eq!(cells[0]["problems"], json!([]));
+        assert_eq!(cells[1]["ok"], json!(false));
+
+        // An in-batch duplicate id: the first occurrence is clean, the repeat
+        // carries the duplicate problem.
+        let (ok, rows, normalized) = build_add_cells_report(root, &[addable("dup"), addable("dup")]).unwrap();
+        assert!(!ok);
+        assert!(rows[0].ok, "the first occurrence of the id is not the duplicate");
+        assert_eq!(rows[1].problems, vec!["addCells: duplicate id \"dup\" within the batch."]);
+        assert!(normalized.is_none());
+        unwritten(&["dup"]);
+
+        // A cell with no usable id is still reported, under its index.
+        let mut anonymous = addable("x");
+        anonymous.as_object_mut().unwrap().shift_remove("id");
+        let (ok, rows, _) = build_add_cells_report(root, &[addable("keep"), anonymous]).unwrap();
+        assert!(!ok);
+        assert_eq!(rows[1].id, "(index 1)");
+        assert!(!rows[1].ok);
+    }
+
+    #[test]
+    fn add_cells_report_folds_a_batch_wide_cycle_onto_every_cell_it_touches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Control first: the same two cells WITHOUT the back-edge are clean,
+        // so the refusal below is the cycle and nothing else.
+        let mut a = addable("cyc-a");
+        a["deps"] = json!(["cyc-b"]);
+        let b = addable("cyc-b");
+        let (ok, _, normalized) = build_add_cells_report(root, &[a.clone(), b]).unwrap();
+        assert!(ok, "a plain in-batch dependency is legal");
+        assert_eq!(normalized.as_ref().map(Vec::len), Some(2));
+
+        let mut b = addable("cyc-b");
+        b["deps"] = json!(["cyc-a"]);
+        let (ok, rows, normalized) = build_add_cells_report(root, &[a, b]).unwrap();
+        assert!(!ok, "a <-> b is a cycle");
+        for row in &rows {
+            assert!(!row.ok, "{} must fail", row.id);
+            assert!(
+                row.problems.iter().any(|p| p.contains("dependency cycle refused")),
+                "the cycle folds onto {} too: {:?}",
+                row.id,
+                row.problems
+            );
+        }
+        assert!(normalized.is_none());
+        assert!(read_cell_norm(root, "cyc-a").ok().unwrap().is_none());
+        assert!(read_cell_norm(root, "cyc-b").ok().unwrap().is_none());
+    }
+
+    // ── verify:"none" (R5): the no-test-repo sentinel ─────────────────────
+    // Oracle: lib/cells.mjs assertVerifySentinelAllowed (decision 55b951e1) —
+    // the sentinel is accepted only where the repo has declared itself.
+    fn write_bee_config(root: &Path, config: &Value) {
+        let dir = root.join(".bee");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.json"), jsjson::stringify_pretty(config)).unwrap();
+    }
+
+    #[test]
+    fn verify_none_is_accepted_only_in_a_declared_no_test_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut sentinel = addable("v-1");
+        sentinel["verify"] = json!("none");
+
+        // Undeclared repo: refused on add AND on update; a real verify passes
+        // either way (the control that nothing else in the cell is at fault).
+        assert!(
+            thrown(validate_new_cell(root, &sentinel)).starts_with("addCell: verify \"none\" is refused"),
+        );
+        assert!(validate_new_cell(root, &addable("v-1")).is_ok());
+        assert!(
+            thrown(assert_verify_sentinel_allowed(root, "updateCell", &json!("none")))
+                .starts_with("updateCell: verify \"none\" is refused"),
+        );
+        assert!(assert_verify_sentinel_allowed(root, "updateCell", &json!("npm test")).is_ok());
+
+        // Declared no-test repo: the same sentinel is accepted on both doors.
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        assert!(validate_new_cell(root, &sentinel).is_ok(), "a declared no-test repo accepts it");
+        assert!(assert_verify_sentinel_allowed(root, "updateCell", &json!("none")).is_ok());
+
+        // isNoTestRepo's own matrix, read back through the real config reader.
+        let declares = |config: Value| -> bool {
+            write_bee_config(root, &config);
+            is_no_test_repo(&read_commands_slice(root).unwrap())
+        };
+        assert!(declares(json!({"commands": {"verify": "none"}})));
+        assert!(declares(json!({"commands": {"test": ["none"]}})));
+        assert!(
+            !declares(json!({"commands": {"test": ["none", "npm test"]}})),
+            "a list with a real command beside the sentinel is NOT a no-test repo"
+        );
+        assert!(!declares(json!({"commands": {"test": "npm test"}})));
+        assert!(!declares(json!({"commands": {}})));
+    }
+
+    #[test]
+    fn capping_in_a_no_test_repo_runs_no_tests_but_a_declared_red_still_refuses() {
+        let cap_flags = |id: &str| CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+        };
+        let cell_body = |id: &str| {
+            json!({
+                "id": id, "feature": "f", "title": "t", "action": "a",
+                "verify": "none", "lane": "tiny", "status": "claimed",
+                "deps": [], "files": [], "trace": {},
+            })
+        };
+
+        // A repo that declares itself no-test: the sentinel is filtered out of
+        // commands.test, the test door never opens, and the cap lands.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "nt-1", &cell_body("nt-1"));
+        let capped = cap_cell_from_flags(root, root, &cap_flags("nt-1"), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(
+            capped["trace"]["tests"],
+            json!("undeclared"),
+            "\"none\" is not a command to run"
+        );
+        assert!(!test_results_path(root).exists(), "nothing ran, so nothing was recorded");
+
+        // Control: the same cell shape in a repo declaring a real, RED command
+        // refuses the cap — proving the door above was genuinely closed by the
+        // sentinel rather than by an absent test runner.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        write_bee_config(root2, &json!({"commands": {"test": "exit 3"}}));
+        write_cell_fixture(root2, "nt-2", &cell_body("nt-2"));
+        let refusal = thrown(cap_cell_from_flags(root2, root2, &cap_flags("nt-2"), false));
+        assert!(
+            refusal.starts_with("refusing to cap \"nt-2\" — the declared test run is RED"),
+            "{refusal}"
+        );
+        let after = read_cell_norm(root2, "nt-2").ok().unwrap().unwrap();
+        assert_eq!(after.get("status"), Some(&json!("claimed")), "a red run never caps");
+        assert!(test_results_path(root2).exists(), "the red run IS recorded");
+    }
 }

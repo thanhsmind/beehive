@@ -176,6 +176,16 @@ fn pbi_value(p: &Pbi) -> Value {
     Value::Object(m)
 }
 
+/// R6a: the PBI fold as `backlog pbi list --json` emits each record, for
+/// IN-PROCESS callers (`bee herding classify-lane`, which used to spawn that
+/// very command from Node). Fold order, not the list verb's sorted order —
+/// the only caller looks an id up. None => a JSONL line only V8 could parse,
+/// which the caller must treat as an unreadable fold.
+pub(crate) fn fold_pbi_records(root: &Path) -> Option<Vec<Value>> {
+    let fold = fold_pbis(root)?;
+    Some(fold.order.iter().filter_map(|id| fold.items.get(id)).map(pbi_value).collect())
+}
+
 /// localeCompare-safe id guard: within ^p-[0-9a-f]+$ (lowercase hex after a
 /// fixed "p-" prefix) ICU collation and byte order provably agree.
 fn id_sort_safe(id: &str) -> bool {

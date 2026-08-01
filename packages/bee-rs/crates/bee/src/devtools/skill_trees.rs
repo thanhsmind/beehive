@@ -971,7 +971,13 @@ mod tests {
             }
         };
         if !made {
-            return; // host cannot create symlinks (win32 without the privilege)
+            // A silent return here reads as coverage the suite does not have.
+            // Name the capability so a reader can decide whether to enable it.
+            eprintln!(
+                "SKIP (env-limited: symlink creation denied — needs Developer Mode \
+                 or an elevated shell) — a_symlink_in_the_source_refuses_before_any_output"
+            );
+            return;
         }
         assert!(canonical_files(root).is_err(), "a symlink must refuse the whole walk");
     }

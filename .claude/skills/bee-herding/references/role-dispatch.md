@@ -149,11 +149,11 @@ not get to decide its own first minute from a language-model reading of a
 backlog column:
 
 ```
-node .claude/skills/bee-herding/scripts/dispatch-interlock.mjs
+.bee/bin/bee herding interlock
 ```
 
-(use the copy under whichever skill root your runtime reads — `.agents/` for
-Codex.) It emits `{enabled, marker, main_root, reason}`. Not `true` → build
+It emits `{enabled, marker, main_root, reason}` and exits 0 enabled / 3
+disabled / 1 cannot-decide. Not `true` → build
 nothing: no backlog read, no classification, no spawn. End the iteration,
 optionally announcing once (same dedup as §4) that dispatch is disabled pending
 the owner's enable marker.
@@ -188,14 +188,14 @@ every iteration:
 
 ### 6. Lane-safety filter — a two-key gate, script AND your own reading
 
-For every candidate from §5, **both** the script's verdict and your own reading
+For every candidate from §5, **both** the classifier's verdict and your own reading
 must independently say safe. Either key alone is advisory; only agreement lets
 a candidate through. This is deliberate, not redundancy to trim.
 
-**Key 1 — the script** (do not modify it):
+**Key 1 — the classifier** (do not try to talk it out of a verdict):
 
 ```
-node .claude/skills/bee-herding/scripts/classify-lane.mjs <PBI-ID>
+.bee/bin/bee herding classify-lane <PBI-ID>
 ```
 
 It emits `{pbi, lane, hard_gate_flags[], lane_safe, reason}`, reading the
@@ -327,11 +327,11 @@ or in the herdr workspace changes as a result.
 | Runtime tab, its panes | `herdr tab list --workspace <id>`, `herdr pane list --workspace <id>` |
 | A worktree's own state (phase + cells, one verb) | `(cd <worktree_path> && bee orient --json)` |
 | Read chat scrollback (anomaly dedup) | `herdr pane read <chat_pane_id> --source recent --lines 200` |
-| Enable interlock | `node .claude/skills/bee-herding/scripts/dispatch-interlock.mjs` → `enabled` |
+| Enable interlock | `.bee/bin/bee herding interlock` → `enabled` |
 | Slug for a PBI (condition (a)) | the record's own `feature` field from `bee backlog pbi list --json`, then confirm `docs/history/<slug>/CONTEXT.md` exists — never guess |
 | Worktree grant check | `bee worktree list --json` → `grants` keys ending `--wt--<slug>` |
 | Cell count for a slug | `bee cells list --feature <slug> --json` |
-| Lane safety (two-key: both required) | Key 1: `node .claude/skills/bee-herding/scripts/classify-lane.mjs <PBI-ID>` → `lane_safe` (fail-open on unmatched keywords). Key 2: your own reading — refuse and announce if unsure. |
+| Lane safety (two-key: both required) | Key 1: `.bee/bin/bee herding classify-lane <PBI-ID>` → `lane_safe` (fail-open on unmatched keywords). Key 2: your own reading — refuse and announce if unsure. |
 | Announce / report | `herdr pane send-text <chat_pane_id> "..."` |
 | Create the worktree | `bee worktree new --feature <slug> --json` |
 | Open the runtime pane + agent | `herdr agent start <slug> --cwd <path> --workspace <ws> --tab <runtime_tab> --split right\|down --no-focus -- claude --model sonnet --permission-mode bypassPermissions "<opening instruction>"` — the `claude …` tail is `herding.agent_command`-driven; never split first, never `-p` (§8) |

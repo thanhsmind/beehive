@@ -72,7 +72,7 @@ single worker — never wave analysis or multi-cell assignment.
 
 ## Operating Contract in full
 
-1. **Wave analysis.** Run `node .bee/bin/bee.mjs cells schedule --json`: the
+1. **Wave analysis.** Run `.bee/bin/bee cells schedule --json`: the
    computed waves are the **default** dispatch order — override only with a
    stated reason recorded in the swarm report. Refuse to dispatch when
    diagnostics report cycles. Two ready cells sharing a file means fix the
@@ -132,7 +132,7 @@ single worker — never wave analysis or multi-cell assignment.
      security-sensitive or `high-risk`-lane work, ambiguous specs,
      cross-cutting change: where a wrong call is expensive.
 
-   Record the choice so scarcity stays measurable: `node .bee/bin/bee.mjs
+   Record the choice so scarcity stays measurable: `.bee/bin/bee
    cells tier --id <id> --tier <tier>`. Then resolve with `resolveTier(root,
    tier, runtime)` — full semantics, tier-marker anchoring, and dispatch
    economics: "Model Tiers — Config-Driven, Runtime-Keyed" below. Keep
@@ -157,12 +157,12 @@ single worker — never wave analysis or multi-cell assignment.
      states its proven transport verbatim (model-shaped vs cli-shaped, per
      the Worker Prompt Template below) — this must match what
      the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run.
-5. **Record workers** before results arrive: `node .bee/bin/bee.mjs state
+5. **Record workers** before results arrive: `.bee/bin/bee state
    worker add --nickname <n> --cell <id> --tier <tier> --status <status>`
    per worker.
 6. **Tend** the swarm: collect status tokens, update cells and state, verify
    reservations were released. Silence is not failure — inspect cell status
-   and `node .bee/bin/bee.mjs reservations list --active-only` before
+   and `.bee/bin/bee reservations list --active-only` before
    assuming a worker is stuck. Do not send routine mid-flight pings;
    interrupt only for explicit user aborts or confirmed deadlocks.
 <!-- bee:only codex -->
@@ -199,7 +199,7 @@ single worker — never wave analysis or multi-cell assignment.
      the same tier with the failing excerpt (a task miss is a rerun, never a
      silent tier escalation — provider errors, not task errors, are what the
      rescue ladder's tier rung is for).
-   - **Frozen judge:** `node .bee/bin/bee.mjs cells judge --id <id>`. Hits
+   - **Frozen judge:** `.bee/bin/bee cells judge --id <id>`. Hits
      (undeclared test/CI/lockfile/verify-config changes) → the cell never
      auto-counts toward a clean wave: record the hits in the cell trace and
      carry them into any review session that later covers this scope, and
@@ -391,7 +391,7 @@ No live checkout is used as a fault-injection target.
 | Subagent type | No per-agent subagent type — the tier is enforced as a read budget + output cap in the worker prompt regardless of what is spawned (documented asymmetry, not parity) |
 <!-- bee:end -->
 
-On both runtimes the integrity rails are identical because they live in the helpers: `bee.mjs cells finish` refuses while the declared tests are red, and `bee.mjs reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
+On both runtimes the integrity rails are identical because they live in the helpers: `bee cells finish` refuses while the declared tests are red, and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
 <!-- bee:only claude -->
 On Claude Code, `bee-model-guard` additionally denies pairing a `[bee-tier: generation|extraction|review]` marker with `subagent_type: "general-purpose"` (`generic-type-denied`) — the pinned type above is not optional guidance, it is enforced at dispatch.
 <!-- bee:end -->
@@ -440,7 +440,7 @@ A slot value may also be `{ "model": "opus", "effort": "xhigh" }` (per-agent rea
 Resolve a tier for the active runtime before spawning:
 
 ```
-node .bee/bin/bee.mjs status --json    # .models shows both runtime maps
+.bee/bin/bee status --json    # .models shows both runtime maps
 ```
 
 Or in code: `resolveTier(root, tier, runtime, purpose?)` returns a typed dispatch — `{type:'inherit'}` (ceiling → omit the model param and carry the anchored `[bee-tier: ceiling]` marker), `{type:'model', model}`, `{type:'budget'}` (prompt-enforced tier, anchored `[bee-tier: <tier>]` marker), `{type:'cli', command}` (external executor, below — only when `purpose` is the explicit `{for:'gather'}`), or `{type:'refused', reason:'cli_tier_gather_only', slot, fix}` (a cli-shaped tier resolving without `{for:'gather'}`). The optional 4th param `purpose` is shaped `{for:'gather'|'cell'}` and **defaults to `'cell'`** — the fail-safe side: every bare 3-arg call, and any missing/malformed `purpose`, resolves cli-shaped values as a refusal; only an explicit `{for:'gather'}` unlocks `{type:'cli'}`. Non-cli values ignore `purpose` entirely. `modelForTier` returns a model name or `null` (it calls `resolveTier` with no purpose, so cli degrades to `null`). Two shapes, one map: keep the strongest model as `ceiling` and it stays scarce as the orchestrator (fan-out).
@@ -483,14 +483,14 @@ A configurable tier may name an **external CLI executor** instead of a model —
 
    The outcome vocabulary is exactly the four status tokens — `result.json` is the cli **transport** of the same worker contract as the native markdown results, never a second contract. Exiting is not signaling; a worker that only exits has not finished.
 3. **Spawn detached, output to files:** before launching — first dispatch or any resume round — delete any existing `.bee/workers/<cell-id>.result.json`; a stale result must never satisfy a later attempt. Run the configured command as a background process, prompt via stdin, final message to a dedicated file where the CLI supports it (codex: `-o .bee/workers/<cell-id>.result.md`), raw stream to a job log with stderr suppressed — thinking noise bloats the orchestrator's context; re-enable stderr only to debug a failing run. E.g. `<command> -o .bee/workers/<id>.result.md - < .bee/workers/<id>.prompt.md > .bee/workers/<id>.out.log 2>/dev/null`. Keep the launcher's job handle — its exit event is the "process ended" signal step 5 waits on. Record the worker (nickname, cell, `executor: cli`) in `.bee/state.json` as usual.
-4. **Tend by artifact, not by chat:** the external worker runs the same `.bee/bin` helpers (reserve → finish) because they are plain node scripts — the cell status and reservations ARE the progress signal. Poll `node .bee/bin/bee.mjs cells show --id <id>` and read `.bee/workers/<cell-id>.result.json` for the final outcome; never parse the raw JSONL stream. A quiet run is not a dead run — do not kill on silence alone.
+4. **Tend by artifact, not by chat:** the external worker runs the same `.bee/bin/bee` binary (reserve → finish) — one self-contained executable, no runtime to install — the cell status and reservations ARE the progress signal. Poll `.bee/bin/bee cells show --id <id>` and read `.bee/workers/<cell-id>.result.json` for the final outcome; never parse the raw JSONL stream. A quiet run is not a dead run — do not kill on silence alone.
 5. **Accept by file, never by exit:** once the process ends, a cli run counts only if `result.json` exists, parses, and carries a valid outcome. Missing, unparseable, or invalid-outcome result = a failed run, routed to rescue (step 7) — never accepted, never silently waited on.
-6. **Trust boundary — never on its word:** an external worker's `done` is never accepted on its word — the orchestrator ALWAYS re-runs the declared tests itself (`bee test`) and runs `bee.mjs cells judge --id <id>`. External executors never get the tiny/small spot-check relaxation; every external cell is goal-checked. The result file is a signal, never the evidence. On `standard`/`high-risk` `behavior_change` cells, the same semantic checklist judge from the tier table in `bee-hive/references/routing-and-contracts.md` ("Goal-check judge tier") applies here too — verification, not the on-demand review session.
+6. **Trust boundary — never on its word:** an external worker's `done` is never accepted on its word — the orchestrator ALWAYS re-runs the declared tests itself (`bee test`) and runs `bee cells judge --id <id>`. External executors never get the tiny/small spot-check relaxation; every external cell is goal-checked. The result file is a signal, never the evidence. On `standard`/`high-risk` `behavior_change` cells, the same semantic checklist judge from the tier table in `bee-hive/references/routing-and-contracts.md` ("Goal-check judge tier") applies here too — verification, not the on-demand review session.
 7. **Rescue — resume before re-dispatch:** on a goal-check miss or a failed acceptance (step 5), prefer the CLI's session-resume (codex: `codex exec resume --last`, run from the repo dir; resume inherits the original session's sandbox/config — do not re-pass sandbox flags) with a short prompt carrying the diagnostic that applies — the failing verify output for a goal-check miss, or the acceptance failure (missing/unparseable/invalid `result.json`) for a step-5 reject — plus the contract path. It keeps the worker's context and costs far less than a fresh run. **After 2 failed resume rounds, stop ping-ponging:** mark `[BLOCKED]` and climb the normal rescue ladder (a stuck/garbled run is killed and re-dispatched; the tier rung may swap `cli` for a native model tier when the provider itself is failing).
 
 Constraints: the external CLI must be able to edit the repo working tree and run node (the `.bee/bin` contract); grant write access scoped to the repo only (codex: `-s workspace-write`) — never a machine-wide bypass (`--yolo`-style flags) as the house default; the goal-check exists so bee does not have to *trust* the worker, not so it can hand over the machine. Secrets: the external process gets only its own provider's credentials from the user's environment — bee passes none.
 
-**Transient hygiene:** dispatch transients (`<cell-id>.prompt.md`, `.out*.log`, `.result.md|json`, reviewer/plan-check logs) accumulate in `.bee/workers/` and are never needed after the feature closes. At feature close — after review acceptance, before the closing commit — the orchestrator runs `node .bee/bin/bee.mjs state worker prune` (`--dry-run` to preview). Keep-rules protect transients of active workers and non-capped cells (re-read immediately before the destructive loop), and files outside the transient suffix set (evidence snapshots, cell payloads, subdirectories) are never touched — but prune is still the orchestrator's feature-close verb, not something to race against an in-flight dispatch round.
+**Transient hygiene:** dispatch transients (`<cell-id>.prompt.md`, `.out*.log`, `.result.md|json`, reviewer/plan-check logs) accumulate in `.bee/workers/` and are never needed after the feature closes. At feature close — after review acceptance, before the closing commit — the orchestrator runs `.bee/bin/bee state worker prune` (`--dry-run` to preview). Keep-rules protect transients of active workers and non-capped cells (re-read immediately before the destructive loop), and files outside the transient suffix set (evidence snapshots, cell payloads, subdirectories) are never touched — but prune is still the orchestrator's feature-close verb, not something to race against an in-flight dispatch round.
 
 ## Worker Prompt Template
 
@@ -565,7 +565,7 @@ What I need next: <specific parent action>
 Reason: <context high / safe pause>
 Progress: <done so far>
 Reservations: <active paths or none>
-Resume: read .bee/HANDOFF.json, node .bee/bin/bee.mjs cells show --id <cell-id>, reservation list
+Resume: read .bee/HANDOFF.json, .bee/bin/bee cells show --id <cell-id>, reservation list
 ```
 
 ```text
@@ -574,16 +574,16 @@ Reason: <missing, already capped, or unavailable>
 Suggested next action: <re-check ready set, fix assignment, respawn later>
 ```
 
-On each result: update the cell if the worker could not (`block` with reason), clear the worker from `.bee/state.json`, and confirm with `node .bee/bin/bee.mjs reservations list --active-only` that nothing leaked.
+On each result: update the cell if the worker could not (`block` with reason), clear the worker from `.bee/state.json`, and confirm with `.bee/bin/bee reservations list --active-only` that nothing leaked.
 
 ## Handoff JSON
 
 Near 65% context, write `.bee/HANDOFF.json`: `{ phase, feature, mode, cells_in_flight, done, remaining, next_action, written_at }`. Include the resume commands:
 
 ```text
-node .bee/bin/bee.mjs status --json
-node .bee/bin/bee.mjs cells ready
-node .bee/bin/bee.mjs reservations list --active-only
+.bee/bin/bee status --json
+.bee/bin/bee cells ready
+.bee/bin/bee reservations list --active-only
 ```
 
 ## Fresh-session handoff in full

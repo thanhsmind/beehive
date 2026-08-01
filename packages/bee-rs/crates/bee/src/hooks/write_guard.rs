@@ -5465,4 +5465,234 @@ mod tests {
         let t = extract_bash_targets("node x.mjs > out.log && echo done");
         assert_eq!(t.paths, vec!["out.log"]);
     }
+
+    // ── D9 glued/spaced separator matrix ──────────────────────────────────
+    // R5 port of packages/bee/tests/test_guards_tokenizer.mjs. The existing
+    // `tokenizer_matches_mjs_semantics` asserts only two of the five
+    // separator forms; the whole point of that suite is that EVERY form in
+    // the SEPARATORS set splits identically whether glued or spaced — a
+    // glued `&` that failed to split used to garble the adjacent path and
+    // leak command-verb tokens into the target list.
+
+    #[test]
+    fn d9_every_separator_form_splits_glued_and_spaced_alike() {
+        for sep in [";", "&&", "&", "|", "||"] {
+            let glued = extract_bash_targets(&format!("git add a.txt{sep}git add b.txt"));
+            assert_eq!(
+                glued.paths,
+                vec!["a.txt", "b.txt"],
+                "glued {sep:?} must not glue onto the adjacent token"
+            );
+            let spaced = extract_bash_targets(&format!("git add a.txt {sep} git add b.txt"));
+            assert_eq!(spaced.paths, vec!["a.txt", "b.txt"], "spaced {sep:?}");
+        }
+    }
+
+    #[test]
+    fn d9_separator_lookalikes_are_not_boundaries() {
+        // fd duplication is not a file write
+        assert!(extract_bash_targets("echo hi 2>&1").paths.is_empty());
+        assert!(extract_bash_targets("echo hi 1>&2").paths.is_empty());
+        // a separator character inside quotes is data
+        assert_eq!(extract_bash_targets("rm 'a&b.txt'").paths, vec!["a&b.txt"]);
+        // a backslash-escaped separator stays part of the filename
+        assert_eq!(extract_bash_targets("rm a\\;b.txt").paths, vec!["a;b.txt"]);
+    }
+
+    #[test]
+    fn d8_staging_a_cli_owned_file_is_not_a_direct_edit_target() {
+        // Chained form — the case the mixed command used to break.
+        assert!(extract_bash_targets("git add .bee/backlog.jsonl && git commit -m \"stage\"")
+            .paths
+            .is_empty());
+        assert!(extract_bash_targets("git add .bee/backlog.jsonl").paths.is_empty());
+        // Control: an actual content mutation of the same file IS a target,
+        // so the two assertions above are the D8 exemption firing rather
+        // than the extractor going blind on `.bee/` paths.
+        assert_eq!(
+            extract_bash_targets("sed -i s/a/b/ .bee/backlog.jsonl").paths,
+            vec![".bee/backlog.jsonl"]
+        );
+    }
+
+    #[test]
+    fn d12_companion_marker_is_direct_edit_denied() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(edit(".bee/companion-session.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee worktree new --with-companion"), "{}", e.stderr);
+    }
+
+    // ── isSharedNestedCheckoutTarget primitive, rows 72–77 ─────────────────
+    // R5 port of test_write_guard.mjs rows 72–77, which call the primitive
+    // DIRECTLY (the .mjs imports isSharedNestedCheckoutTarget from the
+    // vendored guards.mjs). Rows 71/78/80/81 already run through the hook in
+    // `nested_checkout_concurrent_denies_solo_allows`; these five are the
+    // exclusion arms that the wired rows never reach.
+
+    /// Probe (never a platform guess): attempt a real directory symlink in a
+    /// scratch dir. win32 denies this without Developer Mode / elevation.
+    fn symlink_capable() -> bool {
+        use std::sync::OnceLock;
+        static CAP: OnceLock<bool> = OnceLock::new();
+        *CAP.get_or_init(|| {
+            let dir = tempfile::tempdir().unwrap();
+            let target = dir.path().join("t");
+            std::fs::create_dir(&target).unwrap();
+            symlink_dir(&target, &dir.path().join("l")).is_ok()
+        })
+    }
+
+    fn symlink_dir(target: &Path, link: &Path) -> std::io::Result<()> {
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_dir(target, link)
+        }
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link)
+        }
+    }
+
+    /// A bare root with `.bee/` — the primitive needs no state.json, only the
+    /// sessions dir it reads through `is_concurrent_mode`.
+    fn wcg_root() -> Fx {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        Fx { _dir: dir, root }
+    }
+
+    fn flagged(root: &Path, target: &Path) -> bool {
+        is_shared_nested_checkout_target(
+            &root.to_string_lossy(),
+            &target.to_string_lossy(),
+            None,
+            None,
+        )
+        .expect("primitive must decide natively")
+    }
+
+    #[test]
+    fn row72_71_plain_nested_checkout_flags_only_when_concurrent() {
+        let fx = wcg_root();
+        let nested = fx.root.join("repo");
+        std::fs::create_dir_all(nested.join(".git")).unwrap();
+        std::fs::write(nested.join("foo.js"), "// nested plain\n").unwrap();
+        let target = nested.join("foo.js");
+
+        // row72: solo — the D6 backward-compat no-op.
+        assert!(!flagged(&fx.root, &target), "row72: solo must not flag");
+        // row71: another live session — STR65's unguarded incident shape.
+        add_live_session(&fx.root, "other-live");
+        assert!(flagged(&fx.root, &target), "row71: concurrent must flag");
+    }
+
+    #[test]
+    fn row73_registered_submodule_is_never_flagged() {
+        // The exclusion keys off `.gitmodules` registration, not the `.git`
+        // shape, so the fixture only needs the registration the primitive
+        // actually reads (Node's row73 spends a real `git submodule add` to
+        // produce exactly these two artifacts).
+        let fx = wcg_root();
+        let nested = fx.root.join("repo");
+        std::fs::create_dir_all(nested.join(".git")).unwrap();
+        std::fs::write(nested.join("foo.js"), "// submodule file\n").unwrap();
+        std::fs::write(
+            fx.root.join(".gitmodules"),
+            "[submodule \"repo\"]\n\tpath = repo\n\turl = ../remote.git\n",
+        )
+        .unwrap();
+        add_live_session(&fx.root, "other-live");
+        assert!(
+            !flagged(&fx.root, &nested.join("foo.js")),
+            "row73: a registered submodule is excluded even when concurrent"
+        );
+
+        // Control: the SAME tree without the registration IS flagged — proves
+        // the assertion above is the exclusion firing, not a vacuous pass.
+        std::fs::remove_file(fx.root.join(".gitmodules")).unwrap();
+        assert!(flagged(&fx.root, &nested.join("foo.js")));
+
+        // A .gitmodules registering some OTHER path does not excuse this one.
+        std::fs::write(
+            fx.root.join(".gitmodules"),
+            "[submodule \"vendor\"]\n\tpath = vendor/lib\n",
+        )
+        .unwrap();
+        assert!(flagged(&fx.root, &nested.join("foo.js")));
+    }
+
+    #[test]
+    fn rows74_77_verified_companion_mount_exclusions() {
+        const CAP: &str =
+            "symlink creation denied — needs Developer Mode or an elevated shell";
+        if !symlink_capable() {
+            for row in [
+                "row75: verified companion mount, solo, is NOT flagged",
+                "row74: verified companion mount + concurrent session IS flagged",
+                "row76: a marker whose worktreePath mismatches the live symlink is NOT flagged",
+                "row77: a symlink mount with NO marker is NOT flagged by the primitive",
+            ] {
+                eprintln!("SKIP (env-limited: {CAP}) — {row}");
+            }
+            return;
+        }
+
+        let mount_dir = tempfile::tempdir().unwrap();
+        let mount_target = dunce::canonicalize(mount_dir.path()).unwrap();
+        std::fs::create_dir_all(mount_target.join(".git")).unwrap();
+        std::fs::write(mount_target.join("foo.js"), "// companion file\n").unwrap();
+
+        let write_marker = |root: &Path, worktree: &Path| {
+            std::fs::write(
+                root.join(".bee").join("companion-session.json"),
+                format!(
+                    "{}\n",
+                    serde_json::to_string_pretty(&json!({
+                        "sessionId": "s1",
+                        "worktreePath": worktree.to_string_lossy(),
+                        "mountPath": "repo"
+                    }))
+                    .unwrap()
+                ),
+            )
+            .unwrap();
+        };
+
+        // rows 75 / 74 — verified marker, solo then concurrent.
+        let verified = wcg_root();
+        symlink_dir(&mount_target, &verified.root.join("repo")).unwrap();
+        write_marker(&verified.root, &mount_target);
+        let target = verified.root.join("repo").join("foo.js");
+        assert!(!flagged(&verified.root, &target), "row75: solo is a no-op");
+        add_live_session(&verified.root, "other-live");
+        assert!(
+            flagged(&verified.root, &target),
+            "row74: a verified mount reachable by another live session IS flagged"
+        );
+
+        // row76 — the marker's declared worktreePath does not resolve to the
+        // live symlink, so verification fails and the primitive stays quiet.
+        let other_dir = tempfile::tempdir().unwrap();
+        let other_real = dunce::canonicalize(other_dir.path()).unwrap();
+        let mismatch = wcg_root();
+        symlink_dir(&mount_target, &mismatch.root.join("repo")).unwrap();
+        write_marker(&mismatch.root, &other_real);
+        add_live_session(&mismatch.root, "other-live");
+        assert!(
+            !flagged(&mismatch.root, &mismatch.root.join("repo").join("foo.js")),
+            "row76: verification failure is not a flag"
+        );
+
+        // row77 — a symlink mount with no marker at all: containment's job,
+        // not this primitive's.
+        let no_marker = wcg_root();
+        symlink_dir(&mount_target, &no_marker.root.join("repo")).unwrap();
+        add_live_session(&no_marker.root, "other-live");
+        assert!(
+            !flagged(&no_marker.root, &no_marker.root.join("repo").join("foo.js")),
+            "row77: an unmarked symlink mount is not flagged by the primitive"
+        );
+    }
 }

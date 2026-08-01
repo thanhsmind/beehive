@@ -101,7 +101,7 @@ All functions are sync unless noted. `root` = absolute repo root path.
 - `extractBashTargets(command)` → `{paths:[], broadWrite:boolean}` (khuym patterns: `sed -i`, `tee`, `rm`, `mv`, `cp`, `mkdir`, `touch`, `git add|mv|rm`, redirection `>`).
 
 ### `inject.mjs`
-- `buildSessionPreamble(root)` → markdown string: bee version + onboarding health; phase/mode/feature; gate states; HANDOFF block ("present it and WAIT — never auto-resume") when present; up to 10-line digest of `docs/history/learnings/critical-patterns.md`; last 3 active decisions (datamarked); when `docs/specs/` exists, one state-layer line ("Area specs + reading map at `docs/specs/` — read the touched area's spec before its code"); "Run `node .bee/bin/bee.mjs status --json` for detail. Route via bee-hive." This is the **startup-shaped** orientation, and it is what `startup`/`clear`/`resume` render, byte-identical.
+- `buildSessionPreamble(root)` → markdown string: bee version + onboarding health; phase/mode/feature; gate states; HANDOFF block ("present it and WAIT — never auto-resume") when present; up to 10-line digest of `docs/history/learnings/critical-patterns.md`; last 3 active decisions (datamarked); when `docs/specs/` exists, one state-layer line ("Area specs + reading map at `docs/specs/` — read the touched area's spec before its code"); "Run `node .bee/bin/bee.mjs status --json` for detail. Route via bee-hive." This is the **startup-shaped** orientation, and it is what `startup`/`clear`/`resume` render, byte-identical. **R6a note:** the quoted `node .bee/bin/bee.mjs status --json` is the literal the Node engine still emits (`packages/bee/lib/inject.mjs`); the whole preamble path is delegated to Node, so the string is pinned by the byte-parity contract until R6 deletes the engine. It is the one agent-facing Node spelling R6a could not rewrite — see plans/rust-port.md.
 - `buildCompactCapsule(root, {sessionId, handoffOutcome})` → markdown string: the **compact-scoped** orientation that replaces the preamble body when `SessionStart` fires with `source=compact`. Narrower by design — the state mismatch line, onboarding-MISSING, the HANDOFF block (including its `- Adoption not applied: <reason>` line, which is why `handoffOutcome` is a required argument at the call site), the gate-bypass banner, phase/mode/feature/lane, the claimed cell with its `verify` command and dependency status, the first open gate, `next_action`, the recorded standard commands, the compaction survival count and its warning, and a one-line pointer to where the critical patterns live. The intent anchor is **not** rendered here: the hook prefixes it, exactly as on `resume`.
 - `buildPromptReminder(root)` → `{text, hash}` — 1–3 lines: phase / mode / next_action / first open gate. `hash` = stable hash of those fields.
 - `shouldInject(root, key, hash)` / `markInjected(root, key, hash)` — via `.bee/.inject-cache.json`; inject when hash differs from last or >30 min elapsed.
@@ -169,7 +169,7 @@ bee.mjs feedback digest [--out PATH] [--json]     (P18, evolving loop; decision 
              logic in the CLI — see lib API below
 
 --help [--json]
-    node .bee/bin/bee.mjs --help --json emits {schema_version, commands:[{name, invoke, description,
+    .bee/bin/bee --help --json emits {schema_version, commands:[{name, invoke, description,
     parameters, examples, deprecated}]} — the same JSON-Schema tool-definition shape Claude Code's
     own tool/subagent surface uses; the registry carries no per-group dispatch field any more (D5
     removed it together with the legacy scripts).
@@ -226,7 +226,7 @@ Common prologue for every hook: read stdin fully (may be empty), `findRepoRoot(c
 ## Onboarding (`packages/bee/scripts/onboard_bee.mjs`)
 
 ```
-node onboard_bee.mjs --repo-root <path> [--apply] [--json] [--repo-hooks] [--claude-md]
+.bee/bin/bee onboard --repo-root <path> [--apply] [--json] [--repo-hooks] [--claude-md]
 ```
 
 1. Verify Node ≥18. 2. Compute plan: AGENTS.md BEE block (insert or update between `<!-- BEE:START -->` / `<!-- BEE:END -->`, content from `packages/bee/AGENTS.block.md` — do NOT touch anything outside markers); create `.bee/` runtime files if missing (never overwrite existing state/decisions/cells); copy `packages/bee/*.mjs` + `packages/bee/lib/*` → `.bee/bin/`; create `docs/history/learnings/critical-patterns.md` stub if missing. 3. Without `--apply` → report `{status: 'up_to_date'|'changes_needed', plan:[...]}`. With `--apply` → apply + write `.bee/onboarding.json` with managed versions. `--repo-hooks` additionally merges hook entries into `<repo>/.claude/settings.json` (backup first). `--claude-md` writes/extends `CLAUDE.md` with a bare `@AGENTS.md` import (harness pattern: auto-loads the BEE block on Claude Code when plugin hooks are unavailable); never duplicates the import, never rewrites existing user content.

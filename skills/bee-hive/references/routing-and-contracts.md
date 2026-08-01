@@ -47,11 +47,12 @@ the bee source repo's handbook, never product routing in a host repo.
 ## Onboarding Protocol
 
 `SKILL.md`'s Onboarding section carries the three steps a session actually runs; this is the full
-status contract behind them (the router keeps the steps, this file keeps the detail). Run from the
-bee source root (the checkout or installed plugin package):
+status contract behind them (the router keeps the steps, this file keeps the detail). Run the bee
+binary from the bee source root (the checkout or installed plugin package) — `onboard` is a
+subcommand of the same binary every other verb uses:
 
 ```bash
-node packages/bee/scripts/onboard_bee.mjs --repo-root <repo-root> --json
+.bee/bin/bee onboard --repo-root <repo-root> --json
 ```
 
 Then inspect the result:
@@ -119,7 +120,7 @@ Retrieval triggers, not reading lists. Token budgets by lane:
 
 Do not read `node_modules/`, `dist/`, `build/`, `.git/` internals, `vendor/`, `coverage/` — the scout guard blocks them anyway.
 
-**Orphaned scribing debt:** when `bee.mjs status --json` reports a non-zero `scribing_debt.orphaned` count (the preamble already prints one loud line for it), surface it and offer it as fix-first knowledge work with the same one-line offer discipline as the capture-queue flush — e.g. "N cell(s) across M feature(s) never got their scribing sync — close the gap now, or after the current task?" One line, user chooses; orphaned scribing debt is never silently ignored. The repair verb is `bee.mjs state scribing-run --feature <feature> --areas "<a,b>" --next-action "<n>"`, which can stamp a non-active feature directly — no need to reactivate it first.
+**Orphaned scribing debt:** when `bee status --json` reports a non-zero `scribing_debt.orphaned` count (the preamble already prints one loud line for it), surface it and offer it as fix-first knowledge work with the same one-line offer discipline as the capture-queue flush — e.g. "N cell(s) across M feature(s) never got their scribing sync — close the gap now, or after the current task?" One line, user chooses; orphaned scribing debt is never silently ignored. The repair verb is `bee state scribing-run --feature <feature> --areas "<a,b>" --next-action "<n>"`, which can stamp a non-active feature directly — no need to reactivate it first.
 
 ### Route record
 
@@ -170,7 +171,7 @@ It fires on whichever path came first, and a feature that passed through explori
 **Log it or it did not happen.** A demotion writes a one-line audit decision naming the evidence counts:
 
 ```bash
-node .bee/bin/bee.mjs decisions log \
+.bee/bin/bee decisions log \
   --decision "re-laned <from> → <to> (evidence checkpoint): <feature>" \
   --rationale "<n> product files scouted, 0 hard-gate flags, 0 open gray areas"
 ```
@@ -294,7 +295,7 @@ full text behind each bullet (the router keeps the rule, this file keeps the det
 
 **The preamble is the scout's first source, and usually its only one.** The session preamble injected at session start already carries onboarding health, phase, mode, feature, gate states, cell counts, PBI counts, the recent critical-patterns digest and the recent active decisions. Read what arrived; never re-fetch what it just told you.
 
-Re-run the read-only scout (`node .bee/bin/bee.mjs status --json`) when you are about to **route work** — claim a cell, plan, or change phase — or when no preamble arrived, or it went stale after a compaction. That run adds what the preamble does not carry: active reservations, staleness warnings, and `recommended_next`. Answering a question, reading code, or explaining something is not routing work — for those, the preamble has already answered, and `status --json` plus `decisions active --recent 3` are pure duplication. The decisions re-fetch (`node .bee/bin/bee.mjs decisions active --recent 3`) belongs to routing work, not to answering a question.
+Re-run the read-only scout (`.bee/bin/bee status --json`) when you are about to **route work** — claim a cell, plan, or change phase — or when no preamble arrived, or it went stale after a compaction. That run adds what the preamble does not carry: active reservations, staleness warnings, and `recommended_next`. Answering a question, reading code, or explaining something is not routing work — for those, the preamble has already answered, and `status --json` plus `decisions active --recent 3` are pure duplication. The decisions re-fetch (`.bee/bin/bee decisions active --recent 3`) belongs to routing work, not to answering a question.
 
 ### Knowledge context
 
@@ -366,7 +367,7 @@ The draft cell(s) are rendered as a **preview inside the gate message** — neve
 
 ### Capture discipline
 
-Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-cell quick work included: a feature whose capped cells include `behavior_change` owes ONE `bee-capturing` spec sync covering all of them — tiny lanes included — recorded as PENDING at close and run deferred, at the owner's pace, batching several closed features into one session when cheaper (decision c8e25271; `bee orient` carries the reminder until it runs). A settled discussion outcome (rule, behavior, tuned value; backend or frontend alike) is still captured the moment it settles — deferral applies to the close-time sync, never to same-turn settlement capture. Every task close carries either a decision-log/capture-stub line or an explicit "nothing settled" statement — a close with neither is not a close. **Settlement detection is the agent's duty, unprompted:** the routing row "user asks to document" is the fallback, not the norm — the norm is the agent noticing "this just settled", announcing it in one line, and capturing in the same turn without being asked. What same-turn capture costs is lane-scaled: high-risk = full spec sync inline; every other lane = decision log + a one-line capture stub (`bee.mjs capture add`), with the full merge at a flush point (wrap-up, PreCompact warning, or next session's offer). Capture writes only `docs/` + `.bee/` — no gate applies.
+Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-cell quick work included: a feature whose capped cells include `behavior_change` owes ONE `bee-capturing` spec sync covering all of them — tiny lanes included — recorded as PENDING at close and run deferred, at the owner's pace, batching several closed features into one session when cheaper (decision c8e25271; `bee orient` carries the reminder until it runs). A settled discussion outcome (rule, behavior, tuned value; backend or frontend alike) is still captured the moment it settles — deferral applies to the close-time sync, never to same-turn settlement capture. Every task close carries either a decision-log/capture-stub line or an explicit "nothing settled" statement — a close with neither is not a close. **Settlement detection is the agent's duty, unprompted:** the routing row "user asks to document" is the fallback, not the norm — the norm is the agent noticing "this just settled", announcing it in one line, and capturing in the same turn without being asked. What same-turn capture costs is lane-scaled: high-risk = full spec sync inline; every other lane = decision log + a one-line capture stub (`bee capture add`), with the full merge at a flush point (wrap-up, PreCompact warning, or next session's offer). Capture writes only `docs/` + `.bee/` — no gate applies.
 
 ## Chaining Contract
 
@@ -374,7 +375,7 @@ Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-ce
 |-------|-------|--------|
 | hive | onboarding, state, HANDOFF, critical-patterns, decisions | state routing updates only |
 | shaping (Explore/Qualify/Lock) | user conversation, backlog row, critical-patterns, quick scout | `docs/history/<feature>/CONTEXT.md` (lock or park), backlog row status, state update |
-| planning | CONTEXT.md, critical-patterns, active decisions, bee_status | `approach.md`, `plan.md` (frozen at Gate 2 — approval stamp only after approval; none for `tiny`, opt-in for `small`), current-slice cells via `bee.mjs cells add` |
+| planning | CONTEXT.md, critical-patterns, active decisions, bee_status | `approach.md`, `plan.md` (frozen at Gate 2 — approval stamp only after approval; none for `tiny`, opt-in for `small`), current-slice cells via `bee cells add` |
 | shaping (Brief) | CONTEXT.md, approach.md, frozen plan.md + cells (drift re-render triggers on cell changes only, since the plan cannot drift after approval), test-result records (`.bee/logs/test-results.json`), state gates (render/refresh); capped cell traces, review findings, UAT (walkthrough) | `docs/history/<feature>/implement-plan.md` (projection; `high-risk` always, `standard` on-demand, `small` optional on request); `docs/history/<feature>/walkthrough.md` (post-Gate-4; `standard`/`high-risk`) |
 | swarming (orchestrate) | Gate-2-approved cells, state, reservations | worker registry in state, HANDOFF at ~65%, wave results |
 | swarming ("Execute") | assigned cell, CONTEXT.md, reservations | implementation commits (one per cell, cell id in message), finish (runs the declared tests; the result record is the evidence), report in `docs/history/<feature>/reports/` |
@@ -413,7 +414,7 @@ Avoid "violates D5" or "non-monotonic" without immediate explanation.
 
 ### The agent runs the machinery, not the user
 
-Every bee command (`bee.mjs status`, `cells`, `reservations`, `decisions`, onboarding, cell verify
+Every bee command (`bee status`, `cells`, `reservations`, `decisions`, onboarding, cell verify
 commands) is run by the agent itself the moment the workflow calls for it — never printed for the
 user to execute, never "run this and tell me the output". The only human actions in bee are gate
 approvals, decision answers, and privacy approvals. `AGENTS.md` states the same law inside its
@@ -552,7 +553,7 @@ Off by default. Set from `bee-hive`'s Gates section — on the user's instructio
 Legacy `true` maps to `normal`. At **Gate 1 or Gate 2** when the level bypasses that gate:
 
 1. **Safety floor is level-scoped, not absolute.** Under `normal` the floor holds: a `high-risk` lane or any hard-gate flag (auth · authorization · data loss · audit/security · external provider · validation removal · database migration/schema change) is **NOT** bypassed — present it to the human normally. Under `full` and `total` the high-risk/hard-gate floor is **lifted** — the human lifted it by choosing the level — so those gates auto-approve too.
-2. Do not ask. Instead: select the option the RECOMMENDATION favors; set `approved_gates.<gate>` in `.bee/state.json` (same write the human's "yes" would trigger); still write the machine-layer report to `docs/history/<feature>/reports/`; log a one-line audit entry — `node .bee/bin/bee.mjs decisions log --decision "auto-approved Gate N (bypass): <choice>" --rationale "<the recommendation's why>"` — so the approval is never silent; then post a **short chat line** (not a question) — `⚡ auto-approved Gate N (bypass): <what/why in one plain sentence>` — and continue. The human sees what happened and can still interrupt.
+2. Do not ask. Instead: select the option the RECOMMENDATION favors; set `approved_gates.<gate>` in `.bee/state.json` (same write the human's "yes" would trigger); still write the machine-layer report to `docs/history/<feature>/reports/`; log a one-line audit entry — `.bee/bin/bee decisions log --decision "auto-approved Gate N (bypass): <choice>" --rationale "<the recommendation's why>"` — so the approval is never silent; then post a **short chat line** (not a question) — `⚡ auto-approved Gate N (bypass): <what/why in one plain sentence>` — and continue. The human sees what happened and can still interrupt.
 
 **Bypass suppresses approvals, never genuine information-gathering.** The point of the levels is to stop the agent asking merely to be *approved* — not to gag a real question. So distinguish two kinds of "question": an **approval** (the agent already has a confident best answer; the human would only rubber-stamp it) is suppressed under `full`/`total` — the agent takes its own answer and continues. An **information** question (the answer turns on a preference or knowledge only the human holds, and the agent cannot resolve it from evidence with a confident default) is still asked, even under `total`. This is where `bee-shaping`'s Socratic Explore step still stops when it must (its materiality test + the information-vs-approval refinement): the human asked to keep being consulted for real information, only never for a rubber stamp. Litmus: *"do I already have a confident best answer?"* — yes → proceed; no, and only the human can supply it → ask.
 
@@ -585,9 +586,9 @@ The one orchestration pattern bee runs: the session model (the owner's best mode
 - **Delegation rubric** — a mechanical step delegates down-tier when it needs reading >3 files OR content the main model only needs as a digest, not verbatim; the orchestrator may override either way at dispatch. Prose-ruled — no hook enforces the threshold.
 - **Lane rule** — the rubric applies in every lane and every phase, tiny/small included. The "0 subagents" rule for tiny/small means zero *ceremony* subagents (reviewers/checkers/panels); I/O workers are exempt. A 1-file tiny fix never crosses the rubric, so it stays inline naturally.
 - **Digest contract** — an I/O worker returns paths read, the facts extracted (with file:line anchors), and verbatim quotes only where asked; the orchestrator never re-reads what a digest already answers.
-- **Transport** — anchored `[bee-tier: <tier>]` marker or `model` param, one work-language intent sentence of what the worker will find/build/check plus the model name in the Agent description (a description that is only a model name or a codename is a red flag), background dispatch where the runtime supports it, the dispatch log as the audit trail. I/O workers do **not** register in `bee.mjs state worker add` — the registry stays swarm-cell-scoped (reservations/status are execution concerns); the dispatch log is the audit surface for gathers.
-- **Execution worker (second named class)** — the Delegation contract's other dispatch shape, distinguished from the I/O-offload worker by **authority and state effects**, not by task size. Unlike an I/O worker, an execution worker **does** register in the swarm registry (`bee.mjs state worker add`) and **does** take reservations under its own nickname; it implements exactly one assigned cell (claim → read `read_first` → implement within `files` → commit → finish, which runs the declared tests and releases the reservations) and returns exactly one status token (`[DONE]`/`[BLOCKED]`/`[HANDOFF]`/`[NOOP]`) — it is authority-bearing, never a digest-only gather. Every `bee-swarming` worker dispatch belongs to this class: full waves in `standard`/`high-risk`, and the single dispatched worker that carries out `small` cell implementation (`bee-swarming/references/swarming-reference.md` ("Single execution worker in full")) — never zero of them from `small` up; `tiny` may execute inline in the orchestrator session instead, and when a tiny cell IS dispatched it belongs to this class too. **Parallel by default:** a `small` lane's 1-3 cells fan out to concurrent execution workers whenever every cell's product file set is disjoint — reservations are the proof and the police, 3-4 live workers is the cap; serial requires a named conflict recorded in the dispatch note (worker returns and its done-report lands before the conflicting next cell is claimed/dispatched) — never assumed as the default. **Parallel criterion:** cells run in parallel whenever every cell's *product* file set is provably disjoint; a cell's regen targets (release manifest, onboarding ledger, plugin mirrors) drop out of that comparison when it carries `regen_obligation_ack: "wave-barrier"` (the orchestrator then owes the full regen chain once, at wave close); any *actually shared* product file still forces serial — in doubt, serial. An independent reviewer or checker (plan-checker, cell reviewer, panel member) is **neither** class: it is a review-class dispatch — read-only, no registry entry, no reservations, no cell of its own — and is never called an "execution worker."
-- **cli gather branch** — when the resolved gather tier is a `cli` type, a gather dispatch runs the configured command **verbatim** via the shell — nothing appended, ever; the prompt goes in on **stdin**; every path handed to the worker is **absolute**; the run is **read-only** by contract. **Stdout IS the digest**, framed by a delimiter contract: the worker prompt instructs the CLI to emit its digest between `<<<BEE_DIGEST` and `BEE_DIGEST>>>` lines, and the orchestrator extracts only what sits between them — missing delimiters or an empty digest is a **failed run**, surfaced loudly, never accepted as a silent green. No `result.json`, no cell, no reservation, no `bee.mjs state worker add` registration for a gather, same as any other I/O worker. **Known measurement gap, named not solved here:** a Bash-launched gather emits zero `dispatch.jsonl` rows — closing that gap is Slice 3's job, not this branch's.
+- **Transport** — anchored `[bee-tier: <tier>]` marker or `model` param, one work-language intent sentence of what the worker will find/build/check plus the model name in the Agent description (a description that is only a model name or a codename is a red flag), background dispatch where the runtime supports it, the dispatch log as the audit trail. I/O workers do **not** register in `bee state worker add` — the registry stays swarm-cell-scoped (reservations/status are execution concerns); the dispatch log is the audit surface for gathers.
+- **Execution worker (second named class)** — the Delegation contract's other dispatch shape, distinguished from the I/O-offload worker by **authority and state effects**, not by task size. Unlike an I/O worker, an execution worker **does** register in the swarm registry (`bee state worker add`) and **does** take reservations under its own nickname; it implements exactly one assigned cell (claim → read `read_first` → implement within `files` → commit → finish, which runs the declared tests and releases the reservations) and returns exactly one status token (`[DONE]`/`[BLOCKED]`/`[HANDOFF]`/`[NOOP]`) — it is authority-bearing, never a digest-only gather. Every `bee-swarming` worker dispatch belongs to this class: full waves in `standard`/`high-risk`, and the single dispatched worker that carries out `small` cell implementation (`bee-swarming/references/swarming-reference.md` ("Single execution worker in full")) — never zero of them from `small` up; `tiny` may execute inline in the orchestrator session instead, and when a tiny cell IS dispatched it belongs to this class too. **Parallel by default:** a `small` lane's 1-3 cells fan out to concurrent execution workers whenever every cell's product file set is disjoint — reservations are the proof and the police, 3-4 live workers is the cap; serial requires a named conflict recorded in the dispatch note (worker returns and its done-report lands before the conflicting next cell is claimed/dispatched) — never assumed as the default. **Parallel criterion:** cells run in parallel whenever every cell's *product* file set is provably disjoint; a cell's regen targets (release manifest, onboarding ledger, plugin mirrors) drop out of that comparison when it carries `regen_obligation_ack: "wave-barrier"` (the orchestrator then owes the full regen chain once, at wave close); any *actually shared* product file still forces serial — in doubt, serial. An independent reviewer or checker (plan-checker, cell reviewer, panel member) is **neither** class: it is a review-class dispatch — read-only, no registry entry, no reservations, no cell of its own — and is never called an "execution worker."
+- **cli gather branch** — when the resolved gather tier is a `cli` type, a gather dispatch runs the configured command **verbatim** via the shell — nothing appended, ever; the prompt goes in on **stdin**; every path handed to the worker is **absolute**; the run is **read-only** by contract. **Stdout IS the digest**, framed by a delimiter contract: the worker prompt instructs the CLI to emit its digest between `<<<BEE_DIGEST` and `BEE_DIGEST>>>` lines, and the orchestrator extracts only what sits between them — missing delimiters or an empty digest is a **failed run**, surfaced loudly, never accepted as a silent green. No `result.json`, no cell, no reservation, no `bee state worker add` registration for a gather, same as any other I/O worker. **Known measurement gap, named not solved here:** a Bash-launched gather emits zero `dispatch.jsonl` rows — closing that gap is Slice 3's job, not this branch's.
 
 ### Judgment contract — rails for workers, boundaries for the orchestrator
 
@@ -713,8 +714,12 @@ docs/specs/
 
 ## Helper CLI Quick Reference
 
-`node .bee/bin/bee.mjs <group> <verb>` is the sole canonical form.
-`bee --help` prints the porcelain flow surface; `bee --help --all` prints
-the full registry — the help output is the command reference, not this
-file. Legacy `bee_*.mjs` shims do not ship; `LEGACY_HELPER_RE` in the
-write-guard stays only as a transition guard for hosts mid-upgrade.
+`.bee/bin/bee <group> <verb>` is the sole canonical form — the vendored
+binary onboarding installs into the repo, invoked by its repo-relative path
+from the session's cwd. Prose elsewhere writes it `bee <group> <verb>` for
+readability; that always means this same binary, never a PATH lookup and
+never a Node script. `bee --help` prints the porcelain flow surface;
+`bee --help --all` prints the full registry — the help output is the command
+reference, not this file. Legacy `bee_*.mjs` shims do not ship;
+`LEGACY_HELPER_RE` in the write-guard stays only as a transition guard for
+hosts mid-upgrade.

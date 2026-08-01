@@ -561,6 +561,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn setup_repo() -> tempfile::TempDir {
         let tmp = tempfile::tempdir().unwrap();
@@ -578,6 +579,126 @@ mod tests {
         let dir = root.join(".bee").join("lanes");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(format!("{feature}.json")), content).unwrap();
+    }
+
+    /// A fixture the WHOLE command can run against: `resolve_store_root` needs
+    /// an onboarding marker before g_prelude will hand a verb a root.
+    fn setup_cli_repo() -> tempfile::TempDir {
+        let repo = setup_repo();
+        std::fs::write(
+            repo.path().join(".bee").join("onboarding.json"),
+            r#"{"schema_version":"1.0","bee_version":"0.1.0"}"#,
+        )
+        .unwrap();
+        write_state(repo.path(), r#"{"phase":"idle","feature":null}"#);
+        repo
+    }
+
+    fn scratch_dir(root: &Path, scratch_rel: &str) -> PathBuf {
+        let mut p = root.to_path_buf();
+        for seg in scratch_rel.split('/') {
+            p.push(seg);
+        }
+        p
+    }
+
+    /// test_scratch.mjs makeScratchDir — `files` are (relative path, content).
+    fn make_scratch(root: &Path, scratch_rel: &str, name: &str, files: &[(&str, &str)]) {
+        let dir = scratch_dir(root, scratch_rel).join(name);
+        for (rel, content) in files {
+            let mut file = dir.clone();
+            for seg in rel.split('/') {
+                file.push(seg);
+            }
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(&file, content).unwrap();
+        }
+    }
+
+    // ─── whole-command harness ─────────────────────────────────────────────
+    //
+    // `try_native` runs the real dispatch frame, and g_prelude resolves the
+    // repo root from the PROCESS cwd. Mutating cwd in-process would race every
+    // other test sharing this binary, so each command runs in a child copy of
+    // THIS test binary (always the freshly built code under test — never a
+    // possibly stale target/<profile>/bee executable) with cwd set to the
+    // fixture. The child brackets bee's own streams with markers so the parent
+    // can lift them out of libtest's chatter.
+
+    const ARGV_ENV: &str = "BEE_RS_TMP_GROUP_TEST_ARGV";
+    const CHILD_TEST: &str = "verbs::tmp_group::tests::tmp_sweep_child_process";
+    const OUT_OPEN: &str = "<<<bee-stdout";
+    const OUT_CLOSE: &str = "bee-stdout>>>";
+    const ERR_OPEN: &str = "<<<bee-stderr";
+    const ERR_CLOSE: &str = "bee-stderr>>>";
+    /// Tripwire: printed only when the router declined and Node would have
+    /// served the command. `run_sweep` refuses to let that pass for a green.
+    const DELEGATED: &str = "__DELEGATED_TO_NODE__";
+
+    #[test]
+    #[ignore = "child process of run_sweep(): needs a fixture cwd, never runs in-process"]
+    fn tmp_sweep_child_process() -> ExitCode {
+        let raw = std::env::var(ARGV_ENV).expect("child spawned without an argv env var");
+        let argv: Vec<OsString> = raw.split('\u{1f}').map(OsString::from).collect();
+        println!("{OUT_OPEN}");
+        eprintln!("{ERR_OPEN}");
+        let code = match try_native(&argv, Instant::now()) {
+            Some(code) => code,
+            None => {
+                println!("{DELEGATED}");
+                ExitCode::SUCCESS
+            }
+        };
+        println!("{OUT_CLOSE}");
+        eprintln!("{ERR_CLOSE}");
+        code
+    }
+
+    struct Run {
+        /// The command exited non-zero (ctx.fail), as Node's `status !== 0`.
+        refused: bool,
+        stdout: String,
+        stderr: String,
+    }
+
+    impl Run {
+        fn json(&self) -> Value {
+            serde_json::from_str(&self.stdout)
+                .unwrap_or_else(|e| panic!("stdout is not JSON ({e}): {:?}", self.stdout))
+        }
+    }
+
+    fn between(hay: &str, open: &str, close: &str, whole: &str) -> String {
+        let start = match hay.find(open) {
+            Some(i) => i + open.len(),
+            None => panic!("child never printed {open} — full child output:\n{whole}"),
+        };
+        let end = match hay[start..].find(close) {
+            Some(i) => start + i,
+            None => panic!("child never printed {close} — full child output:\n{whole}"),
+        };
+        hay[start..end].trim().to_string()
+    }
+
+    fn run_sweep(root: &Path, args: &[&str]) -> Run {
+        let exe = std::env::current_exe().expect("test binary path");
+        let out = std::process::Command::new(exe)
+            .args([CHILD_TEST, "--exact", "--ignored", "--nocapture"])
+            .env(ARGV_ENV, args.join("\u{1f}"))
+            .current_dir(root)
+            .output()
+            .expect("spawn the child test binary");
+        let raw_out = String::from_utf8_lossy(&out.stdout).into_owned();
+        let raw_err = String::from_utf8_lossy(&out.stderr).into_owned();
+        let whole = format!("--- stdout ---\n{raw_out}\n--- stderr ---\n{raw_err}");
+        let stdout = between(&raw_out, OUT_OPEN, OUT_CLOSE, &whole);
+        let stderr = between(&raw_err, ERR_OPEN, ERR_CLOSE, &whole);
+        assert!(
+            !stdout.contains(DELEGATED),
+            "`bee {}` fell through to the Node delegate — the native path under test never ran",
+            args.join(" ")
+        );
+        Run { refused: !out.status.success(), stdout, stderr }
     }
 
     #[test]
@@ -668,7 +789,11 @@ mod tests {
             .arg(&target)
             .output();
         if !status.map(|o| o.status.success()).unwrap_or(false) {
-            return; // environment cannot create junctions — skip
+            eprintln!(
+                "SKIP (env-limited: junction creation denied — needs `mklink /J` rights, i.e. \
+                 Developer Mode or an elevated shell) symlinked_root_is_refused_wholesale"
+            );
+            return;
         }
         let inspection = inspect_scratch_roots(root);
         assert_eq!(inspection.roots.len(), 1);
@@ -689,5 +814,237 @@ mod tests {
         assert!(read_lane_phase(root, "f2").is_err());
         // Path-separator names read as "no lane" without touching disk.
         assert_eq!(read_lane_phase(root, "a/b").unwrap(), None);
+    }
+
+    // ─── whole-command contracts (oracle: packages/bee/tests/test_scratch.mjs) ─
+
+    /// Oracle: "`bee tmp sweep` with NO flags refuses (typed), no default
+    /// purge", "`--json` (json alone) still refuses", and the control
+    /// "`--dry-run` (a real flag) does not refuse".
+    #[test]
+    fn sweep_refuses_every_targetless_invocation_and_purges_nothing() {
+        let repo = setup_cli_repo();
+        let root = repo.path();
+        make_scratch(root, ".bee/tmp", "would-be-swept", &[("a.txt", "hello world")]);
+        let victim = scratch_dir(root, ".bee/tmp").join("would-be-swept");
+
+        // No flags at all: a typed refusal that names every way to opt in.
+        let bare = run_sweep(root, &["tmp", "sweep"]);
+        assert!(
+            bare.refused,
+            "a no-flag sweep must exit non-zero; stdout={:?} stderr={:?}",
+            bare.stdout, bare.stderr
+        );
+        for flag in ["--feature", "--before", "--all", "--dry-run"] {
+            assert!(bare.stderr.contains(flag), "the refusal must name {flag}: {:?}", bare.stderr);
+        }
+        assert!(bare.stderr.contains("no default purge"), "{:?}", bare.stderr);
+        assert!(victim.is_dir(), "a refused no-flag call must delete nothing");
+
+        // `--json` is not a target either — same refusal, carried on stdout.
+        let json_only = run_sweep(root, &["tmp", "sweep", "--json"]);
+        assert!(json_only.refused, "--json alone must still refuse: {:?}", json_only.stdout);
+        let err = json_only.json();
+        assert!(
+            err["error"].as_str().unwrap_or_default().contains("no default purge"),
+            "{err}"
+        );
+        assert!(victim.is_dir(), "a refused --json call must delete nothing either");
+
+        // CONTROL — one real flag and the very same command is served, so the
+        // refusals above are the flag gate and not a broken fixture. The
+        // default target set is still empty (no record, no --before), which is
+        // the same discipline expressed as a plan instead of an error.
+        let dry = run_sweep(root, &["tmp", "sweep", "--dry-run", "--json"]);
+        assert!(!dry.refused, "--dry-run must be accepted as a real flag: {:?}", dry.stderr);
+        let payload = dry.json();
+        assert_eq!(payload["dry_run"], json!(true));
+        assert_eq!(payload["removed"], json!([]));
+        assert!(victim.is_dir(), "--dry-run must delete nothing");
+    }
+
+    /// Oracle: "--dry-run removes nothing on disk and its removed[] matches a
+    /// real run byte-for-byte" + "reported bytes_freed/files_freed match a
+    /// manual walk of the real files removed".
+    #[test]
+    fn dry_run_reports_exactly_what_a_real_run_removes_and_deletes_nothing() {
+        let repo = setup_cli_repo();
+        let root = repo.path();
+        let files = [
+            ("a.txt", "hello world"),
+            ("nested/b.txt", "second file, more bytes here"),
+            ("nested/deeper/c.txt", "zzzzz"),
+        ];
+        make_scratch(root, ".bee/tmp", "closed-feat", &files);
+        write_lane(root, "closed-feat", r#"{"feature":"closed-feat","phase":"compounding-complete"}"#);
+        let target = scratch_dir(root, ".bee/tmp").join("closed-feat");
+        // Ground truth: a manual walk of the fixture, not the port's own sizer.
+        let expect_bytes: u64 = files.iter().map(|(_, c)| c.len() as u64).sum();
+        let expect_files = files.len() as u64;
+
+        let dry = run_sweep(root, &["tmp", "sweep", "--all", "--dry-run", "--json"]).json();
+        assert!(target.is_dir(), "--dry-run must delete nothing");
+        assert_eq!(dry["dry_run"], json!(true));
+        assert_eq!(dry["bytes_freed"], json!(expect_bytes), "{dry}");
+        assert_eq!(dry["files_freed"], json!(expect_files), "{dry}");
+        assert_eq!(dry["removed"][0]["bytes"], json!(expect_bytes));
+        assert_eq!(dry["removed"][0]["files"], json!(expect_files));
+
+        let real = run_sweep(root, &["tmp", "sweep", "--all", "--json"]).json();
+        assert!(!target.exists(), "the real run must actually remove the directory");
+        assert_eq!(real["dry_run"], json!(false));
+        assert_eq!(
+            real["removed"], dry["removed"],
+            "a real run's removed[] must be exactly what the dry run advertised"
+        );
+        assert_eq!(real["bytes_freed"], dry["bytes_freed"]);
+        assert_eq!(real["files_freed"], dry["files_freed"]);
+        assert_eq!(real["removed"][0]["name"], json!("closed-feat"));
+        assert_eq!(real["removed"][0]["scratchRoot"], json!(".bee/tmp"));
+    }
+
+    /// Oracle: issue #53 — "a LOOSE FILE at the scratch root is a sweep entry
+    /// — --all clears it", paired with "loose root files stay behind the same
+    /// no-default-purge discipline as dirs".
+    #[test]
+    fn all_clears_loose_root_files_that_the_default_target_set_leaves_alone() {
+        let repo = setup_cli_repo();
+        let root = repo.path();
+        let tmp_root = scratch_dir(root, ".bee/tmp");
+        make_scratch(root, ".bee/tmp", "a-dir", &[("a.txt", "dir scratch")]);
+        std::fs::write(tmp_root.join("build_helper.mjs"), "console.log(1)\n").unwrap();
+        std::fs::write(tmp_root.join("f2-2-evidence.json"), "{\"x\":1}\n").unwrap();
+
+        // CONTROL — record-less entries, loose files included, are reported and
+        // left alone by the default set.
+        let dry = run_sweep(root, &["tmp", "sweep", "--dry-run", "--json"]).json();
+        assert_eq!(dry["removed"], json!([]));
+        let mut skipped: Vec<(String, String)> = dry["skipped"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| {
+                (
+                    s["name"].as_str().unwrap().to_string(),
+                    s["reason"].as_str().unwrap_or("null").to_string(),
+                )
+            })
+            .collect();
+        skipped.sort();
+        assert_eq!(
+            skipped,
+            vec![
+                ("a-dir".to_string(), "absent_no_before".to_string()),
+                ("build_helper.mjs".to_string(), "absent_no_before".to_string()),
+                ("f2-2-evidence.json".to_string(), "absent_no_before".to_string()),
+            ]
+        );
+        assert!(tmp_root.join("build_helper.mjs").is_file(), "nothing swept without a flag");
+
+        // --all clears the lot — "the lot" includes the loose root files.
+        let all = run_sweep(root, &["tmp", "sweep", "--all", "--json"]).json();
+        let mut names: Vec<&str> = all["removed"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["name"].as_str().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["a-dir", "build_helper.mjs", "f2-2-evidence.json"], "{all}");
+        assert_eq!(all["files_freed"], json!(3), "files_freed must count the loose files");
+        assert!(!tmp_root.join("build_helper.mjs").exists());
+        assert!(!tmp_root.join("f2-2-evidence.json").exists());
+        assert!(!tmp_root.join("a-dir").exists());
+    }
+
+    /// Oracle: "docs/**, .bee/cells/, .bee/decisions.jsonl are NEVER touched
+    /// under any flag combination".
+    #[test]
+    fn deliverables_survive_every_flag_combination() {
+        let repo = setup_cli_repo();
+        let root = repo.path();
+        write_lane(root, "closed-feat", r#"{"feature":"closed-feat","phase":"compounding-complete"}"#);
+
+        let docs = root.join("docs").join("history").join("demo").join("CONTEXT.md");
+        std::fs::create_dir_all(docs.parent().unwrap()).unwrap();
+        std::fs::write(&docs, "# real deliverable").unwrap();
+        let cell = root.join(".bee").join("cells").join("demo-1.json");
+        std::fs::create_dir_all(cell.parent().unwrap()).unwrap();
+        std::fs::write(&cell, "{\"id\":\"demo-1\"}").unwrap();
+        let decisions = root.join(".bee").join("decisions.jsonl");
+        std::fs::write(&decisions, "{\"id\":\"dec-1\"}\n").unwrap();
+        let deliverables = [docs, cell, decisions];
+        // The bytes ARE the contract here: an untouched file is byte-identical.
+        let before: Vec<String> =
+            deliverables.iter().map(|p| std::fs::read_to_string(p).unwrap()).collect();
+
+        let combos: [&[&str]; 4] = [
+            &["tmp", "sweep", "--all", "--dry-run", "--json"],
+            &["tmp", "sweep", "--all", "--json"],
+            &["tmp", "sweep", "--feature", "closed-feat", "--json"],
+            &["tmp", "sweep", "--before", "2999-01-01", "--json"],
+        ];
+        let scratch = scratch_dir(root, ".bee/tmp").join("closed-feat");
+        for args in combos {
+            make_scratch(root, ".bee/tmp", "closed-feat", &[("a.txt", "reseeded scratch")]);
+            let run = run_sweep(root, args).json();
+            // PAIRED CONTROL — each combo really swept something, so the
+            // survival assertions below cannot pass vacuously.
+            let names: Vec<&str> = run["removed"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["name"].as_str().unwrap())
+                .collect();
+            assert_eq!(names, vec!["closed-feat"], "combo {args:?} swept nothing: {run}");
+            let dry = run["dry_run"] == json!(true);
+            assert_eq!(
+                scratch.exists(),
+                dry,
+                "combo {args:?}: only --dry-run may leave the scratch dir behind"
+            );
+            for (path, want) in deliverables.iter().zip(&before) {
+                assert_eq!(
+                    &std::fs::read_to_string(path).unwrap(),
+                    want,
+                    "{} must survive combo {args:?}",
+                    path.display()
+                );
+            }
+        }
+    }
+
+    /// Oracle: "finding 4 (pinned): a CLOSED record sweeps even when --before
+    /// predates its mtime — --before never age-gates closed scratch".
+    #[test]
+    fn closed_record_sweeps_even_when_before_predates_its_mtime() {
+        let repo = setup_repo();
+        let root = repo.path();
+        write_state(root, r#"{"phase":"idle","feature":null}"#);
+        write_lane(root, "closed-feat", r#"{"feature":"closed-feat","phase":"compounding-complete"}"#);
+        for name in ["closed-feat", "absent-feat"] {
+            make_scratch(root, ".bee/tmp", name, &[("a.txt", "scratch")]);
+        }
+
+        // A cutoff far in the past — every fixture entry's mtime is newer.
+        let plan = compute_sweep_plan(root, None, Some("2000-01-01"), false).ok().unwrap();
+        let included: Vec<&str> = plan.included.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(
+            included,
+            vec!["closed-feat"],
+            "a closed record's closure is the signal; --before never age-gates it"
+        );
+        // CONTROL — the very same cutoff DOES gate the record-less sibling,
+        // so the line above is about the record and not about --before being
+        // ignored wholesale.
+        let skipped: Vec<(&str, Option<&'static str>)> =
+            plan.skipped.iter().map(|(_, n, r)| (n.as_str(), *r)).collect();
+        assert_eq!(skipped, vec![("absent-feat", Some("absent_not_old_enough"))]);
+
+        // …and a cutoff ahead of that mtime takes the absent one too.
+        let plan = compute_sweep_plan(root, None, Some("2999-01-01"), false).ok().unwrap();
+        let mut included: Vec<&str> = plan.included.iter().map(|i| i.name.as_str()).collect();
+        included.sort();
+        assert_eq!(included, vec!["absent-feat", "closed-feat"]);
     }
 }

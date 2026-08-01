@@ -15,7 +15,7 @@ From superpowers via khuym, unchanged in substance:
 7. **Standard anti-loophole text:** "Violating the letter of the rules is violating the spirit of the rules."
 8. Ship with a CREATION-LOG.md recording scenarios, rationalizations found, and fixes.
 
-Frontmatter conventions (khuym): bare hyphen-case `name` matching the directory; `metadata.dependencies` as a mapping keyed by dependency id with `kind`, `command`/`server_names`, truthful `missing_effect`, `reason` — or `dependencies: []`. bee skills should mostly be dependency-free (Node 18+ and the vendored `.bee/bin/` helpers only).
+Frontmatter conventions (khuym): bare hyphen-case `name` matching the directory; `metadata.dependencies` as a mapping keyed by dependency id with `kind`, `command`/`server_names`, truthful `missing_effect`, `reason` — or `dependencies: []`. bee skills should mostly be dependency-free (the vendored `.bee/bin/bee` binary only).
 
 ---
 

@@ -6,7 +6,13 @@
  * dispatcher to pick up (D6, agent-pane-orchestration; retargeted to the
  * fold by backlog-unification D6/bu-4).
  *
- * Usage: node classify-lane.mjs <PBI-ID> [--bee-cmd "node .bee/bin/bee.mjs"]
+ * SUPERSEDED (R6a). The live path is the bee binary: `.bee/bin/bee herding classify-lane <PBI-ID>`.
+ * This file is retained ONLY as the fixture the Node suites
+ * packages/bee/tests/test_herding.mjs still execute; nothing in the
+ * instruction layer names it any more, and no agent should run it. It is
+ * deleted together with the Node engine and those suites in R6.
+ *
+ * Historical usage: `<node> classify-lane <PBI-ID>`.
  *
  * Reads the PBI's current record from the fold — `bee backlog pbi list
  * --json` (event-sourced records in .bee/backlog.jsonl, never
@@ -115,7 +121,7 @@ function unclassifiable(pbi, reason) {
 function parseArgs(argv) {
   const args = argv.slice(2);
   let pbi = null;
-  let beeCmd = 'node .bee/bin/bee.mjs';
+  let beeCmd = '.bee/bin/bee';
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
     if (args[i] === '--bee-cmd') {

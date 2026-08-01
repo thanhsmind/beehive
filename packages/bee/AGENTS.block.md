@@ -23,7 +23,7 @@ Four boundaries hold in every mode:
   approvals belong to the user; every bee command belongs to the
   agent, run the moment the workflow calls for it — never printed for
   the user to run.
-- Modify bee state only through the CLI (`node .bee/bin/bee.mjs …`),
+- Modify bee state only through the CLI (`.bee/bin/bee …`),
   never by hand-editing `.bee/*.json(l)`. Log agreements with
   `bee decisions log`; `docs/history/<feature>/CONTEXT.md` holds the
   locked ones — cite them, never reinterpret them.

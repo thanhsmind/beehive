@@ -5,7 +5,7 @@ these files, and they are the reason work is resumable and reviewable. Two
 invariants govern all of them:
 
 1. **Never hand-edit `.bee/*.json(l)`.** Every mutation goes through the CLI
-   (`node .bee/bin/bee.mjs <group> <verb>`). A mutation with no CLI verb is filed
+   (`.bee/bin/bee <group> <verb>`). A mutation with no CLI verb is filed
    as friction (`backlog add`), then edited by hand — never silently.
 2. **State is the truth the hook cannot see.** The write-guard hook is a net; the
    phase and gate fields below are what actually decide whether work may proceed.
@@ -155,7 +155,7 @@ Shape: `{kind:'stub', id, at, outcome, dids[], area, files[], lane}`. Written vi
 
 ## The CLI — how registers are mutated
 
-Every register above is read/written through `node .bee/bin/bee.mjs <group> <verb>`.
+Every register above is read/written through `.bee/bin/bee <group> <verb>`.
 The primary nine groups (per `AGENTS.md`) plus the utility groups the dispatcher
 also exposes:
 
@@ -172,5 +172,5 @@ also exposes:
 | `feedback` | digest · count · collect · rank |
 | *utility* | `intent` · `knowledge` (check·index·list·context·promote) · `perf` · `worktree` (new·merge·…) · `herding` · `config` · `tmp` · `dispatch` · `recovery` |
 
-Run `node .bee/bin/bee.mjs --help --json` for the full tool-schema-shaped manifest,
+Run `.bee/bin/bee --help --json` for the full tool-schema-shaped manifest,
 or `<group> --help --json` before a group's first use in a session.

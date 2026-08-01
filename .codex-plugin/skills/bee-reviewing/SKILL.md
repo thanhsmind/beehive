@@ -6,11 +6,11 @@ metadata:
   version: '0.2'
   ecosystem: bee
   dependencies:
-    nodejs-runtime:
+    bee-cli:
       kind: command
-      command: node
+      command: .bee/bin/bee
       missing_effect: degraded
-      reason: Review sessions and their records live in bee state, driven through the vendored .bee/bin CLI.
+      reason: Review sessions and their records live in bee state, driven through the vendored bee binary. The binary is vendored into the repo by onboarding; no Node runtime is involved.
 ---
 
 # Reviewing — independent inspection

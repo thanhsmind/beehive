@@ -1354,4 +1354,817 @@ mod tests {
         assert_eq!(split_list("a, b ,,c "), vec!["a", "b", "c"]);
         assert_eq!(split_list("  "), Vec::<String>::new());
     }
+
+    // ─── write-path fixtures (R5 test migration; oracle: packages/bee/tests/
+    // test_reviews.mjs makeReviewRepo/reviewCell/baseScope) ────────────────
+
+    /// The dispatch frame the write verbs take. Its non-root fields are
+    /// private to `verbs::knowledge`, so the only way to mint one is
+    /// `g_prelude` — which resolves the AMBIENT checkout (and refreshes its
+    /// manifest-drift cache, exactly as any `bee` invocation does). The store
+    /// root is then retargeted at the fixture, so nothing under test ever
+    /// reads or writes the ambient repo: every run_* below uses `ctx.root`
+    /// only.
+    /// None when the host checkout cannot mint one — `g_prelude` answers
+    /// NeedsNode inside a LINKED WORKTREE (a normal way to run this repo's
+    /// suite) and Emitted when there is no `.bee` root at all.
+    fn ctx_at(root: &Path) -> Option<GCtx> {
+        match g_prelude("reviews create", false, false, Instant::now())? {
+            GPre::Go(mut ctx) => {
+                ctx.root = root.to_path_buf();
+                Some(ctx)
+            }
+            GPre::Emitted(_) => None,
+        }
+    }
+
+    /// Probe the capability (a mintable dispatch frame), never the platform,
+    /// and name what is missing when it is absent.
+    macro_rules! ctx_or_skip {
+        ($root:expr, $name:literal) => {
+            match ctx_at($root) {
+                Some(c) => c,
+                None => {
+                    eprintln!(
+                        "SKIP (env: no ordinary bee checkout around the test host — g_prelude \
+                         answers NeedsNode in a linked worktree and no-root elsewhere; run the \
+                         suite from the main checkout) {}",
+                        $name
+                    );
+                    return;
+                }
+            }
+        };
+    }
+
+    /// Real parseFlags over a real argv tail — never a hand-built Flags.
+    fn flags_of(toks: &[&str]) -> Flags {
+        parse_flags(toks).expect("parse_flags accepts the shape").0
+    }
+
+    fn thrown(out: R<Out2>) -> String {
+        match out.ok().expect("native, not delegated") {
+            Out2::Thrown(m) => m,
+            Out2::Emit(v, t) => panic!("expected a refusal, got Emit({}, {t})", jsjson::stringify(&v)),
+        }
+    }
+
+    fn emitted(out: R<Out2>) -> (Value, String) {
+        match out.ok().expect("native, not delegated") {
+            Out2::Emit(v, t) => (v, t),
+            Out2::Thrown(m) => panic!("expected success, got refusal: {m}"),
+        }
+    }
+
+    fn write_cell(root: &Path, id: &str, body: Value) {
+        let dir = cells_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify(&body)).unwrap();
+    }
+
+    /// test_reviews.mjs seedCappedCellWithEvidence — a capped behavior_change
+    /// cell, which runPreflight keeps included AND counts in cells_checked.
+    fn capped_cell(root: &Path, id: &str) {
+        write_cell(
+            root,
+            id,
+            json!({"id": id, "feature": "demo", "status": "capped", "trace": {"behavior_change": true}}),
+        );
+    }
+
+    /// Writes the scope/payload JSON the --file flag points at; returns the path.
+    fn json_file(root: &Path, name: &str, body: &Value) -> String {
+        let file = root.join(name);
+        std::fs::write(&file, jsjson::stringify(body)).unwrap();
+        file.to_string_lossy().into_owned()
+    }
+
+    /// test_reviews.mjs baseScope.
+    fn base_scope() -> Value {
+        json!({
+            "id": "rev-1",
+            "requested_by": "user",
+            "scope_description": "review the demo feature",
+            "included": [{"type": "cell", "id": "ok-1"}],
+            "baseline": "sha-base",
+            "head": "sha-head",
+        })
+    }
+
+    fn create_with(ctx: &GCtx, root: &Path, scope: &Value) -> R<Out2> {
+        let file = json_file(root, "scope.json", scope);
+        run_create(ctx, &flags_of(&["--file", &file]))
+    }
+
+    fn record_with(ctx: &GCtx, root: &Path, id: &str, kind: &str, payload: &Value) -> R<Out2> {
+        let file = json_file(root, "payload.json", payload);
+        run_record(ctx, &flags_of(&["--id", id, "--kind", kind, "--file", &file]))
+    }
+
+    // ─── createReview write path ───────────────────────────────────────────
+
+    /// Oracle: "createReview: session roundtrip carries every SPEC §8 field,
+    /// and show/readReview round-trips it".
+    #[test]
+    fn create_writes_every_spec_8_field_and_read_review_round_trips() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "create_writes_every_spec_8_field_and_read_review_round_trips");
+        capped_cell(root, "ok-1");
+
+        let (session, text) = emitted(create_with(&ctx, root, &base_scope()));
+        for field in [
+            "id",
+            "requested_by",
+            "requested_at",
+            "scope_description",
+            "included",
+            "excluded",
+            "baseline",
+            "head",
+            "reviewer_manifest",
+            "verification_preflight",
+            "findings",
+            "uat",
+            "decision",
+            "created_at",
+            "updated_at",
+        ] {
+            assert!(session.get(field).is_some(), "session is missing SPEC §8 field {field}");
+        }
+        assert_eq!(session["decision"], json!({"status": "pending", "gate4": null}));
+        assert_eq!(session["included"], json!([{"type": "cell", "id": "ok-1"}]));
+        assert_eq!(session["excluded"], json!([]));
+        assert_eq!(session["reviewer_manifest"], json!([]));
+        assert_eq!(session["findings"], json!([]));
+        assert_eq!(session["uat"], json!([]));
+        assert_eq!(session["baseline"], json!("sha-base"));
+        assert_eq!(session["head"], json!("sha-head"));
+        // A capped behavior_change cell is counted by the stored preflight.
+        assert_eq!(session["verification_preflight"]["cells_checked"], json!(["ok-1"]));
+        assert_eq!(session["verification_preflight"]["passed"], json!(true));
+        // One utcNow() stamps every timestamp in a single create.
+        let now = &session["created_at"];
+        assert_eq!(&session["updated_at"], now);
+        assert_eq!(&session["requested_at"], now);
+        assert_eq!(&session["verification_preflight"]["checked_at"], now);
+        assert_eq!(text, "Created review session rev-1.");
+
+        // Written to .bee/reviews/<id>.json, and the read side round-trips it.
+        let stored: Value =
+            serde_json::from_str(&std::fs::read_to_string(review_file(root, "rev-1")).unwrap()).unwrap();
+        assert_eq!(stored, session);
+        assert_eq!(read_review(root, "rev-1").ok().unwrap(), session);
+        let listed = list_reviews(root).ok().unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0]["id"], json!("rev-1"));
+    }
+
+    /// Oracle: "createReview: A6 auto-excludes an open/claimed included cell
+    /// with reason \"in progress\", never silently reviewed-in" (plus the
+    /// pre-declared-exclusion row that follows it).
+    #[test]
+    fn create_auto_excludes_open_and_claimed_cells_and_keeps_pre_declared_ones() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "create_auto_excludes_open_and_claimed_cells_and_keeps_pre_declared_ones");
+        capped_cell(root, "ok-1");
+        write_cell(root, "open-1", json!({"id": "open-1", "feature": "demo", "status": "open"}));
+        write_cell(root, "claimed-1", json!({"id": "claimed-1", "feature": "demo", "status": "claimed"}));
+        let open_before = std::fs::read(cells_dir(root).join("open-1.json")).unwrap();
+        let claimed_before = std::fs::read(cells_dir(root).join("claimed-1.json")).unwrap();
+
+        let scope = json!({
+            "id": "rev-1",
+            "requested_by": "user",
+            "scope_description": "d",
+            "included": [
+                {"type": "cell", "id": "ok-1"},
+                {"type": "cell", "id": "open-1"},
+                {"type": "cell", "id": "claimed-1"},
+            ],
+            "excluded": [{"type": "cell", "id": "pre-1", "reason": "unrelated hotfix"}],
+            "baseline": "b",
+            "head": "h",
+        });
+        let (session, _) = emitted(create_with(&ctx, root, &scope));
+
+        // The control that must happen: the capped cell stays included and
+        // counted — so the exclusions below are not a blanket drop.
+        assert_eq!(session["included"], json!([{"type": "cell", "id": "ok-1"}]));
+        assert_eq!(session["verification_preflight"]["cells_checked"], json!(["ok-1"]));
+        // The pre-declared exclusion keeps its verbatim reason and leads;
+        // auto-exclusions are appended after it.
+        assert_eq!(
+            session["excluded"],
+            json!([
+                {"type": "cell", "id": "pre-1", "reason": "unrelated hotfix"},
+                {"type": "cell", "id": "open-1", "reason": "in progress"},
+                {"type": "cell", "id": "claimed-1", "reason": "in progress"},
+            ])
+        );
+        // Excluding from review scope never touches the cells themselves.
+        assert_eq!(std::fs::read(cells_dir(root).join("open-1.json")).unwrap(), open_before);
+        assert_eq!(std::fs::read(cells_dir(root).join("claimed-1.json")).unwrap(), claimed_before);
+    }
+
+    /// Oracle: "bee.mjs reviews create exits non-zero and writes nothing when
+    /// the preflight cannot resolve an included cell".
+    #[test]
+    fn create_refuses_an_unresolvable_included_cell_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "create_refuses_an_unresolvable_included_cell_and_writes_nothing");
+        let msg = thrown(create_with(&ctx, root, &base_scope())); // ok-1 never seeded
+        // Refusal wording is a pinned contract here: bee.mjs serves these
+        // legacy stderr refusals byte-identical to Node (see file header).
+        assert_eq!(
+            msg,
+            "create: preflight cannot resolve included cell \"ok-1\" — no such cell. FIX: fix the scope input or drop the entry."
+        );
+        assert!(!reviews_dir(root).exists(), "a refused create writes no session dir");
+        // Control: the same scope with the cell present does write.
+        capped_cell(root, "ok-1");
+        emitted(create_with(&ctx, root, &base_scope()));
+        assert!(review_file(root, "rev-1").exists());
+    }
+
+    /// Oracle: "createReview: refuses an already-existing session id … and
+    /// leaves the file byte-unchanged (id non-reuse, §8)".
+    #[test]
+    fn create_refuses_a_duplicate_id_and_leaves_the_file_byte_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "create_refuses_a_duplicate_id_and_leaves_the_file_byte_unchanged");
+        capped_cell(root, "ok-1");
+        emitted(create_with(&ctx, root, &base_scope()));
+        // Bytes, not a parsed value: a refused duplicate must not REWRITE the
+        // file at all, so any serializer touch is itself the defect.
+        let before = std::fs::read(review_file(root, "rev-1")).unwrap();
+
+        let mut second = base_scope();
+        second["scope_description"] = json!("a different description");
+        let msg = thrown(create_with(&ctx, root, &second));
+        assert_eq!(
+            msg,
+            "create: review session \"rev-1\" already exists — review ids are never reused. FIX: pick a new id."
+        );
+        assert_eq!(std::fs::read(review_file(root, "rev-1")).unwrap(), before);
+        // Control: a fresh id under the same fixture does get written.
+        let mut third = base_scope();
+        third["id"] = json!("rev-2");
+        emitted(create_with(&ctx, root, &third));
+        assert!(review_file(root, "rev-2").exists());
+    }
+
+    /// Oracle: "createReview: rejects missing required scope fields and an
+    /// empty \"included\" array before any write".
+    #[test]
+    fn create_rejects_missing_scope_fields_before_any_write() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "create_rejects_missing_scope_fields_before_any_write");
+        capped_cell(root, "ok-1");
+
+        for field in ["id", "requested_by", "scope_description", "baseline", "head"] {
+            // Blank-but-present and absent take the same branch.
+            for bad in [json!("   "), Value::Null] {
+                let mut scope = base_scope();
+                if bad.is_null() {
+                    scope.as_object_mut().unwrap().remove(field);
+                } else {
+                    scope[field] = bad.clone();
+                }
+                assert_eq!(
+                    thrown(create_with(&ctx, root, &scope)),
+                    format!("create: scope is missing required field \"{field}\" (non-empty string).")
+                );
+            }
+        }
+        let mut empty_included = base_scope();
+        empty_included["included"] = json!([]);
+        assert_eq!(
+            thrown(create_with(&ctx, root, &empty_included)),
+            "create: scope requires a non-empty \"included\" array."
+        );
+        let mut bad_excluded = base_scope();
+        bad_excluded["excluded"] = json!("nope");
+        assert_eq!(
+            thrown(create_with(&ctx, root, &bad_excluded)),
+            "create: scope \"excluded\" must be an array when present."
+        );
+        let mut bad_id = base_scope();
+        bad_id["id"] = json!("../escape");
+        assert_eq!(
+            thrown(create_with(&ctx, root, &bad_id)),
+            "invalid review id \"../escape\" — use letters, digits, dot, dash, underscore (e.g. \"review-2026-07-12\")."
+        );
+        assert_eq!(
+            thrown(create_with(&ctx, root, &json!(["not", "an", "object"]))),
+            "create: scope input must be a JSON object."
+        );
+        assert!(!reviews_dir(root).exists(), "no session dir created by any rejected create");
+        // Control: the untouched base scope does create one.
+        emitted(create_with(&ctx, root, &base_scope()));
+        assert!(review_file(root, "rev-1").exists());
+    }
+
+    // ─── recordOnReview ────────────────────────────────────────────────────
+
+    fn seeded_session(root: &Path, ctx: &GCtx) -> Vec<u8> {
+        capped_cell(root, "ok-1");
+        emitted(create_with(ctx, root, &base_scope()));
+        std::fs::read(review_file(root, "rev-1")).unwrap()
+    }
+
+    /// Oracle: "recordOnReview: refuses any payload touching baseline/head/
+    /// included/excluded — exits via throw, file byte-unchanged (R5
+    /// immutability)".
+    #[test]
+    fn record_refuses_immutable_scope_fields_and_leaves_the_file_byte_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "record_refuses_immutable_scope_fields_and_leaves_the_file_byte_unchanged");
+        let before = seeded_session(root, &ctx);
+
+        for field in IMMUTABLE_FIELDS {
+            let payload = json!({ field: "whatever", "note": "n" });
+            let msg = thrown(record_with(&ctx, root, "rev-1", "manifest", &payload));
+            assert!(
+                msg.starts_with(&format!(
+                    "record: refused — payload attempts to touch immutable scope field(s): {field}."
+                )),
+                "unexpected refusal for {field}: {msg}"
+            );
+            assert_eq!(std::fs::read(review_file(root, "rev-1")).unwrap(), before);
+        }
+        // Several at once are listed in IMMUTABLE_FIELDS order, not payload order.
+        let msg = thrown(record_with(
+            &ctx,
+            root,
+            "rev-1",
+            "finding",
+            &json!({"head": "h", "excluded": [], "baseline": "b"}),
+        ));
+        assert!(
+            msg.starts_with("record: refused — payload attempts to touch immutable scope field(s): baseline, head, excluded."),
+            "{msg}"
+        );
+        assert_eq!(std::fs::read(review_file(root, "rev-1")).unwrap(), before);
+        // Control: a payload with none of them DOES rewrite the file.
+        emitted(record_with(&ctx, root, "rev-1", "manifest", &json!({"reviewers": ["a"]})));
+        assert_ne!(std::fs::read(review_file(root, "rev-1")).unwrap(), before);
+    }
+
+    /// Oracle: "recordOnReview: manifest/preflight/decision SET the field;
+    /// finding/uat APPEND one entry per call".
+    #[test]
+    fn record_sets_manifest_preflight_decision_and_appends_finding_and_uat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "record_sets_manifest_preflight_decision_and_appends_finding_and_uat");
+        seeded_session(root, &ctx);
+
+        emitted(record_with(&ctx, root, "rev-1", "manifest", &json!({"reviewers": ["a", "b"]})));
+        let (session, _) = emitted(record_with(&ctx, root, "rev-1", "manifest", &json!({"reviewers": ["c"]})));
+        assert_eq!(session["reviewer_manifest"], json!({"reviewers": ["c"]}), "manifest SETs");
+
+        let (session, _) = emitted(record_with(
+            &ctx,
+            root,
+            "rev-1",
+            "preflight",
+            &json!({"checked_at": "t", "cells_checked": ["x"], "passed": false}),
+        ));
+        assert_eq!(session["verification_preflight"]["passed"], json!(false), "preflight SETs");
+
+        emitted(record_with(&ctx, root, "rev-1", "finding", &json!({"severity": "P1"})));
+        let (session, text) = emitted(record_with(&ctx, root, "rev-1", "finding", &json!({"severity": "P2"})));
+        assert_eq!(
+            session["findings"],
+            json!([{"severity": "P1"}, {"severity": "P2"}]),
+            "findings APPEND in call order"
+        );
+        assert_eq!(
+            text,
+            format!("Recorded finding on rev-1 (updated_at {}).", session["updated_at"].as_str().unwrap())
+        );
+
+        emitted(record_with(&ctx, root, "rev-1", "uat", &json!({"item": "login flow"})));
+        let (session, _) = emitted(record_with(&ctx, root, "rev-1", "uat", &json!({"item": "logout"})));
+        assert_eq!(session["uat"], json!([{"item": "login flow"}, {"item": "logout"}]));
+
+        let (session, _) = emitted(record_with(
+            &ctx,
+            root,
+            "rev-1",
+            "decision",
+            &json!({"status": "approved", "gate4": {"approved_by": "user"}}),
+        ));
+        assert_eq!(session["decision"], json!({"status": "approved", "gate4": {"approved_by": "user"}}));
+        // The immutable half is still exactly what create froze.
+        assert_eq!(session["baseline"], json!("sha-base"));
+        assert_eq!(session["head"], json!("sha-head"));
+        assert_eq!(session["included"], json!([{"type": "cell", "id": "ok-1"}]));
+        assert_eq!(session["excluded"], json!([]));
+        // …and the file on disk carries the same record.
+        assert_eq!(read_review(root, "rev-1").ok().unwrap(), session);
+
+        // A decision status outside DECISION_STATUSES is refused, and the
+        // stored decision keeps the last accepted value.
+        assert_eq!(
+            thrown(record_with(&ctx, root, "rev-1", "decision", &json!({"status": "maybe"}))),
+            "record: decision.status must be one of pending, blocked, approved, got \"maybe\"."
+        );
+        assert_eq!(read_review(root, "rev-1").ok().unwrap()["decision"]["status"], json!("approved"));
+    }
+
+    /// An unknown kind is refused BEFORE the session is read or written — the
+    /// proof is that a nonexistent id still yields the kind refusal, and the
+    /// same call with a legal kind reaches the not-found refusal instead.
+    /// Oracle: recordOnReview's check order in lib/reviews.mjs.
+    #[test]
+    fn record_refuses_an_unknown_kind_before_the_session_is_touched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "record_refuses_an_unknown_kind_before_the_session_is_touched");
+        let before = seeded_session(root, &ctx);
+
+        assert_eq!(
+            thrown(record_with(&ctx, root, "no-such-review", "bogus", &json!({"a": 1}))),
+            "record: invalid kind \"bogus\" — must be one of manifest, preflight, finding, uat, decision."
+        );
+        assert!(!review_file(root, "no-such-review").exists());
+        assert_eq!(std::fs::read(review_file(root, "rev-1")).unwrap(), before);
+        // Control: same id, legal kind → the read refusal, i.e. the kind gate
+        // really did short-circuit ahead of the read above.
+        let file = review_file(root, "no-such-review");
+        assert_eq!(
+            thrown(record_with(&ctx, root, "no-such-review", "manifest", &json!({"a": 1}))),
+            format!("readReviewStrict: review session \"no-such-review\" not found at {}.", file.display())
+        );
+        assert!(!file.exists(), "a refused record never creates the session file");
+        // An unknown kind also outranks a payload that is not an object.
+        assert_eq!(
+            thrown(record_with(&ctx, root, "rev-1", "bogus", &json!(["arr"]))),
+            "record: invalid kind \"bogus\" — must be one of manifest, preflight, finding, uat, decision."
+        );
+        assert_eq!(
+            thrown(record_with(&ctx, root, "rev-1", "manifest", &json!(["arr"]))),
+            "record: payload for kind \"manifest\" must be a JSON object."
+        );
+        assert_eq!(std::fs::read(review_file(root, "rev-1")).unwrap(), before);
+    }
+
+    /// An id that is not a legal slug is refused by readReviewStrict's own
+    /// gate, before any path is built. Oracle: readReviewStrict/assertValidId.
+    #[test]
+    fn record_refuses_an_unknown_or_malformed_session_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "record_refuses_an_unknown_or_malformed_session_id");
+        seeded_session(root, &ctx);
+        assert_eq!(
+            thrown(record_with(&ctx, root, "../escape", "manifest", &json!({"a": 1}))),
+            "invalid review id \"../escape\" — use letters, digits, dot, dash, underscore (e.g. \"review-2026-07-12\")."
+        );
+        // A session file that parses to a non-object refuses loudly rather
+        // than being treated as absent (the strict read's whole point).
+        write_session(root, "rev-arr", &json!(["not", "an", "object"]));
+        let msg = thrown(record_with(&ctx, root, "rev-arr", "manifest", &json!({"a": 1})));
+        assert!(msg.ends_with("exists but is not a JSON object (found an array)."), "{msg}");
+        // Control: the well-formed session accepts the identical payload.
+        emitted(record_with(&ctx, root, "rev-1", "manifest", &json!({"a": 1})));
+    }
+
+    // ─── reviews candidate add ─────────────────────────────────────────────
+
+    /// Oracle: "bee.mjs reviews candidate add requires --mode and rejects an
+    /// unrecognized mode, leaving the ledger untouched".
+    #[test]
+    fn candidate_add_requires_mode_and_rejects_an_unrecognized_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "candidate_add_requires_mode_and_rejects_an_unrecognized_one");
+        let ledger = candidates_path(root);
+
+        let missing = run_candidate_add(&ctx, &flags_of(&["--feature", "demo", "--head", "sha-1"]));
+        assert_eq!(thrown(missing), "Missing required flag --mode.");
+        assert!(!ledger.exists(), "a refused candidate add creates no ledger");
+
+        let bad = run_candidate_add(
+            &ctx,
+            &flags_of(&["--feature", "demo", "--head", "sha-1", "--mode", "gigantic"]),
+        );
+        assert_eq!(
+            thrown(bad),
+            "candidate add: --mode is required and must be one of docs, tiny, small, spike, standard, high-risk (the closing feature's lane)."
+        );
+        assert!(!ledger.exists(), "an unrecognized mode leaves the ledger untouched");
+
+        // Control: a legal mode appends exactly one row with the SPEC shape.
+        let (entry, text) = emitted(run_candidate_add(
+            &ctx,
+            &flags_of(&["--feature", " demo ", "--head", " sha-1 ", "--mode", "standard", "--cells", "c1, ,c2"]),
+        ));
+        assert_eq!(entry["type"], json!("candidate"));
+        assert_eq!(entry["feature"], json!("demo"));
+        assert_eq!(entry["head"], json!("sha-1"));
+        assert_eq!(entry["mode"], json!("standard"));
+        assert_eq!(entry["baseline"], Value::Null);
+        assert_eq!(entry["cells"], json!(["c1", "c2"]));
+        assert!(text.ends_with("(mode standard, 2 cell(s))."), "{text}");
+        let rows = list_candidates(root).ok().unwrap();
+        assert_eq!(rows.len(), 1, "exactly one row survived the two refusals");
+        assert_eq!(rows[0], entry);
+
+        // A refusal AFTER a good row still leaves the ledger byte-unchanged.
+        let before = std::fs::read(&ledger).unwrap();
+        thrown(run_candidate_add(&ctx, &flags_of(&["--feature", "demo", "--head", "s", "--mode", "nope"])));
+        assert_eq!(std::fs::read(&ledger).unwrap(), before);
+    }
+
+    // ─── fail-open read path ───────────────────────────────────────────────
+
+    /// A corrupt session entry and an unreadable candidates ledger degrade the
+    /// review block instead of failing it. Oracle: "bee.mjs status: a corrupt
+    /// .bee/reviews entry and an unreadable candidates ledger degrade the
+    /// review block but leave bee_status exiting 0".
+    #[test]
+    fn a_corrupt_session_entry_and_an_unreadable_ledger_degrade_rather_than_fail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "a_corrupt_session_entry_and_an_unreadable_ledger_degrade_rather_than_fail");
+        capped_cell(root, "ok-1");
+        emitted(create_with(&ctx, root, &base_scope()));
+        // A session file that is valid JSON but not an object is skipped.
+        write_session(root, "rev-corrupt", &json!("just a string"));
+        let sessions = list_reviews(root).ok().unwrap();
+        assert_eq!(sessions.len(), 1, "the good session survives the corrupt neighbour");
+        assert_eq!(sessions[0]["id"], json!("rev-1"));
+
+        // A ledger line that is not JSON at all is dropped, the rest kept.
+        let ledger = candidates_path(root);
+        std::fs::create_dir_all(ledger.parent().unwrap()).unwrap();
+        std::fs::write(
+            &ledger,
+            "{\"id\":\"c1\",\"feature\":\"demo\"}\n{oops not json\n{\"id\":\"c2\",\"feature\":\"demo\"}\n",
+        )
+        .unwrap();
+        let rows = list_candidates(root).ok().unwrap();
+        assert_eq!(rows.len(), 2, "corrupt JSONL line skipped, the readable rows kept");
+        assert_eq!(rows[0]["id"], json!("c1"));
+        assert_eq!(rows[1]["id"], json!("c2"));
+
+        // An UNREADABLE ledger (a directory where the file should be) reads as
+        // empty rather than erroring — and reviews status still renders.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        let ctx2 = ctx_or_skip!(root2, "a_corrupt_session_entry_and_an_unreadable_ledger_degrade_rather_than_fail");
+        std::fs::create_dir_all(candidates_path(root2)).unwrap();
+        assert!(list_candidates(root2).ok().unwrap().is_empty());
+        let (summary, text) = emitted(run_status(&ctx2, &flags_of(&[])));
+        assert_eq!(summary["counts"]["verified"], json!(0));
+        assert_eq!(summary["candidates"], json!([]));
+        assert!(text.ends_with("No review candidates."), "{text}");
+    }
+
+    // ─── deriveCandidateStatus git-degradation arms ────────────────────────
+
+    static GIT_CAPABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+    /// Probe the capability (a runnable `git`), never the platform.
+    fn git_capable() -> bool {
+        *GIT_CAPABLE.get_or_init(|| {
+            std::process::Command::new("git")
+                .arg("--version")
+                .output()
+                .map(|o| o.status.success() && !o.stdout.is_empty())
+                .unwrap_or(false)
+        })
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap_or_else(|e| panic!("git {args:?}: {e}"));
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    fn git_out(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap_or_else(|e| panic!("git {args:?}: {e}"));
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// test_reviews.mjs makeReviewGitRepo — bee scaffolding plus a real repo,
+    /// because coverage/staleness is defined over actual commit ancestry.
+    fn git_repo(dir: &Path) -> String {
+        git(dir, &["init", "-q"]);
+        git(dir, &["config", "user.email", "bee-review@example.com"]);
+        git(dir, &["config", "user.name", "bee review tests"]);
+        git(dir, &["config", "commit.gpgsign", "false"]);
+        git_commit(dir, "seed.txt", "seed\n", "seed")
+    }
+
+    fn git_commit(dir: &Path, file: &str, content: &str, message: &str) -> String {
+        std::fs::write(dir.join(file), content).unwrap();
+        git(dir, &["add", file]);
+        git(dir, &["commit", "-q", "-m", message]);
+        git_out(dir, &["rev-parse", "HEAD"])
+    }
+
+    fn approved_session(id: &str, head: &str) -> Value {
+        json!({
+            "id": id,
+            "included": [{"type": "feature", "id": "demo"}],
+            "head": head,
+            "decision": {"status": "approved", "gate4": {"approved_by": "user"}},
+        })
+    }
+
+    /// Oracle: "an approved session covers the candidate's exact head as
+    /// \"reviewed\"; one extra commit after that head flips the SAME candidate
+    /// to \"review stale\" … (A8)".
+    #[test]
+    fn derive_flips_reviewed_to_review_stale_when_a_commit_lands_after_the_session_head() {
+        if !git_capable() {
+            eprintln!(
+                "SKIP (env: no runnable `git` on PATH — install git and re-run) \
+                 derive_flips_reviewed_to_review_stale_when_a_commit_lands_after_the_session_head"
+            );
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let sha1 = git_repo(root);
+        let sessions = vec![approved_session("rev-reviewed", &sha1)];
+        let cand = json!({"feature": "demo", "head": sha1, "mode": "standard", "cells": []});
+
+        let d = derive_candidate_status(root, &cand, &sessions, &mut GitMemo::new()).ok().unwrap();
+        assert_eq!(d.status, "reviewed");
+        assert_eq!(d.session, Some(json!("rev-reviewed")));
+        assert_eq!(d.note, None);
+
+        git_commit(root, "unrelated.txt", "unrelated\n", "unrelated commit after review head");
+        // A fresh memo — the flip must come from git, not a cached answer.
+        let d = derive_candidate_status(root, &cand, &sessions, &mut GitMemo::new()).ok().unwrap();
+        assert_eq!(d.status, "review stale");
+        assert_eq!(d.session, Some(json!("rev-reviewed")));
+        assert_eq!(d.note, None, "a RESOLVABLE stale range carries no note");
+    }
+
+    /// Oracle: "an unresolvable candidate head (unknown sha, simulating
+    /// rebase/amend) … degrades to \"review stale\" with a \"range
+    /// unresolvable\" note, never throws".
+    #[test]
+    fn derive_degrades_when_the_candidate_head_cannot_be_resolved() {
+        if !git_capable() {
+            eprintln!(
+                "SKIP (env: no runnable `git` on PATH — install git and re-run) \
+                 derive_degrades_when_the_candidate_head_cannot_be_resolved"
+            );
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let sha1 = git_repo(root);
+        let sessions = vec![approved_session("rev-unresolvable", &sha1)];
+        let fake = "a".repeat(40);
+        let cand = json!({"feature": "demo", "head": fake, "cells": []});
+
+        let d = derive_candidate_status(root, &cand, &sessions, &mut GitMemo::new()).ok().unwrap();
+        assert_eq!(d.status, "review stale");
+        assert_eq!(d.note, Some("range unresolvable"));
+        assert_eq!(d.session, Some(json!("rev-unresolvable")));
+        // Control: a resolvable head in the same repo answers "reviewed", so
+        // the degradation above is the unknown sha and not the fixture.
+        let ok = json!({"feature": "demo", "head": sha1, "cells": []});
+        let d = derive_candidate_status(root, &ok, &sessions, &mut GitMemo::new()).ok().unwrap();
+        assert_eq!(d.status, "reviewed");
+    }
+
+    /// Oracle: "git binary unavailable (PATH stripped) never throws — a
+    /// covering session degrades to \"review stale\"/\"range unresolvable\"".
+    ///
+    /// The oracle strips PATH in-process; Rust's threaded test harness makes
+    /// `env::set_var` unsound (unsafe since edition 2024) while sibling tests
+    /// run, so the identical branch is reached the other way: `run_git`
+    /// returns None whenever the child cannot be spawned at all — here because
+    /// its cwd does not exist. Same arm, no global mutation.
+    #[test]
+    fn derive_degrades_when_git_cannot_be_spawned_at_all() {
+        if !git_capable() {
+            eprintln!(
+                "SKIP (env: no runnable `git` on PATH — install git and re-run) \
+                 derive_degrades_when_git_cannot_be_spawned_at_all"
+            );
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let sha1 = git_repo(root);
+        let sessions = vec![approved_session("rev-nogit", &sha1)];
+        let cand = json!({"feature": "demo", "head": sha1, "cells": []});
+
+        let unspawnable = root.join("does-not-exist");
+        let d = derive_candidate_status(&unspawnable, &cand, &sessions, &mut GitMemo::new())
+            .ok()
+            .expect("a missing git child never delegates and never panics");
+        assert_eq!(d.status, "review stale");
+        assert_eq!(d.note, Some("range unresolvable"));
+        // Control: the very same inputs against the real repo answer cleanly.
+        let d = derive_candidate_status(root, &cand, &sessions, &mut GitMemo::new()).ok().unwrap();
+        assert_eq!(d.status, "reviewed");
+        assert_eq!(d.note, None);
+    }
+
+    /// Oracle: "a candidate whose head postdates the covering approved
+    /// session's frozen head … derives \"unreviewed\" — not a stale
+    /// re-labelling of unrelated new work".
+    #[test]
+    fn derive_returns_unreviewed_when_the_candidate_head_postdates_the_session() {
+        if !git_capable() {
+            eprintln!(
+                "SKIP (env: no runnable `git` on PATH — install git and re-run) \
+                 derive_returns_unreviewed_when_the_candidate_head_postdates_the_session"
+            );
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let sha1 = git_repo(root);
+        let sessions = vec![approved_session("rev-old", &sha1)];
+        let sha2 = git_commit(root, "more.txt", "more work\n", "new delta after review head");
+        assert_ne!(sha1, sha2);
+
+        let newer = json!({"feature": "demo", "head": sha2, "cells": []});
+        let d = derive_candidate_status(root, &newer, &sessions, &mut GitMemo::new()).ok().unwrap();
+        assert_eq!(d.status, "unreviewed", "new work is not a stale re-label");
+        assert_eq!(d.session, None, "unreviewed carries no session reference");
+        // Control: the OLD head against the same session is still covered —
+        // so "unreviewed" above is the ancestry answer, not a broken fixture.
+        let older = json!({"feature": "demo", "head": sha1, "cells": []});
+        let d = derive_candidate_status(root, &older, &sessions, &mut GitMemo::new()).ok().unwrap();
+        assert_eq!(d.status, "review stale", "sha1 is covered but one commit behind HEAD");
+        assert_eq!(d.session, Some(json!("rev-old")));
+    }
+
+    /// Oracle: "a pass-local gitMemo dedupes repeated git invocations when
+    /// multiple candidates share a covering session's (head,ref)/(ref) pair
+    /// (D2) — derived statuses stay byte-identical to the unmemoized path".
+    ///
+    /// Proof that the memo — and not git — answered the second candidate: the
+    /// second call runs against a cwd no child can be spawned in, where an
+    /// unmemoized run degrades (the control at the end).
+    #[test]
+    fn git_memo_answers_a_second_candidate_sharing_the_same_head_pair() {
+        if !git_capable() {
+            eprintln!(
+                "SKIP (env: no runnable `git` on PATH — install git and re-run) \
+                 git_memo_answers_a_second_candidate_sharing_the_same_head_pair"
+            );
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let sha0 = git_repo(root);
+        let sessions = vec![approved_session("rev-memo", &sha0)];
+        let c1 = json!({"feature": "demo", "head": sha0, "cells": []});
+        let c2 = json!({"feature": "demo", "head": sha0, "mode": "tiny", "cells": []});
+
+        let mut memo = GitMemo::new();
+        let first = derive_candidate_status(root, &c1, &sessions, &mut memo).ok().unwrap();
+        assert_eq!(first.status, "reviewed");
+        // The exact-head fast path never spawns merge-base; only the
+        // rev-list range is memoized.
+        assert!(memo.contains_key(&format!("since {sha0}")), "commitsSince memoized: {:?}", memo.keys());
+
+        let unspawnable = root.join("does-not-exist");
+        let second = derive_candidate_status(&unspawnable, &c2, &sessions, &mut memo).ok().unwrap();
+        assert_eq!(second.status, first.status, "memoized status is byte-identical");
+        assert_eq!(second.session, first.session);
+        assert_eq!(second.note, first.note);
+
+        // Control: without the memo the same unspawnable call degrades — so
+        // the agreement above could only have come from the memo.
+        let cold = derive_candidate_status(&unspawnable, &c2, &sessions, &mut GitMemo::new()).ok().unwrap();
+        assert_eq!(cold.status, "review stale");
+        assert_eq!(cold.note, Some("range unresolvable"));
+
+        // The unresolvable answer is memoized too (cp-2): a second candidate
+        // sharing an unresolvable head reuses it rather than re-spawning.
+        let mut cold_memo = GitMemo::new();
+        derive_candidate_status(&unspawnable, &c1, &sessions, &mut cold_memo).ok().unwrap();
+        let reused = derive_candidate_status(&unspawnable, &c2, &sessions, &mut cold_memo).ok().unwrap();
+        assert_eq!(reused.status, "review stale");
+        assert_eq!(reused.note, Some("range unresolvable"));
+        assert!(cold_memo.contains_key(&format!("since {sha0}")));
+    }
 }

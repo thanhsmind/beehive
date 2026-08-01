@@ -3374,4 +3374,862 @@ mod tests {
             Some(Promo::Thrown(m)) if m.starts_with("knowledge promote: unknown_work — no bee.work-item concept")
         ));
     }
+
+    // ═══ R5: fixture builders ══════════════════════════════════════════════
+    //
+    // Node oracle: tests/test_knowledge.mjs makeRepo / writeBundleFile /
+    // conceptText (l.60–108). Fixtures are authored THROUGH `emit_frontmatter`
+    // — D12 makes the emitter the subset's source of truth — so every fixture
+    // is canonical by construction and `not_canonical` can only fire where a
+    // test bends the bytes on purpose.
+
+    fn bundle() -> (tempfile::TempDir, PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("docs").join("knowledge");
+        std::fs::create_dir_all(&dir).unwrap();
+        (tmp, dir)
+    }
+
+    fn write_bundle_file(dir: &Path, rel: &str, text: &str) {
+        let abs = join_rel(dir, rel);
+        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
+        std::fs::write(abs, text).unwrap();
+    }
+
+    struct Cx {
+        ty: &'static str,
+        title: String,
+        description: Option<String>,
+        id: String,
+        lifecycle: &'static str,
+        tags: Vec<String>,
+        areas: Vec<String>,
+        bee_extra: Vec<(&'static str, Value)>,
+        body: String,
+    }
+
+    impl Cx {
+        fn new(id: &str) -> Self {
+            Cx {
+                ty: "bee.pattern",
+                title: "A demo pattern".into(),
+                description: Some("A canonical fixture concept".into()),
+                id: id.into(),
+                lifecycle: "active",
+                tags: vec!["demo".into()],
+                areas: vec!["demo-area".into()],
+                bee_extra: Vec::new(),
+                body: "Body.".into(),
+            }
+        }
+        fn ty(mut self, t: &'static str) -> Self {
+            self.ty = t;
+            self
+        }
+        fn title(mut self, t: &str) -> Self {
+            self.title = t.into();
+            self
+        }
+        fn description(mut self, d: &str) -> Self {
+            self.description = Some(d.into());
+            self
+        }
+        fn no_description(mut self) -> Self {
+            self.description = None;
+            self
+        }
+        fn lifecycle(mut self, l: &'static str) -> Self {
+            self.lifecycle = l;
+            self
+        }
+        fn tags(mut self, t: &[&str]) -> Self {
+            self.tags = t.iter().map(|s| (*s).to_string()).collect();
+            self
+        }
+        fn areas(mut self, a: &[&str]) -> Self {
+            self.areas = a.iter().map(|s| (*s).to_string()).collect();
+            self
+        }
+        fn body(mut self, b: &str) -> Self {
+            self.body = b.into();
+            self
+        }
+        fn bee(mut self, key: &'static str, value: Value) -> Self {
+            self.bee_extra.push((key, value));
+            self
+        }
+        fn critical(self) -> Self {
+            self.bee("critical", json!(true))
+        }
+
+        fn text(&self) -> String {
+            let mut data = Map::new();
+            data.insert("type".into(), json!(self.ty));
+            data.insert("title".into(), json!(self.title));
+            if let Some(d) = &self.description {
+                data.insert("description".into(), json!(d));
+            }
+            data.insert("tags".into(), json!(self.tags));
+            data.insert("timestamp".into(), json!("2026-07-22"));
+            let mut bee = Map::new();
+            bee.insert("id".into(), json!(self.id));
+            bee.insert("lifecycle".into(), json!(self.lifecycle));
+            bee.insert("areas".into(), json!(self.areas));
+            bee.insert("required_context".into(), json!([]));
+            bee.insert("decisions".into(), json!([]));
+            bee.insert("sources".into(), json!([]));
+            for (k, v) in &self.bee_extra {
+                bee.insert((*k).to_string(), v.clone());
+            }
+            data.insert("bee".into(), Value::Object(bee));
+            format!("{}\n# {}\n\n{}\n", emit_frontmatter(&data).unwrap(), self.title, self.body)
+        }
+    }
+
+    fn put(dir: &Path, rel: &str, c: Cx) {
+        write_bundle_file(dir, rel, &c.text());
+    }
+
+    fn codes(list: &[Value]) -> Vec<&str> {
+        list.iter().map(|f| f["code"].as_str().unwrap()).collect()
+    }
+
+    fn of_code<'a>(list: &'a [Value], code: &str) -> Vec<&'a Value> {
+        list.iter().filter(|f| f["code"] == code).collect()
+    }
+
+    fn msg(f: &Value) -> &str {
+        f["message"].as_str().unwrap()
+    }
+
+    // ═══ profile WARNINGS (D4) ═════════════════════════════════════════════
+
+    /// Node: 'profile warning: type outside the D18 nine warns, does not
+    /// error, exits ok un-strict' (test_knowledge.mjs l.271).
+    #[test]
+    fn unknown_type_warns_without_erroring_and_a_profile_type_stays_silent() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "patterns/guide.md", Cx::new("guide-1").ty("bee.guide"));
+        put(&dir, "patterns/known.md", Cx::new("known-1")); // control: bee.pattern is in the nine
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(
+            report.okf_errors.is_empty(),
+            "an unknown type is a SHOULD, never an OKF error: {:?}",
+            codes(&report.okf_errors)
+        );
+        let warns = of_code(&report.warnings, "unknown_type");
+        assert_eq!(warns.len(), 1, "only the off-vocabulary file may warn: {:?}", report.warnings);
+        assert_eq!(warns[0]["file"], "patterns/guide.md");
+        assert!(msg(warns[0]).contains("bee.guide"), "the offending type must flow into the message: {}", msg(warns[0]));
+        assert!(report.ok, "warnings alone must not fail un-strict");
+    }
+
+    /// Node: 'profile warning: missing profile-required field (D10: never
+    /// invented, warned by name)' (l.281). The nested `bee.id`/`bee.lifecycle`
+    /// paths exercise readPath's object walk, which the flat cases cannot.
+    #[test]
+    fn missing_profile_field_warns_by_name_and_a_complete_concept_stays_silent() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "patterns/complete.md", Cx::new("complete")); // control: all four present
+        put(&dir, "patterns/undescribed.md", Cx::new("undescribed").no_description());
+        // No `bee:` map at all — readPath stops mid-walk on both nested keys.
+        write_bundle_file(
+            &dir,
+            "patterns/nobee.md",
+            "---\ntype: bee.pattern\ntitle: No bee map\ndescription: Has no bee map\n---\nBody.\n",
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(report.okf_errors.is_empty(), "a missing profile field is never an OKF error: {:?}", codes(&report.okf_errors));
+        let warns = of_code(&report.warnings, "missing_profile_field");
+        // Walk order: files path-sorted, keys in PROFILE_REQUIRED order.
+        let got: Vec<(&str, &str)> = warns.iter().map(|w| (w["file"].as_str().unwrap(), msg(w))).collect();
+        assert_eq!(got.len(), 3, "exactly the three absent fields may warn: {:?}", report.warnings);
+        assert_eq!(got[0].0, "patterns/nobee.md");
+        assert!(got[0].1.contains("\"bee.id\""), "{}", got[0].1);
+        assert_eq!(got[1].0, "patterns/nobee.md");
+        assert!(got[1].1.contains("\"bee.lifecycle\""), "{}", got[1].1);
+        assert_eq!(got[2].0, "patterns/undescribed.md");
+        assert!(got[2].1.contains("\"description\""), "{}", got[2].1);
+        assert!(report.ok, "a missing profile field is a warning, green un-strict");
+    }
+
+    /// Node: 'profile warning: dangling required_context path; a resolving
+    /// path stays silent' (l.290).
+    #[test]
+    fn dangling_required_context_warns_only_for_the_unresolvable_target() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "areas/demo/overview.md", Cx::new("demo-overview").ty("bee.area"));
+        put(
+            &dir,
+            "patterns/linked.md",
+            Cx::new("linked").bee(
+                "required_context",
+                // one resolving target (the control) + one ghost
+                json!(["areas/demo/overview.md", "areas/ghost/nothing.md"]),
+            ),
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        let dangling = of_code(&report.warnings, "dangling_required_context");
+        assert_eq!(dangling.len(), 1, "only the ghost path may warn: {:?}", report.warnings);
+        assert_eq!(dangling[0]["file"], "patterns/linked.md");
+        assert!(
+            msg(dangling[0]).contains("areas/ghost/nothing.md"),
+            "the unresolved target must be named: {}",
+            msg(dangling[0])
+        );
+        assert!(report.ok);
+    }
+
+    /// Node: 'profile warning: dangling supersedes id; a resolving id stays
+    /// silent' (l.300).
+    #[test]
+    fn dangling_supersedes_warns_only_for_the_id_no_concept_claims() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "patterns/old.md", Cx::new("old-pattern").lifecycle("superseded"));
+        put(&dir, "patterns/new.md", Cx::new("new-pattern").bee("supersedes", json!("old-pattern")));
+        put(&dir, "patterns/orphan.md", Cx::new("orphan").bee("supersedes", json!("never-existed")));
+        let report = check_bundle(&dir, false).unwrap();
+        let dangling = of_code(&report.warnings, "dangling_supersedes");
+        assert_eq!(dangling.len(), 1, "the resolving supersedes must stay silent: {:?}", report.warnings);
+        assert_eq!(dangling[0]["file"], "patterns/orphan.md");
+        assert!(msg(dangling[0]).contains("never-existed"), "{}", msg(dangling[0]));
+        assert!(report.ok);
+    }
+
+    /// Node: 'profile warning: duplicate bee.id (D31: id is globally unique)'
+    /// (l.310). A duplicate id is a WARNING — the pair to the authority ERROR
+    /// below, which fails the chain on its own.
+    #[test]
+    fn duplicate_id_warns_and_names_every_claimant() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "patterns/a.md", Cx::new("same-id"));
+        put(&dir, "patterns/b.md", Cx::new("same-id"));
+        put(&dir, "patterns/c.md", Cx::new("unique-id")); // control: never named
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(report.profile_errors.is_empty(), "a duplicate id is not a profile error: {:?}", codes(&report.profile_errors));
+        let dup = of_code(&report.warnings, "duplicate_id");
+        assert_eq!(dup.len(), 1, "one finding per duplicated id: {:?}", report.warnings);
+        assert_eq!(dup[0]["file"], "patterns/a.md", "the finding is filed against the first claimant");
+        let m = msg(dup[0]);
+        assert!(m.contains("same-id"), "{m}");
+        assert!(m.contains("patterns/a.md") && m.contains("patterns/b.md"), "both claimants must be traceable: {m}");
+        assert!(!m.contains("patterns/c.md"), "the unique id must not be dragged in: {m}");
+        assert!(report.ok, "a duplicate id alone stays green un-strict");
+    }
+
+    // ═══ profile ERRORS (G14 layer 3 / cell f3-3) ══════════════════════════
+
+    /// Node: 'profile ERROR: duplicate bee.authoritative_for FAILS the chain'
+    /// (l.337) + 'grouped by the HARDENED subject' (l.352). The chain runs
+    /// `knowledge check` WITHOUT --strict, so this must be an error, not a
+    /// warning promoted only under strict.
+    #[test]
+    fn duplicate_authoritative_for_is_a_chain_failing_error_over_the_hardened_subject() {
+        // Control: two DIFFERENT subjects stay green — the grouping is not a
+        // blanket "two claims anywhere" rule.
+        {
+            let (_tmp, dir) = bundle();
+            put(&dir, "areas/x/one.md", Cx::new("x-one").ty("bee.area").bee("authoritative_for", json!("gates")));
+            put(&dir, "areas/x/two.md", Cx::new("x-two").ty("bee.area").bee("authoritative_for", json!("locks")));
+            let report = check_bundle(&dir, false).unwrap();
+            assert!(report.profile_errors.is_empty(), "distinct subjects: {:?}", report.profile_errors);
+            assert!(report.ok);
+        }
+        // Every ASCII spelling that normalizeSubject folds onto "gates".
+        for second in ["gates", "gates.", "  GATES  ", "Gates!", "GATES---"] {
+            let (_tmp, dir) = bundle();
+            put(&dir, "areas/x/one.md", Cx::new("x-one").ty("bee.area").bee("authoritative_for", json!("gates")));
+            put(&dir, "areas/x/two.md", Cx::new("x-two").ty("bee.area").bee("authoritative_for", json!(second)));
+            let report = check_bundle(&dir, false).unwrap();
+            let dup = of_code(&report.profile_errors, "duplicate_authoritative_for");
+            assert_eq!(dup.len(), 1, "{second:?}: exact-string grouping misses this, hardened grouping must not: {:?}", report.profile_errors);
+            assert_eq!(dup[0]["file"], "areas/x/one.md");
+            let m = msg(dup[0]);
+            assert!(m.contains("areas/x/one.md") && m.contains("areas/x/two.md"), "{second:?}: both claimants must be named: {m}");
+            assert!(m.contains("\"gates\""), "{second:?}: the RAW claim is quoted, not the normalized key: {m}");
+            assert!(
+                !report.ok,
+                "{second:?}: a forked subject must fail the chain with no --strict"
+            );
+            assert!(
+                of_code(&report.warnings, "duplicate_authoritative_for").is_empty(),
+                "{second:?}: promoted to profile.errors, not duplicated across buckets"
+            );
+        }
+    }
+
+    /// Node's hardened grouping also folds NFKC + confusables (l.352: Cyrillic
+    /// 'а', fullwidth). The Rust port models only the ASCII-identity slice of
+    /// normalizeSubject, so a non-ASCII claim REFUSES to answer and the whole
+    /// command delegates rather than guessing the fold.
+    #[test]
+    fn a_non_ascii_authority_claim_delegates_instead_of_guessing_the_fold() {
+        for second in ["g\u{430}tes", "\u{ff47}\u{ff41}\u{ff54}\u{ff45}\u{ff53}", "caf\u{e9}"] {
+            let (_tmp, dir) = bundle();
+            put(&dir, "areas/x/one.md", Cx::new("x-one").ty("bee.area").bee("authoritative_for", json!("gates")));
+            put(&dir, "areas/x/two.md", Cx::new("x-two").ty("bee.area").bee("authoritative_for", json!(second)));
+            assert!(
+                check_bundle(&dir, false).is_none(),
+                "{second:?}: a non-ASCII claim must delegate, never be answered by the ASCII subset"
+            );
+        }
+        // Control: the ASCII twin of the same fixture DOES answer natively.
+        let (_tmp, dir) = bundle();
+        put(&dir, "areas/x/one.md", Cx::new("x-one").ty("bee.area").bee("authoritative_for", json!("gates")));
+        put(&dir, "areas/x/two.md", Cx::new("x-two").ty("bee.area").bee("authoritative_for", json!("gates.")));
+        assert!(check_bundle(&dir, false).is_some(), "an ASCII pair must not delegate");
+    }
+
+    /// Node: 'profile ERROR: a MALFORMED bee.authoritative_for is a
+    /// chain-failing error naming the file, never a silent skip' (l.369). The
+    /// reachable set is measured against the D12 parser: `42`/`null` parse as
+    /// STRINGS, and a mapping is already an unparseable_frontmatter OKF error.
+    #[test]
+    fn malformed_authoritative_for_is_a_chain_failing_error_naming_the_got_type() {
+        for (literal, got) in [
+            (json!(["gates", "locks"]), "array"),
+            (json!(true), "boolean"),
+            (json!(""), "string"),
+            (json!("   "), "string"),
+        ] {
+            let (_tmp, dir) = bundle();
+            put(&dir, "areas/x/bad.md", Cx::new("x-bad").ty("bee.area").bee("authoritative_for", literal.clone()));
+            let report = check_bundle(&dir, false).unwrap();
+            assert!(
+                report.okf_errors.is_empty(),
+                "{literal}: the frontmatter itself parses — this is a profile fault, not an OKF one: {:?}",
+                report.okf_errors
+            );
+            let bad = of_code(&report.profile_errors, "malformed_authoritative_for");
+            assert_eq!(bad.len(), 1, "{literal}: {:?}", report.profile_errors);
+            assert_eq!(bad[0]["file"], "areas/x/bad.md");
+            assert!(msg(bad[0]).contains(&format!("(got {got})")), "{literal}: {}", msg(bad[0]));
+            assert!(!report.ok, "{literal}: a claim bee cannot read must fail the chain");
+        }
+        // Control: a well-formed claim produces neither finding.
+        let (_tmp, dir) = bundle();
+        put(&dir, "areas/x/good.md", Cx::new("x-good").ty("bee.area").bee("authoritative_for", json!("gates")));
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(report.profile_errors.is_empty(), "{:?}", report.profile_errors);
+        assert!(report.ok);
+    }
+
+    // ═══ --strict (D4/D13) ═════════════════════════════════════════════════
+
+    /// Node: 'strict flip: a warnings-only bundle is ok un-strict and not ok
+    /// under strict' (l.473) + 'CLI (f3-3): a duplicated authority exits
+    /// NON-ZERO with no --strict' (l.511). `run_check` turns `!report.ok`
+    /// straight into the exit code (l.1815/1862), so `ok` IS the exit-code
+    /// contract at this level.
+    #[test]
+    fn strict_flips_a_warnings_only_bundle_but_an_authority_error_fails_without_it() {
+        let (_tmp, warn_dir) = bundle();
+        put(&warn_dir, "patterns/guide.md", Cx::new("guide-1").ty("bee.guide"));
+        let loose = check_bundle(&warn_dir, false).unwrap();
+        assert!(loose.okf_errors.is_empty() && loose.profile_errors.is_empty());
+        assert!(!loose.warnings.is_empty(), "the fixture must actually warn or the flip proves nothing");
+        assert!(loose.ok, "un-strict passes on warnings only");
+        assert!(!check_bundle(&warn_dir, true).unwrap().ok, "--strict fails on any finding");
+
+        // Control: strict must not invent a failure on a clean bundle.
+        let (_tmp2, clean_dir) = bundle();
+        put(&clean_dir, "patterns/clean.md", Cx::new("clean"));
+        assert!(check_bundle(&clean_dir, false).unwrap().ok);
+        assert!(check_bundle(&clean_dir, true).unwrap().ok, "--strict is a warning promoter, not a new check");
+
+        // A forked authority is non-zero WITHOUT --strict.
+        let (_tmp3, dup_dir) = bundle();
+        put(&dup_dir, "areas/x/one.md", Cx::new("x-one").ty("bee.area").bee("authoritative_for", json!("gates")));
+        put(&dup_dir, "areas/x/two.md", Cx::new("x-two").ty("bee.area").bee("authoritative_for", json!("gates")));
+        let dup = check_bundle(&dup_dir, false).unwrap();
+        assert!(dup.warnings.is_empty(), "nothing in this bundle is a mere warning: {:?}", dup.warnings);
+        assert_eq!(codes(&dup.profile_errors), vec!["duplicate_authoritative_for"]);
+        assert!(!dup.ok, "the fork fails the chain with the flag absent");
+    }
+
+    // ═══ round-trip guard: not_canonical (D12) ═════════════════════════════
+
+    /// Node: round-trip guard for an unquoted colon (l.416), a mid-value '#'
+    /// (l.429) and CRLF (l.441), plus 'a fully canonical bundle yields zero
+    /// not_canonical warnings' (l.452). Each bend must keep the DATA intact
+    /// and warn — a silent misparse is the failure this guard exists to stop.
+    #[test]
+    fn not_canonical_warns_on_bent_bytes_and_a_canonical_bundle_warns_zero_times() {
+        let canonical = Cx::new("bent").text();
+        for (rel, bent, expected_title) in [
+            (
+                "patterns/colon.md",
+                canonical.replace("title: A demo pattern", "title: Routing: the golden rule"),
+                "Routing: the golden rule",
+            ),
+            (
+                "patterns/hash.md",
+                canonical.replace("title: A demo pattern", "title: value # not a comment"),
+                "value # not a comment",
+            ),
+            ("patterns/crlf.md", canonical.replace('\n', "\r\n"), "A demo pattern"),
+        ] {
+            let (_tmp, dir) = bundle();
+            write_bundle_file(&dir, rel, &bent);
+            let report = check_bundle(&dir, false).unwrap();
+            assert!(report.okf_errors.is_empty(), "{rel}: bent bytes are a profile warning, never an OKF error: {:?}", report.okf_errors);
+            let warns = of_code(&report.warnings, "not_canonical");
+            assert_eq!(warns.len(), 1, "{rel}: {:?}", report.warnings);
+            assert_eq!(warns[0]["file"], rel);
+            // The value survived the bend intact — never comment-stripped,
+            // never truncated at the colon.
+            let data = parse_ok(&bent);
+            assert_eq!(data["title"], json!(expected_title), "{rel}");
+            assert_eq!(data["bee"]["id"], json!("bent"), "{rel}");
+        }
+        // Control: the same concept, unbent, warns zero times.
+        let (_tmp, dir) = bundle();
+        write_bundle_file(&dir, "patterns/clean.md", &canonical);
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(report.warnings.is_empty(), "a canonical file must not warn: {:?}", report.warnings);
+        assert!(report.ok);
+    }
+
+    // ═══ knowledge index (D21) ═════════════════════════════════════════════
+
+    /// makeIndexFixture (test_knowledge.mjs l.573): nested dirs, one critical,
+    /// one plain, and a log.md with an ISO heading.
+    fn index_fixture(dir: &Path) {
+        put(
+            dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .title("Demo overview")
+                .description("Overview of the demo area")
+                .areas(&["routing"])
+                .bee("authoritative_for", json!("demo-overview")),
+        );
+        put(
+            dir,
+            "areas/demo/rules.md",
+            Cx::new("demo-rules")
+                .ty("bee.area")
+                .title("Demo rules")
+                .description("Rules of the demo area")
+                .lifecycle("draft")
+                .areas(&["routing"])
+                .bee("authoritative_for", json!("demo-rules")),
+        );
+        put(
+            dir,
+            "patterns/critical-one.md",
+            Cx::new("critical-one").title("A critical pattern").description("Always in context").critical(),
+        );
+        put(dir, "patterns/plain.md", Cx::new("plain-one").title("A plain pattern").description("Not critical"));
+        write_bundle_file(dir, "log.md", "# Log\n\n## 2026-07-22\n\n- Fixture bundle created.\n");
+    }
+
+    /// Node: 'index generates an index at every level ... two consecutive runs
+    /// are byte-identical, LF-only' (l.594) + 'index --check exits non-zero
+    /// naming a doctored stale index; regeneration heals it' (l.614).
+    ///
+    /// `run_index --check` (l.1877-1884) is `compute_index_files` plus a
+    /// read-and-compare per file; it cannot be entered without a process cwd,
+    /// so both production halves are driven directly and only the three-line
+    /// join is written here.
+    #[test]
+    fn index_check_flags_exactly_the_doctored_index_and_regeneration_heals_it() {
+        let (_tmp, dir) = bundle();
+        index_fixture(&dir);
+        let expected = compute_index_files(&dir).unwrap();
+        let rels: Vec<&str> = expected.iter().map(|(r, _)| r.as_str()).collect();
+        assert_eq!(rels, vec!["index.md", "areas/index.md", "areas/demo/index.md", "patterns/index.md"]);
+        for (rel, content) in &expected {
+            assert!(!content.contains('\r'), "{rel}: a generated index is LF-only");
+            let has_clock = content.as_bytes().windows(8).any(|w| {
+                w[0].is_ascii_digit()
+                    && w[1].is_ascii_digit()
+                    && w[2] == b':'
+                    && w[3].is_ascii_digit()
+                    && w[4].is_ascii_digit()
+                    && w[5] == b':'
+                    && w[6].is_ascii_digit()
+                    && w[7].is_ascii_digit()
+            });
+            assert!(!has_clock, "{rel}: a generated index carries no wall-clock value");
+        }
+        assert_eq!(compute_index_files(&dir).unwrap(), expected, "recomputation must be byte-identical");
+
+        // Render, exactly as run_index's write loop does.
+        for (rel, content) in &expected {
+            write_bundle_file(&dir, rel, content);
+        }
+        let stale = |exp: &Vec<(String, String)>| -> Vec<String> {
+            exp.iter()
+                .filter(|(rel, content)| read_file_lossy(&join_rel(&dir, rel)).ok().as_deref() != Some(content.as_str()))
+                .map(|(rel, _)| format!("docs/knowledge/{rel}"))
+                .collect()
+        };
+        assert!(stale(&expected).is_empty(), "a fresh render is not stale: {:?}", stale(&expected));
+
+        // Doctor exactly one index. index.md is a reserved basename, so the
+        // expected SET must not move — only that one file goes stale.
+        let doctored = join_rel(&dir, "areas/demo/index.md");
+        let bent = format!("{}\nHand-edited drift.\n", read_file_lossy(&doctored).unwrap());
+        std::fs::write(&doctored, &bent).unwrap();
+        let after = compute_index_files(&dir).unwrap();
+        assert_eq!(after, expected, "a hand-edited index is not a concept and cannot change the expected set");
+        assert_eq!(stale(&after), vec!["docs/knowledge/areas/demo/index.md"]);
+
+        // Regeneration heals it.
+        for (rel, content) in &after {
+            write_bundle_file(&dir, rel, content);
+        }
+        assert!(stale(&after).is_empty(), "regeneration must clear the drift: {:?}", stale(&after));
+    }
+
+    /// Node: 'generated non-root indexes carry NO frontmatter — only the HTML
+    /// provenance comment' (l.631) + 'generated root index keeps
+    /// okf_version-only frontmatter ... and the generated bundle passes
+    /// knowledge check' (l.644).
+    #[test]
+    fn generated_indexes_obey_the_okf_frontmatter_rules_and_pass_check() {
+        let (_tmp, dir) = bundle();
+        index_fixture(&dir);
+        let expected = compute_index_files(&dir).unwrap();
+        for (rel, content) in &expected {
+            if rel == "index.md" {
+                let Fm::Parsed { data, .. } = parse_frontmatter(content) else {
+                    panic!("the root index must carry frontmatter");
+                };
+                assert_eq!(
+                    data.keys().map(String::as_str).collect::<Vec<_>>(),
+                    vec!["okf_version"],
+                    "root index frontmatter carries ONLY okf_version"
+                );
+                assert_eq!(data["okf_version"], json!("0.1"));
+            } else {
+                assert!(matches!(parse_frontmatter(content), Fm::Absent), "{rel}: a non-root index must carry no frontmatter");
+                assert!(content.starts_with("<!--"), "{rel}: must open with the provenance comment");
+            }
+            // PINNED PROSE: D21 makes the provenance header part of the
+            // artifact's contract (the Node oracle asserts it at l.639-640),
+            // so these two strings are asserted deliberately.
+            assert!(content.contains("GENERATED FILE — do not hand-edit"), "{rel}");
+            assert!(content.contains("bee knowledge index"), "{rel}: the regenerate command must be named");
+        }
+
+        // Rendered into the bundle, the generated indexes keep check green —
+        // the control proving check_index_file agrees with what index emits.
+        for (rel, content) in &expected {
+            write_bundle_file(&dir, rel, content);
+        }
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(report.okf_errors.is_empty(), "generated indexes must produce zero OKF errors: {:?}", report.okf_errors);
+        assert!(report.ok);
+
+        // And the control proving check_index_file BITES: hand-added
+        // frontmatter on a NON-root index is an OKF error.
+        let patterns = expected.iter().find(|(r, _)| r == "patterns/index.md").unwrap();
+        write_bundle_file(&dir, "patterns/index.md", &format!("---\nokf_version: 0.1\n---\n{}", patterns.1));
+        let bent = check_bundle(&dir, false).unwrap();
+        assert_eq!(codes(&bent.okf_errors), vec!["index_frontmatter"]);
+        assert!(!bent.ok);
+    }
+
+    // ═══ knowledge context: the relevance-cut invariants (G5/G11) ══════════
+
+    fn built(dir: &Path, work: &str, budget: f64) -> Value {
+        match build_context_manifest(dir, work, budget, &json_raw(&format!("{budget}"))) {
+            ManifestOut::Built(m) => m,
+            ManifestOut::Thrown(m) => panic!("unexpected throw: {m}"),
+            ManifestOut::NeedsNode => panic!("unexpected delegation"),
+        }
+    }
+
+    fn entry_paths(manifest: &Value) -> Vec<String> {
+        manifest["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["path"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    fn str_list(v: &Value) -> Vec<String> {
+        v.as_array().unwrap().iter().map(|s| s.as_str().unwrap().to_string()).collect()
+    }
+
+    /// Node: 'knowledge context CONSERVES the critical set: entries +
+    /// truncated + excluded == every bee.critical concept, no duplicates'
+    /// (l.1360). buildContextManifest carries its own conservation guard; this
+    /// asserts the PAYLOAD accounts for the set independently of it.
+    #[test]
+    fn context_conserves_the_critical_set_at_every_budget() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "work/billing/work-item.md",
+            Cx::new("billing-migration")
+                .ty("bee.work-item")
+                .title("Migrate the billing ledger onto the invoice schema")
+                .description("Move every ledger row into the new billing schema behind a coverage gate.")
+                .tags(&["billing", "ledger", "migration"])
+                .areas(&["billing"])
+                .body("Every ledger row is migrated into the invoice schema, one migration cell per ledger table."),
+        );
+        let critical_names = ["ledger-rows", "coverage-gate", "schema-rollback", "kiln-firing", "estuary-silt"];
+        for name in critical_names {
+            put(
+                &dir,
+                &format!("patterns/{name}.md"),
+                Cx::new(name)
+                    .title(&format!("{name} guidance"))
+                    .description(&format!("{name} guidance for the ledger schema migration"))
+                    .tags(&["pattern"])
+                    .areas(&["billing"])
+                    .critical()
+                    .body(&format!("{name} guidance notes, technique and maintenance for a ledger row.")),
+            );
+        }
+        let all: Vec<String> = critical_names.iter().map(|n| format!("docs/knowledge/patterns/{n}.md")).collect();
+
+        for budget in [100000.0, 900.0, 0.0] {
+            let manifest = built(&dir, "billing-migration", budget);
+            let mut accounted: Vec<String> = entry_paths(&manifest);
+            accounted.extend(str_list(&manifest["truncated"]));
+            accounted.extend(
+                manifest["excluded"].as_array().unwrap().iter().map(|e| e["path"].as_str().unwrap().to_string()),
+            );
+            accounted.retain(|p| all.contains(p));
+            let unique: HashSet<&String> = accounted.iter().collect();
+            assert_eq!(unique.len(), accounted.len(), "budget {budget}: a critical is accounted for exactly ONCE: {accounted:?}");
+            assert_eq!(
+                unique.len(),
+                all.len(),
+                "budget {budget}: CONSERVATION FAILED — {} criticals exist, {} accounted for",
+                all.len(),
+                unique.len()
+            );
+            assert_eq!(manifest["critical_total"], json!(all.len()), "budget {budget}: critical_total states the full population");
+        }
+    }
+
+    /// Node: 'knowledge context FLOOR: the highest-scoring critical survives a
+    /// budget that the plain prefix cut would have evicted it under' (l.1376).
+    #[test]
+    fn context_floor_keeps_the_top_criticals_a_plain_prefix_cut_would_evict() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "work/billing/work-item.md",
+            Cx::new("billing-migration")
+                .ty("bee.work-item")
+                .title("Migrate the billing ledger onto the invoice schema")
+                .description("Move every ledger row into the new billing schema behind a coverage gate.")
+                .tags(&["billing", "ledger", "migration"])
+                .areas(&["billing"])
+                .bee(
+                    "required_context",
+                    json!([
+                        "areas/billing/ledger-schema.md",
+                        "areas/billing/invoice-rows.md",
+                        "areas/billing/rollback-runbook.md"
+                    ]),
+                )
+                .body("Every ledger row is migrated into the invoice schema, one migration cell per ledger table."),
+        );
+        // The required_context chain is deliberately far larger than the floor:
+        // under a plain prefix cut it eats the whole budget and every critical
+        // is evicted, which is the failure the floor exists to stop.
+        for name in ["ledger-schema", "invoice-rows", "rollback-runbook"] {
+            put(
+                &dir,
+                &format!("areas/billing/{name}.md"),
+                Cx::new(name)
+                    .ty("bee.area")
+                    .title(&format!("The {name}"))
+                    .description(&format!("{name} reference"))
+                    .tags(&["billing"])
+                    .areas(&["billing"])
+                    .body(&format!("{name} reference material. ").repeat(60)),
+            );
+        }
+        for name in ["rel-ledger-rows", "rel-coverage-gate", "rel-schema-rollback", "irr-kiln-firing"] {
+            put(
+                &dir,
+                &format!("patterns/{name}.md"),
+                Cx::new(name)
+                    .title(&format!("{name} guidance"))
+                    .description(&format!("{name} guidance for the ledger schema migration"))
+                    .tags(&["pattern"])
+                    .areas(&["billing"])
+                    .critical()
+                    .body(&format!("{name} guidance notes and technique for a migrated ledger row.")),
+            );
+        }
+
+        let full = built(&dir, "billing-migration", 100_000.0);
+        let work_path = "docs/knowledge/work/billing/work-item.md";
+        assert_eq!(full["entries"][0]["path"], work_path, "rank 1 is the work item");
+        let floor = str_list(&full["floor"]);
+        assert_eq!(floor.len(), FLOOR, "the floor is the pinned FLOOR: {floor:?}");
+        let entries = full["entries"].as_array().unwrap();
+        let top_critical = entries
+            .iter()
+            .find(|e| e["reason"].as_str().unwrap().starts_with("critical pattern"))
+            .expect("a critical must be in entries at a large budget");
+        assert!(floor.contains(&top_critical["path"].as_str().unwrap().to_string()), "the highest-scoring critical is in the floor");
+
+        let est = |path: &str| -> f64 {
+            entries.iter().find(|e| e["path"] == path).unwrap()["est_tokens"].as_f64().unwrap()
+        };
+        let work_cost = est(work_path);
+        let floor_cost: f64 = floor.iter().map(|p| est(p)).sum();
+        let req_cost: f64 = entries
+            .iter()
+            .filter(|e| e["reason"].as_str().unwrap().contains("required_context"))
+            .map(|e| e["est_tokens"].as_f64().unwrap())
+            .sum();
+        assert!(
+            req_cost > floor_cost,
+            "the fixture must make the required_context chain the thing that would evict the floor ({req_cost} vs {floor_cost})"
+        );
+
+        // Exactly the work item plus the floor.
+        let tight = work_cost + floor_cost;
+        let cut = built(&dir, "billing-migration", tight);
+        assert!(cut["total_est"].as_f64().unwrap() <= tight, "the budget stays a hard ceiling even with a floor");
+        let cut_paths = entry_paths(&cut);
+        for p in &floor {
+            assert!(cut_paths.contains(p), "every floor critical must survive a tight budget; {p} was evicted from {cut_paths:?}");
+        }
+        assert_eq!(cut_paths[0], work_path, "the work item is never displaced by its own floor");
+        assert_eq!(cut_paths.len(), 1 + floor.len(), "under this budget exactly the work item and the floor survive: {cut_paths:?}");
+        let truncated = str_list(&cut["truncated"]);
+        assert!(
+            truncated.iter().any(|p| p.contains("areas/billing/")),
+            "the floor must beat the higher-ranked required_context chain: {truncated:?}"
+        );
+    }
+
+    /// Node: 'knowledge context FAILS when zero_signal_count exceeds the
+    /// pinned threshold' (l.1423) + 'the zero-signal guard is inert below the
+    /// pinned population floor' (l.1450).
+    #[test]
+    fn context_zero_signal_fails_above_the_population_floor_and_is_inert_below() {
+        let work = || {
+            Cx::new("signalless")
+                .ty("bee.work-item")
+                .title("Reconcile quarterly payroll withholding")
+                .description("Withholding reconciliation across payroll periods.")
+                .tags(&["payroll"])
+                .areas(&["payroll"])
+                .body("Payroll withholding reconciliation across quarterly periods, employer contributions included.")
+        };
+        let void = |topic: &str, i: usize| {
+            Cx::new(&format!("void-{i}"))
+                .title(&format!("{topic} guidance"))
+                .description(&format!("{topic} guidance notes"))
+                .tags(&["unrelated"])
+                .areas(&["unrelated"])
+                .critical()
+                .body(&format!("{topic} guidance notes, {topic} technique, {topic} maintenance."))
+        };
+        let topics = [
+            "kubernetes ingress",
+            "sourdough hydration",
+            "telescope collimation",
+            "bicycle derailleur",
+            "harpsichord tuning",
+            "glacier moraine",
+            "origami tessellation",
+            "submarine ballast",
+            "volcanic tephra",
+            "lighthouse fresnel",
+            "saffron cultivation",
+            "permafrost drilling",
+        ];
+
+        let (_tmp, dir) = bundle();
+        put(&dir, "work/lonely/work-item.md", work());
+        for (i, topic) in topics.iter().enumerate() {
+            put(&dir, &format!("patterns/void-{i:02}.md"), void(topic, i));
+        }
+        match build_context_manifest(&dir, "signalless", 100_000.0, &json_raw("100000")) {
+            ManifestOut::Thrown(m) => {
+                assert!(m.contains("zero_signal"), "the typed code must lead: {m}");
+                assert!(m.contains("12 of 12"), "the measured counts must flow into the failure: {m}");
+                assert!(m.contains("0.5"), "the pinned ratio must be named: {m}");
+            }
+            ManifestOut::Built(_) => panic!("an all-zero ranking must FAIL the run"),
+            ManifestOut::NeedsNode => panic!("unexpected delegation"),
+        }
+
+        // Control: the SAME zero-signal vocabulary, one critical — below
+        // ZERO_SIGNAL_MIN_POPULATION the guard is inert, and the count is
+        // still reported.
+        let (_tmp2, small) = bundle();
+        put(&small, "work/lonely/work-item.md", work());
+        put(&small, "patterns/void-00.md", void(topics[0], 0));
+        let manifest = built(&small, "signalless", 100_000.0);
+        assert_eq!(manifest["zero_signal_count"], json!(1), "the count is still REPORTED below the floor");
+        assert_eq!(manifest["critical_total"], json!(1));
+    }
+
+    /// Node: 'knowledge context: relevance ties break DETERMINISTICALLY by
+    /// path, and repeat runs are byte-identical' (l.1401).
+    #[test]
+    fn context_relevance_ties_break_deterministically_by_path() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "work/twins/work-item.md",
+            Cx::new("twins")
+                .ty("bee.work-item")
+                .title("Twin ranking")
+                .description("Two criticals with identical vocabulary must not flap")
+                .tags(&["twin"])
+                .areas(&["twin"])
+                .body("Identical vocabulary twin ranking flap determinism."),
+        );
+        for name in ["zulu-twin", "alpha-twin"] {
+            put(
+                &dir,
+                &format!("patterns/{name}.md"),
+                Cx::new(name)
+                    .title("Twin pattern")
+                    .description("Identical vocabulary twin")
+                    .tags(&["twin"])
+                    .areas(&["twin"])
+                    .critical()
+                    .body("Identical vocabulary twin ranking flap determinism, word for word."),
+            );
+        }
+        let first = built(&dir, "twins", 100_000.0);
+        let second = built(&dir, "twins", 100_000.0);
+        assert_eq!(
+            jsjson::stringify(&first),
+            jsjson::stringify(&second),
+            "two runs over the same bundle must serialize identically"
+        );
+        let criticals: Vec<String> = first["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["reason"].as_str().unwrap().starts_with("critical pattern"))
+            .map(|e| e["path"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(
+            criticals,
+            vec!["docs/knowledge/patterns/alpha-twin.md", "docs/knowledge/patterns/zulu-twin.md"],
+            "tied scores must order by path"
+        );
+        // Control: the tie is real — both criticals carry the same score.
+        let scores: Vec<&str> = first["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|e| e["reason"].as_str())
+            .filter(|r| r.starts_with("critical pattern"))
+            .map(|r| r.split("relevance ").nth(1).unwrap().split(',').next().unwrap())
+            .collect();
+        assert_eq!(scores[0], scores[1], "the fixture must actually tie or the path tie-break proves nothing");
+    }
 }

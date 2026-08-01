@@ -168,19 +168,7 @@ fi
 # stdin, prints the value at that path under .result, or fails loudly
 # (surfacing herdr's own .error.message) if the call did not succeed.
 json_result() {
-  node -e "
-    let s = '';
-    process.stdin.on('data', (d) => { s += d; });
-    process.stdin.on('end', () => {
-      let r;
-      try { r = JSON.parse(s); } catch (e) { console.error('bootstrap-cockpit.sh: unparseable herdr output: ' + s); process.exit(1); }
-      if (r.error) { console.error('bootstrap-cockpit.sh: herdr error: ' + (r.error.message || JSON.stringify(r.error))); process.exit(1); }
-      let v = r.result;
-      for (const key of '$1'.split('.')) { v = v == null ? v : v[key]; }
-      if (v == null) { console.error('bootstrap-cockpit.sh: herdr response missing result.$1: ' + s); process.exit(1); }
-      console.log(v);
-    });
-  "
+  "$MAIN_ROOT/.bee/bin/bee" herding herdr-result "$1" --context bootstrap-cockpit.sh
 }
 
 # find_dispatch_pane - reads a `herdr pane list` response on stdin and
@@ -192,20 +180,7 @@ json_result() {
 # refuse-if-sure check, not a reason to block a bootstrap over a herdr
 # response shape mismatch.
 find_dispatch_pane() {
-  node -e "
-    let s = '';
-    process.stdin.on('data', (d) => { s += d; });
-    process.stdin.on('end', () => {
-      let r;
-      try { r = JSON.parse(s); } catch (e) { process.exit(0); }
-      if (!r || r.error) { process.exit(0); }
-      let panes = r.result;
-      if (panes && !Array.isArray(panes) && Array.isArray(panes.panes)) { panes = panes.panes; }
-      if (!Array.isArray(panes)) { process.exit(0); }
-      const hit = panes.find((p) => p && p.label === 'dispatch');
-      if (hit) { console.log(hit.pane_id || ''); }
-    });
-  "
+  "$MAIN_ROOT/.bee/bin/bee" herding herdr-pane-id --label dispatch
 }
 
 # Refuse when a dispatch loop already owns this workspace - see header

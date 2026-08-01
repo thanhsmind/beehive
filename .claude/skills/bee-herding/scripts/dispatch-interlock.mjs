@@ -5,7 +5,13 @@
  * dispatch-interlock.mjs — the hard enable-interlock the dispatch role MUST
  * clear before it builds any dispatchable set (D10, bee-herding).
  *
- * Usage: node dispatch-interlock.mjs [--main-root PATH]
+ * SUPERSEDED (R6a). The live path is the bee binary: `.bee/bin/bee herding interlock [--main-root PATH]`.
+ * This file is retained ONLY as the fixture the Node suites
+ * packages/bee/tests/test_herding{,_cli}.mjs still execute; nothing in the
+ * instruction layer names it any more, and no agent should run it. It is
+ * deleted together with the Node engine and those suites in R6.
+ *
+ * Historical usage: `<node> dispatch-interlock [--main-root PATH]`.
  *
  * Emits exactly one JSON object on stdout:
  *   {enabled, marker, main_root, reason}

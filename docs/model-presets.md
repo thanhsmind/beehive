@@ -172,4 +172,4 @@ Muốn một file `.bee/config.json` hoàn chỉnh thay vì ghép từng khối:
 
 ## Đổi preset
 
-Sửa `.bee/config.json` → chạy `node .bee/bin/bee.mjs status` xem dòng `Models (claude): ...` xác nhận. Không cần onboard lại.
+Sửa `.bee/config.json` → chạy `.bee/bin/bee status` xem dòng `Models (claude): ...` xác nhận. Không cần onboard lại.

@@ -5449,4 +5449,1363 @@ mod tests {
             .expect("orient")
             .contains_key("worktree"));
     }
+
+    // ── recovery (recovery.mjs) ────────────────────────────────────────────
+    //
+    // Ported from packages/bee/tests/test_recovery.mjs. The Node oracle
+    // injects `now`; this port reads `now_ms()` internally, so every fixture
+    // timestamp below is anchored to the wall clock instead.
+
+    /// `detectCrashCandidates` reads BEE_SESSION_ID / CLAUDE_CODE_SESSION_ID
+    /// from the PROCESS environment (claims.mjs resolveSessionId). One test
+    /// has to set it, and cargo runs the others on parallel threads of the
+    /// same process — so every test that calls `detect_crash_candidates`
+    /// takes this lock, not just the one that writes.
+    fn session_env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// test_recovery.mjs cleanEndEvents: the stop/turn/last-prompt trio plus
+    /// the trailing bookkeeping events a clean stop is allowed to emit.
+    fn clean_end_events(t0: f64) -> Vec<Value> {
+        vec![
+            json!({"type":"user","timestamp":to_iso(t0),"message":{"role":"user","content":[{"type":"text","text":"go"}]}}),
+            json!({"type":"assistant","timestamp":to_iso(t0 + 1000.0),"message":{"role":"assistant"}}),
+            json!({"type":"system","subtype":"stop_hook_summary","timestamp":to_iso(t0 + 1100.0)}),
+            json!({"type":"system","subtype":"turn_duration","durationMs":5000,"timestamp":to_iso(t0 + 1105.0)}),
+            json!({"type":"last-prompt","lastPrompt":"hi","leafUuid":"x"}),
+            json!({"type":"ai-title","aiTitle":"demo"}),
+            json!({"type":"mode","mode":"normal"}),
+        ]
+    }
+
+    /// test_recovery.mjs dirtyEndEvents: ends mid-turn, no trio at all.
+    fn dirty_end_events(t0: f64) -> Vec<Value> {
+        vec![
+            json!({"type":"user","timestamp":to_iso(t0),"message":{"role":"user","content":[{"type":"text","text":"go"}]}}),
+            json!({"type":"assistant","timestamp":to_iso(t0 + 1000.0),"message":{"role":"assistant"}}),
+        ]
+    }
+
+    fn write_jsonl_file(file: &Path, events: &[Value]) {
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let body = if events.is_empty() {
+            String::new()
+        } else {
+            let lines: Vec<String> =
+                events.iter().map(|e| serde_json::to_string(e).unwrap()).collect();
+            format!("{}\n", lines.join("\n"))
+        };
+        std::fs::write(file, body).unwrap();
+    }
+
+    /// test_recovery.mjs writeSessionRecord.
+    fn write_session_record(
+        root: &Path,
+        id: &str,
+        started_at: &str,
+        last_heartbeat: &str,
+        lane: Option<&str>,
+        transcript_path: Option<&str>,
+    ) {
+        let mut m = JMap::new();
+        m.insert("id".into(), json!(id));
+        m.insert("started_at".into(), json!(started_at));
+        m.insert("last_heartbeat".into(), json!(last_heartbeat));
+        if let Some(l) = lane {
+            m.insert("lane".into(), json!(l));
+        }
+        if let Some(t) = transcript_path {
+            m.insert("transcript_path".into(), json!(t));
+        }
+        write(
+            root,
+            &format!(".bee/sessions/{id}.json"),
+            &serde_json::to_string(&Value::Object(m)).unwrap(),
+        );
+    }
+
+    /// test_recovery.mjs writeLaneRecord.
+    fn write_lane_record(root: &Path, feature: &str, phase: &str) {
+        write(
+            root,
+            &format!(".bee/lanes/{feature}.json"),
+            &serde_json::to_string(&json!({
+                "schema_version": "1.0",
+                "feature": feature,
+                "mode": "standard",
+                "phase": phase,
+                "approved_gates": {"context": true, "shape": true, "execution": true, "review": false},
+                "summary": "",
+                "next_action": "",
+            }))
+            .unwrap(),
+        );
+    }
+
+    /// test_recovery.mjs writeClaim.
+    fn write_claim_record(root: &Path, cell_id: &str, session_id: &str, claimed_at: &str) {
+        write(
+            root,
+            &format!(".bee/claims/{cell_id}.json"),
+            &serde_json::to_string(&json!({
+                "cell": cell_id,
+                "session": session_id,
+                "ttl_seconds": 3600,
+                "claimed_at": claimed_at,
+                "acquired_at": claimed_at,
+            }))
+            .unwrap(),
+        );
+    }
+
+    /// test_recovery.mjs writeDecision (appends — the store is a ledger).
+    fn append_decision(root: &Path, id: &str, date: &str) {
+        let file = root.join(".bee").join("decisions.jsonl");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let line = serde_json::to_string(&json!({
+            "id": id, "type": "decide", "date": date, "decision": "x", "rationale": "y",
+            "alternatives": null, "scope": "repo", "source": "user", "confidence": null,
+        }))
+        .unwrap();
+        let mut prev = std::fs::read_to_string(&file).unwrap_or_default();
+        prev.push_str(&line);
+        prev.push('\n');
+        std::fs::write(file, prev).unwrap();
+    }
+
+    /// test_recovery.mjs writeCaptureStub.
+    fn append_capture_stub(root: &Path, id: &str, at: &str, lane: Option<&str>) {
+        let file = root.join(".bee").join("capture-queue.jsonl");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let line = serde_json::to_string(&json!({
+            "kind": "stub", "id": id, "at": at, "outcome": "x",
+            "dids": [], "area": null, "files": [],
+            "lane": lane.map(Value::from).unwrap_or(Value::Null),
+        }))
+        .unwrap();
+        let mut prev = std::fs::read_to_string(&file).unwrap_or_default();
+        prev.push_str(&line);
+        prev.push('\n');
+        std::fs::write(file, prev).unwrap();
+    }
+
+    /// test_recovery.mjs writeCappedCell.
+    fn write_capped_cell(root: &Path, id: &str, feature: &str, capped_at: &str) {
+        write(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &serde_json::to_string(
+                &json!({"id": id, "feature": feature, "status": "capped", "trace": {"capped_at": capped_at}}),
+            )
+            .unwrap(),
+        );
+    }
+
+    /// test_recovery.mjs hasCleanEndTrio, all five rows of its truth table.
+    #[test]
+    fn clean_end_trio_truth_table() {
+        let t0 = 1_785_313_046_986.0;
+        // trio + tolerated trailing bookkeeping (queue/ai-title/mode).
+        assert!(has_clean_end_trio(&clean_end_events(t0)));
+        // entirely absent (mid-turn tail).
+        assert!(!has_clean_end_trio(&dirty_end_events(t0)));
+        // stop_hook_summary + turn_duration alone is NOT the full trio.
+        let no_last_prompt: Vec<Value> = clean_end_events(t0)
+            .into_iter()
+            .filter(|e| {
+                !(str_eq(vget(e, "type"), "last-prompt")
+                    || str_eq(vget(e, "type"), "ai-title")
+                    || str_eq(vget(e, "type"), "mode"))
+            })
+            .collect();
+        assert!(!has_clean_end_trio(&no_last_prompt));
+        // a conversational event AFTER the trio reopens the turn.
+        let mut followed = clean_end_events(t0);
+        followed.push(json!({"type":"user","timestamp":to_iso(t0 + 5000.0),"message":{}}));
+        assert!(!has_clean_end_trio(&followed));
+        // empty tail.
+        assert!(!has_clean_end_trio(&[]));
+    }
+
+    /// test_recovery.mjs readTranscriptTail: the bounded window drops the
+    /// truncated first line, malformed lines are skipped, and a missing or
+    /// empty file is [] rather than a throw.
+    #[test]
+    fn transcript_tail_is_a_bounded_window_over_well_formed_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+
+        // missing / empty.
+        assert!(
+            read_transcript_tail(&dir.join("nope.jsonl"), DEFAULT_TAIL_MAX_BYTES)
+                .unwrap()
+                .is_empty()
+        );
+        std::fs::write(dir.join("empty.jsonl"), "").unwrap();
+        assert!(
+            read_transcript_tail(&dir.join("empty.jsonl"), DEFAULT_TAIL_MAX_BYTES)
+                .unwrap()
+                .is_empty()
+        );
+
+        // Window smaller than the padding forces a mid-line start.
+        let pad = serde_json::to_string(&json!({"type":"assistant","pad":"x".repeat(500)})).unwrap();
+        let mut lines: Vec<String> = (0..400).map(|_| pad.clone()).collect();
+        lines.push(
+            serde_json::to_string(&json!({"type":"user","marker":"TAIL_EVENT_1"})).unwrap(),
+        );
+        lines.push(
+            serde_json::to_string(&json!({"type":"assistant","marker":"TAIL_EVENT_2"})).unwrap(),
+        );
+        let big = dir.join("big.jsonl");
+        std::fs::write(&big, format!("{}\n", lines.join("\n"))).unwrap();
+        let tail = read_transcript_tail(&big, 600).unwrap();
+        let markers: Vec<String> = tail
+            .iter()
+            .filter_map(|e| vget(e, "marker").and_then(|m| m.as_str()).map(str::to_string))
+            .collect();
+        assert!(markers.contains(&"TAIL_EVENT_1".to_string()));
+        assert!(markers.contains(&"TAIL_EVENT_2".to_string()));
+        // The truncated leading fragment never survives as an entry, and the
+        // window really is bounded: 400×~520B of padding cannot fit in 600B.
+        assert!(tail.iter().all(|e| matches!(e, Value::Object(_))));
+        assert!(tail.len() < 10, "window kept {} events, expected a handful", tail.len());
+        // Control: the same file read with a window bigger than the file
+        // returns every line, proving the small window is what dropped them.
+        assert_eq!(read_transcript_tail(&big, 10_000_000).unwrap().len(), 402);
+
+        // Malformed lines inside the window are skipped, order preserved.
+        let malformed = dir.join("malformed.jsonl");
+        std::fs::write(
+            &malformed,
+            "{\"type\":\"user\",\"marker\":\"ok1\"}\n{not valid json\n{\"type\":\"assistant\",\"marker\":\"ok2\"}\n",
+        )
+        .unwrap();
+        let tail = read_transcript_tail(&malformed, DEFAULT_TAIL_MAX_BYTES).unwrap();
+        assert_eq!(tail.len(), 2);
+        assert_eq!(vget(&tail[0], "marker"), Some(&json!("ok1")));
+        assert_eq!(vget(&tail[1], "marker"), Some(&json!("ok2")));
+    }
+
+    /// test_recovery.mjs lastDurableSettlement — max across decisions,
+    /// capture stubs and cell traces, read through the same store readers
+    /// `detect_crash_candidates` uses.
+    #[test]
+    fn last_durable_settlement_maxes_across_stores_and_scopes_by_lane() {
+        let read_stores = |ctx: &Ctx| -> (Vec<Value>, Vec<Value>, Vec<Value>) {
+            (
+                active_decisions(ctx, None),
+                read_jsonl(&ctx.root.join(".bee").join("capture-queue.jsonl")),
+                list_cells(ctx, None, None).unwrap(),
+            )
+        };
+        let base = 1_785_313_046_986.0;
+
+        // (a) global: the newest of the three sources wins (capture stub).
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        append_decision(root, "d1", &to_iso(base));
+        append_capture_stub(root, "c1", &to_iso(base + 2000.0), None);
+        write_capped_cell(root, "feat-1", "feat", &to_iso(base + 1000.0));
+        let ctx = ctx_for(root);
+        let (d, c, cells) = read_stores(&ctx);
+        assert_eq!(
+            last_durable_settlement(None, &d, &c, &cells).map(to_iso),
+            Some(to_iso(base + 2000.0))
+        );
+
+        // (b) lane scoping filters stubs and cells; decisions stay GLOBAL.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        append_decision(root, "d1", &to_iso(base + 9000.0));
+        append_capture_stub(root, "c-mine", &to_iso(base + 1000.0), Some("mine"));
+        append_capture_stub(root, "c-other", &to_iso(base + 5000.0), Some("other"));
+        write_capped_cell(root, "mine-1", "mine", &to_iso(base + 2000.0));
+        write_capped_cell(root, "other-1", "other", &to_iso(base + 6000.0));
+        let ctx = ctx_for(root);
+        let (d, c, cells) = read_stores(&ctx);
+        let lane = json!("mine");
+        assert_eq!(
+            last_durable_settlement(Some(&lane), &d, &c, &cells).map(to_iso),
+            Some(to_iso(base + 9000.0)),
+            "the unscoped decision is still counted; the +5000/+6000 rows belong to lane \"other\""
+        );
+        // Control: unscoped, the "other" cell at +6000 is the max — so the
+        // scoped answer above really was a filter, not a coincidence.
+        assert_eq!(
+            last_durable_settlement(None, &d, &c, &cells).map(to_iso),
+            Some(to_iso(base + 9000.0))
+        );
+        let other = json!("other");
+        assert_eq!(
+            last_durable_settlement(Some(&other), &d, &c, &cells).map(to_iso),
+            Some(to_iso(base + 9000.0))
+        );
+
+        // (c) nothing settled anywhere -> None (caller falls back to
+        // started_at), lane-scoped or not.
+        let tmp = tempfile::tempdir().unwrap();
+        let ctx = ctx_for(tmp.path());
+        let (d, c, cells) = read_stores(&ctx);
+        assert_eq!(last_durable_settlement(None, &d, &c, &cells), None);
+        assert_eq!(last_durable_settlement(Some(&lane), &d, &c, &cells), None);
+    }
+
+    /// Seeds the canonical "this session crashed" fixture: one heartbeat-stale
+    /// session bound to a non-terminal lane, whose dirty (mid-turn) transcript
+    /// is reached through the session record's own stored `transcript_path`
+    /// (recovery.mjs/perf.mjs D5 Codex bridge). The encoded-layout root that
+    /// the Node oracle uses cannot be created on win32 — see
+    /// `crash_candidate_resolves_through_the_encoded_layout_root` — so the
+    /// stored-path arm carries the ladder here.
+    ///
+    /// Returns (projects_root — deliberately absent, transcript path).
+    fn seed_crash_fixture(root: &Path, sid: &str, now: f64) -> (String, PathBuf) {
+        let transcript = root.join("transcripts").join(format!("{sid}.jsonl"));
+        write_jsonl_file(&transcript, &dirty_end_events(now - 500_000.0));
+        write_session_record(
+            root,
+            sid,
+            &to_iso(now - 2_000_000.0),
+            &to_iso(now - 1_000_000.0), // > the 900s staleness law
+            Some("feat-lane"),
+            Some(&transcript.to_string_lossy()),
+        );
+        write_lane_record(root, "feat-lane", "swarming");
+        (
+            root.join("projects").to_string_lossy().into_owned(),
+            transcript,
+        )
+    }
+
+    /// test_recovery.mjs detectCrashCandidates exclusion ladder. Every rung is
+    /// one mutation away from the SAME fixture that does produce a candidate,
+    /// so no rung can pass vacuously.
+    #[test]
+    fn crash_candidate_exclusion_ladder_each_against_its_firing_control() {
+        let _guard = session_env_lock();
+        let now = now_ms();
+        let sid = "sess-ladder";
+
+        // ── the control: this fixture IS a crash candidate ────────────────
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (projects_root, transcript) = seed_crash_fixture(root, sid, now);
+        let out = detect_crash_candidates(&mut ctx_for(root), &projects_root).unwrap();
+        assert_eq!(out.len(), 1, "control must fire");
+        assert_eq!(vget(&out[0], "session_id"), Some(&json!(sid)));
+        assert_eq!(vget(&out[0], "lane"), Some(&json!("feat-lane")));
+        assert_eq!(vget(&out[0], "work_signal"), Some(&json!("lane")));
+        assert_eq!(
+            vget(&out[0], "transcript"),
+            Some(&json!(transcript.to_string_lossy())),
+            "resolved from the stored transcript_path, never a layout guess"
+        );
+        assert_eq!(
+            vget(&out[0], "runtime"),
+            Some(&Value::Null),
+            "no scanned root prefixes the stored path -> runtime unknown"
+        );
+        assert_eq!(
+            vget(&out[0], "since"),
+            Some(&json!(to_iso(now - 2_000_000.0))),
+            "no durable settlement anywhere -> since falls back to started_at"
+        );
+
+        // ── rung 1: the CURRENT live session is never its own candidate ───
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (projects_root, _) = seed_crash_fixture(root, sid, now);
+        let prev = std::env::var_os("BEE_SESSION_ID");
+        unsafe { std::env::set_var("BEE_SESSION_ID", sid) };
+        let out = detect_crash_candidates(&mut ctx_for(root), &projects_root);
+        unsafe {
+            match &prev {
+                Some(v) => std::env::set_var("BEE_SESSION_ID", v),
+                None => std::env::remove_var("BEE_SESSION_ID"),
+            }
+        }
+        assert!(out.unwrap().is_empty(), "the resolved current session is excluded");
+
+        // ── rung 2: a fresh heartbeat is not stale ────────────────────────
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (projects_root, transcript) = seed_crash_fixture(root, sid, now);
+        write_session_record(
+            root,
+            sid,
+            &to_iso(now - 2_000_000.0),
+            &to_iso(now - 60_000.0), // 60s old, inside the 900s law
+            Some("feat-lane"),
+            Some(&transcript.to_string_lossy()),
+        );
+        assert!(
+            detect_crash_candidates(&mut ctx_for(root), &projects_root)
+                .unwrap()
+                .is_empty()
+        );
+
+        // ── rung 3: a clean-end tail beats even a live-looking lane ───────
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (projects_root, transcript) = seed_crash_fixture(root, sid, now);
+        write_jsonl_file(&transcript, &clean_end_events(now - 500_000.0));
+        assert!(
+            detect_crash_candidates(&mut ctx_for(root), &projects_root)
+                .unwrap()
+                .is_empty()
+        );
+
+        // ── rung 4: no transcript at all -> nothing proves an abrupt stop ──
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (projects_root, transcript) = seed_crash_fixture(root, sid, now);
+        std::fs::remove_file(&transcript).unwrap();
+        assert!(
+            detect_crash_candidates(&mut ctx_for(root), &projects_root)
+                .unwrap()
+                .is_empty()
+        );
+
+        // ── rung 5: a TERMINAL-phase lane with no other signal ────────────
+        // Settlement is newer than the transcript's last activity, so the
+        // transcript_activity arm cannot fire either.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (projects_root, _) = seed_crash_fixture(root, sid, now);
+        write_capped_cell(root, "feat-lane-1", "feat-lane", &to_iso(now - 1000.0));
+        write_lane_record(root, "feat-lane", "compounding-complete");
+        assert!(
+            detect_crash_candidates(&mut ctx_for(root), &projects_root)
+                .unwrap()
+                .is_empty()
+        );
+        // Same store, same transcript, only the phase flipped back -> fires.
+        write_lane_record(root, "feat-lane", "swarming");
+        let out = detect_crash_candidates(&mut ctx_for(root), &projects_root).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(vget(&out[0], "work_signal"), Some(&json!("lane")));
+        assert_eq!(
+            vget(&out[0], "since"),
+            Some(&json!(to_iso(now - 1000.0))),
+            "the capped cell is now the durable settlement the window is measured from"
+        );
+        // "idle" is the other terminal phase.
+        write_lane_record(root, "feat-lane", "idle");
+        assert!(
+            detect_crash_candidates(&mut ctx_for(root), &projects_root)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    /// test_recovery.mjs detectCrashCandidates: the three positive work_signal
+    /// arms, each with the store state that produced it.
+    #[test]
+    fn crash_candidate_work_signal_arms() {
+        let _guard = session_env_lock();
+        let now = now_ms();
+        let stale = to_iso(now - 1_000_000.0);
+        let started = to_iso(now - 2_000_000.0);
+
+        // (a) claimed_cells — a laneless session holding an ACTIVE claim.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let sid = "sess-claims";
+        let transcript = root.join("transcripts").join("t.jsonl");
+        write_jsonl_file(&transcript, &dirty_end_events(now - 500_000.0));
+        write_session_record(
+            root,
+            sid,
+            &started,
+            &stale,
+            None,
+            Some(&transcript.to_string_lossy()),
+        );
+        write_claim_record(root, "some-cell-1", sid, &to_iso(now - 60_000.0));
+        let projects_root = root.join("projects").to_string_lossy().into_owned();
+        let out = detect_crash_candidates(&mut ctx_for(root), &projects_root).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(vget(&out[0], "work_signal"), Some(&json!("claimed_cells")));
+        assert_eq!(vget(&out[0], "lane"), Some(&Value::Null));
+        // Control: expire that same claim (ttl already elapsed) and the arm
+        // goes quiet — the transcript here is older than started_at is not,
+        // so transcript_activity still carries it; assert the SIGNAL changed.
+        write(
+            root,
+            ".bee/claims/some-cell-1.json",
+            &serde_json::to_string(&json!({
+                "cell": "some-cell-1", "session": sid, "ttl_seconds": 1,
+                "claimed_at": to_iso(now - 60_000.0), "acquired_at": to_iso(now - 60_000.0),
+            }))
+            .unwrap(),
+        );
+        let out = detect_crash_candidates(&mut ctx_for(root), &projects_root).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(
+            vget(&out[0], "work_signal"),
+            Some(&json!("transcript_activity")),
+            "an expired claim is not a work signal"
+        );
+
+        // (b) transcript_activity + the GLOBAL settlement window (D3): a
+        // laneless session whose transcript moved after the last decision.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let sid = "sess-laneless";
+        let transcript = root.join("transcripts").join("t.jsonl");
+        write_jsonl_file(&transcript, &dirty_end_events(now - 500_000.0));
+        write_session_record(
+            root,
+            sid,
+            &started,
+            &stale,
+            None,
+            Some(&transcript.to_string_lossy()),
+        );
+        append_decision(root, "d1", &to_iso(now - 1_500_000.0));
+        let projects_root = root.join("projects").to_string_lossy().into_owned();
+        let out = detect_crash_candidates(&mut ctx_for(root), &projects_root).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(vget(&out[0], "work_signal"), Some(&json!("transcript_activity")));
+        assert_eq!(
+            vget(&out[0], "since"),
+            Some(&json!(to_iso(now - 1_500_000.0))),
+            "the candidate carries the global settlement it was measured against"
+        );
+        // Control: move the settlement PAST the transcript's last activity and
+        // the arm stops firing — the comparison is real, not a constant.
+        append_decision(root, "d2", &to_iso(now - 1000.0));
+        assert!(
+            detect_crash_candidates(&mut ctx_for(root), &projects_root)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    /// test_recovery.mjs: "zero stale sessions never touches the
+    /// decisions/capture/cells stores". Node spies on fs; the Rust port is
+    /// probed with a TRIPWIRE instead — a corrupt cell file that makes
+    /// `list_cells` bail. Reaching the shared-store block is then loud.
+    #[test]
+    fn zero_stale_sessions_never_reads_the_settlement_stores() {
+        let _guard = session_env_lock();
+        let now = now_ms();
+        let sid = "sess-fresh-only";
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let transcript = root.join("transcripts").join("t.jsonl");
+        write_jsonl_file(&transcript, &dirty_end_events(now - 500_000.0));
+        append_decision(root, "d1", &to_iso(now - 1_500_000.0));
+        append_capture_stub(root, "c1", &to_iso(now - 1_500_000.0), None);
+        // The tripwire: any read of the cells store bails.
+        write(root, ".bee/cells/tripwire.json", "{not json");
+        let projects_root = root.join("projects").to_string_lossy().into_owned();
+
+        // Fresh heartbeat -> the fast path returns before the stores.
+        write_session_record(
+            root,
+            sid,
+            &to_iso(now - 2_000_000.0),
+            &to_iso(now - 60_000.0),
+            None,
+            Some(&transcript.to_string_lossy()),
+        );
+        assert!(
+            detect_crash_candidates(&mut ctx_for(root), &projects_root)
+                .unwrap()
+                .is_empty(),
+            "fresh heartbeat -> no candidates AND no store read"
+        );
+
+        // Control: the identical fixture with a STALE heartbeat reaches the
+        // shared-store block and trips the wire.
+        write_session_record(
+            root,
+            sid,
+            &to_iso(now - 2_000_000.0),
+            &to_iso(now - 1_000_000.0),
+            None,
+            Some(&transcript.to_string_lossy()),
+        );
+        assert!(
+            matches!(
+                detect_crash_candidates(&mut ctx_for(root), &projects_root),
+                Err(Ex::Bail)
+            ),
+            "a stale session MUST reach the cells store — otherwise the fast-path assertion above proves nothing"
+        );
+    }
+
+    /// test_recovery.mjs scanTranscriptRoots: the config arms, including the
+    /// exactly-one-warning contract for a bad configured root.
+    #[test]
+    fn scan_transcript_roots_config_arms() {
+        // (a) no config -> the Claude default root alone, and a MISSING
+        // default root never warns (the pre-existing D2 silent no-op).
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let projects_root = root.join("projects").to_string_lossy().into_owned();
+        let mut ctx = ctx_for(root);
+        let roots = scan_transcript_roots(&mut ctx, &projects_root).unwrap();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].runtime, "claude");
+        assert_eq!(roots[0].path, projects_root);
+        assert!(!roots[0].scanned);
+        assert_eq!(roots[0].reason.as_deref(), Some("ENOENT"));
+        assert!(ctx.stderr.is_empty(), "stderr was {:?}", ctx.stderr);
+
+        // (b) a healthy configured root is scanned, silently.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let projects_root = root.join("projects");
+        std::fs::create_dir_all(&projects_root).unwrap();
+        let extra = root.join("codex-sessions");
+        std::fs::create_dir_all(&extra).unwrap();
+        write(
+            root,
+            ".bee/config.json",
+            &serde_json::to_string(&json!({"recovery": {"transcript_roots": [
+                {"runtime": "codex", "path": extra.to_string_lossy()}
+            ]}}))
+            .unwrap(),
+        );
+        let mut ctx = ctx_for(root);
+        let roots =
+            scan_transcript_roots(&mut ctx, &projects_root.to_string_lossy()).unwrap();
+        assert_eq!(roots.len(), 2);
+        assert!(roots[0].scanned);
+        assert_eq!(roots[1].runtime, "codex");
+        assert_eq!(roots[1].path, extra.to_string_lossy());
+        assert!(roots[1].scanned);
+        assert!(roots[1].reason.is_none());
+        assert!(ctx.stderr.is_empty(), "stderr was {:?}", ctx.stderr);
+
+        // (c) a missing CONFIGURED root degrades to scanned:false + reason,
+        // with exactly one warning naming the offending path.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let projects_root = root.join("projects");
+        std::fs::create_dir_all(&projects_root).unwrap();
+        let missing = root.join("does-not-exist-codex-root");
+        write(
+            root,
+            ".bee/config.json",
+            &serde_json::to_string(&json!({"recovery": {"transcript_roots": [
+                {"runtime": "codex", "path": missing.to_string_lossy()}
+            ]}}))
+            .unwrap(),
+        );
+        let mut ctx = ctx_for(root);
+        let roots =
+            scan_transcript_roots(&mut ctx, &projects_root.to_string_lossy()).unwrap();
+        assert_eq!(roots.len(), 2);
+        assert!(!roots[1].scanned);
+        assert_eq!(roots[1].reason.as_deref(), Some("ENOENT"));
+        assert_eq!(ctx.stderr.len(), 1, "stderr was {:?}", ctx.stderr);
+        assert!(ctx.stderr[0].contains(&*missing.to_string_lossy()));
+        assert!(ctx.stderr[0].contains("recovery.transcript_roots"));
+
+        // (d) malformed entries (missing runtime/path, non-object junk) are
+        // ignored silently — only the Claude default survives.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let projects_root = root.join("projects").to_string_lossy().into_owned();
+        write(
+            root,
+            ".bee/config.json",
+            &serde_json::to_string(&json!({"recovery": {"transcript_roots": [
+                {"runtime": "codex"}, {"path": "/no-runtime"}, "just-a-string", 42, null
+            ]}}))
+            .unwrap(),
+        );
+        let mut ctx = ctx_for(root);
+        let roots = scan_transcript_roots(&mut ctx, &projects_root).unwrap();
+        assert_eq!(roots.len(), 1);
+        assert!(ctx.stderr.is_empty(), "stderr was {:?}", ctx.stderr);
+    }
+
+    /// test_recovery.mjs: a configured extra-runtime root that PREFIXES the
+    /// stored transcript path tags the candidate with that runtime.
+    #[test]
+    fn crash_candidate_is_tagged_with_the_runtime_whose_root_held_the_transcript() {
+        let _guard = session_env_lock();
+        let now = now_ms();
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let sid = "sess-codex-crash";
+
+        let codex_root = root.join("codex-sessions");
+        let transcript = codex_root.join("2026").join("07").join(format!("rollout-{sid}.jsonl"));
+        write_jsonl_file(&transcript, &dirty_end_events(now - 500_000.0));
+        write_session_record(
+            root,
+            sid,
+            &to_iso(now - 2_000_000.0),
+            &to_iso(now - 1_000_000.0),
+            Some("feat-codex"),
+            Some(&transcript.to_string_lossy()),
+        );
+        write_lane_record(root, "feat-codex", "swarming");
+        let projects_root = root.join("projects").to_string_lossy().into_owned();
+
+        // Without the config the transcript still resolves (stored path), but
+        // no scanned root prefixes it -> runtime null.
+        let out = detect_crash_candidates(&mut ctx_for(root), &projects_root).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(vget(&out[0], "runtime"), Some(&Value::Null));
+
+        // Declaring the root that actually holds it flips the tag.
+        write(
+            root,
+            ".bee/config.json",
+            &serde_json::to_string(&json!({"recovery": {"transcript_roots": [
+                {"runtime": "codex", "path": codex_root.to_string_lossy()}
+            ]}}))
+            .unwrap(),
+        );
+        let out = detect_crash_candidates(&mut ctx_for(root), &projects_root).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(vget(&out[0], "runtime"), Some(&json!("codex")));
+        assert_eq!(
+            vget(&out[0], "transcript"),
+            Some(&json!(transcript.to_string_lossy()))
+        );
+    }
+
+    /// Can this filesystem actually hold `encodeProjectDir`'s spelling as a
+    /// directory? On NTFS the drive colon turns the component into an
+    /// alternate data stream, and both `create_dir_all` and `Path::exists`
+    /// LIE about it (Ok / true) while the PARENT silently becomes a file — so
+    /// the only truthful probe enumerates the parent.
+    fn encoded_project_dir_capable(encoded: &str) -> bool {
+        let Ok(tmp) = tempfile::tempdir() else { return false };
+        let parent = tmp.path().join("projects");
+        if std::fs::create_dir_all(parent.join(encoded)).is_err() {
+            return false;
+        }
+        match std::fs::read_dir(&parent) {
+            Ok(entries) => entries
+                .filter_map(|e| e.ok())
+                .any(|e| e.file_name().to_string_lossy() == encoded),
+            Err(_) => false,
+        }
+    }
+
+    /// test_recovery.mjs: with NO stored transcript_path the resolver falls
+    /// back to perf.mjs layout math — `<projectsRoot>/<encodeProjectDir(root)>/
+    /// <sid>.jsonl` — and the candidate is tagged runtime "claude".
+    ///
+    /// `encodeProjectDir` maps only [\\/.] to '-', so an absolute Windows root
+    /// keeps its drive colon and the encoded directory is unnameable on NTFS
+    /// (plans/rust-port.md). Probe the capability with the exact name this
+    /// case needs; skip loudly if the filesystem refuses it.
+    #[test]
+    fn crash_candidate_resolves_through_the_encoded_layout_root() {
+        let _guard = session_env_lock();
+        let now = now_ms();
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let sid = "sess-layout";
+
+        let encoded_name = encode_project_dir(&root.to_string_lossy());
+        if !encoded_project_dir_capable(&encoded_name) {
+            eprintln!(
+                "SKIP (env: this filesystem cannot hold the directory name \
+                 encodeProjectDir() spells for an absolute root — it keeps the \
+                 drive colon, so \"{encoded_name}\" is silently taken as an NTFS \
+                 alternate data stream on its parent; needs a filesystem that \
+                 permits ':' in a path component) — \
+                 crash_candidate_resolves_through_the_encoded_layout_root"
+            );
+            return;
+        }
+        let projects_root = root.join("projects");
+        let encoded = projects_root.join(&encoded_name);
+        std::fs::create_dir_all(&encoded).unwrap();
+        write_jsonl_file(
+            &encoded.join(format!("{sid}.jsonl")),
+            &dirty_end_events(now - 500_000.0),
+        );
+        write_session_record(
+            root,
+            sid,
+            &to_iso(now - 2_000_000.0),
+            &to_iso(now - 1_000_000.0),
+            Some("feat-layout"),
+            None, // no stored path: force the layout math
+        );
+        write_lane_record(root, "feat-layout", "swarming");
+        let out =
+            detect_crash_candidates(&mut ctx_for(root), &projects_root.to_string_lossy())
+                .unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(vget(&out[0], "runtime"), Some(&json!("claude")));
+        assert_eq!(vget(&out[0], "work_signal"), Some(&json!("lane")));
+        assert!(
+            tpl(vget(&out[0], "transcript")).ends_with(&format!("{sid}.jsonl")),
+            "resolved through the encoded layout directory"
+        );
+    }
+
+    // ── contention summary (bee.mjs buildContentionSummary) ────────────────
+    //
+    // Ported from packages/bee/tests/test_contention_status.mjs.
+
+    /// The minimal repo `status` needs: onboarding marker + phase.
+    fn contention_root(root: &Path) {
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+    }
+
+    fn contention_record(
+        ts: &str,
+        lock_name: &str,
+        lock_wait_ms: i64,
+        holder: Option<&str>,
+        caller: Option<&str>,
+        result: &str,
+    ) -> String {
+        serde_json::to_string(&json!({
+            "ts": ts,
+            "lock_name": lock_name,
+            "lock_wait_ms": lock_wait_ms,
+            "holder_session": holder.map(Value::from).unwrap_or(Value::Null),
+            "caller_session": caller.map(Value::from).unwrap_or(Value::Null),
+            "workflow_id": null, "workspace_id": null, "resource": null,
+            "result": result,
+        }))
+        .unwrap()
+    }
+
+    /// test_contention_status.mjs (1)+(2): a seeded log produces the JSON
+    /// aggregates and a text line; an absent log omits the key entirely.
+    #[test]
+    fn contention_summary_aggregates_a_seeded_log_and_is_absent_without_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        contention_root(root);
+        write(
+            root,
+            ".bee/logs/contention.jsonl",
+            &format!(
+                "{}\n{}\n{}\n{}\n",
+                contention_record("2026-07-24T10:00:00.000Z", "sessions", 50, Some("sess-a"), Some("sess-b"), "busy"),
+                contention_record("2026-07-24T10:00:01.000Z", "sessions", 120, Some("sess-a"), Some("sess-c"), "busy"),
+                contention_record("2026-07-24T10:00:02.000Z", "worktree-admin", 900, Some("sess-d"), Some("sess-e"), "busy"),
+                // 'acquired' must never count as contention.
+                contention_record("2026-07-24T10:00:03.000Z", "sessions", 0, None, Some("sess-f"), "acquired"),
+            ),
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let c = status.get("contention").expect("contention key");
+        assert_eq!(vget(c, "busy_count"), Some(&json!(3)));
+        assert_eq!(
+            vget(c, "top_locks"),
+            Some(&json!([
+                {"lock_name": "sessions", "busy_count": 2},
+                {"lock_name": "worktree-admin", "busy_count": 1}
+            ]))
+        );
+        assert_eq!(vget(c, "worst_wait_ms"), Some(&json!(900)));
+        assert_eq!(vget(c, "worst_wait_lock"), Some(&json!("worktree-admin")));
+        let recent = vget(c, "recent_busy").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(recent.len(), 3, "the 'acquired' row is not in recent_busy");
+        assert_eq!(
+            recent[0],
+            json!({
+                "ts": "2026-07-24T10:00:02.000Z",
+                "lock_name": "worktree-admin",
+                "holder_session": "sess-d",
+                "caller_session": "sess-e",
+                "lock_wait_ms": 900
+            }),
+            "recent_busy is newest-first"
+        );
+
+        // The text renderer carries the data, not just the label.
+        let line = render_status_text(&status)
+            .lines()
+            .find(|l| l.starts_with("Contention:"))
+            .expect("a Contention line")
+            .to_string();
+        assert!(line.contains("3 LOCK_BUSY event(s)"), "{line}");
+        assert!(line.contains("sessions×2"), "{line}");
+        assert!(line.contains("worktree-admin×1"), "{line}");
+        assert!(line.contains("900ms"), "{line}");
+        assert!(line.contains("\"worktree-admin\""), "{line}");
+
+        // Absent log -> the key is omitted entirely, and status still builds.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        contention_root(root);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        assert!(!status.contains_key("contention"));
+        assert!(!render_status_text(&status).contains("Contention:"));
+    }
+
+    /// test_contention_status.mjs (3): malformed lines are skipped while
+    /// well-formed busy events still count.
+    #[test]
+    fn contention_summary_skips_malformed_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        contention_root(root);
+        write(
+            root,
+            ".bee/logs/contention.jsonl",
+            &format!(
+                "not json at all\n{}\n{{\"truncated\": tr\n",
+                contention_record("2026-07-24T10:05:00.000Z", "claims", 42, Some("sess-x"), Some("sess-y"), "busy")
+            ),
+        );
+        let ctx = ctx_for(root);
+        let c = build_contention_summary(&ctx).unwrap().expect("summary");
+        assert_eq!(c.get("busy_count"), Some(&json!(1)));
+        assert_eq!(
+            c.get("top_locks"),
+            Some(&json!([{"lock_name": "claims", "busy_count": 1}]))
+        );
+
+        // A log with only non-busy rows yields no summary at all.
+        write(
+            root,
+            ".bee/logs/contention.jsonl",
+            &format!(
+                "{}\n",
+                contention_record("2026-07-24T10:05:00.000Z", "claims", 0, None, Some("s"), "acquired")
+            ),
+        );
+        assert!(build_contention_summary(&ctx_for(root)).unwrap().is_none());
+    }
+
+    /// test_contention_status.mjs (4): the read is a bounded tail window.
+    /// Stronger than the Node oracle — a well-formed busy record is placed
+    /// BEFORE the window, so a full-file scan would report busy_count 2.
+    #[test]
+    fn contention_summary_reads_only_the_tail_window() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        contention_root(root);
+        let head = contention_record(
+            "2026-07-24T09:00:00.000Z",
+            "head-lock",
+            5000,
+            Some("sess-old"),
+            Some("sess-older"),
+            "busy",
+        );
+        let tail = contention_record(
+            "2026-07-24T10:10:00.000Z",
+            "tail-lock",
+            77,
+            Some("sess-tail-holder"),
+            Some("sess-tail-caller"),
+            "busy",
+        );
+        let garbage = format!("garbage-not-json-{}\n", "x".repeat(200));
+        let mut body = String::new();
+        body.push_str(&head);
+        body.push('\n');
+        while body.len() < (CONTENTION_TAIL_MAX_BYTES as usize) * 4 {
+            body.push_str(&garbage);
+        }
+        body.push_str(&tail);
+        body.push('\n');
+        write(root, ".bee/logs/contention.jsonl", &body);
+
+        let c = build_contention_summary(&ctx_for(root)).unwrap().expect("summary");
+        assert_eq!(
+            c.get("busy_count"),
+            Some(&json!(1)),
+            "the head record sits outside the {CONTENTION_TAIL_MAX_BYTES}-byte window"
+        );
+        assert_eq!(
+            c.get("top_locks"),
+            Some(&json!([{"lock_name": "tail-lock", "busy_count": 1}]))
+        );
+        assert_eq!(c.get("worst_wait_ms"), Some(&json!(77)));
+        assert_eq!(c.get("worst_wait_lock"), Some(&json!("tail-lock")));
+
+        // Control: the same two records with no padding between them — both
+        // are inside the window, so both count. This is what proves the
+        // assertion above measured the window and not a parse failure.
+        write(root, ".bee/logs/contention.jsonl", &format!("{head}\n{tail}\n"));
+        let c = build_contention_summary(&ctx_for(root)).unwrap().expect("summary");
+        assert_eq!(c.get("busy_count"), Some(&json!(2)));
+        assert_eq!(c.get("worst_wait_ms"), Some(&json!(5000)));
+        assert_eq!(c.get("worst_wait_lock"), Some(&json!("head-lock")));
+    }
+
+    // ── config validation (state.mjs validateModelsConfig / drift) ─────────
+    //
+    // Ported from scripts/tests/test_config_validate.mjs. The Rust `Problem`
+    // has no `flag` field (Node's rows carry one), so flag-level assertions
+    // read the rendered message instead.
+
+    fn codes(problems: &[Problem]) -> Vec<&'static str> {
+        problems.iter().map(|p| p.code).collect()
+    }
+
+    #[test]
+    fn valid_models_configs_produce_zero_problems() {
+        for config in [
+            json!({"models": {"claude": {"extraction": "haiku", "generation": "sonnet", "review": "opus"}}}),
+            json!({"models": {"claude": {"generation": {"model": "sonnet", "effort": "medium"}}}}),
+            json!({"models": {"claude": {"generation": {"kind": "cli", "command": "codex exec --json -m gpt-5.3-codex -s read-only", "promptVia": "stdin"}}}}),
+            json!({"models": {"claude": {"advisor": {"kind": "cli", "command": "codex exec -m gpt-5.6-sol -s read-only -", "promptVia": "stdin"}}}}),
+            json!({"models": {"codex": {"generation": {"kind": "native", "model": "gpt-5.5", "effort": "high", "fork_turns": "none", "agent_type": "worker"}}}}),
+            json!({"models": {"codex": {"advisor": {
+                "primary": {"kind": "native", "model": "gpt-5.5", "effort": "high"},
+                "fallback": {"kind": "cli", "command": "codex exec -m gpt-5.5 -s read-only -", "promptVia": "stdin"},
+                "fallback_policy": "explicit-only"
+            }}}}),
+            json!({}),
+            json!({"hooks": {}}),
+        ] {
+            let problems = validate_models_config(Some(&config));
+            assert!(
+                problems.is_empty(),
+                "{config} produced {:?}",
+                problems.iter().map(|p| (p.code, &p.message)).collect::<Vec<_>>()
+            );
+        }
+        // No config file at all is normal, never a problem row.
+        assert!(validate_models_config(None).is_empty());
+    }
+
+    #[test]
+    fn cli_tier_problem_codes_fire_for_each_defect() {
+        // cli-malformed: three ways to be cli-shaped and invalid.
+        for bad in [
+            json!({"command": "codex exec"}),           // missing kind:"cli"
+            json!({"kind": "cli", "command": ""}),      // empty command
+            json!({"kind": "cli"}),                     // no command at all
+        ] {
+            let problems =
+                validate_models_config(Some(&json!({"models": {"claude": {"generation": bad}}})));
+            assert!(codes(&problems).contains(&"cli-malformed"), "{:?}", codes(&problems));
+        }
+
+        // cli-prompt-transport-missing: a trailing "-" is a shell convention,
+        // never a declared transport. Must NOT be read as cli-malformed.
+        let problems = validate_models_config(Some(&json!({"models": {"claude": {
+            "generation": {"kind": "cli", "command": "codex exec -m gpt-5 -s read-only -"}
+        }}})));
+        assert_eq!(codes(&problems), vec!["cli-prompt-transport-missing"]);
+
+        // cli-unsafe-flag: every alias in the blocklist, individually.
+        for flag in UNSAFE_CLI_FLAGS {
+            let problems = validate_models_config(Some(&json!({"models": {"claude": {
+                "generation": {"kind": "cli", "command": format!("some-cli exec {flag} --other-flag"), "promptVia": "stdin"}
+            }}})));
+            let unsafe_rows: Vec<&Problem> =
+                problems.iter().filter(|p| p.code == "cli-unsafe-flag").collect();
+            assert_eq!(unsafe_rows.len(), 1, "flag {flag}: {:?}", codes(&problems));
+            assert!(unsafe_rows[0].message.contains(flag), "row must name {flag}");
+            assert_eq!(unsafe_rows[0].runtime, Some("claude"));
+            assert_eq!(unsafe_rows[0].slot, Some("generation"));
+        }
+        // Two aliases in one command -> one row each.
+        let problems = validate_models_config(Some(&json!({"models": {"codex": {
+            "review": {"kind": "cli", "command": format!("some-cli exec {} {}", UNSAFE_CLI_FLAGS[0], UNSAFE_CLI_FLAGS[1]), "promptVia": "stdin"}
+        }}})));
+        let unsafe_rows: Vec<&Problem> =
+            problems.iter().filter(|p| p.code == "cli-unsafe-flag").collect();
+        assert_eq!(unsafe_rows.len(), 2);
+        assert!(unsafe_rows.iter().any(|p| p.message.contains(UNSAFE_CLI_FLAGS[0])));
+        assert!(unsafe_rows.iter().any(|p| p.message.contains(UNSAFE_CLI_FLAGS[1])));
+
+        // Advice-class (advisor/review) write-granting tokens.
+        for token in ADVICE_CLASS_WRITABLE_TOKENS {
+            let problems = validate_models_config(Some(&json!({"models": {"claude": {
+                "advisor": {"kind": "cli", "command": format!("codex exec -m gpt-5 {token} -"), "promptVia": "stdin"}
+            }}})));
+            assert!(
+                problems
+                    .iter()
+                    .any(|p| p.code == "cli-advice-slot-writable" && p.message.contains(token)),
+                "token {token}: {:?}",
+                codes(&problems)
+            );
+            // ...and the SAME token on a non-advice slot is clean. The
+            // discriminator: "-s workspace-write" is on neither blocklist for
+            // generation, so this is slot scoping, not a second code firing.
+            let problems = validate_models_config(Some(&json!({"models": {"claude": {
+                "generation": {"kind": "cli", "command": format!("codex exec -m gpt-5 {token} -"), "promptVia": "stdin"}
+            }}})));
+            assert!(!codes(&problems).contains(&"cli-advice-slot-writable"));
+        }
+        // danger-full-access on an advice slot trips BOTH blocklists.
+        let problems = validate_models_config(Some(&json!({"models": {"claude": {
+            "advisor": {"kind": "cli", "command": "codex exec -m gpt-5 -s danger-full-access -", "promptVia": "stdin"}
+        }}})));
+        assert!(codes(&problems).contains(&"cli-unsafe-flag"));
+        assert!(codes(&problems).contains(&"cli-advice-slot-writable"));
+    }
+
+    #[test]
+    fn native_and_composite_tier_problem_codes() {
+        let p = |v: Value| validate_models_config(Some(&json!({"models": {"codex": {"advisor": v}}})));
+        let g = |v: Value| validate_models_config(Some(&json!({"models": {"codex": {"generation": v}}})));
+
+        // A native override with no model is native-model-missing, NOT
+        // cli-malformed (the native branch runs before looksLikeCli).
+        let problems = g(json!({"kind": "native"}));
+        assert!(codes(&problems).contains(&"native-model-missing"));
+        assert!(!codes(&problems).contains(&"cli-malformed"));
+        // fork_turns other than "none".
+        assert!(
+            codes(&g(json!({"kind": "native", "model": "gpt-5.5", "fork_turns": "full"})))
+                .contains(&"native-fork-turns-unknown")
+        );
+        // Composite with no fallback_policy (silent native->cli is forbidden).
+        assert!(
+            codes(&p(json!({
+                "primary": {"kind": "native", "model": "gpt-5.5"},
+                "fallback": {"kind": "cli", "command": "codex exec -m gpt-5.5 -s read-only -"}
+            })))
+            .contains(&"composite-fallback-policy-missing")
+        );
+        // Composite whose primary is not a native override.
+        assert!(
+            codes(&p(json!({
+                "primary": {"model": "gpt-5.5"},
+                "fallback": {"kind": "cli", "command": "x"},
+                "fallback_policy": "explicit-only"
+            })))
+            .contains(&"composite-primary-malformed")
+        );
+        // Composite whose cli fallback is malformed.
+        assert!(
+            codes(&p(json!({
+                "primary": {"kind": "native", "model": "gpt-5.5"},
+                "fallback": {"kind": "cli"},
+                "fallback_policy": "explicit-only"
+            })))
+            .contains(&"composite-fallback-malformed")
+        );
+    }
+
+    #[test]
+    fn malformed_config_input_reports_rows_instead_of_throwing() {
+        for bad in [
+            Value::Null,
+            json!("a string"),
+            json!(42),
+            json!(true),
+            json!(["array", "config"]),
+        ] {
+            assert!(
+                codes(&validate_models_config(Some(&bad))).contains(&"config-malformed"),
+                "{bad}"
+            );
+        }
+        // `models` of the wrong type, and a runtime of the wrong type.
+        assert!(
+            codes(&validate_models_config(Some(&json!({"models": "not-an-object"}))))
+                .contains(&"config-malformed")
+        );
+        assert!(
+            codes(&validate_models_config(Some(
+                &json!({"models": {"claude": "not-an-object"}})
+            )))
+            .contains(&"runtime-malformed")
+        );
+        // The discriminator between "no file yet" and "file is null".
+        assert!(validate_models_config(None).is_empty());
+    }
+
+    fn write_agent_file(root: &Path, agent: &str, frontmatter: &str) {
+        write(
+            root,
+            &format!(".claude/agents/{agent}.md"),
+            &format!("---\n{frontmatter}\n---\n\nBody text, not parsed by the drift check.\n"),
+        );
+    }
+
+    /// scripts/tests/test_config_validate.mjs validateAgentFilesDrift.
+    #[test]
+    fn agent_file_drift_findings() {
+        // (a) a rendered file whose model no longer matches the tier.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: opus");
+        let cfg = json!({"models": {"claude": {"generation": "sonnet"}}});
+        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
+        assert_eq!(codes(&problems), vec!["agent-file-drift"]);
+        assert_eq!(problems[0].agent, Some("bee-gather"));
+        assert_eq!(problems[0].slot, Some("generation"));
+        assert!(problems[0].message.contains("model: \"opus\""));
+        assert!(problems[0].message.contains("is \"sonnet\""));
+
+        // (b) matching files across all three agents -> clean.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet");
+        write_agent_file(root, "bee-extract", "name: bee-extract\nmodel: haiku");
+        write_agent_file(root, "bee-review", "name: bee-review\nmodel: opus");
+        let cfg =
+            json!({"models": {"claude": {"generation": "sonnet", "extraction": "haiku", "review": "opus"}}});
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
+
+        // (c) no agent files at all -> absent is clean.
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = json!({"models": {"claude": {"generation": "sonnet"}}});
+        assert!(validate_agent_files_drift(&ctx_for(tmp.path()), Some(&cfg)).is_empty());
+
+        // (d) a stale file under a now cli-shaped slot is flagged, never
+        // silently accepted.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet");
+        let cfg = json!({"models": {"claude": {"generation": {"kind": "cli", "command": "codex exec -m gpt-5.5 -s read-only -"}}}});
+        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
+        assert_eq!(codes(&problems), vec!["agent-file-drift"]);
+        assert!(problems[0].message.contains("cli-shaped or unconfigured"));
+
+        // (e) unparseable frontmatter is its own code, never a throw.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".claude/agents/bee-extract.md", "not even frontmatter, just plain text\n");
+        let cfg = json!({"models": {"claude": {"extraction": "haiku"}}});
+        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
+        assert_eq!(codes(&problems), vec!["agent-file-malformed"]);
+        assert_eq!(problems[0].agent, Some("bee-extract"));
+
+        // (f) an explicitly null review slot falls back to generation
+        // (decision 0021), mirroring resolveTier.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-review", "name: bee-review\nmodel: sonnet");
+        let cfg = json!({"models": {"claude": {"generation": "sonnet", "review": null}}});
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
+        // Control: the same null-review config with a file declaring the
+        // seeded review default drifts, proving the fallback really moved the
+        // expectation to generation.
+        write_agent_file(root, "bee-review", "name: bee-review\nmodel: opus");
+        assert_eq!(
+            codes(&validate_agent_files_drift(&ctx_for(root), Some(&cfg))),
+            vec!["agent-file-drift"]
+        );
+
+        // (g) no config on disk at all -> resolves against the seeded
+        // defaults (generation=sonnet), no throw.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet");
+        assert!(validate_agent_files_drift(&ctx_for(root), None).is_empty());
+    }
+
+    /// The point of the cell (scripts/tests/test_config_validate.mjs header):
+    /// a malformed cli tier is LOUD. `normalizeTierValue` drops it and the
+    /// seeded default silently survives — the only thing that tells anyone is
+    /// the staleness warning `status` emits.
+    #[test]
+    fn a_malformed_cli_tier_is_loud_not_silently_reverted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        // kind:"cli" missing -> normalizeTierValue returns undefined.
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"commands":{"test":"t"},"models":{"claude":{"generation":{"command":"codex exec"}}}}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        // The silent revert really happened...
+        assert_eq!(
+            status.get("models").and_then(|m| vget(m, "claude")).and_then(|c| vget(c, "generation")),
+            Some(&json!("sonnet")),
+            "the seeded default survived — this is exactly what the warning exists for"
+        );
+        // ...and it was announced.
+        let warnings: Vec<String> = status
+            .get("staleness_warnings")
+            .and_then(|v| v.as_array())
+            .unwrap()
+            .iter()
+            .map(|w| tpl(Some(w)))
+            .collect();
+        let hit = warnings
+            .iter()
+            .find(|w| w.starts_with("config validate [cli-malformed]"))
+            .unwrap_or_else(|| panic!("no cli-malformed warning in {warnings:?}"));
+        assert!(hit.contains(" models.claude.generation:"), "{hit}");
+        assert!(hit.contains("silently reverts to the seeded default"), "{hit}");
+
+        // Control: the same tier, now well-formed, is adopted AND silent.
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"commands":{"test":"t"},"models":{"claude":{"generation":{"kind":"cli","command":"codex exec","promptVia":"stdin"}}}}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        assert_eq!(
+            status.get("models").and_then(|m| vget(m, "claude")).and_then(|c| vget(c, "generation")),
+            Some(&json!({"kind": "cli", "command": "codex exec"}))
+        );
+        let warnings = status.get("staleness_warnings").and_then(|v| v.as_array()).unwrap();
+        assert!(
+            !warnings.iter().any(|w| tpl(Some(w)).starts_with("config validate")),
+            "{warnings:?}"
+        );
+    }
+
+    // ── ship_visibility (state.mjs shipVisibility) ─────────────────────────
+    //
+    // Ported from scripts/tests/test_ship_visibility.mjs (the status --json
+    // half; the buildSessionPreamble half lives in inject.mjs, not here).
+
+    #[test]
+    fn ship_visibility_surfaces_draft_pr_and_warns_once_on_an_unrecognized_value() {
+        let build = |config: Option<&str>| -> (JMap, Vec<String>) {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+            write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+            if let Some(c) = config {
+                write(root, ".bee/config.json", c);
+            }
+            let mut ctx = ctx_for(root);
+            let status = build_status(&mut ctx, false).unwrap();
+            (status, ctx.stderr.clone())
+        };
+
+        // draft-pr survives; nothing is written to stderr about it.
+        let (status, stderr) = build(Some(r#"{"ship_visibility":"draft-pr"}"#));
+        assert_eq!(status.get("ship_visibility"), Some(&json!("draft-pr")));
+        assert!(!stderr.iter().any(|l| l.contains("ship_visibility")), "{stderr:?}");
+
+        // An unrecognized value normalizes to "off" AND says so, once, by name.
+        let (status, stderr) = build(Some(r#"{"ship_visibility":"launch-the-rocket"}"#));
+        assert_eq!(status.get("ship_visibility"), Some(&json!("off")));
+        let warns: Vec<&String> =
+            stderr.iter().filter(|l| l.contains("ship_visibility")).collect();
+        assert_eq!(warns.len(), 1, "{stderr:?}");
+        assert_eq!(
+            warns[0],
+            "config: unrecognized ship_visibility \"launch-the-rocket\" in .bee/config.json — normalized to \"off\". Allowed: off, draft-pr."
+        );
+
+        // Explicit "off" and an absent key are the same silent shape.
+        for config in [Some(r#"{"ship_visibility":"off"}"#), Some("{}"), None] {
+            let (status, stderr) = build(config);
+            assert_eq!(status.get("ship_visibility"), Some(&json!("off")), "{config:?}");
+            assert!(
+                !stderr.iter().any(|l| l.contains("ship_visibility")),
+                "{config:?} -> {stderr:?}"
+            );
+        }
+    }
 }
