@@ -136,6 +136,26 @@ Two campaign rules that emerged from practice and now govern every port:
   Sequencing: R6a runs AFTER the CLI surface settles, because every spelling it writes must
   match the final binary invocation.
 
+#### The two filed win32 defects — one fixed, one still live
+
+- **Inode precision — FIXED in the port.** `entryIdentity` keyed a map on
+  `` `${st.dev}:${st.ino}` `` built from JS Numbers. Measured on this NTFS volume over the
+  beehive tree: **29 of 3544 entries (0.8%) have their file index silently rounded**, and two
+  indices actually present on the volume collide once rounded (…919 and …920 both become …920).
+  A collision makes `detectAliasCollisions` block two unrelated skills as a case-insensitive
+  alias that does not exist — or hide a real one. The Rust port keeps the volume serial as
+  `u64` and the file index as `u128`. No output byte changes: the value was only ever a map key.
+- **`encodeProjectDir` drive colon — STILL LIVE, fix at cutover.** It is not in onboard; it
+  lives in `packages/bee/lib/perf.mjs` and is faithfully replicated in `verbs/status_full.rs`
+  and `hooks/session_close.rs` (C2 demanded that). Confirmed live: Node encodes
+  `D:-projects-…`, and `mkdir` of that transcript directory fails EINVAL — the layout it names
+  cannot exist on NTFS — while the correct `D--projects-…` (what Claude Code itself writes)
+  succeeds. So every transcript-dependent path (recovery scan, perf rollup) is unreachable on
+  win32 for BOTH runtimes. Fixing it means diverging from Node, so it belongs at R6 when there
+  is no Node left to match: change all three sites together, and unpin the tests that currently
+  assert the broken spelling — including `test_bee_cli.mjs`'s `RECOVERY_LAYOUT_UNREPRESENTABLE`
+  skip, which exists solely because of this bug.
+
 #### Coverage debts R6 must close (a delegated path is fine until Node is deleted)
 
 Tracked here because "the verb is ported" is not the same as "every repo shape runs native".
