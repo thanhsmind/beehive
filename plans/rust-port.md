@@ -165,9 +165,33 @@ before these are closed does not "lose coverage" — it loses behavior:
   `LEASE_MISSING`, `LEASE_FENCE_STALE`, `CLAIM_FENCE_STALE`, `adoptClaim`, multi-resource batch
   acquire, and homoglyph folding of an authority subject. Each is named at its site in the Rust
   tree rather than faked green.
-- **Two behaviors are pinned as deliberate delegations, so they have no native owner once
+- **Two behaviors were pinned as deliberate delegations, so they had no native owner once
   `bee.mjs` is gone**: write-guard's CLI-shape check (d), and `listWorkflows`' skip tolerance.
-  These are the sharpest blockers — today the delegation IS the implementation.
+  These were the sharpest blockers — the delegation WAS the implementation. **Both are now
+  native (2026-08-01):**
+  - **Check (d)** lives in `crates/bee/src/hooks/cli_shape.rs`: the argv tokenizer feeds
+    `splitCliSegments`, longest-prefix command resolution runs against the embedded
+    `registry::REGISTRY_PAYLOAD` (the bytes the freshness test already pins), and
+    `validate-args.mjs`'s `isValidParameterSchema`/`typeMatches`/`isPresent`/`validate` are
+    ported whole, including the ce-1 batched-`problems` rendering. Never bails: every arm is
+    deterministic. Proven by a 34-row byte-diff (stdout/stderr/exit) against the `.mjs` hook
+    with `BEE_HOOK_NO_DELEGATE=1`, all native, zero mismatches.
+    **One deliberate widening:** the guard now also recognizes the R6a BINARY spelling
+    (`.bee/bin/bee <verb>`, `bee <verb>` in command position, `bee.exe`), which no `.mjs`
+    regex could see — so a malformed binary-spelled call is denied with the same bytes the
+    `.mjs` spelling always produced. The divergence runs in one direction only (Node-allow →
+    Rust-deny); a 14-row harness proves no denial ever becomes an allow, and
+    `cli_shape.rs::documented_invocations` fails the build if any SHIPPED command spelling in
+    `skills/`, `expertise/`, `docs/` or the root instruction files would be refused.
+  - **`listWorkflows` skip tolerance** is reproduced in `verbs/workflow_store.rs`: the three
+    ordinary skips (missing record, not-a-JSON-object, id mismatch) warn with Node's exact
+    `listWorkflows: skipping unreadable workflow "<id>" — <reason>` bytes, and the repeat
+    count needs no modelling because the Rust call graph calls `list_workflows` from the same
+    places `bee.mjs` does. Measured node-vs-rust warn counts over corrupt fixtures: 1/1, 3/3,
+    5/5, 15/15, 25/25. **Residue — two arms only:** a reason embedding a V8 `JSON.parse`
+    message, and the non-ENOENT read failure whose reason embeds a libuv errno string. Both
+    are decided in a PRE-PASS, so a delegating run still emits zero bytes first (verified:
+    a delegating run's stderr carries only the tripwire line).
 - **Two laws go vacuously green at deletion.** `test_instruction_size_law` and
   `test_scan_set_hygiene` scan `scripts/**` and `packages/bee/**`; once those trees are gone the
   laws pass because their subject vanished, not because the law holds. Re-point or retire them

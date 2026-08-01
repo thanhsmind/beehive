@@ -966,17 +966,79 @@ struct CheckReport {
     ok: bool,
 }
 
-/// normalizeSubject, restricted to ASCII claims (NFKC/diacritic/confusable
-/// folds are identity there). None => non-ASCII claim, delegate.
-fn normalize_subject_ascii(claim: &str) -> Option<String> {
-    if !claim.is_ascii() {
-        return None;
+// ─── G14 layer 1: the subject SKELETON (knowledge.mjs foldEncoding /
+//     normalizeSubject) ────────────────────────────────────────────────────
+//
+// Encoding must never be able to buy a fork: a trailing period and a Cyrillic
+// 'е' homoglyph both used to buy a NEW concept sitting beside the owner, so
+// `bee.authoritative_for` identity is a skeleton, not a string:
+//
+//   NFKC            -> fullwidth, ligature and math-alphanumeric forms
+//   lowercase       -> case is not identity
+//   NFD + strip \p{M} -> diacritics are not identity
+//   confusable fold -> cross-script look-alikes (NFKC does NOT do this: a
+//                      Cyrillic 'е' U+0435 and a Latin 'e' stay distinct
+//                      codepoints forever, which is exactly the defeat)
+//   non-letter/digit runs -> a single space, ends trimmed
+//
+// This replaces the ASCII-only subset the port shipped with (a non-ASCII
+// claim used to DELEGATE the whole `knowledge check` rather than guess the
+// fold), so the anti-fork gate now answers natively for every claim.
+
+/// knowledge.mjs CONFUSABLE_FOLD — the UTS #39 skeleton fold, bounded to the
+/// look-alikes that collide with ASCII. Transcribed key-for-key from the .mjs
+/// map (Cyrillic then Greek); order is irrelevant, membership is not.
+const CONFUSABLE_FOLD: [(char, char); 42] = [
+    // Cyrillic -> Latin
+    ('а', 'a'), ('в', 'b'), ('е', 'e'), ('ё', 'e'), ('з', '3'), ('к', 'k'),
+    ('м', 'm'), ('н', 'h'), ('о', 'o'), ('р', 'p'), ('с', 'c'), ('т', 't'),
+    ('у', 'y'), ('х', 'x'), ('ѕ', 's'), ('і', 'i'), ('ї', 'i'), ('ј', 'j'),
+    ('ԁ', 'd'), ('ԛ', 'q'), ('ԝ', 'w'), ('ѵ', 'v'), ('ӏ', 'l'), ('ѡ', 'w'),
+    ('ғ', 'f'),
+    // Greek -> Latin
+    ('α', 'a'), ('β', 'b'), ('γ', 'y'), ('ε', 'e'), ('ζ', 'z'), ('η', 'n'),
+    ('ι', 'i'), ('κ', 'k'), ('ν', 'v'), ('ο', 'o'), ('ρ', 'p'), ('τ', 't'),
+    ('υ', 'u'), ('χ', 'x'), ('ϲ', 'c'), ('ϳ', 'j'), ('ϱ', 'p'),
+];
+
+fn confusable_fold(c: char) -> char {
+    match CONFUSABLE_FOLD.iter().find(|(from, _)| *from == c) {
+        Some((_, to)) => *to,
+        None => c,
     }
-    let lower = claim.to_ascii_lowercase();
+}
+
+/// knowledge.mjs foldEncoding — `NFKC -> toLowerCase -> NFD -> strip \p{M} ->
+/// confusable map`. Keeps punctuation (normalizeSubject strips it).
+pub(crate) fn fold_encoding(text: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    let bare: String = text
+        .nfkc()
+        .collect::<String>()
+        // JS String.prototype.toLowerCase is the full Unicode Default Case
+        // Conversion (locale-independent), which is exactly str::to_lowercase.
+        .to_lowercase()
+        .nfd()
+        .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
+        .collect();
+    bare.chars().map(confusable_fold).collect()
+}
+
+/// knowledge.mjs normalizeSubject — the skeleton used for `authoritative_for`
+/// ownership. `''` for a subject carrying no letters or digits at all (null,
+/// '', '   ', '...'), which is the signal layer 2 refuses on.
+///
+/// `\p{L}|\p{N}` is spelled here as `is_alphabetic() || is_numeric()`. The two
+/// sets differ only by Other_Alphabetic, which is made up of marks and of
+/// enclosed/squared letter forms — the marks are already gone (NFD + \p{M}
+/// strip above) and the enclosed forms are already folded to plain letters by
+/// NFKC, so on the input this function actually sees the two spellings agree.
+fn normalize_subject(subject: &str) -> String {
+    let folded = fold_encoding(subject);
     let mut out = String::new();
     let mut in_run = false;
-    for c in lower.chars() {
-        if c.is_ascii_alphanumeric() {
+    for c in folded.chars() {
+        if c.is_alphabetic() || c.is_numeric() {
             out.push(c);
             in_run = false;
         } else if !in_run {
@@ -984,7 +1046,8 @@ fn normalize_subject_ascii(claim: &str) -> Option<String> {
             in_run = true;
         }
     }
-    Some(out.trim_matches(' ').to_string())
+    // `.trim()` after the replacement: only ASCII spaces can remain at the ends.
+    out.trim_matches(' ').to_string()
 }
 
 fn typeof_word(v: &Value) -> &'static str {
@@ -1137,7 +1200,10 @@ fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
                     ),
                 ));
             } else if let Value::String(claim) = claim_v {
-                let key = normalize_subject_ascii(claim)?; // non-ASCII → delegate
+                // The HARDENED skeleton, not the raw string: two claims that
+                // differ only by punctuation, case or ENCODING are one
+                // subject with two authorities.
+                let key = normalize_subject(claim);
                 match by_authority.iter_mut().find(|(k, _)| *k == key) {
                     Some((_, holders)) => holders.push((concept.path.clone(), claim.clone())),
                     None => by_authority.push((key, vec![(concept.path.clone(), claim.clone())])),
@@ -3058,11 +3124,59 @@ mod tests {
         assert!(files[1].1.starts_with("<!--\n"));
     }
 
+    /// knowledge.mjs foldEncoding + normalizeSubject, unit-level. Every row is
+    /// an ENCODING difference that must NOT be able to buy a second authority
+    /// for one subject, paired with the genuine-difference control.
     #[test]
-    fn normalize_subject_folds_ascii_encoding_only() {
-        assert_eq!(normalize_subject_ascii("Billing: Refunds!").unwrap(), "billing refunds");
-        assert_eq!(normalize_subject_ascii("...").unwrap(), "");
-        assert!(normalize_subject_ascii("caf\u{e9}").is_none()); // non-ASCII → delegate
+    fn normalize_subject_is_a_skeleton_not_a_string() {
+        // Case, punctuation and whitespace are not identity.
+        assert_eq!(normalize_subject("Billing: Refunds!"), "billing refunds");
+        assert_eq!(normalize_subject("  BILLING---refunds.  "), "billing refunds");
+        // No letters or digits at all -> '' (the signal layer 2 refuses on).
+        for empty in ["", "   ", "...", "-- //"] {
+            assert_eq!(normalize_subject(empty), "", "{empty:?}");
+        }
+
+        // NFKC: fullwidth, ligature and math-alphanumeric forms all fold.
+        assert_eq!(normalize_subject("\u{ff47}\u{ff41}\u{ff54}\u{ff45}\u{ff53}"), "gates");
+        assert_eq!(normalize_subject("\u{fb01}le"), "file"); // ﬁ ligature
+        assert_eq!(normalize_subject("\u{1d420}ates"), "gates"); // 𝐠 math bold
+        assert_eq!(normalize_subject("\u{2460}"), "1"); // ① circled digit
+        // NFD + \p{M} strip: diacritics are not identity, precomposed or not.
+        assert_eq!(normalize_subject("caf\u{e9}"), "cafe");
+        assert_eq!(normalize_subject("cafe\u{301}"), "cafe");
+        assert_eq!(normalize_subject("N\u{c3}\u{a9}"), normalize_subject("N\u{c3}\u{a9}"));
+        // Confusable fold: NFKC alone leaves these distinct forever.
+        assert_eq!(normalize_subject("g\u{430}tes"), "gates"); // Cyrillic 'а'
+        assert_eq!(normalize_subject("gat\u{435}s"), "gates"); // Cyrillic 'е'
+        assert_eq!(normalize_subject("g\u{3b1}tes"), "gates"); // Greek 'α'
+        assert_eq!(normalize_subject("\u{41a}ey"), "key"); // uppercase Cyrillic 'К'
+        assert_eq!(normalize_subject("\u{451}poch"), "epoch"); // Cyrillic 'ё'
+        // The fold is bounded: a letter with no ASCII look-alike survives, so
+        // two genuinely different scripts are still two subjects.
+        assert_ne!(normalize_subject("gates"), normalize_subject("шлюзы"));
+        // …and a word-order paraphrase is a DIFFERENT subject, never folded
+        // (the residual layer-1 cannot close, by design).
+        assert_ne!(
+            normalize_subject("refunds and reversals"),
+            normalize_subject("reversals and refunds")
+        );
+    }
+
+    /// The confusable table is transcribed by hand from the .mjs map, so it is
+    /// pinned as a set: exactly the 25 Cyrillic + 17 Greek entries, no more.
+    #[test]
+    fn the_confusable_table_is_exactly_the_mjs_map() {
+        assert_eq!(CONFUSABLE_FOLD.len(), 42);
+        let mut seen: Vec<char> = CONFUSABLE_FOLD.iter().map(|(f, _)| *f).collect();
+        let before = seen.len();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), before, "a duplicated key would silently shadow");
+        for (from, to) in CONFUSABLE_FOLD {
+            assert!(to.is_ascii(), "{from:?} folds to a non-ASCII target {to:?}");
+            assert_eq!(from.to_lowercase().next(), Some(from), "{from:?} must be a lowercase key");
+        }
     }
 
     #[test]
@@ -3658,26 +3772,51 @@ mod tests {
         }
     }
 
-    /// Node's hardened grouping also folds NFKC + confusables (l.352: Cyrillic
-    /// 'а', fullwidth). The Rust port models only the ASCII-identity slice of
-    /// normalizeSubject, so a non-ASCII claim REFUSES to answer and the whole
-    /// command delegates rather than guessing the fold.
+    /// Node's hardened grouping folds NFKC + confusables (l.352: Cyrillic 'а',
+    /// fullwidth). This port used to model only the ASCII-identity slice and
+    /// DELEGATE a non-ASCII claim; it now answers natively, so a homoglyph can
+    /// no longer buy a second authority for an already-owned subject.
     #[test]
-    fn a_non_ascii_authority_claim_delegates_instead_of_guessing_the_fold() {
-        for second in ["g\u{430}tes", "\u{ff47}\u{ff41}\u{ff54}\u{ff45}\u{ff53}", "caf\u{e9}"] {
+    fn a_homoglyph_authority_claim_is_caught_natively_as_a_duplicate() {
+        // Every non-ASCII spelling that normalizeSubject folds onto "gates".
+        for second in [
+            "g\u{430}tes",                                   // Cyrillic 'а'
+            "\u{ff47}\u{ff41}\u{ff54}\u{ff45}\u{ff53}",      // fullwidth
+            "\u{1d420}ates",                                 // math bold 𝐠
+            "G\u{430}TES.",                                  // homoglyph + case + punctuation
+            "g\u{3b1}t\u{435}s",                             // Greek 'α' + Cyrillic 'е'
+        ] {
             let (_tmp, dir) = bundle();
             put(&dir, "areas/x/one.md", Cx::new("x-one").ty("bee.area").bee("authoritative_for", json!("gates")));
             put(&dir, "areas/x/two.md", Cx::new("x-two").ty("bee.area").bee("authoritative_for", json!(second)));
-            assert!(
-                check_bundle(&dir, false).is_none(),
-                "{second:?}: a non-ASCII claim must delegate, never be answered by the ASCII subset"
+            let report = check_bundle(&dir, false)
+                .unwrap_or_else(|| panic!("{second:?}: a non-ASCII claim must be ANSWERED, not delegated"));
+            let dup = of_code(&report.profile_errors, "duplicate_authoritative_for");
+            assert_eq!(dup.len(), 1, "{second:?}: {:?}", report.profile_errors);
+            assert_eq!(dup[0]["file"], "areas/x/one.md");
+            let m = msg(dup[0]);
+            assert!(m.contains("areas/x/one.md") && m.contains("areas/x/two.md"), "{second:?}: {m}");
+            assert!(m.contains(&format!("\"{second}\"")), "{second:?}: the RAW claim is quoted: {m}");
+            assert!(!report.ok, "{second:?}: a forked subject must fail the chain");
+        }
+
+        // A diacritic is likewise not identity — and the control beside it: a
+        // genuinely different subject in another script is NOT a duplicate.
+        for (a, b, is_dup) in [
+            ("caf\u{e9}", "cafe", true),
+            ("caf\u{e9}", "cafe\u{301}", true),
+            ("gates", "\u{448}\u{43b}\u{44e}\u{437}\u{44b}", false),
+        ] {
+            let (_tmp, dir) = bundle();
+            put(&dir, "areas/x/one.md", Cx::new("x-one").ty("bee.area").bee("authoritative_for", json!(a)));
+            put(&dir, "areas/x/two.md", Cx::new("x-two").ty("bee.area").bee("authoritative_for", json!(b)));
+            let report = check_bundle(&dir, false).expect("answered natively");
+            assert_eq!(
+                of_code(&report.profile_errors, "duplicate_authoritative_for").len(),
+                usize::from(is_dup),
+                "{a:?} vs {b:?}"
             );
         }
-        // Control: the ASCII twin of the same fixture DOES answer natively.
-        let (_tmp, dir) = bundle();
-        put(&dir, "areas/x/one.md", Cx::new("x-one").ty("bee.area").bee("authoritative_for", json!("gates")));
-        put(&dir, "areas/x/two.md", Cx::new("x-two").ty("bee.area").bee("authoritative_for", json!("gates.")));
-        assert!(check_bundle(&dir, false).is_some(), "an ASCII pair must not delegate");
     }
 
     /// Node: 'profile ERROR: a MALFORMED bee.authoritative_for is a

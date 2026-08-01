@@ -13,3 +13,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 dunce = "1"
+# knowledge.mjs's G14 layer-1 subject skeleton needs a real NFKC/NFD
+# implementation (foldEncoding) — the one contract in this port that cannot be
+# re-derived from std: Rust has no Unicode normalization in core/std.
+unicode-normalization = "0.1"

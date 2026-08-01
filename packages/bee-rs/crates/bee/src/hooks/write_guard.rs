@@ -20,11 +20,18 @@
 // validate-args.mjs + command-registry.mjs is embedded at compile time and
 // byte-compared at runtime before any native decision is made.
 //
+// CHECK (d) IS NATIVE (R6 blocker closed): the CLI-shape schema guard lives in
+// hooks/cli_shape.rs — registry resolution + validate-args semantics + the
+// exact refusal bytes, resolved against the embedded REGISTRY_PAYLOAD that the
+// byte gate above proves matches the host's own command-registry.mjs. It also
+// recognizes the R6a BINARY spelling (`.bee/bin/bee <verb>` / `bee <verb>`)
+// that no `.mjs` regex could see; that is the one deliberate divergence from
+// the .mjs and it only ever ADDS a denial for a call Node left unguarded —
+// see cli_shape.rs's header.
+//
 // DELEGATED BRANCHES (each justified at its site):
 //   - any readJson()-level corrupt JSON on the native path (Node warns to
 //     stderr with the V8 parse message — unreplicable bytes);
-//   - CLI-shape check (d) when a bee.mjs/bee_*.mjs-shaped token is present
-//     and no denial was already computed (registry+validate-args semantics);
 //   - node -e/--eval/-p inline-eval commands (internals-reach regex);
 //   - companion-mount resolution when .bee/companion-session.json exists and
 //     the target already failed containment;
@@ -111,7 +118,7 @@ fn js_is_ws(c: char) -> bool {
         | '\u{205f}' | '\u{3000}' | '\u{feff}')
 }
 
-fn js_trim(s: &str) -> &str {
+pub(crate) fn js_trim(s: &str) -> &str {
     s.trim_matches(js_is_ws)
 }
 
@@ -1575,7 +1582,7 @@ fn check_read(rel: &str) -> ReadVerdict {
 // ─── tokenizer (provenance: hooks/tokenize-command.mjs == guards.mjs
 // tokenize — byte-identical algorithm, hand-synced there, single port here) ──
 
-fn tokenize(command: &str) -> Vec<String> {
+pub(crate) fn tokenize(command: &str) -> Vec<String> {
     let chars: Vec<char> = command.chars().collect();
     let mut tokens: Vec<String> = Vec::new();
     let mut current = String::new();
@@ -3790,26 +3797,6 @@ fn check_ask_user_question(tool_input: &Map<String, Value>) -> R<AskResult> {
 
 // ─── CLI-shape / internals-reach delegation detectors ──────────────────────
 
-/// True when a token's basename matches LEGACY_HELPER_RE (^bee_[a-z]+\.mjs$/i)
-/// or DISPATCHER_RE (^bee\.mjs$/i) — checkCliShape would then resolve against
-/// the command registry, which is not ported → the caller delegates.
-fn has_bee_cli_token(command: &str) -> bool {
-    for token in tokenize(command) {
-        let base = token.replace('\\', "/");
-        let base = base.rsplit('/').next().unwrap_or("");
-        let lower = base.to_lowercase();
-        if lower == "bee.mjs" {
-            return true;
-        }
-        if let Some(mid) = lower.strip_prefix("bee_").and_then(|r| r.strip_suffix(".mjs")) {
-            if !mid.is_empty() && mid.chars().all(|c| c.is_ascii_alphabetic()) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 /// True when a shell segment invokes node/nodejs with an inline-eval script
 /// (-e/--eval/-p or --eval=…) — checkBinLibImportBashCommand's regex scan is
 /// not ported → the caller delegates.
@@ -4217,17 +4204,22 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
         }
     }
 
-    // Check (d) — CLI-shape validation. The vendored validate-args.mjs /
-    // command-registry.mjs import side effects are proven silent by the byte
-    // gate; checkCliShape is null unless a bee-cli-shaped token resolves, and
-    // it can only ASSIGN a denial when none exists yet.
+    // Check (d) — CLI-shape validation, NATIVE (hooks/cli_shape.rs). The
+    // vendored validate-args.mjs / command-registry.mjs import side effects are
+    // proven silent by the byte gate, and that same gate proves the host's
+    // registry bytes match the embedded REGISTRY_PAYLOAD this resolves against.
+    // checkCliShape is null unless a bee-CLI-shaped token resolves, and it can
+    // only ASSIGN a denial when none exists yet (`cliDenial && !denial`) — so
+    // short-circuiting on `denial.is_none()` is Node's own semantics.
     if tool_name == "Bash" {
         let command = match tool_input.get("command") {
             Some(Value::String(s)) => s.clone(),
             _ => String::new(),
         };
-        if !command.is_empty() && denial.is_none() && has_bee_cli_token(&command) {
-            return Err(Nd); // registry/validate semantics not ported
+        if !command.is_empty() && denial.is_none() {
+            if let Some(reason) = crate::hooks::cli_shape::check_cli_shape(&command) {
+                denial = Some(reason);
+            }
         }
     }
 
@@ -4484,14 +4476,88 @@ mod tests {
         assert_eq!(e2.code, 0);
     }
 
-    // ── CLI-shaped bash commands delegate (check (d) not ported) ───────────
+    // ── check (d): CLI-shape validation, WIRED through the whole hook ──────
+    // The pure decision table lives in hooks/cli_shape.rs; these rows prove
+    // the wiring — that a denial reaches exit 2 on stderr, that a well-formed
+    // call still exits 0, and that check (d) never overwrites an earlier deny.
 
     #[test]
-    fn bee_cli_shapes_delegate() {
+    fn row5_5b_plain_bee_cli_invocations_still_pass() {
         let fx = build_fixture("swarming", true);
-        expect_delegate(bash("node .bee/bin/bee_state.mjs set --phase swarming"), &fx.root);
+        let a = expect_done(bash("node .bee/bin/bee_state.mjs set --phase swarming"), &fx.root);
+        assert_eq!(a.code, 0, "stderr={}", a.stderr);
+        let b = expect_done(
+            bash("node .bee/bin/bee_backlog.mjs add --type bug --title \"x\" --severity P2"),
+            &fx.root,
+        );
+        assert_eq!(b.code, 0, "stderr={}", b.stderr);
+    }
+
+    #[test]
+    fn rows5c_5d_a_malformed_bee_cli_call_is_denied_at_exit_two() {
+        let fx = build_fixture("swarming", true);
+        for command in [
+            "node .bee/bin/bee_cells.mjs cap --outcome \"done\"",
+            "node .bee/bin/bee.mjs cells cap --outcome \"done\"",
+            // R6a spellings — Node saw neither of these.
+            ".bee/bin/bee cells cap --outcome \"done\"",
+            "bee cells cap --outcome \"done\"",
+        ] {
+            let e = expect_done(bash(command), &fx.root);
+            assert_eq!(e.code, 2, "{command}");
+            assert!(e.stdout.is_empty(), "{command}: {}", e.stdout);
+            assert!(e.stderr.contains("bee CLI-shape guard"), "{command}: {}", e.stderr);
+            assert!(e.stderr.contains("cells.cap"), "{command}: {}", e.stderr);
+            assert!(e.stderr.contains("field: id"), "{command}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn a_well_formed_bee_cli_call_reaches_the_ordinary_verdict() {
+        let fx = build_fixture("swarming", true);
+        for command in [
+            "node .bee/bin/bee.mjs cells cap --id demo-1 --outcome done",
+            ".bee/bin/bee cells cap --id demo-1 --outcome done",
+            "bee status --json",
+        ] {
+            let e = expect_done(bash(command), &fx.root);
+            assert_eq!(e.code, 0, "{command}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn check_d_never_overwrites_a_denial_an_earlier_check_computed() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "src/reserved.js", "other-agent", "c1", None, "reservation");
+        let mut payload = bash("rm src/reserved.js && bee cells cap --outcome done");
+        payload["tool_input"]["agent_name"] = json!("me");
+        payload["agent_name"] = json!("me");
+        let e = expect_done(payload, &fx.root);
+        assert_eq!(e.code, 2, "stderr={}", e.stderr);
+        assert!(
+            e.stderr.contains("bee reservation conflict"),
+            "the ORIGINAL deny must survive: {}",
+            e.stderr
+        );
+        assert!(
+            !e.stderr.contains("CLI-shape guard"),
+            "check (d) must never assign once a denial exists: {}",
+            e.stderr
+        );
+    }
+
+    #[test]
+    fn a_tampered_registry_still_delegates_before_check_d_can_answer() {
+        // The byte gate is what licenses resolving against the EMBEDDED
+        // registry: a host whose command-registry.mjs differs by one byte
+        // never reaches a native check-(d) verdict.
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("bin").join("lib").join("command-registry.mjs"),
+            "export const COMMAND_REGISTRY = [];\n",
+        )
+        .unwrap();
         expect_delegate(bash("node .bee/bin/bee_cells.mjs cap --outcome \"done\""), &fx.root);
-        expect_delegate(bash("node .bee/bin/bee.mjs cells cap --outcome \"done\""), &fx.root);
     }
 
     #[test]

@@ -10,6 +10,7 @@
 
 pub mod adapter;
 pub mod chain_nudge;
+pub mod cli_shape;
 pub mod codex_subagent_audit;
 pub mod model_guard;
 pub mod prompt_context;

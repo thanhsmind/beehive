@@ -61,8 +61,9 @@
 //   * a workflow record whose key is ABSENT projects as an absent key (JS
 //     `{...current, feature: undefined}` is dropped by JSON.stringify), where
 //     the hook writes `null`. Unreachable for any bee-created record.
-//   * list_workflows returns Exotic (delegate) whenever ANY entry would be
-//     SKIPPED, instead of reproducing the skip warn — see its own comment.
+//   * list_workflows REPRODUCES the skip warn natively (the hook's copy still
+//     delegates on any skip). Only the two arms whose reason embeds a V8 parse
+//     message or a libuv errno string route back to Node — see its own comment.
 //
 // Locking: identical lock-name strings to Node so both runtimes interoperate
 // mid-campaign — `workflow:<id>` (workflow-store.mjs withWorkflowLock),
@@ -80,8 +81,8 @@ use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock::{self, LockGuard, MAX_ATTEMPTS};
 use crate::verbs::reservations::{
-    date_parse_val, jget, js_disp, js_disp_opt, js_strict_eq, js_trim, now_iso, truthy, Err2, Ex,
-    Exotic,
+    date_parse_val, jget, js_disp, js_disp_opt, js_strict_eq, js_trim, now_iso, pseudo_uuid_v4,
+    truthy, Err2, Ex, Exotic,
 };
 use crate::verbs::state_group::{
     adopt_claim, coerce_legacy_phase, default_gates, handoff_path, parse_json_v8, read_claim,
@@ -269,24 +270,46 @@ fn read_workflow_record(root: &Path, id: &str) -> Result<Map<String, Value>, WfS
     Ok(merged)
 }
 
+/// The `listWorkflows: skipping unreadable workflow "<id>" — <reason>` line
+/// Node's `console.warn` puts on stderr for every skipped record. Kept as a
+/// function so the tests assert the same bytes the runtime emits.
+pub(crate) fn skip_warn_line(id: &str, reason: &str) -> String {
+    format!("listWorkflows: skipping unreadable workflow \"{id}\" — {reason}")
+}
+
 /// workflow-store.mjs listWorkflows — fail-open enumeration in directory-read
-/// order.
+/// order. A corrupt or unreadable entry is SKIPPED (never guessed at, never
+/// thrown for the whole list) and reported with a `console.warn` per skip.
 ///
-/// DELIBERATE NARROWING (documented divergence): Node warns
-/// `listWorkflows: skipping unreadable workflow "<id>" — <reason>` on stderr
-/// for every skipped entry, and bee.mjs calls listWorkflows two to four times
-/// per mutation verb (withMutationLock, the write-through, the rebuild), so
-/// byte-parity would require reproducing both the reason text AND the exact
-/// number of repeats at every call site. Instead, ANY entry that would be
-/// skipped — for ANY reason — routes the whole command back to Node before a
-/// single byte of output. A healthy repo (every workflow directory carries a
-/// readable, id-matching state.json) is fully native; a repo with a broken
-/// record keeps Node's exact warn stream.
+/// SKIP TOLERANCE IS NATIVE (R6 blocker closed). The reason bytes come
+/// straight from `read_workflow_record`'s own refusals, so the three ordinary
+/// skips — missing record, not-a-JSON-object, id mismatch — warn here exactly
+/// as Node does. The repeat count needs no modelling: this function is called
+/// from the same places `listWorkflows` is (the mutation-lock scope read, the
+/// write-through, and each rebuild*), so a verb that calls it 2–4 times emits
+/// the stream 2–4 times by construction. `state_lanes_over_a_broken_workflow_
+/// record_warns_once_per_call` pins that.
+///
+/// WHAT STILL DELEGATES — two arms, both because the reason embeds bytes this
+/// port cannot author (rust-port.md campaign rule 2, "refusals delegate unless
+/// their bytes are deterministic"):
+///   1. `readWorkflow: "<file>" exists but is not valid JSON (${err.message})`
+///      — a V8 parse message.
+///   2. `readWorkflow: could not read "<file>" (${err.code})` — a libuv errno
+///      string for a non-ENOENT read failure (EISDIR/EACCES/EPERM). Node's
+///      mapping of a Win32 error to that code is not reproducible from
+///      `std::io::Error` (a directory read is ACCESS_DENIED on Win32 and
+///      libuv rewrites it to EISDIR only in some paths).
+/// Both are decided in a PRE-PASS: the whole directory is classified before a
+/// single warn is written, so a delegating run still emits zero bytes first
+/// (`Outcome`-equivalent for verbs: `try_native` must produce no output before
+/// returning None).
 pub(crate) fn list_workflows(root: &Path) -> Ex<Vec<Map<String, Value>>> {
     let Ok(rd) = std::fs::read_dir(workflows_dir(root)) else {
         return Ok(Vec::new());
     };
     let mut out = Vec::new();
+    let mut warns: Vec<String> = Vec::new();
     for entry in rd.flatten() {
         if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
             continue; // `if (!entry.isDirectory()) continue` — silent, no warn
@@ -296,8 +319,13 @@ pub(crate) fn list_workflows(root: &Path) -> Ex<Vec<Map<String, Value>>> {
         };
         match read_workflow_record(root, &id) {
             Ok(record) => out.push(record),
-            Err(_) => return Err(Exotic), // see the doc comment above
+            Err(WfSkip::Reason(reason)) => warns.push(skip_warn_line(&id, &reason)),
+            Err(WfSkip::Delegate) => return Err(Exotic), // see the doc comment
         }
+    }
+    // Emitted only once the whole scan is known warn-reproducible.
+    for line in warns {
+        eprintln!("{line}");
     }
     Ok(out)
 }
@@ -406,6 +434,148 @@ pub(crate) fn update_workflow_assuming_lock_with(
     write_json_atomic(&workflow_state_path(root, &workflow_id), &Value::Object(next.clone()))
         .map_err(|_| Err2::Ex)?;
     Ok(next)
+}
+
+// ─── record creation (workflow-store.mjs createWorkflow) ───────────────────
+
+/// workflow-store.mjs generateWorkflowId — `wf-${randomBytes(4).hex}`, with
+/// the one defensive regeneration the .mjs carries: a generated id that
+/// happens to equal the caller's own feature slug is rerolled, so D1's
+/// "workflow_id is never the feature slug" never has to fire on the default
+/// generator. Randomness is derived the same way reservations.rs's
+/// pseudo_uuid_v4 and lock.rs's fresh_token derive theirs (pid + counter +
+/// clock nanos through sha256) rather than adding an RNG dependency — the
+/// store needs uniqueness, and the value is never compared to Node's.
+#[allow(dead_code)] // see create_workflow's own note on wiring
+fn generate_workflow_id(feature: Option<&str>) -> String {
+    let mut id = format!("wf-{}", &pseudo_uuid_v4().replace('-', "")[..8]);
+    while matches!(feature, Some(f) if id == f) {
+        id = format!("wf-{}", &pseudo_uuid_v4().replace('-', "")[..8]);
+    }
+    id
+}
+
+/// The caller-supplied half of createWorkflow's options object. `None` means
+/// the JS parameter was `undefined`, i.e. its default applies.
+#[allow(dead_code)]
+pub(crate) struct NewWorkflow<'a> {
+    pub feature: Option<&'a str>,
+    pub phase: Option<Value>,
+    pub mode: Option<Value>,
+    pub plan_rev: Option<Value>,
+    pub gates: Option<Value>,
+    pub summary: Option<Value>,
+    pub next_action: Option<Value>,
+    pub status: Option<&'a str>,
+    pub id: Option<&'a str>,
+}
+
+#[allow(dead_code)]
+impl<'a> NewWorkflow<'a> {
+    pub(crate) fn for_feature(feature: &'a str) -> Self {
+        Self {
+            feature: Some(feature),
+            phase: None,
+            mode: None,
+            plan_rev: None,
+            gates: None,
+            summary: None,
+            next_action: None,
+            status: None,
+            id: None,
+        }
+    }
+}
+
+/// createWorkflow(root, {...}) — create a new workflow record under its own
+/// `workflow:<id>` lock, so two callers racing the same explicit id can never
+/// both "win" a create. Never overwrites an existing record.
+///
+/// Every refusal here has deterministic bytes (no V8 text), so all four are
+/// reproduced natively: WORKFLOW_INVALID_ID (from requireWorkflowId or the D1
+/// id-equals-feature invariant), WORKFLOW_INVALID_FEATURE,
+/// WORKFLOW_INVALID_STATUS, and WORKFLOW_ALREADY_EXISTS — the last of which is
+/// reached AFTER the lock is taken and therefore MUST be native (campaign rule
+/// 2), or a delegation would double the contention telemetry.
+///
+/// NOT YET WIRED TO A VERB, deliberately: Node's only production callers are
+/// `state.mjs`'s `ensureWorkflowRecordForFeature` / `startFeature` /
+/// `seedLegacyWorkflows`, and `state start-feature` is still a documented
+/// delegation (its `applyWritePolicy` + workspace-store half is unported).
+/// What this closes is the DELETION blocker: record creation exists natively
+/// now, byte-pinned against the live Node oracle, so `bee.mjs` can go without
+/// losing it. `verbs/state_group.rs` — the file that will call it — is owned
+/// by another in-flight cell, so the call site is left to that cell.
+#[allow(dead_code)]
+pub(crate) fn create_workflow(
+    root: &Path,
+    opts: NewWorkflow<'_>,
+) -> Result<Map<String, Value>, Err2> {
+    // `id = generateWorkflowId(feature)` is a DEFAULT PARAMETER: it is
+    // evaluated before requireFeature runs, which is why an invalid feature
+    // still reports the feature refusal, not an id one.
+    let generated;
+    let raw_id = match opts.id {
+        Some(id) => id,
+        None => {
+            generated = generate_workflow_id(opts.feature.map(js_trim).filter(|f| !f.is_empty()));
+            &generated
+        }
+    };
+    let workflow_id = require_workflow_id(raw_id)?;
+    let feature_name = match opts.feature.map(js_trim) {
+        Some(f) if !f.is_empty() => f.to_string(),
+        _ => return Err(Err2::Msg("createWorkflow: feature is required.".to_string())),
+    };
+    if workflow_id == feature_name {
+        return Err(Err2::Msg(format!(
+            "createWorkflow: workflow id \"{workflow_id}\" must not equal the feature slug \"{feature_name}\" — ids are \
+generated identifiers, never feature slugs (CONTEXT.md D1: a feature can reopen or run competing \
+attempts, so identity must never collide with the human-chosen name). FIX: pass an explicit id distinct \
+from the feature, or omit id to let one be generated."
+        )));
+    }
+    let status = opts.status.unwrap_or("active");
+    if !STATUS_VALUES.contains(&status) {
+        return Err(Err2::Msg(format!(
+            "createWorkflow: status must be one of active/paused/closed (got {}).",
+            jsjson::stringify(&Value::String(status.to_string()))
+        )));
+    }
+
+    let guard = acquire_workflow_lock(root, &workflow_id)?;
+    let out = (|| -> Result<Map<String, Value>, Err2> {
+        let file = workflow_state_path(root, &workflow_id);
+        if file.exists() {
+            return Err(Err2::Msg(format!(
+                "createWorkflow: a workflow record already exists at \"{}\" — createWorkflow never overwrites an \
+existing record. FIX: use updateWorkflow, or generate a fresh id.",
+                file.display()
+            )));
+        }
+        // Key ORDER is `{...baseWorkflowDefaults(), id, feature, phase, mode,
+        // plan_rev, gates, summary, next_action, status, created_at}` — a JS
+        // re-assignment keeps the key's ORIGINAL position, so the six defaults
+        // stay first and only id/feature/gates/created_at are appended. This
+        // is C1 surface: readWorkflowRecord must read back what create wrote.
+        let mut record = base_workflow_defaults();
+        record.insert("id".into(), Value::String(workflow_id.clone()));
+        record.insert("feature".into(), Value::String(feature_name));
+        record.insert("phase".into(), opts.phase.unwrap_or_else(|| json!("idle")));
+        record.insert("mode".into(), opts.mode.unwrap_or(Value::Null));
+        record.insert("plan_rev".into(), opts.plan_rev.unwrap_or_else(|| json!(0)));
+        // `mergeGates(defaultGates(), gates)` — merge_gates already seeds the
+        // full default map, so a None base is the same value, not a shortcut.
+        record.insert("gates".into(), merge_gates(None, opts.gates.as_ref()));
+        record.insert("summary".into(), opts.summary.unwrap_or_else(|| json!("")));
+        record.insert("next_action".into(), opts.next_action.unwrap_or_else(|| json!("")));
+        record.insert("status".into(), Value::String(status.to_string()));
+        record.insert("created_at".into(), Value::String(now_iso()));
+        write_json_atomic(&file, &Value::Object(record.clone())).map_err(|_| Err2::Ex)?;
+        Ok(record)
+    })();
+    drop(guard);
+    out
 }
 
 /// workflow-store.mjs updateWorkflowAssumingLock with a plain object patch.
@@ -1450,18 +1620,118 @@ mod tests {
         }
     }
 
+    // ── listWorkflows skip tolerance (R6 blocker, now native) ─────────────
+
+    /// The three ordinary skips, each with the reason bytes `read_workflow_
+    /// record` hands `console.warn`. Named here so the warn-stream tests and
+    /// the reason-shape tests cannot drift apart.
+    fn seed_the_three_ordinary_skips(root: &Path) -> Vec<String> {
+        let dir = workflows_dir(root);
+        // (1) directory present, no state.json → WORKFLOW_MISSING
+        std::fs::create_dir_all(dir.join("wf-missing")).unwrap();
+        // (2) present but not a JSON object
+        std::fs::create_dir_all(dir.join("wf-array")).unwrap();
+        std::fs::write(dir.join("wf-array").join("state.json"), "[1,2]").unwrap();
+        // (3) present, an object, but its id names someone else
+        write_workflow(root, "wf-wrongid", json!({"id":"somebody-else","feature":"f"}));
+        vec![
+            format!(
+                "readWorkflow: no workflow record at \"{}\". FIX: createWorkflow first, or check the id.",
+                workflow_state_path(root, "wf-missing").display()
+            ),
+            format!(
+                "readWorkflow: \"{}\" exists but is not a JSON object (found an array).",
+                workflow_state_path(root, "wf-array").display()
+            ),
+            format!(
+                "readWorkflow: \"{}\" exists but its id field (\"somebody-else\") does not match the \
+requested workflow \"wf-wrongid\" — never trusted. FIX: inspect/restore the file (e.g. \"git \
+checkout -- {}\").",
+                workflow_state_path(root, "wf-wrongid").display(),
+                format!(".bee{0}runtime{0}workflows{0}wf-wrongid{0}state.json", MAIN_SEPARATOR)
+            ),
+        ]
+    }
+
     #[test]
-    fn list_workflows_delegates_when_any_entry_would_be_skipped() {
+    fn list_workflows_skips_the_three_ordinary_shapes_and_keeps_the_readable_ones() {
         let tmp = tmp_root();
         write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1"}));
         assert_eq!(ok(list_workflows(tmp.path())).len(), 1);
-        // A stray, unreadable entry routes the whole command back to Node.
-        std::fs::create_dir_all(workflows_dir(tmp.path()).join("junk")).unwrap();
-        assert!(list_workflows(tmp.path()).is_err());
-        // A non-directory entry is skipped SILENTLY by Node — still native.
-        std::fs::remove_dir_all(workflows_dir(tmp.path()).join("junk")).unwrap();
+
+        let reasons = seed_the_three_ordinary_skips(tmp.path());
+        // Every skip is tolerated: the listing still returns the good record.
+        let listed = ok(list_workflows(tmp.path()));
+        assert_eq!(listed.len(), 1, "the readable record survives every skip");
+        assert_eq!(wf_id(&listed[0]), "wf-1");
+
+        // ...and each skip reason is the exact WorkflowStoreError message.
+        for (id, reason) in ["wf-missing", "wf-array", "wf-wrongid"].iter().zip(&reasons) {
+            match read_workflow_record(tmp.path(), id) {
+                Err(WfSkip::Reason(m)) => assert_eq!(&m, reason, "reason bytes for {id}"),
+                _ => panic!("expected an ordinary (native) skip for {id}"),
+            }
+        }
+
+        // A non-directory entry is skipped SILENTLY by Node — no warn at all.
         std::fs::write(workflows_dir(tmp.path()).join("README"), "x").unwrap();
         assert_eq!(ok(list_workflows(tmp.path())).len(), 1);
+    }
+
+    #[test]
+    fn the_warn_line_is_console_warns_own_shape() {
+        let tmp = tmp_root();
+        let reasons = seed_the_three_ordinary_skips(tmp.path());
+        assert_eq!(
+            skip_warn_line("wf-missing", &reasons[0]),
+            format!(
+                "listWorkflows: skipping unreadable workflow \"wf-missing\" — readWorkflow: no \
+workflow record at \"{}\". FIX: createWorkflow first, or check the id.",
+                workflow_state_path(tmp.path(), "wf-missing").display()
+            )
+        );
+    }
+
+    #[test]
+    fn only_the_two_v8_worded_arms_still_delegate() {
+        let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1"}));
+        // (1) unparseable JSON — the reason embeds V8's own parse message.
+        let dir = workflows_dir(tmp.path()).join("wf-badjson");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("state.json"), "{not json").unwrap();
+        assert!(
+            matches!(read_workflow_record(tmp.path(), "wf-badjson"), Err(WfSkip::Delegate)),
+            "a V8 parse message must stay Node's"
+        );
+        assert!(list_workflows(tmp.path()).is_err(), "and it routes the whole call back");
+
+        // (2) present-but-unreadable — the reason embeds a libuv errno string.
+        // A directory in place of state.json is the portable way to reach it.
+        std::fs::remove_dir_all(&dir).unwrap();
+        let d2 = workflows_dir(tmp.path()).join("wf-eisdir");
+        std::fs::create_dir_all(d2.join("state.json")).unwrap();
+        assert!(
+            matches!(read_workflow_record(tmp.path(), "wf-eisdir"), Err(WfSkip::Delegate)),
+            "an errno-worded refusal must stay Node's"
+        );
+        assert!(list_workflows(tmp.path()).is_err());
+    }
+
+    #[test]
+    fn a_delegating_scan_emits_no_warn_before_it_bails() {
+        // The pre-pass contract: a directory holding BOTH an ordinary skip and
+        // a delegating one must produce zero output, or the Node re-run would
+        // print that warn a second time. Proven structurally — the classifier
+        // is run to completion and only then are the lines emitted — and
+        // observably by the child-process byte-diff in
+        // scripts (see the cell's harness), which sees an empty stderr here.
+        let tmp = tmp_root();
+        seed_the_three_ordinary_skips(tmp.path()); // three warnable entries
+        let bad = workflows_dir(tmp.path()).join("wf-badjson");
+        std::fs::create_dir_all(&bad).unwrap();
+        std::fs::write(bad.join("state.json"), "{not json").unwrap();
+        assert!(list_workflows(tmp.path()).is_err());
     }
 
     #[test]
@@ -1987,19 +2257,223 @@ mod tests {
         );
     }
 
-    // ── R5 test migration: locking + absent-store enumeration ─────────────
+    // ── R5 test migration: createWorkflow + locking + absent-store ─────────
     //
-    // NOT PORTABLE, and deliberately absent here: the createWorkflow rows of
-    // test_workflow_store.mjs (full-schema write, refusal to overwrite an
-    // existing id, refusal when id === feature). workflow-store.mjs
-    // createWorkflow has NO Rust counterpart — this module's provenance table
-    // covers readWorkflowRecord/listWorkflows/updateWorkflow*/withWorkflowLock
-    // only, and record creation is still Node's. There is nothing to exercise.
+    // The createWorkflow rows of test_workflow_store.mjs (full-schema write,
+    // refusal to overwrite an existing id, refusal when id === feature) now
+    // have a Rust counterpart — see § createWorkflow below.
     //
-    // Likewise the oracle's "listWorkflows … tolerant of an unreadable entry
-    // (skip+report, never throws)" row: this port turns that tolerance into a
-    // DELEGATION on purpose (see list_workflows' doc comment), pinned by
-    // `list_workflows_delegates_when_any_entry_would_be_skipped` above.
+    // The oracle's "listWorkflows … tolerant of an unreadable entry
+    // (skip+report, never throws)" row is now ported too — see § listWorkflows
+    // skip tolerance above. Only the two V8/errno-worded reasons still
+    // delegate; `only_the_two_v8_worded_arms_still_delegate` pins exactly
+    // which, so the residue can never quietly widen.
+
+    // ══ createWorkflow (workflow-store.mjs) ════════════════════════════════
+
+    /// Oracle: "createWorkflow writes the full schema and readWorkflow reads
+    /// it back unchanged". Create and read must be BYTE-symmetric (mv-4), so
+    /// the key order is asserted, not just the values.
+    #[test]
+    fn create_writes_the_full_schema_and_reads_back_identical() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let record = create_workflow(
+            root,
+            NewWorkflow {
+                feature: Some("  billing-refunds  "),
+                phase: Some(json!("planning")),
+                mode: Some(json!("swarm")),
+                plan_rev: Some(json!(2)),
+                gates: Some(json!({"shape": {"approved": true}})),
+                summary: Some(json!("s")),
+                next_action: Some(json!("n")),
+                status: Some("paused"),
+                id: Some("wf-explicit"),
+            },
+        )
+        .expect("create");
+
+        let keys: Vec<&str> = record.keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            vec![
+                "mode", "phase", "plan_rev", "summary", "next_action", "status", "route", "id",
+                "feature", "gates", "created_at"
+            ],
+            "a JS re-assignment keeps a key's original position — only id/feature/gates/created_at append"
+        );
+        assert_eq!(record["id"], json!("wf-explicit"));
+        assert_eq!(record["feature"], json!("billing-refunds"), "the feature slug is trimmed");
+        assert_eq!(record["phase"], json!("planning"));
+        assert_eq!(record["mode"], json!("swarm"));
+        assert_eq!(record["plan_rev"], json!(2));
+        assert_eq!(record["status"], json!("paused"));
+        assert_eq!(record["route"], Value::Null, "baseWorkflowDefaults' route survives");
+        assert!(record["created_at"].as_str().unwrap().ends_with('Z'));
+        // mergeGates(defaultGates(), overrides): the override is one level
+        // deep over the default entry, and every GATE_NAME is still present.
+        assert_eq!(
+            jsjson::stringify(&record["gates"]),
+            r#"{"context":{"approved":false,"approved_for_plan_rev":null},"shape":{"approved":true,"approved_for_plan_rev":null},"execution":{"approved":false,"approved_for_plan_rev":null},"review":{"approved":false,"approved_for_plan_rev":null}}"#
+        );
+
+        // The record is on disk at .bee/runtime/workflows/<id>/state.json,
+        // byte-for-byte as a live `node` run of workflow-store.mjs
+        // createWorkflow writes it over this exact fixture (ORACLE-PINNED).
+        let file = workflow_state_path(root, "wf-explicit");
+        let on_disk = std::fs::read_to_string(&file)
+            .unwrap()
+            .replace(record["created_at"].as_str().unwrap(), "<now>");
+        assert_eq!(
+            on_disk,
+            "{\n  \"mode\": \"swarm\",\n  \"phase\": \"planning\",\n  \"plan_rev\": 2,\n  \"summary\": \"s\",\n  \"next_action\": \"n\",\n  \"status\": \"paused\",\n  \"route\": null,\n  \"id\": \"wf-explicit\",\n  \"feature\": \"billing-refunds\",\n  \"gates\": {\n    \"context\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null\n    },\n    \"shape\": {\n      \"approved\": true,\n      \"approved_for_plan_rev\": null\n    },\n    \"execution\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null\n    },\n    \"review\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null\n    }\n  },\n  \"created_at\": \"<now>\"\n}\n"
+        );
+        // … and readWorkflowRecord round-trips it with no drift at all.
+        let read_back = read_workflow_record(root, "wf-explicit").ok().expect("readable");
+        assert_eq!(jsjson::stringify(&Value::Object(read_back)), jsjson::stringify(&Value::Object(record)));
+    }
+
+    /// Oracle: "createWorkflow defaults every optional field" — and the
+    /// generated id is never the feature slug.
+    #[test]
+    fn create_defaults_every_optional_field_and_generates_a_wf_prefixed_id() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let record = create_workflow(root, NewWorkflow::for_feature("f1")).expect("create");
+        assert_eq!(record["phase"], json!("idle"));
+        assert_eq!(record["mode"], Value::Null);
+        assert_eq!(record["plan_rev"], json!(0));
+        assert_eq!(record["summary"], json!(""));
+        assert_eq!(record["next_action"], json!(""));
+        assert_eq!(record["status"], json!("active"));
+        let id = record["id"].as_str().unwrap();
+        assert!(id.starts_with("wf-"), "{id}");
+        assert_eq!(id.len(), 11, "wf- plus 4 bytes of hex: {id}");
+        assert_ne!(id, "f1");
+        assert!(record["gates"]["context"]["approved"] == json!(false));
+
+        // Two creates never collide, and both are listed.
+        let second = create_workflow(root, NewWorkflow::for_feature("f2")).expect("create");
+        assert_ne!(second["id"], record["id"]);
+        assert_eq!(ok(list_workflows(root)).len(), 2);
+    }
+
+    /// Oracle: "createWorkflow refuses to overwrite an existing record", "…
+    /// refuses when id === feature (D1)", plus the id/feature/status
+    /// validation ladder. Every refusal's bytes are pinned.
+    #[test]
+    fn create_refuses_on_every_invalid_shape_and_never_overwrites() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+
+        let msg = |r: Result<Map<String, Value>, Err2>| match r {
+            Err(Err2::Msg(m)) => m,
+            Err(Err2::Ex) => panic!("expected a typed refusal, got Exotic"),
+            Ok(_) => panic!("expected a refusal"),
+        };
+
+        // feature is required — checked AFTER requireWorkflowId, so a valid
+        // explicit id plus a blank feature reports the feature refusal.
+        for feature in [None, Some(""), Some("   ")] {
+            let mut opts = NewWorkflow::for_feature("x");
+            opts.feature = feature;
+            opts.id = Some("wf-a");
+            assert_eq!(msg(create_workflow(root, opts)), "createWorkflow: feature is required.");
+        }
+        // requireWorkflowId fires first for a path-shaped explicit id.
+        let mut opts = NewWorkflow::for_feature("f");
+        opts.id = Some("  ");
+        assert_eq!(msg(create_workflow(root, opts)), "workflow id is required.");
+        let mut opts = NewWorkflow::for_feature("f");
+        opts.id = Some("a/b");
+        assert_eq!(
+            msg(create_workflow(root, opts)),
+            "workflow id \"a/b\" must be a plain id (no path separators) — it becomes a directory name under .bee/runtime/workflows/."
+        );
+        // D1: the id may never be the feature slug.
+        let mut opts = NewWorkflow::for_feature("wf-thing");
+        opts.id = Some("wf-thing");
+        assert_eq!(
+            msg(create_workflow(root, opts)),
+            "createWorkflow: workflow id \"wf-thing\" must not equal the feature slug \"wf-thing\" — ids are \
+generated identifiers, never feature slugs (CONTEXT.md D1: a feature can reopen or run competing \
+attempts, so identity must never collide with the human-chosen name). FIX: pass an explicit id distinct \
+from the feature, or omit id to let one be generated."
+        );
+        let mut opts = NewWorkflow::for_feature("f");
+        opts.id = Some("wf-a");
+        opts.status = Some("archived");
+        assert_eq!(
+            msg(create_workflow(root, opts)),
+            "createWorkflow: status must be one of active/paused/closed (got \"archived\")."
+        );
+        // Not one of those refusals wrote anything.
+        assert!(!workflows_dir(root).exists(), "a refused create never touches the store");
+
+        // The overwrite refusal — reached AFTER the `workflow:<id>` lock, so
+        // it must be native (campaign rule 2).
+        let mut opts = NewWorkflow::for_feature("f");
+        opts.id = Some("wf-dup");
+        create_workflow(root, opts).expect("first create");
+        let before = std::fs::read_to_string(workflow_state_path(root, "wf-dup")).unwrap();
+        let mut opts = NewWorkflow::for_feature("other-feature");
+        opts.id = Some("wf-dup");
+        opts.status = Some("closed");
+        assert_eq!(
+            msg(create_workflow(root, opts)),
+            format!(
+                "createWorkflow: a workflow record already exists at \"{}\" — createWorkflow never overwrites an \
+existing record. FIX: use updateWorkflow, or generate a fresh id.",
+                workflow_state_path(root, "wf-dup").display()
+            )
+        );
+        assert_eq!(
+            std::fs::read_to_string(workflow_state_path(root, "wf-dup")).unwrap(),
+            before,
+            "the existing record is byte-identical after the refusal"
+        );
+    }
+
+    /// createWorkflow takes `workflow:<id>` for its whole body — the same lock
+    /// name updateWorkflow uses, so a racing create and update on one id
+    /// serialize. Proven by holding the lock externally.
+    #[test]
+    fn create_takes_the_workflow_id_lock_for_its_whole_body() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let held = lock::acquire_store_lock(root, "workflow:wf-locked", 1)
+            .unwrap_or_else(|b| panic!("precondition: {}", b.message()));
+        let mut opts = NewWorkflow::for_feature("f");
+        opts.id = Some("wf-locked");
+        match create_workflow(root, opts) {
+            Err(Err2::Msg(m)) => assert!(
+                m.starts_with("lock \"workflow:wf-locked\" busy: held by "),
+                "expected LOCK_BUSY, got {m}"
+            ),
+            other => panic!(
+                "create must be denied under a held workflow lock, got {}",
+                match other {
+                    Ok(_) => "a record".to_string(),
+                    Err(Err2::Ex) => "Exotic".to_string(),
+                    Err(Err2::Msg(m)) => m,
+                }
+            ),
+        }
+        assert!(!workflow_state_path(root, "wf-locked").exists());
+        drop(held);
+        // Control: with the lock free the very same create succeeds.
+        let mut opts = NewWorkflow::for_feature("f");
+        opts.id = Some("wf-locked");
+        assert!(create_workflow(root, opts).is_ok());
+        // A DIFFERENT id is never blocked by another id's lock.
+        let other = lock::acquire_store_lock(root, "workflow:wf-locked", 1)
+            .unwrap_or_else(|b| panic!("precondition: {}", b.message()));
+        let mut opts = NewWorkflow::for_feature("g");
+        opts.id = Some("wf-sibling");
+        assert!(create_workflow(root, opts).is_ok(), "sibling ids hash to distinct lock files");
+        drop(other);
+    }
 
     /// Oracle: "listWorkflows on an absent .bee/runtime/workflows/ directory
     /// returns an empty, non-throwing result".

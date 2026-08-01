@@ -1123,7 +1123,10 @@ fn env_nonempty(name: &str) -> Option<String> {
 
 /// provenance: claims.mjs resolveSessionId (flag → BEE_SESSION_ID →
 /// CLAUDE_CODE_SESSION_ID → single-live-session adoption → null).
-fn resolve_session_id(flag: Option<&str>, control_root: &str) -> Ex<Option<String>> {
+///
+/// pub(crate) since the `worktree new` port: bee.mjs's handleWorktreeNew
+/// resolves the acting session the same way, against controlRootFor(mainRoot).
+pub(crate) fn resolve_session_id(flag: Option<&str>, control_root: &str) -> Ex<Option<String>> {
     if let Some(f) = flag {
         if !js_trim(f).is_empty() {
             return Ok(Some(js_trim(f).to_string()));
@@ -1153,9 +1156,28 @@ fn resolve_session_id(flag: Option<&str>, control_root: &str) -> Ex<Option<Strin
 /// provenance: claims.mjs isConcurrentMode (no exclusion — the sessionless
 /// reserve caller has no id of its own).
 fn is_concurrent_mode(control_root: &str) -> Ex<bool> {
+    is_concurrent_mode_excluding(control_root, None)
+}
+
+/// provenance: claims.mjs isConcurrentMode with `excludeSessionId` — the
+/// acting session's OWN heartbeat is never "another" live session.
+///
+/// `strict` has no separate arm here: `list_session_records` already returns
+/// `Exotic` for an unreadable record (Node's non-strict form warns with a V8
+/// message), so this port is strict-equivalent by construction — a detection
+/// failure delegates rather than silently reading as "solo", which is exactly
+/// the fail-closed posture guards.mjs's strict mode was added for.
+///
+/// pub(crate) since the `worktree new` port (bee.mjs's wcg-3 guard).
+pub(crate) fn is_concurrent_mode_excluding(
+    control_root: &str,
+    exclude_session_id: Option<&str>,
+) -> Ex<bool> {
+    let exclude = exclude_session_id.map(js_trim).unwrap_or("");
     let now = now_ms();
     for session in list_session_records(control_root)? {
-        if !heartbeat_stale(&session, now)? {
+        let is_excluded = matches!(session.get("id"), Some(Value::String(s)) if s == exclude);
+        if !is_excluded && !heartbeat_stale(&session, now)? {
             return Ok(true);
         }
     }
@@ -1263,6 +1285,7 @@ pub(crate) enum Out {
     Thrown(String),
 }
 pub(crate) type R2<T> = Result<T, Err2>;
+#[derive(Debug)]
 pub(crate) enum Err2 {
     Ex,
     Msg(String),
@@ -1736,6 +1759,73 @@ fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams) -> R2<Out
     Ok(Out::Emit(Value::Object(result), text, 0))
 }
 
+/// reservePathAtomic's TYPED verdict — bee.mjs returns `{refusal}` (the
+/// foreign hold) or `{reserveResult}` (reserve()'s own ok/conflict answer)
+/// and leaves presentation to each caller: `reservations reserve` renders the
+/// FOREIGN_HOLD / CONFLICT text, `dispatch prepare --claim` renders its own
+/// `- checkout "…" holds "…"` lines and then unwinds.
+///
+/// Derived from the SAME `Out` `run_reserve` emits, never from a second copy
+/// of the section — the values inside are the identical JS values Node's
+/// `section.refusal` / `section.reserveResult` carry.
+pub(crate) enum ReserveOutcome {
+    /// `{refusal}` — the cross-worktree hold, with `holder`/`feature`/`cell`/
+    /// `path` copied verbatim off the ledger row.
+    ForeignHold(Map<String, Value>),
+    /// `reserveResult.conflicts` — each row has `agent`/`path`/`cell`.
+    Conflicts(Vec<Value>),
+    /// `reserveResult.reservation` — note `.path` is the NORMALIZED path the
+    /// lease record carries, not the raw `files[]` entry.
+    Reserved(Value),
+    /// reserve()'s own argument refusals (thrown at the CLI boundary).
+    Thrown(String),
+}
+
+/// bee.mjs's `reservePathAtomic(root, {agent, cell, path})` — the ONE reserve
+/// door `reservations reserve` and `dispatch prepare --claim` share, so the
+/// foreign-hold check, the local reserve and the mirror-insert cannot diverge
+/// between them.
+///
+/// pub(crate) since the `dispatch prepare --claim` port. `ttl`/`session`/
+/// `kind` are structurally absent because the dispatch call site passes none:
+/// reserve() then defaults to DEFAULT_TTL_SECONDS, `resolveSessionId` from the
+/// environment only, and kind `'lease'` (hard conflicts).
+pub(crate) fn reserve_path_atomic(
+    topo: Option<(&Path, &str)>,
+    root_s: &str,
+    agent: &str,
+    cell: &str,
+    path: &str,
+) -> R2<ReserveOutcome> {
+    let params = ReserveParams {
+        agent: agent.to_string(),
+        cell: cell.to_string(),
+        path: path.to_string(),
+        ttl: None,
+        session: None,
+        kind: None,
+    };
+    let t = topo.map(|(m, h)| Topo { main_root: m, holder: h });
+    // Every delegate-trigger front-loaded, before the cross-worktree lock.
+    reserve_prechecks(t, root_s, &params)?;
+    Ok(match reserve_exec(t, root_s, &params, lock::MAX_ATTEMPTS)? {
+        Out::Thrown(m) => ReserveOutcome::Thrown(m),
+        Out::Emit(Value::Object(m), _, _) => {
+            if matches!(m.get("code"), Some(Value::String(c)) if c == "FOREIGN_HOLD") {
+                ReserveOutcome::ForeignHold(m)
+            } else if m.get("ok") == Some(&Value::Bool(true)) {
+                ReserveOutcome::Reserved(m.get("reservation").cloned().unwrap_or(Value::Null))
+            } else {
+                ReserveOutcome::Conflicts(match m.get("conflicts") {
+                    Some(Value::Array(a)) => a.clone(),
+                    _ => Vec::new(),
+                })
+            }
+        }
+        Out::Emit(..) => return Err(Err2::Ex), // unreachable: always an object
+    })
+}
+
 fn conflict_out(conflicts: &[Resv]) -> Out {
     let mut lines =
         vec!["Reservation CONFLICT — return [BLOCKED] to the orchestrator:".to_string()];
@@ -1791,6 +1881,19 @@ fn run_release(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
 
     let out = release_exec(topo, &root_s, &agent, cell.as_deref(), lock::MAX_ATTEMPTS);
     finish(&ctx, out)
+}
+
+/// releaseReservationsForAgent — pub(crate) since the `dispatch prepare
+/// --claim` port, whose conflict unwind releases exactly the reservations the
+/// same call had just taken (`agent` = the worker, `cell` = the claimed cell).
+pub(crate) fn release_reservations_for_agent(
+    topo: Option<(&Path, &str)>,
+    root_s: &str,
+    agent: &str,
+    cell: Option<&str>,
+) -> R2<Out> {
+    let t = topo.map(|(m, h)| Topo { main_root: m, holder: h });
+    release_exec(t, root_s, agent, cell, lock::MAX_ATTEMPTS)
 }
 
 fn release_exec(

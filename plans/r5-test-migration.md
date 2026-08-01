@@ -71,7 +71,7 @@ process-boundary contracts, then the rest.
 | `hooks/test_hook_contracts.mjs` (4366 L) | GAP → **ported** (wrapper table) | new `crates/bee/tests/hook_contracts.rs` — the adversarial-input matrix, the Codex advisory-shape rows, and the apply_patch rows, black-box over the shipped binary. The catalog-drift / shim-binary / installed-route halves are NODE-ONLY (they diff `.codex/hooks.json` against `catalog.mjs`'s `.mjs` command spellings). |
 | `tests/test_guards.mjs` (1918 L) | COVERED | `src/hooks/write_guard.rs` maps ~1:1 (NET branches 1–7, AskUserQuestion, the gc-2 git branch, msn-21 ownership, xwh-4 cross-worktree). Its four `buildSessionPreamble` checks are part of the preamble gap below. |
 | `tests/test_guards_tokenizer.mjs` (171 L) | GAP → **ported** | `src/hooks/write_guard.rs::{d9_every_separator_form_splits_glued_and_spaced_alike, d9_separator_lookalikes_are_not_boundaries, d8_staging_a_cli_owned_file_is_not_a_direct_edit_target, d12_companion_marker_is_direct_edit_denied}`. Its tokenizer-equivalence corpus is NODE-ONLY: it exists to catch drift between two hand-synced `.mjs` copies, and Rust has one tokenizer. |
-| `tests/test_bee_write_guard_hook.mjs` (691 L) | GAP (partly BLOCKED) | Guard bodies covered by `write_guard.rs`. **Check (d), the CLI-shape schema guard, is a deliberate delegation** (`bee_cli_shapes_delegate`) — see § Structural blockers. |
+| `tests/test_bee_write_guard_hook.mjs` (691 L) | GAP → **ported** | Guard bodies covered by `write_guard.rs`. Check (d), the CLI-shape schema guard, is now NATIVE in `hooks/cli_shape.rs` — its § (a) rows are mirrored there and wired-path rows live in `write_guard.rs`. |
 | `hooks/test_bypass_stop_net.mjs` (221 L) | GAP (thin) | Fire/no-fire matrix + loop guard covered by `src/hooks/session_close.rs::{bypass_net_blocks_planning_once_then_steps_aside, bypass_net_high_risk_consult_sentence_and_mode_floor}`. The "PreCompact never blocks" contract is blocked: session-close's PreCompact branch delegates. |
 
 ### CLI / dispatcher
@@ -111,7 +111,7 @@ process-boundary contracts, then the rest.
 | `tests/test_bundle_mode.mjs` (1037 L) | GAP | `scribingTarget` has **no Rust port at all** — the single largest un-planned gap. See § Not ported. |
 | `tests/test_misc.mjs` (3752 L) | GAP (mixed, ~60% covered) | Spread across `decisions.rs`, `prompt_context.rs`, `onboard/notices.rs`, `drivers.rs`, `cells.rs`, `reservations.rs`. Its `buildSessionPreamble` block (~20 contracts) is BLOCKED. |
 | `tests/test_perf.mjs` (390 L) | GAP | `src/hooks/session_close.rs` has the pipeline and 2 tests; ~10 contracts unasserted. |
-| `tests/test_workflow_store.mjs` (439 L) | GAP (thin) | `src/verbs/workflow_store.rs` (24). `listWorkflows`' unreadable-entry tolerance is a deliberate delegation — see § Structural blockers. |
+| `tests/test_workflow_store.mjs` (439 L) | GAP (thin) | `src/verbs/workflow_store.rs`. `listWorkflows`' unreadable-entry tolerance is now NATIVE for the three ordinary skip reasons; only the V8-parse and libuv-errno wordings delegate. |
 | `tests/test_lease_store.mjs` (457 L) | GAP | Only the write half is ported, inline in `reservations.rs`. Renew/fence/rollback/deterministic-order are unported. |
 | `tests/test_msn_invariants.mjs` (653 L) | GAP (half NODE-ONLY) | The source-marker index mechanism dies; inv 5/6/10 are the concurrency gap. |
 | `tests/test_write_policy.mjs` (291 L) | GAP (partly BLOCKED) | `observe` and `shared-disjoint` are in `cells.rs`/`write_guard.rs` with no test; `isolated` is blocked on workspace-store. |
@@ -348,20 +348,31 @@ in this audit. It lives only in `packages/bee/lib/knowledge.mjs` and has no
 runtime caller outside that module and its test — so before porting it, confirm
 it is live surface and not dead code.
 
-### 3. Structural delegations that block deletion, not merely coverage
+### 3. Structural delegations that blocked deletion — CLOSED 2026-08-01
 
-Two behaviors are pinned in Rust as *deliberate delegations*, meaning the
-contract has no native owner at all once `bee.mjs` is gone. These are runtime
-gaps wearing test-gap clothing:
+Two behaviors were pinned in Rust as *deliberate delegations*, meaning the
+contract had no native owner at all once `bee.mjs` is gone. Both are now
+implemented natively; see `plans/rust-port.md` § "Hard blockers" for the full
+account and the byte-diff evidence.
 
-- **write-guard check (d), the CLI-shape schema guard.** `write_guard.rs`
-  pins `bee_cli_shapes_delegate`; the module header says check (d) is not
-  ported. Node's rows 5c/5d (registry resolution of a missing `--id`, the
-  `field: id` message) have no Rust path.
-- **`listWorkflows` unreadable-entry tolerance.** `workflow_store.rs` pins
-  `list_workflows_delegates_when_any_entry_would_be_skipped`.
-
-Both need porting before R6 can delete the runtime.
+- **write-guard check (d), the CLI-shape schema guard** → new
+  `crates/bee/src/hooks/cli_shape.rs` (registry resolution + validate-args +
+  the exact refusal bytes), wired from `write_guard.rs`. `bee_cli_shapes_delegate`
+  is replaced by `row5_5b_plain_bee_cli_invocations_still_pass`,
+  `rows5c_5d_a_malformed_bee_cli_call_is_denied_at_exit_two`,
+  `a_well_formed_bee_cli_call_reaches_the_ordinary_verdict`,
+  `check_d_never_overwrites_a_denial_an_earlier_check_computed` and
+  `a_tampered_registry_still_delegates_before_check_d_can_answer`, plus 24 unit
+  rows in `cli_shape.rs`. Nothing here delegates any more; the byte gate still
+  does, one layer up.
+- **`listWorkflows` unreadable-entry tolerance** → `workflow_store.rs` warns
+  natively for the three ordinary skips.
+  `list_workflows_delegates_when_any_entry_would_be_skipped` is replaced by
+  `list_workflows_skips_the_three_ordinary_shapes_and_keeps_the_readable_ones`,
+  `the_warn_line_is_console_warns_own_shape`,
+  `only_the_two_v8_worded_arms_still_delegate` and
+  `a_delegating_scan_emits_no_warn_before_it_bails`. Residue: the V8-parse-message
+  arm and the libuv-errno arm, named by the third of those tests.
 
 ### 4. Contracts with no Rust implementation at all
 

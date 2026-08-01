@@ -31,6 +31,7 @@ const HARD_STALE_MS: u128 = 3_600_000; // 1h pid-reuse/unknowable-liveness ceili
 const TRANSIENT_FS_RETRY_ATTEMPTS: u32 = 15;
 const TRANSIENT_FS_RETRY_DELAY_MS: u64 = 20;
 
+#[derive(Debug)]
 pub struct LockBusy {
     pub lock_name: String,
     pub holder: Option<Value>,

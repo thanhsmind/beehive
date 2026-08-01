@@ -9,6 +9,7 @@
 //   close --feature <F> --dry-run [--json]
 //   dispatch prepare --runtime <claude|codex> --kind <cell|gather|reviewer|advisor>
 //                    [--cell <C>] [--worker <W>] [--force-ownership] [--json]
+//                    [--claim [--session-id <S>]]
 //
 // Everything else returns None BEFORE any output, any lock, and any write, and
 // the whole command re-runs under Node (campaign rule 1 — conservative argv
@@ -17,28 +18,37 @@
 //
 // ─── Shapes DELEGATED, and why ─────────────────────────────────────────────
 //
-//   * `dispatch prepare --claim` (the claim+reserve+prompt gesture).
-//     bee.mjs's claimAndReserveForDispatch composes TWO mutating doors that
-//     are already ported natively but live PRIVATE inside their own modules:
-//     claimCellFromFlags (verbs/cells.rs `run_claim` — write-policy
-//     shared-disjoint lease pre-check, lane-record gate resolution, the
-//     O_EXCL claims-store protocol with fence epochs and session adoption,
-//     per-cell store lock, budget checks) and reservePathAtomic /
-//     releaseReservationsForAgent (verbs/reservations.rs — control-root
-//     resolution, cross-worktree foreign-hold scan, TTL leases). Re-deriving
-//     ~1.5k lines of proven MUTATING store code into a third file would fork
-//     the store-mutation logic in two places, which is exactly the drift
-//     contract C1 exists to prevent; and a pre-flight-then-mutate shape
-//     cannot honour campaign rule 2 ("a refusal reached AFTER a lock attempt
-//     must be native") without re-deriving every refusal anyway. So --claim
-//     returns None before touching anything. NOTE: the PRODUCT of --claim —
-//     the assembled worker prompt, including the machine-assembled
-//     Learned-context and Prior-rounds blocks — is byte-for-byte the same
-//     string this file builds for the non-claim `--kind cell` shape (bee.mjs
-//     sequences the claim BEFORE the payload build and never feeds it back
-//     into prepareDispatch), so the prompt itself is covered natively and
-//     byte-diffed. R6 debt: re-export cells.rs's claim door and
-//     reservations.rs's reserve door as pub(crate) and finish this branch.
+//   * (CLOSED at R6) `dispatch prepare --claim` is now NATIVE. The blocker
+//     was never the logic — both mutating doors were already ported, just
+//     PRIVATE inside their own modules. They are now shared, exactly as
+//     bee.mjs shares them, rather than re-derived (a second copy of ~1.5k
+//     lines of store-mutation code is the precise drift C1 exists to
+//     prevent):
+//       - `cells::claim_cell_from_flags` — bee.mjs's own "one claim door for
+//         cells.claim and dispatch.prepare --claim": the write-policy
+//         resolution (enforceIsolation:false, so only observe /
+//         shared-disjoint can act), the O_EXCL claims-store protocol with
+//         fence epochs and session adoption, the per-cell store lock, the
+//         budget checks, the byte-identical claim refusal and the route
+//         soft-warning.
+//       - `reservations::reserve_path_atomic` — the ONE reserve door, now
+//         returning a TYPED verdict (ForeignHold / Conflicts / Reserved /
+//         Thrown) so each caller renders its own text, mirroring bee.mjs's
+//         "presentation stays with each caller" split.
+//       - `reservations::release_reservations_for_agent` +
+//         `cells::unclaim_cell` for the conflict UNWIND, run in reverse
+//         order so the refusal can truthfully claim the repo is back in its
+//         pre-call state.
+//     Campaign rule 2 is honoured by front-loading: the claim door's own
+//     prescans, the reserve prechecks, and a dry-run `prepare_dispatch` pass
+//     all run BEFORE the first O_EXCL write, so nothing delegates after a
+//     lock attempt. With `--claim` that dry-run pass is a DELEGATION PROBE
+//     ONLY — bee.mjs sequences the claim BEFORE the payload build, so its
+//     verdict over the still-unclaimed cell is discarded.
+//     Still delegated inside this branch: a non-`true` `--claim` spelling
+//     and a bare `--session-id` (both `String(true)`-shaped, unproven), and
+//     — unchanged — `--session-id` WITHOUT `--claim`, which bee.mjs
+//     documents as ignored.
 //
 //   * `dispatch prepare --runtime codex` on a host that HAS a
 //     `.bee/native-transport-probe.json` whose `schema` matches. Beyond that
@@ -151,6 +161,9 @@ use crate::verbs::reservations::{
     finish, js_is_ws, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::emit_no_root_error;
+use crate::verbs::reservations::{
+    release_reservations_for_agent, reserve_path_atomic, Err2, ReserveOutcome,
+};
 use serde_json::{Map, Number, Value};
 use std::collections::HashSet;
 use std::ffi::OsString;
@@ -1777,6 +1790,119 @@ fn native_transport_classification(root: &Path) -> D<&'static str> {
     }
 }
 
+/// bee.mjs's `claimAndReserveForDispatch` — the claim, then one reserve per
+/// declared file IN DECLARATION ORDER, stopping at the first conflict and
+/// unwinding everything this call created, in REVERSE (reservations first,
+/// then the claim), so the refusal can truthfully say the repo is back in its
+/// pre-call state.
+///
+/// Both doors are the SHARED ones (`cells::claim_cell_from_flags`,
+/// `reservations::reserve_path_atomic`), never a second copy — re-deriving
+/// them would fork the store-mutation logic C1 exists to protect.
+fn claim_and_reserve_for_dispatch(
+    root: &Path,
+    topo: Option<(&Path, &str)>,
+    cell_id: &str,
+    worker: &str,
+    session_flag: Option<&str>,
+) -> R2<Result<(Value, Vec<Value>), String>> {
+    use crate::verbs::cells;
+    // ttl/isolate are structurally absent: bee.mjs builds `{id, worker}` plus
+    // `session-id` only when one was passed.
+    let door = match cells::claim_cell_from_flags(root, cell_id, worker, session_flag, None) {
+        Ok(d) => d,
+        Err(cells::Fail::Delegate) => return Err(Err2::Ex),
+        Err(cells::Fail::Thrown(m)) => return Ok(Err(m)),
+    };
+    let cell = door.cell;
+    let claimed_id = match cell.get("id") {
+        Some(Value::String(s)) => s.clone(),
+        other => jsjson::js_to_string(other.unwrap_or(&Value::Null)),
+    };
+    // `Array.isArray(cell.files) ? cell.files.filter(f => typeof f === 'string' && f) : []`
+    let files: Vec<String> = match cell.get("files") {
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|f| match f {
+                Value::String(s) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+
+    let mut reserved: Vec<Value> = Vec::new();
+    for file_path in &files {
+        let section = reserve_path_atomic(topo, root.to_str().ok_or(Err2::Ex)?, worker, &claimed_id, file_path)?;
+        let conflict_lines: Vec<String> = match section {
+            ReserveOutcome::Reserved(reservation) => {
+                // The NORMALIZED path off the lease record, not files[i].
+                reserved.push(reservation.get("path").cloned().unwrap_or(Value::Null));
+                continue;
+            }
+            ReserveOutcome::Thrown(m) => return Ok(Err(m)),
+            ReserveOutcome::ForeignHold(hold) => {
+                let or_unknown = |k: &str| match hold.get(k) {
+                    Some(v) if truthy(v) => jsjson::js_to_string(v),
+                    _ => "unknown".to_string(),
+                };
+                vec![format!(
+                    "- checkout \"{}\" holds \"{}\" (cross-worktree hold, feature {}, cell {})",
+                    hold.get("holder").map_or("undefined".into(), jsjson::js_to_string),
+                    hold.get("path").map_or("undefined".into(), jsjson::js_to_string),
+                    or_unknown("feature"),
+                    or_unknown("cell"),
+                )]
+            }
+            ReserveOutcome::Conflicts(conflicts) => conflicts
+                .iter()
+                .map(|c| {
+                    format!(
+                        "- {} holds \"{}\" (cell {})",
+                        c.get("agent").map_or("undefined".into(), jsjson::js_to_string),
+                        c.get("path").map_or("undefined".into(), jsjson::js_to_string),
+                        c.get("cell").map_or("undefined".into(), jsjson::js_to_string),
+                    )
+                })
+                .collect(),
+        };
+
+        // Unwind, in reverse. Both rungs read stores this same call has
+        // already probed (reserve_prechecks, and the claim door's own
+        // prescans), so the Exotic arm below is unreachable in practice —
+        // recorded as this branch's one accepted residual.
+        let mut unwind_note = "the claim was unwound and state restored as found".to_string();
+        let unwound = (|| -> R2<Result<(), String>> {
+            if !reserved.is_empty() {
+                if let Out::Thrown(m) = release_reservations_for_agent(
+                    topo,
+                    root.to_str().ok_or(Err2::Ex)?,
+                    worker,
+                    Some(&claimed_id),
+                )? {
+                    return Ok(Err(m));
+                }
+            }
+            match cells::unclaim_cell(root, &claimed_id, door.session_id.as_deref(), false) {
+                Ok(_) => Ok(Ok(())),
+                Err(cells::Fail::Delegate) => Err(Err2::Ex),
+                Err(cells::Fail::Thrown(m)) => Ok(Err(m)),
+            }
+        })()?;
+        if let Err(message) = unwound {
+            unwind_note = format!(
+                "UNWIND FAILED ({message}) — restore by hand: bee reservations release --agent {worker} --cell {claimed_id} --json ; bee cells unclaim --id {claimed_id} --json"
+            );
+        }
+        let mut lines = vec![format!(
+            "dispatch prepare --claim: reservation conflict on cell \"{claimed_id}\" — nothing dispatched; {unwind_note}:"
+        )];
+        lines.extend(conflict_lines);
+        return Ok(Err(lines.join("\n")));
+    }
+    Ok(Ok((cell, reserved)))
+}
+
 fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(
         &flags,
@@ -1784,15 +1910,24 @@ fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     ) {
         return None;
     }
-    // --claim: the claim+reserve doors are Node's (see the file header).
-    if flags.get("claim").is_some() {
-        return None;
-    }
-    // `--session-id` is documented as ignored without --claim; a caller that
-    // passes it anyway is an unproven shape here.
-    if flags.get("session-id").is_some() {
-        return None;
-    }
+    // `flags.claim === true`: a bare `--claim` or `--claim=true`. Any other
+    // spelling is validate()'s to answer.
+    let claim = match flags.get("claim") {
+        None => false,
+        Some(FlagV::Present) => true,
+        Some(FlagV::S(s)) if s == "true" => true,
+        Some(FlagV::S(s)) if s == "false" => false,
+        Some(FlagV::S(_)) => return None,
+    };
+    // `--session-id` is documented as ignored WITHOUT --claim; a caller that
+    // passes it anyway is an unproven shape here. With --claim it is the
+    // claim door's own `sessionFlag`.
+    let session_flag: Option<String> = match (claim, flags.get("session-id")) {
+        (_, None) => None,
+        (false, Some(_)) => return None,
+        (true, Some(FlagV::S(s))) => Some(s.clone()),
+        (true, Some(FlagV::Present)) => return None, // String(true) — unproven
+    };
     // validate(): boolean-typed --force-ownership given as =value.
     match flags.get("force-ownership") {
         None | Some(FlagV::Present) => {}
@@ -1830,29 +1965,89 @@ fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     } else {
         None
     };
+
+    // ── --claim's own argument refusals. bee.mjs throws all three BEFORE
+    //    prepareDispatch is ever called, so they are resolved here and the
+    //    dry-run below is skipped entirely when one fires. ─────────────────
+    let claim_arg_error: Option<String> = if !claim {
+        None
+    } else if kind != "cell" {
+        Some(format!(
+            "dispatch prepare: --claim is only valid with --kind cell (got --kind {kind}) — claiming and reserving are cell-execution moves; gather/reviewer/advisor dispatches never own a cell."
+        ))
+    } else if cell_id.is_none() {
+        Some("dispatch prepare: --cell is required when --kind cell.".to_string())
+    } else if worker.is_none() {
+        Some("dispatch prepare: --worker is required when --kind cell.".to_string())
+    } else {
+        None
+    };
+
     // Dry-run the whole build to surface every delegate-shaped input before a
     // single byte (or the prepare-time log line) is produced. The build is
     // free of side effects apart from appendPrepareRecord, which is applied on
     // the SECOND pass only.
-    let prepared = prepare_dispatch(
-        &root,
-        &runtime,
-        &kind,
-        cell_id.as_deref(),
-        worker.as_deref(),
-        force_ownership,
-        classification,
-        false,
-    )
-    .ok()?;
+    //
+    // With --claim this pass is a DELEGATION PROBE ONLY: bee.mjs sequences the
+    // claim BEFORE the payload build, so a Thrown produced here (over the
+    // still-unclaimed cell) is not necessarily the message the real,
+    // post-claim build produces. Its verdict is discarded; only "would this
+    // delegate?" is kept, and it is kept because after the claim's O_EXCL
+    // write nothing may delegate at all (campaign rule 2).
+    let prepared = if claim_arg_error.is_some() {
+        Prepared::Value(Value::Null) // unused — the refusal short-circuits below
+    } else {
+        prepare_dispatch(
+            &root,
+            &runtime,
+            &kind,
+            cell_id.as_deref(),
+            worker.as_deref(),
+            force_ownership,
+            classification,
+            false,
+        )
+        .ok()?
+    };
+    // The cross-worktree hold topology reservePathAtomic resolves for itself.
+    // `prelude` above already narrowed this to an ORDINARY checkout, so this
+    // is always `(workRoot, "main")` — a linked worktree delegated earlier.
+    let topology = match claim {
+        false => None,
+        true => match crate::roots::resolve_store_root_worktree(&cwd) {
+            crate::roots::RootsWt::Go(r) => r.hold_topology(),
+            _ => return None,
+        },
+    };
 
     let ctx = match prelude("dispatch prepare", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
+    if let Some(message) = claim_arg_error {
+        return finish(&ctx, Ok(Out::Thrown(message)));
+    }
+
+    // ── the claim + reserve gesture, before the payload build (Node's order).
+    let mut claim_outcome: Option<Vec<Value>> = None;
+    if claim {
+        let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
+        match claim_and_reserve_for_dispatch(
+            &ctx.root,
+            topo,
+            cell_id.as_deref().unwrap_or(""),
+            worker.as_deref().unwrap_or(""),
+            session_flag.as_deref(),
+        ) {
+            Ok(Ok((_cell, reserved))) => claim_outcome = Some(reserved),
+            Ok(Err(message)) => return finish(&ctx, Ok(Out::Thrown(message))),
+            Err(e) => return finish(&ctx, Err(e)),
+        }
+    }
+
     let out: R2<Out> = match prepared {
-        Prepared::Thrown(msg) => Ok(Out::Thrown(msg)),
-        Prepared::Value(_) => {
+        Prepared::Thrown(msg) if !claim => Ok(Out::Thrown(msg)),
+        _ => {
             // Re-run for real so the prepare-time record is appended exactly
             // once, with a freshly minted dispatch_id/ts like Node's.
             match prepare_dispatch(
@@ -1866,11 +2061,30 @@ fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
                 true,
             ) {
                 Ok(Prepared::Value(result)) => {
+                    // `claimOutcome ? {...out, claimed:true, reserved} : out`
+                    // — the claim/reservations are real state either way, so
+                    // the result names them beside the payload.
+                    let result = match &claim_outcome {
+                        None => result,
+                        Some(reserved) => {
+                            let mut m = match result {
+                                Value::Object(m) => m,
+                                other => return finish(&ctx, Ok(Out::Emit(other, String::new(), 0))),
+                            };
+                            m.insert("claimed".into(), Value::Bool(true));
+                            m.insert("reserved".into(), Value::Array(reserved.clone()));
+                            Value::Object(m)
+                        }
+                    };
                     let text = jsjson::stringify_pretty(&result);
                     Ok(Out::Emit(result, text, 0))
                 }
                 Ok(Prepared::Thrown(msg)) => Ok(Out::Thrown(msg)),
-                Err(_) => Err(crate::verbs::reservations::Err2::Ex),
+                // Accepted residual, recorded in the module header: a
+                // delegate-shaped input that the pre-claim probe did not see.
+                // Unreachable in practice — record=true differs from the
+                // probe only by appendPrepareRecord.
+                Err(_) => Err(Err2::Ex),
             }
         }
     };
@@ -4619,13 +4833,16 @@ mod tests {
         assert!(try_native(&os(&["close"]), t0).is_none());
         assert!(try_native(&os(&["close", "--feature="]), t0).is_none());
         assert!(try_native(&os(&["close", "--feature", "f", "--dry-run=maybe"]), t0).is_none());
-        // dispatch: --claim and --session-id are Node's (the claim+reserve
-        // doors); bad enums and missing requireds are validate()'s.
+        // dispatch: `--claim` is NATIVE at R6, so the shapes that still go
+        // back to Node are the UNPROVEN spellings only — a `--claim` value
+        // that is not `true`/`false` (validate()'s own message) and a bare
+        // `--session-id` under --claim (`String(true)` as a session id).
         assert!(try_native(
-            &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "cell", "--cell", "c", "--worker", "w", "--claim"]),
+            &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "cell", "--cell", "c", "--worker", "w", "--claim=maybe"]),
             t0
         )
         .is_none());
+        // --session-id WITHOUT --claim is documented as ignored — unproven.
         assert!(try_native(
             &os(&["dispatch", "prepare", "--runtime", "claude", "--kind", "cell", "--session-id", "s"]),
             t0

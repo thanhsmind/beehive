@@ -12,6 +12,7 @@ mod herding;
 mod hooks;
 mod js_fallback;
 mod jsjson;
+mod lease_store;
 mod lock;
 mod onboard;
 mod path_identity;

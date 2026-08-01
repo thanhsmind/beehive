@@ -627,11 +627,11 @@ fn tertiary_case_cmp(a: &str, b: &str) -> Ordering {
 /// Handler failure: hand the whole command to Node (no output yet), or a
 /// thrown-Error message (bee.mjs emitError bytes).
 #[derive(Debug)]
-enum Fail {
+pub(crate) enum Fail {
     Delegate,
     Thrown(String),
 }
-type MR<T> = Result<T, Fail>;
+pub(crate) type MR<T> = Result<T, Fail>;
 
 impl From<Delegate> for Fail {
     fn from(_: Delegate) -> Self {
@@ -1141,35 +1141,321 @@ fn release_claim_file_best_effort(root: &Path, id: &str) {
     })();
 }
 
-/// claims.mjs releaseClaim — owner-matched removal under the gate (the
-/// claim-unwind path of claimCellCrossSession). The caller ignores the typed
-/// result; only the disk effect must match Node.
-fn release_claim(control: &Path, session: Option<&str>, cell_id: &str) -> MR<()> {
-    if read_claim(control, cell_id)?.is_none() {
-        return Ok(()); // NOT_FOUND, ignored by the unwind caller
+// ─── claims: fencing, adoption and same-session renewal ───────────────────
+//
+// multisession-native-12 (D4/D9 invariant 10). `fence_epoch` is a CAS-style
+// token: claimCellFile stamps 1, adoptClaim bumps it by exactly 1 in the SAME
+// atomic write as the ownership change, and renewClaimTTL/releaseClaim refuse
+// typed CLAIM_FENCE_STALE when a caller presents an epoch BEHIND the stored
+// one. Before this cell nothing in the Rust tree consumed the token at all —
+// claim_cell_file stamped it and no code path ever compared it, so a stale
+// holder's write would have silently proceeded. Fence semantics are
+// safety-critical: a stale fence REFUSES, never silently proceeds.
+//
+// SECOND-PORT NOTE: verbs/state_group.rs carries a NARROWED adopt_claim (the
+// `state handoff adopt` path: no typed codes, no `now` injection). That file
+// is outside this cell's touchable set, so adoptClaim is re-derived here from
+// claims.mjs rather than imported, and
+// `adopt_agrees_with_the_state_group_port_on_the_shared_fixture` pins the two
+// against one fixture so a future divergence fails a test.
+
+/// claims.mjs `fail(code, reason, extra)` — the typed refusal shape every
+/// claims mutator returns instead of throwing.
+#[allow(dead_code)]
+pub(crate) struct ClaimRefusal {
+    pub code: &'static str,
+    pub reason: String,
+    pub extra: Map<String, Value>,
+}
+
+impl ClaimRefusal {
+    fn new(code: &'static str, reason: String) -> Self {
+        Self { code, reason, extra: Map::new() }
     }
-    if !acquire_gate_with_retry(control, cell_id)? {
-        return Ok(()); // GATE_HELD, ignored
+}
+
+#[allow(dead_code)]
+pub(crate) enum AdoptClaimOutcome {
+    Ok { claim: Value, previous_owner: Option<Value> },
+    Refused(ClaimRefusal),
+}
+
+#[allow(dead_code)]
+pub(crate) enum RenewClaimOutcome {
+    Ok { renewed: Vec<String>, skipped: Vec<String> },
+    Refused(ClaimRefusal),
+}
+
+#[allow(dead_code)]
+pub(crate) enum ReleaseClaimOutcome {
+    Ok { released: Value },
+    Refused(ClaimRefusal),
+}
+
+/// `Number.isFinite(claim.fence_epoch) ? claim.fence_epoch : 1` — a legacy
+/// claim written before msn-12 reads as epoch 1, the same default a fresh
+/// claimCellFile stamps.
+fn current_fence_epoch(claim: &Map<String, Value>) -> f64 {
+    match claim.get("fence_epoch") {
+        Some(Value::Number(n)) => match n.as_f64() {
+            Some(v) if v.is_finite() => v,
+            _ => 1.0,
+        },
+        _ => 1.0,
     }
-    let outcome = (|| -> MR<()> {
-        let Some(claim) = read_claim(control, cell_id)? else { return Ok(()) };
+}
+
+/// The shared `!Number.isFinite(presentedEpoch) || presentedEpoch <
+/// currentEpoch` guard behind renewClaimTTL and releaseClaim. `verb` is the
+/// only difference between the two refusal texts ("renew" / "release").
+fn claim_fence_refusal(
+    verb: &str,
+    cell: &str,
+    presented: &Value,
+    claim: &Map<String, Value>,
+) -> Option<ClaimRefusal> {
+    let current = current_fence_epoch(claim);
+    let presented_num = match presented {
+        Value::Number(n) => n.as_f64().unwrap_or(f64::NAN),
+        _ => f64::NAN, // Number.isFinite(non-number) === false
+    };
+    if presented_num.is_finite() && presented_num >= current {
+        return None;
+    }
+    let mut refusal = ClaimRefusal::new(
+        "CLAIM_FENCE_STALE",
+        format!(
+            "cell \"{cell}\" {verb} refused: presented epoch {} is behind current fence_epoch {} — a takeover already moved ownership forward; re-adopt before writing again.",
+            jsjson::stringify(presented),
+            jsjson::js_f64_to_string(current)
+        ),
+    );
+    refusal.extra.insert("cell".into(), Value::String(cell.to_string()));
+    refusal.extra.insert(
+        "current_epoch".into(),
+        Number::from_f64(current).map(Value::Number).unwrap_or(Value::Null),
+    );
+    refusal.extra.insert("presented_epoch".into(), presented.clone());
+    Some(refusal)
+}
+
+/// claims.mjs adoptClaim — transfer ownership IN PLACE under the exclusive
+/// gate: the claim file is atomically REWRITTEN, never deleted, so concurrent
+/// 'wx' claimers keep getting EEXIST throughout the adoption. Every adoption
+/// bumps `fence_epoch` by exactly 1 in the same atomic write as the ownership
+/// change, which is what makes a stale holder's later renew/release
+/// detectable at all.
+///
+/// Not called from a verb in THIS module: the one native caller today is
+/// `state handoff adopt`, which lives in verbs/state_group.rs (owned by
+/// another in-flight cell) and drives its own narrowed twin. This is the full
+/// claims-module contract, byte-pinned against the live Node oracle.
+#[allow(dead_code)]
+pub(crate) fn adopt_claim(
+    control: &Path,
+    cell_id: &str,
+    new_session_id: &str,
+) -> MR<AdoptClaimOutcome> {
+    let cell = require_id(cell_id, "cell id")?;
+    let session = require_id(new_session_id, "session id")?;
+    let _ = std::fs::create_dir_all(claims_dir(control));
+    if !acquire_gate(control, &cell)? {
+        return Ok(AdoptClaimOutcome::Refused(ClaimRefusal::new(
+            "GATE_HELD",
+            format!(
+                "claim \"{cell}\" is gated by another in-flight adopt/sweep — retry later, never wait on the gate."
+            ),
+        )));
+    }
+    let outcome = (|| -> MR<AdoptClaimOutcome> {
+        let Some(claim) = read_claim(control, &cell)? else {
+            return Ok(AdoptClaimOutcome::Refused(ClaimRefusal::new(
+                "NOT_FOUND",
+                format!("cell \"{cell}\" has no claim to adopt."),
+            )));
+        };
+        let previous = claim.get("session").cloned();
+        let previous_epoch = current_fence_epoch(&claim);
+        let now = utc_now();
+        // `{...claim, session, claimed_at, adopted_from, adopted_at,
+        // fence_epoch}` — a re-assigned key keeps its ORIGINAL position, and
+        // `adopted_from: undefined` (no previous owner) is dropped wholesale
+        // by JSON.stringify rather than written as null.
+        let mut adopted = claim.clone();
+        adopted.insert("session".into(), Value::String(session));
+        adopted.insert("claimed_at".into(), Value::String(now.clone())); // fresh ownership renews the TTL clock
+        match &previous {
+            Some(prev) => {
+                adopted.insert("adopted_from".into(), prev.clone());
+            }
+            None => {
+                adopted.shift_remove("adopted_from");
+            }
+        }
+        adopted.insert("adopted_at".into(), Value::String(now));
+        adopted.insert(
+            "fence_epoch".into(),
+            Value::Number(Number::from_f64(previous_epoch + 1.0).ok_or(Fail::Delegate)?),
+        );
+        let adopted = Value::Object(adopted);
+        let file = claim_path(control, &cell)?;
+        transient_fs_retry(|| write_json_atomic(&file, &adopted))
+            .map_err(|e| Fail::Thrown(format!("{e}")))?;
+        Ok(AdoptClaimOutcome::Ok { claim: adopted, previous_owner: previous })
+    })();
+    release_gate(control, &cell); // `finally` — the gate is never leaked
+    outcome
+}
+
+/// claims.mjs renewClaimTTL — same-session-only TTL renewal: refreshes
+/// `claimed_at` for every claim owned by `session`, never touching
+/// adopted_from/adopted_at and never bumping `fence_epoch`. A claim whose gate
+/// is held by another in-flight adopt/sweep is SKIPPED, never waited on. The
+/// session match is RE-VERIFIED under the gate, so a renewal racing an
+/// adoption can never revert ownership.
+///
+/// `presented_epoch` is OPTIONAL and OFF by default (the shape every
+/// production caller uses today). Presented and behind a reached claim's
+/// current epoch, the WHOLE call refuses typed CLAIM_FENCE_STALE rather than
+/// silently completing a partial renewal of the others.
+///
+/// Node's production caller is `heartbeatTouch` (claims.mjs), reached from
+/// the bee-state-sync hook — whose own narrowed heartbeat path lives in
+/// src/hooks/state_sync.rs, outside this cell's touchable set. This is the
+/// full contract including the fencing arm that hook does not present.
+#[allow(dead_code)]
+pub(crate) fn renew_claim_ttl(
+    control: &Path,
+    session_id: &str,
+    presented_epoch: Option<&Value>,
+) -> MR<RenewClaimOutcome> {
+    let session = require_id(session_id, "session id")?;
+    let Ok(entries) = std::fs::read_dir(claims_dir(control)) else {
+        return Ok(RenewClaimOutcome::Ok { renewed: Vec::new(), skipped: Vec::new() });
+    };
+    // readdirSync yields directory order; collect first so the gate work does
+    // not hold the directory handle open (a Windows sharing hazard).
+    let mut names: Vec<String> =
+        entries.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+    names.retain(|n| n.ends_with(".json"));
+    let mut renewed = Vec::new();
+    let mut skipped = Vec::new();
+    for name in names {
+        let cell = name[..name.len() - ".json".len()].to_string();
+        // readClaim → claimPath → requireId: a file name that is not a plain
+        // id throws in Node (uncaught, so the whole call throws) — mirrored.
+        let preview = read_claim(control, &cell)?;
+        match preview.as_ref().and_then(|c| c.get("session")) {
+            Some(Value::String(s)) if *s == session => {}
+            _ => continue, // not ours (or sessionless): never touched
+        }
+        if !acquire_gate(control, &cell)? {
+            skipped.push(cell);
+            continue;
+        }
+        let step = (|| -> MR<RenewStep> {
+            let Some(claim) = read_claim(control, &cell)? else { return Ok(RenewStep::Untouched) };
+            match claim.get("session") {
+                Some(Value::String(s)) if *s == session => {}
+                _ => return Ok(RenewStep::Untouched), // adopted away between listing and gating
+            }
+            if let Some(presented) = presented_epoch {
+                if let Some(refusal) = claim_fence_refusal("renew", &cell, presented, &claim) {
+                    return Ok(RenewStep::Refused(refusal));
+                }
+            }
+            // The `...claim` spread carries acquired_at AND fence_epoch
+            // forward untouched — only claimed_at, the expiry clock, advances.
+            let mut next = claim.clone();
+            next.insert("claimed_at".into(), Value::String(utc_now()));
+            let file = claim_path(control, &cell)?;
+            transient_fs_retry(|| write_json_atomic(&file, &Value::Object(next.clone())))
+                .map_err(|e| Fail::Thrown(format!("{e}")))?;
+            Ok(RenewStep::Renewed)
+        })();
+        release_gate(control, &cell); // `finally`, even on the fenced refusal
+        match step? {
+            RenewStep::Refused(refusal) => return Ok(RenewClaimOutcome::Refused(refusal)),
+            RenewStep::Renewed => renewed.push(cell),
+            RenewStep::Untouched => {}
+        }
+    }
+    Ok(RenewClaimOutcome::Ok { renewed, skipped })
+}
+
+#[allow(dead_code)] // Refused is only constructed on the fencing arm
+enum RenewStep {
+    Renewed,
+    Untouched,
+    Refused(ClaimRefusal),
+}
+
+/// claims.mjs releaseClaim — owner-matched removal under the same exclusive
+/// gate as adopt/sweep, with the msn-12 fencing guard checked AFTER the owner
+/// check (epoch fencing is an additional, orthogonal guard, never a
+/// substitute for ownership). A fenced refusal leaves the claim file
+/// untouched.
+pub(crate) fn release_claim_typed(
+    control: &Path,
+    session: Option<&str>,
+    cell_id: &str,
+    presented_epoch: Option<&Value>,
+) -> MR<ReleaseClaimOutcome> {
+    let cell = require_id(cell_id, "cell id")?;
+    let not_found = || {
+        ReleaseClaimOutcome::Refused(ClaimRefusal::new(
+            "NOT_FOUND",
+            format!("cell \"{cell}\" has no claim to release."),
+        ))
+    };
+    if read_claim(control, &cell)?.is_none() {
+        return Ok(not_found());
+    }
+    if !acquire_gate_with_retry(control, &cell)? {
+        return Ok(ReleaseClaimOutcome::Refused(ClaimRefusal::new(
+            "GATE_HELD",
+            format!(
+                "claim \"{cell}\" is gated by another in-flight adopt/sweep/release after {GATE_RETRY_ATTEMPTS} bounded retries — never waited unboundedly."
+            ),
+        )));
+    }
+    let outcome = (|| -> MR<ReleaseClaimOutcome> {
+        let Some(claim) = read_claim(control, &cell)? else { return Ok(not_found()) };
         let owner: Option<String> = match claim.get("session") {
             Some(Value::String(s)) => Some(s.clone()),
             Some(Value::Null) | None => None,
             Some(_) => return Err(Fail::Delegate), // non-string session — JS-exotic compare
         };
         if owner.as_deref() != session {
-            return Ok(()); // NOT_OWNER, ignored
+            return Ok(ReleaseClaimOutcome::Refused(ClaimRefusal::new(
+                "NOT_OWNER",
+                format!(
+                    "cell \"{cell}\" is owned by session \"{}\", not \"{}\".",
+                    owner.as_deref().unwrap_or("none (sessionless)"),
+                    session.unwrap_or("none (sessionless)")
+                ),
+            )));
         }
-        let file = claim_path(control, cell_id)?;
+        if let Some(presented) = presented_epoch {
+            if let Some(refusal) = claim_fence_refusal("release", &cell, presented, &claim) {
+                return Ok(ReleaseClaimOutcome::Refused(refusal));
+            }
+        }
+        let file = claim_path(control, &cell)?;
         let _ = transient_fs_retry(|| match std::fs::remove_file(&file) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             other => other,
         });
-        Ok(())
+        Ok(ReleaseClaimOutcome::Ok { released: Value::Object(claim) })
     })();
-    release_gate(control, cell_id);
+    release_gate(control, &cell);
     outcome
+}
+
+/// The claim-unwind path of claimCellCrossSession: the caller ignores the
+/// typed result (only the disk effect must match Node), and never fences.
+fn release_claim(control: &Path, session: Option<&str>, cell_id: &str) -> MR<()> {
+    release_claim_typed(control, session, cell_id, None).map(|_| ())
 }
 
 // ─── sessions (claims.mjs) ─────────────────────────────────────────────────
@@ -4950,6 +5236,66 @@ fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode>
     };
     dispatch("cells claim", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
+        let claimed = claim_cell_from_flags(
+            &root,
+            &id,
+            &worker,
+            session_flag.as_deref(),
+            ttl,
+        )?
+        .cell;
+        let worker_disp = match claimed.get("trace").and_then(|t| t.get("worker")) {
+            Some(v) => jsjson::js_to_string(v),
+            None => "undefined".to_string(),
+        };
+        let text = format!(
+            "Claimed {} for {}.",
+            js_string_or_undefined(claimed.get("id")),
+            worker_disp
+        );
+        Ok(Out::Emit(claimed, text, 0))
+    })
+}
+
+/// claimCellFromFlags's product — bee.mjs returns `{cell, sessionId}`.
+///
+/// `policy` has no variant here on purpose: `applyWritePolicy` runs with
+/// `enforceIsolation: false` on this door, so its only acting arms are
+/// `observe` (a no-op) and `shared-disjoint` (a refusal); the `isolated`
+/// workspace-attach / auto-isolate machinery that produces `redirect: true`
+/// is structurally unreachable. Node's `if (policy.redirect) return {policy}`
+/// in claimCellFromFlags — and therefore `handleDispatchPrepare`'s own
+/// `if (claimOutcome.policy)` early return — are both provably dead code for
+/// every argv this door serves. (Same reasoning already recorded for
+/// claim-next below.)
+pub(crate) struct ClaimDoor {
+    pub(crate) cell: Value,
+    pub(crate) session_id: Option<String>,
+}
+
+/// bee.mjs's `claimCellFromFlags` — "One claim door for cells.claim and
+/// dispatch.prepare --claim": the write-policy resolution, the claims.mjs
+/// claim-file-first sequence, the byte-identical claim refusal and the route
+/// soft-warning, all in ONE body so the door cannot diverge between the two
+/// verbs. `cells claim` adds only its own emit text; `dispatch prepare
+/// --claim` adds only the reserve loop that follows it.
+///
+/// pub(crate) since the `dispatch prepare --claim` port — previously this was
+/// inlined in `run_claim`'s closure, which is exactly why that verb delegated.
+///
+/// Every delegate-trigger is FRONT-LOADED (the two prescans, the store reads,
+/// the exotic-shape probes) because nothing after claimCellFile's O_EXCL
+/// write may delegate: the claim file would already exist for the Node re-run.
+pub(crate) fn claim_cell_from_flags(
+    root: &Path,
+    id: &str,
+    worker: &str,
+    session_flag: Option<&str>,
+    ttl: Option<f64>,
+) -> MR<ClaimDoor> {
+    let root = root.to_path_buf();
+    let id = id.to_string();
+    {
         if let Some(t) = ttl {
             if !t.is_finite() || t <= 0.0 {
                 return Err(Fail::Thrown("--ttl must be a positive integer (seconds).".into()));
@@ -4981,7 +5327,7 @@ fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode>
             }
         }
 
-        let session_id = resolve_session_flag_env(session_flag.as_deref());
+        let session_id = resolve_session_flag_env(session_flag);
 
         // applyWritePolicy (state.mjs) with enforceIsolation:false — only the
         // observe/shared-disjoint arms can act; 'isolated' passes through.
@@ -5044,7 +5390,7 @@ fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode>
             &root,
             &control,
             session.as_deref(),
-            &worker,
+            worker,
             &id,
             ttl,
             cell_for_policy.as_ref(),
@@ -5063,17 +5409,8 @@ fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode>
                 js_string_or_undefined(claimed.get("feature"))
             );
         }
-        let worker_disp = match claimed.get("trace").and_then(|t| t.get("worker")) {
-            Some(v) => jsjson::js_to_string(v),
-            None => "undefined".to_string(),
-        };
-        let text = format!(
-            "Claimed {} for {}.",
-            js_string_or_undefined(claimed.get("id")),
-            worker_disp
-        );
-        Ok(Out::Emit(claimed, text, 0))
-    })
+        Ok(ClaimDoor { cell: claimed, session_id })
+    }
 }
 
 /// claimCellCrossSession's typed outcome. Node returns `{ok:false, code,
@@ -6419,8 +6756,30 @@ fn run_unclaim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCod
     let (session_flag, force) = ownership_args(&flags)?;
     dispatch("cells unclaim", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
+        let cell = unclaim_cell(&root, &id, session_flag.as_deref(), force)?;
+        let text = format!("Unclaimed {} — back to open.", js_string_or_undefined(cell.get("id")));
+        Ok(Out::Emit(cell, text, 0))
+    })
+}
+
+/// cells.mjs `unclaimCell(root, id, {sessionId, forceOwnership})`.
+///
+/// pub(crate) since the `dispatch prepare --claim` port: bee.mjs's
+/// claimAndReserveForDispatch calls this as the SECOND rung of its unwind
+/// ladder when a reservation conflicts, so the conflict refusal can promise
+/// "the claim was unwound and state restored as found".
+pub(crate) fn unclaim_cell(
+    root: &Path,
+    id: &str,
+    session_flag: Option<&str>,
+    force: bool,
+) -> MR<Value> {
+    let root = root.to_path_buf();
+    let id = id.to_string();
+    {
         let root2 = root.clone();
         let id2 = id.clone();
+        let session_flag = session_flag.map(str::to_string);
         // unclaimCell has NO assertNotArchived (an archived cell reads as
         // capped/dropped and takes the not-claimed refusal instead).
         let cell = mutate_cell(&root, &id, "unclaimCell", None, true, move |cell_map| {
@@ -6444,9 +6803,8 @@ fn run_unclaim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCod
             cell_map.insert("trace".into(), Value::Object(release_trace(trace)));
             Ok(())
         })?;
-        let text = format!("Unclaimed {} — back to open.", js_string_or_undefined(cell.get("id")));
-        Ok(Out::Emit(cell, text, 0))
-    })
+        Ok(cell)
+    }
 }
 
 fn run_reopen(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -8387,8 +8745,9 @@ const C = path.join(REPO_ROOT, dynamic);
     // reclaimed; no gate file leaks", "sweep: TTL expired but heartbeat FRESH
     // is never reclaimed (20260710 — no steal on a stall signal)", and the
     // sweep half of "sweep and adopt skip/refuse while the per-claim gate is
-    // held — typed GATE_HELD, never wait". (adoptClaim itself is not part of
-    // this port's surface — see the module header's claims subset.)
+    // held — typed GATE_HELD, never wait". (The adopt half of that row, and
+    // the whole msn-12 fencing surface, are covered in § adoption + fencing
+    // at the end of this module.)
     #[test]
     fn sweep_skips_a_gated_claim_and_leaks_no_gate_file() {
         let tmp = cn_root();
@@ -8863,5 +9222,388 @@ const C = path.join(REPO_ROOT, dynamic);
         let after = read_cell_norm(root2, "nt-2").ok().unwrap().unwrap();
         assert_eq!(after.get("status"), Some(&json!("claimed")), "a red run never caps");
         assert!(test_results_path(root2).exists(), "the red run IS recorded");
+    }
+
+    // ══ adoption + fencing (claims.mjs, msn-12 D4/D9 invariant 10) ═════════
+    //
+    // Ported from test_claims.mjs. Before this cell nothing in the Rust tree
+    // consumed `fence_epoch`: claim_cell_file stamped it and no code path ever
+    // compared it, so a stale holder's renew/release would have proceeded
+    // silently. Each negative below CONSTRUCTS the stale state and pins the
+    // exact refusal bytes, with a firing control beside it.
+
+    fn adopt(root: &Path, cell: &str, session: &str) -> AdoptClaimOutcome {
+        adopt_claim(root, cell, session).expect("adopt must not throw")
+    }
+
+    fn refused(outcome: AdoptClaimOutcome) -> ClaimRefusal {
+        match outcome {
+            AdoptClaimOutcome::Refused(r) => r,
+            AdoptClaimOutcome::Ok { .. } => panic!("expected a typed refusal"),
+        }
+    }
+
+    fn claim_on_disk(root: &Path, cell: &str) -> Value {
+        let raw = std::fs::read_to_string(claims_dir(root).join(format!("{cell}.json"))).unwrap();
+        serde_json::from_str(&raw).unwrap()
+    }
+
+    /// Oracle: "adoptClaim rewrites the owner IN PLACE: old owner loses, new
+    /// owner holds, the claim file is present throughout" and "adoptClaim
+    /// bumps fence_epoch by exactly 1, atomically with the ownership rewrite".
+    #[test]
+    fn adopt_rewrites_ownership_in_place_and_bumps_the_fence_by_exactly_one() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_claim_fixture(root, "c-1", Some("sess-a"), 600.0, OLD);
+        // A pre-msn-12 claim carries no fence_epoch on disk at all.
+        assert!(claim_on_disk(root, "c-1").get("fence_epoch").is_none());
+
+        let AdoptClaimOutcome::Ok { claim, previous_owner } = adopt(root, "c-1", "sess-b") else {
+            panic!("expected an adoption");
+        };
+        assert_eq!(previous_owner, Some(json!("sess-a")));
+        assert_eq!(claim["session"], json!("sess-b"));
+        assert_eq!(claim["adopted_from"], json!("sess-a"));
+        assert_eq!(claim["fence_epoch"], json!(2.0), "a legacy claim reads as epoch 1, so +1 == 2");
+        assert_ne!(claim["claimed_at"], json!(OLD), "fresh ownership renews the TTL clock");
+        assert_eq!(claim["acquired_at"], json!(OLD), "the acquisition stamp is immutable");
+        assert_eq!(claim["adopted_at"], claim["claimed_at"]);
+        // Compared as RENDERED bytes: JS writes 2 and 2.0 identically, so a
+        // JSON number-kind difference on the read-back is not a difference.
+        assert_eq!(
+            jsjson::stringify(&claim_on_disk(root, "c-1")),
+            jsjson::stringify(&claim),
+            "written atomically, never deleted first"
+        );
+        // ORACLE-PINNED BYTES: captured from a live `node` run of claims.mjs
+        // adoptClaim over this exact fixture, not from a reading of the source.
+        let on_disk = std::fs::read_to_string(claims_dir(root).join("c-1.json"))
+            .unwrap()
+            .replace(claim["claimed_at"].as_str().unwrap(), "<now>");
+        assert_eq!(
+            on_disk,
+            "{\n  \"cell\": \"c-1\",\n  \"session\": \"sess-b\",\n  \"ttl_seconds\": 600,\n  \"claimed_at\": \"<now>\",\n  \"acquired_at\": \"2020-01-01T00:00:00.000Z\",\n  \"adopted_from\": \"sess-a\",\n  \"adopted_at\": \"<now>\",\n  \"fence_epoch\": 2\n}\n"
+        );
+        // Key order: a re-assigned key keeps its position; the three new ones
+        // append in declaration order.
+        let keys: Vec<&str> =
+            claim.as_object().unwrap().keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            vec!["cell", "session", "ttl_seconds", "claimed_at", "acquired_at", "adopted_from", "adopted_at", "fence_epoch"]
+        );
+
+        // A second adoption bumps again, from the STORED epoch.
+        let AdoptClaimOutcome::Ok { claim, previous_owner } = adopt(root, "c-1", "sess-c") else {
+            panic!("expected an adoption");
+        };
+        assert_eq!(previous_owner, Some(json!("sess-b")));
+        assert_eq!(claim["fence_epoch"], json!(3.0));
+
+        // Adopting a SESSIONLESS claim drops `adopted_from` entirely rather
+        // than writing null (`{...claim, adopted_from: undefined}`).
+        write_claim_fixture(root, "c-2", None, 600.0, OLD);
+        let AdoptClaimOutcome::Ok { claim, previous_owner } = adopt(root, "c-2", "sess-b") else {
+            panic!("expected an adoption");
+        };
+        assert_eq!(previous_owner, None);
+        assert!(claim.get("adopted_from").is_none(), "undefined is dropped, never null: {claim}");
+        assert!(!claim_on_disk(root, "c-2").as_object().unwrap().contains_key("adopted_from"));
+
+        // The gate file never leaks.
+        assert!(!claim_gate_path(root, "c-1").unwrap().exists());
+        assert!(!claim_gate_path(root, "c-2").unwrap().exists());
+    }
+
+    /// Oracle: "adoptClaim on a cell with no claim is a typed NOT_FOUND" and
+    /// "sweep and adopt skip/refuse while the per-claim gate is held — typed
+    /// GATE_HELD, never wait".
+    #[test]
+    fn adopt_refuses_not_found_and_gate_held_without_ever_waiting() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let ghost = refused(adopt(root, "no-such-cell", "sess-b"));
+        assert_eq!(ghost.code, "NOT_FOUND");
+        assert_eq!(ghost.reason, "cell \"no-such-cell\" has no claim to adopt.");
+
+        write_claim_fixture(root, "gated", Some("sess-a"), 600.0, OLD);
+        let gate = claim_gate_path(root, "gated").unwrap();
+        std::fs::write(&gate, "{}").unwrap(); // another process mid-adopt
+        let before = claim_on_disk(root, "gated");
+        let held = refused(adopt(root, "gated", "sess-b"));
+        assert_eq!(held.code, "GATE_HELD");
+        assert_eq!(
+            held.reason,
+            "claim \"gated\" is gated by another in-flight adopt/sweep — retry later, never wait on the gate."
+        );
+        assert_eq!(claim_on_disk(root, "gated"), before, "a gated adopt changes nothing");
+        assert!(gate.exists(), "someone else's gate is never released by the loser");
+
+        // Control: with the gate free the very same adopt succeeds.
+        std::fs::remove_file(&gate).unwrap();
+        assert!(matches!(adopt(root, "gated", "sess-b"), AdoptClaimOutcome::Ok { .. }));
+
+        // requireId still guards both arguments.
+        assert!(matches!(adopt_claim(root, "  ", "s"), Err(Fail::Thrown(m)) if m == "cell id is required."));
+        assert!(matches!(adopt_claim(root, "c", " "), Err(Fail::Thrown(m)) if m == "session id is required."));
+    }
+
+    /// The second-port pin named in the fencing section header: this module's
+    /// adoptClaim must leave the SAME bytes on disk as verbs/state_group.rs's
+    /// narrowed twin (the `state handoff adopt` path). Re-derived rather than
+    /// imported because that file is outside this cell's touchable set.
+    #[test]
+    fn adopt_agrees_with_the_state_group_port_on_the_shared_fixture() {
+        let mine = cn_root();
+        let theirs = cn_root();
+        for root in [mine.path(), theirs.path()] {
+            write_claim_fixture(root, "shared", Some("sess-a"), 600.0, OLD);
+        }
+        let AdoptClaimOutcome::Ok { .. } = adopt(mine.path(), "shared", "sess-b") else {
+            panic!("expected an adoption");
+        };
+        let other = crate::verbs::state_group::adopt_claim(theirs.path(), "shared", "sess-b")
+            .unwrap_or_else(|_| panic!("the state_group twin must also adopt"));
+        let crate::verbs::state_group::AdoptOutcome::Adopted { claim, previous_owner } = other else {
+            panic!("expected an adoption from the twin");
+        };
+        assert_eq!(previous_owner, Some(json!("sess-a")));
+        let mut a = claim_on_disk(mine.path(), "shared");
+        let mut b = Value::Object(claim);
+        // The two ports stamp their own `now`; every other byte must agree.
+        for v in [&mut a, &mut b] {
+            let m = v.as_object_mut().unwrap();
+            m.insert("claimed_at".into(), json!("<now>"));
+            m.insert("adopted_at".into(), json!("<now>"));
+        }
+        assert_eq!(jsjson::stringify(&a), jsjson::stringify(&b));
+        assert_eq!(a["fence_epoch"].as_f64(), Some(2.0));
+    }
+
+    /// Oracle: "renewClaimTTL refreshes claimed_at for this session's claims
+    /// only, never touching adopted_from/adopted_at or fence_epoch", and "a
+    /// claim whose gate is held is SKIPPED, never waited on".
+    #[test]
+    fn renew_touches_only_this_sessions_claims_and_never_the_fence() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_claim_fixture(root, "mine", Some("sess-a"), 600.0, OLD);
+        write_claim_fixture(root, "theirs", Some("sess-b"), 600.0, OLD);
+        write_claim_fixture(root, "nobodys", None, 600.0, OLD);
+        write_claim_fixture(root, "gated", Some("sess-a"), 600.0, OLD);
+        std::fs::write(claim_gate_path(root, "gated").unwrap(), "{}").unwrap();
+        // Give `mine` a fence so "renewal never bumps it" is not vacuous.
+        let mut with_fence = claim_on_disk(root, "mine");
+        with_fence["fence_epoch"] = json!(4);
+        std::fs::write(
+            claims_dir(root).join("mine.json"),
+            jsjson::stringify_pretty(&with_fence),
+        )
+        .unwrap();
+
+        let RenewClaimOutcome::Ok { renewed, skipped } =
+            renew_claim_ttl(root, "sess-a", None).unwrap()
+        else {
+            panic!("expected a renewal");
+        };
+        assert_eq!(renewed, vec!["mine".to_string()]);
+        assert_eq!(skipped, vec!["gated".to_string()], "a held gate is skipped, never waited on");
+
+        let renewed_claim = claim_on_disk(root, "mine");
+        assert_ne!(renewed_claim["claimed_at"], json!(OLD), "the expiry clock advanced");
+        assert_eq!(renewed_claim["acquired_at"], json!(OLD), "acquired_at never moves");
+        assert_eq!(renewed_claim["fence_epoch"], json!(4), "renewal never bumps the fence");
+        assert_eq!(claim_on_disk(root, "theirs")["claimed_at"], json!(OLD));
+        assert_eq!(claim_on_disk(root, "nobodys")["claimed_at"], json!(OLD));
+        assert_eq!(claim_on_disk(root, "gated")["claimed_at"], json!(OLD));
+        assert!(!claim_gate_path(root, "mine").unwrap().exists(), "no gate leak");
+
+        // An absent claims directory is an empty, non-throwing answer.
+        let empty = cn_root();
+        let RenewClaimOutcome::Ok { renewed, skipped } =
+            renew_claim_ttl(empty.path(), "sess-a", None).unwrap()
+        else {
+            panic!("expected the empty answer");
+        };
+        assert!(renewed.is_empty() && skipped.is_empty());
+    }
+
+    /// Oracle: "renewClaimTTL refuses typed CLAIM_FENCE_STALE when the
+    /// presented epoch is behind the claim's current fence_epoch, and renews
+    /// NOTHING". NEGATIVE test: the stale state is constructed and the
+    /// refusal bytes are pinned exactly.
+    #[test]
+    fn a_stale_presented_epoch_refuses_the_renew_and_writes_nothing() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_claim_fixture(root, "c-1", Some("sess-a"), 600.0, OLD);
+        // A takeover already moved ownership forward: stored epoch is 3.
+        let mut bumped = claim_on_disk(root, "c-1");
+        bumped["fence_epoch"] = json!(3);
+        std::fs::write(claims_dir(root).join("c-1.json"), jsjson::stringify_pretty(&bumped))
+            .unwrap();
+        let before = std::fs::read_to_string(claims_dir(root).join("c-1.json")).unwrap();
+
+        for (presented, rendered) in
+            [(json!(2), "2"), (json!(0), "0"), (json!(-1), "-1"), (json!(null), "null")]
+        {
+            let RenewClaimOutcome::Refused(r) =
+                renew_claim_ttl(root, "sess-a", Some(&presented)).unwrap()
+            else {
+                panic!("{presented} must be refused");
+            };
+            assert_eq!(r.code, "CLAIM_FENCE_STALE");
+            assert_eq!(
+                r.reason,
+                format!(
+                    "cell \"c-1\" renew refused: presented epoch {rendered} is behind current fence_epoch 3 — a takeover already moved ownership forward; re-adopt before writing again."
+                )
+            );
+            assert_eq!(r.extra["cell"], json!("c-1"));
+            assert_eq!(r.extra["current_epoch"], json!(3.0));
+            assert_eq!(
+                std::fs::read_to_string(claims_dir(root).join("c-1.json")).unwrap(),
+                before,
+                "a fenced refusal renews nothing at all"
+            );
+            assert!(!claim_gate_path(root, "c-1").unwrap().exists(), "the gate is released in finally");
+        }
+
+        // Controls: the CURRENT epoch and an AHEAD epoch both renew, and
+        // omitting the presentation is the legacy unfenced arm.
+        for fresh in [json!(3), json!(4)] {
+            let RenewClaimOutcome::Ok { renewed, .. } =
+                renew_claim_ttl(root, "sess-a", Some(&fresh)).unwrap()
+            else {
+                panic!("presenting {fresh} must renew");
+            };
+            assert_eq!(renewed, vec!["c-1".to_string()]);
+        }
+        assert!(matches!(
+            renew_claim_ttl(root, "sess-a", None).unwrap(),
+            RenewClaimOutcome::Ok { .. }
+        ));
+
+        // A legacy claim with NO fence_epoch reads as 1: presenting 0 is
+        // stale, presenting 1 renews.
+        write_claim_fixture(root, "legacy", Some("sess-b"), 600.0, OLD);
+        let RenewClaimOutcome::Refused(r) =
+            renew_claim_ttl(root, "sess-b", Some(&json!(0))).unwrap()
+        else {
+            panic!("a legacy claim must fence at 1");
+        };
+        assert!(r.reason.contains("behind current fence_epoch 1"), "{}", r.reason);
+        assert!(matches!(
+            renew_claim_ttl(root, "sess-b", Some(&json!(1))).unwrap(),
+            RenewClaimOutcome::Ok { .. }
+        ));
+    }
+
+    /// Oracle: "releaseClaim refuses typed CLAIM_FENCE_STALE on a stale
+    /// presentation and the claim file is left untouched" — the
+    /// safety-critical half. Also pins the refusal ORDER: ownership is
+    /// checked BEFORE fencing (fencing is orthogonal, never a substitute).
+    #[test]
+    fn a_stale_presented_epoch_refuses_the_release_and_never_removes_the_file() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_claim_fixture(root, "c-1", Some("sess-a"), 600.0, OLD);
+        let mut bumped = claim_on_disk(root, "c-1");
+        bumped["fence_epoch"] = json!(3);
+        std::fs::write(claims_dir(root).join("c-1.json"), jsjson::stringify_pretty(&bumped))
+            .unwrap();
+        let file = claims_dir(root).join("c-1.json");
+        let before = std::fs::read_to_string(&file).unwrap();
+
+        let stale = json!(2);
+        let ReleaseClaimOutcome::Refused(r) =
+            release_claim_typed(root, Some("sess-a"), "c-1", Some(&stale)).unwrap()
+        else {
+            panic!("a stale release must refuse");
+        };
+        assert_eq!(r.code, "CLAIM_FENCE_STALE");
+        assert_eq!(
+            r.reason,
+            "cell \"c-1\" release refused: presented epoch 2 is behind current fence_epoch 3 — a takeover already moved ownership forward; re-adopt before writing again."
+        );
+        assert!(file.exists(), "a fenced release must NEVER remove the claim file");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+        assert!(!claim_gate_path(root, "c-1").unwrap().exists());
+
+        // Refusal ORDER: a foreign session presenting a FRESH epoch still gets
+        // NOT_OWNER, not a fence answer.
+        let ReleaseClaimOutcome::Refused(r) =
+            release_claim_typed(root, Some("sess-x"), "c-1", Some(&json!(99))).unwrap()
+        else {
+            panic!("a foreign release must refuse");
+        };
+        assert_eq!(r.code, "NOT_OWNER");
+        assert_eq!(r.reason, "cell \"c-1\" is owned by session \"sess-a\", not \"sess-x\".");
+        assert!(file.exists());
+
+        // Control: the owner presenting the current epoch releases for real.
+        let ReleaseClaimOutcome::Ok { released } =
+            release_claim_typed(root, Some("sess-a"), "c-1", Some(&json!(3))).unwrap()
+        else {
+            panic!("the owner must be able to release");
+        };
+        assert_eq!(released["cell"], json!("c-1"));
+        assert!(!file.exists());
+        // …and the NOT_FOUND rung is unchanged.
+        let ReleaseClaimOutcome::Refused(r) =
+            release_claim_typed(root, Some("sess-a"), "c-1", None).unwrap()
+        else {
+            panic!("a released claim is NOT_FOUND");
+        };
+        assert_eq!(r.code, "NOT_FOUND");
+        assert_eq!(r.reason, "cell \"c-1\" has no claim to release.");
+    }
+
+    /// The whole point of the fence, end to end: an adoption moves ownership
+    /// forward, and the STALE holder's later renew AND release are both
+    /// refused with the epoch it no longer has — never silently applied.
+    #[test]
+    fn an_adoption_fences_out_the_previous_holders_later_writes() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        write_claim_fixture(root, "c-1", Some("sess-a"), 600.0, OLD);
+        // sess-a's in-memory copy says epoch 1 (a fresh claimCellFile stamp).
+        let held_epoch = json!(1);
+        // A takeover happens behind its back.
+        let AdoptClaimOutcome::Ok { claim, .. } = adopt(root, "c-1", "sess-b") else {
+            panic!("expected an adoption");
+        };
+        assert_eq!(claim["fence_epoch"], json!(2.0));
+
+        // The stale holder's renew is refused — and it is no longer the owner
+        // either, so nothing is renewed on any path.
+        let RenewClaimOutcome::Ok { renewed, .. } =
+            renew_claim_ttl(root, "sess-a", Some(&held_epoch)).unwrap()
+        else {
+            panic!("session ownership alone already excludes sess-a");
+        };
+        assert!(renewed.is_empty());
+
+        // The edge case session identity alone would MISS: the same session
+        // re-adopts (so it owns the claim again) while a stale in-memory copy
+        // still presents the pre-adoption epoch.
+        let AdoptClaimOutcome::Ok { .. } = adopt(root, "c-1", "sess-a") else {
+            panic!("expected a re-adoption");
+        };
+        assert_eq!(claim_on_disk(root, "c-1")["fence_epoch"].as_f64(), Some(3.0));
+        let RenewClaimOutcome::Refused(r) =
+            renew_claim_ttl(root, "sess-a", Some(&held_epoch)).unwrap()
+        else {
+            panic!("a stale epoch from the CURRENT owner must still fence");
+        };
+        assert_eq!(r.code, "CLAIM_FENCE_STALE");
+        let ReleaseClaimOutcome::Refused(r) =
+            release_claim_typed(root, Some("sess-a"), "c-1", Some(&held_epoch)).unwrap()
+        else {
+            panic!("a stale epoch must fence the release too");
+        };
+        assert_eq!(r.code, "CLAIM_FENCE_STALE");
+        assert!(claims_dir(root).join("c-1.json").exists(), "still there — a stale fence never proceeds");
     }
 }
