@@ -64,6 +64,32 @@ Precedent: DB2 already proved byte-identical-output migration works for this cod
 - **C5** write-guard / worktree-first semantics (guards.mjs, docs/specs/worktree-first.md)
   ported with paired tests before the Node guard is retired — never a window with no guard.
 
+### Progress log (kept current; commits are the authority)
+
+- **R0 DONE** `9932774b` — workspace, front door, diff harness 19/19.
+- **R1 DONE** `7736d7ed` `793888c1` `72c5399e` — fsutil/jsjson/roots/state/registry/path_identity/
+  lock; first native verb (`status --brief`). Design call: `.bee/` files are read as
+  order-preserving `serde_json::Value`s with JS-spread-parity merging, NOT rigid structs —
+  structs would reorder or drop unknown keys and break C2.
+- **R2 DONE** `8939b151` `9361a7de` `f58b9304` — all nine hooks native under `bee hook <name>`
+  (hook diff harness 60/60); onboard's repo-hook renderer feature-detects a vendored
+  `.bee/bin/bee[.exe]` per target repo, so hosts without the binary keep node wiring
+  byte-identical. write-guard embeds the 26-file vendored-lib closure and byte-compares it at
+  runtime: lib skew ⇒ delegate, so a guard decision can never flip on a skewed host.
+- **R3 IN PROGRESS** `8fd3e21e` `bd0372d6` (wave 1: 31 surfaces) + wave 2 landing —
+  status(full)/orient, cells read+mutating, reservations, decisions, capture, backlog, feedback,
+  intent/reviews/knowledge/tmp, state group, help surfaces, `bee test`.
+
+Two campaign rules that emerged from practice and now govern every port:
+
+1. **Conservative argv routing.** A verb serves ONLY argv shapes proven equivalent; everything
+   else returns before any output and Node handles it. This means the dispatcher's
+   error/validate/nearest-match machinery never has to be reproduced.
+2. **Refusals delegate, unless their bytes are deterministic.** A refusal whose text embeds a V8
+   message goes back to Node; a typed refusal (lock-busy, gate, dep-uncapped) is reproduced
+   natively — with the one exception that a refusal reached AFTER a lock attempt must be native,
+   or delegation would double the contention telemetry.
+
 ### Phases
 
 - **R0 — scaffold + diff harness.** Cargo workspace `packages/bee-rs/` (binary name `bee`).
@@ -108,7 +134,9 @@ session ends shippable.
 - **Two-runtime window confusion.** Mitigation: dispatcher owns routing; `bee --version` prints
   which runtime served the verb; diff harness runs in CI until R6.
 - **Windows Git Bash dependency for `bee test`** (POSIX sh runner) — unchanged by the port;
-  explicitly out of scope.
+  explicitly out of scope. NOTE (found during the R3 port): a bare `bash` spawn on Windows
+  resolves through System32 first and launches **WSL bash (Linux)**, not Git Bash. The Rust
+  runner passes an explicit PATH to the child so resolution is PATH-first like libuv's.
 
 ## Open decisions for owner
 
