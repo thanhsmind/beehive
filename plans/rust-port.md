@@ -117,6 +117,24 @@ Two campaign rules that emerged from practice and now govern every port:
 - **R6 — cutover.** Delete Node runtime + shims; `.bee/bin/` ships the binary; INSTALL.md gains
   the per-platform build step (`cargo build --release`, matching source-checkout distribution);
   onboard re-render; docs sweep; memory updated.
+- **R6a — skills and expertise move onto the Rust system** (owner requirement, 2026-08-01). The
+  port is not finished while the instruction layer still teaches the Node runtime, and it has
+  two halves:
+  - **Content.** Every agent-facing command spelling must name the binary, not a `.mjs` script:
+    `skills/*/SKILL.md` and their `references/`, `expertise/*.md` + `INDEX`, `AGENTS.md`,
+    `CLAUDE.md`, and the live docs. Measured at the start of R6a: 49 `node …*.mjs`
+    invocations across skills/expertise/AGENTS.md, concentrated in
+    `bee-hive/references/routing-and-contracts.md` (16), `bee-swarming/references/
+    swarming-reference.md` (15), and the `bee-herding` reference set. Note `skills/bee-herding/
+    scripts/*.mjs` and `control-loop.sh` are executable helpers, not prose — they are ported or
+    rewritten, not merely reworded.
+  - **Machinery.** The skill-tree render, the `.claude/skills` projection, and the
+    `.bee/expertise` vendoring must be produced by the Rust binary (the onboard and render
+    ports), never by a Node script. After the flip, re-render every projection and prove the
+    vendored trees byte-identical to the intended output.
+
+  Sequencing: R6a runs AFTER the CLI surface settles, because every spelling it writes must
+  match the final binary invocation.
 
 #### Coverage debts R6 must close (a delegated path is fine until Node is deleted)
 
