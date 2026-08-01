@@ -22,6 +22,7 @@
 // spawns the real, unmodified test_agents_budget.mjs against the copies.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -133,11 +134,47 @@ function walk(dir, out = []) {
   return out;
 }
 
-check("no byte/line-ceiling-shaped construct on instruction text survives anywhere in scripts/", () => {
-  const files = walk(SCRIPTS_ROOT).filter(
-    (f) => /\.(mjs|js|cjs)$/.test(f) && f !== __filename,
+// ── Vacuity guard ─────────────────────────────────────────────────────────
+// A law that scans a set must FAIL when that set is unexpectedly empty. A
+// green check over an empty scan set is worse than no check: it reports
+// "the law holds" when in fact its SUBJECT vanished. That is precisely what
+// happens to this suite at the R6 Node-runtime cutover, when `scripts/**`
+// is deleted (plans/rust-port.md § "Hard blockers for deleting the Node
+// runtime"; plans/cutover-readiness.md). Every scan in this file goes
+// through here, and the refusal names what it expected to find and where.
+//
+// The post-cutover home of invariant 1 is the Rust suite —
+// `packages/bee-rs/crates/bee/tests/instruction_laws.rs` — which carries the
+// same detectors re-pointed at `packages/bee-rs/crates/**/*.rs`. This guard
+// is what makes the handover safe in either order: if `scripts/**` goes away
+// while this file is still wired up, it goes RED here, loudly, instead of
+// green over nothing.
+function requireNonEmptyScanSet({ label, roots, expectation, minimum, files }) {
+  const rel = (p) => path.relative(REPO_ROOT, p) || ".";
+  const missing = roots.filter((r) => !fs.existsSync(r));
+  assert(
+    missing.length === 0,
+    `${label}: scan root(s) missing — ${missing.map(rel).join(", ")}. Expected ${expectation}. ` +
+      `A law whose scan root no longer exists must be re-pointed or explicitly retired ` +
+      `(see plans/cutover-readiness.md), never left to pass over nothing.`,
   );
-  assert(files.length > 10, `expected to scan a real tree of script files, found only ${files.length}`);
+  assert(
+    files.length >= minimum,
+    `${label}: scanned ${files.length} file(s) under [${roots.map(rel).join(", ")}], expected at least ` +
+      `${minimum}. Expected ${expectation}. An empty (or implausibly small) scan set means this law is ` +
+      `asserting nothing — re-point it or retire it (see plans/cutover-readiness.md).`,
+  );
+  return files;
+}
+
+check("no byte/line-ceiling-shaped construct on instruction text survives anywhere in scripts/", () => {
+  const files = requireNonEmptyScanSet({
+    label: "invariant 1 — ceiling-shaped constructs",
+    roots: [SCRIPTS_ROOT],
+    expectation: "the repo's Node script tree (scripts/**/*.{mjs,js,cjs})",
+    minimum: 10,
+    files: walk(SCRIPTS_ROOT).filter((f) => /\.(mjs|js|cjs)$/.test(f) && f !== __filename),
+  });
   const offenders = [];
   for (const file of files) {
     const text = fs.readFileSync(file, "utf8");
@@ -153,8 +190,13 @@ check("no byte/line-ceiling-shaped construct on instruction text survives anywhe
 });
 
 check("no per-skill byte-baseline table survives anywhere in scripts/**/*.json", () => {
-  const files = walk(SCRIPTS_ROOT).filter((f) => f.endsWith(".json"));
-  assert(files.length > 0, "expected to scan at least one JSON file under scripts/");
+  const files = requireNonEmptyScanSet({
+    label: "invariant 1 — per-skill byte-baseline tables",
+    roots: [SCRIPTS_ROOT],
+    expectation: "at least one JSON data file under scripts/ (the genre scripts/skill-body-budget.json belonged to)",
+    minimum: 1,
+    files: walk(SCRIPTS_ROOT).filter((f) => f.endsWith(".json")),
+  });
   const offenders = [];
   for (const file of files) {
     let parsed;
@@ -193,6 +235,62 @@ check("negative control: the inline-comparison detector catches a ceiling with n
     hits.some((h) => h.rule.includes("inline size comparison")),
     "the detector must flag an inline size-vs-instruction-text comparison with no named ceiling constant",
   );
+});
+
+// ── Negative controls for the vacuity guard itself ────────────────────────
+// "Prove it fails correctly, naming what it expected" is a permanent part of
+// this suite, not a probe run once and deleted (the house convention set by
+// test_scan_set_hygiene.mjs's --selftest). Both arms of the guard are
+// exercised: an ABSENT root (what deleting scripts/ produces) and a PRESENT
+// but EMPTY root (what emptying it produces).
+
+check("negative control: the vacuity guard refuses an ABSENT scan root, naming what it expected", () => {
+  const gone = path.join(REPO_ROOT, ".bee", "tmp", `no-such-scan-root-${process.pid}-${crypto.randomUUID()}`);
+  assert(!fs.existsSync(gone), "fixture precondition: the absent-root path must really not exist");
+  let error = null;
+  try {
+    requireNonEmptyScanSet({
+      label: "fixture law",
+      roots: [gone],
+      expectation: "the repo's Node script tree (scripts/**/*.{mjs,js,cjs})",
+      minimum: 10,
+      files: [],
+    });
+  } catch (e) {
+    error = e;
+  }
+  assert(error, "an absent scan root must be a hard failure — this is the exact shape deleting scripts/ produces");
+  assert(
+    /scan root\(s\) missing/.test(error.message) && /Node script tree/.test(error.message),
+    `the refusal must name the missing root AND what it expected to find there, got: ${error.message}`,
+  );
+});
+
+check("negative control: the vacuity guard refuses a PRESENT but empty scan root, naming what it expected", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "instruction-size-law-vacuity-"));
+  try {
+    const files = walk(dir).filter((f) => /\.(mjs|js|cjs)$/.test(f));
+    assert(files.length === 0, "fixture precondition: the temp scan root must be empty");
+    let error = null;
+    try {
+      requireNonEmptyScanSet({
+        label: "fixture law",
+        roots: [dir],
+        expectation: "the repo's Node script tree (scripts/**/*.{mjs,js,cjs})",
+        minimum: 10,
+        files,
+      });
+    } catch (e) {
+      error = e;
+    }
+    assert(error, "an empty scan set must be a hard failure, never a silent pass");
+    assert(
+      /scanned 0 file\(s\)/.test(error.message) && /expected at least 10/.test(error.message),
+      `the refusal must name the count it got and the minimum it expected, got: ${error.message}`,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 check("negative control: the JSON-baseline detector catches a renamed per-skill byte table", () => {

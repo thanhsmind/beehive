@@ -51,6 +51,43 @@ const REPO_ROOT = path.join(__dirname, "..", "..");
 const NAME = "test_scan_set_hygiene";
 
 // ════════════════════════════════════════════════════════════════════════
+// Vacuity guard — a law that scans a set must FAIL when the set is empty
+// ════════════════════════════════════════════════════════════════════════
+//
+// Both checks below derive their scan set at runtime, so both can be
+// silently emptied. Check 1 is the sharp case: its pathspecs are
+// `scripts/tests/*.mjs` and `packages/bee/**/*.mjs`, and the R6 Node-runtime
+// cutover DELETES `packages/bee/**` (plans/rust-port.md § "Hard blockers for
+// deleting the Node runtime"). Without this guard the check would report
+// `PASS ... 0 file(s) ... derive no unguarded git-index scan set` — a green
+// tick over an empty set, which is strictly worse than no check, because it
+// looks like coverage.
+//
+// So every scan states a floor and what it expected to find there. Below the
+// floor the check FAILS and names the pathspecs, the count, the floor, and
+// where to go (plans/cutover-readiness.md). The floors are set well under
+// today's real counts (check 1 sees ~150 files, check 2 ~260) — they catch
+// "the subject vanished", not "someone deleted a file".
+//
+// The post-cutover home of both checks is the Rust suite,
+// `packages/bee-rs/crates/bee/tests/instruction_laws.rs`, which carries the
+// same two laws re-pointed at surfaces that survive the deletion. This guard
+// is what makes the handover safe in either order.
+const MIN_CHECK1_FILES = 25;
+const MIN_CHECK2_FILES = 40;
+
+function scanSetVacuity({ label, pathspecs, expectation, count, minimum }) {
+  if (count >= minimum) return null;
+  return (
+    `${NAME} (${label}): SCAN SET IS EMPTY OR IMPLAUSIBLY SMALL — ${count} file(s) matched ` +
+    `[${pathspecs.join(", ")}], expected at least ${minimum} (${expectation}). ` +
+    `This check asserts nothing over that set, so it is failing rather than reporting a vacuous PASS. ` +
+    `If the subject tree was deliberately removed (e.g. the R6 Node-runtime cutover), re-point this ` +
+    `check at the surface that replaced it or retire it explicitly — see plans/cutover-readiness.md.`
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // CHECK 1 (E4) — unguarded git-index scan sets
 // ════════════════════════════════════════════════════════════════════════
 
@@ -193,17 +230,34 @@ function trackedExistingFiles(root, pathspecs) {
 // self-referential source, not a general carve-out.
 const SELF_PATH = "scripts/tests/test_scan_set_hygiene.mjs";
 
-function checkUnguardedScanSets(root) {
-  const files = trackedExistingFiles(root, ["scripts/tests/*.mjs", "packages/bee/**/*.mjs"]).filter(
-    (p) => p !== SELF_PATH,
-  );
+const CHECK1_PATHSPECS = ["scripts/tests/*.mjs", "packages/bee/**/*.mjs"];
+const CHECK1_EXPECTATION =
+  "the Node suite tree and the Node runtime library — the only code in this repo that shells out to " +
+  "`git ls-files` to build a scan set it then reads from";
+
+/** The real, git-backed derivation. Split out from the check itself so the
+ *  selftest can drive the check (and its vacuity guard) with a scan set of
+ *  its own choosing, without needing a git repository behind it. */
+function unguardedScanSetCandidates(root) {
+  return trackedExistingFiles(root, CHECK1_PATHSPECS).filter((p) => p !== SELF_PATH);
+}
+
+function checkUnguardedScanSets(root, files, minimum = 1) {
+  const vacuous = scanSetVacuity({
+    label: "check 1 — unguarded git-index scan set",
+    pathspecs: CHECK1_PATHSPECS,
+    expectation: CHECK1_EXPECTATION,
+    count: files.length,
+    minimum,
+  });
+  if (vacuous) return { ok: false, vacuous, failures: [], scanned: files.length };
   const failures = [];
   for (const rel of files) {
     const text = fs.readFileSync(path.join(root, rel), "utf8");
     const violations = findUnguardedScanSets(text);
     for (const v of violations) failures.push({ file: rel, ...v });
   }
-  return { ok: failures.length === 0, failures, scanned: files.length };
+  return { ok: failures.length === 0, vacuous: null, failures, scanned: files.length };
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -288,17 +342,18 @@ function filterRetiredStageExceptions(paths) {
  * different question than E8 asks. Check 1 above already owns the
  * scripts/tests/**\/packages/bee/** surface for its own (unrelated) concern.
  */
+const CHECK2_GLOBS = [
+  "skills/*/SKILL.md",
+  "skills/*/references/*.md",
+  "skills/*/references/**/*.md",
+  "docs/knowledge/**/*.md",
+  "docs/specs/**/*.md",
+  "AGENTS.md",
+  "CLAUDE.md",
+];
+
 function currentBehaviorScanSet(root) {
-  const globs = [
-    "skills/*/SKILL.md",
-    "skills/*/references/*.md",
-    "skills/*/references/**/*.md",
-    "docs/knowledge/**/*.md",
-    "docs/specs/**/*.md",
-    "AGENTS.md",
-    "CLAUDE.md",
-  ];
-  const files = trackedExistingFiles(root, globs);
+  const files = trackedExistingFiles(root, CHECK2_GLOBS);
   return filterRetiredStageExceptions(files);
 }
 
@@ -336,7 +391,20 @@ function findCurrentBehaviorMentions(text, token) {
  * checkDoctrine() is, so the selftest can aim it at fixture files without a
  * real git repository backing them.
  */
-function checkRetiredStageAsCurrent(root, scanSet) {
+const CHECK2_EXPECTATION =
+  "the shipped current-behavior instruction layer — skills/*/SKILL.md, skills/*/references/**, " +
+  "docs/knowledge/**, docs/specs/**, AGENTS.md, CLAUDE.md (this surface SURVIVES the Node-runtime " +
+  "deletion; only its retired-token source, packages/bee/lib/state.mjs, does not)";
+
+function checkRetiredStageAsCurrent(root, scanSet, minimum = 1) {
+  const vacuous = scanSetVacuity({
+    label: "check 2 — retired workflow stage described as current",
+    pathspecs: CHECK2_GLOBS,
+    expectation: CHECK2_EXPECTATION,
+    count: scanSet.length,
+    minimum,
+  });
+  if (vacuous) return { ok: false, vacuous, failures: [], scanned: scanSet.length, tokens: [] };
   const tokens = deriveRetiredStageTokens(root);
   const files = scanSet;
   const failures = [];
@@ -347,7 +415,7 @@ function checkRetiredStageAsCurrent(root, scanSet) {
       for (const h of hits) failures.push({ file: rel, token, ...h });
     }
   }
-  return { ok: failures.length === 0, failures, scanned: files.length, tokens };
+  return { ok: failures.length === 0, vacuous: null, failures, scanned: files.length, tokens };
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -532,11 +600,65 @@ function runSelftestCheck2() {
   }
 }
 
+/**
+ * Proves the vacuity guard on BOTH checks, using the real check functions —
+ * not a mock — driven with an empty scan set. This is the exact state the R6
+ * Node-runtime cutover produces for check 1 (`packages/bee/**` deleted), and
+ * the state a broken glob or a wrong root produces for either. It must be a
+ * loud, named FAIL, never a PASS.
+ */
+function runSelftestVacuity() {
+  // Check 1, empty scan set, real floor. The check never touches the disk on
+  // this path, so no fixture repo is needed.
+  const c1 = checkUnguardedScanSets(REPO_ROOT, [], MIN_CHECK1_FILES);
+  if (c1.ok || !c1.vacuous) {
+    console.error(`FAIL ${NAME} --selftest: check1 reported a PASS over an EMPTY scan set (result: ${JSON.stringify(c1)})`);
+    return 1;
+  }
+  for (const needle of ["SCAN SET IS EMPTY", "0 file(s)", "at least 25", "packages/bee/**/*.mjs", "cutover-readiness"]) {
+    if (!c1.vacuous.includes(needle)) {
+      console.error(`FAIL ${NAME} --selftest: check1's empty-scan-set refusal does not name "${needle}": ${c1.vacuous}`);
+      return 1;
+    }
+  }
+  // Control: the SAME check, one file above the floor, does NOT report vacuity —
+  // so the guard is a floor, not a blanket refusal.
+  const c1Live = checkUnguardedScanSets(REPO_ROOT, unguardedScanSetCandidates(REPO_ROOT), MIN_CHECK1_FILES);
+  if (c1Live.vacuous) {
+    console.error(
+      `FAIL ${NAME} --selftest: check1's vacuity guard fires on the LIVE tree — either the floor is set too ` +
+        "high, or (the case this guard exists for) the subject tree has actually been deleted and this " +
+        `check now needs re-pointing or retiring:\n      ${c1Live.vacuous}`,
+    );
+    return 1;
+  }
+
+  // Check 2, empty scan set. Note it short-circuits BEFORE
+  // deriveRetiredStageTokens, so this also holds once state.mjs is gone.
+  const c2 = checkRetiredStageAsCurrent(REPO_ROOT, [], MIN_CHECK2_FILES);
+  if (c2.ok || !c2.vacuous) {
+    console.error(`FAIL ${NAME} --selftest: check2 reported a PASS over an EMPTY scan set (result: ${JSON.stringify(c2)})`);
+    return 1;
+  }
+  if (!c2.vacuous.includes("SCAN SET IS EMPTY") || !c2.vacuous.includes("at least 40")) {
+    console.error(`FAIL ${NAME} --selftest: check2's empty-scan-set refusal is not specific enough: ${c2.vacuous}`);
+    return 1;
+  }
+
+  console.log(
+    `PASS ${NAME} --selftest: both checks FAIL loudly on an empty scan set — naming the pathspecs, the count, ` +
+      "the floor and where to re-point — and neither fires on the live tree",
+  );
+  return 0;
+}
+
 function runSelftest() {
   const c1 = runSelftestCheck1();
   if (c1 !== 0) return c1;
   const c2 = runSelftestCheck2();
   if (c2 !== 0) return c2;
+  const v = runSelftestVacuity();
+  if (v !== 0) return v;
   return 0;
 }
 
@@ -551,8 +673,11 @@ function main() {
 
   let failed = false;
 
-  const c1 = checkUnguardedScanSets(REPO_ROOT);
-  if (!c1.ok) {
+  const c1 = checkUnguardedScanSets(REPO_ROOT, unguardedScanSetCandidates(REPO_ROOT), MIN_CHECK1_FILES);
+  if (c1.vacuous) {
+    failed = true;
+    console.error(`FAIL ${c1.vacuous}`);
+  } else if (!c1.ok) {
     failed = true;
     console.error(`FAIL ${NAME} (check 1 — unguarded git-index scan set): ${c1.failures.length} file(s):`);
     for (const f of c1.failures) {
@@ -567,8 +692,11 @@ function main() {
     console.log(`PASS ${NAME} (check 1): ${c1.scanned} file(s) under scripts/tests/** and packages/bee/** derive no unguarded git-index scan set`);
   }
 
-  const c2 = checkRetiredStageAsCurrent(REPO_ROOT, currentBehaviorScanSet(REPO_ROOT));
-  if (!c2.ok) {
+  const c2 = checkRetiredStageAsCurrent(REPO_ROOT, currentBehaviorScanSet(REPO_ROOT), MIN_CHECK2_FILES);
+  if (c2.vacuous) {
+    failed = true;
+    console.error(`FAIL ${c2.vacuous}`);
+  } else if (!c2.ok) {
     failed = true;
     console.error(
       `FAIL ${NAME} (check 2 — retired workflow stage described as current): ${c2.failures.length} mention(s):`,
