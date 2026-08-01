@@ -39,3 +39,7 @@ crates/target/
 # fence, deliberately, because this line is owned by this feature and must
 # never be edited/removed by the fence's own regeneration tooling.
 .bee/cache/
+
+# rust-port: vendored native binary is machine-local, never committed (decision 1f4262ca)
+.bee/bin/bee.exe
+.bee/bin/bee

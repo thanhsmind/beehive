@@ -2234,12 +2234,29 @@ function composeAgentsHeader(repoRoot) {
 
 // ---------- repo hooks (.claude/settings.json) ----------
 
-function repoHookCommand(fileName) {
+// rust-port R2 (plans/rust-port.md): when the TARGET repo carries the
+// vendored Rust binary (.bee/bin/bee[.exe]), hook wiring points at
+// `bee hook <name>` instead of `node .bee/bin/hooks/bee-<name>.mjs`.
+// Feature-detected per target repo at render time, so a host without the
+// binary keeps the node wiring byte-identical — no flag, no drift.
+function vendoredBeeBinary(repoRoot) {
+  for (const name of ["bee.exe", "bee"]) {
+    if (fs.existsSync(path.join(repoRoot, ".bee", "bin", name))) return name;
+  }
+  return null;
+}
+
+function repoHookCommand(fileName, repoRoot) {
+  const binary = repoRoot ? vendoredBeeBinary(repoRoot) : null;
+  if (binary) {
+    const hookName = fileName.replace(/^bee-/, "").replace(/\.mjs$/, "");
+    return `"$CLAUDE_PROJECT_DIR"/.bee/bin/${binary} hook ${hookName}`;
+  }
   return `node "$CLAUDE_PROJECT_DIR"/.bee/bin/hooks/${fileName}`;
 }
 
-function renderRepoHookEntries() {
-  const entry = (fileName) => ({ type: "command", command: repoHookCommand(fileName) });
+function renderRepoHookEntries(repoRoot) {
+  const entry = (fileName) => ({ type: "command", command: repoHookCommand(fileName, repoRoot) });
   return {
     SessionStart: [
       { matcher: "startup|resume|clear|compact", hooks: [entry("bee-session-init.mjs")] },
@@ -2263,7 +2280,13 @@ function renderRepoHookEntries() {
 
 function isBeeHookEntry(entry) {
   for (const hook of entry?.hooks || []) {
-    if (String(hook?.command || "").includes(".bee/bin/hooks/bee-")) {
+    const command = String(hook?.command || "");
+    // Recognize BOTH wirings (node script and Rust binary) so a re-render
+    // replaces either shape instead of stacking duplicates.
+    if (command.includes(".bee/bin/hooks/bee-")) {
+      return true;
+    }
+    if (command.includes(".bee/bin/bee") && command.includes(" hook ")) {
       return true;
     }
   }
@@ -2271,12 +2294,14 @@ function isBeeHookEntry(entry) {
 }
 
 function mergeRepoSettings(settingsPath) {
+  // <repo>/.claude/settings.json -> <repo> (for the vendored-binary probe).
+  const repoRoot = path.resolve(path.dirname(settingsPath), "..");
   const existing = readJsonIfExists(settingsPath) || {};
   const hooks = existing.hooks && typeof existing.hooks === "object" ? existing.hooks : {};
   const merged = { ...hooks };
   let changed = false;
 
-  for (const [eventName, entries] of Object.entries(renderRepoHookEntries())) {
+  for (const [eventName, entries] of Object.entries(renderRepoHookEntries(repoRoot))) {
     const current = Array.isArray(merged[eventName]) ? merged[eventName] : [];
     const next = [...current.filter((e) => !isBeeHookEntry(e)), ...entries];
     if (JSON.stringify(current) !== JSON.stringify(next)) {

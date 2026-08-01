@@ -65,13 +65,23 @@ fn hook_js_path(name: &str) -> Option<PathBuf> {
     for start in starts {
         let mut dir: Option<&std::path::Path> = Some(&start);
         while let Some(d) = dir {
-            let p = d
+            // Vendored host layout first (deployment-true), then the bee
+            // repo checkout layout.
+            let vendored = d
+                .join(".bee")
+                .join("bin")
+                .join("hooks")
+                .join(format!("bee-{name}.mjs"));
+            if vendored.is_file() {
+                return Some(vendored);
+            }
+            let repo = d
                 .join("packages")
                 .join("bee")
                 .join("hooks")
                 .join(format!("bee-{name}.mjs"));
-            if p.is_file() {
-                return Some(p);
+            if repo.is_file() {
+                return Some(repo);
             }
             dir = d.parent();
         }
