@@ -83,6 +83,15 @@ pub const PORTED: &[&str] = &[
     "backlog rank|badges|render",
     "feedback digest|collect|rank",
     "knowledge promote",
+    // R6 — the last debts blocking Node deletion
+    "state rebuild-projections",
+    "cells claim-next",
+    // Linked-worktree coverage. These serve from INSIDE a linked worktree —
+    // granted or ungranted — not just the main checkout; every other verb
+    // still delegates there. A BROKEN link delegates for everyone. The
+    // authoritative flipped/delegated split lives in roots.rs's header.
+    "status|status --lanes-full|orient (inside linked worktrees)",
+    "reservations list|reserve|release|sweep (inside linked worktrees)",
 ];
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {

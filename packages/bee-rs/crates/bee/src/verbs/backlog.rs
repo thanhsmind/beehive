@@ -1244,6 +1244,119 @@ fn walk_backlog_id_rows(product_root: &Path) -> Option<Vec<RankRow>> {
     Some(rows)
 }
 
+// ─── featureBacklogRank (fsh-11 D2 cross-lane ordering) ───────────────────
+// The OPPOSITE lookup from rankBacklog above: "where does feature X rank",
+// keyed by the Feature column (or, fold-first, by the PBI's own `feature`)
+// rather than by row id. `cells claim-next`'s cross-lane pool is the only
+// caller — hence pub(crate).
+
+/// lib/backlog.mjs featureBacklogRank. `None` = delegate (a backlog.jsonl
+/// line only V8 parses, an unresolvable product_root, or a PBI id outside
+/// `id_sort_safe`'s proven localeCompare region).
+pub(crate) fn feature_backlog_rank(root: &Path) -> Option<HashMap<String, usize>> {
+    let fold = fold_pbis(root)?;
+    if fold.has_events {
+        // `[...folded.items.values()]` — JS Map value order is insertion order.
+        let mut rows: Vec<(Option<&str>, i32, &str)> = Vec::with_capacity(fold.order.len());
+        for id in &fold.order {
+            let item = fold.items.get(id)?;
+            if !id_sort_safe(&item.id) {
+                return None; // a.id.localeCompare(b.id) outside the calibrated alphabet
+            }
+            rows.push((
+                item.feature.as_deref(),
+                pbi_rank_weight(&item.status),
+                item.id.as_str(),
+            ));
+        }
+        // `a.weight - b.weight || a.id.localeCompare(b.id)` — stable, like V8's.
+        rows.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| locale_cmp(a.2, b.2)));
+        let mut map: HashMap<String, usize> = HashMap::new();
+        for (rank, row) in rows.iter().enumerate() {
+            if let Some(feature) = row.0 {
+                map.entry(feature.to_string()).or_insert(rank);
+            }
+        }
+        return Some(map);
+    }
+
+    // Legacy pre-migration branch: the docs/backlog.md table's Feature column.
+    let product_root = resolve_product_root(root)?;
+    let bytes = match std::fs::read(backlog_md_path(&product_root)) {
+        Ok(b) => b,
+        Err(_) => return Some(HashMap::new()), // readFileSync threw → new Map()
+    };
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let lines: Vec<&str> = text
+        .split('\n')
+        .map(|seg| seg.strip_suffix('\r').unwrap_or(seg))
+        .collect();
+    let mut status_index: isize = -1;
+    let mut feature_index: isize = -1;
+    let mut separator_line: isize = -1;
+    // (feature, weight, position)
+    let mut rows: Vec<(Option<String>, i32, usize)> = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        if !line.contains('|') {
+            if separator_line != -1 && !rows.is_empty() {
+                break;
+            }
+            continue;
+        }
+        let cells = split_row(line);
+        if status_index == -1 {
+            if let Some(idx) = cells.iter().position(|c| normalize_status(c) == "status") {
+                status_index = idx as isize;
+                feature_index = cells
+                    .iter()
+                    .position(|c| normalize_status(c) == "feature")
+                    .map(|p| p as isize)
+                    .unwrap_or(-1);
+            }
+            continue;
+        }
+        if separator_line == -1 {
+            separator_line = i as isize; // the |---| row right after the header
+            continue;
+        }
+        let token = if cells.len() as isize > status_index {
+            normalize_status(&cells[status_index as usize])
+        } else {
+            String::new()
+        };
+        let raw_feature = if feature_index != -1 && cells.len() as isize > feature_index {
+            cells[feature_index as usize].as_str()
+        } else {
+            ""
+        };
+        // `.replace(/[*`_]/g, '').trim()` — markup stripped, then trimmed.
+        let stripped: String = raw_feature
+            .chars()
+            .filter(|c| !matches!(c, '*' | '`' | '_'))
+            .collect();
+        let feature = js_trim(&stripped).to_string();
+        let position = rows.len();
+        let feature = if !feature.is_empty() && feature != "\u{2014}" && feature != "-" {
+            Some(feature)
+        } else {
+            None
+        };
+        rows.push((feature, rank_weight(&token), position));
+    }
+    if status_index == -1 || feature_index == -1 || separator_line == -1 || rows.is_empty() {
+        return Some(HashMap::new());
+    }
+    let mut ranked: Vec<&(Option<String>, i32, usize)> = rows.iter().collect();
+    ranked.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.2.cmp(&b.2)));
+    let mut map: HashMap<String, usize> = HashMap::new();
+    for (rank, row) in ranked.iter().enumerate() {
+        if let Some(feature) = &row.0 {
+            map.entry(feature.clone()).or_insert(rank);
+        }
+    }
+    Some(map)
+}
+
 /// rankBacklog(root, {write:false}) — read-only: handleBacklogRank refuses
 /// --write outright, so the write arm is never reached from the CLI.
 fn rank_backlog(product_root: &Path) -> Option<(bool, Vec<String>)> {

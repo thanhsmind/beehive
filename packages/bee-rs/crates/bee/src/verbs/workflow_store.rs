@@ -708,24 +708,51 @@ fn apply_workflow_d1_fields(next: &mut Map<String, Value>, wf: &Map<String, Valu
 /// no overrides `applyOverridesOnly()` never writes, so every non-authoritative
 /// branch here is a pure no-op.
 pub(crate) fn rebuild_state_projection(root: &Path) -> Result<(), Err2> {
+    rebuild_state_projection_reporting(root).map(|_| ())
+}
+
+/// The `{ authoritative, source, state|lane }` triple state-projection.mjs's
+/// rebuild* functions return. Only `state rebuild-projections` reports it —
+/// every other caller writes for effect, so `rebuild_state_projection` /
+/// `rebuild_lane_projection` stay the thin shapes they already had.
+pub(crate) struct Proj<T> {
+    pub(crate) authoritative: bool,
+    pub(crate) source: Value,
+    pub(crate) record: T,
+}
+
+/// provenance: state-projection.mjs rebuildStateProjection's own return value
+/// (see `rebuild_state_projection` above for the body's provenance).
+pub(crate) fn rebuild_state_projection_reporting(
+    root: &Path,
+) -> Result<Proj<Map<String, Value>>, Err2> {
     let workflows = list_workflows(root)?;
     let current = read_state_peek(root)?; // read in Node's own order
+    // applyOverridesOnly() with no overrides — never writes, `state: current`.
+    let no_op = |state: Map<String, Value>| Proj {
+        authoritative: false,
+        source: Value::Null,
+        record: state,
+    };
     if workflows.is_empty() {
-        return Ok(()); // C1: zero workflow records — no write at all
+        return Ok(no_op(current)); // C1: zero workflow records — no write at all
     }
     let feature = current.get("feature").cloned().unwrap_or(Value::Null);
     if truthy(&feature) {
         // Branch (1) — feature-matched (msn-10).
-        let Value::String(f) = &feature else {
-            // A non-string truthy feature never `===` a record's string feature.
-            return Ok(());
-        };
-        let Some(wf) = find_live_workflow(&workflows, f) else {
-            return Ok(()); // feature set, no live workflow names it → no-op
-        };
-        let mut next = current.clone();
-        apply_workflow_d1_fields(&mut next, wf);
-        return write_state(root, &next);
+        // A non-string truthy feature never `===` a record's string feature.
+        if let Value::String(f) = &feature {
+            if let Some(wf) = find_live_workflow(&workflows, f) {
+                let source = wf.get("id").cloned().unwrap_or(Value::Null);
+                let mut next = current.clone();
+                apply_workflow_d1_fields(&mut next, wf);
+                write_state(root, &next)?;
+                return Ok(Proj { authoritative: true, source, record: next });
+            }
+        }
+        // feature set, no live workflow names it → the idle-bootstrap branch
+        // below requires `!current.feature`, so this is always a no-op.
+        return Ok(no_op(current));
     }
     // Branch (2) — idle bootstrap (msn-7).
     let phase = current.get("phase").cloned().unwrap_or(Value::Null);
@@ -733,9 +760,13 @@ pub(crate) fn rebuild_state_projection(root: &Path) -> Result<(), Err2> {
         || js_strict_eq(&phase, &json!("compounding-complete"))
         || !truthy(&phase);
     if !current_is_idle {
-        return Ok(());
+        return Ok(no_op(current));
     }
     let active = pick_newest_active_workflow(&workflows)?;
+    let source = match active {
+        Some(wf) => wf.get("id").cloned().unwrap_or(Value::Null),
+        None => Value::Null,
+    };
     let mut next = current.clone();
     match active {
         Some(wf) => apply_workflow_d1_fields(&mut next, wf),
@@ -751,7 +782,8 @@ pub(crate) fn rebuild_state_projection(root: &Path) -> Result<(), Err2> {
             );
         }
     }
-    write_state(root, &next)
+    write_state(root, &next)?;
+    Ok(Proj { authoritative: true, source, record: next })
 }
 
 /// state-projection.mjs rebuildLaneProjection(root, feature). Returns the
@@ -761,13 +793,23 @@ pub(crate) fn rebuild_lane_projection(
     root: &Path,
     feature: &str,
 ) -> Result<Option<Map<String, Value>>, Err2> {
+    Ok(rebuild_lane_projection_reporting(root, feature)?.record)
+}
+
+/// provenance: state-projection.mjs rebuildLaneProjection's own return value.
+pub(crate) fn rebuild_lane_projection_reporting(
+    root: &Path,
+    feature: &str,
+) -> Result<Proj<Option<Map<String, Value>>>, Err2> {
     let workflows = list_workflows(root)?;
+    let no_op = |lane| Proj { authoritative: false, source: Value::Null, record: lane };
     if workflows.is_empty() {
-        return Ok(read_lane_display(root, feature)?);
+        return Ok(no_op(read_lane_display(root, feature)?));
     }
     let Some(wf) = find_live_workflow(&workflows, feature) else {
-        return Ok(read_lane_display(root, feature)?);
+        return Ok(no_op(read_lane_display(root, feature)?));
     };
+    let source = wf.get("id").cloned().unwrap_or(Value::Null);
     let existing = read_lane_display(root, feature)?;
     let mut next = existing.clone().unwrap_or_default();
     next.insert("schema_version".into(), json!("1.0"));
@@ -790,7 +832,7 @@ pub(crate) fn rebuild_lane_projection(
         .unwrap_or_else(|| json!(now_iso()));
     next.insert("created_at".into(), created_at);
     write_lane(root, &next)?;
-    Ok(Some(next))
+    Ok(Proj { authoritative: true, source, record: Some(next) })
 }
 
 /// state-projection.mjs rebuildHandoffProjection(root) — the legacy
@@ -798,9 +840,14 @@ pub(crate) fn rebuild_lane_projection(
 /// every workflow. No-op at zero workflow records (C1); removes the legacy
 /// file when workflows exist but none carries an open handoff.
 pub(crate) fn rebuild_handoff_projection(root: &Path) -> Result<(), Err2> {
+    rebuild_handoff_projection_reporting(root).map(|_| ())
+}
+
+/// provenance: state-projection.mjs rebuildHandoffProjection's own return value.
+pub(crate) fn rebuild_handoff_projection_reporting(root: &Path) -> Result<Proj<()>, Err2> {
     let workflows = list_workflows(root)?;
     if workflows.is_empty() {
-        return Ok(());
+        return Ok(Proj { authoritative: false, source: Value::Null, record: () });
     }
     let mut newest: Option<(Map<String, Value>, String)> = None;
     for wf in &workflows {
@@ -825,16 +872,17 @@ pub(crate) fn rebuild_handoff_projection(root: &Path) -> Result<(), Err2> {
             }
         }
     }
-    let Some((record, _)) = newest else {
+    let Some((record, source_id)) = newest else {
         let _ = std::fs::remove_file(handoff_path(root)); // rmSync force:true
-        return Ok(());
+        return Ok(Proj { authoritative: true, source: Value::Null, record: () });
     };
     // Drop the mailbox-only fields so a legacy reader sees writeHandoff's shape.
     let mut projected = record;
     for key in ["seq", "status", "id", "workflow_id", "target_role", "from_session"] {
         projected.shift_remove(key);
     }
-    write_json_atomic(&handoff_path(root), &Value::Object(projected)).map_err(|_| Err2::Ex)
+    write_json_atomic(&handoff_path(root), &Value::Object(projected)).map_err(|_| Err2::Ex)?;
+    Ok(Proj { authoritative: true, source: json!(source_id), record: () })
 }
 
 // ─── handoff mailbox (lib/state.mjs) ───────────────────────────────────────

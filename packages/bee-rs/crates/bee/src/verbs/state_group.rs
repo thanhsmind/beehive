@@ -90,13 +90,16 @@ use crate::verbs::reservations::{
     js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy, Ctx, Err2, Ex, Exotic,
     FlagV, Flags, Out, Pre, R2,
 };
+use crate::verbs::reservations::rebuild_reservations_projection;
 use crate::verbs::workflow_store::{
     acquire_named_lock, acquire_workflow_lock, adopt_mailbox_handoff, find_live_workflow,
-    gates_patch_from_record, lane_path, list_lanes, list_workflows,
+    gates_patch_from_record, lane_lock_name, lane_path, list_lanes, list_workflows,
     newest_open_handoff_mailbox_record, projection_lock_name, read_lane_display, read_lane_strict,
-    rebuild_handoff_projection, rebuild_lane_projection, rebuild_state_projection, update_workflow,
-    update_workflow_assuming_lock, update_workflow_assuming_lock_with, wf_id, workflows_list_sort,
-    write_lane, write_mailbox_handoff, MailboxAdopt,
+    rebuild_handoff_projection, rebuild_handoff_projection_reporting, rebuild_lane_projection,
+    rebuild_lane_projection_reporting, rebuild_state_projection,
+    rebuild_state_projection_reporting, update_workflow, update_workflow_assuming_lock,
+    update_workflow_assuming_lock_with, wf_id, workflows_list_sort, write_lane,
+    write_mailbox_handoff, MailboxAdopt,
 };
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -1343,6 +1346,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         ["handoff", "show", ..] => ("handoff.show", 2),
         ["workflows", "list", ..] => ("workflows.list", 2),
         ["workflows", "close", ..] => ("workflows.close", 2),
+        ["rebuild-projections", ..] => ("rebuild-projections", 1),
         _ => return None, // route/start-feature/advisor-ref/compact-*/unknown → Node
     };
     if leading.len() != consumed {
@@ -1369,6 +1373,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "handoff.show" => run_handoff_show(flags, use_json, t0),
         "workflows.list" => run_workflows_list(flags, use_json, t0),
         "workflows.close" => run_workflows_close(flags, use_json, t0),
+        "rebuild-projections" => run_rebuild_projections(flags, use_json, t0),
         _ => None,
     }
 }
@@ -3060,6 +3065,144 @@ fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> Option<Exit
         let mut result = Map::new();
         result.insert("closed".into(), Value::Array(closed));
         Ok(Out::Emit(Value::Object(result), text, 0))
+    })();
+    finish(&ctx, out)
+}
+
+// ─── state rebuild-projections (R6 coverage debt) ──────────────────────────
+
+/// bee.mjs withStoreLocks as RAII: the array IS the acquisition order, and the
+/// unwind releases innermost-first exactly like the nested `withStoreLock`
+/// closures it replaces (Vec's own Drop would release outermost-first).
+struct LockStack(Vec<LockGuard>);
+
+impl Drop for LockStack {
+    fn drop(&mut self) {
+        while self.0.pop().is_some() {}
+    }
+}
+
+/// state-projection.mjs rebuildAllProjections(root). Returns the `{state,
+/// handoff, reservations, lanes}` literal in its own key order.
+fn rebuild_all_projections(root: &Path) -> R2<Value> {
+    let state = rebuild_state_projection_reporting(root)?;
+    let handoff = rebuild_handoff_projection_reporting(root)?;
+    let count = rebuild_reservations_projection(root)?;
+
+    let mut state_out = Map::new();
+    state_out.insert("authoritative".into(), json!(state.authoritative));
+    state_out.insert("source".into(), state.source);
+    state_out.insert("state".into(), Value::Object(state.record));
+
+    let mut handoff_out = Map::new();
+    handoff_out.insert("authoritative".into(), json!(handoff.authoritative));
+    handoff_out.insert("source".into(), handoff.source);
+
+    // rebuildReservationsProjection is never gated on workflow records — see
+    // its own doc comment; `authoritative` is an unconditional literal `true`.
+    let mut reservations_out = Map::new();
+    reservations_out.insert("authoritative".into(), json!(true));
+    reservations_out.insert("count".into(), json!(count));
+
+    let workflows = list_workflows(root)?;
+    let mut lanes = Vec::new();
+    for wf in workflows.iter().filter(is_active_workflow) {
+        let feature = js_disp_opt(wf.get("feature"));
+        let lane = rebuild_lane_projection_reporting(root, &feature)?;
+        let mut row = Map::new();
+        row.insert("authoritative".into(), json!(lane.authoritative));
+        row.insert("source".into(), lane.source);
+        row.insert(
+            "lane".into(),
+            lane.record.map(Value::Object).unwrap_or(Value::Null),
+        );
+        lanes.push(Value::Object(row));
+    }
+
+    let mut result = Map::new();
+    result.insert("state".into(), Value::Object(state_out));
+    result.insert("handoff".into(), Value::Object(handoff_out));
+    result.insert("reservations".into(), Value::Object(reservations_out));
+    result.insert("lanes".into(), Value::Array(lanes));
+    Ok(Value::Object(result))
+}
+
+/// `wf.status === 'active'` — the filter both the lane-lock peek and
+/// rebuildAllProjections's own lane pass use.
+fn is_active_workflow(wf: &&Map<String, Value>) -> bool {
+    js_strict_eq(wf.get("status").unwrap_or(&Value::Null), &json!("active"))
+}
+
+/// bee.mjs handleStateRebuildProjections. The ONE seam that holds more than one
+/// projection lock: 'state' then every active workflow's `lane:<feature>`, lane
+/// names SORTED and de-duplicated so two concurrent rebuilds acquire in the same
+/// sequence and can never deadlock. The lane set is peeked immediately before
+/// the acquire, exactly as the .mjs does — rebuildAllProjections re-lists inside.
+fn run_rebuild_projections(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(&flags, &[]) {
+        return None;
+    }
+    let ctx = match go("state rebuild-projections", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = (|| -> R2<Out> {
+        let workflows = list_workflows(&ctx.root)?;
+        // DELEGATION GUARD (pre-lock, pre-write): Node's lane pass maps over
+        // every ACTIVE record — including one whose `feature` is absent or not
+        // a plain non-empty string, where rebuildLaneProjection(root, undefined)
+        // reaches requireLaneFeature/String(feature) with bytes this port does
+        // not model. No bee-created record has that shape; delegate rather than
+        // guess.
+        for wf in workflows.iter().filter(is_active_workflow) {
+            match wf.get("feature") {
+                Some(Value::String(s)) if !s.is_empty() => {}
+                _ => return Err(Err2::Ex),
+            }
+        }
+        let mut lane_locks: Vec<String> = workflows
+            .iter()
+            .filter(is_active_workflow)
+            .filter(|wf| wf.get("feature").is_some_and(truthy))
+            .map(|wf| lane_lock_name(&js_disp_opt(wf.get("feature"))))
+            .collect();
+        js_sort(&mut lane_locks); // `.sort()` then `new Set(...)` — sorted, so
+        lane_locks.dedup(); // duplicates are adjacent and Set order is preserved
+        let mut names: Vec<String> = vec!["state".to_string()];
+        names.extend(lane_locks);
+
+        let mut stack = LockStack(Vec::new());
+        for name in &names {
+            stack.0.push(acquire_named_lock(&ctx.root, name)?);
+        }
+        let result = rebuild_all_projections(&ctx.root)?;
+        drop(stack);
+
+        let lane_count = match jget(&result, "lanes") {
+            Some(Value::Array(rows)) => rows
+                .iter()
+                .filter(|r| jget(r, "authoritative").is_some_and(truthy))
+                .count(),
+            _ => 0,
+        };
+        let state_authoritative = jget(&result, "state")
+            .and_then(|s| jget(s, "authoritative"))
+            .is_some_and(truthy);
+        let state_note = if state_authoritative {
+            format!(
+                "rebuilt .bee/state.json from workflow {}",
+                js_disp_opt(jget(&result, "state").and_then(|s| jget(s, "source")))
+            )
+        } else {
+            "state.json left untouched (no workflow records yet, or a live non-idle default feature \u{2014} see D1 field scoping)".to_string()
+        };
+        let reservations_note = format!(
+            "reservations.json rebuilt ({} active)",
+            js_disp_opt(jget(&result, "reservations").and_then(|r| jget(r, "count")))
+        );
+        let text =
+            format!("{state_note}; {lane_count} lane projection(s) rebuilt; {reservations_note}.");
+        Ok(Out::Emit(result, text, 0))
     })();
     finish(&ctx, out)
 }

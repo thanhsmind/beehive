@@ -26,17 +26,32 @@
 // verbs are async solely because withStoreLock is async — the sync Rust
 // lock covers the same semantics (contract C1).
 //
-// Root topology: crate::roots::resolve_store_root only ever classifies
-// ORDINARY checkouts natively (a linked worktree — `.git` file at the
-// resolved root — is NeedsNode before this module runs). For an ordinary
-// checkout Node's resolveRoots(cwd) always lands on worktreeResolution
-// 'ordinary' with workRoot === root, so resolveMainRoot(root) === root and
-// resolveHoldTopology(root) === { mainRoot: root, holder: 'main' } — both
-// constants here, with the general linked-worktree branches unreachable by
-// construction. controlRootFor (reservations.mjs's own cycle-free
-// findMainRoot walk) is ported in full, because a marker-resolved root can
-// still sit below a git checkout (the walk-up is real even for ordinary
-// roots).
+// Root topology: WORKTREE-NATIVE (see roots.rs's header for the per-verb
+// flip list). The four verbs here resolve through
+// crate::roots::resolve_store_root_worktree and carry both of bee.mjs's
+// topology helpers for real:
+//
+//   * resolveMainRoot(root) — where the shared cross-worktree holds LEDGER
+//     lives. `<mainRoot>/.bee/runtime/cross-worktree-holds.json`, always the
+//     MAIN checkout's store, never a worktree's own (the same asymmetry the
+//     grant registry relies on). `list` and `sweep` use it unconditionally.
+//   * resolveHoldTopology(root) — `{mainRoot, holder}` for the two
+//     hold-worthy topologies and `null` for everything else:
+//       ordinary checkout        -> {workRoot, "main"}
+//       GRANTED linked worktree  -> {mainRoot, its git-verified id}
+//       UNGRANTED linked worktree-> null: `root` already IS the shared main
+//                                  store, so mirroring under a synthetic
+//                                  identity would just duplicate a
+//                                  reservation the store already carries.
+//                                  reserve/release skip the ENTIRE
+//                                  cross-worktree section — no lock taken,
+//                                  no foreign-hold check, no mirror row.
+//
+// A BROKEN link still delegates (resolveRoots throws in Node before dispatch).
+// controlRootFor (reservations.mjs's own cycle-free findMainRoot walk, which
+// cannot import state.mjs) is a THIRD, separate resolver, ported in full
+// including its linked branch: it is where the LEASE files live, and it
+// answers mainRoot for a granted worktree from the git link alone.
 //
 // Delegation rules beyond the argv shape (all pre-checked BEFORE any store
 // write): corrupt JSON that Node would warn about with a V8 message
@@ -56,7 +71,7 @@ use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock;
 use crate::registry::check_manifest_drift;
-use crate::roots::{resolve_store_root, Roots};
+use crate::roots::{resolve_store_root, resolve_store_root_worktree, Roots, RootsWt, StoreRoots};
 use crate::verbs::{emit_no_root_error, record_timing};
 use serde_json::{json, Map, Number, Value};
 use sha2::{Digest, Sha256};
@@ -785,13 +800,13 @@ fn path_lease_file(control_root: &str, raw_path_id: &str) -> PathBuf {
 /// leaseToReservation / leaseAgent / leaseTtlSeconds). Option = absent key
 /// (dropped by JSON.stringify, shows as "undefined" in text templates).
 pub(crate) struct Resv {
-    agent: Option<Value>,
-    cell: Option<Value>,
-    path: String,
+    pub(crate) agent: Option<Value>,
+    pub(crate) cell: Option<Value>,
+    pub(crate) path: String,
     ttl_seconds: Option<f64>, // None = NaN → JSON null
     reserved_at: Option<Value>,
-    session: Option<Value>,
-    kind: Value,
+    pub(crate) session: Option<Value>,
+    pub(crate) kind: Value,
 }
 
 fn lease_to_reservation(rec: &Map<String, Value>) -> Ex<Resv> {
@@ -878,7 +893,11 @@ fn lease_record_expired(rec: &Map<String, Value>, now: f64) -> Ex<bool> {
 }
 
 /// provenance: reservations.mjs listReservations.
-fn list_reservations(root: &str, active_only: bool, now: f64) -> Ex<Vec<Resv>> {
+///
+/// pub(crate) since R6: verbs/state_group.rs's `state rebuild-projections`
+/// needs it for rebuildReservationsProjection, and verbs/cells.rs's
+/// `cells claim-next` needs it for findSessionConflicts.
+pub(crate) fn list_reservations(root: &str, active_only: bool, now: f64) -> Ex<Vec<Resv>> {
     let mut out = Vec::new();
     for rec in list_path_lease_records(root)? {
         if active_only && lease_record_expired(&rec, now)? {
@@ -887,6 +906,48 @@ fn list_reservations(root: &str, active_only: bool, now: f64) -> Ex<Vec<Resv>> {
         out.push(lease_to_reservation(&rec)?);
     }
     Ok(out)
+}
+
+/// provenance: reservations.mjs reservationsPath.
+pub(crate) fn reservations_path(root: &Path) -> PathBuf {
+    root.join(".bee").join("reservations.json")
+}
+
+/// provenance: reservations.mjs rebuildReservationsProjection (msn-16/msn-18b).
+/// Returns the row count (`{ authoritative: true, count }`'s count — the
+/// authoritative flag is an unconditional `true` at the call site, because this
+/// projection is never gated on workflow records).
+///
+/// The READ is control-rooted inside listReservations → listPathLeaseRecords;
+/// the WRITE deliberately stays on the caller's own workspace root (msn-18b:
+/// `.bee/reservations.json` is a legacy single-checkout DISPLAY projection).
+///
+/// A row whose `reserved_at` is not a string would make Node's comparator
+/// inconsistent (`undefined < undefined` is false, so it answers 1 both ways)
+/// and V8's TimSort order becomes implementation detail — delegate instead.
+pub(crate) fn rebuild_reservations_projection(root: &Path) -> Ex<usize> {
+    let root_s = root.to_str().ok_or(Exotic)?;
+    let rows = list_reservations(root_s, true, now_ms())?;
+    // `a.reserved_at !== b.reserved_at ? (a.reserved_at < b.reserved_at ? -1 : 1)
+    //  : a.path !== b.path ? (a.path < b.path ? -1 : 1) : 0` — JS string
+    // relational comparison is UTF-16 code-unit lexicographic.
+    let mut keyed: Vec<(Vec<u16>, Vec<u16>, Resv)> = Vec::with_capacity(rows.len());
+    for r in rows {
+        let Some(Value::String(ra)) = r.reserved_at.clone() else {
+            return Err(Exotic);
+        };
+        let path_key: Vec<u16> = r.path.encode_utf16().collect();
+        keyed.push((ra.encode_utf16().collect(), path_key, r));
+    }
+    keyed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    let rows: Vec<Value> = keyed.iter().map(|(_, _, r)| resv_to_value(r)).collect();
+    let count = rows.len();
+    write_json_atomic(
+        &reservations_path(root),
+        &json!({ "reservations": Value::Array(rows) }),
+    )
+    .map_err(|_| Exotic)?;
+    Ok(count)
 }
 
 /// provenance: reservations.mjs findConflicts (agent-keyed, activeOnly).
@@ -1136,6 +1197,39 @@ pub(crate) fn prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<
     }))
 }
 
+/// The WORKTREE-NATIVE prelude, used ONLY by this module's four verbs.
+///
+/// Deliberately separate from `prelude` above: verbs/decisions.rs,
+/// verbs/cells.rs and verbs/drivers.rs share that one, and none of them has
+/// had its worktree-sensitive branches ported — widening the shared door
+/// would flip them silently. They keep `resolve_store_root`'s
+/// `LinkedValid => NeedsNode` arm; only the reservations verbs opt in here.
+pub(crate) enum PreWt {
+    Go(Ctx, StoreRoots),
+    Emitted(ExitCode),
+}
+
+fn prelude_worktree(cmd: &'static str, use_json: bool, t0: Instant) -> Option<PreWt> {
+    let cwd = std::env::current_dir().ok()?;
+    let roots = match resolve_store_root_worktree(&cwd) {
+        RootsWt::Go(r) => r,
+        RootsWt::NeedsNode => return None,
+        RootsWt::None => return Some(PreWt::Emitted(emit_no_root_error(&cwd, cmd, use_json, t0))),
+    };
+    let drift = check_manifest_drift(&roots.root).ok()?;
+    Some(PreWt::Go(
+        Ctx {
+            root: roots.root.clone(),
+            cmd,
+            use_json,
+            t0,
+            drift_changed: drift.manifest_changed,
+            drift_hint: drift.hint,
+        },
+        roots,
+    ))
+}
+
 impl Ctx {
     /// bee.mjs emit(): drift line (stderr) + result (stdout) + timing.
     fn emit(&self, result: &Value, text: &str, exit_code: u8) -> ExitCode {
@@ -1226,14 +1320,16 @@ fn run_list(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     }
     let active_only = matches!(flags.get("active-only"), Some(FlagV::Present));
 
-    let ctx = match prelude("reservations list", use_json, t0)? {
-        Pre::Go(c) => c,
-        Pre::Emitted(code) => return Some(code),
+    let (ctx, roots) = match prelude_worktree("reservations list", use_json, t0)? {
+        PreWt::Go(c, r) => (c, r),
+        PreWt::Emitted(code) => return Some(code),
     };
+    // resolveMainRoot(root): the shared ledger always lives in MAIN's store.
+    let ledger_root = roots.main_root();
     let root_s = ctx.root.to_str()?.to_string();
     let out = (|| -> R2<Out> {
         let reservations = list_reservations(&root_s, active_only, now_ms())?;
-        let store = read_holds_store(&ctx.root)?;
+        let store = read_holds_store(&ledger_root)?;
         let cross: Vec<Value> = find_foreign_holds(&store, LIST_ALL_HOLDS_SENTINEL, "*", now_ms())?
             .into_iter()
             .cloned()
@@ -1315,10 +1411,11 @@ fn run_reserve(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     let session = flags.truthy_str("session").map(str::to_string);
     let kind = flags.truthy_str("kind").map(str::to_string);
 
-    let ctx = match prelude("reservations reserve", use_json, t0)? {
-        Pre::Go(c) => c,
-        Pre::Emitted(code) => return Some(code),
+    let (ctx, roots) = match prelude_worktree("reservations reserve", use_json, t0)? {
+        PreWt::Go(c, r) => (c, r),
+        PreWt::Emitted(code) => return Some(code),
     };
+    let topology = roots.hold_topology();
     // handleReservationsReserve's own --ttl gate runs before everything else.
     let ttl: Option<f64> = match &ttl_flag {
         None => None,
@@ -1333,26 +1430,41 @@ fn run_reserve(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     let root_s = ctx.root.to_str()?.to_string();
     let params = ReserveParams { agent, cell, path, ttl, session, kind };
 
+    let topo = topology.as_ref().map(|(m, h)| Topo { main_root: m, holder: h });
+
     // Pre-checks (pure reads) — any Exotic delegates before the lock, so the
     // Node re-run owns the whole command including its own lock telemetry.
-    if reserve_prechecks(&ctx.root, &root_s, &params).is_err() {
+    if reserve_prechecks(topo, &root_s, &params).is_err() {
         return None;
     }
 
-    let out = reserve_exec(&ctx.root, &root_s, &params, lock::MAX_ATTEMPTS);
+    let out = reserve_exec(topo, &root_s, &params, lock::MAX_ATTEMPTS);
     finish(&ctx, out)
 }
 
-fn reserve_prechecks(root: &Path, root_s: &str, p: &ReserveParams) -> Ex<()> {
-    if res_normalize_path(&p.path).is_empty() {
-        // insertHold would throw AFTER the lease write — a state Node must own.
-        return Err(Exotic);
-    }
-    let store = read_holds_store(root)?;
+/// bee.mjs resolveHoldTopology's `{mainRoot, holder}`, borrowed for one
+/// command. `None` (an UNGRANTED linked worktree) means the cross-worktree
+/// section is skipped entirely — no lock, no ledger read, no mirror row.
+#[derive(Clone, Copy)]
+struct Topo<'a> {
+    main_root: &'a Path,
+    holder: &'a str,
+}
+
+fn reserve_prechecks(topo: Option<Topo>, root_s: &str, p: &ReserveParams) -> Ex<()> {
     let now = now_ms();
-    for hold in holds_of(&store) {
-        hold_active(hold, now)?; // date-modelability probe
-        hold_foreign_expiry(hold)?;
+    if let Some(t) = topo {
+        if res_normalize_path(&p.path).is_empty() {
+            // insertHold would throw AFTER the lease write — a state Node must
+            // own. Without a topology insertHold never runs, so an empty
+            // normalized path is reserve()'s own plain "path is required."
+            return Err(Exotic);
+        }
+        let store = read_holds_store(t.main_root)?;
+        for hold in holds_of(&store) {
+            hold_active(hold, now)?; // date-modelability probe
+            hold_foreign_expiry(hold)?;
+        }
     }
     let control_root = control_root_for(root_s)?;
     let flag_or_env_session = p
@@ -1377,26 +1489,43 @@ fn reserve_prechecks(root: &Path, root_s: &str, p: &ReserveParams) -> Ex<()> {
     Ok(())
 }
 
-/// The whole reservePathAtomic section under the shared holds lock —
-/// separated from run_reserve so tests can drive it against a fixture root
-/// (max_attempts lets contention tests refuse instantly like a hook would).
-fn reserve_exec(root: &Path, root_s: &str, p: &ReserveParams, max_attempts: u32) -> R2<Out> {
-    // resolveHoldTopology: always { mainRoot: root, holder: 'main' } for the
-    // ordinary checkouts this module serves (see module header).
-    let guard = match lock::acquire_store_lock(root, CROSS_WORKTREE_HOLDS_LOCK, max_attempts) {
+/// The whole reservePathAtomic section — separated from run_reserve so tests
+/// can drive it against a fixture root (max_attempts lets contention tests
+/// refuse instantly like a hook would).
+///
+/// bee.mjs reservePathAtomic: WITH a topology the foreign-hold check, the
+/// local reserve and the mirror-insert are ONE atomic section under
+/// withHoldsLock(topology.mainRoot) (hardening-1-7-10 D3). WITHOUT one — an
+/// ungranted linked worktree — Node runs the bare `doReserve()` and takes no
+/// shared lock at all, so this port must not take one either: a LOCK_BUSY
+/// refusal Node could never emit would be a C2 break of its own.
+fn reserve_exec(
+    topo: Option<Topo>,
+    root_s: &str,
+    p: &ReserveParams,
+    max_attempts: u32,
+) -> R2<Out> {
+    let Some(t) = topo else {
+        return reserve_locked(None, root_s, p);
+    };
+    let guard = match lock::acquire_store_lock(t.main_root, CROSS_WORKTREE_HOLDS_LOCK, max_attempts)
+    {
         Ok(g) => g,
         Err(busy) => return Err(Err2::Msg(busy.message())),
     };
-    let out = reserve_locked(root, root_s, p);
+    let out = reserve_locked(Some(t), root_s, p);
     drop(guard); // Node releases in withStoreLock's finally, before emit
     out
 }
 
-fn reserve_locked(root: &Path, root_s: &str, p: &ReserveParams) -> R2<Out> {
+fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams) -> R2<Out> {
     // findForeignHolds runs its own fresh readStore inside the section.
-    let mut store = read_holds_store(root)?;
-    {
-        let foreign = find_foreign_holds(&store, "main", &p.path, now_ms())?;
+    let mut store = match topo {
+        Some(t) => Some(read_holds_store(t.main_root)?),
+        None => None,
+    };
+    if let (Some(t), Some(store)) = (topo, store.as_ref()) {
+        let foreign = find_foreign_holds(store, t.holder, &p.path, now_ms())?;
         if let Some(hold) = foreign.first() {
             let hold = (*hold).clone();
             let mut m = Map::new();
@@ -1551,7 +1680,8 @@ fn reserve_locked(root: &Path, root_s: &str, p: &ReserveParams) -> R2<Out> {
 
     // insertHold (worktree-holds.mjs), called from inside the held section —
     // the ledger read from this same section is reused (see module header).
-    {
+    // Skipped wholesale without a topology, exactly like Node.
+    if let (Some(t), Some(store)) = (topo, store.as_mut()) {
         let ttl_secs = reservation.ttl_seconds.unwrap_or(f64::NAN);
         let hold_ttl = if ttl_secs.is_finite() && ttl_secs > 0.0 {
             ttl_secs.floor()
@@ -1563,7 +1693,9 @@ fn reserve_locked(root: &Path, root_s: &str, p: &ReserveParams) -> R2<Out> {
             "path".into(),
             Value::String(res_normalize_path(&reservation.path)),
         );
-        hold.insert("holder".into(), Value::String("main".into()));
+        // topology.holder: "main" from an ordinary checkout, the git-verified
+        // worktree id from a granted one.
+        hold.insert("holder".into(), Value::String(t.holder.to_string()));
         hold.insert("feature".into(), Value::Null);
         hold.insert(
             "session".into(),
@@ -1584,7 +1716,7 @@ fn reserve_locked(root: &Path, root_s: &str, p: &ReserveParams) -> R2<Out> {
         if let Some(Value::Array(holds)) = store.get_mut("holds") {
             holds.push(Value::Object(hold));
         }
-        write_json_atomic(&holds_ledger_path(root), &store).map_err(|_| Err2::Ex)?;
+        write_json_atomic(&holds_ledger_path(t.main_root), store).map_err(|_| Err2::Ex)?;
     }
 
     let resv_value = resv_to_value(&reservation);
@@ -1631,10 +1763,12 @@ fn run_release(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     let agent = flags.req_str("agent")?.to_string();
     let cell = flags.truthy_str("cell").map(str::to_string);
 
-    let ctx = match prelude("reservations release", use_json, t0)? {
-        Pre::Go(c) => c,
-        Pre::Emitted(code) => return Some(code),
+    let (ctx, roots) = match prelude_worktree("reservations release", use_json, t0)? {
+        PreWt::Go(c, r) => (c, r),
+        PreWt::Emitted(code) => return Some(code),
     };
+    let topology = roots.hold_topology();
+    let topo = topology.as_ref().map(|(m, h)| Topo { main_root: m, holder: h });
     let root_s = ctx.root.to_str()?.to_string();
 
     // Pre-checks: every store this verb will read or mutate.
@@ -1644,19 +1778,23 @@ fn run_release(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
             lease_record_expired(&rec, now)?;
             lease_to_reservation(&rec)?;
         }
-        read_holds_store(&ctx.root)?;
+        // Without a topology the ledger is never opened (releaseHolds is
+        // skipped), so it must not be probed either.
+        if let Some(t) = topo {
+            read_holds_store(t.main_root)?;
+        }
         Ok(())
     })();
     if precheck.is_err() {
         return None;
     }
 
-    let out = release_exec(&ctx.root, &root_s, &agent, cell.as_deref(), lock::MAX_ATTEMPTS);
+    let out = release_exec(topo, &root_s, &agent, cell.as_deref(), lock::MAX_ATTEMPTS);
     finish(&ctx, out)
 }
 
 fn release_exec(
-    root: &Path,
+    topo: Option<Topo>,
     root_s: &str,
     agent: &str,
     cell: Option<&str>,
@@ -1732,15 +1870,19 @@ fn release_exec(
         }
     }
 
-    // xwh-2/gfb-1: clear this checkout's mirrored ledger entries, one locked
-    // releaseHolds per {cell, session} pair.
+    // xwh-2/gfb-1: clear THIS checkout's mirrored ledger entries, one locked
+    // releaseHolds per {cell, session} pair — the same topology gate the
+    // reserve side uses, so `if (topology)` skipping it entirely inside an
+    // ungranted worktree leaves holds_released at 0 and takes no lock.
     let mut holds_released: u64 = 0;
     for (cell_v, session_v) in &pairs {
-        let guard = match lock::acquire_store_lock(root, CROSS_WORKTREE_HOLDS_LOCK, max_attempts) {
-            Ok(g) => g,
-            Err(busy) => return Err(Err2::Msg(busy.message())),
-        };
-        let mut store = read_holds_store(root)?;
+        let Some(t) = topo else { break };
+        let guard =
+            match lock::acquire_store_lock(t.main_root, CROSS_WORKTREE_HOLDS_LOCK, max_attempts) {
+                Ok(g) => g,
+                Err(busy) => return Err(Err2::Msg(busy.message())),
+            };
+        let mut store = read_holds_store(t.main_root)?;
         let released_at = now_iso();
         let mut count: u64 = 0;
         if let Some(Value::Array(holds)) = store.get_mut("holds") {
@@ -1749,7 +1891,7 @@ fn release_exec(
                 if !unreleased {
                     continue;
                 }
-                if !matches!(jget(hold, "holder"), Some(Value::String(s)) if s == "main") {
+                if !matches!(jget(hold, "holder"), Some(Value::String(s)) if s == t.holder) {
                     continue;
                 }
                 if let Some(s) = session_v {
@@ -1769,7 +1911,7 @@ fn release_exec(
             }
         }
         if count > 0 {
-            write_json_atomic(&holds_ledger_path(root), &store).map_err(|_| Err2::Ex)?;
+            write_json_atomic(&holds_ledger_path(t.main_root), &store).map_err(|_| Err2::Ex)?;
         }
         holds_released += count;
         drop(guard);
@@ -1796,10 +1938,15 @@ fn run_sweep(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &[]) {
         return None;
     }
-    let ctx = match prelude("reservations sweep", use_json, t0)? {
-        Pre::Go(c) => c,
-        Pre::Emitted(code) => return Some(code),
+    let (ctx, roots) = match prelude_worktree("reservations sweep", use_json, t0)? {
+        PreWt::Go(c, r) => (c, r),
+        PreWt::Emitted(code) => return Some(code),
     };
+    // sweep uses resolveMainRoot, NOT resolveHoldTopology: sweepExpiredHolds
+    // resolves its own empty/missing ledger, so bee.mjs calls it
+    // unconditionally — even from an ungranted worktree, which prunes MAIN's
+    // ledger exactly as running it from main would.
+    let ledger_root = roots.main_root();
     let root_s = ctx.root.to_str()?.to_string();
 
     let precheck = (|| -> Ex<()> {
@@ -1807,7 +1954,7 @@ fn run_sweep(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
         for rec in list_path_lease_records(&root_s)? {
             lease_record_expired(&rec, now)?;
         }
-        let store = read_holds_store(&ctx.root)?;
+        let store = read_holds_store(&ledger_root)?;
         for hold in holds_of(&store) {
             hold_expired(hold, now)?;
         }
@@ -1817,10 +1964,12 @@ fn run_sweep(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
         return None;
     }
 
-    let out = sweep_exec(&ctx.root, &root_s, lock::MAX_ATTEMPTS);
+    let out = sweep_exec(&ledger_root, &root_s, lock::MAX_ATTEMPTS);
     finish(&ctx, out)
 }
 
+/// `root` here is resolveMainRoot(root) — where the shared holds ledger and
+/// its lock live, which is NOT the store root inside a linked worktree.
 fn sweep_exec(root: &Path, root_s: &str, max_attempts: u32) -> R2<Out> {
     // sweepExpired (lib/reservations.mjs): per-record, lock-free.
     let control_root = control_root_for(root_s)?;
@@ -1910,6 +2059,12 @@ mod tests {
         p.to_str().unwrap().to_string()
     }
 
+    /// resolveHoldTopology's answer for an ORDINARY checkout — what every
+    /// pre-existing fixture below has always exercised.
+    fn main_topo(p: &Path) -> Option<Topo<'_>> {
+        Some(Topo { main_root: p, holder: "main" })
+    }
+
     /// Session-resolution tests assume no ambient session identity —
     /// edition-2024 env mutation is unsafe under threaded tests, so skip
     /// instead of scrubbing when the harness itself exports one.
@@ -1967,7 +2122,7 @@ mod tests {
         }
         let tmp = fixture_root();
         let root_s = root_str(tmp.path());
-        let out = reserve_exec(tmp.path(), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1);
+        let out = reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1);
         let Ok(Out::Emit(result, text, code)) = out else {
             panic!("expected an emit outcome");
         };
@@ -1999,11 +2154,11 @@ mod tests {
         let tmp = fixture_root();
         let root_s = root_str(tmp.path());
         assert!(matches!(
-            reserve_exec(tmp.path(), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1),
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1),
             Ok(Out::Emit(_, _, 0))
         ));
         let Ok(Out::Emit(result, text, code)) =
-            reserve_exec(tmp.path(), &root_s, &params("worker-b", "cell-2", "src/x.ts"), 1)
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-b", "cell-2", "src/x.ts"), 1)
         else {
             panic!("expected emit");
         };
@@ -2021,13 +2176,13 @@ mod tests {
         let mut intent = params("planner", "cell-p", "src/api/*");
         intent.kind = Some("intent".into());
         assert!(matches!(
-            reserve_exec(tmp.path(), &root_s, &intent, 1),
+            reserve_exec(main_topo(tmp.path()), &root_s, &intent, 1),
             Ok(Out::Emit(_, _, 0))
         ));
         // Broad overlap against the intent row: allowed.
         assert!(matches!(
             reserve_exec(
-                tmp.path(),
+                main_topo(tmp.path()),
                 &root_s,
                 &params("worker-a", "cell-1", "src/api/router.ts"),
                 1
@@ -2036,7 +2191,7 @@ mod tests {
         ));
         // Exact same resource: hard regardless of kind.
         let Ok(Out::Emit(result, _, 1)) =
-            reserve_exec(tmp.path(), &root_s, &params("worker-b", "cell-2", "src/api/*"), 1)
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-b", "cell-2", "src/api/*"), 1)
         else {
             panic!("expected exact-path hard conflict");
         };
@@ -2050,7 +2205,7 @@ mod tests {
         let _held = lock::acquire_store_lock(tmp.path(), CROSS_WORKTREE_HOLDS_LOCK, 1)
             .ok()
             .unwrap();
-        match reserve_exec(tmp.path(), &root_s, &params("worker-a", "c", "src/x.ts"), 1) {
+        match reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-a", "c", "src/x.ts"), 1) {
             Err(Err2::Msg(msg)) => {
                 assert!(msg.contains("lock \"cross-worktree-holds\" busy: held by"), "{msg}");
             }
@@ -2066,7 +2221,7 @@ mod tests {
         let root_s = root_str(tmp.path());
         let mut p = params("a", "c", "src/x.ts");
         p.kind = Some("true".into());
-        match reserve_exec(tmp.path(), &root_s, &p, 1) {
+        match reserve_exec(main_topo(tmp.path()), &root_s, &p, 1) {
             Ok(Out::Thrown(msg)) => {
                 assert_eq!(msg, "reserve: kind must be one of intent/lease (got \"true\").")
             }
@@ -2079,10 +2234,10 @@ mod tests {
         let tmp = fixture_root();
         let root_s = root_str(tmp.path());
         assert!(matches!(
-            reserve_exec(tmp.path(), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1),
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1),
             Ok(Out::Emit(_, _, 0))
         ));
-        let Ok(Out::Emit(result, text, 0)) = release_exec(tmp.path(), &root_s, "worker-a", None, 1)
+        let Ok(Out::Emit(result, text, 0)) = release_exec(main_topo(tmp.path()), &root_s, "worker-a", None, 1)
         else {
             panic!("expected release emit");
         };
@@ -2101,11 +2256,11 @@ mod tests {
         let tmp = fixture_root();
         let root_s = root_str(tmp.path());
         assert!(matches!(
-            reserve_exec(tmp.path(), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1),
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-a", "cell-1", "src/x.ts"), 1),
             Ok(Out::Emit(_, _, 0))
         ));
         let Ok(Out::Emit(result, text, 0)) =
-            release_exec(tmp.path(), &root_s, "worker-a", Some("other-cell"), 1)
+            release_exec(main_topo(tmp.path()), &root_s, "worker-a", Some("other-cell"), 1)
         else {
             panic!("expected release emit");
         };
@@ -2180,7 +2335,7 @@ mod tests {
             .unwrap();
         }
         let Ok(Out::Emit(result, _, 1)) =
-            reserve_exec(tmp.path(), &root_s, &params("a", "c", "src/x.ts"), 1)
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("a", "c", "src/x.ts"), 1)
         else {
             panic!("expected SESSION_REQUIRED refusal");
         };
@@ -2206,7 +2361,7 @@ mod tests {
         )
         .unwrap();
         let Ok(Out::Emit(result, _, 0)) =
-            reserve_exec(tmp.path(), &root_s, &params("a", "c", "src/x.ts"), 1)
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("a", "c", "src/x.ts"), 1)
         else {
             panic!("expected adopted-session reserve");
         };
@@ -2237,5 +2392,203 @@ mod tests {
         assert_eq!(a.len(), 36);
         assert_eq!(&a[14..15], "4");
         assert!(matches!(&a[19..20], "8" | "9" | "a" | "b"));
+    }
+
+    // ── hold topology over REAL `git worktree add` fixtures ────────────────
+    //
+    // Pinned against Node on the same fixture shape first (twin-fixture
+    // byte-diff of reserve/list/release/sweep from each checkout with
+    // BEE_JS_ENTRY sabotaged, plus a diff of the resulting `.bee` trees).
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixtures");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// main + `wt-granted` (registered) + `wt-ungranted` (not).
+    fn worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(main.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git(&main, &["init", "-q", "-b", "main", "."]);
+        git(&main, &["config", "user.email", "a@b.c"]);
+        git(&main, &["config", "user.name", "t"]);
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        let granted = tmp.join("wt-granted");
+        let ungranted = tmp.join("wt-ungranted");
+        git(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        git(&main, &["worktree", "add", "-q", ungranted.to_str().unwrap(), "-b", "wt/u"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-granted\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(granted.join(".bee")).unwrap();
+        std::fs::write(granted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        (main, granted, ungranted)
+    }
+
+    fn roots_at(cwd: &Path) -> StoreRoots {
+        match resolve_store_root_worktree(cwd) {
+            RootsWt::Go(r) => r,
+            _ => panic!("expected a resolvable root at {}", cwd.display()),
+        }
+    }
+
+    fn nrm(p: &Path) -> String {
+        p.to_string_lossy().replace('/', "\\")
+    }
+
+    /// bee.mjs resolveMainRoot + resolveHoldTopology, all three topologies.
+    #[test]
+    fn hold_topology_matches_node_for_every_checkout_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, ungranted) = worktree_fixture(tmp.path());
+
+        // ORDINARY: {mainRoot: workRoot, holder: 'main'}.
+        let r = roots_at(&main);
+        assert_eq!(nrm(&r.main_root()), nrm(&main));
+        let (m, h) = r.hold_topology().expect("ordinary always has a topology");
+        assert_eq!(nrm(&m), nrm(&main));
+        assert_eq!(h, "main");
+
+        // GRANTED worktree: ledger at MAIN, holder = the git-verified id.
+        let r = roots_at(&granted);
+        assert_eq!(nrm(&r.root), nrm(&granted)); // its OWN store
+        assert_eq!(nrm(&r.main_root()), nrm(&main));
+        let (m, h) = r.hold_topology().expect("a granted worktree holds");
+        assert_eq!(nrm(&m), nrm(&main));
+        assert_eq!(h, "wt-granted");
+
+        // UNGRANTED worktree: root already IS main's store, and the whole
+        // cross-worktree wiring is SKIPPED (topology === null).
+        let r = roots_at(&ungranted);
+        assert_eq!(nrm(&r.root), nrm(&main));
+        assert_eq!(nrm(&r.main_root()), nrm(&main)); // sweep still prunes main
+        assert!(r.hold_topology().is_none());
+    }
+
+    /// A reserve from inside a GRANTED worktree mirrors into MAIN's ledger
+    /// under the worktree's own id — and the reciprocal reserve from main is
+    /// then refused with FOREIGN_HOLD.
+    #[test]
+    fn granted_worktree_mirrors_under_its_id_and_blocks_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = worktree_fixture(tmp.path());
+        let g = roots_at(&granted);
+        let (gm, gh) = g.hold_topology().unwrap();
+        let g_topo = Some(Topo { main_root: &gm, holder: &gh });
+        let g_root_s = root_str(&g.root);
+
+        assert!(matches!(
+            reserve_exec(g_topo, &g_root_s, &params("wt-agent", "w1", "src/shared.ts"), 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+        // The mirror row lives in MAIN's ledger, holder = the worktree id.
+        let ledger: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(&main)).unwrap())
+                .unwrap();
+        assert_eq!(ledger["holds"].as_array().unwrap().len(), 1);
+        assert_eq!(ledger["holds"][0]["holder"], "wt-granted");
+        assert_eq!(ledger["holds"][0]["path"], "src/shared.ts");
+        // The worktree's OWN store never gets a ledger.
+        assert!(!holds_ledger_path(&granted).exists());
+
+        // MAIN now hits the foreign hold on the same path.
+        let m = roots_at(&main);
+        let (mm, mh) = m.hold_topology().unwrap();
+        let m_topo = Some(Topo { main_root: &mm, holder: &mh });
+        let m_root_s = root_str(&m.root);
+        let Ok(Out::Emit(result, text, 1)) =
+            reserve_exec(m_topo, &m_root_s, &params("main-agent", "c1", "src/shared.ts"), 1)
+        else {
+            panic!("expected a FOREIGN_HOLD refusal from main");
+        };
+        assert_eq!(result["code"], "FOREIGN_HOLD");
+        assert_eq!(result["holder"], "wt-granted");
+        assert!(text.starts_with("bee cross-worktree hold: \"src/shared.ts\" is held by checkout \"wt-granted\""));
+
+        // Releasing from the worktree clears exactly its own mirrored rows.
+        let Ok(Out::Emit(result, _, 0)) = release_exec(g_topo, &g_root_s, "wt-agent", None, 1)
+        else {
+            panic!("expected a clean release");
+        };
+        assert_eq!(result["holds_released"], 1.0);
+    }
+
+    /// An UNGRANTED worktree has NO topology: reserve takes no cross-worktree
+    /// lock, writes no mirror row, and release reports zero holds — while the
+    /// LEASE itself still lands in main's shared store (controlRootFor).
+    #[test]
+    fn ungranted_worktree_skips_the_cross_worktree_section_entirely() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, _granted, ungranted) = worktree_fixture(tmp.path());
+        let r = roots_at(&ungranted);
+        assert!(r.hold_topology().is_none());
+        let root_s = root_str(&r.root);
+
+        assert!(matches!(
+            reserve_exec(None, &root_s, &params("u-agent", "c1", "src/only.ts"), 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+        // No ledger written anywhere — not in main, not in the worktree.
+        assert!(!holds_ledger_path(&main).exists());
+        assert!(!holds_ledger_path(&ungranted).exists());
+        // But the lease DID land, in main's control root (shared store).
+        let Ok(rows) = list_reservations(&root_s, true, now_ms()) else {
+            panic!("listable");
+        };
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].path, "src/only.ts");
+        let Ok(ctrl) = control_root_for(&root_s) else { panic!("control root") };
+        assert_eq!(nrm(Path::new(&ctrl)), nrm(&main));
+
+        let Ok(Out::Emit(result, text, 0)) = release_exec(None, &root_s, "u-agent", None, 1) else {
+            panic!("expected a clean release");
+        };
+        assert_eq!(result["released"], 1.0);
+        assert_eq!(result["holds_released"], 0.0);
+        assert_eq!(text, "Released 1 reservation(s).");
+    }
+
+    /// sweep uses resolveMainRoot, NOT the topology: even from an ungranted
+    /// worktree it prunes MAIN's ledger, exactly as running it from main does.
+    #[test]
+    fn sweep_prunes_mains_ledger_from_an_ungranted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, _granted, ungranted) = worktree_fixture(tmp.path());
+        std::fs::create_dir_all(holds_ledger_path(&main).parent().unwrap()).unwrap();
+        std::fs::write(
+            holds_ledger_path(&main),
+            r#"{"holds":[{"path":"src/old.ts","holder":"someone-else","feature":null,"session":null,"cell":"c","ttl_seconds":60,"mirrored_at":"2020-01-01T00:00:00.000Z","released_at":null}]}"#,
+        )
+        .unwrap();
+        let r = roots_at(&ungranted);
+        let Ok(Out::Emit(result, text, 0)) =
+            sweep_exec(&r.main_root(), &root_str(&r.root), 1)
+        else {
+            panic!("expected a clean sweep");
+        };
+        assert_eq!(result["holds_released"], 1.0);
+        assert_eq!(
+            text,
+            "Swept 0 expired reservation(s) and 1 expired cross-worktree hold(s)."
+        );
+        let ledger: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(&main)).unwrap())
+                .unwrap();
+        assert!(ledger["holds"][0]["released_at"].is_string());
     }
 }

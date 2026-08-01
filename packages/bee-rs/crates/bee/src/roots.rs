@@ -22,34 +22,67 @@
 // validation THROWS WorktreeLinkInvalidError, which bee.mjs's main() turns
 // into `emitError(error.message)`. The two flavors must not be merged.
 //
-// ─── why `resolve_store_root` still returns NeedsNode for a linked worktree ──
+// ─── who is worktree-native, and who still delegates ───────────────────────
 //
-// Classification is only half of "a verb runs natively in a worktree". Every
-// verb ported so far was ported against the invariant "the native path only
-// ever holds an ORDINARY classification", and several of them encode it:
+// Classification is only half of "a verb runs natively in a worktree". A verb
+// is worktree-native only once its OWN worktree-sensitive branches are
+// ported; until then it keeps calling `resolve_store_root`, which answers
+// `NeedsNode` for every linked worktree so the verb can never serve wrong
+// bytes in one. Flipping that mapping wholesale was tried and measured: it
+// cost `orient --json` its whole `worktree` block inside a granted worktree
+// and `status --json` its `worktree_notice` inside an ungranted one — a C2
+// break, not a coverage win. So the flip is strictly per-verb.
 //
-//   * verbs/status_full.rs hardcodes `worktree_notice: Option<String> = None`
-//     (bee.mjs ungrantedWorktreeNotice), and its orient port implements only
-//     the ordinary-checkout half of orientWorktreeContext. Inside an
-//     UNGRANTED worktree Node emits a `worktree_notice`; inside a GRANTED one
-//     Node emits an orient `worktree` block. Both are structurally missing
-//     here.
-//   * verbs/reservations.rs states the invariant in its own header and treats
-//     resolveMainRoot(root)/resolveHoldTopology(root) as the constants
-//     `root` / `{mainRoot: root, holder: 'main'}`. In a worktree Node answers
-//     differently (holder = the git-verified id when granted; the whole
-//     cross-worktree mirroring is SKIPPED when ungranted).
-//   * state.mjs `controlRootFor` re-roots claims/sessions/workflows onto
-//     mainRoot for a linked worktree; the ported verbs assume
-//     controlRoot === root (status_full.rs control_root_for says so).
+// FLIPPED — these call `resolve_roots_core` / `resolve_store_root_worktree`
+// and serve linked worktrees natively:
 //
-// So flipping this mapping to `Ordinary(store_root)` would make those verbs
-// serve WRONG bytes in a worktree — a C2 break, not a coverage win. The flip
-// is per-verb work: a verb becomes worktree-native once its own
-// worktree-sensitive branches are ported, and it opts in by calling
-// `resolve_roots_core` instead of `resolve_store_root`. `verbs/worktree.rs`
-// is the first such caller (it MUST run inside a worktree to be useful).
-// Everything else keeps today's delegation, unchanged and byte-identical.
+//   * `worktree list|register|unregister` (verbs/worktree.rs) — the first
+//     caller; it MUST run inside a worktree to be useful.
+//   * `status` / `status --lanes-full` / `orient` (verbs/status_full.rs) —
+//     carries bee.mjs's ungrantedWorktreeNotice, the GRANTED half of
+//     orientWorktreeContext (grantedWorktreeContext + readWorktreeBranch),
+//     and a real `controlRootFor` (state.mjs resolveContext.controlRoot) so
+//     the control-plane reads — sessions, claims, workers, lanes' bound
+//     sessions, recovery — land in MAIN's store from inside a worktree,
+//     exactly like Node. reservations.mjs's own cycle-safe control-root walk
+//     is ported with its linked branch too (list_path_lease_records).
+//   * `reservations list|reserve|release|sweep` (verbs/reservations.rs) —
+//     carries the real resolveMainRoot / resolveHoldTopology: the holds
+//     ledger is addressed at mainRoot, the holder is the git-verified
+//     worktree id when granted, and the whole cross-worktree mirroring is
+//     SKIPPED (topology === null) inside an ungranted worktree.
+//
+// STILL DELEGATED in a linked worktree (they call `resolve_store_root`, whose
+// `LinkedValid => NeedsNode` arm is deliberate, not an oversight):
+//
+//   * `status --brief` (verbs/status_brief.rs) — NOT flipped even though full
+//     `status` is. It is a separate module with its own prelude; buildStatusBrief
+//     reads only the state layer, so it has no worktree-sensitive branch to
+//     port, but it has also not been diffed from inside a worktree. Flipping
+//     it is a small, independent follow-up.
+//   * `cells *` (incl. `claim-next`), `decisions *`, `dispatch prepare`,
+//     `close` — cells.mjs re-roots claims through controlRootFor
+//     (appendAttempt / checkClaimOwnership / claimCellFile / cap), and those
+//     branches are unported; all of these share verbs/reservations.rs's
+//     narrow `prelude`, which is why that module keeps BOTH preludes.
+//   * `capture *`, `backlog *`, `feedback *`, `knowledge *`, `intent *`,
+//     `reviews *`, `state *` (incl. `rebuild-projections`), `tmp sweep`,
+//     `test`, `--help` — none of their ports has had its worktree-sensitive
+//     half proven, and several read the control plane (sessions, workflows,
+//     handoff mailboxes) as if it were `root`.
+//
+// Two arms stay `NeedsNode` for EVERY caller, worktree-native or not:
+// `LinkInvalid` (Node throws out of main()'s findRepoRoot, which also skips
+// the timings.jsonl append) and `Exotic` (a V8-worded ENOENT).
+//
+// The three resolvers a worktree-native verb may need are NOT the same walk,
+// and each is ported where its Node original lives:
+//   1. `resolveRoots(cwd).storeRoot` — this file. Grant-dependent.
+//   2. state.mjs `controlRootFor(root)` — verbs/status_full.rs. The control
+//      plane (sessions, claims, workflows) always resolves onto mainRoot.
+//   3. reservations.mjs's cycle-free `controlRootFor` — a pure git walk with
+//      no config or grant read, ported in verbs/reservations.rs AND
+//      verbs/status_full.rs (lease files live under it).
 
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -363,9 +396,120 @@ pub fn resolve_roots_core(start: &Path) -> Resolution {
     }
 }
 
+/// What a WORKTREE-NATIVE verb needs from one `resolveRoots(process.cwd())`
+/// call: main()'s `root` (= storeRoot) plus the classification bee.mjs's
+/// worktree-sensitive helpers re-derive by calling `resolveRoots(cwd)` again
+/// (ungrantedWorktreeNotice, grantedWorktreeContext, orientWorktreeContext,
+/// resolveMainRoot, resolveHoldTopology). Resolving it ONCE and threading it
+/// is equivalent: those helpers are pure reads of the same cwd, and nothing
+/// between them mutates `.git` or the grant registry within a single command.
+pub struct StoreRoots {
+    /// main()'s `root` — `resolveRoots(cwd).storeRoot`.
+    pub root: PathBuf,
+    /// `resolveRoots(cwd).workRoot` — the physical checkout.
+    pub work_root: PathBuf,
+    /// `None` for an ORDINARY checkout (byte-identical to the pre-flip path);
+    /// `Some` only for `worktreeResolution === 'linked-valid'`.
+    pub linked: Option<LinkedRoots>,
+}
+
+/// The `linked-valid` fields, kept as PATHS rather than pre-computed booleans
+/// so each predicate is spelled exactly as its Node original does it:
+/// `granted` is `resolve(storeRoot) === resolve(worktreeRoot)`
+/// (grantedWorktreeContext / resolveHoldTopology) while `ungranted` is
+/// `resolve(storeRoot) === resolve(mainRoot)` (ungrantedWorktreeNotice) —
+/// two different comparisons, and a degenerate repo where mainRoot IS the
+/// worktree root satisfies both in Node too.
+pub struct LinkedRoots {
+    pub id: String,
+    pub main_root: PathBuf,
+    pub worktree_root: PathBuf,
+    pub store_root: PathBuf,
+}
+
+impl LinkedRoots {
+    /// bee.mjs grantedWorktreeContext / resolveHoldTopology's `granted` test.
+    pub fn granted(&self) -> bool {
+        self.store_root == self.worktree_root
+    }
+    /// bee.mjs ungrantedWorktreeNotice's `ungranted` test.
+    pub fn ungranted(&self) -> bool {
+        self.store_root == self.main_root
+    }
+}
+
+impl StoreRoots {
+    /// bee.mjs resolveMainRoot(root): the linked arm's own `mainRoot`, else
+    /// the dispatcher's already-resolved `root`.
+    pub fn main_root(&self) -> PathBuf {
+        match &self.linked {
+            Some(l) => l.main_root.clone(),
+            None => self.root.clone(),
+        }
+    }
+
+    /// bee.mjs resolveHoldTopology(root) -> `Some((mainRoot, holder))`:
+    /// ordinary => (workRoot || root, "main"); granted linked worktree =>
+    /// (mainRoot, its git-verified id); everything else (an UNGRANTED linked
+    /// worktree — `root` already IS the shared main store) => None, which
+    /// callers treat as "skip the cross-worktree wiring entirely".
+    pub fn hold_topology(&self) -> Option<(PathBuf, String)> {
+        match &self.linked {
+            None => Some((self.work_root.clone(), "main".to_string())),
+            Some(l) if l.granted() => Some((l.main_root.clone(), l.id.clone())),
+            Some(_) => None,
+        }
+    }
+}
+
+/// The `Roots` analogue for a verb that HAS ported its worktree-sensitive
+/// branches. Same three outcomes, but `linked-valid` is served instead of
+/// delegated. `LinkInvalid`/`Exotic` still delegate for everyone.
+pub enum RootsWt {
+    Go(StoreRoots),
+    NeedsNode,
+    None,
+}
+
+/// `resolveRoots(startDir)` for a worktree-native verb. See `Roots` /
+/// `resolve_store_root` for the narrowed version every other verb still uses.
+pub fn resolve_store_root_worktree(start: &Path) -> RootsWt {
+    match resolve_roots_core(start) {
+        Resolution::Ordinary {
+            store_root,
+            work_root,
+        } => RootsWt::Go(StoreRoots {
+            root: store_root,
+            work_root,
+            linked: None,
+        }),
+        Resolution::LinkedValid {
+            store_root,
+            work_root,
+            id,
+            main_root,
+        } => RootsWt::Go(StoreRoots {
+            root: store_root.clone(),
+            work_root: work_root.clone(),
+            linked: Some(LinkedRoots {
+                id,
+                main_root,
+                worktree_root: work_root,
+                store_root,
+            }),
+        }),
+        // main()'s findRepoRoot THROWS here, and the throw escapes bee.mjs's
+        // recordTiming try-block too — reproducing that means bypassing the
+        // shared timing wrapper, so the whole command delegates.
+        Resolution::LinkInvalid { .. } => RootsWt::NeedsNode,
+        Resolution::Exotic => RootsWt::NeedsNode,
+        Resolution::Unresolved => RootsWt::None,
+    }
+}
+
 /// state.mjs findRepoRoot — `resolveRoots(startDir).storeRoot` — narrowed to
 /// what a verb ported for ORDINARY checkouts can serve. See this file's
-/// header for why every linked-worktree arm still routes to Node.
+/// header for the list of verbs still on this narrowed door and why.
 pub fn resolve_store_root(start: &Path) -> Roots {
     match resolve_roots_core(start) {
         Resolution::Ordinary { store_root, .. } => Roots::Ordinary(store_root),
@@ -680,7 +824,7 @@ mod tests {
         }
     }
 
-    /// Every existing caller keeps today's behavior: a linked worktree —
+    /// Every UNFLIPPED caller keeps today's behavior: a linked worktree —
     /// valid or broken — still routes to Node through `resolve_store_root`.
     #[test]
     fn resolve_store_root_still_delegates_for_linked_worktrees() {
@@ -689,5 +833,89 @@ mod tests {
         assert!(matches!(resolve_store_root(&wt), Roots::NeedsNode));
         std::fs::write(wt.join(".git"), "gitdir: nowhere").unwrap();
         assert!(matches!(resolve_store_root(&wt), Roots::NeedsNode));
+    }
+
+    // ── the worktree-native door ──────────────────────────────────────────
+
+    /// An ORDINARY checkout answers the SAME root through the widened door,
+    /// with `linked: None` — the byte-identity guarantee for main-checkout
+    /// runs of every flipped verb.
+    #[test]
+    fn worktree_door_is_ordinary_for_a_plain_checkout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        match resolve_store_root_worktree(&root) {
+            RootsWt::Go(r) => {
+                assert_eq!(norm(&r.root), norm(&root));
+                assert_eq!(norm(&r.work_root), norm(&root));
+                assert!(r.linked.is_none());
+                assert_eq!(norm(&r.main_root()), norm(&root));
+                let (main, holder) = r.hold_topology().unwrap();
+                assert_eq!(norm(&main), norm(&root));
+                assert_eq!(holder, "main");
+            }
+            _ => panic!("expected an ordinary resolution"),
+        }
+    }
+
+    /// Node (pinned) inside an UNGRANTED worktree: storeRoot === mainRoot, so
+    /// ungrantedWorktreeNotice fires, grantedWorktreeContext is null, and
+    /// resolveHoldTopology returns null (mirroring is skipped entirely).
+    #[test]
+    fn worktree_door_ungranted_shares_main_and_has_no_hold_topology() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = fixture(tmp.path(), "wt-a");
+        match resolve_store_root_worktree(&wt) {
+            RootsWt::Go(r) => {
+                assert_eq!(norm(&r.root), norm(&main));
+                assert_eq!(norm(&r.work_root), norm(&wt));
+                assert_eq!(norm(&r.main_root()), norm(&main));
+                let l = r.linked.as_ref().expect("linked");
+                assert_eq!(l.id, "wt-a");
+                assert!(l.ungranted());
+                assert!(!l.granted());
+                assert!(r.hold_topology().is_none());
+            }
+            _ => panic!("expected a linked resolution"),
+        }
+    }
+
+    /// Node (pinned) inside a GRANTED worktree: storeRoot === worktreeRoot,
+    /// so the notice is silent, the orient worktree block appears, and the
+    /// hold topology names the git-verified id as holder over MAIN's ledger.
+    #[test]
+    fn worktree_door_granted_holds_under_its_own_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = fixture(tmp.path(), "wt-a");
+        let runtime = main.join(".bee").join("runtime");
+        std::fs::create_dir_all(&runtime).unwrap();
+        std::fs::write(runtime.join("worktree-grants.json"), "{\"wt-a\": true}\n").unwrap();
+        match resolve_store_root_worktree(&wt) {
+            RootsWt::Go(r) => {
+                assert_eq!(norm(&r.root), norm(&wt));
+                assert_eq!(norm(&r.main_root()), norm(&main));
+                let l = r.linked.as_ref().expect("linked");
+                assert!(l.granted());
+                assert!(!l.ungranted());
+                let (ledger_root, holder) = r.hold_topology().unwrap();
+                assert_eq!(norm(&ledger_root), norm(&main));
+                assert_eq!(holder, "wt-a");
+            }
+            _ => panic!("expected a linked resolution"),
+        }
+    }
+
+    /// A BROKEN link still delegates through the widened door too — every
+    /// WorktreeLinkInvalidError arm is Node's, for flipped verbs as well.
+    #[test]
+    fn worktree_door_still_delegates_a_broken_link() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_main, wt) = fixture(tmp.path(), "wt-a");
+        std::fs::write(wt.join(".git"), "gitdir: nowhere").unwrap();
+        assert!(matches!(
+            resolve_store_root_worktree(&wt),
+            RootsWt::NeedsNode
+        ));
     }
 }

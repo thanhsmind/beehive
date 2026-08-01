@@ -43,7 +43,7 @@
 
 use crate::jsjson;
 use crate::registry::check_manifest_drift;
-use crate::roots::{resolve_store_root, Roots};
+use crate::roots::{resolve_store_root_worktree, LinkedRoots, RootsWt};
 use crate::state::{bypass_level, read_config_raw, Bail};
 use crate::verbs::{emit_no_root_error, record_timing};
 use serde_json::{json, Map, Value};
@@ -149,6 +149,18 @@ type R<T> = Result<T, Ex>;
 struct Ctx {
     root: PathBuf,
     cwd: PathBuf,
+    /// `resolveRoots(process.cwd()).linked` — `None` for an ORDINARY
+    /// checkout, which is every main-checkout run and every unit fixture, so
+    /// the pre-flip behavior is reached by exactly the same code path.
+    ///
+    /// bee.mjs re-runs `resolveRoots(process.cwd())` inside each of
+    /// ungrantedWorktreeNotice / grantedWorktreeContext /
+    /// orientWorktreeContext because `root` alone cannot tell an ordinary
+    /// checkout apart from an ungranted worktree quietly sharing main's
+    /// store (its own comment at ungrantedWorktreeNotice, GH #30). Resolving
+    /// it once here and threading it is equivalent — the walk is a pure read
+    /// and nothing in a status/orient run mutates `.git` or the registry.
+    linked: Option<LinkedRoots>,
     /// Buffered stderr lines (console.warn / process.stderr.write) in Node's
     /// emission order; printed at emit time, before the drift line.
     stderr: Vec<String>,
@@ -157,6 +169,12 @@ struct Ctx {
 impl Ctx {
     fn warn(&mut self, line: String) {
         self.stderr.push(line);
+    }
+
+    /// The linked classification, only when the current checkout is a GRANTED
+    /// worktree (bee.mjs grantedWorktreeContext's own test).
+    fn granted_worktree(&self) -> Option<&LinkedRoots> {
+        self.linked.as_ref().filter(|l| l.granted())
     }
 }
 
@@ -1404,37 +1422,91 @@ fn read_grants(main_store_root: &Path) -> JMap {
 }
 
 /// state.mjs controlRootFor(root) -> resolveContext(root).controlRoot ?? root.
-/// The native path only ever holds an ORDINARY classification (linked
-/// worktrees bail at root resolution), so controlRoot === root — but the
-/// resolveContext side effects Node performs anyway (grants read, product
-/// root config read with its warnings) are replicated for warning parity.
+///
+/// NOTE the argument: resolveContext is handed `root` (main()'s already-
+/// resolved storeRoot), NOT cwd. That distinction is what makes this a
+/// two-line function rather than a second walk:
+///   * ordinary checkout        -> resolveRootsCore(root) is ordinary,
+///                                 controlRoot === workspaceRoot === root.
+///   * UNGRANTED linked worktree-> `root` already fell back to mainRoot, and
+///                                 resolveRootsCore(mainRoot) is ordinary,
+///                                 so controlRoot === root again.
+///   * GRANTED linked worktree  -> `root` IS the worktree checkout, so
+///                                 resolveRootsCore(root) is linked-valid and
+///                                 controlRoot === its mainRoot.
+/// So the only case that moves is the granted one, and `ctx.linked` (resolved
+/// from the same cwd `root` was) already carries its mainRoot.
+///
+/// The resolveContext side effects Node performs anyway are replicated for
+/// warning parity: readGrants over the MAIN store's `.bee` (silent), and
+/// resolveProductRoot(workspaceRoot) — workspaceRoot is `root` in all three
+/// cases above, so `resolve_product_root(ctx)` is exact — with its warnings.
 fn control_root_for(ctx: &mut Ctx) -> R<PathBuf> {
-    let _ = read_grants(&ctx.root.join(".bee"));
+    let control = match ctx.granted_worktree() {
+        Some(l) => l.main_root.clone(),
+        None => ctx.root.clone(),
+    };
+    let _ = read_grants(&control.join(".bee"));
     let _ = resolve_product_root(ctx)?;
-    Ok(ctx.root.clone())
+    Ok(control)
 }
 
 /// reservations.mjs's cycle-safe controlRootFor replica: a pure git walk-up
-/// (findMainRoot), NO config read. Ordinary git root -> that root; `.git`
-/// FILE cannot occur on the native path (bailed earlier); no git -> root.
+/// (findMainRoot), NO config read — that module cannot import state.mjs's
+/// controlRootFor without a cycle, so it carries its own. Ordinary git root
+/// -> that root; a `.git` FILE -> the bidirectionally-validated mainRoot;
+/// anything malformed or no git at all -> `root` (findMainRoot's null).
+///
+/// This is NOT the same walk as `control_root_for` above even though the two
+/// agree on every shape bee actually produces: this one starts at `root` and
+/// consults no grant registry, so it answers mainRoot for a granted worktree
+/// via the git link alone.
 fn reservations_control_root(ctx: &Ctx) -> PathBuf {
-    let mut dir: Option<&Path> = Some(&ctx.root);
-    while let Some(d) = dir {
-        let marker = d.join(".git");
-        if marker.exists() {
-            if let Ok(meta) = std::fs::metadata(&marker) {
-                if meta.is_file() {
-                    // Linked worktree — unreachable natively (root resolution
-                    // bailed) but fail-open to root like findMainRoot's null.
-                    return ctx.root.clone();
-                }
-                return d.to_path_buf();
+    let walk = || -> Option<PathBuf> {
+        // locateGitRoot(root)
+        let mut dir: Option<&Path> = Some(&ctx.root);
+        let (work_root, marker) = loop {
+            let d = dir?;
+            let marker = d.join(".git");
+            if marker.exists() {
+                break (d.to_path_buf(), marker);
             }
-            return ctx.root.clone();
+            dir = d.parent();
+        };
+        if !std::fs::metadata(&marker).ok()?.is_file() {
+            return Some(work_root); // ordinary checkout: mainRoot === workRoot
         }
-        dir = d.parent();
-    }
-    ctx.root.clone()
+        let read_ptr = |file: &Path, base: &Path| -> Option<String> {
+            let raw = read_text_opt(file)?;
+            let raw = js_trim(&raw);
+            if raw.is_empty() {
+                return None;
+            }
+            let raw = match raw.strip_prefix("gitdir:") {
+                Some(rest) => js_trim(rest),
+                None => raw,
+            };
+            let fixed = raw.replace('\\', &std::path::MAIN_SEPARATOR.to_string());
+            Some(path_resolve(base, &fixed))
+        };
+        let gitdir = read_ptr(&marker, &work_root)?;
+        let worktrees_root = path_resolve(Path::new(&gitdir), "..");
+        let common_git_dir = path_resolve(Path::new(&worktrees_root), "..");
+        if path_basename(&common_git_dir) != ".git" || path_basename(&worktrees_root) != "worktrees"
+        {
+            return None;
+        }
+        let id = path_basename(&gitdir);
+        if id.is_empty() || id == "." || id == ".." {
+            return None;
+        }
+        let reverse = read_ptr(&Path::new(&gitdir).join("gitdir"), Path::new(&gitdir))?;
+        if path_resolve(Path::new(&reverse), ".") != path_resolve(&marker, ".") {
+            return None;
+        }
+        Some(PathBuf::from(path_dirname(&common_git_dir)))
+    };
+    walk().unwrap_or_else(|| ctx.root.clone())
 }
 
 // ─── lanes (state.mjs) ─────────────────────────────────────────────────────
@@ -3581,6 +3653,52 @@ fn find_granted_worktree_for_feature(main_root: &Path, feature: &str) -> Option<
     None
 }
 
+/// bee.mjs ungrantedWorktreeNotice (GH #30) — messaging only, and the ONE
+/// status field whose presence depends on the checkout's grant state.
+///
+/// Node re-resolves `process.cwd()` here rather than reading `root`, because
+/// an UNGRANTED linked worktree's `root` already fell back to the main store
+/// (the P40 default) and is therefore indistinguishable from an ordinary
+/// checkout. `ctx.linked` is that same resolution. Emitted only when the
+/// checkout is linked-valid AND storeRoot === mainRoot; an ordinary checkout
+/// and a GRANTED worktree both omit the key entirely, byte-identical to the
+/// pre-flip output. `null` from the throw arm is unreachable here: a
+/// WorktreeLinkInvalidError already delegated the whole command.
+const UNGRANTED_WORKTREE_NOTICE: &str = "⚠ This linked worktree is UNGRANTED — it SHARES the main checkout's store (same feature/phase/claims; no isolation). To work an isolated feature: run \"bee worktree new --feature <slug>\" from the main checkout. To grant isolation to THIS existing worktree instead: run \"bee worktree register --feature <slug>\" from inside it.";
+
+fn ungranted_worktree_notice(ctx: &Ctx) -> Option<String> {
+    let linked = ctx.linked.as_ref()?;
+    if !linked.ungranted() {
+        return None;
+    }
+    Some(UNGRANTED_WORKTREE_NOTICE.to_string())
+}
+
+/// bee.mjs readWorktreeBranch — best-effort branch for a granted worktree's
+/// orient block. The linked worktree's HEAD lives at
+/// `<mainRoot>/.git/worktrees/<id>/HEAD`; null on any failure or detached
+/// HEAD. The Node regex is `/^ref:\s*refs\/heads\/(.+)$/` over the TRIMMED
+/// file: `.` never matches a line terminator and there is no `m` flag, so the
+/// captured branch must be non-empty and run to the very end of the string.
+fn read_worktree_branch(main_root: &Path, id: &str) -> Option<String> {
+    let head = read_text_opt(
+        &main_root
+            .join(".git")
+            .join("worktrees")
+            .join(id)
+            .join("HEAD"),
+    )?;
+    let head = js_trim(&head);
+    let rest = head.strip_prefix("ref:")?;
+    // \s* — JS whitespace, the same class js_trim strips.
+    let rest = rest.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
+    let branch = rest.strip_prefix("refs/heads/")?;
+    if branch.is_empty() || branch.contains(['\n', '\r', '\u{2028}', '\u{2029}']) {
+        return None;
+    }
+    Some(branch.to_string())
+}
+
 /// bee.mjs isCodeTouchingLane.
 fn is_code_touching_lane(lane: Option<&Value>, other_live_session: bool) -> bool {
     if !opt_truthy(lane) || str_eq(lane, "docs") {
@@ -3866,10 +3984,7 @@ fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
         Some(hive) => classify_source(hive, &home_dir()),
         None => ("unknown".into(), None),
     };
-    // ungrantedWorktreeNotice: the native path only runs on an ORDINARY
-    // classification (linked worktrees bail at root resolution), where the
-    // notice is structurally null — the field is omitted entirely (GH #30).
-    let worktree_notice: Option<String> = None;
+    let worktree_notice = ungranted_worktree_notice(ctx);
     let contention = build_contention_summary(ctx)?;
 
     // Return-object literal: property VALUES evaluate top to bottom, so the
@@ -4394,13 +4509,42 @@ fn orient_decision_line(decision: Option<&Value>) -> String {
     }
 }
 
-/// bee.mjs orientWorktreeContext — the ORDINARY-checkout half; the granted-
-/// worktree half is unreachable natively (linked worktrees bail at root
-/// resolution). Never throws (Thrown -> None like Node's catch).
+/// bee.mjs orientWorktreeContext — BOTH halves. Inside a GRANTED worktree the
+/// packet carries the merge-back state; from the MAIN checkout with a
+/// code-touching active feature that already has a granted worktree, it
+/// carries "go there". Null everywhere else, so an ordinary orient with no
+/// granted worktree is byte-unchanged. Never throws (Thrown -> None like
+/// Node's catch).
 fn orient_worktree_context(ctx: &mut Ctx, status: &JMap) -> R<Option<JMap>> {
     let attempt = |ctx: &mut Ctx| -> R<Option<JMap>> {
-        // grantedWorktreeContext(): resolveRoots(cwd) is 'ordinary' on the
-        // native path -> null; fall through to the main-checkout branch.
+        // grantedWorktreeContext(): the current checkout when it is a GRANTED
+        // linked worktree (its own storeRoot === its own worktreeRoot).
+        if let Some(linked) = ctx.granted_worktree() {
+            let id = linked.id.clone();
+            let branch = read_worktree_branch(&linked.main_root, &id);
+            let mut m = JMap::new();
+            m.insert("location".into(), json!("worktree"));
+            m.insert("id".into(), json!(id.clone()));
+            m.insert(
+                "feature".into(),
+                match status.get("feature") {
+                    None | Some(Value::Null) => Value::Null,
+                    Some(v) => v.clone(),
+                },
+            );
+            m.insert("branch".into(), branch.map(Value::String).unwrap_or(Value::Null));
+            m.insert(
+                "merge_command".into(),
+                json!(format!("bee worktree merge --id {id}")),
+            );
+            return Ok(Some(m));
+        }
+        // `resolution.worktreeResolution !== 'ordinary'` — an UNGRANTED linked
+        // worktree stops here (it is neither "go to the worktree" nor "you
+        // are in one that owns the feature").
+        if ctx.linked.is_some() {
+            return Ok(None);
+        }
         let feature = match status.get("feature") {
             None | Some(Value::Null) => Value::Null,
             Some(v) => v.clone(),
@@ -4691,15 +4835,18 @@ fn run(verb: Verb, lanes_full: bool, use_json: bool, t0: Instant) -> Option<Exit
         Verb::Status => "status",
         Verb::Orient => "orient",
     };
-    let root = match resolve_store_root(&cwd) {
-        Roots::Ordinary(r) => r,
-        Roots::NeedsNode => return None,
-        Roots::None => return Some(emit_no_root_error(&cwd, cmd, use_json, t0)),
+    // WORKTREE-NATIVE (see roots.rs's header): status/orient serve linked
+    // worktrees themselves. A BROKEN link still delegates.
+    let roots = match resolve_store_root_worktree(&cwd) {
+        RootsWt::Go(r) => r,
+        RootsWt::NeedsNode => return None,
+        RootsWt::None => return Some(emit_no_root_error(&cwd, cmd, use_json, t0)),
     };
+    let root = roots.root;
     // Drift check first (its cache write is the one permitted pre-bail side
     // effect — Node performs it before routing too).
     let drift = check_manifest_drift(&root).ok()?;
-    let mut ctx = Ctx { root, cwd, stderr: Vec::new() };
+    let mut ctx = Ctx { root, cwd, linked: roots.linked, stderr: Vec::new() };
     let (payload, text) = match verb {
         Verb::Status => {
             let status = build_status(&mut ctx, lanes_full).ok()?;
@@ -4733,8 +4880,15 @@ fn run(verb: Verb, lanes_full: bool, use_json: bool, t0: Instant) -> Option<Exit
 mod tests {
     use super::*;
 
+    /// An ORDINARY-checkout context (`linked: None`) — the shape every
+    /// pre-existing fixture below has always had.
     fn ctx_for(root: &Path) -> Ctx {
-        Ctx { root: root.to_path_buf(), cwd: root.to_path_buf(), stderr: Vec::new() }
+        Ctx {
+            root: root.to_path_buf(),
+            cwd: root.to_path_buf(),
+            linked: None,
+            stderr: Vec::new(),
+        }
     }
 
     fn write(root: &Path, rel: &str, content: &str) {
@@ -5066,5 +5220,233 @@ mod tests {
         assert_eq!(row.get("session"), Some(&json!("s-1")));
         // Expired by now -> filtered out of activeOnly, still listed raw.
         assert!(list_reservations(&ctx, true).is_empty());
+    }
+
+    // ── linked worktrees, over REAL `git worktree add` fixtures ────────────
+    //
+    // Every expectation below was pinned against Node on the SAME fixture
+    // shape before it was written here (twin-fixture byte-diff of
+    // `status --json` / `orient --json` from inside each checkout, with
+    // BEE_JS_ENTRY sabotaged so bee.exe could not have delegated).
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixtures");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A real main checkout with two real linked worktrees: `wt-granted`
+    /// (registered in MAIN's grant registry, so it owns its own store) and
+    /// `wt-ungranted` (unregistered, so it shares main's).
+    fn worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        write(&main, ".bee/onboarding.json", "{}");
+        write(&main, "f.txt", "x");
+        git(&main, &["init", "-q", "-b", "main", "."]);
+        git(&main, &["config", "user.email", "a@b.c"]);
+        git(&main, &["config", "user.name", "t"]);
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        let granted = tmp.join("wt-granted");
+        let ungranted = tmp.join("wt-ungranted");
+        git(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/granted"]);
+        git(&main, &["worktree", "add", "-q", ungranted.to_str().unwrap(), "-b", "wt/ungranted"]);
+        write(&main, ".bee/runtime/worktree-grants.json", "{\"wt-granted\": true}\n");
+        write(&granted, ".bee/onboarding.json", "{}");
+        (main, granted, ungranted)
+    }
+
+    /// Build the Ctx `run()` would build standing in `cwd`.
+    fn ctx_at(cwd: &Path) -> Ctx {
+        match resolve_store_root_worktree(cwd) {
+            RootsWt::Go(r) => Ctx {
+                root: r.root,
+                cwd: cwd.to_path_buf(),
+                linked: r.linked,
+                stderr: Vec::new(),
+            },
+            _ => panic!("expected a resolvable root at {}", cwd.display()),
+        }
+    }
+
+    /// bee.mjs ungrantedWorktreeNotice: present ONLY inside an ungranted
+    /// linked worktree. The main checkout and a granted worktree both omit
+    /// the key entirely (GH #30) — this is the exact status shape whose loss
+    /// blocked the routing flip.
+    #[test]
+    fn worktree_notice_fires_only_inside_an_ungranted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, ungranted) = worktree_fixture(tmp.path());
+
+        assert_eq!(ungranted_worktree_notice(&ctx_for(&main)), None);
+        assert_eq!(ungranted_worktree_notice(&ctx_at(&main)), None);
+        assert_eq!(ungranted_worktree_notice(&ctx_at(&granted)), None);
+        let notice = ungranted_worktree_notice(&ctx_at(&ungranted)).expect("notice");
+        assert_eq!(notice, UNGRANTED_WORKTREE_NOTICE);
+        assert!(notice.starts_with("⚠ This linked worktree is UNGRANTED"));
+        assert!(notice.ends_with("from inside it."));
+
+        // And it lands in the payload under the right key, only there.
+        let mut c = ctx_at(&ungranted);
+        let status = build_status(&mut c, false).expect("status");
+        assert_eq!(status.get("worktree_notice"), Some(&json!(notice)));
+        let mut c = ctx_at(&granted);
+        assert!(!build_status(&mut c, false).unwrap().contains_key("worktree_notice"));
+        let mut c = ctx_at(&main);
+        assert!(!build_status(&mut c, false).unwrap().contains_key("worktree_notice"));
+    }
+
+    /// state.mjs controlRootFor: sessions/claims/workers are CONTROL plane —
+    /// from inside a granted worktree they must resolve onto MAIN's store,
+    /// never the worktree's own. (An ungranted worktree's `root` already IS
+    /// main, so it agrees trivially.)
+    #[test]
+    fn control_root_re_roots_onto_main_from_a_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, ungranted) = worktree_fixture(tmp.path());
+        let n = |p: &Path| normalize_abs_lexical(&p.to_string_lossy());
+
+        assert_eq!(n(&control_root_for(&mut ctx_at(&main)).unwrap()), n(&main));
+        assert_eq!(n(&control_root_for(&mut ctx_at(&granted)).unwrap()), n(&main));
+        assert_eq!(n(&control_root_for(&mut ctx_at(&ungranted)).unwrap()), n(&main));
+        // The store root itself is NOT re-rooted: it is the worktree's own
+        // when granted, main's when not.
+        assert_eq!(n(&ctx_at(&granted).root), n(&granted));
+        assert_eq!(n(&ctx_at(&ungranted).root), n(&main));
+
+        // A live session written into MAIN's store only is visible from the
+        // granted worktree's status through that control root.
+        let now = to_iso(now_ms());
+        write(
+            &main,
+            ".bee/sessions/sess-live.json",
+            &format!("{{\"id\":\"sess-live\",\"started_at\":\"{now}\",\"last_heartbeat\":\"{now}\"}}"),
+        );
+        let ctrl = control_root_for(&mut ctx_at(&granted)).unwrap();
+        let workers = active_workers(&ctrl, None).unwrap();
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].get("session_id"), Some(&json!("sess-live")));
+        // Reading the worktree's own root instead would find nothing — this
+        // is exactly the bug the `controlRoot == root` assumption caused.
+        assert!(active_workers(&granted, None).unwrap().is_empty());
+    }
+
+    /// reservations.mjs's own cycle-safe control-root walk (LEASE files) also
+    /// answers mainRoot inside a granted worktree — from the git link alone,
+    /// with no grant registry involved.
+    #[test]
+    fn reservations_control_root_follows_the_git_link() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, ungranted) = worktree_fixture(tmp.path());
+        let n = |p: &Path| normalize_abs_lexical(&p.to_string_lossy());
+        assert_eq!(n(&reservations_control_root(&ctx_at(&main))), n(&main));
+        assert_eq!(n(&reservations_control_root(&ctx_at(&granted))), n(&main));
+        assert_eq!(n(&reservations_control_root(&ctx_at(&ungranted))), n(&main));
+        // findMainRoot fails OPEN: a link it cannot validate answers `root`.
+        let orphan = tmp.path().join("orphan");
+        std::fs::create_dir_all(&orphan).unwrap();
+        std::fs::write(orphan.join(".git"), "gitdir: nowhere").unwrap();
+        let ctx = Ctx { root: orphan.clone(), cwd: orphan.clone(), linked: None, stderr: Vec::new() };
+        assert_eq!(n(&reservations_control_root(&ctx)), n(&orphan));
+    }
+
+    /// bee.mjs readWorktreeBranch over a real `git worktree add` HEAD.
+    #[test]
+    fn worktree_branch_reads_the_linked_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, _granted, _ungranted) = worktree_fixture(tmp.path());
+        assert_eq!(read_worktree_branch(&main, "wt-granted").as_deref(), Some("wt/granted"));
+        assert_eq!(read_worktree_branch(&main, "no-such-id"), None);
+        // Detached HEAD (a bare sha) is null, not the sha.
+        std::fs::write(
+            main.join(".git").join("worktrees").join("wt-granted").join("HEAD"),
+            "0123456789abcdef0123456789abcdef01234567\n",
+        )
+        .unwrap();
+        assert_eq!(read_worktree_branch(&main, "wt-granted"), None);
+    }
+
+    /// bee.mjs orientWorktreeContext, both halves, over the real fixture.
+    #[test]
+    fn orient_worktree_context_serves_both_halves() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, ungranted) = worktree_fixture(tmp.path());
+
+        // Inside the GRANTED worktree: the merge-back packet. `feature` is
+        // whatever status resolved, `branch` comes from the linked HEAD.
+        let mut status = JMap::new();
+        status.insert("feature".into(), json!("demo"));
+        let block = orient_worktree_context(&mut ctx_at(&granted), &status)
+            .unwrap()
+            .expect("worktree block inside a granted worktree");
+        assert_eq!(block.get("location"), Some(&json!("worktree")));
+        assert_eq!(block.get("id"), Some(&json!("wt-granted")));
+        assert_eq!(block.get("feature"), Some(&json!("demo")));
+        assert_eq!(block.get("branch"), Some(&json!("wt/granted")));
+        assert_eq!(
+            block.get("merge_command"),
+            Some(&json!("bee worktree merge --id wt-granted"))
+        );
+        // The text render takes the non-'main' branch.
+        let mut packet = JMap::new();
+        packet.insert("worktree".into(), Value::Object(block.clone()));
+        packet.insert("where".into(), json!({"phase":"idle","feature":"demo","mode":null,"gates":{},"gate_bypass_level":"off"}));
+        packet.insert("decisions".into(), json!({"context_md":null,"active_count":0,"recent":[]}));
+        packet.insert("work".into(), json!({"cells":{"open":0,"claimed":0,"capped":0},"ready":[],"blockers":[]}));
+        packet.insert("next".into(), json!({"action":"a","skill":"bee-hive","command":null}));
+        assert!(render_orient_text(&packet).contains(
+            "worktree: wt-granted (branch wt/granted) — merge back from main with bee worktree merge --id wt-granted"
+        ));
+
+        // Inside the UNGRANTED worktree: no block at all.
+        assert!(orient_worktree_context(&mut ctx_at(&ungranted), &status)
+            .unwrap()
+            .is_none());
+
+        // From MAIN with a code-touching lane whose feature lives in the
+        // granted worktree: the "go there" block.
+        write(&granted, ".bee/runtime/worktree-identity.json", "{\"feature\":\"demo\"}");
+        let mut status_main = JMap::new();
+        status_main.insert("feature".into(), json!("demo"));
+        status_main.insert("route".into(), json!({"lane": "small"}));
+        let block = orient_worktree_context(&mut ctx_at(&main), &status_main)
+            .unwrap()
+            .expect("main-side worktree block");
+        assert_eq!(block.get("location"), Some(&json!("main")));
+        assert_eq!(block.get("id"), Some(&json!("wt-granted")));
+        assert!(tpl(block.get("guidance")).starts_with("open your session at "));
+        // A docs lane is exempt -> no block, byte-unchanged orient.
+        status_main.insert("route".into(), json!({"lane": "docs"}));
+        assert!(orient_worktree_context(&mut ctx_at(&main), &status_main)
+            .unwrap()
+            .is_none());
+    }
+
+    /// The whole orient packet from inside a granted worktree carries the
+    /// `worktree` key — the exact block whose loss was the measured C2 break
+    /// that kept this routing flip parked.
+    #[test]
+    fn orient_packet_carries_the_worktree_block_inside_a_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_main, granted, ungranted) = worktree_fixture(tmp.path());
+        let packet = build_orient(&mut ctx_at(&granted)).expect("orient");
+        let block = packet.get("worktree").expect("worktree block");
+        assert_eq!(vget(block, "location"), Some(&json!("worktree")));
+        assert_eq!(vget(block, "id"), Some(&json!("wt-granted")));
+        // next.command stays orient's own (only the 'main' location overrides).
+        assert!(!packet.contains_key("worktree_notice"));
+        // The ungranted worktree's orient has no block.
+        assert!(!build_orient(&mut ctx_at(&ungranted))
+            .expect("orient")
+            .contains_key("worktree"));
     }
 }

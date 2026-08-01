@@ -172,19 +172,31 @@ Each entry is a branch that currently returns to Node and therefore blocks delet
 - **Cross-cutting delegate classes:** corrupt-JSON reads whose warning embeds a V8 message;
   collation over free prose (`localeCompare` on titles); `session-init`'s preamble and
   `session-close`'s PreCompact branch.
-- **Linked worktrees — classification done, routing deliberately NOT flipped.** `roots.rs` now
-  carries both arms of `resolveRootsCore` (gitdir read, namespace shape, bidirectional
-  back-pointer, the four `WorktreeLinkInvalidError` messages, grant lookup), pinned against a
-  Node harness over real `git worktree add` fixtures. But `resolve_store_root` still answers
-  `NeedsNode` for a linked worktree ON PURPOSE: every verb ported so far encodes the invariant
-  "the native path only ever holds an ordinary classification" — `status_full.rs` hardcodes
-  `worktree_notice: None` and ports only the ordinary half of `orientWorktreeContext`,
-  `reservations.rs` treats `resolveMainRoot`/`resolveHoldTopology` as constants, and several
-  ports assume `controlRoot == root`. Flipping the mapping was tried and measured: inside a
-  granted worktree `orient --json` lost its whole `worktree` block, and inside an ungranted one
-  `status --json` lost `worktree_notice`. That is a C2 break, not a coverage win. The flip is
-  therefore per-verb: a verb opts in by calling `resolve_roots_core` once its own
-  worktree-sensitive branches are ported. `verbs/worktree.rs` is the first such caller.
+- **Linked worktrees — classification done, routing flipped PER VERB.** `roots.rs` carries both
+  arms of `resolveRootsCore` (gitdir read, namespace shape, bidirectional back-pointer, the four
+  `WorktreeLinkInvalidError` messages, grant lookup), pinned against a Node harness over real
+  `git worktree add` fixtures. The flip is per-verb, never blanket: an early attempt to widen
+  `resolve_store_root` wholesale was measured and cost `orient --json` its `worktree` block
+  inside a granted worktree and `status --json` its `worktree_notice` inside an ungranted one —
+  a C2 break, not a coverage win. A verb opts in via `resolve_store_root_worktree` only once its
+  own worktree-sensitive branches are ported.
+  - **Worktree-native now:** `worktree list|register|unregister`; `status` / `status
+    --lanes-full` / `orient` (ungrantedWorktreeNotice, BOTH halves of `orientWorktreeContext`
+    incl. `readWorktreeBranch`, and the real `controlRootFor` so sessions/claims/workers/lanes
+    resolve onto mainRoot); `reservations list|reserve|release|sweep` (the real
+    `resolveMainRoot`/`resolveHoldTopology` — the ledger is addressed at mainRoot, the holder is
+    the git-verified worktree id when granted, and the cross-worktree section is skipped
+    entirely when ungranted). Proven by twin-fixture byte-diff from inside a granted AND an
+    ungranted worktree with `BEE_JS_ENTRY` sabotaged, stdout/stderr/exit AND the resulting
+    `.bee/` trees, including a cross-worktree `FOREIGN_HOLD` refusal.
+  - **Still delegated inside a worktree:** `status --brief` (separate module, no
+    worktree-sensitive branch but undiffed there), `cells *`, `decisions *`, `dispatch prepare`,
+    `close`, `capture *`, `backlog *`, `feedback *`, `knowledge *`, `intent *`, `reviews *`,
+    `state *`, `tmp sweep`, `test`, `--help`. cells.mjs re-roots claims through `controlRootFor`
+    and that branch is unported; the rest read the control plane as if it were `root`.
+  - **Delegated for everyone:** a BROKEN link (`WorktreeLinkInvalidError`) — Node's throw
+    escapes main()'s `recordTiming` try-block, so reproducing it means bypassing the shared
+    timing wrapper — and the `Exotic` V8-worded ENOENT.
 
 ### Sizing (honest)
 
