@@ -118,6 +118,24 @@ Two campaign rules that emerged from practice and now govern every port:
   the per-platform build step (`cargo build --release`, matching source-checkout distribution);
   onboard re-render; docs sweep; memory updated.
 
+#### Coverage debts R6 must close (a delegated path is fine until Node is deleted)
+
+Tracked here because "the verb is ported" is not the same as "every repo shape runs native".
+Each entry is a branch that currently returns to Node and therefore blocks deleting `bee.mjs`:
+
+- **The lane/workflow world.** `state set/gate/scribing-run/plan-rev bump/handoff` are native only
+  when the repo has no `--lane` selector, no lane-bound session, and zero records under
+  `.bee/runtime/workflows/`. A repo using lanes or workflows still runs Node for those verbs —
+  the projection write-through, workflow locks, and handoff mailboxes are unported.
+- **Whole verbs still on Node:** `state start-feature|route|workflows.*|rebuild-projections|
+  advisor-ref.*|compact-*`, `decisions supersede|render`, `knowledge promote`,
+  `backlog rank|badges|render`, `feedback digest|collect|rank`, plus every `--stdin` shape
+  (a probe must decide before consuming the pipe, so stdin can never be validated natively first).
+- **Cross-cutting delegate classes:** corrupt-JSON reads whose warning embeds a V8 message;
+  linked-worktree roots (the gitdir+grants half of `resolveRootsCore` is unported); collation
+  over free prose (`localeCompare` on titles); `session-init`'s preamble and `session-close`'s
+  PreCompact branch.
+
 ### Sizing (honest)
 
 Fluent is 78k LOC Rust for a comparable tool. Expect the finished port in the same class.
