@@ -19,6 +19,7 @@ pub mod backlog;
 pub mod capture;
 pub mod cells;
 pub mod decisions;
+pub mod drivers;
 pub mod feedback;
 pub mod help;
 pub mod intent_group;
@@ -30,6 +31,7 @@ pub mod status_brief;
 pub mod status_full;
 pub mod test_runner;
 pub mod tmp_group;
+pub mod worktree;
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     // help probes FIRST: in bee.mjs, --help short-circuits main() before root
@@ -50,10 +52,16 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if let Some(code) = state_group::try_native(args, t0) {
         return Some(code);
     }
+    if let Some(code) = drivers::try_native(args, t0) {
+        return Some(code);
+    }
     if let Some(code) = test_runner::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = reservations::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = worktree::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = decisions::try_native(args, t0) {

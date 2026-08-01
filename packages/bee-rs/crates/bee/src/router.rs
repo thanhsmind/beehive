@@ -64,6 +64,10 @@ pub const PORTED: &[&str] = &[
     "reviews create|list|show|record|candidate add|candidates|status (--file shapes)",
     "knowledge check|index|list|context",
     "tmp sweep",
+    // R3 wave 3
+    "close (incl. --dry-run; non-lane features)",
+    "dispatch prepare (all kinds; --claim still delegated)",
+    "worktree list|register|unregister",
 ];
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
