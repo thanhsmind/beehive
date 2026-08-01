@@ -48,7 +48,7 @@
       "worktree-store.mjs": "103abd2cb02c5bd3faa361c5d73f9f71aa3b76d172f2281aee9b66f5834b505a"
     },
     "expertise": {
-      "INDEX.md": "a1d21197b5b8e2e6942abb70cec97fd4d15cf6cd3fd69c2311af852ee75787b4",
+      "INDEX.md": "7a1321b6bc0696baa116524f72629e5f5ad2fc47dbf726a4960d8a4d0f5cbabd",
       "README.md": "5952cecfeb633c792ec72e799f497d0ae3f2bb14c9edb4afedae158802551e3a",
       "architecture.md": "b71c018f47c78a0b5e1c55f9cb2ae4450281e1c4d3a625e87c1da096f1f50cca",
       "debugging.md": "c19b8b92fadfb33b225fc47a99fdbe29b594531ad3d74e3f7d5c9712bec979fd",
@@ -56,7 +56,13 @@
       "documentation.md": "595957ca75796645c6c6d23d64f4ca25675b596c2651832f73866940d94a0e5c",
       "planning.md": "41e02da1232203b6289add90524b045146e916d8bce6d3d1179bdf9ac32a00b9",
       "review.md": "39b2974638433428abbfcbaac37730106571409388ba856b5d89f3b99befcad1",
-      "tests.md": "fa7ce43b7dc3e0321e6768594c5830da68cd41786c8871d12aed24fdef2d3b15",
+      "tests.md": "54ec3787014ca122b16f1b40428762d064b298c90b4a09a5cf7792b314a7ef26",
+      "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
+      "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
+      "tests/patterns/differential-testing.md": "2c089b719275b401ae62c5f6f6af4cdcdfc7e5a2528fc64ce16eff8a1d0b6add",
+      "tests/patterns/environment-limited-tests.md": "b55575b8822948848f355abe62508388c3a3f2d50ba59a6d06bfedf8aafcc72e",
+      "tests/patterns/pinning-against-a-live-oracle.md": "c6251f5fd518cdc1ef7d323ddc7e2b5b6ae9a6cda810cb15cc76d2c43e3a2928",
+      "tests/patterns/proving-the-code-under-test-ran.md": "6e9e895c3c83a726dd6f5f3c86bc686513db460491cbf51804c4a990d747c9da",
       "thinking.md": "548618d837d7d07fa1f966b5f16a9ff11ecc971bce20a9bfdcc0880f71cbcbac"
     },
     "prompts": {
@@ -98,5 +104,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-01T00:34:35.558Z"
+  "updated_at": "2026-08-01T06:39:37.959Z"
 }
