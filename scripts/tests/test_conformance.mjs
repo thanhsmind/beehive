@@ -529,11 +529,24 @@ function findStateSyncMatcher(hooksBlock) {
   const postToolUse = (hooksBlock && hooksBlock.PostToolUse) || [];
   for (const entry of postToolUse) {
     const names = (entry.hooks || []).map((h) => String(h.command || ""));
-    if (names.some((c) => c.includes("bee-state-sync.mjs")) && typeof entry.matcher === "string") {
+    if (names.some(isStateSyncCommand) && typeof entry.matcher === "string") {
       return entry.matcher;
     }
   }
   return null;
+}
+
+// The state-sync hook has TWO valid spellings: the node wrapper
+// (`node .bee/bin/hooks/bee-state-sync.mjs`) and the native binary
+// (`.bee/bin/bee[.exe] hook state-sync`), which onboard renders when the
+// target repo carries a vendored binary (rust-port R2). Recognizing only the
+// .mjs name made a rewired target invisible here, and an invisible entry
+// reads as `matcher=null` — an environment fact reported as a matcher
+// regression. Mirrors onboard_bee.mjs's own isBeeHookEntry, which recognizes
+// both shapes for the same reason.
+function isStateSyncCommand(command) {
+  if (command.includes("bee-state-sync.mjs")) return true;
+  return command.includes(".bee/bin/bee") && /\bhook\s+state-sync\b/.test(command);
 }
 
 function adapterRegressionMatcherSuperset() {
