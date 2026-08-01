@@ -90,6 +90,11 @@ inline-eval invocation, so the direct skill-vs-guard tension is gone; the
 underlying gap — no CLI verb exposing these two helpers — remains until the
 PBI closes.
 
+**Settled 2026-08-01 for `scribingTarget` specifically** (owner decision during
+the Rust port): it is dead surface, and the anti-fork rule it appeared to
+enforce is a convention the scribe follows, not a machine gate — the handbook
+now says so. The PBI's remaining scope is `emitFrontmatter` alone.
+
 ## Pointers (implementation)
 
 - Guard: `packages/bee/hooks/bee-write-guard.mjs`, internals-reach branch (inline-eval

@@ -305,9 +305,15 @@ comma, or other reserved character; both forms round-trip.
 
 ## Pointers (implementation)
 
-- The bundle-mode predicate, the scribing-target resolver and the frontmatter emitter:
-  `bundleMode`, `scribingTarget`, `emitFrontmatter` in `.bee/bin/lib/knowledge.mjs` (mirrored at
+- The bundle-mode predicate and the frontmatter emitter: `bundleMode`,
+  `emitFrontmatter` in `.bee/bin/lib/knowledge.mjs` (mirrored at
   `packages/bee/lib/knowledge.mjs`).
+- `scribingTarget` (the scribing-target resolver) is **dead surface**, kept only
+  as a reference: it has no runtime caller, no CLI verb, and is absent from the
+  command registry. Its only reachable path was an internals-reach `node -e`
+  invocation, which the write guard denies. The anti-fork rule it once looked
+  like it enforced is a convention the scribe follows, not a gate — see
+  `docs/handbook/stages/scribing.md`.
 - The product-root resolution both doc trees share: `resolveProductRoot` in
   `.bee/bin/lib/state.mjs` — the same resolver the session preamble (`inject.mjs`), the backlog
   and the session-close hook already use.

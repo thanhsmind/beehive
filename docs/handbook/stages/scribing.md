@@ -31,8 +31,10 @@ and appends to the durable ledger `.bee/logs/scribing-runs.jsonl`).
 
 ## Key rules
 - **NEVER invent** — unverified claims become *Open Gaps*, never asserted fact.
-- **One area = one file/concept, forever** — never fork (anti-fork gate via
-  `bundleMode`/`scribingTarget`).
+- **One area = one file/concept, forever** — never fork. This is a rule the
+  scribe follows, NOT a gate the machine enforces: `scribingTarget` has no
+  runtime caller and no CLI verb, so nothing refuses a fork at write time.
+  Read it as a convention you are accountable for, and say so if you break it.
 - **Tech-agnostic** — no language, framework, or library named outside a Pointers
   section.
 - **Do not skip scribing** when `behavior_change` cells were capped — in any lane,
