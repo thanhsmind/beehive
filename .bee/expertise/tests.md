@@ -7,6 +7,9 @@
 | Judging whether a test is worth writing | Confidence, not coverage |
 | About to write a test for a change | The coverage audit |
 | Deciding what a test may assert | Test behavior, not structure |
+| Naming a test, or it needs "and" in its name | One behavior, named after it |
+| Choosing unit vs integration vs end-to-end | Pick the cheapest level that can fail |
+| Replacing a dependency in a test | Fakes over stubs over mocks |
 | Setting up fixtures and shared state | Every test owns its world |
 | A test touches time, network, randomness, or ordering | The four determinism leaks |
 | A test fails intermittently | Flaky is worse than missing |
@@ -14,6 +17,8 @@
 | Fixing a reported bug | Red before green |
 | The code under test is hard to reach | Test the real code, never the twin |
 | Tempted to test everything | What not to test |
+| About to run the suite | Running tests |
+| A failure's cause is not obvious from the output | Instrument before guessing |
 | A bug shipped despite a green suite | Every escaped bug is a missing test |
 
 ## Confidence, not coverage
@@ -57,6 +62,17 @@ renaming a private function, inlining a helper, or reordering internal
 calls turns the suite red, the tests were pinned to structure, and they now
 punish exactly the improvements they were supposed to enable.
 
+```rust
+// Good — asserts the contract: invalid input is refused, and the refusal
+// names what the caller must fix.
+let err = claim_cell(&root, "missing-id").unwrap_err();
+assert_eq!(err.reason, "CELL_NOT_FOUND");
+
+// Bad — asserts the choreography. Passes only while claim_cell happens to
+// call validate() exactly once, and breaks on any honest refactor.
+assert_eq!(validate_calls.get(), 1);
+```
+
 The common ways structure-coupling creeps in:
 
 - **Asserting call counts and call order on your own code.** Checking that
@@ -80,6 +96,70 @@ them is correct even though they describe "how." Assert the property (the
 output order, the eviction victim, the delay sequence), still not the
 private call graph.
 
+## One behavior, named after it
+
+A test name states the scenario and the expected outcome, so a red line in
+the output explains itself without opening the file. If the name needs
+"and," it is two tests.
+
+```rust
+// Vague — a red line here sends you to the source to learn what broke.
+fn test_claim() { … }
+
+// Clear — the failure explains itself.
+fn claiming_a_cell_held_by_another_session_is_refused_with_its_holder() { … }
+```
+
+Follow arrange-act-assert: build the world, take the action, assert the
+outcome. When setup grows long, lift it into a helper so the body stays the
+scenario; when several tests build near-identical worlds, give the helper
+defaults and let each test override the one field it cares about.
+
+## Pick the cheapest level that can fail
+
+Match the level to the failure you are trying to catch, and prefer the
+cheapest level that can actually catch it:
+
+- **Unit** — one component, no I/O. Fast enough to run constantly; the right
+  home for logic, edge cases, and algorithms.
+- **Integration** — components against real collaborators (a real temp
+  filesystem, a real store, a real lock). Slower, and usually the best
+  confidence per unit of cost, because it catches the bugs that live in the
+  seams where each piece is individually correct.
+- **End-to-end** — the shipped entry point driven the way a user drives it
+  (spawn the CLI, feed it stdin, read stdout and the exit code). Highest
+  confidence, slowest, and the most sensitive to environment; keep the set
+  small and load-bearing.
+
+No level substitutes for another. A suite of only unit tests never sees the
+seams; a suite of only end-to-end tests is slow, and its failures point at
+"something in the pipeline."
+
+## Fakes over stubs over mocks
+
+A test double replaces a dependency. The three kinds differ in what they
+know:
+
+- **Fake** — a real, working implementation with a shortcut: an in-memory
+  store, a temp directory standing in for a repo. It executes logic, so it
+  still catches malformed input.
+- **Stub** — returns canned answers, knows nothing else.
+- **Mock** — records calls so the test can assert which ones happened.
+
+Prefer the real dependency when it is fast and deterministic — a temp
+directory usually is. Otherwise prefer a fake. Reserve mocks for when the
+interaction *is* the behavior under test (a notification was sent, a
+payment was charged); otherwise they pin structure and break on refactors.
+
+**A double is called with whatever the production code chooses to send.**
+If your double branches on the shape of its input — argv, env, cwd, stdin —
+guard each branch and exit cleanly on an unrecognized shape. A double that
+falls through to a catch-all branch produces side effects in the wrong
+context, and the resulting failure surfaces two layers away from the cause.
+
+**If a test needs many doubles, the code under test has too many
+dependencies.** Fix the design, not the test.
+
 ## Every test owns its world
 
 Every test creates its own fixtures, and it cleans up after itself — or
@@ -99,6 +179,11 @@ The usual leaks and their fixes:
 - **Randomness**: seed it or inject it.
 - **Ordering**: never assert on the iteration order of an unordered
   collection; sort before comparing.
+
+When output legitimately carries a varying token — a duration, a generated
+id, a timestamp — do not weaken the assertion to a substring match.
+Normalize the varying token and keep comparing everything else exactly; see
+the differential-testing pattern.
 
 ## Flaky is worse than missing
 
@@ -159,6 +244,12 @@ logic, export the function, inject the dependency — and then test the real
 thing. Improving testability this way is a legitimate production change,
 not test scaffolding.
 
+**A passing test is not proof the real path ran.** When the system has a
+fallback — a delegate, a retry, a cached answer — a test can pass because
+the fallback answered while the code under test was never reached. If a
+fallback exists, prove it stayed out of the way; see the
+proving-the-code-under-test-ran pattern.
+
 ## What not to test
 
 Do not spend tests on:
@@ -185,6 +276,59 @@ State the reason when you skip. The boundary that never qualifies:
 and error handling have behavior, and difficulty setting them up is an
 argument for a better harness, never for skipping the test.
 
+## Running tests
+
+**The project declares its suite once, and the door runs it.** `bee test`
+executes the recorded `commands.test` and writes the record every gate
+reads; `bee cells finish` and `bee close` run it as the door. Green caps
+the work; red refuses the cap and quotes the failing excerpt, and that red
+becomes the next piece of work. Never build on a red base, and never trust
+a stale record — the door re-runs the suite rather than reading yesterday's
+answer.
+
+**Save the output to a file, then read the file.**
+
+```bash
+cargo test --release > /tmp/test.out 2>&1
+```
+
+A long run's failing case scrolls past, and a filtered pipe truncates
+exactly the context you need. The saved file is the evidence: grep it,
+cite its path in a summary or handoff, and reopen it later instead of
+paying for a rerun.
+
+**Use a runner with per-test isolation and real parallelism.** Isolation
+puts each test in its own process so env vars, temp state, and in-process
+singletons cannot leak between cases; parallelism keeps the suite fast
+enough that people actually run it. For the Rust engine, `cargo nextest
+run` gives both. If a test only passes when the suite is serialized, that
+test shares state it should own — fix the test rather than serializing
+everyone else.
+
+**Run the whole suite after a cross-cutting change.** When a change touches
+something several components read — a shared schema, generated output, a
+path convention, a store format — the suite nearest the edited file stays
+green while a sibling suite quietly accumulates the breakage. Pay the
+wall-clock cost when the change shape warrants it.
+
+**An environment limit is not a failure.** When the host genuinely cannot
+run a case — no symlink privilege, no shell, no network — the case skips
+loudly and names the missing capability; it never fails, and it never
+silently disappears. See the environment-limited-tests pattern.
+
+## Instrument before guessing
+
+When a failure's cause is not obvious from its output → add one or two
+targeted prints on the suspect path, including inside any test double, run
+once, and read the new evidence. One instrumented run beats three
+hypothetical fixes, each of which changes two things and teaches you
+nothing. Remove the instrumentation once the cause is understood.
+
+If reading the output requires a debugger, the test is too coarse: it
+exercises so much that its red line cannot point anywhere. When several
+tests fail at once, start at the leaf — the innermost failure is usually
+the cause, and the rest are its shadow.
+
 ## Every escaped bug is a missing test
 
 When production breaks despite green tests → the incident has identified
@@ -195,3 +339,29 @@ this scenario invisible to the suite? An untested error path, an
 over-mocked boundary that hid the real interaction, an environment
 difference the tests never exercise. **Close the class of gap, not just
 the instance**, or the same hole ships the next bug too.
+
+## Patterns
+
+Reusable testing patterns live in `tests/patterns/` as individual files.
+Each line below carries its load trigger — read a pattern only when its
+trigger applies, never the whole directory.
+
+- [differential-testing](tests/patterns/differential-testing.md) — read when
+  a second implementation must match an existing one: a port, a rewrite, a
+  cache beside its source of truth, or a fast path beside a slow one.
+- [proving-the-code-under-test-ran](tests/patterns/proving-the-code-under-test-ran.md)
+  — read when the system has a fallback, delegate, retry, or cache that
+  could satisfy the assertion while the code under test never ran.
+- [environment-limited-tests](tests/patterns/environment-limited-tests.md) —
+  read when a case needs a capability the host may not have: symlinks, a
+  POSIX shell, elevated privilege, a network, a specific filesystem.
+- [pinning-against-a-live-oracle](tests/patterns/pinning-against-a-live-oracle.md)
+  — read when reimplementing behavior owned by something else — a platform
+  API, a collation order, a serializer — and the expectations would
+  otherwise be guesses.
+- [asserting-on-generated-output](tests/patterns/asserting-on-generated-output.md)
+  — read when the subject renders a template: prompts, codegen, reports,
+  formatted messages.
+- [comparing-structured-data](tests/patterns/comparing-structured-data.md) —
+  read when asserting on a JSON/JSONL/YAML artifact, or that such a file was
+  left unchanged.

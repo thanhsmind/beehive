@@ -1838,15 +1838,30 @@ function listTemplateLibModules() {
 // never a hand-kept list): every top-level *.md in the source expertise/ dir
 // is a vendored guide. Absent dir -> [] (a source tree without the craft
 // layer plans no expertise items and never deletes a host's vendored copy).
+// RECURSIVE since expertise gained progressive disclosure: a guide may carry
+// a `<topic>/patterns/*.md` directory whose files it indexes with per-file
+// load triggers (expertise/tests.md is the first). Those pattern files are
+// guides too — a host that vendors only the top-level *.md gets an index
+// pointing at files it does not have. Names are returned as POSIX-relative
+// paths ("tests/patterns/differential-testing.md") so every caller keeps
+// treating a name as the identity of one vendored guide.
 function listSourceExpertise() {
   if (!fs.existsSync(EXPERTISE_DIR)) {
     return [];
   }
-  return fs
-    .readdirSync(EXPERTISE_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
-    .map((entry) => entry.name)
-    .sort();
+  const out = [];
+  const walk = (dir, prefix) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walk(path.join(dir, entry.name), rel);
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        out.push(rel);
+      }
+    }
+  };
+  walk(EXPERTISE_DIR, "");
+  return out.sort();
 }
 
 // Same readdir discipline as listSourceExpertise (crit-pattern 20260714:
@@ -3144,11 +3159,13 @@ function computePlan(
   // ledger-based like 3c: .bee/expertise/ is wholly managed (like a bee-*
   // skill dir — a file absent from source IS an intentional removal), so a
   // stale guide is cleaned even when no ledger ever recorded it. Scoped to
-  // plain top-level *.md files only (dirent isFile(), so symlinks and
-  // subdirectories are never enumerated, unlinked, or deleted), and the whole
-  // removal pass is gated on the SOURCE dir existing — a source tree without
-  // the craft layer (pre-expertise checkout) must never read as "delete
-  // everything".
+  // plain *.md files (dirent isFile(), so symlinks are never enumerated,
+  // unlinked, or deleted) at any depth — progressive disclosure puts pattern
+  // files under `<topic>/patterns/`, and both the copy and the removal pass
+  // must see them or a host ends up with an index pointing at absent files,
+  // or with orphans a later removal never reaches. The whole removal pass is
+  // gated on the SOURCE dir existing — a source tree without the craft layer
+  // (pre-expertise checkout) must never read as "delete everything".
   const currentExpertiseNames = new Set(listSourceExpertise());
   for (const name of currentExpertiseNames) {
     const source = fs.readFileSync(path.join(EXPERTISE_DIR, name), "utf8");
@@ -3159,14 +3176,21 @@ function computePlan(
   }
   if (fs.existsSync(EXPERTISE_DIR)) {
     const expertiseTargetDir = path.join(repoRoot, ".bee", "expertise");
+    const listVendoredExpertise = (dir, prefix = "") => {
+      const found = [];
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+          found.push(...listVendoredExpertise(path.join(dir, entry.name), rel));
+        } else if (entry.isFile() && entry.name.endsWith(".md")) {
+          found.push(rel);
+        }
+      }
+      return found;
+    };
     const staleExpertise = fs.existsSync(expertiseTargetDir)
-      ? fs
-          .readdirSync(expertiseTargetDir, { withFileTypes: true })
-          .filter(
-            (entry) =>
-              entry.isFile() && entry.name.endsWith(".md") && !currentExpertiseNames.has(entry.name),
-          )
-          .map((entry) => entry.name)
+      ? listVendoredExpertise(expertiseTargetDir)
+          .filter((name) => !currentExpertiseNames.has(name))
           .sort()
       : [];
     for (const name of staleExpertise) {
@@ -3737,16 +3761,21 @@ function applyPlan(
         break;
       }
       case "copy_expertise": {
-        const name = path.basename(item.path);
+        // The name is the path RELATIVE to .bee/expertise — not the basename:
+        // a pattern file is vendored as "tests/patterns/<file>.md", and a
+        // basename would both read the wrong source and flatten the tree.
+        const name = item.path.slice(".bee/expertise/".length);
+        fs.mkdirSync(path.dirname(target), { recursive: true });
         writeFileAtomic(target, fs.readFileSync(path.join(EXPERTISE_DIR, name), "utf8"));
         break;
       }
       case "remove_expertise": {
-        // Same exact-path safety as remove_lib: item.path is always
-        // .bee/expertise/<name>, derived from the target-dir enumeration in
-        // section 3d above (plain top-level *.md files only), never
-        // host/user-supplied.
-        if (path.dirname(item.path) === ".bee/expertise") {
+        // Same containment safety as remove_lib — item.path is always derived
+        // from the target-dir enumeration in section 3d, never host-supplied
+        // — but the check is prefix-based, because a vendored guide may sit
+        // in a `<topic>/patterns/` subdirectory and an exact-dirname check
+        // would silently decline to clean those.
+        if (`${item.path}/`.startsWith(".bee/expertise/") && !item.path.includes("..")) {
           fs.rmSync(target, { force: true });
         }
         break;
