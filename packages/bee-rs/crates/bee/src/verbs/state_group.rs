@@ -54,18 +54,18 @@
 //     not reachable from here, so a repo that HAS a granted worktree AND
 //     records a code-touching lane returns None before any lock or write).
 //
+//   state start-feature — NATIVE (R6), BOTH branches: the default pipeline
+//     and `--as-lane`. seedLegacyWorkflows (C1), applyWritePolicy's three
+//     modes (observe / shared-disjoint / isolated — owner, refusal, and the
+//     CONSENTED isolate-create's real `git worktree add`), startLane's five
+//     preconditions, the default body's six, the shared workflow-precondition
+//     layer, ensureWorkflowRecordForFeature, closeWorkflowsForFeature and
+//     bee.mjs's own projection rebuild all run here. Both recorded blockers
+//     have dissolved — see the `state start-feature` section header below for
+//     which port retired each, and for the delegation gates that keep the
+//     "nothing after the first write can fall back" property true.
+//
 // DELEGATED whole verbs (unprovable here, by design):
-//   * state.start-feature. Its default path calls applyWritePolicy with
-//     enforceIsolation TRUE — which registerWorkspace/attachWorkspace WRITE
-//     into workspace-store.mjs before deciding, and on the consented branch
-//     runs createFeatureWorktree (real `git worktree add`, skills sync,
-//     companion mount) to produce the `redirect` answer. Nothing downstream
-//     of that first write can fall back to Node, and none of
-//     workspace-store.mjs is ported. seedLegacyWorkflows / startLane /
-//     listActiveReservationsForStart / listAllCellsForStart /
-//     checkNoLiveWorkflowForFeature / ensureWorkflowRecordForFeature /
-//     closeWorkflowsForFeature are all reachable from this crate today, so
-//     the residue is genuinely the write-policy half, not the sweep.
 //   * state.advisor-ref.*, state.compact-*.
 //
 // Provenance: bee.mjs handleStateSet/handleStateGate/handleStatePlanRevBump/
@@ -110,9 +110,11 @@ use crate::verbs::reservations::{
     js_numberify, js_strict_eq, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
     Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
-use crate::verbs::reservations::rebuild_reservations_projection;
+use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
+use crate::verbs::workspace_store as ws;
 use crate::verbs::workflow_store::{
-    acquire_named_lock, acquire_workflow_lock, adopt_mailbox_handoff, find_live_workflow,
+    acquire_named_lock, acquire_workflow_lock, adopt_mailbox_handoff, create_workflow,
+    find_live_workflow, NewWorkflow,
     gates_patch_from_record, lane_lock_name, lane_path, list_lanes, list_workflows,
     newest_open_handoff_mailbox_record, projection_lock_name, read_lane_display, read_lane_strict,
     rebuild_handoff_projection, rebuild_handoff_projection_reporting, rebuild_lane_projection,
@@ -1368,7 +1370,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         ["workflows", "close", ..] => ("workflows.close", 2),
         ["rebuild-projections", ..] => ("rebuild-projections", 1),
         ["route", ..] => ("route", 1),
-        _ => return None, // route/start-feature/advisor-ref/compact-*/unknown → Node
+        ["start-feature", ..] => ("start-feature", 1),
+        _ => return None, // advisor-ref/compact-*/unknown → Node
     };
     if leading.len() != consumed {
         return None; // "Unexpected argument" — Node's own refusal path
@@ -1396,6 +1399,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "workflows.close" => run_workflows_close(flags, use_json, t0),
         "rebuild-projections" => run_rebuild_projections(flags, use_json, t0),
         "route" => run_route(flags, use_json, t0),
+        "start-feature" => run_start_feature(flags, use_json, t0),
         _ => None,
     }
 }
@@ -3653,6 +3657,1120 @@ fn run_rebuild_projections(flags: Flags, use_json: bool, t0: Instant) -> Option<
     finish(&ctx, out)
 }
 
+// ─── state start-feature ───────────────────────────────────────────────────
+//
+// lib/state.mjs startFeature + startLane + seedLegacyWorkflows +
+// checkNoLiveWorkflowForFeature + checkNoSameFeatureClaimedCells +
+// ensureWorkflowRecordForFeature + closeWorkflowsForFeature +
+// applyWritePolicy, and bee.mjs's handleStateStartFeature around them.
+//
+// The three transactions run in Node's order, NONE nested inside another's
+// lock (D1/C4, multisession-native-6):
+//   (1) seedLegacyWorkflows — `workflow:<id>` per created record
+//   (2) applyWritePolicy    — `workspace:<id>` (+ 'worktree-admin' on the
+//                             consented isolate-create), then the legacy
+//                             read-check-write body under 'state' (or the
+//                             lane record under 'state', same hold)
+//   (3) ensureWorkflowRecordForFeature, then closeWorkflowsForFeature —
+//       `workflow:<id>`, always OUTSIDE 'state'
+// then bee.mjs's own projection rebuild under 'state' | `lane:<feature>`
+// (splpr-3: exactly one lock, for the record IT writes).
+//
+// WHAT UNBLOCKED THIS. Both recorded blockers have dissolved:
+//   * "applyWritePolicy WRITES into workspace-store.mjs before deciding, and
+//     none of workspace-store.mjs is ported" — verbs/workspace_store.rs now
+//     carries registerWorkspace / attachWorkspace / decideOwnership /
+//     applyOwnershipTakeover with Node's `workspace:<id>` lock name and
+//     Node's key ORDER, so registerWorkspace/attachWorkspace here call THE
+//     port. The "nothing after that first write can fall back" property is
+//     still true and still governs: every delegation gate below is decided in
+//     a read-only PREFLIGHT, before seedLegacyWorkflows' first write.
+//   * "ensureWorkflowRecordForFeature -> createWorkflow has no Rust
+//     implementation" — verbs/workflow_store.rs::create_workflow does, and
+//     `close_workflows_for_feature` is the same close-by-feature loop
+//     `state workflows close --all-but-active` already drives here.
+//
+// DELEGATED, by design, decided BEFORE any lock or write:
+//   * a control root that is not this store root. Node re-roots
+//     seedLegacyWorkflows / checkNoLiveWorkflowForFeature /
+//     ensureWorkflowRecordForFeature / closeWorkflowsForFeature /
+//     applyWritePolicy through controlRootFor(root); every other verb in this
+//     module reads the control plane as if it were `root`, so rather than
+//     silently inherit that assumption on a verb that WRITES workflow records,
+//     the mismatch is checked and delegated. (The prelude has already sent
+//     every linked worktree to Node, so this only fires on the exotic
+//     `.bee/onboarding.json`-below-the-git-root layout.)
+//   * every corrupt/exotic READ the run would make (config, workflow records,
+//     lanes, cells, reservations, sessions, the handoff, the grants registry,
+//     the workspace record) — classified by `preflight` up front, so a run
+//     that delegates has emitted zero bytes, taken zero locks and written
+//     nothing.
+//   * `--phase` naming a non-enum value is NOT delegated: the refusal is
+//     deterministic and native (it is thrown before seeding, zero mutation).
+//
+// The one accepted residual, identical in kind to verbs/workspace_store.rs's
+// and verbs/worktree.rs's: an fs WRITE that fails after the preflight still
+// delegates late. Every step to that point is idempotent by construction
+// (ensureWorkflowRecordForFeature is idempotent by feature, registerWorkspace
+// is idempotent, and a legacy write that never landed leaves the record
+// untouched), so the Node re-run reproduces the same answer over the same
+// store.
+
+/// state.mjs listAllCellsForStart — `.bee/cells/*.json`, objects only. A
+/// corrupt cell makes fsutil's readJson WARN with a V8 message, so it is
+/// classified as Exotic and delegated by the preflight.
+fn list_all_cells_for_start(root: &Path) -> Ex<Vec<Map<String, Value>>> {
+    let Ok(entries) = std::fs::read_dir(root.join(".bee").join("cells")) else {
+        return Ok(Vec::new());
+    };
+    let mut names: Vec<String> = Vec::new();
+    for entry in entries.flatten() {
+        match entry.file_name().to_str() {
+            Some(n) => names.push(n.to_string()),
+            None => return Err(Exotic),
+        }
+    }
+    names.sort(); // readdirSync order is the filesystem's; only the SET is read
+    let mut cells = Vec::new();
+    for name in names {
+        if !name.ends_with(".json") {
+            continue;
+        }
+        let parsed = match read_json(&root.join(".bee").join("cells").join(&name)) {
+            ReadJson::Missing => continue,
+            ReadJson::Corrupt => return Err(Exotic),
+            ReadJson::Parsed(v) => js_numberify(&v)?,
+        };
+        // `!cell || typeof cell !== 'object' || Array.isArray(cell)`
+        if let Value::Object(m) = parsed {
+            cells.push(m);
+        }
+    }
+    Ok(cells)
+}
+
+fn cell_field(cell: &Map<String, Value>, key: &str) -> Value {
+    cell.get(key).cloned().unwrap_or(Value::Null)
+}
+
+fn cell_id_disp(cell: &Map<String, Value>) -> String {
+    js_disp_opt(cell.get("id"))
+}
+
+/// state.mjs checkNoSameFeatureClaimedCells.
+fn check_no_same_feature_claimed_cells(
+    feature: &str,
+    cells: &[Map<String, Value>],
+) -> Option<String> {
+    let claimed: Vec<String> = cells
+        .iter()
+        .filter(|c| {
+            js_strict_eq(&cell_field(c, "feature"), &json!(feature))
+                && js_strict_eq(&cell_field(c, "status"), &json!("claimed"))
+        })
+        .map(cell_id_disp)
+        .collect();
+    if claimed.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "startFeature: refused — feature \"{feature}\" already has claimed cell(s): {}. FIX: cap or drop them first (bee.mjs cells cap / bee.mjs cells drop).",
+        claimed.join(", ")
+    ))
+}
+
+/// state.mjs checkNoLiveWorkflowForFeature — read-only, runs before any write.
+fn check_no_live_workflow_for_feature(
+    workflows: &[Map<String, Value>],
+    feature: &str,
+) -> Option<String> {
+    let conflict = workflows.iter().find(|wf| {
+        js_strict_eq(&cell_field(wf, "feature"), &json!(feature))
+            && !js_strict_eq(&cell_field(wf, "status"), &json!("closed"))
+    })?;
+    Some(format!(
+        "startFeature: refused — a live workflow already exists for feature \"{feature}\" (workflow {}, phase \"{}\", status \"{}\"). FIX: close or resolve that workflow before starting a new one for the same feature.",
+        js_disp_opt(conflict.get("id")),
+        js_disp_opt(conflict.get("phase")),
+        js_disp_opt(conflict.get("status"))
+    ))
+}
+
+/// state.mjs legacyGatesToWorkflowGates.
+fn legacy_gates_to_workflow_gates(approved: Option<&Value>) -> Value {
+    let mut gates = Map::new();
+    for name in GATE_NAMES {
+        let approved_flag = approved
+            .and_then(|g| jget(g, name))
+            .map(|v| js_strict_eq(v, &Value::Bool(true)))
+            .unwrap_or(false);
+        gates.insert(
+            name.to_string(),
+            json!({ "approved": approved_flag, "approved_for_plan_rev": Value::Null }),
+        );
+    }
+    Value::Object(gates)
+}
+
+/// The `{record, created}` answer ensureWorkflowRecordForFeature gives. Only
+/// the record's summary/next_action are consumed downstream, so `created` is
+/// not modelled (no caller reads it).
+fn ensure_workflow_record_for_feature(
+    control_root: &Path,
+    feature: &str,
+    phase: &str,
+    mode: Option<&str>,
+    summary: Option<&Value>,
+    next_action: Option<&Value>,
+    gates: Option<Value>,
+) -> Result<(), Err2> {
+    let feature_trimmed = js_trim(feature);
+    if feature_trimmed.is_empty() {
+        return Err(Err2::Msg(
+            "ensureWorkflowRecordForFeature: a non-empty feature slug is required.".to_string(),
+        ));
+    }
+    // Idempotent by FEATURE: a live record is returned untouched, never a
+    // second record for one feature and never a silent overwrite.
+    let live = list_workflows(control_root)?.into_iter().find(|wf| {
+        js_strict_eq(&cell_field(wf, "feature"), &json!(feature_trimmed))
+            && !js_strict_eq(&cell_field(wf, "status"), &json!("closed"))
+    });
+    if live.is_some() {
+        return Ok(());
+    }
+    create_workflow(
+        control_root,
+        NewWorkflow {
+            feature: Some(feature_trimmed),
+            // `isKnownPhase(phase) ? phase : 'idle'`
+            phase: Some(json!(if is_known_phase(phase) { phase } else { "idle" })),
+            // `mode == null ? null : String(mode)`
+            mode: Some(mode.map_or(Value::Null, |m| json!(m))),
+            plan_rev: None,
+            gates,
+            // `typeof summary === 'string' ? summary : ''`
+            summary: Some(match summary {
+                Some(Value::String(s)) => json!(s),
+                _ => json!(""),
+            }),
+            next_action: Some(match next_action {
+                Some(Value::String(s)) => json!(s),
+                _ => json!(""),
+            }),
+            status: Some("active"),
+            id: None,
+        },
+    )
+    .map(|_| ())
+}
+
+/// state.mjs closeWorkflowsForFeature(root, { keepFeature }) — close every
+/// LIVE record whose feature differs from `keep`, each under its OWN
+/// `workflow:<id>` lock, sequentially, never nested inside 'state'.
+fn close_workflows_for_feature(control_root: &Path, keep: Option<&str>) -> Result<(), Err2> {
+    let keep = keep.map(js_trim).filter(|s| !s.is_empty());
+    for wf in list_workflows(control_root)? {
+        if js_strict_eq(&cell_field(&wf, "status"), &json!("closed")) {
+            continue;
+        }
+        if let Some(keep) = keep {
+            if js_strict_eq(&cell_field(&wf, "feature"), &json!(keep)) {
+                continue;
+            }
+        }
+        let mut patch = Map::new();
+        patch.insert("status".into(), json!("closed"));
+        update_workflow(control_root, &wf_id(&wf), patch)?;
+    }
+    Ok(())
+}
+
+/// state.mjs seedLegacyWorkflows (C1) — materialize every ALREADY-live legacy
+/// record into a workflow record, once per repo. Gated on
+/// `listWorkflows(controlRoot).workflows.length === 0`, and each candidate goes
+/// through the ONE creation seam so seeding and starting share one definition
+/// of "already recorded".
+fn seed_legacy_workflows(root: &Path, control_root: &Path) -> Result<(), Err2> {
+    if !list_workflows(control_root)?.is_empty() {
+        return Ok(()); // never re-seed once ANY workflow record exists
+    }
+    // (a) the legacy default record, read with the FAIL-OPEN readState.
+    let legacy = read_state_peek(root)?;
+    let feature = legacy.get("feature").cloned().unwrap_or(Value::Null);
+    let phase = legacy.get("phase").cloned().unwrap_or(Value::Null);
+    let gates_live = match legacy.get("approved_gates") {
+        Some(Value::Object(g)) => g.values().any(|v| js_strict_eq(v, &Value::Bool(true))),
+        Some(Value::Array(a)) => a.iter().any(|v| js_strict_eq(v, &Value::Bool(true))),
+        _ => false,
+    };
+    let phase_live = truthy(&phase)
+        && !js_strict_eq(&phase, &json!("idle"))
+        && !js_strict_eq(&phase, &json!("compounding-complete"));
+    let legacy_live = truthy(&feature) || phase_live || gates_live;
+    if legacy_live && truthy(&feature) {
+        ensure_workflow_record_for_feature(
+            control_root,
+            &js_disp_opt(Some(&feature)),
+            &js_disp_opt(Some(&phase)),
+            legacy.get("mode").filter(|v| !v.is_null()).map(|_| js_disp_opt(legacy.get("mode"))).as_deref(),
+            legacy.get("summary"),
+            legacy.get("next_action"),
+            Some(legacy_gates_to_workflow_gates(legacy.get("approved_gates"))),
+        )?;
+    }
+
+    // (b) every non-terminal lane.
+    for lane in list_lanes(root)? {
+        let lane_feature = cell_field(&lane, "feature");
+        if !truthy(&lane_feature) {
+            continue;
+        }
+        let lane_phase = cell_field(&lane, "phase");
+        let lane_live = truthy(&lane_phase)
+            && !js_strict_eq(&lane_phase, &json!("idle"))
+            && !js_strict_eq(&lane_phase, &json!("compounding-complete"));
+        if !lane_live {
+            continue;
+        }
+        ensure_workflow_record_for_feature(
+            control_root,
+            &js_disp_opt(Some(&lane_feature)),
+            &js_disp_opt(Some(&lane_phase)),
+            lane.get("mode").filter(|v| !v.is_null()).map(|_| js_disp_opt(lane.get("mode"))).as_deref(),
+            lane.get("summary"),
+            lane.get("next_action"),
+            Some(legacy_gates_to_workflow_gates(lane.get("approved_gates"))),
+        )?;
+    }
+    Ok(())
+}
+
+/// claims.mjs activeWorkers — live-heartbeat sessions joined with their first
+/// active claim, one row per session. Re-derived here from THIS module's own
+/// list_session_records / heartbeat_stale / read_claim rather than widened out
+/// of verbs/status_full.rs: those are read-only projections (no store mutation
+/// to single-source), and status_full's copy is bound to that module's own
+/// error type.
+struct Worker {
+    session_id: String,
+    cell: Option<Value>,
+}
+
+/// claims.mjs isClaimExpired/isClaimActive.
+fn is_claim_active(claim: &Value, now: f64) -> Ex<bool> {
+    let ttl = match jget(claim, "ttl_seconds") {
+        Some(Value::Number(n)) => n.as_f64().unwrap_or(f64::NAN),
+        _ => return Ok(true), // `typeof ttl !== 'number'` -> never expires
+    };
+    if !ttl.is_finite() || ttl <= 0.0 {
+        return Ok(true);
+    }
+    match date_parse_val(jget(claim, "claimed_at"))? {
+        None => Ok(true),
+        Some(at) => Ok(at + ttl * 1000.0 > now),
+    }
+}
+
+fn claim_ids(root: &Path) -> Ex<Vec<String>> {
+    let Ok(entries) = std::fs::read_dir(claims_dir(root)) else {
+        return Ok(Vec::new());
+    };
+    let mut ids = Vec::new();
+    for entry in entries.flatten() {
+        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+            return Err(Exotic);
+        };
+        if let Some(stem) = name.strip_suffix(".json") {
+            ids.push(stem.to_string());
+        }
+    }
+    ids.sort();
+    Ok(ids)
+}
+
+fn active_workers(root: &Path, exclude_session_id: Option<&str>) -> Ex<Vec<Worker>> {
+    let exclude = exclude_session_id.map(js_trim).unwrap_or("");
+    let now = now_ms();
+    let mut live: Vec<Map<String, Value>> = Vec::new();
+    for session in list_session_records(root)? {
+        let id = js_disp_opt(session.get("id"));
+        if id == exclude || heartbeat_stale(&session, now)? {
+            continue;
+        }
+        live.push(session);
+    }
+    if live.is_empty() {
+        return Ok(Vec::new());
+    }
+    // First active claim seen for a session wins (one row per worker).
+    let mut cell_by_session: Vec<(String, Value)> = Vec::new();
+    for id in claim_ids(root)? {
+        let Some(claim) = read_claim(root, &id)? else { continue };
+        let session = jget(&claim, "session").cloned().unwrap_or(Value::Null);
+        if !truthy(&session) || !is_claim_active(&claim, now)? {
+            continue;
+        }
+        let key = js_disp_opt(Some(&session));
+        if !cell_by_session.iter().any(|(s, _)| *s == key) {
+            cell_by_session.push((key, jget(&claim, "cell").cloned().unwrap_or(Value::Null)));
+        }
+    }
+    Ok(live
+        .into_iter()
+        .map(|session| {
+            let session_id = js_disp_opt(session.get("id"));
+            let cell = cell_by_session
+                .iter()
+                .find(|(s, _)| *s == session_id)
+                .map(|(_, c)| c.clone());
+            Worker { session_id, cell }
+        })
+        .collect())
+}
+
+/// state.mjs listClaimHoldsForStart — ANOTHER session's active claim whose
+/// claimed cell's files overlap a declared path.
+struct ClaimHold {
+    session: String,
+    cell: String,
+    path: String,
+}
+
+fn list_claim_holds_for_start(
+    control_root: &Path,
+    session_id: Option<&str>,
+    cells: &[Map<String, Value>],
+    declared: &[String],
+) -> Ex<Vec<ClaimHold>> {
+    let now = now_ms();
+    let mut holds = Vec::new();
+    for id in claim_ids(control_root)? {
+        let Some(claim) = read_claim(control_root, &id)? else { continue };
+        if !is_claim_active(&claim, now)? {
+            continue;
+        }
+        let claim_session = jget(&claim, "session").cloned().unwrap_or(Value::Null);
+        if let Some(sid) = session_id {
+            if js_strict_eq(&claim_session, &json!(sid)) {
+                continue; // own holds never block
+            }
+        }
+        let claim_cell = jget(&claim, "cell").cloned().unwrap_or(Value::Null);
+        let cell = cells
+            .iter()
+            .find(|c| js_strict_eq(&cell_field(c, "id"), &claim_cell));
+        let files: Vec<String> = match cell.map(|c| cell_field(c, "files")) {
+            Some(Value::Array(a)) => a.iter().map(|f| js_disp_opt(Some(f))).collect(),
+            _ => Vec::new(),
+        };
+        for file in files {
+            if declared.iter().any(|d| paths_overlap(&file, d)) {
+                holds.push(ClaimHold {
+                    session: js_disp_opt(Some(&claim_session)),
+                    cell: js_disp_opt(Some(&claim_cell)),
+                    path: file,
+                });
+                break;
+            }
+        }
+    }
+    Ok(holds)
+}
+
+/// The reservation display `${r.agent}:${r.path}` both precondition messages
+/// use.
+fn resv_disp(r: &crate::verbs::reservations::Resv) -> String {
+    format!("{}:{}", js_disp_opt(r.agent.as_ref()), r.path)
+}
+
+// ─── applyWritePolicy (multisession-native-20, D3) ─────────────────────────
+
+/// The answer applyWritePolicy gives the caller. `Redirect` is the consented
+/// isolate-create — `handleStateStartFeature` returns it directly and MUST NOT
+/// perform its own write in `root`.
+enum Policy {
+    Proceed,
+    Redirect { result: Map<String, Value>, text: String },
+}
+
+fn write_policy_isolate_one_liner(verb_hint: &str) -> String {
+    let verb = if js_trim(verb_hint).is_empty() { "<verb>" } else { js_trim(verb_hint) };
+    format!(
+        "bee.mjs {verb} --isolate (creates a fresh worktree for this session), or set guards.auto_isolate to true in .bee/config.json to always auto-isolate on contention."
+    )
+}
+
+/// isolateNoticeMarkerPath — `${sessionId}`.replace(/[\\/]/g,'_').
+fn isolate_notice_marker_path(control_root: &Path, session_id: &str) -> PathBuf {
+    let safe: String = session_id
+        .chars()
+        .map(|c| if c == '\\' || c == '/' { '_' } else { c })
+        .collect();
+    control_root
+        .join(".bee")
+        .join("runtime")
+        .join("notices")
+        .join("isolate")
+        .join(format!("{safe}.json"))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_write_policy(
+    root: &Path,
+    control_root: &Path,
+    config: &Map<String, Value>,
+    session_id: Option<&str>,
+    paths: &[String],
+    isolate: bool,
+    feature: &str,
+    verb_hint: &str,
+) -> Result<Policy, Err2> {
+    // resolveWritePolicyMode(config)
+    let configured = match config.get("guards").and_then(|g| jget(g, "write_policy")) {
+        Some(Value::String(s)) => js_trim(s).to_string(),
+        _ => String::new(),
+    };
+    if configured == "observe" {
+        return Ok(Policy::Proceed);
+    }
+
+    if configured == "shared-disjoint" {
+        let declared: Vec<&String> = paths.iter().filter(|p| !js_trim(p).is_empty()).collect();
+        if declared.is_empty() {
+            return Ok(Policy::Proceed);
+        }
+        let control_root_s = control_root.to_str().ok_or(Err2::Ex)?.to_string();
+        let active = list_reservations(&control_root_s, true, now_ms())?;
+        let missing: Vec<&&String> = declared
+            .iter()
+            .filter(|p| {
+                !active.iter().any(|r| {
+                    session_id.is_some_and(|sid| js_strict_eq(
+                        &r.session.clone().unwrap_or(Value::Null),
+                        &json!(sid),
+                    )) && !r.path.ends_with('*')
+                        && paths_overlap(&r.path, p)
+                })
+            })
+            .collect();
+        if !missing.is_empty() {
+            let list: Vec<&str> = missing.iter().map(|p| p.as_str()).collect();
+            return Err(Err2::Msg(format!(
+                "bee write-policy (shared-disjoint): no exact-path lease held for: {}. A broad/glob reservation never satisfies shared-disjoint — an exact-path lease is mandatory before write. FIX: bee.mjs reservations reserve --agent <worker> --cell <id> --path <path>{} for each path, then retry.",
+                list.join(", "),
+                match session_id {
+                    Some(sid) => format!(" --session-id {sid}"),
+                    None => String::new(),
+                }
+            )));
+        }
+        return Ok(Policy::Proceed);
+    }
+
+    // isolated (default). No session identity => nothing to own a workspace
+    // with; `enforceIsolation` is always TRUE for this verb.
+    let Some(session_id) = session_id.filter(|s| !s.is_empty()) else {
+        return Ok(Policy::Proceed);
+    };
+
+    // resolveContext(root). This verb only ever runs from an ORDINARY
+    // checkout whose control root IS this root (both gated in `run_start_feature`
+    // before anything is read), so decideWorktreeStore can only answer
+    // 'ordinary' — workspaceId is 'main', worktreeId is null, and
+    // workspaceRoot is `root` itself.
+    let workspace_id = "main";
+    let workspace_root = root.to_str().ok_or(Err2::Ex)?;
+    let now = now_ms();
+    let now_iso_s = now_iso();
+    ws::register_workspace(
+        control_root,
+        ws::RegisterSpec {
+            id: workspace_id,
+            kind: "main",
+            root: workspace_root,
+            branch: None,
+            base_sha: None,
+        },
+        &now_iso_s,
+    )
+    .map_err(ws_err)?;
+
+    // Production-shaped isOwnerLive, built from THIS module's readSession +
+    // heartbeatStale. `preflight` has already proven every session record
+    // parses and every heartbeat is date-parseable, so neither `unwrap_or`
+    // below can fire on a shape Node would have read differently.
+    let is_owner_live = |owner: &str, now_ms_v: f64| -> bool {
+        match read_session(control_root, owner) {
+            Ok(Some(session)) => !heartbeat_stale(&session, now_ms_v).unwrap_or(true),
+            _ => false,
+        }
+    };
+    let attach = ws::attach_workspace(
+        control_root,
+        workspace_id,
+        Some(session_id),
+        ws::OwnershipOpts { now, now_iso: &now_iso_s, is_owner_live: Some(&is_owner_live) },
+    )
+    .map_err(ws_err)?;
+    let owner_session = match attach.role {
+        ws::AttachRole::Owner { .. } => return Ok(Policy::Proceed),
+        ws::AttachRole::ReadOnly { write_owner_session } => write_owner_session,
+    };
+
+    // blocked: a DIFFERENT, live session already owns this workspace's writes.
+    let auto_isolate = isolate
+        || config
+            .get("guards")
+            .and_then(|g| jget(g, "auto_isolate"))
+            .map(|v| js_strict_eq(v, &Value::Bool(true)))
+            .unwrap_or(false);
+    if !auto_isolate {
+        let marker = isolate_notice_marker_path(control_root, session_id);
+        let already_shown = marker.exists();
+        if !already_shown {
+            // Best-effort stamp: a failed write only means the next refusal
+            // shows the fuller message again.
+            let _ = write_json_atomic(
+                &marker,
+                &json!({ "session_id": session_id, "shown_at": now_iso() }),
+            );
+        }
+        let one_liner = write_policy_isolate_one_liner(verb_hint);
+        return Err(Err2::Msg(if already_shown {
+            format!(
+                "bee write-policy: workspace \"{workspace_id}\" is still write-owned by session \"{owner_session}\". FIX: {one_liner}"
+            )
+        } else {
+            format!(
+                "bee write-policy: a second write-capable session defaults to isolation, not a wait — workspace \"{workspace_id}\" already has a live write owner (session \"{owner_session}\"). Bee never writes into the same checkout as a live owner. FIX: {one_liner}"
+            )
+        }));
+    }
+
+    // Consented (--isolate) or configured (guards.auto_isolate) — a fresh
+    // feature worktree. createFeatureWorktree already registers its own
+    // workspace record (msn-19); this attaches the ACTING session as that new
+    // workspace's first (uncontested) write owner.
+    let isolate_feature = if js_trim(feature).is_empty() {
+        format!("session-{session_id}")
+    } else {
+        js_trim(feature).to_string()
+    };
+    let mut lock_busy: Option<String> = None;
+    let created = match crate::verbs::worktree::create_feature_worktree(
+        control_root,
+        &isolate_feature,
+        None,
+        &mut lock_busy,
+    ) {
+        Ok(c) => c,
+        Err(crate::verbs::worktree::CErr::Refuse(message)) => return Err(Err2::Msg(message)),
+        Err(crate::verbs::worktree::CErr::Ex) => {
+            return match lock_busy {
+                // Reached AFTER a lock attempt, so native (campaign rule 2).
+                Some(message) => Err(Err2::Msg(message)),
+                None => Err(Err2::Ex),
+            }
+        }
+    };
+    ws::attach_workspace(
+        control_root,
+        &created.id,
+        Some(session_id),
+        ws::OwnershipOpts { now, now_iso: &now_iso(), is_owner_live: None },
+    )
+    .map_err(ws_err)?;
+
+    let worktree_root = created.worktree_root.to_string_lossy().into_owned();
+    let cost_disclosure = format!(
+        "[bee cost] Isolated worktree created — a FULL working-tree copy at {worktree_root} (disk cost scales with repo size)."
+    );
+    let text = format!(
+        "{cost_disclosure}\nOpen your next session with cwd={worktree_root} to continue \"{isolate_feature}\" there — this checkout stays untouched."
+    );
+    let mut result = Map::new();
+    result.insert("ok".into(), Value::Bool(true));
+    result.insert("mode".into(), json!("isolated"));
+    result.insert("workspace".into(), json!("isolated-created"));
+    result.insert("redirect".into(), Value::Bool(true));
+    result.insert("worktreeRoot".into(), json!(worktree_root));
+    result.insert("workspaceId".into(), json!(created.id));
+    result.insert("branch".into(), json!(created.branch));
+    result.insert("costDisclosure".into(), json!(cost_disclosure));
+    result.insert("text".into(), json!(text.clone()));
+    Ok(Policy::Redirect { result, text })
+}
+
+/// A WorkspaceStoreError / LockBusyError message is deterministic and
+/// reproduced natively by verbs/workspace_store.rs; only its `Ex` arm (a V8
+/// message) delegates.
+fn ws_err(e: ws::WsErr) -> Err2 {
+    match e {
+        ws::WsErr::Err { message, .. } => Err2::Msg(message),
+        ws::WsErr::Ex => Err2::Ex,
+    }
+}
+
+// ─── startLane / the default legacy body ──────────────────────────────────
+
+/// state.mjs startLane — the whole lane branch, run inside the 'state' hold.
+#[allow(clippy::too_many_arguments)]
+fn start_lane(
+    root: &Path,
+    control_root: &Path,
+    feature: &str,
+    mode: Option<&str>,
+    phase: &str,
+    session_id: Option<&str>,
+    paths: &[String],
+    workflows: &[Map<String, Value>],
+) -> R2<Result<Map<String, Value>, String>> {
+    // A corrupt existing lane record refuses loudly with the file untouched.
+    let existing = read_lane_strict(root, feature)?;
+    if let Some(existing) = &existing {
+        let existing_phase = cell_field(existing, "phase");
+        if !js_strict_eq(&existing_phase, &json!("idle"))
+            && !js_strict_eq(&existing_phase, &json!("compounding-complete"))
+        {
+            return Ok(Err(format!(
+                "startFeature: refused — lane \"{feature}\" is mid-flight at phase \"{}\", not idle or the terminal alias \"compounding-complete\". FIX: finish or explicitly wind down that lane first, then retry.",
+                js_disp_opt(Some(&existing_phase))
+            )));
+        }
+    }
+
+    let cells = list_all_cells_for_start(root)?;
+
+    // (a) nonterminal cells of THIS lane's feature.
+    let nonterminal: Vec<String> = cells
+        .iter()
+        .filter(|c| {
+            js_strict_eq(&cell_field(c, "feature"), &json!(feature)) && {
+                let s = cell_field(c, "status");
+                js_strict_eq(&s, &json!("open"))
+                    || js_strict_eq(&s, &json!("claimed"))
+                    || js_strict_eq(&s, &json!("blocked"))
+            }
+        })
+        .map(|c| format!("{}({})", cell_id_disp(c), js_disp_opt(c.get("status"))))
+        .collect();
+    if !nonterminal.is_empty() {
+        return Ok(Err(format!(
+            "startFeature: refused — feature \"{feature}\" already has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee.mjs cells drop --id ID --reason R). FIX: cap or drop each listed cell, then retry.",
+            nonterminal.join(", ")
+        )));
+    }
+
+    // (b) the global handoff blocks a LANE start only when it names this feature.
+    if let Some(handoff) = read_handoff(root)? {
+        if js_strict_eq(&jget(&handoff, "feature").cloned().unwrap_or(Value::Null), &json!(feature))
+        {
+            return Ok(Err(format!(
+                "startFeature: refused — .bee/HANDOFF.json names feature \"{feature}\"; its paused work must resume or close before this lane restarts. FIX: resume the handoff (or explicitly delete HANDOFF.json once its work is truly abandoned), then retry."
+            )));
+        }
+    }
+
+    // (c) an OTHER live worker whose claimed cell derives to this feature.
+    let lane_workers: Vec<String> = active_workers(control_root, session_id)?
+        .into_iter()
+        .filter(|w| {
+            let Some(cell_id) = &w.cell else { return false };
+            cells.iter().any(|c| {
+                js_strict_eq(&cell_field(c, "id"), cell_id)
+                    && js_strict_eq(&cell_field(c, "feature"), &json!(feature))
+            })
+        })
+        .map(|w| format!("{}({})", w.session_id, js_disp_opt(w.cell.as_ref())))
+        .collect();
+    if !lane_workers.is_empty() {
+        return Ok(Err(format!(
+            "startFeature: refused — active worker session(s) on feature \"{feature}\": {}. FIX: wait for the session's heartbeat to go stale, or have it cap/drop its claimed cell, then retry.",
+            lane_workers.join(", ")
+        )));
+    }
+
+    // (d) declared intended paths vs ANOTHER session's active holds.
+    let declared: Vec<String> = paths
+        .iter()
+        .filter(|p| !js_trim(p).is_empty())
+        .map(|p| js_trim(p).to_string())
+        .collect();
+    if !declared.is_empty() {
+        let root_s = root.to_str().ok_or(Err2::Ex)?.to_string();
+        let reservation_holds: Vec<String> = list_reservations(&root_s, true, now_ms())?
+            .iter()
+            .filter(|r| declared.iter().any(|d| paths_overlap(&r.path, d)))
+            .map(resv_disp)
+            .collect();
+        if !reservation_holds.is_empty() {
+            return Ok(Err(format!(
+                "startFeature: refused — declared path(s) overlap active reservation hold(s): {}. FIX: wait for release/expiry (bee.mjs reservations release), or start the lane over non-overlapping paths.",
+                reservation_holds.join(", ")
+            )));
+        }
+        let claim_holds = list_claim_holds_for_start(control_root, session_id, &cells, &declared)?;
+        if !claim_holds.is_empty() {
+            return Ok(Err(format!(
+                "startFeature: refused — declared path(s) overlap file(s) of cell(s) claimed by another session: {}. FIX: wait for the claim to release or expire, or start the lane over non-overlapping paths.",
+                claim_holds
+                    .iter()
+                    .map(|h| format!("{}:{}({})", h.session, h.cell, h.path))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        }
+    }
+
+    // (e) the shared workflow-precondition layer.
+    if let Some(refusal) = check_no_live_workflow_for_feature(workflows, feature) {
+        return Ok(Err(refusal));
+    }
+    if let Some(refusal) = check_no_same_feature_claimed_cells(feature, &cells) {
+        return Ok(Err(refusal));
+    }
+
+    // ONE atomic write to this lane's record. created_at survives a restart.
+    let mut record = Map::new();
+    record.insert("schema_version".into(), json!("1.0"));
+    record.insert("feature".into(), json!(feature));
+    record.insert("mode".into(), mode.map_or(Value::Null, |m| json!(m)));
+    record.insert("phase".into(), json!(phase));
+    record.insert("approved_gates".into(), Value::Object(default_gates()));
+    record.insert(
+        "summary".into(),
+        json!(format!("Feature \"{feature}\" started at phase \"{phase}\" (lane).")),
+    );
+    record.insert(
+        "next_action".into(),
+        json!(format!("Continue bee-{phase} for \"{feature}\" (lane).")),
+    );
+    let created_at = existing
+        .as_ref()
+        .and_then(|e| e.get("created_at"))
+        .and_then(|v| match v {
+            Value::String(s) if !s.is_empty() => Some(s.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(now_iso);
+    record.insert("created_at".into(), json!(created_at));
+    write_lane(root, &record)?;
+    Ok(Ok(record))
+}
+
+/// startFeature's DEFAULT (non-lane) legacy body, run inside the 'state' hold.
+/// Every read happens before the single write at the end, so a refusal leaves
+/// zero mutations.
+fn start_default(
+    root: &Path,
+    feature: &str,
+    mode: Option<&str>,
+    phase: &str,
+    workflows: &[Map<String, Value>],
+) -> R2<Result<Map<String, Value>, String>> {
+    let mut state = read_state_strict(root)?;
+
+    let current_phase = state.get("phase").cloned().unwrap_or(Value::Null);
+    if !js_strict_eq(&current_phase, &json!("idle"))
+        && !js_strict_eq(&current_phase, &json!("compounding-complete"))
+    {
+        return Ok(Err(format!(
+            "startFeature: refused — current phase is \"{}\", not idle or the terminal alias \"compounding-complete\". A prior feature must finish or be explicitly wound down before a new feature starts. FIX: resume/close the current feature through its normal chain, or drop its remaining cells (bee.mjs cells drop), then retry.",
+            js_disp_opt(Some(&current_phase))
+        )));
+    }
+
+    // F5: scoped per-feature — a handoff naming a DIFFERENT feature no longer
+    // blocks this start.
+    if let Some(handoff) = read_handoff(root)? {
+        if js_strict_eq(&jget(&handoff, "feature").cloned().unwrap_or(Value::Null), &json!(feature))
+        {
+            return Ok(Err(format!(
+                "startFeature: refused — .bee/HANDOFF.json names feature \"{feature}\"; its paused work must resume or close before this feature restarts. FIX: resume the handoff (or explicitly delete HANDOFF.json once its work is truly abandoned), then retry."
+            )));
+        }
+    }
+
+    // msn-20 D3 RETIRED the old "another session is active, wait" precondition
+    // — applyWritePolicy above is its replacement, so nothing stands here.
+
+    let root_s = root.to_str().ok_or(Err2::Ex)?.to_string();
+    let active_reservations = list_reservations(&root_s, true, now_ms())?;
+    if !active_reservations.is_empty() {
+        return Ok(Err(format!(
+            "startFeature: refused — {} active reservation(s) remain ({}). FIX: release them first (bee.mjs reservations release).",
+            active_reservations.len(),
+            active_reservations.iter().map(resv_disp).collect::<Vec<_>>().join(", ")
+        )));
+    }
+
+    let cells = list_all_cells_for_start(root)?;
+    let claimed: Vec<String> = cells
+        .iter()
+        .filter(|c| js_strict_eq(&cell_field(c, "status"), &json!("claimed")))
+        .map(cell_id_disp)
+        .collect();
+    if !claimed.is_empty() {
+        return Ok(Err(format!(
+            "startFeature: refused — claimed cell(s) remain: {}. FIX: cap or drop them first (bee.mjs cells cap / bee.mjs cells drop).",
+            claimed.join(", ")
+        )));
+    }
+
+    let prior_feature = state.get("feature").cloned().unwrap_or(Value::Null);
+    if truthy(&prior_feature) {
+        let nonterminal: Vec<String> = cells
+            .iter()
+            .filter(|c| {
+                js_strict_eq(&cell_field(c, "feature"), &prior_feature) && {
+                    let s = cell_field(c, "status");
+                    js_strict_eq(&s, &json!("open"))
+                        || js_strict_eq(&s, &json!("claimed"))
+                        || js_strict_eq(&s, &json!("blocked"))
+                }
+            })
+            .map(|c| format!("{}({})", cell_id_disp(c), js_disp_opt(c.get("status"))))
+            .collect();
+        if !nonterminal.is_empty() {
+            return Ok(Err(format!(
+                "startFeature: refused — prior feature \"{}\" has nonterminal cell(s): {}. An abandoned cell must first be resolved through the existing drop verb (bee.mjs cells drop --id ID --reason R) — startFeature never auto-clears cells as cleanup. FIX: cap or drop each listed cell, then retry.",
+                js_disp_opt(Some(&prior_feature)),
+                nonterminal.join(", ")
+            )));
+        }
+    }
+
+    if let Some(refusal) = check_no_live_workflow_for_feature(workflows, feature) {
+        return Ok(Err(refusal));
+    }
+    if let Some(refusal) = check_no_same_feature_claimed_cells(feature, &cells) {
+        return Ok(Err(refusal));
+    }
+
+    // ONE atomic write. A JS re-assignment keeps each key's ORIGINAL position,
+    // so the on-disk key order is readStateStrict's, not this list's.
+    state.insert("feature".into(), json!(feature));
+    state.insert("mode".into(), mode.map_or(Value::Null, |m| json!(m)));
+    state.insert("phase".into(), json!(phase));
+    state.insert("approved_gates".into(), Value::Object(default_gates()));
+    state.insert(
+        "summary".into(),
+        json!(format!("Feature \"{feature}\" started at phase \"{phase}\".")),
+    );
+    state.insert(
+        "next_action".into(),
+        json!(format!("Continue bee-{phase} for \"{feature}\".")),
+    );
+    write_state(root, &state)?;
+    Ok(Ok(state))
+}
+
+/// Every read the run would make, classified BEFORE the first lock or write.
+/// A single `Err(Exotic)` here sends the whole command to Node with zero
+/// bytes emitted (campaign rule: a delegation is only sound before a mutation,
+/// and seedLegacyWorkflows' first `createWorkflow` is that mutation).
+fn preflight(root: &Path, control_root: &Path) -> Ex<()> {
+    let now = now_ms();
+    list_workflows(control_root).map_err(|_| Exotic)?;
+    read_state_peek(root)?;
+    list_lanes(root)?;
+    list_all_cells_for_start(root)?;
+    read_handoff(root)?;
+    let root_s = root.to_str().ok_or(Exotic)?.to_string();
+    list_reservations(&root_s, true, now)?;
+    if control_root != root {
+        let ctrl_s = control_root.to_str().ok_or(Exotic)?.to_string();
+        list_reservations(&ctrl_s, true, now)?;
+    }
+    // Sessions + claims: read AND date-parsed, so `is_owner_live`'s and
+    // active_workers' fallbacks can never fire on a shape Node reads
+    // differently.
+    for session in list_session_records(control_root)? {
+        heartbeat_stale(&session, now)?;
+    }
+    for id in claim_ids(control_root)? {
+        if let Some(claim) = read_claim(control_root, &id)? {
+            is_claim_active(&claim, now)?;
+        }
+    }
+    // The grants registry backs resolveContext's decideWorktreeStore AND the
+    // consented isolate-create's own createFeatureWorktree.
+    crate::verbs::worktree::read_grants_strict(&control_root.join(".bee")).ok_or(Exotic)?;
+    Ok(())
+}
+
+/// bee.mjs handleStateStartFeature.
+fn run_start_feature(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(
+        &flags,
+        &["feature", "mode", "phase", "as-lane", "session-id", "paths", "isolate"],
+    ) {
+        return None;
+    }
+    if !bool_flag_ok(&flags, "as-lane") || !bool_flag_ok(&flags, "isolate") {
+        return None;
+    }
+    let ctx = match go("state start-feature", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+
+    // controlRootFor(root): every workflow/session/claim/workspace read and
+    // write below is control-plane. See the section header for why a mismatch
+    // delegates rather than silently reading `root`.
+    let root_s = ctx.root.to_str()?.to_string();
+    let control_root_s = crate::verbs::reservations::control_root_for(&root_s).ok()?;
+    if control_root_s != root_s {
+        return None;
+    }
+    let control_root = ctx.root.clone();
+    if preflight(&ctx.root, &control_root).is_err() {
+        return None;
+    }
+
+    let out = (|| -> R2<Out> {
+        // bee.mjs's rejectDryRun is structurally unreachable for this verb:
+        // `dry-run` is not in its registry schema, so the dispatcher's own
+        // unknown-flag refusal fires first — and `keys_known` above already
+        // routes that argv shape to Node.
+        let feature = require_flag(&flags, "feature")?;
+        let mode = flag_value(&flags, "mode");
+        let phase = flag_value(&flags, "phase").unwrap_or_else(|| "exploring".to_string());
+        let lane = matches!(flags.get("as-lane"), Some(FlagV::Present))
+            || matches!(flags.get("as-lane"), Some(FlagV::S(s)) if s == "true");
+        let session_id = flag_value(&flags, "session-id");
+        let paths: Vec<String> = match flags.get("paths") {
+            Some(FlagV::S(s)) => split_list(s),
+            Some(FlagV::Present) => split_list("true"), // String(true)
+            None => Vec::new(),
+        };
+        let isolate = matches!(flags.get("isolate"), Some(FlagV::Present))
+            || matches!(flags.get("isolate"), Some(FlagV::S(s)) if s == "true");
+
+        // ── startFeature ──────────────────────────────────────────────────
+        let feature_trimmed = js_trim(&feature).to_string();
+        if feature_trimmed.is_empty() {
+            return Ok(Out::Thrown(
+                "startFeature: a non-empty --feature slug is required.".to_string(),
+            ));
+        }
+        if !is_known_phase(&phase) {
+            return Ok(Out::Thrown(format!(
+                "startFeature: invalid phase \"{phase}\" — not in the known-phase enum (isKnownPhase). FIX: use one of {KNOWN_PHASES_JOINED}."
+            )));
+        }
+        // A lane feature becomes a filename: requireLaneFeature's two throws
+        // fire from lanePath, inside the 'state' hold, and are deterministic.
+        let session_id_trimmed = session_id
+            .as_deref()
+            .map(js_trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+
+        // (1) C1 seeding, BEFORE this call's own legacy write.
+        seed_legacy_workflows(&ctx.root, &control_root)?;
+
+        // (2) the write policy (DEFAULT path only — lanes are bee's existing,
+        // already-coordinated concurrent mechanism and stay byte-untouched).
+        if !lane {
+            let config = crate::state::read_config_raw(&ctx.root).map_err(|_| Err2::Ex)?;
+            match apply_write_policy(
+                &ctx.root,
+                &control_root,
+                &config,
+                session_id_trimmed.as_deref(),
+                &paths,
+                isolate,
+                &feature_trimmed,
+                &format!("state start-feature --feature {feature_trimmed}"),
+            )? {
+                Policy::Proceed => {}
+                Policy::Redirect { result, text } => {
+                    // A successful isolate-create short-circuits: startFeature
+                    // never touched root's own pipeline, so the projection
+                    // rebuild below must not run either.
+                    return Ok(Out::Emit(Value::Object(result), text, 0));
+                }
+            }
+        }
+
+        // (2b) the legacy read-check-write body, under 'state'.
+        let workflows = list_workflows(&control_root)?;
+        let guard = acquire_state_lock(&ctx.root)?;
+        let legacy = if lane {
+            // requireLaneFeature(feature) — the RAW flag, not the trimmed one.
+            match crate::verbs::workflow_store::require_lane_feature(&feature) {
+                Ok(lane_feature) => start_lane(
+                    &ctx.root,
+                    &control_root,
+                    &lane_feature,
+                    mode.as_deref(),
+                    &phase,
+                    session_id_trimmed.as_deref(),
+                    &paths,
+                    &workflows,
+                ),
+                Err(e) => Err(e),
+            }
+        } else {
+            start_default(&ctx.root, &feature_trimmed, mode.as_deref(), &phase, &workflows)
+        };
+        drop(guard);
+        let legacy = match legacy? {
+            Ok(record) => record,
+            Err(refusal) => return Ok(Out::Thrown(refusal)),
+        };
+
+        // (3) workflow record creation OUTSIDE the 'state' lock, carrying the
+        // legacy write's own computed summary/next_action.
+        ensure_workflow_record_for_feature(
+            &control_root,
+            &feature_trimmed,
+            &phase,
+            mode.as_deref(),
+            legacy.get("summary"),
+            legacy.get("next_action"),
+            None,
+        )?;
+        // Close the OUTGOING work — every OTHER live record. Scoped to the
+        // DEFAULT path; a lane start closes nothing, by design.
+        if !lane {
+            close_workflows_for_feature(&control_root, Some(&feature_trimmed))?;
+        }
+
+        // bee.mjs's own projection rebuild, under the lock for the record IT
+        // writes (splpr-3: exactly one lock, so no new edge in the global order).
+        let record_feature = js_disp_opt(legacy.get("feature"));
+        let lock_name = if lane {
+            lane_lock_name(&record_feature)
+        } else {
+            "state".to_string()
+        };
+        let guard = acquire_named_lock(&ctx.root, &lock_name)?;
+        let rebuilt = if lane {
+            rebuild_lane_projection(&ctx.root, &record_feature).map(|_| ())
+        } else {
+            rebuild_state_projection(&ctx.root)
+        };
+        drop(guard);
+        rebuilt?;
+
+        let text = format!(
+            "Started feature \"{record_feature}\"{} at phase \"{}\" (mode {}); all four gates reset.",
+            if lane { " as a lane" } else { "" },
+            js_disp_opt(legacy.get("phase")),
+            // `state.mode ?? 'null'` — nullish, so `null` renders "null".
+            match legacy.get("mode") {
+                None | Some(Value::Null) => "null".to_string(),
+                Some(v) => jsjson::js_to_string(v),
+            }
+        );
+        Ok(Out::Emit(Value::Object(legacy), text, 0))
+    })();
+    finish(&ctx, out)
+}
+
 // ─── tests ─────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -3685,6 +4803,226 @@ mod tests {
             Value::Object(m) => m,
             _ => panic!("expected object"),
         }
+    }
+
+    // ── state start-feature ───────────────────────────────────────────────
+
+    /// seedLegacyWorkflows is once-per-repo and materializes the LIVE legacy
+    /// records only — never the feature this same call is about to write.
+    #[test]
+    fn seed_legacy_workflows_is_gated_and_carries_gates_over() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"swarming","feature":"legacy-feat","mode":"standard",
+                "approved_gates":{"context":true,"shape":false,"execution":false,"review":false},
+                "summary":"legacy summary","next_action":"legacy next"}"#,
+        );
+        // A TERMINAL lane is never seeded; a live one is.
+        std::fs::create_dir_all(lanes_dir(root)).unwrap();
+        for (feature, phase) in [("dead-lane", "compounding-complete"), ("live-lane", "planning")] {
+            std::fs::write(
+                lanes_dir(root).join(format!("{feature}.json")),
+                format!(
+                    "{{\"schema_version\":\"1.0\",\"feature\":\"{feature}\",\"phase\":\"{phase}\",\"mode\":null,\"approved_gates\":{{}},\"summary\":\"\",\"next_action\":\"\"}}"
+                ),
+            )
+            .unwrap();
+        }
+
+        ok(seed_legacy_workflows(root, root));
+        let seeded = ok(list_workflows(root));
+        let mut features: Vec<String> = seeded.iter().map(|w| js_disp_opt(w.get("feature"))).collect();
+        features.sort();
+        assert_eq!(features, vec!["legacy-feat", "live-lane"]);
+
+        // The default record's gates rode across as
+        // `{approved, approved_for_plan_rev: null}` per gate.
+        let legacy = seeded
+            .iter()
+            .find(|w| js_disp_opt(w.get("feature")) == "legacy-feat")
+            .unwrap();
+        assert_eq!(legacy["gates"]["context"]["approved"], Value::Bool(true));
+        assert_eq!(legacy["gates"]["shape"]["approved"], Value::Bool(false));
+        assert_eq!(legacy["gates"]["context"]["approved_for_plan_rev"], Value::Null);
+        assert_eq!(legacy["mode"], json!("standard"));
+        assert_eq!(legacy["summary"], json!("legacy summary"));
+
+        // Never re-seed once ANY record exists: a second call is a no-op even
+        // after a new live lane appears.
+        std::fs::write(
+            lanes_dir(root).join("later-lane.json"),
+            r#"{"schema_version":"1.0","feature":"later-lane","phase":"planning","mode":null,"approved_gates":{},"summary":"","next_action":""}"#,
+        )
+        .unwrap();
+        ok(seed_legacy_workflows(root, root));
+        assert_eq!(ok(list_workflows(root)).len(), 2);
+    }
+
+    /// ensureWorkflowRecordForFeature is idempotent BY FEATURE — never a
+    /// second record, and never a silent overwrite of the live one's phase.
+    #[test]
+    fn ensure_workflow_record_is_idempotent_by_feature() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        ok(ensure_workflow_record_for_feature(
+            root, "feat-a", "planning", Some("standard"), Some(&json!("s")), Some(&json!("n")), None,
+        ));
+        let first = ok(list_workflows(root));
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0]["phase"], json!("planning"));
+
+        // Same feature, different phase: adopted, not duplicated or moved.
+        ok(ensure_workflow_record_for_feature(
+            root, "feat-a", "swarming", None, None, None, None,
+        ));
+        let second = ok(list_workflows(root));
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0]["phase"], json!("planning"));
+
+        // An UNKNOWN phase degrades to 'idle' rather than refusing.
+        ok(ensure_workflow_record_for_feature(root, "feat-b", "nope", None, None, None, None));
+        let third = ok(list_workflows(root));
+        let b = third.iter().find(|w| js_disp_opt(w.get("feature")) == "feat-b").unwrap();
+        assert_eq!(b["phase"], json!("idle"));
+
+        // A CLOSED record for the feature is not "live" — a new one is made.
+        let id = wf_id(b);
+        let mut patch = Map::new();
+        patch.insert("status".into(), json!("closed"));
+        ok(update_workflow(root, &id, patch));
+        ok(ensure_workflow_record_for_feature(root, "feat-b", "planning", None, None, None, None));
+        assert_eq!(ok(list_workflows(root)).len(), 3);
+    }
+
+    /// closeWorkflowsForFeature closes BY FEATURE — every live record whose
+    /// feature differs from `keep`, and is idempotent on a second call.
+    #[test]
+    fn close_workflows_for_feature_keeps_only_the_named_one() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        for feature in ["keep-me", "drop-a", "drop-b"] {
+            ok(ensure_workflow_record_for_feature(root, feature, "planning", None, None, None, None));
+        }
+        ok(close_workflows_for_feature(root, Some("keep-me")));
+        let after = ok(list_workflows(root));
+        for record in &after {
+            let expected = if js_disp_opt(record.get("feature")) == "keep-me" { "active" } else { "closed" };
+            assert_eq!(js_disp_opt(record.get("status")), expected);
+        }
+        // Idempotent.
+        ok(close_workflows_for_feature(root, Some("keep-me")));
+        assert_eq!(
+            ok(list_workflows(root)).iter().filter(|r| js_disp_opt(r.get("status")) != "closed").count(),
+            1
+        );
+        // `keep: None` is a full wind-down.
+        ok(close_workflows_for_feature(root, None));
+        assert!(ok(list_workflows(root)).iter().all(|r| js_disp_opt(r.get("status")) == "closed"));
+    }
+
+    /// The two shared workflow preconditions name the conflicting record /
+    /// cells, byte-for-byte.
+    #[test]
+    fn workflow_preconditions_name_the_conflict() {
+        let workflows = vec![
+            obj(r#"{"id":"wf-1","feature":"taken","phase":"swarming","status":"active"}"#),
+            obj(r#"{"id":"wf-2","feature":"done","phase":"idle","status":"closed"}"#),
+        ];
+        assert_eq!(check_no_live_workflow_for_feature(&workflows, "free"), None);
+        assert_eq!(check_no_live_workflow_for_feature(&workflows, "done"), None);
+        assert_eq!(
+            check_no_live_workflow_for_feature(&workflows, "taken").unwrap(),
+            "startFeature: refused — a live workflow already exists for feature \"taken\" (workflow wf-1, phase \"swarming\", status \"active\"). FIX: close or resolve that workflow before starting a new one for the same feature."
+        );
+
+        let cells = vec![
+            obj(r#"{"id":"c-1","feature":"f","status":"claimed"}"#),
+            obj(r#"{"id":"c-2","feature":"f","status":"open"}"#),
+            obj(r#"{"id":"c-3","feature":"g","status":"claimed"}"#),
+        ];
+        assert_eq!(check_no_same_feature_claimed_cells("g2", &cells), None);
+        assert_eq!(
+            check_no_same_feature_claimed_cells("f", &cells).unwrap(),
+            "startFeature: refused — feature \"f\" already has claimed cell(s): c-1. FIX: cap or drop them first (bee.mjs cells cap / bee.mjs cells drop)."
+        );
+    }
+
+    /// The isolate-notice marker path replaces BOTH separators, so a session
+    /// id that looks like a path can never escape the notices directory.
+    #[test]
+    fn isolate_notice_marker_is_path_safe() {
+        let tmp = tmp_root();
+        let marker = isolate_notice_marker_path(tmp.path(), "a/b\\c");
+        assert_eq!(marker.file_name().unwrap().to_str().unwrap(), "a_b_c.json");
+        assert!(marker.starts_with(tmp.path().join(".bee").join("runtime").join("notices")));
+    }
+
+    /// activeWorkers is a DERIVED view: live-heartbeat sessions joined with
+    /// their first active claim, with the calling session excluded (C3).
+    #[test]
+    fn active_workers_joins_live_sessions_to_claims() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        std::fs::create_dir_all(sessions_dir(root)).unwrap();
+        std::fs::create_dir_all(claims_dir(root)).unwrap();
+        let fresh = now_iso();
+        for id in ["live-1", "mine"] {
+            std::fs::write(
+                sessions_dir(root).join(format!("{id}.json")),
+                format!("{{\"id\":\"{id}\",\"last_heartbeat\":\"{fresh}\"}}"),
+            )
+            .unwrap();
+        }
+        std::fs::write(
+            sessions_dir(root).join("stale.json"),
+            "{\"id\":\"stale\",\"last_heartbeat\":\"2020-01-01T00:00:00.000Z\"}",
+        )
+        .unwrap();
+        std::fs::write(
+            claims_dir(root).join("c-1.json"),
+            format!("{{\"cell\":\"c-1\",\"session\":\"live-1\",\"claimed_at\":\"{fresh}\",\"ttl_seconds\":3600}}"),
+        )
+        .unwrap();
+        // An EXPIRED claim never contributes a cell.
+        std::fs::write(
+            claims_dir(root).join("c-2.json"),
+            "{\"cell\":\"c-2\",\"session\":\"mine\",\"claimed_at\":\"2020-01-01T00:00:00.000Z\",\"ttl_seconds\":1}",
+        )
+        .unwrap();
+
+        let all = ok(active_workers(root, None));
+        let mut rows: Vec<(String, String)> = all
+            .iter()
+            .map(|w| (w.session_id.clone(), js_disp_opt(w.cell.as_ref())))
+            .collect();
+        rows.sort();
+        assert_eq!(
+            rows,
+            vec![("live-1".to_string(), "c-1".to_string()), ("mine".to_string(), "undefined".to_string())]
+        );
+
+        // C3: the calling session's own heartbeat is never "another" worker.
+        let others = ok(active_workers(root, Some("mine")));
+        assert_eq!(others.len(), 1);
+        assert_eq!(others[0].session_id, "live-1");
+    }
+
+    /// listAllCellsForStart reads objects only, and a CORRUPT cell is Exotic
+    /// (Node's readJson would warn with a V8 message) — the preflight's job.
+    #[test]
+    fn cells_for_start_skips_non_objects_and_delegates_on_corrupt() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+        std::fs::write(root.join(".bee/cells/c-1.json"), "{\"id\":\"c-1\"}").unwrap();
+        std::fs::write(root.join(".bee/cells/c-2.json"), "[1,2]").unwrap();
+        std::fs::write(root.join(".bee/cells/notes.txt"), "ignored").unwrap();
+        assert_eq!(ok(list_all_cells_for_start(root)).len(), 1);
+        std::fs::write(root.join(".bee/cells/c-3.json"), "{oops").unwrap();
+        assert!(list_all_cells_for_start(root).is_err());
+        assert!(preflight(root, root).is_err());
     }
 
     // ── gate-door rules (checkPhaseTransition) ────────────────────────────

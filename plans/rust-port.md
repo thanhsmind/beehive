@@ -156,7 +156,36 @@ Two campaign rules that emerged from practice and now govern every port:
   assert the broken spelling — including `test_bee_cli.mjs`'s `RECOVERY_LAYOUT_UNREPRESENTABLE`
   skip, which exists solely because of this bug.
 
-#### Hard blockers for deleting the Node runtime (found by R5, 2026-08-01)
+#### Cutover status (2026-08-01, after the debt-closing waves)
+
+Every hard blocker below is CLOSED: the seven missing contracts exist and are pinned against a
+live Node oracle; write-guard check (d) and `listWorkflows` tolerance are native; the two
+vacuous laws now fail on an empty scan set; `worktree merge` and `state start-feature` — the
+last delegated verbs — are native, with all of their recorded blockers dissolved rather than
+waived. 846 Rust tests; CLI harness 19/19; hook harness 60/60.
+
+**What still reaches Node.** These are narrow arms, not verbs. Each must be either ported or
+consciously accepted as a behavior change before `bee.mjs` is deleted — a delegation that has
+nowhere to delegate is not a fallback, it is a crash:
+
+- **Companion worktrees** — `worktree new --with-companion` and `merge` on a companion
+  worktree. Both tear down a mount before staging and cannot fall back once it is gone.
+- **`--queue-wait-ms`** on `worktree merge` (only the default 180 000 ms bound is native).
+- **A second live session** during `worktree new` — wcg-3's shared-nested-checkout scan has no
+  Rust counterpart, and its helper is private to the write guard; re-deriving it forks the
+  guard, which is the drift C5 exists to prevent.
+- **`WorktreeLinkInvalidError`** anywhere — Node's throw escapes its own timing wrapper, so the
+  shared wrapper cannot reproduce it.
+- **Every `--stdin` shape** — a probe must decide before consuming the pipe.
+- **Corrupt-JSON reads** whose warning embeds a V8 message, across every verb.
+- **Two deliberate divergences scheduled FOR the cutover, not before it**: the session
+  preamble's own `node .bee/bin/bee.mjs status --json` string (emitted by `lib/inject.mjs`,
+  byte-pinned by a golden file) and the `encodeProjectDir` drive-colon bug. Both mean diverging
+  from Node, which is only legal once Node is gone.
+- **`test_agents_budget.mjs`'s meaning guards** — the one instruction-law invariant whose
+  subject is another Node suite; it needs a new home, not a migration.
+
+#### Hard blockers for deleting the Node runtime (found by R5, 2026-08-01) — ALL CLOSED
 
 The test migration turned up gaps that are missing CODE, not missing tests. Deleting `bee.mjs`
 before these are closed does not "lose coverage" — it loses behavior:

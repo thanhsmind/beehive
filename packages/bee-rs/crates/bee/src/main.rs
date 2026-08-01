@@ -10,6 +10,7 @@ mod devtools;
 mod fsutil;
 mod herding;
 mod hooks;
+mod integration_queue;
 mod js_fallback;
 mod jsjson;
 mod lease_store;
