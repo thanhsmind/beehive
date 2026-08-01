@@ -255,7 +255,7 @@
     },
     {
       "path": ".bee/expertise/INDEX.md",
-      "sha256": "a1d21197b5b8e2e6942abb70cec97fd4d15cf6cd3fd69c2311af852ee75787b4",
+      "sha256": "7a1321b6bc0696baa116524f72629e5f5ad2fc47dbf726a4960d8a4d0f5cbabd",
       "mode": "666",
       "role": "runtime_expertise"
     },
@@ -279,7 +279,7 @@
     },
     {
       "path": ".bee/expertise/tests.md",
-      "sha256": "fa7ce43b7dc3e0321e6768594c5830da68cd41786c8871d12aed24fdef2d3b15",
+      "sha256": "54ec3787014ca122b16f1b40428762d064b298c90b4a09a5cf7792b314a7ef26",
       "mode": "666",
       "role": "runtime_expertise"
     },
@@ -1050,7 +1050,7 @@
     },
     {
       "path": "expertise/INDEX.md",
-      "sha256": "a1d21197b5b8e2e6942abb70cec97fd4d15cf6cd3fd69c2311af852ee75787b4",
+      "sha256": "7a1321b6bc0696baa116524f72629e5f5ad2fc47dbf726a4960d8a4d0f5cbabd",
       "mode": "666",
       "role": "expertise_guide"
     },
@@ -1074,7 +1074,7 @@
     },
     {
       "path": "expertise/tests.md",
-      "sha256": "fa7ce43b7dc3e0321e6768594c5830da68cd41786c8871d12aed24fdef2d3b15",
+      "sha256": "54ec3787014ca122b16f1b40428762d064b298c90b4a09a5cf7792b314a7ef26",
       "mode": "666",
       "role": "expertise_guide"
     },
@@ -1541,7 +1541,7 @@
     },
     {
       "path": "packages/bee/scripts/onboard_bee.mjs",
-      "sha256": "4e512a386d0018cc4964480612632ea4638b48cd62aad38cf2bb557b940ed433",
+      "sha256": "d4f266d0122095caebbb971c964cebadc8ab179f2fdfa99f15c762367ac2dcc8",
       "mode": "666",
       "role": "package_payload",
       "packagePath": "packages/bee/scripts/onboard_bee.mjs"
@@ -1576,7 +1576,7 @@
     },
     {
       "path": "packages/bee/statusline/statusline-command.sh",
-      "sha256": "de03ffbc330cef57fe2c6ced4a56af1987b7720a2ef35277e1ee95e2945fab21",
+      "sha256": "8025dc9c95a33219763ec88eb873a1477415393721acf6d4f36850cae9e81af6",
       "mode": "666",
       "role": "package_payload",
       "packagePath": "packages/bee/statusline/statusline-command.sh"

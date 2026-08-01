@@ -56,15 +56,30 @@ if [ -n "$week_pct" ]; then
   line="${line}${sep}${c}7d: ${w}%${reset}"
 fi
 
-# Per-model token/cost (main session + subagents) — fail-open, never breaks the line
-NODE=$(command -v node || true)
-for cand in /usr/local/bin/node /usr/bin/node; do
-  [ -n "$NODE" ] && break
-  [ -x "$cand" ] && NODE="$cand"
+# Per-model token/cost (main session + subagents) — fail-open, never breaks the line.
+# The native binary is preferred when the host carries one (rust-port): same
+# stdin/stdout contract, same shared signature cache, no interpreter startup.
+# The node script stays as the fallback so a host without a vendored binary
+# keeps working unchanged. Both legs are silenced and optional — a statusline
+# must never be the reason a prompt fails to render.
+usage_seg=""
+SELF_DIR=$(dirname "${BASH_SOURCE[0]}")
+for bee_bin in "$SELF_DIR/../bee" "$SELF_DIR/../bee.exe" "$SELF_DIR/../../bee" "$SELF_DIR/../../bee.exe"; do
+  if [ -x "$bee_bin" ]; then
+    usage_seg=$(echo "$input" | "$bee_bin" dev statusline 2>/dev/null)
+    break
+  fi
 done
-if [ -n "$NODE" ]; then
-  usage_seg=$(echo "$input" | "$NODE" "$(dirname "${BASH_SOURCE[0]}")/statusline-usage.mjs" 2>/dev/null)
-  [ -n "$usage_seg" ] && line="${line}\n${yellow}${usage_seg}${reset}"
+if [ -z "$usage_seg" ]; then
+  NODE=$(command -v node || true)
+  for cand in /usr/local/bin/node /usr/bin/node; do
+    [ -n "$NODE" ] && break
+    [ -x "$cand" ] && NODE="$cand"
+  done
+  if [ -n "$NODE" ]; then
+    usage_seg=$(echo "$input" | "$NODE" "$SELF_DIR/statusline-usage.mjs" 2>/dev/null)
+  fi
 fi
+[ -n "$usage_seg" ] && line="${line}\n${yellow}${usage_seg}${reset}"
 
 printf '%b\n' "$line"
