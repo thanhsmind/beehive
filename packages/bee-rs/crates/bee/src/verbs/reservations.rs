@@ -2697,29 +2697,20 @@ mod tests {
 
     // ── R5 test migration from packages/bee/tests/test_lease_store.mjs ─────
     //
-    // WHAT IS NOT HERE, AND WHY — the lease store this file ports is the
-    // SINGLE-resource path-lease half that reservations.mjs drives
-    // (acquire one lease under O_EXCL, release by agent/cell, sweep by
-    // expiry). These oracle contracts have NO Rust counterpart anywhere this
-    // module can reach, so they are named rather than faked:
+    // WHAT IS TESTED HERE, AND WHERE THE REST LIVES — the lease store THIS
+    // file ports is the SINGLE-resource path-lease half that reservations.mjs
+    // drives (acquire one lease under O_EXCL, release by agent/cell, sweep by
+    // expiry), so the rows below are the single-resource echoes.
     //
-    //   * renewLease / renewLeasesBySession and the LEASE_MISSING refusal.
-    //     reservations.rs never renews. (A narrowed renew lives in
-    //     src/hooks/state_sync.rs `renew_lease_path` and in
-    //     src/hooks/prompt_context.rs — both module-private and outside this
-    //     file, so their tests belong there.)
-    //   * LEASE_FENCE_STALE on renew AND release, the "file is never removed
-    //     on a fenced refusal" property, and the legacy no-`presentedEpoch`
-    //     arm. Nothing in the Rust tree reads or compares `epoch`:
-    //     reserve_locked STAMPS `epoch: 0` and no code path ever presents,
-    //     bumps or checks it.
-    //   * multi-resource partial-acquire rollback, and the hash-sorted
-    //     deterministic acquire order that makes a batch deadlock-free.
-    //     There is no batch: reserve_locked acquires exactly one resource.
-    //     The single-resource echo of "zero residue" IS ported below.
-    //   * LEASE_INVALID_REQUEST as a typed batch validation error. The
-    //     single-resource echo — every malformed request refused before any
-    //     file is created — is ported below.
+    // The rest of lease-store.mjs — the multi-resource batch (hash-sorted
+    // acquire order, partial rollback, typed LEASE_HELD /
+    // LEASE_INVALID_REQUEST), renewLease / renewLeasesBySession with the
+    // LEASE_MISSING refusal, and LEASE_FENCE_STALE on BOTH renew and release
+    // including the "file is never removed on a fenced refusal" property — now
+    // lives in `src/lease_store.rs` with its own tests. `reserve_locked` here
+    // is deliberately NOT rewired through it: this arm is byte-diffed against
+    // Node through four live verbs, and rewiring it would be a behavior risk
+    // with no behavior gain (see that module's header).
 
     /// Reads the whole path-lease directory as a set of file names, so a test
     /// can assert nothing was added or left behind.

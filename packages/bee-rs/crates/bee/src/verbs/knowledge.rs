@@ -48,7 +48,8 @@
 // bundleDir/emitFrontmatter/parseFrontmatter/listBundleMarkdown/
 // isIsoDateHeading/checkIndexFile/checkLogFile/readPath/resolveInsideBundle/
 // checkBundle/collectConcepts/listConcepts/computeIndexFiles/
-// knowledgeIndexDrift/renderKnowledgeIndexes/normalizeSubject(ASCII subset)/
+// knowledgeIndexDrift/renderKnowledgeIndexes/CONFUSABLE_FOLD/foldEncoding/
+// normalizeSubject/
 // CONTEXT_ESTIMATOR/estimateTokens/KNOWLEDGE_CONTEXT_LANE_BUDGETS/beeOf/dirOf/
 // normalizeBundleTarget/CRITICAL_RELEVANCE/RELEVANCE_STOPWORDS/relevanceTokens/
 // conceptBody/metaTextOf/scoreCriticalRelevance/buildContextManifest),
