@@ -1,36 +1,20 @@
 {
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/statusline-command.sh\""
-  },
   "permissions": {
     "defaultMode": "bypassPermissions"
-  },
-  "enabledPlugins": {
-    "compound-engineering@compound-engineering-plugin": false
   },
   "hooks": {
     "SessionStart": [
       {
         "matcher": "startup|resume|clear|compact",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-session-init.mjs"
-          }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-session-init.mjs" }
         ]
       }
     ],
     "UserPromptSubmit": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-prompt-context.mjs"
-          }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-prompt-context.mjs" }
         ]
       }
     ],
@@ -38,76 +22,49 @@
       {
         "matcher": "Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-write-guard.mjs"
-          }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-write-guard.mjs" }
         ]
       },
       {
         "matcher": "Agent|Task",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-model-guard.mjs"
-          }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-model-guard.mjs" }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "TaskCreate|TaskUpdate|TodoWrite",
+        "matcher": "update_plan|TaskCreate|TaskUpdate|TodoWrite",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-state-sync.mjs"
-          }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-state-sync.mjs" }
         ]
       },
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-tools-logger.mjs"
-          }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-tools-logger.mjs" }
         ]
       }
     ],
     "SubagentStop": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-state-sync.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-chain-nudge.mjs"
-          }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-state-sync.mjs" },
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-chain-nudge.mjs" }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-state-sync.mjs"
-          },
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-session-close.mjs"
-          }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-state-sync.mjs" },
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-session-close.mjs" }
         ]
       }
     ],
     "PreCompact": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-session-close.mjs"
-          }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-session-close.mjs" }
         ]
       }
     ]
