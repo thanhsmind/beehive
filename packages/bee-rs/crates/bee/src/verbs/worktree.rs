@@ -21,6 +21,36 @@
 //     runs the host's `commands.verify` under the 'worktree-admin' store
 //     lock, tears down companions and optionally removes worktree+branch+
 //     grant. Same reason.
+//
+//     R6 RE-MEASUREMENT (recorded while the other coverage debts closed, so
+//     the next attempt starts from evidence rather than from scratch). Both
+//     verbs stay delegated, and the blocker is NOT the store shape — it is
+//     that every observable byte on the happy path is produced by a CHILD
+//     PROCESS this port would have to reproduce exactly:
+//       - `git worktree add -b wt/<slug> <path> <base>` and `git merge
+//         --no-ff` write git's own stdout/stderr, which bee.mjs surfaces
+//         verbatim in both the human text and the `--json` result. Those
+//         bytes vary by git version and locale; a Rust spawn can pass them
+//         through, but the FAILURE arms embed Node's spawnSync error shape
+//         (`error.status`/`error.stderr`/ENOENT wording), which has no
+//         faithful Rust twin — and both arms are reached AFTER the worktree
+//         (or the merge commit) already exists, so they can never delegate.
+//       - the rollback ladder in createFeatureWorktree is best-effort and
+//         ORDER-SENSITIVE (grant, store bootstrap, skills projection,
+//         companion mount, `git worktree remove --force`, branch delete): a
+//         partial port that unwinds in a different order leaves a different
+//         tree behind, which is exactly the C1 breach the campaign forbids.
+//       - `worktree merge` additionally holds a PROCESSOR LEASE over the
+//         shared integration queue while it runs the host's `commands.verify`
+//         child. A refusal reached after that lease is taken must be native
+//         (campaign rule 2), so the lease, the queue records, the verify
+//         runner AND the teardown have to land in one piece — the same
+//         all-or-nothing shape `cells claim-next`'s sweep had, but with a
+//         child process in the middle instead of a store write.
+//     What IS already reusable when that work starts: verbs/cells.rs's
+//     `run_declared_tests` (the POSIX-sh runner with the explicit-PATH fix)
+//     for the host verify, this file's own grant registry + store bootstrap,
+//     and crate::roots::resolve_roots_core for every classification.
 //   * Anything reached through a WorktreeLinkInvalidError: main()'s own
 //     findRepoRoot throws before dispatch, and that throw ALSO escapes the
 //     timings.jsonl append inside bee.mjs's recordTiming try-block. The

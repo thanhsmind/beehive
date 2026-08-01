@@ -165,10 +165,28 @@ Each entry is a branch that currently returns to Node and therefore blocks delet
   when the repo has no `--lane` selector, no lane-bound session, and zero records under
   `.bee/runtime/workflows/`. A repo using lanes or workflows still runs Node for those verbs —
   the projection write-through, workflow locks, and handoff mailboxes are unported.
-- **Whole verbs still on Node:** `state start-feature|route|workflows.*|rebuild-projections|
-  advisor-ref.*|compact-*`, `decisions supersede|render`, `knowledge promote`,
-  `backlog rank|badges|render`, `feedback digest|collect|rank`, plus every `--stdin` shape
-  (a probe must decide before consuming the pipe, so stdin can never be validated natively first).
+- **Whole verbs still on Node** (list rewritten 2026-08-01 after the debt-closing wave — the
+  earlier entries for claim-next, rebuild-projections, route, decisions supersede/render,
+  backlog rank/badges/render, feedback digest/collect/rank and knowledge promote are all now
+  native):
+  - `state start-feature` — its default path calls `applyWritePolicy` with
+    `enforceIsolation: true`, and `registerWorkspace`/`attachWorkspace` **write** into the
+    unported `workspace-store.mjs` before the decision is made; the consented branch then runs
+    a real `git worktree add` to produce `redirect`. Nothing after that first write can fall
+    back, so the residue is exactly the write-policy half.
+  - `state advisor-ref.*`, `state compact-*`.
+  - `worktree new|merge` — not a store-shape problem: every observable byte on the happy path
+    comes from a child process (`git worktree add`, `git merge --no-ff`, surfaced verbatim in
+    both text and `--json`), the failure arms embed Node's `spawnSync` error shape and are
+    reached *after* the worktree or merge commit exists, `createFeatureWorktree`'s rollback
+    ladder is order-sensitive (a different unwind order leaves a different tree — a C1 breach),
+    and `merge` holds a processor lease over the integration queue while running the host
+    verify, so lease + queue + verify + teardown must land in one piece.
+  - `dispatch prepare --claim` — its claim and reserve doors are private to cells.rs and
+    reservations.rs; the assembled prompt (the product) is already covered by the non-claim
+    shape's twin diff.
+  - Every `--stdin` shape: a probe must decide before consuming the pipe, so stdin can never be
+    validated natively first.
 - **Cross-cutting delegate classes:** corrupt-JSON reads whose warning embeds a V8 message;
   collation over free prose (`localeCompare` on titles); `session-init`'s preamble and
   `session-close`'s PreCompact branch.

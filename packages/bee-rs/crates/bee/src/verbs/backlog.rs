@@ -2056,4 +2056,61 @@ mod tests {
         std::fs::write(root.join(".bee").join("config.json"), r#"{"product_root":42}"#).unwrap();
         assert!(resolve_product_root(root).is_none());
     }
+
+    // ── featureBacklogRank (R6, cells claim-next's cross-lane ordering) ────
+
+    #[test]
+    fn feature_backlog_rank_reads_the_feature_column_then_the_pbi_fold() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        // No backlog at all → an empty map (never a delegate).
+        assert!(feature_backlog_rank(root).unwrap().is_empty());
+
+        // Legacy table: status-grouped weight, stable within a group, and the
+        // BEST-ranked occurrence of a feature wins.
+        std::fs::create_dir_all(root.join("docs")).unwrap();
+        std::fs::write(
+            root.join("docs").join("backlog.md"),
+            "# B\n\n| ID | Story | Status | Feature |\n|----|-------|--------|---------|\n\
+             | P1 | a | done | gamma |\n\
+             | P2 | b | proposed | beta |\n\
+             | P3 | c | in-flight | alpha |\n\
+             | P4 | d | in-flight | \u{2014} |\n\
+             | P5 | e | done | alpha |\n",
+        )
+        .unwrap();
+        let rank = feature_backlog_rank(root).unwrap();
+        assert_eq!(rank.get("alpha"), Some(&0));
+        assert_eq!(rank.get("beta"), Some(&2));
+        assert_eq!(rank.get("gamma"), Some(&3));
+        assert_eq!(rank.get("\u{2014}"), None, "the placeholder never claims a slug");
+
+        // A table with no Feature column contributes nothing.
+        std::fs::write(
+            root.join("docs").join("backlog.md"),
+            "| ID | Status |\n|----|--------|\n| P1 | done |\n",
+        )
+        .unwrap();
+        assert!(feature_backlog_rank(root).unwrap().is_empty());
+
+        // Fold-first: one kind:'pbi' event and the table is ignored entirely.
+        write_backlog(
+            root,
+            "{\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"p-0002\",\"status\":\"done\",\"feature\":\"zeta\"}\n\
+             {\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"p-0001\",\"status\":\"in-flight\",\"feature\":\"omega\"}\n\
+             {\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"p-0003\",\"status\":\"in-flight\",\"feature\":\"zeta\"}\n",
+        );
+        let folded = feature_backlog_rank(root).unwrap();
+        // weight asc, then id.localeCompare: p-0001(0) p-0003(1) p-0002(2).
+        assert_eq!(folded.get("omega"), Some(&0));
+        assert_eq!(folded.get("zeta"), Some(&1), "best-ranked occurrence wins");
+
+        // An id outside the calibrated localeCompare alphabet delegates.
+        write_backlog(
+            root,
+            "{\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"P50\",\"status\":\"done\",\"feature\":\"z\"}\n",
+        );
+        assert!(feature_backlog_rank(root).is_none());
+    }
 }

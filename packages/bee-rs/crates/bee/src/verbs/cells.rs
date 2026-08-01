@@ -4,6 +4,9 @@
 // `cells show` (flags: --json; --feature/--status on list; --feature on
 // ready; --id on show).
 //
+// SELECTING (R6): `cells claim-next` — the sweep, resolvePipeline, the
+// cross-lane pool and the hold filters, then the shared claim half.
+//
 // MUTATING (this wave): add, update, claim, cap, finish, block, drop,
 // unclaim, reopen, tier, judge, reset-budget, judge-record, schedule,
 // archive, unarchive — each mirroring bee.mjs's dispatch frame (root resolve
@@ -18,42 +21,29 @@
 // 'cells-archive' acquire + archived-only re-check, typed
 // CELLS_ARCHIVE_BUSY on contention).
 //
-// STILL DELEGATED (file-header contract):
-//   - `cells claim-next` — heavy cross-module side effects this port cannot
-//     close byte-for-byte: sweepExpiredClaims (cell resets + decision log
-//     rows inside the sweep), resolvePipeline's session->lane binding with
-//     typed LANE_* refusals, docs/backlog.md rank parsing (backlog.mjs),
-//     live-session lane-ownership pooling, reservation-conflict +
-//     cross-worktree foreign-hold selection filters (findSessionConflicts /
-//     findForeignHolds over the full worktree topology). Every argv shape
-//     for claim-next returns None.
+// R6 — `cells claim-next` IS NOW NATIVE (the last cells debt). All four
+// pieces the previous header listed as missing are ported, in one piece so
+// the sweep never half-runs:
+//   1. sweepExpiredClaims (claims.mjs): the per-claim `.adopting` gate, the
+//      `sessions` store lock around the heartbeat re-verify, the claim-file
+//      removal, the claimed->open reset under `cells:<id>` (trace stamped
+//      swept_at/swept_from_session), and one best-effort logDecision row per
+//      actual reset.
+//   2. resolvePipeline (state.mjs) — session -> bound lane -> default, with
+//      the four typed LANE_INVALID/LANE_MISSING/LANE_CORRUPT refusals.
+//   3. the pooling pass — readState + listLanes + listSessionRecords/
+//      heartbeatStale (GH#20 live-owner skip) + featureBacklogRank
+//      (verbs/backlog.rs, both the docs/backlog.md Feature-column walk and
+//      the PBI fold's `a.id.localeCompare(b.id)` arm) + the created_at
+//      tiebreak.
+//   4. the per-candidate filters — findSessionConflicts (path leases) and
+//      findForeignHolds over resolveHoldTopology's ordinary arm.
+// The old "a partial port cannot fall back to Node afterwards" objection is
+// answered, not ignored: the sweep removes its own trigger, so a Node re-run
+// after a mid-flight delegate re-derives the identical end state and bytes.
+// See the `cells claim-next` section comment for the full argument.
 //
-//     R6 STATUS (re-measured while closing the other per-verb coverage
-//     debts). The CLAIM half is already here — `run_claim` carries
-//     claimCellFile's O_EXCL protocol, the budget unwind, the `cells:<id>`
-//     store-locked claimCell with its gate/status/deps refusals, and the
-//     route warning — so what claim-next still needs is the SELECTION half
-//     plus the sweep, none of which exists anywhere in this crate yet:
-//       1. sweepExpiredClaims (claims.mjs): the per-cell gate + a SESSIONS
-//          lock + a `cells:<id>` store lock, a claimed->open cell reset whose
-//          trace records swept_at/swept_from_session, and a best-effort
-//          logDecision row per reset. Every one of those writes lands before
-//          any output, so a mid-sweep delegate would double-write.
-//       2. resolvePipeline (state.mjs) — session->lane resolution with the
-//          four typed LANE_INVALID/LANE_MISSING/LANE_CORRUPT refusals whose
-//          text embeds path.relative(controlRoot, lanePath).
-//       3. the pooling pass: readState + listLanes + listSessionRecords/
-//          heartbeatStale (GH#20 live-owner skip) + featureBacklogRank
-//          (the docs/backlog.md Feature-column walk, or the PBI fold's own
-//          `a.id.localeCompare(b.id)` ordering — verbs/backlog.rs's
-//          `locale_cmp` is the calibrated model that arm would reuse) +
-//          the created_at tiebreak.
-//       4. the per-candidate filters: findSessionConflicts (reservations.mjs
-//          listReservations + pathsOverlap) and findForeignHolds over
-//          resolveHoldTopology's granted/ordinary worktree arms.
-//     Attempting the sweep without (1)-(4) all present is not shippable: the
-//     sweep mutates before selection even runs, so a partial port cannot
-//     fall back to Node afterwards. Left wholly delegated on purpose.
+// STILL DELEGATED (file-header contract):
 //   - every argv shape any ported verb cannot PROVE: unknown flags, missing
 //     required flags, --help, bad enum/number values (Node's validate()
 //     speaks there), non-flag tokens, non-UTF-8 argv.
@@ -8140,5 +8130,255 @@ const C = path.join(REPO_ROOT, dynamic);
         assert!(impact_registry_warning(root, root, &[json!("src/other.js")], "", "i-1").is_none());
         std::fs::remove_file(root.join("scripts").join("impact_registry.mjs")).unwrap();
         assert!(impact_registry_warning(root, root, &[json!("src/a.js")], "", "i-1").is_none());
+    }
+
+    // ── cells claim-next (R6): the sweep + the selection filters ──────────
+
+    fn cn_root() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        tmp
+    }
+
+    fn write_claim_fixture(root: &Path, id: &str, session: Option<&str>, ttl: f64, at: &str) {
+        let dir = claims_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut claim = Map::new();
+        claim.insert("cell".into(), json!(id));
+        if let Some(s) = session {
+            claim.insert("session".into(), json!(s));
+        }
+        claim.insert("ttl_seconds".into(), json!(ttl));
+        claim.insert("claimed_at".into(), json!(at));
+        claim.insert("acquired_at".into(), json!(at));
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            jsjson::stringify_pretty(&Value::Object(claim)),
+        )
+        .unwrap();
+    }
+
+    fn write_session_fixture(root: &Path, id: &str, heartbeat: &str, lane: Option<&str>) {
+        let dir = sessions_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut rec = Map::new();
+        rec.insert("id".into(), json!(id));
+        rec.insert("started_at".into(), json!(heartbeat));
+        rec.insert("last_heartbeat".into(), json!(heartbeat));
+        rec.insert("lane".into(), lane.map(|l| json!(l)).unwrap_or(Value::Null));
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            jsjson::stringify_pretty(&Value::Object(rec)),
+        )
+        .unwrap();
+    }
+
+    const OLD: &str = "2020-01-01T00:00:00.000Z";
+
+    #[test]
+    fn sweep_resets_only_the_claim_it_actually_removed() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+        let fresh = rsv::iso_from_ms(now).ok().unwrap();
+
+        // (a) expired claim, dead owner, cell still claimed BY THAT SESSION.
+        write_cell_fixture(
+            root,
+            "a1",
+            &json!({"id":"a1","status":"claimed","feature":"f","trace":{"worker":"w","claim_session":"dead"}}),
+        );
+        write_claim_fixture(root, "a1", Some("dead"), 60.0, OLD);
+        write_session_fixture(root, "dead", OLD, None);
+        // (b) expired claim, but the cell was RE-claimed by another session.
+        write_cell_fixture(
+            root,
+            "b1",
+            &json!({"id":"b1","status":"claimed","feature":"f","trace":{"worker":"w2","claim_session":"someone-else"}}),
+        );
+        write_claim_fixture(root, "b1", Some("dead"), 60.0, OLD);
+        // (c) expired claim whose owner is LIVE — never swept.
+        write_cell_fixture(
+            root,
+            "c1",
+            &json!({"id":"c1","status":"claimed","feature":"f","trace":{"worker":"w3","claim_session":"live"}}),
+        );
+        write_claim_fixture(root, "c1", Some("live"), 60.0, OLD);
+        write_session_fixture(root, "live", &fresh, None);
+        // (d) an UNEXPIRED claim — never swept.
+        write_cell_fixture(
+            root,
+            "d1",
+            &json!({"id":"d1","status":"claimed","feature":"f","trace":{"worker":"w4","claim_session":"dead"}}),
+        );
+        write_claim_fixture(root, "d1", Some("dead"), 3600.0, &fresh);
+
+        sweep_expired_claims(root, now).ok().unwrap();
+
+        let gone = |id: &str| !claims_dir(root).join(format!("{id}.json")).exists();
+        assert!(gone("a1"), "expired + stale owner is swept");
+        assert!(gone("b1"), "the claim file goes even when the reset is skipped");
+        assert!(!gone("c1"), "a live owner is never swept");
+        assert!(!gone("d1"), "an unexpired claim is never swept");
+
+        let status = |id: &str| match read_cell_norm(root, id).ok().unwrap() {
+            Some(Value::Object(m)) => js_string_or_undefined(m.get("status")),
+            _ => panic!("cell {id}"),
+        };
+        assert_eq!(status("a1"), "open", "claimed -> open reset");
+        assert_eq!(status("b1"), "claimed", "claim_session mismatch: never overwritten");
+        assert_eq!(status("c1"), "claimed");
+        assert_eq!(status("d1"), "claimed");
+
+        // The reset's trace carries the sweep stamps and clears the claim.
+        let a1 = read_cell_norm(root, "a1").ok().unwrap().unwrap();
+        let trace = a1.get("trace").unwrap();
+        assert_eq!(trace.get("worker"), Some(&Value::Null));
+        assert_eq!(trace.get("claimed_at"), Some(&Value::Null));
+        assert_eq!(trace.get("claim_session"), Some(&Value::Null));
+        assert_eq!(trace.get("swept_from_session"), Some(&json!("dead")));
+        assert_eq!(
+            trace.get("swept_at"),
+            Some(&json!(rsv::iso_from_ms(now).ok().unwrap()))
+        );
+
+        // Exactly ONE decision row — b1's skipped reset logs nothing.
+        let rows = std::fs::read_to_string(decisions_path(root)).unwrap();
+        let lines: Vec<&str> = rows.lines().filter(|l| !l.trim().is_empty()).collect();
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("sweep: cell \\\"a1\\\" reset claimed -> open"));
+        assert!(lines[0].contains("swept session \\\"dead\\\""));
+
+        // Idempotent: a second pass has nothing left to trigger on.
+        sweep_expired_claims(root, now).ok().unwrap();
+        let rows2 = std::fs::read_to_string(decisions_path(root)).unwrap();
+        assert_eq!(rows2.lines().filter(|l| !l.trim().is_empty()).count(), 1);
+    }
+
+    #[test]
+    fn sweep_of_a_sessionless_claim_names_none_in_its_decision_row() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+        write_cell_fixture(
+            root,
+            "s1",
+            &json!({"id":"s1","status":"claimed","feature":"f","trace":{"worker":"w"}}),
+        );
+        write_claim_fixture(root, "s1", None, 60.0, OLD);
+        sweep_expired_claims(root, now).ok().unwrap();
+        let s1 = read_cell_norm(root, "s1").ok().unwrap().unwrap();
+        assert_eq!(s1.get("status"), Some(&json!("open")));
+        assert_eq!(
+            s1.get("trace").and_then(|t| t.get("swept_from_session")),
+            Some(&Value::Null)
+        );
+        let rows = std::fs::read_to_string(decisions_path(root)).unwrap();
+        assert!(rows.contains("swept session \\\"none (sessionless)\\\""));
+    }
+
+    #[test]
+    fn resolve_pipeline_refuses_a_bound_but_broken_lane() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let fresh = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+
+        // No session record at all → the default pipeline.
+        match resolve_pipeline(root, root, "nobody").ok().unwrap() {
+            Pipeline::Ok { feature, execution_approved } => {
+                assert!(feature.is_none() && !execution_approved);
+            }
+            Pipeline::Refused { .. } => panic!("default expected"),
+        }
+
+        // Bound to a lane with no record → LANE_MISSING.
+        write_session_fixture(root, "s1", &fresh, Some("nope"));
+        match resolve_pipeline(root, root, "s1").ok().unwrap() {
+            Pipeline::Refused { code, reason } => {
+                assert_eq!(code, "LANE_MISSING");
+                assert!(reason.contains("session \"s1\" is bound to lane \"nope\" but"));
+                assert!(reason.contains("does not exist"));
+            }
+            Pipeline::Ok { .. } => panic!("LANE_MISSING expected"),
+        }
+
+        // Bound to an invalid lane NAME → LANE_INVALID (lanePath's throw).
+        write_session_fixture(root, "s2", &fresh, Some("a/b"));
+        match resolve_pipeline(root, root, "s2").ok().unwrap() {
+            Pipeline::Refused { code, reason } => {
+                assert_eq!(code, "LANE_INVALID");
+                assert!(reason.contains("lane feature must be a plain id (no path separators)"));
+            }
+            Pipeline::Ok { .. } => panic!("LANE_INVALID expected"),
+        }
+
+        // Bound to a lane file that is not a record for THAT feature → LANE_CORRUPT.
+        let lanes = root.join(".bee").join("lanes");
+        std::fs::create_dir_all(&lanes).unwrap();
+        std::fs::write(lanes.join("broken.json"), r#"{"feature":"other"}"#).unwrap();
+        write_session_fixture(root, "s3", &fresh, Some("broken"));
+        match resolve_pipeline(root, root, "s3").ok().unwrap() {
+            Pipeline::Refused { code, .. } => assert_eq!(code, "LANE_CORRUPT"),
+            Pipeline::Ok { .. } => panic!("LANE_CORRUPT expected"),
+        }
+
+        // A healthy bound lane resolves to ITS OWN feature and gate.
+        std::fs::write(
+            lanes.join("good.json"),
+            r#"{"feature":"good","approved_gates":{"execution":true}}"#,
+        )
+        .unwrap();
+        write_session_fixture(root, "s4", &fresh, Some("good"));
+        match resolve_pipeline(root, root, "s4").ok().unwrap() {
+            Pipeline::Ok { feature, execution_approved } => {
+                assert_eq!(feature.as_deref(), Some("good"));
+                assert!(execution_approved);
+            }
+            Pipeline::Refused { .. } => panic!("lane expected"),
+        }
+    }
+
+    #[test]
+    fn candidate_filters_skip_foreign_session_holds_and_foreign_worktree_holds() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+        let cell = json!({"id":"x1","status":"open","feature":"f","files":["src/a.ts"]});
+        // No holds anywhere → claimable.
+        assert!(candidate_ok(root, root, "mine", &cell, now).ok().unwrap());
+
+        // A cross-worktree hold owned by a DIFFERENT checkout blocks it.
+        let runtime = root.join(".bee").join("runtime");
+        std::fs::create_dir_all(&runtime).unwrap();
+        let stamp = rsv::iso_from_ms(now).ok().unwrap();
+        std::fs::write(
+            runtime.join("cross-worktree-holds.json"),
+            format!(
+                r#"{{"holds":[{{"holder":"wt-other","path":"src/a.ts","mirrored_at":"{stamp}","ttl_seconds":3600,"released_at":null}}]}}"#
+            ),
+        )
+        .unwrap();
+        assert!(!candidate_ok(root, root, "mine", &cell, now).ok().unwrap());
+        // Our OWN holder never blocks us.
+        std::fs::write(
+            runtime.join("cross-worktree-holds.json"),
+            format!(
+                r#"{{"holds":[{{"holder":"main","path":"src/a.ts","mirrored_at":"{stamp}","ttl_seconds":3600,"released_at":null}}]}}"#
+            ),
+        )
+        .unwrap();
+        assert!(candidate_ok(root, root, "mine", &cell, now).ok().unwrap());
+        // A RELEASED hold never blocks.
+        std::fs::write(
+            runtime.join("cross-worktree-holds.json"),
+            format!(
+                r#"{{"holds":[{{"holder":"wt-other","path":"src/a.ts","mirrored_at":"{stamp}","ttl_seconds":3600,"released_at":"{stamp}"}}]}}"#
+            ),
+        )
+        .unwrap();
+        assert!(candidate_ok(root, root, "mine", &cell, now).ok().unwrap());
+        // A cell with NO declared files skips both hold checks entirely.
+        let bare = json!({"id":"x2","status":"open","feature":"f"});
+        assert!(candidate_ok(root, root, "mine", &bare, now).ok().unwrap());
     }
 }

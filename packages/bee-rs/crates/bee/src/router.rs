@@ -86,6 +86,8 @@ pub const PORTED: &[&str] = &[
     // R6 — the last debts blocking Node deletion
     "state rebuild-projections",
     "cells claim-next",
+    "state route --show",
+    "state route --set (repos with no granted worktree)",
     // Linked-worktree coverage. These serve from INSIDE a linked worktree —
     // granted or ungranted — not just the main checkout; every other verb
     // still delegates there. A BROKEN link delegates for everyone. The

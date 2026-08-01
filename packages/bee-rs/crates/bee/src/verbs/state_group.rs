@@ -41,12 +41,32 @@
 //   state workflows list / close — native (listWorkflowRecords /
 //     closeWorkflowsForFeature + the three mutually exclusive close modes).
 //
-// DELEGATED whole verbs (unprovable here, by design): state.route (its
-// worktree-grant block reaches guards/worktree machinery), state.start-feature
-// (startFeature's precondition sweep + write-policy/isolate redirect + claims
-// + reservations), state.rebuild-projections (needs reservations.mjs's
-// rebuildReservationsProjection, whose Rust twin `list_reservations` is
-// private to verbs/reservations.rs), state.advisor-ref.*, state.compact-*.
+//   state rebuild-projections — NATIVE (R6). The one seam that holds more
+//     than one projection lock: 'state' then every active workflow's
+//     `lane:<feature>`, sorted + de-duplicated, then rebuildAllProjections
+//     (state/handoff/reservations/lanes). reservations.mjs's
+//     rebuildReservationsProjection now lives in verbs/reservations.rs beside
+//     its own `list_reservations`.
+//   state route — NATIVE (R6) for `--show` in every repo, and for `--set`
+//     in every repo whose worktree-grants registry has no `true` entry (see
+//     the `state route` section header: buildRouteWorktreeBlock's
+//     findGrantedWorktreeForFeature walk lives in verbs/status_full.rs and is
+//     not reachable from here, so a repo that HAS a granted worktree AND
+//     records a code-touching lane returns None before any lock or write).
+//
+// DELEGATED whole verbs (unprovable here, by design):
+//   * state.start-feature. Its default path calls applyWritePolicy with
+//     enforceIsolation TRUE — which registerWorkspace/attachWorkspace WRITE
+//     into workspace-store.mjs before deciding, and on the consented branch
+//     runs createFeatureWorktree (real `git worktree add`, skills sync,
+//     companion mount) to produce the `redirect` answer. Nothing downstream
+//     of that first write can fall back to Node, and none of
+//     workspace-store.mjs is ported. seedLegacyWorkflows / startLane /
+//     listActiveReservationsForStart / listAllCellsForStart /
+//     checkNoLiveWorkflowForFeature / ensureWorkflowRecordForFeature /
+//     closeWorkflowsForFeature are all reachable from this crate today, so
+//     the residue is genuinely the write-policy half, not the sweep.
+//   * state.advisor-ref.*, state.compact-*.
 //
 // Provenance: bee.mjs handleStateSet/handleStateGate/handleStatePlanRevBump/
 // stateWorkerMutate + worker handlers/readPruneKeepSet/keptByPruneKeepSet/
@@ -86,9 +106,9 @@ use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, Read
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
 use crate::verbs::reservations::{
-    date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt, js_numberify, js_strict_eq,
-    js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy, Ctx, Err2, Ex, Exotic,
-    FlagV, Flags, Out, Pre, R2,
+    date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
+    js_numberify, js_strict_eq, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
+    Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::reservations::rebuild_reservations_projection;
 use crate::verbs::workflow_store::{
@@ -1347,6 +1367,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         ["workflows", "list", ..] => ("workflows.list", 2),
         ["workflows", "close", ..] => ("workflows.close", 2),
         ["rebuild-projections", ..] => ("rebuild-projections", 1),
+        ["route", ..] => ("route", 1),
         _ => return None, // route/start-feature/advisor-ref/compact-*/unknown → Node
     };
     if leading.len() != consumed {
@@ -1374,6 +1395,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "workflows.list" => run_workflows_list(flags, use_json, t0),
         "workflows.close" => run_workflows_close(flags, use_json, t0),
         "rebuild-projections" => run_rebuild_projections(flags, use_json, t0),
+        "route" => run_route(flags, use_json, t0),
         _ => None,
     }
 }
@@ -3069,6 +3091,430 @@ fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> Option<Exit
     finish(&ctx, out)
 }
 
+// ─── state route (R6 coverage debt) ────────────────────────────────────────
+//
+// Provenance: bee.mjs handleStateRoute / validateRouteSetFlags /
+// resolveRouteTarget / buildRouteWorktreeBlock / isCodeTouchingLane /
+// otherLiveWorkPresent / rejectDryRun, lib/worktree-store.mjs
+// findGrantedWorktreeForFeature, lib/claims.mjs activeWorkers.
+//
+// `--show` is a pure read through resolveMutationTarget. `--set` runs the
+// same withMutationLock seam every other record-mutating state verb uses,
+// plus the D1 `route` patch onto the live workflow record
+// (updateWorkflowAssumingLock, non-self-deadlocking because the workflow lock
+// is already held).
+//
+// ONE branch of `--set` stays with Node, and it is decided BEFORE any lock or
+// write: buildRouteWorktreeBlock's `findGrantedWorktreeForFeature` walk needs
+// worktree-store.mjs's bidirectional gitdir resolution, which lives in
+// verbs/status_full.rs and is not reachable from here. The block can only be
+// non-null when the recorded lane is code-touching AND the feature holds no
+// granted worktree — so a repo whose grants registry has ZERO `true` entries
+// can never have one, and the native path serves it exactly. The moment any
+// grant is `true` AND the lane is code-touching, the whole verb returns None
+// before the lock. (`--show`, and every non-code-touching lane, are native in
+// every repo.)
+
+const ROUTE_CLASS_VALUES: [&str; 7] =
+    ["feature", "bugfix", "docs", "refactor", "research", "release", "spike"];
+const ROUTE_LANE_VALUES: [&str; 6] =
+    ["docs", "tiny", "small", "spike", "standard", "high-risk"];
+const ROUTE_FLAG_VALUES: [&str; 10] = [
+    "auth",
+    "authorization",
+    "data-model",
+    "audit-security",
+    "external-systems",
+    "public-contracts",
+    "cross-platform",
+    "covered-contract-change",
+    "proof-weakening",
+    "multi-domain",
+];
+const EXAMPLE_ROUTE: &str =
+    "bee state route --set --class feature --lane standard --flags multi-domain --files 7 --json";
+
+/// `Number(v)` for a flag STRING — the full ToNumber conversion, not
+/// reservations.rs's `js_number_flag` (which is Number.parseInt and would read
+/// "2.5" as 2). `Ok(None)` is NaN (Node then reports the invalid-flag refusal);
+/// `Err` is a spelling JS converts but this port does not model (hex/binary/
+/// octal literals, Infinity, |n| >= 1e21) — delegate, Node owns the answer.
+fn js_number_full(raw: &str) -> Ex<Option<f64>> {
+    let t = js_trim(raw);
+    if t.is_empty() {
+        return Ok(Some(0.0)); // Number("") === Number("   ") === 0
+    }
+    let lower = t.to_ascii_lowercase();
+    if lower.starts_with("0x")
+        || lower.starts_with("0b")
+        || lower.starts_with("0o")
+        || lower.contains("infinity")
+    {
+        return Err(Exotic);
+    }
+    // grammar: [+-]? ( digits [ '.' digits? ] | '.' digits ) ( [eE][+-]?digits )?
+    let bytes = t.as_bytes();
+    let mut i = 0usize;
+    if matches!(bytes.first(), Some(b'+') | Some(b'-')) {
+        i += 1;
+    }
+    let int_start = i;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    let int_len = i - int_start;
+    let mut frac_len = 0usize;
+    if i < bytes.len() && bytes[i] == b'.' {
+        i += 1;
+        let fs = i;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        frac_len = i - fs;
+    }
+    if int_len == 0 && frac_len == 0 {
+        return Ok(None); // not numeric at all → NaN
+    }
+    if i < bytes.len() && (bytes[i] == b'e' || bytes[i] == b'E') {
+        i += 1;
+        if matches!(bytes.get(i), Some(b'+') | Some(b'-')) {
+            i += 1;
+        }
+        let es = i;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i == es {
+            return Ok(None);
+        }
+    }
+    if i != bytes.len() {
+        return Ok(None); // trailing junk → NaN
+    }
+    let num: f64 = t.parse().map_err(|_| Exotic)?;
+    if !num.is_finite() || num.abs() >= 1e21 {
+        return Err(Exotic); // JS exponent rendering this port does not model
+    }
+    Ok(Some(num))
+}
+
+/// bee.mjs validateRouteSetFlags — the hand-rolled batch validation (`--flags
+/// ""` is the valid spelling of "zero flags", which requireFlags would call
+/// missing). Every refusal is deterministic.
+fn validate_route_set_flags(flags: &Flags) -> Ex<Result<Map<String, Value>, String>> {
+    let mut missing: Vec<&str> = Vec::new();
+    let mut invalid: Vec<String> = Vec::new();
+
+    // `x === undefined || x === '' || x === true` — Present IS JS `true`.
+    let named = |key: &str| -> Option<String> {
+        match flags.get(key) {
+            Some(FlagV::S(s)) if !s.is_empty() => Some(s.clone()),
+            _ => None,
+        }
+    };
+    let class_value = named("class");
+    match &class_value {
+        None => missing.push("--class"),
+        Some(v) if !ROUTE_CLASS_VALUES.contains(&v.as_str()) => invalid.push(format!(
+            "--class \"{v}\" (must be one of {})",
+            ROUTE_CLASS_VALUES.join(", ")
+        )),
+        Some(_) => {}
+    }
+    let lane_value = named("lane");
+    match &lane_value {
+        None => missing.push("--lane"),
+        Some(v) if !ROUTE_LANE_VALUES.contains(&v.as_str()) => invalid.push(format!(
+            "--lane \"{v}\" (must be one of {})",
+            ROUTE_LANE_VALUES.join(", ")
+        )),
+        Some(_) => {}
+    }
+    // `flags.flags === undefined || flags.flags === true` — '' is legal here.
+    let mut flag_names: Vec<String> = Vec::new();
+    match flags.get("flags") {
+        None | Some(FlagV::Present) => missing.push("--flags"),
+        Some(FlagV::S(raw)) => {
+            flag_names = split_list(raw);
+            let bad: Vec<&String> = flag_names
+                .iter()
+                .filter(|f| !ROUTE_FLAG_VALUES.contains(&f.as_str()))
+                .collect();
+            if !bad.is_empty() {
+                invalid.push(format!(
+                    "--flags \"{raw}\" names invalid flag(s) {} (legal set: {})",
+                    bad.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
+                    ROUTE_FLAG_VALUES.join(", ")
+                ));
+            }
+        }
+    }
+    let mut product_files: Option<f64> = None;
+    match named("files") {
+        None => missing.push("--files"),
+        Some(raw) => {
+            // `Number(flags.files)`, then Number.isInteger(n) && n >= 0.
+            let n = js_number_full(&raw)?;
+            match n {
+                Some(n) if n.is_finite() && n.fract() == 0.0 && n >= 0.0 => {
+                    product_files = Some(n);
+                }
+                _ => invalid.push(format!("--files \"{raw}\" (must be a non-negative integer)")),
+            }
+        }
+    }
+
+    if !missing.is_empty() || !invalid.is_empty() {
+        let mut parts: Vec<String> = Vec::new();
+        if !missing.is_empty() {
+            parts.push(format!("missing required flag(s): {}", missing.join(", ")));
+        }
+        if !invalid.is_empty() {
+            parts.push(format!("invalid flag(s): {}", invalid.join("; ")));
+        }
+        return Ok(Err(format!(
+            "route --set: {}. Example: {EXAMPLE_ROUTE}",
+            parts.join("; ")
+        )));
+    }
+
+    let mut route = Map::new();
+    route.insert("class".into(), json!(class_value.unwrap()));
+    route.insert("lane".into(), json!(lane_value.unwrap()));
+    route.insert(
+        "flags".into(),
+        Value::Array(flag_names.into_iter().map(Value::String).collect()),
+    );
+    route.insert(
+        "product_files".into(),
+        Value::Number(serde_json::Number::from_f64(product_files.unwrap()).ok_or(Exotic)?),
+    );
+    // `flags.rationale !== undefined && flags.rationale !== true ? String(...) : null`
+    route.insert(
+        "rationale".into(),
+        match flags.get("rationale") {
+            Some(FlagV::S(s)) => json!(s),
+            _ => Value::Null,
+        },
+    );
+    route.insert("updated_at".into(), json!(now_iso()));
+    Ok(Ok(route))
+}
+
+/// bee.mjs isCodeTouchingLane.
+fn is_code_touching_lane(lane: &str, other_live_session: bool) -> bool {
+    if lane.is_empty() || lane == "docs" {
+        return false;
+    }
+    if lane == "tiny" && !other_live_session {
+        return false;
+    }
+    true
+}
+
+/// bee.mjs otherLiveWorkPresent (D9a). activeWorkers' `cell` join is never
+/// read here — only `lane` is — so the claims scan it performs contributes
+/// nothing and is skipped: one row per OTHER live session is the whole input.
+/// Fails quiet to `false`, exactly like the .mjs's own try/catch.
+fn other_live_work_present(root: &Path) -> Ex<bool> {
+    let self_id = resolve_session_id(None, root)?;
+    let now = now_ms();
+    let exclude = self_id.as_deref().unwrap_or("");
+    for session in list_session_records(root)? {
+        if matches!(session.get("id"), Some(Value::String(s)) if s == exclude) {
+            continue;
+        }
+        if heartbeat_stale(&session, now)? {
+            continue;
+        }
+        let lane = match session.get("lane") {
+            Some(Value::String(l)) if !l.is_empty() => Some(l.clone()),
+            _ => None,
+        };
+        let phase = match &lane {
+            Some(l) => read_lane_display(root, l)?.and_then(|r| r.get("phase").cloned()),
+            None => read_state_peek(root)?.get("phase").cloned(),
+        };
+        let live = match phase {
+            Some(p) => truthy(&p) && !js_strict_eq(&p, &json!("idle")) && !js_strict_eq(&p, &json!("compounding-complete")),
+            None => false,
+        };
+        if live {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// `Object.values(readGrants(...)).some((v) => v === true)` — the pre-lock
+/// gate that decides whether findGrantedWorktreeForFeature could possibly
+/// answer non-null (see this section's header).
+fn any_granted_worktree(root: &Path) -> bool {
+    match crate::roots::read_grants(&root.join(".bee")) {
+        Value::Object(m) => m.values().any(|v| matches!(v, Value::Bool(true))),
+        _ => false,
+    }
+}
+
+/// bee.mjs buildRouteWorktreeBlock, for the ordinary-checkout arm the native
+/// path always sits on, with `findGrantedWorktreeForFeature` proven null by
+/// the caller's pre-lock gate.
+fn route_worktree_block(feature: Option<&str>, lane: &str, code_touching: bool) -> Option<Value> {
+    let feature = feature?;
+    if !code_touching {
+        return None;
+    }
+    let command = format!("bee worktree new --feature {feature}");
+    let mut block = Map::new();
+    block.insert("required".into(), Value::Bool(true));
+    block.insert("command".into(), json!(command));
+    block.insert("reason".into(), json!(format!(
+        "lane \"{lane}\" is code-touching and this is the MAIN checkout \u{2014} feature work branches at feature start (worktree-first)"
+    )));
+    block.insert("notice".into(), json!(format!(
+        "\u{26a0} WORKTREE-FIRST: lane \"{lane}\" is code-touching and this is the MAIN checkout. NEXT: run \"{command}\", then open your session at the printed worktree path \u{2014} main stays for integration, docs-lane, and release work; once the worktree is granted, main refuses feature source edits."
+    )));
+    Some(Value::Object(block))
+}
+
+fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(&flags, &["set", "show", "class", "lane", "flags", "files", "rationale"]) {
+        return None;
+    }
+    for b in ["set", "show"] {
+        if !bool_flag_ok(&flags, b) {
+            return None;
+        }
+    }
+    let show = matches!(flags.get("show"), Some(FlagV::Present));
+    let set = matches!(flags.get("set"), Some(FlagV::Present));
+    let ctx = match go("state route", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = (|| -> R2<Out> {
+        if show {
+            let target = resolve_mutation_target(&ctx.root, None, "route show", false)?;
+            // `target.record.route ?? null`, then `if (!route)`.
+            let route = match target.record().get("route") {
+                Some(v) if truthy(v) => v.clone(),
+                _ => {
+                    return Ok(Out::Emit(Value::Null, "No route recorded.".to_string(), 0));
+                }
+            };
+            // `route.flags.length` / `route.flags.join(',')` throw on a
+            // non-array; a stored route is always this shape.
+            let Some(Value::Array(flag_names)) = jget(&route, "flags") else {
+                return Err(Err2::Ex);
+            };
+            let joined: Vec<String> = flag_names.iter().map(js_disp).collect();
+            let rationale = match jget(&route, "rationale") {
+                Some(v) if truthy(v) => format!(" rationale=\"{}\"", js_disp(v)),
+                _ => String::new(),
+            };
+            let text = format!(
+                "class={} lane={} flags={} [{}] files={}{rationale}{}",
+                js_disp_opt(jget(&route, "class")),
+                js_disp_opt(jget(&route, "lane")),
+                flag_names.len(),
+                joined.join(","),
+                js_disp_opt(jget(&route, "product_files")),
+                target.lane_note(),
+            );
+            return Ok(Out::Emit(route, text, 0));
+        }
+        if !set {
+            return Ok(Out::Thrown(
+                "route: requires --set (to record a route) or --show (to read it back).".to_string(),
+            ));
+        }
+        let route_object = match validate_route_set_flags(&flags)? {
+            Ok(r) => r,
+            Err(message) => return Ok(Out::Thrown(message)),
+        };
+        let lane_class = js_disp_opt(route_object.get("lane"));
+
+        // ── the pre-lock delegation gate (see this section's header) ───────
+        // otherLiveWorkPresent is only consulted for the tiny lane; probing it
+        // here also front-loads its own delegation triggers.
+        let other_live = if lane_class == "tiny" { other_live_work_present(&ctx.root)? } else { true };
+        let code_touching = is_code_touching_lane(&lane_class, other_live);
+        if code_touching && any_granted_worktree(&ctx.root) {
+            return Err(Err2::Ex);
+        }
+
+        let scope = resolve_mutation_lock_scope(&ctx.root, None, false)?;
+        let workflows = list_workflows(&ctx.root)?;
+        let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
+        let mut target = resolve_mutation_target(&ctx.root, None, "route", false)?;
+        let phase = target.record().get("phase").cloned().unwrap_or(Value::Null);
+        let feature_set = target.record().get("feature").map(truthy).unwrap_or(false);
+        if !feature_set
+            || js_strict_eq(&phase, &json!("idle"))
+            || js_strict_eq(&phase, &json!("compounding-complete"))
+        {
+            // `${phase ?? 'idle'}` / `${state.feature ?? 'none'}` — nullish.
+            let phase_disp = match target.record().get("phase") {
+                None | Some(Value::Null) => "idle".to_string(),
+                Some(v) => js_disp(v),
+            };
+            let feature_disp = match target.record().get("feature") {
+                None | Some(Value::Null) => "none".to_string(),
+                Some(v) => js_disp(v),
+            };
+            return Ok(Out::Thrown(format!(
+                "route --set: refused \u{2014} no active feature to attach a route to (phase \"{phase_disp}\", feature \"{feature_disp}\"). FIX: start a feature first (state start-feature), then record its route."
+            )));
+        }
+        let lane_note = target.lane_note();
+        let target_lane = target.lane().map(str::to_string);
+        target
+            .record_mut()
+            .insert("route".into(), Value::Object(route_object.clone()));
+        let record = target.record().clone();
+        write_through_projection(&ctx.root, &target, &record, &[])?;
+        // D1: also patch the live workflow record's own `route` field.
+        let target_feature = match &target_lane {
+            Some(l) => l.clone(),
+            None => js_disp_opt(record.get("feature")),
+        };
+        let live = list_workflows(&ctx.root)?;
+        if let Some(wf) = find_live_workflow(&live, &target_feature) {
+            let mut patch = Map::new();
+            patch.insert("route".into(), Value::Object(route_object.clone()));
+            update_workflow_assuming_lock(&ctx.root, &wf_id(wf), patch)?;
+        }
+        // `state.feature ?? target.lane ?? null`
+        let routed_feature = match record.get("feature") {
+            Some(v) if !v.is_null() => Some(js_disp(v)),
+            _ => target_lane.clone(),
+        };
+        drop(locks);
+
+        let other_live = if lane_class == "tiny" { other_live_work_present(&ctx.root)? } else { true };
+        let code_touching = is_code_touching_lane(&lane_class, other_live);
+        let block = route_worktree_block(routed_feature.as_deref(), &lane_class, code_touching);
+
+        let flags_len = match route_object.get("flags") {
+            Some(Value::Array(a)) => a.len(),
+            _ => 0,
+        };
+        let mut text = format!(
+            "Recorded route (class={} lane={lane_class} flags={flags_len} files={}).{lane_note}",
+            js_disp_opt(route_object.get("class")),
+            js_disp_opt(route_object.get("product_files")),
+        );
+        let mut result = route_object;
+        if let Some(block) = block {
+            text.push('\n');
+            text.push_str(&js_disp_opt(jget(&block, "notice")));
+            result.insert("worktree".into(), block);
+        }
+        Ok(Out::Emit(Value::Object(result), text, 0))
+    })();
+    finish(&ctx, out)
+}
+
 // ─── state rebuild-projections (R6 coverage debt) ──────────────────────────
 
 /// bee.mjs withStoreLocks as RAII: the array IS the acquisition order, and the
@@ -4011,5 +4457,189 @@ mod tests {
             r#"{"context":false,"shape":true,"execution":false,"review":false}"#
         );
         assert_eq!(lane.get("created_at"), Some(&Value::Null));
+    }
+
+    // ── state rebuild-projections (R6) ────────────────────────────────────
+
+    fn seed_workflow(root: &Path, id: &str, feature: &str, status: &str) {
+        let dir = workflows_dir(root).join(id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("state.json"),
+            format!(
+                r#"{{"id":"{id}","feature":"{feature}","status":"{status}","phase":"exploring","mode":null,"plan_rev":0,"summary":"s","next_action":"n","route":null,"created_at":"2026-01-01T00:00:00.000Z"}}"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn rebuild_all_projections_reports_every_record_in_nodes_key_order() {
+        let tmp = tmp_root();
+        // C1: zero workflow records — state/handoff non-authoritative, while
+        // reservations is ALWAYS authoritative with a concrete count.
+        let empty = ok(rebuild_all_projections(tmp.path()));
+        let keys: Vec<&str> = match &empty {
+            Value::Object(m) => m.keys().map(String::as_str).collect(),
+            _ => panic!("object"),
+        };
+        assert_eq!(keys, vec!["state", "handoff", "reservations", "lanes"]);
+        assert_eq!(
+            jget(&empty, "state").and_then(|s| jget(s, "authoritative")),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            jget(&empty, "handoff").and_then(|h| jget(h, "authoritative")),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            jsjson::stringify(jget(&empty, "reservations").unwrap()),
+            r#"{"authoritative":true,"count":0}"#
+        );
+        assert_eq!(jget(&empty, "lanes"), Some(&json!([])));
+        assert!(tmp.path().join(".bee").join("reservations.json").exists());
+
+        // One active + one closed record: only the active one is rebuilt.
+        seed_workflow(tmp.path(), "wf-1", "alpha", "active");
+        seed_workflow(tmp.path(), "wf-2", "gone", "closed");
+        let full = ok(rebuild_all_projections(tmp.path()));
+        let lanes = match jget(&full, "lanes") {
+            Some(Value::Array(a)) => a.clone(),
+            _ => panic!("lanes array"),
+        };
+        assert_eq!(lanes.len(), 1);
+        assert_eq!(jget(&lanes[0], "authoritative"), Some(&json!(true)));
+        assert_eq!(jget(&lanes[0], "source"), Some(&json!("wf-1")));
+        // The idle-bootstrap branch adopts the newest ACTIVE record.
+        assert_eq!(
+            jget(&full, "state").and_then(|s| jget(s, "source")),
+            Some(&json!("wf-1"))
+        );
+        assert!(lanes_dir(tmp.path()).join("alpha.json").exists());
+    }
+
+    #[test]
+    fn rebuild_projections_lane_locks_are_sorted_deduped_and_state_first() {
+        // The lock ORDER is what keeps two concurrent rebuilds deadlock-free:
+        // "state" first, then every active lane name sorted + de-duplicated.
+        let mut lane_locks: Vec<String> = ["zeta", "alpha", "zeta", "mid"]
+            .iter()
+            .map(|f| lane_lock_name(f))
+            .collect();
+        js_sort(&mut lane_locks);
+        lane_locks.dedup();
+        assert_eq!(lane_locks, vec!["lane:alpha", "lane:mid", "lane:zeta"]);
+    }
+
+    // ── state route (R6) ──────────────────────────────────────────────────
+
+    fn route_flags(pairs: &[(&str, &str)]) -> Flags {
+        Flags(pairs.iter().map(|(k, v)| ((*k).to_string(), FlagV::S((*v).to_string()))).collect())
+    }
+
+    #[test]
+    fn route_set_validation_names_every_bad_value() {
+        let f = route_flags(&[
+            ("class", "nope"),
+            ("lane", "weird"),
+            ("flags", "bogus,auth"),
+            ("files", "x"),
+        ]);
+        let message = match ok(validate_route_set_flags(&f)) {
+            Err(m) => m,
+            Ok(_) => panic!("expected a refusal"),
+        };
+        assert!(message.starts_with(
+            "route --set: invalid flag(s): --class \"nope\" (must be one of feature, bugfix, docs"
+        ));
+        assert!(message.contains(
+            "--lane \"weird\" (must be one of docs, tiny, small, spike, standard, high-risk)"
+        ));
+        assert!(message.contains("--flags \"bogus,auth\" names invalid flag(s) bogus (legal set: auth,"));
+        assert!(message.contains("--files \"x\" (must be a non-negative integer)"));
+        assert!(message.ends_with(&format!("Example: {EXAMPLE_ROUTE}")));
+
+        // Missing is a different clause; `--flags ""` is zero flags, not missing.
+        let missing = match ok(validate_route_set_flags(&Flags(Vec::new()))) {
+            Err(m) => m,
+            Ok(_) => panic!("expected a refusal"),
+        };
+        assert!(missing.contains("missing required flag(s): --class, --lane, --flags, --files"));
+        let zero = route_flags(&[("class", "docs"), ("lane", "docs"), ("flags", ""), ("files", "0")]);
+        let route = match ok(validate_route_set_flags(&zero)) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        assert_eq!(route.get("flags"), Some(&json!([])));
+        assert_eq!(route.get("rationale"), Some(&Value::Null));
+        // Key order is the object literal's.
+        let keys: Vec<&str> = route.keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            vec!["class", "lane", "flags", "product_files", "rationale", "updated_at"]
+        );
+    }
+
+    #[test]
+    fn route_files_uses_number_not_parseint() {
+        // Number("2.5") === 2.5 (NOT parseInt's 2) → not an integer → refused.
+        let f = route_flags(&[("class", "docs"), ("lane", "docs"), ("flags", ""), ("files", "2.5")]);
+        assert!(matches!(ok(validate_route_set_flags(&f)), Err(m) if m.contains("--files \"2.5\"")));
+        assert_eq!(js_number_full("2.5").ok().unwrap(), Some(2.5));
+        assert_eq!(js_number_full("  7 ").ok().unwrap(), Some(7.0));
+        assert_eq!(js_number_full("   ").ok().unwrap(), Some(0.0)); // Number("  ") === 0
+        assert_eq!(js_number_full("x").ok().unwrap(), None); // NaN
+        assert_eq!(js_number_full("7px").ok().unwrap(), None);
+        assert!(js_number_full("0x10").is_err()); // modeled by Node only
+        assert!(js_number_full("Infinity").is_err());
+    }
+
+    #[test]
+    fn route_worktree_block_follows_is_code_touching_lane() {
+        assert!(!is_code_touching_lane("docs", true));
+        assert!(!is_code_touching_lane("", true));
+        assert!(!is_code_touching_lane("tiny", false));
+        assert!(is_code_touching_lane("tiny", true));
+        for lane in ["small", "spike", "standard", "high-risk"] {
+            assert!(is_code_touching_lane(lane, false));
+        }
+        assert!(route_worktree_block(None, "standard", true).is_none());
+        assert!(route_worktree_block(Some("f1"), "docs", false).is_none());
+        let block = route_worktree_block(Some("f1"), "standard", true).unwrap();
+        assert_eq!(jget(&block, "required"), Some(&json!(true)));
+        assert_eq!(
+            jget(&block, "command"),
+            Some(&json!("bee worktree new --feature f1"))
+        );
+        assert!(js_disp_opt(jget(&block, "notice")).starts_with(
+            "\u{26a0} WORKTREE-FIRST: lane \"standard\" is code-touching and this is the MAIN checkout."
+        ));
+    }
+
+    #[test]
+    fn other_live_work_present_ignores_idle_and_stale_peers() {
+        let tmp = tmp_root();
+        let sessions = tmp.path().join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let stamp = now_iso();
+        // A live peer on the DEFAULT record, which is idle → no live work.
+        std::fs::write(
+            sessions.join("peer.json"),
+            format!(
+                r#"{{"id":"peer","started_at":"{stamp}","last_heartbeat":"{stamp}","lane":null}}"#
+            ),
+        )
+        .unwrap();
+        assert!(!ok(other_live_work_present(tmp.path())));
+        // Move the default record off idle → the peer now counts.
+        write_state_file(tmp.path(), r#"{"phase":"swarming","feature":"f1"}"#);
+        assert!(ok(other_live_work_present(tmp.path())));
+        // A STALE peer never counts.
+        std::fs::write(
+            sessions.join("peer.json"),
+            r#"{"id":"peer","started_at":"2020-01-01T00:00:00.000Z","last_heartbeat":"2020-01-01T00:00:00.000Z","lane":null}"#,
+        )
+        .unwrap();
+        assert!(!ok(other_live_work_present(tmp.path())));
     }
 }
