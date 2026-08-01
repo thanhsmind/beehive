@@ -1,30 +1,52 @@
 // bee state — native port of the `state` verb group (strangler subset).
 //
+// R6 coverage debt "the lane/workflow world" — CLOSED for the record-mutating
+// verbs. Through R3 wave 2 these verbs served natively ONLY in the "C1 world"
+// (no --lane flag, no session-bound lane, zero records under
+// .bee/runtime/workflows/). That gate is GONE: verbs/workflow_store.rs now
+// carries the lane store, the workflow store, the handoff mailbox, and the
+// projection builders, so lane-targeted and workflow-carrying repos take the
+// same native path a bare repo does — same lock names, same projection
+// write-through, same bytes.
+//
 // Ported argv shapes (everything else returns None BEFORE any output and the
 // whole command re-runs under Node):
 //   state set / gate / scribing-run / compounding-run / plan-rev bump
-//     — ONLY in the C1 world: no --lane flag, no session-bound lane for the
-//       calling session, zero workflow records under .bee/runtime/workflows/,
-//       and a peekable (non-corrupt) state.json. Within that world:
-//       * every deterministic refusal is native (arg validation, the
-//         chain-integrity gate-door rules, owner checks, readStateStrict's
-//         three typed errors, the scribing-run/compounding-run phase doors)
-//       * a PASSING `--phase compounding-complete` close delegates (its
-//         scribing-debt door + waiver decision-logging live in cells.mjs /
-//         decisions.mjs), as does a real --feature swap (same door), and a
-//         high-risk execution/merge approval (advisorRefStale).
+//     — native in EVERY repo shape (explicit --lane, a session-bound lane, or
+//       the default record; with or without live workflow records). The full
+//       Node seam is reproduced: resolveMutationLockScope's fail-open peek,
+//       withMutationLock's `workflow:<id>` → {'state' | lane:<f>} nesting,
+//       resolveMutationTarget's strict reads, and
+//       writeLaneRecordThroughProjection / writeStateRecordThroughProjection
+//       (updateWorkflowAssumingLock + rebuild). Deterministic refusals — arg
+//       validation, the chain-integrity gate doors, owner checks,
+//       readStateStrict/readLaneStrict's typed errors, the LANE_MISSING
+//       refusals, the scribing-run/compounding-run phase doors, plan-rev
+//       bump's four refusals — are all native.
+//       Still delegated INSIDE these verbs (each is a different R6 debt, not
+//       this one): a PASSING `--phase compounding-complete` close (its
+//       scribing-debt door + waiver decision-logging live in cells.mjs /
+//       decisions.mjs — default AND lane branches), a real --feature swap
+//       (same door), and a high-risk execution/merge approval
+//       (advisorRefStale, lib/state.mjs).
 //   state worker add / update / remove / clear / prune — always native for
 //     known flag shapes (they never consult lanes/sessions/workflows).
 //   state lanes / session list / session bind / session unbind — native.
 //   state scribing-run --show — native (read-only ledger/lane/state query).
-//   state handoff write / adopt / show — native ONLY when zero workflow
-//     records exist (resolveHandoffWorkflowId's C1 null → the legacy
-//     .bee/HANDOFF.json path); any workflow record delegates (mailboxes).
+//   state handoff write / adopt / show — native in every repo shape: the
+//     legacy .bee/HANDOFF.json path when resolveHandoffWorkflowId answers
+//     null (C1), and the per-workflow MAILBOX path
+//     (.bee/runtime/handoffs/<workflow-id>/NNNN.json + the legacy-file
+//     projection rebuild) when a workflow resolves.
+//   state workflows list / close — native (listWorkflowRecords /
+//     closeWorkflowsForFeature + the three mutually exclusive close modes).
 //
-// DELEGATED whole verbs (unprovable here, by design): state.route,
-// state.workflows.*, state.start-feature (createWorkflow + claims +
-// reservations + write-policy machinery), state.rebuild-projections,
-// state.advisor-ref.*, state.compact-*.
+// DELEGATED whole verbs (unprovable here, by design): state.route (its
+// worktree-grant block reaches guards/worktree machinery), state.start-feature
+// (startFeature's precondition sweep + write-policy/isolate redirect + claims
+// + reservations), state.rebuild-projections (needs reservations.mjs's
+// rebuildReservationsProjection, whose Rust twin `list_reservations` is
+// private to verbs/reservations.rs), state.advisor-ref.*, state.compact-*.
 //
 // Provenance: bee.mjs handleStateSet/handleStateGate/handleStatePlanRevBump/
 // stateWorkerMutate + worker handlers/readPruneKeepSet/keptByPruneKeepSet/
@@ -42,11 +64,15 @@
 // fence_epoch); lib/cells.mjs scribingLedgerPath/readScribingLedger/
 // appendScribingLedger/bestScribingStampMs/scribingRunStampMs.
 //
-// Locking: identical lock-name strings — mutations hold "state"
-// (withStoreLock, 100×50ms wait, LockBusyError bytes via lock.rs), session
-// bind/unbind hold "sessions" through claims.mjs's bounded 15×20ms
-// acquire-once loop, adoptClaim uses the per-claim `<cell>.adopting` gate
-// file (no store lock). worker prune takes no lock (read-only on state).
+// Locking: identical lock-name strings — the mutation verbs follow bee.mjs's
+// global order `workflow:<id>` → {'state' | lane:<feature>} (withMutationLock),
+// falling back to a single "state" hold when no live workflow names the
+// target; the worker verbs hold "state" alone; the handoff mailbox holds
+// `handoff:<workflow-id>`; session bind/unbind hold "sessions" through
+// claims.mjs's bounded 15×20ms acquire-once loop; adoptClaim uses the
+// per-claim `<cell>.adopting` gate file (no store lock). worker prune takes
+// no lock (read-only on state). All waits are lock.rs's 100×50ms
+// withStoreLock, with LockBusyError's bytes reproduced natively.
 //
 // Known accepted approximations (documented, delegation guards the rest):
 // unreadable-file errno strings map only EISDIR/EPERM (others delegate);
@@ -58,11 +84,19 @@
 
 use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
-use crate::lock::{self, AcquireOnce};
+use crate::lock::{self, AcquireOnce, LockGuard};
 use crate::verbs::reservations::{
-    date_parse_val, finish, iso_from_ms, jget, js_disp, js_numberify, js_strict_eq, js_trim,
-    keys_known, now_iso, now_ms, parse_flags, prelude, truthy, Ctx, Err2, Ex, Exotic, FlagV,
-    Flags, Out, Pre, R2,
+    date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt, js_numberify, js_strict_eq,
+    js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy, Ctx, Err2, Ex, Exotic,
+    FlagV, Flags, Out, Pre, R2,
+};
+use crate::verbs::workflow_store::{
+    acquire_named_lock, acquire_workflow_lock, adopt_mailbox_handoff, find_live_workflow,
+    gates_patch_from_record, lane_path, list_lanes, list_workflows,
+    newest_open_handoff_mailbox_record, projection_lock_name, read_lane_display, read_lane_strict,
+    rebuild_handoff_projection, rebuild_lane_projection, rebuild_state_projection, update_workflow,
+    update_workflow_assuming_lock, update_workflow_assuming_lock_with, wf_id, workflows_list_sort,
+    write_lane, write_mailbox_handoff, MailboxAdopt,
 };
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -91,6 +125,7 @@ fn is_known_phase(p: &str) -> bool {
 const EXAMPLE_GATE: &str = "bee state gate --name execution --approved true --json";
 const EXAMPLE_SCRIBING: &str =
     "bee state scribing-run --feature newf --areas auth --next-action bee-capturing --json";
+const EXAMPLE_WORKFLOWS_CLOSE: &str = "bee state workflows close --feature stale-feature --json";
 const EXAMPLE_COMPOUNDING: &str =
     "bee state compounding-run --feature newf --learnings docs/history/newf/reports/learnings.md --json";
 
@@ -143,7 +178,7 @@ fn rel_bee(parts: &[&str]) -> String {
     out
 }
 
-enum ParsedJson {
+pub(crate) enum ParsedJson {
     Parsed(Value),
     Unparseable,
 }
@@ -151,7 +186,7 @@ enum ParsedJson {
 /// JSON.parse modeled: serde parse + js_numberify. When serde fails but the
 /// text carries "\u" escapes, V8 might still parse it (lone surrogates) —
 /// delegate instead of guessing.
-fn parse_json_v8(text: &str) -> Ex<ParsedJson> {
+pub(crate) fn parse_json_v8(text: &str) -> Ex<ParsedJson> {
     match serde_json::from_str::<Value>(text) {
         Ok(v) => Ok(ParsedJson::Parsed(js_numberify(&v)?)),
         Err(_) => {
@@ -165,6 +200,23 @@ fn parse_json_v8(text: &str) -> Ex<ParsedJson> {
 }
 
 // ─── flag plumbing (bee.mjs requireFlag / requireFlags / lane selectors) ───
+
+/// The raw string value of a flag, or None for absent/boolean-true — the
+/// shape `typeof flag === 'string'` accepts (resolveSessionId's own guard).
+fn flag_value(flags: &Flags, name: &str) -> Option<String> {
+    match flags.get(name) {
+        Some(FlagV::S(s)) => Some(s.clone()),
+        _ => None,
+    }
+}
+
+/// `${sessionId}` where resolveSessionId answers `string | null`.
+fn sid_disp(sid: &Option<String>) -> String {
+    match sid {
+        Some(s) => s.clone(),
+        None => "null".to_string(),
+    }
+}
 
 /// `String(flags[name])` when the flag is present (Present → "true").
 fn flag_string(flags: &Flags, name: &str) -> Option<String> {
@@ -264,7 +316,7 @@ fn state_path(root: &Path) -> PathBuf {
     root.join(".bee").join("state.json")
 }
 
-fn default_gates() -> Map<String, Value> {
+pub(crate) fn default_gates() -> Map<String, Value> {
     let mut m = Map::new();
     m.insert("context".into(), json!(false));
     m.insert("shape".into(), json!(false));
@@ -273,7 +325,7 @@ fn default_gates() -> Map<String, Value> {
     m
 }
 
-fn default_state() -> Map<String, Value> {
+pub(crate) fn default_state() -> Map<String, Value> {
     let mut m = Map::new();
     m.insert("schema_version".into(), json!("1.0"));
     m.insert("phase".into(), json!("idle"));
@@ -292,7 +344,7 @@ fn default_state() -> Map<String, Value> {
 /// `{ ...defaults, ...(overlay || {}) }` over the gates map. Falsy and
 /// no-own-props truthy primitives (true, numbers) yield the defaults; string/
 /// array spreads add JS exotica → delegate.
-fn spread_gates(overlay: Option<&Value>) -> Ex<Map<String, Value>> {
+pub(crate) fn spread_gates(overlay: Option<&Value>) -> Ex<Map<String, Value>> {
     match overlay {
         Some(Value::Object(over)) => {
             let mut merged = default_gates();
@@ -308,7 +360,7 @@ fn spread_gates(overlay: Option<&Value>) -> Ex<Map<String, Value>> {
 }
 
 /// coerceLegacyPhase applied to the merged map's phase slot (D13).
-fn coerce_legacy_phase(m: &mut Map<String, Value>) -> Ex<()> {
+pub(crate) fn coerce_legacy_phase(m: &mut Map<String, Value>) -> Ex<()> {
     let Some(phase) = m.get("phase") else { return Ok(()) };
     if matches!(phase, Value::String(s) if s == "validating") {
         m.insert("phase".into(), json!("planning"));
@@ -335,7 +387,7 @@ fn merge_state_with_defaults(parsed: &Map<String, Value>) -> Ex<Map<String, Valu
 
 /// readStateStrict — the three typed refuse-to-rebuild errors are DETERMINISTIC
 /// bytes (they embed only path + code strings) and are served natively.
-fn read_state_strict(root: &Path) -> Result<Map<String, Value>, Err2> {
+pub(crate) fn read_state_strict(root: &Path) -> Result<Map<String, Value>, Err2> {
     let file = state_path(root);
     let file_disp = file.display().to_string();
     let rel = rel_bee(&["state.json"]);
@@ -390,7 +442,7 @@ fn read_state_strict(root: &Path) -> Result<Map<String, Value>, Err2> {
 }
 
 /// readState — the fail-open peek (corrupt → Node's V8-worded warn → delegate).
-fn read_state_peek(root: &Path) -> Ex<Map<String, Value>> {
+pub(crate) fn read_state_peek(root: &Path) -> Ex<Map<String, Value>> {
     match read_json(&state_path(root)) {
         ReadJson::Missing => Ok(default_state()),
         ReadJson::Corrupt => Err(Exotic),
@@ -401,7 +453,7 @@ fn read_state_peek(root: &Path) -> Ex<Map<String, Value>> {
     }
 }
 
-fn write_state(root: &Path, state: &Map<String, Value>) -> Result<(), Err2> {
+pub(crate) fn write_state(root: &Path, state: &Map<String, Value>) -> Result<(), Err2> {
     write_json_atomic(&state_path(root), &Value::Object(state.clone())).map_err(|_| Err2::Ex)
 }
 
@@ -578,6 +630,17 @@ fn env_nonempty(name: &str) -> Option<String> {
     }
 }
 
+/// claims.mjs resolveSessionId({flag, root}) — the explicit flag wins, then
+/// the env chain, then single-live-session adoption.
+fn resolve_session_id(flag: Option<&str>, root: &Path) -> Ex<Option<String>> {
+    if let Some(f) = flag {
+        if !js_trim(f).is_empty() {
+            return Ok(Some(js_trim(f).to_string()));
+        }
+    }
+    resolve_session_id_no_flag(root)
+}
+
 /// resolveSessionId({root}) — env chain, then single-live-session adoption.
 fn resolve_session_id_no_flag(root: &Path) -> Ex<Option<String>> {
     if let Some(v) = env_nonempty("BEE_SESSION_ID") {
@@ -601,15 +664,16 @@ fn resolve_session_id_no_flag(root: &Path) -> Ex<Option<String>> {
     Ok(None)
 }
 
-/// The calling session's bound lane, if any — the routing gate that keeps
-/// lane-targeted mutations on Node.
-fn session_bound_lane(root: &Path) -> Ex<Option<String>> {
-    let Some(sid) = resolve_session_id_no_flag(root)? else { return Ok(None) };
-    let Some(sess) = read_session(root, &sid)? else { return Ok(None) };
-    match sess.get("lane") {
-        Some(Value::String(l)) if !js_trim(l).is_empty() => Ok(Some(js_trim(l).to_string())),
-        _ => Ok(None),
-    }
+/// The `(sessionId, boundLane)` pair every resolution seam shares:
+/// `session && typeof session.lane === 'string' ? session.lane.trim() : ''`.
+fn session_binding(flag: Option<&str>, root: &Path) -> Ex<(Option<String>, Option<String>)> {
+    let Some(sid) = resolve_session_id(flag, root)? else { return Ok((None, None)) };
+    let Some(sess) = read_session(root, &sid)? else { return Ok((Some(sid), None)) };
+    let bound = match sess.get("lane") {
+        Some(Value::String(l)) if !js_trim(l).is_empty() => Some(js_trim(l).to_string()),
+        _ => None,
+    };
+    Ok((Some(sid), bound))
 }
 
 /// claims.mjs SESSIONS_LOCK_NAME bounded acquire (15 × 20ms, acquire-once).
@@ -635,7 +699,7 @@ fn claims_dir(root: &Path) -> PathBuf {
 
 /// readClaim — `!claim || typeof claim !== 'object'` → null. Arrays pass
 /// typeof in JS; the callers here treat them as Exotic when spread.
-fn read_claim(root: &Path, cell: &str) -> Ex<Option<Value>> {
+pub(crate) fn read_claim(root: &Path, cell: &str) -> Ex<Option<Value>> {
     match read_json(&claims_dir(root).join(format!("{cell}.json"))) {
         ReadJson::Missing => Ok(None),
         ReadJson::Corrupt => Err(Exotic),
@@ -654,14 +718,14 @@ impl Drop for GateGuard {
     }
 }
 
-enum AdoptOutcome {
+pub(crate) enum AdoptOutcome {
     Fail { reason: String },
     Adopted { claim: Map<String, Value>, previous_owner: Option<Value> },
 }
 
 /// adoptClaim (claims.mjs) — in-place atomic rewrite under the exclusive
 /// gate; fence_epoch bumps by exactly 1 in the same write.
-fn adopt_claim(root: &Path, cell_id: &str, new_session_id: &str) -> Result<AdoptOutcome, Err2> {
+pub(crate) fn adopt_claim(root: &Path, cell_id: &str, new_session_id: &str) -> Result<AdoptOutcome, Err2> {
     let cell = require_id(cell_id, "cell id")?;
     let session = require_id(new_session_id, "session id")?;
     ensure_dir(&claims_dir(root)).map_err(|_| Err2::Ex)?;
@@ -725,7 +789,7 @@ fn adopt_claim(root: &Path, cell_id: &str, new_session_id: &str) -> Result<Adopt
 
 // ─── handoff (lib/state.mjs legacy single-file path — C1 only) ─────────────
 
-fn handoff_path(root: &Path) -> PathBuf {
+pub(crate) fn handoff_path(root: &Path) -> PathBuf {
     root.join(".bee").join("HANDOFF.json")
 }
 
@@ -891,99 +955,11 @@ fn adopt_handoff(root: &Path, session_id: &str) -> Result<HandoffAdopt, Err2> {
     }
 }
 
-// ─── lanes (lib/state.mjs readLane / listLanes — display path) ─────────────
-
-fn lanes_dir(root: &Path) -> PathBuf {
-    root.join(".bee").join("lanes")
-}
-
-fn default_lane_record(feature: &str) -> Map<String, Value> {
-    let mut m = Map::new();
-    m.insert("schema_version".into(), json!("1.0"));
-    m.insert("feature".into(), json!(feature));
-    m.insert("mode".into(), Value::Null);
-    m.insert("phase".into(), json!("idle"));
-    m.insert("approved_gates".into(), Value::Object(default_gates()));
-    m.insert("summary".into(), json!(""));
-    m.insert("next_action".into(), json!(""));
-    m.insert("created_at".into(), Value::Null);
-    m
-}
-
-/// laneRecordFrom — null unless the parsed content is a lane record for THIS
-/// feature; merged over the per-feature defaults.
-fn lane_record_from(feature: &str, parsed: &Value) -> Ex<Option<Map<String, Value>>> {
-    let obj = match parsed {
-        Value::Object(m) => m,
-        _ => return Ok(None),
-    };
-    if !matches!(obj.get("feature"), Some(Value::String(s)) if s == feature) {
-        return Ok(None);
-    }
-    let mut merged = default_lane_record(feature);
-    for (k, v) in obj {
-        merged.insert(k.clone(), v.clone());
-    }
-    let gates = spread_gates(obj.get("approved_gates"))?;
-    merged.insert("approved_gates".into(), Value::Object(gates));
-    coerce_legacy_phase(&mut merged)?;
-    Ok(Some(merged))
-}
-
-/// readLane for display — corrupt-but-valid-JSON records get the deterministic
-/// warn + skip; JSON-corrupt files delegate (Node's readJson warns first with
-/// the V8 message).
-fn read_lane_display(root: &Path, raw_feature: &str) -> Ex<Option<Map<String, Value>>> {
-    let feature = js_trim(raw_feature);
-    if feature.is_empty() || feature.contains('/') || feature.contains('\\') || feature.contains("..")
-    {
-        return Ok(None); // lanePath's requireLaneFeature throw is caught → "no lane"
-    }
-    let file = lanes_dir(root).join(format!("{feature}.json"));
-    if !file.exists() {
-        return Ok(None);
-    }
-    let warn = || {
-        let rel = format!(".bee{0}lanes{0}{feature}.json", MAIN_SEPARATOR);
-        eprintln!(
-            "readLane: skipping corrupt lane record \"{rel}\" for display — mutations through readLaneStrict will refuse loudly. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\")."
-        );
-    };
-    match read_json(&file) {
-        ReadJson::Missing => {
-            // existsSync raced a delete: readJson falls back → record null → warn.
-            warn();
-            Ok(None)
-        }
-        ReadJson::Corrupt => Err(Exotic),
-        ReadJson::Parsed(v) => {
-            let v = js_numberify(&v)?;
-            match lane_record_from(feature, &v)? {
-                Some(rec) => Ok(Some(rec)),
-                None => {
-                    warn();
-                    Ok(None)
-                }
-            }
-        }
-    }
-}
-
-fn list_lanes(root: &Path) -> Ex<Vec<Map<String, Value>>> {
-    let entries = match std::fs::read_dir(lanes_dir(root)) {
-        Ok(e) => e,
-        Err(_) => return Ok(Vec::new()),
-    };
-    let mut lanes = Vec::new();
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let Some(stem) = name.strip_suffix(".json") else { continue };
-        if let Some(record) = read_lane_display(root, stem)? {
-            lanes.push(record);
-        }
-    }
-    Ok(lanes)
-}
+// ─── lanes ────────────────────────────────────────────────────────────────
+// The lane store (lanesDir/lanePath/requireLaneFeature/defaultLaneRecord/
+// laneRecordFrom/readLane/readLaneStrict/writeLane/listLanes) lives in
+// verbs/workflow_store.rs — ONE port, shared by the display verbs here and
+// by the mutation/projection seams below.
 
 // ─── scribing ledger (lib/cells.mjs) ───────────────────────────────────────
 
@@ -1066,31 +1042,269 @@ fn best_scribing_stamp_ms(
     Ok(best)
 }
 
-// ─── environment gating ────────────────────────────────────────────────────
-
-/// ANY entry under .bee/runtime/workflows/ routes the command to Node
-/// (workflow records re-route locks, writes, and handoff mailboxes).
-fn workflows_present(root: &Path) -> bool {
-    match std::fs::read_dir(root.join(".bee").join("runtime").join("workflows")) {
-        Ok(mut entries) => entries.next().is_some(),
-        Err(_) => false,
-    }
-}
-
-/// The shared C1 gate for the record-mutating verbs: no workflow records, and
-/// (unless --no-lane skips session resolution) no session-bound lane.
-fn mutation_env_native(root: &Path, no_lane: bool) -> Ex<bool> {
-    if workflows_present(root) {
-        return Ok(false);
-    }
-    if !no_lane && session_bound_lane(root)?.is_some() {
-        return Ok(false);
-    }
-    Ok(true)
-}
-
 fn acquire_state_lock(root: &Path) -> Result<lock::LockGuard, Err2> {
     lock::acquire_store_lock(root, "state", lock::MAX_ATTEMPTS).map_err(|b| Err2::Msg(b.message()))
+}
+
+// ─── the mutation seam (bee.mjs resolveMutationLockScope / withMutationLock /
+//     resolveMutationTarget / write*RecordThroughProjection) ────────────────
+//
+// This block is what retired the C1 gate. Every record-mutating state verb now
+// runs the SAME three steps Node runs, in the same order, against the same
+// lock names:
+//   1. resolve_mutation_lock_scope — a fail-open PEEK (never the *Strict
+//      readers) at which feature/record a mutation will land on.
+//   2. acquire_mutation_locks — `workflow:<id>` then the projection lock when
+//      a live workflow names that feature; a single 'state' hold otherwise.
+//      The global order workflow:<id> → {'state' | lane:<f>} is never inverted.
+//   3. resolve_mutation_target — the authoritative strict read, then
+//      write_through_projection: updateWorkflowAssumingLock (D1 fields +
+//      gates, identity fields protected), the caller's FULL record
+//      (writeState/writeLane — GH #86), then the rebuild.
+
+/// bee.mjs resolveMutationLockScope's `{feature, lane}`.
+struct Scope {
+    feature: Option<String>,
+    lane: bool,
+}
+
+fn resolve_mutation_lock_scope(
+    root: &Path,
+    lane_feature: Option<&str>,
+    no_lane: bool,
+) -> Ex<Scope> {
+    if let Some(f) = lane_feature {
+        return Ok(Scope { feature: Some(f.to_string()), lane: true });
+    }
+    if no_lane {
+        return Ok(Scope { feature: None, lane: false });
+    }
+    let (_sid, bound) = session_binding(None, root)?;
+    if let Some(bound) = bound {
+        return Ok(Scope { feature: Some(bound), lane: true });
+    }
+    // Fail-open peek; readStateStrict's throw still happens in the target.
+    let state = read_state_peek(root)?;
+    let feature = match state.get("feature") {
+        Some(v) if truthy(v) => Some(js_disp(v)),
+        _ => None,
+    };
+    Ok(Scope { feature, lane: false })
+}
+
+/// bee.mjs resolveMutationTarget's return, minus the `write` closure (which
+/// becomes `write_through_projection` below).
+enum Target {
+    /// The default `.bee/state.json` record. `target_feature` is captured at
+    /// resolution time, BEFORE any caller mutation (the `--feature` swap
+    /// carve-out depends on that).
+    Default { record: Map<String, Value>, target_feature: Option<String> },
+    Lane { record: Map<String, Value>, lane: String },
+}
+
+impl Target {
+    fn record(&self) -> &Map<String, Value> {
+        match self {
+            Target::Default { record, .. } | Target::Lane { record, .. } => record,
+        }
+    }
+    fn record_mut(&mut self) -> &mut Map<String, Value> {
+        match self {
+            Target::Default { record, .. } | Target::Lane { record, .. } => record,
+        }
+    }
+    fn lane(&self) -> Option<&str> {
+        match self {
+            Target::Lane { lane, .. } => Some(lane),
+            Target::Default { .. } => None,
+        }
+    }
+    /// `target.source === 'lane' ? `lane "${target.lane}"` : 'default state'`.
+    fn selected_record(&self) -> String {
+        match self {
+            Target::Lane { lane, .. } => format!("lane \"{lane}\""),
+            Target::Default { .. } => "default state".to_string(),
+        }
+    }
+    /// `${targetLane ? ` (lane "${targetLane}")` : ''}` — every verb's text tail.
+    fn lane_note(&self) -> String {
+        match self.lane() {
+            Some(l) => format!(" (lane \"{l}\")"),
+            None => String::new(),
+        }
+    }
+}
+
+fn lane_missing_refusal(verb: &str, lane_feature: &str) -> String {
+    format!(
+        "{verb}: refused — lane \"{lane_feature}\" does not exist (no .bee/lanes/{lane_feature}.json). FIX: start it first (\"state start-feature --feature {lane_feature} --as-lane\"), then retry."
+    )
+}
+
+fn bound_lane_missing_refusal(verb: &str, session_id: &str, bound: &str) -> String {
+    format!(
+        "{verb}: refused — calling session \"{session_id}\" is bound to lane \"{bound}\" but no .bee/lanes/{bound}.json exists; resolution never guesses back to the default record. FIX: start the lane (\"state start-feature --feature {bound} --as-lane\"), unbind the session, or pass --no-lane to target the default record explicitly."
+    )
+}
+
+fn resolve_mutation_target(
+    root: &Path,
+    lane_feature: Option<&str>,
+    verb: &str,
+    no_lane: bool,
+) -> Result<Target, Err2> {
+    let default_target = |root: &Path| -> Result<Target, Err2> {
+        let record = read_state_strict(root)?;
+        let target_feature = match record.get("feature") {
+            Some(v) if truthy(v) => Some(js_disp(v)),
+            _ => None,
+        };
+        Ok(Target::Default { record, target_feature })
+    };
+    if let Some(f) = lane_feature {
+        let Some(record) = read_lane_strict(root, f)? else {
+            return Err(Err2::Msg(lane_missing_refusal(verb, f)));
+        };
+        return Ok(Target::Lane { record, lane: f.to_string() });
+    }
+    if no_lane {
+        return default_target(root);
+    }
+    let (sid, bound) = session_binding(None, root)?;
+    let Some(bound) = bound else { return default_target(root) };
+    let Some(record) = read_lane_strict(root, &bound)? else {
+        return Err(Err2::Msg(bound_lane_missing_refusal(verb, &sid_disp(&sid), &bound)));
+    };
+    Ok(Target::Lane { record, lane: bound })
+}
+
+/// The five D1 fields writeLaneRecordThroughProjection /
+/// writeStateRecordThroughProjection patch onto the live workflow record.
+fn workflow_patch_from_record(
+    updated: &Map<String, Value>,
+    stamps: &[(String, Value)],
+) -> Map<String, Value> {
+    let mut patch = Map::new();
+    patch.insert("phase".into(), updated.get("phase").cloned().unwrap_or(Value::Null));
+    // `updated.mode == null ? null : String(updated.mode)` — loose null check.
+    let mode = match updated.get("mode") {
+        None | Some(Value::Null) => Value::Null,
+        Some(v) => json!(js_disp(v)),
+    };
+    patch.insert("mode".into(), mode);
+    patch.insert("summary".into(), updated.get("summary").cloned().unwrap_or(Value::Null));
+    patch.insert(
+        "next_action".into(),
+        updated.get("next_action").cloned().unwrap_or(Value::Null),
+    );
+    patch.insert("gates".into(), gates_patch_from_record(updated, stamps));
+    patch
+}
+
+/// bee.mjs writeLaneRecordThroughProjection + writeStateRecordThroughProjection.
+/// Runs INSIDE the caller's `workflow:<id>` hold, so it uses
+/// updateWorkflowAssumingLock (never the self-locking form).
+fn write_through_projection(
+    root: &Path,
+    target: &Target,
+    updated: &Map<String, Value>,
+    stamps: &[(String, Value)],
+) -> Result<(), Err2> {
+    let workflows = list_workflows(root)?;
+    let (routable_feature, is_lane) = match target {
+        Target::Lane { lane, .. } => (Some(lane.clone()), true),
+        Target::Default { target_feature, .. } => {
+            // `routable = targetFeature && updated.feature === targetFeature`
+            // — a --feature SWAP deliberately falls to the direct writeState.
+            let routable = target_feature.as_ref().is_some_and(|tf| {
+                matches!(updated.get("feature"), Some(Value::String(f)) if f == tf)
+            });
+            (if routable { target_feature.clone() } else { None }, false)
+        }
+    };
+    let wf = routable_feature
+        .as_deref()
+        .and_then(|f| find_live_workflow(&workflows, f));
+    let Some(wf) = wf else {
+        // C1 fallback: no live workflow names this target — the direct write.
+        return if is_lane { write_lane(root, updated) } else { write_state(root, updated) };
+    };
+    let id = wf_id(wf);
+    update_workflow_assuming_lock(root, &id, workflow_patch_from_record(updated, stamps))?;
+    // GH #86: land the caller's FULL record before the rebuild re-reads disk.
+    match target {
+        Target::Lane { lane, .. } => {
+            write_lane(root, updated)?;
+            rebuild_lane_projection(root, lane)?;
+        }
+        Target::Default { .. } => {
+            write_state(root, updated)?;
+            rebuild_state_projection(root)?;
+        }
+    }
+    Ok(())
+}
+
+/// bee.mjs withMutationLock's acquisition, as RAII guards. Dropping the struct
+/// releases in reverse order (projection lock first), matching the .mjs's
+/// nested `withStoreLock` unwind.
+struct MutationLocks {
+    _projection: LockGuard,
+    _workflow: Option<LockGuard>,
+}
+
+fn acquire_mutation_locks(
+    root: &Path,
+    scope: &Scope,
+    workflows: &[Map<String, Value>],
+) -> Result<MutationLocks, Err2> {
+    let wf = scope
+        .feature
+        .as_deref()
+        .and_then(|f| find_live_workflow(workflows, f));
+    match wf {
+        Some(wf) => {
+            let workflow = acquire_workflow_lock(root, &wf_id(wf))?;
+            let projection = acquire_named_lock(
+                root,
+                &projection_lock_name(scope.lane, scope.feature.as_deref()),
+            )?;
+            Ok(MutationLocks { _projection: projection, _workflow: Some(workflow) })
+        }
+        // C1 fallback — deliberately 'state' even for a lane (see the .mjs).
+        None => Ok(MutationLocks { _projection: acquire_state_lock(root)?, _workflow: None }),
+    }
+}
+
+/// The record a mutation will land on, read WITHOUT any warn — used only for
+/// the pre-lock delegation decisions (the scribing-debt doors and the
+/// high-risk advisor precondition, which live in cells.mjs/state.mjs and are
+/// separate R6 debts). A `None` answer means "cannot tell yet"; the same
+/// check re-runs under the lock and delegates there instead.
+fn peek_target_record(
+    root: &Path,
+    scope: &Scope,
+    lane_feature: Option<&str>,
+) -> Ex<Option<Map<String, Value>>> {
+    if scope.lane {
+        let feature = lane_feature.map(str::to_string).or_else(|| scope.feature.clone());
+        let Some(feature) = feature else { return Ok(None) };
+        // Silent: read_lane_display would warn on a mismatched record, and a
+        // warn before a delegate would double up under Node.
+        let Ok(file) = lane_path(root, &feature) else { return Ok(None) };
+        let bytes = match std::fs::read(&file) {
+            Ok(b) => b,
+            Err(_) => return Ok(None),
+        };
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        return match parse_json_v8(&text)? {
+            ParsedJson::Unparseable => Ok(None),
+            ParsedJson::Parsed(v) => {
+                crate::verbs::workflow_store::lane_record_from(js_trim(&feature), &v)
+            }
+        };
+    }
+    Ok(Some(read_state_peek(root)?))
 }
 
 // ─── routing ───────────────────────────────────────────────────────────────
@@ -1127,7 +1341,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         ["handoff", "write", ..] => ("handoff.write", 2),
         ["handoff", "adopt", ..] => ("handoff.adopt", 2),
         ["handoff", "show", ..] => ("handoff.show", 2),
-        _ => return None, // route/workflows/start-feature/advisor-ref/compact-*/unknown → Node
+        ["workflows", "list", ..] => ("workflows.list", 2),
+        ["workflows", "close", ..] => ("workflows.close", 2),
+        _ => return None, // route/start-feature/advisor-ref/compact-*/unknown → Node
     };
     if leading.len() != consumed {
         return None; // "Unexpected argument" — Node's own refusal path
@@ -1151,6 +1367,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "handoff.write" => run_handoff_write(flags, use_json, t0),
         "handoff.adopt" => run_handoff_adopt(flags, use_json, t0),
         "handoff.show" => run_handoff_show(flags, use_json, t0),
+        "workflows.list" => run_workflows_list(flags, use_json, t0),
+        "workflows.close" => run_workflows_close(flags, use_json, t0),
         _ => None,
     }
 }
@@ -1188,7 +1406,7 @@ fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
         if let Some(p) = &phase_flag {
             if !is_known_phase(p) {
                 return Ok(Out::Thrown(format!(
-                    "set: invalid phase \"{p}\" — not in the known-phase enum (isKnownPhase, not the bare PHASES array — the terminal alias \"compounding-complete\" must pass). FIX: use one of {KNOWN_PHASES_JOINED}."
+                    "set: invalid phase \"{p}\" \u{2014} not in the known-phase enum (isKnownPhase, not the bare PHASES array \u{2014} the terminal alias \"compounding-complete\" must pass). FIX: use one of {KNOWN_PHASES_JOINED}."
                 )));
             }
         }
@@ -1206,107 +1424,132 @@ fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
         };
-        if lane_feature.is_some() {
-            if flags.get("feature").is_some() {
-                return Ok(Out::Thrown(
-                    "set: --feature cannot be combined with --lane — a lane's feature is its identity (the lane record's filename), not a mutable field. FIX: omit --feature, or start a new lane instead.".to_string(),
-                ));
-            }
-            return Err(Err2::Ex); // lane-targeted mutation → Node
+        if lane_feature.is_some() && flags.get("feature").is_some() {
+            return Ok(Out::Thrown(
+                "set: --feature cannot be combined with --lane \u{2014} a lane's feature is its identity (the lane record's filename), not a mutable field. FIX: omit --feature, or start a new lane instead.".to_string(),
+            ));
         }
-        if !mutation_env_native(&ctx.root, no_lane)? {
-            return Err(Err2::Ex);
-        }
-        // Pre-lock peek (mirrors resolveMutationLockScope's fail-open read;
-        // corrupt state.json means Node warns with V8 bytes → delegate) — and
-        // the close/swap delegation is decided here, BEFORE any lock/telemetry.
-        let peek = read_state_peek(&ctx.root)?;
         let waive = matches!(flags.get("waive-compounding"), Some(FlagV::Present));
-        if let Some(p) = &phase_flag {
-            let t = check_phase_transition(peek.get("phase"), p, &peek, waive)?;
-            if t.ok && p == "compounding-complete" {
-                return Err(Err2::Ex); // passing close → scribing-debt door on Node
+
+        // withMutationLock's own pre-lock reads: the fail-open scope peek, then
+        // the workflow listing that picks the lock names.
+        let scope = resolve_mutation_lock_scope(&ctx.root, lane_feature.as_deref(), no_lane)?;
+        let workflows = list_workflows(&ctx.root)?;
+
+        // Strangler: the two scribing-debt doors (cells.mjs scribingDebt +
+        // decisions.mjs logDecision — a DIFFERENT R6 debt, for BOTH the lane
+        // and default branches) are decided here, BEFORE any lock or output,
+        // off a silent peek at the record the strict read will land on.
+        if let Some(peek) = peek_target_record(&ctx.root, &scope, lane_feature.as_deref())?
+        {
+            if let Some(p) = &phase_flag {
+                let t = check_phase_transition(peek.get("phase"), p, &peek, waive)?;
+                if t.ok && p == "compounding-complete" {
+                    return Err(Err2::Ex); // passing close -> the debt door on Node
+                }
+            }
+            if !scope.lane {
+                if let Some(f) = flag_string(&flags, "feature") {
+                    let current = peek.get("feature");
+                    if current.map(truthy).unwrap_or(false)
+                        && !opt_strict_eq(current, Some(&Value::String(f.clone())))
+                    {
+                        return Err(Err2::Ex); // feature swap -> the debt door on Node
+                    }
+                }
             }
         }
-        if let Some(f) = flag_string(&flags, "feature") {
-            let current = peek.get("feature");
-            if current.map(truthy).unwrap_or(false)
-                && !opt_strict_eq(current, Some(&Value::String(f.clone())))
-            {
-                return Err(Err2::Ex); // feature swap → scribing-debt door on Node
+
+        let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
+        let mut target =
+            resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "set", no_lane)?;
+        // i54-closeout-7 (D7): a session-AUTO-resolved lane refuses --feature too
+        // (the flag-level guard above only ever sees an EXPLICIT --lane).
+        if flags.get("feature").is_some() {
+            if let Some(lane) = target.lane() {
+                return Ok(Out::Thrown(format!(
+                    "set: --feature cannot target lane \"{lane}\" (auto-resolved from this session's lane binding) \u{2014} a lane's feature is its identity (the lane record's filename), not a mutable field. FIX: omit --feature, or pass --no-lane to address the default record."
+                )));
             }
         }
-        let guard = acquire_state_lock(&ctx.root)?;
-        let mut state = read_state_strict(&ctx.root)?;
         if let Some(p) = &phase_flag {
-            let t = check_phase_transition(state.get("phase"), p, &state, waive)?;
+            let record = target.record();
+            let t = check_phase_transition(record.get("phase"), p, record, waive)?;
             if !t.ok {
                 return Ok(Out::Thrown(t.reason));
             }
             if p == "compounding-complete" {
-                return Err(Err2::Ex); // race: strict read now passes the door
+                return Err(Err2::Ex); // race: the strict read now passes the door
             }
         }
-        if let Some(f) = flag_string(&flags, "feature") {
-            let current = state.get("feature");
-            if current.map(truthy).unwrap_or(false)
-                && !opt_strict_eq(current, Some(&Value::String(f.clone())))
-            {
-                return Err(Err2::Ex);
+        if target.lane().is_none() {
+            if let Some(f) = flag_string(&flags, "feature") {
+                let current = target.record().get("feature");
+                if current.map(truthy).unwrap_or(false)
+                    && !opt_strict_eq(current, Some(&Value::String(f.clone())))
+                {
+                    return Err(Err2::Ex);
+                }
             }
         }
-        // Pre-mutation phase validity + ownership (selectedRecord = default).
-        let phase_known = matches!(state.get("phase"), Some(Value::String(s)) if is_known_phase(s));
+        let selected = target.selected_record();
+        let lane_note = target.lane_note();
+        let phase_known =
+            matches!(target.record().get("phase"), Some(Value::String(s)) if is_known_phase(s));
         if !phase_known {
             // `${state.phase ?? ''}` — nullish coalescing.
-            let disp = match state.get("phase") {
+            let disp = match target.record().get("phase") {
                 None | Some(Value::Null) => String::new(),
                 Some(v) => js_disp(v),
             };
             return Ok(Out::Thrown(format!(
-                "set: refused — selected default state has missing or invalid pre-mutation phase \"{disp}\". Ownership cannot be derived from a corrupt routing record, so nothing was written. FIX: restore a valid phase before retrying."
+                "set: refused \u{2014} selected {selected} has missing or invalid pre-mutation phase \"{disp}\". Ownership cannot be derived from a corrupt routing record, so nothing was written. FIX: restore a valid phase before retrying."
             )));
         }
-        let phase_str = js_disp(state.get("phase").unwrap());
+        let phase_str = js_disp(target.record().get("phase").unwrap());
         let owner = match flags.get("owner") {
             Some(FlagV::S(s)) if !s.is_empty() => s.clone(),
             _ => {
                 return Ok(Out::Thrown(format!(
-                    "set: missing --owner — selected default state's pre-mutation phase is \"{phase_str}\". FIX: retry with --owner {phase_str}."
+                    "set: missing --owner \u{2014} selected {selected}'s pre-mutation phase is \"{phase_str}\". FIX: retry with --owner {phase_str}."
                 )));
             }
         };
         if owner != phase_str {
             return Ok(Out::Thrown(format!(
-                "set: owner mismatch — selected default state's pre-mutation phase is \"{phase_str}\", not \"{owner}\". FIX: retry with --owner {phase_str}."
+                "set: owner mismatch \u{2014} selected {selected}'s pre-mutation phase is \"{phase_str}\", not \"{owner}\". FIX: retry with --owner {phase_str}."
             )));
         }
         let mut changed: Vec<String> = Vec::new();
-        if let Some(p) = &phase_flag {
-            state.insert("phase".into(), json!(p));
-            changed.push(format!("phase={p}"));
+        {
+            let state = target.record_mut();
+            if let Some(p) = &phase_flag {
+                state.insert("phase".into(), json!(p));
+                changed.push(format!("phase={p}"));
+            }
+            if let Some(m) = flag_string(&flags, "mode") {
+                state.insert("mode".into(), json!(m));
+                changed.push(format!("mode={m}"));
+            }
+            if let Some(f) = flag_string(&flags, "feature") {
+                state.insert("feature".into(), json!(f));
+                changed.push(format!("feature={f}"));
+            }
+            if let Some(n) = flag_string(&flags, "next-action") {
+                state.insert("next_action".into(), json!(n));
+                changed.push("next_action".to_string());
+            }
+            if let Some(s) = flag_string(&flags, "summary") {
+                state.insert("summary".into(), json!(s));
+                changed.push("summary".to_string());
+            }
         }
-        if let Some(m) = flag_string(&flags, "mode") {
-            state.insert("mode".into(), json!(m));
-            changed.push(format!("mode={m}"));
-        }
-        if let Some(f) = flag_string(&flags, "feature") {
-            state.insert("feature".into(), json!(f));
-            changed.push(format!("feature={f}"));
-        }
-        if let Some(n) = flag_string(&flags, "next-action") {
-            state.insert("next_action".into(), json!(n));
-            changed.push("next_action".to_string());
-        }
-        if let Some(s) = flag_string(&flags, "summary") {
-            state.insert("summary".into(), json!(s));
-            changed.push("summary".to_string());
-        }
-        write_state(&ctx.root, &state)?;
-        drop(guard);
+        let record = target.record().clone();
+        write_through_projection(&ctx.root, &target, &record, &[])?;
+        drop(locks);
         Ok(Out::Emit(
-            Value::Object(state),
-            format!("Updated state: {}.", changed.join(" ")),
+            Value::Object(record),
+            format!("Updated state: {}.{lane_note}", changed.join(" ")),
             0,
         ))
     })();
@@ -1331,13 +1574,13 @@ fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     let out = (|| -> R2<Out> {
         if flags.get("owner").is_some() {
             return Ok(Out::Thrown(
-                "gate: --owner is not accepted — routing ownership protects generic `state set` fields only. FIX: omit --owner and use the dedicated gate command.".to_string(),
+                "gate: --owner is not accepted \u{2014} routing ownership protects generic `state set` fields only. FIX: omit --owner and use the dedicated gate command.".to_string(),
             ));
         }
         let merge = matches!(flags.get("merge"), Some(FlagV::Present));
         if merge && flags.get("name").is_some() {
             return Ok(Out::Thrown(
-                "gate: --merge cannot be combined with --name — --merge always addresses BOTH shape and execution in one call. FIX: pass --merge alone, or drop --merge and use --name to approve a single gate.".to_string(),
+                "gate: --merge cannot be combined with --name \u{2014} --merge always addresses BOTH shape and execution in one call. FIX: pass --merge alone, or drop --merge and use --name to approve a single gate.".to_string(),
             ));
         }
         let spec: Vec<(&str, Option<&[&str]>)> = if merge {
@@ -1364,56 +1607,85 @@ fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
         };
-        if lane_feature.is_some() {
-            return Err(Err2::Ex);
-        }
-        if !mutation_env_native(&ctx.root, no_lane)? {
-            return Err(Err2::Ex);
-        }
         let exec_component = merge || name == "execution";
-        let peek = read_state_peek(&ctx.root)?;
-        if exec_component && approved && matches!(peek.get("mode"), Some(Value::String(s)) if s == "high-risk")
-        {
-            return Err(Err2::Ex); // requireFreshAdvisorForHighRisk → Node
+
+        let scope = resolve_mutation_lock_scope(&ctx.root, lane_feature.as_deref(), no_lane)?;
+        let workflows = list_workflows(&ctx.root)?;
+        // requireFreshAdvisorForHighRisk (advisorRefStale, lib/state.mjs) is a
+        // separate R6 debt — decided off a silent peek, before any lock.
+        if exec_component && approved {
+            if let Some(peek) =
+                peek_target_record(&ctx.root, &scope, lane_feature.as_deref())?
+            {
+                if matches!(peek.get("mode"), Some(Value::String(s)) if s == "high-risk") {
+                    return Err(Err2::Ex);
+                }
+            }
         }
-        let guard = acquire_state_lock(&ctx.root)?;
-        let mut state = read_state_strict(&ctx.root)?;
+        let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
+        let mut target =
+            resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "gate", no_lane)?;
         if exec_component
             && approved
-            && matches!(state.get("mode"), Some(Value::String(s)) if s == "high-risk")
+            && matches!(target.record().get("mode"), Some(Value::String(s)) if s == "high-risk")
         {
-            return Err(Err2::Ex); // race: peek missed the high-risk mode
+            return Err(Err2::Ex); // race: the peek missed the high-risk mode
         }
-        if exec_component && !approved {
-            // state.gate_revoked_at = { ...state.gate_revoked_at, execution: iso }
-            let mut revoked = match state.get("gate_revoked_at") {
+        let lane_note = target.lane_note();
+        // multisession-native-9 D7 / validation-diet D15 — the plan-rev stamp is
+        // LANE-ONLY and reads the live workflow's CURRENT plan_rev.
+        let mut stamps: Vec<(String, Value)> = Vec::new();
+        if exec_component {
+            if let Some(lane) = target.lane() {
+                let live = list_workflows(&ctx.root)?;
+                if let Some(wf) = find_live_workflow(&live, lane) {
+                    let rev = if approved {
+                        wf.get("plan_rev").cloned().unwrap_or(Value::Null)
+                    } else {
+                        Value::Null
+                    };
+                    if merge {
+                        stamps.push(("shape".to_string(), rev.clone()));
+                    }
+                    stamps.push(("execution".to_string(), rev));
+                }
+            }
+        }
+        {
+            let state = target.record_mut();
+            // Revocation tracking (AO13) — execution component only.
+            if exec_component && !approved {
+                let mut revoked = match state.get("gate_revoked_at") {
+                    Some(Value::Object(m)) => m.clone(),
+                    None | Some(Value::Null) | Some(Value::Bool(_)) | Some(Value::Number(_)) => {
+                        Map::new()
+                    }
+                    Some(_) => return Err(Err2::Ex), // string/array spread exotica
+                };
+                revoked.insert("execution".into(), json!(now_iso()));
+                state.insert("gate_revoked_at".into(), Value::Object(revoked));
+            }
+            let mut gates = match state.get("approved_gates") {
                 Some(Value::Object(m)) => m.clone(),
-                None | Some(Value::Null) | Some(Value::Bool(_)) | Some(Value::Number(_)) => Map::new(),
-                Some(_) => return Err(Err2::Ex), // string/array spread exotica
+                _ => Map::new(), // both strict readers always merge an object
             };
-            revoked.insert("execution".into(), json!(now_iso()));
-            state.insert("gate_revoked_at".into(), Value::Object(revoked));
+            if merge {
+                gates.insert("shape".into(), json!(approved));
+                gates.insert("execution".into(), json!(approved));
+            } else {
+                gates.insert(name.clone(), json!(approved));
+            }
+            state.insert("approved_gates".into(), Value::Object(gates));
         }
-        let mut gates = match state.get("approved_gates") {
-            Some(Value::Object(m)) => m.clone(),
-            _ => unreachable!("strict read always merges an approved_gates object"),
-        };
-        if merge {
-            gates.insert("shape".into(), json!(approved));
-            gates.insert("execution".into(), json!(approved));
-        } else {
-            gates.insert(name.clone(), json!(approved));
-        }
-        state.insert("approved_gates".into(), Value::Object(gates));
-        // gateStamp: no live workflow (C1 gate above) → null → plain writeState.
-        write_state(&ctx.root, &state)?;
-        drop(guard);
+        let record = target.record().clone();
+        write_through_projection(&ctx.root, &target, &record, &stamps)?;
+        drop(locks);
         let text = if merge {
-            format!("Gates \"shape\" and \"execution\" set to {approved}.")
+            format!("Gates \"shape\" and \"execution\" set to {approved}.{lane_note}")
         } else {
-            format!("Gate \"{name}\" set to {approved}.")
+            format!("Gate \"{name}\" set to {approved}.{lane_note}")
         };
-        Ok(Out::Emit(Value::Object(state), text, 0))
+        Ok(Out::Emit(Value::Object(record), text, 0))
     })();
     finish(&ctx, out)
 }
@@ -1437,23 +1709,75 @@ fn run_plan_rev_bump(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCo
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
         };
-        if lane_feature.is_some() {
-            return Err(Err2::Ex);
+        // Read-only PEEK outside both locks (splr-1's canonical order:
+        // workflow:<id> FIRST, then the projection lock — never the reverse).
+        let scope = resolve_mutation_lock_scope(&ctx.root, lane_feature.as_deref(), no_lane)?;
+        let workflows = list_workflows(&ctx.root)?;
+        let peeked_id = scope
+            .feature
+            .as_deref()
+            .and_then(|f| find_live_workflow(&workflows, f))
+            .map(wf_id);
+        let _workflow_guard = match &peeked_id {
+            Some(id) => Some(acquire_workflow_lock(&ctx.root, id)?),
+            None => None,
+        };
+        let _projection_guard = acquire_named_lock(
+            &ctx.root,
+            &projection_lock_name(scope.lane, scope.feature.as_deref()),
+        )?;
+        let target =
+            resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "plan-rev bump", no_lane)?;
+        let Some(lane) = target.lane() else {
+            return Ok(Out::Thrown(
+                "plan-rev bump: refused \u{2014} resolution landed on the default (non-lane) record. plan_rev bumping is scoped to lanes only, by design (nothing else ever reads or bumps the default pipeline's plan_rev, so stamping it would be meaningless). FIX: target a lane explicitly with --lane <feature>, or bind the calling session to one first (\"state session bind --session-id <id> --lane <feature>\").".to_string(),
+            ));
+        };
+        let live = list_workflows(&ctx.root)?;
+        let Some(wf) = find_live_workflow(&live, lane) else {
+            return Ok(Out::Thrown(format!(
+                "plan-rev bump: no live workflow record found for lane \"{lane}\" \u{2014} nothing to bump. FIX: start the lane first (\"state start-feature --feature {lane} --as-lane\")."
+            )));
+        };
+        let id = wf_id(wf);
+        // The peek picked which workflow lock is held right now; a different
+        // resolution means that lock protects the wrong record.
+        if peeked_id.as_deref() != Some(id.as_str()) {
+            return Ok(Out::Thrown(format!(
+                "plan-rev bump: the target lane's workflow changed while this call was starting (expected \"{}\", resolved \"{id}\"), so the workflow lock this call holds does not protect it. Nothing was written. FIX: re-run the bump.",
+                peeked_id.as_deref().unwrap_or("none")
+            )));
         }
-        if !mutation_env_native(&ctx.root, no_lane)? {
-            return Err(Err2::Ex);
-        }
-        if !no_lane {
-            // resolveMutationLockScope's fail-open readState peek — corrupt
-            // state.json warns (V8 bytes) in Node before the strict throw.
-            let _ = read_state_peek(&ctx.root)?;
-        }
-        let guard = acquire_state_lock(&ctx.root)?;
-        let _state = read_state_strict(&ctx.root)?; // resolveMutationTarget's strict read
-        drop(guard);
-        Ok(Out::Thrown(
-            "plan-rev bump: refused — resolution landed on the default (non-lane) record. plan_rev bumping is scoped to lanes only, by design (nothing else ever reads or bumps the default pipeline's plan_rev, so stamping it would be meaningless). FIX: target a lane explicitly with --lane <feature>, or bind the calling session to one first (\"state session bind --session-id <id> --lane <feature>\").".to_string(),
-        ))
+        let updated = update_workflow_assuming_lock_with(&ctx.root, &id, |current| {
+            // `(current.plan_rev || 0) + 1` — a non-numeric plan_rev would take
+            // JS's own coercion path (string concat), which this port delegates.
+            let base = match current.get("plan_rev") {
+                Some(Value::Number(n)) => n.as_f64().ok_or(Err2::Ex)?,
+                None | Some(Value::Null) | Some(Value::Bool(false)) => 0.0,
+                Some(Value::String(s)) if s.is_empty() => 0.0,
+                Some(_) => return Err(Err2::Ex),
+            };
+            let mut patch = Map::new();
+            patch.insert(
+                "plan_rev".into(),
+                Value::Number(serde_json::Number::from_f64(base + 1.0).ok_or(Err2::Ex)?),
+            );
+            Ok(patch)
+        })?;
+        let rebuilt = rebuild_lane_projection(&ctx.root, lane)?;
+        let plan_rev = updated.get("plan_rev").cloned().unwrap_or(Value::Null);
+        let mut result = Map::new();
+        result.insert("feature".into(), json!(lane));
+        result.insert("plan_rev".into(), plan_rev.clone());
+        result.insert(
+            "lane".into(),
+            rebuilt.map(Value::Object).unwrap_or(Value::Null),
+        );
+        let text = format!(
+            "Bumped plan_rev to {} for lane \"{lane}\" (workflow); lane projection rebuilt.",
+            js_disp(&plan_rev)
+        );
+        Ok(Out::Emit(Value::Object(result), text, 0))
     })();
     finish(&ctx, out)
 }
@@ -1849,36 +2173,45 @@ fn run_scribing_run(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCod
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
         };
-        if lane_feature.is_some() {
-            return Err(Err2::Ex);
-        }
-        if !mutation_env_native(&ctx.root, no_lane)? {
-            return Err(Err2::Ex);
-        }
-        let _peek = read_state_peek(&ctx.root)?; // lock-scope peek: corrupt → V8 warn on Node
-        let guard = acquire_state_lock(&ctx.root)?;
-        let mut state = read_state_strict(&ctx.root)?;
-        let active_feature_at_call = state.get("feature").cloned().unwrap_or(Value::Null);
-        // tst-1: only a call stamping its OWN active feature (or none) produces
-        // the phase transition; a mismatch is the si-1 ledger-only repair path.
-        let stamped_active = !truthy(&active_feature_at_call)
-            || opt_strict_eq(Some(&active_feature_at_call), Some(&Value::String(feature.clone())));
+        let scope = resolve_mutation_lock_scope(&ctx.root, lane_feature.as_deref(), no_lane)?;
+        let workflows = list_workflows(&ctx.root)?;
+        let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
+        let mut target =
+            resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "scribing-run", no_lane)?;
+        let lane_note = target.lane_note();
+        let is_lane = target.lane().is_some();
+        let active_feature_at_call = target.record().get("feature").cloned().unwrap_or(Value::Null);
+        // tst-1: only a call that ACTUALLY produces a phase transition on the
+        // record it targets passes the D3 door — a lane call always does; a
+        // default-record call only when it stamps its OWN active feature (or
+        // none). A mismatch is the si-1 ledger-only repair path.
+        let stamped_active = is_lane
+            || !truthy(&active_feature_at_call)
+            || opt_strict_eq(
+                Some(&active_feature_at_call),
+                Some(&Value::String(feature.clone())),
+            );
         if stamped_active {
-            if let Some(reason) = check_scribing_run_phase(state.get("phase")) {
+            if let Some(reason) = check_scribing_run_phase(target.record().get("phase")) {
                 return Ok(Out::Thrown(reason));
             }
-            let mut run = Map::new();
-            run.insert("feature".into(), json!(feature));
-            run.insert("date".into(), json!(date));
-            run.insert("at".into(), json!(at));
-            run.insert("areas_synced".into(), Value::Array(areas.clone()));
-            run.insert("next_action".into(), json!(next_action));
-            state.insert("last_scribing_run".into(), Value::Object(run));
-            state.insert("phase".into(), json!("compounding"));
-            state.insert("next_action".into(), json!(next_action));
-            write_state(&ctx.root, &state)?;
+            {
+                let state = target.record_mut();
+                let mut run = Map::new();
+                run.insert("feature".into(), json!(feature));
+                run.insert("date".into(), json!(date));
+                run.insert("at".into(), json!(at));
+                run.insert("areas_synced".into(), Value::Array(areas.clone()));
+                run.insert("next_action".into(), json!(next_action));
+                state.insert("last_scribing_run".into(), Value::Object(run));
+                state.insert("phase".into(), json!("compounding"));
+                state.insert("next_action".into(), json!(next_action));
+            }
+            let record = target.record().clone();
+            write_through_projection(&ctx.root, &target, &record, &[])?;
         }
-        drop(guard);
+        let record = target.record().clone();
+        drop(locks);
         // si-1: the durable ledger append — ALWAYS, even on the repair path.
         // Fail-open; the Node warning embeds a Node error message, not replicated.
         let _ = append_jsonl(
@@ -1889,12 +2222,12 @@ fn run_scribing_run(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCod
             String::new()
         } else {
             format!(
-                " — recorded in the durable ledger only: the default record tracks feature \"{}\", not \"{feature}\", so its phase/last_scribing_run were left untouched (repair path for an orphaned feature; `bee status --json`'s scribing_debt.orphaned names it).",
+                " \u{2014} recorded in the durable ledger only: the default record tracks feature \"{}\", not \"{feature}\", so its phase/last_scribing_run were left untouched (repair path for an orphaned feature; `bee status --json`'s scribing_debt.orphaned names it).",
                 js_disp(&active_feature_at_call)
             )
         };
-        let text = format!("Recorded scribing run for \"{feature}\" at {at}.{repair_note}");
-        Ok(Out::Emit(Value::Object(state), text, 0))
+        let text = format!("Recorded scribing run for \"{feature}\" at {at}.{lane_note}{repair_note}");
+        Ok(Out::Emit(Value::Object(record), text, 0))
     })();
     finish(&ctx, out)
 }
@@ -1931,35 +2264,40 @@ fn run_compounding_run(flags: Flags, use_json: bool, t0: Instant) -> Option<Exit
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
         };
-        if lane_feature.is_some() {
-            return Err(Err2::Ex);
-        }
-        if !mutation_env_native(&ctx.root, no_lane)? {
-            return Err(Err2::Ex);
-        }
-        let _peek = read_state_peek(&ctx.root)?;
-        let guard = acquire_state_lock(&ctx.root)?;
-        let mut state = read_state_strict(&ctx.root)?;
-        if let Some(reason) = check_compounding_run_phase(state.get("phase")) {
+        let scope = resolve_mutation_lock_scope(&ctx.root, lane_feature.as_deref(), no_lane)?;
+        let workflows = list_workflows(&ctx.root)?;
+        let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
+        let mut target = resolve_mutation_target(
+            &ctx.root,
+            lane_feature.as_deref(),
+            "compounding-run",
+            no_lane,
+        )?;
+        let lane_note = target.lane_note();
+        if let Some(reason) = check_compounding_run_phase(target.record().get("phase")) {
             return Ok(Out::Thrown(reason));
         }
-        let mut run = Map::new();
-        run.insert("feature".into(), json!(feature));
-        run.insert("date".into(), json!(date));
-        run.insert("at".into(), json!(at));
-        run.insert("learnings".into(), json!(learnings));
-        run.insert(
-            "next_action".into(),
-            next_action.as_ref().map(|n| json!(n)).unwrap_or(Value::Null),
-        );
-        state.insert("last_compounding_run".into(), Value::Object(run));
-        if let Some(n) = &next_action {
-            state.insert("next_action".into(), json!(n));
+        {
+            let state = target.record_mut();
+            let mut run = Map::new();
+            run.insert("feature".into(), json!(feature));
+            run.insert("date".into(), json!(date));
+            run.insert("at".into(), json!(at));
+            run.insert("learnings".into(), json!(learnings));
+            run.insert(
+                "next_action".into(),
+                next_action.as_ref().map(|n| json!(n)).unwrap_or(Value::Null),
+            );
+            state.insert("last_compounding_run".into(), Value::Object(run));
+            if let Some(n) = &next_action {
+                state.insert("next_action".into(), json!(n));
+            }
         }
-        write_state(&ctx.root, &state)?;
-        drop(guard);
-        let text = format!("Recorded compounding run for \"{feature}\" at {at}.");
-        Ok(Out::Emit(Value::Object(state), text, 0))
+        let record = target.record().clone();
+        write_through_projection(&ctx.root, &target, &record, &[])?;
+        drop(locks);
+        let text = format!("Recorded compounding run for \"{feature}\" at {at}.{lane_note}");
+        Ok(Out::Emit(Value::Object(record), text, 0))
     })();
     finish(&ctx, out)
 }
@@ -2187,7 +2525,55 @@ fn run_session_unbind(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
     finish(&ctx, out)
 }
 
-// ─── state handoff write / adopt / show (C1 legacy single-file path) ───────
+// ─── state handoff write / adopt / show ────────────────────────────────────
+//
+// multisession-native-15 (D5): each verb first resolves WHICH workflow it
+// targets and, when one resolves, reads/writes/adopts THAT workflow's own
+// mailbox (.bee/runtime/handoffs/<workflow-id>/NNNN.json) instead of the
+// single legacy .bee/HANDOFF.json — every mailbox mutation then rebuilds the
+// legacy file as a display projection. A repo with zero workflow records (C1),
+// or a call where nothing resolves, keeps the legacy single-file path.
+
+/// bee.mjs resolveHandoffWorkflowId — explicit --lane > the calling session's
+/// bound lane > the DEFAULT record's own live workflow > null. A --lane or a
+/// bound session naming NO live workflow refuses loudly (never guesses back).
+fn resolve_handoff_workflow_id(
+    root: &Path,
+    lane_feature: Option<&str>,
+    session_id_flag: Option<&str>,
+) -> Result<Option<String>, Err2> {
+    let workflows = list_workflows(root)?;
+    if workflows.is_empty() {
+        return Ok(None); // C1: no workflow records anywhere.
+    }
+    if let Some(f) = lane_feature {
+        return match find_live_workflow(&workflows, f) {
+            Some(wf) => Ok(Some(wf_id(wf))),
+            None => Err(Err2::Msg(format!(
+                "state handoff: refused \u{2014} --lane \"{f}\" names no live workflow (no .bee/runtime/workflows/*/state.json with feature \"{f}\" and status !== closed). FIX: start it first (\"state start-feature --feature {f} --as-lane\"), or omit --lane."
+            ))),
+        };
+    }
+    let (sid, bound) = session_binding(session_id_flag, root)?;
+    if let Some(bound) = bound {
+        return match find_live_workflow(&workflows, &bound) {
+            Some(wf) => Ok(Some(wf_id(wf))),
+            None => Err(Err2::Msg(format!(
+                "state handoff: refused \u{2014} calling session \"{}\" is bound to lane \"{bound}\" but no live workflow names it. FIX: start the lane, unbind the session, or pass --lane explicitly.",
+                sid_disp(&sid)
+            ))),
+        };
+    }
+    let default_record = read_state_strict(root)?;
+    if let Some(v) = default_record.get("feature") {
+        if truthy(v) {
+            if let Some(wf) = find_live_workflow(&workflows, &js_disp(v)) {
+                return Ok(Some(wf_id(wf)));
+            }
+        }
+    }
+    Ok(None) // nothing resolves — the legacy single-file path handles this call
+}
 
 fn run_handoff_write(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(
@@ -2211,17 +2597,12 @@ fn run_handoff_write(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCo
         Err(code) => return Some(code),
     };
     let out = (|| -> R2<Out> {
-        let _lane = match optional_lane_flag(&flags, "state handoff write") {
+        let lane = match optional_lane_flag(&flags, "state handoff write") {
             Ok(v) => v,
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
         };
-        // resolveHandoffWorkflowId returns null FIRST when zero workflow
-        // records exist — before --lane / session resolution — so the whole
-        // C1 branch is lane/session-blind. Any workflow record → Node.
-        if workflows_present(&ctx.root) {
-            return Err(Err2::Ex);
-        }
+        let target_role = flag_string(&flags, "target-role");
         let mut input = Map::new();
         input.insert("kind".into(), json!(kind));
         if let Some(v) = flag_string(&flags, "feature") {
@@ -2261,6 +2642,35 @@ fn run_handoff_write(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCo
                 }
             }
         }
+        let workflow_id = match resolve_handoff_workflow_id(
+            &ctx.root,
+            lane.as_deref(),
+            flag_value(&flags, "session-id").as_deref(),
+        ) {
+            Ok(v) => v,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
+        if let Some(wid) = workflow_id {
+            let record = match write_mailbox_handoff(
+                &ctx.root,
+                &wid,
+                &input,
+                target_role.as_deref(),
+            ) {
+                Ok(r) => r,
+                Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+                Err(Err2::Ex) => return Err(Err2::Ex),
+            };
+            rebuild_handoff_projection(&ctx.root)?;
+            let kind_disp = js_disp_opt(record.get("kind"));
+            let seq_disp = js_disp_opt(record.get("seq"));
+            let text = format!(
+                "Wrote \"{kind_disp}\" handoff to workflow \"{wid}\" mailbox (seq {seq_disp})."
+            );
+            return Ok(Out::Emit(Value::Object(record), text, 0));
+        }
+        // Legacy single-file path (C1).
         let record = match write_handoff(&ctx.root, &input, &kind) {
             Ok(r) => r,
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
@@ -2294,14 +2704,53 @@ fn run_handoff_adopt(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCo
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
         };
-        let _lane = match optional_lane_flag(&flags, "state handoff adopt") {
+        let lane = match optional_lane_flag(&flags, "state handoff adopt") {
             Ok(v) => v,
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
         };
-        if workflows_present(&ctx.root) {
-            return Err(Err2::Ex);
+        let target_role = flag_string(&flags, "target-role");
+        let workflow_id =
+            match resolve_handoff_workflow_id(&ctx.root, lane.as_deref(), Some(&session_id)) {
+                Ok(v) => v,
+                Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+                Err(Err2::Ex) => return Err(Err2::Ex),
+            };
+        if let Some(wid) = workflow_id {
+            let adopted = match adopt_mailbox_handoff(
+                &ctx.root,
+                &wid,
+                &session_id,
+                target_role.as_deref(),
+            ) {
+                Ok(v) => v,
+                Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+                Err(Err2::Ex) => return Err(Err2::Ex),
+            };
+            return match adopted {
+                MailboxAdopt::Fail { reason } => {
+                    Ok(Out::Thrown(format!("state handoff adopt: {reason}")))
+                }
+                MailboxAdopt::Ok { claim, previous_owner, next_cell, workflow_id, seq } => {
+                    rebuild_handoff_projection(&ctx.root)?;
+                    let mut result = Map::new();
+                    result.insert("ok".into(), json!(true));
+                    result.insert("claim".into(), claim.unwrap_or(Value::Null));
+                    if let Some(prev) = previous_owner {
+                        // undefined is dropped by JSON.stringify.
+                        result.insert("previous_owner".into(), prev);
+                    }
+                    result.insert("next_cell".into(), json!(next_cell));
+                    result.insert("workflow_id".into(), json!(workflow_id));
+                    result.insert("seq".into(), json!(seq));
+                    let text = format!(
+                        "Adopted the handoff's carried claim on \"{next_cell}\" into session \"{session_id}\" (workflow \"{wid}\"); handoff cleared."
+                    );
+                    Ok(Out::Emit(Value::Object(result), text, 0))
+                }
+            };
         }
+        // Legacy single-file path (C1).
         match adopt_handoff(&ctx.root, &session_id) {
             Err(Err2::Msg(m)) => Ok(Out::Thrown(m)), // requireId's own throws, unprefixed
             Err(Err2::Ex) => Err(Err2::Ex),
@@ -2313,7 +2762,6 @@ fn run_handoff_adopt(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCo
                 result.insert("ok".into(), json!(true));
                 result.insert("claim".into(), Value::Object(claim));
                 if let Some(prev) = previous_owner {
-                    // previous_owner: undefined is dropped by JSON.stringify.
                     result.insert("previous_owner".into(), prev);
                 }
                 result.insert("next_cell".into(), json!(next_cell));
@@ -2336,15 +2784,28 @@ fn run_handoff_show(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCod
         Err(code) => return Some(code),
     };
     let out = (|| -> R2<Out> {
-        let _lane = match optional_lane_flag(&flags, "state handoff show") {
+        let lane = match optional_lane_flag(&flags, "state handoff show") {
             Ok(v) => v,
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
         };
-        if workflows_present(&ctx.root) {
-            return Err(Err2::Ex);
-        }
-        let handoff = read_handoff(&ctx.root)?;
+        let target_role = flag_string(&flags, "target-role");
+        let workflow_id = match resolve_handoff_workflow_id(
+            &ctx.root,
+            lane.as_deref(),
+            flag_value(&flags, "session-id").as_deref(),
+        ) {
+            Ok(v) => v,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
+        let handoff: Option<Value> = match &workflow_id {
+            Some(wid) => {
+                newest_open_handoff_mailbox_record(&ctx.root, wid, target_role.as_deref())?
+                    .map(Value::Object)
+            }
+            None => read_handoff(&ctx.root)?,
+        };
         let m = match handoff {
             None => return Ok(Out::Emit(Value::Null, "No handoff.".to_string(), 0)),
             Some(v) if !truthy(&v) => {
@@ -2370,11 +2831,247 @@ fn run_handoff_show(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCod
     finish(&ctx, out)
 }
 
+// ─── state workflows list / close (workflow-lifecycle wl-2) ────────────────
+
+fn run_workflows_list(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(&flags, &[]) {
+        return None;
+    }
+    let ctx = match go("state workflows list", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = (|| -> R2<Out> {
+        let mut records = list_workflows(&ctx.root)?;
+        workflows_list_sort(&mut records)?;
+        let text = if records.is_empty() {
+            "No workflow records.".to_string()
+        } else {
+            records
+                .iter()
+                .map(|r| {
+                    format!(
+                        "{} feature={} status={} phase={} created_at={}",
+                        js_disp_opt(r.get("id")),
+                        js_disp_opt(r.get("feature")),
+                        js_disp_opt(r.get("status")),
+                        js_disp_opt(r.get("phase")),
+                        js_disp_opt(r.get("created_at")),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let result = Value::Array(records.into_iter().map(Value::Object).collect());
+        Ok(Out::Emit(result, text, 0))
+    })();
+    finish(&ctx, out)
+}
+
+/// bee.mjs resolveActiveFeatureForWorkflowsClose (review-p1-fixes p1-3, F5):
+/// `Ok(feature)` on a real resolution (None is a definite "idle" answer),
+/// `Err(reason)` when resolution ITSELF failed.
+fn resolve_active_feature_for_workflows_close(
+    root: &Path,
+) -> Ex<Result<Option<String>, String>> {
+    match resolve_mutation_target(root, None, "workflows close", false) {
+        Ok(t) => Ok(Ok(match t.record().get("feature") {
+            Some(v) if truthy(v) => Some(js_disp(v)),
+            _ => None,
+        })),
+        Err(Err2::Msg(m)) => Ok(Err(m)),
+        Err(Err2::Ex) => Err(Exotic),
+    }
+}
+
+/// The shared tail of both unresolved-active refusals (F5).
+fn workflows_close_unresolved_active_tail(reason: &str) -> String {
+    format!(
+        "Underlying resolution failure: {reason}\nA guard that cannot establish its precondition refuses \u{2014} it never proceeds on a null active feature.\nFIX: repair the routing record named above (restore .bee/state.json, start or unbind the session-bound lane), then retry \u{2014} or close one record explicitly with `bee state workflows close --id <id>`, the one mode that never consults the active feature."
+    )
+}
+
+fn closed_row(record: &Map<String, Value>) -> Value {
+    let mut row = Map::new();
+    row.insert("id".into(), record.get("id").cloned().unwrap_or(Value::Null));
+    row.insert(
+        "feature".into(),
+        record.get("feature").cloned().unwrap_or(Value::Null),
+    );
+    Value::Object(row)
+}
+
+fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(&flags, &["feature", "id", "all-but-active"]) {
+        return None;
+    }
+    if !bool_flag_ok(&flags, "all-but-active") {
+        return None;
+    }
+    let ctx = match go("state workflows close", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = (|| -> R2<Out> {
+        let has_feature = matches!(flags.get("feature"), Some(FlagV::S(s)) if !s.is_empty());
+        let has_id = matches!(flags.get("id"), Some(FlagV::S(s)) if !s.is_empty());
+        let has_all_but_active = matches!(flags.get("all-but-active"), Some(FlagV::Present));
+        let mode_count =
+            [has_feature, has_id, has_all_but_active].iter().filter(|b| **b).count();
+        if mode_count != 1 {
+            return Ok(Out::Thrown(format!(
+                "workflows close: requires exactly one of --feature <feature>, --id <id>, or --all-but-active. Example: {EXAMPLE_WORKFLOWS_CLOSE}"
+            )));
+        }
+        // F5: computed for every mode, CONSULTED only by the two it protects.
+        let active = resolve_active_feature_for_workflows_close(&ctx.root)?;
+        let active_feature = match &active {
+            Ok(f) => f.clone(),
+            Err(_) => None,
+        };
+
+        if has_id {
+            let id = flag_string(&flags, "id").unwrap_or_default();
+            let records = list_workflows(&ctx.root)?;
+            let live = records.iter().find(|r| {
+                js_strict_eq(r.get("id").unwrap_or(&Value::Null), &Value::String(id.clone()))
+                    && !js_strict_eq(r.get("status").unwrap_or(&Value::Null), &json!("closed"))
+            });
+            if live.is_none() {
+                return Ok(Out::Thrown(format!(
+                    "workflows close --id: no live workflow record found with id \"{id}\"."
+                )));
+            }
+            let mut patch = Map::new();
+            patch.insert("status".into(), json!("closed"));
+            let closed = update_workflow(&ctx.root, &id, patch)?;
+            let text = format!(
+                "Closed 1 workflow record: {} (feature \"{}\").",
+                js_disp_opt(closed.get("id")),
+                js_disp_opt(closed.get("feature"))
+            );
+            let mut result = Map::new();
+            result.insert("closed".into(), Value::Array(vec![closed_row(&closed)]));
+            return Ok(Out::Emit(Value::Object(result), text, 0));
+        }
+
+        if has_feature {
+            let feature = flag_string(&flags, "feature").unwrap_or_default();
+            let Ok(_) = &active else {
+                let reason = active.unwrap_err();
+                return Ok(Out::Thrown(format!(
+                    "workflows close --feature: refused \u{2014} the currently active feature could not be resolved, so the guard that keeps \"{feature}\" from being closed while it IS the active feature cannot be evaluated. Nothing was closed.\n{}",
+                    workflows_close_unresolved_active_tail(&reason)
+                )));
+            };
+            if active_feature.as_deref() == Some(feature.as_str()) {
+                return Ok(Out::Thrown(format!(
+                    "workflows close --feature: refused \u{2014} \"{feature}\" is the currently active feature; use --id <id> to close its record explicitly."
+                )));
+            }
+            let records = list_workflows(&ctx.root)?;
+            let matches: Vec<String> = records
+                .iter()
+                .filter(|r| {
+                    js_strict_eq(
+                        r.get("feature").unwrap_or(&Value::Null),
+                        &Value::String(feature.clone()),
+                    ) && !js_strict_eq(
+                        r.get("status").unwrap_or(&Value::Null),
+                        &json!("closed"),
+                    )
+                })
+                .map(wf_id)
+                .collect();
+            if matches.is_empty() {
+                return Ok(Out::Thrown(format!(
+                    "workflows close --feature: no live workflow record found for feature \"{feature}\"."
+                )));
+            }
+            let mut closed: Vec<Map<String, Value>> = Vec::new();
+            for id in matches {
+                let mut patch = Map::new();
+                patch.insert("status".into(), json!("closed"));
+                closed.push(update_workflow(&ctx.root, &id, patch)?);
+            }
+            let ids: Vec<String> = closed.iter().map(|r| js_disp_opt(r.get("id"))).collect();
+            let text = format!(
+                "Closed {} workflow record(s) for feature \"{feature}\": {}.",
+                closed.len(),
+                ids.join(", ")
+            );
+            let mut result = Map::new();
+            result.insert(
+                "closed".into(),
+                Value::Array(closed.iter().map(closed_row).collect()),
+            );
+            return Ok(Out::Emit(Value::Object(result), text, 0));
+        }
+
+        // --all-but-active
+        let Ok(_) = &active else {
+            let reason = active.unwrap_err();
+            return Ok(Out::Thrown(format!(
+                "workflows close --all-but-active: refused \u{2014} the currently active feature could not be resolved, so \"all but active\" would silently degrade into \"all\": every live workflow record, in-flight work included, would be closed. Nothing was closed.\n{}",
+                workflows_close_unresolved_active_tail(&reason)
+            )));
+        };
+        // state.mjs closeWorkflowsForFeature({keepFeature}).
+        let keep = active_feature
+            .as_deref()
+            .map(js_trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        let records = list_workflows(&ctx.root)?;
+        let mut closed: Vec<Value> = Vec::new();
+        for record in &records {
+            if js_strict_eq(record.get("status").unwrap_or(&Value::Null), &json!("closed")) {
+                continue;
+            }
+            if let Some(keep) = &keep {
+                if js_strict_eq(
+                    record.get("feature").unwrap_or(&Value::Null),
+                    &Value::String(keep.clone()),
+                ) {
+                    continue;
+                }
+            }
+            let id = wf_id(record);
+            let mut patch = Map::new();
+            patch.insert("status".into(), json!("closed"));
+            update_workflow(&ctx.root, &id, patch)?;
+            closed.push(closed_row(record));
+        }
+        if closed.is_empty() {
+            return Ok(Out::Thrown(
+                "workflows close --all-but-active: nothing to close \u{2014} no live workflow record other than the active feature.".to_string(),
+            ));
+        }
+        let ids: Vec<String> = closed
+            .iter()
+            .map(|r| js_disp_opt(jget(r, "id")))
+            .collect();
+        let text = format!(
+            "Closed {} workflow record(s), kept active feature \"{}\": {}.",
+            closed.len(),
+            active_feature.as_deref().unwrap_or("(none)"),
+            ids.join(", ")
+        );
+        let mut result = Map::new();
+        result.insert("closed".into(), Value::Array(closed));
+        Ok(Out::Emit(Value::Object(result), text, 0))
+    })();
+    finish(&ctx, out)
+}
+
 // ─── tests ─────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::verbs::workflow_store::{
+        lanes_dir, list_handoff_mailbox, workflow_state_path, workflows_dir,
+    };
 
     fn tmp_root() -> tempfile::TempDir {
         tempfile::tempdir().unwrap()
@@ -2776,6 +3473,376 @@ mod tests {
         }
         // The pre-existing (foreign) gate file must survive our failed attempt.
         assert!(claims.join("next.adopting").exists());
+    }
+
+    // ── the lane/workflow seam (the R6 "C1 gate" is gone) ─────────────────
+
+    fn write_workflow(root: &Path, id: &str, body: Value) {
+        let dir = workflows_dir(root).join(id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("state.json"), serde_json::to_string(&body).unwrap()).unwrap();
+    }
+
+    fn read_workflow_file(root: &Path, id: &str) -> Value {
+        serde_json::from_str(&std::fs::read_to_string(workflow_state_path(root, id)).unwrap())
+            .unwrap()
+    }
+
+    fn write_lane_file(root: &Path, feature: &str, content: &str) {
+        std::fs::create_dir_all(lanes_dir(root)).unwrap();
+        std::fs::write(lanes_dir(root).join(format!("{feature}.json")), content).unwrap();
+    }
+
+    /// The session id the resolver will actually look for. resolveSessionId's
+    /// env chain (BEE_SESSION_ID / CLAUDE_CODE_SESSION_ID) OUTRANKS single-live
+    /// -session adoption, and a Claude Code test runner really does export
+    /// CLAUDE_CODE_SESSION_ID — so a fixture that hard-codes "sess-1" would be
+    /// invisible to the very code under test. Ask the resolver instead.
+    fn fixture_session_id(root: &Path) -> String {
+        ok(resolve_session_id_no_flag(root)).unwrap_or_else(|| "sess-1".to_string())
+    }
+
+    fn write_session(root: &Path, id: &str, lane: Option<&str>) {
+        let dir = sessions_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut rec = Map::new();
+        rec.insert("id".into(), json!(id));
+        rec.insert("last_heartbeat".into(), json!(now_iso()));
+        if let Some(l) = lane {
+            rec.insert("lane".into(), json!(l));
+        }
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            jsjson::stringify(&Value::Object(rec)),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn mutation_scope_follows_lane_then_session_binding_then_default_feature() {
+        let tmp = tmp_root();
+        write_state_file(tmp.path(), r#"{"phase":"planning","feature":"default-f"}"#);
+        // Explicit --lane always wins.
+        let s = ok(resolve_mutation_lock_scope(tmp.path(), Some("lane-a"), false));
+        assert_eq!(s.feature.as_deref(), Some("lane-a"));
+        assert!(s.lane);
+        assert_eq!(projection_lock_name(s.lane, s.feature.as_deref()), "lane:lane-a");
+        // --no-lane forces the default record AND skips session resolution.
+        let s = ok(resolve_mutation_lock_scope(tmp.path(), None, true));
+        assert!(s.feature.is_none() && !s.lane);
+        // A bound session targets its lane.
+        let sid = fixture_session_id(tmp.path());
+        write_session(tmp.path(), &sid, Some("lane-b"));
+        let s = ok(resolve_mutation_lock_scope(tmp.path(), None, false));
+        assert_eq!(s.feature.as_deref(), Some("lane-b"));
+        assert!(s.lane);
+        // Unbound: the default record's own feature, lane = false.
+        write_session(tmp.path(), &sid, None);
+        let s = ok(resolve_mutation_lock_scope(tmp.path(), None, false));
+        assert_eq!(s.feature.as_deref(), Some("default-f"));
+        assert!(!s.lane);
+        assert_eq!(projection_lock_name(s.lane, s.feature.as_deref()), "state");
+    }
+
+    #[test]
+    fn lane_resolution_refusals_are_byte_exact_and_never_guess_back() {
+        let tmp = tmp_root();
+        match resolve_mutation_target(tmp.path(), Some("ghost"), "set", false) {
+            Err(Err2::Msg(m)) => assert_eq!(
+                m,
+                "set: refused — lane \"ghost\" does not exist (no .bee/lanes/ghost.json). FIX: start it first (\"state start-feature --feature ghost --as-lane\"), then retry."
+            ),
+            _ => panic!("expected the LANE_MISSING refusal"),
+        }
+        let sid = fixture_session_id(tmp.path());
+        write_session(tmp.path(), &sid, Some("ghost"));
+        match resolve_mutation_target(tmp.path(), None, "gate", false) {
+            Err(Err2::Msg(m)) => assert_eq!(
+                m,
+                format!("gate: refused — calling session \"{sid}\" is bound to lane \"ghost\" but no .bee/lanes/ghost.json exists; resolution never guesses back to the default record. FIX: start the lane (\"state start-feature --feature ghost --as-lane\"), unbind the session, or pass --no-lane to target the default record explicitly.")
+            ),
+            _ => panic!("expected the bound-lane refusal"),
+        }
+        // --no-lane is the documented escape back to the default record.
+        assert!(matches!(
+            ok(resolve_mutation_target(tmp.path(), None, "gate", true)),
+            Target::Default { .. }
+        ));
+        // A present-but-corrupt lane record refuses instead of defaulting.
+        write_lane_file(tmp.path(), "ghost", "{nope");
+        assert!(matches!(
+            resolve_mutation_target(tmp.path(), Some("ghost"), "set", false),
+            Err(Err2::Msg(_))
+        ));
+    }
+
+    #[test]
+    fn lane_mutation_writes_through_the_live_workflow_record() {
+        let tmp = tmp_root();
+        write_lane_file(
+            tmp.path(),
+            "f1",
+            r#"{"feature":"f1","phase":"planning","created_at":"2026-01-01T00:00:00.000Z"}"#,
+        );
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","status":"active","phase":"planning",
+                   "plan_rev":2,"created_at":"2026-01-02T00:00:00.000Z"}),
+        );
+        let mut target = ok(resolve_mutation_target(tmp.path(), Some("f1"), "gate", false));
+        assert_eq!(target.selected_record(), "lane \"f1\"");
+        assert_eq!(target.lane_note(), " (lane \"f1\")");
+        {
+            let rec = target.record_mut();
+            let mut gates = default_gates();
+            gates.insert("execution".into(), json!(true));
+            rec.insert("approved_gates".into(), Value::Object(gates));
+            rec.insert("phase".into(), json!("swarming"));
+        }
+        let record = target.record().clone();
+        let stamps = vec![("execution".to_string(), json!(2))];
+        ok(write_through_projection(tmp.path(), &target, &record, &stamps));
+        // The WORKFLOW record took the D1 fields and the plan-rev stamp…
+        let wf = read_workflow_file(tmp.path(), "wf-1");
+        assert_eq!(wf["phase"], json!("swarming"));
+        assert_eq!(wf["feature"], json!("f1"), "identity never patched");
+        assert_eq!(
+            wf["gates"]["execution"],
+            json!({"approved":true,"approved_for_plan_rev":2})
+        );
+        assert_eq!(
+            wf["gates"]["context"],
+            json!({"approved":false,"approved_for_plan_rev":null})
+        );
+        // …and the lane projection was rebuilt FROM it ("record wins").
+        let lane = ok(read_lane_strict(tmp.path(), "f1")).unwrap();
+        assert_eq!(lane.get("phase"), Some(&json!("swarming")));
+        assert_eq!(
+            jsjson::stringify(lane.get("approved_gates").unwrap()),
+            r#"{"context":false,"shape":false,"execution":true,"review":false}"#
+        );
+        assert_eq!(lane.get("created_at"), Some(&json!("2026-01-01T00:00:00.000Z")));
+        // A lane mutation never touches .bee/state.json.
+        assert!(!state_path(tmp.path()).exists());
+    }
+
+    #[test]
+    fn a_plan_rev_bump_flips_the_stamped_gate_in_the_same_projection() {
+        let tmp = tmp_root();
+        write_lane_file(tmp.path(), "f1", r#"{"feature":"f1","phase":"planning"}"#);
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","status":"active","phase":"planning","plan_rev":1,
+                   "created_at":"2026-01-01T00:00:00.000Z",
+                   "gates":{"execution":{"approved":true,"approved_for_plan_rev":1},
+                            "context":{"approved":true,"approved_for_plan_rev":null}}}),
+        );
+        // Before the bump, execution projects effective.
+        let lane = ok(rebuild_lane_projection(tmp.path(), "f1")).unwrap();
+        assert_eq!(
+            jsjson::stringify(lane.get("approved_gates").unwrap()),
+            r#"{"context":true,"shape":false,"execution":true,"review":false}"#
+        );
+        let updated = ok(update_workflow_assuming_lock_with(tmp.path(), "wf-1", |current| {
+            let base = current.get("plan_rev").and_then(Value::as_f64).unwrap_or(0.0);
+            let mut patch = Map::new();
+            patch.insert(
+                "plan_rev".into(),
+                Value::Number(serde_json::Number::from_f64(base + 1.0).unwrap()),
+            );
+            Ok(patch)
+        }));
+        assert_eq!(jsjson::stringify(updated.get("plan_rev").unwrap()), "2");
+        let lane = ok(rebuild_lane_projection(tmp.path(), "f1")).unwrap();
+        // execution was stamped for rev 1 → ineffective at rev 2; context is
+        // rev-immune (never stamped) and survives.
+        assert_eq!(
+            jsjson::stringify(lane.get("approved_gates").unwrap()),
+            r#"{"context":true,"shape":false,"execution":false,"review":false}"#
+        );
+    }
+
+    #[test]
+    fn default_mutation_routes_through_its_own_live_workflow() {
+        let tmp = tmp_root();
+        write_state_file(tmp.path(), r#"{"phase":"planning","feature":"f1","workers":[]}"#);
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","status":"active","phase":"planning",
+                   "plan_rev":0,"summary":"","next_action":"",
+                   "created_at":"2026-01-01T00:00:00.000Z"}),
+        );
+        let mut target = ok(resolve_mutation_target(tmp.path(), None, "set", true));
+        assert_eq!(target.selected_record(), "default state");
+        assert_eq!(target.lane_note(), "");
+        target.record_mut().insert("phase".into(), json!("swarming"));
+        target.record_mut().insert("summary".into(), json!("S"));
+        let record = target.record().clone();
+        ok(write_through_projection(tmp.path(), &target, &record, &[]));
+        let wf = read_workflow_file(tmp.path(), "wf-1");
+        assert_eq!(wf["phase"], json!("swarming"));
+        assert_eq!(wf["summary"], json!("S"));
+        // state.json is the rebuilt projection of that same record.
+        let st = ok(read_state_strict(tmp.path()));
+        assert_eq!(st.get("phase"), Some(&json!("swarming")));
+        assert_eq!(st.get("summary"), Some(&json!("S")));
+    }
+
+    #[test]
+    fn a_feature_swap_bypasses_workflow_routing_and_writes_state_directly() {
+        let tmp = tmp_root();
+        write_state_file(tmp.path(), r#"{"phase":"planning","feature":"old"}"#);
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            json!({"id":"wf-1","feature":"old","status":"active","phase":"planning",
+                   "created_at":"2026-01-01T00:00:00.000Z"}),
+        );
+        let mut target = ok(resolve_mutation_target(tmp.path(), None, "set", true));
+        target.record_mut().insert("feature".into(), json!("new"));
+        let record = target.record().clone();
+        ok(write_through_projection(tmp.path(), &target, &record, &[]));
+        // state.json took the swap…
+        assert_eq!(ok(read_state_strict(tmp.path())).get("feature"), Some(&json!("new")));
+        // …and the OLD feature's workflow record is completely untouched.
+        let wf = read_workflow_file(tmp.path(), "wf-1");
+        assert_eq!(wf["feature"], json!("old"));
+        assert_eq!(wf["phase"], json!("planning"));
+    }
+
+    #[test]
+    fn mutation_locks_follow_the_global_order_and_the_projection_scope() {
+        let tmp = tmp_root();
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","status":"active",
+                   "created_at":"2026-01-01T00:00:00.000Z"}),
+        );
+        let workflows = ok(list_workflows(tmp.path()));
+        let scope = Scope { feature: Some("f1".to_string()), lane: true };
+        let locks = ok(acquire_mutation_locks(tmp.path(), &scope, &workflows));
+        assert!(lock::lock_file_path(tmp.path(), "workflow:wf-1").exists());
+        assert!(lock::lock_file_path(tmp.path(), "lane:f1").exists());
+        // A lane mutation must NOT serialize against .bee/state.json's writers.
+        assert!(!lock::lock_file_path(tmp.path(), "state").exists());
+        drop(locks);
+        assert!(!lock::lock_file_path(tmp.path(), "workflow:wf-1").exists());
+        // A default-record mutation with a live workflow: workflow:<id> + 'state'.
+        let scope = Scope { feature: Some("f1".to_string()), lane: false };
+        let locks = ok(acquire_mutation_locks(tmp.path(), &scope, &workflows));
+        assert!(lock::lock_file_path(tmp.path(), "workflow:wf-1").exists());
+        assert!(lock::lock_file_path(tmp.path(), "state").exists());
+        drop(locks);
+        // C1 fallback (no live workflow): the single 'state' hold, lane or not.
+        let scope = Scope { feature: Some("nolane".to_string()), lane: true };
+        let locks = ok(acquire_mutation_locks(tmp.path(), &scope, &workflows));
+        assert!(lock::lock_file_path(tmp.path(), "state").exists());
+        assert!(!lock::lock_file_path(tmp.path(), "lane:nolane").exists());
+        drop(locks);
+    }
+
+    #[test]
+    fn handoff_workflow_resolution_covers_c1_lane_session_and_default() {
+        let tmp = tmp_root();
+        // C1: zero workflow records → the legacy single-file path.
+        assert!(ok(resolve_handoff_workflow_id(tmp.path(), None, None)).is_none());
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","status":"active",
+                   "created_at":"2026-01-01T00:00:00.000Z"}),
+        );
+        assert_eq!(
+            ok(resolve_handoff_workflow_id(tmp.path(), Some("f1"), None)).as_deref(),
+            Some("wf-1")
+        );
+        match resolve_handoff_workflow_id(tmp.path(), Some("ghost"), None) {
+            Err(Err2::Msg(m)) => assert_eq!(
+                m,
+                "state handoff: refused — --lane \"ghost\" names no live workflow (no .bee/runtime/workflows/*/state.json with feature \"ghost\" and status !== closed). FIX: start it first (\"state start-feature --feature ghost --as-lane\"), or omit --lane."
+            ),
+            _ => panic!("expected the --lane refusal"),
+        }
+        // The default record's own feature resolves last.
+        write_state_file(tmp.path(), r#"{"phase":"planning","feature":"f1"}"#);
+        assert_eq!(
+            ok(resolve_handoff_workflow_id(tmp.path(), None, None)).as_deref(),
+            Some("wf-1")
+        );
+        // A bound session naming no live workflow refuses loudly (the
+        // --session-id FLAG outranks the env chain, so "sess-1" is safe here).
+        write_session(tmp.path(), "sess-1", Some("ghost"));
+        match resolve_handoff_workflow_id(tmp.path(), None, Some("sess-1")) {
+            Err(Err2::Msg(m)) => assert_eq!(
+                m,
+                "state handoff: refused — calling session \"sess-1\" is bound to lane \"ghost\" but no live workflow names it. FIX: start the lane, unbind the session, or pass --lane explicitly."
+            ),
+            _ => panic!("expected the bound-session refusal"),
+        }
+        // A CLOSED workflow is not live.
+        write_workflow(
+            tmp.path(),
+            "wf-2",
+            json!({"id":"wf-2","feature":"ghost","status":"closed",
+                   "created_at":"2026-01-01T00:00:00.000Z"}),
+        );
+        assert!(resolve_handoff_workflow_id(tmp.path(), Some("ghost"), None).is_err());
+    }
+
+    #[test]
+    fn a_workflow_carrying_repo_routes_handoffs_to_the_mailbox() {
+        let tmp = tmp_root();
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","status":"active",
+                   "created_at":"2026-01-01T00:00:00.000Z"}),
+        );
+        write_state_file(tmp.path(), r#"{"phase":"planning","feature":"f1"}"#);
+        let wid = ok(resolve_handoff_workflow_id(tmp.path(), None, None)).unwrap();
+        let mut input = Map::new();
+        input.insert("kind".into(), json!("pause"));
+        input.insert("feature".into(), json!("f1"));
+        let record = ok(write_mailbox_handoff(tmp.path(), &wid, &input, None));
+        assert_eq!(record.get("workflow_id"), Some(&json!("wf-1")));
+        assert_eq!(record.get("seq"), Some(&json!(1)));
+        // The mailbox is the source of truth…
+        assert_eq!(ok(list_handoff_mailbox(tmp.path(), "wf-1")).len(), 1);
+        // …and the legacy file is its projection.
+        ok(rebuild_handoff_projection(tmp.path()));
+        let legacy = ok(read_handoff(tmp.path())).unwrap();
+        assert_eq!(jget(&legacy, "kind"), Some(&json!("pause")));
+        assert!(jget(&legacy, "workflow_id").is_none(), "mailbox-only field stripped");
+    }
+
+    #[test]
+    fn workflows_close_guards_the_active_feature() {
+        let tmp = tmp_root();
+        write_state_file(tmp.path(), r#"{"phase":"planning","feature":"active-f"}"#);
+        write_workflow(
+            tmp.path(),
+            "wf-active",
+            json!({"id":"wf-active","feature":"active-f","status":"active",
+                   "created_at":"2026-01-01T00:00:00.000Z"}),
+        );
+        write_workflow(
+            tmp.path(),
+            "wf-stale",
+            json!({"id":"wf-stale","feature":"stale-f","status":"active",
+                   "created_at":"2026-01-02T00:00:00.000Z"}),
+        );
+        let active = ok(resolve_active_feature_for_workflows_close(tmp.path()));
+        assert_eq!(active.unwrap().as_deref(), Some("active-f"));
+        // A resolution FAILURE is distinguishable from "idle" (F5).
+        let sid = fixture_session_id(tmp.path());
+        write_session(tmp.path(), &sid, Some("ghost"));
+        let failed = ok(resolve_active_feature_for_workflows_close(tmp.path()));
+        assert!(failed.is_err(), "a bound-but-missing lane is a failure, not null");
+        assert!(workflows_close_unresolved_active_tail("R").starts_with("Underlying resolution failure: R\n"));
     }
 
     // ── lanes ─────────────────────────────────────────────────────────────

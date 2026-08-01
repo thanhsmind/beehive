@@ -1,0 +1,659 @@
+// onboard::plan — computePlan and the managed-hash ledger.
+//
+// Provenance: onboard_bee.mjs listTemplateHelpers (l. 1794),
+// listTemplateLibModules (l. 1826), listSourceExpertise (l. 1848, RECURSIVE
+// since expertise gained progressive disclosure), listTemplatePrompts
+// (l. 1871), listTemplateStatusline (l. 1882), listPluginHooks (l. 2070),
+// computePlan (l. 3006), coreChangesNeeded (l. 3389), buildHookVersions
+// (l. 3397), buildManagedVersions (l. 3408) and subsetManaged (l. 3476).
+//
+// Plan-item key order is load-bearing: `--json` prints the plan verbatim
+// (contract C2), so every item is built with an ordered map in the same
+// order the JS object literal declares.
+
+use super::agents::compute_agent_file_plan;
+use super::hooks_wiring as hw;
+use super::merge::{
+    agents_block_present, claude_md_imports_agents, extract_agents_block,
+    extract_gitignore_block, gitignore_block_present, normalize_gitignore_for_compare,
+    render_agents_block, render_gitignore_block,
+};
+use super::migration::{detect_worktree_migration, WorktreeMigration};
+use super::notices::has_prose_outside_block;
+use super::skills::{blocked_source_identity_skill_sync, compute_skill_sync, SkillSync};
+use super::source::{read_source_release_identity, Engine};
+use super::templates as T;
+use super::util::{
+    exists, hash_file, join_rel, read_dir_sorted, read_json_if_exists, read_text_if_exists,
+    sha256_str,
+};
+use crate::jsjson;
+use serde_json::{json, Map, Value};
+use std::path::Path;
+
+#[derive(Debug, Clone)]
+pub struct Options {
+    pub repo_hooks: bool,
+    pub claude_md: bool,
+    pub global_skills: bool,
+    pub sync_skills: bool,
+    pub force_downgrade: bool,
+    pub plugin_source: bool,
+    pub runtime: String,
+}
+
+pub struct ComputedPlan {
+    pub plan: Vec<Value>,
+    pub bee_version: Option<String>,
+    pub rendered_block: String,
+    pub rendered_gitignore_block: String,
+    pub desired_managed: Value,
+    pub skill_sync: SkillSync,
+    pub codex_hybrid: bool,
+    pub worktree_migration: WorktreeMigration,
+}
+
+fn plan_item(action: &str, path: &str) -> Value {
+    let mut m = Map::new();
+    m.insert("action".into(), json!(action));
+    m.insert("path".into(), json!(path));
+    Value::Object(m)
+}
+
+// ── source enumeration ─────────────────────────────────────────────────────
+
+/// listTemplateHelpers (l. 1794): top-level `*.mjs` in packages/bee, sorted.
+pub fn list_template_helpers(engine: &Engine) -> Vec<String> {
+    list_files_by_suffix(&engine.templates_dir, ".mjs")
+}
+
+/// listTemplateLibModules (l. 1826).
+pub fn list_template_lib_modules(engine: &Engine) -> Vec<String> {
+    list_files_by_suffix(&engine.templates_lib_dir, ".mjs")
+}
+
+/// listTemplatePrompts (l. 1871).
+pub fn list_template_prompts(engine: &Engine) -> Vec<String> {
+    list_files_by_suffix(&engine.templates_prompts_dir, ".md")
+}
+
+/// listTemplateStatusline (l. 1882): every plain file, sorted.
+pub fn list_template_statusline(engine: &Engine) -> Vec<String> {
+    if !exists(&engine.templates_statusline_dir) {
+        return Vec::new();
+    }
+    read_dir_sorted(&engine.templates_statusline_dir)
+        .into_iter()
+        .filter(|e| e.is_file)
+        .map(|e| e.name)
+        .collect()
+}
+
+fn list_files_by_suffix(dir: &Path, suffix: &str) -> Vec<String> {
+    if !exists(dir) {
+        return Vec::new();
+    }
+    let mut out: Vec<String> = read_dir_sorted(dir)
+        .into_iter()
+        .filter(|e| e.is_file && e.name.ends_with(suffix))
+        .map(|e| e.name)
+        .collect();
+    out.sort();
+    out
+}
+
+/// listSourceExpertise (l. 1848) — RECURSIVE. A guide may carry a
+/// `<topic>/patterns/*.md` directory whose files it indexes with per-file
+/// load triggers; a host that vendors only the top-level *.md gets an index
+/// pointing at files it does not have. Names are POSIX-relative
+/// ("tests/patterns/differential-testing.md") so every caller keeps treating
+/// a name as the identity of ONE vendored guide.
+pub fn list_source_expertise(engine: &Engine) -> Vec<String> {
+    if !exists(&engine.expertise_dir) {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    walk_md_tree(&engine.expertise_dir, "", &mut out);
+    out.sort();
+    out
+}
+
+/// The same recursive `*.md` enumeration applied to a VENDORED tree — the
+/// stale-removal domain of section 3d (l. 3179).
+pub fn list_vendored_expertise(dir: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    walk_md_tree(dir, "", &mut out);
+    out.sort();
+    out
+}
+
+fn walk_md_tree(dir: &Path, prefix: &str, out: &mut Vec<String>) {
+    // Dirent typing never follows links, so a symlinked file or directory is
+    // neither enumerated nor (later) unlinked.
+    for entry in read_dir_sorted(dir) {
+        let rel =
+            if prefix.is_empty() { entry.name.clone() } else { format!("{prefix}/{}", entry.name) };
+        if entry.is_dir {
+            walk_md_tree(&dir.join(&entry.name), &rel, out);
+        } else if entry.is_file && entry.name.ends_with(".md") {
+            out.push(rel);
+        }
+    }
+}
+
+/// listPluginHooks (l. 2070): HOOK_FILENAMES order, filtered by existence.
+pub fn list_plugin_hooks(engine: &Engine) -> Vec<String> {
+    if !exists(&engine.plugin_hooks_dir) {
+        return Vec::new();
+    }
+    T::HOOK_FILENAMES
+        .iter()
+        .filter(|name| exists(&engine.plugin_hooks_dir.join(name)))
+        .map(|n| (*n).to_string())
+        .collect()
+}
+
+// ── the managed ledger ─────────────────────────────────────────────────────
+
+/// buildHookVersions (l. 3397): shared by managed.repo_hooks and
+/// managed.codex_hooks so the two can never drift.
+fn build_hook_versions(engine: &Engine) -> Value {
+    let mut hooks = Map::new();
+    for name in list_plugin_hooks(engine) {
+        let h = hash_file(&engine.plugin_hooks_dir.join(&name)).unwrap_or_default();
+        hooks.insert(name, json!(h));
+    }
+    hooks.insert(".codex/hooks.json".into(), json!(sha256_str(&hw::codex_hook_entries_json())));
+    Value::Object(hooks)
+}
+
+/// buildManagedVersions (l. 3408).
+pub fn build_managed_versions(
+    engine: &Engine,
+    rendered_block: &str,
+    rendered_gitignore_block: &str,
+    repo_hooks: bool,
+    statusline: bool,
+    codex_hybrid: bool,
+) -> Value {
+    let hash_map = |dir: &Path, names: Vec<String>| -> Value {
+        let mut m = Map::new();
+        for name in names {
+            m.insert(name.clone(), json!(hash_file(&join_rel(dir, &name)).unwrap_or_default()));
+        }
+        Value::Object(m)
+    };
+    let mut managed = Map::new();
+    managed.insert("agents_block".into(), json!(sha256_str(rendered_block)));
+    managed.insert("gitignore_block".into(), json!(sha256_str(rendered_gitignore_block)));
+    managed.insert(
+        "helpers".into(),
+        hash_map(&engine.templates_dir, list_template_helpers(engine)),
+    );
+    managed
+        .insert("lib".into(), hash_map(&engine.templates_lib_dir, list_template_lib_modules(engine)));
+    managed
+        .insert("expertise".into(), hash_map(&engine.expertise_dir, list_source_expertise(engine)));
+    managed.insert(
+        "prompts".into(),
+        hash_map(&engine.templates_prompts_dir, list_template_prompts(engine)),
+    );
+    if repo_hooks {
+        managed.insert("repo_hooks".into(), build_hook_versions(engine));
+    }
+    if codex_hybrid {
+        // Advisor R5: a DISTINCT key from repo_hooks.
+        managed.insert("codex_hooks".into(), build_hook_versions(engine));
+    }
+    if statusline {
+        let mut pair = Map::new();
+        for name in list_template_statusline(engine) {
+            let h = hash_file(&engine.templates_statusline_dir.join(&name)).unwrap_or_default();
+            pair.insert(name, json!(h));
+        }
+        managed.insert("statusline".into(), Value::Object(pair));
+    }
+    Value::Object(managed)
+}
+
+/// JS `x || fallback`.
+fn js_or(v: Option<&Value>, fallback: Value) -> Value {
+    match v {
+        Some(Value::Null) | None => fallback,
+        Some(Value::Bool(false)) => fallback,
+        Some(Value::String(s)) if s.is_empty() => fallback,
+        Some(Value::Number(n)) if n.as_f64() == Some(0.0) => fallback,
+        Some(other) => other.clone(),
+    }
+}
+
+/// subsetManaged (l. 3476): compare only the parts THIS run manages. Note
+/// (faithful to the original): `prompts` is deliberately NOT part of the
+/// subset, so a prompt-only change never flips onboarding drift on its own.
+pub fn subset_managed(
+    managed: Option<&Value>,
+    repo_hooks: bool,
+    statusline: bool,
+    codex_hybrid: bool,
+) -> Value {
+    let src = managed.filter(|m| m.is_object());
+    let get = |k: &str| src.and_then(|m| m.get(k));
+    let mut out = Map::new();
+    out.insert("agents_block".into(), js_or(get("agents_block"), Value::Null));
+    out.insert("gitignore_block".into(), js_or(get("gitignore_block"), Value::Null));
+    out.insert("helpers".into(), js_or(get("helpers"), json!({})));
+    out.insert("lib".into(), js_or(get("lib"), json!({})));
+    out.insert("expertise".into(), js_or(get("expertise"), json!({})));
+    if repo_hooks {
+        out.insert("repo_hooks".into(), js_or(get("repo_hooks"), json!({})));
+    }
+    if codex_hybrid {
+        out.insert("codex_hooks".into(), js_or(get("codex_hooks"), json!({})));
+    }
+    if statusline {
+        out.insert("statusline".into(), js_or(get("statusline"), json!({})));
+    }
+    Value::Object(out)
+}
+
+/// coreChangesNeeded (l. 3389): the legacy-global refresh never drives
+/// up_to_date/changes_needed.
+pub fn core_changes_needed(plan: &[Value]) -> bool {
+    plan.iter().any(|i| i["action"] != "refresh_legacy_global_skill")
+}
+
+// ── computePlan ────────────────────────────────────────────────────────────
+
+pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ComputedPlan {
+    let mut plan: Vec<Value> = Vec::new();
+    let codex_hybrid = opts.plugin_source && hw::runtime_covers_codex(&opts.runtime);
+
+    // 0. worktree-local coordination migration (msn-18d).
+    let worktree_migration = detect_worktree_migration(repo_root);
+    if worktree_migration.applicable
+        && worktree_migration.conflicts.is_empty()
+        && !worktree_migration.records.is_empty()
+    {
+        let mut m = Map::new();
+        m.insert("action".into(), json!("migrate_worktree_records"));
+        m.insert("path".into(), json!(".bee/ (worktree-local coordination stores)"));
+        m.insert("count".into(), json!(worktree_migration.records.len()));
+        plan.push(Value::Object(m));
+    }
+
+    let release_identity = read_source_release_identity(engine);
+    if release_identity.blocked.is_some() {
+        return ComputedPlan {
+            plan,
+            bee_version: None,
+            rendered_block: String::new(),
+            rendered_gitignore_block: String::new(),
+            desired_managed: json!({}),
+            skill_sync: blocked_source_identity_skill_sync(
+                engine,
+                repo_root,
+                opts.sync_skills,
+                opts.global_skills,
+                &release_identity,
+            ),
+            codex_hybrid,
+            worktree_migration,
+        };
+    }
+    let bee_version = release_identity.version.clone();
+    let rendered_block = render_agents_block(&engine.agents_block_template);
+    let rendered_gitignore_block = render_gitignore_block();
+
+    // 1. AGENTS.md BEE block
+    let agents_path = repo_root.join("AGENTS.md");
+    let agents_text = read_text_if_exists(&agents_path);
+    if agents_text.trim().is_empty() {
+        plan.push(plan_item("create_agents_block", "AGENTS.md"));
+    } else if !agents_block_present(&agents_text) {
+        plan.push(plan_item("append_agents_block", "AGENTS.md"));
+    } else if extract_agents_block(&agents_text).as_deref() != Some(rendered_block.as_str()) {
+        plan.push(plan_item("update_agents_block", "AGENTS.md"));
+    }
+
+    // 1b. minimal header proposal (decision D4, propose-only)
+    if !has_prose_outside_block(&agents_text) {
+        plan.push(plan_item("propose_agents_header", "AGENTS.md"));
+    }
+
+    // 2. runtime files (create-if-missing only)
+    for rel in [
+        ".bee/state.json",
+        ".bee/config.json",
+        ".bee/reservations.json",
+        ".bee/decisions.jsonl",
+        ".bee/backlog.jsonl",
+    ] {
+        if !exists(&join_rel(repo_root, rel)) {
+            plan.push(plan_item("create_runtime_file", rel));
+        }
+    }
+    for rel_dir in [".bee/cells", ".bee/logs"] {
+        if !exists(&join_rel(repo_root, rel_dir)) {
+            plan.push(plan_item("create_dir", rel_dir));
+        }
+    }
+
+    // 3. vendored helpers + lib (copy when missing or drifted)
+    let onboarding = read_json_if_exists(&repo_root.join(".bee").join("onboarding.json"));
+    for name in list_template_helpers(engine) {
+        let source = read_text_if_exists(&engine.templates_dir.join(&name));
+        let target = repo_root.join(".bee").join("bin").join(&name);
+        if read_text_if_exists(&target) != source {
+            plan.push(plan_item("copy_helper", &format!(".bee/bin/{name}")));
+        }
+    }
+    // 3a. retired helper shims (D2)
+    for name in T::RETIRED_HELPERS {
+        if exists(&repo_root.join(".bee").join("bin").join(name)) {
+            plan.push(plan_item("remove_helper", &format!(".bee/bin/{name}")));
+        }
+    }
+    let current_lib_names = list_template_lib_modules(engine);
+    for name in &current_lib_names {
+        let source = read_text_if_exists(&engine.templates_lib_dir.join(name));
+        let target = repo_root.join(".bee").join("bin").join("lib").join(name);
+        if read_text_if_exists(&target) != source {
+            plan.push(plan_item("copy_lib", &format!(".bee/bin/lib/{name}")));
+        }
+    }
+    // 3c. retired lib modules — derived from the ledger diff, not a list.
+    let previous_lib_names: Vec<String> = onboarding
+        .as_ref()
+        .and_then(|o| o.get("managed"))
+        .and_then(|m| m.get("lib"))
+        .and_then(Value::as_object)
+        .map(|o| o.keys().cloned().collect())
+        .unwrap_or_default();
+    for name in previous_lib_names {
+        if !current_lib_names.contains(&name)
+            && exists(&repo_root.join(".bee").join("bin").join("lib").join(&name))
+        {
+            plan.push(plan_item("remove_lib", &format!(".bee/bin/lib/{name}")));
+        }
+    }
+
+    // 3d. vendored expertise guides — recursive on both sides.
+    let current_expertise_names = list_source_expertise(engine);
+    for name in &current_expertise_names {
+        let source = read_text_if_exists(&join_rel(&engine.expertise_dir, name));
+        let target = join_rel(&repo_root.join(".bee").join("expertise"), name);
+        if read_text_if_exists(&target) != source {
+            plan.push(plan_item("copy_expertise", &format!(".bee/expertise/{name}")));
+        }
+    }
+    if exists(&engine.expertise_dir) {
+        let expertise_target_dir = repo_root.join(".bee").join("expertise");
+        let mut stale: Vec<String> = if exists(&expertise_target_dir) {
+            list_vendored_expertise(&expertise_target_dir)
+                .into_iter()
+                .filter(|name| !current_expertise_names.contains(name))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        stale.sort();
+        for name in stale {
+            plan.push(plan_item("remove_expertise", &format!(".bee/expertise/{name}")));
+        }
+    }
+
+    // 3e. vendored prompt files (prompt-files spec §1)
+    let current_prompt_names = list_template_prompts(engine);
+    for name in &current_prompt_names {
+        let source = read_text_if_exists(&engine.templates_prompts_dir.join(name));
+        let target = repo_root.join(".bee").join("bin").join("prompts").join(name);
+        if read_text_if_exists(&target) != source {
+            plan.push(plan_item("copy_prompt", &format!(".bee/bin/prompts/{name}")));
+        }
+    }
+    if exists(&engine.templates_prompts_dir) {
+        let prompts_target_dir = repo_root.join(".bee").join("bin").join("prompts");
+        let mut stale: Vec<String> = if exists(&prompts_target_dir) {
+            read_dir_sorted(&prompts_target_dir)
+                .into_iter()
+                .filter(|e| e.is_file && e.name.ends_with(".md") && !current_prompt_names.contains(&e.name))
+                .map(|e| e.name)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        stale.sort();
+        for name in stale {
+            plan.push(plan_item("remove_prompt", &format!(".bee/bin/prompts/{name}")));
+        }
+    }
+
+    // 3b. statusline pair (opt-in sync)
+    if hw::statusline_opt_in(repo_root) {
+        for name in list_template_statusline(engine) {
+            let source = read_text_if_exists(&engine.templates_statusline_dir.join(&name));
+            let target = repo_root.join(".claude").join(&name);
+            if read_text_if_exists(&target) != source {
+                plan.push(plan_item("copy_statusline", &format!(".claude/{name}")));
+            }
+        }
+    }
+
+    // 4. learnings stub
+    if !exists(&join_rel(repo_root, "docs/history/learnings/critical-patterns.md")) {
+        plan.push(plan_item("create_stub", "docs/history/learnings/critical-patterns.md"));
+    }
+    // 4a. state-layer skeletons
+    for name in ["reading-map.md", "system-overview.md"] {
+        if !exists(&join_rel(repo_root, &format!("docs/specs/{name}"))) {
+            plan.push(plan_item("create_specs_stub", &format!("docs/specs/{name}")));
+        }
+    }
+
+    // 4b. .gitignore managed block (D1)
+    let gitignore_text = read_text_if_exists(&repo_root.join(".gitignore"));
+    if gitignore_text.trim().is_empty() {
+        plan.push(plan_item("create_gitignore_block", ".gitignore"));
+    } else if !gitignore_block_present(&gitignore_text) {
+        plan.push(plan_item("append_gitignore_block", ".gitignore"));
+    } else if normalize_gitignore_for_compare(
+        extract_gitignore_block(&gitignore_text).as_deref().unwrap_or(""),
+    ) != rendered_gitignore_block
+    {
+        plan.push(plan_item("update_gitignore_block", ".gitignore"));
+    }
+
+    // 5. repo hooks fallback (--repo-hooks only)
+    if opts.repo_hooks {
+        for name in list_plugin_hooks(engine) {
+            let source = read_text_if_exists(&engine.plugin_hooks_dir.join(&name));
+            let target = repo_root.join(".bee").join("bin").join("hooks").join(&name);
+            if read_text_if_exists(&target) != source {
+                plan.push(plan_item("copy_repo_hook", &format!(".bee/bin/hooks/{name}")));
+            }
+        }
+        let settings_path = repo_root.join(".claude").join("settings.json");
+        if hw::merge_repo_settings(&settings_path).changed {
+            plan.push(plan_item("merge_repo_hook_settings", ".claude/settings.json"));
+        }
+        if !hw::repo_owns_hook_catalog(repo_root) {
+            let codex_hooks_path = repo_root.join(".codex").join("hooks.json");
+            if hw::merge_codex_hooks(&codex_hooks_path).changed {
+                plan.push(plan_item("merge_codex_hooks", ".codex/hooks.json"));
+            }
+        }
+    }
+
+    // 5a. codex-hybrid hooks (GH #22 P0-1)
+    if codex_hybrid && !hw::repo_owns_hook_catalog(repo_root) {
+        for name in list_plugin_hooks(engine) {
+            let source = read_text_if_exists(&engine.plugin_hooks_dir.join(&name));
+            let target = repo_root.join(".bee").join("bin").join("hooks").join(&name);
+            if read_text_if_exists(&target) != source {
+                plan.push(plan_item("copy_repo_hook", &format!(".bee/bin/hooks/{name}")));
+            }
+        }
+        let codex_hooks_path = repo_root.join(".codex").join("hooks.json");
+        if hw::merge_codex_hooks(&codex_hooks_path).changed {
+            plan.push(plan_item("merge_codex_hooks", ".codex/hooks.json"));
+        }
+    }
+
+    // 5c. Codex user-config status line (machine-level, add-only)
+    if hw::codex_statusline_missing() {
+        plan.push(plan_item("ensure_codex_statusline", "~/.codex/config.toml"));
+    }
+
+    // 5b. CLAUDE.md @import fallback (D1, default)
+    if opts.claude_md {
+        let claude_md_path = repo_root.join("CLAUDE.md");
+        if !exists(&claude_md_path) {
+            plan.push(plan_item("create_claude_md", "CLAUDE.md"));
+        } else if !claude_md_imports_agents(&read_text_if_exists(&claude_md_path)) {
+            plan.push(plan_item("append_claude_md_import", "CLAUDE.md"));
+        }
+    }
+
+    // 5d. bee agent files (config-rendered, AO10-safe flat sync)
+    plan.extend(compute_agent_file_plan(engine, repo_root));
+
+    // 6. onboarding.json drift (managed versions)
+    let statusline = hw::statusline_opt_in(repo_root);
+    let desired_managed = build_managed_versions(
+        engine,
+        &rendered_block,
+        &rendered_gitignore_block,
+        opts.repo_hooks,
+        statusline,
+        codex_hybrid,
+    );
+    let onboarding_current = onboarding.as_ref().is_some_and(|o| {
+        o.get("schema_version").and_then(Value::as_str) == Some(T::ONBOARDING_SCHEMA_VERSION)
+            && o.get("bee_version").and_then(Value::as_str) == bee_version.as_deref()
+            && jsjson::stringify(&subset_managed(
+                o.get("managed"),
+                opts.repo_hooks,
+                statusline,
+                codex_hybrid,
+            )) == jsjson::stringify(&subset_managed(
+                Some(&desired_managed),
+                opts.repo_hooks,
+                statusline,
+                codex_hybrid,
+            ))
+    });
+    if !onboarding_current {
+        plan.push(plan_item("write_onboarding", ".bee/onboarding.json"));
+    }
+
+    // 7. skill sync (D1-D5, per target)
+    let skill_sync = if opts.sync_skills {
+        compute_skill_sync(engine, repo_root, opts.global_skills)
+    } else {
+        SkillSync {
+            source_root: engine.skills_root.join("bee-hive"),
+            targets: Vec::new(),
+            blocked: None,
+            legacy_refresh: None,
+        }
+    };
+    if skill_sync.blocked.is_none() {
+        for target in &skill_sync.targets {
+            plan.extend(target.items.iter().cloned());
+        }
+        if let Some(lr) = &skill_sync.legacy_refresh {
+            plan.extend(lr.items.iter().cloned());
+        }
+    }
+
+    ComputedPlan {
+        plan,
+        bee_version,
+        rendered_block,
+        rendered_gitignore_block,
+        desired_managed,
+        skill_sync,
+        codex_hybrid,
+        worktree_migration,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn subset_managed_ignores_prompts_and_optional_maps() {
+        let managed = json!({
+            "agents_block": "a", "gitignore_block": "g",
+            "helpers": {"x":"1"}, "lib": {}, "expertise": {}, "prompts": {"p":"9"},
+            "repo_hooks": {"h":"1"}, "statusline": {"s":"1"}, "codex_hooks": {"c":"1"}
+        });
+        let bare = subset_managed(Some(&managed), false, false, false);
+        let keys: Vec<&str> = bare.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        assert_eq!(keys, vec!["agents_block", "gitignore_block", "helpers", "lib", "expertise"]);
+        let full = subset_managed(Some(&managed), true, true, true);
+        let keys: Vec<&str> = full.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        assert_eq!(
+            keys,
+            vec![
+                "agents_block",
+                "gitignore_block",
+                "helpers",
+                "lib",
+                "expertise",
+                "repo_hooks",
+                "codex_hooks",
+                "statusline"
+            ]
+        );
+        // Missing input falls back the way `||` does.
+        let empty = subset_managed(None, false, false, false);
+        assert!(empty["agents_block"].is_null());
+        assert_eq!(empty["helpers"], json!({}));
+    }
+
+    #[test]
+    fn core_changes_needed_ignores_legacy_refresh_only_plans() {
+        let refresh = json!({"action": "refresh_legacy_global_skill"});
+        assert!(!core_changes_needed(&[refresh.clone()]));
+        assert!(core_changes_needed(&[refresh, json!({"action": "copy_lib"})]));
+        assert!(!core_changes_needed(&[]));
+    }
+
+    #[test]
+    fn expertise_enumeration_is_recursive_and_posix_sorted() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::from_plugin_root(dir.path().to_path_buf());
+        std::fs::create_dir_all(engine.expertise_dir.join("tests").join("patterns")).unwrap();
+        std::fs::write(engine.expertise_dir.join("tests.md"), "T").unwrap();
+        std::fs::write(engine.expertise_dir.join("review.md"), "R").unwrap();
+        std::fs::write(engine.expertise_dir.join("notes.txt"), "skip").unwrap();
+        std::fs::write(
+            engine.expertise_dir.join("tests").join("patterns").join("differential-testing.md"),
+            "D",
+        )
+        .unwrap();
+        assert_eq!(
+            list_source_expertise(&engine),
+            vec![
+                "review.md".to_string(),
+                "tests.md".to_string(),
+                "tests/patterns/differential-testing.md".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn vendored_expertise_enumeration_matches_the_source_shape() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join(".bee").join("expertise").join("tests").join("patterns");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("orphan.md"), "O").unwrap();
+        std::fs::write(dir.path().join(".bee").join("expertise").join("tests.md"), "T").unwrap();
+        assert_eq!(
+            list_vendored_expertise(&dir.path().join(".bee").join("expertise")),
+            vec!["tests.md".to_string(), "tests/patterns/orphan.md".to_string()]
+        );
+    }
+}

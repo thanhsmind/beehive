@@ -31,6 +31,7 @@ pub mod status_brief;
 pub mod status_full;
 pub mod test_runner;
 pub mod tmp_group;
+pub mod workflow_store; // library module (no try_native) — never probed below
 pub mod worktree;
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {

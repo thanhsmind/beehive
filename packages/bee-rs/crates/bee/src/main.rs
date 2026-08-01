@@ -6,11 +6,13 @@
 // (contract C2: byte-identical output). A native probe that returns None has
 // produced NO output — the Node run owns the command end to end.
 
+mod devtools;
 mod fsutil;
 mod hooks;
 mod js_fallback;
 mod jsjson;
 mod lock;
+mod onboard;
 mod path_identity;
 mod registry;
 mod roots;

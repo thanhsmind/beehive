@@ -68,6 +68,14 @@ pub const PORTED: &[&str] = &[
     "close (incl. --dry-run; non-lane features)",
     "dispatch prepare (all kinds; --claim still delegated)",
     "worktree list|register|unregister",
+    // R4 dev surface
+    "onboard [--repo-root R] [--apply] [--json] [--repo-hooks] [--plugin-source] \
+     [--runtime R] [--claude-md|--no-claude-md] [--global-skills] [--force-downgrade]",
+    "dev render-skill-trees",
+    "dev render-prompt <name> [--var K=V]",
+    "dev statusline",
+    "dev impact-registry --write|--check|--query <file...> [--level 1]",
+    "dev release-manifest --write|--check|--selftest",
 ];
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
@@ -75,6 +83,19 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(rs_info());
     }
     if let Some(code) = crate::hooks::try_native(args) {
+        return Some(code);
+    }
+    // onboard is a maintenance surface, not a bee.mjs porcelain verb, so it
+    // probes BEFORE the verb tree: nothing in `verbs` can claim the word.
+    if let Some(code) = crate::onboard::try_native(args) {
+        return Some(code);
+    }
+    // `bee dev …` is the R4 dev-surface namespace (render-skill-trees,
+    // render-prompt, statusline, impact-registry, release-manifest). Like
+    // onboard it is not a bee.mjs porcelain verb, so it probes before the
+    // verb tree; a `dev` shape it does not serve returns None with no output
+    // and the delegate reports unknown-command exactly as Node does.
+    if let Some(code) = crate::devtools::try_native(args) {
         return Some(code);
     }
     verbs::try_native(args, t0)
