@@ -155,12 +155,43 @@ function initMain(main, { withCompanion = true, brokenStart = false } = {}) {
   return { companionHome };
 }
 
+// The companion MOUNT is a real symlink (worktree-store.mjs mounts it with
+// fs.symlinkSync). Windows denies symlink creation with EPERM unless the
+// process holds SeCreateSymbolicLinkPrivilege — i.e. Developer Mode is on or
+// the shell is elevated; junctions still work, symlinks do not. On such a host
+// every case that expects a SUCCESSFUL `--with-companion` mount is
+// unrepresentable, so those cases skip loudly naming the capability instead of
+// failing (the env-limited-tests-skip-loudly rule). The no-companion,
+// refusal, and rollback cases never mount, so they still run.
+const SYMLINK_CAPABLE = (() => {
+  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-symlink-probe-'));
+  try {
+    fs.symlinkSync(probeDir, path.join(probeDir, 'link'));
+    return true;
+  } catch {
+    return false;
+  } finally {
+    fs.rmSync(probeDir, { recursive: true, force: true });
+  }
+})();
+const SYMLINK_SKIP_REASON =
+  'symlink creation denied (EPERM) — needs Developer Mode or an elevated shell on win32';
+
+function skipNoSymlink(desc) {
+  console.log(`SKIP (env: ${SYMLINK_SKIP_REASON}) — ${desc}`);
+}
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bee-worktree-companion-'));
 try {
   // -------------------------------------------------------------------
   // Case 1: new --with-companion mounts the symlink + writes the marker.
   // -------------------------------------------------------------------
-  {
+  if (!SYMLINK_CAPABLE) {
+    skipNoSymlink('new --with-companion succeeds');
+    skipNoSymlink('new --with-companion reports companion {worktreePath, sessionId, mountPath}');
+    skipNoSymlink('mounted path is a real symlink resolving into the companion worktree');
+    skipNoSymlink('companion-session.json marker written inside the new worktree');
+  } else {
     const main = path.join(tmp, 'case1-main');
     initMain(main);
     const r = bee(main, ['worktree', 'new', '--feature', 'demo-a', '--with-companion', '--json']);
@@ -207,7 +238,13 @@ try {
   // the fixture end script actually runs with the real session id, and the
   // symlink + marker are gone before the dirty-check would ever see them.
   // -------------------------------------------------------------------
-  {
+  if (!SYMLINK_CAPABLE) {
+    skipNoSymlink('case 3 setup: new --with-companion succeeds');
+    skipNoSymlink('merge --cleanup succeeds despite the companion symlink');
+    skipNoSymlink('merge result reports companion.ended === true, no warning');
+    skipNoSymlink('fixture end script actually ran with the real session id');
+    skipNoSymlink('bee worktree itself was cleaned up (removed)');
+  } else {
     const main = path.join(tmp, 'case3-main');
     const { companionHome } = initMain(main);
     const newR = bee(main, ['worktree', 'new', '--feature', 'demo-c', '--with-companion', '--json']);
@@ -325,7 +362,9 @@ try {
   // session declared --with-companion → the new check must NEVER refuse it; the
   // full companion path runs and mounts as usual (the paved road).
   // -------------------------------------------------------------------
-  {
+  if (!SYMLINK_CAPABLE) {
+    skipNoSymlink('concurrent + nested checkout + --with-companion: never refused, mounts as usual');
+  } else {
     const main = path.join(tmp, 'case9-main');
     initMain(main);
     plantLiveSession(main);
