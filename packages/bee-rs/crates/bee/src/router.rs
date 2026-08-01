@@ -51,6 +51,19 @@ pub const PORTED: &[&str] = &[
     "backlog pbi amend",
     "backlog pbi list",
     "feedback count",
+    // R3 wave 2
+    "--help (all forms, incl. group-scoped)",
+    "test",
+    "cells add|update|claim|unclaim|cap|finish|block|drop|reopen|tier",
+    "cells judge|judge-record|reset-budget|schedule|archive|unarchive",
+    "state worker add|update|remove|clear|prune",
+    "state lanes",
+    "state session list|bind|unbind",
+    "state set|gate|scribing-run|compounding-run|plan-rev bump|handoff (no-lane/no-workflow repos)",
+    "intent set|show|advance|clear",
+    "reviews create|list|show|record|candidate add|candidates|status (--file shapes)",
+    "knowledge check|index|list|context",
+    "tmp sweep",
 ];
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {

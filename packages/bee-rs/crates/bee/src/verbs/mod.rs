@@ -20,12 +20,24 @@ pub mod capture;
 pub mod cells;
 pub mod decisions;
 pub mod feedback;
+pub mod help;
+pub mod intent_group;
 pub mod knowledge;
 pub mod reservations;
+pub mod reviews;
+pub mod state_group;
 pub mod status_brief;
 pub mod status_full;
+pub mod test_runner;
+pub mod tmp_group;
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
+    // help probes FIRST: in bee.mjs, --help short-circuits main() before root
+    // resolution, and group-scoped help fires before dispatch — so a `--help`
+    // anywhere in the flag section must never reach a verb probe.
+    if let Some(code) = help::try_native(args, t0) {
+        return Some(code);
+    }
     if let Some(code) = status_brief::try_native(args, t0) {
         return Some(code);
     }
@@ -33,6 +45,12 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = cells::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = state_group::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = test_runner::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = reservations::try_native(args, t0) {
@@ -48,6 +66,15 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = feedback::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = intent_group::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = reviews::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = tmp_group::try_native(args, t0) {
         return Some(code);
     }
     knowledge::try_native(args, t0)
