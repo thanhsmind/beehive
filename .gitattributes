@@ -1,3 +1,28 @@
+# Line endings are LF in the working tree on EVERY platform.
+#
+# Without this the repo had no EOL policy at all, so what landed in the index
+# depended on the committer's core.autocrlf and what a checkout produced
+# depended on the checker-outer's. That is invisible until something compares
+# RENDERED bytes to ON-DISK bytes — which bee does in three places
+# (`dev render-skill-trees`, `dev render-hook-manifests`, the prompt-skew
+# check). The renderers emit `\n`; a CRLF working tree makes all three
+# disagree, and the 2.0.1 release proved it: green on ubuntu, twenty failures
+# on windows-latest with `left: "{\r\n…"` against `right: "{\n…"`.
+#
+# `eol=lf` (not just `text=auto`) is the point: it pins the WORKING TREE, not
+# only the index, so a Windows checkout and a Linux checkout hand the
+# renderers identical bytes.
+* text=auto eol=lf
+
+# Binaries and images must never be touched by the rule above.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.exe binary
+
 # bee log tier — append-only event logs that must union-merge across parallel
 # branches/worktrees instead of producing trivial conflicts (P30 / P44 D3+D5,
 # worktree-feature-parallelism). git's built-in `union` merge driver keeps both
