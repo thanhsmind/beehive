@@ -158,6 +158,6 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
 
 - Proposal builder (B5): `buildPromotion` in the same module, with `readCappedCellTraces` as its
   read-only view of `.bee/cells/`. Neither function writes; the CLI handler
-  (`handleKnowledgePromote` in `.bee/bin/bee.mjs`) only prints what they return.
+  (`handleKnowledgePromote` in `.bee/bin/bee`) only prints what they return.
 - CLI wiring: `.bee/bin/lib/command-registry.mjs` (the `knowledge` group) +
-  `.bee/bin/bee.mjs` dispatch (`HANDLERS`).
+  `.bee/bin/bee` dispatch (`HANDLERS`).

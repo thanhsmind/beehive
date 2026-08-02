@@ -165,7 +165,7 @@ You describe what you want. bee routes it by size and risk, then walks it throug
 │                               scope: P1/P2/P3 findings, artifact      │
 │                               verification, UAT                       │
 │           ▼                                                          │
-│   ▶ GATE 4  "P1 issues block merge; otherwise, merge?"  ← you approve │
+│   ▶ GATE 3  "P1 issues block merge; otherwise, merge?"  ← you approve │
 │           │                                                          │
 │        bee-shaping (Brief)   writes the walkthrough (what shipped +  │
 │                               how to test)                           │
@@ -356,7 +356,7 @@ feature closes          ←   done — verified, unreviewed
 
 "review feature X"      →   bee-reviewing: P1/P2/P3 + UAT      docs/history/X/reports/
                             over the scope you named
-you approve GATE 4      →   (P1 findings block merge)
+you approve GATE 3      →   (P1 findings block merge)
                             bee-shaping writes walkthrough     docs/history/X/walkthrough.md
 ```
 

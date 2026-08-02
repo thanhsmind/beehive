@@ -10,7 +10,7 @@
 ## 0. What this repository is
 
 This repository is managed by **bee** — a lean, gated agent workflow harness. bee's central law:
-**no source code is touched without first routing through the bee workflow.** This is not
+**no non-trivial change is made without first routing through the bee workflow.** This is not
 etiquette; it is enforced mechanically — by hooks on Claude Code and by the vendored
 `bee` binary on every runtime. An edit a guard failed to block is still **not** an approved edit.
 
@@ -28,10 +28,13 @@ bee is not installed yet — go to **§5 (Install)** first.
 
 ## 2. The one rule that matters most
 
-**Route through the `bee-hive` skill before touching source — every time, in every phase.**
+**Route through the `bee-hive` skill before any non-trivial change to code, docs, or behavior.**
 Never reason "I'll try the edit, and only route through bee if a hook blocks me." That inverts
 the contract: it turns every gap in the guard into a gap in the law. Classify the work, create
-the cell(s), pass the gates, then execute. A tiny fix stays tiny — but it still routes.
+the cell(s), pass the gates, then execute. The skill routes by size and risk: a typo fix takes
+one cell and one merged question, an auth change takes the full chain, a docs-only change takes
+no pipeline at all. What counts as trivial is the router's call, not a guess from how fast the
+edit looks.
 
 ## 3. Non-negotiable laws (distilled from `AGENTS.md`)
 
@@ -45,23 +48,31 @@ the cell(s), pass the gates, then execute. A tiny fix stays tiny — but it stil
 5. **Never hand-edit `.bee/*.json(l)`.** Every state change goes through its `bee` CLI verb.
 6. **Reserve files before write-heavy swarm work**; on conflict, return `[BLOCKED]` — never
    write anyway.
-7. **Read the spec before the code:** `docs/specs/<area>.md` → decisions → history.
+7. **Read the state layer before the code:** `docs/knowledge/areas/<area>/` → the area's
+   section of `docs/decisions/index.md` → history. `docs/specs/reading-map.md` says where an
+   area lives. Most `docs/specs/<area>.md` files are now pointer stubs that only resolve old
+   citations — never read a stub for current truth; the handful not yet migrated say so at
+   the top.
 8. **Privacy:** before reading secret-shaped files (`.env*`, `*.pem`, `*.key`, `credentials*`,
    …) ask the human. Never work around a `@@BEE_PRIVACY@@` block.
-9. **Silent bookkeeping — work language only.** Run bee mechanics silently; talk to the human
-   about the *work* ("fixing X", "tests pass"), not about cells, phases, or gates.
+9. **Work language, and one tick per step.** Talk to the human about the *work* ("fixing X",
+   "tests pass"), never in bee vocabulary ("capped cell auth-3"). This governs the WORDS, not
+   whether a step is mentioned: every perceivable step gets one short progress line, on by
+   default — `▸` started, `✓` green, `⚡` auto-approved, `✗` red. A red is never silenced.
 10. **Fan out the gathering, keep the deciding.** Delegate multi-file reads / scans to
     down-tier I/O workers (carry the tier explicitly); keep synthesis, gates, and decisions on
     yourself. Never paste session history into a worker dispatch.
 11. **The hook is a safety net, not the authority.** Its silence is never permission (see §2).
 
-## 4. Your first five minutes (session start / after compaction)
+## 4. Session start — one ritual (and again after compaction)
 
-1. Read [`AGENTS.md`](AGENTS.md) (and again after any context compaction).
-2. `.bee/bin/bee status --json` — orient on phase, mode, gates, cells, warnings.
-3. If `.bee/config.json` records `commands.verify`, run it once as a **baseline** before
-   claiming any cell. A red baseline is its own fix-first cell — never build on red.
-4. If `.bee/HANDOFF.json` exists, surface it and **wait** — never auto-resume a pause handoff.
+1. Read [`AGENTS.md`](AGENTS.md) and the **injected session preamble**. The preamble already
+   carries phase, gates, cells, and warnings — never re-fetch state on arrival.
+2. Only when routing, starting, or resuming work: `.bee/bin/bee orient` — it names the phase,
+   the blockers, and the next skill. A plain question needs neither step.
+3. If `.bee/HANDOFF.json` exists, surface it and **wait** — never auto-resume a pause handoff.
+4. Before your first `cells claim`, establish a green base by running `commands.test` — never
+   build on red; a red base is its own fix-first cell. A session that claims no cell owes no check.
 5. Read `docs/history/learnings/critical-patterns.md` before any planning or execution.
 
 You run the machinery, not the human. The only human actions in bee are gate approvals,
@@ -119,7 +130,7 @@ Before your first edit, you can honestly say **all** of these:
 
 - [ ] I routed through `bee-hive` and know the mode/lane for this work.
 - [ ] Gate 2 (`execution`) is approved (or `gate_bypass` is explicitly set).
-- [ ] I ran the baseline verify and it was green.
+- [ ] I established a green base with `commands.test` (or this session claims no cell).
 - [ ] I will record real verify output before capping, and cite the cell id in the commit.
 - [ ] I am talking to the human in work language, not bee vocabulary.
 
@@ -132,7 +143,7 @@ If you cannot check a box, stop and route through `bee-hive`.
 | The full, canonical law | [`AGENTS.md`](AGENTS.md) |
 | Installation & troubleshooting | [`INSTALL.md`](INSTALL.md) |
 | Human overview of bee | [`README.md`](README.md) |
-| What each area *does now* (read before its code) | `docs/specs/<area>.md`, `docs/specs/reading-map.md` |
+| What each area *does now* (read before its code) | `docs/knowledge/areas/<area>/`, `docs/specs/reading-map.md` |
 | The workflow skills you invoke | `skills/bee-*` (start with `bee-hive`) |
 
 **Violating the letter of these rules is violating the spirit of these rules.**

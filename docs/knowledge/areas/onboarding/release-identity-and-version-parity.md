@@ -187,12 +187,12 @@ and the strongest of them is the one that reports success.
 
 - Source-identity geometry and the falsifiable anchor (R17 post-move):
   `ENGINE_DIR`/`PLUGIN_ROOT`/`SKILLS_ROOT` constants and the `identityOk`
-  check in `packages/bee/scripts/onboard_bee.mjs` (`computeSkillSync`'s
+  check in `packages/bee/scripts/bee onboard` (`computeSkillSync`'s
   identity-anchor block); `classifySource` itself in
   `packages/bee/lib/source-identity.mjs` is unchanged (packages-engine-move
   C3) — only its two call sites (`readSourceReleaseIdentity`,
   `computeSkillSync`) now build `hiveDir` from `SKILLS_ROOT`. Regression:
-  `packages/bee/scripts/tests/test_onboard_bee.mjs`,
+  `packages/bee/scripts/tests/test_bee onboard`,
   `packages/bee/scripts/tests/test_split_brain_regression.mjs` (rewritten
   stale-launcher scenario now asserts a synced projection carries no launcher
   and an engine copy invoked from a projection-shaped root reports
@@ -224,20 +224,20 @@ and the strongest of them is the one that reports success.
   `./packages/bee/hooks/hooks.json` respectively.
 - Skill-sync version stamp (R29): `SKILLS_VERSION_STAMP` constant
   (`.bee-skills-version.json`) and the stamp-first/legacy-marker-fallback read
-  in `computeSkillSyncTarget` (`packages/bee/scripts/onboard_bee.mjs:1271-1281`)
+  in `computeSkillSyncTarget` (`packages/bee/scripts/bee onboard:1271-1281`)
   and the analogous global-root read (`:1461-1471`). Evidence:
   `.bee/cells/packages-restructure-1.json`.
-- Retired-library removal (R27): `onboard_bee.mjs`'s plan builder derives a
+- Retired-library removal (R27): `bee onboard`'s plan builder derives a
   `remove_lib` item per retired library module by diffing the previous
   `.bee/onboarding.json` `managed.lib` keys against the current
   `listTemplateLibModules()` set (section 3c, immediately after the existing
   `copy_lib`/`RETIRED_HELPERS` items it mirrors); apply executes it with the
   same exact-dirname safety `remove_helper` uses. Regression coverage:
-  `packages/bee/scripts/tests/test_onboard_bee.mjs` ("stale lib" block).
+  `packages/bee/scripts/tests/test_bee onboard` ("stale lib" block).
 - Extra-file-only drift tolerance (R28): the verify node snippet at the tail of
   `scripts/install.sh` (piped after `printf '%s' "$STATUS" | node -e '...'`),
   reading `s.onboarding.drift_detail` (populated by `computeRuntimeDrift`,
-  `packages/bee/bee.mjs`). Regression test:
+  `the bee binary`). Regression test:
   `scripts/tests/test_installers_e2e.mjs` ("extra unmanaged .mjs in .bee/bin/lib/
   does not hard-fail install.sh's verify step" case). Evidence:
   `.bee/cells/installer-verify-extra-drift-1.json`.

@@ -200,10 +200,10 @@ areas/workflow-state/cells-completion-judge-and-archive.md B43).
   `.bee/cells/wc-7.json`; reports
   `docs/history/worker-conformance/reports/wc-{3,6,7}.md`.
 - Batch slice creation: `addCells` in `packages/bee/lib/cells.mjs`,
-  CLI `bee.mjs cells add --stdin` (JSON array). Evidence: dispatcher-unify
+  CLI `bee cells add --stdin` (JSON array). Evidence: dispatcher-unify
   cells-batch-add suite rows (v0.1.27).
 - Cell revision: `updateCell` + `UPDATE_FIELD_VALIDATORS`/`UPDATE_FROZEN_HINTS`
-  in `packages/bee/lib/cells.mjs`; CLI `bee.mjs cells update --id ID
+  in `packages/bee/lib/cells.mjs`; CLI `bee cells update --id ID
   --file patch.json | --stdin` (byte-mirrored to `.bee/bin/`). Evidence: cell
   `.bee/cells/cuv-1.json` (commit 127abb0), 7 suite checks.
 - Derived regen obligation: `deriveManifestScope` + `REGEN_ACK_FIELD`

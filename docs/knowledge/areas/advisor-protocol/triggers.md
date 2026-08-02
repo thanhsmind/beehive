@@ -62,7 +62,7 @@ dependency on configuration.
 - **P2 —** Orchestrator consult + throw: `handleStateGate`'s
   `requireFreshAdvisorForHighRisk` (shared by the standalone `--name execution`
   path and the merged `--merge` path) + `state advisor-ref record/show` in
-  `packages/bee/bee.mjs`; helpers `advisorRefAnchors` /
+  `the bee binary`; helpers `advisorRefAnchors` /
   `advisorRefStale` in `packages/bee/lib/state.mjs`. There is no
   standalone validating skill (deleted, validation-diet D1) — the consult now
   has to happen during planning/briefing, before Gate 2's execution component

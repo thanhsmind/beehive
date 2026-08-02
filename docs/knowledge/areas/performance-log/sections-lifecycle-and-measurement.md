@@ -182,7 +182,7 @@ Token vocabulary (the four raw quantities the breakdown is built from):
 
 - **P2** — CLI surface `bee perf start|stop|section|log|render|report|sync`:
   **NOT BUILT INTO THE CURRENT BINARY.** The handlers lived in
-  `packages/bee/bee.mjs`, which the R6 Node deletion removed; no Rust port
+  `the bee binary`, which the R6 Node deletion removed; no Rust port
   replaced them, so every one of these verbs now refuses by name (the registry
   entries carry an `unavailable` marker, and `bee --help --all` prints it).
   What survives without them: every command appends its own wall time to

@@ -46,7 +46,7 @@ merge approval, only inside a review session the user invoked). Gates 1-2 are th
 chain; Gate 3 is additive and never automatic ("The three gates").
 
 Never approve a gate yourself, in any mode — headless included. Gates belong to the user:
-`bee state gate` records their answer, presented as a plain-language layer plus the fixed
+`bee gate` records their answer, presented as a plain-language layer plus the fixed
 question, report linked, never pasted ("Gate Presentation Contract").
 
 The one recorded exception is gate bypass — `.bee/config.json` `gate_bypass`, a level:

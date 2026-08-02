@@ -52,7 +52,7 @@ use std::path::{Path, PathBuf};
 use crate::version::BEE_VERSION;
 
 /// state.mjs COMMAND_KEYS / WORKTREE_COMPANION_COMMAND_KEYS.
-const COMMAND_KEYS: [&str; 4] = ["setup", "start", "test", "verify"];
+const COMMAND_KEYS: [&str; 3] = ["setup", "start", "test"];
 const WORKTREE_COMPANION_COMMAND_KEYS: [&str; 3] = [
     "worktree_companion_start",
     "worktree_companion_end",

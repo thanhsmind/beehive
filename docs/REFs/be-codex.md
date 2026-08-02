@@ -1,6 +1,6 @@
 # Kết luận
 
-**Đúng: Bee hiện chưa chạy trên Codex tương đương Claude Code.** Nhưng nguyên nhân chính không phải Codex “kém hiểu prompt” hơn. Core của Bee—`bee.mjs`, gates, cells, reservations, verify evidence, handoff—khá tốt và có thể dùng chung. Khoảng cách nằm ở **lớp tích hợp runtime**: Bee vẫn là kiến trúc Claude-first, sau đó thêm các nhánh tương thích Codex vào cùng bộ skill.
+**Đúng: Bee hiện chưa chạy trên Codex tương đương Claude Code.** Nhưng nguyên nhân chính không phải Codex “kém hiểu prompt” hơn. Core của Bee—`bee`, gates, cells, reservations, verify evidence, handoff—khá tốt và có thể dùng chung. Khoảng cách nằm ở **lớp tích hợp runtime**: Bee vẫn là kiến trúc Claude-first, sau đó thêm các nhánh tương thích Codex vào cùng bộ skill.
 
 Tôi khuyên:
 
@@ -19,7 +19,7 @@ Trong `INSTALL.md`, Bee vẫn khẳng định:
 
 > “Codex has no lifecycle hooks”
 
-và chỉ hướng dẫn Codex dựa trên `AGENTS.md` cùng `bee.mjs`.
+và chỉ hướng dẫn Codex dựa trên `AGENTS.md` cùng `bee`.
 
 Tài liệu kiến trúc `docs/06-runtime-integration.md` cũng tiếp tục thiết kế Codex như runtime không có hooks và chấp nhận khoảng trống mechanical enforcement.
 

@@ -68,6 +68,6 @@ The reference runtime remains frozen and authoritative for the whole port. It is
 ## Pointers (implementation)
 
 - Compiled runtime: `crates/queen-bee` (commands and hooks), `crates/bee-core` (readers, stores, locks).
-- Frozen reference: `.bee/bin/bee.mjs`, `.bee/bin/lib/*.mjs`, `.bee/bin/hooks/*.mjs`.
+- Frozen reference: `.bee/bin/bee`, `.bee/bin/lib/*.mjs`, `.bee/bin/hooks/*.mjs`.
 - Review derivation cache: `.bee/runtime/review-git-cache.json`; ancestry answered in-process via `gix`.
 - Locked decisions: `docs/history/rust-port/CONTEXT.md` (D1, D3, D5, D9, D10); addendum decision `a7d7b3d5`.

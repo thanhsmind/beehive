@@ -81,8 +81,9 @@ type JMap = Map<String, Value>;
 /// state.mjs GATE_NAMES.
 const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
 
-/// state.mjs COMMAND_KEYS.
-const COMMAND_KEYS: [&str; 4] = ["setup", "start", "test", "verify"];
+/// COMMAND_KEYS. `verify` was retired — `commands.test` is the one declared
+/// test command (dev loop, cap door, feature close, and the merge gate).
+const COMMAND_KEYS: [&str; 3] = ["setup", "start", "test"];
 
 /// state.mjs normalizeCommands' companion slots (normalized alongside, never
 /// listed by the preamble — COMMAND_KEYS is what it iterates).

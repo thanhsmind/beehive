@@ -33,7 +33,7 @@ CLAIM is unique; the prose is deliberately in both.
 **B12 — A feature can start as its own lane, and every lane mutation is
 commandable.** Trigger: new work begins while other features are mid-flight.
 What happens: starting a feature *as a lane* creates that feature's own
-pipeline record and resets exactly its four gates in one atomic write, leaving
+pipeline record and resets exactly its four gate fields in one atomic write, leaving
 the default record and every other lane byte-identical. Its preconditions are
 lane-scoped, with attribution **derived from existing records, never new
 fields**: an unfinished unit blocks only if it belongs to this feature; a
@@ -440,14 +440,14 @@ its knowledge actually landed — the state and the specs can no longer disagree
 ## Pointers (implementation)
 
 - Ship visibility (R77): `shipVisibility(root)` + `SHIP_VISIBILITY_VALUES` in
-  `packages/bee/lib/state.mjs`; status field in `packages/bee/bee.mjs`;
+  `packages/bee/lib/state.mjs`; status field in `the bee binary`;
   preamble line in `packages/bee/lib/inject.mjs`; suite
   `scripts/tests/test_ship_visibility.mjs`; commits 5d46f40f, f0460a67.
 - Lanes (B12): lane store + `resolvePipeline` + lane-mode `startFeature` in
   `packages/bee/lib/state.mjs`; `bindSessionLane`/`unbindSessionLane`
   in `lib/claims.mjs`; CLI: `--lane` on `state.set/gate/scribing-run`,
   `--as-lane/--session-id/--paths` on `state.start-feature`, `state.lanes`,
-  `state.session.list/bind/unbind` (`lib/command-registry.mjs` + `bee.mjs`,
+  `state.session.list/bind/unbind` (`lib/command-registry.mjs` + `bee`,
   runExample rows in `test_bee_cli.mjs`). Evidence: traces
   `.bee/cells/fsh-{3,4}.json`, commits 257d6b5, 6fa4f89;
   `docs/history/fresh-session-handoff/reports/validation-s2.md`.
@@ -463,7 +463,7 @@ its knowledge actually landed — the state and the specs can no longer disagree
 - Active workers (D6): `activeWorkers(root, {excludeSessionId})` in
   `packages/bee/lib/claims.mjs`; `startFeature`'s worker
   precondition (default and `startLane`) reads it instead of
-  `state.workers`; `buildStatus`/`renderStatusText` in `bee.mjs` gain a
+  `state.workers`; `buildStatus`/`renderStatusText` in `bee` gain a
   `workers` field/line sourced from it. `stateWorkerMutate` and
   `handleStateWorkerPrune` keep writing/reading the legacy `workers` array,
   now display-only. Tests: `test_claims.mjs` (unit coverage),

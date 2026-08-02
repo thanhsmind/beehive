@@ -347,7 +347,7 @@ pub(crate) fn perform_cleanup(
     if verify_skipped {
         out.insert(
             "warning".into(),
-            json!("verify skipped — no commands.verify recorded; cleaned up unchecked."),
+            json!("verify skipped — no commands.test recorded; cleaned up unchecked."),
         );
     }
     out

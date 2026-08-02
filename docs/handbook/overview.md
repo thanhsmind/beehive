@@ -120,7 +120,7 @@ are *derived* (live-heartbeat sessions joined with cell claims), never stored.
 **Worktree-first.** Code-touching feature work lives in its own feature worktree
 from the moment the lane is routed (`bee worktree new --feature <slug>`); the main
 checkout takes only integration, docs-lane, and release work. Landing is
-`bee worktree merge`, which re-runs `commands.verify` on the merged tree — the last
+`bee worktree merge`, which re-runs `commands.test` against the staged merge — the last
 net before a semantic conflict reaches main.
 
 **Proof is one declared test path (test-simple).** A project declares how it is
@@ -130,7 +130,7 @@ runs that suite at every cap: green caps, red refuses and carries the failing
 excerpt — and that red becomes the next work. There are no per-cell proof tiers,
 no `change_class × lane` matrix, no red-first evidence flags; coverage judgment
 survives as craft in `.bee/expertise/tests.md`, enforced by review, not by a cap
-door. `commands.verify` is the close/merge chain; CI owns the full estate.
+door. Close, merge, and CI all re-run that same command — `commands.verify` is retired.
 
 **Capture is deferred, never dropped.** A green `bee close` records capture as
 *pending* and names what remains; Scribe and Compound run when the owner chooses,

@@ -44,7 +44,7 @@ The store is classified into three lifecycle tiers, realized by git config (no d
 - CLI: the `worktree` command group.
 - Merge safety: `.gitattributes` (log tier) + the onboarding gitignore block (runtime/cache tiers).
 - Shared ledger: `templates/lib/worktree-holds.mjs` (mirror/release/foreign-lookup/sweep,
-  corrupt-check); seam wiring in `templates/bee.mjs` reservations handlers +
+  corrupt-check); seam wiring in `templates/bee` reservations handlers +
   `performCleanup`; claim-next tap in `templates/lib/cells.mjs`; guard tap in
   `templates/lib/guards.mjs` (`resolveHoldTopology` in all three, same shape).
 - Tests: resolver P40 regression, grant-resolve, worktree-store unit, worktree CLI e2e,

@@ -184,7 +184,7 @@ rule. It says nothing whatever about whether the rule was then obeyed
 - Master copy of the standing sheet: `packages/bee/AGENTS.block.md`;
   the rendered per-project copy sits between the `<!-- BEE:START -->` /
   `<!-- BEE:END -->` markers in each host's root `AGENTS.md`.
-- B1's copy-into-project step: `packages/bee/scripts/onboard_bee.mjs`
+- B1's copy-into-project step: `packages/bee/scripts/bee onboard`
   (`update_agents_block` plan item).
 - Anchor tests (B4/R2): `packages/bee/tests/test_lib.mjs` — the
   `census:` checks, including the delegation-layer anchor and the on-demand

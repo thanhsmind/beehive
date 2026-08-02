@@ -188,7 +188,7 @@ adopted.
   `anchorMissing`, `compactCheck`, and `CAPSULE_MUTED_CHECKS` (the anchor-mute
   list). Mirrored to `.bee/bin/lib/`.
 - CLI: `state compact-log`, `state compact-check`, and `state compact-capsule` in
-  `command-registry.mjs` + `bee.mjs` — each reachable independent of whether any
+  `command-registry.mjs` + `bee` — each reachable independent of whether any
   lifecycle checkpoint fires.
 - Wiring: `packages/bee/hooks/bee-session-init.mjs` (the compaction-resume branch; computes and
   passes `handoffOutcome` through to the builder), `packages/bee/hooks/bee-session-close.mjs`

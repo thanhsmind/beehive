@@ -43,13 +43,13 @@ Adopt: name these three sources explicitly as grooming's proposal inputs, adopt 
 
 Harness stories carry `verify_command` + `last_verified_at/result`, with `story verify-all` re-running every configured proof. bee verifies once at cap time — after that, regressions against capped cells are invisible.
 
-Adopt: `bee.mjs cells verify-all [--feature F]` re-runs the recorded `verify` command of capped cells and stores `last_verified_at/last_verified_result`; entropy adds `capped_but_failing × 10`. Optional mirror for decisions: a `verify_command` field + `bee.mjs decisions verify --id`, counted in entropy as unverified/failing decisions. This turns grooming's "unverified verify-commands" hunt from a static check into a live regression sweep.
+Adopt: `bee cells verify-all [--feature F]` re-runs the recorded `verify` command of capped cells and stores `last_verified_at/last_verified_result`; entropy adds `capped_but_failing × 10`. Optional mirror for decisions: a `verify_command` field + `bee decisions verify --id`, counted in entropy as unverified/failing decisions. This turns grooming's "unverified verify-commands" hunt from a static check into a live regression sweep.
 
 ### 5. CLAUDE.md `@import` fallback
 
 Harness solves "Claude Code doesn't auto-load AGENTS.md" with a minimal CLAUDE.md whose bare `@AGENTS.md` / `@docs/FEATURE_INTAKE.md` lines import the must-read set at context-load time. bee's session-init hook covers this — but when plugin hooks don't fire (unsupported environment, disabled), bee has no Claude Code bootstrap at all.
 
-Adopt: `onboard_bee.mjs --claude-md` writes a 5-line CLAUDE.md with `@AGENTS.md` (belt three, trivially cheap).
+Adopt: `bee onboard --claude-md` writes a 5-line CLAUDE.md with `@AGENTS.md` (belt three, trivially cheap).
 
 ## Adopt later (phase 4+, real value, real cost)
 

@@ -63,7 +63,7 @@ after the package is known inactive. User and foreign hook entries survive.
 
 ## Pointers (implementation)
 
-- Doctor row: `doctorHookSourcesCodex` in `packages/bee/bee.mjs`.
+- Doctor row: `doctorHookSourcesCodex` in `the bee binary`.
   Both-present regression test: `packages/bee/tests/test_bee_cli.mjs`
   (single-source baseline + both-present fixture). Evidence:
   `.bee/cells/i54-closeout-5.json`.

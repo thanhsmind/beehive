@@ -46,8 +46,7 @@
   "commands": {
     "setup": "npm install",
     "start": "npm run dev",
-    "test": "npx jest --onlyChanged",
-    "verify": "npm run build && npm test"
+    "test": "npx jest --onlyChanged"
   },
   "gate_bypass": false,
   "models": {

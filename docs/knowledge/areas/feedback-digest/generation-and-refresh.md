@@ -103,7 +103,7 @@ silent omission is a violation even when the summary has no obvious place to put
 
 ## Pointers (implementation)
 
-- **P2** — Command surface: `packages/bee/bee.mjs` (`feedback` group: `digest`,
+- **P2** — Command surface: `the bee binary` (`feedback` group: `digest`,
   `count`, `collect`, `rank`)
 - **P6** — Close-time refresh: `skills/bee-capturing/SKILL.md`, "Compound" step 5 (housekeeping digest refresh)
 - **P7** — Written artifact: `.bee/feedback-digest.json`

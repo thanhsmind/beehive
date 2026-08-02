@@ -45,7 +45,7 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   conflict runs `git merge --abort`, then PROVES main is untouched (HEAD unchanged, no
   `.git/MERGE_HEAD`, clean tracked status) before returning typed `MERGE_CONFLICT` — bee
   still does not auto-resolve a textual conflict, it just no longer leaves conflict state
-  sitting on main. A clean stage runs the configured `commands.verify` (none recorded →
+  sitting on main. A clean stage runs the configured `commands.test` (none recorded →
   `verify: skipped`) against the merged-but-**uncommitted** tree.
 - **The transaction runs in three phases so the coordination lock is never held across the
   verify child (multisession-native D10b, issue #56 3.9).** Every pre-check plus the stage
@@ -188,7 +188,7 @@ under any lock" claim, which is false today (short git plumbing legitimately run
   `runVerifyChild` (the async verify-child replacement for `spawnSync`) and the
   `onVerifyTick`/`checkProcessorLease` hooks in `worktree-store.mjs`; CLI wiring
   (`--queue-wait-ms`, the `INTEGRATION_QUEUE_TIMEOUT` text) in `handleWorktreeMerge`,
-  `packages/bee/bee.mjs`. Evidence: trace
+  `the bee binary`. Evidence: trace
   `.bee/cells/multisession-native-22.json`, commit 546d532.
 - The acceptance suite (D9, msn-23): `packages/bee/tests/test_msn_invariants.mjs`
   (index, 15 numbered entries) plus its two fresh Worker-concurrency race harnesses

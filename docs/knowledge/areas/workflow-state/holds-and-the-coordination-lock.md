@@ -254,7 +254,7 @@ legacy file directly, so it always sees `reserve()`'s true current state
 rather than a possibly-stale projection (closing the advisor's condition C
 concern about a lazily-rebuilt projection). One seam is deliberately left
 byte-for-byte untouched (advisor condition B, the biggest risk in this cell):
-`bee.mjs`'s atomic cross-worktree seam — `findForeignHolds` + the reservation
+`bee`'s atomic cross-worktree seam — `findForeignHolds` + the reservation
 write + the mirrored `insertHold` into the cross-worktree ledger — still runs
 as ONE section under `withHoldsLock`, exactly as before the shim; a new
 CLI-level regression test proves both the mirror write and the foreign-hold
@@ -364,10 +364,10 @@ drift from it.
   `acquireStoreLockOnceSync` (hook try-once path); schema `{ts, lock_name,
   lock_wait_ms, holder_session, caller_session, workflow_id, workspace_id,
   resource, result}` written to `.bee/logs/contention.jsonl` via a plain
-  `fs.appendFileSync`, mirroring `bee.mjs`'s own `timings.jsonl`
+  `fs.appendFileSync`, mirroring `bee`'s own `timings.jsonl`
   `recordTiming`. Evidence: `scripts/tests/test_store_lock.mjs` scenario (i);
   trace `.bee/cells/multisession-native-3.json`, commit 2d66ccc.
-- Status contention summary: `buildContentionSummary` in `bee.mjs`, reading
+- Status contention summary: `buildContentionSummary` in `bee`, reading
   through `readTranscriptTail` (`lib/recovery.mjs`) for the bounded,
   windowed, never-throws read. Evidence:
   `packages/bee/tests/test_contention_status.mjs` (seeded
@@ -410,7 +410,7 @@ drift from it.
   `rebuildAllProjections`); `listActiveReservationsForStart` in `state.mjs`
   reading through the live shim. A CLI-level regression test proves the
   cross-worktree mirror write and the foreign-hold deny both still hold
-  through the shim (`bee.mjs`'s `withHoldsLock` seam at the
+  through the shim (`bee`'s `withHoldsLock` seam at the
   `findForeignHolds`/reserve/`insertHold` call site, untouched). Evidence:
   trace `.bee/cells/multisession-native-16.json`, commit 81a936c; advisor
   consult for this whole slice:

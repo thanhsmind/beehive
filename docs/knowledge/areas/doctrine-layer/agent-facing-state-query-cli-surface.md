@@ -9,7 +9,7 @@ bee:
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
   decisions: [5ca69717 state-query-surface B1 -- decisions --cell/--feature word-boundary token match not a structural field, e0d130c1 state-query-surface META -- a harness must own its own state-query contract]
-  sources: [state-query-surface feature close 2026-07-24, .bee/bin/bee.mjs handleDecisionsActive/handleDecisionsSearch/handleBacklogFindings/scribing-run --show branch, .bee/bin/lib/decisions.mjs matchesWholeToken word-boundary helper]
+  sources: [state-query-surface feature close 2026-07-24, .bee/bin/bee handleDecisionsActive/handleDecisionsSearch/handleBacklogFindings/scribing-run --show branch, .bee/bin/lib/decisions.mjs matchesWholeToken word-boundary helper]
   authoritative_for: "doctrine-layer: agent-facing state query CLI surface"
 ---
 
@@ -126,7 +126,7 @@ None identified for this surface as of the state-query-surface close.
 
 ## Pointers (implementation)
 
-- The three verbs live in the bee CLI dispatcher (`bee.mjs`) and its command
+- The three verbs live in the bee CLI dispatcher (`bee`) and its command
   registry, alongside the workflow's other query and mutation verbs.
 - Word-boundary matching form: `(?<![\w-])<id>(?![\w-])` (case-insensitive),
   applied identically wherever a cell id or feature slug is matched as a

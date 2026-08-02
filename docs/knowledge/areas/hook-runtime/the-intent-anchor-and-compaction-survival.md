@@ -168,7 +168,7 @@ orientation ended with zero edits to that suite.
 - Store and renderers: `packages/bee/lib/intent.mjs`
   (`writeIntent`/`readIntent`/`advanceIntent`/`clearIntent`, `precompactBlock`,
   `resumeBlock`), mirrored to `.bee/bin/lib/`.
-- CLI: the `intent` group in `command-registry.mjs` + `bee.mjs`.
+- CLI: the `intent` group in `command-registry.mjs` + `bee`.
 - Checkpoints: `packages/bee/hooks/bee-session-close.mjs` (compaction re-assertion, the
   survival warning, and the forced anchor nudge), `packages/bee/hooks/bee-prompt-context.mjs`
   (the deduped anchor nudge on every prompt), and `packages/bee/hooks/bee-session-init.mjs`

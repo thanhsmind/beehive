@@ -17,7 +17,7 @@ bee:
 msh-2 shipped a claim-race suite, green at cap. Two cells later msh-4 added an ownership guard
 to the same mutators (block/reopen); msh-4's verify ran only its own suites, so the msh-2 suite
 silently went red and sat broken for two cells — discovered only when msh-6 wired the new suites
-into the standing `commands.verify` chain (the wiring step caught the feature's first real
+into the standing `commands.test` chain (the wiring step caught the feature's first real
 cross-cell interaction bug at close instead of after ship). **Two rules:** (1) a cell that
 changes shared guard/ownership/dispatch logic lists, in its own verify, every EXISTING suite
 that exercises the same surface — grep the tests for the functions it edits at plan time;

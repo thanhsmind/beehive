@@ -16,7 +16,7 @@ Fresh Session Test coverage today:
 | What is this system? | `docs/specs/system-overview.md` | hole — exists only after scribing has run once |
 | How is it organized? | `docs/specs/reading-map.md` | hole — same |
 | How do I run it? | `.bee/config.json` commands | half — mechanism exists (09 item 1), capture is a skippable question |
-| How do I verify it? | `commands.verify` + baseline gate | half — same |
+| How do I verify it? | `commands.test` + baseline gate | half — same |
 | Where are we now? | `bee_status` + state + cells | covered (stronger than the course) |
 
 ### A1. Scribe bootstrap mode (`bee-capturing`) — the generator
@@ -47,7 +47,7 @@ The Fresh Session Test probe (grooming reference) files backlog items today; eac
 |---|---|---|
 | Task with requirements/verification/files/status (§4.1) | cell: must_haves + verify + evidence + files + trace; cap mechanically refuses without proof | covered, stronger (refusal beats prose) |
 | No code without an agreed task (§2.1, §2.5) | intake gate, hook-enforced | covered, stronger |
-| User authority (§2.1.4) | four human gates, never self-approved | covered |
+| User authority (§2.1.4) | three human gates, never self-approved | covered |
 | Commit carries task id (§4.9) | one commit per cell, cell id in message | covered |
 | Status history log (§4.8) | decisions.jsonl + cell trace + git | covered, event-sourced |
 | Index ↔ task-file status sync (§4.4) | one file per cell — nothing to sync | **skip** — the sync rule cures a self-inflicted disease (two locations for one fact); adopting dual-location is a regression |

@@ -171,7 +171,7 @@ pub(crate) fn js_path_is_absolute(p: &str) -> bool {
 
 /// worktree-store.mjs runCompanionStart. Runs with `mainRoot` as cwd — the
 /// same root the command was resolved from, so the configured command owns its
-/// own `cd` into whatever nested tree it isolates (mirroring `commands.verify`).
+/// own `cd` into whatever nested tree it isolates (mirroring `commands.test`).
 ///
 /// `Err(message)` is folded by the caller into the SAME post-add rollback
 /// ladder as any other failure after `git worktree add` succeeded: a worktree

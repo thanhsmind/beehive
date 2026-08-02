@@ -17,12 +17,12 @@ bee/
       bee-state-sync.mjs           ← PostToolUse/SubagentStop/Stop: state snapshot persistence
       bee-chain-nudge.mjs          ← SubagentStop: advance the chain after workers/reviewers
       bee-session-close.mjs        ← Stop: warn on mid-phase exit without HANDOFF + decision/capture nudges
-    bee.mjs                       ← sole shipped CLI: bee.mjs <group> <verb> over all 9 command groups (D1, shim-retire, decision bbc6bcea; supersedes the 9-shim compat net from harness-integration-adopt/decision 30606de4)
+    bee                       ← sole shipped CLI: bee <group> <verb> over all 9 command groups (D1, shim-retire, decision bbc6bcea; supersedes the 9-shim compat net from harness-integration-adopt/decision 30606de4)
     lib/command-registry.mjs      ← single source of truth for every subcommand's JSON-Schema parameters
-    lib/validate-args.mjs         ← validates parsed CLI args against a registry entry's schema; shared by bee.mjs and bee-write-guard.mjs
+    lib/validate-args.mjs         ← validates parsed CLI args against a registry entry's schema; shared by bee and bee-write-guard.mjs
     scripts/
-      onboard_bee.mjs             ← installer: AGENTS.md block, .bee/, bee.mjs + lib
-      test_onboard_bee.mjs
+      bee onboard             ← installer: AGENTS.md block, .bee/, bee + lib
+      test_bee onboard
   AGENTS.template.md             ← Codex bootstrap block (installed into repo AGENTS.md, BEE:START/END markers)
   skills/
     bee-hive/        ← bootstrap + routing meta-skill, incl. gates and gate-bypass levels (instructions only; the onboarding engine lives at packages/bee/scripts/ above)
@@ -58,7 +58,7 @@ Nine skills; additions are decision-gated (a decision record naming the uncovere
     config.json                  ← per-repo config: hooks.<name> toggles + commands (setup/start/test/verify — the host project's standard paths, docs/09 item 1)
     logs/hooks.jsonl             ← fail-open hook crash/audit log
     cells/                       ← one JSON file per cell: <feature>-<n>.json
-    bin/                         ← bee.mjs, the sole shipped CLI (bee.mjs <group> <verb> over all 9 command groups; D1, shim-retire) — the 9 legacy bee_*.mjs shims are retired
+    bin/                         ← bee, the sole shipped CLI (bee <group> <verb> over all 9 command groups; D1, shim-retire) — the 9 legacy bee_*.mjs shims are retired
     bin/lib/                     ← shared modules (state, cells, reservations, guards, inject, backlog, commands_detect) used by BOTH helpers and hooks
   docs/
     backlog.md                   ← product backlog: prioritized PBI rows (proposed/in-flight/done), scribing-owned (docs/10) — distinct from .bee/backlog.jsonl
@@ -91,7 +91,7 @@ artifact_readiness: requirements-only | implementation-ready
 mode: tiny | small | standard | high-risk | spike
 ```
 
-The shape pass writes it as `requirements-only` and stops at Gate 2; the post-approval prep pass enriches the *same file* to `implementation-ready` and creates the current-slice cells. Downstream skills (swarming, reviewing, compounding) all receive one canonical plan path — no doc-discovery ambiguity, and the readiness field is machine-checkable (`bee.mjs status` reports it).
+The shape pass writes it as `requirements-only` and stops at Gate 2; the post-approval prep pass enriches the *same file* to `implementation-ready` and creates the current-slice cells. Downstream skills (swarming, reviewing, compounding) all receive one canonical plan path — no doc-discovery ambiguity, and the readiness field is machine-checkable (`bee status` reports it).
 
 ## The state layer: area specs + reading map (decisions 0001, 0002)
 
@@ -158,14 +158,14 @@ One JSON file per cell in `.bee/cells/`, one schema across planning → executio
 
 Rules:
 
-- **Capping requires verification — with proof.** `bee.mjs cells cap <id>` refuses unless a passing verify result is recorded; for `small`/`standard`/`high-risk` lanes it additionally refuses without recorded verify *output* (or `verification_evidence`) and a non-empty `files_changed` list (decision 0004 — dogfood showed assertion-capping: `verify_passed: true` with no output and an empty file list). A `behavior_change` cell additionally refuses without a **"before" characterization** in the evidence — `red_failure_evidence` (the prior behavior this change alters: a `git show` of the old state, or a pre-change check that failed), or a `deliberate_exceptions` note for a genuinely new surface (decision 0009 — dogfood showed a `behavior_change` cell capped with empty `red_failure_evidence`, forcing a whole evidence-backfill cell later in review). An assertion is not evidence. Evidence lives in the cell trace, the single source; per-cell reports link it, never re-embed it. One commit per cell, cell id in the commit message.
+- **Capping requires verification — with proof.** `bee cells cap <id>` refuses unless a passing verify result is recorded; for `small`/`standard`/`high-risk` lanes it additionally refuses without recorded verify *output* (or `verification_evidence`) and a non-empty `files_changed` list (decision 0004 — dogfood showed assertion-capping: `verify_passed: true` with no output and an empty file list). A `behavior_change` cell additionally refuses without a **"before" characterization** in the evidence — `red_failure_evidence` (the prior behavior this change alters: a `git show` of the old state, or a pre-change check that failed), or a `deliberate_exceptions` note for a genuinely new surface (decision 0009 — dogfood showed a `behavior_change` cell capped with empty `red_failure_evidence`, forcing a whole evidence-backfill cell later in review). An assertion is not evidence. Evidence lives in the cell trace, the single source; per-cell reports link it, never re-embed it. One commit per cell, cell id in the commit message.
 - **Lane scales strictness.** `tiny` cells may omit `must_haves` and record a one-line trace; `high-risk` cells require full `must_haves`, spike evidence links, and a detailed trace (fields checked mechanically, harness-style tiers).
-- **Ready = all deps capped.** `bee.mjs cells ready` lists claimable cells; only the orchestrator assigns them (workers never self-select).
+- **Ready = all deps capped.** `bee cells ready` lists claimable cells; only the orchestrator assigns them (workers never self-select).
 - Optional adapter: when the beads CLI (`br`) is present and the user opts in, cells mirror into beads for graph tooling. Nothing in the chain depends on it.
 
-## The CLI (`bee.mjs`, sole shipped surface)
+## The CLI (`bee`, sole shipped surface)
 
-One Node script (Node 18+, zero npm deps), vendored to `.bee/bin/bee.mjs` by onboarding, mirroring khuym's `.codex/*.mjs` pattern but as a single dispatcher rather than one file per group: `bee.mjs status [--json]`, `bee.mjs cells <verb> ...`, `bee.mjs reservations <verb> ...`, `bee.mjs decisions <verb> ...`, and five more groups below.
+One Node script (Node 18+, zero npm deps), vendored to `.bee/bin/bee` by onboarding, mirroring khuym's `.codex/*.mjs` pattern but as a single dispatcher rather than one file per group: `bee status [--json]`, `bee cells <verb> ...`, `bee reservations <verb> ...`, `bee decisions <verb> ...`, and five more groups below.
 
 | Group | Operations |
 |---|---|
@@ -179,16 +179,16 @@ One Node script (Node 18+, zero npm deps), vendored to `.bee/bin/bee.mjs` by onb
 | `reviews` | `create / list / show / record / candidate add / candidates / status` |
 | `feedback` | `digest / count / collect / rank` — dogfood-repo aggregation |
 
-Everything a skill tells an agent to run is `bee.mjs <group> <verb>`, `git`, or the project's own build/test commands.
+Everything a skill tells an agent to run is `bee <group> <verb>`, `git`, or the project's own build/test commands.
 
 ### History: from 4 shims to the sole CLI (decision 30606de4 → D1, shim-retire/decision bbc6bcea)
 
-`bee.mjs` began (harness-integration-adopt, decision 30606de4, `docs/decisions/0024`, adopted from vantt's PR #1) as an *additive* dispatcher living alongside 4 legacy per-group shim scripts (status, cells, reservations, decisions), then later extended to cover all 9 groups while the shims stayed a compatibility net (DA6 scope-freeze applied only to that original 4). The shim-retire feature (D1, decision bbc6bcea, owner-directed) superseded that compat-net clause: the 9 shims are deleted from `packages/bee/` and, via an onboarding `RETIRED_HELPERS` removal pass (D2), from every host's `.bee/bin/` too. `bee.mjs` is now the sole canonical *and* sole shipped CLI — no skill instruction names a legacy shim directly any more. Durable pieces of the original design still apply:
+`bee` began (harness-integration-adopt, decision 30606de4, `docs/decisions/0024`, adopted from vantt's PR #1) as an *additive* dispatcher living alongside 4 legacy per-group shim scripts (status, cells, reservations, decisions), then later extended to cover all 9 groups while the shims stayed a compatibility net (DA6 scope-freeze applied only to that original 4). The shim-retire feature (D1, decision bbc6bcea, owner-directed) superseded that compat-net clause: the 9 shims are deleted from `packages/bee/` and, via an onboarding `RETIRED_HELPERS` removal pass (D2), from every host's `.bee/bin/` too. `bee` is now the sole canonical *and* sole shipped CLI — no skill instruction names a legacy shim directly any more. Durable pieces of the original design still apply:
 
 - **Manifest shape.** `.bee/bin/bee --help --json` emits `{schema_version, commands:[{name, invoke, description, parameters, examples, deprecated}]}`, sourced from `command-registry.mjs` — the single source of truth for every subcommand, one entry per command, `parameters` expressed as JSON-Schema (`{type:"object", properties, required}`) in the exact shape Claude Code's own tool/subagent definitions use. The registry's old `helper` field (which shim used to implement a command) was removed together with the shims (D5) — it never appears in the public manifest.
-- **Manifest drift tracking (DA4).** A sha256 of `{schema_version, COMMAND_REGISTRY}` is persisted to `.bee/manifest-hash.json` (`{hash, checked_at}`, gitignored — it is rewritten on every `bee.mjs` invocation, including read-only ones). When the current hash differs from the last-persisted one, a `manifest_changed: true` hint is written to **stderr only** — stdout's JSON/text shape never changes, so a machine consumer parsing a command's steady-state output never has to special-case a drift call.
-- **CLI-shape enforcement.** `packages/bee/hooks/bee-write-guard.mjs` parses and validates a Bash call shaped like a `bee.mjs` invocation against `command-registry.mjs`'s schema via `validate-args.mjs` before the shell executes it — malformed calls are denied with a structured correction; unrecognized shapes fail open (that classification is the dispatcher's own job, via its Levenshtein nearest-match suggestion, not the guard's). `LEGACY_HELPER_RE` (D3) keeps resolving old `bee_*.mjs` invocation shapes too, as a transition guard for hosts mid-upgrade whose sessions still invoke shim names — its removal is filed as future grooming debt.
-- **Drift enforcement (DA5, re-pointed at runtime).** A standing test derives the live verb list from `bee.mjs <group>`'s own "Unknown command … Use: …" contract line (never from grepping source — pinned syntax can be the bug) and asserts a bijection with the registry's `group.*` entries.
+- **Manifest drift tracking (DA4).** A sha256 of `{schema_version, COMMAND_REGISTRY}` is persisted to `.bee/manifest-hash.json` (`{hash, checked_at}`, gitignored — it is rewritten on every `bee` invocation, including read-only ones). When the current hash differs from the last-persisted one, a `manifest_changed: true` hint is written to **stderr only** — stdout's JSON/text shape never changes, so a machine consumer parsing a command's steady-state output never has to special-case a drift call.
+- **CLI-shape enforcement.** `packages/bee/hooks/bee-write-guard.mjs` parses and validates a Bash call shaped like a `bee` invocation against `command-registry.mjs`'s schema via `validate-args.mjs` before the shell executes it — malformed calls are denied with a structured correction; unrecognized shapes fail open (that classification is the dispatcher's own job, via its Levenshtein nearest-match suggestion, not the guard's). `LEGACY_HELPER_RE` (D3) keeps resolving old `bee_*.mjs` invocation shapes too, as a transition guard for hosts mid-upgrade whose sessions still invoke shim names — its removal is filed as future grooming debt.
+- **Drift enforcement (DA5, re-pointed at runtime).** A standing test derives the live verb list from `bee <group>`'s own "Unknown command … Use: …" contract line (never from grepping source — pinned syntax can be the bug) and asserts a bijection with the registry's `group.*` entries.
 - **Deferred.** An MCP server wrapper and a mandatory every-session `--help --json` discovery call are out of scope (foundation-add without demonstrated need) — revisit only if dogfood shows real need.
 
 ## Dual-runtime support (Claude Code + Codex)
@@ -200,7 +200,7 @@ The workflow contract is runtime-neutral; only two seams differ:
 | Runtime | Mechanism |
 |---|---|
 | Claude Code | `packages/bee/hooks/bee-session-init.mjs` (SessionStart on startup/resume/clear/compact) injects the routing preamble plus live state: status, gates, HANDOFF surfacing, standard commands + baseline gate, critical-patterns digest, recent decisions (superpowers pattern + claudekit session-init) |
-| Codex | The `AGENTS.template.md` block installed into the repo's `AGENTS.md` carries the same instructions (khuym pattern); `bee.mjs status --json` is the first commanded step. Re-read after any compaction. |
+| Codex | The `AGENTS.template.md` block installed into the repo's `AGENTS.md` carries the same instructions (khuym pattern); `bee status --json` is the first commanded step. Re-read after any compaction. |
 
 Both vectors point at the same skill (`bee-hive`); the preamble content is generated from one shared module (`bin/lib/inject.mjs`) for the hook, the AGENTS.md block, and `bee_status` output, so the runtimes can never drift. The preamble carries, in order: standard commands (host project paths), a Project map section (pointers to `docs/specs/` maps and a specced-area count, or a bootstrap warning when absent) with a PBI counts line when `docs/backlog.md` exists, the critical-patterns digest, and recent decisions.
 
@@ -213,7 +213,7 @@ The spawn *contract* is identical on both: assigned cell id, CONTEXT.md path, gl
 
 ### Everything else is shared
 
-Skills, artifacts, cells, gates, helpers, templates: one copy of prose/logic in `skills/`. Each plugin manifest routes to its own **committed rendered tree** instead — `.claude-plugin/plugin.json` → `.claude-plugin/skills/` = `render(skills/, "claude")`, `.codex-plugin/plugin.json` → `.codex-plugin/skills/` = `render(skills/, "codex")` — generated only through the D9 renderer (`packages/bee/scripts/onboard_bee.mjs::renderSkillBytes`, regenerated via `scripts/render_plugin_skill_trees.mjs`); with zero runtime markers today both rendered trees stay byte-identical to `skills/` (cnr2-12).
+Skills, artifacts, cells, gates, helpers, templates: one copy of prose/logic in `skills/`. Each plugin manifest routes to its own **committed rendered tree** instead — `.claude-plugin/plugin.json` → `.claude-plugin/skills/` = `render(skills/, "claude")`, `.codex-plugin/plugin.json` → `.codex-plugin/skills/` = `render(skills/, "codex")` — generated only through the D9 renderer (`packages/bee/scripts/bee onboard::renderSkillBytes`, regenerated via `bee dev render-skill-trees`); with zero runtime markers today both rendered trees stay byte-identical to `skills/` (cnr2-12).
 
 ## Hooks: one automation skeleton, both runtimes + the helper floor underneath
 
@@ -242,7 +242,7 @@ Any proposed tenth hook must name which of the nine it replaces — claudekit's 
 
 - Every skill updates `phase`, `summary`, `next_action` on completion — the handoff is machine-checkable.
 - At ~65% context usage, the active skill writes `.bee/HANDOFF.json` (phase, feature, cells in flight, done/remaining, next action) and pauses. Resume never auto-continues: `bee-hive` surfaces the handoff and waits for the user.
-- Gate approvals are recorded here; `bee.mjs status` refuses to report "ready to swarm" unless `execution: true`.
+- Gate approvals are recorded here; `bee status` refuses to report "ready to swarm" unless `execution: true`.
 
 ## Security posture (carried from upstreams)
 

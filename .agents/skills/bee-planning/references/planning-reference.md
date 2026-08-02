@@ -181,12 +181,12 @@ EOF
 The batch is all-or-nothing and validated before any write; fix rejects,
 never downgrade the lane to dodge validation.
 
-## Verify scoping
+## Test scoping
 
-Cells run `commands.test` — the project's one declared test path — at
-finish; `commands.verify` is the close/merge chain; CI owns the full
-estate. A host keeps finish fast by pointing `commands.test` at its fast
-suite. In a repo that has declared itself no-test (`commands.test` set to
+Cells run `commands.test` — the project's ONE declared test command — at
+finish; close, `bee worktree merge`, and CI re-run that same command.
+`commands.verify` is retired. A host keeps every door fast by pointing
+`commands.test` at a suite it is willing to run on every cap. In a repo that has declared itself no-test (`commands.test` set to
 the sentinel `"none"`), cells cap with `tests: undeclared` — never invent
 a fake check to satisfy the runner.
 

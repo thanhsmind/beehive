@@ -168,9 +168,9 @@ itself a signal worth reading.
 - **P8** — Tests: `packages/bee/tests/test_lib.mjs` (124 assertions, incl. a
   table-driven payload sweep over every allowed field, the ranking matrix, and a control-byte sweep
   over vendored sources)
-- **P9** — Filing + scoped, gated commit: `packages/bee/bee.mjs` `handleBacklogAdd` /
-  `commitBacklogRow` (mirrored to `.bee/bin/bee.mjs` and the plugin/skill trees via
-  `packages/bee/scripts/onboard_bee.mjs --apply`); the queue-submission/self-observation
+- **P9** — Filing + scoped, gated commit: `the bee binary` `handleBacklogAdd` /
+  `commitBacklogRow` (mirrored to `.bee/bin/bee` and the plugin/skill trees via
+  `packages/bee/scripts/bee onboard --apply`); the queue-submission/self-observation
   distinction is the `--queue-submit` flag (default false); the merge-in-progress check resolves
   the real git-dir (`git rev-parse --git-dir`) and looks for `MERGE_HEAD` there before attempting
   the commit. `lib/command-registry.mjs`'s `backlog.add` entry documents the flag. Example

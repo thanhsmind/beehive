@@ -104,11 +104,11 @@ runtime, per project — the installer cannot grant it).
 ## Pointers (implementation)
 
 - Self-recognition (R9): `repoOwnsHookCatalog()` in
-  `packages/bee/scripts/onboard_bee.mjs`, checked before both the
+  `packages/bee/scripts/bee onboard`, checked before both the
   `--repo-hooks` and codex-hybrid Codex-projection branches. Checks
   `packages/bee/hooks/catalog.mjs` OR the legacy `hooks/catalog.mjs` (repo-root,
   pre-packages-restructure) — an OR fallback, never a forced migration.
-- `packages/bee/scripts/onboard_bee.mjs` — `renderCodexHookEntries()`,
+- `packages/bee/scripts/bee onboard` — `renderCodexHookEntries()`,
   `mergeCodexHooks()`, `isBeeCodexHookEntry()` (any-transport bee-entry
   matcher), `merge_codex_hooks` plan/apply action, `.codex/hooks.json`
   pseudo-entry in `buildManagedVersions`; `READING_MAP_STUB`/

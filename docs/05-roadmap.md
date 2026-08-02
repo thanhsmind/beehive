@@ -10,7 +10,7 @@ The V3-synthesis lesson: prove risky ideas early instead of discovering blockers
 |---|---|---|
 | S1 dual-manifest | Does one `skills/` dir load correctly from both `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`? (khuym proves the Codex side; verify the pair) | Both runtimes list the same skills |
 | S2 hook skeleton | Do plugin-shipped hooks (SessionStart, UserPromptSubmit, PreToolUse block, SubagentStop) fire reliably in Claude Code on Windows, including the self-arm check (silent when `.bee/onboarding.json` absent) and a PreToolUse deny? | Each hook demonstrably fires/blocks; crash log works |
-| S3 cell helper | Can a zero-dependency Node script enforce cap-requires-verify and lane field tiers with atomic writes (`.tmp` + rename)? | a cells-helper prototype (later unified into `bee.mjs cells`, D1) + its test script |
+| S3 cell helper | Can a zero-dependency Node script enforce cap-requires-verify and lane field tiers with atomic writes (`.tmp` + rename)? | a cells-helper prototype (later unified into `bee cells`, D1) + its test script |
 | S4 Codex subagent results | Do Codex subagents reliably return `[DONE]/[BLOCKED]` tokens to the parent thread the way khuym's swarming assumes? | One toy swarm run |
 
 A NO on any spike changes the architecture doc before any skill is written.
@@ -19,8 +19,8 @@ A NO on any spike changes the architecture doc before any skill is written.
 
 Goal: a tiny fix can flow bootstrap → plan(tiny) → validate(light) → one worker → self-checks, entirely under bee.
 
-1. Shared `bin/lib/` modules (state, cells, reservations, guards, inject) + vendored per-group helper scripts (status, cells, reservations; + test scripts, following khuym's `test_onboard_khuym.mjs` pattern) — later unified into and retired in favor of `bee.mjs <group> <verb>` (D1, shim-retire).
-2. `onboard_bee.mjs`: installs AGENTS.md block (BEE:START/END), `.bee/` runtime files, helpers + lib; `--apply` gated on approval.
+1. Shared `bin/lib/` modules (state, cells, reservations, guards, inject) + vendored per-group helper scripts (status, cells, reservations; + test scripts, following khuym's `test_onboard_khuym.mjs` pattern) — later unified into and retired in favor of `bee <group> <verb>` (D1, shim-retire).
+2. `bee onboard`: installs AGENTS.md block (BEE:START/END), `.bee/` runtime files, helpers + lib; `--apply` gated on approval.
 3. First half of the hook skeleton, as thin wrappers over `lib/`: `bee-session-init`, `bee-write-guard` (gate + privacy checks), `bee-session-close` — with the AGENTS.md preamble generated from the same `inject.mjs` source so the runtimes cannot drift.
 4. Skills (each RED → GREEN → REFACTOR with pressure tests, in this order): **hive**, **planning** (mode gate + tiny/small paths first), **validating** (reality gate only; later removed and folded into **planning**, validation-diet D1), **executing**, **reviewing** (lightweight path).
 5. Dogfood: run three real tiny fixes in a real repo. Capture friction verbatim — it is Phase 2's input.
@@ -42,7 +42,7 @@ Exit: Gate discipline holds under pressure tests; a feature pauses at 65% and re
 
 ## Phase 3 — Memory and the clean hive
 
-1. A decisions helper (event-sourced log, write-time redaction, datamark on read — later unified into `bee.mjs decisions`, D1) + decision surfacing in hive bootstrap.
+1. A decisions helper (event-sourced log, write-time redaction, datamark on read — later unified into `bee decisions`, D1) + decision surfacing in hive bootstrap.
 2. **scribing** (decision 0002): the BA-grade state layer — area-spec template with the rebuild bar, sync mode in the chain after execution (review-on-demand, decision 565e68d0), capture mode for discussion-agreed rules, harvest mode for legacy areas.
 3. **compounding**: analysts, learnings template, critical promotion, friction → backlog, and the state-layer **guard** (verify scribing ran; invoke it if not — decisions 0001/0002).
 4. **grooming**: entropy audit (including the `stale specs` term), hunt checklists, propose/approve/execute/close-the-loop.
