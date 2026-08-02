@@ -432,12 +432,18 @@ pub(crate) fn resolve_live_worker_count(root: &str, control_root: &str, ctx: &Js
 }
 
 /// provenance: guards.mjs intakeFixLine / intakeRefusal.
+///
+/// The opt-out used to be spelled `bee config set --key guards.idle_gate`.
+/// `bee config` is one of the verbs the Node deletion left declared but not
+/// built, so the busiest guard in the harness — the first refusal most people
+/// ever see — ended a paragraph of good advice by naming a command that
+/// answers "not built into this binary". It names the file instead.
 pub(crate) fn intake_fix_line() -> String {
     format!(
         "FIX: commit or write bookkeeping directly — {} are exempt from this gate — \
 or route the request through bee-hive first (classify the mode; tiny fixes stay tiny — one cell, a 2-minute \
 reality check, Gate 3, go), then execute. Last resort, repo-level opt-out: \
-bee config set --key guards.idle_gate --value false (re-enable with: bee config unset --key guards.idle_gate).",
+set guards.idle_gate to false in .bee/config.json (plain JSON; delete the key to re-enable).",
         GATE_ALLOWED_PREFIXES.join(", ")
     )
 }

@@ -262,6 +262,34 @@ fn error_exit(message: &str) -> ExitCode {
     ExitCode::from(1)
 }
 
+/// `bee onboard` was spelled correctly and this binary cannot see the source
+/// checkout it would vendor from. Says so, names the two ways forward, and —
+/// because the installer branches on it — carries a machine-readable `kind`
+/// rather than prose a caller has to regex.
+pub(crate) const NO_ENGINE_KIND: &str = "engine_not_found";
+
+fn no_engine_refusal(as_json: bool) -> ExitCode {
+    let message = "bee onboard: no bee source checkout is visible from this binary, and \
+onboarding vendors its files FROM that checkout — the skills, the expertise layer, the \
+AGENTS.md block. Searched upward from the binary and from the current directory for one \
+containing packages/bee/. FIX: run this from inside a bee checkout (`cd <bee>` first), or \
+re-run the installer, which brings its own: \
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y";
+    if as_json {
+        print!(
+            "{}\n",
+            jsjson::stringify_pretty(&json!({
+                "status": "blocked_no_engine",
+                "kind": NO_ENGINE_KIND,
+                "error": message,
+            }))
+        );
+    } else {
+        eprintln!("{message}");
+    }
+    ExitCode::from(1)
+}
+
 fn version_value(v: &Option<String>) -> Value {
     v.as_ref().map(|s| json!(s)).unwrap_or(Value::Null)
 }
@@ -475,7 +503,21 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
             // Geometry first: without a locatable source checkout there is
             // nothing authoritative to vendor from, so decline the command
             // before producing a byte of output.
-            let engine = Engine::locate()?;
+            //
+            // DECLINING IS NOT THE SAME AS NOT EXISTING. Returning None here
+            // used to mean "let Node answer"; since the cutover it drops the
+            // argv into `emit_unsupported_shape`, which tells the caller that
+            // `bee onboard --repo-root X --json` is an unsupported ARGUMENT
+            // SHAPE — pointing at the flags, which are fine. The real answer
+            // is that this binary cannot see a bee source checkout from where
+            // it is standing. Two callers hit this constantly and neither
+            // could act on the old wording: the installer, which runs a
+            // downloaded binary from a temp dir while the clone sits
+            // elsewhere, and every host repo, where `bee-hive` tells the agent
+            // to run exactly this command when onboarding is stale.
+            let Some(engine) = Engine::locate() else {
+                return Some(no_engine_refusal(parsed.json));
+            };
             Some(run(&engine, &parsed))
         }
     }

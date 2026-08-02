@@ -123,7 +123,7 @@
     },
     {
       "path": ".claude-plugin/plugin.json",
-      "sha256": "8901d23490fade1a32cf92caada61364298e71a42fe7a6f4e92d1368f473fe0c",
+      "sha256": "0f2c1e8855af9a4652b9a4de022645737f618e48df056406c75389f687fd8ea8",
       "mode": "666",
       "role": "plugin_manifest",
       "packagePath": ".claude-plugin/plugin.json"
@@ -494,7 +494,7 @@
     },
     {
       "path": ".codex-plugin/plugin.json",
-      "sha256": "80f1138f6fb04019782c4359efcd95f0b99c0732d2e5b264c3c815ac08ea8ece",
+      "sha256": "bd6854c46a5bb9212c7f1c62ae3473a25d5758e59b5b18103e7d0332ed4d845f",
       "mode": "666",
       "role": "plugin_manifest",
       "packagePath": ".codex-plugin/plugin.json"
@@ -1051,13 +1051,13 @@
     },
     {
       "path": "scripts/install.ps1",
-      "sha256": "6275b4d75d62678b8004ba129e2e9f0e453a1334ec63eb622e5cef758cc92684",
+      "sha256": "69d6f134942a545dac7bb81814ca52d38732add527bc78806a561796daf67abb",
       "mode": "666",
       "role": "distribution_tool"
     },
     {
       "path": "scripts/install.sh",
-      "sha256": "13417df40f86aef92b9704cb78eed8ac9f3bb6fb36beb06b6aac37e70c03e742",
+      "sha256": "56d2078a047f58bbd0bef0e099a549fa6b2e4ffd43037513c7d4a28277083a4d",
       "mode": "666",
       "role": "distribution_tool"
     },

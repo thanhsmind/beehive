@@ -207,7 +207,7 @@ else
   # and the instruction layer it vendors can never come from different commits.
   case "$REF" in
     v[0-9]*) PREBUILT_TAG="$REF" ;;
-    *) PREBUILT_TAG="$(fetch "$RELEASES/latest" /dev/stdout 2>/dev/null | sed -n 's|.*/releases/tag/\(v[0-9][^"]*\)".*||p' | head -1 || true)" ;;
+    *) PREBUILT_TAG="$(fetch "$RELEASES/latest" /dev/stdout 2>/dev/null | sed -n 's|.*/releases/tag/\(v[0-9][^"]*\)".*|\1|p' | head -1 || true)" ;;
   esac
   if [ -z "$PREBUILT_TAG" ]; then
     log "binary   could not resolve a published release — building from source"
@@ -513,8 +513,18 @@ if [ "$GLOBAL_SKILLS" -eq 1 ]; then
 fi
 
 # onboard_plan_json prints the onboarding plan as JSON (plan mode, writes nothing).
+# CWD IS LOAD-BEARING. `bee onboard` vendors FROM a bee source checkout, and
+# the binary finds one by walking up from itself and from the cwd. On the
+# published-binary path those are a temp dir and the target repo — neither is
+# a checkout — so onboarding refused every run and the installer died at
+# "Onboarding plan failed" with the reason thrown away by 2>/dev/null. Running
+# it from $BEE_SRC is what puts the clone in view.
 onboard_plan_json() {
-  "$BEE_BIN" onboard --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>/dev/null
+  ( cd "$BEE_SRC" && "$BEE_BIN" onboard --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>"$CLEANUP_DIR/onboard.err" )
+}
+# Whatever the last plan call said on stderr, so a failure can be acted on.
+onboard_plan_stderr() {
+  [ -s "$CLEANUP_DIR/onboard.err" ] && sed -n '1,6p' "$CLEANUP_DIR/onboard.err"
 }
 # plan_field <json> <field> — extract one string field, or "parse_error" on bad JSON.
 plan_field() {
@@ -527,7 +537,7 @@ plan_field() {
 #    a refusal as a non-`changes_needed`/`up_to_date` status (and may still exit 0),
 #    so status — not exit code alone — is the gate.
 log "plan     bee onboard ${ONBOARD_FLAGS[*]:-} (preview, writes nothing)"
-PREVIEW_JSON="$(onboard_plan_json)" || fail "Onboarding plan failed."
+PREVIEW_JSON="$(onboard_plan_json)" || fail "Onboarding plan failed. $(onboard_plan_stderr)"
 PREVIEW_STATUS="$(plan_field "$PREVIEW_JSON" status)"
 case "$PREVIEW_STATUS" in
   up_to_date|changes_needed) log "plan     status: $PREVIEW_STATUS" ;;
@@ -541,6 +551,35 @@ fi
 
 # 3. confirmation gate. Nothing above this line mutates a plugin, target, or home.
 confirm "Apply this onboarding plan to $TARGET_DIR?" || fail "Aborted — nothing applied."
+
+# VENDOR THE BINARY BEFORE ONBOARDING APPLIES, not after.
+#
+# Hook wiring is FEATURE-DETECTED: onboarding looks for .bee/bin/bee[.exe]
+# in the target and writes binary-shaped hook commands when it finds one.
+# Copying the binary in after the apply meant the first apply always wired
+# for a binary that was not there yet, so the immediate recheck came back
+# `changes_needed` (merge_repo_hook_settings .claude/settings.json) and a
+# fresh install exited 1 — while a SECOND run succeeded, because by then the
+# binary existed. Ordering, not logic: put it where the detector looks
+# first, and one pass converges.
+
+mkdir -p "$TARGET_DIR/.bee/bin"
+# THE VENDORED NAME IS A CONTRACT, not whatever the source file happened to
+# be called. Hooks are wired to `.bee/bin/bee[.exe]`, AGENTS.md tells agents
+# to invoke that path, and the skills name it. `basename "$BEE_BIN"` is `bee`
+# only when the binary was BUILT here; a downloaded release asset is called
+# `bee-x86_64-unknown-linux-gnu`, and vendoring under THAT name leaves every
+# hook pointing at a file that does not exist — while the installer still
+# reports success, because it verifies through the same wrong path.
+case "$BEE_BIN" in
+  *.exe) HOST_BEE_NAME="bee.exe" ;;
+  *)     HOST_BEE_NAME="bee" ;;
+esac
+cp "$BEE_BIN" "$TARGET_DIR/.bee/bin/$HOST_BEE_NAME" \
+  || fail "Could not install the binary into $TARGET_DIR/.bee/bin/"
+chmod +x "$TARGET_DIR/.bee/bin/$HOST_BEE_NAME" 2>/dev/null || true
+HOST_BEE="$TARGET_DIR/.bee/bin/$HOST_BEE_NAME"
+
 
 # 4. transition the selected plugin, then re-probe and revalidate before onboarding.
 transition_plugin || handle_transition_failure "Plugin transition failed"
@@ -573,12 +612,12 @@ node "$DIST_HELPER" "${DIST_ARGS[@]}" || {
 
 # 5. apply onboarding, but ONLY when the plan has work. A repeat install that is
 #    already current must not rewrite managed files (no timestamp-only churn).
-APPLY_JSON="$(onboard_plan_json)" || handle_transition_failure "Onboarding plan failed after transition"
+APPLY_JSON="$(onboard_plan_json)" || handle_transition_failure "Onboarding plan failed after transition. $(onboard_plan_stderr)"
 APPLY_STATUS="$(plan_field "$APPLY_JSON" status)"
 case "$APPLY_STATUS" in
   up_to_date) log "onboard  already current — no managed files rewritten" ;;
   changes_needed)
-    APPLY_OUTPUT="$("$BEE_BIN" onboard --repo-root "$TARGET_DIR" --apply ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>&1)" || {
+    APPLY_OUTPUT="$( cd "$BEE_SRC" && "$BEE_BIN" onboard --repo-root "$TARGET_DIR" --apply ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>&1 )" || {
       printf '%s\n' "$APPLY_OUTPUT" >&2
       apply_failure_fix_options
       handle_transition_failure "Onboarding apply failed"
@@ -597,12 +636,6 @@ fi
 # Success requires exact source/onboarding/runtime/projection version equality,
 # no drift, and an immediate up_to_date recheck — not merely an "installed" flag.
 
-# Put the binary where the host's own hooks and agents look for it, THEN verify
-# through that copy — the thing this repo will actually run from now on.
-mkdir -p "$TARGET_DIR/.bee/bin"
-cp "$BEE_BIN" "$TARGET_DIR/.bee/bin/$(basename "$BEE_BIN")" \
-  || fail "Could not install the binary into $TARGET_DIR/.bee/bin/"
-HOST_BEE="$TARGET_DIR/.bee/bin/$(basename "$BEE_BIN")"
 STATUS="$(cd "$TARGET_DIR" && "$HOST_BEE" status --json 2>/dev/null)" \
   || fail "Verification failed: bee status did not run."
 printf '%s' "$STATUS" | node -e '
@@ -639,12 +672,16 @@ printf '%s' "$STATUS" | node -e '
 # `node "" …` (with stderr suppressed) rather than rechecking anything. It now
 # runs the binary just installed into the target, which is the one the host
 # will actually use.
-RECHECK="$("$HOST_BEE" onboard --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>/dev/null)" \
-  || fail "Verification failed: onboarding recheck did not run."
+RECHECK="$( cd "$BEE_SRC" && "$HOST_BEE" onboard --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>"$CLEANUP_DIR/recheck.err" )" \
+  || fail "Verification failed: onboarding recheck did not run. $(sed -n '1,6p' "$CLEANUP_DIR/recheck.err" 2>/dev/null)"
 printf '%s' "$RECHECK" | node -e '
   const s = JSON.parse(require("fs").readFileSync(0, "utf8"));
   if (s.status !== "up_to_date") {
-    console.error(`onboarding recheck expected up_to_date, got ${s.status}`);
+    // NAME WHAT IS LEFT. "not up_to_date" alone sends the reader back to the
+    // whole installer; the outstanding plan says which surface did not settle.
+    const left = (s.plan || []).map(p => `${p.action} ${p.path || ""}`.trim());
+    console.error(`onboarding recheck expected up_to_date, got ${s.status}` +
+      (left.length ? ` — still outstanding: ${left.join("; ")}` : " with an empty plan"));
     process.exit(1);
   }
 ' || fail "Verification failed: onboarding is not up_to_date immediately after apply."

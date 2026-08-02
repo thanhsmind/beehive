@@ -561,8 +561,13 @@ try {
   # verify through that copy - the thing this repo will actually run from now on.
   $hostBinDir = Join-Path $Directory '.bee\bin'
   if (-not (Test-Path $hostBinDir)) { New-Item -ItemType Directory -Force $hostBinDir | Out-Null }
-  Copy-Item $beeBin (Join-Path $hostBinDir (Split-Path $beeBin -Leaf)) -Force
-  $hostBee = Join-Path $hostBinDir (Split-Path $beeBin -Leaf)
+  # The vendored name is a contract: hooks, AGENTS.md and the skills all name
+  # .bee/bin/bee.exe. A downloaded release asset is called
+  # bee-x86_64-pc-windows-msvc.exe, so copying it under its own leaf name
+  # would leave every hook pointing at a file that is not there.
+  $hostBeeName = if ($beeBin -like '*.exe') { 'bee.exe' } else { 'bee' }
+  Copy-Item $beeBin (Join-Path $hostBinDir $hostBeeName) -Force
+  $hostBee = Join-Path $hostBinDir $hostBeeName
 
   Push-Location $Directory
   try {

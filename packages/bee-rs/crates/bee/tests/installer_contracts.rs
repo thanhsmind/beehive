@@ -134,3 +134,138 @@ fn both_installers_handle_both_binary_names() {
         assert!(unix_form, "{rel} never falls back to the extension-less unix binary name");
     }
 }
+
+/// No shipped script carries a raw control byte.
+///
+/// THE DEFECT THIS EXISTS TO CATCH. `install.sh` resolved the newest release
+/// with
+///
+///     sed -n 's|.*/releases/tag/\(v[0-9][^"]*\)".*|\1|p'
+///
+/// except that the two characters `\1` had been written to disk as the single
+/// byte 0x01 — some tool in the authoring chain ate the backslash and left
+/// SOH. sed then substituted the captured tag with a control character, and
+/// one mangled byte took out BOTH install paths:
+///
+///   * `$RELEASES/download/<SOH>/bee-…` is not a URL — curl exits 3
+///     ("Malformed input to a URL function"), so no published binary is ever
+///     downloaded on any platform;
+///   * `git clone --branch "${PREBUILT_TAG:-$REF}"` — SOH is NOT empty, so
+///     the `:-` default never fires and git is asked for a branch named
+///     "\x01". On Linux the clone dies there and the installer exits 1 having
+///     installed nothing at all.
+///
+/// It is invisible in every ordinary view: a terminal prints SOH as nothing,
+/// a diff shows the line as unchanged-looking, and `grep '||p'` does not match
+/// because the replacement is not empty. Only `cat -A` or a byte dump shows
+/// it. That is why this is a byte-level law and not a review checklist item.
+#[test]
+fn no_installer_carries_a_raw_control_byte() {
+    let mut offenders: Vec<String> = Vec::new();
+    let mut scanned = 0usize;
+    for rel in ["scripts/install.sh", "scripts/install.ps1"] {
+        let bytes = std::fs::read(repo_root().join(rel))
+            .unwrap_or_else(|e| panic!("reading {rel}: {e}"));
+        scanned += 1;
+        for (i, b) in bytes.iter().enumerate() {
+            // Tab, LF and CR are the only control bytes a shell script has any
+            // business containing.
+            if *b < 0x20 && !matches!(*b, b'\t' | b'\n' | b'\r') {
+                let line = bytes[..i].iter().filter(|c| **c == b'\n').count() + 1;
+                offenders.push(format!("{rel}:{line}: byte 0x{b:02x}"));
+            }
+        }
+    }
+    assert_eq!(scanned, 2, "the scan lost an installer — it can no longer go red");
+    assert!(
+        offenders.is_empty(),
+        "a shipped installer contains a raw control byte. Almost certainly an escape sequence \
+         that lost its backslash on the way to disk — check any sed/regex replacement nearby:\n  {}",
+        offenders.join("\n  ")
+    );
+}
+
+/// The capture is actually emitted. A `sed` substitution that captures a group
+/// and then throws it away is the shape the bug above took, and it survives a
+/// control-byte scan the moment the mangled byte happens to be printable.
+#[test]
+fn every_capturing_sed_substitution_in_install_sh_emits_its_capture() {
+    let text = read("scripts/install.sh");
+    let mut checked = 0usize;
+    let mut offenders: Vec<String> = Vec::new();
+    for (n, line) in text.lines().enumerate() {
+        let Some(start) = line.find("sed -n 's|") else { continue };
+        let body = &line[start + "sed -n 's|".len()..];
+        let Some(end) = body.find("|p'") else { continue };
+        let expr = &body[..end];
+        // pattern|replacement — split on the LAST unescaped bar.
+        let Some(bar) = expr.rfind('|') else { continue };
+        let (pattern, replacement) = (&expr[..bar], &expr[bar + 1..]);
+        if !pattern.contains(r"\(") {
+            continue; // no capture group, nothing to emit
+        }
+        checked += 1;
+        if !replacement.contains(r"\1") {
+            offenders.push(format!(
+                "scripts/install.sh:{}: captures a group but the replacement is {replacement:?}",
+                n + 1
+            ));
+        }
+    }
+    assert!(checked > 0, "no capturing sed substitution found — the scan went vacuous");
+    assert!(offenders.is_empty(), "{}", offenders.join("\n"));
+}
+
+/// The vendored binary lands under the name everything else names.
+///
+/// THE DEFECT THIS EXISTS TO CATCH. Both installers copied the binary with
+/// `basename` / `Split-Path -Leaf`. That yields `bee` only when the binary was
+/// BUILT locally. On the published-binary path — the default, and the whole
+/// point of shipping release assets — the source file is called
+/// `bee-x86_64-unknown-linux-gnu`, so the host ended up with
+/// `.bee/bin/bee-x86_64-unknown-linux-gnu` while every hook command, the
+/// AGENTS.md block and every skill say `.bee/bin/bee`. Nothing errored: the
+/// installer verified through that same wrong path and printed
+/// "bee installed." The hooks were simply never going to fire.
+#[test]
+fn both_installers_vendor_the_binary_under_its_canonical_name() {
+    // CODE ONLY. A law a comment can turn red is a law people satisfy by
+    // rewording comments — and the comment right above the fix in install.sh
+    // quotes the very expression this forbids, in order to explain it.
+    let code = |rel: &str| -> String {
+        read(rel)
+            .lines()
+            .map(str::trim_start)
+            .filter(|l| !l.starts_with('#'))
+            .collect::<Vec<_>>()
+            .join("
+")
+    };
+    let sh = code("scripts/install.sh");
+    let ps1 = code("scripts/install.ps1");
+
+    // What the wiring actually invokes — read from the shipped manifest, so
+    // this law cannot drift away from the path onboarding writes.
+    let manifest = read("packages/bee/hooks/claude-hooks.json");
+    assert!(
+        manifest.contains(".bee/bin/bee"),
+        "the shipped hook manifest no longer names .bee/bin/bee — re-point this law"
+    );
+
+    assert!(
+        !sh.contains(r#"basename "$BEE_BIN""#),
+        "install.sh vendors under the source file name again — a downloaded asset          is not called bee"
+    );
+    assert!(
+        sh.contains("HOST_BEE_NAME"),
+        "install.sh must pick a canonical vendored name"
+    );
+    assert!(
+        !ps1.contains("Split-Path $beeBin -Leaf)) -Force"),
+        "install.ps1 vendors under the source file name again"
+    );
+    assert!(
+        ps1.contains("hostBeeName"),
+        "install.ps1 must pick a canonical vendored name"
+    );
+}
