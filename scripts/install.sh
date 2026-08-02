@@ -8,7 +8,7 @@ set -euo pipefail
 #      project projections; onboarding never creates repo skill/hook copies.
 #   2. repo-copy: prove the plugin inactive before onboarding vendors skills and
 #      hooks into the repository.
-#      Both modes run onboard_bee.mjs against the target project — it installs the
+#      Both modes run `bee onboard` against the target project — it installs the
 #      AGENTS.md BEE block, .bee/ runtime files, vendored helpers, and (by
 #      default) syncs the bee skills per-project into <repo>/.claude/skills and
 #      <repo>/.agents/skills.
@@ -59,7 +59,7 @@ Options:
       --no-git-init       Greenfield: do not run `git init` in a non-git target.
   -y, --yes               Non-interactive; accept defaults, skip prompts.
       --dry-run           Show the runtime copies and the exact onboarding plan
-                          (onboard_bee.mjs without --apply). Writes nothing.
+                          (`bee onboard` without --apply). Writes nothing.
   -h, --help              Show this help.
 
 Safety (brownfield):
@@ -144,11 +144,18 @@ case "$DISTRIBUTION_MODE" in plugin-first|repo-copy) ;; *) fail "--distribution 
 
 # ---------- prerequisites ----------
 
-# R6 CUTOVER: bee is a single native binary. The Node 18+ preflight that stood
-# here is gone — what the installer needs now is a Rust toolchain, because
-# decision 1f4262ca keeps prebuilt binaries OUT of the repo and builds one per
-# machine from the source checkout.
+# R6 CUTOVER: bee is a single native binary, so what the installer needs to
+# RUN bee is a Rust toolchain — decision 1f4262ca keeps prebuilt binaries OUT
+# of the repo and builds one per machine from the source checkout.
 command -v cargo >/dev/null 2>&1 || fail "A Rust toolchain is required (cargo not found on PATH). Install rustup: https://rustup.rs"
+
+# ...but INSTALLING bee still needs node, and that is a different question from
+# running it. The R6 sweep removed the Node preflight along with the runtime;
+# plugin_distribution.mjs was never ported, and this script drives it plus
+# several `node -e` JSON steps. Without this check the failure lands as a bare
+# `node: command not found` AFTER a clone and a multi-minute cargo build —
+# the cost of a missing preflight is paid at the worst possible moment.
+command -v node >/dev/null 2>&1 || fail "Node.js is required to INSTALL bee (the distribution helper packages/bee/scripts/plugin_distribution.mjs is not ported yet). bee itself runs as a native binary and needs no Node at runtime. Install Node 18+: https://nodejs.org"
 
 # ---------- resolve bee source (local checkout or clone) ----------
 
@@ -244,15 +251,15 @@ fi
 log "target   $TARGET_DIR [$MODE]"
 
 ONBOARD_FLAGS=()
-# Thread --runtime through to onboard_bee.mjs on both branches: it's the flag
+# Thread --runtime through to `bee onboard` on both branches: it's the flag
 # that gates the codex-hybrid write (pluginSource && runtimeCoversCodex(runtime)
-# in onboard_bee.mjs computePlan/applyPlan) so plugin-first + --runtime codex/both
+# in onboarding's computePlan/applyPlan) so plugin-first + --runtime codex/both
 # actually reaches the hook-write path this installer's --codex-hybrid cleanup
 # scoping (DIST_ARGS above) assumes is active. repo-copy passes it too for
-# symmetry — onboard_bee.mjs's skill-sync targets are runtime-independent today,
+# symmetry — onboarding's skill-sync targets are runtime-independent today,
 # so this is currently a no-op there, but it keeps both branches honest about
 # which runtime the installer was asked for instead of always defaulting to
-# onboard_bee.mjs's own "both".
+# onboarding's own "both".
 ONBOARD_FLAGS+=("--runtime" "$RUNTIME")
 if [ "$DISTRIBUTION_MODE" = "plugin-first" ]; then
   ONBOARD_FLAGS+=("--plugin-source")
@@ -410,8 +417,8 @@ cp "$STATE_FILE" "$PRE_STATE_FILE"
 DIST_ARGS=(--mode "$DISTRIBUTION_MODE" --runtime "$RUNTIME" --repo-root "$TARGET_DIR" --release-manifest "$RELEASE_MANIFEST" --plugin-state-file "$STATE_FILE")
 # GH #22 P0-1 (cph-1 self-erasure fix): a plugin-first install whose runtime
 # scope covers codex gets the codex-hybrid .codex/hooks.json + .bee/bin/hooks/
-# write from onboard_bee.mjs, gated by its own --runtime (now threaded through
-# via ONBOARD_FLAGS above, so onboard_bee.mjs's codexHybrid computation sees
+# write from onboarding, gated by its own --runtime (now threaded through
+# via ONBOARD_FLAGS above, so onboarding's codexHybrid computation sees
 # the SAME $RUNTIME this installer resolved --runtime codex/both to). Without
 # --codex-hybrid here, the next line's $DIST_HELPER cleanup pass would
 # immediately strip the very hook entries onboarding just wrote, right back to
@@ -463,7 +470,7 @@ transition_plugin || handle_transition_failure "Plugin transition failed"
 [ -n "${BEE_INSTALL_FAULT_AFTER_TRANSITION:-}" ] && handle_transition_failure "injected post-transition fault (BEE_INSTALL_FAULT_AFTER_TRANSITION)"
 
 # A typed-blocked/refused apply (e.g. the codex-hybrid hook write preflight in
-# onboard_bee.mjs applyPlan refusing because .codex/hooks.json or .bee/bin/hooks/
+# onboarding's applyPlan refusing because .codex/hooks.json or .bee/bin/hooks/
 # can't be written — a pre-existing non-directory .codex, permissions, etc. — or
 # the same obstacle caught earlier by $DIST_HELPER's own project-cleanup probe,
 # e.g. an ENOTDIR lstat under a pre-existing non-directory .codex when it walks

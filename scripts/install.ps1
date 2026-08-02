@@ -4,7 +4,7 @@
 #   1. Runtime layer (opt-in, -GlobalSkills): copy the bee skills into your
 #      agent's global skills directory (~/.claude/skills and/or ~/.codex/skills).
 #      Off by default - the per-project sync in layer 2 is the default layout.
-#   2. Repo layer: run onboard_bee.mjs against the target project - installs the
+#   2. Repo layer: run `bee onboard` against the target project - installs the
 #      AGENTS.md BEE block, .bee/ runtime files, vendored helpers, and (by
 #      default) syncs the bee skills per-project into <repo>/.claude/skills and
 #      <repo>/.agents/skills.
@@ -271,12 +271,19 @@ function Invoke-PluginTransitionFailure([string]$Message) {
 
 # ---------- prerequisites ----------
 
-# R6 CUTOVER: bee is a single native binary. The Node 18+ preflight that stood
-# here is gone - what the installer needs now is a Rust toolchain, because
-# decision 1f4262ca keeps prebuilt binaries OUT of the repo and builds one per
-# machine from the source checkout.
+# R6 CUTOVER: bee is a single native binary, so what the installer needs to RUN
+# bee is a Rust toolchain - decision 1f4262ca keeps prebuilt binaries OUT of the
+# repo and builds one per machine from the source checkout.
 $cargoCmd = Get-Command cargo -ErrorAction SilentlyContinue
 if (-not $cargoCmd) { Fail 'A Rust toolchain is required (cargo not found on PATH). Install rustup: https://rustup.rs' }
+
+# ...but INSTALLING bee still needs node, and that is a different question from
+# running it. The R6 sweep removed the Node preflight along with the runtime;
+# plugin_distribution.mjs was never ported, and this script invokes it below.
+# Without this check the failure lands as a bare "node is not recognized" AFTER
+# a clone and a multi-minute cargo build.
+$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+if (-not $nodeCmd) { Fail 'Node.js is required to INSTALL bee (the distribution helper packages/bee/scripts/plugin_distribution.mjs is not ported yet). bee itself runs as a native binary and needs no Node at runtime. Install Node 18+: https://nodejs.org' }
 
 # ---------- resolve bee source (local checkout or clone) ----------
 
@@ -289,7 +296,7 @@ try {
     $beeSrc = (Resolve-Path $Source).ProviderPath
   # R6 CUTOVER: this probe keyed on packages\bee\scripts\onboard_bee.mjs, which
   # is deleted. Left alone it answers "no" for every local checkout and
-  # RE-CLONES from GitHub instead of installing the tree in front of you — the
+  # RE-CLONES from GitHub instead of installing the tree in front of you - the
   # quietest possible wrong answer. The marker is now the Rust crate manifest:
   # it is what the build step below compiles, so a yes here means a build can
   # actually run.
