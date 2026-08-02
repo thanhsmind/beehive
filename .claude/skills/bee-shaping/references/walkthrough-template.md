@@ -1,8 +1,8 @@
 # Walkthrough Reference
 
-Load when shaping's Brief move writes the post-ship walkthrough (post-Gate-4, `standard`/`high-risk` only). The walkthrough is the post-implementation summary that closes the loop: reconstructed from execution records, evidence-honest, findings-transparent.
+Load when shaping's Brief move writes the post-ship walkthrough (post-Gate-3, `standard`/`high-risk` only). The walkthrough is the post-implementation summary that closes the loop: reconstructed from execution records, evidence-honest, findings-transparent.
 
-Path: `docs/history/<feature>/walkthrough.md`. One file per feature, written once at Gate 4, updated in place if the feature is reopened. Never forked.
+Path: `docs/history/<feature>/walkthrough.md`. One file per feature, written once at Gate 3, updated in place if the feature is reopened. Never forked.
 
 ## The one rule that shapes everything
 

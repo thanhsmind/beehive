@@ -33,8 +33,8 @@ compaction. Re-entered whenever a routing or mode-gate decision is needed.
 Presents all three verbatim but structurally owns none — it is the presenter and
 enforcer. Gate 1 "Decisions locked. Approve CONTEXT.md before planning?" · Gate 2
 "Work shape is ready. Approve before current-work preparation?" — folding the old
-standalone Gate 3 into the same approval, shape and execution together via
-`bee gate --merge` · Gate 4 (P1>0) "P1 findings block merge. Fix before
+standalone execution gate into the same approval, shape and execution together via
+`bee gate --merge` · Gate 3 (P1>0) "P1 findings block merge. Fix before
 proceeding?" / (P1=0) "Review complete. Approve merge?".
 
 ## State touched

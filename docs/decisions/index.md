@@ -746,6 +746,10 @@ each decision event.
 
 - 86403dd5 · 2026-07-23 · backlog-auto-commit close: promoted 1 critical pattern (pinned read-only worker type vs cell-execution dispatch, recurrence of 2026-07-20 friction); logged learnings at docs/history/learnings/20260723-backlog-auto-commit.md; corrected the failure-analyst's incident-2 conclusion using direct empirical evidence (guards.mjs:682 does gate git mutations on a held path, contra the analyst's static-read finding)
 
+### config
+
+- 051ecb01 · 2026-08-02 · Config keys "lanes" and "capabilities" are removed from default_config(), .bee/config.json and both shipped samples. The annotated sample now carries every key bee actually reads: cells_archive_on_close, ship_visibility and worktree_first were added; product_root stays documented-but-unset on purpose.
+
 ### decisions
 
 - e6dca7ad · 2026-07-22 · A cross-cutting write-time refusal is unfinished until the callers already in the tree are swept in the same change, with a source-derived check left behind. The check must never flag a caller that legitimately forwards a user-supplied value, and must be proven by injecting a violation.
@@ -852,6 +856,8 @@ each decision event.
 
 ### gates
 
+- ae56ecc1 · 2026-08-02 · The gate-bypass stop net prescribes the MERGED approval — ee state gate --merge --approved true, not --name execution — and treats Gate 2 as pending unless BOTH shape and xecution are already true.
+- 668482e8 · 2026-08-02 · bee has THREE gates: Gate 1 (context/CONTEXT.md), Gate 2 (merged shape+execution via ee gate --merge), Gate 3 (review/merge approval, user-invoked review session only). The review gate is renumbered 4 -> 3; the number 3 no longer means the standalone execution gate, which validation-diet D2 folded into Gate 2 and which doctrine now names by function ('the old standalone execution gate') rather than by number. Review-session decision field renamed gate4 -> review, with legacy gate4 still read and normalized to the new key on write.
 - 08b28593 · 2026-07-29 · Merged gate for lane-plan-unconditional auto-approved under gate_bypass total; SMALLER PATH passed with no cheaper shape.
 - 0f9c02a6 · 2026-07-29 · Gate 2 (merged shape+execution) for budget-fence-removal auto-approved under gate_bypass total; recommended choice was approve.
 - 69e5dee3 · 2026-07-29 · Gate 1 (context) for budget-fence-removal auto-approved under gate_bypass total; recommended choice was approve.
@@ -1006,6 +1012,7 @@ each decision event.
 
 ### hooks
 
+- 1c047d5d · 2026-08-02 · The Codex Windows hook transport no longer uses Node. commandWindows is now: git -c alias.beehook="!<sh body>" beehook — git runs an exclamation-prefixed alias from the repository TOP LEVEL, so the command string never has to COMPUTE the repo root, which was the sole reason a node -e interpreter survived the R6 Node deletion.
 - 9b5f3514 · 2026-07-29 · work-language-guard D5+D6: matching is an explicit curated term list plus the identifier shape, applied only to prose outside code blocks, inline code, paths and quoted output; the guard becomes the first code that reads 'quiet', which suppresses the silent-step half only — the internal-term half is never silenced by any setting or bypass level.
 - 531cd0f3 · 2026-07-29 · work-language-guard D3+D4: detection reads the session transcript (lib/perf.mjs resolveTranscript + lib/fsutil.mjs readJsonl), never .bee/logs/tools.jsonl; two violation classes — an internal term in user-facing prose, and a turn whose tool_use blocks show perceivable steps while its text carries zero per-step lines.
 - c1c3aab5 · 2026-07-29 · work-language-guard D1: the end-of-turn voice guard blocks the stop AT MOST ONCE per turn on a violation, feeding the reason back so the message is rewritten — never warn-only, never block-until-clean.
@@ -1020,6 +1027,10 @@ each decision event.
 - 7385ee5d · 2026-07-23 · compaction-hardening D16 (supersession): the compact-scoped capsule supersedes intent-anchor ia-1's D4/D5 for the compact source ONLY. hooks/test_hook_contracts.mjs:2740-2778 currently asserts the anchor path is strictly additive over the full preamble for both compact and resume; that assertion is split in the same cell that lands the capsule — resume keeps byte-identical additivity, compact asserts the capsule's required items and the absence of the startup-only sections.
 - 9f7fa594 · 2026-07-23 · compaction-hardening D3 (helper floor): every behavior this feature adds is reachable through a bee.mjs verb, and each hook only calls that verb's library function — no behavior exists solely inside a hook.
 - 8ba804e6 · 2026-07-23 · compaction-hardening D14: bee ships NO provider-native compaction transport adapter — no OpenAI Responses compaction_trigger, no previous_response_id continuation, no opaque-artifact replay, no compaction-provider interface.
+
+### install
+
+- d2fd8c63 · 2026-08-02 · Prebuilt binaries are published per release and preferred by both installers, superseding 1f4262ca. The release-binaries workflow builds x86_64-unknown-linux-gnu and x86_64-pc-windows-msvc from the tag, publishes them plus SHA256SUMS as release assets, and refuses to publish when .claude-plugin/plugin.json disagrees with the tag. install.sh/install.ps1 download the asset for the host, verify its SHA-256, and pin the cloned source tree to the SAME tag so BEE_VERSION and the vendored instruction layer always come from one commit; any download or checksum failure is non-fatal and falls back to the cargo build, which also remains the path for uncovered platforms and for --build-from-source.
 
 ### installer
 

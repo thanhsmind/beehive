@@ -4,7 +4,7 @@ Load after Gate 2 approval (merged shape+execution), before spawning the first w
 
 ## Single execution worker in full
 
-For `small`, the merged Gate 2+3 question and the frozen-judge
+For `small`, the merged Gate 2 shape+execution question and the frozen-judge
 check stay with the orchestrator, but implementation itself runs through
 **one dispatched execution worker** — a lighter direct Agent dispatch
 under the same execution contract as a swarm worker (same worker prompt
@@ -218,7 +218,7 @@ single worker — never wave analysis or multi-cell assignment.
      recorded with `cells judge-record` — per-cell records and cap teeth
      unchanged; a single-cell slice is identical to the old per-cell shape.
      This is goal-check verification, distinct from the no-auto-reviewer
-     stance above and from any user-invoked review session (Gate 4 and the
+     stance above and from any user-invoked review session (Gate 3 and the
      candidates ledger are separate) —
      `NEEDS_REVISION`/`automatic` means the cell is NOT done yet.
    - A `[DONE]` report carrying a **Consults** section is goal-checked

@@ -16,7 +16,7 @@ only when it is granted from a source it cannot forge;
 adoption path, the bootstrap contract and every typed zero-mutation refusal;
 `returning-and-the-merge-gate.md` owns the way back — the staged merge, the verify gate that
 catches a semantic conflict, and post-commit cleanup; `routing-and-visibility.md` owns whether
-to take a worktree at all, the lane-first refinement that defers the grant to Gate 3, and the
+to take a worktree at all, the lane-first refinement that defers the grant to Gate 2's execution component, and the
 notices an occupied checkout prints so isolation is never silently absent;
 `cross-worktree-holds.md` owns the shared holds ledger that makes an island's write intent
 visible to its siblings; and `store-tiers-and-where-it-lives.md` owns which parts of the store

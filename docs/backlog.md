@@ -89,7 +89,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-e8a153e2] Validation speedup: delta validation, merged review wave, deferred presentation (spec ak/plans/reports/spec-260727-1610-bee-validation-speedup.md) — done
 - [p-fa847e3a] Parallel-by-default doctrine: cells in a slice run concurrently on disjoint ownership; serial names its conflict; wave-barrier regen — done
 - [P1] A greenfield repo with no build gets an init lane on its first onboard — done
-- [P10] Gate 4 walkthrough can quiz the approver — done
+- [P10] Gate 3 walkthrough can quiz the approver — done
 - [P11] SEE gray areas can be locked by reacting to a throwaway HTML mock — done
 - [P12] The orchestrator measures worker results itself before accepting them — done
 - [P13] Advisor mode is dogfooded end-to-end — done
@@ -114,7 +114,7 @@ never a generation timestamp or any other wall-clock value.
 - [P32] Bee knows when to ask a second opinion, and stops doing the work itself — done
 - [P37] Slice 1d — SRC source-identity classifier — done
 - [P39] Parallel cells stop politely waiting: the scheduler computes waves from declared files+deps — done
-- [P4] Gates 2–3 are reviewed on a single human-readable implement plan — done
+- [P4] The merged Gate 2 is reviewed on a single human-readable implement plan — done
 - [P42] Codex subagent waits do not spam empty completion panels — done
 - [P44] A single session fans work into independent-feature git worktrees, each with its own gates, merged back as event-sourced state — done
 - [P45] Exploring asks fewer, batched rounds instead of one question per message — done

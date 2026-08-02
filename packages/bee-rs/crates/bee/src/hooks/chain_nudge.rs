@@ -148,7 +148,7 @@ fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
             "bee chain-nudge: a review agent finished. Collect its findings report, \
 score severities independently (P1/P2/P3), and when all reviewers are done \
 synthesize findings (corroboration promotes one level; disagreements go \
-conservative), then present Gate 4."
+conservative), then present Gate 3."
                 .to_string(),
         );
     } else if is_registered_worker || phase == json!("swarming") {

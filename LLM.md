@@ -35,7 +35,7 @@ the cell(s), pass the gates, then execute. A tiny fix stays tiny — but it stil
 
 ## 3. Non-negotiable laws (distilled from `AGENTS.md`)
 
-1. **Gates are never self-approved.** No source-editing execution before Gate 3 (`execution`)
+1. **Gates are never self-approved.** No source-editing execution before Gate 2 (`execution`)
    is approved. The *only* exception is the explicit opt-in `gate_bypass` switch.
 2. **Evidence before claims.** "Done / passing / fixed" requires fresh command output in the
    same message. "Should work" is not evidence.
@@ -118,7 +118,7 @@ refreshes). Keep hosts on the same version as the bee source.
 Before your first edit, you can honestly say **all** of these:
 
 - [ ] I routed through `bee-hive` and know the mode/lane for this work.
-- [ ] Gate 3 (`execution`) is approved (or `gate_bypass` is explicitly set).
+- [ ] Gate 2 (`execution`) is approved (or `gate_bypass` is explicitly set).
 - [ ] I ran the baseline verify and it was green.
 - [ ] I will record real verify output before capping, and cite the cell id in the commit.
 - [ ] I am talking to the human in work language, not bee vocabulary.

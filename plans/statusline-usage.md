@@ -8,4 +8,4 @@ Shape: cell `statusline-usage-1`, 2 files:
 
 Reality check (đã chạy trước khi shape): xác nhận cấu trúc `message.usage`/`message.model` trong transcript thật, subagents nằm ở `<session>/subagents/agent-*.jsonl`, cùng một `message.id` xuất hiện nhiều dòng với usage lũy tiến → cần dedupe. Giá lấy từ skill claude-api (cached 2026-06-24).
 
-Gate 2+3 merged: auto-approved (gate_bypass, tiny). Verify: `node --check` + `bash -n` + smoke test với session có subagents.
+Gate 2 (merged shape+execution): auto-approved (gate_bypass, tiny). Verify: `node --check` + `bash -n` + smoke test với session có subagents.

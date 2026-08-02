@@ -43,8 +43,9 @@ pub(crate) fn is_no_work_phase(record: &JMap) -> bool {
     NO_WORK_PHASES.iter().any(|p| str_eq(phase, p))
 }
 
-/// inject.mjs visibleGates — gate 4 is user-invoked, so it is pending only
-/// inside a live review session, and a terminal record owes no gate at all.
+/// inject.mjs visibleGates — the review gate (Gate 3) is user-invoked, so it
+/// is pending only inside a live review session, and a terminal record owes no
+/// gate at all.
 pub(crate) fn visible_gates(record: &JMap) -> Vec<&'static str> {
     if is_no_work_phase(record) {
         return Vec::new();

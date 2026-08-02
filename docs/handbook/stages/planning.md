@@ -31,7 +31,7 @@ deeply.
 
 ## Gate
 **Gate 2** — "Work shape is ready. Approve before current-work preparation?"
-The old standalone Gate 3 is folded into it: Gate 2 covers execution too, approved
+The old standalone execution gate is folded into it: Gate 2 covers execution too, approved
 via `bee gate --merge` (flips `approved_gates.shape` and
 `approved_gates.execution` in one call). Tiny/small ask it as the **merged** gate —
 "Work shape + execution: I'm about to do X via Y, verified by Z. Approve?" — with

@@ -7,7 +7,7 @@ bee follows the khuym method: read each upstream system, keep what holds up in p
 | Idea | Source | Lands in bee as |
 |---|---|---|
 | 7-stage chain with explicit artifact handoffs | khuym | The bee chain (unchanged skeleton) |
-| Human gates, never skipped (originally 4, validation-diet D2 merged shape+execution into one) | khuym | Gates 1, 2, 4 in `bee-hive` |
+| Human gates, never skipped (originally 4, validation-diet D2 merged shape+execution into one) | khuym | Gates 1, 2, 3 in `bee-hive` |
 | Socratic decision locking, one question at a time, D-IDs | khuym / superpowers / gsd | `bee-shaping` ("Explore"/"Lock") |
 | Mode gate: smallest honest workflow | khuym | Mode gate in `bee-planning` |
 | Reality gate (SMALLER PATH survivor) + spikes (feasibility matrix deleted, D6) | khuym / gsd | `bee-planning` (folded in from the deleted standalone validating stage, validation-diet D1/D5) |
@@ -26,7 +26,7 @@ bee follows the khuym method: read each upstream system, keep what holds up in p
 | Decision records with lifecycle + optional verify command | repository-harness / gstack | `decisions.jsonl` + `docs/decisions/` |
 | Event-sourced decision log (decide/supersede/redact, append-only) | gstack | `.bee/decisions.jsonl` |
 | Learnings JSONL injected into future session preambles | gstack / khuym | `bee-capturing` ("Compound") + `bee-hive` bootstrap |
-| Cross-model second opinion at contentious gates | gstack | Optional step at Gates 2 and 4 |
+| Cross-model second opinion at contentious gates | gstack | Optional step at Gates 2 and 3 |
 | Docs generated from code where code owns the truth | gstack | bee build script (later phase) |
 | Context isolation: task + interfaces + constraints only, never history | claudekit / superpowers | Worker spawn contract |
 | File-based agent communication (reports/ dir, no MCP required) | claudekit | Worker results + review reports |
@@ -129,7 +129,7 @@ bee follows the khuym method: read each upstream system, keep what holds up in p
 **Keep:**
 - **Event-sourced decisions:** `.bee/decisions.jsonl`, append-only, three event kinds (`decide`, `supersede`, `redact`); "active" is computed, never edited. Each event: decision, rationale, alternatives considered, scope, date, source, confidence. Write-time secret/PII rejection; datamark on read so resurfaced text can't act as instructions.
 - **Learnings injection:** top-N relevant learnings and recent active decisions are surfaced at session bootstrap (`bee-hive`), not just stored.
-- **Cross-model dispatch as a gate feature:** at Gate 2/3/4, optionally ask the *other* runtime's model for a second opinion. Agreement is a strong signal to report; disagreement is surfaced to the user verbatim. Never auto-resolve.
+- **Cross-model dispatch as a gate feature:** at Gate 2 and Gate 3, optionally ask the *other* runtime's model for a second opinion. Agreement is a strong signal to report; disagreement is surfaced to the user verbatim. Never auto-resolve.
 - **Docs from code** (deferred to a later bee phase): generate command references in skills from the actual helper scripts, so docs can't drift.
 - **Three layers of knowledge** framing for research: tried-and-true, new-and-popular, first-principles — prize layer 3, log it as a learning when found.
 - **Outcome-framed questions:** "what breaks for users if X?" instead of "should we X?".

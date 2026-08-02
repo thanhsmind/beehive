@@ -89,7 +89,7 @@ is dispatched for unchanged content.
   history, never stored; legacy features with no review record derive
   `unreviewed` — no session records are ever fabricated for history (decision
   565e68d0-327f-404e-b49e-d1c61ba81bfd; SPEC §11.3).
-- R11 — The final human approval of a review (its Gate 4) exists only inside a
+- R11 — The final human approval of a review (its Gate 3) exists only inside a
   review session; gate bypass never creates or approves one (decision
   565e68d0-327f-404e-b49e-d1c61ba81bfd; SPEC R8).
 - R28 — When review status is derived from change history, a conclusive
@@ -108,7 +108,7 @@ is dispatched for unchanged content.
 - A corrupt review record: read paths skip it with a warning; write verbs
   refuse loudly with the record untouched (same strict-read discipline as the
   workflow record itself).
-- The old "past reviewing but Gate 4 still pending" staleness warning is
+- The old "past reviewing but the review gate still pending" staleness warning is
   retired: closing through scribing/compounding without a review session is
   the normal state, reported informationally, never as drift. The
   unknown-phase warning is unchanged.

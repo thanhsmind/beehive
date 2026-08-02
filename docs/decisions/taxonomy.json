@@ -288,6 +288,9 @@
     "distribution",
     "proof",
     "simplification",
-    "install"
+    "install",
+    "transport",
+    "config",
+    "dead-code"
   ]
 }

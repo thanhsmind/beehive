@@ -103,6 +103,16 @@ pub fn default_state() -> Value {
 }
 
 /// onboard_bee.mjs DEFAULT_CONFIG (l. 261–287).
+///
+/// `lanes: {}` and `capabilities: {}` were dropped here (2026-08-02). Every
+/// new repo was seeded with both and `config-sample.json` documented them as
+/// "reserved … leave {} unless a bee release documents a key" — but NOTHING
+/// has ever read either one. A config key with no reader is not a reserved
+/// extension point, it is a promise the code does not keep: it invites a host
+/// to configure something that cannot take effect. Removing them is
+/// behaviour-neutral for the same reason it is safe — an existing config that
+/// still carries them keeps working, because bee ignores unknown top-level
+/// keys.
 pub fn default_config() -> Value {
     json!({
         "hooks": {
@@ -113,8 +123,6 @@ pub fn default_config() -> Value {
             "chain-nudge": true,
             "session-close": true
         },
-        "lanes": {},
-        "capabilities": {},
         "gate_bypass": false,
         "models": {
             "claude": { "extraction": "haiku", "generation": "sonnet" },
@@ -216,7 +224,9 @@ mod tests {
     fn default_config_keeps_literal_order_and_nulls() {
         let v = default_config();
         let keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
-        assert_eq!(keys, vec!["hooks", "lanes", "capabilities", "gate_bypass", "models"]);
+        // Every key here must have a reader. `lanes`/`capabilities` were
+        // seeded for years with none — see default_config's note.
+        assert_eq!(keys, vec!["hooks", "gate_bypass", "models"]);
         assert!(v["models"]["codex"]["extraction"].is_null());
     }
 

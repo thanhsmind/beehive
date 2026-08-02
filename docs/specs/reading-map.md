@@ -220,7 +220,7 @@ before this file when you do not yet know which area you are in.
   refusal); `returning-and-the-merge-gate.md` (the staged `--no-commit` merge, the verify gate
   that catches a semantic conflict before anything is committed, and `--cleanup`);
   `routing-and-visibility.md` (D9's prose routing rule, the lane-first refinement that defers
-  the grant to Gate 3, and the notices an ungranted worktree prints); `cross-worktree-holds.md`
+  the grant to Gate 2's execution component, and the notices an ungranted worktree prints); `cross-worktree-holds.md`
   (the shared path-keyed ledger in the main store, its single-lock atomic acquisition,
   heartbeat renewal, three read taps and cell-scoped release); and
   `store-tiers-and-where-it-lives.md` (the log/cache/runtime tiers that decide what a merge may

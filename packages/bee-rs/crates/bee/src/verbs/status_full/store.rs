@@ -551,8 +551,8 @@ pub(crate) fn bypass_level_root(ctx: &mut Ctx) -> R<&'static str> {
 pub(crate) fn bypass_banner(level: &str) -> &'static str {
     match level {
         "total" => "⚡⚡⚡ GATE BYPASS: TOTAL AUTOPILOT — ZERO STOPS. Every gate (any lane, high-risk/hard-gate included), secret-file reads, and review P1 findings auto-proceed; NO human checkpoint remains. Turn off: bee-hive bypass off",
-        "full" => "⚡⚡ GATE BYPASS: FULL AUTOPILOT — ALL Gates 1-3 auto-approved including high-risk/hard-gate work; only secret-file reads and a review P1 finding still stop for the human. Turn off: bee-hive bypass off",
-        "normal" => "⚡ GATE BYPASS: NORMAL — Gates 1-3 auto-approved for tiny/small/standard work only; high-risk/hard-gate, secret reads, and Gate 4 UAT still stop. Turn off: bee-hive bypass off",
+        "full" => "⚡⚡ GATE BYPASS: FULL AUTOPILOT — ALL Gates 1-2 auto-approved including high-risk/hard-gate work; only secret-file reads and a review P1 finding still stop for the human. Turn off: bee-hive bypass off",
+        "normal" => "⚡ GATE BYPASS: NORMAL — Gates 1-2 auto-approved for tiny/small/standard work only; high-risk/hard-gate, secret reads, and Gate 3 UAT still stop. Turn off: bee-hive bypass off",
         _ => "",
     }
 }

@@ -24,7 +24,7 @@ yes/no question, and silence left as unreviewed.
   — nothing evaporates.
 
 ## Gate
-**Gate 4** — P1>0: "P1 findings block merge. Fix before proceeding?"; P1=0:
+**Gate 3** — P1>0: "P1 findings block merge. Fix before proceeding?"; P1=0:
 "Review complete. Approve merge?" **This gate lives only inside a review session.**
 
 ## State touched

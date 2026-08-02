@@ -94,7 +94,7 @@ is captured the moment it settles, in every lane.
 
 **Gates are the human checkpoints.** They fence the irreversible transitions —
 Gate 2 approves shape and execution together in one call (`bee gate --merge`),
-folding the old standalone Gate 3 into it. They are never self-approved — except
+folding the old standalone execution gate into it. They are never self-approved — except
 when the opt-in `gate_bypass` switch is deliberately set by the human (levels:
 `normal` / `full` / `total`).
 
@@ -207,16 +207,16 @@ bee-hive  ─ route ─▶  exploring  ─[Gate 1]─▶  planning  ─[Gate 2]�
                                                                           │
         deferred, at the owner's pace:  scribing  ─▶  compounding
                                                                           │
-   on user request only:  reviewing  ─[Gate 4]─▶  merge
+   on user request only:  reviewing  ─[Gate 3]─▶  merge
 ```
 
 - **Gate 1** — "Decisions locked. Approve CONTEXT.md before planning?"
 - **Gate 2** — approves shape and execution together (`bee gate --merge`, folding
-  the old standalone Gate 3 into this one call) *(no source edits before this)*
-- **Gate 4** — merge approval, and it lives **only** inside a review session the user
+  the old standalone execution gate into this one call) *(no source edits before this)*
+- **Gate 3** — merge approval, and it lives **only** inside a review session the user
   explicitly asked for. It is never an automatic end-of-chain step.
 
-Every lane merges the old Gate 2 and Gate 3 into one shape+execution question;
+Every lane merges the old shape and execution approvals into one question;
 the docs lane has no gates at all. See each stage page for its lane behavior.
 
 ## How to read this handbook

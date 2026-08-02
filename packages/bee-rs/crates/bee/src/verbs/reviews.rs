@@ -87,6 +87,41 @@ const REVIEW_MODES: [&str; 6] = ["docs", "tiny", "small", "spike", "standard", "
 const SCOPE_ENTRY_TYPES: [&str; 3] = ["cell", "feature", "commit"];
 const RECORD_KINDS: [&str; 5] = ["manifest", "preflight", "finding", "uat", "decision"];
 const DECISION_STATUSES: [&str; 3] = ["pending", "blocked", "approved"];
+
+/// The review session's merge-approval field inside `decision`.
+///
+/// It was named `gate4` while bee had four gates. validation-diet D2 merged
+/// shape and execution into Gate 2, which renumbered the review gate to 3 and
+/// left `gate4` naming a gate that no longer exists. The field is now
+/// `review` — named for what it approves rather than for a number that has
+/// already moved once.
+const DECISION_GATE_FIELD: &str = "review";
+/// The pre-renumber spelling. Sessions created before the rename carry it, so
+/// it is still read and still accepted on write (normalized to `review`).
+const DECISION_GATE_FIELD_LEGACY: &str = "gate4";
+
+/// Read the merge-approval field from a `decision` object, new name first.
+/// Returns `None` only when neither spelling is present.
+///
+/// No production caller today — nothing in the CLI branches on the approval
+/// payload; `is_session_open` and the candidates ledger both key off
+/// `decision.status`. It exists so that the first reader to need it cannot
+/// accidentally ship a `gate4`-blind lookup against a store that still holds
+/// pre-rename sessions, and the back-compat test below is its exercise.
+#[allow(dead_code)]
+fn decision_gate<'a>(decision: &'a Map<String, Value>) -> Option<&'a Value> {
+    decision.get(DECISION_GATE_FIELD).or_else(|| decision.get(DECISION_GATE_FIELD_LEGACY))
+}
+
+/// Fold a legacy `gate4` key into `review` so the store converges on one
+/// spelling. A payload that already carries `review` wins outright — an
+/// explicit new-name value is never overwritten by a stale legacy one, and the
+/// legacy key never survives the write.
+fn normalize_decision_gate_field(decision: &mut Map<String, Value>) {
+    if let Some(legacy) = decision.remove(DECISION_GATE_FIELD_LEGACY) {
+        decision.entry(DECISION_GATE_FIELD.to_string()).or_insert(legacy);
+    }
+}
 const IMMUTABLE_FIELDS: [&str; 4] = ["baseline", "head", "included", "excluded"];
 
 /// Delegate marker (a shape this port still refuses to answer).
@@ -1037,7 +1072,7 @@ fn run_create(ctx: &GCtx, flags: &Flags) -> R<Out2> {
     session.insert("uat".into(), Value::Array(Vec::new()));
     let mut decision = Map::new();
     decision.insert("status".into(), Value::String("pending".to_string()));
-    decision.insert("gate4".into(), Value::Null);
+    decision.insert(DECISION_GATE_FIELD.into(), Value::Null);
     session.insert("decision".into(), Value::Object(decision));
     session.insert("created_at".into(), Value::String(now.clone()));
     session.insert("updated_at".into(), Value::String(now));
@@ -1123,7 +1158,9 @@ fn run_record(ctx: &GCtx, flags: &Flags) -> R<Out2> {
                     js_str_or_undefined(payload_map.get("status"))
                 )));
             }
-            session.insert("decision".into(), Value::Object(payload_map.clone()));
+            let mut decision = payload_map.clone();
+            normalize_decision_gate_field(&mut decision);
+            session.insert("decision".into(), Value::Object(decision));
         }
         "manifest" => {
             session.insert("reviewer_manifest".into(), payload.clone());
@@ -1726,7 +1763,7 @@ mod tests {
         ] {
             assert!(session.get(field).is_some(), "session is missing SPEC §8 field {field}");
         }
-        assert_eq!(session["decision"], json!({"status": "pending", "gate4": null}));
+        assert_eq!(session["decision"], json!({"status": "pending", "review": null}));
         assert_eq!(session["included"], json!([{"type": "cell", "id": "ok-1"}]));
         assert_eq!(session["excluded"], json!([]));
         assert_eq!(session["reviewer_manifest"], json!([]));
@@ -1993,9 +2030,9 @@ mod tests {
             root,
             "rev-1",
             "decision",
-            &json!({"status": "approved", "gate4": {"approved_by": "user"}}),
+            &json!({"status": "approved", "review": {"approved_by": "user"}}),
         ));
-        assert_eq!(session["decision"], json!({"status": "approved", "gate4": {"approved_by": "user"}}));
+        assert_eq!(session["decision"], json!({"status": "approved", "review": {"approved_by": "user"}}));
         // The immutable half is still exactly what create froze.
         assert_eq!(session["baseline"], json!("sha-base"));
         assert_eq!(session["head"], json!("sha-head"));
@@ -2011,6 +2048,43 @@ mod tests {
             "record: decision.status must be one of pending, blocked, approved, got \"maybe\"."
         );
         assert_eq!(read_review(root, "rev-1").ok().unwrap()["decision"]["status"], json!("approved"));
+    }
+
+    /// The merge-approval field was `gate4` before the review gate was
+    /// renumbered from 4 to 3. Both halves of the back-compat contract are
+    /// proven here: a decision payload written with the LEGACY key is still
+    /// accepted and converges on the new `review` spelling (the legacy key
+    /// never survives the write), and `decision_gate` reads either spelling
+    /// off a session that has not been rewritten since the rename.
+    #[test]
+    fn legacy_gate4_decision_key_is_read_and_normalized_to_review() {
+        // Read side: an untouched pre-rename session still yields its approval.
+        let legacy = json!({"status": "approved", "gate4": {"approved_by": "user"}});
+        assert_eq!(
+            decision_gate(legacy.as_object().unwrap()),
+            Some(&json!({"approved_by": "user"}))
+        );
+        // …and the new spelling reads through the same accessor.
+        let current = json!({"status": "approved", "review": {"approved_by": "user"}});
+        assert_eq!(
+            decision_gate(current.as_object().unwrap()),
+            Some(&json!({"approved_by": "user"}))
+        );
+        assert_eq!(decision_gate(json!({"status": "pending"}).as_object().unwrap()), None);
+
+        // Write side: a legacy payload is folded onto the new key.
+        let mut d = legacy.as_object().unwrap().clone();
+        normalize_decision_gate_field(&mut d);
+        assert_eq!(Value::Object(d), json!({"status": "approved", "review": {"approved_by": "user"}}));
+
+        // An explicit new-name value wins over a stale legacy one in the same
+        // payload, and the legacy key is dropped either way.
+        let mut both = json!({"status": "approved", "review": "new", "gate4": "stale"})
+            .as_object()
+            .unwrap()
+            .clone();
+        normalize_decision_gate_field(&mut both);
+        assert_eq!(Value::Object(both), json!({"status": "approved", "review": "new"}));
     }
 
     /// An unknown kind is refused BEFORE the session is read or written — the
@@ -2214,6 +2288,9 @@ mod tests {
         git_out(dir, &["rev-parse", "HEAD"])
     }
 
+    /// Deliberately shaped with the pre-rename `gate4` key: candidate
+    /// derivation keys off `decision.status`, so a session written before the
+    /// review gate was renumbered must keep deriving exactly the same way.
     fn approved_session(id: &str, head: &str) -> Value {
         json!({
             "id": id,

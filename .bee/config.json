@@ -7,8 +7,6 @@
     "session-close": true,
     "write-guard": true
   },
-  "lanes": {},
-  "capabilities": {},
   "commands": {
     "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
     "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"

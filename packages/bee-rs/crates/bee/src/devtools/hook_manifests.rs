@@ -397,13 +397,19 @@ mod tests {
     /// CUTOVER: no projection may name a `.mjs` wrapper or `node` in a
     /// position that LAUNCHES something. There is nothing left to launch, so a
     /// surviving arm would be a hook that silently does nothing on every
-    /// event. The one legal `node` is the Windows `-e` bootstrap, which is a
-    /// launcher for the binary, not a runtime for bee (it cannot be removed:
-    /// the ban on `$`/`%`/backtick that makes one string parse identically
-    /// under cmd.exe and powershell.exe also bans command substitution, so the
-    /// command text cannot ask git for the repo root).
+    /// event.
+    ///
+    /// This test used to carry ONE exemption — the Codex Windows `node -e`
+    /// bootstrap — on the reasoning that the ban on `$`/`%`/backtick also bans
+    /// command substitution, so the command text could not ask git for the
+    /// repo root and therefore needed an interpreter to do the lookup. The
+    /// exemption is gone with the thing it excused: a `!`-prefixed git alias
+    /// is run from the repo top level, so the root never has to be COMPUTED,
+    /// only relied on (`onboard::hooks_wiring::codex_hook_command_windows`).
+    /// The assertion is now unconditional — Node appears in no projection, on
+    /// no transport.
     #[test]
-    fn no_projection_launches_a_wrapper_and_only_codex_windows_launches_node() {
+    fn no_projection_launches_a_wrapper_or_node_on_any_transport() {
         for (rel, runtime, target) in projections() {
             let v = render_projection(runtime, target);
             let hooks = v["hooks"].as_object().unwrap();
@@ -428,18 +434,14 @@ mod tests {
                                 !win.contains(".mjs"),
                                 "{rel} {event}: commandWindows still names a wrapper: {win}"
                             );
-                            // THE ONE EXCEPTION, and the reason this test is
-                            // not called "no node anywhere". Codex's Windows
-                            // command string may contain no `$`, `%` or
-                            // backtick - so cmd.exe and powershell.exe parse
-                            // it identically - which also forbids command
-                            // substitution. The string therefore cannot ask
-                            // git where the repo root is, and without the root
-                            // it cannot name the binary. `node -e` is the only
-                            // launcher left that can do the lookup itself.
-                            // Lifting this needs a measurement against a real
-                            // Codex-on-Windows session, not a rewrite here.
-                            assert!(win.starts_with("node -e \""), "{rel} {event}: {win}");
+                            assert!(
+                                !win.contains("node"),
+                                "{rel} {event}: commandWindows still launches node: {win}"
+                            );
+                            assert!(
+                                win.contains(" hook "),
+                                "{rel} {event}: commandWindows does not launch the binary: {win}"
+                            );
                         }
                     }
                 }

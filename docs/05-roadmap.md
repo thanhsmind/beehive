@@ -33,7 +33,7 @@ Exit: the three fixes shipped through bee with zero hand-editing of `.bee/` file
 2. **planning** full: research levels, shapes (phase plan / epic map), cell prep with `must_haves`.
 3. **validating** full: feasibility matrix, spikes, adversarial plan-checker, cell review. (Skill later deleted — feasibility matrix retired with no replacement, spikes and cell review folded into **planning**, validation-diet D1/D5/D6.)
 4. **swarming**: wave analysis, spawn contracts for both runtimes, tend loop, HANDOFF.
-5. **reviewing** full: specialist roster, EXISTS/SUBSTANTIVE/WIRED, UAT, Gate 4.
+5. **reviewing** full: specialist roster, EXISTS/SUBSTANTIVE/WIRED, UAT, Gate 3.
 6. Second half of the hook skeleton: `bee-prompt-context` (injection dedup), `bee-state-sync`, `bee-chain-nudge` (reservation guard added to `bee-write-guard`) — plus the two-belt parity test (every guards/cells rule exercised by both a hook test and a helper test).
 7. Go mode in hive; HANDOFF/resume tested across a real pause.
 8. Dogfood: one standard feature end-to-end on each runtime (Claude Code and Codex).
@@ -53,7 +53,7 @@ Exit: after two features, `critical-patterns.md` and active decisions demonstrab
 
 ## Phase 4 — Polish (only if earned)
 
-- Cross-model second-opinion step at Gates 2–4.
+- Cross-model second-opinion step at Gates 2–3.
 - Capability registry (`tools.json`) with graceful fallbacks (gkg, beads adapter, browser testing).
 - Docs-from-code generation for helper command references, and the **repo-native playbook** (`.bee/PLAYBOOK.md` generated from SKILL.md sources at build time, installed by onboarding — the tier-3 degradation path so any plugin-less agent in the repo can still run the chain; see 06-runtime-integration.md).
 - High-risk lane hardening: detailed trace tiers, mandatory spike evidence links, plan-review persona panel (coherence + feasibility + conditional lenses).

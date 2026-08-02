@@ -780,11 +780,11 @@ pub(crate) fn claim_cell_cross_session(
                 if !approved {
                     let message = match (&lane_gates, &cell) {
                         (Some(_), Some(c)) => format!(
-                            "claimCell: lane \"{}\" gate \"execution\" is not approved — cells of this feature cannot be claimed before ITS lane passes Gate 3 (D2: only the lane's own approvals authorize its cells — the default pipeline's gate never does). Surface Gate 3 to the user for lane \"{}\" and set its approved_gates.execution once approved.",
+                            "claimCell: lane \"{}\" gate \"execution\" is not approved — cells of this feature cannot be claimed before ITS lane passes Gate 2 (D2: only the lane's own approvals authorize its cells — the default pipeline's gate never does). Surface Gate 2 to the user for lane \"{}\" and set its approved_gates.execution once approved.",
                             js_string_or_undefined(c.get("feature")),
                             js_string_or_undefined(c.get("feature"))
                         ),
-                        _ => "claimCell: gate \"execution\" is not approved — cells cannot be claimed before execution is approved. Surface Gate 3 to the user (\"Feasibility validated. Approve execution?\") and set approved_gates.execution once approved. The opt-in gate_bypass switch may self-approve: level \"normal\" covers tiny/small/standard non-hard-gate work only; levels \"full\" and \"total\" also self-approve high-risk/hard-gate execution (decision 0010, total-autopilot dcf01d7b).".to_string(),
+                        _ => "claimCell: gate \"execution\" is not approved — cells cannot be claimed before execution is approved. Surface Gate 2 to the user (\"Work shape is ready. Approve before current-work preparation?\" — the merged shape+execution question) and set approved_gates.execution once approved. The opt-in gate_bypass switch may self-approve: level \"normal\" covers tiny/small/standard non-hard-gate work only; levels \"full\" and \"total\" also self-approve high-risk/hard-gate execution (decision 0010, total-autopilot dcf01d7b).".to_string(),
                     };
                     return Err(Fail::Thrown(message));
                 }

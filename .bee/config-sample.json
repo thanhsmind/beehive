@@ -7,8 +7,8 @@
     "gate_bypass": {
       "values": "false | \"normal\" | \"full\" | \"total\" (legacy true = normal). Set via the bee-bypass-gate skill, not by hand.",
       "false": "default — every gate stops for the human.",
-      "normal": "auto-approves Gates 1-3 for tiny/small/standard work; high-risk/hard-gate work, secret reads, and review-P1 still stop.",
-      "full": "also auto-approves high-risk/hard-gate Gates 1-3; only secret reads and a review P1 still stop.",
+      "normal": "auto-approves Gates 1-2 for tiny/small/standard work; high-risk/hard-gate work, secret reads, and review-P1 still stop.",
+      "full": "also auto-approves high-risk/hard-gate Gates 1-2; only secret reads and a review P1 still stop.",
       "total": "zero stops: every gate, secret reads, and review P1 findings auto-proceed. The loud session banner reminds you it is on."
     },
     "models": {
@@ -19,13 +19,14 @@
         "object_cli": "{ \"kind\": \"cli\", \"command\": \"...\", \"promptVia\": \"stdin\" } — external CLI executor. GATHER-ONLY by design: cell execution against a cli-shaped slot is refused (cli_tier_gather_only); gathers/reviewers/advisors run through it with the prompt piped via stdin. See config-sample-cli-executors.json for full examples.",
         "null": "slot unset — prompt-budget tier; on codex-native transport the effective model is inherited-or-unknown (the dispatch log records the honest split)."
       },
-      "advisor": "The AO3/AO13 Gate-3 consult identity for high-risk work. Claude default: fable (the session-class model). Set null to skip the advisor line in worker prompts when no advisor resolves.",
+      "advisor": "The AO3/AO13 consult identity required before Gate 2's execution component opens on high-risk work. Claude default: fable (the session-class model). Set null to skip the advisor line in worker prompts when no advisor resolves.",
       "codex_note": "On codex-cli 0.144.4 native subagents cannot pin a per-agent model — a string here records the REQUESTED model; the dispatch log will still say effective_model_status=inherited-or-unknown until a capability probe proves per-agent selection."
     },
-    "lanes": "Reserved per-repo lane config overrides; leave {} unless a bee release documents a key.",
-    "capabilities": "Reserved capability flags; leave {} unless a bee release documents a key.",
     "dogfood_repos": "Only used in bee's own source repo (self-improvement loops); host projects can omit or leave [].",
-    "product_root": "Optional, for the workshop+nested-product topology only: where the product's own docs live when they are NOT beside .bee/ (path relative to the bee root, or absolute). Unset = the bee root; do not set it speculatively — a set-but-missing path warns loudly on every read."
+    "product_root": "Optional, for the workshop+nested-product topology only: where the product's own docs live when they are NOT beside .bee/ (path relative to the bee root, or absolute). Unset = the bee root; do not set it speculatively — a set-but-missing path warns loudly on every read.",
+    "cells_archive_on_close": "true (default) lets a green `bee close` retire the feature's capped cells into .bee/cells/archive/<feature>/, out of the path status/orient parse on every call. Set false only if your own tooling reads .bee/cells/*.json by path; reverse with bee cells unarchive --feature <f>.",
+    "ship_visibility": "How finished work is surfaced: \"off\" (default) or \"draft-pr\". An unrecognized value normalizes to \"off\" and says so once, by name.",
+    "worktree_first": "Code-touching feature work lives in its own worktree; the write guard refuses feature edits made in the main checkout. Set to the exact string \"off\" to disable that refusal for a repo that deliberately works in main."
   },
   "hooks": {
     "session-init": true,
@@ -42,8 +43,6 @@
     "idle_gate": true,
     "max_read_lines": 800
   },
-  "lanes": {},
-  "capabilities": {},
   "commands": {
     "setup": "npm install",
     "start": "npm run dev",
@@ -77,5 +76,8 @@
       "path": "../example-bee-repo",
       "label": "example-bee-repo"
     }
-  ]
+  ],
+  "cells_archive_on_close": true,
+  "ship_visibility": "off",
+  "worktree_first": "on"
 }

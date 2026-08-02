@@ -1,6 +1,6 @@
 # Go Mode — Step-by-Step Reference
 
-Load this when executing go mode. Go mode is the full bee pipeline from raw feature request to compounded learnings, closing verified but `unreviewed`. It chains every skill in sequence with up to **2 human gates** (fewer when the opt-in gate-bypass switch is on — see the end of this file). Each gate protects the next irreversible commitment. **Go mode never auto-enters independent review** — `bee-reviewing` and its Gate 4 are a separate, user-invoked flow layered over a completed scope; see the boxed note after the diagram.
+Load this when executing go mode. Go mode is the full bee pipeline from raw feature request to compounded learnings, closing verified but `unreviewed`. It chains every skill in sequence with up to **2 human gates** (fewer when the opt-in gate-bypass switch is on — see the end of this file). Each gate protects the next irreversible commitment. **Go mode never auto-enters independent review** — `bee-reviewing` and its Gate 3 are a separate, user-invoked flow layered over a completed scope; see the boxed note after the diagram.
 
 Trigger: `/go [feature]`, "run the full pipeline", or "go mode".
 
@@ -57,7 +57,7 @@ DONE — verified, unreviewed, development continues
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-Separately, `standard`/`high-risk` swarming waves also run a semantic checklist judge once per slice at slice close over its capped `behavior_change` cells (table in `bee-hive/references/routing-and-contracts.md`) — that is verification of the cells, not the boxed review flow above, and never triggers Gate 4 on its own.
+Separately, `standard`/`high-risk` swarming waves also run a semantic checklist judge once per slice at slice close over its capped `behavior_change` cells (table in `bee-hive/references/routing-and-contracts.md`) — that is verification of the cells, not the boxed review flow above, and never triggers Gate 3 on its own.
 
 ## Pre-Pipeline: Bootstrap
 
@@ -72,9 +72,9 @@ Before invoking `bee-shaping`:
 
 - **Gate 1:** "Decisions locked. Approve CONTEXT.md before planning?"
 - **Gate 2:** "Work shape is ready. Approve before current-work preparation?" — approves `shape` AND `execution` together in one call (`bee state gate --merge`); every lane merges the same way.
-- **Gate 4:** P1 > 0 → "P1 findings block merge. Fix before proceeding?" ; P1 = 0 → "Review complete. Approve merge?"
+- **Gate 3:** P1 > 0 → "P1 findings block merge. Fix before proceeding?" ; P1 = 0 → "Review complete. Approve merge?"
 
-Each gate is one question in the standard CONTEXT / QUESTION / RECOMMENDATION / options format, presented per the **Gate Presentation Contract** (`routing-and-contracts.md`): plain-language layer in chat, in the user's language; full mechanical report written to `docs/history/<feature>/reports/` and linked, never pasted. Gates are asked **one at a time** — Gate 1 and Gate 2 are never batched into a single question. `tiny`/`small` keep the same merge shape at a lighter ceremony (`routing-and-contracts.md` "Lane ceremony in full"): the inline reality check plus one merged question IS the contract there too, and `tiny` closes with a done-report instead of Gate 4. Optional at Gate 2 and Gate 4: a cross-model second opinion; disagreement is quoted to the user, never auto-resolved.
+Each gate is one question in the standard CONTEXT / QUESTION / RECOMMENDATION / options format, presented per the **Gate Presentation Contract** (`routing-and-contracts.md`): plain-language layer in chat, in the user's language; full mechanical report written to `docs/history/<feature>/reports/` and linked, never pasted. Gates are asked **one at a time** — Gate 1 and Gate 2 are never batched into a single question. `tiny`/`small` keep the same merge shape at a lighter ceremony (`routing-and-contracts.md` "Lane ceremony in full"): the inline reality check plus one merged question IS the contract there too, and `tiny` closes with a done-report instead of Gate 3. Optional at Gate 2 and Gate 3: a cross-model second opinion; disagreement is quoted to the user, never auto-resolved.
 
 ## Gate Presentations
 
@@ -119,7 +119,7 @@ Full review: docs/history/<feature>/reports/
 - P1 > 0 → "P1 findings block merge. Fix before proceeding? (a) fix now (b) show details (c) explicit user override" — silence is not acknowledgment.
 - P1 = 0 → "Review complete. Approve merge? (yes / show P2s first / no)"
 
-Fix cells created for P1s run through swarming, then reviewing re-runs (targeted to the fix diff) before Gate 4 is re-presented. Repeat until P1 = 0 or explicit override.
+Fix cells created for P1s run through swarming, then reviewing re-runs (targeted to the fix diff) before Gate 3 is re-presented. Repeat until P1 = 0 or explicit override.
 
 ## The Slice Loop
 
@@ -145,4 +145,4 @@ After compounding: set state `phase: idle`, `feature: null`, `mode: null`, summa
 
 Separate from headless. When `.bee/config.json` `gate_bypass` is on (set from `bee-hive`'s Gates section), go mode does not stop at a bypassed Gate 1-2: at each, the agent takes the RECOMMENDATION, records the approval, logs a one-line audit decision, posts a short `⚡ auto-approved Gate N` line, and continues. **How far bypass reaches is level-aware** (`routing-and-contracts.md §Gate bypass` table): `normal` covers `tiny`/`small`/`standard` non-hard-gate work and the high-risk/hard-gate floor still stops for the human; `full` and `total` **lift that floor** — the human chose the level precisely to remove it — so Gates 1-2 auto-approve at **every** lane, high-risk and hard-gate included. Secret-file reads still stop under `off`/`normal`/`full`; only `total` auto-proceeds on them. With bypass off (the default), Gates 1-2 are never self-approved.
 
-Gate 4 sits outside this entirely: bypass never creates or auto-approves a review session, so go mode reaching DONE never triggers it. If the user later invokes `bee-reviewing`, bypass may auto-approve the merge question only once P1 = 0 and every UAT item passed; any P1 or UAT fail/skip always stops for the human inside that session.
+Gate 3 sits outside this entirely: bypass never creates or auto-approves a review session, so go mode reaching DONE never triggers it. If the user later invokes `bee-reviewing`, bypass may auto-approve the merge question only once P1 = 0 and every UAT item passed; any P1 or UAT fail/skip always stops for the human inside that session.

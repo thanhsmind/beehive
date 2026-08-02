@@ -341,7 +341,15 @@ pub(crate) fn maybe_bypass_block(
     if !level_covers_gate(level, &mode) {
         return Ok(None);
     }
-    if record.gates.get(gate) == Some(&Value::Bool(true)) {
+    // Gate 2 is the MERGED shape+execution approval, so it has passed only
+    // when BOTH components are true. Testing `execution` alone would let a
+    // half-open merged gate slip past the very net that exists to close it:
+    // the standalone `--name` path can still grant one component without the
+    // other, and a record in that state is not an approved Gate 2.
+    let merged_passed = ["shape", gate]
+        .iter()
+        .all(|field| record.gates.get(*field) == Some(&Value::Bool(true)));
+    if merged_passed {
         return Ok(None); // gate already passed — nothing to force
     }
     let key = "bypass-stop-net";
@@ -351,7 +359,11 @@ pub(crate) fn maybe_bypass_block(
     }
     mark_injected(root, key, &hash)?;
 
-    let gate_no = "3"; // gate is never "shape" (PHASE_GATE maps planning→execution)
+    // Planning's gate is the merged shape+execution approval, numbered 2 since
+    // validation-diet D2 folded the old standalone execution gate (then Gate 3)
+    // into it. The gate field is never "shape" here — PHASE_GATE maps
+    // planning→execution — so the label names the component being set.
+    let gate_no = "2";
     let consult_sentence = if mode == Value::String("high-risk".into()) {
         // `bee state advisor-ref record` used to be prescribed here. It is
         // declared in the registry and NOT built into this binary (the R6
@@ -369,9 +381,9 @@ record it with bee decisions log --decision \"advisor consult: <identity>\" \
     };
     Ok(Some(format!(
         "⚡ GATE BYPASS ({level}): you are stopping mid-{phase} with Gate {gate_no} \
-({gate}) still pending, but bypass level \"{level}\" requires auto-approval at \
+(shape+execution) still pending, but bypass level \"{level}\" requires auto-approval at \
 this lane — do NOT ask the human. {consult_sentence}Set the gate yourself now: \
-bee state gate --name {gate} --approved true ; log a one-line \
+bee state gate --merge --approved true ; log a one-line \
 audit decision (bee decisions log --decision \"auto-approved Gate \
 {gate_no} (bypass): <choice>\" --rationale \"<why>\"); post the short \"⚡ auto-approved \
 Gate {gate_no} (bypass)\" line; then CONTINUE to the next phase. Do not re-emit the \

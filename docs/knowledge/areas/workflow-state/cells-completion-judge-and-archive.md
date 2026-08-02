@@ -317,7 +317,7 @@ over and proving it again (hardening-1-7-10).
 - R50 — The goal-check's semantic judge is verification inside the loop that
   finishes a unit, scaled by lane risk — it is never the user-invoked
   independent review, never opens or approves a review session, and never
-  touches the review-candidates ledger or Gate 4 (self-correcting-loop D4;
+  touches the review-candidates ledger or Gate 3 (self-correcting-loop D4;
   decision 565e68d0-327f-404e-b49e-d1c61ba81bfd unchanged).
 - R53 — Archiving or unarchiving a cell is refused before any move when the
   destination already holds a cell of the same identity, is journaled before

@@ -237,48 +237,61 @@ pub(crate) fn codex_hook_command(file_name: &str) -> String {
     .join("\n")
 }
 
-/// codexWindowsBootstrap (l. 2400): `node -e SCRIPT <name>` — the SCRIPT
-/// uses only single quotes and no `$`/`%`/backtick, so cmd.exe and
-/// powershell.exe parse the outer double-quoted argument identically.
+/// codexWindowsBootstrap (l. 2400): one string that cmd.exe and
+/// powershell.exe must parse IDENTICALLY, because nothing tells us which of
+/// them Codex hands it to. That is the whole constraint, and it bans `$`
+/// (PowerShell variables), `%` (cmd variables) and backtick (PowerShell
+/// escape) — which also bans both shells' command substitution.
 ///
-/// rust-port R6: it now LAUNCHES THE BINARY and exits 0 silently when the host
-/// carries none — there is no wrapper left to spawn. This `node -e` launcher
-/// is the ONE surface Node cannot leave: the ban on `$`, `%` and backtick is
-/// also a ban on command substitution, so the command STRING cannot ask git
-/// for the repo root, and the binary can only resolve its own root once
-/// launched from a root-dependent path.
+/// NODE IS GONE FROM THIS ARM. It used to be `node -e SCRIPT <name>`, kept on
+/// the reasoning that "no command substitution" meant the string could not ask
+/// git for the repo root, and without the root it could not name the binary —
+/// so it needed an interpreter that could do the lookup itself. That reasoning
+/// had a hole: it assumed the string must COMPUTE the root. It does not. A git
+/// alias prefixed with `!` is run **from the top level of the repository**, so
+/// git resolves the root for us and the body can name the binary by a path
+/// relative to it. No substitution, no interpreter, no Node — bee ships one
+/// binary and now its Windows hook transport needs nothing else installed that
+/// git itself did not already require.
+///
+/// The body runs in the shell git uses for `!` aliases (Git for Windows'
+/// bundled `sh`, never the WSL launcher a bare `bash` would reach), so it is
+/// the same POSIX shape as the arm above with two deliberate differences:
+///
+///   * **No `$`.** The two candidate binary paths are unrolled into two
+///     statements instead of a `for b in …; do [ -x "$b" ] …` loop, and the
+///     no-root check reads `git rev-parse`'s EXIT STATUS rather than capturing
+///     its output.
+///   * **Single quotes only.** The alias value is wrapped in the one pair of
+///     double quotes the outer shell consumes, so the body may not contain
+///     another `"`. Both diagnostics are single-quoted; `windows_transport_
+///     stays_parseable_by_both_shells` pins that neither ever grows a `'`.
+///
+/// VISIBLE FAIL-OPEN ON THIS TRANSPORT TOO. Both bail arms print the SAME
+/// constants the POSIX arm uses — the wordings cannot drift apart — and exit
+/// 0. They once were a bare `process.exit(0)`, which meant a Codex session on
+/// Windows that could not resolve its repo or binary lost every guard, the
+/// write guard included, without printing one character.
+///
+/// Measured on Windows 11 / git 2.51.2 across the full matrix — {cmd.exe,
+/// powershell.exe} x {repo root, repo subdirectory, repo with no vendored
+/// binary, not a repo at all} — all eight launch the binary or print the right
+/// diagnostic and exit 0, byte-identically per shell.
 pub(crate) fn codex_hook_command_windows(file_name: &str) -> String {
     let name = codex_hook_name(file_name);
-    // VISIBLE FAIL-OPEN ON THIS TRANSPORT TOO.
-    //
-    // The two bail arms below used to be a bare `process.exit(0)`. On Windows
-    // that meant a Codex session whose repo root or binary could not be
-    // resolved lost every guard - the write guard included - without printing
-    // one character, while the POSIX arm above said exactly what was wrong.
-    // `every_projection_fails_open_visibly` did not catch it: it searched the
-    // whole rendered document for the diagnostic, and the POSIX arm in the
-    // same file satisfied the search.
-    //
-    // Owned Strings rather than &str so the two arms can interpolate the SAME
-    // constants the POSIX arm uses - the wordings cannot drift apart. Both
-    // additions keep the no-`$`/`%`/backtick rule this string lives under.
-    let parts: Vec<String> = vec![
-        "var cp=require('child_process');".to_string(),
-        "var path=require('path');".to_string(),
-        "var fs=require('fs');".to_string(),
-        "var hook=process.argv[1];".to_string(),
-        "var root='';".to_string(),
-        "try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}".to_string(),
-        format!("if(!root){{console.error('{CODEX_TRANSPORT_DIAGNOSTIC}');process.exit(0);}}"),
-        "var bin=path.join(root,'.bee','bin','bee.exe');".to_string(),
-        "if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}".to_string(),
-        format!("if(!fs.existsSync(bin)){{console.error('{CODEX_BINARY_MISSING_DIAGNOSTIC}');process.exit(0);}}"),
-        "var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});".to_string(),
-        "if(r.error){process.exit(1);}".to_string(),
-        "process.exit(r.status===null?1:r.status);".to_string(),
-    ];
-    let body = parts.concat();
-    format!("node -e \"{body}\" {name}")
+    let body = [
+        // `|| { … }` on the exit status: capturing the output would need `$`.
+        format!(
+            "git rev-parse --show-toplevel >/dev/null 2>&1 || {{ echo '{CODEX_TRANSPORT_DIAGNOSTIC}' >&2; exit 0; }}"
+        ),
+        // Unrolled rather than looped, for the same no-`$` reason. Relative to
+        // the repo top level, which is where git runs a `!` alias.
+        format!("[ -x .bee/bin/bee ] && exec .bee/bin/bee hook {name} --source=repo"),
+        format!("[ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook {name} --source=repo"),
+        format!("echo '{CODEX_BINARY_MISSING_DIAGNOSTIC}' >&2; exit 0"),
+    ]
+    .join("; ");
+    format!("git -c alias.beehook=\"!{body}\" beehook")
 }
 
 fn codex_entry(file_name: &str, status_message: &str) -> Value {
@@ -677,7 +690,7 @@ mod tests {
         assert!(v["hooks"]["SessionStart"][0]["hooks"][0]["commandWindows"]
             .as_str()
             .unwrap()
-            .starts_with("node -e \"var cp=require('child_process');"));
+            .starts_with("git -c alias.beehook=\"!"));
         std::fs::create_dir_all(hooks.parent().unwrap()).unwrap();
         std::fs::write(&hooks, &merged.text).unwrap();
         assert!(!merge_codex_hooks(&hooks).changed);
@@ -700,17 +713,52 @@ mod tests {
             )
         );
         let win = codex_hook_command_windows("bee-write-guard.mjs");
-        assert!(win.ends_with("\" write-guard"), "{win}");
-        assert!(win.contains("'.bee','bin','bee.exe'"), "{win}");
-        assert!(win.contains("['hook',hook,'--source=repo']"), "{win}");
+        assert_eq!(
+            win,
+            concat!(
+                "git -c alias.beehook=\"!",
+                "git rev-parse --show-toplevel >/dev/null 2>&1 || ",
+                "{ echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; ",
+                "[ -x .bee/bin/bee ] && exec .bee/bin/bee hook write-guard --source=repo; ",
+                "[ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook write-guard --source=repo; ",
+                "echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0",
+                "\" beehook"
+            )
+        );
         for leg in [&posix, &win] {
             assert!(!leg.contains(".mjs"), "wrapper spelling survived: {leg}");
             assert!(!leg.contains("/.bee/bin/hooks/"), "wrapper path survived: {leg}");
         }
-        // R8a: one string, two shells. `$`, `%` and backtick are banned in the
-        // Windows leg or cmd.exe and powershell.exe stop agreeing on it.
-        for ch in ['$', '%', '`'] {
-            assert!(!win.contains(ch), "banned {ch:?} in commandWindows: {win}");
+        // Node left this arm: bee ships one binary, and git's `!` alias runs
+        // from the repo top level, so nothing has to COMPUTE the root.
+        assert!(!win.contains("node"), "node survived the Windows leg: {win}");
+    }
+
+    /// The one property that makes `commandWindows` a single string for two
+    /// shells, pinned as its own test because every clause of it is a silent
+    /// breakage: the wrong character does not fail to render, it renders and
+    /// then behaves differently under cmd.exe than under powershell.exe.
+    #[test]
+    fn windows_transport_stays_parseable_by_both_shells() {
+        for script in ["bee-session-init.mjs", "bee-write-guard.mjs", "bee-prompt-context.mjs"] {
+            let win = codex_hook_command_windows(script);
+            // `$` = PowerShell variable, `%` = cmd variable, backtick =
+            // PowerShell escape. Any of them and the two shells disagree.
+            for ch in ['$', '%', '`'] {
+                assert!(!win.contains(ch), "banned {ch:?} in commandWindows: {win}");
+            }
+            // The alias value owns the ONLY pair of double quotes — the outer
+            // shell consumes them. A `"` inside the body would close it early.
+            assert_eq!(win.matches('"').count(), 2, "body grew a double quote: {win}");
+            // …so both diagnostics are single-quoted inside sh, which means
+            // neither may ever contain a `'` of its own.
+            for diagnostic in [CODEX_TRANSPORT_DIAGNOSTIC, CODEX_BINARY_MISSING_DIAGNOSTIC] {
+                assert!(
+                    !diagnostic.contains('\''),
+                    "diagnostic {diagnostic:?} has a single quote — it cannot be sh-quoted in the Windows arm"
+                );
+                assert!(win.contains(diagnostic), "{diagnostic:?} missing from {win}");
+            }
         }
     }
 

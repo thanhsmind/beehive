@@ -29,8 +29,6 @@
   "guards": {
     "idle_gate": true
   },
-  "lanes": {},
-  "capabilities": {},
   "commands": {
     "setup": "npm install",
     "start": "npm run dev",

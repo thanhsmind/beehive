@@ -40,6 +40,11 @@ current stop. Out-of-band requests:
 
 ## Gates
 
+Three gates, and only three: **Gate 1** (exploring — approve CONTEXT.md), **Gate 2**
+(planning — shape AND execution in one `bee gate --merge` call), **Gate 3** (reviewing —
+merge approval, only inside a review session the user invoked). Gates 1-2 are the default
+chain; Gate 3 is additive and never automatic ("The three gates").
+
 Never approve a gate yourself, in any mode — headless included. Gates belong to the user:
 `bee state gate` records their answer, presented as a plain-language layer plus the fixed
 question, report linked, never pasted ("Gate Presentation Contract").
@@ -47,7 +52,7 @@ question, report linked, never pasted ("Gate Presentation Contract").
 The one recorded exception is gate bypass — `.bee/config.json` `gate_bypass`, a level:
 `off` (`false`, default) · `normal` (`true` / `"on"` / `"normal"`; legacy `true` reads as
 `normal`) auto-approves Gates 1-2 for non-hard-gate work, while high-risk/hard-gate,
-secret reads, and Gate 4 UAT/P1 still stop · `full` (`"full"`) lifts the high-risk/
+secret reads, and Gate 3 UAT/P1 still stop · `full` (`"full"`) lifts the high-risk/
 hard-gate floor; secret reads and a review P1 still stop · `total` (`"total"`) stops for
 nothing, secret reads included. To change it: set the config value (preserve every other
 field; create it if absent), log a one-line audit decision, and state the level's row —

@@ -5,6 +5,26 @@ out to workers, or a judgment call made about bending a rule. Day-to-day
 routing and the skill catalog live in `routing-and-contracts.md`; nothing
 here is needed to pick the next skill.
 
+## The three gates
+
+| Gate | Earned by | Question |
+|---|---|---|
+| **Gate 1** | exploring | "Decisions locked. Approve CONTEXT.md before planning?" |
+| **Gate 2** | planning | "Work shape is ready. Approve before current-work preparation?" — approves `shape` AND `execution` together (`bee gate --merge`) |
+| **Gate 3** | reviewing (user-invoked only) | P1 > 0 → "P1 findings block merge. Fix before proceeding?" ; P1 = 0 → "Review complete. Approve merge?" |
+
+Gates 1-2 are the default chain every lane closes through. Gate 3 is
+additive: it is asked once, inside a review session the user actually
+invoked, and never automatically at the end of any lane.
+
+**Reading older records.** bee had four gates until validation-diet D2
+merged shape and execution into one call. The review gate was numbered 4
+then and is numbered 3 now; the standalone execution gate that used to
+hold the number 3 no longer exists. History written before the merge is
+left as written — where this doctrine refers back to it, it says "the old
+standalone **execution** gate" rather than a number, so no sentence ever
+means two different gates at once.
+
 ## Gate Presentation Contract
 
 A gate message has two layers, and **only the human layer goes into chat**:
@@ -21,7 +41,7 @@ A gate message has two layers, and **only the human layer goes into chat**:
 
 Litmus test: **the user must be able to restate what they are approving in their own words.** A gate the user cannot restate is a dead gate — worse than no gate, because it manufactures false confidence. A technical term (BLOCKER count, spike id) may appear in the human layer only with an immediate plain-language gloss.
 
-This contract applies to all four gates, in every mode, including go mode.
+This contract applies to all three gates, in every mode, including go mode.
 
 ### AskUserQuestion — honor the tool's schema (a valid call, every time)
 
@@ -43,9 +63,9 @@ Off by default. Set from `bee-hive`'s Gates section — on the user's instructio
 | Level | Config value | Auto-approves | Still stops for the human |
 |---|---|---|---|
 | `off` | `false` / absent | nothing — every gate stops | every gate (default) |
-| `normal` | `true` / `"on"` / `"normal"` | Gates 1-2 for `tiny`/`small`/`standard` non-hard-gate work | high-risk/hard-gate Gates 1-2 · secret reads · Gate 4 UAT/P1 |
+| `normal` | `true` / `"on"` / `"normal"` | Gates 1-2 for `tiny`/`small`/`standard` non-hard-gate work | high-risk/hard-gate Gates 1-2 · secret reads · Gate 3 UAT/P1 |
 | `full` | `"full"` | **all** Gates 1-2 at every lane, high-risk/hard-gate included | secret-file reads · a review P1 finding |
-| `total` | `"total"` | **everything** — all Gates 1-2 any lane, secret-file reads, Gate 4 UAT, review P1 findings | **nothing — zero stops** |
+| `total` | `"total"` | **everything** — all Gates 1-2 any lane, secret-file reads, Gate 3 UAT, review P1 findings | **nothing — zero stops** |
 
 Legacy `true` maps to `normal`. At **Gate 1 or Gate 2** when the level bypasses that gate:
 
@@ -54,17 +74,17 @@ Legacy `true` maps to `normal`. At **Gate 1 or Gate 2** when the level bypasses 
 
 **Bypass suppresses approvals, never genuine information-gathering.** The point of the levels is to stop the agent asking merely to be *approved* — not to gag a real question. So distinguish two kinds of "question": an **approval** (the agent already has a confident best answer; the human would only rubber-stamp it) is suppressed under `full`/`total` — the agent takes its own answer and continues. An **information** question (the answer turns on a preference or knowledge only the human holds, and the agent cannot resolve it from evidence with a confident default) is still asked, even under `total`. This is where `bee-shaping`'s Socratic Explore step still stops when it must (its materiality test + the information-vs-approval refinement): the human asked to keep being consulted for real information, only never for a rubber stamp. Litmus: *"do I already have a confident best answer?"* — yes → proceed; no, and only the human can supply it → ask.
 
-**Gate 4 and secret reads follow the level.** Under `normal` and `full`, Gate 4 is never fully bypassed and bypass never creates a review session: a review only exists once the user invoked `bee-reviewing`, its UAT items are always presented, and any P1 always stops. Under `total`, a review the user started runs to completion without stopping — UAT items and P1 findings auto-proceed on the recommended resolution. **Secret-file reads** stop for the human under `off`/`normal`/`full`; only `total` auto-proceeds on them (the human accepted that credential contents may enter context/logs unprompted). Bypass still never *creates* a review session on its own at any level.
+**Gate 3 and secret reads follow the level.** Under `normal` and `full`, Gate 3 is never fully bypassed and bypass never creates a review session: a review only exists once the user invoked `bee-reviewing`, its UAT items are always presented, and any P1 always stops. Under `total`, a review the user started runs to completion without stopping — UAT items and P1 findings auto-proceed on the recommended resolution. **Secret-file reads** stop for the human under `off`/`normal`/`full`; only `total` auto-proceeds on them (the human accepted that credential contents may enter context/logs unprompted). Bypass still never *creates* a review session on its own at any level.
 
 The mechanical guards do not change: cell claiming and the write-guard still require `approved_gates.execution: true` — bypass simply means the agent records that approval itself for eligible work instead of waiting for the human. Bypass state is surfaced every session (the preamble and `bee_status` both print a loud level-specific `GATE BYPASS` banner — `NORMAL` / `FULL AUTOPILOT` / `TOTAL AUTOPILOT — ZERO STOPS`) so the active level is never silently in effect.
 
-**The bypass is mechanized at runtime, not prose-only.** The rule above is still the assistant's to follow, and the runtime honors it too: the session-stop checkpoint hook emits a turn-control block that forces continuation when the assistant tries to stop mid-planning at a gate the active level covers and is still pending. It is loop-guarded (blocks once per `sessionId:phase:gate:level`, then degrades to advisory) and excludes exploring/Gate 1 (genuine information questions still stop even under `total`).
+**The bypass is mechanized at runtime, not prose-only.** The rule above is still the assistant's to follow, and the runtime honors it too: the session-stop checkpoint hook emits a turn-control block that forces continuation when the assistant tries to stop mid-planning at a gate the active level covers and is still pending. What it prescribes is the **merged** approval — `bee state gate --merge --approved true` — because Gate 2 is one gate over two fields: a net that set `execution` alone would leave the gate it just approved half open. For the same reason it treats Gate 2 as pending unless **both** `shape` and `execution` are already true, so a record granted through the standalone `--name` path is not a hole through the net. It is loop-guarded (blocks once per `sessionId:phase:gate:level`, then degrades to advisory) and excludes exploring/Gate 1 (genuine information questions still stop even under `total`).
 
 ### Headless mode (never ask; defer into Outstanding Questions)
 
 With `mode:headless`: never ask blocking questions. Perform onboarding checks and routing only when
 unambiguous; defer every ambiguity (stale onboarding needing `--apply`, HANDOFF present, unclear
-route) into an `Outstanding Questions` section of a structured terminal report. The four gates are
+route) into an `Outstanding Questions` section of a structured terminal report. The three gates are
 NEVER self-approved in headless mode — the only mechanism that self-approves gates is the explicit
 opt-in gate-bypass switch above, and how far it reaches is its level (`normal` = normal-lane only;
 `full` = also high-risk/hard-gate; `total` = everything incl. UAT/secrets). Headless and bypass are
@@ -73,7 +93,7 @@ in `references/go-mode.md` ("Headless Go Mode").
 
 ### Green base check (before the first claim)
 
-**Before your first `cells claim`, never on arrival.** Not one of the four gates: the trigger is the *claim*, so a session that claims no cell owes no check. If `.bee/config.json` records `commands.verify`, establish a green base — **never build on red**, and a red is surfaced to the user and becomes its own fix-first tiny cell.
+**Before your first `cells claim`, never on arrival.** Not one of the three gates: the trigger is the *claim*, so a session that claims no cell owes no check. If `.bee/config.json` records `commands.verify`, establish a green base — **never build on red**, and a red is surfaced to the user and becomes its own fix-first tiny cell.
 
 Run `commands.verify` yourself when it is cheap, which is the normal case; read CI when it is not. Prefer the local run: it answers about *your* tree, and it is the same command CI runs. Fall back to CI (`gh run list`/`gh api` for the base branch, plus any open `verify-red` issue) when the chain is genuinely long — CI's answer is about the base branch as of its last run, so it is evidence about your tree only while nothing has changed under you. When no commands are recorded, `bee status` warns and the capture belongs to exploring or onboarding, never to guesswork.
 
@@ -125,7 +145,7 @@ boundary.
 
 ### Goal-check judge tier — verification, not review
 
-The swarming goal-check has a **semantic** judge tier by lane, layered on the frozen judge (`bee cells judge`, undeclared-file check) — this is verification of a capped cell, never the user-invoked review session (Gate 4 and the candidates ledger are untouched by every row below).
+The swarming goal-check has a **semantic** judge tier by lane, layered on the frozen judge (`bee cells judge`, undeclared-file check) — this is verification of a capped cell, never the user-invoked review session (Gate 3 and the candidates ledger are untouched by every row below).
 
 | Lane | Judge | Model | Verdict handling |
 |---|---|---|---|

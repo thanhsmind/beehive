@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/entering-creating-and-registering.md]
-  decisions: ["worktree-first (docs/specs/worktree-first.md, 2026-07-31, owner-approved)", "worktree-session-routing D9 (the routing rule is prose, not a hook)", D9a (a live cross-session heartbeat plus a non-idle phase in the shared store), "cross-worktree-holds D7 (lane-first: the grant is taken at Gate 2's execution component — the old standalone Gate 3, folded in by validation-diet D2 — and only on genuine file overlap; superseded by worktree-first)", "worktree-ux (2026-07-21, GH #30/#31 — the ungranted-worktree notice and the containment-deny message)"]
+  decisions: ["worktree-first (docs/specs/worktree-first.md, 2026-07-31, owner-approved)", "worktree-session-routing D9 (the routing rule is prose, not a hook)", D9a (a live cross-session heartbeat plus a non-idle phase in the shared store), "cross-worktree-holds D7 (lane-first: the grant is taken at Gate 2's execution component — the old standalone execution gate, folded in by validation-diet D2 — and only on genuine file overlap; superseded by worktree-first)", "worktree-ux (2026-07-21, GH #30/#31 — the ungranted-worktree notice and the containment-deny message)"]
   sources: [docs/specs/worktree-first.md, docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-routing-rule-d9-prose-not-a-hook"]
   authoritative_for: "worktree-parallelism: the worktree-first routing rule, its exemptions, and worktree visibility notices"
 ---
@@ -50,7 +50,7 @@ message, never an allow).
 
 **Lane-first refinement — superseded (worktree-first, 2026-07-31):** cross-worktree-holds D7
 (2026-07-20) deferred the worktree grant to Gate 2's execution component (the old standalone
-Gate 3, folded into Gate 2 — validation-diet D2) and took it only on genuine file overlap,
+execution gate, folded into Gate 2 — validation-diet D2) and took it only on genuine file overlap,
 on the argument that exploring and planning do not touch source. Worktree-first inverts
 that: the grant is taken at feature start, before any gate and whether or not files overlap
 — isolation is the default, not an escalation. The shared-store coordination the lane model

@@ -15,7 +15,7 @@ New to the system? Read [overview.md](overview.md) first.
 | 4 | **executing** | Implement, test, and finish exactly one cell. | — | [stages/executing.md](stages/executing.md) |
 | 5 | **scribing** | Sync durable, tech-agnostic knowledge of every area. | — | [stages/scribing.md](stages/scribing.md) |
 | 6 | **compounding** | Capture learnings + decisions; close the feature. | — | [stages/compounding.md](stages/compounding.md) |
-| R | **reviewing** | On-demand independent review gate over a chosen scope. | Gate 4 | [stages/reviewing.md](stages/reviewing.md) |
+| R | **reviewing** | On-demand independent review gate over a chosen scope. | Gate 3 | [stages/reviewing.md](stages/reviewing.md) |
 
 Stages 5–6 are **deferred by design**: a green `bee close` records capture as
 pending and names what remains; they run at the owner's pace, often batching
@@ -65,10 +65,10 @@ Gates are presented and enforced by **hive**, but each is *earned* at the end of
 particular stage:
 
 - **Gate 1** — earned by **exploring**: "Decisions locked. Approve CONTEXT.md before planning?"
-- **Gate 2** — earned by **planning**: the old Gate 2 and Gate 3 merged into one question that approves shape and execution together (`bee gate --merge`, flipping `approved_gates.shape` and `approved_gates.execution` in one call) *(no source edits before this)*
-- **Gate 4** — earned by **reviewing** only: P1>0 → "P1 findings block merge. Fix before proceeding?"; P1=0 → "Review complete. Approve merge?"
+- **Gate 2** — earned by **planning**: the old shape and execution approvals merged into one question that approves both together (`bee gate --merge`, flipping `approved_gates.shape` and `approved_gates.execution` in one call) *(no source edits before this)*
+- **Gate 3** — earned by **reviewing** only: P1>0 → "P1 findings block merge. Fix before proceeding?"; P1=0 → "Review complete. Approve merge?"
 
-Every lane merges the old Gate 2 and Gate 3 into one shape+execution question:
+Every lane merges the old shape and execution approvals into one question:
 tiny/small ask it inline before cells persist, standard/high-risk ask it once
 shape and the brief are ready. The docs lane has no gates. `gate_bypass` (in
 [config.json](register.md#beeconfigjson)) can auto-approve gates by level

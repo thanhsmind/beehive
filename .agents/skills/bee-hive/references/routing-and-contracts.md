@@ -16,7 +16,7 @@ Open this when the compact bootstrap in `SKILL.md` is not enough.
 | 8 | `bee-grooming` | Entropy audit, debt hunt, approved kills. | Cleanup/audit requested; hive idle |
 | 9 | `bee-researching` | Evidence-labeled research scout. | Research a topic/library/approach; planning discovery L2/L3 |
 | 10 | `bee-herding` | Cockpit roles: bootstrap, dispatch, merge. | Human invokes the cockpit, or the control loop runs one iteration |
-| 11 | `bee-shaping` (Brief) | Render the one human-readable implement plan per feature, and the post-Gate-4 walkthrough (consolidator, not planner). | Planning shaped `small`+ work; a feature's implement plan needs (re)generating; a `standard`/`high-risk` feature passed Gate 4 |
+| 11 | `bee-shaping` (Brief) | Render the one human-readable implement plan per feature, and the post-Gate-3 walkthrough (consolidator, not planner). | Planning shaped `small`+ work; a feature's implement plan needs (re)generating; a `standard`/`high-risk` feature passed Gate 3 |
 
 Gate bypass is set from `bee-hive` (Gates); developing bee itself
 (authoring skills, the self-improvement loop) is maintainer territory in
@@ -28,7 +28,7 @@ the bee source repo's handbook, never product routing in a host repo.
 |---|---|---|
 | Vague/new feature | `bee-shaping` (Explore) | Always start here if gray areas exist |
 | Research a topic/library/approach (no feature underway) | `bee-researching` | Standalone brief; suggests shaping or planning as next step |
-| (Re)generate or read a feature's implement plan or walkthrough | `bee-shaping` (Brief) | Consolidates the truth artifacts into `docs/history/<feature>/implement-plan.md`, any phase; writes `walkthrough.md` post-Gate-4 for `standard`/`high-risk`; renders nothing for `tiny`/`spike` |
+| (Re)generate or read a feature's implement plan or walkthrough | `bee-shaping` (Brief) | Consolidates the truth artifacts into `docs/history/<feature>/implement-plan.md`, any phase; writes `walkthrough.md` post-Gate-3 for `standard`/`high-risk`; renders nothing for `tiny`/`spike` |
 | Research inside a scoped feature | `bee-planning` | Discovery L2/L3 invokes `bee-researching` in-chain |
 | "Just fix this" / small change | `bee-planning` | Route in tiny or small mode |
 | Review code | `bee-reviewing` | Load directly — only on an explicit review request; never automatic after execution completes |
@@ -90,7 +90,7 @@ examples, and the session scout in full.
 The router's Modes and Lanes section keeps the classification rule and the scaling law; this section
 carries the full per-lane ceremony detail.
 
-Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 4 after execution. Every lane below closes through scribing/compounding as `unreviewed`; a review session — and its Gate 4 — happens only when the user asks, over whatever scope they choose. Separately, `standard`/`high-risk` goal-checks also run a semantic checklist judge once per slice over its capped `behavior_change` cells (table: "Goal-check judge tier" below) — that is verification of the cells, not this on-demand review session.
+Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 3 after execution. Every lane below closes through scribing/compounding as `unreviewed`; a review session — and its Gate 3 — happens only when the user asks, over whatever scope they choose. Separately, `standard`/`high-risk` goal-checks also run a semantic checklist judge once per slice over its capped `behavior_change` cells (table: "Goal-check judge tier" below) — that is verification of the cells, not this on-demand review session.
 
 **"Validate" below is ceremony, not a phase — it runs inline inside `planning`'s shape stage.**
 
@@ -102,7 +102,7 @@ Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 4 afte
 | `standard` | full `plan.md` | SMALLER PATH check + merged reviewer; ≤5-file diff (0 hard-gate flags): inline self-review, no dispatch | swarm workers | on user request only: session panel scaled to scope risk (4 core reviewers) | 2 — Gate 1, Gate 2 (merged shape+execution) |
 | `high-risk` | `plan.md` + brief | SMALLER PATH check + persona panel | swarm workers | on user request only: session panel scaled to scope risk (full wave + conditionals) | 2 — Gate 1, Gate 2 (merged shape+execution) |
 
-**Gate 4 is additive, not counted above:** it is asked once, whenever a review session actually runs for that scope — never automatically at the end of a lane's default chain.
+**Gate 3 is additive, not counted above:** it is asked once, whenever a review session actually runs for that scope — never automatically at the end of a lane's default chain.
 
 ### Concurrency law in full
 
@@ -137,10 +137,10 @@ Lanes scale ceremony, never memory — zero exceptions, the docs lane and non-ce
 | hive | onboarding, state, HANDOFF, critical-patterns, decisions | state routing updates only |
 | shaping (Explore/Qualify/Lock) | user conversation, backlog row, critical-patterns, quick scout | `docs/history/<feature>/CONTEXT.md` (lock or park), backlog row status, state update |
 | planning | CONTEXT.md, critical-patterns, active decisions, bee_status | `approach.md`, `plan.md` (frozen at Gate 2 — approval stamp only after approval; none for `tiny`, opt-in for `small`), current-slice cells via `bee cells add` |
-| shaping (Brief) | CONTEXT.md, approach.md, frozen plan.md + cells (drift re-render triggers on cell changes only, since the plan cannot drift after approval), test-result records (`.bee/logs/test-results.json`), state gates (render/refresh); capped cell traces, review findings, UAT (walkthrough) | `docs/history/<feature>/implement-plan.md` (projection; `high-risk` always, `standard` on-demand, `small` optional on request); `docs/history/<feature>/walkthrough.md` (post-Gate-4; `standard`/`high-risk`) |
+| shaping (Brief) | CONTEXT.md, approach.md, frozen plan.md + cells (drift re-render triggers on cell changes only, since the plan cannot drift after approval), test-result records (`.bee/logs/test-results.json`), state gates (render/refresh); capped cell traces, review findings, UAT (walkthrough) | `docs/history/<feature>/implement-plan.md` (projection; `high-risk` always, `standard` on-demand, `small` optional on request); `docs/history/<feature>/walkthrough.md` (post-Gate-3; `standard`/`high-risk`) |
 | swarming (orchestrate) | Gate-2-approved cells, state, reservations | worker registry in state, HANDOFF at ~65%, wave results |
 | swarming ("Execute") | assigned cell, CONTEXT.md, reservations | implementation commits (one per cell, cell id in message), finish (runs the declared tests; the result record is the evidence), report in `docs/history/<feature>/reports/` |
-| reviewing | user-selected immutable scope (a `bee_reviews` session — never triggered by phase or cell completion) | session findings (P1/P2/P3) and the Gate 4 decision recorded on that session, backlog items, `residual-findings.md` fallback |
+| reviewing | user-selected immutable scope (a `bee_reviews` session — never triggered by phase or cell completion) | session findings (P1/P2/P3) and the Gate 3 decision recorded on that session, backlog items, `residual-findings.md` fallback |
 | capturing | `behavior_change` cells + test-result records, CONTEXT.md, active decisions, UAT/worker reports, feature history, traces, commits, code + user interview (harvest) | with a bundle: `docs/knowledge/areas/<area>/` concepts (BA-grade merge); with no bundle: `docs/specs/<area>.md` (BA-grade merge), `docs/specs/reading-map.md`; plus `docs/history/learnings/YYYYMMDD-<slug>.md`, critical-patterns promotions, decision log entries, backlog friction, state record |
 | grooming | entropy inputs, backlog, traces, diffs | kill proposals, tiny/small cells, outcome records |
 
@@ -308,7 +308,7 @@ docs/history/<feature>/
   discovery.md  approach.md  implement-plan.md        ← conditional: separate files only for
                                                         L2+ discovery / high-risk; else folded
                                                         into plan.md sections
-  walkthrough.md                                      ← standard/high-risk, post-Gate-4
+  walkthrough.md                                      ← standard/high-risk, post-Gate-3
 
 docs/history/learnings/
   critical-patterns.md  YYYYMMDD-<slug>.md

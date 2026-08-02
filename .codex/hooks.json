@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook session-init --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" session-init",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook session-init --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook session-init --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: session bootstrap"
           }
         ]
@@ -19,7 +19,7 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook prompt-context --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" prompt-context",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook prompt-context --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook prompt-context --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: phase reminder"
           }
         ]
@@ -32,7 +32,7 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook write-guard --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" write-guard",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook write-guard --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook write-guard --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: write guard"
           }
         ]
@@ -43,7 +43,7 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook model-guard --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" model-guard",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook model-guard --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook model-guard --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: model-tier guard"
           }
         ]
@@ -56,7 +56,7 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook state-sync --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" state-sync",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook state-sync --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook state-sync --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: state sync"
           }
         ]
@@ -66,7 +66,7 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook tools-logger --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" tools-logger",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook tools-logger --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook tools-logger --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: tools logger"
           }
         ]
@@ -78,7 +78,7 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook codex-subagent-audit --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" codex-subagent-audit",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook codex-subagent-audit --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook codex-subagent-audit --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: subagent start audit"
           }
         ]
@@ -90,13 +90,13 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook state-sync --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" state-sync",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook state-sync --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook state-sync --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: state sync"
           },
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook chain-nudge --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" chain-nudge",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook chain-nudge --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook chain-nudge --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: chain nudge"
           }
         ]
@@ -106,7 +106,7 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook codex-subagent-audit --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" codex-subagent-audit",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook codex-subagent-audit --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook codex-subagent-audit --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: subagent stop audit"
           }
         ]
@@ -118,7 +118,7 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook session-close --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" session-close",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook session-close --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook session-close --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: pre-compact flush check"
           }
         ]
@@ -130,13 +130,13 @@
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook state-sync --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" state-sync",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook state-sync --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook state-sync --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: state sync"
           },
           {
             "type": "command",
             "command": "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\nfor b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook session-close --source=repo; done\necho \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0",
-            "commandWindows": "node -e \"var cp=require('child_process');var path=require('path');var fs=require('fs');var hook=process.argv[1];var root='';try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}if(!root){console.error('bee: hook transport unavailable (no git root)');process.exit(0);}var bin=path.join(root,'.bee','bin','bee.exe');if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}if(!fs.existsSync(bin)){console.error('bee: hook binary missing (.bee/bin/bee)');process.exit(0);}var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});if(r.error){process.exit(1);}process.exit(r.status===null?1:r.status);\" session-close",
+            "commandWindows": "git -c alias.beehook=\"!git rev-parse --show-toplevel >/dev/null 2>&1 || { echo 'bee: hook transport unavailable (no git root)' >&2; exit 0; }; [ -x .bee/bin/bee ] && exec .bee/bin/bee hook session-close --source=repo; [ -x .bee/bin/bee.exe ] && exec .bee/bin/bee.exe hook session-close --source=repo; echo 'bee: hook binary missing (.bee/bin/bee)' >&2; exit 0\" beehook",
             "statusMessage": "bee: session close check"
           }
         ]

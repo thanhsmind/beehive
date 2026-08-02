@@ -23,7 +23,7 @@
 // plans/r5-test-migration.md § "Structural delegations".
 //
 // (3) is NOT ported: executing every example needs the .mjs suite's whole
-// fixture apparatus (a repo past Gate 3, seeded cells/decisions/reservations,
+// fixture apparatus (a repo past Gate 2, seeded cells/decisions/reservations,
 // perf and transcript roots redirected), and most examples would run through
 // the delegate anyway — proving Node works, not Rust. What IS portable is the
 // invariant below that every example is spelled against a command the

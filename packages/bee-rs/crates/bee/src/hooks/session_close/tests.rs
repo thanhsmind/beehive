@@ -80,13 +80,53 @@ use std::process::ExitCode;
         );
         let (stdout, parts, _) = run_stop(root, json!({"session_id": "s-1"})).unwrap();
         assert!(stdout.starts_with("{\"decision\":\"block\",\"reason\":\"⚡ GATE BYPASS (total): "));
-        assert!(stdout.contains("mid-planning with Gate 3 (execution) still pending"));
-        assert!(stdout.contains("state gate --name execution --approved true"));
+        assert!(stdout.contains("mid-planning with Gate 2 (shape+execution) still pending"));
+        // The net prescribes the MERGED approval, not the standalone --name
+        // path: Gate 2 flips `shape` and `execution` together, so a net that
+        // set only execution would leave the gate it just "approved" half open.
+        assert!(stdout.contains("state gate --merge --approved true"));
+        assert!(!stdout.contains("--name execution"));
         assert!(!stdout.contains("High-risk execution requires"));
         assert!(parts.is_empty());
         // loop-guard: the same (session, phase, gate, level) key degrades to advisory
         let (stdout2, _, _) = run_stop(root, json!({"session_id": "s-1"})).unwrap();
         assert_eq!(stdout2, "");
+    }
+
+    /// Gate 2 has passed only when BOTH of its components are true. A record
+    /// carrying just one of them is a half-open merged gate, and the net must
+    /// still fire on it — otherwise the standalone `--name` path is a hole
+    /// straight through the bypass net.
+    #[test]
+    fn bypass_net_fires_on_a_half_open_merged_gate_and_stands_down_on_a_whole_one() {
+        for half in [
+            json!({"shape": true, "execution": false}),
+            json!({"shape": false, "execution": true}),
+        ] {
+            let fx = fixture();
+            let root = fx.path();
+            write_json_file(&root.join(".bee").join("config.json"), &json!({"gate_bypass": "total"}));
+            write_json_file(
+                &root.join(".bee").join("state.json"),
+                &json!({"phase": "planning", "mode": "standard", "approved_gates": half}),
+            );
+            let (stdout, _, _) = run_stop(root, json!({"session_id": "s-1"})).unwrap();
+            assert!(
+                stdout.contains("state gate --merge --approved true"),
+                "half-open gate {half} did not fire the net: {stdout}"
+            );
+        }
+
+        // Both components granted: the gate is whole, so the net stands down.
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({"gate_bypass": "total"}));
+        write_json_file(
+            &root.join(".bee").join("state.json"),
+            &json!({"phase": "planning", "mode": "standard", "approved_gates": {"shape": true, "execution": true}}),
+        );
+        let (stdout, _, _) = run_stop(root, json!({"session_id": "s-1"})).unwrap();
+        assert_eq!(stdout, "");
     }
 
     #[test]
