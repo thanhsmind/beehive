@@ -121,6 +121,11 @@ const STALE_HANDOFF_MS: f64 = 7.0 * 24.0 * 60.0 * 60.0 * 1000.0;
 
 const POST_EXECUTION_REVIEW_PHASES: [&str; 3] = ["scribing", "compounding", "compounding-complete"];
 
+/// How many un-retired finished features it takes before the retirement nudge
+/// is worth a line. One or two is noise a reader learns to skip; five is a
+/// real drag on every orientation, and one command clears it.
+const ARCHIVABLE_NUDGE_FLOOR: f64 = 5.0;
+
 // bee.mjs ~819-821
 const CONTENTION_TAIL_MAX_BYTES: u64 = 65536;
 

@@ -200,6 +200,35 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
         ));
     }
     {
+        // The retirement nudge. `bee close` retires the feature it closes, so
+        // this only ever speaks for work that never went through close — and
+        // it stays quiet until the backlog is actually worth a command, since
+        // a line that shows up at one stale feature is a line readers learn
+        // to skip.
+        let a = s("cells").and_then(|c| vget(c, "archivable"));
+        let features = a.and_then(|v| vget(v, "features")).and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let cells = a.and_then(|v| vget(v, "cells")).and_then(|v| v.as_f64()).unwrap_or(0.0);
+        if features >= ARCHIVABLE_NUDGE_FLOOR {
+            let ids = match a.and_then(|v| vget(v, "ids")) {
+                Some(Value::Array(arr)) if !arr.is_empty() => {
+                    let shown = js_join(arr, ", ");
+                    if features > arr.len() as f64 {
+                        format!(" ({shown}, …)")
+                    } else {
+                        format!(" ({shown})")
+                    }
+                }
+                _ => String::new(),
+            };
+            lines.push(format!(
+                "Finished features not retired: {} feature(s), {} cell(s) still in the active scan{ids} — every status and orient parses them. Retire: bee cells archive --all-but-active",
+                tpl(a.and_then(|v| vget(v, "features"))),
+                tpl(a.and_then(|v| vget(v, "cells"))),
+            ));
+            let _ = cells;
+        }
+    }
+    {
         let sd = s("scribing_debt");
         if opt_truthy(sd) && vget(sd.unwrap(), "count").and_then(|v| v.as_f64()).unwrap_or(0.0) > 0.0 {
             let sd = sd.unwrap();

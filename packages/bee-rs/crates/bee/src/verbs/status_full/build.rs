@@ -259,6 +259,7 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
         c.insert("capped".into(), json!(capped));
         c.insert("blocked".into(), json!(blocked));
         c.insert("archived".into(), Value::Object(archived));
+        c.insert("archivable".into(), Value::Object(archivable_backlog(&cells, feature_or_null.as_ref())));
         status.insert("cells".into(), Value::Object(c));
     }
     if lanes_full {

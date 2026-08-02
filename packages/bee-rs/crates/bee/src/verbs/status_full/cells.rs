@@ -770,3 +770,58 @@ pub(crate) fn list_reservations(ctx: &Ctx, active_only: bool) -> Vec<JMap> {
         .map(|r| lease_to_reservation(&r))
         .collect()
 }
+
+/// The retirement backlog: features whose ACTIVE cells are all terminal and
+/// which are therefore sitting in the hot scan path for no reason.
+///
+/// WHY STATUS CARRIES IT. `list_cells` above parses every file in
+/// `.bee/cells/` on every `status` and `orient`, so the cost of asking "where
+/// am I" grows with the amount of work already finished. `bee close` retires
+/// the feature it closes, but nothing retires a feature that was simply
+/// abandoned mid-lifecycle or finished before close existed — on this repo
+/// that had reached 116 features and 441 files, two thirds of a 300 ms
+/// orient. A read-only verb must not fix that itself; it names it, and
+/// `bee cells archive --all-but-active` does the work when the reader says so.
+///
+/// Computed from the cell list the caller ALREADY loaded, so it costs no I/O.
+pub(crate) fn archivable_backlog(cells: &[Value], active: Option<&Value>) -> JMap {
+    let mut terminal_only: std::collections::BTreeMap<String, (bool, i64)> =
+        std::collections::BTreeMap::new();
+    for cell in cells {
+        let Some(Value::String(feature)) = vget(cell, "feature") else { continue };
+        if feature.is_empty() {
+            continue;
+        }
+        let is_terminal = matches!(
+            vget(cell, "status").and_then(|v| v.as_str()),
+            Some("capped") | Some("dropped")
+        );
+        let entry = terminal_only.entry(feature.clone()).or_insert((true, 0));
+        entry.0 &= is_terminal;
+        entry.1 += 1;
+    }
+    // The active feature is never archivable — its cells are where the work
+    // is — so counting it here would make the nudge unclearable.
+    let active_name = match active {
+        Some(Value::String(f)) if !f.is_empty() => Some(f.as_str()),
+        _ => None,
+    };
+    let mut features: Vec<&String> = terminal_only
+        .iter()
+        .filter(|(f, (all_terminal, _))| *all_terminal && Some(f.as_str()) != active_name)
+        .map(|(f, _)| f)
+        .collect();
+    features.sort();
+    let cell_count: i64 = features
+        .iter()
+        .map(|f| terminal_only.get(*f).map(|(_, n)| *n).unwrap_or(0))
+        .sum();
+    let mut out = JMap::new();
+    out.insert("features".into(), json!(features.len()));
+    out.insert("cells".into(), json!(cell_count));
+    out.insert(
+        "ids".into(),
+        Value::Array(features.iter().take(5).map(|f| json!(f)).collect()),
+    );
+    out
+}

@@ -15,7 +15,7 @@ use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{
     release_reservations_for_agent, reserve_path_atomic, Err2, ReserveOutcome,
 };
-use serde_json::{Map, Number, Value};
+use serde_json::{json, Map, Number, Value};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -620,6 +620,24 @@ pub(crate) fn close_handler(
         },
     );
 
+    // ── retire the feature's cells ────────────────────────────────────────
+    //
+    // Close is the lifecycle event that MEANS "this feature is done", and
+    // `.bee/cells/` is on the hot read path — every `status` and `orient`
+    // parses each file in it. Left to a human remembering `bee cells
+    // archive`, cells accumulate for the life of the repo: bee's own store
+    // reached 455 files across 118 features, 441 of them belonging to
+    // features that were completely finished, and paid for all of them on
+    // every orientation.
+    //
+    // Three conditions, all necessary: the close is GREEN (a red close never
+    // reaches here), every one of the feature's cells is terminal (close's
+    // only blocking door is tests, so a feature CAN close green holding an
+    // open cell — that one is reported, not archived), and the repo has not
+    // opted out. Reversible either way: `bee cells archive --feature <f>`
+    // has an `unarchive` twin and the files stay in git.
+    let retired = auto_archive_on_close(root, feature);
+
     let mut lines = vec![headline];
     if !run.undeclared {
         lines.extend(render_test_command_lines(&run));
@@ -627,11 +645,63 @@ pub(crate) fn close_handler(
     lines.push(format!(
         "Capture (deferred, decision c8e25271): scribing {scribing_detail}; capture queue {queue_detail}."
     ));
+    match &retired {
+        // `moved == 0` is the feature that had no cells in the first place:
+        // real, common (a docs-only close), and not worth a line.
+        Retirement::Archived { moved } if *moved > 0 => lines.push(format!(
+            "Retired \"{feature}\": {moved} cell(s) moved out of the active scan (bee cells unarchive --feature {feature} to reverse)."
+        )),
+        Retirement::Archived { .. } => {}
+        Retirement::Held { reason } => lines.push(format!(
+            "Cells kept in the active scan: {reason}."
+        )),
+        Retirement::Off => {}
+    }
+    result.insert("retired".into(), retired.value());
     lines.push(
         "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
             .to_string(),
     );
     Ok(Out::Emit(Value::Object(result), lines.join("\n"), 0))
+}
+
+/// What close did with the feature's cells, and why.
+pub(crate) enum Retirement {
+    Archived { moved: usize },
+    Held { reason: String },
+    /// `cells_archive_on_close: false` — the repo asked close to leave the
+    /// store alone. Silent, because a switch the owner set is not news.
+    Off,
+}
+
+impl Retirement {
+    fn value(&self) -> Value {
+        match self {
+            Retirement::Archived { moved } => json!({"archived": true, "moved": moved}),
+            Retirement::Held { reason } => json!({"archived": false, "reason": reason}),
+            Retirement::Off => json!({"archived": false, "reason": "cells_archive_on_close is off"}),
+        }
+    }
+}
+
+/// Default TRUE: the whole point is that it happens without anyone
+/// remembering. `.bee/config.json` `cells_archive_on_close: false` opts out —
+/// for a repo whose own tooling reads `.bee/cells/*.json` by path.
+fn archive_on_close_enabled(root: &Path) -> bool {
+    let Ok(config) = read_config_raw(root) else { return true };
+    !matches!(config.get("cells_archive_on_close"), Some(Value::Bool(false)))
+}
+
+fn auto_archive_on_close(root: &Path, feature: &str) -> Retirement {
+    if !archive_on_close_enabled(root) {
+        return Retirement::Off;
+    }
+    // Best-effort throughout: close has already succeeded, and a store that
+    // could not be tidied is not a failed close. Every arm says what it did.
+    match crate::verbs::cells::archive_feature_for_close(root, feature) {
+        Ok(moved) => Retirement::Archived { moved },
+        Err(reason) => Retirement::Held { reason },
+    }
 }
 
 /// provenance: state.mjs readLane / lanePath / requireLaneFeature — the

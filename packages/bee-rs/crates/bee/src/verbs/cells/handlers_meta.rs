@@ -454,25 +454,17 @@ pub(crate) fn assert_archive_dir_contained(verb: &str, root: &Path, archive_dir:
     )))
 }
 
-pub(crate) fn run_archive(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !rsv::keys_known(&flags, &["feature"]) {
-        return None;
-    }
-    let feature = flags.req_str("feature")?.to_string();
-    dispatch("cells archive", use_json, t0, move |ctx| {
-        let root = ctx.root.clone();
-        // handleCellsArchive: active-feature guard from state.json.
-        let state = bstate::read_state_brief(&root).map_err(|_| Fail::Delegate)?;
-        if matches!(&state.feature, Value::String(f) if js_truthy(&state.feature) && *f == feature) {
-            return Err(Fail::Thrown(format!(
-                "cells archive: feature \"{feature}\" is the active feature (state.feature) — only a closed/inactive feature can be archived. Switch or clear state.feature first, or archive a different feature."
-            )));
-        }
-        let feature = assert_valid_feature_slug("archiveFeature", &feature)?;
-        let mut guard = acquire_named_lock(&root, "cells-archive")?;
-        let outcome = (|| -> MR<(Vec<Value>, f64, f64)> {
-            recover_archive_journal(&root, &feature)?;
-            let cells = list_cells(&root, Some(&feature), None).map_err(|_| Fail::Delegate)?;
+/// Archive ONE feature's cells. The caller owns the `cells-archive` lock, the
+/// active-feature guard and the slug check — so the batch path below can hold
+/// the lock once across a whole sweep instead of contending with itself.
+fn archive_one_feature(root: &Path, feature: &str) -> MR<(Vec<Value>, f64, f64)> {
+    let feature = feature.to_string();
+    let feature = &feature;
+    {
+        {
+            recover_archive_journal(root, feature)?;
+            let cells =
+                list_cells(root, Some(feature.as_str()), None).map_err(|_| Fail::Delegate)?;
             if cells.is_empty() {
                 return Err(Fail::Thrown(format!(
                     "archiveFeature: no cells found for feature \"{feature}\" — nothing to archive."
@@ -568,9 +560,171 @@ pub(crate) fn run_archive(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opt
             summary.insert(feature.clone(), Value::Object(entry));
             write_json_atomic(&archive_summary_file(&root), &Value::Object(summary))
                 .map_err(|e| Fail::Thrown(format!("{e}")))?;
-            crate::fsutil::remove_file_if_exists(&archive_journal_path(&root, &feature));
+            crate::fsutil::remove_file_if_exists(&archive_journal_path(root, feature));
             Ok((moved.into_iter().map(|(_, _, id)| id).collect(), capped, dropped))
-        })();
+        }
+    }
+}
+
+/// Features whose ACTIVE cells are all terminal, excluding the active feature.
+/// Returns (eligible, skipped-with-reason) — nothing is dropped silently: a
+/// sweep that quietly passed over a feature would look identical to one that
+/// had nothing to do.
+fn terminal_features(root: &Path, active: Option<&str>) -> MR<(Vec<String>, Vec<(String, String)>)> {
+    let cells = list_cells(root, None, None).map_err(|_| Fail::Delegate)?;
+    let mut order: Vec<String> = Vec::new();
+    let mut by_feature: std::collections::HashMap<String, Vec<&Value>> =
+        std::collections::HashMap::new();
+    for cell in &cells {
+        let Some(Value::String(f)) = cell.get("feature") else { continue };
+        if f.is_empty() {
+            continue;
+        }
+        if !by_feature.contains_key(f) {
+            order.push(f.clone());
+        }
+        by_feature.entry(f.clone()).or_default().push(cell);
+    }
+    order.sort();
+    let (mut eligible, mut skipped) = (Vec::new(), Vec::new());
+    for feature in order {
+        let group = &by_feature[&feature];
+        if active == Some(feature.as_str()) {
+            skipped.push((feature, "active feature (state.feature)".to_string()));
+            continue;
+        }
+        let live: Vec<String> = group
+            .iter()
+            .filter(|c| {
+                !matches!(c.get("status"), Some(Value::String(s)) if s == "capped" || s == "dropped")
+            })
+            .map(|c| {
+                format!(
+                    "{} ({})",
+                    js_string_or_undefined(c.get("id")),
+                    js_string_or_undefined(c.get("status"))
+                )
+            })
+            .collect();
+        if live.is_empty() {
+            eligible.push(feature);
+        } else {
+            skipped.push((feature, format!("non-terminal cell(s): {}", live.join(", "))));
+        }
+    }
+    Ok((eligible, skipped))
+}
+
+pub(crate) fn run_archive(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["feature", "all-but-active"]) {
+        return None;
+    }
+    let sweep = matches!(flags.get("all-but-active"), Some(FlagV::Present));
+    let feature_flag = flags.truthy_str("feature").map(str::to_string);
+    dispatch("cells archive", use_json, t0, move |ctx| {
+        let root = ctx.root.clone();
+        let state = bstate::read_state_brief(&root).map_err(|_| Fail::Delegate)?;
+        let active: Option<String> = match &state.feature {
+            Value::String(f) if js_truthy(&state.feature) => Some(f.clone()),
+            _ => None,
+        };
+
+        // Two modes, and the registry cannot say "exactly one of" in a flat
+        // JSON-Schema `required` — so it declares neither and the handler
+        // owns the choice, exactly as `state workflows close` does.
+        if sweep == feature_flag.is_some() {
+            return Err(Fail::Thrown(
+                "cells archive: requires exactly one of --feature <feature> (retire that one feature) or --all-but-active (retire every finished feature in one pass). Example: bee cells archive --all-but-active --json"
+                    .to_string(),
+            ));
+        }
+
+        if sweep {
+            // The same guard `state workflows close --all-but-active` carries,
+            // for the same reason: with no resolvable active feature, "all but
+            // active" silently becomes "all", and the one feature that must
+            // never be archived is the in-flight one.
+            let Some(active_feature) = active.as_deref() else {
+                return Err(Fail::Thrown(
+                    "cells archive --all-but-active: refused — state.feature is empty, so \"all but active\" cannot be evaluated and would degrade into \"all\", archiving the in-flight feature's cells. Nothing was archived. Set the active feature, or archive one feature at a time with --feature."
+                        .to_string(),
+                ));
+            };
+            let (eligible, skipped) = terminal_features(&root, Some(active_feature))?;
+            let mut guard = acquire_named_lock(&root, "cells-archive")?;
+            let outcome = (|| -> MR<(Vec<Value>, f64, f64, Vec<(String, String)>)> {
+                let (mut rows, mut capped_total, mut dropped_total) = (Vec::new(), 0f64, 0f64);
+                let mut failed: Vec<(String, String)> = Vec::new();
+                for feature in &eligible {
+                    let slug = match assert_valid_feature_slug("archiveFeature", feature) {
+                        Ok(s) => s,
+                        // One malformed slug must not abort a sweep that is
+                        // otherwise fine — it is reported, not fatal.
+                        Err(Fail::Thrown(why)) => {
+                            failed.push((feature.clone(), why));
+                            continue;
+                        }
+                        Err(other) => return Err(other),
+                    };
+                    match archive_one_feature(&root, &slug) {
+                        Ok((moved, capped, dropped)) => {
+                            capped_total += capped;
+                            dropped_total += dropped;
+                            rows.push(json!({
+                                "feature": slug,
+                                "moved": moved.len(),
+                                "counts": {"capped": capped, "dropped": dropped},
+                            }));
+                        }
+                        Err(Fail::Thrown(why)) => failed.push((slug, why)),
+                        Err(other) => return Err(other),
+                    }
+                }
+                Ok((rows, capped_total, dropped_total, failed))
+            })();
+            guard.release();
+            let (rows, capped, dropped, failed) = outcome?;
+            let moved_total: u64 = rows
+                .iter()
+                .filter_map(|r| r.get("moved").and_then(Value::as_u64))
+                .sum();
+            let result = json!({
+                "mode": "all-but-active",
+                "active_feature": active_feature,
+                "archived": rows,
+                "counts": {"capped": capped, "dropped": dropped},
+                "skipped": skipped
+                    .iter()
+                    .map(|(f, why)| json!({"feature": f, "reason": why}))
+                    .collect::<Vec<_>>(),
+                "failed": failed
+                    .iter()
+                    .map(|(f, why)| json!({"feature": f, "reason": why}))
+                    .collect::<Vec<_>>(),
+            });
+            let mut text = format!(
+                "Archived {} feature(s): {moved_total} cell(s) moved (capped={} dropped={}). Kept {} in the active scan.",
+                rows.len(),
+                jsjson::js_f64_to_string(capped),
+                jsjson::js_f64_to_string(dropped),
+                skipped.len()
+            );
+            for (f, why) in &failed {
+                text.push_str(&format!("\n  ! {f}: {why}"));
+            }
+            return Ok(Out::Emit(result, text, if failed.is_empty() { 0 } else { 1 }));
+        }
+
+        let feature = feature_flag.clone().unwrap_or_default();
+        // handleCellsArchive: active-feature guard from state.json.
+        if active.as_deref() == Some(feature.as_str()) {
+            return Err(Fail::Thrown(format!(
+                "cells archive: feature \"{feature}\" is the active feature (state.feature) — only a closed/inactive feature can be archived. Switch or clear state.feature first, or archive a different feature."
+            )));
+        }
+        let feature = assert_valid_feature_slug("archiveFeature", &feature)?;
+        let mut guard = acquire_named_lock(&root, "cells-archive")?;
+        let outcome = archive_one_feature(&root, &feature);
         guard.release();
         let (moved, capped, dropped) = outcome?;
         let result = json!({
@@ -684,4 +838,64 @@ pub(crate) fn run_unarchive(flags: rsv::Flags, use_json: bool, t0: Instant) -> O
         );
         Ok(Out::Emit(result, text, 0))
     })
+}
+
+/// `bee close`'s retirement entry point: archive `feature`'s cells now that
+/// close has proven the feature done.
+///
+/// It deliberately does NOT carry `run_archive`'s active-feature guard. That
+/// guard exists to stop a caller archiving work that is still in flight; close
+/// has just run the declared suite green over this exact feature, which is the
+/// evidence the guard is a proxy for. The condition it DOES keep is the real
+/// one: every cell terminal. Close's only blocking door is tests, so a feature
+/// can close green while still holding an open cell, and that cell belongs in
+/// the active scan.
+///
+/// `Err(reason)` is a sentence for the caller to print, never a failed close.
+pub(crate) fn archive_feature_for_close(root: &Path, feature: &str) -> Result<usize, String> {
+    let slug = match assert_valid_feature_slug("archiveFeature", feature) {
+        Ok(s) => s,
+        Err(Fail::Thrown(why)) => return Err(why),
+        Err(_) => return Err(format!("feature \"{feature}\" could not be resolved")),
+    };
+    let cells = match list_cells(root, Some(slug.as_str()), None) {
+        Ok(c) => c,
+        Err(_) => return Err(format!("the cell store for \"{slug}\" could not be read")),
+    };
+    if cells.is_empty() {
+        // Nothing to retire is not a held store — a docs-only feature, or one
+        // whose cells were archived already, has nothing to say about them.
+        return Ok(0);
+    }
+    let live: Vec<String> = cells
+        .iter()
+        .filter(|c| {
+            !matches!(c.get("status"), Some(Value::String(s)) if s == "capped" || s == "dropped")
+        })
+        .map(|c| {
+            format!(
+                "{} ({})",
+                js_string_or_undefined(c.get("id")),
+                js_string_or_undefined(c.get("status"))
+            )
+        })
+        .collect();
+    if !live.is_empty() {
+        return Err(format!(
+            "feature \"{slug}\" still holds {}",
+            live.join(", ")
+        ));
+    }
+    let mut guard = match acquire_named_lock(root, "cells-archive") {
+        Ok(g) => g,
+        // Another session is archiving. Not this close's problem to solve.
+        Err(_) => return Err(format!("the cells-archive lock is held — \"{slug}\" stays for now")),
+    };
+    let outcome = archive_one_feature(root, &slug);
+    guard.release();
+    match outcome {
+        Ok((moved, _, _)) => Ok(moved.len()),
+        Err(Fail::Thrown(why)) => Err(why),
+        Err(_) => Err(format!("feature \"{slug}\" could not be archived")),
+    }
 }
