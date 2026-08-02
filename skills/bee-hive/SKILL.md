@@ -61,6 +61,15 @@ gate; bypass is not headless — headless still stops at every gate ("Gate bypas
 `.bee/bin/bee onboard --repo-root <root> --json`. `changes_needed` →
 summarize, get approval, re-run with `--apply` — never silently; `blocked_*` → zero
 mutations, surface `versions`. Do not continue until it reports `up_to_date`.
+These three steps are the whole session-time contract; the status detail behind
+them loads from `references/onboarding.md` only when one of them actually fires.
+
+A freshly onboarded project has craft (`.bee/expertise/`) but an empty
+knowledge layer of its own. Its first debt is the orientation entry —
+written by reading the tree, never by asking the user to describe it:
+`.bee/expertise/knowledge.md` ("The orientation file") sets the bar,
+`bee-capturing` owns the write. Until it exists, every session pays to
+rediscover where things are.
 
 ## Go mode
 
@@ -77,7 +86,13 @@ mutations, surface `versions`. Do not continue until it reports `up_to_date`.
 
 ## References
 
+Every heading quoted in this body resolves somewhere in `references/`; the row
+that names the contract is the one to open.
+
 | File | When to load |
 |---|---|
-| `references/routing-and-contracts.md` | Every quoted heading in this body resolves here. Deep contracts: gates and bypass, lanes and ceremony, delegation, communication, judge tier, onboarding detail |
+| `references/routing-and-contracts.md` | The default: skill catalog, first-skill routing, state bootstrap, resume logic, lane ceremony, chaining, communication contract, question format, file and CLI quick reference |
+| `references/gates-and-delegation.md` | A gate is about to be presented, a bypass level set, work fanned out, or a rule bent — gate presentation, bypass levels, headless, delegation, judgment contract, judge tier, verify scope, Codex tending |
+| `references/scout-and-ticks.md` | Deciding how much to read before acting, re-judging a lane against evidence, or writing a tick / ship-visibility / route-record line exactly |
+| `references/onboarding.md` | ONLY when onboarding is in question — `.bee/onboarding.json` missing or stale, an install/upgrade request, or a `blocked_*` result. Never on a session that is already `up_to_date` |
 | `references/go-mode.md` | `/go` runs: gate wording, slice loop, fallbacks, headless + bypass |

@@ -21,6 +21,14 @@ the **state layer** — `docs/knowledge/` with a bundle, else
 command, process: any unit with observable behavior) has one spec that
 is its meaning; the decision log; and the learnings history.
 
+Together these are **this project's own knowledge layer**, and it is a
+different layer from `.bee/expertise/`: expertise holds craft that
+holds in any repo, this holds what is true *here* and expensive to
+re-derive. What belongs in it, how a fact is harvested from finished
+work, how the index routes, and what the always-loaded tier may cost:
+`.bee/expertise/knowledge.md` — read it before standing one up in a
+fresh project, and whenever the layer starts duplicating or piling.
+
 ## Capture the moment it settles
 
 Detection is your own duty, unprompted. Most settlements are silent —
@@ -84,7 +92,9 @@ runs it.
    --into <spec>`. A stub is never dropped or summarized away.
 2. From the feature's artifacts — CONTEXT.md, plan, cell traces,
    worker reports, review findings — write one dated learnings file
-   (`references/promotion.md` ("Learnings File Template")). Delegate
+   (`references/promotion.md` ("Harvest Discipline", "Learnings File
+   Template")); read the touched areas' existing entries first, so the
+   harvest extends the layer instead of restating it. Delegate
    the reading to read-only subagents; keep synthesis here. Thin
    evidence means a thin file, never an invented finding.
 3. Promote a learning only when it clears all three bars:
@@ -125,5 +135,6 @@ questions, ambiguous merges, and critical promotions go to
 |---|---|
 | `references/area-spec.md` | Area spec + system-overview templates, per-section and merge rules, harvest interview, bootstrap, rebuild checklist |
 | `references/citations.md` | Citation discipline: short8 decision ids in specs and backlog rows |
-| `references/promotion.md` | Learnings file template, promotion decision tree, critical promotion format, friction entries |
+| `references/promotion.md` | Harvest discipline (source ranking, what never becomes a record, denied writes), learnings file template, promotion decision tree, critical promotion format, friction entries |
+| `.bee/expertise/knowledge.md` | The project knowledge layer as a system: what belongs in it, harvesting from finished work, routing, the always-loaded budget, migration rot |
 | `.bee/expertise/documentation.md`, `.bee/expertise/decisions.md` | Spec craft; what deserves a decision record |

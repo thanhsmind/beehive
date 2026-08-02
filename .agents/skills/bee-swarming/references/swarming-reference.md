@@ -51,7 +51,7 @@ target) still forces serial — in doubt, serial.
 
 After `[DONE]`, emit the cap tick, and when `ship_visibility` is active push
 the cap (first cap of a feature opens the draft PR) —
-`bee-hive/references/routing-and-contracts.md`, "Progress ticks" / "Ship
+`bee-hive/references/scout-and-ticks.md`, "Progress ticks" / "Ship
 visibility". Then — never the worker — author the done-report from the
 worker's verbatim diff plus the commit (the finish already ran the declared
 tests; a re-run stays a smell-triggered judgment call, step 7 below),
@@ -196,7 +196,7 @@ single worker — never wave analysis or multi-cell assignment.
      ~1-in-3 sample (choice stated in the slice-close tick, never a silent
      skip); any `NEEDS_REVISION` escalates that worker to judge-every-slice
      for the feature's remainder (tier table in
-     `bee-hive/references/routing-and-contracts.md`, "Goal-check judge
+     `bee-hive/references/gates-and-delegation.md`, "Goal-check judge
      tier"). The judge returns one verdict per cell and each verdict is
      recorded with `cells judge-record` — per-cell records and cap teeth
      unchanged; a single-cell slice is identical to the old per-cell shape.
@@ -346,7 +346,7 @@ A configurable tier may name an **external CLI executor** instead of a model —
 3. **Spawn detached, output to files:** before launching — first dispatch or any resume round — delete any existing `.bee/workers/<cell-id>.result.json`; a stale result must never satisfy a later attempt. Run the configured command as a background process, prompt via stdin, final message to a dedicated file where the CLI supports it (codex: `-o .bee/workers/<cell-id>.result.md`), raw stream to a job log with stderr suppressed — thinking noise bloats the orchestrator's context; re-enable stderr only to debug a failing run. E.g. `<command> -o .bee/workers/<id>.result.md - < .bee/workers/<id>.prompt.md > .bee/workers/<id>.out.log 2>/dev/null`. Keep the launcher's job handle — its exit event is the "process ended" signal step 5 waits on. Record the worker (nickname, cell, `executor: cli`) in `.bee/state.json` as usual.
 4. **Tend by artifact, not by chat:** the external worker runs the same `.bee/bin/bee` binary (reserve → finish) — one self-contained executable, no runtime to install — the cell status and reservations ARE the progress signal. Poll `.bee/bin/bee cells show --id <id>` and read `.bee/workers/<cell-id>.result.json` for the final outcome; never parse the raw JSONL stream. A quiet run is not a dead run — do not kill on silence alone.
 5. **Accept by file, never by exit:** once the process ends, a cli run counts only if `result.json` exists, parses, and carries a valid outcome. Missing, unparseable, or invalid-outcome result = a failed run, routed to rescue (step 7) — never accepted, never silently waited on.
-6. **Trust boundary — never on its word:** an external worker's `done` is never accepted on its word — the orchestrator ALWAYS re-runs the declared tests itself (`bee test`) and runs `bee cells judge --id <id>`. External executors never get the tiny/small spot-check relaxation; every external cell is goal-checked. The result file is a signal, never the evidence. On `standard`/`high-risk` `behavior_change` cells, the same semantic checklist judge from the tier table in `bee-hive/references/routing-and-contracts.md` ("Goal-check judge tier") applies here too — verification, not the on-demand review session.
+6. **Trust boundary — never on its word:** an external worker's `done` is never accepted on its word — the orchestrator ALWAYS re-runs the declared tests itself (`bee test`) and runs `bee cells judge --id <id>`. External executors never get the tiny/small spot-check relaxation; every external cell is goal-checked. The result file is a signal, never the evidence. On `standard`/`high-risk` `behavior_change` cells, the same semantic checklist judge from the tier table in `bee-hive/references/gates-and-delegation.md` ("Goal-check judge tier") applies here too — verification, not the on-demand review session.
 7. **Rescue — resume before re-dispatch:** on a goal-check miss or a failed acceptance (step 5), prefer the CLI's session-resume (codex: `codex exec resume --last`, run from the repo dir; resume inherits the original session's sandbox/config — do not re-pass sandbox flags) with a short prompt carrying the diagnostic that applies — the failing verify output for a goal-check miss, or the acceptance failure (missing/unparseable/invalid `result.json`) for a step-5 reject — plus the contract path. It keeps the worker's context and costs far less than a fresh run. **After 2 failed resume rounds, stop ping-ponging:** mark `[BLOCKED]` and climb the normal rescue ladder (a stuck/garbled run is killed and re-dispatched; the tier rung may swap `cli` for a native model tier when the provider itself is failing).
 
 Constraints: the external CLI must be able to edit the repo working tree and run node (the `.bee/bin` contract); grant write access scoped to the repo only (codex: `-s workspace-write`) — never a machine-wide bypass (`--yolo`-style flags) as the house default; the goal-check exists so bee does not have to *trust* the worker, not so it can hand over the machine. Secrets: the external process gets only its own provider's credentials from the user's environment — bee passes none.

@@ -100,7 +100,7 @@ context before planning or executing.
   hold conflict, stop and report it — never write through it. A worker
   executes exactly the one cell it was handed.
 
-**Native Codex empty waits require a progress interval** — the full ordered rule lives in `bee-hive` → `references/routing-and-contracts.md` ("Native Codex subagent tending").
+**Native Codex empty waits require a progress interval** — the full ordered rule lives in `bee-hive` → `references/gates-and-delegation.md` ("Native Codex subagent tending").
 
 ## Multi-session etiquette
 

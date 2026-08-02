@@ -2,6 +2,12 @@
 
 Where things live. Read the touched area's spec before its code.
 
+Cold start — no area in mind yet:
+[`docs/codebase-overview.md`](../codebase-overview.md) is the one-read map of
+the tree as it stands after the R6 Node cutover: entry points, what lives in
+each module, the conventions that hold, and the recorded test command. Read it
+before this file when you do not yet know which area you are in.
+
 ## Area specs
 
 - [`docs/knowledge/areas/decision-memory/`](../knowledge/areas/decision-memory/index.md) — what

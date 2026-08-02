@@ -28,6 +28,7 @@ bee/
     bee-hive/        ← bootstrap + routing meta-skill, incl. gates and gate-bypass levels (instructions only; the onboarding engine lives at packages/bee/scripts/ above)
       SKILL.md
       references/routing-and-contracts.md
+      references/onboarding.md
       references/go-mode.md
     bee-shaping/     SKILL.md + references/{shaping-reference.md, gray-area-probes.md, context-template.md, mini-brief-template.md, implement-plan-template.md, walkthrough-template.md} — Explore, Qualify, Lock, and Brief in one front door
     bee-planning/    SKILL.md + references/{planning-reference.md, edge-dimensions.md} — also owns the reality check (SMALLER PATH) and review wave folded in from the deleted `validating` skill (validation-diet D1/D5)

@@ -1,7 +1,65 @@
 # Learnings and Promotion
 
 Load during the Compound step. The judgment lives in SKILL.md; the
-templates and the promotion bar live here.
+templates, the harvest discipline, and the promotion bar live here.
+
+## Harvest Discipline
+
+How a feature's evidence becomes candidate learnings, before any
+template applies.
+
+**Read the layer before you read the feature.** Two reads, in this
+order: the existing patterns and area concepts for every area this
+feature touched, then the feature's own artifacts. Reversed, the
+harvest produces entries the layer already holds — and a duplicate is
+not free, because it clears the promotion bar on its own merits and
+then taxes every future session twice.
+
+**Rank the sources by what they observed.** Review findings and
+verification output rank first: an independent reader or a command
+saw them. Cell traces and worker reports rank second: an agent
+believed them. The plan ranks last: it records intent from before
+contact. A finding that exists only in the plan is not a finding, and
+a worker's claim that no verification output supports is a lead, not
+evidence.
+
+**Mine the project, not the change.** The question is never "what did
+this feature do" but "what will still be true for the next feature."
+A convention a reviewer enforced, a constraint the work surfaced, a
+trap that cost real time — those are learnings. The ids, the line
+numbers, the particular bug are the *evidence* for a learning, never
+the learning itself.
+
+**Three things never become a record:**
+
+- **A one-off of this change.** If restating it requires naming this
+  feature's cells or files to make sense, it has not generalized yet.
+- **Generic software advice.** That layer already exists and is
+  written once, universally: `.bee/expertise/`. An entry that would
+  read as sound advice dropped into any repo is in the wrong layer —
+  and the knowledge bundle is where a reader looks for what is true
+  *here*.
+- **Anything the layer already holds.** When an existing entry is
+  merely incomplete, extend that entry. A neighbor filed beside it
+  splits the topic in two, and the next reader finds whichever half
+  the index shows first.
+
+**Every attributed claim carries its quote.** A learning that rests on
+a review finding, a user answer, or a command's output quotes the
+words it rests on, verbatim, and names where they came from. A
+paraphrase cannot be checked later, and an attribution nobody can
+check is how an invented finding enters the layer wearing the
+authority of an observed one. Decisions additionally carry their
+short8 id (`references/citations.md`) so a supersede sweep can reach
+the passage.
+
+**When writes are denied** — a read-only pass, a headless run without
+authority, a feature abandoned before its owner returned — produce
+the same analysis as a *proposal*: the candidate learnings with their
+evidence, in the reply, and change nothing under `docs/knowledge/` or
+`docs/history/`. A proposal nobody acted on costs one read. A record
+written without authority is load-bearing the moment the next session
+loads it.
 
 ## Learnings File Template
 
