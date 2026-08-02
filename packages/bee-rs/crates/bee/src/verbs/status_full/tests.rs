@@ -2027,3 +2027,170 @@ use crate::version::BEE_VERSION;
             );
         }
     }
+
+    // ── the review block's cross-run git cache ─────────────────────────────
+    //
+    // The port kept `derive_candidate_status`'s in-process memo and dropped
+    // the on-disk one Node wrote, so every `status` / `orient` re-spawned the
+    // same `merge-base` and `rev-list` queries. Measured on the bee repo (89
+    // candidates, win32): orient 850ms with candidates, 280ms without — two
+    // thirds of the session-start path spent re-asking answered questions.
+    //
+    // These four pin the properties that make replaying those answers safe.
+    // Each POISONS the cache with an answer the git fixture contradicts, so a
+    // pass that ignored the cache and a pass that honoured it cannot report
+    // the same counts — the alternative (asserting two identical runs agree)
+    // is green whether or not a single byte is ever read back.
+
+    /// A candidate whose head is an ancestor of an approved session's head,
+    /// at HEAD. Derives to `reviewed` with no cache in play.
+    fn review_git_fixture(tmp: &Path) -> (PathBuf, String, String) {
+        let root = tmp.join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        write(&root, ".bee/onboarding.json", "{}");
+        write(&root, "f.txt", "one");
+        git(&root, &["init", "-q", "-b", "main", "."]);
+        git(&root, &["config", "user.email", "a@b.c"]);
+        git(&root, &["config", "user.name", "t"]);
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-qm", "one"]);
+        let first = git_out(&root, &["rev-parse", "HEAD"]);
+        write(&root, "f.txt", "two");
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-qm", "two"]);
+        let second = git_out(&root, &["rev-parse", "HEAD"]);
+
+        write(
+            &root,
+            ".bee/review-candidates.jsonl",
+            &format!(
+                "{}\n",
+                json!({
+                    "id": "cand-1", "type": "candidate", "feature": "f",
+                    "head": first, "mode": "standard", "cells": ["c1"],
+                })
+            ),
+        );
+        write(
+            &root,
+            ".bee/reviews/s1.json",
+            &json!({
+                "id": "s1",
+                "head": second,
+                "included": [{ "type": "cell", "id": "c1" }],
+                "decision": { "status": "approved" },
+            })
+            .to_string(),
+        );
+        (root, first, second)
+    }
+
+    fn git_out(cwd: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the review-cache fixtures");
+        assert!(out.status.success(), "git {args:?} failed");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn poisoned_cache(head: &str, candidate_head: &str, session_head: &str) -> Value {
+        json!({
+            "schema": "review-git-cache/1",
+            "head": head,
+            "covered": {},
+            // The fixture's git says TRUE. A pass that reads this file reports
+            // `unreviewed`; a pass that re-derives reports `reviewed`.
+            "covered_gen": {
+                format!("{candidate_head} {session_head}"): {
+                    "covered": false, "unresolved": false,
+                },
+            },
+            "since": {},
+        })
+    }
+
+    fn review_counts(root: &Path) -> Value {
+        let mut ctx = ctx_for(root);
+        let block = build_review_block(&mut ctx).expect("the review block never bails here");
+        Value::Object(block)["candidates"].clone()
+    }
+
+    #[test]
+    fn a_cold_review_pass_derives_from_git_and_leaves_a_cache_at_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, first, second) = review_git_fixture(tmp.path());
+        let head = git_out(&root, &["rev-parse", "HEAD"]);
+
+        assert_eq!(review_counts(&root)["reviewed"], json!(1));
+
+        let cached = match crate::fsutil::read_json(&git_cache_path(&root)) {
+            crate::fsutil::ReadJson::Parsed(v) => v,
+            crate::fsutil::ReadJson::Missing => panic!("the pass must leave a cache behind"),
+            crate::fsutil::ReadJson::Corrupt => panic!("the cache it leaves must be parseable"),
+        };
+        assert_eq!(cached["schema"], json!("review-git-cache/1"));
+        assert_eq!(cached["head"], json!(head), "the cache is keyed on HEAD");
+        assert_eq!(
+            cached["covered_gen"][format!("{first} {second}")]["covered"],
+            json!(true),
+            "the answer git actually gave must be what is written down"
+        );
+    }
+
+    #[test]
+    fn a_warm_cache_at_the_same_head_is_replayed_instead_of_re_spawning_git() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, first, second) = review_git_fixture(tmp.path());
+        let head = git_out(&root, &["rev-parse", "HEAD"]);
+        crate::fsutil::write_json_atomic(
+            &git_cache_path(&root),
+            &poisoned_cache(&head, &first, &second),
+        )
+        .unwrap();
+
+        // If the cache were decorative this would still be `reviewed`.
+        let counts = review_counts(&root);
+        assert_eq!(counts["unreviewed"], json!(1), "the cached answer must win");
+        assert_eq!(counts["reviewed"], json!(0));
+    }
+
+    #[test]
+    fn a_cache_written_at_another_head_is_discarded_rather_than_replayed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, first, second) = review_git_fixture(tmp.path());
+        // `commits_since` counts `<ref>..HEAD`, so an answer set derived at a
+        // different HEAD is not merely old, it can be wrong. Same file, one
+        // field changed — the only thing under test is the HEAD guard.
+        crate::fsutil::write_json_atomic(
+            &git_cache_path(&root),
+            &poisoned_cache(&"0".repeat(40), &first, &second),
+        )
+        .unwrap();
+
+        assert_eq!(
+            review_counts(&root)["reviewed"],
+            json!(1),
+            "a foreign-HEAD cache must be re-derived, not trusted"
+        );
+    }
+
+    #[test]
+    fn a_corrupt_or_hand_edited_cache_costs_a_slower_pass_and_nothing_else() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, first, second) = review_git_fixture(tmp.path());
+        let head = git_out(&root, &["rev-parse", "HEAD"]);
+
+        // Unparseable.
+        std::fs::create_dir_all(git_cache_path(&root).parent().unwrap()).unwrap();
+        std::fs::write(git_cache_path(&root), b"{not json").unwrap();
+        assert_eq!(review_counts(&root)["reviewed"], json!(1));
+
+        // Parseable, but an entry whose shape this reader does not recognise
+        // is skipped rather than coerced into an answer.
+        let mut bad = poisoned_cache(&head, &first, &second);
+        bad["covered_gen"][format!("{first} {second}")]["covered"] = json!("nope");
+        crate::fsutil::write_json_atomic(&git_cache_path(&root), &bad).unwrap();
+        assert_eq!(review_counts(&root)["reviewed"], json!(1));
+    }
