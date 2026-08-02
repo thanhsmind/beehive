@@ -491,7 +491,13 @@ try {
   Copy-Item $stateFile $preStateFile -Force
 
   Write-Host "plan     bee onboard $($onboardFlags -join ' ') (dry-run first)"
-  & $beeBin onboard --repo-root $Directory @onboardFlags
+  # CWD IS LOAD-BEARING. `bee onboard` vendors FROM a bee source checkout and
+  # finds one by walking up from the binary and from the cwd. On the published
+  # path those are a temp dir and the TARGET repo, neither of which is a
+  # checkout, so onboarding refused every run. Running it from $beeSrc is what
+  # puts the clone in view.
+  Push-Location $beeSrc
+  try { & $beeBin onboard --repo-root $Directory @onboardFlags } finally { Pop-Location }
   if ($LASTEXITCODE -ne 0) { Fail 'Onboarding plan failed.' }
 
   if ($DryRun) {
@@ -503,6 +509,26 @@ try {
   #    onboarding apply below - nothing above this point mutates a plugin,
   #    target, or home.
   if (-not (Confirm-Step "Apply this onboarding plan to $Directory?")) { Fail 'Aborted - nothing applied.' }
+
+  # VENDOR THE BINARY BEFORE ONBOARDING APPLIES, not after.
+  #
+  # Hook wiring is FEATURE-DETECTED: onboarding writes binary-shaped hook
+  # commands when it finds .bee/bin/bee[.exe] in the target. Copying it in
+  # after the apply meant the first apply always wired for a binary that was
+  # not there yet, so a fresh install never converged in one pass while a
+  # second run did. Ordering, not logic.
+  #
+  # The vendored NAME is a contract too: hooks, AGENTS.md and the skills all
+  # name .bee/bin/bee.exe. A downloaded release asset is called
+  # bee-x86_64-pc-windows-msvc.exe, so copying it under its own leaf name
+  # would leave every hook pointing at a file that is not there - with the
+  # installer still reporting success, because it verifies through that same
+  # wrong path.
+  $hostBinDir = Join-Path $Directory '.bee\bin'
+  if (-not (Test-Path $hostBinDir)) { New-Item -ItemType Directory -Force $hostBinDir | Out-Null }
+  $hostBeeName = if ($beeBin -like '*.exe') { 'bee.exe' } else { 'bee' }
+  Copy-Item $beeBin (Join-Path $hostBinDir $hostBeeName) -Force
+  $hostBee = Join-Path $hostBinDir $hostBeeName
 
   # 3. mutate the plugin ONLY now, after confirmation - the pre-run snapshot
   #    recorded above ($preStateFile) is what a later failure rolls back to.
@@ -541,7 +567,8 @@ try {
   #    write preflight in onboard_bee.mjs applyPlan refusing because
   #    .codex/hooks.json or .bee/bin/hooks/ can't be written) names the
   #    concrete way out below, then rolls the plugin transition back.
-  $applyOutput = & $beeBin onboard --repo-root $Directory --apply @onboardFlags
+  Push-Location $beeSrc
+  try { $applyOutput = & $beeBin onboard --repo-root $Directory --apply @onboardFlags } finally { Pop-Location }
   if ($LASTEXITCODE -ne 0) {
     Write-Host ($applyOutput -join "`n")
     Write-Host '  fix options:'
@@ -556,18 +583,6 @@ try {
   }
 
   # ---------- verify ----------
-
-  # Put the binary where the host's own hooks and agents look for it, THEN
-  # verify through that copy - the thing this repo will actually run from now on.
-  $hostBinDir = Join-Path $Directory '.bee\bin'
-  if (-not (Test-Path $hostBinDir)) { New-Item -ItemType Directory -Force $hostBinDir | Out-Null }
-  # The vendored name is a contract: hooks, AGENTS.md and the skills all name
-  # .bee/bin/bee.exe. A downloaded release asset is called
-  # bee-x86_64-pc-windows-msvc.exe, so copying it under its own leaf name
-  # would leave every hook pointing at a file that is not there.
-  $hostBeeName = if ($beeBin -like '*.exe') { 'bee.exe' } else { 'bee' }
-  Copy-Item $beeBin (Join-Path $hostBinDir $hostBeeName) -Force
-  $hostBee = Join-Path $hostBinDir $hostBeeName
 
   Push-Location $Directory
   try {

@@ -269,3 +269,69 @@ fn both_installers_vendor_the_binary_under_its_canonical_name() {
         "install.ps1 must pick a canonical vendored name"
     );
 }
+
+/// Onboarding is invoked from the source checkout, and the binary is in place
+/// before the apply — in BOTH installers.
+///
+/// THE DEFECT THIS EXISTS TO CATCH, twice. `bee onboard` vendors FROM a bee
+/// checkout and locates one by walking up from the binary and from the cwd. On
+/// the published path those are a temp dir and the target repo, so onboarding
+/// refused every run and the install died. Separately, hook wiring is
+/// FEATURE-DETECTED against `.bee/bin/bee[.exe]`: vendoring the binary after
+/// the apply left the first apply wiring for a file that was not there, so a
+/// fresh install never converged in one pass while a second run did.
+///
+/// install.sh was fixed first and install.ps1 shipped one release still
+/// carrying both — which is the argument for a law that reads both files
+/// rather than the one that happened to be under the debugger.
+#[test]
+fn both_installers_onboard_from_the_source_and_vendor_before_applying() {
+    // install.sh — a subshell `cd "$BEE_SRC"` around each onboard call.
+    let sh = read("scripts/install.sh");
+    let sh_calls: Vec<&str> =
+        sh.lines().filter(|l| l.contains("onboard --repo-root")).collect();
+    assert!(sh_calls.len() >= 3, "install.sh onboard call sites vanished: {sh_calls:?}");
+    for line in &sh_calls {
+        assert!(
+            line.contains(r#"cd "$BEE_SRC""#),
+            "install.sh calls onboard without cd-ing to the source checkout: {line}"
+        );
+    }
+
+    // install.ps1 — Push-Location $beeSrc around each one.
+    let ps1 = read("scripts/install.ps1");
+    let ps_lines: Vec<(usize, &str)> = ps1.lines().enumerate().collect();
+    let ps_calls: Vec<usize> = ps_lines
+        .iter()
+        .filter(|(_, l)| l.contains("onboard --repo-root"))
+        .map(|(i, _)| *i)
+        .collect();
+    assert!(ps_calls.len() >= 2, "install.ps1 onboard call sites vanished");
+    for i in &ps_calls {
+        let window = ps_lines[i.saturating_sub(3)..=*i]
+            .iter()
+            .map(|(_, l)| *l)
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            window.contains("Push-Location $beeSrc"),
+            "install.ps1 calls onboard without Push-Location to the source: {}",
+            ps_lines[*i].1
+        );
+    }
+
+    // Ordering: the vendored copy precedes the apply, in both.
+    // Anchor on the INVOCATIONS, not on any mention: `--apply` also appears in
+    // the help text near the top of the file, and matching that would compare
+    // prose against code and call the ordering wrong.
+    let sh_copy = sh.find(r#"cp "$BEE_BIN""#)
+        .expect("install.sh no longer copies the binary into the target");
+    let sh_apply = sh
+        .find(r#"onboard --repo-root "$TARGET_DIR" --apply"#)
+        .expect("install.sh no longer applies onboarding");
+    assert!(sh_copy < sh_apply, "install.sh vendors the binary AFTER the apply again");
+
+    let ps_copy = ps1.find("Copy-Item $beeBin").expect("install.ps1 no longer copies a binary");
+    let ps_apply = ps1.find("--apply @onboardFlags").expect("install.ps1 no longer applies");
+    assert!(ps_copy < ps_apply, "install.ps1 vendors the binary AFTER the apply again");
+}
