@@ -410,8 +410,7 @@ use std::time::Instant;
     }
 
     /// main + `wt-granted` (registered) + `wt-ungranted` (not).
-    fn worktree_fixture(tmp: &Path) -> (crate::testutil::GitGuard, PathBuf, PathBuf, PathBuf) {
-        let guard = crate::testutil::git_fixture_lock();
+    fn worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
         let main = tmp.join("main");
         std::fs::create_dir_all(main.join(".bee")).unwrap();
         std::fs::write(main.join(".bee").join("onboarding.json"), "{}\n").unwrap();
@@ -433,7 +432,7 @@ use std::time::Instant;
         .unwrap();
         std::fs::create_dir_all(granted.join(".bee")).unwrap();
         std::fs::write(granted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
-        (guard, main, granted, ungranted)
+        (main, granted, ungranted)
     }
 
     fn roots_at(cwd: &Path) -> StoreRoots {
@@ -451,7 +450,7 @@ use std::time::Instant;
     #[test]
     fn hold_topology_matches_node_for_every_checkout_kind() {
         let tmp = tempfile::tempdir().unwrap();
-        let (_git, main, granted, ungranted) = worktree_fixture(tmp.path());
+        let (main, granted, ungranted) = worktree_fixture(tmp.path());
 
         // ORDINARY: {mainRoot: workRoot, holder: 'main'}.
         let r = roots_at(&main);
@@ -482,7 +481,7 @@ use std::time::Instant;
     #[test]
     fn granted_worktree_mirrors_under_its_id_and_blocks_main() {
         let tmp = tempfile::tempdir().unwrap();
-        let (_git, main, granted, _ungranted) = worktree_fixture(tmp.path());
+        let (main, granted, _ungranted) = worktree_fixture(tmp.path());
         let g = roots_at(&granted);
         let (gm, gh) = g.hold_topology().unwrap();
         let g_topo = Some(Topo { main_root: &gm, holder: &gh });
@@ -530,7 +529,7 @@ use std::time::Instant;
     #[test]
     fn ungranted_worktree_skips_the_cross_worktree_section_entirely() {
         let tmp = tempfile::tempdir().unwrap();
-        let (_git, main, _granted, ungranted) = worktree_fixture(tmp.path());
+        let (main, _granted, ungranted) = worktree_fixture(tmp.path());
         let r = roots_at(&ungranted);
         assert!(r.hold_topology().is_none());
         let root_s = root_str(&r.root);
@@ -564,7 +563,7 @@ use std::time::Instant;
     #[test]
     fn sweep_prunes_mains_ledger_from_an_ungranted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
-        let (_git, main, _granted, ungranted) = worktree_fixture(tmp.path());
+        let (main, _granted, ungranted) = worktree_fixture(tmp.path());
         std::fs::create_dir_all(holds_ledger_path(&main).parent().unwrap()).unwrap();
         std::fs::write(
             holds_ledger_path(&main),
