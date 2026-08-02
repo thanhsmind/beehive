@@ -54,6 +54,17 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+/// The `dev` verbs whose implementation resolves `bee_source_root()` and
+/// returns None without it. `statusline` is deliberately absent: it renders a
+/// HOST repo's status line and works anywhere, so guarding it would refuse a
+/// call that succeeds today.
+const SOURCE_CHECKOUT_DEV_VERBS: [&str; 4] = [
+    "render-skill-trees",
+    "render-prompt",
+    "release-manifest",
+    "render-hook-manifests",
+];
+
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     let strs: Vec<&str> = args.iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
     if strs.first().copied() != Some("dev") {
@@ -61,6 +72,22 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     }
     let rest = &strs[1..];
     let (name, flags) = rest.split_first()?;
+    // A REAL dev verb outside a bee source checkout used to return None here.
+    // While the delegate existed that meant "let Node answer"; since the
+    // cutover it means the argv reaches `emit_unsupported_shape`, which tells
+    // the caller `bee dev render-skill-trees` is an unknown command and
+    // suggests `bee test, bee gate, bee close`. The command is not unknown —
+    // its precondition is unmet, and that is what it must say. (Inside a
+    // checkout nothing changes: a bad flag still falls through to the
+    // unknown-shape path, which is the right answer for a bad flag.)
+    if SOURCE_CHECKOUT_DEV_VERBS.contains(name) && bee_source_root().is_none() {
+        eprintln!(
+            "bee dev {name}: the dev surface runs in a bee SOURCE checkout \
+             (one containing packages/bee/ and packages/bee-rs/), and this is not one. \
+             FIX: cd into the bee checkout, or run `bee onboard` if you meant to install bee here."
+        );
+        return Some(ExitCode::from(1));
+    }
     match *name {
         "render-skill-trees" => skill_trees::run(flags),
         "render-prompt" => prompts::run(flags),

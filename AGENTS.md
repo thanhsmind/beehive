@@ -39,8 +39,11 @@ Four boundaries hold in every mode:
   only integration, docs-lane, and release work — land through
   `bee worktree merge`.
 
-`bee --help --json` prints the porcelain flow surface; `bee --help
---all --json` prints everything.
+`bee --help --json` prints the porcelain flow surface. Add `--names`
+for an index — one line per command, the whole registry for a fraction
+of the tokens — and spend the full text on the one verb you are about
+to call (`bee <command> --help`). `bee --help --all --json` prints
+every command's full contract; reach for it last, not first.
 
 ## Judgment and deviation
 

@@ -59,10 +59,18 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if strs.first() == Some(&"--help") {
         // handleHelp reads json/all via argv.includes(...) — any OTHER token
         // is ignored by Node; those unproven shapes delegate instead.
-        if !strs[1..].iter().all(|t| *t == "--json" || *t == "--all") {
+        if !strs[1..]
+            .iter()
+            .all(|t| *t == "--json" || *t == "--all" || *t == "--names")
+        {
             return None;
         }
-        return top_level(strs.contains(&"--json"), strs.contains(&"--all"), t0);
+        return top_level(
+            strs.contains(&"--json"),
+            strs.contains(&"--all"),
+            strs.contains(&"--names"),
+            t0,
+        );
     }
     group_scoped(&strs, t0)
 }
@@ -97,7 +105,7 @@ fn registry() -> Option<&'static ParsedRegistry> {
 
 // ── top-level --help (handleHelp) ──────────────────────────────────────────
 
-fn top_level(json: bool, all: bool, t0: Instant) -> Option<ExitCode> {
+fn top_level(json: bool, all: bool, names: bool, t0: Instant) -> Option<ExitCode> {
     let reg = registry()?;
     // Timing root exactly as the wrapper computes it: findRepoRoot(cwd) ||
     // cwd. CUTOVER: help reads NOTHING but the embedded registry, so the WIDE
@@ -112,6 +120,40 @@ fn top_level(json: bool, all: bool, t0: Instant) -> Option<ExitCode> {
     };
 
     let total = reg.commands.len();
+    if names {
+        let rows: Vec<&Map<String, Value>> = if all {
+            reg.commands.iter().collect()
+        } else {
+            reg.commands.iter().filter(|e| is_porcelain(e) && !is_unavailable(e)).collect()
+        };
+        let surface = if all { "all" } else { "porcelain" };
+        if json {
+            let mut manifest = Map::new();
+            manifest.insert("schema_version".into(), reg.schema_version.clone());
+            manifest.insert("surface".into(), Value::from(surface));
+            manifest.insert("view".into(), Value::from("names"));
+            manifest.insert("total_commands".into(), Value::from(total as u64));
+            manifest.insert(
+                "commands".into(),
+                Value::Array(rows.iter().map(|e| Value::Object(names_entry(e))).collect()),
+            );
+            print!("{}\n", jsjson::stringify_pretty(&Value::Object(manifest)));
+        } else {
+            for entry in &rows {
+                let invoke = entry.get("invoke").and_then(Value::as_str).unwrap_or("");
+                let mark = if is_unavailable(entry) { " [not built]" } else { "" };
+                println!("{invoke}{mark} — {}", first_sentence(entry));
+            }
+            println!(
+                "{} command(s){}. Full text for one: `bee <command> --help`; everything at once: \
+                 `bee --help --all`.",
+                rows.len(),
+                if all { String::new() } else { format!(" of {total}") }
+            );
+        }
+        record_timing(&root, "unknown", t0, true);
+        return Some(ExitCode::SUCCESS);
+    }
     if all {
         let commands: Vec<Value> = reg
             .commands
@@ -339,6 +381,57 @@ fn manifest_entry(entry: &Map<String, Value>) -> Map<String, Value> {
     out
 }
 
+// ── `--names`: the index view ──────────────────────────────────────────────
+//
+// `bee --help --all --json` is the map an agent is told to read, and it is
+// 212 KB — roughly 53k tokens, most of a small context window, to answer
+// "what may I call". Every byte of it is real (each entry's description is
+// the contract for that verb), so the fix is not to shorten the descriptions
+// but to offer an INDEX: the invocation, whether it is built, and one
+// sentence. ~7 KB for the whole registry. An agent reads the index, then
+// spends the tokens on `bee <command> --help` for the one verb it is about
+// to call.
+//
+// The `unavailable` marker rides along even here: an index that lists a verb
+// this binary cannot run would recreate exactly the drift the registry laws
+// exist to catch.
+
+/// The first sentence of a description — up to the first ". ", em-dash clause
+/// break, or 160 chars, whichever comes first.
+fn first_sentence(entry: &Map<String, Value>) -> String {
+    let desc = entry.get("description").and_then(Value::as_str).unwrap_or("");
+    let cut = desc
+        .find(". ")
+        .map(|i| i + 1)
+        .or_else(|| desc.find(" — ").or_else(|| desc.find(" - ")))
+        .unwrap_or(desc.len());
+    let mut s = desc[..cut.min(desc.len())].trim().to_string();
+    if s.chars().count() > 160 {
+        let end = s.char_indices().nth(157).map(|(i, _)| i).unwrap_or(s.len());
+        s.truncate(end);
+        s.push('…');
+    }
+    s
+}
+
+fn names_entry(entry: &Map<String, Value>) -> Map<String, Value> {
+    let mut out = Map::new();
+    for key in ["name", "invoke"] {
+        if let Some(v) = entry.get(key) {
+            out.insert(key.to_string(), v.clone());
+        }
+    }
+    out.insert(
+        "surface".into(),
+        Value::from(if is_porcelain(entry) { "porcelain" } else { "plumbing" }),
+    );
+    out.insert("summary".into(), Value::from(first_sentence(entry)));
+    if is_unavailable(entry) {
+        out.insert("unavailable".into(), Value::Bool(true));
+    }
+    out
+}
+
 fn is_porcelain(entry: &Map<String, Value>) -> bool {
     // `e.surface === 'porcelain'` — strict string equality.
     entry.get("surface").and_then(Value::as_str) == Some("porcelain")
@@ -370,6 +463,14 @@ fn help_footer_lines(total: usize, porcelain: usize, unavailable: usize) -> Vec<
              \"bee --help --all\" marks each one with its reason."
         ));
     }
+    // Named here because a reader who has not seen this line will reach for
+    // `--all` — which is the full contract text for 139 commands, and by far
+    // the most expensive thing this CLI can print into a context window.
+    lines.push(
+        "For an index instead of full text — one line per command — add \"--names\" to either \
+         form."
+            .to_string(),
+    );
     lines
 }
 
@@ -538,7 +639,12 @@ mod tests {
             help_footer_lines(123, 17, 0),
             vec![
                 "106 more command(s) are plumbing — run \"bee internal --help\" for that namespace, or \"bee --help --all\" for every command at once."
-                    .to_string()
+                    .to_string(),
+                // The index pointer is unconditional: a reader who never sees
+                // it reaches for `--all`, which is the most expensive thing
+                // this CLI prints.
+                "For an index instead of full text — one line per command — add \"--names\" to either form."
+                    .to_string(),
             ]
         );
     }
@@ -627,11 +733,16 @@ mod tests {
             text,
             "bee — unified CLI dispatcher (schema_version 1.0)\n\nbee cells show\n    Show one cell.\n    required: --id\n"
         );
-        // Footer path: body trimmed, two newlines, footer, one trailing \n.
+        // Footer path: body trimmed, two newlines, footer lines, one trailing
+        // \n. Each footer line is its own paragraph, so the index pointer that
+        // now follows the plumbing count must not run into it.
         let with_footer = render_help_text(&entries, &help_footer_lines(2, 1, 0), &json!("1.0"));
+        assert!(with_footer.contains(
+            "\n\n1 more command(s) are plumbing — run \"bee internal --help\" for that namespace, or \"bee --help --all\" for every command at once."
+        ), "{with_footer}");
         assert!(with_footer.ends_with(
-            "\n\n1 more command(s) are plumbing — run \"bee internal --help\" for that namespace, or \"bee --help --all\" for every command at once.\n"
-        ));
+            "For an index instead of full text — one line per command — add \"--names\" to either form.\n"
+        ), "{with_footer}");
         // Surfaced entry prints its surface line.
         let surfaced = vec![Value::Object(surfaced_manifest_entry(&obj(
             r#"{"name":"a","invoke":"bee a","description":"d","parameters":{"required":[]},"examples":[],"deprecated":null}"#,

@@ -290,3 +290,248 @@ fn every_unavailable_marker_names_a_reason_and_a_fix() {
          marker support; do not leave it passing vacuously"
     );
 }
+
+// ─── the other direction: SERVED but never DECLARED ────────────────────────
+//
+// `every_declared_command_dispatches_exactly_as_the_registry_says_it_does`
+// walks registry → dispatcher and catches an entry with nothing behind it.
+// Nothing walked dispatcher → registry, and the R6 cutover left that gap
+// populated too: twelve shapes the binary serves were absent from the
+// registry, so `bee --help --all` — the map an agent reads to find out what
+// it may run — did not list them. `bee onboard` was one of them, and
+// `skills/bee-hive/SKILL.md` tells the agent to run it by name.
+//
+// An undeclared verb fails WORSE than an undeclared flag: `--help` says the
+// command does not exist, so the agent stops looking and improvises. That is
+// the same expensive wrong turn `crate::catalog` was built to prevent, coming
+// in through the door catalog cannot see.
+//
+// The served set is read out of the dispatcher's own match arms rather than
+// hand-listed here, so a namespace that grows a verb grows this law's subject
+// in the same commit. Each scan carries a floor: a refactor that renames the
+// function or reshapes the match makes the scan find nothing, and a law with
+// an empty subject must fail, not pass.
+
+/// Namespaces whose verbs are deliberately NOT registry commands, each with
+/// the reason it is not a gap. An exclusion without a reason is how the first
+/// drift started, so the shape is the same as `unavailable`'s.
+const NOT_A_COMMAND_SURFACE: [(&str, &str); 1] = [(
+    "hook",
+    "hooks are invoked by the runtime through wiring `bee onboard` writes, never typed by an \
+     agent; listing nine of them in --help would add noise to the one surface that must stay \
+     scannable",
+)];
+
+fn crate_src(rel: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(rel);
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
+}
+
+/// The `"name" =>` arms of the `try_native` that follows `marker` in `src`.
+/// `floor` is the vacuity guard: fewer arms than this means the scan lost its
+/// subject and the law is no longer testing anything.
+fn match_arm_verbs(src: &str, marker: &str, floor: usize) -> BTreeSet<String> {
+    let start = src.find(marker).unwrap_or_else(|| panic!("{marker:?} no longer appears — the \
+        dispatcher moved and this scan is now vacuous; re-point it"));
+    let body = &src[start..];
+    let end = body.find("\n}").unwrap_or(body.len());
+    let mut found = BTreeSet::new();
+    for line in body[..end].lines() {
+        let line = line.trim();
+        let Some(rest) = line.strip_prefix('"') else { continue };
+        let Some(name) = rest.split('"').next() else { continue };
+        if line.contains("=>") && !name.is_empty() {
+            found.insert(name.to_string());
+        }
+    }
+    assert!(
+        found.len() >= floor,
+        "{marker}: found only {} match arm(s) ({found:?}), expected at least {floor} — the scan \
+         no longer sees the dispatcher it is meant to police",
+        found.len()
+    );
+    found
+}
+
+#[test]
+fn every_namespace_the_dispatcher_serves_is_declared_in_the_registry() {
+    let p = payload();
+    let invocations: BTreeSet<String> = p["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["invoke"].as_str())
+        .map(str::to_string)
+        .collect();
+
+    let mut served: Vec<String> = Vec::new();
+    for verb in match_arm_verbs(&crate_src("devtools/mod.rs"), "pub fn try_native", 5) {
+        served.push(format!("bee dev {verb}"));
+    }
+    for verb in match_arm_verbs(&crate_src("herding.rs"), "pub fn try_native", 5) {
+        served.push(format!("bee herding {verb}"));
+    }
+    // Two single-word probes the router answers before the verb tree; both are
+    // spelled in `router::dispatch` and have no match arm to scan.
+    for bare in ["bee onboard", "bee rs-info"] {
+        served.push(bare.to_string());
+    }
+    assert!(served.len() >= 12, "the served set collapsed to {served:?}");
+
+    let excluded: BTreeSet<&str> = NOT_A_COMMAND_SURFACE.iter().map(|(ns, _)| *ns).collect();
+    let missing: Vec<&String> = served
+        .iter()
+        .filter(|inv| {
+            let ns = inv.split_whitespace().nth(1).unwrap_or("");
+            !excluded.contains(ns) && !invocations.contains(*inv)
+        })
+        .collect();
+
+    assert!(
+        missing.is_empty(),
+        "the dispatcher serves these shapes and the registry does not declare them, so \
+         `bee --help --all` reports them as unknown commands. Add an entry (with an example \
+         this file can run), or add the namespace to NOT_A_COMMAND_SURFACE with its reason:\n\n  {}",
+        missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n  ")
+    );
+
+    // The exclusion list is not a place to park a gap: every reason must be
+    // written out, and the surface must still be one the binary really serves.
+    for (ns, reason) in NOT_A_COMMAND_SURFACE {
+        assert!(reason.len() > 40, "{ns}: the exclusion needs a real reason, got {reason:?}");
+        assert!(
+            !invocations.iter().any(|inv| inv.starts_with(&format!("bee {ns} "))),
+            "{ns} is excluded as \"not a command surface\" but the registry declares it — drop \
+             one or the other"
+        );
+    }
+}
+
+/// The scan bites. Without this, a rename inside `devtools` could leave both
+/// the scanner and the law quietly matching nothing.
+#[test]
+fn the_served_set_scan_bites_on_a_new_arm_and_refuses_an_empty_one() {
+    let fake = r#"
+pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
+    match *name {
+        "alpha" => a::run(flags),
+        "beta" => b::run(flags),
+        _ => None,
+    }
+}
+"#;
+    let found = match_arm_verbs(fake, "pub fn try_native", 2);
+    assert_eq!(found.iter().map(String::as_str).collect::<Vec<_>>(), ["alpha", "beta"]);
+
+    // …and the floor is real.
+    let thin = "pub fn try_native() {\n    match *name {\n        _ => None,\n    }\n}\n";
+    let panicked = std::panic::catch_unwind(|| match_arm_verbs(thin, "pub fn try_native", 2));
+    assert!(panicked.is_err(), "a scan that finds nothing must fail, not pass vacuously");
+}
+
+/// The registry payload is the agent-facing map. After the Node runtime was
+/// deleted it still named `lib/feedback.mjs`, `lib/compaction.mjs`,
+/// `lib/prompt-renderer.mjs`, `claims.mjs`, `cells.mjs`, `lease-store.mjs`,
+/// `workflow-store.mjs` — and
+/// `.claude/skills/bee-herding/scripts/dispatch-interlock.mjs`, a path that
+/// does not exist in any checkout. `registry.rs` already asserted this for its
+/// one drift HINT; the 153 KB of text an agent actually reads had no such
+/// check.
+#[test]
+fn the_registry_names_no_artifact_the_node_deletion_removed() {
+    let raw = include_str!("../src/generated/registry_payload.json");
+    assert!(raw.len() > 100_000, "the payload shrank unexpectedly: {} bytes", raw.len());
+
+    let mut offenders: Vec<String> = Vec::new();
+    for hit in raw.match_indices(".mjs") {
+        let start = raw[..hit.0].rfind(' ').map(|s| s + 1).unwrap_or(0);
+        let end = (hit.0 + 4).min(raw.len());
+        offenders.push(raw[start..end].to_string());
+    }
+    assert!(
+        offenders.is_empty(),
+        "the registry describes commands in terms of files the R6 cutover deleted. An agent \
+         reading `bee --help` is told to look for, or run, something that is not there:\n\n  {}",
+        offenders.join("\n  ")
+    );
+}
+
+/// `--help --all --json` is the map AGENTS.block.md points an agent at, and
+/// it is 212 KB — roughly 53k tokens to answer "what may I call". `--names`
+/// is the index form. These pin the two properties that make it usable: it
+/// covers the SAME command set (an index that quietly drops rows is worse
+/// than no index), and it is small enough to be the default read.
+#[test]
+fn the_names_index_covers_the_full_surface_at_a_fraction_of_the_size() {
+    let bin = binary();
+    let tmp = tempfile::tempdir().unwrap();
+    let cwd = scratch_repo(tmp.path(), 0);
+
+    let run = |args: &[&str]| -> (serde_json::Value, usize) {
+        let out = Command::new(&bin).args(args).current_dir(&cwd).output().unwrap();
+        assert!(out.status.success(), "`bee {}` failed", args.join(" "));
+        let v = serde_json::from_slice(&out.stdout)
+            .unwrap_or_else(|e| panic!("`bee {}` did not print JSON: {e}", args.join(" ")));
+        (v, out.stdout.len())
+    };
+
+    let (full, full_bytes) = run(&["--help", "--all", "--json"]);
+    let (index, index_bytes) = run(&["--help", "--all", "--names", "--json"]);
+
+    let names_of = |v: &serde_json::Value| -> BTreeSet<String> {
+        v["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["name"].as_str().unwrap().to_string())
+            .collect()
+    };
+    assert_eq!(
+        names_of(&full),
+        names_of(&index),
+        "the index must list exactly the commands the full view lists"
+    );
+    assert_eq!(index["view"], "names");
+    assert_eq!(index["total_commands"], full["total_commands"]);
+
+    // Every row still says whether it can actually be run, and carries enough
+    // to decide whether to spend tokens on the full text.
+    let unavailable_full: BTreeSet<String> = full["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c.get("unavailable").and_then(|u| u.as_object()).is_some())
+        .map(|c| c["name"].as_str().unwrap().to_string())
+        .collect();
+    let unavailable_index: BTreeSet<String> = index["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["unavailable"] == serde_json::Value::Bool(true))
+        .map(|c| c["name"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        unavailable_full, unavailable_index,
+        "an index that hides the not-built marker steers an agent into a dead verb"
+    );
+    for c in index["commands"].as_array().unwrap() {
+        let name = c["name"].as_str().unwrap();
+        let summary = c["summary"].as_str().unwrap_or("");
+        assert!(!summary.trim().is_empty(), "{name}: the index row has no summary");
+        assert!(summary.chars().count() <= 161, "{name}: summary not cut: {summary}");
+        assert!(c["invoke"].as_str().is_some_and(|i| i.starts_with("bee ")), "{name}");
+    }
+
+    // The whole point. If the index ever stops being dramatically cheaper,
+    // it is not doing its job and the pointer in AGENTS.block.md is wrong.
+    assert!(
+        index_bytes * 4 < full_bytes,
+        "the index is {index_bytes} bytes against the full view's {full_bytes} — not enough of a \
+         saving to be worth a second surface"
+    );
+
+    // The flow surface takes the same flag.
+    let (flow_index, _) = run(&["--help", "--names", "--json"]);
+    assert_eq!(flow_index["surface"], "porcelain");
+    assert!(!flow_index["commands"].as_array().unwrap().is_empty());
+}
