@@ -455,7 +455,8 @@ use crate::version::BEE_VERSION;
     /// A real main checkout with two real linked worktrees: `wt-granted`
     /// (registered in MAIN's grant registry, so it owns its own store) and
     /// `wt-ungranted` (unregistered, so it shares main's).
-    fn worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+    fn worktree_fixture(tmp: &Path) -> (crate::testutil::GitGuard, PathBuf, PathBuf, PathBuf) {
+        let guard = crate::testutil::git_fixture_lock();
         let main = tmp.join("main");
         std::fs::create_dir_all(&main).unwrap();
         write(&main, ".bee/onboarding.json", "{}");
@@ -471,7 +472,7 @@ use crate::version::BEE_VERSION;
         git(&main, &["worktree", "add", "-q", ungranted.to_str().unwrap(), "-b", "wt/ungranted"]);
         write(&main, ".bee/runtime/worktree-grants.json", "{\"wt-granted\": true}\n");
         write(&granted, ".bee/onboarding.json", "{}");
-        (main, granted, ungranted)
+        (guard, main, granted, ungranted)
     }
 
     /// Build the Ctx `run()` would build standing in `cwd`.
@@ -494,7 +495,7 @@ use crate::version::BEE_VERSION;
     #[test]
     fn worktree_notice_fires_only_inside_an_ungranted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, granted, ungranted) = worktree_fixture(tmp.path());
+        let (_git, main, granted, ungranted) = worktree_fixture(tmp.path());
 
         assert_eq!(ungranted_worktree_notice(&ctx_for(&main)), None);
         assert_eq!(ungranted_worktree_notice(&ctx_at(&main)), None);
@@ -521,7 +522,7 @@ use crate::version::BEE_VERSION;
     #[test]
     fn control_root_re_roots_onto_main_from_a_granted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, granted, ungranted) = worktree_fixture(tmp.path());
+        let (_git, main, granted, ungranted) = worktree_fixture(tmp.path());
         let n = |p: &Path| normalize_abs_lexical(&p.to_string_lossy());
 
         assert_eq!(n(&control_root_for(&mut ctx_at(&main)).unwrap()), n(&main));
@@ -555,7 +556,7 @@ use crate::version::BEE_VERSION;
     #[test]
     fn reservations_control_root_follows_the_git_link() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, granted, ungranted) = worktree_fixture(tmp.path());
+        let (_git, main, granted, ungranted) = worktree_fixture(tmp.path());
         let n = |p: &Path| normalize_abs_lexical(&p.to_string_lossy());
         assert_eq!(n(&reservations_control_root(&ctx_at(&main))), n(&main));
         assert_eq!(n(&reservations_control_root(&ctx_at(&granted))), n(&main));
@@ -572,7 +573,7 @@ use crate::version::BEE_VERSION;
     #[test]
     fn worktree_branch_reads_the_linked_head() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, _granted, _ungranted) = worktree_fixture(tmp.path());
+        let (_git, main, _granted, _ungranted) = worktree_fixture(tmp.path());
         assert_eq!(read_worktree_branch(&main, "wt-granted").as_deref(), Some("wt/granted"));
         assert_eq!(read_worktree_branch(&main, "no-such-id"), None);
         // Detached HEAD (a bare sha) is null, not the sha.
@@ -588,7 +589,7 @@ use crate::version::BEE_VERSION;
     #[test]
     fn orient_worktree_context_serves_both_halves() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, granted, ungranted) = worktree_fixture(tmp.path());
+        let (_git, main, granted, ungranted) = worktree_fixture(tmp.path());
 
         // Inside the GRANTED worktree: the merge-back packet. `feature` is
         // whatever status resolved, `branch` comes from the linked HEAD.
@@ -646,7 +647,7 @@ use crate::version::BEE_VERSION;
     #[test]
     fn orient_packet_carries_the_worktree_block_inside_a_granted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
-        let (_main, granted, ungranted) = worktree_fixture(tmp.path());
+        let (_git, _main, granted, ungranted) = worktree_fixture(tmp.path());
         let packet = build_orient(&mut ctx_at(&granted)).expect("orient");
         let block = packet.get("worktree").expect("worktree block");
         assert_eq!(vget(block, "location"), Some(&json!("worktree")));

@@ -644,7 +644,8 @@ mod tests {
 
     /// A real main checkout with one real linked worktree (`git worktree
     /// add`). Returns (main_root, worktree_root) as Node would resolve them.
-    fn fixture(tmp: &Path, wt_name: &str) -> (PathBuf, PathBuf) {
+    fn fixture(tmp: &Path, wt_name: &str) -> (crate::testutil::GitGuard, PathBuf, PathBuf) {
+        let guard = crate::testutil::git_fixture_lock();
         let main = tmp.join("main");
         std::fs::create_dir_all(main.join(".bee")).unwrap();
         std::fs::write(main.join(".bee").join("onboarding.json"), "{}").unwrap();
@@ -659,7 +660,7 @@ mod tests {
             &main,
             &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", &format!("wt/{wt_name}")],
         );
-        (main, wt)
+        (guard, main, wt)
     }
 
     fn norm(p: &Path) -> String {
@@ -715,7 +716,7 @@ mod tests {
     #[test]
     fn real_linked_worktree_ungranted_resolves_to_main_store() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, wt) = fixture(tmp.path(), "wt-a");
+        let (_git, main, wt) = fixture(tmp.path(), "wt-a");
         match resolve_roots_core(&wt) {
             Resolution::LinkedValid {
                 store_root,
@@ -744,7 +745,7 @@ mod tests {
     #[test]
     fn granted_linked_worktree_resolves_to_its_own_store() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, wt) = fixture(tmp.path(), "wt-a");
+        let (_git, main, wt) = fixture(tmp.path(), "wt-a");
         let runtime = main.join(".bee").join("runtime");
         std::fs::create_dir_all(&runtime).unwrap();
         std::fs::write(
@@ -782,7 +783,7 @@ mod tests {
     #[test]
     fn self_written_grant_marker_is_ignored() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, wt) = fixture(tmp.path(), "wt-a");
+        let (_git, main, wt) = fixture(tmp.path(), "wt-a");
         let own = wt.join(".bee").join("runtime");
         std::fs::create_dir_all(&own).unwrap();
         std::fs::write(own.join("worktree-grants.json"), "{\"wt-a\": true}\n").unwrap();
@@ -798,7 +799,7 @@ mod tests {
     #[test]
     fn broken_back_pointer_is_link_invalid() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, wt) = fixture(tmp.path(), "wt-b");
+        let (_git, main, wt) = fixture(tmp.path(), "wt-b");
         let back = main.join(".git").join("worktrees").join("wt-b").join("gitdir");
         let expected = format!(
             "linked worktree reverse gitdir pointer is missing or mismatched ({})",
@@ -902,7 +903,7 @@ mod tests {
     #[test]
     fn relative_gitdir_pointer_validates() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, wt) = fixture(tmp.path(), "wt-h");
+        let (_git, main, wt) = fixture(tmp.path(), "wt-h");
         std::fs::write(wt.join(".git"), "gitdir: ../main/.git/worktrees/wt-h").unwrap();
         match resolve_roots_core(&wt) {
             Resolution::LinkedValid { id, main_root, .. } => {
@@ -925,7 +926,7 @@ mod tests {
     #[test]
     fn narrow_door_serves_ungranted_refuses_granted_and_names_a_broken_link() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, wt) = fixture(tmp.path(), "wt-a");
+        let (_git, main, wt) = fixture(tmp.path(), "wt-a");
         match resolve_store_root(&wt) {
             Roots::Ordinary(r) => assert_eq!(norm(&r), norm(&main)),
             _ => panic!("an ungranted worktree resolves to main's store"),
@@ -953,7 +954,7 @@ mod tests {
     #[test]
     fn wide_door_serves_a_granted_worktree_from_its_own_store() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, wt) = fixture(tmp.path(), "wt-a");
+        let (_git, main, wt) = fixture(tmp.path(), "wt-a");
         let runtime = main.join(".bee").join("runtime");
         std::fs::create_dir_all(&runtime).unwrap();
         std::fs::write(runtime.join("worktree-grants.json"), "{\"wt-a\": true}
@@ -994,7 +995,7 @@ mod tests {
     #[test]
     fn worktree_door_ungranted_shares_main_and_has_no_hold_topology() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, wt) = fixture(tmp.path(), "wt-a");
+        let (_git, main, wt) = fixture(tmp.path(), "wt-a");
         match resolve_store_root_worktree(&wt) {
             RootsWt::Go(r) => {
                 assert_eq!(norm(&r.root), norm(&main));
@@ -1016,7 +1017,7 @@ mod tests {
     #[test]
     fn worktree_door_granted_holds_under_its_own_id() {
         let tmp = tempfile::tempdir().unwrap();
-        let (main, wt) = fixture(tmp.path(), "wt-a");
+        let (_git, main, wt) = fixture(tmp.path(), "wt-a");
         let runtime = main.join(".bee").join("runtime");
         std::fs::create_dir_all(&runtime).unwrap();
         std::fs::write(runtime.join("worktree-grants.json"), "{\"wt-a\": true}\n").unwrap();
@@ -1040,7 +1041,7 @@ mod tests {
     #[test]
     fn worktree_door_names_a_broken_link() {
         let tmp = tempfile::tempdir().unwrap();
-        let (_main, wt) = fixture(tmp.path(), "wt-a");
+        let (_git, _main, wt) = fixture(tmp.path(), "wt-a");
         std::fs::write(wt.join(".git"), "gitdir: nowhere").unwrap();
         assert!(matches!(
             resolve_store_root_worktree(&wt),

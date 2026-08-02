@@ -27,6 +27,8 @@ mod roots;
 mod router;
 mod shell;
 mod state;
+#[cfg(test)]
+mod testutil;
 mod verbs;
 mod version;
 
