@@ -38,4 +38,5 @@ and when to load it. Pick by task; never load all the guides at once.
 | [tests.md](tests.md) | What to test and how to judge coverage |
 | [review.md](review.md) | Finding quality, severity, verification |
 | [documentation.md](documentation.md) | Specs a human can rebuild from |
+| [knowledge.md](knowledge.md) | Building the project's own knowledge layer |
 | [debugging.md](debugging.md) | Repro-first, instrument before guessing |

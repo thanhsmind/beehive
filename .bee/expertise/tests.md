@@ -9,14 +9,17 @@
 | Deciding what a test may assert | Test behavior, not structure |
 | Naming a test, or it needs "and" in its name | One behavior, named after it |
 | Choosing unit vs integration vs end-to-end | Pick the cheapest level that can fail |
+| Two systems must agree on a shared interface | Pick the cheapest level that can fail |
 | Replacing a dependency in a test | Fakes over stubs over mocks |
 | Setting up fixtures and shared state | Every test owns its world |
 | A test touches time, network, randomness, or ordering | The four determinism leaks |
 | A test fails intermittently | Flaky is worse than missing |
 | Picking which cases to cover | Choosing cases |
+| The cases multiply and every one looks the same | Properties, when examples multiply |
 | Fixing a reported bug | Red before green |
 | The code under test is hard to reach | Test the real code, never the twin |
 | Tempted to test everything | What not to test |
+| The suite is slow, or a case needs a human to judge it | Fast, automated, unattended |
 | About to run the suite | Running tests |
 | A failure's cause is not obvious from the output | Instrument before guessing |
 | A bug shipped despite a green suite | Every escaped bug is a missing test |
@@ -115,6 +118,16 @@ outcome. When setup grows long, lift it into a helper so the body stays the
 scenario; when several tests build near-identical worlds, give the helper
 defaults and let each test override the one field it cares about.
 
+**Readable beats dry.** Tests are read far more often than written, and
+they are read under pressure — a red line at the end of a long run. A
+reader must be able to tell what a test asserts from the test body alone,
+without chasing a shared fixture, a base class, or a helper three files
+away. So a helper earns its place only when it *shortens* the scenario;
+the moment factoring out duplication hides which value makes this case
+different, keep the duplication. The rule that makes production code
+better makes tests worse: deduplicating tests couples them, and coupled
+tests fail together and get rewritten together.
+
 ## Pick the cheapest level that can fail
 
 Match the level to the failure you are trying to catch, and prefer the
@@ -130,6 +143,12 @@ cheapest level that can actually catch it:
   (spawn the CLI, feed it stdin, read stdout and the exit code). Highest
   confidence, slowest, and the most sensitive to environment; keep the set
   small and load-bearing.
+- **Contract** — the agreement between two independently-changed sides of a
+  boundary: an API and its callers, a writer and its readers, a plugin host
+  and its plugins. Each side tests itself against the same recorded contract,
+  so a change that breaks the other side fails at home instead of in
+  someone else's suite. Reach for it only where the sides genuinely ship
+  apart; inside one deployable, an integration test already covers the seam.
 
 No level substitutes for another. A suite of only unit tests never sees the
 seams; a suite of only end-to-end tests is slow, and its failures point at
@@ -167,6 +186,14 @@ better, writes into a per-test temporary location that needs no cleanup.
 No test may depend on another test having run first, on shared mutable
 state, or on leftovers from a previous run. A suite whose tests pass in
 order but fail when filtered to one test is broken, even while it is green.
+
+**Cleanup must survive the failing path.** A teardown written as the last
+lines of the test body never runs on the run that matters — the one where
+an assertion fired three lines earlier. Put cleanup where the runner
+guarantees it (a teardown hook, a scope guard, a defer), or sidestep it
+entirely with a per-test temp directory the OS reclaims. Otherwise the
+first real failure leaves state behind, and the next run reports a
+cascade whose first red is the only true one.
 
 ## The four determinism leaks
 
@@ -217,6 +244,38 @@ add one test proving the dimensions are wired together. Combinatorial
 suites look thorough but bury the one interaction case that actually
 matters under repetition no one reads.
 
+## Properties, when examples multiply
+
+An example test names one input and one expected output. A property names
+a rule that must hold for *every* input: encode-then-decode returns the
+original, sorting twice equals sorting once, a merge of two valid stores
+is a valid store, the parser never panics on arbitrary bytes. When you
+find yourself writing a sixth example that differs only in its numbers,
+you are hand-sampling a property — state the property instead and let a
+generator sample it.
+
+```rust
+// Example — one sample, and it says nothing about the next input.
+assert_eq!(decode(&encode("héllo")), "héllo");
+
+// Property — the rule itself, checked against generated inputs, and it
+// shrinks a failure down to the smallest input that still breaks.
+proptest!(|(s: String)| assert_eq!(decode(&encode(&s)), s));
+```
+
+Reach for a property when the input space is large and the rule is short:
+round-trips, invariants preserved across an operation, ordering and
+idempotence, equivalence between a fast path and a reference path (see the
+differential-testing pattern). Stay with examples when the interesting
+inputs are few and named — the boundary values, the three error cases —
+because a generator will spend its budget on inputs you already know are
+uninteresting.
+
+**A property test still owes you a seed.** A generated failure that cannot
+be replayed is a rumor. Record the failing case as its own example test the
+moment the generator finds one: the generator's job is discovery, the
+example's job is regression.
+
 ## Red before green
 
 When fixing a reported bug → start by reproducing the bug as a failing
@@ -243,6 +302,25 @@ or constructed only inside a framework. Fix the reachability — extract the
 logic, export the function, inject the dependency — and then test the real
 thing. Improving testability this way is a legitimate production change,
 not test scaffolding.
+
+**The reachability ladder**, in order — take the first rung that works,
+and record why when you skip one:
+
+1. **Restructure.** Lift the logic into a unit with its own contract.
+   Usually the code is hard to reach because one function does three
+   jobs, and splitting it is the change you wanted anyway.
+2. **Widen visibility deliberately.** Making a function crate-visible or
+   package-private so its own tests can reach it is a fair trade, and a
+   smaller one than the twin you were about to write.
+3. **Test from higher up.** If the behavior is observable one level out,
+   assert it there. Slower and coarser, but it exercises shipped code.
+4. **Duplicate — last, and in writing.** If nothing else reaches it and
+   the logic is load-bearing, a copy in the test is better than no test
+   at all, provided the test says so in a comment: what it duplicates,
+   why the real code is unreachable, and that it cannot detect drift in
+   the original.
+
+Adjust the code to fit the test, never the test to avoid the code.
 
 **A passing test is not proof the real path ran.** When the system has a
 fallback — a delegate, a retry, a cached answer — a test can pass because
@@ -276,6 +354,28 @@ State the reason when you skip. The boundary that never qualifies:
 and error handling have behavior, and difficulty setting them up is an
 argument for a better harness, never for skipping the test.
 
+## Fast, automated, unattended
+
+A suite is only worth what it is worth *running*. Two things decide that,
+and both are properties of the suite, not of any one test.
+
+**Slow suites stop being run.** Past the point where you hesitate before
+running it, you start batching changes, and a red no longer names which
+change caused it — the whole feedback loop the suite was built for is
+gone. When a single test is slow, suspect the design before the test: code
+that needs a live service, a full migration, or a heavy fixture to
+exercise one branch is telling you the logic wants to come out where it
+can be reached directly. Fixing that is a production change, and it is the
+right one.
+
+**Every test judges itself.** No manual setup step, no "then look at the
+screenshot," no case that passes when a human squints at the output. A
+test that needs a person to rule on it does not run in CI, does not run on
+a teammate's machine, and in practice does not run. If the output is
+genuinely visual or generative, assert the part that is machine-checkable
+— the invariant, the shape, the diff against a reviewed snapshot — and
+say plainly what remains unasserted.
+
 ## Running tests
 
 **The project declares its suite once, and the door runs it.** `bee test`
@@ -296,6 +396,14 @@ A long run's failing case scrolls past, and a filtered pipe truncates
 exactly the context you need. The saved file is the evidence: grep it,
 cite its path in a summary or handoff, and reopen it later instead of
 paying for a rerun.
+
+**Read the run you already have before buying another.** Most runners
+keep per-case stdout and stderr on disk after the run — look for "test
+output" or "log directory" in the runner's docs, and read the failing
+case's log directly. Re-running a suite to see what a test printed pays
+full wall-clock for output that is already sitting in a file. If the
+runner discards per-case output by default, turn that on once; it is
+cheaper than every rerun it saves.
 
 **Use a runner with per-test isolation and real parallelism.** Isolation
 puts each test in its own process so env vars, temp state, and in-process
@@ -340,11 +448,27 @@ over-mocked boundary that hid the real interaction, an environment
 difference the tests never exercise. **Close the class of gap, not just
 the instance**, or the same hole ships the next bug too.
 
+## Related guides
+
+Neighboring disciplines, each loaded only when its trigger applies —
+never alongside this file by default.
+
+- [debugging.md](debugging.md) — read when a red is not a missing test but
+  an unexplained defect: the repro is unstable, the error is being
+  misread, or a fix "works" without a cause.
+- [review.md](review.md) — read when judging someone else's tests rather
+  than writing your own: what makes a finding about test quality worth
+  filing, and what evidence it owes.
+
 ## Patterns
 
 Reusable testing patterns live in `tests/patterns/` as individual files.
 Each line below carries its load trigger — read a pattern only when its
-trigger applies, never the whole directory.
+trigger applies, never the whole directory. When a narrower theme
+accumulates enough material to route on its own, give it a
+`tests/<sub-topic>/` directory and a `tests/<sub-topic>.md` file carrying
+its own `## Patterns` index — the index stays shallow that way, and a
+reader lands on the sub-topic instead of scanning a flat list.
 
 - [differential-testing](tests/patterns/differential-testing.md) — read when
   a second implementation must match an existing one: a port, a rewrite, a
