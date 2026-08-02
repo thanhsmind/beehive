@@ -181,11 +181,11 @@ behavior change at all.
   mode, suite `scripts/tests/test_heartbeat_touch.mjs`; state logical
   read-modify-write verbs (`startFeature` in `lib/state.mjs`;
   `handleStateSet`/`handleStateGate`/`stateWorkerMutate`/
-  `handleStateScribingRun` in `bee.mjs`) serialized under the same lock,
+  `handleStateScribingRun` in `bee`) serialized under the same lock,
   waiting normally. Orchestrator-claims-before-spawn doctrine in
   `skills/bee-swarming/SKILL.md` + `references/worker-details.md`
   + `references/swarming-reference.md`; the
-  four new suites added to `.bee/config.json` `commands.verify`. Evidence:
+  four new suites added to `.bee/config.json` `commands.test`. Evidence:
   `docs/history/multi-session-hardening/CONTEXT.md` (D1-D7, Δ1-Δ6); traces
   `.bee/cells/msh-{1..7}.json`; reports
   `docs/history/multi-session-hardening/reports/msh-{1..7}.md`.

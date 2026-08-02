@@ -36,8 +36,8 @@ Four boundaries hold in every mode:
   locked ones — cite them, never reinterpret them.
 - Code-touching feature work lives in its feature worktree from the
   start (`bee worktree new --feature <slug>`); the main checkout takes
-  only integration, docs-lane, and release work — land through
-  `bee worktree merge`.
+  integration, docs-lane, release work, and a solo `tiny` fix when no
+  other session is live — land through `bee worktree merge`.
 
 `bee --help --json` prints the porcelain flow surface. Add `--names`
 for an index — one line per command, the whole registry for a fraction
@@ -59,8 +59,10 @@ recorded fallback instead of demanding the ritual.
 
 ## Start a session
 
-Read the injected preamble instead of re-fetching state; run
-`bee status --json` only when routing work. A handoff record has two
+Read the injected preamble instead of re-fetching state. One ritual, one
+verb: when you are routing, starting, or resuming work — and only then —
+run `bee orient`; it names the phase, the blockers, and the next skill.
+A plain question needs neither. A handoff record has two
 kinds — `planned-next` and `pause` — and a kindless record reads as
 pause:
 

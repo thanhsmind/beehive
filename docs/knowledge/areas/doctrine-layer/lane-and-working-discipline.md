@@ -182,7 +182,7 @@ govern the working residue of a cell rather than its content.
   issue when red. *(Amended 2026-07-31 — decision 412e9b3a,
   docs/specs/test-simple.md: `commands.test` now runs at every
   `bee cells finish` and again at `bee close`; `bee worktree merge`
-  re-runs `commands.verify` on the merged tree as the last net.)*
+  re-runs `commands.test` against the staged merge as the last net.)*
 
   **The claim is still the trigger, not arrival.** It is stated claim-first,
   in the execution discipline rather than in any startup checklist, because a

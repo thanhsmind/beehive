@@ -117,7 +117,7 @@ consult budget.
   top-level key; the nested `models.<runtime>.advisor` slot is separate and
   valid), `hasStaleAdvisorKey`
   in `packages/bee/lib/state.mjs` (byte-mirrored to
-  `.bee/bin/lib/state.mjs`); surfaced by `packages/bee/bee.mjs`
-  (`status` group) and `packages/bee/scripts/onboard_bee.mjs` (`staleAdvisorNotices`).
+  `.bee/bin/lib/state.mjs`); surfaced by `the bee binary`
+  (`status` group) and `packages/bee/scripts/bee onboard` (`staleAdvisorNotices`).
   Evidence: fanout-delegation cells fanout-1/fanout-4 (commits 0056eda,
   79d96df).

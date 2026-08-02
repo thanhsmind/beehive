@@ -90,5 +90,5 @@ place is `suite-topology-and-discovery.md`.
 
 ## Pointers (implementation)
 
-- **P5** — `scripts/render_plugin_skill_trees.mjs`, `scripts/tests/test_render_race.mjs` —
+- **P5** — `bee dev render-skill-trees`, `scripts/tests/test_render_race.mjs` —
   locked tmp-swap render + race proof.

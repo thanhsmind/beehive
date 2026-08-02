@@ -32,7 +32,7 @@ prior feature has no nonterminal cell. An intentionally abandoned cell must
 first be dropped through the explicit drop verb, which records the reason —
 the start operation never clears work as a side effect. When the preconditions
 hold, one atomic write sets the feature, its mode, a valid phase, resets all
-four gates to ungranted, and updates the summary/next-action. Observers (the
+four gate fields to ungranted, and updates the summary/next-action. Observers (the
 next session's preamble, the status command) see either the old record intact
 or the new feature fully reset — never a mixture.
 
@@ -220,7 +220,7 @@ its knowledge actually landed — the state and the specs can no longer disagree
 
 ## Business Rules
 
-- R1 — A new feature can never inherit gate approvals: all four gates reset in
+- R1 — A new feature can never inherit gate approvals: all four gate fields reset in
   the same atomic write that sets the feature (codex-runtime-parity D2;
   plan-review P1 repair).
 - R2 — Feature start never destroys evidence of unfinished work; abandonment
@@ -318,12 +318,12 @@ its knowledge actually landed — the state and the specs can no longer disagree
 
 ## Pointers (implementation)
 
-- Record: `.bee/state.json` (CLI-owned). Verbs: `bee.mjs state`
+- Record: `.bee/state.json` (CLI-owned). Verbs: `bee state`
   (`start-feature` — new; set/gate/worker/scribing-run — existing);
   `startFeature()` + `isKnownPhase` in `packages/bee/lib/state.mjs`
   (byte-mirrored to `.bee/bin/lib/state.mjs`).
 - Phase-owned routing: generic `state set --owner <pre-phase>` in
-  `packages/bee/bee.mjs` and `.bee/bin/bee.mjs`; required-owner
+  `the bee binary` and `.bee/bin/bee`; required-owner
   metadata in both command registries; phase-aware callers in exploring,
   planning, and compounding (there is no `validating` phase — validation-diet
   D3 retired it; the merged gate's execution component is carried by
@@ -345,7 +345,7 @@ its knowledge actually landed — the state and the specs can no longer disagree
   execution` path and the `--merge` path (D14); `--merge` stamps
   `approved_for_plan_rev` on both fields via `findGateStamp` (D15); a plain
   `--name` approval is byte-for-byte unchanged. `handleStateGate` in
-  `packages/bee/bee.mjs` + `.bee/bin/bee.mjs`. Evidence: trace
+  `the bee binary` + `.bee/bin/bee`. Evidence: trace
   `.bee/cells/vd-3.json`; `test_cli_state.mjs`, `test_state_projection.mjs`,
   `test_bee_cli.mjs` all green.
 - Terminal-phase parity (B2a/R79): `scripts/tests/test_terminal_phase_parity.mjs`

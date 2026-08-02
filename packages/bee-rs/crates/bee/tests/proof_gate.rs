@@ -29,12 +29,12 @@ fn read(root: &Path, rel: &str) -> String {
 
 /// The declared command, minus any leading `VAR=...` environment prefix (CI
 /// already has cargo on PATH; a local session may not).
-fn declared_verify_invocation(root: &Path) -> String {
+fn declared_test_invocation(root: &Path) -> String {
     let config: serde_json::Value =
         serde_json::from_str(&read(root, ".bee/config.json")).expect(".bee/config.json parses");
-    let raw = config["commands"]["verify"]
+    let raw = config["commands"]["test"]
         .as_str()
-        .expect(".bee/config.json declares commands.verify as a string");
+        .expect(".bee/config.json declares commands.test as a string");
     strip_env_prefix(raw)
 }
 
@@ -83,12 +83,12 @@ fn cargo_test_lines(workflow: &str) -> Vec<String> {
 const WORKFLOWS: [&str; 2] = [".github/workflows/ci.yml", ".github/workflows/windows.yml"];
 
 #[test]
-fn ci_runs_the_declared_verify_command_and_adds_no_flags_to_it() {
+fn ci_runs_the_declared_test_command_and_adds_no_flags_to_it() {
     let root = repo_root();
-    let declared = declared_verify_invocation(&root);
+    let declared = declared_test_invocation(&root);
     assert!(
         declared.starts_with("cargo test"),
-        "commands.verify is expected to be a cargo invocation; got {declared:?}"
+        "commands.test is expected to be a cargo invocation; got {declared:?}"
     );
     for wf in WORKFLOWS {
         let lines = cargo_test_lines(&read(&root, wf));
@@ -96,7 +96,7 @@ fn ci_runs_the_declared_verify_command_and_adds_no_flags_to_it() {
         for line in lines {
             assert_eq!(
                 line, declared,
-                "{wf} runs a different suite from .bee/config.json commands.verify.\n\
+                "{wf} runs a different suite from .bee/config.json commands.test.\n\
                  A gate whose CI proof is a different command from the local one proves \
                  nothing about the local one — that is exactly how `-- --test-threads=1` \
                  kept a flaky parallel suite green on CI for the whole cutover."

@@ -11,7 +11,7 @@ The assigned cell arrives **already claimed** under the worker's nickname — th
 ## Tests at finish (the one proof path)
 
 The project declares how it is tested once — `.bee/config.json`
-`commands.test` (string or array). `bee cells finish` runs that declared
+`commands.test` (string or array). `bee finish` runs that declared
 suite through the deterministic runner (`bee test`) and writes ONE
 normalized record: `.bee/logs/test-results.json`. Green → the cap records
 `{tests: green}` with a pointer to the record; red → the cap is refused
@@ -33,7 +33,7 @@ Startup runs ZERO of these: the dispatch prompt inlines the cell JSON and the st
 
 ```text
 .bee/bin/bee reservations reserve --agent "<name>" --cell "<id>" --path "<path>" --ttl 3600
-.bee/bin/bee cells finish --id <id> [--outcome TEXT] [--files a,b] [--deviations-file F] [--friction TEXT]
+.bee/bin/bee finish --id <id> [--outcome TEXT] [--files a,b] [--deviations-file F] [--friction TEXT]
 .bee/bin/bee decisions active --recent 3
 ```
 
@@ -91,7 +91,7 @@ nothing here is a required output artifact, and none of it is written up anywher
 
 No `gate_bypass` level lifts any refusal below:
 
-- **Red declared tests** — `bee cells finish` refuses while `commands.test`
+- **Red declared tests** — `bee finish` refuses while `commands.test`
   is red; the refusal quotes the failing excerpt. The red is the next work
   item, never a base to build on — fix it, then finish again.
 - **Claim ownership** — a finish from a session that does not own the claim

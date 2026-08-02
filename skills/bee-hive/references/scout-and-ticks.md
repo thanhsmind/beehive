@@ -26,7 +26,7 @@ Do not read `node_modules/`, `dist/`, `build/`, `.git/` internals, `vendor/`, `c
 
 ### Route record
 
-`state route --set` persists one validated record on the ACTIVE feature's workflow record: `{class, lane, flags[], product_files, rationale}`. Enum-checked, typed refusals — free prose is refused, that is the point:
+`bee route --set` persists one validated record on the ACTIVE feature's workflow record: `{class, lane, flags[], product_files, rationale}`. Enum-checked, typed refusals — free prose is refused, that is the point:
 
 - `class` ∈ `feature`, `bugfix`, `docs`, `refactor`, `research`, `release`, `spike`
 - `lane` ∈ `docs`, `tiny`, `small`, `spike`, `standard`, `high-risk`
@@ -78,7 +78,7 @@ It fires on whichever path came first, and a feature that passed through explori
   --rationale "<n> product files scouted, 0 hard-gate flags, 0 open gray areas"
 ```
 
-Alongside the decision, `state route --set` rewrites the same route record's `lane` in place ("Route record" above) — never a second record — so the decision log and the route record agree on the target lane.
+Alongside the decision, `bee route --set` rewrites the same route record's `lane` in place ("Route record" above) — never a second record — so the decision log and the route record agree on the target lane.
 
 Then emit the re-lane tick (Progress ticks below) and continue on the new lane — its gates, ceremony, and worker shape from that point are the target lane's, exactly as if triage had picked it.
 
@@ -137,9 +137,10 @@ never to learn whether ticks are owed.
 
 Two things the catalog does not repeat, and that the rule depends on. Ticks are chat
 output the agent writes as it goes, not an emitter subsystem — nothing to build, nothing
-to poll. And Silent Bookkeeping's litmus still applies to every line: no cell ids as the
-subject, no "capped cell xyz-3" as the whole line; say what happened to the work, an id
-may ride at the end.
+to poll. And the work-language litmus still applies to every line (`routing-and-contracts.md`,
+"Work language"): no cell ids as the subject, no "capped cell xyz-3" as the whole line; say
+what happened to the work, an id may ride at the end. The litmus governs the WORDS of a
+tick, never whether the tick is owed — a mechanical step is ticked like any other.
 
 **Bypass silences QUESTIONS, never ticks.** Gate auto-approval under bypass (Gate bypass
 mode above) already posts its own `⚡` line and keeps going instead of stopping to ask —

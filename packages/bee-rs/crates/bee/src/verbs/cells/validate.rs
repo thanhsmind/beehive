@@ -44,7 +44,7 @@ pub(crate) fn assert_verify_sentinel_allowed(root: &Path, verb: &str, verify: &V
         return Ok(());
     }
     Err(Fail::Thrown(format!(
-        "{verb}: verify \"{NO_TEST_SENTINEL}\" is refused — this repo has not declared itself a no-test repo. FIX: use a real, runnable verify command, or declare the repo no-test first by setting commands.verify (or commands.test) to \"{NO_TEST_SENTINEL}\" in .bee/config.json (decision 55b951e1)."
+        "{verb}: verify \"{NO_TEST_SENTINEL}\" is refused — this repo has not declared itself a no-test repo. FIX: use a real, runnable verify command, or declare the repo no-test first by setting commands.test to \"{NO_TEST_SENTINEL}\" in .bee/config.json (decision 55b951e1)."
     )))
 }
 

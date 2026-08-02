@@ -109,7 +109,7 @@ against the unit's new attempts (self-correcting-loop D2).
   `REPEATED_FAILURE`, skip-on-select wired into `claimNextCell`, reset verb
   `resetCellBudget` / CLI `cells reset-budget --id --reason`; change
   classification `deriveChangeClass`, authoring advisory
-  `JUDGE_STANDARD_INSUFFICIENT` (STDERR only via the `bee.mjs` handler layer,
+  `JUDGE_STANDARD_INSUFFICIENT` (STDERR only via the `bee` handler layer,
   pah-2 precedent), behavior-class completion teeth (evidence length +
   tolerant duplicate scan) in `capCell`; judge-verdict schema
   `validateJudgeVerdict` / `deriveModelIndependence` in new

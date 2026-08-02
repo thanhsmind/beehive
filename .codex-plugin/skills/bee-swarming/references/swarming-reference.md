@@ -221,14 +221,14 @@ One declared test path, one result record — supersedes the proof-economy
 tier system (decision 412e9b3a, docs/specs/test-simple.md, 2026-07-31).
 
 - **Declaration:** `.bee/config.json` `commands.test` is the single place
-  a project declares how it is tested (string or array of commands).
-  `commands.verify` remains the close/merge-time chain. Nothing else
+  a project declares how it is tested (string or array of commands) — the
+  ONE command every door runs. `commands.verify` is retired. Nothing else
   declares test obligations.
 - **Runner:** `bee test` runs the declared commands in order and writes
   ONE normalized record, `.bee/logs/test-results.json` — `{ran_at, green,
   commands: [{command, exit, duration_ms, failure_excerpt}]}`. The runner
   is a program; an agent's word is never the record.
-- **At finish:** `bee cells finish` runs `bee test` when `commands.test`
+- **At finish:** `bee finish` runs `bee test` when `commands.test`
   is declared. Green → the cap records `{tests: green}` plus the record
   pointer; red → the cap is refused and the refusal carries the
   `failure_excerpt` — the red becomes the work. A repo with no declared
@@ -238,8 +238,9 @@ tier system (decision 412e9b3a, docs/specs/test-simple.md, 2026-07-31).
   the failing excerpt and becomes fix cells in the SAME feature (never
   un-cap a capped cell — the fix is new work). Per-cell commits +
   `git bisect` localize a regression across the feature's cells.
-- **Merge:** `bee worktree merge` still re-runs `commands.verify` on the
-  merged tree — the last net. The full estate beyond that is CI-owned.
+- **Merge:** `bee worktree merge` re-runs `commands.test` against the
+  staged merge — the last net. The estate beyond that is CI-owned, running
+  the same command.
 - **Never build on red:** a red result is the next work item, never a
   base. Re-dispatch prompts (Prior rounds) cite the `failure_excerpt`
   directly.
@@ -257,7 +258,7 @@ tier system (decision 412e9b3a, docs/specs/test-simple.md, 2026-07-31).
 | Isolation guarantee | `fork_turns: "none"`; never fork the parent history for routine cells |
 | Subagent type | No per-agent subagent type — the tier is enforced as a read budget + output cap in the worker prompt regardless of what is spawned (documented asymmetry, not parity) |
 
-On both runtimes the integrity rails are identical because they live in the helpers: `bee cells finish` refuses while the declared tests are red, and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
+On both runtimes the integrity rails are identical because they live in the helpers: `bee finish` refuses while the declared tests are red, and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
 
 ### Native Codex timeout interval
 

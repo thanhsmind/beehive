@@ -56,7 +56,7 @@ travels with it (R18 — never judge an envelope no probe has seen).
 
 ## Pointers (implementation)
 
-- Constant: `PROBED_CODEX_VERSION` in `packages/bee/bee.mjs`.
+- Constant: `PROBED_CODEX_VERSION` in `the bee binary`.
 - Canary: `scripts/canary_codex.mjs` (full run, `--probe`, `--probe-selftest`).
 - Evidence: `docs/history/i54-closeout/reports/validation-canary.md` (section
   4, post-fix full canary rerun), `.bee/cells/i54-closeout-8.json`.

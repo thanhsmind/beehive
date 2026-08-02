@@ -265,7 +265,6 @@ pub(crate) const WORKTREE_MERGE_SESSIONLESS_ID: &str = "bee-worktree-merge-sessi
 /// because merge's verify fallback is `typeof commands.test === 'string'`, so
 /// an array `test` is never spawned as one shell command.
 pub(crate) struct WorktreeCommands {
-    pub(crate) verify: Option<String>,
     pub(crate) test_string: Option<String>,
     pub(crate) companion_start: Option<String>,
     pub(crate) companion_mount: Option<String>,
@@ -275,7 +274,6 @@ pub(crate) struct WorktreeCommands {
 pub(crate) fn read_worktree_commands(main_root: &Path) -> Option<WorktreeCommands> {
     let config = crate::state::read_config_raw(main_root).ok()?;
     let mut out = WorktreeCommands {
-        verify: None,
         test_string: None,
         companion_start: None,
         companion_mount: None,
@@ -290,7 +288,6 @@ pub(crate) fn read_worktree_commands(main_root: &Path) -> Option<WorktreeCommand
             _ => None,
         }
     };
-    out.verify = trimmed("verify");
     out.test_string = trimmed("test");
     out.companion_start = trimmed("worktree_companion_start");
     out.companion_mount = trimmed("worktree_companion_mount");
@@ -442,14 +439,11 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     // break, not just noisy telemetry. Each probe below is read-only.
 
     let commands = read_worktree_commands(&main_root)?; // corrupt config -> Node
-    // test-simple (412e9b3a) + no-test-repos D1/D2: `commands.verify ||
-    // (typeof commands.test === 'string' ? commands.test : undefined)`, with
-    // the literal "none" sentinel mapped to "no verify configured".
-    let verify_command = commands
-        .verify
-        .clone()
-        .or_else(|| commands.test_string.clone())
-        .filter(|c| c != "none");
+    // test-simple (412e9b3a) + no-test-repos D1/D2. `commands.verify` was
+    // retired (one declared test command, one contract): the merge gate now
+    // runs `commands.test`, with the literal "none" sentinel mapped to "no
+    // test command configured".
+    let verify_command = commands.test_string.clone().filter(|c| c != "none");
     // worktree-companion-hook: resolved unconditionally (cheap) — there is no
     // `--with-companion` on the merge side, because the worktree's own marker
     // IS the signal. A worktree WITH a marker is torn down even when this

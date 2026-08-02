@@ -2,7 +2,7 @@
 
 bee is a gated agent workflow harness: a single native CLI plus a set of skills
 and lifecycle hooks that hold an agent to explore → gate → plan → execute →
-scribe → compound, with four human gates and evidence required at every cap.
+scribe → compound, with three human gates and evidence required at every cap.
 It ships as a Claude Code / Codex plugin, installs itself into a host repo
 (`bee onboard --apply`), and keeps that repo's runtime state under `.bee/`.
 

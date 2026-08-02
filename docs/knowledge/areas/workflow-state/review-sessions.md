@@ -116,10 +116,10 @@ is dispatched for unchanged content.
 ## Pointers (implementation)
 
 - Review records: `.bee/reviews/<id>.json` (sessions) + `.bee/review-candidates.jsonl`
-  (ledger), CLI `bee.mjs reviews` (create/list/show/record/candidate add/
+  (ledger), CLI `bee reviews` (create/list/show/record/candidate add/
   candidates/status), lib `packages/bee/lib/reviews.mjs`
   (`deriveCandidateStatus`, `readReviewStrict`; byte-mirrored to `.bee/bin/`).
-  Status surface: `review` block in `packages/bee/bee.mjs` (`status` group).
+  Status surface: `review` block in `the bee binary` (`status` group).
   Coverage derivation uses status-first `git merge-base --is-ancestor` +
   `git rev-list --count`: a concrete Git answer wins over an attached auxiliary
   launch warning, while missing/inconclusive output yields `review stale`.

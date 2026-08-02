@@ -505,7 +505,7 @@ over and proving it again (hardening-1-7-10).
 - The absence-of-proof marker (B42/R90/R91): `proofUnrecorded` at
   `packages/bee/lib/cells.mjs:2228-2237`, written as `trace.proof:
   "unrecorded"` at `:2273`; the workspace exemption is `isNoTestCommand` from
-  `packages/bee/lib/state.mjs` applied to `commands.verify`. Both doors read
+  the config reader applied to `commands.test`. Both doors read
   it in `packages/bee/lib/state.mjs`: `featureVerifyDebt` (`:2502-2560`) and
   `testCellDebt` (`:2570-2640`).
 - The feature coverage door (B43/R93): `testCellDebt` in

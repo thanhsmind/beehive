@@ -43,7 +43,7 @@ of the live workflow record, kept for compatibility. Same keys as before:
 | `phase` | current chain phase — the closed nine: `idle` · `exploring` · `planning` · `swarming` · `reviewing` · `scribing` · `compounding` · `grooming` · `compounding-complete` |
 | `feature` | active feature slug |
 | `mode` | lane (`tiny` · `small` · `standard` · `high-risk` · `spike` · `docs`) |
-| `approved_gates` | `{context, shape, execution, review}` booleans — the four gates |
+| `approved_gates` | `{context, shape, execution, review}` booleans — four fields, three gates: `shape` and `execution` flip together as Gate 2 |
 | `gate_revoked_at` | map of gate name → ISO timestamp (revocation audit) |
 | `cells` | rollup counts `{open, claimed, capped, blocked}` |
 | `route` | the recorded triage `{class, lane, flags[], product_files, rationale, updated_at}` — written by `bee route` |
@@ -68,15 +68,15 @@ Per-repo configuration.
 
 | Key | Holds |
 |-----|-------|
-| `commands` | `{setup, start, test, verify}` shell commands. **`test` is the single declaration of how the project is tested** (a string or an array run in order); `verify` is the close/merge chain. A `"none"` sentinel means the gate is deliberately disabled |
+| `commands` | `{setup, start, test}` shell commands. **`test` is the single declaration of how the project is tested** (a string or an array run in order) — the one command the green base check, every cap, close, merge, and CI all run. A `"none"` sentinel means the gate is deliberately disabled |
 | `hooks` | toggle map: `session-init`, `prompt-context`, `state-sync`, `chain-nudge`, `session-close`, `write-guard` — each default-on |
 | `gate_bypass` | `off` · `normal` · `full` · `total` — the opt-in gate autopilot level |
 | `models` | per-runtime tier→model map: `{claude:{extraction, generation, review, advisor}, codex:{…}}`. A tier may be an object `{kind:"cli", command, promptVia}` — an external gather-only executor |
 | `lanes`, `capabilities` | per-repo overrides |
 
-Read by hive (bypass level), planning (verify scoping), swarming (model tiers),
+Read by hive (bypass level), planning (test scoping), swarming (model tiers),
 `bee test` / `bee cells finish` / `bee close` (`commands.test`), and
-`bee worktree merge` (`commands.verify`).
+`bee worktree merge` (`commands.test`).
 
 **Config is the one hand-edited register.** The `config get/set/unset/validate`
 verbs are [declared but not built](#declared-but-not-built), and `config.json` is

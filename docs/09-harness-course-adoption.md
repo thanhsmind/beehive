@@ -8,7 +8,7 @@ The course's frame: a harness = Instructions + Tools + Environment + State + Fee
 
 | Course mechanism | Where bee has it — often stronger |
 |---|---|
-| Feature list as harness primitive: triple (behavior, verification, state) + evidence, pass-state gating, harness-controlled transitions (L08) | The cell: `must_haves` + `verify` + `status` + `trace.verification_evidence`; `bee.mjs cells cap` mechanically refuses without a passing verify + recorded output — the course's "harness executes and decides" is literal here |
+| Feature list as harness primitive: triple (behavior, verification, state) + evidence, pass-state gating, harness-controlled transitions (L08) | The cell: `must_haves` + `verify` + `status` + `trace.verification_evidence`; `bee cells cap` mechanically refuses without a passing verify + recorded output — the course's "harness executes and decides" is literal here |
 | Externalized termination + worker/checker separation (L09, L11) | Cap-requires-verify-with-proof; `bee-reviewing` as independent checker (EXISTS/SUBSTANTIVE/WIRED, UAT, Gate 3); "an assertion is not evidence" |
 | Repo as system of record, knowledge next to code (L03, encode-knowledge SOP) | `docs/specs/` state layer + reading-map + system-overview; policy-vs-ops split; the **rebuild bar** is a stronger per-area form of the course's Fresh Session Test |
 | Short router entry file, progressive disclosure, ≤200 lines (L04, prompt-calibration) | AGENTS block ~90 lines; SKILL.md <200 lines with one `references/` file each (khuym/superpowers rule) |

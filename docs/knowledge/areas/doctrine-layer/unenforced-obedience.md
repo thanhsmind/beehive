@@ -38,7 +38,10 @@ every rule it fails to cover (decision c2c46488).
 - **R7** — The workflow's own machinery is run by the assistant, never handed to
   the human. The human's only actions are approvals, decisions, and permissions.
 - **R8** — The workflow's internal vocabulary stays out of the conversation. The
-  human hears the work in their own terms; the machinery runs silently (1689af1b).
+  human hears the work in their own terms (1689af1b, narrowed): this constrains the
+  WORDS, not whether a step is mentioned — every perceivable step is still ticked,
+  in work language. The earlier "run it, never narrate it" reading of 1689af1b is
+  retired; it contradicted the tick contract, which is the rule that stands.
   This carries a positive duty — purpose-first narration (4439bd7e, work-visibility
   D1/D2): every perceivable work unit (a phase of real work starting, a worker sent
   out, a long-running step, a change of direction) opens with one work-language

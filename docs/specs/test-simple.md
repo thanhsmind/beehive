@@ -6,8 +6,8 @@ proof-economy tier system wholesale.
 ## The model (three pieces, like fluent's)
 
 1. **Declaration.** `.bee/config.json` `commands.test` is the single place
-   a project declares how it is tested (string or array of commands).
-   `commands.verify` remains the close/merge-time chain. Nothing else
+   a project declares how it is tested (string or array of commands) — the
+   ONE command every door runs. `commands.verify` is retired. Nothing else
    declares test obligations — no per-cell proof tiers, no per-slice
    test-cell mandate.
 2. **Deterministic runner.** `bee test` (porcelain) runs the declared
@@ -46,8 +46,8 @@ proof-economy tier system wholesale.
 - `bee close`: still the close driver — now its doors are: `bee test`
   green (full declared run) + capture reminder. Scribing/capture doors
   are capture-side, unchanged.
-- Merge gate: `bee worktree merge` still re-runs `commands.verify` on
-  the merged tree — the last net.
+- Merge gate: `bee worktree merge` re-runs `commands.test` against the
+  staged merge — the last net.
 - "Never build on red": a red result is the next work item, never a base.
 - Communication rule: "done/green/fixed" only beside fresh output — now
   always satisfiable by quoting the record.
@@ -58,6 +58,7 @@ proof-economy tier system wholesale.
 ## Cost note
 
 This trades the deferred-proof economy for per-finish test runs, exactly
-fluent's trade. A host keeps it fast by pointing `commands.test` at its
-fast suite (the full chain stays on `commands.verify`/CI). bee's own
-repo declares its impacted-cap runner.
+fluent's trade. A host keeps it fast by pointing `commands.test` at a
+suite it is willing to run on every cap — there is no second, slower
+command to hide the full chain behind. bee's own repo declares its
+impacted-cap runner.

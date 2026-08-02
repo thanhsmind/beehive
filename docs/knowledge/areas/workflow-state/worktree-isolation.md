@@ -158,7 +158,7 @@ checkout at all, nothing about this behavior changes today's write.
   and `hasAnySharedNestedCheckout` (directory-scan), plus their shared
   companion-marker verification and submodule-registration exclusion helpers;
   wired into `packages/bee/hooks/bee-write-guard.mjs`'s dispatch, ahead of
-  `checkWrite`, and into `packages/bee/bee.mjs`'s `handleWorktreeNew`. Both
+  `checkWrite`, and into `the bee binary`'s `handleWorktreeNew`. Both
   detection functions take the coordination root as an `opts.controlRoot`
   field (falling back to the physical root when omitted) so the concurrency
   check can consult a coordination root that differs from the physical

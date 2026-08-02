@@ -33,7 +33,7 @@ bee reassembles these into one opinionated chain, sized for a single developer r
 
 9. **Skills are code. Test them.** No bee skill ships without a failing pressure test first (the Iron Law). Descriptions state *when to use*, never summarize the workflow — a workflow summary in the description causes agents to skip the skill body. (superpowers, khuym)
 
-10. **Humans decide at exactly four gates.** Approve decisions, approve the work shape, approve execution, approve merge. Models recommend; the user decides. When two models disagree at a gate, surface the disagreement — never auto-resolve. (khuym, gstack)
+10. **Humans decide at exactly three gates.** Approve decisions (Gate 1), approve the work shape and execution together (Gate 2), approve merge inside a review session the user asked for (Gate 3). Models recommend; the user decides. When two models disagree at a gate, surface the disagreement — never auto-resolve. (khuym, gstack)
 
 11. **The meaning outlives the stack.** This holds for the entire development process — backend, frontend, integrations, pipelines, processes alike. Vibe-driven development locks knowledge into code and the current technology: business rules, field meanings, and behaviors agreed in discussion vanish when the session closes. So every settled outcome of the discuss → build → test → adjust loop — a rule agreed, a behavior confirmed by test, a value tuned — is recorded technology-agnostically in the state layer (`docs/specs/`) the moment it settles, at BA grade. Code is one *rendering* of the spec; the spec must survive a full rewrite on another stack (the rebuild bar). Lanes scale ceremony, never memory: a tiny fix that changes behavior still updates the spec. (owner requirement, decisions 0001/0002)
 

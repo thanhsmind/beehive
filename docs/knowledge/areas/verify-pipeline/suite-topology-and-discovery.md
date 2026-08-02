@@ -89,7 +89,7 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   *(Since 2026-07-31 — decision 412e9b3a, docs/specs/test-simple.md —
   `commands.test` is the one declared test path, run by `bee cells finish`
   at every cap and re-run by `bee close`; `bee worktree merge` re-runs
-  `commands.verify` on the merged tree instead.)*
+  `commands.test` against the staged merge instead.)*
 - **The transitive impacted run has a ceiling, and level-1 is exempt from
   it.** A single hot file (imported almost everywhere) can make the
   transitive impacted set balloon to nearly the whole suite pool, erasing
@@ -175,7 +175,7 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   docs/specs/test-simple.md: per-cell `verify` commands are retired —
   `bee cells finish` runs the declared `commands.test` at every cap and
   `bee close` re-runs it for the feature; `bee worktree merge` re-runs
-  `commands.verify` on the merged tree; the full estate beyond that stays
+  `commands.test` against the staged merge; the estate beyond that stays
   CI-owned. The pre-amendment rule is kept below as the historical
   record.)* Verify is two-tier, but the full tier moved off the machine
   (verify-scoping D2, superseded by ci-owned-verify D1/D5/D6): a cell's
@@ -183,7 +183,7 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   (a direct test file or `--only` selection); the dev loop's own broader
   check is `commands.test` (the impacted run, `run_verify.mjs --impacted` /
   `--impacted-from-git`), resolved through the impact registry — never the
-  full configured verify. The FULL configured verify (`commands.verify`) is
+  full configured suite. The declared test command (`commands.test`) is
   CI-owned: it runs on the project's own CI cadence (push, nightly, or
   scheduled — the host workflow decides), never locally, and auto-files a
   deduped `verify-red` issue when red — no session baseline, feature close, or
@@ -192,7 +192,7 @@ concurrency-safe and hermetic is `concurrency-and-hermetic-runs.md`.
   run belongs to CI. Mid-iteration, the level-1 impacted run (direct edges
   only) is the fast local check; the transitive impacted run (`commands.test`)
   remains what gates wave-close and merge (impacted-level1 D1). A repo that
-  declares itself no-test (`commands.verify`/`commands.test` set to the exact
+  declares itself no-test (`commands.test` set to the exact
   sentinel `"none"`, decision 55b951e1) skips both tiers loudly instead: the
   session preamble, wave-close, session-finish, and worktree merge each print
   one disabled-gate line rather than running anything, and a cell's own

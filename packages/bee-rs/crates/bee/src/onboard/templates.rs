@@ -159,9 +159,16 @@ pub const CODEX_BINARY_MISSING_DIAGNOSTIC: &str = "bee: hook binary missing (.be
 pub const CODEX_STATUS_LINE_BLOCK: &str = "status_line = [\"current-dir\", \"git-branch\", \"model-with-reasoning\", \"context-remaining\", \"five-hour-limit\", \"weekly-limit\", \"used-tokens\"]\nstatus_line_use_colors = true\n";
 
 /// onboard_bee.mjs COMMAND_KEYS (l. 2592) — its own copy of state.mjs's list.
-pub const COMMAND_KEYS: &[&str] = &["setup", "start", "test", "verify"];
+pub const COMMAND_KEYS: &[&str] = &["setup", "start", "test"];
 
 pub const STALE_ADVISOR_KEY_WARNING: &str = "advisor mode was removed in 0.1.23; the top-level advisor key in .bee/config.json is ignored — delete it. (This does not affect the models.<runtime>.advisor slot, which is separate and still valid.)";
+
+/// The `commands.verify` retirement (2.1.0). Two shapes, because the damage
+/// differs: with a `test` recorded the key is merely dead weight; without one
+/// the host just lost every test gate it had.
+pub const RETIRED_VERIFY_KEY_WARNING: &str = "commands.verify was retired in 2.1.0; .bee/config.json still has one and it is now ignored — delete it. commands.test is the one declared test command: the green base check, every cap, close, `bee worktree merge`, and CI all run it.";
+
+pub const RETIRED_VERIFY_KEY_NO_TEST_WARNING: &str = "commands.verify was retired in 2.1.0 and .bee/config.json declares NO commands.test — this repo currently has no test gate at all. FIX: move your verify command to commands.test (a fast subset is better than nothing), or set commands.test to \"none\" if this repo is deliberately test-free. Note: \"none\" on commands.verify no longer declares a no-test repo.";
 
 /// onboard_bee.mjs HEADER_POINTER_CANDIDATES (l. 2194–2198).
 pub const HEADER_POINTER_CANDIDATES: &[&str] =

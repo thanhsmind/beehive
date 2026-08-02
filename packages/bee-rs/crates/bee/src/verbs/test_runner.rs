@@ -115,7 +115,7 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
             result.insert("undeclared".into(), Value::Bool(true));
             let text = [
                 "No commands.test declared — nothing ran.",
-                "bee test runs the project's ONE declared test path: set commands.test in .bee/config.json (a string, or an array run in order). Point it at the fast suite — the full chain stays on commands.verify (worktree merge / CI).",
+                "bee test runs the project's ONE declared test path: set commands.test in .bee/config.json (a string, or an array run in order). It is the only declared test command — cell finish, feature close, and worktree merge all run it.",
                 "Once declared, it becomes the cap door: bee cells finish runs it before every cap, and bee close runs it as the tests door.",
                 "next: declare commands.test, then re-run bee test",
             ]

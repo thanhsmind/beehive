@@ -63,7 +63,7 @@ bee follows the khuym method: read each upstream system, keep what holds up in p
 - Communication contract: plain-language first, scenario before jargon, answer in the order summary → current behavior → why it matters → concrete scenario → next step.
 
 **Change:**
-- **Beads (`br`/`bv`) become optional.** khuym hard-depends on the beads CLI for its task graph; that is its heaviest external dependency. bee's native task unit is the **cell**: a JSON file in `.bee/cells/` with id, title, status, deps, acceptance criteria, verify command, and lane. A small vendored CLI (`bee.mjs cells`) gives list/ready/claim/cap operations. If `br` exists, an adapter can mirror cells into beads — but nothing in the chain requires it.
+- **Beads (`br`/`bv`) become optional.** khuym hard-depends on the beads CLI for its task graph; that is its heaviest external dependency. bee's native task unit is the **cell**: a JSON file in `.bee/cells/` with id, title, status, deps, acceptance criteria, verify command, and lane. A small vendored CLI (`bee cells`) gives list/ready/claim/cap operations. If `br` exists, an adapter can mirror cells into beads — but nothing in the chain requires it.
 - **gkg becomes optional.** Treat it as one entry in a capability registry (see repository-harness) with a documented grep fallback, not a first-class dependency that turns skills "unavailable."
 
 **Reject:**

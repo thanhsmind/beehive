@@ -279,30 +279,26 @@ pub fn build_session_preamble(
         for key in &recorded_keys {
             lines.push(format!("- {key}: `{}`", tpl(commands.get(*key))));
         }
-        if str_eq(commands.get("verify"), NO_TEST_SENTINEL) {
+        if str_eq(commands.get("test"), NO_TEST_SENTINEL) {
             // no-test-repos D1 (decision 55b951e1): the sentinel REPLACES the
-            // CI-status-gate paragraph outright with one loud line — never a
+            // test-gate paragraph outright with one loud line — never a
             // silent drop of the gate.
             lines.push(format!(
-                "- Test gates disabled by repo declaration (commands.verify: {NO_TEST_SENTINEL}) — cells cap on diff-backed outcomes; re-enable by recording real commands."
+                "- Test gates disabled by repo declaration (commands.test: {NO_TEST_SENTINEL}) — cells cap on diff-backed outcomes; re-enable by recording a real commands.test."
             ));
-        } else if opt_truthy(commands.get("verify")) {
+        } else if opt_truthy(commands.get("test")) {
             lines.push(
-                // REWRITTEN. This used to read "before your first `cells
-                // claim`, check CI INSTEAD of running anything locally", and
-                // it was wrong in both directions: CI ran nightly only, so
-                // its answer could predate the change by a day, while the
-                // declared command it stood in for finishes in seconds. CI
-                // now runs on push and pull_request (.github/workflows), and
-                // the command below IS what CI runs — so the cheapest fresh
-                // answer is the local one. Also 600 bytes shorter.
-                "- Never build on red: run the verify command above before your first `cells claim`, and treat a red as its own fix-first cell. CI runs the same command on every push and PR.".to_string(),
+                // REWRITTEN TWICE. It first read "before your first `cells
+                // claim`, check CI INSTEAD of running anything locally",
+                // wrong in both directions: CI ran nightly only, so its
+                // answer could predate the change by a day, while the
+                // declared command it stood in for finishes in seconds. It
+                // then keyed on `commands.verify`, which has since been
+                // retired — one declared test command now serves the dev
+                // loop, the cap door, feature close, and the merge gate, and
+                // it IS what CI runs on every push and PR.
+                "- Never build on red: run the test command above before your first `cells claim`, and treat a red as its own fix-first cell. CI runs the same command on every push and PR.".to_string(),
             );
-            if str_eq(commands.get("test"), NO_TEST_SENTINEL) {
-                lines.push(format!(
-                    "- Dev-loop test command disabled by repo declaration (commands.test: {NO_TEST_SENTINEL}) — the CI-owned verify above still governs; re-enable by recording a real `test` command."
-                ));
-            }
         }
     }
 

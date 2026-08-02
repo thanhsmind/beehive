@@ -91,14 +91,14 @@ into the concept whose topic it matches.
 | E14 | [docs/knowledge/areas/onboarding/managed-ignore-section.md](../knowledge/areas/onboarding/managed-ignore-section.md) | a silenced path already tracked → the report warns and names the untrack command |
 | E15 | [docs/knowledge/areas/onboarding/host-project-artifacts.md](../knowledge/areas/onboarding/host-project-artifacts.md) | the shipped configuration sample is annotated, not silent |
 | P1 | [docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md](../knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md) | shared isolated test-entrypoint runner — `scripts/lib/run-module-worker.mjs` |
-| P2 | [docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md](../knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md) | the complete onboarding suite — `packages/bee/scripts/test_onboard_bee.mjs` |
+| P2 | [docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md](../knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md) | the complete onboarding suite — `packages/bee/scripts/test_bee onboard` |
 | P3 | [docs/knowledge/areas/onboarding/distribution-source-exclusivity.md](../knowledge/areas/onboarding/distribution-source-exclusivity.md) | shared strict planner/prover and the 22-case transaction suite |
 | P4 | [docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md](../knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md) | package wiring, cross-platform entrypoints, metadata, inventory, cachebuster proof |
 | P5 | [docs/knowledge/areas/onboarding/release-identity-and-version-parity.md](../knowledge/areas/onboarding/release-identity-and-version-parity.md) | release-version single-source — `scripts/lib/release-tuple.mjs` |
 | P6 | [docs/knowledge/areas/onboarding/distribution-source-exclusivity.md](../knowledge/areas/onboarding/distribution-source-exclusivity.md) | fresh-host handler-delivery proof |
-| P7 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | statusline opt-in, plan stage 3b, `copy_statusline` — `onboard_bee.mjs` |
+| P7 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | statusline opt-in, plan stage 3b, `copy_statusline` — `bee onboard` |
 | P8 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | canonical pair — `packages/bee/statusline/` |
-| P9 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | section 9c sandbox cases — `test_onboard_bee.mjs` |
+| P9 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | section 9c sandbox cases — `test_bee onboard` |
 | P10 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | statusline byte-equality sweep — `packages/bee/tests/test_lib.mjs` |
 | P11 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | host-side settings contract — `.claude/settings.json` |
 | P12 | [docs/knowledge/areas/onboarding/status-display-vendoring.md](../knowledge/areas/onboarding/status-display-vendoring.md) | the second runtime's machine-level status block — `ensure_codex_statusline` |

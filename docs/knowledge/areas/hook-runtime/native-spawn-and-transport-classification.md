@@ -90,7 +90,7 @@ unaffected (codex-native-transport D6; decision 350f1e82).
   `packages/bee/lib/dispatch-guard.mjs`). Probe record reader/
   writer and the D4 doctor row: `readNativeTransportClassification`,
   `writeNativeTransportProbe`, `doctorNativeTransportUnlock`
-  (`packages/bee/bee.mjs`, mirroring the doctor-attest pattern).
+  (`the bee binary`, mirroring the doctor-attest pattern).
   Suite: `scripts/tests/test_native_probe.mjs`. Advisor-marker acceptance on the
   codex branch: `ANCHORED_CODEX_TIER_MARKER_RE` in `dispatch-guard.mjs`.
   Evidence: `.bee/cells/cnt-2.json`, `.bee/cells/cnt-3.json`,

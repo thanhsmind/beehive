@@ -89,7 +89,7 @@ outputs — when a verb refuses, its message names the fix.
    make the cell fit.
 4. Commit once: subject describes the change in imperative mood; the cell
    id rides the last line of the body.
-5. `bee cells finish --id <cell> --outcome "<one line>" --files <a,b>` —
+5. `bee finish --id <cell> --outcome "<one line>" --files <a,b>` —
    cap and release in one verb. Finish runs the declared tests
    (`commands.test`): green caps; a red refuses, and the refusal carries
    the failing test excerpt — that red is now your work. Tests run at

@@ -73,7 +73,7 @@ on this path; everything unresolved is written down, never guessed.
 3. Judge clarity and size over the evidence with the triage table above —
    your own reasoning, never a keyword match; a vague row parks here
    instead of interviewing.
-4. `bee state route` records the call. Proceed → Lock, then planning.
+4. `bee route` records the call. Proceed → Lock, then planning.
    Park → Lock writes the evidence and open questions into `Outstanding
    Questions`; a later human Explore starts there, not from scratch.
 

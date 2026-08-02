@@ -232,27 +232,20 @@ pub(crate) fn assert_regen_obligation(cell: &Map<String, Value>, verb: &str) -> 
     }
 }
 
-// ─── config slice (state.mjs readConfig -> commands.test/verify) ───────────
+// ─── config slice (readConfig -> commands.test; `verify` retired) ─────────
 
 pub(crate) const NO_TEST_SENTINEL: &str = "none";
 
 pub(crate) struct CommandsSlice {
     /// normalizeCommands' `test`: Some(list) for a declared string/array.
     pub(crate) test: Option<Vec<String>>,
-    /// normalizeCommands' `verify` (single trimmed string).
-    pub(crate) verify: Option<String>,
 }
 
 pub(crate) fn read_commands_slice(root: &Path) -> MR<CommandsSlice> {
     let config = bstate::read_config_raw(root).map_err(|_| Fail::Delegate)?;
     let raw = config.get("commands");
-    let mut out = CommandsSlice { test: None, verify: None };
+    let mut out = CommandsSlice { test: None };
     let Some(Value::Object(raw)) = raw else { return Ok(out) };
-    if let Some(Value::String(s)) = raw.get("verify") {
-        if !js_trim(s).is_empty() {
-            out.verify = Some(js_trim(s).to_string());
-        }
-    }
     match raw.get("test") {
         Some(Value::String(s)) if !js_trim(s).is_empty() => {
             out.test = Some(vec![js_trim(s).to_string()]);
@@ -274,8 +267,8 @@ pub(crate) fn read_commands_slice(root: &Path) -> MR<CommandsSlice> {
     Ok(out)
 }
 
-/// state.mjs isNoTestRepo over the normalized commands slice.
+/// isNoTestRepo over the normalized commands slice. `commands.verify` was
+/// retired, so `commands.test: "none"` is the one way to declare a no-test repo.
 pub(crate) fn is_no_test_repo(commands: &CommandsSlice) -> bool {
-    commands.verify.as_deref() == Some(NO_TEST_SENTINEL)
-        || matches!(&commands.test, Some(list) if list.len() == 1 && list[0] == NO_TEST_SENTINEL)
+    matches!(&commands.test, Some(list) if list.len() == 1 && list[0] == NO_TEST_SENTINEL)
 }

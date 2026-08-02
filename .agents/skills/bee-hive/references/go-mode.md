@@ -23,7 +23,7 @@ User: "/go [feature]"
          bee-shaping (Brief)   → implement-plan.md  (high-risk always; standard/small on-demand)
          SMALLER PATH check + review wave run inline before the gate below
        ▼
-[GATE 2] ← HARD STOP — approves `shape` AND `execution` together in one call (`bee state gate
+[GATE 2] ← HARD STOP — approves `shape` AND `execution` together in one call (`bee gate
           --merge`); review the implement plan, or plan.md when no brief was rendered
        ▼
 [STEP 3] bee-planning (prep)  → current-slice cells only — plan.md is frozen, never rewritten
@@ -49,7 +49,7 @@ DONE — verified, unreviewed, development continues
 │ slice, not at DONE. When the user explicitly asks for review (any time, │
 │ any scope: this feature, a named batch, a commit range), invoke         │
 │ bee-reviewing over that immutable scope: P1/P2/P3 findings, artifact    │
-│ verification, UAT, then [GATE 4] ← HARD STOP (never auto-merge) inside  │
+│ verification, UAT, then [GATE 3] ← HARD STOP (never auto-merge) inside  │
 │ that session, followed by bee-shaping's walkthrough (Brief) for         │
 │ standard/high-risk. A merge/ship/release request while candidates       │
 │ sit unreviewed/stale reports the count + risk level and asks ONE        │
@@ -71,7 +71,7 @@ Before invoking `bee-shaping`:
 ## Gate Wording (fixed)
 
 - **Gate 1:** "Decisions locked. Approve CONTEXT.md before planning?"
-- **Gate 2:** "Work shape is ready. Approve before current-work preparation?" — approves `shape` AND `execution` together in one call (`bee state gate --merge`); every lane merges the same way.
+- **Gate 2:** "Work shape is ready. Approve before current-work preparation?" — approves `shape` AND `execution` together in one call (`bee gate --merge`); every lane merges the same way.
 - **Gate 3:** P1 > 0 → "P1 findings block merge. Fix before proceeding?" ; P1 = 0 → "Review complete. Approve merge?"
 
 Each gate is one question in the standard CONTEXT / QUESTION / RECOMMENDATION / options format, presented per the **Gate Presentation Contract** (`routing-and-contracts.md`): plain-language layer in chat, in the user's language; full mechanical report written to `docs/history/<feature>/reports/` and linked, never pasted. Gates are asked **one at a time** — Gate 1 and Gate 2 are never batched into a single question. `tiny`/`small` keep the same merge shape at a lighter ceremony (`routing-and-contracts.md` "Lane ceremony in full"): the inline reality check plus one merged question IS the contract there too, and `tiny` closes with a done-report instead of Gate 3. Optional at Gate 2 and Gate 3: a cross-model second opinion; disagreement is quoted to the user, never auto-resolved.
@@ -104,9 +104,9 @@ Full plan: docs/history/<feature>/plan.md
 Work shape is ready. Approve before current-work preparation? (yes / revise / show full plan.md)
 ```
 
-Approval flips `approved_gates.shape` AND `approved_gates.execution` together (`bee state gate --merge`) and covers the **current slice only**; later slices of the same feature build on it without a re-ask (a `plan-rev bump` is what revokes it). Revise → return to the shape pass, update `plan.md` content (unapproved — pre-Gate-2 content edits are allowed; frozen only once `approved_gates.shape` is set), re-present.
+Approval flips `approved_gates.shape` AND `approved_gates.execution` together (`bee gate --merge`) and covers the **current slice only**; later slices of the same feature build on it without a re-ask (a `plan-rev bump` is what revokes it). Revise → return to the shape pass, update `plan.md` content (unapproved — pre-Gate-2 content edits are allowed; frozen only once `approved_gates.shape` is set), re-present.
 
-**GATE 4** — inside a user-invoked `bee-reviewing` session only (never at the end of go mode's default chain):
+**GATE 3** — inside a user-invoked `bee-reviewing` session only (never at the end of go mode's default chain):
 
 ```text
 What was built: [the shipped change in one plain sentence].

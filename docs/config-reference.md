@@ -101,49 +101,53 @@ Two rules travel with every cli-shaped slot: it is **gather/review/advisor-only*
 
 ## `commands` — the host project's lifecycle commands
 
-Captured at onboarding (or the first natural moment in exploring), four standard keys — all plain runnable shell commands, never descriptions:
+Captured at onboarding (or the first natural moment in exploring), three standard keys — all plain runnable shell commands, never descriptions:
 
 | Key | Meaning | Who runs it, when |
 |---|---|---|
 | `setup` | install dependencies from scratch | onboarding checks, fresh-clone bootstrap |
 | `start` | run the app/dev server | on demand (`/run`-style checks) |
-| `test` | **the SCOPED dev-loop test command** — only the tests related to the current change | your machine, often: the orchestrator's wave-close check after cells cap, and the `bee worktree merge` semantic gate (run against the staged merge) |
-| `verify` | **the FULL test suite** | **CI-owned, on the project's own CI cadence** — push, nightly, or scheduled, the host workflow decides (plus the release gate). Never a local per-cell, per-cap, or session-start obligation — a red CI run auto-files a `verify-red` issue instead |
+| `test` | **the project's ONE declared test command** | every door, and the same command each time: the green base check before the first claim, `bee finish` at each cap, the orchestrator's wave-close check, `bee close` for the feature, the `bee worktree merge` semantic gate (run against the staged merge), and CI on the host's own cadence |
 
-The split is the point (ci-owned-verify D1/D5): `test` must be *narrower* than `verify`, or every dev-loop iteration pays the full-suite price as the suite grows. Every consumer that wants `test` falls back to `verify` when `test` is missing, so a repo that only recorded `verify` keeps working — just slower.
+**`commands.verify` is retired.** It used to sit above `test` as a second, full-suite, CI-owned command. Two repo-wide commands meant every surface had to say which door ran which — and they disagreed: this reference called `verify` "never a local obligation" while the green base check told agents to run it locally before their first claim. One command ends the question. A host that wants a slower full sweep runs it in CI on its own schedule; bee needs no config key to know about it.
 
-Below `commands.test` there is a third, narrower layer that is **not** config: each work cell's own `verify` field, authored per change (one test file / one test function, seconds). Config carries the two repo-wide commands; the cell carries the per-change one.
+Below `commands.test` there is a second, narrower layer that is **not** config: each work cell's own `verify` field, authored per change (one test file / one test function, seconds). Config carries the one repo-wide command; the cell carries the per-change one.
 
 ### Projects without tests
 
-A project that deliberately runs no tests declares that in config instead of leaving the keys absent: set `commands.verify` (and/or `commands.test`) to the exact sentinel string `"none"` (no-test-repos D1, decision `55b951e1`). Absence keeps its existing meaning — not-captured-yet, the normal onboarding nag — the sentinel means "this repo will never have one." With the sentinel set: the session preamble skips the CI-status-gate paragraph and prints one loud `Test gates disabled by repo declaration` line instead; cells may carry `verify: "none"` (refused everywhere else, exactly like a prose description would be) and cap on that cell records the diff-backed outcome with an auto waiver note rather than a passing verify result; wave-close, session-finish, and worktree-merge all skip with the same loud line, never silently. Nothing here is permanent — re-enable at any time by recording a real `test`/`verify` command, which restores every gate above on the next session.
+A project that deliberately runs no tests declares that in config instead of leaving the key absent: set `commands.test` to the exact sentinel string `"none"` (no-test-repos D1, decision `55b951e1`). Absence keeps its existing meaning — not-captured-yet, the normal onboarding nag — the sentinel means "this repo will never have one." With the sentinel set: the session preamble skips the CI-status-gate paragraph and prints one loud `Test gates disabled by repo declaration` line instead; cells may carry `verify: "none"` (refused everywhere else, exactly like a prose description would be) and cap on that cell records the diff-backed outcome with an auto waiver note rather than a passing verify result; wave-close, session-finish, and worktree-merge all skip with the same loud line, never silently. Nothing here is permanent — re-enable at any time by recording a real `test` command, which restores every gate above on the next session.
 
 ### Per-language recipes
 
-Pick your runner's changed-only/related mode for `test`; `verify` is whatever runs everything.
+`commands.test` runs on every cap, so pick something you are willing to pay for that often. A changed-only mode is ideal where the runner has one; a whole-suite command is fine when the suite is fast.
 
-| Language | `commands.test` (scoped) | `commands.verify` (full) |
-|---|---|---|
-| **Node** | `npx jest --onlyChanged` (jest) · `npx vitest related --run <files>` (vitest) | `npm test` / `npm run build && npm test` |
-| **Go** | `go test ./internal/<changed-pkg>/...` — derive the package set from the diff (`go list ./... \| grep …`, or reverse-deps via `go list -deps`) | `go test ./...` |
-| **Rust** | `cargo test -p <changed-crate>` (workspace: one crate) · `cargo test <module>::` (one module path) | `cargo test --workspace` |
-| **Python** | `pytest tests/test_<area>.py` (by path) · `pytest -k <expr>` (by name) · `pytest --testmon` (coverage-map impacted, needs pytest-testmon) | `pytest` |
-| **PHP** | `vendor/bin/phpunit --filter <TestClass>` · `vendor/bin/phpunit tests/<Area>/` (by dir) · Laravel: `php artisan test --filter <name>` | `vendor/bin/phpunit` (hoặc `composer test`) |
-| **No tests** | `"none"` (sentinel — declares the repo deliberately test-free) | `"none"` (either key alone is sufficient; setting both is fine) |
+| Language | `commands.test` |
+|---|---|
+| **Node** | `npx jest --onlyChanged` (jest) · `npx vitest related --run <files>` (vitest) |
+| **Go** | `go test ./internal/<changed-pkg>/...` — derive the package set from the diff (`go list ./... \| grep …`, or reverse-deps via `go list -deps`) |
+| **Rust** | `cargo test -p <changed-crate>` (workspace: one crate) · `cargo test <module>::` (one module path) |
+| **Python** | `pytest tests/test_<area>.py` (by path) · `pytest -k <expr>` (by name) · `pytest --testmon` (coverage-map impacted, needs pytest-testmon) |
+| **PHP** | `vendor/bin/phpunit --filter <TestClass>` · `vendor/bin/phpunit tests/<Area>/` (by dir) · Laravel: `php artisan test --filter <name>` |
+| **No tests** | `"none"` (sentinel — declares the repo deliberately test-free) |
 
-bee's own repo is a Rust project since the port (plans/rust-port.md): both keys are
+bee's own repo is a Rust project since the port (plans/rust-port.md): the key is
 `PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH" cargo test --release --manifest-path packages/bee-rs/Cargo.toml`.
 The `PATH` prefix is deliberate and portable — rustup installs to `$CARGO_HOME`/`~/.cargo/bin`, and an
 agent session started before rustup (or before a PATH change) otherwise fails the cap door with
-`cargo: command not found` rather than a real red. `test` and `verify` are the same command here
-because the Rust suite has no impacted-only mode; the split above still holds for host projects.
+`cargo: command not found` rather than a real red — a failure mode worth knowing, because it reads
+as tooling noise and is in fact the door never having run at all.
 
 Notes:
-- A command that takes the changed-file list from git itself (jest `--onlyChanged`, testmon) is the best `test` value — it stays correct with zero per-change editing. Where the runner has no such mode (Go, Rust, PHP), record the *narrow invocation shape* and let the session substitute the changed package/crate/class per change — the doctrine cares that the dev loop never runs the full suite, not which selector you use.
-- CI should run `commands.verify` verbatim (bee's own `ci.yml` does exactly that via `scripts/verify_all.mjs`, and files a deduped `verify-red` issue on red).
+- A command that takes the changed-file list from git itself (jest `--onlyChanged`, testmon) is the best `test` value — it stays correct with zero per-change editing. Where the runner has no such mode (Go, Rust, PHP), record the *narrow invocation shape* and let the session substitute the changed package/crate/class per change — the doctrine cares that the door stays cheap enough to run at every cap, not which selector you use.
+- CI should run `commands.test` verbatim (bee's own `ci.yml` does exactly that with `cargo test --release`, and files a deduped `verify-red` issue on red).
 - Where the "which tests relate to this file" answer needs a lookup, use the language's native graph (Go: `go list -deps` reversed; Rust: the crate graph; Python: testmon's coverage map). bee's own repo used to ship a derived impact registry for this; it was retired at the R6 Node cutover, because its subject was the `.mjs` suite graph and the Rust suite that replaced it runs whole in ~20s.
 
 ## Removed keys
+
+**`commands.verify`** was retired in **2.1.0**. `commands.test` is now the one declared test command and every door runs it. If your `.bee/config.json` still has a `verify`, onboarding warns and it is ignored — delete it. Two migrations matter:
+
+- **You recorded both.** Nothing to do beyond deleting `verify` — `test` already governed the dev loop, and it now governs merge and CI too. If your `verify` was materially broader, decide whether that breadth belongs in `test` (paid at every cap) or in your CI workflow (paid on push).
+- **You recorded ONLY `verify`.** You currently have **no test gate at all** — onboarding says so loudly. Move the command to `commands.test`, or set `commands.test` to `"none"` if the repo is deliberately test-free. `"none"` on `verify` no longer declares a no-test repo.
 
 The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (decision fanout-delegation D1). If your `.bee/config.json` still has one, onboarding warns about the stale key and ignores it — delete it. This is **not** the same thing as the `models.<runtime>.advisor` slot above, which is current and valid.
 
@@ -151,14 +155,14 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 
 | Key | What it does | Default |
 |---|---|---|
-| `commands` | the host project's `setup` / `start` / `test` (scoped, dev loop) / `verify` (full, CI-owned) commands — full section above | none — captured at onboarding |
+| `commands` | the host project's `setup` / `start` / `test` commands — full section above | none — captured at onboarding |
 | `gate_bypass` | opt-in autopilot with levels `false` · `"normal"` · `"full"` · `"total"` (legacy `true` = normal); set via `bee-hive`'s "Gates" section (gate-bypass levels) | `false` |
 | `hooks` | per-hook kill switch — nine hooks: `session-init`, `prompt-context`, `write-guard`, `model-guard`, `state-sync`, `chain-nudge`, `session-close`, `tools-logger`, `codex-subagent-audit` | all `true` (an absent key also reads `true`) |
 | `guards` | `idle_gate` (`false` disables the idle intake gate) · `max_read_lines` (line cap a single inbound file read may pull before the read guard trims it; number > 0) · `memory_root` (one absolute path the write guard will let the agent write — see below) | idle gate on · `800` · no memory root |
 | `cells_archive_on_close` | whether a green `bee close` retires the feature's cells into `.bee/cells/archive/<feature>/`, out of the scan path `status`/`orient` parse on every call. Only fires when every one of the feature's cells is capped or dropped; reverse with `bee cells unarchive --feature <f>`. Set `false` for a repo whose own tooling reads `.bee/cells/*.json` by path | `true` |
 | `ship_visibility` | how finished work is surfaced — `"off"` or `"draft-pr"`. An unrecognized value normalizes to `"off"` and says so once, by name | `"off"` |
 | `worktree_first` | code-touching feature work lives in its own worktree and the write guard refuses feature edits made in the main checkout; the exact string `"off"` disables that refusal — see [specs/worktree-first.md](specs/worktree-first.md) | on |
-| `dogfood_repos` | foreign repos whose feedback digest `bee.mjs feedback collect`/`rank` (and the [handbook/evolving.md](handbook/evolving.md) loop) fold in — see below | `null` (local digest only) |
+| `dogfood_repos` | foreign repos whose feedback digest `bee feedback collect`/`rank` (and the [handbook/evolving.md](handbook/evolving.md) loop) fold in — see below | `null` (local digest only) |
 | `product_root` | where the project's PRODUCT docs live (`docs/backlog.md`, `docs/specs/`, the product README) when they are NOT beside `.bee/` — a path relative to the bee root, or absolute. For the "workshop + nested product repo" (repo-divorce) topology where `.bee/` sits one level above the product's own git repo. Unset ⇒ the bee root (every ordinary single-root repo is unaffected). A set-but-missing path warns loudly to stderr rather than silently reading nothing. `.bee/*` runtime state and `docs/history/` (bee's own workshop trail) are never affected — only the product's own docs. | unset ⇒ bee root |
 
 ### `guards.memory_root` (GH #71) — letting the agent keep its own memory
@@ -219,7 +223,7 @@ Clean JSON — paste into `.bee/config.json` and edit values (keep any existing 
 
 ```json
 {
-  "commands": { "setup": "npm install", "start": "npm run dev", "test": "npx jest --onlyChanged", "verify": "npm run build && npm test" },
+  "commands": { "setup": "npm install", "start": "npm run dev", "test": "npx jest --onlyChanged" },
   "gate_bypass": false,
   "guards": { "idle_gate": true, "max_read_lines": 800 },
   "models": {

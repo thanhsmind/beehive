@@ -37,12 +37,12 @@ carries instructions only. Every path onboarding resolves against that payload
 is relative to its own plugin root, never self-relative to wherever the
 onboarding engine's own script happens to sit (packages-restructure D1-D3;
 decision e0f3e40e). The engine itself later moved out of the skill tree it
-renders (packages-engine-move D1; decision 80b64c20): `onboard_bee.mjs`,
+renders (packages-engine-move D1; decision 80b64c20): `bee onboard`,
 `plugin_distribution.mjs`, and their three test suites now live at
 `packages/bee/scripts/`, so `packages/bee/` is the complete standard code set
 — payload *and* engine — and `skills/` is instruction-only in fact, not just
 intent. The canonical entrypoint is
-`node packages/bee/scripts/onboard_bee.mjs --repo-root <repo-root>`, run from
+`.bee/bin/bee onboard --repo-root <repo-root>`, run from
 a source root (a checkout or an installed plugin package), never from a
 projection. Why it matters: the workspace filesystem
 of one supported platform rejects several characters that the source platform
@@ -100,16 +100,16 @@ carries a forbidden character, a reserved device name, or a trailing dot/space.
 
 ## Pointers (implementation)
 
-- `packages/bee/` — the vendored payload's single standard layout (`bee.mjs`,
+- `packages/bee/` — the vendored payload's single standard layout (`bee`,
   `lib/`, `tests/`, `agents/`, `statusline/`, `AGENTS.block.md`), with
   `packages/bee/hooks/` as its hook-catalog subtree (hook modules, `catalog.mjs`,
   `claude-hooks.json`, `hooks.json`, and their test suites) and
   `packages/bee/scripts/` as the onboarding/distribution engine subtree
-  (`onboard_bee.mjs`, `plugin_distribution.mjs`, `tests/`) — moved out of the
+  (`bee onboard`, `plugin_distribution.mjs`, `tests/`) — moved out of the
   skill tree it renders (packages-engine-move D1; decision 80b64c20); `skills/`
   now carries instruction-only content (`SKILL.md` + references only, no
   runnable engine of its own) — no version marker of its own travels inside a
-  synced skill dir anymore. `onboard_bee.mjs`'s `PLUGIN_ROOT`, `TEMPLATES_DIR`, and
+  synced skill dir anymore. `bee onboard`'s `PLUGIN_ROOT`, `TEMPLATES_DIR`, and
   `PLUGIN_HOOKS_DIR` resolve every payload path `PLUGIN_ROOT`-relative, the
   same mechanism `PLUGIN_HOOKS_DIR` already used before the move (`../templates`
   self-relative resolution retired). `scripts/install.ps1`'s bootstrap
@@ -121,7 +121,7 @@ carries a forbidden character, a reserved device name, or a trailing dot/space.
 - `scripts/lib/run-module-worker.mjs` — shared isolated test-entrypoint runner;
   preserves arguments, environment, stdout, stderr, and exit status without
   changing the production entrypoint.
-- `packages/bee/scripts/tests/test_onboard_bee.mjs` — the complete onboarding
+- `packages/bee/scripts/tests/test_bee onboard` — the complete onboarding
   suite keeps its real and fixture-local entrypoints and all prior assertions
   while routing nested Node launches through the shared runner.
 - `scripts/install.sh`, `scripts/install.ps1`, `.codex-plugin/plugin.json`,

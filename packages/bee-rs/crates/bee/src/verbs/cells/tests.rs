@@ -1775,8 +1775,12 @@ use std::time::Instant;
             write_bee_config(root, &config);
             is_no_test_repo(&read_commands_slice(root).unwrap())
         };
-        assert!(declares(json!({"commands": {"verify": "none"}})));
+        assert!(declares(json!({"commands": {"test": "none"}})));
         assert!(declares(json!({"commands": {"test": ["none"]}})));
+        assert!(
+            !declares(json!({"commands": {"verify": "none"}})),
+            "commands.verify is retired — it no longer declares a no-test repo"
+        );
         assert!(
             !declares(json!({"commands": {"test": ["none", "npm test"]}})),
             "a list with a real command beside the sentinel is NOT a no-test repo"

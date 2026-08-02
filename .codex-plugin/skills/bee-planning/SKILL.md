@@ -39,7 +39,7 @@ File caps count product files only — never `.bee/**`, `docs/**`, or plans.
 | `high-risk` | 4+ flags or any hard-gate flag (auth, authz, data loss, audit/security, external provider, validation removal) |
 | `spike` | one yes/no proof decides whether the plan is real — only for migration, security, an external side effect, or no in-repo precedent |
 
-Record: `bee state route --set --class <c> --lane <l> --flags <f> --files <n>`;
+Record: `bee route --set --class <c> --lane <l> --flags <f> --files <n>`;
 re-route upward on new evidence any time, de-escalate only on cited evidence.
 A code-touching route's next action includes creating the feature worktree —
 `bee worktree new --feature <slug>`, session opened there (worktree-first;
@@ -74,13 +74,13 @@ decision?* FAIL → redraft. Standard/high-risk add the review wave before the g
 Standard/high-risk: present the shape in plain language — what will be built,
 why this size, cost if the shape is wrong — link the plan, then ask verbatim:
 "Work shape is ready. Approve before current-work preparation?" and stop. On
-approval, `bee state gate --name shape --approved true`; `plan.md` freezes —
+approval, `bee gate --name shape --approved true`; `plan.md` freezes —
 a stamp may follow, a content edit may not.
 
 Tiny/small merge shape and execution: draft the cell(s), preview them in the
 gate message — never persist-then-preview — then ask: "Work shape + execution:
 I'm about to do [X] via [Y], verified by [Z]. Approve?" One yes records both
-(`bee state gate --merge --approved true`); cells persist only after it —
+(`bee gate --merge --approved true`); cells persist only after it —
 full protocol: `references/planning-reference.md` ("Tiny/small merged gate").
 
 ## Prep
@@ -92,12 +92,12 @@ surface makes slice 1 a walking skeleton: end-to-end, real behavior, no stubs.
 
 The writer owns tests TDD-style as part of each cell — coverage judgment
 first: cite existing tests by file and case, author only the gap
-(`.bee/expertise/tests.md`) — and `bee cells finish` runs the declared
+(`.bee/expertise/tests.md`) — and `bee finish` runs the declared
 suite (`commands.test`) at every cap.
 
-Cells run `commands.test` at finish; `commands.verify` is the close/merge
-chain, and CI owns the full estate (`references/planning-reference.md`
-("Verify scoping")); then
+Cells run `commands.test` at finish — the one declared command, which
+close, merge, and CI all re-run (`references/planning-reference.md`
+("Test scoping")); then
 `bee state set --owner planning --phase swarming --next-action "Invoke bee-swarming."`
 
 ## Scope integrity

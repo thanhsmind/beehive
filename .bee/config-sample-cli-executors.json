@@ -32,8 +32,7 @@
   "commands": {
     "setup": "npm install",
     "start": "npm run dev",
-    "test": "npm test",
-    "verify": "npm run build && npm test"
+    "test": "npm test"
   },
   "gate_bypass": false,
   "models": {

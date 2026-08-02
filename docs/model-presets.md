@@ -111,7 +111,7 @@ Cờ cần biết (`agy --help`, smoke-test 2026-07-14):
 
 > **`--dangerously-skip-permissions` đã bị gỡ khỏi mọi preset (2026-07-14).** Đo được: `agy --sandbox --mode plan` đọc repo và trả lời đúng câu hỏi thật mà **không** cần cờ đó — quyền ghi là thừa, không phải điều kiện. Và một worker CLI **nằm ngoài tầm write-guard của bee**: bee chỉ thấy dòng `bash -lc`, trích ra zero đường dẫn, rồi cho qua; mọi byte CLI ghi sau đó bee không thấy. Worker của bee có write-guard làm lưới chắn prompt-injection — worker CLI thì không có gì. Đừng bật lại cờ này làm mặc định (`swarming-reference.md:91`).
 
-> **Chưa dùng cli cho slot `generation` để CHẠY CELL.** Đo được 2026-07-14: cwd của một CLI ngoài **không phải** repo root (agy tự dời sang sandbox riêng của nó), nên các lệnh `.bee/bin/bee.mjs` bằng đường dẫn tương đối sẽ chạy vào một thư mục `.bee/` **ma** — reservation, cap, kết quả verify đều ghi vào nơi bee không đọc, trong khi worker vẫn báo done. Đường gather (chỉ đọc) thì an toàn; đường thực thi cell đang chờ lập kế hoạch lại.
+> **Chưa dùng cli cho slot `generation` để CHẠY CELL.** Đo được 2026-07-14: cwd của một CLI ngoài **không phải** repo root (agy tự dời sang sandbox riêng của nó), nên các lệnh `.bee/bin/bee` bằng đường dẫn tương đối sẽ chạy vào một thư mục `.bee/` **ma** — reservation, cap, kết quả verify đều ghi vào nơi bee không đọc, trong khi worker vẫn báo done. Đường gather (chỉ đọc) thì an toàn; đường thực thi cell đang chờ lập kế hoạch lại.
 
 ## 6. `opencode-review` — reviewer qua opencode CLI
 

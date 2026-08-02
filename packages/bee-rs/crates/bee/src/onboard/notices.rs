@@ -6,7 +6,10 @@
 // and repoHooksTransitionNotices (l. 3512) — plus lib/commands_detect.mjs
 // detectCommands, which this script imports.
 
-use super::templates::{COMMAND_KEYS, GITIGNORE_BLOCK_PATTERNS, STALE_ADVISOR_KEY_WARNING};
+use super::templates::{
+    COMMAND_KEYS, GITIGNORE_BLOCK_PATTERNS, RETIRED_VERIFY_KEY_NO_TEST_WARNING,
+    RETIRED_VERIFY_KEY_WARNING, STALE_ADVISOR_KEY_WARNING,
+};
 use super::util::{exists, read_dir_sorted, read_json_if_exists, read_text_if_exists, split_lines};
 use serde_json::Value;
 use std::path::Path;
@@ -172,7 +175,7 @@ pub fn commands_notices(repo_root: &Path, first_onboard: bool) -> Vec<String> {
         )];
     }
     let mut notices = vec![
-        "No standard commands recorded. Ask the user for the host project's setup/start/test/verify commands and write them to .bee/config.json `commands` (skippable — never invent values). They power the session CI status gate.".to_string(),
+        "No standard commands recorded. Ask the user for the host project's setup/start/test commands and write them to .bee/config.json `commands` (skippable — never invent values). They power the session CI status gate.".to_string(),
     ];
     if first_onboard {
         notices.push("Greenfield init lane (docs/09 item 6): this is the first onboard and no build was detected. Offer the init lane before any feature work — the first planning slice is one init cell whose must_haves are exactly: setup succeeds from scratch, one passing test exists, standard commands are recorded in .bee/config.json, and the repo has a clean first commit.".to_string());
@@ -181,17 +184,34 @@ pub fn commands_notices(repo_root: &Path, first_onboard: bool) -> Vec<String> {
 }
 
 /// staleAdvisorNotices (l. 2645): warn, never error.
+///
+/// Also carries the `commands.verify` retirement notice (2.1.0). Same shape,
+/// same never-error contract — and it is not cosmetic: a host that recorded
+/// ONLY `commands.verify` used to have a merge gate and now has none, and a
+/// host that declared itself no-test with `verify: "none"` no longer does.
+/// Both failures are silent without this line, which is exactly the class of
+/// break a warning exists for.
 pub fn stale_advisor_notices(repo_root: &Path) -> Vec<String> {
     let config = read_json_if_exists(&repo_root.join(".bee").join("config.json"));
-    let has_stale = config
-        .as_ref()
-        .and_then(Value::as_object)
-        .is_some_and(|o| o.contains_key("advisor"));
-    if has_stale {
-        vec![STALE_ADVISOR_KEY_WARNING.to_string()]
-    } else {
-        Vec::new()
+    let obj = config.as_ref().and_then(Value::as_object);
+    let mut notices = Vec::new();
+    if obj.is_some_and(|o| o.contains_key("advisor")) {
+        notices.push(STALE_ADVISOR_KEY_WARNING.to_string());
     }
+    let commands = obj.and_then(|o| o.get("commands")).and_then(Value::as_object);
+    if let Some(commands) = commands {
+        if commands.contains_key("verify") {
+            let has_test = commands
+                .get("test")
+                .is_some_and(|v| v.as_str().is_some_and(|s| !s.trim().is_empty()) || v.is_array());
+            notices.push(if has_test {
+                RETIRED_VERIFY_KEY_WARNING.to_string()
+            } else {
+                RETIRED_VERIFY_KEY_NO_TEST_WARNING.to_string()
+            });
+        }
+    }
+    notices
 }
 
 /// trackedGitignorePaths (l. 2665): `git ls-files -z -- <patterns>` with an

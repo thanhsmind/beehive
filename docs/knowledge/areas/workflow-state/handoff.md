@@ -93,7 +93,7 @@ own independent slot and is never touched by that auto-clear — this is what
 lets one workflow's own handoff pause without ever blocking or clobbering a
 different role's, or a different workflow's, handoff. Every record — cleared
 or not — stays on disk under its own sequence number for audit history,
-never deleted. `bee.mjs`'s `state handoff write/show/adopt` verbs resolve
+never deleted. `bee`'s `state handoff write/show/adopt` verbs resolve
 which workflow they target — an explicit `--lane`, the calling session's own
 bound lane, or the default record's live workflow — and route to that
 workflow's mailbox; a repo with no workflow records anywhere keeps using the
@@ -127,12 +127,12 @@ change at all.
 by a grep audit rather than trusted as documentation (multisession-native D5
 amendment, msn-24, advisor-digest-slice5 condition E).** `rebuildHandoffProjection`
 is documented in its own header as the ONLY writer of the legacy file for any repo
-with at least one workflow record: every mailbox write/adopt call in `bee.mjs`
+with at least one workflow record: every mailbox write/adopt call in `bee`
 invokes it immediately afterward to keep the projection current, and no other
 production path writes that file on the live-workflow side. `writeHandoff`/
 `adoptHandoff` (`state.mjs`) — the pre-mailbox direct-file writers — are retained
 for exactly ONE more release as the C1 no-workflow-records legacy fallback:
-`handleStateHandoffWrite`/`handleStateHandoffAdopt` in `bee.mjs` call them ONLY on
+`handleStateHandoffWrite`/`handleStateHandoffAdopt` in `bee` call them ONLY on
 the branch where resolving the target workflow id returns null (a repo with zero
 workflow records anywhere — the same C1 fallback `workflow-records-and-
 projections.md` documents for state/lane projections). Each carries a dated
@@ -141,7 +141,7 @@ workflow records (every `startFeature` call already seeds one via
 `seedLegacyWorkflows` — this fallback exists only for a repo that predates
 multisession-native or was never onboarded through it), both retire together. A
 grep-audit test (`test_state.mjs`) makes this a structural guarantee, not a
-convention to remember: it scans every `.mjs` file under `lib/` plus `bee.mjs` for
+convention to remember: it scans every `.mjs` file under `lib/` plus `bee` for
 the two mutation primitives every legal writer uses
 (`writeJsonAtomic(handoffPath(...))` / `fs.rmSync(handoffPath(...))`), resolves each
 hit's enclosing function name, and asserts the exact production writer set is
@@ -201,7 +201,7 @@ using the untouched pre-mailbox path.
   `adoptMailboxHandoff`/`listHandoffMailbox`/`newestOpenHandoffMailboxRecord`
   in `packages/bee/lib/state.mjs`; `state handoff write/show/adopt`
   resolve their target workflow (`--lane`, the calling session's bound lane,
-  or the default record's live workflow) in `bee.mjs`; `rebuildHandoffProjection`
+  or the default record's live workflow) in `bee`; `rebuildHandoffProjection`
   in `state-projection.mjs`, registered in `rebuildAllProjections` (see
   `workflow-records-and-projections.md` for that aggregator). Proves invariant
   9: one paused workflow never blocks or leaks into another's own mailbox.

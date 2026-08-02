@@ -97,7 +97,7 @@ Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 3 afte
 | Lane | Plan | Validate (inline, inside planning) | Execute | Review | Human stops |
 |---|---|---|---|---|---|
 | `docs` | none — announce one line | format check (parse/lint if applicable) | direct, in-session | none | 0 |
-| `tiny` | none — the cell is the micro-plan | SMALLER PATH check inline, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract) | inline in the orchestrator session (cap discipline and done-report unchanged), or one dispatched execution worker at the orchestrator's option (when dispatched, the execution-worker contract applies: param-carrying dispatch, model param or pinned type, never a bare marker; standard worker prompt template, no reviewers/panels/waves) | orchestrator-authored done-report (worker's verbatim diff + commit; `bee cells finish` ran the declared tests — the result record is the evidence; orchestrator re-runs only on smell or hard-gate) — verification, not independent review | 1 — the merged shape+execution gate |
+| `tiny` | none — the cell is the micro-plan | SMALLER PATH check inline, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract) | inline in the orchestrator session (cap discipline and done-report unchanged), or one dispatched execution worker at the orchestrator's option (when dispatched, the execution-worker contract applies: param-carrying dispatch, model param or pinned type, never a bare marker; standard worker prompt template, no reviewers/panels/waves) | orchestrator-authored done-report (worker's verbatim diff + commit; `bee finish` ran the declared tests — the result record is the evidence; orchestrator re-runs only on smell or hard-gate) — verification, not independent review | 1 — the merged shape+execution gate |
 | `small` | logged scoping synthesis; plan.md is opt-in | SMALLER PATH check inline, 0 ceremony subagents (I/O-offload workers exempt — Delegation contract); spike only if a blocking assumption demands it | one dispatched execution worker (same contract as `tiny`'s Execute column), its 1-3 cells dispatched in PARALLEL when disjoint (see Concurrency law in full below) | orchestrator-authored done-report, self-checks only, no auto reviewer (the correctness reviewer moves inside an on-demand review session) | 2 — merged shape+execution gate, self-checks close-out |
 | `standard` | full `plan.md` | SMALLER PATH check + merged reviewer; ≤5-file diff (0 hard-gate flags): inline self-review, no dispatch | swarm workers | on user request only: session panel scaled to scope risk (4 core reviewers) | 2 — Gate 1, Gate 2 (merged shape+execution) |
 | `high-risk` | `plan.md` + brief | SMALLER PATH check + persona panel | swarm workers | on user request only: session panel scaled to scope risk (full wave + conditionals) | 2 — Gate 1, Gate 2 (merged shape+execution) |
@@ -124,7 +124,7 @@ The change is knowledge upkeep, same class as capture — announce one line ("do
 
 ### Tiny/small fast path
 
-The draft cell(s) are rendered as a **preview inside the gate message** — never persisted first — and the 2-minute reality check runs inline against that preview, before the shape and execution approvals are presented as **one merged question** — "Work shape + execution: I'm about to do X via Y, verified by Z. Approve?" — approval records both `shape` and `execution` and covers exactly the previewed work packet. `cells add` runs only **after** approval, and the cells are claimed only then — previewed before persist, never persist-then-preview. Implementation runs inline in-session for `tiny` (the merged gate, cap discipline, and done-report are unchanged; dispatching stays legal when the orchestrator prefers it), and through the one dispatched execution worker for `small`. After execution (worker return or inline finish): no separate merge gate — the orchestrator authors the done-report itself from the worker's verbatim diff plus its commit (`bee cells finish` ran the declared tests; a re-run only on smell or hard-gate) and that done-report (diff + commit + capture line) closes it, once `bee close` re-runs the declared tests green for the feature (`bee-swarming/references/swarming-reference.md`, "Tests at finish and close, in full"). A real problem found during the orchestrator's own review stops and asks, always.
+The draft cell(s) are rendered as a **preview inside the gate message** — never persisted first — and the 2-minute reality check runs inline against that preview, before the shape and execution approvals are presented as **one merged question** — "Work shape + execution: I'm about to do X via Y, verified by Z. Approve?" — approval records both `shape` and `execution` and covers exactly the previewed work packet. `cells add` runs only **after** approval, and the cells are claimed only then — previewed before persist, never persist-then-preview. Implementation runs inline in-session for `tiny` (the merged gate, cap discipline, and done-report are unchanged; dispatching stays legal when the orchestrator prefers it), and through the one dispatched execution worker for `small`. After execution (worker return or inline finish): no separate merge gate — the orchestrator authors the done-report itself from the worker's verbatim diff plus its commit (`bee finish` ran the declared tests; a re-run only on smell or hard-gate) and that done-report (diff + commit + capture line) closes it, once `bee close` re-runs the declared tests green for the feature (`bee-swarming/references/swarming-reference.md`, "Tests at finish and close, in full"). A real problem found during the orchestrator's own review stops and asks, always.
 
 ### Capture discipline
 
@@ -154,55 +154,11 @@ The repo artifacts are the single source of truth for what work exists and its s
 
 The mapping is one-way: cells and PBI rows generate the session todo list, and no edit to that list ever writes back to a cell or a backlog row. When the two disagree, the repo artifact wins and the session list is regenerated from it. A todo item with no cell or PBI behind it is a projection bug, not a new unit of work — file the cell or the backlog row first, then let the list re-derive. This keeps the durable layer authoritative and the chat/session state disposable.
 
-## Communication Contract
-
-Plain language first:
-
-- practical first, abstract second; scenario-first, not jargon-first
-- explain what happens in real life before naming technical properties
-- translate decision IDs, invariants, and architecture terms on first use
-- prefer "here is what the code does today" over "here is the category of bug"
-
-For plans, findings, blockers, and handoffs, answer in this order:
-
-1. Plain-language summary
-2. Current behavior or state
-3. Why it matters
-4. Concrete scenario
-5. Next step
-
-Avoid "violates D5" or "non-monotonic" without immediate explanation.
-
-### The agent runs the machinery, not the user
-
-Every bee command (`bee status`, `cells`, `reservations`, `decisions`, onboarding, cell verify
-commands) is run by the agent itself the moment the workflow calls for it — never printed for the
-user to execute, never "run this and tell me the output". The only human actions in bee are gate
-approvals, decision answers, and privacy approvals. `AGENTS.md` states the same law inside its
-workflow boundaries and defers here for the full form; `SKILL.md`'s Priority Rules list carries the router-side pointer.
-
-### Silent Bookkeeping — work language only
-
-Bee is bookkeeping, not the deliverable. Every mechanical workflow act — claiming or capping cells, status and `state.json` changes, reservations, phase transitions, decision logging, capture stubs — is done silently: run it, never narrate it. Chat speaks the user's work language only: "fixing the login redirect", "done — tests pass", never "capped cell auth-3" or "phase is now swarming".
-
-Bee vocabulary may enter chat in exactly two cases:
-
-1. the user asks about bee itself (state, cells, workflow) — answer plainly, in their language;
-2. a gate genuinely needs their decision — and the Gate Presentation Contract already requires that question in work terms, not bee terms.
-
-Litmus: strip every bee term out of a chat message; if nothing the user needs is lost, those terms should not have been there.
-
-The full user-facing voice — turn shape, rules, and the pre-send check — is the Communication contract section below.
-
-### Purpose-first narration
-
-Silence about mechanics is never silence about purpose. Every perceivable work unit — a phase of real work starting, a worker sent out, a long-running step, a change of direction — opens with one work-language sentence naming what is being done and for what outcome. This is a positive duty, not an exception carved out of Silent Bookkeeping: the bee terms still stay out of chat; what changes is that the work itself is no longer left unnarrated either. Twin litmus: strip the message entirely — if the user loses the thread of what is happening and why, the sentence was owed.
-
 ## Communication contract
 
-Silent Bookkeeping says what never reaches the user (bee mechanics); this section
-says what does, and in what shape. One home — chat style is never governed from
-anywhere else.
+One home — chat style is never governed from anywhere else. This section says
+what reaches the user and in what shape; the vocabulary rule below says in whose
+words.
 
 **Reader facts** (what bee's user is actually doing — every rule below derives from
 one of these):
@@ -212,7 +168,7 @@ one of these):
 2. They drop in and out of long multi-phase sessions. State not restated is state
    lost — assume the last message is all they remember.
 3. They think in product terms. Bee mechanics (cells, claims, phases, caps) are
-   noise to them — the Silent Bookkeeping litmus applies to every line.
+   noise to them — the work-language litmus applies to every line.
 4. Their high-stakes moments are rare: a gate, a decision, a privacy approval. Those
    must be visually unmistakable from progress chatter, or they get skimmed past.
 5. They trust evidence, not assurance. Fresh command output convinces; "should work"
@@ -223,9 +179,10 @@ one of these):
 - **Open** with one line of state, in work language: what finished, what is running,
   what remains. Not "Step 3 of 5 (cell jr-2)" — "Rewrite landed and verified; now
   renumbering the references."
-- **Body** is the work itself. Progress narration stays within ~5 lines per turn;
-  the complete record (reports, findings, matrices) lives in a linked file, never
-  pasted into chat.
+- **Body** is the work itself. Prose narration stays within ~5 lines per turn.
+  Progress ticks are not prose and do not count against that budget — they are one
+  fixed-format line per step ("Progress ticks"). The complete record (reports,
+  findings, matrices) lives in a linked file, never pasted into chat.
 - **Close** with exactly one next action: the agent's own next move, or the one
   thing only the user can decide. Never a menu of maybes.
 
@@ -268,6 +225,59 @@ Genuine ambiguity gets one short question instead of a guess.
 **Pre-send check:** reading only the first and last line of the message must answer
 (a) what just happened and (b) what happens next. Then strip every bee term: if
 nothing the user needs is lost, those terms should not have been there.
+
+### Plain language first
+
+- practical first, abstract second; scenario-first, not jargon-first
+- explain what happens in real life before naming technical properties
+- translate decision IDs, invariants, and architecture terms on first use
+- prefer "here is what the code does today" over "here is the category of bug"
+
+For plans, findings, blockers, and handoffs, answer in this order:
+
+1. Plain-language summary
+2. Current behavior or state
+3. Why it matters
+4. Concrete scenario
+5. Next step
+
+Avoid "violates D5" or "non-monotonic" without immediate explanation. This order
+governs the one message that carries a plan, finding, blocker, or handoff — never
+a progress tick, which is one line by contract.
+
+### Work language — a vocabulary rule, not a silence rule
+
+Bee is bookkeeping, not the deliverable, so chat speaks the user's work language:
+"fixing the login redirect", "tests pass" — never "capped cell auth-3" or "phase
+is now swarming". What this constrains is the VOCABULARY, not whether a step is
+mentioned at all. Every perceivable step still gets its progress tick ("Progress
+ticks"); the tick names what happened to the WORK rather than what happened to the
+record — `✓ capped: tick catalog rewritten`, not `✓ capped cell vt-3`. An id may
+TRAIL a line as a handle when the reader needs it to act; it is never the subject.
+
+Bee vocabulary may lead a line in exactly two cases:
+
+1. the user asks about bee itself (state, cells, workflow) — answer plainly, in their language;
+2. a gate genuinely needs their decision — and the Gate Presentation Contract already requires that question in work terms, not bee terms.
+
+Litmus: strip every bee term out of a chat message; if nothing the user needs is
+lost, those terms should not have been there.
+
+### Purpose-first narration
+
+Every perceivable work unit — a phase of real work starting, a worker sent out, a
+long-running step, a change of direction — opens with one work-language sentence
+naming what is being done and for what outcome. Twin litmus: strip the message
+entirely — if the user loses the thread of what is happening and why, the sentence
+was owed.
+
+### The agent runs the machinery, not the user
+
+Every bee command (`bee orient`, `cells`, `reservations`, `decisions`, onboarding, cell verify
+commands) is run by the agent itself the moment the workflow calls for it — never printed for the
+user to execute, never "run this and tell me the output". The only human actions in bee are gate
+approvals, decision answers, and privacy approvals. `AGENTS.md` states the same law inside its
+workflow boundaries and defers here for the full form; `SKILL.md`'s Priority Rules list carries the router-side pointer.
 
 ## Gate Presentation Contract
 
