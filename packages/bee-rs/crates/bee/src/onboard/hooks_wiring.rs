@@ -249,22 +249,35 @@ pub(crate) fn codex_hook_command(file_name: &str) -> String {
 /// launched from a root-dependent path.
 pub(crate) fn codex_hook_command_windows(file_name: &str) -> String {
     let name = codex_hook_name(file_name);
-    let body = [
-        "var cp=require('child_process');",
-        "var path=require('path');",
-        "var fs=require('fs');",
-        "var hook=process.argv[1];",
-        "var root='';",
-        "try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}",
-        "if(!root){process.exit(0);}",
-        "var bin=path.join(root,'.bee','bin','bee.exe');",
-        "if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}",
-        "if(!fs.existsSync(bin)){process.exit(0);}",
-        "var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});",
-        "if(r.error){process.exit(1);}",
-        "process.exit(r.status===null?1:r.status);",
-    ]
-    .concat();
+    // VISIBLE FAIL-OPEN ON THIS TRANSPORT TOO.
+    //
+    // The two bail arms below used to be a bare `process.exit(0)`. On Windows
+    // that meant a Codex session whose repo root or binary could not be
+    // resolved lost every guard - the write guard included - without printing
+    // one character, while the POSIX arm above said exactly what was wrong.
+    // `every_projection_fails_open_visibly` did not catch it: it searched the
+    // whole rendered document for the diagnostic, and the POSIX arm in the
+    // same file satisfied the search.
+    //
+    // Owned Strings rather than &str so the two arms can interpolate the SAME
+    // constants the POSIX arm uses - the wordings cannot drift apart. Both
+    // additions keep the no-`$`/`%`/backtick rule this string lives under.
+    let parts: Vec<String> = vec![
+        "var cp=require('child_process');".to_string(),
+        "var path=require('path');".to_string(),
+        "var fs=require('fs');".to_string(),
+        "var hook=process.argv[1];".to_string(),
+        "var root='';".to_string(),
+        "try{root=cp.execSync('git rev-parse --show-toplevel',{stdio:['ignore','pipe','ignore']}).toString().trim();}catch(e){root='';}".to_string(),
+        format!("if(!root){{console.error('{CODEX_TRANSPORT_DIAGNOSTIC}');process.exit(0);}}"),
+        "var bin=path.join(root,'.bee','bin','bee.exe');".to_string(),
+        "if(!fs.existsSync(bin)){bin=path.join(root,'.bee','bin','bee');}".to_string(),
+        format!("if(!fs.existsSync(bin)){{console.error('{CODEX_BINARY_MISSING_DIAGNOSTIC}');process.exit(0);}}"),
+        "var r=cp.spawnSync(bin,['hook',hook,'--source=repo'],{stdio:'inherit'});".to_string(),
+        "if(r.error){process.exit(1);}".to_string(),
+        "process.exit(r.status===null?1:r.status);".to_string(),
+    ];
+    let body = parts.concat();
     format!("node -e \"{body}\" {name}")
 }
 

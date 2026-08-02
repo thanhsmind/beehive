@@ -12,6 +12,7 @@
 mod catalog;
 mod devtools;
 mod fsutil;
+mod doctor;
 mod herding;
 mod hooks;
 mod integration_queue;

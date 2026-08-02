@@ -403,7 +403,7 @@ mod tests {
     /// under cmd.exe and powershell.exe also bans command substitution, so the
     /// command text cannot ask git for the repo root).
     #[test]
-    fn no_projection_launches_node_or_a_wrapper() {
+    fn no_projection_launches_a_wrapper_and_only_codex_windows_launches_node() {
         for (rel, runtime, target) in projections() {
             let v = render_projection(runtime, target);
             let hooks = v["hooks"].as_object().unwrap();
@@ -428,6 +428,17 @@ mod tests {
                                 !win.contains(".mjs"),
                                 "{rel} {event}: commandWindows still names a wrapper: {win}"
                             );
+                            // THE ONE EXCEPTION, and the reason this test is
+                            // not called "no node anywhere". Codex's Windows
+                            // command string may contain no `$`, `%` or
+                            // backtick - so cmd.exe and powershell.exe parse
+                            // it identically - which also forbids command
+                            // substitution. The string therefore cannot ask
+                            // git where the repo root is, and without the root
+                            // it cannot name the binary. `node -e` is the only
+                            // launcher left that can do the lookup itself.
+                            // Lifting this needs a measurement against a real
+                            // Codex-on-Windows session, not a rewrite here.
                             assert!(win.starts_with("node -e \""), "{rel} {event}: {win}");
                         }
                     }
@@ -436,20 +447,56 @@ mod tests {
         }
     }
 
-    /// A host with no binary must SEE that, on every transport. A silent
+    /// A host with no binary must SEE that, on EVERY transport. A silent
     /// exit 0 is how a guard stops guarding without anyone noticing.
+    ///
+    /// This used to search `render_projection_text` - the whole rendered
+    /// document - for the diagnostic. That is one string containing both
+    /// transports, so the POSIX `command` arm satisfied the search while
+    /// `commandWindows` bailed with a bare `process.exit(0)`. Every Codex
+    /// session on Windows whose repo or binary could not be resolved lost the
+    /// write guard in silence, and this test was green throughout. It now
+    /// checks each command string on its own.
     #[test]
     fn every_projection_fails_open_visibly() {
+        let mut checked = 0usize;
         for (rel, runtime, target) in projections() {
-            let text = render_projection_text(runtime, target);
-            assert!(
-                text.contains(BINARY_MISSING),
-                "{rel} has no visible no-binary diagnostic"
-            );
+            let v = render_projection(runtime, target);
+            for (event, groups) in v["hooks"].as_object().unwrap() {
+                for g in groups.as_array().unwrap() {
+                    for h in g["hooks"].as_array().unwrap() {
+                        for field in ["command", "commandWindows"] {
+                            let Some(cmd) = h.get(field).and_then(|c| c.as_str()) else {
+                                continue;
+                            };
+                            checked += 1;
+                            assert!(
+                                cmd.contains(BINARY_MISSING),
+                                "{rel} {event} {field}: bails without a no-binary diagnostic: {cmd}"
+                            );
+                        }
+                    }
+                }
+            }
         }
-        // …and the repo transport keeps its own, older fail-open arm too.
-        let repo = render_projection_text(Runtime::Codex, Target::Repo);
-        assert!(repo.contains("bee: hook transport unavailable (no git root)"));
+        assert!(checked > 20, "only {checked} command strings walked - the scan went vacuous");
+
+        // ...and the repo transport keeps its own no-git-root arm, on both
+        // of its transports.
+        let repo = render_projection(Runtime::Codex, Target::Repo);
+        for (event, groups) in repo["hooks"].as_object().unwrap() {
+            for g in groups.as_array().unwrap() {
+                for h in g["hooks"].as_array().unwrap() {
+                    for field in ["command", "commandWindows"] {
+                        let Some(cmd) = h.get(field).and_then(|c| c.as_str()) else { continue };
+                        assert!(
+                            cmd.contains("bee: hook transport unavailable (no git root)"),
+                            "codex repo {event} {field}: no unresolvable-root diagnostic: {cmd}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     /// The two PLUGIN projections may differ only where ALLOWED_DIFFERENCES

@@ -182,7 +182,7 @@ pub const AGENT_TIER_BY_NAME: &[(&str, &str)] = &[
 pub const AGENT_TIER_DEFAULTS_CLAUDE: &[(&str, &str)] =
     &[("extraction", "haiku"), ("generation", "sonnet"), ("review", "opus")];
 
-pub const CODEX_AGENTS_NOTE: &str = "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design, packages/bee/lib/state.mjs) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11).";
+pub const CODEX_AGENTS_NOTE: &str = "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11).";
 
 #[cfg(test)]
 mod tests {

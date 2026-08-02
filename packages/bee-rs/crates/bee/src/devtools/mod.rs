@@ -352,3 +352,15 @@ mod tests {
         );
     }
 }
+
+/// The hooks manifest this binary renders for a runtime's REPO target, by
+/// name. `doctor` compares a host's wiring against it byte for byte, and it
+/// has no business knowing hook_manifests' enums to ask that question.
+pub fn render_projection_text_for(runtime: &str) -> Option<String> {
+    let r = match runtime {
+        "claude" => hook_manifests::Runtime::Claude,
+        "codex" => hook_manifests::Runtime::Codex,
+        _ => return None,
+    };
+    Some(hook_manifests::render_projection_text(r, hook_manifests::Target::Repo))
+}

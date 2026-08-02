@@ -670,11 +670,13 @@ mod tests {
             .filter(|e| is_porcelain(e) && is_unavailable(e))
             .filter_map(|e| e.get("name").and_then(Value::as_str))
             .collect();
-        assert!(
-            !bad.is_empty(),
-            "no porcelain command is currently marked unavailable — if `doctor` was ported, drop \
-             this assertion; if the marker was lost, restore it"
-        );
+        // The assertion that used to stand here REQUIRED at least one
+        // unavailable porcelain command - written with `doctor` in mind, and
+        // carrying its own instruction to drop it once doctor was ported.
+        // Doctor is ported and no porcelain command is unavailable now, so
+        // the requirement inverts: the flow surface is what an agent may
+        // call, and nothing on it may be unbuilt.
+        assert!(bad.is_empty(), "a porcelain command is marked unavailable: {bad:?}");
         // …and none of them reach the rendered porcelain list.
         let listed: Vec<&str> = reg
             .commands

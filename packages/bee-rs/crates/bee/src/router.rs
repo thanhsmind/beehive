@@ -231,6 +231,11 @@ fn dispatch(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     // executable helpers (classify-lane, interlock), ported off their .mjs.
     // No Node command ever spelled `herding`, so like onboard and dev it
     // probes ahead of the verb tree and cannot shadow a delegated verb.
+    // `bee doctor` is the runtime health verdict. Like onboard and dev it is
+    // not a bee.mjs porcelain verb, so it probes ahead of the verb tree.
+    if let Some(code) = crate::doctor::try_native(args) {
+        return Some(code);
+    }
     if let Some(code) = crate::herding::try_native(args) {
         return Some(code);
     }
@@ -468,7 +473,9 @@ mod tests {
 
     #[test]
     fn an_unbuilt_but_declared_command_says_so_instead_of_suggesting_flags() {
-        let (kind, msg) = classify_argv(&["doctor", "--runtime", "claude"]);
+        // `doctor` stood here until it was ported. The class needs a LIVE
+        // example or the branch stops being exercised at all.
+        let (kind, msg) = classify_argv(&["config", "get", "--key", "gate_bypass"]);
         assert_eq!(kind, "command_unavailable");
         assert!(msg.contains("not built into this binary"), "{msg}");
         assert!(msg.contains("Nothing ran and nothing changed"), "{msg}");

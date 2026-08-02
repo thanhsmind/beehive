@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.0.4",
+  "bee_version": "2.0.5",
   "managed": {
     "agents_block": "1c3fcde4d360f9903e652aa5f7729504d42c15c1474ea232c19c6b4c77e5955e",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
@@ -40,11 +40,11 @@
       "worker-cell.md": "f2e443e627c60773f4a338f9c66e6beed859fc2fdaf9e49943b0c6485654d667"
     },
     "repo_hooks": {
-      ".codex/hooks.json": "9013d9b80efd0be722f0d83ac2222fcaa8c1dfc7cd8173fe8050061876ac1823"
+      ".codex/hooks.json": "6f62f449da7ff8c85ecc9e22d3521707dfd5d51ad1eaeb1c828c31bb876258be"
     }
   },
   "agents_sync": {
-    "bee_version": "2.0.4",
+    "bee_version": "2.0.5",
     "files": [
       ".claude/agents/bee-extract.md",
       ".claude/agents/bee-gather.md",
@@ -57,9 +57,9 @@
     },
     "codex": {
       "agents": [],
-      "note": "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design, packages/bee/lib/state.mjs) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11)."
+      "note": "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11)."
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-02T13:29:09.358Z"
+  "updated_at": "2026-08-02T14:12:34.960Z"
 }

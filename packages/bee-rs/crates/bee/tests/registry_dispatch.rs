@@ -187,7 +187,10 @@ fn the_json_refusal_carries_a_machine_readable_kind() {
     let cases = [
         (vec!["definitely-not-a-bee-verb", "--json"], "unknown_command"),
         (vec!["knowledge", "context", "--json"], "missing_required_argument"),
-        (vec!["doctor", "--runtime", "codex", "--json"], "command_unavailable"),
+        // `doctor` used to stand here. It is ported now, so the fixture moved to
+        // a verb that is still declared-but-unbuilt — the class must keep a
+        // live example or the branch stops being exercised.
+        (vec!["config", "get", "--key", "gate_bypass", "--json"], "command_unavailable"),
         (vec!["state", "show", "--json"], "unknown_command"),
         (vec!["status", "wat", "--json"], "unexpected_argument"),
     ];

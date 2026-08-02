@@ -164,7 +164,7 @@ case "$DISTRIBUTION_MODE" in plugin-first|repo-copy) ;; *) fail "--distribution 
 # several `node -e` JSON steps. Without this check the failure lands as a bare
 # `node: command not found` AFTER a clone and a multi-minute cargo build —
 # the cost of a missing preflight is paid at the worst possible moment.
-command -v node >/dev/null 2>&1 || fail "Node.js is required to INSTALL bee (the distribution helper packages/bee/scripts/plugin_distribution.mjs is not ported yet). bee itself runs as a native binary and needs no Node at runtime. Install Node 18+: https://nodejs.org"
+command -v node >/dev/null 2>&1 || fail "Node.js is required to INSTALL bee (the distribution helper packages/bee/scripts/plugin_distribution.mjs is not ported yet). bee itself runs as a native binary; Node is not needed at runtime by Claude Code on any platform, nor by Codex on macOS/Linux. The one exception is Codex on WINDOWS, whose hook transport still launches node. Install Node 18+: https://nodejs.org"
 
 # ---------- published binary (preferred) ----------
 #
