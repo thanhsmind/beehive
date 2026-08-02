@@ -9,6 +9,7 @@
 // proven. What changed is the consequence of "not proven" — an emitted
 // `unsupported command shape` with a non-zero exit instead of a delegation.
 
+mod catalog;
 mod devtools;
 mod fsutil;
 mod herding;
@@ -24,6 +25,7 @@ mod path_identity;
 mod registry;
 mod roots;
 mod router;
+mod shell;
 mod state;
 mod verbs;
 mod version;

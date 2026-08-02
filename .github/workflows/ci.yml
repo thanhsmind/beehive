@@ -1,6 +1,15 @@
 name: CI
 
 on:
+  # The verify chain runs on every push and every PR, not only nightly.
+  #
+  # It used to be schedule-only, which put the session preamble's "check CI
+  # instead of running anything locally" instruction on a signal that could be
+  # 24 hours stale — while the suite it stands in for finishes in seconds. A
+  # gate whose freshest evidence predates the change it is gating is not a
+  # gate.
+  push:
+  pull_request:
   schedule:
     # 23:00 UTC = 06:00 Asia/Ho_Chi_Minh (next day)
     - cron: '0 23 * * *'
@@ -59,18 +68,30 @@ jobs:
       # source of truth for the verify chain, so CI can never drift from what
       # a local session runs. Output is teed so a red run has a tail to attach
       # to the auto-filed issue below.
+      #
+      # The trailing `-- --test-threads=1` is GONE. It was drift: the declared
+      # command has no such flag, so CI was running a serial suite while every
+      # `bee cells finish` ran a parallel one — and the parallel one was the
+      # red/flaky one. Its real cause (three `posix_shell()` copies resolving
+      # to the WSL launcher, so every shell-spawning test paid a VM cold
+      # start) is fixed in src/shell.rs; the suite is green and ~8x faster
+      # parallel. Pinning threads here would only hide the next such defect
+      # from CI while local sessions kept hitting it.
       - name: Run verify chain
         run: |
-          cargo test --release --manifest-path packages/bee-rs/Cargo.toml -- --test-threads=1 \
-            2>&1 | tee verify-output.log
+          cargo test --release --manifest-path packages/bee-rs/Cargo.toml 2>&1 | tee verify-output.log
 
       # Freshness only matters on the green path — the default step condition
       # already skips these after the verify step above fails.
       - name: Check hook manifests are in sync with the catalog
         run: ./packages/bee-rs/target/release/bee dev render-hook-manifests --check
 
+      # Only for UNATTENDED runs. On a push or a PR the red is already in
+      # front of the person who caused it; filing an issue there would turn
+      # every work-in-progress push into tracker noise and train everyone to
+      # ignore the label.
       - name: File verify-red issue on failure
-        if: failure() && github.event_name != 'pull_request'
+        if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

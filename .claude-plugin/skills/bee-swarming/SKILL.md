@@ -121,3 +121,4 @@ self-approved, in any mode.
 | `references/swarming-reference.md` | Tier rubric, worktree dispatch transaction, prompt template details, result formats |
 | `references/worker-details.md` | Deep worker mechanics: finish and its refusals, advisor consult, friction triggers |
 | `.bee/expertise/tests.md`, `.bee/expertise/debugging.md` | Authoring tests; hunting a red |
+| `.bee/expertise/INDEX.md` | The cell is domain work — stored data, a caller-facing contract, a trust boundary, a rollout, a speed budget, a surface people use: route from the index, load exactly one |

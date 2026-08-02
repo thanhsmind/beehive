@@ -71,9 +71,13 @@ opt-in gate-bypass switch above, and how far it reaches is its level (`normal` =
 independent: headless without bypass still stops at every gate. Go mode's own headless behaviour is
 in `references/go-mode.md` ("Headless Go Mode").
 
-### CI status gate (before the first claim)
+### Green base check (before the first claim)
 
-**Before your first `cells claim`, never on arrival.** Not one of the four gates, and not a scout step: the trigger is the *claim*. Before your first `cells claim` of a session, if `.bee/config.json` records `commands.verify`, check CI instead of running it locally — the latest full-verify run on the base branch (`gh run list`/`gh api`) plus any open `verify-red` issue. Red on either is surfaced to the user and becomes its own fix-first tiny cell — **never build on red**. No local full-suite run is ever owed: the dev loop runs `commands.test` only, and the full suite is CI-owned on the host workflow's own cadence, auto-filing a `verify-red` issue when red. A session that claims no cell owes no CI check. When no commands are recorded, `bee status` warns and the capture belongs to exploring or onboarding, never to guesswork.
+**Before your first `cells claim`, never on arrival.** Not one of the four gates: the trigger is the *claim*, so a session that claims no cell owes no check. If `.bee/config.json` records `commands.verify`, establish a green base — **never build on red**, and a red is surfaced to the user and becomes its own fix-first tiny cell.
+
+Run `commands.verify` yourself when it is cheap, which is the normal case; read CI when it is not. Prefer the local run: it answers about *your* tree, and it is the same command CI runs. Fall back to CI (`gh run list`/`gh api` for the base branch, plus any open `verify-red` issue) when the chain is genuinely long — CI's answer is about the base branch as of its last run, so it is evidence about your tree only while nothing has changed under you. When no commands are recorded, `bee status` warns and the capture belongs to exploring or onboarding, never to guesswork.
+
+*(This used to read "check CI **instead of** running it locally". That was written when the host's own chain took minutes and CI ran nightly; it told agents to trust a signal that could predate their change by a day. Both halves have moved — bee's CI now runs on push and pull_request, and its declared chain finishes in seconds.)*
 
 ### Delegation contract (fan-out: decide-altitude vs gather-altitude)
 

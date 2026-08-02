@@ -272,7 +272,7 @@ nothing the user needs is lost, those terms should not have been there.
 ## Gate Presentation Contract
 
 Lives in `gates-and-delegation.md` — gate presentation, AskUserQuestion
-schema, gate bypass levels, headless mode, the CI status gate, the delegation
+schema, gate bypass levels, headless mode, the green base check, the delegation
 contract, the judgment contract, the goal-check judge tier, verify scope, and
 native Codex subagent tending.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# install.sh — install bee (https://github.com/thanhsmind/beegog) into a project.
+# install.sh — install bee (https://github.com/thanhsmind/beehive) into a project.
 #
 # Two authoritative distribution modes:
 #   1. plugin-first: prove the installed plugin package before removing legacy
@@ -17,8 +17,8 @@ set -euo pipefail
 # supported: onboarding merges via BEE:START/END markers, never touches content
 # outside them, never overwrites existing state, and is idempotent.
 
-REPO_URL="https://github.com/thanhsmind/beegog.git"
-RAW_BASE="https://raw.githubusercontent.com/thanhsmind/beegog/main"
+REPO_URL="https://github.com/thanhsmind/beehive.git"
+RAW_BASE="https://raw.githubusercontent.com/thanhsmind/beehive/main"
 
 usage() {
   cat <<'EOF'
@@ -81,8 +81,8 @@ Examples:
   scripts/install.sh                          # this checkout -> current dir
   scripts/install.sh -d /path/to/project -y   # non-interactive
   scripts/install.sh --dry-run                # plan only
-  curl -fsSL https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.sh | bash -s -- -y
-  curl -fsSL https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.sh | bash -s -- -d /path/to/project --runtime claude --global-skills -y
+  curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y
+  curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -d /path/to/project --runtime claude --global-skills -y
 EOF
 }
 
@@ -182,7 +182,7 @@ else
   CLEANUP_DIR="$(mktemp -d)"
   log "fetch    $REPO_URL (ref: $REF)"
   git clone --quiet --depth 1 --branch "$REF" "$REPO_URL" "$CLEANUP_DIR/bee" \
-    || fail "Clone failed. Check network access to github.com/thanhsmind/beegog."
+    || fail "Clone failed. Check network access to github.com/thanhsmind/beehive."
   BEE_SRC="$CLEANUP_DIR/bee"
 fi
 

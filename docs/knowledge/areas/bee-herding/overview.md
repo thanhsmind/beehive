@@ -36,10 +36,11 @@ isolated copy — is what runs unattended.**
 - **Working agent** — a session started in its own isolated worktree to do one unit of work. Up to
   four run at once.
 - **Enable marker** — an owner-created file. Without it, dispatch selects nothing. It is the switch
-  that arms the loop, and only the human sets it — by hand (`touch`/`rm` the marker file) or through
-  the equivalent `bee herding enable`/`disable`/`status` CLI verbs, which perform the identical file
-  operation (same path, same resolution logic as the interlock) and exist purely as a human-typed
-  convenience: no bee automation ever calls them.
+  that arms the loop, and only the human sets it — by hand, `touch`/`rm` on the marker file. The
+  equivalent `bee herding enable`/`disable`/`status` CLI verbs performed the identical file
+  operation and existed purely as a human-typed convenience; they are **not built into the current
+  binary** (never ported off Node, and they now refuse by name), so the manual gesture is the only
+  live form. No bee automation ever called them.
 - **Stop gesture** — an owner-created file that halts the control loops at the next iteration
   boundary. It does **not** halt working agents already running.
 - **Dispatchable** — a backlog item that is ready, unclaimed, has no worktree yet, and passes the
@@ -98,7 +99,7 @@ the dispatch interlock, or the merge owner-gesture change.
 ## Actors & Access
 
 - **The owner** performs three acts and only three: bootstrap once, set the enable marker to arm
-  dispatch (by hand or via `bee herding enable`/`disable`), and run the merge gesture to land
+  dispatch (by hand — `touch`/`rm` the marker file), and run the merge gesture to land
   finished work. Everything else is the cockpit's.
 - **The dispatch controller** reads state and the backlog and starts working agents; it is confined
   to an enumerated command surface, because a cold model re-invoked ~1,440 times a day will
@@ -133,9 +134,9 @@ the dispatch interlock, or the merge owner-gesture change.
   hardened defect was found by running things; the assembled system's first real run is a watched
   acceptance cycle the owner performs, not a headless claim.
 - R8 — **The enable marker has two equivalent human-typed forms, never an automated one**
-  (herding-dispatch-lock-toggle D1-D5). `bee herding enable`/`disable`/`status` perform byte-identical
+  (herding-dispatch-lock-toggle D1-D5). `bee herding enable`/`disable`/`status` performed byte-identical
   operations to the manual `touch`/`rm` gesture — same file, same resolution logic as the interlock —
-  and deliberately carry no runtime guard (no TTY check, not hidden from `bee --help --json`): an
+  and deliberately carried no runtime guard (no TTY check, not hidden from `bee --help --json`): an
   explicit, considered trade-off that keeps the safety property exactly where R3 already put it
   (convention, not enforcement) rather than adding a new one. No bee automation, skill, or agent code
   ever calls these verbs itself.

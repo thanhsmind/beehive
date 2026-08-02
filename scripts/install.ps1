@@ -1,4 +1,4 @@
-# install.ps1 - install bee (https://github.com/thanhsmind/beegog) into a project.
+# install.ps1 - install bee (https://github.com/thanhsmind/beehive) into a project.
 #
 # Two layers:
 #   1. Runtime layer (opt-in, -GlobalSkills): copy the bee skills into your
@@ -28,7 +28,7 @@
 #   .\scripts\install.ps1 -Directory C:\proj -Yes           # non-interactive
 #   .\scripts\install.ps1 -DryRun                           # plan only
 #   .\scripts\install.ps1 -GlobalSkills -Yes                # also install skills globally
-#   iwr -useb https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.ps1 -OutFile install-bee.ps1
+#   iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
 #   .\install-bee.ps1 -Directory C:\proj -Yes
 
 [CmdletBinding()]
@@ -52,7 +52,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$RepoUrl = 'https://github.com/thanhsmind/beegog.git'
+$RepoUrl = 'https://github.com/thanhsmind/beehive.git'
 
 function Fail([string]$Message) { Write-Error $Message; exit 1 }
 
@@ -319,7 +319,7 @@ try {
     # $ErrorActionPreference = 'Stop', redirecting a native command's stderr turns its
     # warnings into terminating NativeCommandErrors. Exit codes and the probe decide.
     git clone --quiet --depth 1 --branch $Ref --no-checkout $RepoUrl $clonePath
-    if ($LASTEXITCODE -ne 0) { Fail 'Clone failed. Check network access to github.com/thanhsmind/beegog.' }
+    if ($LASTEXITCODE -ne 0) { Fail 'Clone failed. Check network access to github.com/thanhsmind/beehive.' }
 
     # sparse-checkout needs git 2.25+; on older git it exits non-zero and the checkout
     # below is simply a full one (which may still trip over an invalid path; the probe

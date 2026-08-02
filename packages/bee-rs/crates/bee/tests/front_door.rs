@@ -47,8 +47,10 @@ fn an_unserved_argv_shape_refuses_out_loud() {
     assert_eq!(out.status.code(), Some(1), "an unserved shape must exit non-zero");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("unsupported command shape"),
-        "the refusal must name itself; stderr was: {stderr}"
+        stderr.contains("bee: unknown command"),
+        "the refusal must name itself — and for an argv nothing in the registry spells, the \
+         name of the problem is 'unknown command', not the old catch-all 'unsupported command \
+         shape' (which also fired for a real command missing a flag). stderr was: {stderr}"
     );
     // The refusal points somewhere useful rather than dead-ending.
     assert!(stderr.contains("bee --help"), "stderr was: {stderr}");
@@ -71,7 +73,10 @@ fn an_unserved_argv_shape_refuses_in_json_when_json_was_requested() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     let v: serde_json::Value = serde_json::from_str(stdout.trim())
         .unwrap_or_else(|e| panic!("not JSON: {stdout:?} ({e})"));
-    assert!(v["error"].as_str().unwrap().contains("unsupported command shape"));
+    assert!(v["error"].as_str().unwrap().contains("bee: unknown command"));
+    // …and the machine-readable class beside it, so a caller branches on
+    // `kind` instead of regex-matching prose.
+    assert_eq!(v["kind"], "unknown_command");
 }
 
 /// A bare `bee` names itself too. The empty argv used to reach Node's
@@ -83,7 +88,7 @@ fn a_bare_invocation_refuses_out_loud() {
     let out = Command::cargo_bin("bee").unwrap().current_dir(tmp.path()).output().unwrap();
     assert_eq!(out.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("(no command)"), "stderr was: {stderr}");
+    assert!(stderr.contains("(no command given)"), "stderr was: {stderr}");
 }
 
 /// `--help` is the surface the refusal points at, so it had better work with

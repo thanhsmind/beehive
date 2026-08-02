@@ -112,7 +112,102 @@ pub const PORTED: &[&str] = &[
     "reservations list|reserve|release|sweep (inside linked worktrees)",
 ];
 
+// ── the front door's two namespaces ────────────────────────────────────────
+//
+// Before this, `bee --help` filtered 124 top-level verbs down to 17 and called
+// the result a porcelain surface. Nothing had actually moved: the flow the
+// lifecycle talks about — route the work, shape it, approve the gate, finish
+// the cell — was spelled in terms of the STORE it happens to live in
+// (`state route`, `intent set`, `state gate`, `cells finish`), so the skills
+// had to carry the translation. Prose was sequencing the machine.
+//
+// Two changes, both here so the whole split is readable in one place:
+//
+//   * FLOW_VERBS gives each lifecycle step its own one-token spelling. They
+//     are ALIASES, not new behaviour: argv is rewritten and the proven verb
+//     runs, so there is exactly one implementation and one set of tests per
+//     operation. The target keeps working and keeps its own registry entry;
+//     it just leaves the flow surface, since two porcelain spellings of one
+//     command would grow the list the flow surface exists to keep short.
+//
+//   * `bee internal …` is the plumbing namespace. It dispatches identically
+//     after the prefix is stripped, and REFUSES a flow verb — so the boundary
+//     is real in both directions rather than being a help filter. The bare
+//     top-level spellings still work; retiring them is a breaking change with
+//     its own migration, and a namespace nobody can call yet would be worse
+//     than the filter it replaces.
+pub const FLOW_VERBS: &[(&str, &[&str])] = &[
+    ("route", &["state", "route"]),
+    ("shape", &["intent", "set"]),
+    ("gate", &["state", "gate"]),
+    ("finish", &["cells", "finish"]),
+];
+
+pub const INTERNAL: &str = "internal";
+
+fn flow_expansion(head: &str) -> Option<&'static [&'static str]> {
+    FLOW_VERBS.iter().find(|(name, _)| *name == head).map(|(_, to)| *to)
+}
+
+/// argv as the verb tree should see it: a flow verb expanded to its target,
+/// or one `internal` prefix stripped. None when neither applies.
+fn rewrite_front_door(args: &[OsString]) -> Option<Vec<OsString>> {
+    let head = args.first()?.to_str()?;
+    if head == INTERNAL {
+        let rest = &args[1..];
+        // A second `internal` is a caller who thinks the namespace nests.
+        if rest.first().and_then(|a| a.to_str()) == Some(INTERNAL) {
+            return None;
+        }
+        return Some(rest.to_vec());
+    }
+    let expansion = flow_expansion(head)?;
+    let mut out: Vec<OsString> = expansion.iter().map(OsString::from).collect();
+    out.extend_from_slice(&args[1..]);
+    Some(out)
+}
+
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
+    if args.first().and_then(|a| a.to_str()) == Some(INTERNAL) {
+        if let Some(code) = internal_namespace(args, t0) {
+            return Some(code);
+        }
+    }
+    // Help probes the argv AS TYPED, before any rewrite. Help renders from
+    // the registry, and a flow verb has its own registry entry — so
+    // `bee route --help` must describe `bee route`. Rewriting first would
+    // answer with `bee state route`, i.e. document a spelling the caller did
+    // not use and send them back to the group structure the flow verb exists
+    // to hide. (The probe is a no-op for every non-help argv.)
+    if let Some(code) = crate::verbs::help::try_native(args, t0) {
+        return Some(code);
+    }
+    match rewrite_front_door(args) {
+        Some(rewritten) => dispatch(&rewritten, t0),
+        None => dispatch(args, t0),
+    }
+}
+
+/// The `internal` prefix's own two answers, before anything is dispatched:
+/// its help surface, and the refusal that keeps a flow verb out of it.
+fn internal_namespace(args: &[OsString], t0: Instant) -> Option<ExitCode> {
+    let rest: Vec<&str> = args[1..].iter().filter_map(|a| a.to_str()).collect();
+    let wants_help = rest.is_empty() || rest.iter().any(|t| *t == "--help");
+    if wants_help && rest.iter().all(|t| *t == "--help" || *t == "--json") {
+        return crate::verbs::help::internal_surface(rest.contains(&"--json"), t0);
+    }
+    let head = rest.first()?;
+    if flow_expansion(head).is_some() {
+        eprintln!(
+            "bee: `bee {head}` is a flow command, not plumbing — call it as `bee {head}`, without \
+             `internal`. `bee internal --help` lists what the namespace holds."
+        );
+        return Some(ExitCode::FAILURE);
+    }
+    None
+}
+
+fn dispatch(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first().and_then(|a| a.to_str()) == Some("rs-info") {
         return Some(rs_info());
     }
@@ -142,64 +237,380 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     verbs::try_native(args, t0)
 }
 
-/// The end of the line. Reached only when no probe claimed the argv and no
-/// probe emitted anything — the shape is either a command this binary has no
-/// spelling for, or a flag combination the owning verb never proved.
+/// The end of the line: no probe claimed the argv and no probe emitted
+/// anything.
 ///
-/// Deliberately generic. bee.mjs's dispatcher carried a nearest-match
-/// suggester and per-group `Use: …` usage lines; campaign rule 1 kept that
-/// machinery out of the port on purpose (a verb served only proven shapes and
-/// Node owned every error path). Reproducing it now would be inventing an
-/// error surface, not porting one — so this says exactly what is true and
-/// points at the two help surfaces that ARE native and complete.
+/// It used to answer every such argv with one sentence — "unsupported command
+/// shape", followed by the group's sub-verb list. For `bee knowledge context`
+/// that reads as *this command does not exist*, and then lists `context` among
+/// the valid ones. The real answer was "add --work and --budget". An agent
+/// that believes a verb is gone goes looking for a detour; an agent told which
+/// flag is missing adds the flag. So the refusal now separates the three
+/// situations it was collapsing (see crate::catalog):
 ///
-/// `--json` is honoured: a script that asked for JSON gets `{"error": …}` on
-/// stdout rather than an unparseable empty document.
+///   * UNKNOWN      — nothing in the registry spells this. Suggest the
+///                    nearest spellings, or list the group's verbs when the
+///                    first token IS a group.
+///   * UNAVAILABLE  — the registry declares it and this build has no
+///                    implementation. Name the gap instead of implying a typo.
+///   * BAD ARGS     — a real, built command declined this argv. Name the
+///                    missing required flags, and quote the command's own
+///                    example.
+///
+/// Every branch still ends in a non-zero exit with output on exactly one
+/// stream, and `--json` still yields `{"error": …}` on stdout so a script that
+/// asked for JSON never has to parse an empty document. The JSON form also
+/// carries `{kind, command}` — a caller can now BRANCH on the refusal instead
+/// of regex-matching prose.
 pub fn emit_unsupported_shape(args: &[OsString]) -> ExitCode {
-    let shown: Vec<String> =
-        args.iter().map(|a| a.to_string_lossy().into_owned()).collect();
-    let attempted = if shown.is_empty() { "(no command)".to_string() } else { shown.join(" ") };
-    let msg = format!(
-        "bee: unsupported command shape: `bee {attempted}`.{} FIX: `bee --help` for the flow surface, `bee --help --all` for every command.",
-        group_hint(shown.first().map(String::as_str))
-    );
+    let shown: Vec<String> = args.iter().map(|a| a.to_string_lossy().into_owned()).collect();
+    let (kind, command, msg) = classify(&shown);
+
     let json = shown.iter().any(|a| a == "--json" || a.starts_with("--json="));
     if json {
-        println!("{}", crate::jsjson::stringify(&serde_json::json!({ "error": msg })));
+        println!(
+            "{}",
+            crate::jsjson::stringify(&serde_json::json!({
+                "error": msg,
+                "kind": kind,
+                "command": command,
+            }))
+        );
     } else {
         eprintln!("{msg}");
     }
     ExitCode::FAILURE
 }
 
-/// The one thing worth reconstructing from bee.mjs's error machinery: when the
-/// first token IS a known group, say what that group actually takes. This is
-/// what turned `bee state show` and `bee backlog list` — the two shapes the
-/// cutover found in live use — from a bare "unsupported" into a usable answer,
-/// and it costs nothing: the sub-verb list is read straight out of
-/// `REGISTRY_PAYLOAD`, the same bytes `--help` renders from.
-fn group_hint(first: Option<&str>) -> String {
-    let Some(group) = first.filter(|g| !g.starts_with('-')) else { return String::new() };
-    let Ok(payload) =
-        serde_json::from_str::<serde_json::Value>(crate::registry::REGISTRY_PAYLOAD)
-    else {
-        return String::new();
-    };
-    let Some(commands) = payload.get("commands").and_then(|c| c.as_array()) else {
-        return String::new();
-    };
-    let prefix = format!("{group}.");
-    let mut subs: Vec<String> = commands
-        .iter()
-        .filter_map(|c| c.get("name").and_then(|n| n.as_str()))
-        .filter_map(|n| n.strip_prefix(&prefix))
-        .map(|rest| rest.replace('.', " "))
-        .collect();
-    if subs.is_empty() {
-        return String::new();
+const HELP_FIX: &str =
+    "FIX: `bee --help` for the flow surface, `bee --help --all` for every command.";
+
+/// The five leading phrases every dispatcher refusal starts with, one per
+/// branch of `classify`. They are a CONTRACT, not prose: `tests/concurrency.rs`
+/// keys its unserved-shape tripwire on them (a scenario it cannot run must be
+/// skipped out loud, never silently passed) and `tests/registry_dispatch.rs`
+/// keys the registry↔dispatcher walk on them. `refusal_headlines_are_stable`
+/// below fails if a reworded message stops matching, so the two black-box
+/// suites can never go quietly vacuous.
+#[cfg_attr(not(test), allow(dead_code))]
+pub const REFUSAL_HEADLINES: [&str; 5] = [
+    "bee: unknown command",
+    "bee: not built into this binary",
+    "bee: unexpected positional argument",
+    "bee: missing required argument",
+    "bee: unsupported argument shape",
+];
+
+/// (kind, resolved command name or null, message).
+fn classify(shown: &[String]) -> (&'static str, serde_json::Value, String) {
+    if shown.is_empty() {
+        return (
+            "unknown_command",
+            serde_json::Value::Null,
+            format!("bee: unknown command (no command given). {HELP_FIX}"),
+        );
     }
-    subs.dedup();
-    format!(" `bee {group}` takes: {}.", subs.join(", "))
+    let mut leading: Vec<&str> = shown
+        .iter()
+        .take_while(|t| !t.starts_with("--"))
+        .map(String::as_str)
+        .collect();
+    let attempted = shown.join(" ");
+    // Resolve against the argv the verb tree saw, not the one that was typed:
+    // `bee internal state shwo` must be answered about `state shwo`, and
+    // `bee gate --name x` about `state gate`. The message still quotes what
+    // was typed.
+    if leading.first() == Some(&INTERNAL) {
+        leading.remove(0);
+        if leading.is_empty() {
+            return (
+                "unknown_command",
+                serde_json::Value::Null,
+                format!("bee: unknown command `bee {attempted}` — `bee internal` is the plumbing namespace, not a command. FIX: `bee internal --help` for what it holds."),
+            );
+        }
+    }
+    // A flow verb has its own registry entry, so it resolves as typed — and
+    // must, or `bee shape` would report its missing flags against `bee intent
+    // set`, naming a command the caller never typed. The expansion is only a
+    // fallback for a spelling the registry has not caught up with.
+    let expanded: Vec<&str>;
+    if crate::catalog::resolve(&leading).is_none() {
+        if let Some(to) = leading.first().and_then(|h| flow_expansion(h)) {
+            expanded = to.iter().copied().chain(leading[1..].iter().copied()).collect();
+            leading = expanded;
+        }
+    }
+
+    let Some((entry, extra)) = crate::catalog::resolve(&leading) else {
+        return ("unknown_command", serde_json::Value::Null, unknown_message(&leading, &attempted));
+    };
+
+    if let Some(gap) = &entry.unavailable {
+        // The honest answer to `bee doctor` after the Node deletion. Saying
+        // "unsupported shape" here would send the caller hunting for the right
+        // flags for a command that has no code at all.
+        return (
+            "command_unavailable",
+            serde_json::Value::String(entry.name.clone()),
+            format!(
+                "bee: not built into this binary: `{}` is declared in the command registry, {}. \
+                 Nothing ran and nothing changed. FIX: {}",
+                entry.invoke, gap.reason, gap.fix
+            ),
+        );
+    }
+
+    if !extra.is_empty() {
+        // A real command with a stray positional: `bee status foo`.
+        return (
+            "unexpected_argument",
+            serde_json::Value::String(entry.name.clone()),
+            format!(
+                "bee: unexpected positional argument `{}` after `{}`. FIX: `{} --help` for the flags it accepts.",
+                extra.join(" "),
+                entry.invoke,
+                entry.invoke
+            ),
+        );
+    }
+
+    let missing = crate::catalog::missing_required(entry, shown);
+    if !missing.is_empty() {
+        let flags = missing
+            .iter()
+            .map(|m| format!("--{m} <{}>", entry.type_of(m)))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let named =
+            missing.iter().map(|m| format!("--{m}")).collect::<Vec<_>>().join(", ");
+        let example = entry
+            .examples
+            .first()
+            .map(|e| format!(" EXAMPLE: {e}"))
+            .unwrap_or_default();
+        return (
+            "missing_required_argument",
+            serde_json::Value::String(entry.name.clone()),
+            format!(
+                "bee: missing required argument(s) for `{}`: {named}. USAGE: {} {flags}.{example}",
+                entry.invoke, entry.invoke
+            ),
+        );
+    }
+
+    // Named, built, required flags all present — the verb declined the argv
+    // for a reason of its own (an unknown flag, an out-of-enum value, a state
+    // it does not handle). Say that, rather than implying the verb is absent.
+    (
+        "unsupported_argument_shape",
+        serde_json::Value::String(entry.name.clone()),
+        format!(
+            "bee: unsupported argument shape for `{}`: `bee {attempted}`. Its required arguments \
+             are all present, so what it refused is an optional flag, a flag value, or a target \
+             that does not exist. FIX: `{} --help` for every accepted flag and its type.",
+            entry.invoke, entry.invoke
+        ),
+    )
+}
+
+/// Nothing in the registry spells the leading tokens. Two useful answers: when
+/// the first token IS a group, list what that group takes (this is what turned
+/// `bee state show` and `bee backlog list` — the two shapes the cutover found
+/// in live use — into usable output); otherwise suggest nearest spellings.
+fn unknown_message(leading: &[&str], attempted: &str) -> String {
+    if let Some(group) = leading.first().filter(|g| !g.starts_with('-')) {
+        let subs = crate::catalog::group_subverbs(group);
+        if !subs.is_empty() {
+            let typed = leading[1..].join(" ");
+            let got = if typed.is_empty() {
+                format!("`bee {group}` is a command group, not a command")
+            } else {
+                format!("`bee {group}` has no `{typed}` verb")
+            };
+            return format!(
+                "bee: unknown command `bee {attempted}` — {got}. `bee {group}` takes: {}. \
+                 FIX: `bee {group} --help` for each verb's flags.",
+                subs.join(", ")
+            );
+        }
+    }
+    let near = crate::catalog::nearest(leading, 3);
+    let hint = if near.is_empty() {
+        String::new()
+    } else {
+        format!(" Closest spellings: {}.", near.join(", "))
+    };
+    format!("bee: unknown command `bee {attempted}`.{hint} {HELP_FIX}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn classify_argv(argv: &[&str]) -> (&'static str, String) {
+        let shown: Vec<String> = argv.iter().map(|s| s.to_string()).collect();
+        let (kind, _, msg) = classify(&shown);
+        (kind, msg)
+    }
+
+    /// The regression this taxonomy exists for: the old message said the
+    /// command was unsupported and then listed it as valid.
+    #[test]
+    fn a_missing_required_flag_is_not_reported_as_a_missing_command() {
+        let (kind, msg) = classify_argv(&["knowledge", "context"]);
+        assert_eq!(kind, "missing_required_argument");
+        assert!(msg.contains("--work"), "{msg}");
+        assert!(msg.contains("--budget"), "{msg}");
+        assert!(!msg.contains("unknown command"), "{msg}");
+        assert!(!msg.contains("unsupported command shape"), "{msg}");
+    }
+
+    #[test]
+    fn an_unbuilt_but_declared_command_says_so_instead_of_suggesting_flags() {
+        let (kind, msg) = classify_argv(&["doctor", "--runtime", "claude"]);
+        assert_eq!(kind, "command_unavailable");
+        assert!(msg.contains("not built into this binary"), "{msg}");
+        assert!(msg.contains("Nothing ran and nothing changed"), "{msg}");
+    }
+
+    #[test]
+    fn a_group_with_a_wrong_verb_lists_the_verbs_it_has() {
+        let (kind, msg) = classify_argv(&["state", "show"]);
+        assert_eq!(kind, "unknown_command");
+        assert!(msg.contains("has no `show` verb"), "{msg}");
+        assert!(msg.contains("`bee state` takes:"), "{msg}");
+    }
+
+    #[test]
+    fn a_typo_suggests_the_spelling_it_meant() {
+        let (kind, msg) = classify_argv(&["stauts"]);
+        assert_eq!(kind, "unknown_command");
+        assert!(msg.contains("bee status"), "{msg}");
+    }
+
+    #[test]
+    fn nonsense_still_refuses_and_points_at_help() {
+        let (kind, msg) = classify_argv(&["definitely-not-a-bee-verb"]);
+        assert_eq!(kind, "unknown_command");
+        assert!(msg.contains("unknown command"), "{msg}");
+        assert!(msg.contains("bee --help"), "{msg}");
+    }
+
+    #[test]
+    fn a_stray_positional_on_a_real_command_names_the_positional() {
+        let (kind, msg) = classify_argv(&["status", "wat"]);
+        assert_eq!(kind, "unexpected_argument");
+        assert!(msg.contains("`wat`"), "{msg}");
+    }
+
+    #[test]
+    fn an_empty_argv_still_names_itself() {
+        let (kind, msg) = classify_argv(&[]);
+        assert_eq!(kind, "unknown_command");
+        assert!(msg.contains("(no command given)"), "{msg}");
+    }
+
+    fn strs(v: &[&str]) -> Vec<OsString> {
+        v.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn a_flow_verb_expands_to_its_proven_target() {
+        for (name, target) in FLOW_VERBS {
+            let rewritten = rewrite_front_door(&strs(&[name, "--json"])).expect("{name} rewrites");
+            let got: Vec<String> =
+                rewritten.iter().map(|a| a.to_string_lossy().into_owned()).collect();
+            let mut want: Vec<String> = target.iter().map(|s| s.to_string()).collect();
+            want.push("--json".to_string());
+            assert_eq!(got, want, "{name}");
+            // …and the target it expands to is a real command, not a wish.
+            assert!(
+                crate::catalog::resolve(target).is_some(),
+                "{name} expands to {target:?}, which the registry does not declare"
+            );
+        }
+    }
+
+    /// Both spellings are the flow surface's, so a caller who typed the flow
+    /// verb must be answered about the flow verb — not about the group the
+    /// command happens to be stored under.
+    #[test]
+    fn a_flow_verb_is_named_in_its_own_refusal() {
+        let (kind, msg) = classify_argv(&["shape"]);
+        assert_eq!(kind, "missing_required_argument");
+        assert!(msg.contains("`bee shape`"), "{msg}");
+        assert!(!msg.contains("intent set"), "the caller never typed that: {msg}");
+    }
+
+    #[test]
+    fn the_internal_prefix_strips_exactly_one_level() {
+        let rewritten = rewrite_front_door(&strs(&["internal", "state", "lanes"])).unwrap();
+        let got: Vec<String> = rewritten.iter().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(got, vec!["state", "lanes"]);
+        // A second `internal` is a caller who thinks the namespace nests.
+        assert!(rewrite_front_door(&strs(&["internal", "internal", "status"])).is_none());
+    }
+
+    #[test]
+    fn a_bare_internal_is_not_a_command() {
+        let (kind, msg) = classify_argv(&["internal"]);
+        assert_eq!(kind, "unknown_command");
+        assert!(msg.contains("plumbing namespace"), "{msg}");
+    }
+
+    /// The refusal resolves against what the verb tree SAW, so an unknown verb
+    /// under the namespace still gets its group's list rather than a shrug.
+    #[test]
+    fn an_unknown_verb_under_internal_is_answered_about_the_group() {
+        let (kind, msg) = classify_argv(&["internal", "state", "shwo"]);
+        assert_eq!(kind, "unknown_command");
+        assert!(msg.contains("`bee state` takes:"), "{msg}");
+    }
+
+    /// Every flow verb is a registry entry in its own right — otherwise it
+    /// would not appear in `--help`, and the CLI-shape write guard would have
+    /// no schema to validate it against.
+    #[test]
+    fn every_flow_verb_is_declared_porcelain_in_the_registry() {
+        for (name, _) in FLOW_VERBS {
+            let (entry, rest) = crate::catalog::resolve(&[name]).unwrap_or_else(|| {
+                panic!("{name} is not in the command registry")
+            });
+            assert!(rest.is_empty());
+            assert_eq!(entry.invoke, format!("bee {name}"));
+            assert!(entry.unavailable.is_none(), "{name} must be callable");
+        }
+    }
+
+    /// The black-box suites detect "the front door refused" by these five
+    /// leading phrases. If a message is reworded without updating
+    /// REFUSAL_HEADLINES, `tests/concurrency.rs` stops recognising an unserved
+    /// shape and starts silently passing scenarios it never ran — so the
+    /// coupling is pinned here, at the source.
+    #[test]
+    fn refusal_headlines_are_stable() {
+        let cases: [&[&str]; 6] = [
+            &[],
+            &["definitely-not-a-bee-verb"],
+            &["state", "show"],
+            &["doctor"],
+            &["status", "wat"],
+            &["knowledge", "context"],
+        ];
+        for argv in cases {
+            let (_, msg) = classify_argv(argv);
+            assert!(
+                REFUSAL_HEADLINES.iter().any(|h| msg.starts_with(h)),
+                "no headline matches the refusal for {argv:?}: {msg}"
+            );
+        }
+        // And the shape branch, which needs a command whose required flags are
+        // all present but whose argv the verb still declines.
+        let (kind, msg) = classify_argv(&["capture", "flush", "--id", "nope", "--wat"]);
+        assert_eq!(kind, "unsupported_argument_shape");
+        assert!(msg.starts_with(REFUSAL_HEADLINES[4]), "{msg}");
+    }
 }
 
 fn rs_info() -> ExitCode {

@@ -77,7 +77,7 @@ built from the source checkout per machine — no prebuilt binaries live in the 
 before writing (`-y` skips prompts):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.sh | bash -s -- -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y
 ```
 
 Windows PowerShell and all flags (`--dry-run`, `--runtime`, `--no-hooks`, …): see `INSTALL.md`.

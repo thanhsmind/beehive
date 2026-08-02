@@ -20,9 +20,12 @@ questioning — ask before asserting.
 | Confidence built on unchecked assumptions | WYSIATI |
 | A solution arrived before the need was named | Jobs to Be Done |
 | Solving before the problem is actually understood | Double Diamond |
+| Special cases keep multiplying; every fix adds a branch | Simplification Cascade |
+| The domain's own vocabulary has stopped producing options | Forced Analogy |
 | An alternative is being dismissed too easily | Steelmanning |
 | Two positions both have real merit | Dialectic |
 | The immediate effect looks good; downstream unclear | Second-Order Thinking |
+| A design is being judged only at today's size | Scale Test |
 | Two explanations fit the evidence | Occam's Razor |
 | About to remove something that looks pointless | Chesterton's Fence |
 | Stuck, or an explanation only makes sense to its author | Rubber-Duck Explanation |
@@ -137,6 +140,42 @@ shape with variants — and converge on the best. Most wasted builds
 are competent solutions to an unexamined problem; the first diamond
 is where that waste is prevented.
 
+### Simplification Cascade
+
+When the design keeps growing special cases — a fourth branch for a
+fourth variant, a flag to make the flag work → stop adding and look for
+the one statement that would make several of them unnecessary at once.
+The prompt is literally that: *if X were true, what could we delete?*
+Then test whether X can be made true.
+
+The tell that a cascade is available is repetition with variation: five
+handlers whose bodies differ in two lines, a switch whose arms are the
+same shape, a config matrix where most combinations are never used. Each
+of those is a general case wearing several disguises, and finding the
+general case removes the branches rather than organizing them. Sequence
+matters — one insight usually unlocks the next, so re-ask the question
+after each deletion instead of stopping at the first win. Where no such
+statement exists, the variation is real and the branches are honest; that
+is a finding too, and it ends the search rather than justifying a
+premature abstraction.
+
+### Forced Analogy
+
+When the domain's own vocabulary has stopped producing options — every
+idea is a variation of the current one → deliberately borrow a structure
+from an unrelated field and ask what it would mean here. *What if we
+treated this queue like a ledger? this cache like a lease? this config
+like a migration? this permission like a reservation?*
+
+Most transfers fail, and failing is cheap; the value is in the few that
+carry a whole solved problem with them, including its known failure
+modes. A borrowed structure arrives with vocabulary, invariants, and a
+literature of what goes wrong — which is exactly what a genuinely novel
+design lacks. Keep the borrowing honest: name the property that makes the
+analogy hold, and the point where it stops holding. An analogy carried
+past its breaking point is how a system ends up with a metaphor in its
+type names and a different behavior underneath.
+
 ### Steelmanning
 
 When an alternative is being waved off, a critique deflected, or an
@@ -172,6 +211,26 @@ matrix nobody can test, the deadline saved by skipping the test that
 teaches the team tests are skippable. Trace who reacts to the change,
 how they adapt, and what their adaptation causes. A choice that wins
 the first order and loses the second is a loss.
+
+### Scale Test
+
+When a design is being judged only at the size it has today → run it at
+the extremes and see what breaks. A thousand times more: what runs out
+first — memory, connections, a single writer, someone's patience, a
+per-item call that was invisible at ten? A thousand times less: what
+disappears entirely, and is the machinery still justified when it does?
+Then the time axis: instantaneous, and a year long. What has to be
+resumable, what has to be idempotent, what silently assumes it finishes
+before anything else changes?
+
+The extremes are diagnostic because they convert vague unease into a
+named limit — "this holds until roughly one writer per partition" is
+usable where "should scale fine" is not. The method finds two distinct
+things: the component that fails first, which is the real capacity of the
+design, and the machinery that only exists for a scale you do not have,
+which is the part to delete. Note that this is a *design* question asked
+before building; the measured version of it belongs to profiling, and
+guessing here is not a substitute for measuring there.
 
 ### Occam's Razor
 

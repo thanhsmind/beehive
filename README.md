@@ -79,7 +79,7 @@ Letting an AI write code freely is fast until it isn't. The usual failure modes:
 
 bee's answer is four ideas working together:
 
-1. **Gates** — the human approves at four irreversible moments (what to build, how, whether to start writing code, whether to merge). Between gates the agent runs on its own; at a gate it stops.
+1. **Gates** — the human approves at three irreversible moments: what to build · how it will be built *and* whether the agent may start editing real files, which are approved together · whether to merge. Between gates the agent runs on its own; at a gate it stops.
 2. **Cells** — work is cut into small, self-contained task units, each with its own acceptance criteria and a real verify command. A cell **cannot be closed until its verification passes** — this is enforced by code, not by the agent's good intentions.
 3. **Lanes** — ceremony scales with risk. A typo fix is one cell and a light touch; an auth change gets mandatory proof and a slower path. Memory never scales down: even a one-line fix that changes behavior updates the spec.
 4. **Compounding** — finished work becomes durable knowledge: specs that survive a rewrite, a decision log, and "critical patterns" the next session reads first.
@@ -92,7 +92,7 @@ The result is meant to be *trustworthy, not ceremonial*: every "done" is backed 
 
 | Concept | What it is | Why it matters |
 |---|---|---|
-| **Gate** | One of four human approval points (decisions → shape → execution → merge) | You stay in control at the moments that are expensive to undo |
+| **Gate** | One of three human approval points (decisions → shape+execution → merge) | You stay in control at the moments that are expensive to undo |
 | **Cell** | A small JSON task unit: what to do, files, acceptance criteria, verify command, trace | The atom of work; can't be "capped" (closed) without proof it passed |
 | **Lane** | The size/risk class of the work: `tiny`, `small`, `standard`, `high-risk`, `spike` | Decides how much process the work gets — no epic ceremony for a typo |
 | **Spec** | A tech-agnostic, BA-grade description of an *area* (a screen, API, job, process) in `docs/specs/` | The system's meaning, understandable without the code and rebuildable on any stack |
@@ -374,14 +374,14 @@ macOS / Linux / WSL / Git Bash — run from inside the project:
 
 ```bash
 cd /path/to/your-project
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.sh | bash -s -- -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y
 ```
 
 Windows PowerShell:
 
 ```powershell
 cd C:\path\to\your-project
-iwr -useb https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.ps1 -OutFile install-bee.ps1
+iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
 .\install-bee.ps1 -Yes
 ```
 
@@ -392,11 +392,11 @@ Safe on existing repos: content outside the managed `BEE:START/END` markers in `
 Point the installer at a directory that doesn't exist yet (it creates it and offers `git init`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.sh | bash -s -- -d ~/projects/my-new-app -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -d ~/projects/my-new-app -y
 ```
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.ps1 -OutFile install-bee.ps1
+iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
 .\install-bee.ps1 -Directory C:\projects\my-new-app -Yes
 ```
 
@@ -408,7 +408,7 @@ iwr -useb https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/insta
 
 **Update to the latest bee:** re-run the same install command (or `bee onboard --apply`) — drift detection refreshes `AGENTS.md`, `CLAUDE.md`, helpers, hooks, and both skill trees in place; your state and everything outside the managed markers stay untouched.
 
-Useful flags: `--global-skills`/`-GlobalSkills` (also install the legacy global copies under `~/.claude/skills` + `~/.codex/skills`), `--no-claude-md`/`-NoClaudeMd`, `--no-hooks`/`-NoHooks`, `--source <local-checkout>`/`-Source`. Full options, the Claude Code plugin route (`/plugin marketplace add thanhsmind/beegog` + `/plugin install bee@bee`), manual installs, uninstall: [INSTALL.md](INSTALL.md).
+Useful flags: `--global-skills`/`-GlobalSkills` (also install the legacy global copies under `~/.claude/skills` + `~/.codex/skills`), `--no-claude-md`/`-NoClaudeMd`, `--no-hooks`/`-NoHooks`, `--source <local-checkout>`/`-Source`. Full options, the Claude Code plugin route (`/plugin marketplace add thanhsmind/beehive` + `/plugin install bee@bee`), manual installs, uninstall: [INSTALL.md](INSTALL.md).
 
 ---
 
@@ -419,14 +419,14 @@ If you are an AI/LLM agent (Claude Code, Codex, Cursor, Aider, …) setting bee 
 > **Fetch these files with `curl`, not a summarizing web fetch** — the flags and exact commands are load-bearing and must not be paraphrased away:
 >
 > ```bash
-> curl -fsSL https://raw.githubusercontent.com/thanhsmind/beegog/main/LLM.md
-> curl -fsSL https://raw.githubusercontent.com/thanhsmind/beegog/main/INSTALL.md
+> curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/LLM.md
+> curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/INSTALL.md
 > ```
 
 One-liner install (the agent should `cd` into the target repo first, then run):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.sh | bash -s -- -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y
 ```
 
 ---

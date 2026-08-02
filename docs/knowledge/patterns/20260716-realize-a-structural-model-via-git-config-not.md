@@ -15,7 +15,7 @@ bee:
 # Realize a structural model via git config, not a file migration, when the boundaries already exist
 
 The "three-tier `.bee/` store" (log / cache / runtime) sounded like a directory restructure, but
-beegog's flat store already had the boundaries: logs tracked, cache/runtime gitignored. The tiers
+beehive's flat store already had the boundaries: logs tracked, cache/runtime gitignored. The tiers
 were realized as a LOGICAL classification — `.gitattributes merge=union` on the tracked log jsonl
 (so worktree branches union-merge provenance) plus gitignore entries for the runtime/cache dirs —
 moving zero files. Before migrating a layout to match a model, check whether the model is already

@@ -163,8 +163,9 @@ dispatchable state** — a feature that finishes shaping has an `in-flight` row,
 a slug, a CONTEXT.md, no worktree and no cells, which is every one of the four
 conditions. Normal work manufactures dispatchable rows as a side effect, so
 "the loop will select nothing, safely" was measured false. The owner marker
-(`bee herding enable` / `disable` / `status`, or the equivalent `touch` of
-`<main-root>/.bee/tmp/bee-herding.enable`) is the explicit, durable "yes, run"
+(a `touch` of `<main-root>/.bee/tmp/bee-herding.enable` — the
+`bee herding enable|disable|status` verbs that also spelled it are not built
+into the current binary) is the explicit, durable "yes, run"
 with no home anywhere else. Every other safety needs the loop already running
 to matter; this one decides whether it runs.
 

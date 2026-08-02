@@ -181,10 +181,14 @@ Token vocabulary (the four raw quantities the breakdown is built from):
 ## Pointers (implementation)
 
 - **P2** — CLI surface `bee perf start|stop|section|log|render|report|sync`:
-  handlers + `perfUsageFallback` in `packages/bee/bee.mjs`;
-  registry entries in `packages/bee/lib/command-registry.mjs`.
-  `perf report` reads the log (backfilling once if empty); `perf sync` scans
-  transcripts and writes session rows into the log.
+  **NOT BUILT INTO THE CURRENT BINARY.** The handlers lived in
+  `packages/bee/bee.mjs`, which the R6 Node deletion removed; no Rust port
+  replaced them, so every one of these verbs now refuses by name (the registry
+  entries carry an `unavailable` marker, and `bee --help --all` prints it).
+  What survives without them: every command appends its own wall time to
+  `.bee/logs/timings.jsonl`. What is described below is the design as it stood
+  and as it would be re-implemented — read it as a specification, not as a
+  surface you can call today.
 - **P4** — Open-section marker: `.bee/perf-open.json` in the project
   working copy.
 - **P6** — Data source: Claude Code session transcripts at

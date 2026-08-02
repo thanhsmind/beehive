@@ -74,7 +74,22 @@ const CHILD_LIMIT: Duration = Duration::from_secs(90);
 const UNSERVED_EXIT: i32 = 1;
 /// The distinctive half of that refusal — exit 1 alone is also a legitimate
 /// typed refusal, so the tripwire keys on the text.
-const UNSERVED_MARK: &str = "unsupported command shape";
+///
+/// These are `router::REFUSAL_HEADLINES` verbatim: the front door used to
+/// answer every unclaimed argv with one sentence ("unsupported command
+/// shape"), which said "no such command" for an argv that was really just
+/// missing a flag. It now classifies, and each class leads with its own
+/// phrase. `router::refusal_headlines_are_stable` fails if a message is
+/// reworded out from under this list — without that pin, a rewording would
+/// make `native_probe` stop recognising unserved shapes and start passing
+/// scenarios it never ran.
+const UNSERVED_MARKS: [&str; 5] = [
+    "bee: unknown command",
+    "bee: not built into this binary",
+    "bee: unexpected positional argument",
+    "bee: missing required argument",
+    "bee: unsupported argument shape",
+];
 
 fn bee_bin() -> PathBuf {
     assert_cmd::cargo::cargo_bin("bee")
@@ -169,7 +184,8 @@ impl Racer {
         format!("{from_json}\n{}\n{}", self.stdout, self.stderr)
     }
     fn unserved(&self) -> bool {
-        self.code == UNSERVED_EXIT && self.stderr.contains(UNSERVED_MARK)
+        self.code == UNSERVED_EXIT
+            && UNSERVED_MARKS.iter().any(|m| self.stderr.trim_start().starts_with(m))
     }
 }
 

@@ -2,21 +2,25 @@
 
 Every onboarded repo has a `.bee/config.json`. Any key you leave out uses a built-in default, so the file can be short — but the values below are the ones worth setting per repo. **`.bee/config.json` is strict JSON: no comments, no trailing commas.** The annotated block here is for reading; copy the clean block at the bottom into the real file.
 
-## Setting values — use the CLI, not a hand-edit
+## Setting values — hand-edit the JSON
 
-You do not have to hand-edit the JSON. Set/read/remove any key through the CLI (validated on write, dot-notation for nested keys):
+> **`bee config get|set|unset|validate` are NOT built into the current binary.** They lived only in
+> the Node runtime the R6 cutover deleted, and no Rust port replaced them, so each one now refuses by
+> name (`bee --help --all` marks them, and the registry carries the reason). **Edit
+> `.bee/config.json` directly** — it is plain, strict JSON. `bee status --json` reports the derived
+> `gate_bypass_level` and `ship_visibility`, which is what most `config get` calls were really after.
 
-```bash
-.bee/bin/bee config get   --key product_root
-.bee/bin/bee config set   --key product_root --value repo
-.bee/bin/bee config set   --key guards.idle_gate --value false   # nested key
-.bee/bin/bee config unset --key guards.idle_gate                 # remove (prunes the empty parent)
-.bee/bin/bee config validate                                     # check models/cli-tier config
-```
+Two rules the deleted CLI used to enforce for you, now yours to keep:
 
-The value is parsed as JSON when it parses (`false` → boolean, `12` → number, `{...}` → object), otherwise kept as a string (`repo` → `"repo"`); pass `--string` to force a string. `set`/`unset` refuse to write if the change would make the models/cli-tier config invalid, or if the existing file is unparseable (it is never silently clobbered).
+- **`hooks.*` and `guards.*` are local-only namespaces.** Put them in `.bee/config.local.json`
+  (gitignored, per-machine), never in the tracked `.bee/config.json` — so one developer muting a
+  hook never lands in everyone's config. The overlay wins over the tracked file at read time.
+- **The models/cli-tier block has to stay valid.** `config set` refused a write that broke it;
+  nothing refuses a hand-edit, so re-read [Which model each tier uses](#which-model-each-tier-uses)
+  after changing `models`.
 
-One routing rule to know: `hooks.*` and `guards.*` are **local-only namespaces** — `config set`/`unset` always write them to `.bee/config.local.json` (gitignored, per-machine), even without `--local`, so one developer muting a hook never lands in the tracked config. `config get` reads overlay-over-tracked and warns if such a value still sits in the tracked file.
+Values are ordinary JSON: `false` is a boolean, `12` a number, `"repo"` a string. Nested keys that
+the old `--key guards.idle_gate` dot-notation reached are just nested objects in the file.
 
 ## Which model each tier uses
 

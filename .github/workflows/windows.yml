@@ -1,6 +1,11 @@
 name: Windows
 
 on:
+  # win32 is bee's primary platform and the only one where the shell
+  # resolution, path separators and process spawning differ — so this lane
+  # runs on every push and PR too, not only nightly. The suite is seconds.
+  push:
+  pull_request:
   schedule:
     # 16:00 UTC = 23:00 Asia/Ho_Chi_Minh
     - cron: '0 16 * * *'
@@ -37,12 +42,19 @@ jobs:
           workspaces: packages/bee-rs
 
       # `bee test` and several worktree suites shell out through POSIX sh;
-      # Git Bash ships with the runner. NOTE (found during the port): a bare
-      # `bash` spawn on Windows resolves through System32 first and launches
-      # WSL bash, not Git Bash — the runner passes an explicit PATH to the
-      # child for exactly this reason.
+      # Git Bash ships with the runner. A bare `bash` spawn on Windows
+      # resolves to `%SystemRoot%\System32\bash.exe` — the WSL launcher —
+      # whether the search goes through CreateProcess (System32 first) or
+      # through PATH (System32 is also first there). src/shell.rs now pins a
+      # real Win32 bash at the head of the CHILD's PATH and drops every
+      # %SystemRoot% candidate; `shell::the_resolved_shell_is_not_wsl` is the
+      # regression pin, and it runs in this lane.
+      #
+      # Same command as ci.yml, and the same string as .bee/config.json
+      # `commands.verify`: no `--test-threads=1`, so the suite CI proves is
+      # the suite `bee cells finish` runs.
       - name: Verify chain (full suite, no exclusions)
-        run: cargo test --release --manifest-path packages/bee-rs/Cargo.toml -- --test-threads=1
+        run: cargo test --release --manifest-path packages/bee-rs/Cargo.toml
 
   install-ps1-syntax:
     runs-on: windows-latest

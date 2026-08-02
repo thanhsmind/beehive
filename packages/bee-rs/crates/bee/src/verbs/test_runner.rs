@@ -230,41 +230,22 @@ struct TestRun {
     write_error: Option<String>,
 }
 
-/// Build the `<shell> -c <command>` spawn. On Windows the child's PATH is set
-/// explicitly (to the parent's own PATH): Rust's Command then resolves the
-/// bare "bash" against PATH FIRST — matching libuv's spawnSync('bash', ...)
-/// search, which finds Git Bash — instead of CreateProcess's System32-first
-/// order, which finds WSL's bash.exe on WSL-enabled hosts (verified live:
-/// bare Command::new("bash") ran Linux). The bare name also keeps bash's $0
-/// as "bash", so "bash: line 1: ..." error prefixes stay byte-identical to
-/// Node's. (libuv additionally searches cwd before PATH; a bash.exe sitting
-/// in the repo root is not mirrored — documented divergence.)
+/// Build the `<shell> -c <command>` spawn.
+///
+/// FIXED (was: PATH set to the parent's own PATH, bare `bash` spawned). That
+/// only moved the resolution from CreateProcess's System32-first order to
+/// PATH's own order — and on a WSL-enabled host System32 comes FIRST on PATH
+/// too, so the proof gate ran the project's test command inside WSL. The
+/// resolution now lives in crate::shell, which pins a real Win32 bash at the
+/// head of the child's PATH while keeping argv[0] the bare word `bash` (so
+/// "bash: line 1: ..." excerpt prefixes are unchanged).
 fn shell_command(shell: &str) -> Command {
-    let mut cmd = Command::new(shell);
-    if cfg!(windows) {
-        if let Some(path) = std::env::var_os("PATH") {
-            cmd.env("PATH", path);
-        }
-    }
-    cmd
+    crate::shell::command().unwrap_or_else(|| Command::new(shell))
 }
 
-/// posixShell (test-runner.mjs:51): on win32, probe `bash -c "exit 0"` once
-/// (Git Bash); no bash -> None (Node falls back to cmd.exe — delegated).
-/// On POSIX, Node's `shell: true` already IS /bin/sh; probe it the same way
-/// so a missing sh delegates instead of embedding a Rust spawn error.
+/// posixShell: the shared resolver's answer, probed once per process.
 fn posix_shell() -> Option<&'static str> {
-    let shell = if cfg!(windows) { "bash" } else { "/bin/sh" };
-    let probe = shell_command(shell)
-        .args(["-c", "exit 0"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-    match probe {
-        Ok(s) if s.success() => Some(shell),
-        _ => None,
-    }
+    crate::shell::posix_shell()
 }
 
 fn run_declared_tests(root: &Path, commands: &[String], shell: &str) -> TestRun {

@@ -12,6 +12,8 @@
 | The cause is unclear | Instrument before guessing |
 | The search space is large | Bisection: three axes |
 | The bug looks impossible | Environment versus code |
+| It passes alone and fails in the suite | When it only fails in company |
+| It only fails where you cannot attach | Debugging what you cannot touch |
 | The symptom looks like one you've seen before | The familiarity trap |
 | The symptom just vanished | The fix is not done at "it works" |
 | Wrapping up the fix | Cleanup |
@@ -137,6 +139,64 @@ because a large share of "impossible" bugs live there:
   path separators, case-sensitive versus case-insensitive filesystems,
   line endings, whether symlinks can be created at all. "Works on my
   machine" is usually one of these wearing a mask.
+
+## When it only fails in company
+
+When something passes alone and fails as part of a larger run — a test in
+its suite, a job in its pipeline, a request under concurrency → the
+subject of the investigation is no longer that unit. It is the state
+shared between it and whatever ran before: a global, a cached
+connection, a file on disk, a stubbed function never restored, a clock
+that was frozen and not thawed, a record left in a store.
+
+Two facts make this tractable. **Order is the input.** Run the same
+members in a different order and the failure moves or vanishes, which
+already proves the fault is in shared state rather than in the failing
+unit. And **the search bisects**: run the first half of the preceding
+members plus the failing one, then the half that still reproduces it,
+until one predecessor remains. That predecessor — the polluter — is where
+the fix goes, not the unit that reported the failure.
+
+Two traps. When a run is randomly ordered, record and re-apply the seed
+or the ordering, or you cannot reproduce what you just saw. And when the
+bisection finds nothing, suspect the environment the run itself creates —
+parallel workers sharing a directory, a port, or a database — because
+then the failing pair is not "before and after" but "at the same time."
+
+The durable fix is never to reorder the members permanently. It is to
+give each one its own world (`tests.md`, "Every test owns its world"), so
+ordering stops being an input at all.
+
+## Debugging what you cannot touch
+
+When a failure happens only where you cannot attach — a build machine,
+another environment, a customer's installation → the method inverts.
+Locally you form a hypothesis and run an experiment; here every run is
+expensive and possibly unrepeatable, so you harvest evidence first and
+form the hypothesis from what you already have.
+
+Read what the environment already recorded, in this order: the exact
+command and the exact arguments it ran; the versions of everything
+involved; the full output, from the first failure rather than the last;
+the timestamps around it; and whatever the surrounding system logged in
+the same window. Correlate by identifier where one exists and by time
+where it does not — the entries from the same moment in a different
+component are usually the missing half of the story.
+
+Then treat the *difference* as the suspect, not the code. Something is
+true there and false here (`Environment versus code` lists the usual
+candidates), and the fastest path is usually to reproduce the
+environment rather than the failure — the same versions, the same
+ordering, the same emptiness of a cache, the same absence of a file you
+happen to have locally.
+
+When a further run is unavoidable, make it count: add the instrumentation
+that answers the specific question you cannot answer from the record, and
+make the failure *keep* its evidence — the artifact, the log, the state
+directory — because a failure that cleans up after itself teaches you
+nothing and you may not get another one. And when a re-run passes with no
+change, that is not a fix; it is a report that the failure is
+intermittent, which is a different investigation with the same rules.
 
 ## The familiarity trap
 

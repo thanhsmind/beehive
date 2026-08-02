@@ -41,7 +41,12 @@ against isolated fixtures, asserting that a denied action changed nothing.
   missing/drifted); `degraded` = mechanical green but trust surfaces the
   runtime cannot expose are structurally unknown (the user is pointed at
   /hooks); `ready` = mechanical green plus, on the second runtime, a VALID
-  static attestation. `bee doctor attest --runtime codex` records
+  static attestation. **`bee doctor` and `bee doctor attest` are NOT BUILT
+  INTO THE CURRENT BINARY** — the R6 Node deletion removed the only
+  implementation and no Rust port replaced it, so no install can reach
+  `ready` on the second runtime today; treat it as degraded. The rest of this
+  section is the design as specified, not a surface you can call.
+  `bee doctor attest --runtime codex` records
   {hooks-file sha256, CLI version, repo identity} into gitignored runtime
   state; validity = all three match live state (no liveness leg — the runtime
   exposes no hook-fire event surface, and the reason text says so honestly);

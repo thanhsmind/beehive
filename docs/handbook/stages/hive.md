@@ -42,9 +42,9 @@ Writes onboarding state and gate approvals (`state gate`).
   vibe. Uncertainty resolves *downward* into more ceremony, never upward into less.
 - **The hook is a safety net, not the authority** — an unblocked write is not an
   approved write. Route through hive *before* touching source, every time.
-- **CI status gate before the first `cells claim`** — check the latest full-verify
-  CI run on the base branch plus any open `verify-red` issue; red becomes a
-  fix-first tiny cell, never a base to build on. No local full-suite run is owed.
+- **Green base before the first `cells claim`** — run `commands.verify` when it is
+  cheap (it is the same command CI runs), read CI when it is not; red becomes a
+  fix-first tiny cell, never a base to build on.
 - **Multisession etiquette** — coordinate through lanes, claims, and holds, never
   around them. New feature work in an occupied checkout routes through
   `bee worktree new` / `bee worktree merge`; docs, tiny, and release work stay in

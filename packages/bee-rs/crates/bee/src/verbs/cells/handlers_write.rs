@@ -1,0 +1,857 @@
+// verb handlers: add, update, claim
+//
+// Split out of the single 9.4k-line verbs/cells.rs. Code unchanged; only module placement and item visibility moved.
+#![allow(unused_imports)]
+
+use super::*;
+use crate::fsutil::{read_json, write_json_atomic, ReadJson};
+use crate::jsjson;
+use crate::lock;
+use crate::registry::check_manifest_drift;
+use crate::roots::{resolve_store_root, Roots};
+use crate::state as bstate;
+use crate::verbs::reservations as rsv;
+use crate::verbs::reservations::{Err2, FlagV, Out, R2};
+use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
+use serde_json::{json, Map, Number, Value};
+use sha2::{Digest, Sha256};
+use std::cmp::Ordering;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+use std::time::Instant;
+
+// ─── verb handlers ─────────────────────────────────────────────────────────
+
+pub(crate) fn dispatch(
+    cmd: &'static str,
+    use_json: bool,
+    t0: Instant,
+    f: impl FnOnce(&rsv::Ctx) -> MR<Out>,
+) -> Option<ExitCode> {
+    let ctx = match rsv::prelude(cmd, use_json, t0)? {
+        rsv::Pre::Go(c) => c,
+        rsv::Pre::Emitted(code) => return Some(code),
+    };
+    let out = f(&ctx);
+    rsv::finish(&ctx, to_r2(out))
+}
+
+/// requireFlag(flags, name) — Missing/empty/boolean-true refuse with the
+/// handler's own deterministic message (validate() never guards these
+/// verbs' optional-at-schema flags).
+pub(crate) fn require_flag_native(flags: &rsv::Flags, name: &str) -> MR<String> {
+    match flags.get(name) {
+        Some(FlagV::S(s)) if !s.is_empty() => Ok(s.clone()),
+        _ => Err(Fail::Thrown(format!("Missing required flag --{name}."))),
+    }
+}
+
+pub(crate) fn read_file_text(file: &str, label: &str) -> MR<String> {
+    match std::fs::read(file) {
+        Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
+        Err(_) => Err(Fail::Thrown(format!("Cannot read {label} file: {file}"))),
+    }
+}
+
+pub(crate) fn read_stdin_text() -> MR<String> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    match std::io::stdin().lock().read_to_end(&mut bytes) {
+        Ok(_) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
+        Err(e) => Err(Fail::Thrown(format!("{e}"))),
+    }
+}
+
+pub(crate) const RELEASE_MANIFEST_LINT_PATH: &str = "docs/history/codex-harness-hardening/release-manifest.json";
+
+/// bee.mjs manifestLintWarning + emitManifestLintWarnings (stderr).
+pub(crate) fn emit_manifest_lint_warnings(cells: &[Value]) {
+    for cell in cells {
+        let Value::Object(map) = cell else { continue };
+        let verify = match map.get("verify") {
+            Some(Value::String(s)) => s,
+            _ => continue,
+        };
+        if !verify.contains("release_manifest") {
+            continue;
+        }
+        let files = match map.get("files") {
+            Some(Value::Array(a)) => a.clone(),
+            _ => Vec::new(),
+        };
+        if files.iter().any(|f| matches!(f, Value::String(s) if s == RELEASE_MANIFEST_LINT_PATH)) {
+            continue;
+        }
+        let id = match map.get("id") {
+            Some(Value::String(s)) if !s.is_empty() => s.clone(),
+            _ => "(unknown id)".to_string(),
+        };
+        eprintln!(
+            "WARNING: cell \"{id}\" verify mentions release_manifest but files is missing \"{RELEASE_MANIFEST_LINT_PATH}\" — a cold worker will hit red verify with no sanctioned fix. FIX: add the manifest path to files; regenerate it only via \"bee dev release-manifest --write\"."
+        );
+    }
+}
+
+// ── cells add ──────────────────────────────────────────────────────────────
+
+/// buildAddCellsReport row.
+pub(crate) struct AddReportRow {
+    pub(crate) id: String,
+    pub(crate) ok: bool,
+    pub(crate) problems: Vec<String>,
+}
+
+pub(crate) fn build_add_cells_report(root: &Path, cells: &[Value]) -> MR<(bool, Vec<AddReportRow>, Option<Vec<Value>>)> {
+    let mut seen: Vec<String> = Vec::new();
+    let mut rows: Vec<AddReportRow> = Vec::new();
+    for (index, cell) in cells.iter().enumerate() {
+        let id = match cell.get("id") {
+            Some(Value::String(s)) if !s.is_empty() => s.clone(),
+            _ => format!("(index {index})"),
+        };
+        let mut problems: Vec<String> = Vec::new();
+        match validate_new_cell(root, cell) {
+            Ok(()) => {}
+            Err(Fail::Thrown(message)) => problems.push(message),
+            Err(Fail::Delegate) => return Err(Fail::Delegate),
+        }
+        if let Some(Value::String(cid)) = cell.get("id") {
+            if !cid.is_empty() {
+                if seen.contains(cid) {
+                    problems.push(format!("addCells: duplicate id \"{cid}\" within the batch."));
+                } else {
+                    seen.push(cid.clone());
+                }
+            }
+        }
+        rows.push(AddReportRow { id, ok: problems.is_empty(), problems });
+    }
+    let mut normalized: Option<Vec<Value>> = None;
+    if rows.iter().all(|r| r.ok) {
+        let mut list = Vec::new();
+        for cell in cells {
+            list.push(normalize_new_cell(cell)?);
+        }
+        let cycles = compute_incoming_cycles(root, &list)?;
+        if !cycles.is_empty() {
+            let cycle_ids: Vec<String> = cycles.iter().flatten().cloned().collect();
+            let message = format_cycle_refusal("addCells", &cycles);
+            for row in rows.iter_mut() {
+                if cycle_ids.contains(&row.id) {
+                    row.problems.push(message.clone());
+                    row.ok = false;
+                }
+            }
+        } else {
+            normalized = Some(list);
+        }
+    }
+    let ok = rows.iter().all(|r| r.ok);
+    Ok((ok, rows, if ok { normalized } else { None }))
+}
+
+pub(crate) fn add_report_rows_value(rows: &[AddReportRow]) -> Value {
+    Value::Array(
+        rows.iter()
+            .map(|r| {
+                let mut m = Map::new();
+                m.insert("id".into(), Value::String(r.id.clone()));
+                m.insert("ok".into(), Value::Bool(r.ok));
+                m.insert(
+                    "problems".into(),
+                    Value::Array(r.problems.iter().map(|p| Value::String(p.clone())).collect()),
+                );
+                Value::Object(m)
+            })
+            .collect(),
+    )
+}
+
+pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["file", "stdin", "dry-run"]) {
+        return None;
+    }
+    let stdin = bool_flag(&flags, "stdin")?;
+    // `flags['dry-run'] !== undefined` — a "false" string still triggers it.
+    let dry_run = match flags.get("dry-run") {
+        None => false,
+        Some(FlagV::Present) => true,
+        Some(FlagV::S(s)) if s == "true" || s == "false" => true,
+        Some(FlagV::S(_)) => return None,
+    };
+    dispatch("cells add", use_json, t0, move |ctx| {
+        let root = ctx.root.clone();
+        delegate_only(read_commands_slice(&root))?;
+        let text = if stdin {
+            read_stdin_text()?
+        } else {
+            let file = require_flag_native(&flags, "file")?;
+            read_file_text(&file, "cell")?
+        };
+        // Lone surrogates and |n| >= 1e21 used to fork here; both are gone
+        // (see parse_json_js), so every unparseable payload — file or stdin —
+        // takes the one refusal Node's `catch` threw.
+        let payload = match parse_json_js(&text, false) {
+            JsParse::Value(v) => v,
+            JsParse::NotJson => return Err(Fail::Thrown("add: input is not valid JSON.".into())),
+        };
+        if dry_run {
+            let batch: Vec<Value> = match &payload {
+                Value::Array(a) => a.clone(),
+                other => vec![other.clone()],
+            };
+            if batch.is_empty() {
+                return Err(Fail::Thrown(
+                    "previewAddCells: expected a non-empty JSON array of cells.".into(),
+                ));
+            }
+            let (ok, rows, _) = build_add_cells_report(&root, &batch)?;
+            let mut lines: Vec<String> = Vec::new();
+            let failing = rows.iter().filter(|r| !r.ok).count();
+            lines.push(if ok {
+                format!("dry-run: {} cell(s) valid — nothing written.", batch.len())
+            } else {
+                format!(
+                    "dry-run: {failing} of {} cell(s) failed validation — nothing written.",
+                    batch.len()
+                )
+            });
+            for r in &rows {
+                lines.push(format!(
+                    "{} {}{}",
+                    if r.ok { "OK" } else { "FAIL" },
+                    r.id,
+                    if r.problems.is_empty() { String::new() } else { format!(": {}", r.problems.join("; ")) }
+                ));
+            }
+            let mut result = Map::new();
+            result.insert("dry_run".into(), Value::Bool(true));
+            result.insert("ok".into(), Value::Bool(ok));
+            result.insert("cells".into(), add_report_rows_value(&rows));
+            return Ok(Out::Emit(Value::Object(result), lines.join("\n"), if ok { 0 } else { 1 }));
+        }
+        if let Value::Array(batch) = &payload {
+            if batch.is_empty() {
+                return Err(Fail::Thrown("addCells: expected a non-empty JSON array of cells.".into()));
+            }
+            let (ok, rows, normalized) = build_add_cells_report(&root, batch)?;
+            if !ok {
+                let failing: Vec<&AddReportRow> = rows.iter().filter(|r| !r.ok).collect();
+                let named = failing
+                    .iter()
+                    .map(|r| format!("{} ({})", r.id, r.problems.join("; ")))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(Fail::Thrown(format!(
+                    "addCells: {} of {} cell(s) failed validation — {named}. Nothing written.",
+                    failing.len(),
+                    batch.len()
+                )));
+            }
+            let normalized = normalized.expect("ok report carries normalized cells");
+            for cell in &normalized {
+                write_cell(&root, cell)?;
+            }
+            emit_manifest_lint_warnings(&normalized);
+            let text = normalized
+                .iter()
+                .map(|c| format!("Added {}", summarize_cell(c)))
+                .collect::<Vec<_>>()
+                .join("\n");
+            return Ok(Out::Emit(Value::Array(normalized), text, 0));
+        }
+        validate_new_cell(&root, &payload)?;
+        let normalized = normalize_new_cell(&payload)?;
+        assert_no_cycle(&root, "addCell", std::slice::from_ref(&normalized))?;
+        write_cell(&root, &normalized)?;
+        emit_manifest_lint_warnings(std::slice::from_ref(&normalized));
+        let text = format!("Added {}", summarize_cell(&normalized));
+        Ok(Out::Emit(normalized, text, 0))
+    })
+}
+
+// ── cells update ───────────────────────────────────────────────────────────
+
+pub(crate) const UPDATE_FIELDS: [&str; 13] = [
+    "title",
+    "action",
+    "verify",
+    "files",
+    "read_first",
+    "deps",
+    "decisions",
+    "must_haves",
+    "behavior_change",
+    "lane",
+    "pbi",
+    "change_class",
+    REGEN_ACK_FIELD,
+];
+
+pub(crate) fn update_field_problem(key: &str, value: &Value) -> Option<String> {
+    let bad = |msg: &str| Some(msg.to_string());
+    match key {
+        "title" | "action" | "verify" => {
+            if nonblank_string(Some(value)) {
+                None
+            } else {
+                bad("must be a non-empty string")
+            }
+        }
+        "files" | "read_first" | "deps" | "decisions" => {
+            if is_string_array(value) {
+                None
+            } else {
+                bad("must be an array of strings")
+            }
+        }
+        "must_haves" => {
+            if matches!(value, Value::Object(_)) {
+                None
+            } else {
+                bad("must be a JSON object")
+            }
+        }
+        "behavior_change" => {
+            if matches!(value, Value::Bool(_)) {
+                None
+            } else {
+                bad("must be a boolean")
+            }
+        }
+        "lane" => {
+            if matches!(value, Value::String(s) if LANES.contains(&s.as_str())) {
+                None
+            } else {
+                Some(format!("must be one of: {}", LANES.join(", ")))
+            }
+        }
+        "pbi" => {
+            if matches!(value, Value::Null | Value::String(_)) {
+                None
+            } else {
+                bad("must be a string or null")
+            }
+        }
+        "change_class" => {
+            if matches!(value, Value::Null)
+                || matches!(value, Value::String(s) if CHANGE_CLASSES.contains(&s.as_str()))
+            {
+                None
+            } else {
+                Some(format!("must be null or one of: {}", CHANGE_CLASSES.join(", ")))
+            }
+        }
+        _ if key == REGEN_ACK_FIELD => {
+            if matches!(value, Value::Null) || nonblank_string(Some(value)) {
+                None
+            } else {
+                bad("must be null or a non-empty string (the one-line reason for skipping the derived regen obligation)")
+            }
+        }
+        _ => unreachable!("caller checks membership"),
+    }
+}
+
+pub(crate) fn update_frozen_hint(key: &str) -> Option<&'static str> {
+    match key {
+        "id" => Some("a cell id is permanent — add a new cell instead"),
+        "feature" => Some("a cell never moves between features — drop and re-add instead"),
+        "status" => Some("status moves only through claim/verify/cap/block/drop"),
+        "trace" => Some("the trace is the frozen audit record — claim/verify/cap own it"),
+        "tier" => Some("use the tier verb (bee cells tier --id ID --tier T)"),
+        _ => None,
+    }
+}
+
+pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["id", "file", "stdin"]) {
+        return None;
+    }
+    let id = flags.req_str("id")?.to_string(); // schema-required: missing -> validate() -> Node
+    let stdin = bool_flag(&flags, "stdin")?;
+    dispatch("cells update", use_json, t0, move |ctx| {
+        let root = ctx.root.clone();
+        delegate_only(read_commands_slice(&root))?;
+        let text = if stdin {
+            read_stdin_text()?
+        } else {
+            let file = require_flag_native(&flags, "file")?;
+            read_file_text(&file, "patch")?
+        };
+        let patch = match parse_json_js(&text, false) {
+            JsParse::Value(v) => v,
+            JsParse::NotJson => {
+                return Err(Fail::Thrown("update: patch input is not valid JSON.".into()))
+            }
+        };
+        // updateCell — pure validation before the lock.
+        if id.is_empty() || !id_pattern_ok(&id) {
+            return Err(Fail::Thrown(format!("updateCell: invalid id \"{id}\".")));
+        }
+        let patch_map = match &patch {
+            Value::Object(m) => m.clone(),
+            _ => return Err(Fail::Thrown("updateCell: patch must be a JSON object.".into())),
+        };
+        if patch_map.is_empty() {
+            return Err(Fail::Thrown("updateCell: patch is empty — nothing to update.".into()));
+        }
+        for (key, value) in &patch_map {
+            if !UPDATE_FIELDS.contains(&key.as_str()) {
+                let message = match update_frozen_hint(key) {
+                    Some(hint) => format!(
+                        "updateCell: field \"{key}\" is frozen — {hint}. The whole patch is refused; the cell is untouched."
+                    ),
+                    None => format!(
+                        "updateCell: unknown field \"{key}\" — updatable fields: {}. The whole patch is refused; the cell is untouched.",
+                        UPDATE_FIELDS.join(", ")
+                    ),
+                };
+                return Err(Fail::Thrown(message));
+            }
+            if let Some(problem) = update_field_problem(key, value) {
+                return Err(Fail::Thrown(format!(
+                    "updateCell: field \"{key}\" {problem}. The whole patch is refused; the cell is untouched."
+                )));
+            }
+        }
+        if let Some(verify) = patch_map.get("verify") {
+            assert_verify_sentinel_allowed(&root, "updateCell", verify)?;
+        }
+
+        let mut guard = acquire_named_lock(&root, &format!("cells:{id}"))?;
+        let outcome = (|| -> MR<Value> {
+            assert_not_archived(&root, "updateCell", &id)?;
+            // readCellStrictForUpdate — raw read, no BOM strip.
+            let file = cell_file(&root, &id);
+            let raw = match std::fs::read(&file) {
+                Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    return Err(Fail::Thrown(format!("updateCell: cell \"{id}\" not found.")))
+                }
+                // readCellStrictForUpdate's unreadable branch (lib/cells.mjs
+                // :1474). Node interpolated err.code; this carries the Rust
+                // io error in the same sentence, same refusal.
+                Err(e) => {
+                    return Err(Fail::Thrown(format!(
+                        "updateCell: could not read \"{}\" ({e}) — refusing to touch it. FIX: inspect/restore the file, then retry.",
+                        file.display()
+                    )))
+                }
+            };
+            let sep = std::path::MAIN_SEPARATOR;
+            let rel = format!(".bee{sep}cells{sep}{id}.json");
+            let cell_map = match parse_json_js(&raw, false) {
+                JsParse::Value(Value::Object(m)) => m,
+                JsParse::Value(_) => {
+                    return Err(Fail::Thrown(format!(
+                        "updateCell: \"{}\" exists but is not a JSON object — refusing to merge a patch over a corrupt cell.",
+                        file.display()
+                    )))
+                }
+                // Lone surrogates land here too — a cell file this CLI cannot
+                // parse is corrupt, and the refusal is the same either way.
+                JsParse::NotJson => {
+                    return Err(Fail::Thrown(format!(
+                        "updateCell: \"{}\" exists but is not valid JSON — refusing to merge a patch over a corrupt cell. FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\"), then retry.",
+                        file.display()
+                    )))
+                }
+            };
+            let status_ok = matches!(cell_map.get("status"), Some(Value::String(s)) if s == "open" || s == "blocked");
+            if !status_ok {
+                return Err(Fail::Thrown(format!(
+                    "updateCell: cell \"{id}\" has status \"{}\" — only open or blocked cells are updatable (claimed = a live worker owns it; capped/dropped = frozen audit). The cell is untouched.",
+                    js_string_or_undefined(cell_map.get("status"))
+                )));
+            }
+            let mut merged = cell_map.clone();
+            spread_into(&mut merged, &patch_map);
+            let merged_lane = match merged.get("lane") {
+                Some(Value::String(s)) => s.clone(),
+                _ => String::new(),
+            };
+            if merged_lane == "standard" || merged_lane == "high-risk" {
+                let truths = merged
+                    .get("must_haves")
+                    .filter(|m| js_truthy(m))
+                    .and_then(|m| m.get("truths"));
+                if !matches!(truths, Some(Value::Array(a)) if !a.is_empty()) {
+                    return Err(Fail::Thrown(format!(
+                        "updateCell: lane \"{merged_lane}\" requires non-empty must_haves.truths — the patch would leave \"{id}\" without them. The cell is untouched."
+                    )));
+                }
+            }
+            let merged_value = Value::Object(merged.clone());
+            if patch_map.contains_key("deps") {
+                assert_no_cycle(&root, "updateCell", std::slice::from_ref(&merged_value))?;
+            }
+            assert_regen_obligation(&merged, "updateCell")?;
+            write_cell(&root, &merged_value)?;
+            Ok(merged_value)
+        })();
+        guard.release();
+        let updated = outcome?;
+        emit_manifest_lint_warnings(std::slice::from_ref(&updated));
+        let keys: Vec<String> = patch_map.keys().cloned().collect();
+        let text = format!(
+            "Updated {} ({}).",
+            js_string_or_undefined(updated.get("id")),
+            keys.join(", ")
+        );
+        Ok(Out::Emit(updated, text, 0))
+    })
+}
+
+// ── cells claim ────────────────────────────────────────────────────────────
+
+pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !rsv::keys_known(&flags, &["id", "worker", "session-id", "ttl", "isolate"]) {
+        return None;
+    }
+    let id = flags.req_str("id")?.to_string();
+    let worker = flags.req_str("worker")?.to_string();
+    let session_flag = opt_string_flag(&flags, "session-id")?;
+    let _isolate = bool_flag(&flags, "isolate")?;
+    let ttl: Option<f64> = match flags.get("ttl") {
+        None => None,
+        Some(FlagV::Present) => return None,
+        Some(FlagV::S(s)) => match rsv::js_number_flag(s) {
+            Err(_) => return None, // validate() refuses the shape — Node's message
+            Ok(parsed) => Some(parsed.unwrap_or(f64::NAN)),
+        },
+    };
+    dispatch("cells claim", use_json, t0, move |ctx| {
+        let root = ctx.root.clone();
+        let claimed = claim_cell_from_flags(
+            &root,
+            &id,
+            &worker,
+            session_flag.as_deref(),
+            ttl,
+        )?
+        .cell;
+        let worker_disp = match claimed.get("trace").and_then(|t| t.get("worker")) {
+            Some(v) => jsjson::js_to_string(v),
+            None => "undefined".to_string(),
+        };
+        let text = format!(
+            "Claimed {} for {}.",
+            js_string_or_undefined(claimed.get("id")),
+            worker_disp
+        );
+        Ok(Out::Emit(claimed, text, 0))
+    })
+}
+
+/// claimCellFromFlags's product — bee.mjs returns `{cell, sessionId}`.
+///
+/// `policy` has no variant here on purpose: `applyWritePolicy` runs with
+/// `enforceIsolation: false` on this door, so its only acting arms are
+/// `observe` (a no-op) and `shared-disjoint` (a refusal); the `isolated`
+/// workspace-attach / auto-isolate machinery that produces `redirect: true`
+/// is structurally unreachable. Node's `if (policy.redirect) return {policy}`
+/// in claimCellFromFlags — and therefore `handleDispatchPrepare`'s own
+/// `if (claimOutcome.policy)` early return — are both provably dead code for
+/// every argv this door serves. (Same reasoning already recorded for
+/// claim-next below.)
+pub(crate) struct ClaimDoor {
+    pub(crate) cell: Value,
+    pub(crate) session_id: Option<String>,
+}
+
+/// bee.mjs's `claimCellFromFlags` — "One claim door for cells.claim and
+/// dispatch.prepare --claim": the write-policy resolution, the claims.mjs
+/// claim-file-first sequence, the byte-identical claim refusal and the route
+/// soft-warning, all in ONE body so the door cannot diverge between the two
+/// verbs. `cells claim` adds only its own emit text; `dispatch prepare
+/// --claim` adds only the reserve loop that follows it.
+///
+/// pub(crate) since the `dispatch prepare --claim` port — previously this was
+/// inlined in `run_claim`'s closure, which is exactly why that verb delegated.
+///
+/// Every delegate-trigger is FRONT-LOADED (the two prescans, the store reads,
+/// the exotic-shape probes) because nothing after claimCellFile's O_EXCL
+/// write may delegate: the claim file would already exist for the Node re-run.
+pub(crate) fn claim_cell_from_flags(
+    root: &Path,
+    id: &str,
+    worker: &str,
+    session_flag: Option<&str>,
+    ttl: Option<f64>,
+) -> MR<ClaimDoor> {
+    let root = root.to_path_buf();
+    let id = id.to_string();
+    {
+        if let Some(t) = ttl {
+            if !t.is_finite() || t <= 0.0 {
+                return Err(Fail::Thrown("--ttl must be a positive integer (seconds).".into()));
+            }
+        }
+        // Pre-scan: everything after claimCellFile's O_EXCL write must never
+        // delegate (the file would already exist for a retry).
+        prescan_claim(&root, &id)?;
+        let control = control_root(&root)?;
+        delegate_only(list_session_records(&control))?;
+        delegate_only(bstate::read_state_brief(&root).map_err(|_| Fail::Delegate))?;
+        let config = bstate::read_config_raw(&root).map_err(|_| Fail::Delegate)?;
+        let cell_for_policy = read_cell_norm(&root, &id)?;
+        if let Some(cell) = &cell_for_policy {
+            if !matches!(cell, Value::Object(_)) {
+                return Err(Fail::Delegate); // truthy non-object cell — JS-exotic downstream
+            }
+            delegate_only(merge_trace(cell.get("trace")))?;
+            delegate_only(lane_record_gates(&root, cell.get("feature")))?;
+            // CUTOVER: the read_lane_route probe that stood here had exactly
+            // one delegating arm — a corrupt/mismatched lane record — which
+            // is native now. Keeping it would print readLane's warning twice.
+            match cell.get("deps") {
+                None => {}
+                Some(deps) if !js_truthy(deps) => {}
+                Some(Value::Array(_)) => {}
+                Some(_) => return Err(Fail::Delegate), // truthy non-array deps
+            }
+        }
+
+        let session_id = resolve_session_flag_env(session_flag);
+
+        // applyWritePolicy (state.mjs) with enforceIsolation:false — only the
+        // observe/shared-disjoint arms can act; 'isolated' passes through.
+        let mode = match config.get("guards").and_then(|g| g.get("write_policy")) {
+            Some(Value::String(s)) if js_trim(s) == "observe" => "observe",
+            Some(Value::String(s)) if js_trim(s) == "shared-disjoint" => "shared-disjoint",
+            _ => "isolated",
+        };
+        if mode == "shared-disjoint" {
+            let declared: Vec<String> = match cell_for_policy.as_ref().and_then(|c| c.get("files")) {
+                Some(Value::Array(files)) => files
+                    .iter()
+                    .filter_map(|f| match f {
+                        Value::String(s) if !js_trim(s).is_empty() => Some(s.clone()),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            if !declared.is_empty() {
+                let now = rsv::now_ms();
+                let records = list_path_lease_records(&root)?;
+                let mut active: Vec<ResvLite> = Vec::new();
+                for rec in &records {
+                    if lease_record_expired(rec, now)? {
+                        continue;
+                    }
+                    active.push(lease_to_resv_lite(rec)?);
+                }
+                let missing: Vec<String> = declared
+                    .iter()
+                    .filter(|p| {
+                        !active.iter().any(|r| {
+                            let session_match = match (&session_id, &r.session) {
+                                (Some(sid), Some(Value::String(s))) => s == sid,
+                                _ => false,
+                            };
+                            session_match && !r.path.ends_with('*') && rsv::paths_overlap(&r.path, p)
+                        })
+                    })
+                    .cloned()
+                    .collect();
+                if !missing.is_empty() {
+                    let session_suffix = session_id
+                        .as_deref()
+                        .map(|s| format!(" --session-id {s}"))
+                        .unwrap_or_default();
+                    return Err(Fail::Thrown(format!(
+                        "bee write-policy (shared-disjoint): no exact-path lease held for: {}. A broad/glob reservation never satisfies shared-disjoint — an exact-path lease is mandatory before write. FIX: bee reservations reserve --agent <worker> --cell <id> --path <path>{session_suffix} for each path, then retry.",
+                        missing.join(", ")
+                    )));
+                }
+            }
+        }
+
+        // claimCellCrossSession (shared with claim-next — see its own comment).
+        let session = session_id.clone();
+        let cell_id = js_trim(&id).to_string();
+        let claimed = match claim_cell_cross_session(
+            &root,
+            &control,
+            session.as_deref(),
+            worker,
+            &id,
+            ttl,
+            cell_for_policy.as_ref(),
+        )? {
+            CrossClaim::Ok { cell, .. } => cell,
+            CrossClaim::Refused { code, reason } => {
+                return Err(Fail::Thrown(format!("claim: {code} — {reason}")));
+            }
+        };
+        let _ = &cell_id;
+        // explicit-triage D3 soft route warning (stderr, never a refusal).
+        if !claimed_feature_has_route(&root, claimed.get("feature"))? {
+            eprint!(
+                "WARNING: cell \"{}\" claimed for feature \"{}\" with no route record — run \"bee state route --set --class <c> --lane <l> --flags <f> --files <n>\" to record the triage (D3, soft enforcement).\n",
+                js_string_or_undefined(claimed.get("id")),
+                js_string_or_undefined(claimed.get("feature"))
+            );
+        }
+        Ok(ClaimDoor { cell: claimed, session_id })
+    }
+}
+
+/// claimCellCrossSession's typed outcome. Node returns `{ok:false, code,
+/// reason}`; each CLI caller prefixes it with its own verb word (`claim: …`
+/// / `claim-next: …`), so the refusal stays typed until then.
+pub(crate) enum CrossClaim {
+    /// `{ok:true, cell, claim}` — `cells claim` reads only the cell,
+    /// `cells claim-next` emits the whole envelope.
+    Ok { cell: Value, claim: Value },
+    Refused { code: String, reason: String },
+}
+
+/// lib/cells.mjs claimCellCrossSession — the CLAIM half shared by
+/// `cells claim` and `cells claim-next`: claimCellFile's O_EXCL protocol, the
+/// budget unwind (releaseClaim before surfacing, so a refused acquisition
+/// never orphans a claims-store file), then claimCell under the `cells:<id>`
+/// store lock with every throw unwinding into CLAIM_CELL_FAILED.
+///
+/// `cell_for_budget` is the caller's already-read cell record — Node re-reads
+/// it here (`readCell(root, id)`); both callers pre-read it in the same
+/// command, and the store cannot change under this process between the two
+/// points, so the read is hoisted rather than repeated.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn claim_cell_cross_session(
+    root: &Path,
+    control: &Path,
+    session: Option<&str>,
+    worker: &str,
+    cell_id_in: &str,
+    ttl: Option<f64>,
+    cell_for_budget: Option<&Value>,
+) -> MR<CrossClaim> {
+    if js_trim(worker).is_empty() {
+        return Err(Fail::Thrown("claimCellCrossSession: worker is required.".into()));
+    }
+    if js_trim(cell_id_in).is_empty() {
+        return Err(Fail::Thrown("claimCellCrossSession: cellId is required.".into()));
+    }
+    let cell_id = js_trim(cell_id_in).to_string();
+    let file_claim = match claim_cell_file(control, session, &cell_id, ttl)? {
+        ClaimFileOutcome::Refused { code, reason } => {
+            return Ok(CrossClaim::Refused { code: code.to_string(), reason });
+        }
+        ClaimFileOutcome::Ok { claim } => claim,
+    };
+    // Budget check inside the O_EXCL window.
+    if let Some(Value::Object(cell_map)) = cell_for_budget {
+        match check_cell_budgets(cell_map) {
+            Ok(BudgetCheck::Ok) => {}
+            Ok(BudgetCheck::Refused { code, reason }) => {
+                release_claim(control, session, &cell_id)?;
+                return Ok(CrossClaim::Refused { code: code.to_string(), reason });
+            }
+            Err(fail) => {
+                // Pre-scanned; a mid-command race lands here — unwind the
+                // claim file before surfacing anything.
+                release_claim(control, session, &cell_id)?;
+                return Err(fail);
+            }
+        }
+    }
+    // claimCell under the per-cell store lock; every throw unwinds the
+    // claim file and surfaces as CLAIM_CELL_FAILED.
+    let claim_result = (|| -> MR<Value> {
+        let mut guard = acquire_named_lock(root, &format!("cells:{cell_id}"))?;
+        let outcome = (|| -> MR<Value> {
+            let root = root;
+            let worker = worker;
+            {
+                assert_not_archived(root, "claimCell", &cell_id)?;
+                let cell = read_cell_norm(root, &cell_id)?;
+                let lane_gates = match &cell {
+                    Some(c) if js_truthy(c) => lane_record_gates(&root, c.get("feature"))?,
+                    _ => None,
+                };
+                let approved = match &lane_gates {
+                    Some(gates) => matches!(gates.get("execution"), Some(Value::Bool(true))),
+                    None => default_gate_approved(&root, "execution")?,
+                };
+                if !approved {
+                    let message = match (&lane_gates, &cell) {
+                        (Some(_), Some(c)) => format!(
+                            "claimCell: lane \"{}\" gate \"execution\" is not approved — cells of this feature cannot be claimed before ITS lane passes Gate 3 (D2: only the lane's own approvals authorize its cells — the default pipeline's gate never does). Surface Gate 3 to the user for lane \"{}\" and set its approved_gates.execution once approved.",
+                            js_string_or_undefined(c.get("feature")),
+                            js_string_or_undefined(c.get("feature"))
+                        ),
+                        _ => "claimCell: gate \"execution\" is not approved — cells cannot be claimed before execution is approved. Surface Gate 3 to the user (\"Feasibility validated. Approve execution?\") and set approved_gates.execution once approved. The opt-in gate_bypass switch may self-approve: level \"normal\" covers tiny/small/standard non-hard-gate work only; levels \"full\" and \"total\" also self-approve high-risk/hard-gate execution (decision 0010, total-autopilot dcf01d7b).".to_string(),
+                    };
+                    return Err(Fail::Thrown(message));
+                }
+                let Some(cell) = cell else {
+                    return Err(Fail::Thrown(format!("claimCell: cell \"{cell_id}\" not found.")));
+                };
+                let status_open = matches!(cell.get("status"), Some(Value::String(s)) if s == "open");
+                if !status_open {
+                    return Err(Fail::Thrown(format!(
+                        "claimCell: cell \"{cell_id}\" is \"{}\", not \"open\" — only open cells can be claimed. Run bee cells ready to list claimable cells.",
+                        js_string_or_undefined(cell.get("status"))
+                    )));
+                }
+                // depsAllCapped (cells.mjs flavor — collects misses).
+                let mut uncapped: Vec<Value> = Vec::new();
+                if let Some(deps) = cell.get("deps") {
+                    if js_truthy(deps) {
+                        let Value::Array(deps) = deps else { return Err(Fail::Delegate) };
+                        for dep in deps {
+                            let dep_id = jsjson::js_to_string(dep);
+                            let capped = match read_cell_norm(&root, &dep_id)? {
+                                Some(dep_cell) => {
+                                    matches!(dep_cell.get("status"), Some(Value::String(s)) if s == "capped")
+                                }
+                                None => false,
+                            };
+                            if !capped {
+                                uncapped.push(dep.clone());
+                            }
+                        }
+                    }
+                }
+                if !uncapped.is_empty() {
+                    return Err(Fail::Thrown(format!(
+                        "claimCell: cell \"{cell_id}\" has uncapped deps: {} — deps must be capped first.",
+                        js_join(&uncapped, ", ")
+                    )));
+                }
+                let Value::Object(mut cell_map) = cell else { return Err(Fail::Delegate) };
+                cell_map.insert("status".into(), Value::String("claimed".into()));
+                let mut trace = merge_trace(cell_map.get("trace"))?;
+                trace.insert("worker".into(), Value::String(js_trim(worker).to_string()));
+                trace.insert(
+                    "claim_session".into(),
+                    session.map(|s| Value::String(s.to_string())).unwrap_or(Value::Null),
+                );
+                trace.insert("claimed_at".into(), Value::String(utc_now()));
+                cell_map.insert("trace".into(), Value::Object(trace));
+                let cell_value = Value::Object(cell_map);
+                write_cell(root, &cell_value)?;
+                Ok(cell_value)
+            }
+        })();
+        guard.release();
+        outcome
+    })();
+    match claim_result {
+        Ok(cell) => Ok(CrossClaim::Ok { cell, claim: file_claim }),
+        Err(Fail::Thrown(message)) => {
+            release_claim(control, session, &cell_id)?;
+            Ok(CrossClaim::Refused { code: "CLAIM_CELL_FAILED".into(), reason: message })
+        }
+        Err(Fail::Delegate) => {
+            // Pre-scanned; only a mid-command race lands here. Unwind so the
+            // Node re-run isn't refused by our own claim file.
+            release_claim(control, session, &cell_id)?;
+            Err(Fail::Delegate)
+        }
+    }
+}

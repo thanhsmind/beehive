@@ -129,10 +129,14 @@ fn top_level(json: bool, all: bool, t0: Instant) -> Option<ExitCode> {
             print!("{}", render_help_text(&commands, &[], &reg.schema_version));
         }
     } else {
+        // The flow surface lists only what this binary can actually run. An
+        // unavailable porcelain verb (`doctor`, after the Node deletion) used
+        // to sit here looking like any other command; the whole point of the
+        // porcelain list is that an agent can call everything on it.
         let porcelain: Vec<&Map<String, Value>> = reg
             .commands
             .iter()
-            .filter(|e| is_porcelain(e))
+            .filter(|e| is_porcelain(e) && !is_unavailable(e))
             .collect();
         let commands: Vec<Value> = porcelain
             .iter()
@@ -146,11 +150,63 @@ fn top_level(json: bool, all: bool, t0: Instant) -> Option<ExitCode> {
             manifest.insert("commands".into(), Value::Array(commands));
             print!("{}\n", jsjson::stringify_pretty(&Value::Object(manifest)));
         } else {
-            let footer = vec![help_footer_line(total, porcelain.len())];
+            let unavailable = reg.commands.iter().filter(|e| is_unavailable(e)).count();
+            let footer = help_footer_lines(total, porcelain.len(), unavailable);
             print!("{}", render_help_text(&commands, &footer, &reg.schema_version));
         }
     }
     record_timing(&root, "unknown", t0, true);
+    Some(ExitCode::SUCCESS)
+}
+
+// ── `bee internal --help` — the plumbing namespace's own surface ───────────
+
+/// Everything that is NOT on the flow surface, rendered under the `bee
+/// internal …` spelling. The list is the same registry rows `--help --all`
+/// shows minus the flow verbs; what this adds is the NAME for them, so a
+/// reader learns the namespace exists from the tool rather than from prose.
+pub fn internal_surface(json: bool, t0: Instant) -> Option<ExitCode> {
+    let reg = registry()?;
+    let cwd = std::env::current_dir().ok()?;
+    let root = match resolve_store_root(&cwd) {
+        Roots::Ordinary(r) => r,
+        Roots::None => cwd.clone(),
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "internal", json, t0, &why))
+        }
+    };
+    let plumbing: Vec<&Map<String, Value>> = reg
+        .commands
+        .iter()
+        .filter(|e| !is_porcelain(e) && !is_unavailable(e))
+        .collect();
+    let entries: Vec<Value> = plumbing
+        .iter()
+        .map(|e| {
+            let mut m = manifest_entry(e);
+            // Spelled the way the namespace is called, not the way the
+            // legacy top-level spelling reads.
+            if let Some(Value::String(invoke)) = m.get_mut("invoke") {
+                *invoke = format!("bee internal {}", invoke.trim_start_matches("bee "));
+            }
+            Value::Object(m)
+        })
+        .collect();
+    if json {
+        let mut manifest = Map::new();
+        manifest.insert("schema_version".into(), reg.schema_version.clone());
+        manifest.insert("surface".into(), Value::from("internal"));
+        manifest.insert("total_commands".into(), Value::from(reg.commands.len() as u64));
+        manifest.insert("commands".into(), Value::Array(entries));
+        print!("{}\n", jsjson::stringify_pretty(&Value::Object(manifest)));
+    } else {
+        let footer = vec![format!(
+            "{} plumbing command(s). Each also answers to its bare top-level spelling (`bee state gate` == `bee internal state gate`); `bee internal` is the one that says which surface it belongs to. Run \"bee --help\" for the flow surface.",
+            plumbing.len()
+        )];
+        print!("{}", render_help_text(&entries, &footer, &reg.schema_version));
+    }
+    record_timing(&root, "internal", t0, true);
     Some(ExitCode::SUCCESS)
 }
 
@@ -258,13 +314,19 @@ fn resolve_command(leading: &[&str], names: &HashSet<&str>) -> (String, Vec<Stri
 /// toManifestEntries' object-literal key order. A key absent on the source
 /// entry destructures to undefined in JS and JSON.stringify drops it — so
 /// only present keys are copied; extra source keys (surface, ...) never leak.
-const MANIFEST_KEYS: [&str; 6] = [
+/// `unavailable` is the seventh key and the one addition to Node's list: it is
+/// present ONLY on entries this binary declares but does not implement, so
+/// every other entry's manifest is byte-identical to what it was. Without it
+/// `--help --json` — the surface agents read to decide what to call — would go
+/// on advertising 23 commands the dispatcher refuses.
+const MANIFEST_KEYS: [&str; 7] = [
     "name",
     "invoke",
     "description",
     "parameters",
     "examples",
     "deprecated",
+    "unavailable",
 ];
 
 fn manifest_entry(entry: &Map<String, Value>) -> Map<String, Value> {
@@ -282,6 +344,11 @@ fn is_porcelain(entry: &Map<String, Value>) -> bool {
     entry.get("surface").and_then(Value::as_str) == Some("porcelain")
 }
 
+/// Declared in the registry, not built into this binary. See crate::catalog.
+fn is_unavailable(entry: &Map<String, Value>) -> bool {
+    entry.get("unavailable").and_then(Value::as_object).is_some()
+}
+
 fn surfaced_manifest_entry(entry: &Map<String, Value>) -> Map<String, Value> {
     let mut out = manifest_entry(entry);
     let surface = if is_porcelain(entry) { "porcelain" } else { "plumbing" };
@@ -289,11 +356,21 @@ fn surfaced_manifest_entry(entry: &Map<String, Value>) -> Map<String, Value> {
     out
 }
 
-fn help_footer_line(total: usize, porcelain: usize) -> String {
-    format!(
-        "{} more command(s) are plumbing, hidden here — run \"bee --help --all\" for the full surface.",
-        total - porcelain
-    )
+fn help_footer_lines(total: usize, porcelain: usize, unavailable: usize) -> Vec<String> {
+    let mut lines = vec![format!(
+        "{} more command(s) are plumbing — run \"bee internal --help\" for that namespace, or \"bee --help --all\" for every command at once.",
+        total - porcelain - unavailable
+    )];
+    if unavailable > 0 {
+        // Counted separately and said out loud. Folding them into "plumbing"
+        // would keep the old lie in a new place: they are not hidden because
+        // they are low-level, they are hidden because they do not run.
+        lines.push(format!(
+            "{unavailable} command(s) are declared in the registry but NOT built into this binary; \
+             \"bee --help --all\" marks each one with its reason."
+        ));
+    }
+    lines
 }
 
 // ── renderHelpText (bee.mjs ~8316) ─────────────────────────────────────────
@@ -367,6 +444,17 @@ fn render_help_text(entries: &[Value], footer_lines: &[String], schema_version: 
                 ));
             }
         }
+        // Same shape as the DEPRECATED line, and deliberately louder: a
+        // deprecated command still runs, an unavailable one does not.
+        if let Some(gap) = get("unavailable") {
+            if js_truthy(gap) {
+                lines.push(format!(
+                    "    NOT BUILT INTO THIS BINARY — {}.",
+                    js_display(gap.get("reason"))
+                ));
+                lines.push(format!("    instead: {}", js_display(gap.get("fix"))));
+            }
+        }
         lines.push(String::new());
     }
     let joined = lines.join("\n");
@@ -403,6 +491,24 @@ mod tests {
         assert!(m.get("surface").is_none());
         assert!(m.get("internal").is_none());
         assert_eq!(m.get("deprecated"), Some(&Value::Null));
+        // The seventh key rides along ONLY where the registry set it, so an
+        // ordinary entry's manifest is unchanged.
+        assert!(m.get("unavailable").is_none());
+    }
+
+    #[test]
+    fn an_unavailable_entry_carries_the_marker_last() {
+        let e = obj(
+            r#"{"name":"doctor","invoke":"bee doctor","surface":"porcelain","description":"d",
+                "parameters":{"type":"object","properties":{},"required":[]},
+                "examples":["bee doctor"],"deprecated":null,
+                "unavailable":{"reason":"never ported","fix":"use bee status"}}"#,
+        );
+        let m = manifest_entry(&e);
+        assert_eq!(m.keys().last().map(String::as_str), Some("unavailable"));
+        let text = render_help_text(&[Value::Object(m)], &[], &json!("1.0"));
+        assert!(text.contains("NOT BUILT INTO THIS BINARY — never ported."), "{text}");
+        assert!(text.contains("instead: use bee status"), "{text}");
     }
 
     #[test]
@@ -429,9 +535,50 @@ mod tests {
     #[test]
     fn footer_counts_hidden_commands() {
         assert_eq!(
-            help_footer_line(123, 17),
-            "106 more command(s) are plumbing, hidden here — run \"bee --help --all\" for the full surface."
+            help_footer_lines(123, 17, 0),
+            vec![
+                "106 more command(s) are plumbing — run \"bee internal --help\" for that namespace, or \"bee --help --all\" for every command at once."
+                    .to_string()
+            ]
         );
+    }
+
+    /// Unavailable commands are subtracted from the plumbing count and named
+    /// on their own line — "hidden because it is low-level" and "hidden
+    /// because it does not run" are different facts.
+    #[test]
+    fn footer_separates_unavailable_from_plumbing() {
+        let lines = help_footer_lines(123, 16, 23);
+        assert!(lines[0].starts_with("84 more command(s) are plumbing"), "{lines:?}");
+        assert!(lines[1].starts_with("23 command(s) are declared in the registry but NOT built"), "{lines:?}");
+    }
+
+    /// The live payload's own numbers: the flow surface must contain nothing
+    /// the dispatcher would refuse by declaration.
+    #[test]
+    fn the_porcelain_surface_lists_no_unavailable_command() {
+        let reg = registry().expect("embedded payload parses");
+        let bad: Vec<&str> = reg
+            .commands
+            .iter()
+            .filter(|e| is_porcelain(e) && is_unavailable(e))
+            .filter_map(|e| e.get("name").and_then(Value::as_str))
+            .collect();
+        assert!(
+            !bad.is_empty(),
+            "no porcelain command is currently marked unavailable — if `doctor` was ported, drop \
+             this assertion; if the marker was lost, restore it"
+        );
+        // …and none of them reach the rendered porcelain list.
+        let listed: Vec<&str> = reg
+            .commands
+            .iter()
+            .filter(|e| is_porcelain(e) && !is_unavailable(e))
+            .filter_map(|e| e.get("name").and_then(Value::as_str))
+            .collect();
+        for name in bad {
+            assert!(!listed.contains(&name), "{name} still appears on the flow surface");
+        }
     }
 
     #[test]
@@ -481,9 +628,9 @@ mod tests {
             "bee — unified CLI dispatcher (schema_version 1.0)\n\nbee cells show\n    Show one cell.\n    required: --id\n"
         );
         // Footer path: body trimmed, two newlines, footer, one trailing \n.
-        let with_footer = render_help_text(&entries, &[help_footer_line(2, 1)], &json!("1.0"));
+        let with_footer = render_help_text(&entries, &help_footer_lines(2, 1, 0), &json!("1.0"));
         assert!(with_footer.ends_with(
-            "\n\n1 more command(s) are plumbing, hidden here — run \"bee --help --all\" for the full surface.\n"
+            "\n\n1 more command(s) are plumbing — run \"bee internal --help\" for that namespace, or \"bee --help --all\" for every command at once.\n"
         ));
         // Surfaced entry prints its surface line.
         let surfaced = vec![Value::Object(surfaced_manifest_entry(&obj(
@@ -506,9 +653,12 @@ mod tests {
         assert!(cells.contains(&"cells.ready"));
         // A porcelain-only surface never filters group help: plumbing verbs
         // (surface absent) appear too.
-        let all_have_six_keys = reg.commands.iter().all(|e| {
-            MANIFEST_KEYS.iter().all(|k| e.contains_key(*k))
-        });
+        // The six ALWAYS-present keys. `unavailable` (the seventh) is set
+        // only on entries this binary does not implement — asserting it here
+        // would demand every command be broken.
+        let core = &MANIFEST_KEYS[..6];
+        let all_have_six_keys =
+            reg.commands.iter().all(|e| core.iter().all(|k| e.contains_key(*k)));
         assert!(all_have_six_keys, "registry entries carry the six manifest keys");
     }
 }

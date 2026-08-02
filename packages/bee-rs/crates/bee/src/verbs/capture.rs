@@ -340,7 +340,22 @@ fn run_flush(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         .iter()
         .any(|s| s.get("id").and_then(Value::as_str) == Some(id));
     if !found {
-        return None; // no pending stub with this id — Node's refusal text
+        // CUTOVER FIX: this used to `return None` so Node could own the
+        // refusal bytes. With Node gone that returned the caller to the
+        // dispatcher's end-of-line, which answers "this command does not
+        // exist" — for the everyday case of a stub id that has already been
+        // flushed. A missing target is the VERB's error, and it says so.
+        let msg = format!(
+            "bee capture flush: no pending capture stub with id {id}. \
+             FIX: `bee capture list --json` lists the ids still pending."
+        );
+        return Some(crate::verbs::feedback::emit_error(
+            &ctx.root,
+            "capture flush",
+            parsed.json,
+            &msg,
+            t0,
+        ));
     }
 
     // Record key order: kind, id, at, into.

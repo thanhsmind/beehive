@@ -55,7 +55,7 @@ shared holds ledger closes that gap at WRITE time:
   longer hard-denies unconditionally. It denies only when the path matches an
   **exclusive-resource list** — built-in defaults: any-depth `migrations/` directories, common
   lockfiles (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`,
-  `composer.lock`, `Gemfile.lock`, matched both at repo root and nested), the beegog
+  `composer.lock`, `Gemfile.lock`, matched both at repo root and nested), the beehive
   release-manifest path, `.bee/onboarding.json`, and any-depth `generated/` directories —
   extended (never replaced) by `.bee/config.json`'s `guards.exclusive_paths` array, matched
   with a small `**`-aware glob-to-regex translator distinct from this store's own

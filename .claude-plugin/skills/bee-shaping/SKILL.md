@@ -122,3 +122,4 @@ execution records, never the plan (`references/walkthrough-template.md`).
 | `references/mini-brief-template.md` | The small-lane ~15-line brief |
 | `references/walkthrough-template.md` | Post-ship walkthrough |
 | `.bee/expertise/decisions.md` | What makes a lockable decision |
+| `.bee/expertise/INDEX.md` | A gray area is domain-shaped — what deletion means, what a contract promises callers, who may see what, how fast is fast enough, what an empty or failed state shows: route from the index for the questions worth asking |

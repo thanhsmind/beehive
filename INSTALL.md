@@ -1,6 +1,6 @@
 # Installing bee
 
-Source: **https://github.com/thanhsmind/beegog**
+Source: **https://github.com/thanhsmind/beehive**
 
 ## Quick install (recommended): the install script
 
@@ -9,13 +9,13 @@ One command does everything below — fetches bee, installs the skills for the c
 macOS / Linux / Git Bash:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.sh | bash -s -- -y
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y
 ```
 
 Windows PowerShell:
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/thanhsmind/beegog/main/scripts/install.ps1 -OutFile install-bee.ps1
+iwr -useb https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.ps1 -OutFile install-bee.ps1
 .\install-bee.ps1 -Yes
 ```
 
@@ -71,7 +71,7 @@ binary. The single exception is Codex on native Windows, whose hook transport
 uses a ~10-line `node -e` launcher to find the repo root before handing off to
 the binary; every other transport is Node-free.
 
-> Path used in the examples: `D:\projects\tools\AI\bee`. Replace with wherever this plugin lives (a local clone of `thanhsmind/beegog` or the git URL).
+> Path used in the examples: `D:\projects\tools\AI\bee`. Replace with wherever this plugin lives (a local clone of `thanhsmind/beehive` or the git URL).
 
 ---
 

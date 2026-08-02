@@ -16,13 +16,19 @@
 //   backlog badges     [--write] [--json]
 //   backlog render     [--write] [--check] [--json]
 //
-// STILL DELEGATED TO NODE (strangler note):
+// NOT BUILT (was: "still delegated to Node" — there is no Node):
 //   - `backlog add --queue-submit ...` — the scoped git auto-commit path
 //     (commitBacklogRow's spawnSync git calls). Without the flag Node never
-//     touches git, which is the exact subset ported here.
-//   - within accepted shapes, every refusal path (missing/empty/over-length
-//     flags, bad enums, duplicate/unknown pbi ids, whitespace-only values)
-//     returns None so Node's byte-exact error text is preserved.
+//     touched git, which is the exact subset ported here. The flag is now
+//     parsed and REFUSED BY NAME before any write, instead of falling through
+//     to the dispatcher's "unsupported command shape" — which read as
+//     "bee backlog add does not exist".
+//   - within accepted shapes, most refusal paths still return None so Node's
+//     byte-exact error text was preserved. Two of them — an unknown PBI id in
+//     `pbi status` / `pbi amend` — no longer do: after the cutover, returning
+//     None for a mistyped id told the caller the VERB was missing. Those emit
+//     natively now (see run_pbi_status / run_pbi_amend). The rest are pinned
+//     by tests/registry_dispatch.rs, which walks every registry example.
 //
 // Additional delegation triggers (None before any output/write):
 //   - linked-worktree roots, corrupt manifest-hash cache/config
@@ -590,10 +596,22 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     match verb {
         "counts" => run_counts(parse_shape(&args[2..], &[])?, t0),
         "findings" => run_findings(parse_shape(&args[2..], &["feature", "text"])?, t0),
-        "add" => run_add(
-            parse_shape(&args[2..], &["type", "title", "severity", "layer", "detail", "feature"])?,
-            t0,
-        ),
+        // `--queue-submit` is a BOOLEAN flag, and parse_shape only knows
+        // value flags — leaving it in the token stream made it swallow the
+        // next token (or fail outright), so the whole call came back as an
+        // unknown command shape. It is lifted out here and refused by name in
+        // run_add, after the root is known.
+        "add" => {
+            let rest: Vec<OsString> = args[2..].to_vec();
+            let queue_submit = rest.iter().any(is_queue_submit);
+            let filtered: Vec<OsString> =
+                rest.into_iter().filter(|a| !is_queue_submit(a)).collect();
+            run_add(
+                parse_shape(&filtered, &["type", "title", "severity", "layer", "detail", "feature"])?,
+                queue_submit,
+                t0,
+            )
+        }
         "propose" => run_propose(parse_shape(&args[2..], &["story", "cos", "feature"])?, t0),
         "pbi" => {
             let sub = args.get(2)?.to_str()?;
@@ -704,7 +722,12 @@ fn run_findings(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     ))
 }
 
-fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
+fn is_queue_submit(arg: &OsString) -> bool {
+    arg.to_str()
+        .is_some_and(|s| s == "--queue-submit" || s.starts_with("--queue-submit="))
+}
+
+fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCode> {
     // requireFlags batch (ce-1): every missing/enum/length problem is a
     // Node-owned refusal — delegate on the first one seen.
     let ty = require_flag(&parsed, "type")?;
@@ -728,6 +751,19 @@ fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Err(code) => return Some(code),
         Ok(c) => c?,
     };
+    // --queue-submit is the scoped git auto-commit path (commitBacklogRow's
+    // spawnSync git calls). It was never ported, and after the Node deletion
+    // the flag turned the whole call into "unsupported command shape" — which
+    // reads as "bee backlog add does not exist". Refuse the FLAG by name, and
+    // refuse BEFORE the append so the caller is never left wondering whether
+    // the row landed.
+    if queue_submit {
+        let msg = "bee backlog add: --queue-submit is not built into this binary (the scoped git \
+                   auto-commit path was never ported off Node). Nothing was written. FIX: re-run \
+                   without --queue-submit and commit .bee/backlog.jsonl yourself."
+            .to_string();
+        return Some(emit_error(&ctx.root, "backlog add", parsed.json, &msg, t0));
+    }
     // Row key order: ts, type, title, detail, severity, layer, feature.
     let mut line = Map::new();
     line.insert("ts".into(), Value::String(now_iso()));
@@ -857,7 +893,17 @@ fn run_pbi_status(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Ok(c) => c?,
     };
     let fold = fold_pbis(&ctx.root);
-    let current = fold.items.get(id.as_str())?.clone(); // unknown id -> Node
+    // CUTOVER FIX: `?` here used to hand an unknown id to Node for the refusal
+    // bytes. With Node gone it fell through to the dispatcher's end-of-line,
+    // which tells the caller `bee backlog pbi status` is not a command — for
+    // the ordinary case of a mistyped PBI id.
+    let Some(current) = fold.items.get(id.as_str()).cloned() else {
+        let msg = format!(
+            "bee backlog pbi status: no PBI with id {id}. \
+             FIX: `bee backlog pbi list --json` lists every id and its status."
+        );
+        return Some(emit_error(&ctx.root, "backlog pbi status", parsed.json, &msg, t0));
+    };
     let feature_trim = feature_raw
         .as_deref()
         .map(js_trim)
@@ -917,7 +963,15 @@ fn run_pbi_amend(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
         Ok(c) => c?,
     };
     let fold = fold_pbis(&ctx.root);
-    let current = fold.items.get(id.as_str())?.clone(); // unknown id -> Node
+    // CUTOVER FIX: see run_pbi_status — an unknown id is this verb's error,
+    // not evidence that the verb is missing.
+    let Some(current) = fold.items.get(id.as_str()).cloned() else {
+        let msg = format!(
+            "bee backlog pbi amend: no PBI with id {id}. \
+             FIX: `bee backlog pbi list --json` lists every id and its status."
+        );
+        return Some(emit_error(&ctx.root, "backlog pbi amend", parsed.json, &msg, t0));
+    };
     // Event key order: ts, kind, event, id[, title][, cos].
     let mut event = Map::new();
     event.insert("ts".into(), Value::String(now_iso()));

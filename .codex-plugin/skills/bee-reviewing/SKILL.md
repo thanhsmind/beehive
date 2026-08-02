@@ -113,3 +113,4 @@ closes the review, not any feature; their already-closed state stays untouched.
 |---|---|
 | `references/reviewing-reference.md` | Reviewer role cards (Purpose/Scope/Method), finding schema, UAT wording |
 | `.bee/expertise/review.md` | Finding quality, severity calibration, adversarial reading, verification |
+| `.bee/expertise/INDEX.md` | A reviewer lens needs domain grounding — stored data, a caller-facing contract, a trust boundary, a rollout, a speed budget, a surface people use: route from the index, one guide per lens |
