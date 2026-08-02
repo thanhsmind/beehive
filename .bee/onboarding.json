@@ -2,20 +2,23 @@
   "schema_version": "1.0",
   "bee_version": "1.20.3",
   "managed": {
-    "agents_block": "7520888a768056c2a22d967645e65d6ed70780cc07de3cad8bc679cfe963c4d6",
+    "agents_block": "11d943d7319993dd7132e6e9c8ae33bf98801fcab9b273e565580bbf182496a9",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
     "helpers": {},
     "lib": {},
     "expertise": {
-      "INDEX.md": "7a1321b6bc0696baa116524f72629e5f5ad2fc47dbf726a4960d8a4d0f5cbabd",
-      "README.md": "5952cecfeb633c792ec72e799f497d0ae3f2bb14c9edb4afedae158802551e3a",
+      "INDEX.md": "bcedefdee32edf8d387f0a4847dd90f9a6e166052d522b5ecb4d0f111e25d31c",
+      "README.md": "a3a0b4ba969617f4d36486d86588a086b76eafb013d524716ff3a22397ea5c07",
       "architecture.md": "b71c018f47c78a0b5e1c55f9cb2ae4450281e1c4d3a625e87c1da096f1f50cca",
       "debugging.md": "c19b8b92fadfb33b225fc47a99fdbe29b594531ad3d74e3f7d5c9712bec979fd",
       "decisions.md": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
       "documentation.md": "595957ca75796645c6c6d23d64f4ca25675b596c2651832f73866940d94a0e5c",
+      "knowledge.md": "958da265dd957b2fa80647f331862e9aec374086890fce858fa332d05a2c5717",
+      "knowledge/patterns/attribution-that-survives-rewrites.md": "5d1e08dc87500c610d4e954986d0356328224fd2221d3d52b6d2957410b1aaff",
+      "knowledge/patterns/rules-that-ship-as-a-check.md": "73100f56893c0f2c78c58604878d06949acdd3b0d2ba5a4166a2dbe7561d188e",
       "planning.md": "41e02da1232203b6289add90524b045146e916d8bce6d3d1179bdf9ac32a00b9",
       "review.md": "39b2974638433428abbfcbaac37730106571409388ba856b5d89f3b99befcad1",
-      "tests.md": "54ec3787014ca122b16f1b40428762d064b298c90b4a09a5cf7792b314a7ef26",
+      "tests.md": "ec9b33a859c151619dbf661bc1b6ce45fa42c073f1e9aca5c8b094ff82ee670b",
       "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
       "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
       "tests/patterns/differential-testing.md": "2c089b719275b401ae62c5f6f6af4cdcdfc7e5a2528fc64ce16eff8a1d0b6add",
@@ -52,5 +55,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-02T01:26:33.380Z"
+  "updated_at": "2026-08-02T03:08:52.165Z"
 }
