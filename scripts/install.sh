@@ -41,6 +41,10 @@ Options:
                           clean user/global skill roots.
       --source <path>     Use a local bee checkout instead of cloning GitHub.
       --ref <ref>         Git branch/tag to clone. Default: main.
+      --build-from-source Skip the published binary and compile with cargo.
+                          The default is to download the release binary for
+                          this platform and fall back to a build only if there
+                          is none.
       --no-hooks          Skip --repo-hooks wiring for Claude Code. By default
                           this installer wires repo-local hooks, because the
                           manual skills-copy route does not load plugin hooks.
@@ -110,6 +114,7 @@ PLUGIN_STATE_FILE=""
 OWNERSHIP_LEDGER=""
 SOURCE=""
 REF="main"
+BUILD_FROM_SOURCE=0
 REPO_HOOKS=1
 GLOBAL_SKILLS=0
 NO_CLAUDE_MD=0
@@ -126,6 +131,7 @@ while [ $# -gt 0 ]; do
     --ownership-ledger) OWNERSHIP_LEDGER="$2"; shift 2 ;;
     --source)       SOURCE="$2"; shift 2 ;;
     --ref)          REF="$2"; shift 2 ;;
+    --build-from-source) BUILD_FROM_SOURCE=1; shift ;;
     --no-hooks)     REPO_HOOKS=0; shift ;;
     --global-skills) GLOBAL_SKILLS=1; shift ;;
     --no-claude-md) NO_CLAUDE_MD=1; shift ;;
@@ -144,10 +150,13 @@ case "$DISTRIBUTION_MODE" in plugin-first|repo-copy) ;; *) fail "--distribution 
 
 # ---------- prerequisites ----------
 
-# R6 CUTOVER: bee is a single native binary, so what the installer needs to
-# RUN bee is a Rust toolchain — decision 1f4262ca keeps prebuilt binaries OUT
-# of the repo and builds one per machine from the source checkout.
-command -v cargo >/dev/null 2>&1 || fail "A Rust toolchain is required (cargo not found on PATH). Install rustup: https://rustup.rs"
+# bee is a single native binary. It used to be compiled per machine from the
+# source checkout (decision 1f4262ca); the release workflow now publishes one
+# per platform, so a Rust toolchain is needed only when there is no published
+# binary for this host — or when the caller asks for a build outright.
+# The check therefore moved DOWN, next to the build it guards: demanding cargo
+# up here would keep the toolchain a hard prerequisite for everyone while the
+# whole point is that most hosts no longer need it.
 
 # ...but INSTALLING bee still needs node, and that is a different question from
 # running it. The R6 sweep removed the Node preflight along with the runtime;
@@ -157,12 +166,78 @@ command -v cargo >/dev/null 2>&1 || fail "A Rust toolchain is required (cargo no
 # the cost of a missing preflight is paid at the worst possible moment.
 command -v node >/dev/null 2>&1 || fail "Node.js is required to INSTALL bee (the distribution helper packages/bee/scripts/plugin_distribution.mjs is not ported yet). bee itself runs as a native binary and needs no Node at runtime. Install Node 18+: https://nodejs.org"
 
+# ---------- published binary (preferred) ----------
+#
+# Asset naming and the checksum file are the release-binaries workflow's
+# contract. Any failure here is NON-FATAL: it logs why and leaves BEE_BIN
+# empty, and the source build below takes over. An installer that dies because
+# a CDN blipped would be worse than the build it replaced.
+SCRIPT_DIR_EARLY="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd -P || true)"
+RELEASES="https://github.com/thanhsmind/beehive/releases"
+PREBUILT_ASSET=""
+case "$(uname -s 2>/dev/null || echo unknown)/$(uname -m 2>/dev/null || echo unknown)" in
+  Linux/x86_64)                          PREBUILT_ASSET="bee-x86_64-unknown-linux-gnu" ;;
+  MINGW*/x86_64|MSYS*/x86_64|CYGWIN*/x86_64) PREBUILT_ASSET="bee-x86_64-pc-windows-msvc.exe" ;;
+esac
+
+fetch() {
+  # $1 url, $2 dest. curl or wget, whichever the host has.
+  if command -v curl >/dev/null 2>&1; then curl -fsSL "$1" -o "$2"
+  elif command -v wget >/dev/null 2>&1; then wget -qO "$2" "$1"
+  else return 1
+  fi
+}
+
+BEE_BIN=""
+PREBUILT_TAG=""
+if [ "$BUILD_FROM_SOURCE" = "1" ]; then
+  log "binary   --build-from-source given; skipping the published binary"
+elif [ -n "$SOURCE" ]; then
+  log "binary   --source given; building that checkout rather than downloading"
+elif [ -n "$SCRIPT_DIR_EARLY" ] && [ -f "$SCRIPT_DIR_EARLY/../packages/bee-rs/Cargo.toml" ]; then
+  # Running from inside a checkout. Downloading a release binary here would
+  # pair it with THIS tree's skills, which is the version skew the whole design
+  # exists to avoid — build what is in front of us instead.
+  log "binary   running inside a bee checkout; building it rather than downloading"
+elif [ -z "$PREBUILT_ASSET" ]; then
+  log "binary   no published binary for $(uname -s 2>/dev/null)/$(uname -m 2>/dev/null) — building from source"
+else
+  # A tag ref installs THAT release; anything else takes the latest one. Either
+  # way the source tree is pinned to the same tag further down, so the binary
+  # and the instruction layer it vendors can never come from different commits.
+  case "$REF" in
+    v[0-9]*) PREBUILT_TAG="$REF" ;;
+    *) PREBUILT_TAG="$(fetch "$RELEASES/latest" /dev/stdout 2>/dev/null | sed -n 's|.*/releases/tag/\(v[0-9][^"]*\)".*||p' | head -1 || true)" ;;
+  esac
+  if [ -z "$PREBUILT_TAG" ]; then
+    log "binary   could not resolve a published release — building from source"
+  else
+    STATE_TMP_BIN="$(mktemp -d)"
+    if fetch "$RELEASES/download/$PREBUILT_TAG/$PREBUILT_ASSET" "$STATE_TMP_BIN/$PREBUILT_ASSET"        && fetch "$RELEASES/download/$PREBUILT_TAG/SHA256SUMS" "$STATE_TMP_BIN/SHA256SUMS"; then
+      # Verified, never trusted: this binary is about to be copied into the
+      # target repo and executed by every hook.
+      if ( cd "$STATE_TMP_BIN" && grep " $PREBUILT_ASSET\$" SHA256SUMS > want.txt            && sha256sum -c want.txt >/dev/null 2>&1 ); then
+        chmod +x "$STATE_TMP_BIN/$PREBUILT_ASSET"
+        BEE_BIN="$STATE_TMP_BIN/$PREBUILT_ASSET"
+        log "binary   $PREBUILT_TAG $PREBUILT_ASSET (checksum verified) — no build needed"
+      else
+        log "binary   CHECKSUM MISMATCH for $PREBUILT_ASSET at $PREBUILT_TAG — refusing it, building from source"
+        rm -rf "$STATE_TMP_BIN"
+      fi
+    else
+      log "binary   no downloadable asset at $PREBUILT_TAG — building from source"
+      rm -rf "$STATE_TMP_BIN"
+    fi
+  fi
+fi
+
 # ---------- resolve bee source (local checkout or clone) ----------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd -P || true)"
 CLEANUP_DIR=""
 STATE_TMP=""
 cleanup() {
+  [ -n "${STATE_TMP_BIN:-}" ] && rm -rf "$STATE_TMP_BIN" || true
   [ -n "$CLEANUP_DIR" ] && rm -rf "$CLEANUP_DIR" || true
   [ -n "$STATE_TMP" ] && rm -rf "$STATE_TMP" || true
 }
@@ -181,7 +256,9 @@ else
   command -v git >/dev/null 2>&1 || fail "git is required to fetch bee (or pass --source <local-checkout>)."
   CLEANUP_DIR="$(mktemp -d)"
   log "fetch    $REPO_URL (ref: $REF)"
-  git clone --quiet --depth 1 --branch "$REF" "$REPO_URL" "$CLEANUP_DIR/bee" \
+  # Pinned to the binary's own tag when one was downloaded: the vendored
+  # instruction layer and BEE_VERSION must come from one commit.
+  git clone --quiet --depth 1 --branch "${PREBUILT_TAG:-$REF}" "$REPO_URL" "$CLEANUP_DIR/bee" \
     || fail "Clone failed. Check network access to github.com/thanhsmind/beehive."
   BEE_SRC="$CLEANUP_DIR/bee"
 fi
@@ -189,11 +266,14 @@ fi
 # Build the binary from the resolved source checkout. This is the install: the
 # repo ships no binary, so every host compiles its own once.
 [ -f "$BEE_SRC/packages/bee-rs/Cargo.toml" ] || fail "Not a bee checkout (missing packages/bee-rs/Cargo.toml): $BEE_SRC"
-log "build    cargo build --release (packages/bee-rs) — first build takes a few minutes"
-cargo build --release --manifest-path "$BEE_SRC/packages/bee-rs/Cargo.toml" >&2   || fail "cargo build --release failed. Fix the build, then re-run the installer."
-BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee"
-[ -x "$BEE_BIN" ] || BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee.exe"
-[ -x "$BEE_BIN" ] || fail "cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]"
+if [ -z "$BEE_BIN" ]; then
+  command -v cargo >/dev/null 2>&1 || fail "No published binary was usable for this host and cargo is not on PATH. Install rustup (https://rustup.rs), or re-run where a release asset exists."
+  log "build    cargo build --release (packages/bee-rs) — first build takes a few minutes"
+  cargo build --release --manifest-path "$BEE_SRC/packages/bee-rs/Cargo.toml" >&2   || fail "cargo build --release failed. Fix the build, then re-run the installer."
+  BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee"
+  [ -x "$BEE_BIN" ] || BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee.exe"
+  [ -x "$BEE_BIN" ] || fail "cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]"
+fi
 # THE LAST NODE DEPENDENCY. R6 deleted every other .mjs in this repo;
 # plugin_distribution.mjs survives because it is NOT ported yet, and it is not a
 # thin shim: it proves an installed plugin package against the release manifest,

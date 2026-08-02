@@ -69,7 +69,7 @@ decision answers, and privacy approvals — everything mechanical is yours to ru
 
 ## 5. Installing bee correctly
 
-Requirement: **a Rust toolchain** (`cargo --version`). bee ships as one native binary and is
+Requirement on x86_64 Linux/Windows: **none** — the installer fetches the checksum-verified release binary. Elsewhere, or with `--build-from-source`: **a Rust toolchain** (`cargo --version`). bee ships as one native binary and is
 built from the source checkout per machine — no prebuilt binaries live in the repo
 (decision 1f4262ca). Node.js is NOT required. Full guide: [`INSTALL.md`](INSTALL.md).
 

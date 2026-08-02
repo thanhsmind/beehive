@@ -42,6 +42,7 @@ param(
   [string]$OwnershipLedger = '',
   [string]$Source = '',
   [string]$Ref = 'main',
+  [switch]$BuildFromSource,
   [switch]$NoHooks,
   [switch]$GlobalSkills,
   [switch]$NoClaudeMd,
@@ -271,11 +272,11 @@ function Invoke-PluginTransitionFailure([string]$Message) {
 
 # ---------- prerequisites ----------
 
-# R6 CUTOVER: bee is a single native binary, so what the installer needs to RUN
-# bee is a Rust toolchain - decision 1f4262ca keeps prebuilt binaries OUT of the
-# repo and builds one per machine from the source checkout.
-$cargoCmd = Get-Command cargo -ErrorAction SilentlyContinue
-if (-not $cargoCmd) { Fail 'A Rust toolchain is required (cargo not found on PATH). Install rustup: https://rustup.rs' }
+# bee is a single native binary. It used to be compiled per machine from the
+# source checkout (decision 1f4262ca); the release workflow now publishes one
+# per platform, so a Rust toolchain is needed only when no published binary
+# fits this host - or when the caller asks for a build outright. The check
+# therefore lives next to the build it guards, not up here.
 
 # ...but INSTALLING bee still needs node, and that is a different question from
 # running it. The R6 sweep removed the Node preflight along with the runtime;
@@ -284,6 +285,72 @@ if (-not $cargoCmd) { Fail 'A Rust toolchain is required (cargo not found on PAT
 # a clone and a multi-minute cargo build.
 $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
 if (-not $nodeCmd) { Fail 'Node.js is required to INSTALL bee (the distribution helper packages/bee/scripts/plugin_distribution.mjs is not ported yet). bee itself runs as a native binary and needs no Node at runtime. Install Node 18+: https://nodejs.org' }
+
+# ---------- published binary (preferred) ----------
+#
+# Non-fatal by design: any failure logs its reason, leaves $beeBin unset, and
+# the source build takes over. An installer that dies because a download
+# blipped would be worse than the build it replaces.
+$releasesBase = 'https://github.com/thanhsmind/beehive/releases'
+$prebuiltAsset = 'bee-x86_64-pc-windows-msvc.exe'
+$beeBin = $null
+$prebuiltTag = $null
+$prebuiltDir = $null
+$scriptDirEarly = Split-Path -Parent $PSCommandPath
+
+if ($BuildFromSource) {
+  Write-Host 'binary   -BuildFromSource given; skipping the published binary'
+} elseif ($Source) {
+  Write-Host 'binary   -Source given; building that checkout rather than downloading'
+} elseif ($scriptDirEarly -and (Test-Path (Join-Path $scriptDirEarly '..\packages\bee-rs\Cargo.toml'))) {
+  # Running from inside a checkout. Pairing a downloaded binary with THIS
+  # tree's skills is the version skew the design exists to avoid.
+  Write-Host 'binary   running inside a bee checkout; building it rather than downloading'
+} else {
+  try {
+    # A tag ref installs THAT release; anything else takes the latest. The
+    # source tree is pinned to the same tag below, so the binary and the
+    # instruction layer it vendors always come from one commit.
+    if ($Ref -match '^v[0-9]') {
+      $prebuiltTag = $Ref
+    } else {
+      $resp = Invoke-WebRequest -UseBasicParsing -Uri "$releasesBase/latest" -MaximumRedirection 5
+      $final = $null
+      if ($resp.BaseResponse.ResponseUri) { $final = $resp.BaseResponse.ResponseUri.AbsoluteUri }
+      elseif ($resp.BaseResponse.RequestMessage) { $final = $resp.BaseResponse.RequestMessage.RequestUri.AbsoluteUri }
+      if ($final -and $final -match '/releases/tag/(v[^/]+)$') { $prebuiltTag = $Matches[1] }
+    }
+  } catch { $prebuiltTag = $null }
+
+  if (-not $prebuiltTag) {
+    Write-Host 'binary   could not resolve a published release - building from source'
+  } else {
+    try {
+      $prebuiltDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
+      New-Item -ItemType Directory -Force -Path $prebuiltDir | Out-Null
+      $binPath = Join-Path $prebuiltDir $prebuiltAsset
+      $sumPath = Join-Path $prebuiltDir 'SHA256SUMS'
+      Invoke-WebRequest -UseBasicParsing -Uri "$releasesBase/download/$prebuiltTag/$prebuiltAsset" -OutFile $binPath
+      Invoke-WebRequest -UseBasicParsing -Uri "$releasesBase/download/$prebuiltTag/SHA256SUMS" -OutFile $sumPath
+      # Verified, never trusted: this binary is copied into the target repo and
+      # then executed by every hook.
+      $wantLine = Get-Content $sumPath | Where-Object { $_.EndsWith($prebuiltAsset) } | Select-Object -First 1
+      $want = $null
+      if ($wantLine) { $want = ($wantLine -split '\s+')[0] }
+      $got = (Get-FileHash -Algorithm SHA256 $binPath).Hash.ToLower()
+      if ($want -and $got -eq $want.ToLower()) {
+        $beeBin = $binPath
+        Write-Host "binary   $prebuiltTag $prebuiltAsset (checksum verified) - no build needed"
+      } else {
+        Write-Host "binary   CHECKSUM MISMATCH for $prebuiltAsset at $prebuiltTag - refusing it, building from source"
+        Remove-Item -Recurse -Force $prebuiltDir -ErrorAction SilentlyContinue
+      }
+    } catch {
+      Write-Host "binary   no downloadable asset at $prebuiltTag - building from source"
+      if ($prebuiltDir) { Remove-Item -Recurse -Force $prebuiltDir -ErrorAction SilentlyContinue }
+    }
+  }
+}
 
 # ---------- resolve bee source (local checkout or clone) ----------
 
@@ -318,7 +385,9 @@ try {
     # No 2> redirection anywhere below: under Windows PowerShell 5.1 with
     # $ErrorActionPreference = 'Stop', redirecting a native command's stderr turns its
     # warnings into terminating NativeCommandErrors. Exit codes and the probe decide.
-    git clone --quiet --depth 1 --branch $Ref --no-checkout $RepoUrl $clonePath
+    # Pinned to the binary's own tag when one was downloaded.
+    $cloneRef = if ($prebuiltTag) { $prebuiltTag } else { $Ref }
+    git clone --quiet --depth 1 --branch $cloneRef --no-checkout $RepoUrl $clonePath
     if ($LASTEXITCODE -ne 0) { Fail 'Clone failed. Check network access to github.com/thanhsmind/beehive.' }
 
     # sparse-checkout needs git 2.25+; on older git it exits non-zero and the checkout
@@ -340,12 +409,16 @@ try {
   # the repo ships no binary, so every host compiles its own once.
   $cargoToml = Join-Path $beeSrc 'packages\bee-rs\Cargo.toml'
   if (-not (Test-Path $cargoToml)) { Fail "Not a bee checkout (missing packages/bee-rs/Cargo.toml): $beeSrc" }
-  Write-Host 'build    cargo build --release (packages/bee-rs) - first build takes a few minutes'
-  cargo build --release --manifest-path $cargoToml
-  if ($LASTEXITCODE -ne 0) { Fail 'cargo build --release failed. Fix the build, then re-run the installer.' }
-  $beeBin = Join-Path $beeSrc 'packages\bee-rs\target\release\bee.exe'
-  if (-not (Test-Path $beeBin)) { $beeBin = Join-Path $beeSrc 'packages\bee-rs\target\release\bee' }
-  if (-not (Test-Path $beeBin)) { Fail 'cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]' }
+  if (-not $beeBin) {
+    $cargoCmd = Get-Command cargo -ErrorAction SilentlyContinue
+    if (-not $cargoCmd) { Fail 'No published binary was usable for this host and cargo is not on PATH. Install rustup (https://rustup.rs), or re-run where a release asset exists.' }
+    Write-Host 'build    cargo build --release (packages/bee-rs) - first build takes a few minutes'
+    cargo build --release --manifest-path $cargoToml
+    if ($LASTEXITCODE -ne 0) { Fail 'cargo build --release failed. Fix the build, then re-run the installer.' }
+    $beeBin = Join-Path $beeSrc 'packages\bee-rs\target\release\bee.exe'
+    if (-not (Test-Path $beeBin)) { $beeBin = Join-Path $beeSrc 'packages\bee-rs\target\release\bee' }
+    if (-not (Test-Path $beeBin)) { Fail 'cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]' }
+  }
   $distributionHelper = Join-Path $beeSrc 'packages\bee\scripts\plugin_distribution.mjs'
   $releaseManifest = Join-Path $beeSrc 'docs\history\codex-harness-hardening\release-manifest.json'
   if (-not (Test-Path $distributionHelper)) { Fail "Not a bee release (missing plugin_distribution.mjs): $beeSrc" }

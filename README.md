@@ -366,7 +366,7 @@ If a session runs long, bee writes `.bee/HANDOFF.json` at ~65% context and pause
 
 ## Install
 
-Requirement: **a Rust toolchain** (`cargo`) — bee is one native binary, built from the source checkout per machine (decision 1f4262ca: no prebuilt binaries in the repo). Node.js is not required. One command installs everything — the per-project skills (`.claude/skills/` for Claude Code, `.agents/skills/` for Codex), `CLAUDE.md`, the `AGENTS.md` BEE block, the `.bee/` runtime + vendored helpers, and the runtime hook wiring for both Claude Code and Codex.
+Requirement: **nothing but the installer** on x86_64 Linux and Windows — the one-liner downloads the release binary for your platform, verifies its SHA-256 against the release `SHA256SUMS`, and copies it in. A **Rust toolchain** (`cargo`) is needed only on a platform with no published binary, or with `--build-from-source` (supersedes decision 1f4262ca, which kept every host compiling its own). Node.js is not required to run bee. One command installs everything — the per-project skills (`.claude/skills/` for Claude Code, `.agents/skills/` for Codex), `CLAUDE.md`, the `AGENTS.md` BEE block, the `.bee/` runtime + vendored helpers, and the runtime hook wiring for both Claude Code and Codex.
 
 ### Brownfield — existing project (copy, paste, done)
 

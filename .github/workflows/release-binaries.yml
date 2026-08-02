@@ -1,0 +1,136 @@
+name: Release binaries
+
+# Builds the two binaries a host actually installs and attaches them to the
+# GitHub Release for the tag.
+#
+# WHY THIS EXISTS. Decision 1f4262ca kept prebuilt binaries out of the repo and
+# made every host compile its own from a source checkout. That was the right
+# call while bee was source-only, but it puts a Rust toolchain and a
+# multi-minute build in front of every install — the single largest adoption
+# cost bee has. Superseded: the binaries are BUILT here, from the tag, and
+# published as release assets. Installing becomes "copy the binary, wire the
+# hooks". The repo still ships no binary, and `cargo build` stays the fallback
+# for any platform this matrix does not cover.
+#
+# Version consistency is the risk this design has to answer: a binary from one
+# release paired with skills from another is exactly the skew bee exists to
+# prevent. Two things hold it. The asset is built from the TAG, and the
+# installer that downloads it clones the SAME tag — so BEE_VERSION (parsed from
+# .claude-plugin/plugin.json at compile time) and the vendored instruction layer
+# always come from one commit.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and attach assets to (e.g. v2.0.1)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            built: bee
+            asset: bee-x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            built: bee.exe
+            asset: bee-x86_64-pc-windows-msvc.exe
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/bee-rs
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: >-
+          cargo build --release --locked
+          --manifest-path packages/bee-rs/Cargo.toml
+          --target ${{ matrix.target }}
+
+      # The binary must be able to say which version it is before anyone ships
+      # it: BEE_VERSION is parsed from .claude-plugin/plugin.json at COMPILE
+      # time, so a stale manifest produces a binary that lies about itself, and
+      # the tag is the only thing that can catch it here.
+      - name: Check the binary reports the tag's version
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="packages/bee-rs/target/${{ matrix.target }}/release/${{ matrix.built }}"
+          tag="${{ inputs.tag || github.ref_name }}"
+          want="${tag#v}"
+          got="$(node -e 'process.stdout.write(require("./.claude-plugin/plugin.json").version)')"
+          [ "$got" = "$want" ] || {
+            echo "::error::plugin.json says $got but the tag says $want — the binary would ship a version it is not"
+            exit 1
+          }
+          "$bin" rs-info >/dev/null || { echo "::error::the built binary does not run"; exit 1; }
+
+      - name: Stage the asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp "packages/bee-rs/target/${{ matrix.target }}/release/${{ matrix.built }}" "dist/${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    name: Attach to the release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # A binary a host copies into its repo and then executes is exactly the
+      # artifact that owes a checksum. The installers verify against this file.
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum bee-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "bee ${TAG#v}" --notes "$(git tag -l --format='%(contents)' "$TAG")"
+          fi
+          gh release upload "$TAG" dist/bee-* dist/SHA256SUMS --clobber
