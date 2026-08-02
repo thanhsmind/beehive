@@ -145,4 +145,4 @@
 **Known residual risks:**
 - [Loopholes deemed acceptable + why]
 
-**Validation run:** [`node --check` on scripts, link check, frontmatter check — commands + results]
+**Validation run:** [syntax check on any shipped script (`bash -n`), link check, frontmatter check, `bee dev render-skill-trees`, `bee test` — commands + results]

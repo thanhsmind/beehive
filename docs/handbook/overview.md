@@ -10,38 +10,72 @@
 > convention — `overview → index → register → stages/<id>` — mapped onto bee's
 > own architecture: the **chain is the set of stages**, and the `.bee/` runtime
 > files are the **state registers**.
+>
+> **Currency.** This handbook is a *derived* layer. It describes the tree as it
+> stands after the R6 Node cutover and the harness refocus: one native Rust
+> binary, a porcelain/plumbing front door, a craft `expertise/` layer, and
+> test-simple proof. On any disagreement the source wins and the handbook is
+> stale — say so, then fix it.
 
 ## What bee is
 
 bee is a **workflow harness** for AI coding agents. It is not an application with
 users and features of its own — it is the operating discipline a coding agent runs
-*inside* when it works on a host project. Its job is to make an agent's work on a
-codebase safe, resumable, and reviewable: turn a fuzzy request into locked
-decisions, scale ceremony to real risk, gate the irreversible steps behind human
-approval, and keep a durable memory of what settled so the next session starts
-smarter.
+*inside* when it works on a host project. Its job is to keep the agent pointed in
+the right direction and assemble just-right context, so it always knows where it
+is and what to do next: turn a fuzzy request into locked decisions, scale ceremony
+to real risk, gate the irreversible steps behind human approval, and keep a durable
+memory of what settled so the next session starts smarter.
 
-bee ships as five things working together:
+### The three layers
 
-1. **Skills** (`skills/<name>/SKILL.md`) — the phases of the workflow, instruction
-   content only (SKILL.md + references + scripts). Each skill is a self-contained
-   instruction set the agent loads when the workflow routes to it. `bee-hive` is
-   the router; the rest are the chain stages.
-2. **The payload package** (`packages/bee/`, since v1.18.0) — the single standard
-   code set: the CLI source (`scripts/bee.mjs`), the onboarding/distribution
-   engine (`scripts/onboard_bee.mjs`), `lib/`, `hooks/`, `agents/`, `statusline/`,
-   `AGENTS.block.md`, and its own `tests/`. Install resolves everything from here;
-   what lands in a host repo is a vendored render of this package.
-3. **A single CLI** (`.bee/bin/bee.mjs` — the vendored render of
-   `packages/bee/scripts/bee.mjs`) — every state read and mutation goes through
-   this one dispatcher across nine command groups. State is *never* hand-edited.
-4. **Runtime state** (`.bee/*.json`, `.bee/*.jsonl`, `.bee/cells/`,
-   `.bee/runtime/`) — the [state registers](register.md): workflow records, phase,
-   gates, feature, cells, decisions, leases, backlog, handoff mailboxes.
-5. **Hooks** (`.codex/hooks.json` catalog, 8 lifecycle events, shipped from
-   `packages/bee/hooks/`) — a fail-open safety net that catches forgotten rules.
-   The hook is a net, *not* the authority: an unblocked write is not an approved
-   write.
+Everything below sorts into one of three layers, and which layer a rule lives in
+is the first question any change to bee must answer:
+
+| Layer | Lives in | Owns |
+|---|---|---|
+| **Machine** | the CLI + the hooks | flow, state, gates, proof, context assembly. It *teaches at the point of contact*: every flow verb and every refusal names the next action in plain language. |
+| **Craft** | `skills/` + `expertise/` | how to do the work well — interviewing, shaping, decomposing, testing, reviewing, capturing. Universal wording, portable to any repo. |
+| **Memory** | `docs/` | why bee is the way it is — decisions, history, specs, this handbook. |
+
+The load-bearing consequence: **a rule the machine enforces is deleted from
+prose.** Prose keeps the intent ("cap with proof; the CLI refuses otherwise and
+tells you how to fix it"), never a restatement of the check. A skill that has to
+sequence three CLI calls to express one intent is a missing verb, not a longer
+skill.
+
+### What bee ships
+
+1. **Skills** (`skills/<name>/SKILL.md`) — nine of them, instruction content only.
+   Each body stays lean and teaches judgment; depth lives exactly one level down
+   in `references/`. `bee-hive` is the router; the rest are the chain stages and
+   the on-demand side steps.
+2. **Expertise** (`expertise/`) — the craft layer: 9 craft guides (thinking,
+   planning, architecture, decisions, tests, review, documentation, knowledge,
+   debugging) and 6 domain guides (data, apis, security, operations, performance,
+   frontend), routed from `INDEX.md`. Vendored into a host as `.bee/expertise/`;
+   skills reference the vendored path, never the source.
+3. **One native CLI** (`packages/bee-rs/crates/bee`, Rust 2024) — every state read
+   and mutation goes through this single binary, vendored into a host repo as
+   `.bee/bin/bee` (`bee.exe` on Windows). State is *never* hand-edited. The same
+   binary serves the hooks (`bee hook <name>`), onboarding (`bee onboard`), and
+   the maintainer surface (`bee dev …`).
+4. **Payload assets** (`packages/bee/`) — what onboarding vendors that is *not*
+   code: `AGENTS.block.md`, `agents/*.tmpl`, `prompts/` (worker, gather, reviewer,
+   advisor), `hooks/{hooks,claude-hooks}.json`, `statusline/`, and the shared
+   distribution planner `scripts/plugin_distribution.mjs` — the one `.mjs` file
+   left in the tree.
+5. **Runtime state** (`.bee/`) — the [state registers](register.md): workflow
+   records, phase, gates, feature, cells, decisions, leases, claims, lanes,
+   intent anchors, backlog, handoff mailboxes.
+6. **Hooks** — one catalog of record rendered per runtime (`hooks/hooks.json` for
+   Codex's 8 events, `hooks/claude-hooks.json` for Claude Code's 7), every entry
+   launching the same vendored binary as `bee hook <name>`. Nine names are
+   invokable: `session-init`, `prompt-context`, `write-guard`, `model-guard`,
+   `state-sync`, `chain-nudge`, `session-close`, `tools-logger`,
+   `codex-subagent-audit`. Every one is **fail-open**: a payload it cannot decide
+   allows the operation and says so out loud. The hook is a net, *not* the
+   authority — an unblocked write is not an approved write.
 
 ## The core model
 
@@ -58,32 +92,50 @@ count + product-file count) and runs the *least* workflow that honestly protects
 work. What never scales down is memory: a rule, behavior, or value that just settled
 is captured the moment it settles, in every lane.
 
-**Gates are the human checkpoints.** Three approval gates fence the irreversible
-transitions — Gate 2 now approves shape and execution together in one call
-(`bee state gate --merge`), folding the old standalone Gate 3 into it. They are
-never self-approved — except when the opt-in `gate_bypass` switch is
-deliberately set by the human (levels: `normal` / `full` / `total`).
+**Gates are the human checkpoints.** They fence the irreversible transitions —
+Gate 2 approves shape and execution together in one call (`bee gate --merge`),
+folding the old standalone Gate 3 into it. They are never self-approved — except
+when the opt-in `gate_bypass` switch is deliberately set by the human (levels:
+`normal` / `full` / `total`).
 
 **Knowledge over history.** The state layer an agent reads *first* is the knowledge
 bundle (`docs/knowledge/`) when the repo has one, or `docs/specs/` otherwise.
-`docs/history/` is archaeology, read last.
+`docs/history/` is archaeology, read last. In bee's own repo `docs/specs/` is now a
+**read-only compatibility surface** — the live area concepts are in the bundle, and
+a fence refuses new prose in the old location.
 
-**Workflow-first, multisession-native (v1.17.0).** The source of truth for a
-running workflow is its own record (`.bee/runtime/workflows/<wf-id>/state.json`);
-legacy `.bee/state.json` is a read-only projection. State splits into a **control
-plane** shared across worktrees (workflow records, sharded leases, handoff
-mailboxes, cross-worktree holds) and a **data plane** isolated per worktree.
-Sessions coordinate through leases, claims, and holds — never around them; new
-feature work in an occupied checkout goes through `bee worktree new` /
-`bee worktree merge`. Active workers are *derived* (live-heartbeat sessions joined
-with cell claims), never stored.
+**Orient, don't re-derive.** `bee orient` is the one command a session or worker
+runs to know where it is: phase, gates, decisions in force, ready cells, blockers,
+and exactly one recommended next step. It supersedes the "read these five files in
+this order" paragraphs — the packet *is* the context assembly.
 
-**Proof scales with the change (test-economy, v1.17.1).** The evidence `cells cap`
-demands is derived from `change_class × lane` — red-first proof is mandatory only
-for `security`/`migration` classes and the `high-risk` lane; a covered bugfix at
-tiny/small needs a targeted green test, not ceremony. The dev loop runs impacted
-tests only (capped, transitive tail delegated); the full verify suite is CI-owned,
-and a red CI run files a `verify-red` issue — never build on red.
+**Workflow-first, multisession-native.** The source of truth for a running workflow
+is its own record (`.bee/runtime/workflows/<wf-id>/state.json`); legacy
+`.bee/state.json` is a read-only projection. State splits into a **control plane**
+shared across worktrees (workflow records, sharded leases, handoff mailboxes,
+cross-worktree holds) and a **data plane** isolated per worktree. Sessions
+coordinate through leases, claims, and holds — never around them. Active workers
+are *derived* (live-heartbeat sessions joined with cell claims), never stored.
+
+**Worktree-first.** Code-touching feature work lives in its own feature worktree
+from the moment the lane is routed (`bee worktree new --feature <slug>`); the main
+checkout takes only integration, docs-lane, and release work. Landing is
+`bee worktree merge`, which re-runs `commands.verify` on the merged tree — the last
+net before a semantic conflict reaches main.
+
+**Proof is one declared test path (test-simple).** A project declares how it is
+tested exactly once, in `.bee/config.json` `commands.test`. `bee test` runs it and
+writes one normalized record, `.bee/logs/test-results.json`. `bee cells finish`
+runs that suite at every cap: green caps, red refuses and carries the failing
+excerpt — and that red becomes the next work. There are no per-cell proof tiers,
+no `change_class × lane` matrix, no red-first evidence flags; coverage judgment
+survives as craft in `.bee/expertise/tests.md`, enforced by review, not by a cap
+door. `commands.verify` is the close/merge chain; CI owns the full estate.
+
+**Capture is deferred, never dropped.** A green `bee close` records capture as
+*pending* and names what remains; Scribe and Compound run when the owner chooses,
+often batching several closed features into one session. The reminder stands until
+they run.
 
 ## Architecture at a glance
 
@@ -92,7 +144,7 @@ skills/                     the workflow, one SKILL.md per skill (instructions o
   bee-hive/                 router + gate keeper + onboarding + gate bypass → stages/hive.md
   bee-shaping/              fuzzy request → locked CONTEXT.md; Explore, Qualify,
                             Lock, and Brief in one front door   → stages/exploring.md
-  bee-planning/             mode + shape + reality check + cells → stages/planning.md
+  bee-planning/             route + research + shape + cells    → stages/planning.md
   bee-swarming/             orchestrate bounded workers, plus the
                             "Execute" one-cell worker contract  → stages/swarming.md, stages/executing.md
   bee-reviewing/            on-demand independent review gate    → stages/reviewing.md
@@ -104,29 +156,43 @@ skills/                     the workflow, one SKILL.md per skill (instructions o
   (maintainer guides for developing bee itself live in
    docs/handbook/writing-skills.md and docs/handbook/evolving.md)
 
-packages/bee/               the payload package (v1.18.0) — single standard code set
-  scripts/bee.mjs           CLI source (vendored into host as .bee/bin/bee.mjs)
-  scripts/onboard_bee.mjs   onboarding + distribution engine
-  lib/ · hooks/ · agents/ · statusline/ · tests/ · AGENTS.block.md
+expertise/                  the craft layer, vendored to .bee/expertise/
+  INDEX.md                  routes two questions: how is work done · what is being built
+  thinking · planning · architecture · decisions · tests · review ·
+  documentation · knowledge · debugging          (craft)
+  data · apis · security · operations · performance · frontend   (domain)
+
+packages/bee-rs/            THE runtime — one Rust binary, no second implementation
+  crates/bee/src/main.rs    collect argv → router::try_native → exit
+  crates/bee/src/router.rs  the front door: flow-verb aliases, the `internal`
+                            namespace, the probe chain, the refusal taxonomy
+  crates/bee/src/verbs/     one module per command group        → register.md
+  crates/bee/src/hooks/     the guard layer — 9 invokable as `bee hook <name>`
+  crates/bee/src/onboard/   the installer (`bee onboard`)
+  crates/bee/src/devtools/  `bee dev …` — release manifest, skill trees, prompts
+
+packages/bee/               vendored payload ASSETS only (no runtime code)
+  AGENTS.block.md · agents/*.tmpl · prompts/ · hooks/{hooks,claude-hooks}.json
+  statusline/ · scripts/plugin_distribution.mjs
 
 .bee/
-  bin/bee.mjs               the single CLI, vendored render (9 command groups) → register.md
-  runtime/workflows/<wf-id>/state.json  workflow record — SOURCE OF TRUTH → register.md
-  runtime/leases/           sharded cell/path leases (control plane)     → register.md
-  runtime/handoffs/<wf-id>/ per-workflow handoff mailbox                 → register.md
-  state.json               read-only projection: phase · gates · feature → register.md
-  config.json              commands · hook toggles · gate_bypass · models → register.md
-  cells/<feature>-<n>.json  one unit of executable work          → register.md
-  decisions.jsonl          append-only decision log             → register.md
-  reservations.json        compat mirror of the lease store      → register.md
-  backlog.jsonl            friction events + PBI records         → register.md
-  HANDOFF.json             legacy pause/resume projection        → register.md
-  onboarding.json          onboarding state + managed versions   → register.md
+  bin/bee[.exe]             the single CLI, vendored binary                → register.md
+  expertise/                vendored craft + domain guides
+  runtime/workflows/<wf-id>/state.json  workflow record — SOURCE OF TRUTH  → register.md
+  runtime/leases/           sharded cell/path leases (control plane)       → register.md
+  runtime/handoffs/<wf-id>/ per-workflow handoff mailbox                   → register.md
+  state.json                read-only projection: phase · gates · feature  → register.md
+  config.json               commands · hook toggles · gate_bypass · models → register.md
+  cells/<feature>-<n>.json  one unit of executable work                    → register.md
+  decisions.jsonl           append-only decision log                       → register.md
+  intent/ · lanes/ · claims/ · sessions/ · locks/ · reviews/               → register.md
+  logs/test-results.json    the one test record `cells finish` reads       → register.md
 
 docs/
-  knowledge/               the state layer (read FIRST)
-  specs/                   read-only compatibility surface
+  knowledge/               the state layer (read FIRST) — areas/ patterns/ work/
+  specs/                   read-only compatibility surface (fenced)
   history/<feature>/       CONTEXT.md · plan.md · reports/ (archaeology)
+  decisions/              numbered decision records + skill creation logs
   handbook/                ← you are here
 ```
 
@@ -135,15 +201,18 @@ docs/
 ```
 bee-hive  ─ route ─▶  exploring  ─[Gate 1]─▶  planning  ─[Gate 2]─▶  swarming
                                                                           │
-   compounding  ◀─  scribing  ◀─  executing  ◀───────────────────────────┘
-
+                                                                     executing
+                                                                          │
+                                                            bee close (green)
+                                                                          │
+        deferred, at the owner's pace:  scribing  ─▶  compounding
+                                                                          │
    on user request only:  reviewing  ─[Gate 4]─▶  merge
 ```
 
 - **Gate 1** — "Decisions locked. Approve CONTEXT.md before planning?"
-- **Gate 2** — approves shape and execution together (`bee state gate --merge`,
-  folding the old standalone Gate 3 into this one call) *(no source edits before
-  this)*
+- **Gate 2** — approves shape and execution together (`bee gate --merge`, folding
+  the old standalone Gate 3 into this one call) *(no source edits before this)*
 - **Gate 4** — merge approval, and it lives **only** inside a review session the user
   explicitly asked for. It is never an automatic end-of-chain step.
 
@@ -156,5 +225,6 @@ the docs lane has no gates at all. See each stage page for its lane behavior.
 2. Read that `stages/<id>.md` — what the stage does, what it reads and writes, its
    gate, and its hard rules.
 3. Cross-reference [register.md](register.md) for any `.bee/` file the stage touches.
-4. Then read the **real source** (`skills/<name>/SKILL.md`, `.bee/bin/`), and only
-   then emit an edit plan — see [using-as-planner.md](using-as-planner.md).
+4. Then read the **real source** (`skills/<name>/SKILL.md`,
+   `packages/bee-rs/crates/bee/src/`), and only then emit an edit plan — see
+   [using-as-planner.md](using-as-planner.md).
