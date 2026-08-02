@@ -455,6 +455,14 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
 
 /// Strangler probe. `Some(code)` only for argv shapes this port serves end to
 /// end; `None` is returned BEFORE any output.
+/// The host directories the `.bee/onboarding.json` managed-hash ledger covers,
+/// for `verbs/cells.rs`'s regen obligation. Re-exported here so the obligation
+/// depends on the onboard MODULE contract rather than reaching into a private
+/// submodule.
+pub(crate) fn ledger_covered_roots() -> Vec<&'static str> {
+    plan::ledger_covered_roots()
+}
+
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
     if args.first().and_then(|a| a.to_str()) != Some("onboard") {
         return None;

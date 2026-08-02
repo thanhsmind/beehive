@@ -1,30 +1,31 @@
 // bee dev render-prompt — the prompt template loader/renderer.
 //
-// PROVENANCE (two sources, deliberately named together):
-//   * packages/bee/lib/prompt-renderer.mjs — `loadPrompt` / `render`, the
-//     original and the authority for every byte below.
-//   * packages/bee-rs/crates/bee/src/verbs/drivers.rs — the FIRST Rust port
-//     of the same two functions (its `normalize_template` / `load_prompt` /
-//     `render`), landed with `bee dispatch prepare`.
+// PROVENANCE. Originally `packages/bee/lib/prompt-renderer.mjs`'s `loadPrompt`
+// / `render`. There are TWO Rust ports of that one grammar:
+//   * this module (`bee dev render-prompt`), and
+//   * packages/bee-rs/crates/bee/src/verbs/drivers.rs — the FIRST port, landed
+//     with `bee dispatch prepare`.
 //
-// The drivers.rs port is module-private and drivers.rs is not a file this
-// port may edit, so the grammar is RE-DERIVED here from the same .mjs rather
-// than shared. Two ports of one contract need a pin, so this file carries
-// three:
+// R6 CUTOVER — HOW THE TWO PORTS STAY PINNED. While the .mjs existed, the pin
+// was indirect: each port was byte-embedded against the .mjs, so a change to
+// the original forced both back to the diff. Deleting the .mjs removes that
+// shared authority, and an indirect pin with no authority left is not a pin —
+// it is a test that passes over nothing. The pin is therefore made DIRECT:
+// `grammar_corpus_pins_both_ports` now runs every case through BOTH ports and
+// asserts they produce the same answer, so a divergence is caught by the same
+// test that always claimed to catch it. `drivers.rs::render` and
+// `::normalize_template` were widened to `pub(crate)` for exactly this (the
+// old header noted drivers.rs was off-limits to this port — that was a
+// strangler-campaign rule, and the campaign is over).
 //
-//   1. `prompt_renderer_mjs_matches_disk` — lib/prompt-renderer.mjs is
-//      embedded at build time and byte-compared against the checkout. Edit
-//      the .mjs and BOTH Rust ports are forced back to the diff (the same
-//      embed-and-byte-compare technique hooks/write_guard.rs uses for the
-//      vendored lib closure).
+// Three pins, post-cutover:
+//
+//   1. `grammar_corpus_pins_both_ports` — the shared semantic corpus, run
+//      through this port AND drivers.rs, output compared. This is the pin.
 //   2. `c4_embedded_prompts_match_disk` — contract C4 restated: the four
 //      templates compiled in here are the checked-out prompts/*.md bytes,
 //      via the same include_str! paths drivers.rs uses.
-//   3. `grammar_corpus_pins_both_ports` — the shared semantic corpus. Every
-//      case and every refusal STRING below is what drivers.rs's `render`
-//      produces for the same input; the two ports agree iff this corpus
-//      passes in both, and it is written to be checkable by reading either
-//      file against the .mjs.
+//   3. `real_templates_render_end_to_end` — every real template renders.
 //
 // CLI shape (a new surface — the .mjs is a library, never a script, so there
 // is no Node stdout framing to match):
@@ -46,11 +47,6 @@ const PROMPT_WORKER_CELL: &str = include_str!("../../../../../bee/prompts/worker
 const PROMPT_GATHER: &str = include_str!("../../../../../bee/prompts/gather.md");
 const PROMPT_REVIEWER: &str = include_str!("../../../../../bee/prompts/reviewer.md");
 const PROMPT_ADVISOR: &str = include_str!("../../../../../bee/prompts/advisor.md");
-
-/// The .mjs this port re-derives, embedded so a change to it turns this
-/// module's test red instead of silently forking the grammar.
-#[cfg(test)]
-const PROMPT_RENDERER_MJS: &str = include_str!("../../../../../bee/lib/prompt-renderer.mjs");
 
 const PROMPT_NAMES: [&str; 4] = ["advisor", "gather", "reviewer", "worker-cell"];
 
@@ -269,21 +265,6 @@ mod tests {
             .join("..")
     }
 
-    // ── pin 1: the .mjs this port re-derives ──────────────────────────────
-    #[test]
-    fn prompt_renderer_mjs_matches_disk() {
-        let disk = std::fs::read(
-            repo_root().join("packages").join("bee").join("lib").join("prompt-renderer.mjs"),
-        )
-        .expect("lib/prompt-renderer.mjs readable");
-        assert_eq!(
-            String::from_utf8_lossy(&disk),
-            PROMPT_RENDERER_MJS,
-            "lib/prompt-renderer.mjs changed — re-derive BOTH Rust ports \
-             (devtools/prompts.rs and verbs/drivers.rs) against the new grammar"
-        );
-    }
-
     // ── pin 2: contract C4 ────────────────────────────────────────────────
     #[test]
     fn c4_embedded_prompts_match_disk() {
@@ -304,77 +285,88 @@ mod tests {
         }
     }
 
-    // ── pin 3: the shared grammar corpus (this port vs verbs/drivers.rs) ──
+    // ── THE pin: the shared grammar corpus, run through BOTH ports ───────
+    //
+    // Every case below is asserted twice: once against this module's `render`
+    // and once against `verbs::drivers::render`. Before the R6 cutover the two
+    // ports were pinned only INDIRECTLY, each against the `.mjs` they were
+    // derived from; with the `.mjs` deleted that pin had no authority left, so
+    // it is replaced with a direct comparison. A divergence between the two
+    // ports now fails here, naming the case.
     #[test]
     fn grammar_corpus_pins_both_ports() {
-        let v = |pairs: &[(&str, &str)]| -> Vec<(String, String)> {
-            pairs.iter().map(|(k, x)| (k.to_string(), x.to_string())).collect()
-        };
+        // (template, vars, expected) — expected is Ok(rendered) | Err(refusal).
+        type Case = (&'static str, &'static [(&'static str, &'static str)], Result<&'static str, &'static str>);
+        const CORPUS: &[Case] = &[
+            // plain substitution
+            ("a {{x}} b", &[("x", "Q")], Ok("a Q b")),
+            // a substituted value is NEVER re-scanned
+            ("{{x}}", &[("x", "{{y}}"), ("y", "no")], Ok("{{y}}")),
+            // kept block: the leading newline rides along with `inner`
+            ("head\n{{#if f}}\nbody\n{{/if}}\ntail", &[("f", "1")], Ok("head\nbody\ntail")),
+            // dropped block: zero residue bytes
+            ("head\n{{#if f}}\nbody\n{{/if}}\ntail", &[("f", "")], Ok("head\ntail")),
+            // an absent var is undefined -> falsy
+            ("head\n{{#if f}}\nbody\n{{/if}}\ntail", &[], Ok("head\ntail")),
+            // block content is still substituted after splicing
+            ("h\n{{#if f}}\n{{x}}\n{{/if}}\nt", &[("f", "y"), ("x", "V")], Ok("h\nV\nt")),
+            // lazy inner: the block ends at the FIRST following `\n{{/if}}`
+            (
+                "a\n{{#if f}}\n1\n{{/if}}\nmid\n{{#if f}}\n2\n{{/if}}\nz",
+                &[("f", "1")],
+                Ok("a\n1\nmid\n2\nz"),
+            ),
+            // a marker at byte 0 has no preceding \n, so it is NOT a block — it
+            // survives pass 1 and trips the unmatched-marker refusal.
+            (
+                "{{#if f}}\nx\n{{/if}}",
+                &[("f", "1")],
+                Err("prompt-renderer: unmatched or malformed {{#if}}/{{/if}} marker in template."),
+            ),
+            // nesting: loud refusal, exact wording
+            (
+                "a\n{{#if o}}\n\n{{#if i}}\nx\n{{/if}}\n{{/if}}\n",
+                &[("o", "1"), ("i", "1")],
+                Err("prompt-renderer: nested {{#if}} inside block \"o\" — nesting is not supported."),
+            ),
+            // missing placeholder: loud refusal, exact wording
+            (
+                "a {{missing}}",
+                &[],
+                Err("prompt-renderer: no value supplied for placeholder {{missing}}."),
+            ),
+            // a name outside [A-Za-z0-9_]+ is not a placeholder — literal passthrough
+            ("{{a-b}}", &[], Ok("{{a-b}}")),
+            // …and not a block opener either (the `}}`-run check fails)
+            (
+                "x\n{{#if a-b}}\ny\n{{/if}}\nz",
+                &[],
+                Err("prompt-renderer: unmatched or malformed {{#if}}/{{/if}} marker in template."),
+            ),
+        ];
 
-        // plain substitution
-        assert_eq!(render("a {{x}} b", &v(&[("x", "Q")])).unwrap(), "a Q b");
+        for (i, (template, vars, expected)) in CORPUS.iter().enumerate() {
+            let expected: Result<String, String> =
+                expected.map(str::to_string).map_err(str::to_string);
 
-        // a substituted value is NEVER re-scanned
-        assert_eq!(
-            render("{{x}}", &v(&[("x", "{{y}}"), ("y", "no")])).unwrap(),
-            "{{y}}"
-        );
+            // this port (owns `&[(String, String)]`)
+            let owned: Vec<(String, String)> =
+                vars.iter().map(|(k, v)| ((*k).to_string(), (*v).to_string())).collect();
+            let mine = render(template, &owned);
+            assert_eq!(
+                mine, expected,
+                "devtools/prompts.rs case {i} ({template:?}) diverged from the corpus"
+            );
 
-        // kept block: the leading newline rides along with `inner`
-        assert_eq!(
-            render("head\n{{#if f}}\nbody\n{{/if}}\ntail", &v(&[("f", "1")])).unwrap(),
-            "head\nbody\ntail"
-        );
-        // dropped block: zero residue bytes
-        assert_eq!(
-            render("head\n{{#if f}}\nbody\n{{/if}}\ntail", &v(&[("f", "")])).unwrap(),
-            "head\ntail"
-        );
-        // an absent var is undefined -> falsy
-        assert_eq!(
-            render("head\n{{#if f}}\nbody\n{{/if}}\ntail", &[]).unwrap(),
-            "head\ntail"
-        );
-        // block content is still substituted after splicing
-        assert_eq!(
-            render("h\n{{#if f}}\n{{x}}\n{{/if}}\nt", &v(&[("f", "y"), ("x", "V")])).unwrap(),
-            "h\nV\nt"
-        );
-
-        // lazy inner: the block ends at the FIRST following `\n{{/if}}`
-        assert_eq!(
-            render("a\n{{#if f}}\n1\n{{/if}}\nmid\n{{#if f}}\n2\n{{/if}}\nz", &v(&[("f", "1")]))
-                .unwrap(),
-            "a\n1\nmid\n2\nz"
-        );
-
-        // a marker at byte 0 has no preceding \n, so it is NOT a block —
-        // it survives pass 1 and trips the unmatched-marker refusal.
-        assert_eq!(
-            render("{{#if f}}\nx\n{{/if}}", &v(&[("f", "1")])).unwrap_err(),
-            "prompt-renderer: unmatched or malformed {{#if}}/{{/if}} marker in template."
-        );
-
-        // nesting: loud refusal, exact wording
-        assert_eq!(
-            render("a\n{{#if o}}\n\n{{#if i}}\nx\n{{/if}}\n{{/if}}\n", &v(&[("o", "1"), ("i", "1")]))
-                .unwrap_err(),
-            "prompt-renderer: nested {{#if}} inside block \"o\" — nesting is not supported."
-        );
-
-        // missing placeholder: loud refusal, exact wording
-        assert_eq!(
-            render("a {{missing}}", &[]).unwrap_err(),
-            "prompt-renderer: no value supplied for placeholder {{missing}}."
-        );
-
-        // a name outside [A-Za-z0-9_]+ is not a placeholder — literal passthrough
-        assert_eq!(render("{{a-b}}", &[]).unwrap(), "{{a-b}}");
-        // …and not a block opener either (the `}}`-run check fails)
-        assert_eq!(
-            render("x\n{{#if a-b}}\ny\n{{/if}}\nz", &[]).unwrap_err(),
-            "prompt-renderer: unmatched or malformed {{#if}}/{{/if}} marker in template."
-        );
+            // the OTHER port
+            let theirs = crate::verbs::drivers::render(template, vars);
+            assert_eq!(
+                theirs, mine,
+                "THE TWO PORTS DISAGREE on case {i} ({template:?}): verbs/drivers.rs says \
+                 {theirs:?}, devtools/prompts.rs says {mine:?}. One grammar, two \
+                 implementations — reconcile them, do not edit this corpus to match."
+            );
+        }
     }
 
     #[test]

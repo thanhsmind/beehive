@@ -13,7 +13,8 @@ use super::render::{
     validate_skill_tree_markers, walk_skill_tree, Walk,
 };
 use super::source::{
-    read_manifest_version_strict, read_version_strict, repo_target_segments_joined,
+    read_host_version_strict, read_manifest_version_strict, read_version_strict,
+    repo_target_segments_joined,
     skill_sync_targets, skills_target_root, unknown_versions_triple, compare_versions, Engine,
     ReleaseIdentity, VersionState,
 };
@@ -527,6 +528,12 @@ fn aggregate_skill_blocked(targets: &[SkillTarget]) -> Option<AggBlocked> {
 
 /// hostLibDowngradeBlock (l. 1412): target-independent runtime-lib guard
 /// (VER-02..06).
+/// VER-04's downgrade guard. R6 CUTOVER: `host_version` is now read from
+/// `.bee/onboarding.json`'s `bee_version` rather than the deleted
+/// `.bee/bin/lib/state.mjs`, so the messages name the marker that actually
+/// exists. The GUARD is unchanged: an installed host that is NEWER than the
+/// source refuses (forceably), and an installed host whose version cannot be
+/// resolved refuses outright.
 fn host_lib_downgrade_block(
     source_version: &VersionState,
     host_version: &VersionState,
@@ -543,7 +550,7 @@ fn host_lib_downgrade_block(
         return Some(AggBlocked {
             status: "blocked_downgrade".into(),
             reason: format!(
-                "runtime lib .bee/bin/lib version unresolvable (source {}, runtime {}) - refusing (never forceable)",
+                "installed bee version in .bee/onboarding.json unresolvable (source {}, installed {}) - refusing (never forceable)",
                 source_version.label(),
                 host_version.label()
             ),
@@ -555,7 +562,7 @@ fn host_lib_downgrade_block(
         return Some(AggBlocked {
             status: "blocked_downgrade".into(),
             reason: format!(
-                "source {} is older than the installed runtime lib .bee/bin/lib {} - refusing (--force-downgrade overrides after review)",
+                "source {} is older than the installed bee {} recorded in .bee/onboarding.json - refusing (--force-downgrade overrides after review)",
                 source_version.value().unwrap(),
                 host_version.value().unwrap()
             ),
@@ -670,7 +677,12 @@ pub fn compute_skill_sync(engine: &Engine, repo_root: &Path, global_skills: bool
         let bee_hive = realpath(&source_root.join("bee-hive"))?;
         let real_plugin_root = realpath(&engine.plugin_root)?;
         let contained = bee_hive != real_plugin_root && is_under(&bee_hive, &real_plugin_root);
-        let payload_readable = exists(&engine.templates_lib_dir.join("state.mjs"));
+        // R6 CUTOVER: the anchor payload used to be `packages/bee/lib/state.mjs`.
+        // It is now the AGENTS block template — the same tree (`templates_dir`),
+        // the same "this root really is a bee engine" question, and the file
+        // `Engine::locate` already keys on, so the two can never disagree about
+        // what counts as a package root.
+        let payload_readable = exists(&engine.agents_block_template);
         Some(contained && payload_readable)
     })()
     .unwrap_or(false);
@@ -697,10 +709,13 @@ pub fn compute_skill_sync(engine: &Engine, repo_root: &Path, global_skills: bool
     let real_repo =
         realpath(repo_root).unwrap_or_else(|| path_resolve(&repo_root.to_string_lossy()));
 
-    let source_version =
-        read_version_strict(&engine.templates_lib_dir.join("state.mjs"), true, None);
-    let host_state_file = repo_root.join(".bee").join("bin").join("lib").join("state.mjs");
-    let host_version = read_version_strict(&host_state_file, exists(&host_state_file), None);
+    // R6 CUTOVER: source version from `.claude-plugin/plugin.json`, host
+    // version from `.bee/onboarding.json` — see onboard::source for why the
+    // two `.mjs` markers these replace could not simply be dropped.
+    let source_version = read_manifest_version_strict(
+        &engine.plugin_root.join(".claude-plugin").join("plugin.json"),
+    );
+    let host_version = read_host_version_strict(repo_root);
 
     let mut targets = Vec::new();
     for (kind, target_root) in &target_specs {
@@ -1016,7 +1031,7 @@ mod tests {
         assert!(host_lib_downgrade_block(&newer, &older).is_none());
         let b = host_lib_downgrade_block(&older, &newer).unwrap();
         assert!(b.forceable);
-        assert!(b.reason.contains("is older than the installed runtime lib"));
+        assert!(b.reason.contains("is older than the installed bee"));
         let b = host_lib_downgrade_block(&older, &VersionState::Unknown).unwrap();
         assert!(!b.forceable);
         assert!(b.reason.contains("never forceable"));

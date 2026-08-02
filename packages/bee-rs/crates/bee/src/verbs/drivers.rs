@@ -320,7 +320,7 @@ fn embedded_prompt(name: &str) -> Option<&'static str> {
 
 /// provenance: prompt-renderer.mjs loadPrompt — CRLF normalized to LF and ONE
 /// trailing newline stripped.
-fn normalize_template(raw: &str) -> String {
+pub(crate) fn normalize_template(raw: &str) -> String {
     let lf = raw.replace("\r\n", "\n");
     match lf.strip_suffix('\n') {
         Some(s) => s.to_string(),
@@ -370,7 +370,7 @@ fn prompts_match_disk(root: &Path, name: &str) -> bool {
 ///   * `{{NAME}}` placeholders substitute String(vars[NAME]); an
 ///     undefined/null value is a loud refusal.
 /// Names are `[A-Za-z0-9_]+` in both markers.
-fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, String> {
+pub(crate) fn render(template: &str, vars: &[(&str, &str)]) -> Result<String, String> {
     let lookup = |name: &str| -> Option<&str> {
         vars.iter().find(|(k, _)| *k == name).map(|(_, v)| *v)
     };

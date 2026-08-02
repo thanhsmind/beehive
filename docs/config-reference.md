@@ -137,7 +137,7 @@ because the Rust suite has no impacted-only mode; the split above still holds fo
 Notes:
 - A command that takes the changed-file list from git itself (jest `--onlyChanged`, testmon) is the best `test` value — it stays correct with zero per-change editing. Where the runner has no such mode (Go, Rust, PHP), record the *narrow invocation shape* and let the session substitute the changed package/crate/class per change — the doctrine cares that the dev loop never runs the full suite, not which selector you use.
 - CI should run `commands.verify` verbatim (bee's own `ci.yml` does exactly that via `scripts/verify_all.mjs`, and files a deduped `verify-red` issue on red).
-- Where the "which tests relate to this file" answer needs a lookup: bee's own repo ships a derived impact registry (`.bee/bin/bee dev impact-registry --query <file>`); other languages use their native graph (Go: `go list -deps` reversed; Rust: the crate graph; Python: testmon's coverage map).
+- Where the "which tests relate to this file" answer needs a lookup, use the language's native graph (Go: `go list -deps` reversed; Rust: the crate graph; Python: testmon's coverage map). bee's own repo used to ship a derived impact registry for this; it was retired at the R6 Node cutover, because its subject was the `.mjs` suite graph and the Rust suite that replaced it runs whole in ~20s.
 
 ## Removed keys
 

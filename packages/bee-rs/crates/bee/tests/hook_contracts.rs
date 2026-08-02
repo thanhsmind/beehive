@@ -53,34 +53,29 @@ fn bee_bin() -> PathBuf {
     assert_cmd::cargo::cargo_bin("bee")
 }
 
-fn repo_root() -> PathBuf {
-    // crates/bee -> crates -> bee-rs -> packages -> beehive
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(4)
-        .unwrap()
-        .to_path_buf()
-}
-
-/// Several hooks gate on a vendored `.bee/bin/lib/` being present (and the
-/// write guard byte-compares the whole 26-file closure — lib skew ⇒ delegate,
-/// so a guard decision can never flip on a skewed host). A fixture without it
-/// makes every hook exit 0 silently, which would turn this entire matrix into
-/// a vacuous pass. Vendor the repo's own copy, exactly as `copyLib()` in the
-/// .mjs suites does.
-fn copy_vendored_lib(root: &Path) {
-    let src = repo_root().join(".bee").join("bin").join("lib");
-    let dst = root.join(".bee").join("bin").join("lib");
-    std::fs::create_dir_all(&dst).unwrap();
-    let entries = std::fs::read_dir(&src)
-        .unwrap_or_else(|e| panic!("vendored lib missing at {}: {e}", src.display()));
-    for e in entries.flatten() {
-        let p = e.path();
-        if p.extension().and_then(|s| s.to_str()) == Some("mjs") {
-            std::fs::copy(&p, dst.join(p.file_name().unwrap())).unwrap();
-        }
-    }
-}
+// R6 CUTOVER — `copy_vendored_lib` is GONE, and its job with it.
+//
+// It used to copy this repo's `.bee/bin/lib/*.mjs` into every fixture, because
+// each hook began `if (!existsSync(storeRoot/.bee/bin/lib/state.mjs)) return 0;`
+// ("bee is not installed here, decide nothing"), and the write guard
+// additionally byte-compared the whole 26-file lib closure before trusting its
+// own decision. A fixture without the lib made every hook exit 0 silently,
+// which would have turned this entire matrix into a vacuous pass — hence the
+// copy, and hence its `panic!` when the source directory was missing.
+//
+// Both probes were re-keyed onto `.bee/onboarding.json` BEFORE the deletion
+// (see hooks/write_guard.rs's byte-gate note): the install marker every onboard
+// writes and nothing else does. `fixture()` writes that marker, so the hooks
+// reach their real decision tables exactly as before. The lib copy would now
+// populate a directory nothing reads, and its panic on the deleted source would
+// be the only part of it still doing anything.
+//
+// NON-VACUITY is still proven, by the same evidence it always was: the DENY
+// cases below (`a_write_guard_deny_reaches_the_host_as_exit_two_on_stderr`,
+// `a_model_guard_deny_reaches_the_host_as_exit_two_on_stderr`,
+// `apply_patch_targeting_state_json_is_denied_by_the_write_guard`) assert
+// exit 2 and specific stderr. A fixture the hooks decline to act on cannot
+// produce those, so a silently-disabled matrix goes RED here, not green.
 
 /// A fixture repo the hooks will accept as a bee root: `.bee/` with a state
 /// file in an execution-approved phase, so the write guard reaches its real
@@ -95,8 +90,10 @@ fn fixture() -> Fixture {
     let root = dunce::canonicalize(dir.path()).unwrap();
     std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
     std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+    // THE install marker — what every hook's activation probe reads since the
+    // R6 cutover. Without it the hooks decline every payload and this whole
+    // matrix goes vacuously green (see the note above).
     std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
-    copy_vendored_lib(&root);
     std::fs::write(
         root.join(".bee").join("state.json"),
         serde_json::to_string_pretty(&serde_json::json!({

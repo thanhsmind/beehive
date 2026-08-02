@@ -16,7 +16,10 @@ concurrency:
 # them:
 #   * the verify chain           -> `cargo test --release`, which IS
 #                                   .bee/config.json `commands.verify`
-#   * impact-registry freshness  -> `bee dev impact-registry --check`
+#   * impact-registry freshness  -> RETIRED with the tool. Its subject was the
+#                                   .mjs suite graph, and the cargo suite that
+#                                   replaced it runs whole in ~20s, so there is
+#                                   no impacted-only mode to keep fresh.
 #   * the verify-red issue filer -> `gh issue` (the runner ships gh)
 # The Node matrix is deleted rather than replaced by a Rust one: bee ships a
 # single binary built from one toolchain, so "does it work on three runtimes"
@@ -62,10 +65,7 @@ jobs:
             2>&1 | tee verify-output.log
 
       # Freshness only matters on the green path — the default step condition
-      # already skips this after the verify step above fails.
-      - name: Check impact registry freshness
-        run: ./packages/bee-rs/target/release/bee dev impact-registry --check
-
+      # already skips these after the verify step above fails.
       - name: Check hook manifests are in sync with the catalog
         run: ./packages/bee-rs/target/release/bee dev render-hook-manifests --check
 

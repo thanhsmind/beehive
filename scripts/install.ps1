@@ -287,7 +287,13 @@ try {
     # .ProviderPath, not .Path: on UNC paths PS 5.1 returns a provider-qualified
     # string (Microsoft.PowerShell.Core\FileSystem::\\...) that node cannot open.
     $beeSrc = (Resolve-Path $Source).ProviderPath
-  } elseif ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot '..\packages\bee\scripts\onboard_bee.mjs'))) {
+  # R6 CUTOVER: this probe keyed on packages\bee\scripts\onboard_bee.mjs, which
+  # is deleted. Left alone it answers "no" for every local checkout and
+  # RE-CLONES from GitHub instead of installing the tree in front of you — the
+  # quietest possible wrong answer. The marker is now the Rust crate manifest:
+  # it is what the build step below compiles, so a yes here means a build can
+  # actually run.
+  } elseif ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot '..\packages\bee-rs\Cargo.toml'))) {
     $beeSrc = (Resolve-Path (Join-Path $PSScriptRoot '..')).ProviderPath
   } else {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -315,7 +321,10 @@ try {
     git -C $clonePath checkout --quiet HEAD
 
     $beeSrc = $clonePath
-    if (-not (Test-Path (Join-Path $beeSrc 'packages\bee\scripts\onboard_bee.mjs'))) {
+    # R6 CUTOVER: same marker move as the probe above. Keyed on the deleted
+    # onboard_bee.mjs this became a HARD Fail on every clone-path install, with
+    # a message blaming the user's git version for a file that no longer exists.
+    if (-not (Test-Path (Join-Path $beeSrc 'packages\bee-rs\Cargo.toml'))) {
       Fail "Checkout of $RepoUrl (ref: $Ref) produced no packages/ tree. Update git to 2.25+ (sparse checkout), or pass -Source <local-checkout>."
     }
   }

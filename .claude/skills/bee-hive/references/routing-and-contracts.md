@@ -640,30 +640,6 @@ Cells run `commands.test` — the project's one declared test path — at finish
 
 **Suite rent.** A suite is not immortal: every guard suite pays rent by catching real defects. A suite that has not caught one in ~6 months is a demotion candidate — moved out of the local/impacted hot path to the CI/nightly tier by a RECORDED decision (never a silent delete; the suite still runs, just not on every developer loop). `bee-grooming` owns the audit: read the verify logs for which suites have gone red for a real defect (environment reds don't count as rent paid), list the never-fired tenants, and propose demotions. Institutional/meta guards (fences, parity checks, doctrine gates) are the usual tenants — product-behavior suites earn rent more often and mostly stay.
 
-<!-- bee:only codex -->
-### Native Codex subagent tending
-
-For every bee-owned native Codex subagent flow, including ordinary delegated
-gathers, a completed `wait_agent` call with no completion is an **empty wait**:
-it is a timeout signal only, never failure. A `wait_agent` timeout/no-completion
-result is only an empty wait; silence is not failure. Never call `wait_agent`
-twice consecutively after an empty wait; authority, urgency, and no-chatter
-instructions create no exception. Before any later bounded wait, perform at
-least one material task-local action when work remains; that one action satisfies
-the interval, and exhausting all local work is not required. Only when no
-material work remains, take exactly one `list_agents` snapshot. Handle any
-completion that arrives during the interval exactly once, then recompute the
-relevant live-agent set. Send one concise commentary update naming both the live
-agent state and the next action. Only after this commentary may a later bounded
-wait run, and only while the relevant live-agent set is non-empty; zero live
-agents ends collection without another wait. No-op work, repeated state reads,
-hidden reasoning, generic commentary, or commentary alone do not qualify.
-Timeout never licenses interrupt, duplicate dispatch, claim release, or
-reservation release; every running agent, claim, and reservation stays owned.
-This refines, rather than replaces, the ban on file/scratchpad polling for
-harness-managed subagents. External process and artifact polling keeps its own
-contract and remains outside this native-agent rule.
-<!-- bee:end -->
 
 ## Question Format
 

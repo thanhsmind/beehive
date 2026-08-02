@@ -53,6 +53,21 @@ pub enum ApplyOutcome {
     Ok(Box<ApplyOk>),
 }
 
+/// Whether a `remove_helper` plan item may unlink its target. Two admissible
+/// sources (see plan.rs 3a/3b): a NAMED retired shim, or a helper the ledger
+/// records that the source no longer ships. Both are flat `.mjs` files
+/// directly under `.bee/bin/`.
+///
+/// The `.mjs` suffix is load-bearing, not decoration: `.bee/bin/` also holds
+/// `bee.exe`/`bee`, the actual binary this process is running from. A plan item
+/// that somehow named it must NEVER reach `remove_file` — bee would delete
+/// itself, on every host, during a routine onboard.
+fn remove_helper_admissible(rel: &str) -> bool {
+    let name = posix_basename(rel);
+    (T::RETIRED_HELPERS.contains(&name) || name.ends_with(".mjs"))
+        && posix_dirname(rel) == ".bee/bin"
+}
+
 /// JS `path.dirname` on the POSIX-shaped `item.path` strings this script
 /// constructs itself.
 fn posix_dirname(p: &str) -> &str {
@@ -236,10 +251,17 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                 );
             }
             "remove_helper" => {
-                // Never a generic rm: only the exact retired-shim basename,
-                // and only under .bee/bin/.
-                let name = posix_basename(rel);
-                if T::RETIRED_HELPERS.contains(&name) && posix_dirname(rel) == ".bee/bin" {
+                // Never a generic rm. Two admissible sources now (see plan.rs
+                // 3a/3b): a NAMED retired shim, or a helper the ledger records
+                // that the source no longer ships. Both are flat `.mjs` files
+                // directly under `.bee/bin/`.
+                //
+                // The `.mjs` suffix is load-bearing, not decoration:
+                // `.bee/bin/` also holds `bee.exe`/`bee`, the actual binary
+                // this process is running from. A ledger key that somehow named
+                // it must NEVER reach `remove_file` — bee would delete itself,
+                // on every host, during a routine onboard.
+                if remove_helper_admissible(rel) {
                     let _ = std::fs::remove_file(&target);
                 }
             }
@@ -286,6 +308,14 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
             }
             "remove_prompt" => {
                 if posix_dirname(rel) == ".bee/bin/prompts" {
+                    let _ = std::fs::remove_file(&target);
+                }
+            }
+            // R6 cutover: the mirror of copy_repo_hook. Containment is the
+            // same shape remove_lib uses — an exact dirname match, so a
+            // crafted `path` can never reach outside the vendored hook dir.
+            "remove_repo_hook" => {
+                if posix_dirname(rel) == ".bee/bin/hooks" {
                     let _ = std::fs::remove_file(&target);
                 }
             }
@@ -549,6 +579,24 @@ mod tests {
         assert_eq!(posix_dirname(".bee/bin/x.mjs"), ".bee/bin");
         assert_eq!(posix_dirname("AGENTS.md"), ".");
         assert_eq!(posix_basename(".bee/expertise/tests/patterns/x.md"), "x.md");
+    }
+
+    /// THE containment proof for the R6 ledger-derived helper removal.
+    #[test]
+    fn remove_helper_never_reaches_the_bee_binary_beside_the_helpers() {
+        // Admissible: the two sources plan.rs 3a/3b produce.
+        assert!(remove_helper_admissible(".bee/bin/bee.mjs")); // ledger-derived
+        assert!(remove_helper_admissible(".bee/bin/bee_state.mjs")); // RETIRED_HELPERS
+
+        // THE case this guard exists for: bee lives in the same directory.
+        assert!(!remove_helper_admissible(".bee/bin/bee.exe"));
+        assert!(!remove_helper_admissible(".bee/bin/bee"));
+
+        // Everything else in or near that directory stays out of reach.
+        assert!(!remove_helper_admissible(".bee/bin/lib/state.mjs")); // remove_lib's job
+        assert!(!remove_helper_admissible(".bee/bin/hooks/x.mjs")); // remove_repo_hook's job
+        assert!(!remove_helper_admissible("../../outside.mjs"));
+        assert!(!remove_helper_admissible(".bee/state.json"));
     }
 
     #[test]

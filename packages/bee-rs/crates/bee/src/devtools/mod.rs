@@ -5,8 +5,16 @@
 //   bee dev render-skill-trees   <- scripts/render_plugin_skill_trees.mjs
 //   bee dev render-prompt        <- packages/bee/lib/prompt-renderer.mjs (C4)
 //   bee dev statusline           <- packages/bee/statusline/statusline-usage.mjs
-//   bee dev impact-registry      <- scripts/impact_registry.mjs
 //   bee dev release-manifest     <- scripts/release_manifest.mjs
+//
+// RETIRED at the R6 cutover: `bee dev impact-registry`. Its whole subject was
+// the Node suite graph — it parsed `scripts/run_verify.mjs`'s SUITES and
+// walked `.mjs` import edges to decide which suites a changed file could
+// affect. With the Node tree gone there is no graph to walk, and the cargo
+// suite it would have been re-pointed at runs in ~20s end to end, so
+// impact-based test filtering buys nothing. The tool,
+// `scripts/impact-registry.json`, `scripts/verify-cache-inputs.json` and the
+// cap-time E1 cross-check in verbs/cells.rs went with it.
 //
 // ROUTING (campaign rule 1, conservative argv routing). `try_native` serves
 // only the `dev <name> …` argv shapes proven equivalent to their .mjs; every
@@ -34,7 +42,6 @@
 // symlink in the skill source, a missing input tree) return None instead.
 
 mod hook_manifests;
-mod impact_registry;
 mod jspath;
 mod prompts;
 mod release_manifest;
@@ -58,26 +65,62 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "render-skill-trees" => skill_trees::run(flags),
         "render-prompt" => prompts::run(flags),
         "statusline" => statusline::run(flags),
-        "impact-registry" => impact_registry::run(flags),
         "release-manifest" => release_manifest::run(flags),
         "render-hook-manifests" => hook_manifests::run(flags),
         _ => None,
     }
 }
 
+/// The release manifest's inventory roots, for `verbs/cells.rs`'s regen
+/// obligation. Re-exported here so the obligation depends on the devtools
+/// MODULE contract rather than reaching into a private submodule.
+pub(crate) fn release_manifest_roots() -> &'static [&'static str] {
+    release_manifest::INVENTORY_ROOTS
+}
+
+/// The manifest file's own repo-relative path (the regen obligation's required
+/// file), from the same module that writes it.
+pub(crate) fn release_manifest_rel() -> &'static str {
+    release_manifest::MANIFEST_REL
+}
+
 // ─── repo-root discovery ───────────────────────────────────────────────────
 
-/// The bee SOURCE checkout containing cwd, or None. Markers are two files
-/// that exist only in this repo (a vendored `.bee/bin/` install has neither
-/// `packages/bee/lib/` nor `scripts/run_verify.mjs`), so a dev tool can never
-/// silently operate on a host repo.
+/// The bee SOURCE checkout containing cwd, or None. TWO markers must both be
+/// present, so a dev tool can never silently operate on a host repo — nor on a
+/// vendored install, nor on an unpacked plugin package.
+///
+/// R6 CUTOVER. The markers were `packages/bee/lib/state.mjs` +
+/// `scripts/run_verify.mjs`; both are deleted. Their replacements are chosen
+/// to keep the SAME two exclusions, which is the whole point of there being
+/// two:
+///
+///   * `packages/bee/AGENTS.block.md` — the template payload. Excludes a HOST
+///     repo and a vendored `.bee/bin/` install: a host receives `.bee/`, never
+///     `packages/bee/`. (This is also `onboard::source::Engine::locate`'s
+///     marker, so "where is the engine" has ONE answer across the binary.)
+///   * `packages/bee-rs/crates/bee/Cargo.toml` — the Rust sources. Excludes an
+///     unpacked PLUGIN PACKAGE, which ships `packages/bee/` but not the crate
+///     it was built from (the release manifest's `package_payload` root is
+///     `packages/bee`; `packages/bee-rs` is deliberately not in the shipped
+///     frame). A dev verb that regenerates committed artifacts must never run
+///     against a package where those artifacts are the product, not the source.
+///
+/// A single marker would have collapsed one of those two exclusions silently,
+/// so both are kept.
 pub(crate) fn bee_source_root() -> Option<PathBuf> {
     let cwd = std::env::current_dir().ok()?;
     let cwd = dunce::canonicalize(&cwd).unwrap_or(cwd);
     let mut cur: Option<&Path> = Some(cwd.as_path());
     while let Some(dir) = cur {
-        if dir.join("packages").join("bee").join("lib").join("state.mjs").is_file()
-            && dir.join("scripts").join("run_verify.mjs").is_file()
+        if dir.join("packages").join("bee").join("AGENTS.block.md").is_file()
+            && dir
+                .join("packages")
+                .join("bee-rs")
+                .join("crates")
+                .join("bee")
+                .join("Cargo.toml")
+                .is_file()
         {
             return Some(dir.to_path_buf());
         }

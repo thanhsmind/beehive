@@ -46,9 +46,10 @@ use serde_json::{json, Map, Value};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-/// state.mjs BEE_VERSION — must track the Node constant (same pin as
-/// verbs/status_full.rs's own copy).
-const BEE_VERSION: &str = "1.20.3";
+/// THE release version, single-sourced from `.claude-plugin/plugin.json`
+/// at build time (R6 cutover — see src/version.rs). This used to be a
+/// hand-maintained copy of state.mjs's `export const BEE_VERSION`.
+use crate::version::BEE_VERSION;
 
 /// state.mjs COMMAND_KEYS / WORKTREE_COMPANION_COMMAND_KEYS.
 const COMMAND_KEYS: [&str; 4] = ["setup", "start", "test", "verify"];

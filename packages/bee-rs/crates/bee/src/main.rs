@@ -26,6 +26,7 @@ mod roots;
 mod router;
 mod state;
 mod verbs;
+mod version;
 
 use std::process::ExitCode;
 use std::time::Instant;

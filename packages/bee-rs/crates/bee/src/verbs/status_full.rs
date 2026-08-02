@@ -64,9 +64,10 @@ type JMap = Map<String, Value>;
 
 // ─── constants (state.mjs / bee.mjs) ───────────────────────────────────────
 
-/// state.mjs BEE_VERSION — must track the Node constant; the diff harness
-/// catches drift (status text embeds it).
-const BEE_VERSION: &str = "1.20.3";
+/// THE release version, single-sourced from `.claude-plugin/plugin.json`
+/// at build time (R6 cutover — see src/version.rs). This used to be a
+/// hand-maintained copy of state.mjs's `export const BEE_VERSION`.
+use crate::version::BEE_VERSION;
 
 const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
 const PHASES: [&str; 8] = [

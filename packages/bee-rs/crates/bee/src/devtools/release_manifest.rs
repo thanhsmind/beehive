@@ -37,8 +37,61 @@ use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-/// provenance: release_manifest.mjs SCHEMA_VERSION.
-const SCHEMA_VERSION: u64 = 1;
+/// provenance: release_manifest.mjs SCHEMA_VERSION. Bumped to 2 at the R6
+/// cutover: the file gained a second top-level key (`unhashedArtifacts`) and
+/// the `runtime_lib` / `distribution_test` roles left the inventory, so a
+/// stored v1 manifest is not comparable to a v2 build.
+const SCHEMA_VERSION: u64 = 2;
+
+/// THE BINARY, and the one thing in the shipped frame that cannot be hashed.
+///
+/// A host receives `.bee/bin/bee` — it is the whole point of the R6 cutover —
+/// but the file is GITIGNORED and per-platform: it is produced by
+/// `cargo build --release` on the installing machine, so its bytes differ
+/// between every host, every toolchain and every build. Three options were
+/// weighed:
+///
+///   a) omit it. Rejected: the frame would claim to describe what a host
+///      receives while silently missing the only executable in it.
+///   b) hash it. Rejected: `--check` would then fail on every machine except
+///      the one that last ran `--write` — a check that always fails is a check
+///      everyone learns to ignore.
+///   c) record it as PRESENCE-ONLY. Chosen. The manifest names the artifact
+///      and says why it carries no hash; `--check` asserts the file EXISTS and
+///      refuses loudly when it does not.
+///
+/// Both spellings are accepted because the same manifest is checked on Windows
+/// and on POSIX; finding either satisfies the requirement.
+const UNHASHED_ARTIFACTS: &[(&str, &[&str], &str)] = &[(
+    ".bee/bin/bee",
+    &[".bee/bin/bee.exe", ".bee/bin/bee"],
+    "built by `cargo build --release` on the installing host and gitignored, so it has no stable content hash; presence is checked, bytes are not",
+)];
+
+/// Repo-relative roots the manifest's inventory covers. Read by
+/// `verbs/cells.rs`'s regen obligation so "what the release manifest covers"
+/// is DERIVED from the manifest builder rather than pasted beside it — the
+/// property the old `.mjs`-source-parsing derivation existed to guarantee, now
+/// obtained by sharing the definition instead of re-reading it (D2).
+pub(crate) const INVENTORY_ROOTS: &[&str] = &[
+    ".bee/bin/bee",
+    ".bee/expertise",
+    ".claude-plugin/marketplace.json",
+    ".claude-plugin/plugin.json",
+    ".claude-plugin/skills",
+    ".codex-plugin/plugin.json",
+    ".codex-plugin/skills",
+    "expertise",
+    "packages/bee",
+    "packages/bee/hooks",
+    "scripts/install.ps1",
+    "scripts/install.sh",
+    "skills",
+];
+
+/// The manifest file itself, repo-relative — the file a cell that touches any
+/// covered root must also list in `files`.
+pub(crate) const MANIFEST_REL: &str = "docs/history/codex-harness-hardening/release-manifest.json";
 
 /// provenance: release_manifest.mjs MANIFEST_PATH.
 fn manifest_path(root: &Path) -> PathBuf {
@@ -207,17 +260,40 @@ fn enumerate_flat_dir(root: &Path, dir: &Path, role: &str, ext: &str) -> R<Vec<R
     Ok(records)
 }
 
-/// provenance: release_manifest.mjs buildCurrentRecords — the whole
-/// inventory, in the .mjs's own concatenation order, then sorted, then
-/// duplicate-checked.
+/// THE SHIPPED FRAME (R6 cutover, owner decision). Every root below answers
+/// one question: what does a HOST actually receive when it installs bee?
+///
+///   * the binary            `.bee/bin/bee` — see UNHASHED_ARTIFACTS
+///   * the prompts           packages/bee/prompts/** (inside the payload tree)
+///   * the expertise         expertise/**  +  .bee/expertise/**
+///   * the skills            skills/**  +  the two committed render trees
+///   * the hook manifests    packages/bee/hooks/**
+///   * the plugin identity   the two plugin.json + marketplace.json
+///   * the installers        scripts/install.sh / .ps1
+///
+/// DROPPED at the cutover, with reasons:
+///   * `.bee/bin/lib/*.mjs` (`runtime_lib`, 38 records) — the vendored Node
+///     library. It is deleted; a host receives a binary instead, and the frame
+///     must describe what ships, not what used to.
+///   * `scripts/tests/test_verify_manifest.mjs` + `test_release_tuple.mjs`
+///     (`distribution_test`, 2 records) — deleted with the Node suites. They
+///     were never SHIPPED in the first place; they were the tests OF the
+///     distribution, pinned here so a release could not quietly drop its own
+///     guard. That job now belongs to `cargo test`, which cannot be dropped
+///     without the build noticing.
+///
+/// `packages/bee/**` and `packages/bee/hooks/**` stay as roots and simply
+/// shrink: after the deletion they carry the prompts, the statusline, the
+/// agent templates, AGENTS.block.md and the two hook JSON manifests. Keeping
+/// the roots rather than enumerating survivors means a file ADDED back to
+/// those trees is caught by `--check`, which a hand-listed survivor set would
+/// not do.
+///
+/// Roots are also read by `verbs/cells.rs`'s regen obligation (see
+/// `inventory_roots`), so "what the manifest covers" has exactly one
+/// definition in the binary.
 fn build_current_records(root: &Path) -> R<Vec<Record>> {
     let mut records: Vec<Record> = Vec::new();
-    records.extend(enumerate_flat_dir(
-        root,
-        &root.join(".bee").join("bin").join("lib"),
-        "runtime_lib",
-        ".mjs",
-    )?);
     records.extend(enumerate_flat_dir(root, &root.join("expertise"), "expertise_guide", ".md")?);
     records.extend(enumerate_flat_dir(
         root,
@@ -271,12 +347,6 @@ fn build_current_records(root: &Path) -> R<Vec<Record>> {
     ] {
         records.push(build_record(root, &abs, "distribution_tool", false)?);
     }
-    for abs in [
-        root.join("scripts").join("tests").join("test_verify_manifest.mjs"),
-        root.join("scripts").join("tests").join("test_release_tuple.mjs"),
-    ] {
-        records.push(build_record(root, &abs, "distribution_test", false)?);
-    }
 
     sort_records(&mut records)?;
     let duplicates: Vec<String> = records
@@ -299,11 +369,57 @@ fn build_current_records(root: &Path) -> R<Vec<Record>> {
 fn manifest_bytes(records: &[Record]) -> String {
     let mut m = Map::new();
     m.insert("schemaVersion".into(), Value::Number(SCHEMA_VERSION.into()));
+    m.insert("unhashedArtifacts".into(), unhashed_artifacts_value());
     m.insert(
         "files".into(),
         Value::Array(records.iter().map(Record::to_value).collect()),
     );
     format!("{}\n", jsjson::stringify_pretty(&Value::Object(m)))
+}
+
+/// The `unhashedArtifacts` block, self-documenting so a reader of the manifest
+/// never has to guess why one shipped file carries no hash.
+fn unhashed_artifacts_value() -> Value {
+    Value::Array(
+        UNHASHED_ARTIFACTS
+            .iter()
+            .map(|(path, accepts, reason)| {
+                let mut r = Map::new();
+                r.insert("path".into(), Value::String((*path).to_string()));
+                r.insert(
+                    "accepts".into(),
+                    Value::Array(accepts.iter().map(|a| Value::String((*a).to_string())).collect()),
+                );
+                r.insert("check".into(), Value::String("presence".into()));
+                r.insert("reason".into(), Value::String((*reason).to_string()));
+                Value::Object(r)
+            })
+            .collect(),
+    )
+}
+
+/// The presence half of `--check`: every unhashed artifact must exist under at
+/// least one of its accepted spellings. Returns the failures, loudly named.
+fn unhashed_artifact_failures(root: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    for (path, accepts, _) in UNHASHED_ARTIFACTS {
+        let present = accepts.iter().any(|rel| {
+            let mut p = root.to_path_buf();
+            for seg in rel.split('/') {
+                p = p.join(seg);
+            }
+            p.is_file()
+        });
+        if !present {
+            out.push(format!(
+                "MISSING unhashed artifact {path} (looked for {}) - the shipped frame claims a \
+                 host receives this binary and it is not here. Run `cargo build --release` in \
+                 packages/bee-rs and copy the result into .bee/bin/.",
+                accepts.join(" or ")
+            ));
+        }
+    }
+    out
 }
 
 // ─── comparison ────────────────────────────────────────────────────────────
@@ -471,6 +587,26 @@ fn read_stored(root: &Path) -> Result<Vec<Value>, Option<ExitCode>> {
             file.display()
         ))));
     };
+    // R6 cutover: a stored manifest from before the frame was redrawn describes
+    // a DIFFERENT inventory. Say so in one line instead of printing forty
+    // mismatches that all mean the same thing.
+    match parsed.get("schemaVersion").and_then(Value::as_u64) {
+        Some(v) if v == SCHEMA_VERSION => {}
+        Some(v) => {
+            return Err(Some(fail(&format!(
+                "release_manifest: stored manifest is schemaVersion {v}, this bee writes {SCHEMA_VERSION}. \
+                 The inventory changed at the R6 Node cutover (the vendored .mjs roots left it and \
+                 an unhashedArtifacts block joined it), so the two are not comparable. Run \
+                 `bee dev release-manifest --write` and review the diff."
+            ))))
+        }
+        None => {
+            return Err(Some(fail(&format!(
+                "release_manifest: stored manifest has no schemaVersion: {}",
+                file.display()
+            ))))
+        }
+    }
     match parsed.get("files") {
         Some(Value::Array(files)) => Ok(files.clone()),
         _ => Err(Some(fail(&format!(
@@ -480,17 +616,46 @@ fn read_stored(root: &Path) -> Result<Vec<Value>, Option<ExitCode>> {
     }
 }
 
+/// THE `--check` CONTRACT (restated at the R6 cutover). Two obligations, both
+/// of which must hold:
+///
+///   1. HASH PARITY over `files` — every record in the stored manifest is
+///      present in the current tree with the same sha256/mode/role/packagePath,
+///      and the current tree adds nothing the manifest does not know about.
+///      Unchanged from v1, and still the bulk of the check.
+///   2. PRESENCE over `unhashedArtifacts` — new. `.bee/bin/bee` is part of the
+///      shipped frame but cannot be hashed (per-host build, gitignored), so the
+///      manifest asserts it EXISTS. A frame that promises a binary and cannot
+///      find one fails the check; it does not pass quietly with the promise
+///      unverified.
+///
+/// A schemaVersion mismatch is its own refusal (see `read_stored`): a v1
+/// manifest describes an inventory that included `.bee/bin/lib/*.mjs`, and
+/// diffing it against a v2 build would report 40 spurious mismatches instead of
+/// the one real fact — that the file needs regenerating.
 fn run_check(root: &Path) -> Result<ExitCode, Option<ExitCode>> {
     let stored = read_stored(root)?;
     let current = resolve(build_current_records(root))?;
     let current_values: Vec<Value> = current.iter().map(Record::to_value).collect();
     let Some(diff) = compare_manifests(&stored, &current_values) else { return Err(None) };
-    if diff.ok() {
+    let unhashed_failures = unhashed_artifact_failures(root);
+    if diff.ok() && unhashed_failures.is_empty() {
         println!(
-            "release_manifest --check: {} file(s) match stored manifest",
-            current.len()
+            "release_manifest --check: {} file(s) match stored manifest, {} unhashed artifact(s) present",
+            current.len(),
+            UNHASHED_ARTIFACTS.len()
         );
         return Ok(ExitCode::SUCCESS);
+    }
+    for line in &unhashed_failures {
+        eprintln!("{line}");
+    }
+    if diff.ok() {
+        eprintln!(
+            "release_manifest --check: FAIL ({} unhashed artifact(s) missing)",
+            unhashed_failures.len()
+        );
+        return Ok(ExitCode::FAILURE);
     }
     // provenance: printDiff
     for p in &diff.missing {
@@ -655,6 +820,106 @@ pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// INVENTORY_ROOTS is READ by verbs/cells.rs to decide when a cell owes a
+    /// manifest regen. If it drifts from what `build_current_records` actually
+    /// enumerates, that obligation stops firing for the uncovered files — the
+    /// exact silent-no-op failure the R6 cutover had to avoid. So: every path
+    /// the builder produces must fall under a declared root.
+    #[test]
+    fn every_inventory_root_covers_what_the_builder_enumerates() {
+        let root = repo_root();
+        let records = match build_current_records(&root) {
+            Ok(r) => r,
+            Err(_) => return, // not a source checkout (packaged build) — nothing to prove
+        };
+        assert!(!records.is_empty(), "the live tree must produce a non-empty inventory");
+        let uncovered: Vec<&str> = records
+            .iter()
+            .map(|r| r.path.as_str())
+            .filter(|p| {
+                !INVENTORY_ROOTS
+                    .iter()
+                    .any(|root| *p == *root || p.starts_with(&format!("{root}/")))
+            })
+            .collect();
+        assert!(
+            uncovered.is_empty(),
+            "release_manifest INVENTORY_ROOTS does not cover {} enumerated path(s): {:?}. \
+             verbs/cells.rs reads this list to raise the regen obligation, so an uncovered \
+             path means a cell can edit a manifested file and never be told to regenerate.",
+            uncovered.len(),
+            &uncovered[..uncovered.len().min(10)]
+        );
+    }
+
+    /// …and the converse: a root nobody enumerates is a root that would raise
+    /// a regen obligation for files the manifest does not actually cover.
+    /// `.bee/bin/bee` is the one deliberate exception — it is the unhashed
+    /// artifact, present in the frame but never in `files`.
+    #[test]
+    fn every_inventory_root_is_actually_enumerated() {
+        let root = repo_root();
+        let records = match build_current_records(&root) {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        let unhashed: Vec<&str> = UNHASHED_ARTIFACTS.iter().map(|(p, _, _)| *p).collect();
+        let idle: Vec<&&str> = INVENTORY_ROOTS
+            .iter()
+            .filter(|root| !unhashed.contains(*root))
+            .filter(|root| {
+                !records
+                    .iter()
+                    .any(|r| r.path == **root || r.path.starts_with(&format!("{root}/")))
+            })
+            .collect();
+        assert!(
+            idle.is_empty(),
+            "INVENTORY_ROOTS declares {idle:?}, which the builder never enumerates - either the \
+             root is stale (drop it) or the builder stopped covering it (a real regression)."
+        );
+    }
+
+    /// The manifest path the regen obligation names must be the one the tool
+    /// actually writes.
+    /// The presence half of the `--check` contract. `cargo test` proves hash
+    /// parity (`rebuild_reproduces_the_committed_manifest`); nothing else
+    /// proves this half, so it is proven here rather than only in whatever
+    /// tree happens to have a binary lying around.
+    #[test]
+    fn the_unhashed_artifact_check_bites_and_accepts_either_spelling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Absent -> loud, and it names both the artifact and the fix.
+        let failures = unhashed_artifact_failures(root);
+        assert_eq!(failures.len(), 1, "{failures:?}");
+        assert!(failures[0].contains(".bee/bin/bee"), "{}", failures[0]);
+        assert!(failures[0].contains("cargo build --release"), "{}", failures[0]);
+
+        // Either spelling satisfies it — the same manifest is checked on
+        // Windows and on POSIX.
+        std::fs::create_dir_all(root.join(".bee").join("bin")).unwrap();
+        for name in ["bee.exe", "bee"] {
+            std::fs::write(root.join(".bee").join("bin").join(name), b"binary").unwrap();
+            assert!(
+                unhashed_artifact_failures(root).is_empty(),
+                "{name} must satisfy the presence check"
+            );
+            std::fs::remove_file(root.join(".bee").join("bin").join(name)).unwrap();
+        }
+
+        // A DIRECTORY at the path is not a binary.
+        std::fs::create_dir_all(root.join(".bee").join("bin").join("bee")).unwrap();
+        assert_eq!(unhashed_artifact_failures(root).len(), 1);
+    }
+
+    #[test]
+    fn manifest_rel_matches_the_path_the_tool_writes() {
+        let root = Path::new("/repo");
+        assert_eq!(rel_posix(root, &manifest_path(root)), MANIFEST_REL);
+    }
     use crate::devtools::locale_compare;
 
     fn repo_root() -> PathBuf {
@@ -704,7 +969,7 @@ mod tests {
         let rebuilt = manifest_bytes(&records);
         let committed = std::fs::read_to_string(manifest_path(&root)).unwrap();
         let stored: Value = serde_json::from_str(&committed).unwrap();
-        assert_eq!(stored["schemaVersion"], 1);
+        assert_eq!(stored["schemaVersion"], 2);
         let stored_files = stored["files"].as_array().unwrap();
         assert_eq!(
             stored_files.len(),
@@ -861,15 +1126,24 @@ mod tests {
     #[test]
     fn manifest_bytes_shape_matches_node() {
         let records = vec![Record {
-            path: "a/b.mjs".into(),
+            path: "a/b.md".into(),
             sha256: "deadbeef".into(),
             mode: "666".into(),
-            role: "runtime_lib".into(),
+            role: "package_payload".into(),
             package_path: None,
         }];
-        assert_eq!(
-            manifest_bytes(&records),
-            "{\n  \"schemaVersion\": 1,\n  \"files\": [\n    {\n      \"path\": \"a/b.mjs\",\n      \"sha256\": \"deadbeef\",\n      \"mode\": \"666\",\n      \"role\": \"runtime_lib\"\n    }\n  ]\n}\n"
+        // Key ORDER is load-bearing: JSON.stringify emits insertion order and
+        // the committed file is byte-compared. schemaVersion, then the R6
+        // unhashedArtifacts block, then files.
+        let bytes = manifest_bytes(&records);
+        assert!(bytes.starts_with("{\n  \"schemaVersion\": 2,\n  \"unhashedArtifacts\": [\n"), "{bytes}");
+        assert!(bytes.contains("\"path\": \".bee/bin/bee\""), "{bytes}");
+        assert!(bytes.contains("\"check\": \"presence\""), "{bytes}");
+        assert!(
+            bytes.ends_with(
+                "  \"files\": [\n    {\n      \"path\": \"a/b.md\",\n      \"sha256\": \"deadbeef\",\n      \"mode\": \"666\",\n      \"role\": \"package_payload\"\n    }\n  ]\n}\n"
+            ),
+            "{bytes}"
         );
     }
 

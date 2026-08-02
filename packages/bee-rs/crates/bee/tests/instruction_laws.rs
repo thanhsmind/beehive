@@ -84,8 +84,11 @@ fn repo_root() -> PathBuf {
 /// `the_self_exclusion_list_carries_only_files_that_quote_violations_as_fixtures`
 /// pins it.
 const SELF_REFERENTIAL: &[&str] = &[
+    // R6 CUTOVER: this list used to carry a second entry,
+    // `scripts/tests/test_instruction_size_law.mjs` — the Node law this file
+    // re-points, which excluded ITSELF for the identical reason. That file is
+    // deleted with the Node tree, so the carve-out is a carve-out of one again.
     "packages/bee-rs/crates/bee/tests/instruction_laws.rs",
-    "scripts/tests/test_instruction_size_law.mjs",
 ];
 
 /// A scan root: where to look, what must be there, and whether its absence is
@@ -235,14 +238,26 @@ const RUST_TREE: Root = Root {
     required: true,
 };
 
-/// The Node script tree. `required: false` — R6 deletes it, and that is the
-/// whole point of this file existing. While it is here it is still scanned.
-const SCRIPT_TREE: Root = Root {
-    rel: "scripts",
-    exts: &["mjs", "js", "cjs"],
-    min_files: 10,
-    required: false,
-};
+/// RETIRED AT THE R6 CUTOVER: `SCRIPT_TREE` — `scripts/**/*.{mjs,js,cjs}`,
+/// `required: false`, `min_files: 10`.
+///
+/// The Node tree it scanned is deleted, which is the whole point of this file
+/// existing. `required: false` was written for exactly this moment, but it was
+/// not enough on its own: `scripts/` SURVIVES (it still holds install.sh and
+/// install.ps1), so the root does not vanish — it goes to ZERO matching files,
+/// which trips `IMPLAUSIBLY SMALL` rather than the tolerated-absence arm. Two
+/// laws would have gone red for the wrong reason and read as regressions.
+///
+/// Both laws now scan `RUST_TREE` alone. That is not a widening or a
+/// weakening: every tool the deleted scripts implemented lives in the Rust
+/// tree, so the DEFECT CLASS each law hunts (a size ceiling on instruction
+/// text; an unguarded scan set) has exactly one place left to reappear, and
+/// the vacuity guard's union floor still holds over it.
+///
+/// A fixture-only root lives in `the_vacuity_guard_refuses_an_empty_scan_set`,
+/// which needs an OPTIONAL root to exercise its two tolerated-absence arms
+/// against a tempdir. It is deliberately local to that test: it must never
+/// again be a root that a real law scans.
 
 // ════════════════════════════════════════════════════════════════════════
 // Proof: the vacuity guard actually bites
@@ -252,6 +267,12 @@ const SCRIPT_TREE: Root = Root {
 fn the_vacuity_guard_refuses_an_empty_scan_set() {
     let tmp = tempfile::tempdir().unwrap();
 
+    // A fixture-only optional root. It exists so this test can exercise the
+    // tolerated-absence arms; no real law scans it (see the SCRIPT_TREE
+    // retirement note above).
+    const FIXTURE_TREE: Root =
+        Root { rel: "scripts", exts: &["mjs", "js", "cjs"], min_files: 10, required: false };
+
     // Arm 1 — a PRESENT but EMPTY root. This is what emptying a tree
     // produces, and what a mis-typed extension filter produces.
     std::fs::create_dir_all(tmp.path().join("scripts")).unwrap();
@@ -259,7 +280,7 @@ fn the_vacuity_guard_refuses_an_empty_scan_set() {
         tmp.path(),
         "fixture law",
         "the repo's tooling trees",
-        &[SCRIPT_TREE],
+        &[FIXTURE_TREE],
         10,
     )
     .expect_err("an empty scan set must REFUSE, never return a green empty set");
@@ -295,7 +316,7 @@ fn the_vacuity_guard_refuses_an_empty_scan_set() {
         tempfile::tempdir().unwrap().path(),
         "fixture law",
         "the repo's tooling trees",
-        &[SCRIPT_TREE],
+        &[FIXTURE_TREE],
         1,
     )
     .expect_err("an absent optional root must still trip the union floor");
@@ -310,7 +331,7 @@ fn the_vacuity_guard_refuses_an_empty_scan_set() {
         &repo_root(),
         "fixture law",
         "the repo's tooling trees",
-        &[RUST_TREE, SCRIPT_TREE],
+        &[RUST_TREE],
         40,
     );
     assert!(
@@ -329,9 +350,9 @@ fn the_self_exclusion_list_carries_only_files_that_quote_violations_as_fixtures(
     let root = repo_root();
     assert_eq!(
         SELF_REFERENTIAL.len(),
-        2,
-        "the self-exclusion list may not be widened without a recorded reason — it is exactly this \
-         file and the Node law it re-points"
+        1,
+        "the self-exclusion list may not be widened without a recorded reason — since the R6 \
+         cutover it is exactly this file (the Node law it re-pointed is deleted with its tree)"
     );
     assert!(
         root.join(SELF_REFERENTIAL[0]).exists(),
@@ -573,9 +594,10 @@ fn no_size_ceiling_on_instruction_text_survives_in_any_shipped_tooling_tree() {
     let set = require(collect_scan_set(
         &root,
         "LAW A invariant 1 — ceiling-shaped constructs",
-        "the shipped tooling trees: the Rust source tree (packages/bee-rs/crates/**/*.rs), plus the \
-         Node script tree (scripts/**/*.{mjs,js,cjs}) for as long as it exists",
-        &[RUST_TREE, SCRIPT_TREE],
+        "the shipped tooling tree: the Rust source tree (packages/bee-rs/crates/**/*.rs). The Node \
+         script tree that used to join it here was deleted at the R6 cutover; every tool it held \
+         now lives in the Rust tree, so that is the one place the defect class can reappear",
+        &[RUST_TREE],
         40,
     ));
 
@@ -648,11 +670,17 @@ fn no_per_skill_byte_baseline_table_survives_in_any_shipped_tooling_tree() {
                 min_files: 1,
                 required: true,
             },
+            // R6 cutover: this root used to be `scripts` (optional), where the
+            // deleted scripts/skill-body-budget.json lived. `scripts/` is now
+            // the two installers and nothing else, so a JSON root there would
+            // be permanently empty — a vacuous pass wearing a green tick. The
+            // law re-points at the shipped TEMPLATE tree, which is both a
+            // "shipped tooling tree" and where a data table would land today.
             Root {
-                rel: "scripts",
+                rel: "packages/bee",
                 exts: &["json"],
                 min_files: 1,
-                required: false,
+                required: true,
             },
             Root {
                 rel: "skills",

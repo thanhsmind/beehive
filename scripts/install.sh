@@ -163,7 +163,12 @@ trap cleanup EXIT
 
 if [ -n "$SOURCE" ]; then
   BEE_SRC="$(cd "$SOURCE" && pwd -P)" || fail "--source path not found: $SOURCE"
-elif [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/../packages/bee/scripts/onboard_bee.mjs" ]; then
+# R6 CUTOVER: this probe keyed on packages/bee/scripts/onboard_bee.mjs, which is
+# deleted. Left alone it would silently answer "no" for every local checkout and
+# RE-CLONE from GitHub instead of installing the tree in front of you — the
+# quietest possible wrong answer. The marker is now the Rust crate manifest: it
+# is what the very next step builds, so if the probe says yes the build can run.
+elif [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/../packages/bee-rs/Cargo.toml" ]; then
   BEE_SRC="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 else
   command -v git >/dev/null 2>&1 || fail "git is required to fetch bee (or pass --source <local-checkout>)."
@@ -182,6 +187,19 @@ cargo build --release --manifest-path "$BEE_SRC/packages/bee-rs/Cargo.toml" >&2 
 BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee"
 [ -x "$BEE_BIN" ] || BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee.exe"
 [ -x "$BEE_BIN" ] || fail "cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]"
+# THE LAST NODE DEPENDENCY. R6 deleted every other .mjs in this repo;
+# plugin_distribution.mjs survives because it is NOT ported yet, and it is not a
+# thin shim: it proves an installed plugin package against the release manifest,
+# strips bee entries out of host hook configs (with the codex-hybrid exemption
+# that exists to stop it deleting the enforcement it just installed), reads an
+# ownership ledger before it may touch user-global skill roots, and
+# snapshot/revalidates every target to close a TOCTOU window. Deleting it
+# without a port would silently drop all of that from the installer.
+#
+# CONSEQUENCE, stated plainly: `node` remains required to INSTALL bee. It is not
+# required to RUN bee — every hook, verb and dev tool is the native binary. The
+# `node -e` JSON one-liners further down are a symptom of the same gap, not a
+# separate one; they go when this helper is ported.
 DIST_HELPER="$BEE_SRC/packages/bee/scripts/plugin_distribution.mjs"
 RELEASE_MANIFEST="$BEE_SRC/docs/history/codex-harness-hardening/release-manifest.json"
 [ -f "$DIST_HELPER" ] || fail "Not a bee release (missing plugin_distribution.mjs): $BEE_SRC"
@@ -524,12 +542,17 @@ printf '%s' "$STATUS" | node -e '
     console.log(`verify   unmanaged extra file(s) in .bee/bin/lib/ (not fatal — remove them, or they self-heal on the next onboarding refresh): ${detail.join(", ")}`);
   }
   console.log(`verify   onboarding ok (bee ${s.onboarding.bee_version}), phase: ${s.phase}`);
-' "$BEE_SRC/.claude-plugin/plugin.json" || fail "Verification failed: unexpected bee.mjs status output."
+' "$BEE_SRC/.claude-plugin/plugin.json" || fail "Verification failed: unexpected bee status output."
 
 # Immediate up_to_date recheck: a fresh onboarding plan must find nothing to do.
 # This proves onboarding/runtime/project-projection surfaces all equal the source
 # tuple (any drift would re-plan work here).
-RECHECK="$(node "$ONBOARD" --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>/dev/null)" \
+# R6 CUTOVER: this ran `node "$ONBOARD"` — and $ONBOARD is never assigned
+# anywhere in this file, so it expanded to empty. The recheck has been running
+# `node "" …` (with stderr suppressed) rather than rechecking anything. It now
+# runs the binary just installed into the target, which is the one the host
+# will actually use.
+RECHECK="$("$HOST_BEE" onboard --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>/dev/null)" \
   || fail "Verification failed: onboarding recheck did not run."
 printf '%s' "$RECHECK" | node -e '
   const s = JSON.parse(require("fs").readFileSync(0, "utf8"));

@@ -52,17 +52,27 @@ impl Engine {
         }
     }
 
-    /// Locate the bee source checkout that plays the part of `SCRIPT_PATH`'s
-    /// package root. Resolution order mirrors js_fallback::find_entry so both
-    /// runtimes agree about which checkout is "this bee":
+    /// Locate the bee source checkout or plugin package that plays the part
+    /// of `SCRIPT_PATH`'s package root:
     ///   1. BEE_JS_ENTRY (the diff harness's own knob) — its grandparent's
     ///      parent is the package root.
-    ///   2. Walk up from the executable's directory, then from cwd, for
-    ///      `packages/bee/scripts/onboard_bee.mjs`.
+    ///   2. Walk up from the executable's directory, then from cwd, for the
+    ///      MARKER.
     /// None ⇒ the probe declines the command (strangler routing): without a
     /// source tree there is nothing authoritative to vendor FROM.
+    ///
+    /// R6 CUTOVER. The marker used to be `packages/bee/scripts/onboard_bee.mjs`
+    /// — the script this module is a port of. It is now the AGENTS block
+    /// template, chosen on the three properties the .mjs also had: it lives in
+    /// `packages/bee` (so finding it proves `templates_dir` resolves), it ships
+    /// in the plugin package (so a marketplace install still locates itself),
+    /// and no HOST repo ever has one — a host receives `.bee/`, never
+    /// `packages/bee/`. A bare `.claude-plugin/plugin.json` was rejected as the
+    /// marker for exactly that last reason: a host repo can carry one, and
+    /// onboarding a host FROM itself is the one answer that must stay
+    /// impossible.
     pub fn locate() -> Option<Self> {
-        const MARKER: &str = "packages/bee/scripts/onboard_bee.mjs";
+        const MARKER: &str = "packages/bee/AGENTS.block.md";
         if let Some(entry) = std::env::var_os("BEE_JS_ENTRY") {
             let entry = PathBuf::from(entry);
             if let Some(root) = entry.parent().and_then(Path::parent).and_then(Path::parent) {
@@ -188,6 +198,14 @@ pub fn compare_versions(a: &str, b: &str) -> std::cmp::Ordering {
 /// `BEE_VERSION_LINE_RE = /^export const BEE_VERSION = ['"]([^'"]*)['"];?[ \t]*\r?$/gm`
 /// — every line-anchored match in the text. NOTE (faithful to the original):
 /// the opening and closing quote characters need not agree.
+///
+/// R6 CUTOVER: bee's own `BEE_VERSION` moved to `.claude-plugin/plugin.json`
+/// (see crate::version), so this parser no longer reads anything in THIS
+/// checkout. It is kept, and still exercised, because its remaining subject is
+/// real: a HOST that installed an old bee carries a legacy skills tree with
+/// `<skills-root>/bee-hive/templates/lib/state.mjs`, and `onboard/skills.rs`
+/// still reads that marker to decide whether it may write over the tree.
+/// Deleting it would make every such host read as "unknown version".
 fn bee_version_matches(text: &str) -> Vec<String> {
     const PREFIX: &str = "export const BEE_VERSION = ";
     let mut out = Vec::new();
@@ -283,6 +301,16 @@ pub fn read_version_strict(
 /// readManifestVersionStrict (l. 487): a REGULAR, non-symlinked JSON file
 /// whose `version` is a numeric release string.
 pub fn read_manifest_version_strict(manifest_path: &Path) -> VersionState {
+    read_manifest_version_strict_key(manifest_path, "version")
+}
+
+/// The same strictness under a caller-chosen key. Added at the R6 cutover for
+/// `.bee/onboarding.json`, which spells its version `bee_version` and which
+/// replaced `.bee/bin/lib/state.mjs` as the HOST's version marker when the
+/// vendored `.mjs` lib was deleted. The fail-closed rule is unchanged: a
+/// symlink, a non-file, unreadable bytes, invalid JSON, a missing key or a
+/// non-numeric value are all `Unknown` — never a guess, never a default.
+pub fn read_manifest_version_strict_key(manifest_path: &Path, key: &str) -> VersionState {
     let Some(st) = lstat_if_exists(manifest_path) else { return VersionState::Unknown };
     if st.is_symlink || !st.is_file {
         return VersionState::Unknown;
@@ -291,10 +319,30 @@ pub fn read_manifest_version_strict(manifest_path: &Path) -> VersionState {
     let Ok(parsed) = serde_json::from_str::<Value>(&String::from_utf8_lossy(&bytes)) else {
         return VersionState::Unknown;
     };
-    match parsed.get("version").and_then(Value::as_str) {
+    match parsed.get(key).and_then(Value::as_str) {
         Some(v) if parsed.is_object() && is_numeric_release(v) => VersionState::Resolved(v.into()),
         _ => VersionState::Unknown,
     }
+}
+
+/// The HOST's installed-bee version marker, with `readVersionStrict`'s
+/// tree-absent semantics: no `.bee/onboarding.json` at all ⇒ `Absent` (a fresh
+/// install, which onboarding is allowed to proceed with); a marker that EXISTS
+/// but cannot be resolved ⇒ `Unknown`, which every caller turns into a refusal.
+///
+/// R6 CUTOVER: this replaces `read_version_strict(.bee/bin/lib/state.mjs, …)`.
+/// The vendored lib is deleted from hosts by onboarding's own `remove_lib`
+/// action, so keying the host version on it would have made every upgraded
+/// host read `Absent` — i.e. "fresh install, no downgrade possible" — and
+/// silently switched the downgrade guard off. `.bee/onboarding.json` is the
+/// right marker because onboarding WRITES it (`bee_version`) on every apply,
+/// so it exists exactly when a host has been onboarded.
+pub fn read_host_version_strict(repo_root: &Path) -> VersionState {
+    let marker = repo_root.join(".bee").join("onboarding.json");
+    if lstat_if_exists(&marker).is_none() {
+        return VersionState::Absent;
+    }
+    read_manifest_version_strict_key(&marker, "bee_version")
 }
 
 // ── source identity (lib/source-identity.mjs) ──────────────────────────────
@@ -358,12 +406,24 @@ pub struct ReleaseIdentity {
     pub blocked: Option<BlockedSource>,
 }
 
-/// readSourceReleaseIdentity (l. 514): the canonical runtime marker plus both
-/// package manifests are ONE authoritative source identity.
+/// readSourceReleaseIdentity (l. 514): the source's release identity, proven
+/// by agreement between every manifest that carries it.
+///
+/// R6 CUTOVER. The tuple used to be THREE members — the runtime marker
+/// `packages/bee/lib/state.mjs` plus both plugin manifests — and its whole
+/// value was that a release bump had to touch all three or onboarding
+/// refused. With `BEE_VERSION` moved into `.claude-plugin/plugin.json` the
+/// runtime marker IS the first plugin manifest, so the tuple is two members:
+/// `.claude-plugin/plugin.json` (which is also `components[0]`, the "runtime
+/// marker" slot `blockedSourceIdentitySkillSync` reads for its `source` label)
+/// and `.codex-plugin/plugin.json`. Two members still prove the property that
+/// mattered: the manifests cannot drift apart unnoticed. Making it one member
+/// would have retired that proof silently, so it was not done.
 pub fn read_source_release_identity(engine: &Engine) -> ReleaseIdentity {
+    let claude_manifest = engine.plugin_root.join(".claude-plugin").join("plugin.json");
     let runtime_component = (
-        "packages/bee/lib/state.mjs".to_string(),
-        read_version_strict(&engine.templates_lib_dir.join("state.mjs"), true, None),
+        ".claude-plugin/plugin.json".to_string(),
+        read_manifest_version_strict(&claude_manifest),
     );
     let source_kind = classify_source_kind(&engine.skills_root.join("bee-hive"), &home_dir());
 
@@ -398,12 +458,6 @@ pub fn read_source_release_identity(engine: &Engine) -> ReleaseIdentity {
 
     let components = vec![
         runtime_component,
-        (
-            ".claude-plugin/plugin.json".to_string(),
-            read_manifest_version_strict(
-                &engine.plugin_root.join(".claude-plugin").join("plugin.json"),
-            ),
-        ),
         (
             ".codex-plugin/plugin.json".to_string(),
             read_manifest_version_strict(

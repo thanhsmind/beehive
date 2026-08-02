@@ -640,7 +640,6 @@ Cells run `commands.test` — the project's one declared test path — at finish
 
 **Suite rent.** A suite is not immortal: every guard suite pays rent by catching real defects. A suite that has not caught one in ~6 months is a demotion candidate — moved out of the local/impacted hot path to the CI/nightly tier by a RECORDED decision (never a silent delete; the suite still runs, just not on every developer loop). `bee-grooming` owns the audit: read the verify logs for which suites have gone red for a real defect (environment reds don't count as rent paid), list the never-fired tenants, and propose demotions. Institutional/meta guards (fences, parity checks, doctrine gates) are the usual tenants — product-behavior suites earn rent more often and mostly stay.
 
-<!-- bee:only codex -->
 ### Native Codex subagent tending
 
 For every bee-owned native Codex subagent flow, including ordinary delegated
@@ -663,7 +662,6 @@ reservation release; every running agent, claim, and reservation stays owned.
 This refines, rather than replaces, the ban on file/scratchpad polling for
 harness-managed subagents. External process and artifact polling keeps its own
 contract and remains outside this native-agent rule.
-<!-- bee:end -->
 
 ## Question Format
 

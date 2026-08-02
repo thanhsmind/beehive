@@ -49,11 +49,10 @@ fn fixture() -> Fixture {
     let repo = dunce::canonicalize(dir.path()).unwrap().join("repo");
     std::fs::create_dir_all(&repo).unwrap();
 
-    // Release identity tuple: runtime marker + both plugin manifests.
-    write(
-        &root.join("packages").join("bee").join("lib").join("state.mjs"),
-        &format!("export const BEE_VERSION = '{VERSION}';\n"),
-    );
+    // Release identity tuple. R6 CUTOVER: this is the two plugin manifests and
+    // nothing else — `BEE_VERSION` moved out of packages/bee/lib/state.mjs into
+    // .claude-plugin/plugin.json, which is now both the tuple's first member
+    // and the "runtime marker" slot.
     write(
         &root.join(".claude-plugin").join("plugin.json"),
         &format!("{{\"version\":\"{VERSION}\"}}"),
@@ -64,15 +63,18 @@ fn fixture() -> Fixture {
     );
     // A .git marker makes classifySource report source_checkout.
     std::fs::create_dir_all(root.join(".git")).unwrap();
-    // The engine's own script — Engine::locate's marker, and the file whose
-    // presence proves this really is a bee checkout.
-    write(&root.join("packages").join("bee").join("scripts").join("onboard_bee.mjs"), "// engine\n");
-
-    // A second lib module, so drift can be exercised WITHOUT touching
-    // state.mjs — which is also the host's version marker, and tampering it
-    // legitimately blocks the run (see version_marker_tamper_blocks below).
-    write(&root.join("packages").join("bee").join("lib").join("cells.mjs"), "// cells\n");
+    // THE ENGINE MARKER — what `Engine::locate` walks up looking for, and the
+    // file whose presence proves this really is a bee checkout. R6 CUTOVER:
+    // this was packages/bee/scripts/onboard_bee.mjs.
     write(&root.join("packages").join("bee").join("AGENTS.block.md"), "# bee\n\nrules here\n\n\n");
+
+    // A vendorable helper and lib module. Nothing in the real source tree ships
+    // `.mjs` any more, but the vendoring machinery that copies and (since R6)
+    // REMOVES them is still live for hosts installed before the cutover, so the
+    // fixture keeps a specimen of each: `a_helper_the_source_stopped_shipping…`
+    // and `a_hook_the_source_stopped_shipping…` drive the removal paths with
+    // them.
+    write(&root.join("packages").join("bee").join("lib").join("cells.mjs"), "// cells\n");
     write(&root.join("packages").join("bee").join("bee.mjs"), "// dispatcher\n");
     write(&root.join("packages").join("bee").join("prompts").join("worker-cell.md"), "prompt\n");
     write(
@@ -273,7 +275,7 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
     let gi = std::fs::read_to_string(fx.repo.join(".gitignore")).unwrap();
     assert!(gi.starts_with("# BEE:START\n.bee/state.json\n"));
     assert!(gi.ends_with("# BEE:END\n"));
-    assert!(fx.repo.join(".bee").join("bin").join("lib").join("state.mjs").exists());
+    assert!(fx.repo.join(".bee").join("bin").join("lib").join("cells.mjs").exists());
     assert!(fx.repo.join(".bee").join("bin").join("prompts").join("worker-cell.md").exists());
     assert!(fx.repo.join("docs").join("specs").join("reading-map.md").exists());
     assert!(fx.repo.join("docs").join("history").join("learnings").join("critical-patterns.md").exists());
@@ -441,10 +443,15 @@ fn a_drifted_repo_repairs_exactly_the_drifted_files() {
 fn a_tampered_host_version_marker_blocks_never_forceably() {
     let fx = fixture();
     apply(&fx, &[]);
-    // .bee/bin/lib/state.mjs is the host_helpers version marker: a tree that
-    // EXISTS but whose version cannot be read is "unknown" — refuse, and
-    // never forceable (D3 / review P1-1).
-    write(&fx.repo.join(".bee").join("bin").join("lib").join("state.mjs"), "tampered\n");
+    // R6 CUTOVER: the host_helpers version marker moved from
+    // `.bee/bin/lib/state.mjs` (deleted with the vendored Node lib) to
+    // `.bee/onboarding.json`'s `bee_version`. The GUARD is unchanged and this
+    // test still proves it: a host marker that EXISTS but whose version cannot
+    // be read is "unknown" — refuse, and never forceable (D3 / review P1-1).
+    write(
+        &fx.repo.join(".bee").join("onboarding.json"),
+        "{\"schema_version\": \"1.0\", \"bee_version\": \"tampered\"}\n",
+    );
     let p = plan(&fx, &[]);
     assert_eq!(p["status"], "blocked_downgrade");
     assert!(p["reason"].as_str().unwrap().contains("version unresolvable for host_helpers"));
@@ -459,9 +466,10 @@ fn a_tampered_host_version_marker_blocks_never_forceably() {
         assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::from(1)), "{argv:?}");
         assert_eq!(a["status"], "blocked_downgrade");
         assert!(a.get("host_items").is_none(), "a non-forceable refusal never invites a force");
-        assert_eq!(
-            std::fs::read_to_string(fx.repo.join(".bee").join("bin").join("lib").join("state.mjs")).unwrap(),
-            "tampered\n",
+        assert!(
+            std::fs::read_to_string(fx.repo.join(".bee").join("onboarding.json"))
+                .unwrap()
+                .contains("\"bee_version\": \"tampered\""),
             "zero mutations on a refused apply"
         );
     }
@@ -645,14 +653,15 @@ fn a_disagreeing_release_tuple_blocks_with_zero_mutations() {
 fn an_older_source_refuses_a_downgrade_and_force_overrides_it() {
     let fx = fixture();
     apply(&fx, &[]);
-    // Age the source below the installed host runtime.
-    for f in [
-        fx.root.join("packages").join("bee").join("lib").join("state.mjs"),
-    ] {
-        write(&f, "export const BEE_VERSION = '1.0.0';\n");
-    }
+    // Age the source below the installed host. R6 CUTOVER: the SOURCE version
+    // is the plugin manifests now, and the HOST version is
+    // .bee/onboarding.json's bee_version (written by the apply above), so
+    // ageing the source means editing exactly these two files.
     write(&fx.root.join(".claude-plugin").join("plugin.json"), "{\"version\":\"1.0.0\"}");
     write(&fx.root.join(".codex-plugin").join("plugin.json"), "{\"version\":\"1.0.0\"}");
+    // Drift one vendored lib module too, so the forceable refusal has a
+    // copy_lib item to name as its blast radius.
+    write(&fx.root.join("packages").join("bee").join("lib").join("cells.mjs"), "// cells v1\n");
 
     let p = plan(&fx, &[]);
     assert_eq!(p["status"], "blocked_downgrade");
@@ -669,8 +678,8 @@ fn an_older_source_refuses_a_downgrade_and_force_overrides_it() {
     assert!(a["host_items"].as_array().unwrap().iter().any(|i| i["action"] == "copy_lib"));
     // The host is untouched by the refusal.
     assert_eq!(
-        std::fs::read_to_string(fx.repo.join(".bee").join("bin").join("lib").join("state.mjs")).unwrap(),
-        format!("export const BEE_VERSION = '{VERSION}';\n")
+        std::fs::read_to_string(fx.repo.join(".bee").join("bin").join("lib").join("cells.mjs")).unwrap(),
+        "// cells\n"
     );
 
     let (code, forced) = run_with_root(
@@ -682,8 +691,8 @@ fn an_older_source_refuses_a_downgrade_and_force_overrides_it() {
     assert_eq!(forced["forced_downgrade"], true);
     assert_eq!(forced["versions"]["installed_skills"], VERSION);
     assert_eq!(
-        std::fs::read_to_string(fx.repo.join(".bee").join("bin").join("lib").join("state.mjs")).unwrap(),
-        "export const BEE_VERSION = '1.0.0';\n"
+        std::fs::read_to_string(fx.repo.join(".bee").join("bin").join("lib").join("cells.mjs")).unwrap(),
+        "// cells v1\n"
     );
 }
 
@@ -734,6 +743,87 @@ fn notices_surface_detected_commands_and_a_stale_advisor_key() {
         .unwrap()
         .iter()
         .any(|n| n.as_str().unwrap().starts_with("advisor mode was removed in 0.1.23")));
+}
+
+// ── R6 cutover: stale vendored artifacts are REACHED, not stranded ────────
+//
+// Before the cutover, onboarding could remove a vendored LIB module that left
+// the source (3c, ledger-derived) but had no equivalent for vendored HELPERS
+// outside a hand-maintained RETIRED_HELPERS list, and none at all for vendored
+// repo HOOKS. Deleting the whole `.mjs` tree at once turns both gaps into
+// permanent litter on every host that ever onboarded — dead files at exactly
+// the paths `.codex/hooks.json` and AGENTS.md still point agents at. These two
+// tests are the proof that the new actions fire, and that they fire only where
+// they are allowed to.
+
+/// The source stops shipping a helper -> the host's copy is planned for
+/// removal and actually unlinked, WITHOUT the name appearing in any list.
+#[test]
+fn a_helper_the_source_stopped_shipping_is_removed_from_the_host() {
+    let fx = fixture();
+    apply(&fx, &[]);
+    let vendored = fx.repo.join(".bee").join("bin").join("bee.mjs");
+    assert!(vendored.exists(), "fixture must vendor the helper first");
+
+    // The R6 move: the helper leaves the SOURCE tree.
+    std::fs::remove_file(fx.root.join("packages").join("bee").join("bee.mjs")).unwrap();
+
+    let p = plan(&fx, &[]);
+    let removals: Vec<&Value> = p["plan"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|i| i["action"] == "remove_helper")
+        .collect();
+    assert_eq!(
+        removals.len(),
+        1,
+        "exactly one stale helper is owed, derived from the ledger: {:?}",
+        p["plan"]
+    );
+    assert_eq!(removals[0]["path"], ".bee/bin/bee.mjs");
+
+    apply(&fx, &[]);
+    assert!(!vendored.exists(), "the stale helper must be gone from the host");
+
+    // Idempotent: a second plan owes nothing (the ledger no longer records it).
+    let again = plan(&fx, &[]);
+    assert!(
+        !actions(&again, "plan").contains(&"remove_helper".to_string()),
+        "a removal that already happened must not be re-planned forever"
+    );
+}
+
+/// The same, for vendored repo hooks — and a proof the applier's containment
+/// refuses to unlink the BINARY that lives beside them.
+#[test]
+fn a_hook_the_source_stopped_shipping_is_removed_from_the_host() {
+    let fx = fixture();
+    apply(&fx, &["--repo-hooks"]);
+    let vendored = fx.repo.join(".bee").join("bin").join("hooks").join("bee-write-guard.mjs");
+    assert!(vendored.exists(), "fixture must vendor the hook first");
+
+    // The R6 move: the hook leaves the SOURCE tree.
+    std::fs::remove_file(fx.root.join("packages").join("bee").join("hooks").join("bee-write-guard.mjs"))
+        .unwrap();
+
+    let p = plan(&fx, &["--repo-hooks"]);
+    let removals: Vec<&Value> = p["plan"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|i| i["action"] == "remove_repo_hook")
+        .collect();
+    assert_eq!(removals.len(), 1, "exactly one stale hook is owed: {:?}", p["plan"]);
+    assert_eq!(removals[0]["path"], ".bee/bin/hooks/bee-write-guard.mjs");
+
+    apply(&fx, &["--repo-hooks"]);
+    assert!(!vendored.exists(), "the stale hook must be gone from the host");
+    // Its siblings are untouched — this is a diff, not a tree wipe.
+    assert!(fx.repo.join(".bee").join("bin").join("hooks").join("bee-model-guard.mjs").exists());
+
+    let again = plan(&fx, &["--repo-hooks"]);
+    assert!(!actions(&again, "plan").contains(&"remove_repo_hook".to_string()));
 }
 
 // ── human (non-JSON) rendering ─────────────────────────────────────────────

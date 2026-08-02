@@ -167,6 +167,54 @@ fn build_hook_versions(engine: &Engine) -> Value {
     Value::Object(hooks)
 }
 
+/// Every managed-ledger group, paired with the HOST directory whose contents
+/// it fingerprints — i.e. every tree whose hand-edit makes `.bee/onboarding.json`
+/// a lie until onboarding re-runs. The two hash-a-string groups
+/// (`agents_block`, `gitignore_block`) carry `None`: they cover rendered blocks
+/// inside AGENTS.md / .gitignore, not a directory, and a hand-edit of those is
+/// caught by onboarding's own block comparison rather than by a path-scoped
+/// obligation.
+///
+/// `ledger_covered_roots()` projects this to the directory set that
+/// `verbs/cells.rs`'s regen obligation guards.
+///
+/// R6 CUTOVER. That obligation used to derive the same set by PARSING
+/// `scripts/ledger_parity.mjs` for its `checkGroup(managed.X, "<relDir>")`
+/// calls. Parsing a second implementation was the only way to get decision D2's
+/// property — the scope is DERIVED from the thing it guards, never pasted next
+/// to it. The script is deleted (its runtime check now lives natively in
+/// `verbs/status_full.rs`'s `compute_runtime_drift`, which runs on EVERY
+/// `bee status` rather than only when someone remembers to invoke a script), so
+/// the table is SHARED from the module that builds the ledger instead of
+/// re-read from a copy of it: the same property with one fewer implementation.
+///
+/// `every_managed_group_is_classified` pins this table against
+/// `build_managed_versions`, so adding a group without classifying it fails a
+/// test rather than silently escaping the regen obligation.
+const LEDGER_GROUPS: &[(&str, Option<&str>)] = &[
+    ("agents_block", None),
+    ("gitignore_block", None),
+    ("helpers", Some(".bee/bin")),
+    ("lib", Some(".bee/bin/lib")),
+    ("expertise", Some(".bee/expertise")),
+    ("prompts", Some(".bee/bin/prompts")),
+    ("repo_hooks", Some(".bee/bin/hooks")),
+    ("codex_hooks", Some(".bee/bin/hooks")),
+    ("statusline", Some(".bee/bin/statusline")),
+];
+
+pub(crate) fn ledger_covered_roots() -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = Vec::new();
+    for (_, dir) in LEDGER_GROUPS {
+        if let Some(d) = dir {
+            if !out.contains(d) {
+                out.push(d);
+            }
+        }
+    }
+    out
+}
+
 /// buildManagedVersions (l. 3408).
 pub fn build_managed_versions(
     engine: &Engine,
@@ -347,9 +395,43 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
             plan.push(plan_item("copy_helper", &format!(".bee/bin/{name}")));
         }
     }
-    // 3a. retired helper shims (D2)
+    // 3a. retired helper shims (D2) — the NAMED list.
     for name in T::RETIRED_HELPERS {
         if exists(&repo_root.join(".bee").join("bin").join(name)) {
+            plan.push(plan_item("remove_helper", &format!(".bee/bin/{name}")));
+        }
+    }
+    // 3b. STALE helpers, derived from the ledger diff (R6 cutover — new).
+    //
+    // The named list above only ever covered helpers retired ONE AT A TIME by
+    // a decision that also added them to RETIRED_HELPERS. The R6 cutover
+    // retires `bee.mjs` — the Node CLI entrypoint — by deleting the whole
+    // source tree, and nothing adds it to a list. Without this, every host
+    // that ever onboarded keeps `.bee/bin/bee.mjs` forever: a dispatcher whose
+    // entire `lib/` closure `remove_lib` is about to delete out from under it,
+    // still sitting at the path AGENTS.md tells agents to invoke
+    // (`.bee/bin/bee …`). A half-working entrypoint is worse than a missing
+    // one, so it is derived exactly the way 3c derives `remove_lib`: the
+    // previous ledger's key set minus the current source's, intersected with
+    // what is actually on disk.
+    let current_helper_names = list_template_helpers(engine);
+    let previous_helper_names: Vec<String> = onboarding
+        .as_ref()
+        .and_then(|o| o.get("managed"))
+        .and_then(|m| m.get("helpers"))
+        .and_then(Value::as_object)
+        .map(|o| o.keys().cloned().collect())
+        .unwrap_or_default();
+    for name in previous_helper_names {
+        if T::RETIRED_HELPERS.contains(&name.as_str()) {
+            continue; // already planned by 3a — never plan the same unlink twice
+        }
+        if name.contains('/') || name.contains('\\') {
+            continue; // helpers are flat files directly under .bee/bin
+        }
+        if !current_helper_names.contains(&name)
+            && exists(&repo_root.join(".bee").join("bin").join(&name))
+        {
             plan.push(plan_item("remove_helper", &format!(".bee/bin/{name}")));
         }
     }
@@ -461,6 +543,56 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
     ) != rendered_gitignore_block
     {
         plan.push(plan_item("update_gitignore_block", ".gitignore"));
+    }
+
+    // 5-pre. STALE VENDORED HOOKS (R6 cutover — new action).
+    //
+    // Section 3c has always removed a lib module that left the source
+    // (`remove_lib`, derived from the ledger diff, never a pasted list). The
+    // hook tree had NO such action: `copy_repo_hook` writes, and nothing ever
+    // unlinked. That was survivable while HOOK_FILENAMES only ever grew; it
+    // stops being survivable the moment the whole `.mjs` hook set is deleted at
+    // once, because every host that ever ran `--repo-hooks` or codex-hybrid
+    // would keep eleven dead `.bee/bin/hooks/*.mjs` on disk FOREVER, with no
+    // command able to reach them. `.codex/hooks.json` still points at that
+    // directory on a host that owns its own catalog, so "dead files nobody
+    // deletes" is not cosmetic — it is a hook tree that can still be launched.
+    //
+    // Derivation matches `remove_lib` exactly: the previous ledger's key set
+    // minus the current source's, intersected with what is actually on disk. It
+    // therefore fires for hosts that recorded the old hooks and stays silent
+    // for hosts that never vendored any. The `.codex/hooks.json` ledger key is
+    // excluded by name — `build_hook_versions` stores it alongside the hook
+    // filenames, but it is not a file under `.bee/bin/hooks/` and must never be
+    // unlinked by this rule.
+    {
+        let current_hook_names = list_plugin_hooks(engine);
+        let mut previous_hook_names: Vec<String> = Vec::new();
+        for ledger_key in ["repo_hooks", "codex_hooks"] {
+            let names = onboarding
+                .as_ref()
+                .and_then(|o| o.get("managed"))
+                .and_then(|m| m.get(ledger_key))
+                .and_then(Value::as_object)
+                .map(|o| o.keys().cloned().collect::<Vec<String>>())
+                .unwrap_or_default();
+            for name in names {
+                if !previous_hook_names.contains(&name) {
+                    previous_hook_names.push(name);
+                }
+            }
+        }
+        previous_hook_names.sort();
+        for name in previous_hook_names {
+            if name == ".codex/hooks.json" || name.contains('/') || name.contains('\\') {
+                continue; // not a file in the vendored hook directory
+            }
+            if !current_hook_names.contains(&name)
+                && exists(&repo_root.join(".bee").join("bin").join("hooks").join(&name))
+            {
+                plan.push(plan_item("remove_repo_hook", &format!(".bee/bin/hooks/{name}")));
+            }
+        }
     }
 
     // 5. repo hooks fallback (--repo-hooks only)
@@ -580,6 +712,37 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
 
 #[cfg(test)]
 mod tests {
+    /// LEDGER_GROUPS is what `verbs/cells.rs`'s regen obligation guards. A
+    /// managed group that is not in the table is a tree a cell can hand-edit
+    /// without ever being told to re-onboard — the silent no-op the R6 cutover
+    /// had to avoid. Pin the table against the builder's real key set.
+    #[test]
+    fn every_managed_group_is_classified() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = super::Engine::from_plugin_root(dir.path().to_path_buf());
+        // Every optional group ON, so the builder emits its widest key set.
+        let managed = super::build_managed_versions(&engine, "block", "gitignore", true, true, true);
+        let built: Vec<&String> = managed.as_object().unwrap().keys().collect();
+        let classified: Vec<&str> = super::LEDGER_GROUPS.iter().map(|(k, _)| *k).collect();
+
+        let unclassified: Vec<&&String> =
+            built.iter().filter(|k| !classified.contains(&k.as_str())).collect();
+        assert!(
+            unclassified.is_empty(),
+            "build_managed_versions emits managed group(s) {unclassified:?} that LEDGER_GROUPS \
+             does not classify. Add them with the host directory they vendor into (or None if \
+             they hash a rendered block, not a tree) — otherwise verbs/cells.rs's regen \
+             obligation silently stops covering them."
+        );
+        let stale: Vec<&&str> =
+            classified.iter().filter(|k| !built.iter().any(|b| b.as_str() == **k)).collect();
+        assert!(
+            stale.is_empty(),
+            "LEDGER_GROUPS classifies {stale:?}, which build_managed_versions no longer emits — \
+             the regen obligation would be guarding a tree nothing writes."
+        );
+    }
+
     use super::*;
 
     #[test]

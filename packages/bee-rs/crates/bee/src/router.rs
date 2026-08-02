@@ -85,7 +85,6 @@ pub const PORTED: &[&str] = &[
     "dev render-skill-trees",
     "dev render-prompt <name> [--var K=V]",
     "dev statusline",
-    "dev impact-registry --write|--check|--query <file...> [--level 1]",
     "dev release-manifest --write|--check|--selftest",
     // R6a — the bee-herding cockpit's executable helpers, ported off Node
     "herding classify-lane <PBI-ID>",
@@ -126,7 +125,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     // `bee dev …` is the R4 dev-surface namespace (render-skill-trees,
-    // render-prompt, statusline, impact-registry, release-manifest). Like
+    // render-prompt, statusline, release-manifest). Like
     // onboard it is not a bee.mjs porcelain verb, so it probes before the
     // verb tree; a `dev` shape it does not serve returns None with no output
     // and the delegate reports unknown-command exactly as Node does.

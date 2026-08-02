@@ -426,11 +426,119 @@ session ends shippable.
    now CALLS onboard's renderer instead of duplicating it, so the
    "two-renderers-one-file" trap that once broke a release cannot fire.
 
-**NOT DONE — the physical deletion of the `.mjs` trees.** Stopped deliberately
-at a clean boundary: the tree is green, and every wiring surface, hook and
-runtime path has been moved OFF the Node tree (nothing consults it any more),
-but the files are still on disk. Deleting them today breaks the build and
-silently guts several checks. Remaining blockers, each measured:
+**DONE (2026-08-02) — the physical deletion of the `.mjs` trees.** 236 files /
+~177k LOC removed. `cargo test --release -- --test-threads=1`: **964 passed, 3
+ignored** (from 969; the delta is explained below). All eleven blockers were
+worked; ten are closed, one is deliberately NOT closed.
+
+**The three owner decisions, as implemented.**
+
+1. **`BEE_VERSION` lives in `.claude-plugin/plugin.json`.** It is resolved AT
+   COMPILE TIME (`crates/bee/src/version.rs` `include_str!`s the manifest and
+   extracts the value in a `const fn`), so the binary cannot disagree with the
+   checkout it was built from and a manifest that loses the key is a build
+   error. This also retired three hand-maintained copies of the literal in
+   `hooks/compaction.rs`, `hooks/session_preamble.rs` and
+   `verbs/status_full.rs` that nothing had ever pinned to each other. The
+   runtime tuple in `read_source_release_identity` went from three members to
+   two (`.claude-plugin/plugin.json` + `.codex-plugin/plugin.json`) — still two,
+   deliberately, because the property that mattered was that the manifests
+   cannot drift apart unnoticed.
+
+2. **The impact registry is RETIRED**, not re-pointed: `devtools/impact_registry.rs`,
+   the `bee dev impact-registry` route, `scripts/impact-registry.json`,
+   `scripts/verify-cache-inputs.json`, the CI freshness step and the cap-time E1
+   cross-check in `verbs/cells.rs` are all gone. Rationale: its subject was the
+   `.mjs` suite graph, and the cargo suite that replaced it runs whole in ~20s
+   (measured: `bee test` = 22.5s), so impact-based filtering buys nothing.
+
+3. **`release_manifest`'s scope is THE SHIPPED FRAME** — what a host actually
+   receives. `.bee/bin/lib/*.mjs` (38 records) and the two
+   `scripts/tests/test_*.mjs` (2 records) left it; `.bee/bin/bee` joined it.
+   The binary is GITIGNORED and per-host, so it is represented as a
+   PRESENCE-ONLY entry in a new top-level `unhashedArtifacts` block rather than
+   hashed (a hash would fail on every machine but the last one to `--write`) or
+   omitted (the frame would not mention the only executable it ships).
+   `schemaVersion` is 2 and a v1 stored manifest is now its own one-line
+   refusal instead of 40 spurious mismatches. The committed manifest was
+   regenerated: 326 -> 184 records, 0 `.mjs`.
+
+**Two traps found and closed that the table did not list.** Both are the same
+shape as the install-probe trap that stopped the first attempt — a guard that
+would have gone quietly inert rather than loudly red:
+
+* **`.bee/bin/bee.mjs` had no removal path.** Blocker 4 named the missing
+  `remove_repo_hook`; the vendored HELPER had the same hole. `remove_helper`
+  only ever fired for names hard-coded in `RETIRED_HELPERS`, so deleting the
+  Node CLI entrypoint from source would have left it on every host forever — a
+  dispatcher whose entire `lib/` closure `remove_lib` deletes out from under it,
+  sitting at the path AGENTS.md tells agents to invoke. Both removals are now
+  derived from the ledger diff the way `remove_lib` always was, and the applier
+  refuses any `remove_helper` target that is not a flat `*.mjs` under
+  `.bee/bin/` — because `.bee/bin/` also holds the running binary.
+* **`instruction_laws.rs`'s JSON scan root over `scripts/`** went to zero files
+  the moment `scripts/impact-registry.json` was deleted. The vacuity guard
+  caught it loudly (`IMPLAUSIBLY SMALL`), exactly as designed; the law is
+  re-pointed at `packages/bee/**/*.json`.
+
+**Test-count delta: 969 -> 964 (-5).** Net of: -16 removed with the impact
+registry (its own unit tests, the `jspath` helpers only it used, and the
+cap-time E1 test), +11 added — the two ledger-derived removal actions end to
+end, the `remove_helper` containment proof, the `unhashedArtifact` presence
+check, the two `INVENTORY_ROOTS` pins, the ledger-group classification pin, and
+three `version.rs` pins. No test was deleted without either its subject being
+gone or its assertion being re-homed.
+
+**Two pins were replaced rather than dropped**, because both were INDIRECT pins
+whose authority was the deleted `.mjs`:
+
+* `devtools/prompts.rs` and `verbs/drivers.rs` are two Rust ports of one prompt
+  grammar. They used to be pinned only by each byte-embedding the same
+  `prompt-renderer.mjs`. The corpus now runs through BOTH ports and compares
+  their answers directly (proven to bite: mutating `drivers.rs::render` fails
+  the corpus, naming the case).
+* `verbs/cells.rs`'s `REGEN_GUARDS` derived its covered roots by PARSING two
+  `.mjs` files, and `derive_regen_guards` `continue`d — silently deactivating
+  the guard — when a script was missing. Deleting the scripts would have hit
+  exactly that arm and switched both obligations off with no output. The guards
+  now read the same constants their authorities use
+  (`release_manifest::INVENTORY_ROOTS`, `plan::LEDGER_GROUPS`), each pinned to
+  its builder in both directions, and the missing-file arm no longer exists.
+
+**Ledger parity was NOT lost with `scripts/ledger_parity.mjs`.** Its check —
+recompute every managed hash and compare — already exists natively in
+`verbs/status_full.rs`'s `compute_runtime_drift`, which runs on every
+`bee status` rather than only when someone remembers to invoke a script.
+
+**Blocker 11 is NOT CLOSED — deliberately, and this is the one thing left.**
+`packages/bee/scripts/plugin_distribution.mjs` (464 lines) survives, and both
+installers still execute it. It is not a shim: it proves an installed plugin
+package against the release manifest, strips bee entries from host hook configs
+(with the codex-hybrid exemption that stops it deleting the enforcement it just
+installed), gates user-global skill-root cleanup on an exact ownership ledger,
+and snapshot/revalidates every target to close a TOCTOU window. Porting it is
+its own piece of work with its own contract, not a mechanical step, so it was
+kept rather than deleted through. **`node` therefore remains required to INSTALL
+bee; it is not required to RUN it.** The inline `node -e` JSON helpers in the
+installers are a symptom of the same gap and go when the helper is ported.
+
+Its test, `test_plugin_distribution.mjs`, WAS deleted: two of its three imports
+(`onboard_bee.mjs`, `scripts/lib/env-capabilities.mjs`) are gone, so it could no
+longer run. Keeping an unrunnable suite on disk reads as coverage while
+asserting nothing. **The helper is therefore currently unported AND untested —
+that is the open item.**
+
+What was fixed in the installers along the way (both were already broken, or
+about to be): the source-detection probe keyed on the deleted
+`onboard_bee.mjs` — left alone it would have silently RE-CLONED from GitHub
+instead of installing the local checkout (`install.sh`), and hard-failed every
+clone-path Windows install with a message blaming the user's git version
+(`install.ps1`); both now key on `packages/bee-rs/Cargo.toml`. And
+`install.sh`'s up_to_date recheck ran `node "$ONBOARD"` where `$ONBOARD` was
+never assigned anywhere in the file — it now runs the installed binary.
+
+<details>
+<summary>The original blocker table (2026-08-01), kept for the record</summary>
 
 | # | Blocker | Why it blocks |
 |---|---|---|
@@ -447,3 +555,5 @@ silently guts several checks. Remaining blockers, each measured:
 | 11 | `scripts/install.sh` / `install.ps1` still call `plugin_distribution.mjs` (unported) and use inline `node -e` for JSON | the installers cannot be Node-free until that helper is ported |
 
 Blockers 3, 5 and 6 carry owner-facing decisions; the rest are mechanical.
+
+</details>

@@ -2551,255 +2551,89 @@ fn log_decision(root: &Path, decision: &str, rationale: &str, tags: &[&str]) -> 
 const REGEN_ACK_FIELD: &str = "regen_obligation_ack";
 
 struct RegenGuardDef {
-    script: &'static str,
+    /// Where the covered roots come from — named in the refusal so a reader
+    /// can go and check the derivation rather than trust the message.
+    authority: &'static str,
     covers: &'static str,
     required: &'static str,
     command: &'static str,
     regen: &'static str,
-    derive: fn(&str) -> (Vec<String>, Vec<String>),
+    derive: fn() -> (Vec<String>, Vec<String>),
 }
 
+// R6 CUTOVER — WHERE THE COVERED ROOTS COME FROM NOW.
+//
+// Both guards used to READ A .mjs FILE AT RUNTIME and parse its source for the
+// paths it operated on (`path.join(REPO_ROOT, …)` literals in
+// scripts/release_manifest.mjs; `checkGroup(managed.X, "<relDir>")` calls in
+// scripts/ledger_parity.mjs). That was not obfuscation for its own sake — it
+// was decision D2: the obligation's scope must be DERIVED from the thing it
+// guards, never pasted next to it, or the two drift and the guard quietly
+// covers the wrong set.
+//
+// Both scripts are deleted. Parsing is therefore replaced with the strongest
+// available form of the same property: the guards read the SAME CONSTANT the
+// authority itself uses.
+//
+//   * `devtools::release_manifest::INVENTORY_ROOTS` is the list
+//     `build_current_records` enumerates, pinned to it in BOTH directions by
+//     `every_inventory_root_covers_what_the_builder_enumerates` and
+//     `every_inventory_root_is_actually_enumerated`.
+//   * `onboard::plan::LEDGER_COVERED_ROOTS` is the directory set the managed
+//     ledger fingerprints, pinned to `build_managed_versions` by
+//     `ledger_groups_cover_every_managed_file_group`.
+//
+// This is stronger than the parse it replaces: a source edit that changed the
+// covered set used to be caught only if the PARSER still recognised the new
+// shape (and `derive_regen_guards` threw when it did not), whereas a shared
+// constant cannot be out of date without a test going red.
+//
+// The old failure mode is gone with it. `derive_regen_guards` used to
+// `continue` — silently deactivating the guard — when the script was missing.
+// Deleting the two `.mjs` files would have hit exactly that arm and switched
+// BOTH obligations off with no output at all. There is no missing-file arm any
+// more: the authorities are compiled in, and an empty root list is still a
+// loud refusal.
 const REGEN_GUARDS: [RegenGuardDef; 2] = [
     RegenGuardDef {
-        script: "scripts/release_manifest.mjs",
+        authority: "devtools::release_manifest::INVENTORY_ROOTS",
         covers: "the release manifest hashes",
-        required: "release_manifest.mjs --check",
-        command: "node scripts/release_manifest.mjs --check",
+        required: "bee dev release-manifest --check",
+        command: "bee dev release-manifest --check",
         regen: "bee dev render-skill-trees, then bee onboard --repo-root . --apply, then bee dev release-manifest --write (in that order)",
         derive: derive_manifest_scope,
     },
     RegenGuardDef {
-        script: "scripts/ledger_parity.mjs",
+        authority: "onboard::plan::LEDGER_COVERED_ROOTS",
         covers: "the .bee/onboarding.json managed-hash ledger covers",
-        required: "ledger_parity.mjs --check",
-        command: "node scripts/ledger_parity.mjs --check",
+        required: "bee onboard --repo-root . --json",
+        command: "bee onboard --repo-root . --json",
         regen: "bee onboard --repo-root . --apply",
         derive: derive_ledger_scope,
     },
 ];
 
-/// literalJoinSegments: leading string-literal args of one path.join arg list.
-fn literal_join_segments(arg_text: &str) -> Vec<String> {
-    let mut segments = Vec::new();
-    for raw in arg_text.split(',') {
-        let arg = js_trim(raw);
-        if arg.is_empty() {
-            continue;
-        }
-        let chars: Vec<char> = arg.chars().collect();
-        let quoted = chars.len() >= 2
-            && (chars[0] == '"' || chars[0] == '\'')
-            && chars[chars.len() - 1] == chars[0]
-            && chars[1..chars.len() - 1].iter().all(|c| *c != '\\' && *c != chars[0]);
-        if !quoted {
-            break;
-        }
-        segments.push(chars[1..chars.len() - 1].iter().collect());
-    }
-    segments
-}
-
-/// Scan `path.join(\s*<ident>\s*,<capture-to-')'>)` occurrences of `source`.
-fn joined_literal_arg_lists(source: &str, base_ident: &str) -> Vec<String> {
-    let chars: Vec<char> = source.chars().collect();
-    let ident: Vec<char> = base_ident.chars().collect();
-    let mut found = Vec::new();
-    let mut i = 0usize;
-    while i < chars.len() {
-        if !cs_starts_with(&chars, i, "path.join(") {
-            i += 1;
-            continue;
-        }
-        let mut j = ws_run(&chars, i + "path.join(".len());
-        if j + ident.len() <= chars.len() && chars[j..j + ident.len()] == ident[..] {
-            j += ident.len();
-            j = ws_run(&chars, j);
-            if j < chars.len() && chars[j] == ',' {
-                let start = j + 1;
-                let mut k = start;
-                while k < chars.len() && chars[k] != ')' {
-                    k += 1;
-                }
-                if k < chars.len() {
-                    found.push(chars[start..k].iter().collect());
-                }
-            }
-        }
-        i += 1; // JS lastIndex resumes after the match; overlaps don't occur in practice
-    }
-    found
-}
-
-fn joined_literal_paths(source: &str, base_ident: &str) -> Vec<String> {
-    joined_literal_arg_lists(source, base_ident)
-        .into_iter()
-        .filter_map(|args| {
-            let segments = literal_join_segments(&args);
-            if segments.is_empty() {
-                None
-            } else {
-                Some(segments.join("/"))
-            }
-        })
-        .collect()
-}
-
-/// deriveManifestScope: every path.join(REPO_ROOT, ...) literal, minus the
-/// MANIFEST_PATH-derived path (which becomes the required file instead).
-fn derive_manifest_scope(source: &str) -> (Vec<String>, Vec<String>) {
-    let chars: Vec<char> = source.chars().collect();
-    let mut manifest_path: Option<String> = None;
-    for i in 0..chars.len() {
-        if !word_boundary_before(&chars, i) || !cs_starts_with(&chars, i, "MANIFEST_PATH") {
-            continue;
-        }
-        let mut j = ws_run(&chars, i + "MANIFEST_PATH".len());
-        if !(j < chars.len() && chars[j] == '=') {
-            continue;
-        }
-        j = ws_run(&chars, j + 1);
-        if !cs_starts_with(&chars, j, "path.join(") {
-            continue;
-        }
-        j = ws_run(&chars, j + "path.join(".len());
-        if !cs_starts_with(&chars, j, "REPO_ROOT") {
-            continue;
-        }
-        j = ws_run(&chars, j + "REPO_ROOT".len());
-        if !(j < chars.len() && chars[j] == ',') {
-            continue;
-        }
-        let start = j + 1;
-        let mut k = start;
-        while k < chars.len() && chars[k] != ')' {
-            k += 1;
-        }
-        if k < chars.len() {
-            let args: String = chars[start..k].iter().collect();
-            manifest_path = Some(literal_join_segments(&args).join("/"));
-            break; // non-global exec: first match only
-        }
-    }
-    let mut roots: Vec<String> = Vec::new();
-    for candidate in joined_literal_paths(source, "REPO_ROOT") {
-        if !roots.contains(&candidate) {
-            roots.push(candidate);
-        }
-    }
-    let manifest = manifest_path.clone().filter(|m| !m.is_empty());
-    let mut roots: Vec<String> = roots
-        .into_iter()
-        .filter(|c| !c.is_empty() && Some(c) != manifest.as_ref())
+/// The release-manifest scope: every inventory root EXCEPT the manifest file
+/// itself, which becomes the required file instead (a cell that edits a covered
+/// root must also list the regenerated manifest in `files`). Same split the
+/// `.mjs` parse produced from MANIFEST_PATH.
+fn derive_manifest_scope() -> (Vec<String>, Vec<String>) {
+    let manifest = crate::devtools::release_manifest_rel().to_string();
+    let mut roots: Vec<String> = crate::devtools::release_manifest_roots()
+        .iter()
+        .map(|r| (*r).to_string())
+        .filter(|r| *r != manifest)
         .collect();
     js_default_str_sort(&mut roots);
-    let required = match manifest {
-        Some(m) => vec![m],
-        None => Vec::new(),
-    };
-    (roots, required)
+    (roots, vec![manifest])
 }
 
-/// deriveLedgerScope: base from `path.join(root, "..", relDir)`, roots from
-/// every `checkGroup(managed.X, "<relDir>")` call.
-fn derive_ledger_scope(source: &str) -> (Vec<String>, Vec<String>) {
-    let chars: Vec<char> = source.chars().collect();
-    // /path\.join\(\s*root\s*,((?:\s*(?:"..."|'...')\s*,)+)\s*relDir\b/
-    let mut base: Option<String> = None;
-    'outer: for i in 0..chars.len() {
-        if !cs_starts_with(&chars, i, "path.join(") {
-            continue;
-        }
-        let mut j = ws_run(&chars, i + "path.join(".len());
-        if !cs_starts_with(&chars, j, "root") {
-            continue;
-        }
-        j = ws_run(&chars, j + 4);
-        if !(j < chars.len() && chars[j] == ',') {
-            continue;
-        }
-        j += 1;
-        let mut literals: Vec<String> = Vec::new();
-        loop {
-            let mut k = ws_run(&chars, j);
-            if k < chars.len() && (chars[k] == '"' || chars[k] == '\'') {
-                let quote = chars[k];
-                let start = k + 1;
-                let mut m = start;
-                while m < chars.len() && chars[m] != quote && chars[m] != '\\' {
-                    m += 1;
-                }
-                if m >= chars.len() || chars[m] != quote {
-                    continue 'outer;
-                }
-                let lit: String = chars[start..m].iter().collect();
-                k = ws_run(&chars, m + 1);
-                if !(k < chars.len() && chars[k] == ',') {
-                    continue 'outer;
-                }
-                literals.push(lit);
-                j = k + 1;
-                continue;
-            }
-            // No further quoted literal: need \s*relDir\b with >= 1 literal.
-            let k = ws_run(&chars, j);
-            if !literals.is_empty()
-                && cs_starts_with(&chars, k, "relDir")
-                && !word_at(&chars, k + "relDir".len())
-            {
-                base = Some(literals.join("/"));
-                break 'outer;
-            }
-            continue 'outer;
-        }
-    }
-    let Some(base) = base.filter(|b| !b.is_empty()) else {
-        return (Vec::new(), Vec::new());
-    };
-    // /checkGroup\(\s*managed\.\w+\s*,\s*("..."|'...')\s*\)/g
-    let mut roots: Vec<String> = Vec::new();
-    for i in 0..chars.len() {
-        if !cs_starts_with(&chars, i, "checkGroup(") {
-            continue;
-        }
-        let mut j = ws_run(&chars, i + "checkGroup(".len());
-        if !cs_starts_with(&chars, j, "managed.") {
-            continue;
-        }
-        j += "managed.".len();
-        let word_start = j;
-        while j < chars.len() && is_ascii_word(chars[j]) {
-            j += 1;
-        }
-        if j == word_start {
-            continue;
-        }
-        j = ws_run(&chars, j);
-        if !(j < chars.len() && chars[j] == ',') {
-            continue;
-        }
-        j = ws_run(&chars, j + 1);
-        if !(j < chars.len() && (chars[j] == '"' || chars[j] == '\'')) {
-            continue;
-        }
-        let quote = chars[j];
-        let start = j + 1;
-        let mut m = start;
-        while m < chars.len() && chars[m] != quote && chars[m] != '\\' {
-            m += 1;
-        }
-        if m >= chars.len() || chars[m] != quote {
-            continue;
-        }
-        let rel: String = chars[start..m].iter().collect();
-        let k = ws_run(&chars, m + 1);
-        if !(k < chars.len() && chars[k] == ')') {
-            continue;
-        }
-        let joined = if rel.is_empty() { base.clone() } else { format!("{base}/{rel}") };
-        if !roots.contains(&joined) {
-            roots.push(joined);
-        }
-    }
+/// The ledger scope: the host directories the managed-hash groups cover. No
+/// required file — re-running onboarding rewrites `.bee/onboarding.json`
+/// itself, so there is nothing for the cell to list by hand.
+fn derive_ledger_scope() -> (Vec<String>, Vec<String>) {
+    let mut roots: Vec<String> =
+        crate::onboard::ledger_covered_roots().into_iter().map(str::to_string).collect();
     js_default_str_sort(&mut roots);
     (roots, Vec::new())
 }
@@ -2811,22 +2645,18 @@ struct ActiveGuard {
 }
 
 /// deriveRegenGuards: absent script -> inactive; present-but-blind -> throw.
-fn derive_regen_guards(root: &Path) -> MR<Vec<ActiveGuard>> {
+fn derive_regen_guards() -> MR<Vec<ActiveGuard>> {
     let mut active = Vec::new();
     for guard in REGEN_GUARDS.iter() {
-        let mut file = root.to_path_buf();
-        for segment in guard.script.split('/') {
-            file = file.join(segment);
-        }
-        let source = match std::fs::read(&file) {
-            Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
-            Err(_) => continue, // guard not installed — nothing to owe
-        };
-        let (roots, required_files) = (guard.derive)(&source);
+        let (roots, required_files) = (guard.derive)();
+        // There is no "guard not installed" arm any more (see the note above
+        // REGEN_GUARDS): the authorities are compiled into this binary, so the
+        // only way to get an empty scope is a real defect — and a blind guard
+        // refuses rather than passing everything.
         if roots.is_empty() {
             return Err(Fail::Thrown(format!(
-                "regen obligation: could not derive any covered root from \"{}\" — the guard would be blind, so the write is refused rather than passed silently. FIX: the script's shape changed; update deriveRegenGuards in lib/cells.mjs to read the new shape (never paste a literal root list in — see D2).",
-                guard.script
+                "regen obligation: could not derive any covered root from {} — the guard would be blind, so the write is refused rather than passed silently. FIX: that authority returned an empty root set; restore it there (never paste a literal root list in — see D2).",
+                guard.authority
             )));
         }
         active.push(ActiveGuard { def: guard, roots, required_files });
@@ -2851,7 +2681,7 @@ fn path_under_root(file: &str, root_path: &str) -> bool {
 }
 
 /// lib/cells.mjs regenObligationRefusal — None when nothing is owed.
-fn regen_obligation_refusal(root: &Path, cell: &Map<String, Value>, verb: &str) -> MR<Option<String>> {
+fn regen_obligation_refusal(cell: &Map<String, Value>, verb: &str) -> MR<Option<String>> {
     if let Some(ack) = cell.get(REGEN_ACK_FIELD) {
         if matches!(ack, Value::String(s) if !js_trim(s).is_empty()) {
             return Ok(None); // D1 escape hatch
@@ -2878,7 +2708,7 @@ fn regen_obligation_refusal(root: &Path, cell: &Map<String, Value>, verb: &str) 
         Some(Value::String(s)) if !s.is_empty() => s.clone(),
         _ => "(unknown id)".to_string(),
     };
-    for guard in derive_regen_guards(root)? {
+    for guard in derive_regen_guards()? {
         let mut hit: Option<(String, String)> = None;
         for file in &files {
             if let Some(matched) = guard.roots.iter().find(|r| path_under_root(file, r)) {
@@ -2911,7 +2741,7 @@ fn regen_obligation_refusal(root: &Path, cell: &Map<String, Value>, verb: &str) 
         return Ok(Some(format!(
             "{verb}: REGEN_OBLIGATION — cell \"{id}\" touches \"{hit_path}\", which falls under \"{hit_root}\", a root {} (derived at runtime from {}, never a list kept here). Missing: {}. FIX: {}, and run the regen inside THIS cell — {}. To skip deliberately, set \"{REGEN_ACK_FIELD}\" on the cell to a one-line reason; it is recorded in the cell, so skipping is a named act rather than an oversight. For parallel waves, the recognized value \"wave-barrier\" defers the regen to the orchestrator, which owes the full regen chain once at wave close, in the wave-close commit, before the wave is declared clean (parallel-default D2). The write is refused; nothing was written.",
             guard.def.covers,
-            guard.def.script,
+            guard.def.authority,
             missing.join("; "),
             fixes.join(", "),
             guard.def.regen,
@@ -2920,8 +2750,8 @@ fn regen_obligation_refusal(root: &Path, cell: &Map<String, Value>, verb: &str) 
     Ok(None)
 }
 
-fn assert_regen_obligation(root: &Path, cell: &Map<String, Value>, verb: &str) -> MR<()> {
-    match regen_obligation_refusal(root, cell, verb)? {
+fn assert_regen_obligation(cell: &Map<String, Value>, verb: &str) -> MR<()> {
+    match regen_obligation_refusal(cell, verb)? {
         Some(refusal) => Err(Fail::Thrown(refusal)),
         None => Ok(()),
     }
@@ -3134,7 +2964,7 @@ fn validate_new_cell(root: &Path, cell: &Value) -> MR<()> {
     if read_cell_norm(root, &id)?.map(|v| js_truthy(&v)).unwrap_or(false) {
         return Err(Fail::Thrown(format!("addCell: cell \"{id}\" already exists.")));
     }
-    assert_regen_obligation(root, map, "addCell")
+    assert_regen_obligation(map, "addCell")
 }
 
 /// lib/cells.mjs normalizeNewCell — key order: existing keys keep position,
@@ -4594,139 +4424,14 @@ fn release_reservations_for_agent(root: &Path, agent: &str, cell_id: &str) -> MR
     Ok(ReleaseOutcome { paths, holds_released })
 }
 
-// ─── impact registry (scripts/impact_registry.mjs queryRegistry, E1) ───────
-// Fail-open BY CONTRACT: the whole E1 block sits in a try/catch that
-// swallows everything, so every unmodelable shape returns None (no warning)
-// rather than delegating.
-
-fn np_split_abs(p: &str) -> (String, Vec<String>) {
-    let normalized = p.replace('\\', "/");
-    let (prefix, rest) = if cfg!(windows) {
-        let bytes = normalized.as_bytes();
-        if bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic() {
-            (normalized[..2].to_string(), normalized[2..].to_string())
-        } else {
-            (String::new(), normalized.clone())
-        }
-    } else {
-        (String::new(), normalized.clone())
-    };
-    let mut comps: Vec<String> = Vec::new();
-    for part in rest.split('/') {
-        match part {
-            "" | "." => {}
-            ".." => {
-                comps.pop();
-            }
-            other => comps.push(other.to_string()),
-        }
-    }
-    (prefix, comps)
-}
-
-fn np_is_absolute(p: &str) -> bool {
-    if cfg!(windows) {
-        let b = p.as_bytes();
-        p.starts_with('/') || p.starts_with('\\') || (b.len() >= 3 && b[1] == b':' && (b[2] == b'/' || b[2] == b'\\'))
-    } else {
-        p.starts_with('/')
-    }
-}
-
-/// path.resolve(cwd, p) then path.relative(root, abs), '/'-joined — the
-/// normalizeQueryPath shape (module REPO_ROOT == the CLI's own root when the
-/// module lives at <root>/scripts/).
-fn repo_relative_query(root: &Path, cwd: &Path, p: &str) -> String {
-    let abs = if np_is_absolute(p) {
-        np_split_abs(p)
-    } else {
-        let joined = format!("{}/{}", cwd.to_string_lossy(), p);
-        np_split_abs(&joined)
-    };
-    let base = np_split_abs(&root.to_string_lossy());
-    let eq = |a: &str, b: &str| {
-        if cfg!(windows) {
-            a.eq_ignore_ascii_case(b)
-        } else {
-            a == b
-        }
-    };
-    if !eq(&abs.0, &base.0) {
-        // Different roots: path.relative returns `to` as-is; '/'-joined.
-        let mut out = abs.0.clone();
-        out.push('/');
-        out.push_str(&abs.1.join("/"));
-        return out;
-    }
-    let mut common = 0usize;
-    while common < abs.1.len() && common < base.1.len() && eq(&abs.1[common], &base.1[common]) {
-        common += 1;
-    }
-    let mut parts: Vec<String> = Vec::new();
-    for _ in common..base.1.len() {
-        parts.push("..".to_string());
-    }
-    for comp in &abs.1[common..] {
-        parts.push(comp.clone());
-    }
-    parts.join("/")
-}
-
-/// capCell's E1 cross-check: Some(warning line) | None, never an error.
-fn impact_registry_warning(
-    root: &Path,
-    cwd: &Path,
-    cell_files: &[Value],
-    verify: &str,
-    id: &str,
-) -> Option<String> {
-    if cell_files.is_empty() {
-        return None;
-    }
-    // The lazily-imported module must exist, or Node's catch skips silently.
-    if !root.join("scripts").join("impact_registry.mjs").is_file() {
-        return None;
-    }
-    let registry_text = std::fs::read_to_string(root.join("scripts").join("impact-registry.json")).ok()?;
-    let registry: Value = serde_json::from_str(&registry_text).ok()?;
-    let files = match registry.get("files") {
-        Some(Value::Object(m)) => m,
-        _ => return None, // property access on undefined throws -> catch
-    };
-    let mut mapped: Vec<String> = Vec::new();
-    for f in cell_files {
-        let Value::String(f) = f else { return None }; // path.isAbsolute(non-string) throws
-        let rel = repo_relative_query(root, cwd, f);
-        let Some(entry) = files.get(&rel) else { continue }; // unmapped
-        let all = match entry.get("all") {
-            Some(Value::Array(a)) => a,
-            _ => continue, // undefined/absent -> unmapped branch
-        };
-        if all.is_empty() {
-            continue;
-        }
-        let direct = match entry.get("direct") {
-            Some(Value::Array(d)) => d,
-            _ => return None, // for..of undefined throws -> catch
-        };
-        for s in direct {
-            let Value::String(s) = s else { return None }; // non-string suites: unmodeled
-            if !mapped.contains(s) {
-                mapped.push(s.clone());
-            }
-        }
-    }
-    js_default_str_sort(&mut mapped);
-    let missing: Vec<String> = mapped.into_iter().filter(|s| !verify.contains(s.as_str())).collect();
-    if missing.is_empty() {
-        return None;
-    }
-    Some(format!(
-        "capCell: cell \"{id}\" verify does not mention impact-registry direct-edge suite(s) {} for file(s) {} — derived-check-hardening E1 non-blocking warning.",
-        missing.join(", "),
-        js_join(cell_files, ", ")
-    ))
-}
+// RETIRED at the R6 cutover: the cap-time impact-registry cross-check (E1).
+// It queried `scripts/impact-registry.json` — a suite-impact graph derived
+// by parsing `scripts/run_verify.mjs` and the `.mjs` import closure — to warn
+// when a cell's verify command missed a direct-edge Node suite. Both the
+// registry and the graph it was derived from are gone with the Node tree, and
+// the cargo suite that replaced them runs whole in ~20s, so there is no
+// filtering left to advise about. `trace.warnings` keeps its slot (existing
+// capped cells carry it) but this producer no longer exists.
 
 // ─── delegation pre-scans ──────────────────────────────────────────────────
 // The mutators must never return None after an output or a write, so the
@@ -5223,7 +4928,7 @@ fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode
             if patch_map.contains_key("deps") {
                 assert_no_cycle(&root, "updateCell", std::slice::from_ref(&merged_value))?;
             }
-            assert_regen_obligation(&root, &merged, "updateCell")?;
+            assert_regen_obligation(&merged, "updateCell")?;
             write_cell(&root, &merged_value)?;
             Ok(merged_value)
         })();
@@ -6295,7 +6000,7 @@ struct CapFlags {
 }
 
 /// capCellFromFlags — the ONE cap door cap and finish share.
-fn cap_cell_from_flags(root: &Path, cwd: &Path, f: &CapFlags, finish: bool) -> MR<Value> {
+fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR<Value> {
     let id = &f.id;
     // Pre-scan (see the pre-scan section header).
     prescan_claim(root, id)?;
@@ -6465,19 +6170,6 @@ fn cap_cell_from_flags(root: &Path, cwd: &Path, f: &CapFlags, finish: bool) -> M
             next.push(Value::Object(entry));
             trace.insert("judge_overrides".into(), Value::Array(next));
         }
-        // derived-check-hardening E1 (loud, never a refusal, fail-open).
-        let cell_files: Vec<Value> = match cell_map.get("files") {
-            Some(Value::Array(a)) => a.clone(),
-            _ => Vec::new(),
-        };
-        let verify_text = match cell_map.get("verify") {
-            Some(Value::String(s)) => s.clone(),
-            _ => String::new(),
-        };
-        let impact = impact_registry_warning(root, cwd, &cell_files, &verify_text, id);
-        if let Some(warning) = &impact {
-            eprintln!("{warning}");
-        }
         let lane = match cell_map.get("lane") {
             Some(Value::String(s)) => s.clone(),
             _ => String::new(),
@@ -6508,10 +6200,9 @@ fn cap_cell_from_flags(root: &Path, cwd: &Path, f: &CapFlags, finish: bool) -> M
         };
         trace.insert("outcome".into(), outcome_value);
         trace.insert("capped_at".into(), Value::String(utc_now()));
-        trace.insert(
-            "warnings".into(),
-            Value::Array(impact.into_iter().map(Value::String).collect()),
-        );
+        // No producer since the E1 impact-registry check retired; the key
+        // stays so a capped cell's trace shape is unchanged.
+        trace.insert("warnings".into(), Value::Array(Vec::new()));
         match &tests_run {
             None => {
                 trace.insert("tests".into(), Value::String("undeclared".into()));
@@ -6591,14 +6282,13 @@ fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
     dispatch(cmd, use_json, t0, move |ctx| {
         let mut cap_flags = cap_flags_owned;
         let root = ctx.root.clone();
-        let cwd = std::env::current_dir().map_err(|_| Fail::Delegate)?;
         if let Some(file) = &deviations_file {
             if !file.is_empty() {
                 // `flags['deviations-file'] ? parse : []` — truthy only.
                 cap_flags.deviations = parse_deviations_file(file)?;
             }
         }
-        let cell = cap_cell_from_flags(&root, &cwd, &cap_flags, finish)?;
+        let cell = cap_cell_from_flags(&root, &cap_flags, finish)?;
         if !finish {
             let text = cap_text(&cell);
             return Ok(Out::Emit(cell, text, 0));
@@ -8065,48 +7755,95 @@ mod tests {
     }
 
     // ── regen guards ──────────────────────────────────────────────────────
+    //
+    // R6 CUTOVER: this used to build a fake `scripts/release_manifest.mjs` in a
+    // tempdir and assert the PARSE of it. The guards read compiled-in
+    // authorities now, so the fixture is gone and the test asserts the thing
+    // that actually matters: the derived scope is real, the obligation fires on
+    // it, and every escape hatch still works.
     #[test]
-    fn regen_guard_derives_roots_and_refuses_missing_check() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        std::fs::create_dir_all(root.join("scripts")).unwrap();
-        std::fs::write(
-            root.join("scripts").join("release_manifest.mjs"),
-            r#"
-const MANIFEST_PATH = path.join(REPO_ROOT, "docs", "history", "m.json");
-const A = path.join(REPO_ROOT, "templates");
-const B = path.join(REPO_ROOT, "packages", "bee");
-const C = path.join(REPO_ROOT, dynamic);
-"#,
-        )
-        .unwrap();
-        let guards = derive_regen_guards(root).unwrap();
-        assert_eq!(guards.len(), 1);
-        assert_eq!(guards[0].roots, vec!["packages/bee".to_string(), "templates".to_string()]);
-        assert_eq!(guards[0].required_files, vec!["docs/history/m.json".to_string()]);
+    fn regen_guard_derives_real_roots_from_the_compiled_authorities() {
+        let guards = derive_regen_guards().unwrap();
+        assert_eq!(guards.len(), 2, "both guards are always active — there is no absent arm");
+
+        let manifest = &guards[0];
+        assert!(
+            manifest.roots.contains(&"packages/bee".to_string())
+                && manifest.roots.contains(&"skills".to_string()),
+            "the manifest guard must cover the shipped frame: {:?}",
+            manifest.roots
+        );
+        assert_eq!(
+            manifest.required_files,
+            vec!["docs/history/codex-harness-hardening/release-manifest.json".to_string()],
+            "the manifest file itself is the required file, never a covered root"
+        );
+        assert!(
+            !manifest.roots.contains(&manifest.required_files[0]),
+            "the manifest must not be both a covered root and its own required file"
+        );
+
+        let ledger = &guards[1];
+        assert!(
+            ledger.roots.contains(&".bee/bin/lib".to_string())
+                && ledger.roots.contains(&".bee/expertise".to_string()),
+            "the ledger guard must cover the vendored trees: {:?}",
+            ledger.roots
+        );
+    }
+
+    #[test]
+    fn regen_obligation_fires_refuses_and_can_be_acked() {
+        let manifest_rel = "docs/history/codex-harness-hardening/release-manifest.json";
+
         // A cell touching a covered root without the check refuses…
-        let cell = json!({
-            "id": "r-1", "files": ["templates/x.md"], "verify": "echo ok"
-        });
-        let refusal = regen_obligation_refusal(root, cell.as_object().unwrap(), "addCell")
+        let cell = json!({"id": "r-1", "files": ["skills/bee-hive/SKILL.md"], "verify": "echo ok"});
+        let refusal = regen_obligation_refusal(cell.as_object().unwrap(), "addCell")
             .unwrap()
             .expect("must refuse");
-        assert!(refusal.starts_with("addCell: REGEN_OBLIGATION — cell \"r-1\" touches \"templates/x.md\""));
-        assert!(refusal.contains("verify does not contain \"release_manifest.mjs --check\""));
-        assert!(refusal.contains("files does not list \"docs/history/m.json\""));
-        // …the ack skips it, a compliant cell passes.
-        let acked = json!({"id": "r-1", "files": ["templates/x.md"], "verify": "x", "regen_obligation_ack": "wave-barrier"});
-        assert!(regen_obligation_refusal(root, acked.as_object().unwrap(), "addCell").unwrap().is_none());
+        assert!(
+            refusal.starts_with(
+                "addCell: REGEN_OBLIGATION — cell \"r-1\" touches \"skills/bee-hive/SKILL.md\""
+            ),
+            "{refusal}"
+        );
+        assert!(refusal.contains("verify does not contain \"bee dev release-manifest --check\""));
+        assert!(refusal.contains(&format!("files does not list \"{manifest_rel}\"")));
+        // The refusal names WHERE the scope came from, so it can be checked.
+        assert!(refusal.contains("devtools::release_manifest::INVENTORY_ROOTS"), "{refusal}");
+
+        // …the ack skips it…
+        let acked = json!({
+            "id": "r-1",
+            "files": ["skills/bee-hive/SKILL.md"],
+            "verify": "x",
+            "regen_obligation_ack": "wave-barrier"
+        });
+        assert!(regen_obligation_refusal(acked.as_object().unwrap(), "addCell")
+            .unwrap()
+            .is_none());
+
+        // …and a compliant cell passes.
         let ok = json!({
             "id": "r-1",
-            "files": ["templates/x.md", "docs/history/m.json"],
-            "verify": "node scripts/release_manifest.mjs --check"
+            "files": ["skills/bee-hive/SKILL.md", manifest_rel],
+            "verify": "bee dev release-manifest --check"
         });
-        assert!(regen_obligation_refusal(root, ok.as_object().unwrap(), "addCell").unwrap().is_none());
-        // A present-but-blind guard throws the named refusal.
-        std::fs::write(root.join("scripts").join("release_manifest.mjs"), "nothing here").unwrap();
-        assert!(thrown(derive_regen_guards(root).map(|_| ()))
-            .starts_with("regen obligation: could not derive any covered root"));
+        assert!(regen_obligation_refusal(ok.as_object().unwrap(), "addCell").unwrap().is_none());
+
+        // The LEDGER guard fires on its own roots, with its own fix.
+        let vendored = json!({"id": "r-2", "files": [".bee/bin/lib/state.mjs"], "verify": "echo ok"});
+        let refusal = regen_obligation_refusal(vendored.as_object().unwrap(), "addCell")
+            .unwrap()
+            .expect("the ledger guard must fire on a vendored path");
+        assert!(refusal.contains("bee onboard --repo-root . --json"), "{refusal}");
+        assert!(refusal.contains("onboard::plan::LEDGER_COVERED_ROOTS"), "{refusal}");
+
+        // A cell that touches nothing covered is silent.
+        let unrelated = json!({"id": "r-3", "files": ["src/main.rs"], "verify": "echo ok"});
+        assert!(regen_obligation_refusal(unrelated.as_object().unwrap(), "addCell")
+            .unwrap()
+            .is_none());
     }
 
     // ── claims-store protocol ─────────────────────────────────────────────
@@ -8595,38 +8332,6 @@ const C = path.join(REPO_ROOT, dynamic);
         );
         assert_eq!(update_frozen_hint("status"), Some("status moves only through claim/verify/cap/block/drop"));
         assert_eq!(update_frozen_hint("nonsense"), None);
-    }
-
-    // ── impact registry query ─────────────────────────────────────────────
-    #[test]
-    fn impact_registry_warning_names_missing_direct_suites() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        std::fs::create_dir_all(root.join("scripts")).unwrap();
-        std::fs::write(root.join("scripts").join("impact_registry.mjs"), "// module present").unwrap();
-        std::fs::write(
-            root.join("scripts").join("impact-registry.json"),
-            r#"{"files": {"src/a.js": {"direct": ["suiteA", "suiteB"], "all": ["suiteA", "suiteB", "suiteC"]}}}"#,
-        )
-        .unwrap();
-        let warning = impact_registry_warning(
-            root,
-            root,
-            &[json!("src/a.js")],
-            "runs suiteB only",
-            "i-1",
-        )
-        .expect("must warn");
-        assert_eq!(
-            warning,
-            "capCell: cell \"i-1\" verify does not mention impact-registry direct-edge suite(s) suiteA for file(s) src/a.js — derived-check-hardening E1 non-blocking warning."
-        );
-        // Verify covering every direct suite: silent.
-        assert!(impact_registry_warning(root, root, &[json!("src/a.js")], "suiteA suiteB", "i-1").is_none());
-        // No module / no registry / unmapped file: silent.
-        assert!(impact_registry_warning(root, root, &[json!("src/other.js")], "", "i-1").is_none());
-        std::fs::remove_file(root.join("scripts").join("impact_registry.mjs")).unwrap();
-        assert!(impact_registry_warning(root, root, &[json!("src/a.js")], "", "i-1").is_none());
     }
 
     // ── cells claim-next (R6): the sweep + the selection filters ──────────
@@ -9337,7 +9042,7 @@ const C = path.join(REPO_ROOT, dynamic);
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
         write_cell_fixture(root, "nt-1", &cell_body("nt-1"));
-        let capped = cap_cell_from_flags(root, root, &cap_flags("nt-1"), false).unwrap();
+        let capped = cap_cell_from_flags(root, &cap_flags("nt-1"), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
         assert_eq!(
             capped["trace"]["tests"],
@@ -9353,7 +9058,7 @@ const C = path.join(REPO_ROOT, dynamic);
         let root2 = tmp2.path();
         write_bee_config(root2, &json!({"commands": {"test": "exit 3"}}));
         write_cell_fixture(root2, "nt-2", &cell_body("nt-2"));
-        let refusal = thrown(cap_cell_from_flags(root2, root2, &cap_flags("nt-2"), false));
+        let refusal = thrown(cap_cell_from_flags(root2, &cap_flags("nt-2"), false));
         assert!(
             refusal.starts_with("refusing to cap \"nt-2\" — the declared test run is RED"),
             "{refusal}"

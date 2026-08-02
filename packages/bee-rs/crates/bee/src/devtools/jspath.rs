@@ -1,16 +1,21 @@
 // jspath — Node's `path` module, win32 flavor on Windows and posix
 // elsewhere, for the operations the dev-surface scripts perform on paths.
 //
-// provenance: node lib/path.js (`win32.normalize/join/resolve/dirname/
-// basename/relative/isAbsolute/extname` and their posix twins).
+// provenance: node lib/path.js (`win32.normalize/join/dirname/basename`
+// and their posix twins).
 //
-// WHY NOT std::path. `impact_registry.mjs` builds paths out of source-code
-// FRAGMENTS it scans (`path.join(REPO_ROOT, ".bee", "bin", "bee.mjs")`), then
-// keys a committed JSON file on the results. Reproducing that registry
-// byte-for-byte means reproducing Node's lexical rules — trailing-separator
-// preservation, `..` popping, the win32 drive prefix, case-insensitive
-// `relative` — not std::path's (which differs on several of them). The
-// operations are purely lexical here, exactly as they are in Node.
+// WHY NOT std::path. `statusline-usage.mjs` slices and rejoins paths with
+// Node's LEXICAL rules — trailing-separator preservation, `..` popping and the
+// win32 drive prefix — and its output is byte-compared against the original's.
+// std::path differs on several of those, so Node's `path` is reproduced rather
+// than approximated. The operations are purely lexical here, exactly as they
+// are in Node.
+//
+// SCOPE. Trimmed at the R6 cutover to the operations `statusline.rs` still
+// calls (SEP / normalize / join / dirname / basename). `resolve`, `relative`,
+// `is_absolute` and `extname` existed only for the retired impact registry —
+// which had to rebuild a committed JSON graph keyed on paths it assembled out
+// of scanned source fragments — and went with it.
 
 pub const SEP: char = if cfg!(windows) { '\\' } else { '/' };
 
@@ -85,47 +90,6 @@ pub fn join(parts: &[&str]) -> String {
     normalize(&joined.join(&SEP.to_string()))
 }
 
-pub fn is_absolute(p: &str) -> bool {
-    split_root(p).2
-}
-
-/// provenance: `path.resolve` — right-to-left until absolute, then cwd.
-pub fn resolve(parts: &[&str]) -> String {
-    let mut resolved = String::new();
-    let mut absolute = false;
-    for part in parts.iter().rev() {
-        if part.is_empty() {
-            continue;
-        }
-        resolved = if resolved.is_empty() {
-            (*part).to_string()
-        } else {
-            format!("{part}{SEP}{resolved}")
-        };
-        if is_absolute(part) {
-            absolute = true;
-            break;
-        }
-    }
-    if !absolute {
-        let cwd = std::env::current_dir()
-            .map(|c| c.to_string_lossy().into_owned())
-            .unwrap_or_else(|_| SEP.to_string());
-        resolved = if resolved.is_empty() { cwd } else { format!("{cwd}{SEP}{resolved}") };
-    }
-    let normalized = normalize(&resolved);
-    // path.resolve never returns a trailing separator (except for a root).
-    if normalized.len() > 1 && normalized.ends_with(SEP) && !is_absolute_root(&normalized) {
-        return normalized[..normalized.len() - 1].to_string();
-    }
-    normalized
-}
-
-fn is_absolute_root(p: &str) -> bool {
-    let (_, rest, absolute) = split_root(p);
-    absolute && rest.is_empty()
-}
-
 /// provenance: `path.dirname`.
 pub fn dirname(p: &str) -> String {
     if p.is_empty() {
@@ -167,40 +131,6 @@ pub fn basename(p: &str, ext: &str) -> String {
     base.to_string()
 }
 
-/// provenance: `path.extname` — from the LAST `.` in the basename, unless
-/// that dot is the basename's first character.
-pub fn extname(p: &str) -> String {
-    let base = basename(p, "");
-    match base.rfind('.') {
-        Some(0) | None => String::new(),
-        Some(i) => base[i..].to_string(),
-    }
-}
-
-/// provenance: `path.relative(from, to)` — win32 compares case-INSENSITIVELY.
-pub fn relative(from: &str, to: &str) -> String {
-    let from = resolve(&[from]);
-    let to = resolve(&[to]);
-    if from == to {
-        return String::new();
-    }
-    let fold = |s: &str| if cfg!(windows) { s.to_lowercase() } else { s.to_string() };
-    let (fp, fr, _) = split_root(&from);
-    let (tp, tr, _) = split_root(&to);
-    if fold(fp) != fold(tp) {
-        return to; // different roots: no relative path exists
-    }
-    let fs: Vec<&str> = fr.split(SEP).filter(|s| !s.is_empty()).collect();
-    let ts: Vec<&str> = tr.split(SEP).filter(|s| !s.is_empty()).collect();
-    let mut common = 0usize;
-    while common < fs.len() && common < ts.len() && fold(fs[common]) == fold(ts[common]) {
-        common += 1;
-    }
-    let mut out: Vec<&str> = vec![".."; fs.len() - common];
-    out.extend_from_slice(&ts[common..]);
-    out.join(&SEP.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,52 +154,13 @@ mod tests {
     }
 
     #[test]
-    fn dirname_basename_extname_match_node() {
+    fn dirname_and_basename_match_node() {
         // Node slices the ORIGINAL string here — separators are not unified.
-        assert_eq!(dirname("a/b/c.mjs"), "a/b");
-        assert_eq!(dirname(&format!("a{SEP}b{SEP}c.mjs")), format!("a{SEP}b"));
-        assert_eq!(dirname("c.mjs"), ".");
-        assert_eq!(basename("a/b/c.mjs", ""), "c.mjs");
-        assert_eq!(basename("a/b/c.mjs", ".mjs"), "c");
-        assert_eq!(basename("a/.mjs", ".mjs"), ".mjs"); // base == ext
-        assert_eq!(extname("a/b/c.mjs"), ".mjs");
-        assert_eq!(extname("a/.bee-render.json"), ".json");
-        assert_eq!(extname("a/.mjs"), "");
-        assert_eq!(extname("a/b"), "");
-    }
-
-    #[test]
-    fn resolve_stops_at_the_first_absolute_arg() {
-        #[cfg(windows)]
-        {
-            assert_eq!(resolve(&["D:\\a\\b", "../c"]), "D:\\a\\c");
-            assert_eq!(resolve(&["D:\\a", "E:\\b"]), "E:\\b");
-            assert!(is_absolute("D:\\a"));
-            assert!(!is_absolute("a\\b"));
-        }
-        #[cfg(unix)]
-        {
-            assert_eq!(resolve(&["/a/b", "../c"]), "/a/c");
-            assert_eq!(resolve(&["/a", "/b"]), "/b");
-            assert!(is_absolute("/a"));
-            assert!(!is_absolute("a/b"));
-        }
-    }
-
-    #[test]
-    fn relative_matches_node() {
-        #[cfg(windows)]
-        {
-            assert_eq!(relative("D:\\repo", "D:\\repo\\a\\b.mjs"), "a\\b.mjs");
-            assert_eq!(relative("D:\\repo", "D:\\other\\x"), "..\\other\\x");
-            // win32 folds case
-            assert_eq!(relative("D:\\Repo", "d:\\repo\\a"), "a");
-        }
-        #[cfg(unix)]
-        {
-            assert_eq!(relative("/repo", "/repo/a/b.mjs"), "a/b.mjs");
-            assert_eq!(relative("/repo", "/other/x"), "../other/x");
-        }
-        assert_eq!(relative("/a", "/a"), "");
+        assert_eq!(dirname("a/b/c.md"), "a/b");
+        assert_eq!(dirname(&format!("a{SEP}b{SEP}c.md")), format!("a{SEP}b"));
+        assert_eq!(dirname("c.md"), ".");
+        assert_eq!(basename("a/b/c.md", ""), "c.md");
+        assert_eq!(basename("a/b/c.md", ".md"), "c");
+        assert_eq!(basename("a/.md", ".md"), ".md"); // base == ext
     }
 }
