@@ -15,10 +15,9 @@ metadata:
 
 # Grooming — hunt the project's debt
 
-An on-demand hygiene pass for an idle hive: hunt the project's debt,
-propose kills, execute the approved ones as ordinary cells, then record
-what each kill actually bought. Grooming decides nothing alone and
-deletes nothing alone.
+Grooming decides nothing alone and deletes nothing alone: hunt,
+propose kills, execute only the approved ones as ordinary cells, then
+record what each kill actually bought.
 
 ## Scope — the project, not the harness
 
@@ -89,9 +88,9 @@ never learns mows the same grass forever.
 
 ## Headless
 
-`mode:headless` audits and proposes only: score, trend, hunt, ranked
-proposals, with approvals deferred to an `Outstanding Questions`
-section. Headless never executes a kill and never deletes anything.
+`bee-hive` ("Headless") governs; a headless run audits and proposes
+only — score, trend, hunt, ranked proposals — and never executes a
+kill or deletes anything.
 
 ## References
 

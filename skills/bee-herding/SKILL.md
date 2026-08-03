@@ -20,18 +20,11 @@ metadata:
 
 # Herding — the unattended cockpit
 
-Three roles drive a herdr cockpit over one repo. A human invokes
-**bootstrap** directly — no `--role` — to pre-flight and turn the
-cockpit on, once. After that, every control action is a **fresh,
-memoryless invocation**: `control-loop.sh --role dispatch` runs one
-cold iteration per interval, and **merge** is an owner gesture,
-single-shot, never looped. Nothing carries over between invocations
-except what bee state, git, and the herdr workspace durably record —
-read your role's reference in full before acting, then act once,
+## The three roles
+
+Read your role's reference in full before acting, then act once,
 report into the chat pane, and exit; the loop (or the owner's next
 gesture) starts the next invocation cold.
-
-## The three roles
 
 **Bootstrap** — one-shot human setup, start to finish in one turn:
 resolve the main root, pre-flight (main clean; gate-bypass level at
@@ -49,8 +42,9 @@ reading), rank, announce before acting, spawn the working agent.
 `--dry-run` reports the whole decision and changes nothing. Protocol:
 `references/role-dispatch.md`.
 
-**Merge** — the one action that lands work in main, so a human is
-present: find finished worktrees from bee's own record only, honor
+**Merge** — an owner gesture, single-shot, never looped; the one
+action that lands work in main, so a human is present: find finished
+worktrees from bee's own record only, honor
 red-stop markers, merge and clean up each finished worktree, close its
 pane — and STOP COLD on a red verify, never retry. Protocol:
 `references/role-merge.md`.
@@ -103,12 +97,12 @@ never `eval`. Shape and examples:
 
 ## References
 
-| File | Contents |
+| File | When to load |
 |---|---|
-| `references/role-bootstrap.md` | Bootstrap protocol in full |
-| `references/role-dispatch.md` | Dispatch protocol + quick reference |
-| `references/role-merge.md` | Merge protocol + quick reference |
-| `references/operational-invariants.md` | Permission posture, runtime adapter, containment, stop/resume in full |
-| `references/dispatch-dry-run.md` | Recorded dry-run proof |
-| `references/spawn-proof.md` | Recorded live spawn proof |
-| `references/dispatch-prompt.md`, `references/merge-prompt.md` | Control pane opening prompts |
+| `references/role-bootstrap.md` | You are the bootstrap role — read the full protocol before any pre-flight action |
+| `references/role-dispatch.md` | You are the dispatch role — read the full protocol (plus quick reference) before building the dispatchable set |
+| `references/role-merge.md` | You are the merge role — read the full protocol (plus quick reference) before touching any worktree |
+| `references/operational-invariants.md` | A safety boundary needs its full record — permission posture, runtime adapter, containment, stop/resume |
+| `references/dispatch-dry-run.md` | Auditing what a dispatch iteration decides — the recorded dry-run proof |
+| `references/spawn-proof.md` | Auditing a live spawn end to end — the recorded proof |
+| `references/dispatch-prompt.md`, `references/merge-prompt.md` | Opening a control pane and needing its exact opening prompt |

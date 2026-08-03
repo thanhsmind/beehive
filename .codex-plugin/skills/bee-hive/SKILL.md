@@ -29,7 +29,7 @@ current stop. Out-of-band requests:
 | Skill | When |
 |---|---|
 | `bee-shaping` | Gray areas or unlocked decisions — lock them (also backlog triage, parking, the implement-plan brief). |
-| `bee-planning` | Decisions locked, or scope already clear ("just fix this") — route the lane, shape the work, present the gate. A code-touching route creates the feature's worktree in the same step (`bee worktree new --feature <slug>`) and the work lives there. |
+| `bee-planning` | Decisions locked, or scope already clear ("just fix this") — route the lane, shape the work, present the gate. A code-touching route creates the feature's worktree in the same step (worktree-first — AGENTS.md). |
 | `bee-swarming` | Merged shape+execution gate approved, cells open — orchestrate workers, or execute one assigned cell, inside the feature's worktree. A `tiny` cell may run inline; `small` and up runs through a dispatched execution worker. |
 | `bee-capturing` | Execution done, an area needs documenting, or something just settled — sync specs, record learnings. |
 | `bee-reviewing` | Only on an explicit review request — never automatic. Merge/ship with unreviewed candidates: report count + risk, ask ONE question. |
@@ -45,8 +45,8 @@ Three gates, and only three: **Gate 1** (exploring — approve CONTEXT.md), **Ga
 merge approval, only inside a review session the user invoked). Gates 1-2 are the default
 chain; Gate 3 is additive and never automatic ("The three gates").
 
-Never approve a gate yourself, in any mode — headless included. Gates belong to the user:
-`bee gate` records their answer, presented as a plain-language layer plus the fixed
+Gates belong to the user (AGENTS.md), in any mode — headless included: `bee gate`
+records their answer, presented as a plain-language layer plus the fixed
 question, report linked, never pasted ("Gate Presentation Contract").
 
 The one recorded exception is gate bypass — `.bee/config.json` `gate_bypass`, a level:
@@ -80,11 +80,20 @@ rediscover where things are.
 
 `/go` or "run the full pipeline" → `references/go-mode.md`.
 
+## Headless
+
+A headless run proceeds without asking: ambiguities, unanswered decisions, and gate
+questions become `Outstanding Questions` entries in the run's report, each carrying
+the evidence a later human pass would start from — deferred, never guessed, never
+self-answered. A headless run never self-approves a gate: every gate still stops and
+reports awaiting approval (bypass is the separate, recorded exception — "Gate bypass mode").
+Recommendations are still made where the evidence supports one, labeled with confidence.
+Full contract: `references/gates-and-delegation.md` ("Headless mode").
+
 ## Hard rules
 
 - P1 review findings always block; never build on a red base.
-- At ~65% context, write `.bee/HANDOFF.json` and pause.
-- Locked decisions are cited, never reinterpreted; no source edits before the execution gate is approved.
+- Locked decisions (cite, never reinterpret), the pre-execution-gate edit boundary, and the 65%-context handoff hold as written (AGENTS.md).
 - "done/green/fixed" only beside fresh command output in the same message; every close carries a capture line or an explicit "nothing settled".
 - The agent runs every bee command ("The agent runs the machinery"); work language only, one tick line per visible step ("Progress ticks", "Communication contract"); a red line is never silenced.
 - Form rules bend out loud with a recorded reason; boundary rules never bend ("Judgment contract"). Lanes scale ceremony, never memory ("Re-lane checkpoint", "Capture discipline").

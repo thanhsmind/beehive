@@ -15,15 +15,14 @@ metadata:
 
 # Swarming — run the approved work
 
-Two roles share this skill. A **worker** has an assigned cell id in its
-dispatch prompt; everyone else is the **orchestrator**. `bee orient` shows
-where the work stands either way.
+A **worker** has an assigned cell id in its dispatch prompt; everyone else
+is the **orchestrator**. `bee orient` shows where the work stands either way.
 
 ## Orchestrate
 
 You launch workers and tend results; you do not implement. The wave runs
-inside the feature's worktree (worktree-first — the main checkout stays
-clean for integration). A `tiny` cell may run inline in this session;
+inside the feature's worktree (worktree-first — AGENTS.md). A `tiny` cell
+may run inline in this session;
 `small` and up always dispatches — one worker per cell
 (`references/swarming-reference.md` ("Single execution worker in full")),
 parallel by default: disjoint cells fan out concurrently
@@ -64,9 +63,9 @@ runs later, at the owner's pace) and landing is `bee worktree merge` from
 main. Before declaring done: no active reservations, no in-flight
 workers recorded.
 
-At ~65% context, write `.bee/HANDOFF.json` and pause cleanly — never push
-through the budget mid-wave. When a unit finishes and approved work
-remains, continue in-session; finishing a unit is never a reason to stop.
+The 65%-context handoff (AGENTS.md) holds mid-wave — never push through
+the budget. When a unit finishes and approved work remains, continue
+in-session; finishing a unit is never a reason to stop.
 
 ## Execute (worker)
 
@@ -96,8 +95,8 @@ outputs — when a verb refuses, its message names the fix.
    finish; close re-runs them for the feature.
 6. Return exactly one token, first thing in your final message:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
-   diagnosis) · `[HANDOFF]` (at ~65% context — write `.bee/HANDOFF.json`
-   first) · `[NOOP]` (cell missing or already capped). Never wait
+   diagnosis) · `[HANDOFF]` (the 65% handoff, AGENTS.md — handoff file
+   written before the token) · `[NOOP]` (cell missing or already capped). Never wait
    silently; never ask a blocking question — you run headless.
 
 ## Hard rules (both roles)
@@ -110,9 +109,8 @@ outputs — when a verb refuses, its message names the fix.
 
 ## Headless
 
-Waves run without check-ins; unrescuable blockers and anything needing
-user judgment go to an `Outstanding Questions` section. Gates are never
-self-approved, in any mode.
+`bee-hive` ("Headless") governs; waves run without check-ins, and an
+unrescuable blocker becomes an `Outstanding Questions` entry.
 
 ## References
 
