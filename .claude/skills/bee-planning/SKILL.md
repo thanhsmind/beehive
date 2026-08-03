@@ -15,8 +15,8 @@ metadata:
 
 # Planning — shape the work
 
-Turns locked decisions (`docs/history/<feature>/CONTEXT.md`) into a lane, a
-shape, and — after approval — current-slice cells. Craft: `.bee/expertise/planning.md`.
+Inputs: locked decisions in `docs/history/<feature>/CONTEXT.md`.
+Craft: `.bee/expertise/planning.md`.
 
 ## Route
 
@@ -41,9 +41,9 @@ File caps count product files only — never `.bee/**`, `docs/**`, or plans.
 
 Record: `bee route --set --class <c> --lane <l> --flags <f> --files <n>`;
 re-route upward on new evidence any time, de-escalate only on cited evidence.
-A code-touching route's next action includes creating the feature worktree —
-`bee worktree new --feature <slug>`, session opened there (worktree-first;
-`docs` and a solo `tiny` stay in main).
+A code-touching route's next action includes creating the feature worktree
+and opening the session there (worktree-first — AGENTS.md; `docs` and a solo
+`tiny` stay in main).
 
 ## Research
 
@@ -108,12 +108,12 @@ every decision, the user choosing what waits; a cheaper swap needs a supersede.
 
 ## Headless
 
-Route, research, and shape run without questions; draft the shape, stop at
-the gate — never self-approved. Ambiguities go to `Outstanding Questions`.
+`bee-hive` ("Headless") governs; planning's run drafts the shape and stops
+at the gate — never self-approved.
 
 ## Hard rules
 
-- Locked decisions are cited, never reinterpreted, never scope-reduced.
+- Locked decisions are cited, never reinterpreted (AGENTS.md), never scope-reduced.
 - No cells, no prep artifacts, before the gate is approved.
 - Current slice only — a future-slice cell does not exist yet.
 - Scope gaps go back to `bee-shaping`; the finished shape only to `bee-swarming`.

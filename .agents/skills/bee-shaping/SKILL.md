@@ -15,10 +15,10 @@ metadata:
 
 # Shaping — from fuzzy intent to a reviewable plan
 
-Four moves share this skill. **Explore** interviews a human through gray
-areas; **Qualify** triages a backlog item unattended. Both feed **Lock**,
-the single writer of the decision record; **Brief** renders the implement
-plan when the lane earns one. `bee orient` shows which move the work needs.
+**Explore** interviews a human through gray areas; **Qualify** triages a
+backlog item unattended. Both feed **Lock**, the single writer of the
+decision record; **Brief** renders the implement plan when the lane earns
+one. `bee orient` shows which move the work needs.
 
 ## Explore (interactive)
 
@@ -85,7 +85,7 @@ what Explore or Qualify resolved — it never originates a decision, term,
 boundary, or scope note; a section the input left silent is an Open
 Question, never a guess. Concrete language only. Deferred ideas that are
 real future work get `bee backlog add` in the same turn. Downstream work
-cites D-IDs; it never reinterprets them.
+cites D-IDs, never reinterprets them (AGENTS.md).
 
 ## Brief (the gate's document)
 
@@ -109,7 +109,7 @@ execution records, never the plan (`references/walkthrough-template.md`).
 - Explore locks product decisions only; implementation choices belong to
   planning. No architecture proposals, cells, or code — the one exception
   is a throwaway mock under `.bee/spikes/`.
-- Gates belong to the human: shaping presents one, never approves one.
+- Gates belong to the user (AGENTS.md); shaping only presents one.
 
 ## References
 
