@@ -1,0 +1,157 @@
+[
+  {
+    "id": "pd-1",
+    "feature": "prompt-diet",
+    "lane": "standard",
+    "title": "Diet bee-hive/bee-shaping/bee-planning/bee-swarming SKILL.md; bee-hive gains the canonical Headless statement",
+    "behavior_change": true,
+    "files": [
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-swarming/SKILL.md"
+    ],
+    "read_first": [
+      "docs/history/prompt-diet/CONTEXT.md",
+      "docs/history/prompt-diet/plan.md",
+      "AGENTS.md",
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-swarming/SKILL.md"
+    ],
+    "action": "Per prompt-diet D1/D2/D3 (CONTEXT.md) and the plan Constraints block, which binds every edit. (1) D3: in skills/bee-hive/SKILL.md add one canonical headless statement under a NEW stable heading '## Headless' placed before Hard rules: ambiguities, unanswered decisions, and gate questions become Outstanding Questions entries; a headless run never self-answers a question and never self-approves a gate. This ONE full statement replaces five per-skill copies - write it carefully. (2) D1: in each of the four files, find near-verbatim restatements of rules AGENTS.md already carries - gate-approval boundary, worktree-first, cite-never-reinterpret, 65%-context handoff. BEFORE each cut, verify the rule text actually appears in AGENTS.md BEE block; then replace the restatement with a one-line cite keeping any skill-specific delta the original sentence carried. If a sentence carries meaning AGENTS.md does not, keep it (D6). (3) D2: in each file, trim the opening body lines that re-narrate the YAML description - the body must open with an imperative, a table, or a rule. Do not touch YAML frontmatter. (4) In bee-planning and bee-swarming, shrink their Headless/Outstanding-Questions paragraphs to one line citing bee-hive (\"Headless\") plus each skill's own delta (planning: stop at the gate, never self-approved; swarming: whatever its copy uniquely adds). (5) NEVER delete or rename any markdown heading another document cites - check with rg before removing any heading; when in doubt keep it. Never reword a boundary-rule sentence you keep - keep verbatim or cut whole. (6) Do not edit AGENTS.md; do not edit rendered projections under .claude/ or .agents/. Work only in the four named skills/ files. Report per file: lines before/after and every cut SKIPPED for meaning (D6).",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+    "must_haves": {
+      "truths": [
+        "bee-hive/SKILL.md contains a Headless section with the canonical Outstanding Questions statement",
+        "no heading cited by AGENTS.md, CLAUDE.md, or any skills/ doc was deleted or renamed",
+        "every rule cut from a SKILL.md is verifiably present in AGENTS.md BEE block",
+        "YAML frontmatter of all four files is byte-identical to before",
+        "pointer_integrity and instruction_laws tests green"
+      ]
+    },
+    "decisions": ["prompt-diet D1", "prompt-diet D2", "prompt-diet D3", "prompt-diet D6"],
+    "regen_obligation_ack": "wave-barrier",
+    "deps": []
+  },
+  {
+    "id": "pd-2",
+    "feature": "prompt-diet",
+    "lane": "standard",
+    "title": "Diet bee-capturing/bee-reviewing/bee-grooming/bee-researching SKILL.md",
+    "behavior_change": true,
+    "files": [
+      "skills/bee-capturing/SKILL.md",
+      "skills/bee-reviewing/SKILL.md",
+      "skills/bee-grooming/SKILL.md",
+      "skills/bee-researching/SKILL.md"
+    ],
+    "read_first": [
+      "docs/history/prompt-diet/CONTEXT.md",
+      "docs/history/prompt-diet/plan.md",
+      "AGENTS.md",
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-capturing/SKILL.md",
+      "skills/bee-reviewing/SKILL.md",
+      "skills/bee-grooming/SKILL.md",
+      "skills/bee-researching/SKILL.md"
+    ],
+    "action": "Per prompt-diet D1/D2/D3 (CONTEXT.md) and the plan Constraints block. (1) D2: trim each body's opening lines that re-narrate the YAML description; the body opens with an imperative, a table, or a rule. Known targets: bee-capturing's two-layer architecture narration paragraph (knowledge vs expertise) shrinks to one sentence keeping the operative clause; bee-reviewing's 'scrutiny a second team gives a pull request' analogy paragraph is cut with its user-invoked-only rule kept as one line; bee-grooming and bee-researching opening narration trimmed to operative content ('return with a map, not honey' may stay as the heading it already is). (2) D1: replace near-verbatim restatements of AGENTS.md rules (gate-approval, close-with-capture-line, cite-never-reinterpret) with a one-line cite plus the skill's own delta - FIRST verify the rule appears in AGENTS.md BEE block; keep anything carrying extra meaning (D6). bee-reviewing's merge-question nuance (the merge question always belongs to the human) is a REAL delta - keep it. (3) D3: each file's Headless/Outstanding-Questions boilerplate becomes one line citing bee-hive (\"Headless\") - that heading exists after cell pd-1, already landed - plus the skill's own delta if any. (4) NEVER delete or rename a heading another document cites; AGENTS.md Deep contracts names sections in these skills, e.g. bee-capturing (\"Capture the moment it settles\") - check with rg before removing any heading. Never reword a kept boundary sentence. (5) Do not edit AGENTS.md or rendered projections under .claude/ or .agents/. Report per file: lines before/after and skipped cuts with reasons.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+    "must_haves": {
+      "truths": [
+        "no heading cited by AGENTS.md, CLAUDE.md, or any skills/ doc was deleted or renamed",
+        "every cut rule is verifiably present in AGENTS.md BEE block or bee-hive Headless section",
+        "bee-reviewing keeps its merge-question delta",
+        "YAML frontmatter of all four files is byte-identical to before",
+        "pointer_integrity and instruction_laws tests green"
+      ]
+    },
+    "decisions": ["prompt-diet D1", "prompt-diet D2", "prompt-diet D3", "prompt-diet D6"],
+    "regen_obligation_ack": "wave-barrier",
+    "deps": ["pd-1"]
+  },
+  {
+    "id": "pd-3",
+    "feature": "prompt-diet",
+    "lane": "standard",
+    "title": "bee-herding SKILL.md: cut duplicated intro, convert References table to when-to-load",
+    "behavior_change": true,
+    "files": ["skills/bee-herding/SKILL.md"],
+    "read_first": [
+      "docs/history/prompt-diet/CONTEXT.md",
+      "docs/history/prompt-diet/plan.md",
+      "skills/bee-herding/SKILL.md",
+      "skills/bee-hive/SKILL.md"
+    ],
+    "action": "Per prompt-diet D4/D2/D6 (CONTEXT.md) and the plan Constraints block. (1) The opening paragraph narrating the three roles (around lines 21-33) substantially duplicates the 'The three roles' section immediately after it: merge them - keep the section, fold into it any operative clause the intro alone carried (e.g. read your role's reference in full before acting, then act once, report into the chat pane, and exit - that is imperative, keep it). (2) Convert the References table from 'File | Contents' to the 'File | When to load' pattern every other skill uses - each row says WHEN to open the file, not what is inside. (3) D2: the body opens with an imperative or a table, not a re-narration of the frontmatter description. (4) Safety boundaries section: KEEP - its rationale clauses are load-bearing for an unattended cockpit; do not cut them. (5) Never delete or rename a heading another document cites (check with rg); never reword kept boundary sentences; do not touch YAML frontmatter or rendered projections. Report lines before/after and skipped cuts.",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+    "must_haves": {
+      "truths": [
+        "the duplicated intro/role narration exists only once",
+        "References table rows state when to load, not contents",
+        "Safety boundaries section content is preserved",
+        "YAML frontmatter byte-identical; cited headings intact",
+        "pointer_integrity and instruction_laws tests green"
+      ]
+    },
+    "decisions": ["prompt-diet D4", "prompt-diet D2", "prompt-diet D6"],
+    "regen_obligation_ack": "wave-barrier",
+    "deps": ["pd-1"]
+  },
+  {
+    "id": "pd-4",
+    "feature": "prompt-diet",
+    "lane": "standard",
+    "title": "Author the prompt-writing standard as a doctrine-layer knowledge doc",
+    "behavior_change": false,
+    "files": [
+      "docs/knowledge/areas/doctrine-layer/prompt-writing-standard.md",
+      "docs/knowledge/areas/doctrine-layer/index.md"
+    ],
+    "read_first": [
+      "docs/history/prompt-diet/CONTEXT.md",
+      "docs/history/prompt-diet/plan.md",
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/knowledge/areas/doctrine-layer/placement-and-anchoring.md",
+      "docs/knowledge/areas/doctrine-layer/index.md",
+      "docs/knowledge/areas/doctrine-layer/overview.md"
+    ],
+    "action": "Per prompt-diet D5 as AMENDED by plan.md Constraints (no size ceilings - decision 8f63adb4 / budget-fence-removal D1/D6). Author docs/knowledge/areas/doctrine-layer/prompt-writing-standard.md following the area-doc format of the two read_first doctrine docs (frontmatter: type bee.area, bee.id, lifecycle active, areas [doctrine-layer], required_context [areas/doctrine-layer/overview.md], decisions and sources citing prompt-diet CONTEXT.md and the four studies: Lulla 2601.20404, ETH SRI 2602.11988, Khatri 2607.27250, NAIST 2511.12884). Content - the standard for writing or editing any bee instruction text (AGENTS block, SKILL.md, references, agent files): (a) the four-question line filter (self-discoverable? what concrete costly behavior does its absence cause? verifiable? conflicts with another line?) grounded in the research: instructions are followed at roughly 100x the rate when stated (ETH tool-mention data), overview prose shows no measurable steering effect, every line costs (+20-23 percent inference across agents); (b) add-on-failure, never add-upfront: a line earns its place when the same failure occurred twice, a review caught what the text should have prevented, or the same correction was typed in two sessions; (c) one rule, one home: generalize the existing duplication boundary (cite router-triage-and-the-agents-md-duplication-boundary.md, rule R4) from router-vs-operating-block to EVERY instruction document - a boundary rule is stated in full once, everywhere else a one-line cite plus local delta; presence-pinned strings may gain occurrences but never be reworded; (d) verifiable-imperative style: commands with arguments over adjectives; (e) deterministic backstop preference: an absolute MUST or NEVER belongs in a hook or permission when structurally reachable, markdown carries only what enforcement cannot reach - cite unenforced-obedience.md ONLY after reading it and confirming its content matches; (f) explicitly record: no standing size ceiling exists or may be introduced (cite budget-fence-removal); density is judged per edit; a diet is a one-off event and prompt-diet is one such event. Add one row to docs/knowledge/areas/doctrine-layer/index.md matching its existing format. Every citation must name a real file and real heading (pointer_integrity enforces).",
+    "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+    "must_haves": {
+      "truths": [
+        "prompt-writing-standard.md exists in area-doc format with resolving citations",
+        "no numeric size ceiling appears as a rule anywhere in the doc",
+        "index.md carries one new row in its existing format",
+        "pointer_integrity and instruction_laws tests green"
+      ]
+    },
+    "decisions": ["prompt-diet D5", "decision 8f63adb4"],
+    "deps": ["pd-1"]
+  },
+  {
+    "id": "pd-5",
+    "feature": "prompt-diet",
+    "lane": "standard",
+    "title": "Re-render skill projections and prove the full suite green",
+    "behavior_change": false,
+    "files": [".claude/skills", ".agents/skills", ".bee/onboarding.json", "docs/history/codex-harness-hardening/release-manifest.json"],
+    "read_first": [
+      "docs/history/prompt-diet/plan.md"
+    ],
+    "action": "Integration cell - runs only after pd-1..pd-4 are capped. This is the wave-barrier owed by pd-1/pd-2/pd-3 (regen_obligation_ack wave-barrier, parallel-default D2): the full regen chain runs here, in order, before the wave is declared clean. (1) From the worktree root, in this exact order: bee dev render-skill-trees; then bee onboard --repo-root . --apply (if a plain --json probe first reports blocked_*, STOP and report, zero mutations); then bee dev release-manifest --write. Binary: D:/projects/tools/AI/harness/beehive/.bee/bin/bee if the worktree has none. (2) Confirm rendered projections under .claude/skills/ and .agents/skills/ match skills/ for every file pd-1..pd-3 touched (diff one edited skill per cell). (3) Run bee dev release-manifest --check and quote its verdict. (4) Run the full declared suite: PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml - full run, no --test filter. Quote the summary line. A red is its own fix-first work: report it, never paper over it.",
+    "verify": "bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+    "must_haves": {
+      "truths": [
+        "regen chain ran in order: render-skill-trees, onboard --apply, release-manifest --write",
+        "rendered .claude/skills and .agents/skills match skills/ for every touched file",
+        "bee dev release-manifest --check green",
+        "full cargo test suite green, summary line quoted"
+      ]
+    },
+    "decisions": ["prompt-diet D7"],
+    "deps": ["pd-1", "pd-2", "pd-3", "pd-4"]
+  }
+]
