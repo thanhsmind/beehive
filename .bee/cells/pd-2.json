@@ -1,0 +1,68 @@
+{
+  "id": "pd-2",
+  "feature": "prompt-diet",
+  "lane": "standard",
+  "title": "Diet bee-capturing/bee-reviewing/bee-grooming/bee-researching SKILL.md",
+  "behavior_change": true,
+  "files": [
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-grooming/SKILL.md",
+    "skills/bee-researching/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/prompt-diet/CONTEXT.md",
+    "docs/history/prompt-diet/plan.md",
+    "AGENTS.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-reviewing/SKILL.md",
+    "skills/bee-grooming/SKILL.md",
+    "skills/bee-researching/SKILL.md"
+  ],
+  "action": "Per prompt-diet D1/D2/D3 (CONTEXT.md) and the plan Constraints block. (1) D2: trim each body's opening lines that re-narrate the YAML description; the body opens with an imperative, a table, or a rule. Known targets: bee-capturing's two-layer architecture narration paragraph (knowledge vs expertise) shrinks to one sentence keeping the operative clause; bee-reviewing's 'scrutiny a second team gives a pull request' analogy paragraph is cut with its user-invoked-only rule kept as one line; bee-grooming and bee-researching opening narration trimmed to operative content ('return with a map, not honey' may stay as the heading it already is). (2) D1: replace near-verbatim restatements of AGENTS.md rules (gate-approval, close-with-capture-line, cite-never-reinterpret) with a one-line cite plus the skill's own delta - FIRST verify the rule appears in AGENTS.md BEE block; keep anything carrying extra meaning (D6). bee-reviewing's merge-question nuance (the merge question always belongs to the human) is a REAL delta - keep it. (3) D3: each file's Headless/Outstanding-Questions boilerplate becomes one line citing bee-hive (\"Headless\") - that heading exists after cell pd-1, already landed - plus the skill's own delta if any. (4) NEVER delete or rename a heading another document cites; AGENTS.md Deep contracts names sections in these skills, e.g. bee-capturing (\"Capture the moment it settles\") - check with rg before removing any heading. Never reword a kept boundary sentence. (5) Do not edit AGENTS.md or rendered projections under .claude/ or .agents/. Report per file: lines before/after and skipped cuts with reasons.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+  "must_haves": {
+    "truths": [
+      "no heading cited by AGENTS.md, CLAUDE.md, or any skills/ doc was deleted or renamed",
+      "every cut rule is verifiably present in AGENTS.md BEE block or bee-hive Headless section",
+      "bee-reviewing keeps its merge-question delta",
+      "YAML frontmatter of all four files is byte-identical to before",
+      "pointer_integrity and instruction_laws tests green"
+    ]
+  },
+  "decisions": [
+    "prompt-diet D1",
+    "prompt-diet D2",
+    "prompt-diet D3",
+    "prompt-diet D6"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "deps": [
+    "pd-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-pd2",
+    "outcome": "D1/D2/D3 diet: capturing 141->136, reviewing 117->115, grooming 102->100, researching 97->92; analogy and architecture narration cut, Headless boilerplate now cites bee-hive; merge-question delta kept; verify green (pointer 10, laws 9).",
+    "files_changed": [
+      "skills/bee-capturing/SKILL.md",
+      "skills/bee-reviewing/SKILL.md",
+      "skills/bee-grooming/SKILL.md",
+      "skills/bee-researching/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-03T08:33:56.503Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ce3df9bf-8c5d-4f95-964d-f467a6b5458e",
+    "claimed_at": "2026-08-03T08:29:17.246Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-03T08:33:38.479Z"
+  }
+}

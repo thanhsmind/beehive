@@ -1,0 +1,61 @@
+{
+  "id": "pd-5",
+  "feature": "prompt-diet",
+  "lane": "standard",
+  "title": "Re-render skill projections and prove the full suite green",
+  "behavior_change": false,
+  "files": [
+    ".claude/skills",
+    ".agents/skills",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/prompt-diet/plan.md"
+  ],
+  "action": "Integration cell - runs only after pd-1..pd-4 are capped. This is the wave-barrier owed by pd-1/pd-2/pd-3 (regen_obligation_ack wave-barrier, parallel-default D2): the full regen chain runs here, in order, before the wave is declared clean. (1) From the worktree root, in this exact order: bee dev render-skill-trees; then bee onboard --repo-root . --apply (if a plain --json probe first reports blocked_*, STOP and report, zero mutations); then bee dev release-manifest --write. Binary: D:/projects/tools/AI/harness/beehive/.bee/bin/bee if the worktree has none. (2) Confirm rendered projections under .claude/skills/ and .agents/skills/ match skills/ for every file pd-1..pd-3 touched (diff one edited skill per cell). (3) Run bee dev release-manifest --check and quote its verdict. (4) Run the full declared suite: PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml - full run, no --test filter. Quote the summary line. A red is its own fix-first work: report it, never paper over it.",
+  "verify": "bee dev release-manifest --check && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "regen chain ran in order: render-skill-trees, onboard --apply, release-manifest --write",
+      "rendered .claude/skills and .agents/skills match skills/ for every touched file",
+      "bee dev release-manifest --check green",
+      "full cargo test suite green, summary line quoted"
+    ]
+  },
+  "decisions": [
+    "prompt-diet D7"
+  ],
+  "deps": [
+    "pd-1",
+    "pd-2",
+    "pd-3",
+    "pd-4"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-pd5",
+    "outcome": "Wave-barrier regen chain ran in order (render-skill-trees, onboard --apply, release-manifest --write); release-manifest --check 205 match; knowledge index 0 stale after regen; full suite in worktree 988 passed / 1 failed - the red proven environmental (renew_cross_worktree_holds test resolves main_root from cwd, fails under any worktree cwd, passes outside; zero state damage) and pre-existing, filed as follow-up fix-first work.",
+    "files_changed": [
+      ".claude-plugin/skills",
+      ".codex-plugin/skills",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "docs/knowledge/index.md",
+      "docs/knowledge/areas/index.md",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-03T08:43:09.596Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ce3df9bf-8c5d-4f95-964d-f467a6b5458e",
+    "claimed_at": "2026-08-03T08:34:58.087Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-03T08:42:50.650Z"
+  }
+}

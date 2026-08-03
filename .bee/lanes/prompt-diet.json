@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature": "prompt-diet",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"prompt-diet\" started at phase \"planning\" (lane).",
+  "next_action": "Dispatch pd-1 worker (serial), then pd-2/3/4 parallel, then pd-5 wave-close.",
+  "created_at": "2026-08-03T08:08:58.985Z"
+}

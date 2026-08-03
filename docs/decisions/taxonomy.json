@@ -293,6 +293,8 @@
     "config",
     "dead-code",
     "hook-runtime",
-    "decision-reversal"
+    "decision-reversal",
+    "prompt-diet",
+    "deviation"
   ]
 }

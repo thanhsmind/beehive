@@ -1,0 +1,58 @@
+{
+  "id": "pd-4",
+  "feature": "prompt-diet",
+  "lane": "standard",
+  "title": "Author the prompt-writing standard as a doctrine-layer knowledge doc",
+  "behavior_change": false,
+  "files": [
+    "docs/knowledge/areas/doctrine-layer/prompt-writing-standard.md",
+    "docs/knowledge/areas/doctrine-layer/index.md"
+  ],
+  "read_first": [
+    "docs/history/prompt-diet/CONTEXT.md",
+    "docs/history/prompt-diet/plan.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/knowledge/areas/doctrine-layer/placement-and-anchoring.md",
+    "docs/knowledge/areas/doctrine-layer/index.md",
+    "docs/knowledge/areas/doctrine-layer/overview.md"
+  ],
+  "action": "Per prompt-diet D5 as AMENDED by plan.md Constraints (no size ceilings - decision 8f63adb4 / budget-fence-removal D1/D6). Author docs/knowledge/areas/doctrine-layer/prompt-writing-standard.md following the area-doc format of the two read_first doctrine docs (frontmatter: type bee.area, bee.id, lifecycle active, areas [doctrine-layer], required_context [areas/doctrine-layer/overview.md], decisions and sources citing prompt-diet CONTEXT.md and the four studies: Lulla 2601.20404, ETH SRI 2602.11988, Khatri 2607.27250, NAIST 2511.12884). Content - the standard for writing or editing any bee instruction text (AGENTS block, SKILL.md, references, agent files): (a) the four-question line filter (self-discoverable? what concrete costly behavior does its absence cause? verifiable? conflicts with another line?) grounded in the research: instructions are followed at roughly 100x the rate when stated (ETH tool-mention data), overview prose shows no measurable steering effect, every line costs (+20-23 percent inference across agents); (b) add-on-failure, never add-upfront: a line earns its place when the same failure occurred twice, a review caught what the text should have prevented, or the same correction was typed in two sessions; (c) one rule, one home: generalize the existing duplication boundary (cite router-triage-and-the-agents-md-duplication-boundary.md, rule R4) from router-vs-operating-block to EVERY instruction document - a boundary rule is stated in full once, everywhere else a one-line cite plus local delta; presence-pinned strings may gain occurrences but never be reworded; (d) verifiable-imperative style: commands with arguments over adjectives; (e) deterministic backstop preference: an absolute MUST or NEVER belongs in a hook or permission when structurally reachable, markdown carries only what enforcement cannot reach - cite unenforced-obedience.md ONLY after reading it and confirming its content matches; (f) explicitly record: no standing size ceiling exists or may be introduced (cite budget-fence-removal); density is judged per edit; a diet is a one-off event and prompt-diet is one such event. Add one row to docs/knowledge/areas/doctrine-layer/index.md matching its existing format. Every citation must name a real file and real heading (pointer_integrity enforces).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+  "must_haves": {
+    "truths": [
+      "prompt-writing-standard.md exists in area-doc format with resolving citations",
+      "no numeric size ceiling appears as a rule anywhere in the doc",
+      "index.md carries one new row in its existing format",
+      "pointer_integrity and instruction_laws tests green"
+    ]
+  },
+  "decisions": [
+    "prompt-diet D5",
+    "decision 8f63adb4"
+  ],
+  "deps": [
+    "pd-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-pd4",
+    "outcome": "Prompt-writing standard authored (145 lines, area-doc format, citations rg-verified); index row added in deterministic format; no size ceiling as rule (R6 records the ban); verify green (pointer 10, laws 9). Note: knowledge index --check owed at pd-5.",
+    "files_changed": [
+      "docs/knowledge/areas/doctrine-layer/prompt-writing-standard.md",
+      "docs/knowledge/areas/doctrine-layer/index.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-03T08:34:34.177Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ce3df9bf-8c5d-4f95-964d-f467a6b5458e",
+    "claimed_at": "2026-08-03T08:29:17.377Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-03T08:34:15.257Z"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "id": "pd-1",
+  "feature": "prompt-diet",
+  "lane": "standard",
+  "title": "Diet bee-hive/bee-shaping/bee-planning/bee-swarming SKILL.md; bee-hive gains the canonical Headless statement",
+  "behavior_change": true,
+  "files": [
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/prompt-diet/CONTEXT.md",
+    "docs/history/prompt-diet/plan.md",
+    "AGENTS.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "action": "Per prompt-diet D1/D2/D3 (CONTEXT.md) and the plan Constraints block, which binds every edit. (1) D3: in skills/bee-hive/SKILL.md add one canonical headless statement under a NEW stable heading '## Headless' placed before Hard rules: ambiguities, unanswered decisions, and gate questions become Outstanding Questions entries; a headless run never self-answers a question and never self-approves a gate. This ONE full statement replaces five per-skill copies - write it carefully. (2) D1: in each of the four files, find near-verbatim restatements of rules AGENTS.md already carries - gate-approval boundary, worktree-first, cite-never-reinterpret, 65%-context handoff. BEFORE each cut, verify the rule text actually appears in AGENTS.md BEE block; then replace the restatement with a one-line cite keeping any skill-specific delta the original sentence carried. If a sentence carries meaning AGENTS.md does not, keep it (D6). (3) D2: in each file, trim the opening body lines that re-narrate the YAML description - the body must open with an imperative, a table, or a rule. Do not touch YAML frontmatter. (4) In bee-planning and bee-swarming, shrink their Headless/Outstanding-Questions paragraphs to one line citing bee-hive (\"Headless\") plus each skill's own delta (planning: stop at the gate, never self-approved; swarming: whatever its copy uniquely adds). (5) NEVER delete or rename any markdown heading another document cites - check with rg before removing any heading; when in doubt keep it. Never reword a boundary-rule sentence you keep - keep verbatim or cut whole. (6) Do not edit AGENTS.md; do not edit rendered projections under .claude/ or .agents/. Work only in the four named skills/ files. Report per file: lines before/after and every cut SKIPPED for meaning (D6).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+  "must_haves": {
+    "truths": [
+      "bee-hive/SKILL.md contains a Headless section with the canonical Outstanding Questions statement",
+      "no heading cited by AGENTS.md, CLAUDE.md, or any skills/ doc was deleted or renamed",
+      "every rule cut from a SKILL.md is verifiably present in AGENTS.md BEE block",
+      "YAML frontmatter of all four files is byte-identical to before",
+      "pointer_integrity and instruction_laws tests green"
+    ]
+  },
+  "decisions": [
+    "prompt-diet D1",
+    "prompt-diet D2",
+    "prompt-diet D3",
+    "prompt-diet D6"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-pd1",
+    "outcome": "D1/D2/D3 diet: canonical Headless section added to bee-hive; gate/worktree/cite/65% restatements collapsed to AGENTS.md cites with deltas kept; 6 skips recorded for meaning (D6). Worker verify green: pointer_integrity 10 passed, instruction_laws 9 passed.",
+    "files_changed": [
+      "skills/bee-hive/SKILL.md",
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-swarming/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-03T08:29:01.015Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ce3df9bf-8c5d-4f95-964d-f467a6b5458e",
+    "claimed_at": "2026-08-03T08:19:48.789Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-03T08:28:42.936Z"
+  }
+}
