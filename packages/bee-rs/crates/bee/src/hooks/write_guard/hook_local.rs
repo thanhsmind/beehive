@@ -22,6 +22,96 @@ pub(crate) const GENERIC_BASH_CONTAINMENT_MESSAGE: &str =
     "bee write guard denied Bash: one or more extracted targets could not be canonically contained inside the physical worktree. \
 FIX: use plain in-worktree paths without traversal, outside absolute paths, or symlink escapes.";
 
+// ─── harness-owned surface allowlist (guard-hardening E1) ──────────────────
+
+/// The harness-owned write surfaces exempt from the outside-root containment
+/// deny (docs/history/guard-hardening/CONTEXT.md E1): the harness memory root
+/// `<home>/.claude/projects/` and the harness scratchpad root
+/// `<system-temp>/claude/`. Held as canonicalized absolute prefixes; a base
+/// that cannot be resolved contributes NOTHING (fail-closed — the deny
+/// stands). The struct takes injected bases so tests never mutate the
+/// environment.
+pub(crate) struct HarnessRoots {
+    pub(crate) roots: Vec<String>,
+}
+
+impl HarnessRoots {
+    /// Live detection: home the way this crate already resolves it
+    /// (USERPROFILE || HOME on Windows, HOME elsewhere — onboard/util.rs and
+    /// status_full/store.rs shape), temp via std::env::temp_dir().
+    pub(crate) fn detect() -> HarnessRoots {
+        let home = if cfg!(windows) {
+            std::env::var_os("USERPROFILE")
+                .or_else(|| std::env::var_os("HOME"))
+                .map(PathBuf::from)
+        } else {
+            std::env::var_os("HOME").map(PathBuf::from)
+        };
+        HarnessRoots::from_bases(home, Some(std::env::temp_dir()))
+    }
+
+    /// Build from explicit bases (None / empty / unresolvable → that surface
+    /// contributes nothing).
+    pub(crate) fn from_bases(home: Option<PathBuf>, temp: Option<PathBuf>) -> HarnessRoots {
+        let mut roots = Vec::new();
+        if let Some(h) = home.filter(|p| !p.as_os_str().is_empty()) {
+            let base = h.join(".claude").join("projects").to_string_lossy().into_owned();
+            if let Some(r) = canonical_allowlist_root(&base) {
+                roots.push(r);
+            }
+        }
+        if let Some(t) = temp.filter(|p| !p.as_os_str().is_empty()) {
+            let base = t.join("claude").to_string_lossy().into_owned();
+            if let Some(r) = canonical_allowlist_root(&base) {
+                roots.push(r);
+            }
+        }
+        HarnessRoots { roots }
+    }
+}
+
+/// Canonicalize an allowlist base the same way resolve_target_realpath treats
+/// targets: realpath of the deepest existing ancestor, lexical tail appended
+/// (case/prefix handling identical to the containment walk). None =
+/// unresolvable → the caller drops the root (fail-closed).
+fn canonical_allowlist_root(p: &str) -> Option<String> {
+    if np_check_modelable(p).is_err() || !np_is_absolute(p) {
+        return None;
+    }
+    let lexical = np_resolve1(p).ok()?;
+    let (ancestor, unresolved) = walk_existing_ancestor(&lexical)?;
+    let ancestor_real = realpath_any(&ancestor)?;
+    np_resolve_segments(&ancestor_real, &unresolved).ok()
+}
+
+/// guard-hardening E1: does this wall-failed target's RESOLVED location sit
+/// inside a harness-owned surface? Consulted ONLY at the containment failure
+/// sites in main.rs — the exemption bypasses the containment deny alone;
+/// reservation/hold, gate-boundary, direct-edit, and secret checks keep their
+/// existing order and reach by code order (an exempt target never enters
+/// rel_paths, and in-repo targets never reach this check). Every resolution
+/// failure answers false — the deny stands.
+pub(crate) fn harness_allowlisted_target(
+    harness: &HarnessRoots,
+    root: &str,
+    cwd: &str,
+    raw: &Value,
+) -> R<bool> {
+    if harness.roots.is_empty() {
+        return Ok(false);
+    }
+    let resolved = match resolve_target_realpath(cwd, root, raw)? {
+        Some(t) => t,
+        None => return Ok(false), // unresolvable target → fail-closed
+    };
+    for r in &harness.roots {
+        if is_under_root(r, &resolved)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// provenance: bee-write-guard.mjs HOME_PREFIXED_TARGET_RE /
 /// isHomePrefixedTarget (gmr-1).
 pub(crate) fn is_home_prefixed(raw: &str) -> bool {
