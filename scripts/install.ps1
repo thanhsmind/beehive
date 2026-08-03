@@ -280,11 +280,14 @@ function Invoke-PluginTransitionFailure([string]$Message) {
 
 # ...but INSTALLING bee still needs node, and that is a different question from
 # running it. The R6 sweep removed the Node preflight along with the runtime;
-# plugin_distribution.mjs was never ported, and this script invokes it below.
-# Without this check the failure lands as a bare "node is not recognized" AFTER
-# a clone and a multi-minute cargo build.
-$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-if (-not $nodeCmd) { Fail 'Node.js is required to INSTALL bee (the distribution helper packages/bee/scripts/plugin_distribution.mjs is not ported yet). bee itself runs as a native binary and needs no Node at runtime. Install Node 18+: https://nodejs.org' }
+# NO NODE PREFLIGHT, deliberately. This script used to require Node for one
+# reason: it shelled out to plugin_distribution.mjs. That helper is now
+# `bee dev plugin-distribution` on the native binary, and every JSON step here
+# is PowerShell's own ConvertFrom-Json. Preflighting a tool the script never
+# runs would refuse installs for no reason, so the check went with its cause.
+# (install.sh still preflights node: its JSON steps are `node -e` one-liners
+# and are not ported yet. Codex on WINDOWS also still launches node from its
+# hook transport at RUNTIME, which is a separate question from installing.)
 
 # ---------- published binary (preferred) ----------
 #
@@ -419,9 +422,7 @@ try {
     if (-not (Test-Path $beeBin)) { $beeBin = Join-Path $beeSrc 'packages\bee-rs\target\release\bee' }
     if (-not (Test-Path $beeBin)) { Fail 'cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]' }
   }
-  $distributionHelper = Join-Path $beeSrc 'packages\bee\scripts\plugin_distribution.mjs'
   $releaseManifest = Join-Path $beeSrc 'docs\history\codex-harness-hardening\release-manifest.json'
-  if (-not (Test-Path $distributionHelper)) { Fail "Not a bee release (missing plugin_distribution.mjs): $beeSrc" }
   if (-not (Test-Path $releaseManifest)) { Fail "Not a bee release (missing release manifest): $beeSrc" }
   $beeVersion = try {
     (Get-Content (Join-Path $beeSrc '.claude-plugin\plugin.json') -Raw | ConvertFrom-Json).version
@@ -560,7 +561,7 @@ try {
     if ($Runtime -in @('codex', 'both')) { $distributionArgs += @('--user-skill-root', (Join-Path $codexHome 'skills')) }
   }
 
-  node $distributionHelper @distributionArgs
+  & $beeBin dev plugin-distribution @distributionArgs
   if ($LASTEXITCODE -ne 0) { Invoke-PluginTransitionFailure 'Distribution preflight refused after transition' }
 
   # 4. apply onboarding. A refused/blocked apply (e.g. the codex-hybrid hook
@@ -578,7 +579,7 @@ try {
   }
 
   if ($Distribution -eq 'plugin-first') {
-    node $distributionHelper @distributionArgs --apply
+    & $beeBin dev plugin-distribution @distributionArgs --apply
     if ($LASTEXITCODE -ne 0) { Invoke-PluginTransitionFailure 'Plugin-first cleanup refused; repository fallbacks were preserved' }
   }
 

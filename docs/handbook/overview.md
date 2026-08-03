@@ -62,9 +62,9 @@ skill.
    the maintainer surface (`bee dev …`).
 4. **Payload assets** (`packages/bee/`) — what onboarding vendors that is *not*
    code: `AGENTS.block.md`, `agents/*.tmpl`, `prompts/` (worker, gather, reviewer,
-   advisor), `hooks/{hooks,claude-hooks}.json`, `statusline/`, and the shared
-   distribution planner `scripts/plugin_distribution.mjs` — the one `.mjs` file
-   left in the tree.
+   advisor), `hooks/{hooks,claude-hooks}.json`, and `statusline/`. No `.mjs`
+   is left here: the distribution planner that used to live beside them is
+   `bee dev plugin-distribution` on the binary.
 5. **Runtime state** (`.bee/`) — the [state registers](register.md): workflow
    records, phase, gates, feature, cells, decisions, leases, claims, lanes,
    intent anchors, backlog, handoff mailboxes.
@@ -173,7 +173,7 @@ packages/bee-rs/            THE runtime — one Rust binary, no second implement
 
 packages/bee/               vendored payload ASSETS only (no runtime code)
   AGENTS.block.md · agents/*.tmpl · prompts/ · hooks/{hooks,claude-hooks}.json
-  statusline/ · scripts/plugin_distribution.mjs
+  statusline/
 
 .bee/
   bin/bee[.exe]             the single CLI, vendored binary                → register.md

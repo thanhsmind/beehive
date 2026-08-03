@@ -159,12 +159,14 @@ case "$DISTRIBUTION_MODE" in plugin-first|repo-copy) ;; *) fail "--distribution 
 # whole point is that most hosts no longer need it.
 
 # ...but INSTALLING bee still needs node, and that is a different question from
-# running it. The R6 sweep removed the Node preflight along with the runtime;
-# plugin_distribution.mjs was never ported, and this script drives it plus
-# several `node -e` JSON steps. Without this check the failure lands as a bare
-# `node: command not found` AFTER a clone and a multi-minute cargo build —
-# the cost of a missing preflight is paid at the worst possible moment.
-command -v node >/dev/null 2>&1 || fail "Node.js is required to INSTALL bee (the distribution helper packages/bee/scripts/plugin_distribution.mjs is not ported yet). bee itself runs as a native binary; Node is not needed at runtime by Claude Code on any platform, nor by Codex on macOS/Linux. The one exception is Codex on WINDOWS, whose hook transport still launches node. Install Node 18+: https://nodejs.org"
+# running it. plugin_distribution.mjs is GONE — it is `bee dev
+# plugin-distribution` on the native binary now — but five `node -e` JSON steps
+# in this script are not yet ported: the plugin-state merge and probe, the
+# onboarding plan-field reader, and the two verification assertions. Until those
+# are verbs too, this preflight stays: without it the failure lands as a bare
+# `node: command not found` AFTER a clone and a multi-minute cargo build, which
+# is the worst possible moment to pay for a missing check.
+command -v node >/dev/null 2>&1 || fail "Node.js is still required to INSTALL bee: five JSON steps in this installer (plugin-state merge and probe, onboarding plan-field reader, two verification assertions) are not ported yet. bee itself runs as a native binary — Node is not needed at runtime by Claude Code on any platform, nor by Codex on macOS/Linux; Codex on WINDOWS is the one runtime exception, whose hook transport launches node. Install Node 18+: https://nodejs.org"
 
 # ---------- published binary (preferred) ----------
 #
@@ -274,24 +276,18 @@ if [ -z "$BEE_BIN" ]; then
   [ -x "$BEE_BIN" ] || BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee.exe"
   [ -x "$BEE_BIN" ] || fail "cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]"
 fi
-# THE LAST NODE DEPENDENCY. R6 deleted every other .mjs in this repo;
-# plugin_distribution.mjs survives because it is NOT ported yet, and it is not a
-# thin shim: it proves an installed plugin package against the release manifest,
+# THE DISTRIBUTION PREFLIGHT, now a verb on the binary above. It is not a thin
+# shim: it proves an installed plugin package against the release manifest,
 # strips bee entries out of host hook configs (with the codex-hybrid exemption
 # that exists to stop it deleting the enforcement it just installed), reads an
 # ownership ledger before it may touch user-global skill roots, and
-# snapshot/revalidates every target to close a TOCTOU window. Deleting it
-# without a port would silently drop all of that from the installer.
-#
-# CONSEQUENCE, stated plainly: `node` remains required to INSTALL bee. It is not
-# required to RUN bee — every hook, verb and dev tool is the native binary. The
-# `node -e` JSON one-liners further down are a symptom of the same gap, not a
-# separate one; they go when this helper is ported.
-DIST_HELPER="$BEE_SRC/packages/bee/scripts/plugin_distribution.mjs"
+# snapshot/revalidates every target to close a TOCTOU window.
 RELEASE_MANIFEST="$BEE_SRC/docs/history/codex-harness-hardening/release-manifest.json"
-[ -f "$DIST_HELPER" ] || fail "Not a bee release (missing plugin_distribution.mjs): $BEE_SRC"
 [ -f "$RELEASE_MANIFEST" ] || fail "Not a bee release (missing release manifest): $BEE_SRC"
-BEE_VERSION="$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).version)" "$BEE_SRC/.claude-plugin/plugin.json" 2>/dev/null || echo unknown)"
+# The version is read by the same binary that will install it — no second JSON
+# parser, and no interpreter, in the one place they used to disagree.
+BEE_VERSION="$("$BEE_BIN" --version 2>/dev/null | tr -d '\r' | awk 'NR==1{print $NF}')"
+[ -n "$BEE_VERSION" ] || BEE_VERSION=unknown
 log "source   $BEE_SRC (bee $BEE_VERSION)"
 
 # Direct global replacement is intentionally gone: user-root cleanup is legal
@@ -605,7 +601,7 @@ apply_failure_fix_options() {
 }
 
 probe_plugin_state "$STATE_FILE"
-node "$DIST_HELPER" "${DIST_ARGS[@]}" || {
+"$BEE_BIN" dev plugin-distribution "${DIST_ARGS[@]}" || {
   apply_failure_fix_options
   handle_transition_failure "Distribution preflight refused after transition"
 }
@@ -629,7 +625,7 @@ case "$APPLY_STATUS" in
 esac
 
 if [ "$DISTRIBUTION_MODE" = "plugin-first" ]; then
-  node "$DIST_HELPER" "${DIST_ARGS[@]}" --apply || handle_transition_failure "Plugin-first cleanup refused; repository fallbacks were preserved"
+  "$BEE_BIN" dev plugin-distribution "${DIST_ARGS[@]}" --apply || handle_transition_failure "Plugin-first cleanup refused; repository fallbacks were preserved"
 fi
 
 # ---------- verify: strict final postconditions (D2) ----------
@@ -689,7 +685,7 @@ printf '%s' "$RECHECK" | node -e '
 # Plugin-first: the distribution recheck must also report nothing left to clean.
 if [ "$DISTRIBUTION_MODE" = "plugin-first" ]; then
   probe_plugin_state "$STATE_FILE"
-  node "$DIST_HELPER" "${DIST_ARGS[@]}" >/dev/null || fail "Verification failed: distribution recheck refused."
+  "$BEE_BIN" dev plugin-distribution "${DIST_ARGS[@]}" >/dev/null || fail "Verification failed: distribution recheck refused."
 fi
 
 log ""

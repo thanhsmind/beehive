@@ -13,8 +13,10 @@
 //     parse-time bomb (docs/knowledge/patterns/20260714-non-ascii-in-a-ps1-...).
 //   * The R6 sweep removed the Node preflight from BOTH installers on the
 //     grounds that the runtime no longer needs Node — but INSTALLING still
-//     does, because plugin_distribution.mjs was never ported. A missing
-//     preflight surfaces as `node: command not found` after a git clone and a
+//     does. plugin_distribution.mjs is now ported (`bee dev
+//     plugin-distribution`); what still shells out to node is a handful of
+//     JSON steps inside the installers themselves. A missing preflight
+//     surfaces as `node: command not found` after a git clone and a
 //     multi-minute cargo build.
 //
 // These are cheap invariants with expensive failure modes, which is exactly
@@ -51,9 +53,16 @@ fn install_ps1_is_pure_ascii() {
     );
 }
 
-/// Both installers build the binary with cargo and drive the unported
-/// distribution helper with node. Whichever is missing, the user should learn
-/// it in the first second — not after a clone and a release build.
+/// Every tool an installer RUNS, it must preflight — and every tool it no
+/// longer runs, it must stop preflighting. Both directions matter: a missing
+/// preflight surfaces as `node: command not found` after a clone and a full
+/// cargo build, and a stale one refuses an install over a tool the script never
+/// invokes.
+///
+/// The probe reads code, not prose. An earlier version of this test matched the
+/// whole file and was satisfied by the phrase "`node -e`" inside a comment
+/// explaining that the `node -e` steps were gone — a guard green on the very
+/// sentence describing its own subject's removal.
 #[test]
 fn both_installers_preflight_every_tool_they_require() {
     for (rel, cargo_probe, node_probe) in [
@@ -62,30 +71,43 @@ fn both_installers_preflight_every_tool_they_require() {
     ] {
         let text = read(rel);
         assert!(text.contains(cargo_probe), "{rel} builds with cargo but never preflights it");
-        assert!(
-            text.contains(node_probe),
-            "{rel} invokes node (plugin_distribution.mjs is unported) but never preflights it — \
-             the failure would land after a clone and a full cargo build"
+        let code: String = text
+            .lines()
+            .filter(|l| !l.trim_start().starts_with('#'))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let uses_node = code.contains("node -e") || code.contains("| node") || code.contains("node $");
+        assert_eq!(
+            uses_node,
+            code.contains(node_probe),
+            "{rel} must preflight node exactly when it still RUNS node. Runs node={uses_node}. \
+             When the last `node -e` step is ported, drop the preflight in the same commit."
         );
     }
 }
 
-/// The helper is the one surviving `.mjs` and the reason node is required at
-/// all. If it is ever ported, both preflights and both error messages become
-/// wrong together — this pins them to the same fact.
+/// The helper is ported and its file is gone. This used to assert the opposite
+/// — that the `.mjs` still existed — which is exactly the shape of guard that
+/// has to flip when the work it was waiting for lands. It now pins the other
+/// direction: no installer may reach for the deleted script, and both must
+/// drive the verb that replaced it.
 #[test]
-fn the_node_requirement_names_the_file_that_causes_it() {
+fn the_distribution_helper_is_the_verb_not_the_deleted_script() {
     let helper = repo_root().join("packages/bee/scripts/plugin_distribution.mjs");
     assert!(
-        helper.is_file(),
-        "plugin_distribution.mjs is gone — if it was ported, drop the node preflight from both \
-         installers and this test with it"
+        !helper.exists(),
+        "plugin_distribution.mjs is back — it was ported to `bee dev plugin-distribution`; two \
+         implementations of the distribution transaction is the one outcome worth failing over"
     );
     for rel in ["scripts/install.sh", "scripts/install.ps1"] {
+        let text = read(rel);
         assert!(
-            read(rel).contains("plugin_distribution.mjs"),
-            "{rel}'s node requirement must name the file that causes it, so the day it is ported \
-             the requirement is findable"
+            !text.contains("plugin_distribution.mjs\""),
+            "{rel} still invokes the deleted helper"
+        );
+        assert!(
+            text.contains("dev plugin-distribution"),
+            "{rel} must drive the distribution preflight through the native verb"
         );
     }
 }

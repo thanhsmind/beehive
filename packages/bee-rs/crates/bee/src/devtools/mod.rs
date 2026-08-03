@@ -6,6 +6,7 @@
 //   bee dev render-prompt        <- packages/bee/lib/prompt-renderer.mjs (C4)
 //   bee dev statusline           <- packages/bee/statusline/statusline-usage.mjs
 //   bee dev release-manifest     <- scripts/release_manifest.mjs
+//   bee dev plugin-distribution <- packages/bee/scripts/plugin_distribution.mjs
 //
 // RETIRED at the R6 cutover: `bee dev impact-registry`. Its whole subject was
 // the Node suite graph — it parsed `scripts/run_verify.mjs`'s SUITES and
@@ -43,6 +44,7 @@
 
 mod hook_manifests;
 mod jspath;
+mod plugin_distribution;
 mod prompts;
 mod release_manifest;
 mod skill_trees;
@@ -93,6 +95,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "render-prompt" => prompts::run(flags),
         "statusline" => statusline::run(flags),
         "release-manifest" => release_manifest::run(flags),
+        "plugin-distribution" => plugin_distribution::run(flags),
         "render-hook-manifests" => hook_manifests::run(flags),
         _ => None,
     }

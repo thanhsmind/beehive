@@ -140,7 +140,7 @@ impl Record {
 
 /// provenance: release_manifest.mjs modeOctal —
 /// `(statSync(p).mode & 0o777).toString(8).padStart(3, "0")`.
-fn mode_octal(meta: &std::fs::Metadata) -> String {
+pub(super) fn mode_octal(meta: &std::fs::Metadata) -> String {
     #[cfg(unix)]
     let bits = {
         use std::os::unix::fs::MetadataExt;

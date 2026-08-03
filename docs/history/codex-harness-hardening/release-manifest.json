@@ -1036,13 +1036,6 @@
       "packagePath": "packages/bee/prompts/worker-cell.md"
     },
     {
-      "path": "packages/bee/scripts/plugin_distribution.mjs",
-      "sha256": "aa47a6d755a1f1ad4b18732983e7b24f85e25e48d2f39d24ecea150ba25f9922",
-      "mode": "666",
-      "role": "package_payload",
-      "packagePath": "packages/bee/scripts/plugin_distribution.mjs"
-    },
-    {
       "path": "packages/bee/statusline/statusline-command.sh",
       "sha256": "49cec574ddba6fd268ecf8952d5e8fcbc35d82431d48019848dc378cfd2e0421",
       "mode": "666",
@@ -1051,13 +1044,13 @@
     },
     {
       "path": "scripts/install.ps1",
-      "sha256": "5a19678fb29505d616f674dbda842971c668149a8a21d1d3d15d65b0e01c5315",
+      "sha256": "f4bc9fa256661ce89ba14ab6ff3d8b97a80417d895fb26642c5334300a16c1fb",
       "mode": "666",
       "role": "distribution_tool"
     },
     {
       "path": "scripts/install.sh",
-      "sha256": "7b5550931aebd056776ca57f9d86ba9cdd24cb0480f48f7383323fb78ba7f54a",
+      "sha256": "4290aac1aae5147cd1fe46faa421f9a234e4e0041e4863fa6d86b1c052b59f1a",
       "mode": "666",
       "role": "distribution_tool"
     },
