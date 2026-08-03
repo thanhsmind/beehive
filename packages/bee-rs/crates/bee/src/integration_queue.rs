@@ -705,9 +705,23 @@ mod tests {
 
     /// The solo case: an empty queue resolves on the FIRST iteration with no
     /// sleep at all, and the record is driven straight to 'done'.
+    ///
+    /// HOW "no sleep" IS MEASURED. This asserted `elapsed < 400ms` against the
+    /// DEFAULT poll interval, which made a machine-speed measurement stand in
+    /// for a control-flow fact — and 400ms is squarely inside the noise a
+    /// loaded CI runner produces. It failed exactly that way on the v2.1.2
+    /// Windows run, on a box where the whole suite took 117s instead of 20s,
+    /// with nothing wrong in the code under test.
+    ///
+    /// The fix is not a bigger threshold, which only moves the flake. The poll
+    /// interval is now enormous, so the two outcomes are separated by design:
+    /// a drain that sleeps even ONCE cannot finish in under 30 seconds, and a
+    /// drain that does not sleep finishes in milliseconds. The bound below sits
+    /// in the gulf between them, where scheduler noise cannot reach.
     #[test]
     fn solo_drain_runs_immediately_and_marks_done() {
         let tmp = fixture();
+        const UNMISSABLE_POLL_MS: f64 = 30_000.0;
         let started = std::time::Instant::now();
         let out = run_through_queue(
             tmp.path(),
@@ -715,7 +729,7 @@ mod tests {
             "sess-1",
             "main",
             DEFAULT_WAIT_BOUND_MS,
-            DEFAULT_POLL_INTERVAL_MS,
+            UNMISSABLE_POLL_MS,
             DEFAULT_PROCESSOR_TTL_SECONDS,
             DEFAULT_RENEW_INTERVAL_MS,
             |hooks| {
@@ -726,7 +740,11 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(started.elapsed().as_millis() < 400, "no poll sleep on a solo drain");
+        assert!(
+            (started.elapsed().as_millis() as f64) < UNMISSABLE_POLL_MS / 2.0,
+            "a solo drain slept: it took {:?}, and one poll interval is {UNMISSABLE_POLL_MS}ms",
+            started.elapsed()
+        );
         match out {
             Drain::Ran(v) => assert_eq!(v, "merged"),
             Drain::TimedOut(_) => panic!("a solo drain never times out"),

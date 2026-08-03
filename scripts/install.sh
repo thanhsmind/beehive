@@ -234,7 +234,12 @@ fi
 # ---------- resolve bee source (local checkout or clone) ----------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd -P || true)"
-CLEANUP_DIR=""
+# ALWAYS a real directory. This was set only inside the clone branch, so every
+# --source and in-checkout run left it empty and the first redirect that used it
+# became `2>"/onboard.err"` — permission denied at the filesystem root, surfaced
+# as the useless "Onboarding plan failed." Those two paths are exactly the ones
+# a curl install never exercises.
+CLEANUP_DIR="$(mktemp -d)"
 STATE_TMP=""
 cleanup() {
   [ -n "${STATE_TMP_BIN:-}" ] && rm -rf "$STATE_TMP_BIN" || true
@@ -254,7 +259,6 @@ elif [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/../packages/bee-rs/Cargo.toml" ];
   BEE_SRC="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 else
   command -v git >/dev/null 2>&1 || fail "git is required to fetch bee (or pass --source <local-checkout>)."
-  CLEANUP_DIR="$(mktemp -d)"
   # Pinned to the binary's own tag when one was downloaded: the vendored
   # instruction layer and BEE_VERSION must come from one commit. NAME THE REF
   # ACTUALLY USED — this line printed "$REF" (which defaults to `main`) while
@@ -291,10 +295,21 @@ fi
 # snapshot/revalidates every target to close a TOCTOU window.
 RELEASE_MANIFEST="$BEE_SRC/docs/history/codex-harness-hardening/release-manifest.json"
 [ -f "$RELEASE_MANIFEST" ] || fail "Not a bee release (missing release manifest): $BEE_SRC"
-# The version is read by the same binary that will install it — no second JSON
-# parser, and no interpreter, in the one place they used to disagree.
-BEE_VERSION="$("$BEE_BIN" --version 2>/dev/null | tr -d '\r' | awk 'NR==1{print $NF}')"
-[ -n "$BEE_VERSION" ] || BEE_VERSION=unknown
+  # Read the ONE field out of the manifest that already carries it. No
+  # interpreter, and no dependency on the binary answering anything.
+  #
+  # THE DEFECT THIS REPLACES, because it cost three releases. 2.1.0 swapped a
+  # `node -e` read for `"$BEE_BIN" --version` -- and `bee --version` is not a
+  # command; it exits 1. Under `set -euo pipefail` that command substitution
+  # killed the installer outright, with no message, immediately after a
+  # multi-minute build. Every 2.1.x install died there. Nothing caught it
+  # because CI runs the test suite and never the installer.
+  #
+  # `|| true` is load-bearing: a sed that matches nothing exits non-zero, and an
+  # unreadable version is a cosmetic loss, never a reason to stop.
+  BEE_VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$BEE_SRC/.claude-plugin/plugin.json" 2>/dev/null | head -1 || true)"
+  [ -n "$BEE_VERSION" ] || BEE_VERSION=unknown
 log "source   $BEE_SRC (bee $BEE_VERSION)"
 
 # Direct global replacement is intentionally gone: user-root cleanup is legal
