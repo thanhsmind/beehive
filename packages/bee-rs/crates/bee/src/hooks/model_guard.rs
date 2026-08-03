@@ -44,9 +44,12 @@ const CODEX_SPAWN_TOOL: &str = "spawn_agent";
 
 pub fn run(argv: &[String], stdin: &str) -> Outcome {
     match run_inner(argv, stdin) {
-        Ok((code, stderr)) => {
+        Ok((code, stdout, stderr)) => {
+            use std::io::Write;
+            if !stdout.is_empty() {
+                let _ = std::io::stdout().write_all(stdout.as_bytes());
+            }
             if !stderr.is_empty() {
-                use std::io::Write;
                 let _ = std::io::stderr().write_all(stderr.as_bytes());
             }
             Outcome::Done(ExitCode::from(code))
@@ -55,16 +58,16 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     }
 }
 
-/// Returns (exit code, stderr bytes) or Err(()) => delegate to Node.
-fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String), ()> {
+/// Returns (exit code, stdout bytes, stderr bytes) or Err(()) => delegate.
+fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
     let ctx = read_hook_context(HOOK_NAME, argv, stdin);
     let Some(root) = ctx.root.clone() else {
-        return Ok((0, String::new()));
+        return Ok((0, String::new(), String::new()));
     };
 
     // Vendored-lib presence gate (fs.existsSync — any file type counts).
     if !crate::hooks::adapter::bee_installed(&root) {
-        return Ok((0, String::new()));
+        return Ok((0, String::new(), String::new()));
     }
 
     // const toolName = payload.tool_name || payload.toolName || "";
@@ -78,7 +81,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String), ()> {
     let is_dispatch_tool =
         matches!(tool_name.as_deref(), Some("Agent") | Some("Task"));
     if !is_codex_spawn && !is_dispatch_tool {
-        return Ok((0, String::new()));
+        return Ok((0, String::new(), String::new()));
     }
     // Reachable only with a string toolName ("Agent"/"Task"/"spawn_agent").
     let tool_name = tool_name.expect("dispatch tools are string-named");
@@ -89,7 +92,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String), ()> {
     // still fallible.
     let config = read_config_raw(&root).unwrap_or_default();
     if matches!(config.get("hooks").and_then(|h| h.get(HOOK_NAME)), Some(Value::Bool(false))) {
-        return Ok((0, String::new()));
+        return Ok((0, String::new(), String::new()));
     }
 
     // CUTOVER: a dispatch-guard.mjs presence gate stood here — a missing
@@ -107,7 +110,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String), ()> {
 
     let Some(transport) = verdict.transport else {
         // No opinion — never log, exit 0 silently.
-        return Ok((0, String::new()));
+        return Ok((0, String::new(), String::new()));
     };
 
     let economics = derive_dispatch_economics(&models, is_codex_spawn, &verdict);
@@ -121,10 +124,43 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String), ()> {
     if verdict.deny {
         log_dispatch(&root, &tool_name, &input_map, transport, &verdict, economics.as_ref());
         log_deny(&root, &tool_name, &input_map);
-        return Ok((2, verdict.reason.unwrap_or_default()));
+        return Ok((2, String::new(), verdict.reason.unwrap_or_default()));
     }
-    log_dispatch(&root, &tool_name, &input_map, transport, &verdict, economics.as_ref());
-    Ok((0, String::new()))
+    // A repaired dispatch is audited as the request that will actually run —
+    // logging the field the guard just replaced would put a value in the
+    // audit trail that never reached the runtime.
+    let audited_input = verdict
+        .updated_input
+        .as_ref()
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_else(|| input_map.clone());
+    log_dispatch(&root, &tool_name, &audited_input, transport, &verdict, economics.as_ref());
+    let stdout = match &verdict.updated_input {
+        Some(fixed) => repair_stdout(fixed, &verdict.notes),
+        None => String::new(),
+    };
+    Ok((0, stdout, String::new()))
+}
+
+/// The repair emission. No `permissionDecision` rides along: a guard that
+/// corrects a field is not thereby approving the call — the dispatch takes the
+/// host's ordinary permission flow, exactly as an untouched one would
+/// (hook-runtime R23). The rewrite is announced twice: to the agent as
+/// additionalContext, to the human as a systemMessage.
+fn repair_stdout(fixed: &Value, notes: &[String]) -> String {
+    let joined = notes.join("; ");
+    let mut hso = Map::new();
+    hso.insert("hookEventName".into(), Value::String("PreToolUse".into()));
+    hso.insert("updatedInput".into(), fixed.clone());
+    hso.insert(
+        "additionalContext".into(),
+        Value::String(format!("bee-model-guard auto-fixed this dispatch: {joined}")),
+    );
+    let mut out = Map::new();
+    out.insert("hookSpecificOutput".into(), Value::Object(hso));
+    out.insert("systemMessage".into(), Value::String(format!("bee-model-guard: {joined}")));
+    jsjson::stringify(&Value::Object(out))
 }
 
 // ─── JS semantics helpers ───────────────────────────────────────────────────
@@ -386,18 +422,52 @@ struct Verdict {
     /// subagent_type straight from tool_input like the .mjs does.
     #[allow(dead_code)]
     subagent_type: Option<String>,
+    /// Set when the guard repaired the request instead of refusing it. Carries
+    /// the WHOLE tool_input with the offending field rewritten — never a
+    /// partial object, because the host's merge-vs-replace semantics for
+    /// updatedInput are not something a guard should bet a dropped prompt on.
+    updated_input: Option<Value>,
+    notes: Vec<String>,
 }
 
 fn no_opinion() -> Verdict {
-    Verdict { deny: false, transport: None, reason: None, tier: None, model: None, subagent_type: None }
+    Verdict { deny: false, transport: None, reason: None, tier: None, model: None, subagent_type: None, updated_input: None, notes: Vec::new() }
 }
 
 fn allow(transport: &'static str, tier: Option<String>, model: Option<String>, subagent_type: Option<String>) -> Verdict {
-    Verdict { deny: false, transport: Some(transport), reason: None, tier, model, subagent_type }
+    Verdict { deny: false, transport: Some(transport), reason: None, tier, model, subagent_type, updated_input: None, notes: Vec::new() }
 }
 
 fn deny(reason: String, transport: &'static str, tier: Option<String>, model: Option<String>, subagent_type: Option<String>) -> Verdict {
-    Verdict { deny: true, transport: Some(transport), reason: Some(reason), tier, model, subagent_type }
+    Verdict { deny: true, transport: Some(transport), reason: Some(reason), tier, model, subagent_type, updated_input: None, notes: Vec::new() }
+}
+
+/// Allow, with one field of the request rewritten on a replacement copy.
+fn repair(
+    transport: &'static str,
+    tier: Option<String>,
+    model: Option<String>,
+    subagent_type: Option<String>,
+    updated_input: Value,
+    note: String,
+) -> Verdict {
+    Verdict {
+        deny: false,
+        transport: Some(transport),
+        reason: None,
+        tier,
+        model,
+        subagent_type,
+        updated_input: Some(updated_input),
+        notes: vec![note],
+    }
+}
+
+/// The whole request with one key replaced — the original map is never mutated.
+fn with_field(tool_input: &Map<String, Value>, key: &str, value: Value) -> Value {
+    let mut copy = tool_input.clone();
+    copy.insert(key.to_string(), value);
+    Value::Object(copy)
 }
 
 const PINNED_AGENT_TYPE: [(&str, &str); 3] =
@@ -409,6 +479,17 @@ fn pinned_type_for(tier: &str) -> &'static str {
         .find(|(t, _)| *t == tier)
         .map(|(_, p)| *p)
         .unwrap_or("undefined") // unreachable: ceiling is exempted before lookup
+}
+
+/// The tier a rendered bee agent type already stands for. These files are
+/// generated FROM the tier's configured model at onboarding, so naming one is
+/// a tier declaration in every sense that matters — the guard reading it as
+/// one is what keeps the tier decision off the caller's memory.
+fn tier_for_pinned_type(subagent_type: &str) -> Option<&'static str> {
+    PINNED_AGENT_TYPE
+        .iter()
+        .find(|(_, pinned)| *pinned == subagent_type)
+        .map(|(tier, _)| *tier)
 }
 
 fn evaluate_codex_spawn(tool_input: &Value) -> Verdict {
@@ -446,19 +527,26 @@ fn evaluate_claude_dispatch(tool_input: &Value, models: &Models) -> Verdict {
     let subagent_type: Option<String> =
         obj.get("subagent_type").and_then(Value::as_str).map(String::from);
 
-    // (0) Pinned-type rule (W3, AO5/AO10/AO11).
+    // (0) Pinned-type rule (W3, AO5/AO10/AO11) — REPAIRED, not refused. The
+    // tier is already stated; which agent file carries it is a lookup the
+    // guard owns outright, so making the caller re-issue the dispatch to
+    // supply it buys nothing but a round trip and a chance to guess again.
     if let Some(t) = &tier {
         if t != "ceiling" && subagent_type.as_deref() == Some("general-purpose") {
             let pinned = pinned_type_for(t);
-            let reason = format!(
-                "bee-model-guard: [bee-tier: {t}] must spawn its pinned agent type, not \
-subagent_type: \"general-purpose\" — general-purpose carries no tier identity and \
-would run under whatever runtime default is in effect, not the rendered bee agent \
-for this tier (AO5/AO10).\n\
-FIX: set subagent_type: \"{pinned}\" (bee's rendered agent for the {t} tier), \
-or use \"Explore\" for a read-only gather that does not need the rendered agent."
+            let note = format!(
+                "[bee-tier: {t}] dispatched with subagent_type \"general-purpose\" → \"{pinned}\" \
+(general-purpose carries no tier identity and would run under the runtime default, \
+not the rendered bee agent for this tier)"
             );
-            return deny(reason, "generic-type-denied", tier, model_param, subagent_type);
+            return repair(
+                "generic-type-repaired",
+                tier.clone(),
+                model_param,
+                Some(pinned.to_string()),
+                with_field(obj, "subagent_type", Value::String(pinned.to_string())),
+                note,
+            );
         }
     }
 
@@ -469,15 +557,23 @@ or use \"Explore\" for a read-only gather that does not need the rendered agent.
             if param == resolved_model {
                 return allow("model-param", tier, model_param, subagent_type);
             }
-            let reason = format!(
-                "bee-model-guard: [bee-tier: {t}] resolves to model \"{resolved_model}\", but \
-the dispatch carries model: \"{param}\" — the tier label and the param \
-disagree, so the dispatch would run on the param while the audit records the \
-tier (AO5: config is the authority, the model does not get a vote).\n\
-FIX: set model: \"{resolved_model}\" to match the {t} tier, or drop the \
-marker and declare the tier whose configured model is the one you want."
+            // The tier and the param disagree — and AO5 already settled who
+            // wins: config is the authority, the model does not get a vote.
+            // With the winner named in advance there is nothing left to ask,
+            // so the param is rewritten to the tier's model rather than
+            // bounced back for the caller to guess a second time.
+            let note = format!(
+                "[bee-tier: {t}] resolves to \"{resolved_model}\", dispatch carried \
+model: \"{param}\" → \"{resolved_model}\" (AO5: config is the authority)"
             );
-            return deny(reason, "param-tier-mismatch", tier, model_param, subagent_type);
+            return repair(
+                "param-tier-repaired",
+                tier.clone(),
+                Some(resolved_model.clone()),
+                subagent_type,
+                with_field(obj, "model", Value::String(resolved_model.clone())),
+                note,
+            );
         }
         let cli_note = if resolved == Resolved::Refused { " (the slot is a cli executor)" } else { "" };
         let reason = format!(
@@ -527,24 +623,52 @@ param; the cli command names its own model."
         return allow("marker", tier, None, subagent_type);
     }
 
+    // (3b) No marker, no param — but the dispatch NAMES a rendered bee agent,
+    // and that agent was generated from one tier's configured model. The tier
+    // is therefore already declared, in the field that decides which agent
+    // actually runs. Reading it here is what turns the single most common
+    // refusal ("you named bee-gather, now also say which tier bee-gather is")
+    // into no event at all. Purely additive: it can only fire where the guard
+    // used to have nothing to go on, so no dispatch that passes today changes
+    // its verdict.
+    if let Some(t) = subagent_type.as_deref().and_then(tier_for_pinned_type) {
+        if resolve_tier(models, t, "claude") == Resolved::Refused {
+            let reason = format!(
+                "bee-model-guard: subagent_type \"{}\" stands for the {t} tier, which resolves \
+to a cli executor — an in-family Agent/Task subagent cannot be an external process.\n\
+FIX: dispatch it through the external-executor gather path (a Bash call running the \
+configured command verbatim with the prompt on stdin), or name a tier whose slot is \
+a model.",
+                subagent_type.as_deref().unwrap_or_default()
+            );
+            return deny(reason, "cli-tier-denied", Some(t.to_string()), None, subagent_type);
+        }
+        return allow("pinned-type", Some(t.to_string()), None, subagent_type);
+    }
+
     // (4) Bare — deny; resolve the generation slot for the FIX.
     let gen_resolved = resolve_tier(models, "generation", "claude");
     let bare_fix = if let Resolved::Model(gen_model) = &gen_resolved {
         format!(
-            "FIX: pass model: \"{gen_model}\" for the generation tier, or add \
-[bee-tier: ceiling] (or another tier: generation/extraction/review) to the prompt/description."
+            "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
+bee-extract = extraction, bee-review = review) — that alone declares the tier. \
+Otherwise pass model: \"{gen_model}\" for the generation tier, or open the \
+prompt/description with [bee-tier: ceiling] (or generation/extraction/review)."
         )
     } else {
-        "FIX: add [bee-tier: ceiling] (or another tier: generation/extraction/review) to the \
-prompt/description; the generation tier is a cli executor or unconfigured, so run it \
-through the external-executor gather path (a Bash call with the command verbatim and \
-the prompt on stdin) rather than a model param."
+        "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
+bee-extract = extraction, bee-review = review) — that alone declares the tier. \
+Otherwise open the prompt/description with [bee-tier: ceiling] (or another tier: \
+generation/extraction/review); the generation tier is a cli executor or unconfigured, \
+so run it through the external-executor gather path (a Bash call with the command \
+verbatim and the prompt on stdin) rather than a model param."
             .to_string()
     };
     let reason = format!(
-        "bee-model-guard: every Agent/Task dispatch needs an explicit tier — a `model` \
-param or a `[bee-tier: <tier>]` marker in the prompt/description (decision 0023). \
-A bare dispatch would silently inherit the most expensive session model.\n{bare_fix}"
+        "bee-model-guard: every Agent/Task dispatch needs an explicit tier — a rendered \
+bee agent type, a `model` param, or a `[bee-tier: <tier>]` marker opening the \
+prompt/description (decision 0023). A bare dispatch would silently inherit the most \
+expensive session model.\n{bare_fix}"
     );
     deny(reason, "bare-denied", None, None, subagent_type)
 }
@@ -704,10 +828,23 @@ mod tests {
         })
     }
 
+    /// (exit code, stderr) — the two the older rows assert on.
     fn run_payload(root: &Path, payload: Value) -> (u8, String) {
+        let (code, _stdout, stderr) = run_full(root, payload);
+        (code, stderr)
+    }
+
+    /// (exit code, stdout, stderr) — for the repair rows, which read the
+    /// updatedInput emission.
+    fn run_full(root: &Path, payload: Value) -> (u8, String, String) {
         let mut body = payload;
         body["cwd"] = json!(root.to_string_lossy());
         run_inner(&[], &serde_json::to_string(&body).unwrap()).expect("native run")
+    }
+
+    /// The hookSpecificOutput of a repair emission.
+    fn repair_output(stdout: &str) -> Value {
+        serde_json::from_str::<Value>(stdout).expect("repair stdout must be JSON")
     }
 
     fn last_jsonl(file: PathBuf) -> Option<Value> {
@@ -826,12 +963,16 @@ mod tests {
         // agree -> allow
         let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "model": "sonnet"}}));
         assert_eq!(code, 0);
-        // disagree -> deny naming the tier's model
-        let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "model": "opus"}}));
-        assert_eq!(code, 2);
-        assert!(stderr.contains("\"sonnet\""));
+        // disagree -> the param is rewritten to the tier's configured model
+        let (code, stdout, _) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "model": "opus"}}));
+        assert_eq!(code, 0);
+        let out = repair_output(&stdout);
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["model"], json!("sonnet"));
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["prompt"], json!("[bee-tier: generation] go"));
+        assert!(out["systemMessage"].as_str().unwrap().contains("sonnet"));
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
-        assert_eq!(d["transport"], "param-tier-mismatch");
+        assert_eq!(d["transport"], "param-tier-repaired");
+        assert_eq!(d["model"], "sonnet", "the audit records what will actually run");
         // ceiling + param -> deny "drop the model param"
         let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: ceiling] go", "model": "sonnet"}}));
         assert_eq!(code, 2);
@@ -888,17 +1029,32 @@ mod tests {
     fn pinned_type_rule() {
         let fx = fixture(&repo_config());
         for (tier, pinned) in PINNED_AGENT_TYPE {
-            let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": format!("[bee-tier: {tier}] go"), "subagent_type": "general-purpose"}}));
-            assert_eq!(code, 2, "tier {tier}");
-            assert!(stderr.contains(pinned));
+            let (code, stdout, stderr) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": format!("[bee-tier: {tier}] go"), "subagent_type": "general-purpose"}}));
+            // Repaired, not refused: the tier was stated, so the agent type
+            // it implies is the guard's own lookup to perform.
+            assert_eq!(code, 0, "tier {tier}: {stderr}");
+            let out = repair_output(&stdout);
+            assert_eq!(out["hookSpecificOutput"]["updatedInput"]["subagent_type"], json!(pinned));
+            // the rest of the request survives the rewrite untouched
+            assert_eq!(
+                out["hookSpecificOutput"]["updatedInput"]["prompt"],
+                json!(format!("[bee-tier: {tier}] go"))
+            );
+            // no permission verdict rides along (hook-runtime R23)
+            assert!(out["hookSpecificOutput"]["permissionDecision"].is_null());
+            assert!(out["systemMessage"].as_str().unwrap().contains(pinned));
             let d = last_jsonl(dispatch_log(fx.path())).unwrap();
-            assert_eq!(d["transport"], "generic-type-denied");
+            assert_eq!(d["transport"], "generic-type-repaired");
             assert_eq!(d["tier"], tier);
+            assert_eq!(d["subagent_type"], pinned, "the audit records what will run");
         }
-        // matching param does not rescue general-purpose
-        let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "model": "sonnet", "subagent_type": "general-purpose"}}));
-        assert_eq!(code, 2);
-        assert!(stderr.contains("bee-gather"));
+        // a matching param does not change the repair — the type is still wrong
+        let (code, stdout, _) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "model": "sonnet", "subagent_type": "general-purpose"}}));
+        assert_eq!(code, 0);
+        assert_eq!(
+            repair_output(&stdout)["hookSpecificOutput"]["updatedInput"]["subagent_type"],
+            json!("bee-gather")
+        );
         // ceiling has no pinned agent
         let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: ceiling] go", "subagent_type": "general-purpose"}}));
         assert_eq!(code, 0);
@@ -910,6 +1066,57 @@ mod tests {
         // bare param + general-purpose (no marker) stays allowed
         let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"model": "haiku", "subagent_type": "general-purpose"}}));
         assert_eq!(code, 0);
+    }
+
+    #[test]
+    fn a_rendered_bee_agent_type_declares_its_own_tier() {
+        let fx = fixture(&repo_config());
+        // The refusal in the field report: a dispatch that names bee-gather
+        // and nothing else. It now carries its tier in the agent type.
+        for (tier, pinned) in PINNED_AGENT_TYPE {
+            let (code, stdout, stderr) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": pinned, "description": "map campaign source_type usage", "prompt": "find every caller"}}));
+            assert_eq!(code, 0, "{pinned}: {stderr}");
+            assert_eq!(stdout, "", "an inferred tier needs no repair");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["transport"], "pinned-type");
+            assert_eq!(d["tier"], tier);
+            assert_eq!(d["subagent_type"], pinned);
+            // the tier's configured model is what the audit says was requested
+            assert_eq!(d["requested_model"], json!(match tier {
+                "generation" => "sonnet",
+                "extraction" => "haiku",
+                _ => "opus",
+            }));
+        }
+        // Additive only: an unknown agent type is still bare, still refused.
+        let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "some-other-agent", "prompt": "go"}}));
+        assert_eq!(code, 2);
+        assert!(stderr.contains("bee-gather = generation"), "the FIX teaches the new route");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "bare-denied");
+        // An explicit param still wins the read — inference never overrides a
+        // stated model, so nothing that passes today changes verdict.
+        let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-gather", "model": "opus"}}));
+        assert_eq!(code, 0);
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "model-param");
+        assert_eq!(d["model"], "opus");
+        assert_eq!(d["tier"], Value::Null);
+    }
+
+    #[test]
+    fn an_inferred_cli_tier_is_still_refused() {
+        let cli = fixture(&json!({"models": {"claude": {
+            "extraction": "haiku",
+            "generation": {"kind": "cli", "command": "codex exec -m gpt-5.5 -s read-only -"},
+            "review": "opus"
+        }}}));
+        let (code, stderr) = run_payload(cli.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-gather", "prompt": "gather"}}));
+        assert_eq!(code, 2, "a cli slot cannot be an in-family subagent");
+        assert!(stderr.contains("bee-gather") && stderr.contains("cli executor"));
+        let d = last_jsonl(dispatch_log(cli.path())).unwrap();
+        assert_eq!(d["transport"], "cli-tier-denied");
+        assert_eq!(d["tier"], "generation");
     }
 
     #[test]
@@ -994,7 +1201,7 @@ mod tests {
                     .to_string(),
             ),
         ] {
-            let (code, stderr) = run_inner(&[], &stdin).expect("must decide natively");
+            let (code, _stdout, stderr) = run_inner(&[], &stdin).expect("must decide natively");
             assert_eq!(code, 0, "{row} must fail open");
             assert_eq!(stderr, "", "{row} must stay silent");
         }
@@ -1010,7 +1217,7 @@ mod tests {
             "tool_input": { "prompt": "bare dispatch, no marker, no model" },
             "cwd": dir.path().to_string_lossy(),
         });
-        let (code, stderr) =
+        let (code, _stdout, stderr) =
             run_inner(&[], &serde_json::to_string(&body).unwrap()).expect("native");
         assert_eq!(code, 0);
         assert_eq!(stderr, "");

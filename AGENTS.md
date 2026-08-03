@@ -100,9 +100,14 @@ context before planning or executing.
   turns where no skill is running. Decide-altitude never delegates:
   gates, synthesis, state writes, and the human conversation stay on
   the session model.
-- Every dispatch carries its tier: a `model` param or a
-  `[bee-tier: <tier>]` marker, anchored — first thing in the prompt
-  or description, never buried mid-text. From `small` up, cells run
+- Every dispatch carries its tier, and the plainest way to carry it is
+  to name bee's own rendered agent: `subagent_type: bee-gather`
+  (generation), `bee-extract` (extraction), `bee-review` (review) — the
+  agent file IS the tier, so nothing else is needed. Otherwise a
+  `model` param, or a `[bee-tier: <tier>]` marker anchored as the first
+  thing in the prompt or description, never buried mid-text. Only
+  `ceiling|generation|extraction|review` are tiers; any other word in
+  that marker is not a marker at all. From `small` up, cells run
   through dispatched workers (never zero *execution* workers); a tiny
   cell may run inline. A cli-shaped gather tier runs the configured
   external command per the Delegation contract's cli gather branch,

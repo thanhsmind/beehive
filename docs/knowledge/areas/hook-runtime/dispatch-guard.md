@@ -2,7 +2,7 @@
 type: bee.area
 title: Hook Runtime — the pre-spawn dispatch guard
 description: "How a helper dispatch's declared tier and explicit model choice are judged together against configuration alone, which pinned helper type each work tier must ride, and why every evaluated dispatch — allowed or refused — leaves an honest audit line."
-timestamp: 2026-07-22
+timestamp: 2026-08-03
 bee:
   id: hook-runtime-dispatch-guard
   lifecycle: active
@@ -30,8 +30,9 @@ explicit model choice, both, or neither; the guard judges them together, in
 this order, and configuration is the sole authority throughout — there is no
 built-in list of acceptable models.
 - *Both present:* they must agree. A tier configured to a model requires the
-  explicit choice to equal exactly that model; disagreement is refused with the
-  configured model named in the corrective message. A tier that names no model
+  explicit choice to equal exactly that model; disagreement is **repaired to
+  the configured model** (B16a — it was refused with that model named, until
+  2026-08-03). A tier that names no model
   (the session-inherit tier, a budget tier, an external-command tier) must not
   carry an explicit model choice at all — the label would enter the audit
   record while the dispatch actually ran on the choice.
@@ -54,15 +55,44 @@ built-in list of acceptable models.
   in-family helper cannot *be* the external command — and the corrective
   message routes to the external-executor gather path without ever naming a
   model that does not exist.
-- *Neither:* refused, as always; the corrective message now checks how the
-  default tier is configured first, so it never instructs the actor to pass a
-  nonexistent model.
+- *Neither:* refused — unless the helper type itself names a tier (B16a). The
+  corrective message checks how the default tier is configured first, so it
+  never instructs the actor to pass a nonexistent model, and it teaches the
+  helper-type route before the marker route.
 What each actor observes: the assistant receives the corrective message and can
 self-correct on the next attempt; the audit log gains one line per evaluated
 dispatch whose transport label states *why* a refusal happened (tier/choice
 disagreement, unconfigured choice, external-command tier, bare) — a refused or
 misdeclared dispatch can no longer appear in the audit trail as a legitimate
 one. Every internal failure of the guard itself fails open.
+
+**B16a — A declaration the guard can derive is never asked for, and a
+disagreement config already settles is repaired, not refused.** Three of the
+four commonest refusals were the guard demanding something it could work out
+itself, which put the choice back on the actor least able to get it right — the
+caller — and charged a round trip for every guess.
+- *A dispatch that names a rendered helper type and nothing else* declares its
+  tier by that fact: each helper file is generated from exactly one tier's
+  configured model, so the type IS the tier. Permitted, tier recorded, no
+  correction event. This is purely additive — it decides only cases that
+  previously had nothing to go on, so no dispatch that passes today changes
+  its verdict, and an explicit model choice is still read first.
+- *A declared work tier riding the catch-all helper type* is repaired: the
+  request is rewritten to that tier's pinned type on a replacement copy and
+  proceeds. The tier was already stated; which file carries it is the guard's
+  own lookup.
+- *A declared tier and an explicit model that disagree* is repaired to the
+  tier's configured model — the same authority order the refusal was already
+  enforcing (config wins), applied instead of announced.
+- What stays refused: a wholly bare dispatch, an unconfigured model name, an
+  explicit model on a tier that names none, and any tier resolving to an
+  external command. Each is either unknowable or genuinely ambiguous.
+- Every repair is announced twice — to the actor next to the tool call, to the
+  human as a one-line note — and the audit line's transport label says a
+  repair happened and records the value that will actually run. A repair
+  carries **no permission verdict**: correcting a field is not approving the
+  call (hook-runtime R23). Observed rate before this: 126 refusals in 399
+  dispatches, 83% of them the catch-all-type pairing (2026-08-03).
 
 **B18 — Work-tier dispatches ride pinned helper types, not the catch-all.**
 Three pinned helper definitions — a gather worker, an extraction worker, and a
@@ -76,8 +106,8 @@ no file (a helper type must name a real model), and the second runtime gets
 none at all — it has no per-helper model selection, a documented asymmetry.
 The dispatch guard enforces the pairing: a dispatch declaring a work tier
 (gather/extraction/review) while naming the **catch-all generic helper type**
-is refused, and the corrective message names that tier's pinned type (or the
-runtime's read-only explorer type for read-only gathers). The session-model
+is corrected to that tier's pinned type and proceeds (per B16a; it was refused
+with a corrective message until 2026-08-03). The session-model
 tier is exempt — it has no pinned type by definition. Drift between a rendered
 helper file's model and the configured slot is surfaced as an **advisory** by
 the status snapshot and the configuration check (never a refusal — the
@@ -85,6 +115,14 @@ dispatch-time agreement rules already protect the dispatch itself). No claim
 is made that any of this reduces cost; it makes the tier decision auditable.
 
 ## Business Rules
+
+- R6 — A guard refuses only what it cannot derive or resolve. Where the
+  request already contains the answer (a helper type that stands for exactly
+  one tier) or where an existing decision already names the winner (config over
+  an explicit model choice), the guard supplies or corrects it and proceeds,
+  announced. Refusal is reserved for the unknowable and the genuinely
+  ambiguous — a rule that hands a choice back to whoever just got it wrong
+  buys a round trip and a second guess, not safety (2026-08-03).
 
 - R5 — Every dispatch of a subagent carries an explicit model-tier transport
   that **agrees with configuration**, and every evaluated dispatch — allowed or
@@ -104,9 +142,16 @@ is made that any of this reduces cost; it makes the tier decision auditable.
 
 ## Pointers (implementation)
 
+- The whole judgement: `evaluate_claude_dispatch` in
+  `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`, in verdict order —
+  pinned-type repair, tier+model repair, model-only membership, marker-only,
+  helper-type tier inference (`tier_for_pinned_type`), bare refusal. The
+  repair emission is `repair_stdout` (stdout JSON `hookSpecificOutput.
+  updatedInput`, no `permissionDecision`, exit 0); refusals stay exit 2 +
+  stderr. Tests: `a_rendered_bee_agent_type_declares_its_own_tier`,
+  `pinned_type_rule`, `marker_plus_param_agreement_rules`,
+  `an_inferred_cli_tier_is_still_refused`.
 - Claude model-param allowlist advisor fold (B16, "Choice only"):
-  `configuredModelSet` in `packages/bee/lib/dispatch-guard.mjs`
-  (mirrored in `.bee/bin/lib/dispatch-guard.mjs`), folding
-  `resolveAdvisor(root, 'claude')` into the union. Canary rows:
-  `hooks/test_model_guard.mjs` rows 21-22. Evidence: `.bee/cells/cnt-7.json`,
+  `configured_model_set`, folding the resolved advisor model into the union.
+  Evidence: `.bee/cells/cnt-7.json`,
   `docs/history/codex-native-transport/reports/cnt-7.md`.
