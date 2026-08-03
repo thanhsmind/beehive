@@ -125,11 +125,17 @@ same filename *without* a marker fails as new content.
 ## Pointers (implementation)
 
 - The classifier, its verdicts, its named exceptions and its pinned placeholders:
-  `scripts/okf_specs_fence.mjs` (`fenceFindings`, `NAMED_EXCEPTIONS`, `PLACEHOLDERS`).
-- Red-first proof and both directions of the profile-stub assertion:
-  `node scripts/okf_specs_fence.mjs --selftest`.
-- Wired into the chain as two entries (`--selftest` and `--check`): `scripts/run_verify.mjs`
-  `EXTRA_SUITES`, pinned in `scripts/tests/test_verify_manifest.mjs` `MANDATORY_SUITE_ARGS`.
+  `packages/bee-rs/crates/bee/tests/specs_fence.rs` (`classify`, `NAMED_EXCEPTIONS`,
+  `PLACEHOLDERS`). Both forms are tests, so the declared test command IS the chain wiring —
+  there is no separate suite list to fall out of.
+- Its two forms: `the_classifier_bites_in_every_direction` (the self-test) and
+  `the_compatibility_surface_carries_no_new_content` (this repo's surface).
+- **It was absent between the R6 Node cutover and 2026-08-03.** The original,
+  `scripts/okf_specs_fence.mjs`, was deleted with the runtime and never ported, and this page
+  went on describing it as running. Four specs sat in the surface as new content for weeks with
+  nothing red — this concept's own silent-rot failure, happening to the fence itself. Recorded
+  here rather than quietly fixed, because a guard that was once absent is worth knowing about
+  when reading anything it was supposed to have been guarding.
 - The shared bundle-mode predicate and product-root resolver:
   `packages/bee/lib/knowledge.mjs` (`bundleMode`) and
   `packages/bee/lib/state.mjs` (`resolveProductRoot`).
