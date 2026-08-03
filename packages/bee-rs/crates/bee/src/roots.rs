@@ -156,6 +156,7 @@ pub enum Unsupported {
 /// one place Node threw a V8-worded error (a `.git` that vanished between
 /// existsSync and statSync). The port collapsed those two calls into one stat
 /// at cutover, so `Exotic` is no longer constructed.
+#[derive(Debug)]
 pub enum Resolution {
     Ordinary {
         store_root: PathBuf,
@@ -275,6 +276,40 @@ fn join(base: &str, seg: &str) -> String {
 /// `fs.readFileSync(file,'utf8').trim()`, an optional `gitdir:` prefix
 /// stripped and re-trimmed, backslashes rewritten to the platform separator,
 /// then `path.resolve(base, raw)`. Any read failure is `null`.
+/// Do two path spellings name the same file?
+///
+/// Lexical first — that is the comparison this resolver has always made, it is
+/// what Node did, and it is the answer in every ordinary case. The canonical
+/// fallback exists because a lexical-only answer is WRONG on Windows in ways a
+/// user never chose and cannot see:
+///
+///   * An 8.3 short component. A GitHub Windows runner's TEMP really is
+///     `C:\Users\RUNNER~1\AppData\Local\Temp`, and the same directory reached
+///     through `C:\Users\runneradmin\…` is byte-different and identical. This
+///     is what made 17 worktree tests red on every release from v2.0.4 to
+///     2.1.0 — a dead gate, not a flake.
+///   * A drive letter in the other case (`c:\repo` vs `C:\repo`), which
+///     Windows treats as one path and a byte compare does not.
+///   * A junction or symlinked ancestor anywhere above the repo.
+///
+/// In all three the link IS bidirectional and the refusal is false. Canonical
+/// resolution is the question actually being asked — "same file?" — so it is
+/// the right tiebreak, and it stays a FALLBACK so the common path pays no
+/// syscall and byte-compatibility with the old answer is preserved wherever
+/// the old answer was right.
+fn same_path(a: &str, b: &str) -> bool {
+    let (a, b) = (path_resolve(a, "."), path_resolve(b, "."));
+    if a == b {
+        return true;
+    }
+    match (dunce::canonicalize(&a), dunce::canonicalize(&b)) {
+        (Ok(ca), Ok(cb)) => ca == cb,
+        // Unresolvable means "not proven the same", never "assume so": a
+        // missing marker must keep failing the bidirectionality check.
+        _ => false,
+    }
+}
+
 ///
 /// Note the ordering Node uses and this port keeps: emptiness is tested
 /// BEFORE the prefix strip, so a bare `gitdir:` resolves to `base` itself
@@ -433,7 +468,7 @@ pub fn resolve_roots_core(start: &Path) -> Resolution {
     // back.
     let reverse = read_gitdir_file(&join(&gitdir, "gitdir"), &gitdir);
     match &reverse {
-        Some(r) if path_resolve(r, ".") == path_resolve(&marker, ".") => {}
+        Some(r) if same_path(r, &marker) => {}
         _ => return invalid("linked worktree reverse gitdir pointer is missing or mismatched"),
     }
     let main_root = path_dirname(&common_git_dir);
@@ -662,8 +697,18 @@ mod tests {
         (main, wt)
     }
 
+    /// Compare paths by IDENTITY, not by spelling.
+    ///
+    /// `main_root` comes out of the gitdir chain — git's own writing of the
+    /// path — while a fixture holds whatever `tempdir()` returned. On a
+    /// Windows runner those are the long and 8.3-short forms of one directory,
+    /// so a lexical compare made every ungranted-worktree assertion fail for a
+    /// reason that has nothing to do with what is being asserted.
     fn norm(p: &Path) -> String {
-        normalize_abs_lexical(&p.to_string_lossy())
+        match dunce::canonicalize(p) {
+            Ok(c) => normalize_abs_lexical(&c.to_string_lossy()),
+            Err(_) => normalize_abs_lexical(&p.to_string_lossy()),
+        }
     }
 
     #[test]
@@ -741,6 +786,100 @@ mod tests {
 
     /// Node (pinned): the SAME fixture with `{"wt-a": true}` in the MAIN
     /// store's registry flips storeRoot to the worktree's own root.
+    /// The bidirectionality check asks "same file?", and for four releases it
+    /// answered with a byte compare. On a GitHub Windows runner TEMP really is
+    /// `C:\Users\RUNNER~1\...`; git writes its gitdir pointers in the LONG
+    /// form, the fixture holds the short one, and every worktree test went red
+    /// — a dead gate rather than a flake, on every release from v2.0.4 to 2.1.0.
+    ///
+    /// 8.3 aliases cannot be created on demand (the volume may have short-name
+    /// generation off), so this proves the same comparison through the other
+    /// two spellings that reach one file: a symlinked ancestor everywhere, and
+    /// a flipped drive-letter case on Windows.
+    #[test]
+    fn two_spellings_of_one_path_are_the_same_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = tmp.path().join("real");
+        std::fs::create_dir_all(&real).unwrap();
+        let file = real.join("marker");
+        std::fs::write(&file, "x").unwrap();
+
+        // Identical spellings: the lexical fast path, no syscall needed.
+        assert!(same_path(&file.to_string_lossy(), &file.to_string_lossy()));
+
+        // Genuinely different files stay different, canonical fallback and all.
+        let other = real.join("other");
+        std::fs::write(&other, "x").unwrap();
+        assert!(!same_path(&file.to_string_lossy(), &other.to_string_lossy()));
+
+        // A path that does not exist is never "proven the same" — the missing
+        // back-pointer must keep failing the check it guards.
+        assert!(!same_path(
+            &real.join("absent").to_string_lossy(),
+            &real.join("absent").to_string_lossy().replace("absent", "absent2")
+        ));
+
+        #[cfg(windows)]
+        {
+            // `c:\...` and `C:\...` are one path to Windows and two to a byte
+            // compare — the same class as RUNNER~1, reproducible anywhere.
+            let s = file.to_string_lossy().into_owned();
+            let mut flipped = s.clone();
+            if flipped.as_bytes().get(1) == Some(&b':') {
+                let d = flipped.remove(0);
+                flipped.insert(0, if d.is_ascii_uppercase() { d.to_ascii_lowercase() } else { d.to_ascii_uppercase() });
+                assert_ne!(flipped, s, "the fixture must actually differ byte-wise");
+                assert!(same_path(&flipped, &s), "a drive-letter case flip names the same file");
+            }
+        }
+
+        #[cfg(unix)]
+        {
+            let link = tmp.path().join("link");
+            std::os::unix::fs::symlink(&real, &link).unwrap();
+            let via_link = link.join("marker");
+            assert_ne!(via_link, file);
+            assert!(same_path(&via_link.to_string_lossy(), &file.to_string_lossy()));
+        }
+    }
+
+    /// The whole resolver, through a reverse pointer written in an equivalent
+    /// but byte-different spelling — the shape the runner actually produced.
+    #[test]
+    fn a_reverse_pointer_in_another_spelling_still_resolves() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_main, wt) = fixture(tmp.path(), "wt-spell");
+        match resolve_roots_core(&wt) {
+            Resolution::LinkedValid { .. } => {}
+            other => panic!("baseline fixture must resolve, got {other:?}"),
+        }
+
+        // Rewrite <gitdir>/gitdir to point at the same marker by another name.
+        let marker = wt.join(".git");
+        let gitdir = read_gitdir_file(&marker.to_string_lossy(), &wt.to_string_lossy())
+            .expect("the fixture writes a gitdir pointer");
+        let back = std::path::Path::new(&gitdir).join("gitdir");
+        let original = std::fs::read_to_string(&back).unwrap();
+        let respelled = if cfg!(windows) {
+            let mut s = original.trim().to_string();
+            let d = s.remove(0);
+            s.insert(0, if d.is_ascii_uppercase() { d.to_ascii_lowercase() } else { d.to_ascii_uppercase() });
+            s
+        } else {
+            // POSIX: a redundant `/./` survives realpath and not much else.
+            original.trim().replacen('/', "/./", 1)
+        };
+        std::fs::write(&back, format!("{respelled}
+")).unwrap();
+
+        match resolve_roots_core(&wt) {
+            Resolution::LinkedValid { .. } => {}
+            other => panic!(
+                "a reverse pointer naming the SAME marker by another spelling must still                  resolve; got {other:?}"
+            ),
+        }
+    }
+
     #[test]
     fn granted_linked_worktree_resolves_to_its_own_store() {
         let tmp = tempfile::tempdir().unwrap();
