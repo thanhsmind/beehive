@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "prompt-diet",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -10,6 +10,22 @@
     "review": false
   },
   "summary": "Feature \"prompt-diet\" started at phase \"planning\" (lane).",
-  "next_action": "Dispatch pd-1 worker (serial), then pd-2/3/4 parallel, then pd-5 wave-close.",
-  "created_at": "2026-08-03T08:08:58.985Z"
+  "next_action": "CLOSED in substance - merged to main, renders synced, suite 989/0, learnings recorded. Lane parked at compounding because the compounding-complete close delegates to the deleted Node debt door (set_gate.rs:180,214) - see decision + follow-up chip.",
+  "created_at": "2026-08-03T08:08:58.985Z",
+  "last_scribing_run": {
+    "feature": "prompt-diet",
+    "date": "2026-08-03",
+    "at": "2026-08-03T08:45:44.162Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "None - standard captured in-flight by cell pd-4; behavior_change cells pd-1..3 are covered by it."
+  },
+  "last_compounding_run": {
+    "feature": "prompt-diet",
+    "date": "2026-08-03",
+    "at": "2026-08-03T08:46:16.854Z",
+    "learnings": "docs/history/learnings/20260803-prompt-diet.md",
+    "next_action": null
+  }
 }

@@ -295,6 +295,8 @@
     "hook-runtime",
     "decision-reversal",
     "prompt-diet",
-    "deviation"
+    "deviation",
+    "doctrine-layer",
+    "defect"
   ]
 }
