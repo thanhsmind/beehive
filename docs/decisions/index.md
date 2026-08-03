@@ -1010,6 +1010,10 @@ each decision event.
 - 21681a49 · 2026-07-23 · auto-approved Gate 1 (bypass total) - herding-dispatch-lock-toggle CONTEXT.md
 - 9a5f6194 · 2026-07-23 · D5 herding-dispatch-lock-toggle: no runtime guard on bee herding enable and disable (no TTY check, not hidden from help --json); convention-only safety, same level as today's manual touch and rm
 
+### hook-runtime
+
+- 5bd08e53 · 2026-08-03 · AskUserQuestion auto-fix emits permissionDecision "ask", never "allow": the question tool's permission prompt IS the question, so an allow verdict pre-approved it away and the tool returned no selection — the asker then fell back to its own default and the human never saw the question. Reverses the emission half of ask-guard-autofix D2; updatedInput rides the ask verdict (documented combination). The write guard's reservation-warning branch drops its permissionDecision entirely for the same reason: an advisory notice must not double as a pre-approval — the warning now rides additionalContext + systemMessage and the write takes the ordinary permission flow.
+
 ### hooks
 
 - 1c047d5d · 2026-08-02 · The Codex Windows hook transport no longer uses Node. commandWindows is now: git -c alias.beehook="!<sh body>" beehook — git runs an exclamation-prefixed alias from the repository TOP LEVEL, so the command string never has to COMPUTE the repo root, which was the sole reason a node -e interpreter survived the R6 Node deletion.

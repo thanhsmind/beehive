@@ -2,13 +2,13 @@
 type: bee.area
 title: Hook Runtime — the request shapes the write guard can read
 description: "How the write guard decides a batch file-change request target by target, how it shape-checks a workflow command against the published catalog, which command forms it still recognises, how it repairs a mechanically fixable question request instead of refusing it, and why an intercepted-but-unreadable request is denied rather than waved through."
-timestamp: 2026-07-23
+timestamp: 2026-08-03
 bee:
   id: hook-runtime-write-guard-request-shapes
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)"]
+  decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)", "5bd08e53 (ask-guard verdict correction: a repaired question escalates with \"ask\", an advisory reservation notice carries no verdict at all, 2026-08-03)"]
   sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7"]
   authoritative_for: "hook-runtime: write-guard request-shape recognition and per-target decisions"
 ---
@@ -90,6 +90,18 @@ question reaches the human instead of dying on a label-length technicality;
 the original request object is never mutated — the rewrite rides a replacement
 copy (ask-guard-autofix D1/D2, cell ag-1, 2026-07-23).
 
+**B22a — The repair escalates the question to the human; it never pre-approves
+it.** The repaired request is announced to the platform as an *escalation*
+(`permissionDecision: "ask"`), not as an approval. The distinction is the whole
+behavior: for the ask-the-human tool the platform's approval prompt IS the
+question the human answers, so an approval verdict answers the prompt away —
+the tool then returns with no selection and the asker falls back to its own
+default, swallowing the very question the repair existed to save. The
+escalation verdict carries the rewritten request with it, and forces the prompt
+even where the permission mode would otherwise skip it. Observed and fixed
+2026-08-03: a 13-character heading tripped the repair, and the human never saw
+the question.
+
 ## Business Rules
 
 - R3 — An intercepted batch change with unprovable targets is denied, not
@@ -105,9 +117,17 @@ copy (ask-guard-autofix D1/D2, cell ag-1, 2026-07-23).
 - R22 — A question-request violation is repaired only when the repair is
   deterministic and meaning-preserving; everything else refuses with the
   specific correction, and a refusal always beats a repair found in the same
-  request. The repair is announced — to the platform in the approval, and to
+  request. The repair is announced — to the platform in the escalation, and to
   the human as a one-line note — never applied silently (ask-guard-autofix
-  D1/D2, 2026-07-23).
+  D1/D2, 2026-07-23; verdict corrected 2026-08-03, see R23).
+
+- R23 — No advisory verdict the guard emits may carry a permission approval.
+  A repaired question escalates to the human; a soft reservation notice emits
+  its warning as context and nothing else. The guard's only permission verdict
+  is a refusal — anything short of a refusal leaves the host's ordinary
+  permission flow exactly as it found it. An approval verdict attached to an
+  advisory buys the guarded call more permission than it had, and on the
+  ask-the-human tool it destroys the answer outright (2026-08-03).
 
 ## Edge Cases Settled
 
@@ -122,11 +142,12 @@ copy (ask-guard-autofix D1/D2, cell ag-1, 2026-07-23).
   against the `command-registry.mjs` catalog. Evidence: `.bee/cells/du-2.json`,
   `docs/history/dispatcher-unify/`.
 
-- Question-schema guard + auto-fix: `checkAskUserQuestion` in
-  `packages/bee/lib/guards.mjs` (fixed-verdict shape
-  `{allow, fixed, notes}`); updatedInput emission in
-  `packages/bee/hooks/bee-write-guard.mjs` (`fixedAskVerdict` branch — stdout JSON
-  `hookSpecificOutput.updatedInput`, exit 0; deny path unchanged, exit 2 +
-  stderr). Evidence: `.bee/cells/ag-1.json`, tests
-  `packages/bee/tests/test_guards.mjs` and
-  `hooks/test_write_guard.mjs`, commit 52dad26.
+- Question-schema guard + auto-fix: `check_ask_user_question` in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs`
+  (`AskResult::{Allow, Deny, Fixed}`); verdict emission in the same module's
+  `main.rs` (`fixed_ask` branch — stdout JSON `hookSpecificOutput` with
+  `permissionDecision: "ask"` + `updatedInput`, exit 0; deny path unchanged,
+  exit 2 + stderr). The advisory reservation branch below it emits
+  `additionalContext` only, no verdict. Tests: `write_guard/tests.rs`
+  (`ask_long_header_is_auto_fixed`, `intent_reservation_allows_with_warning`).
+  Provenance: `.bee/cells/ag-1.json`, commit 52dad26 (Node original).

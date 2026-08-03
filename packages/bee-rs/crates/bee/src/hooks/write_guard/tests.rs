@@ -336,7 +336,12 @@ use std::process::ExitCode;
         );
         assert_eq!(e.code, 0);
         let parsed: Value = serde_json::from_str(&e.stdout).unwrap();
-        assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], json!("allow"));
+        // "ask", not "allow" — an allow verdict pre-approves the question
+        // prompt away and the human never gets to answer.
+        assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], json!("ask"));
+        assert!(parsed["hookSpecificOutput"]["permissionDecisionReason"]
+            .as_str()
+            .is_some_and(|s| !s.is_empty()));
         assert_eq!(
             parsed["hookSpecificOutput"]["updatedInput"]["questions"][0]["header"],
             json!("Worktree sw…")
@@ -568,7 +573,12 @@ use std::process::ExitCode;
         );
         assert_eq!(e.code, 0, "{}", e.stderr);
         let parsed: Value = serde_json::from_str(&e.stdout).unwrap();
-        assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], json!("allow"));
+        // Advisory only — no permission verdict rides along, so the write still
+        // takes the host's ordinary permission flow.
+        assert!(parsed["hookSpecificOutput"]["permissionDecision"].is_null());
+        assert!(parsed["hookSpecificOutput"]["additionalContext"]
+            .as_str()
+            .is_some_and(|s| s.contains("bee reservation intent")));
         let msg = parsed["systemMessage"].as_str().unwrap();
         assert!(msg.contains("bee reservation intent"));
         assert!(msg.contains("advisory only (kind: intent)"));

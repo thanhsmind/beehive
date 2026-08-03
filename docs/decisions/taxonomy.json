@@ -291,6 +291,8 @@
     "install",
     "transport",
     "config",
-    "dead-code"
+    "dead-code",
+    "hook-runtime",
+    "decision-reversal"
   ]
 }

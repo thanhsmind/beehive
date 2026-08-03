@@ -358,7 +358,13 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
         let notes_joined = notes.join("; ");
         let mut hso = Map::new();
         hso.insert("hookEventName".into(), Value::String("PreToolUse".into()));
-        hso.insert("permissionDecision".into(), Value::String("allow".into()));
+        // "ask", never "allow": the question tool's permission prompt IS the
+        // question the human answers. An "allow" verdict pre-approves that
+        // prompt away, the tool returns no selection, and the asker silently
+        // falls back to its own default — the repair swallowed the question it
+        // was meant to save. "ask" forces the prompt even where the permission
+        // mode would skip it, and carries updatedInput with it.
+        hso.insert("permissionDecision".into(), Value::String("ask".into()));
         hso.insert("permissionDecisionReason".into(), Value::String(notes_joined.clone()));
         hso.insert("updatedInput".into(), fixed);
         hso.insert(
@@ -380,8 +386,13 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
         let joined = reservation_warnings.join("\n");
         let mut hso = Map::new();
         hso.insert("hookEventName".into(), Value::String("PreToolUse".into()));
-        hso.insert("permissionDecision".into(), Value::String("allow".into()));
-        hso.insert("permissionDecisionReason".into(), Value::String(joined.clone()));
+        // No permissionDecision: an advisory warning must not double as a
+        // pre-approval. "allow" here would wave the write past the permission
+        // prompt the host would otherwise show — a soft reservation notice
+        // buying the write more permission than it had. The warning rides
+        // additionalContext (to the agent) and systemMessage (to the human);
+        // the write itself takes the ordinary permission flow.
+        hso.insert("additionalContext".into(), Value::String(joined.clone()));
         let mut output = Map::new();
         output.insert("hookSpecificOutput".into(), Value::Object(hso));
         output.insert("systemMessage".into(), Value::String(joined));
