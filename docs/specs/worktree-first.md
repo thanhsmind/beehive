@@ -1,77 +1,36 @@
-# Worktree-first — main stays clean
+---
+area: worktree-first
+updated: 2026-08-03
+migrated_to: docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md
+---
 
-Status: approved direction (owner, 2026-07-31); supersedes the lane-first
-routing default in worktree-parallelism ("Routing rule", "Lane-first
-refinement").
+# Worktree-first — main stays clean (migrated — pointer stub)
 
-## The policy inversion
+This area's current truth now lives in the knowledge bundle, inside the area it
+always belonged to:
+[`docs/knowledge/areas/worktree-parallelism/`](../knowledge/areas/worktree-parallelism/index.md).
+Worktree-first is not a separate area — it is the ROUTING RULE of
+worktree-parallelism, which is why it superseded that area's lane-first default
+rather than sitting beside it. `routing-and-visibility.md` has cited this source
+and carried the policy since the migration; this stub closes the loop by
+retiring the second copy.
 
-Old default: feature work starts in the main checkout; a worktree is
-granted late (execution gate) and only on genuine file overlap.
+One area, one file, forever: two documents describing where feature work lives
+is exactly the disagreement that rule exists to prevent.
 
-New default: **any code-touching feature branches from the start.** The
-main checkout is for integration, docs-lane work, release machinery, and
-reading — not for feature edits. Concurrent sessions each live in their
-own worktree; they never share a git index or a dirty tree.
+This path stays alive as a pointer stub — a migrated source path is never
+deleted (okf-foundation D20) — so existing citations keep resolving.
 
-| Situation | Where the work lives |
+## Anchor map
+
+This source carried no numbered anchors: prose under named headings.
+
+| Was | Now owned by |
 |---|---|
-| Feature work, any lane except `docs` and `tiny` | Sibling worktree `<repo>--wt--<feature>` on branch `wt/<feature>`, created at feature start |
-| `tiny` lane, no other live session | Main checkout allowed |
-| `tiny` lane, another live session present | Worktree, same as features |
-| `docs` lane, release machinery, merges | Main checkout |
-| Explicit owner override | `--in-main` on feature start, recorded as a decision — never silent |
-
-Everything below the policy already exists and is unchanged: the trust
-model (a worktree gets its own store only via a grant it cannot forge),
-store tiers, cross-worktree holds, `worktree new` / `register` /
-`merge` / `list`, and the merge verify gate.
-
-## Machine changes
-
-1. **Feature start takes the branch.** Recording a non-exempt route
-   (code-touching lane) in the main checkout names the worktree command
-   as the loud next action — `bee worktree new --feature <slug>` — and
-   the session opens at the created path. (Creation stays one explicit
-   command in this slice; folding auto-creation into the route step is a
-   follow-up once the refusal proves out.) —
-   `bee orient` in the main checkout answers with the worktree path as
-   `next.command` until the session runs there. No step in shaping or
-   planning requires the main checkout.
-2. **The main checkout refuses feature edits.** The write guard denies a
-   source write in the main checkout when the active feature is
-   non-exempt and holds a granted worktree — the refusal names the
-   worktree path and the `--in-main` override. Docs-lane paths and the
-   exempt cases pass unchanged.
-3. **Landing is one gesture.** `bee worktree merge --id <id>` stays the
-   only road back to main: staged transaction, verify gate, cleanup.
-   `bee close` runs inside the worktree; its green output names the merge
-   command as the next action.
-4. **Orient knows both sides.** In main: which features live in which
-   worktrees (from the registry), and where the current session should
-   go. In a worktree: the feature, the branch, and the merge-back state.
-
-## What this buys
-
-- Two sessions on two features never interleave commits or share a dirty
-  index — the collision the shared-checkout default produced even with
-  reservations and lanes.
-- Main is always releasable: nothing lands except through the merge
-  gate's verify.
-- A abandoned feature is one `worktree remove` — no archaeology in main.
-
-## Follow-up decision (not in this change)
-
-Fluent additionally keeps main's history linear: land = rebase onto main
-then fast-forward merge, never a merge commit (see
-docs/REFs/learn-fluent.md §4). Whether `bee worktree merge` adopts
-rebase+ff-only is a separate owner decision — it changes conflict
-handling for long-lived features and is not required for the isolation
-this spec buys.
-
-## Out of scope
-
-- Wave-internal worker worktrees (opt-in isolation for one feature's
-  parallel workers) — unchanged, orthogonal.
-- The herding cockpit — already worktree-per-item; unchanged.
-- Auto-merge of any kind: landing stays a human gesture.
+| The policy inversion (and its situation table) | [routing-and-visibility.md](../knowledge/areas/worktree-parallelism/routing-and-visibility.md) |
+| Machine changes 1-2 (feature start takes the branch; main refuses feature edits) | [routing-and-visibility.md](../knowledge/areas/worktree-parallelism/routing-and-visibility.md) |
+| Machine change 3 (landing is one gesture) | [returning-and-the-merge-gate.md](../knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md) |
+| Machine change 4 (orient knows both sides) | [routing-and-visibility.md](../knowledge/areas/worktree-parallelism/routing-and-visibility.md) |
+| What this buys | [overview.md](../knowledge/areas/worktree-parallelism/overview.md) |
+| Follow-up decision (rebase + ff-only) | Still an OPEN owner decision, unchanged by this migration — [returning-and-the-merge-gate.md](../knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md) Open Gaps |
+| Out of scope (wave-internal worktrees, herding, auto-merge) | [overview.md](../knowledge/areas/worktree-parallelism/overview.md) · [areas/bee-herding/](../knowledge/areas/bee-herding/index.md) |

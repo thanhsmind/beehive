@@ -218,7 +218,7 @@ single worker — never wave analysis or multi-cell assignment.
 ## Tests at finish and close, in full
 
 One declared test path, one result record — supersedes the proof-economy
-tier system (decision 412e9b3a, docs/specs/test-simple.md, 2026-07-31).
+tier system (decision 412e9b3a, `docs/knowledge/areas/verify-pipeline/`, 2026-07-31).
 
 - **Declaration:** `.bee/config.json` `commands.test` is the single place
   a project declares how it is tested (string or array of commands) — the

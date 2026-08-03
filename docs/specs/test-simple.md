@@ -1,64 +1,37 @@
-# Test-simple — one declared test path, one result record
+---
+area: test-simple
+updated: 2026-08-03
+migrated_to: docs/knowledge/areas/verify-pipeline/suite-topology-and-discovery.md
+---
 
-Status: owner-approved direction (2026-07-31). Supersedes the
-proof-economy tier system wholesale.
+# TEST-SIMPLE — one declared test command (migrated — pointer stub)
 
-## The model (three pieces, like fluent's)
+This area's current truth now lives in the knowledge bundle:
+[`docs/knowledge/areas/verify-pipeline/`](../knowledge/areas/verify-pipeline/index.md).
+`suite-topology-and-discovery.md` has cited this source and carried its rules
+since the migration; this stub closes the loop by retiring the second copy.
 
-1. **Declaration.** `.bee/config.json` `commands.test` is the single place
-   a project declares how it is tested (string or array of commands) — the
-   ONE command every door runs. `commands.verify` is retired. Nothing else
-   declares test obligations — no per-cell proof tiers, no per-slice
-   test-cell mandate.
-2. **Deterministic runner.** `bee test` (porcelain) runs the declared
-   commands in order, captures per-command output, and writes ONE
-   normalized record: `.bee/logs/test-results.json` —
-   `{ran_at, green, commands: [{command, exit, duration_ms,
-   failure_excerpt}]}` where `failure_excerpt` is the last ≤500 chars of
-   a failing command's output. The runner is a program; an agent's word
-   is never the record.
-3. **The record is the evidence.** `bee cells finish` runs `bee test`
-   when `commands.test` is declared: green → cap records
-   `{tests: green, results: <pointer>}`; red → cap refused, the refusal
-   carries the failure_excerpt, the red becomes the work. A cell in a
-   repo with no declared `commands.test` caps with `tests: undeclared`.
-   Re-dispatch prompts (Prior rounds) cite the failure_excerpt directly.
+**Changed since this source was written (2.1.0):** it described `commands.verify`
+as "the close/merge-time chain" sitting above `commands.test`. That second
+repo-wide command is RETIRED. `commands.test` is now the one declared test
+command, and the green base check, every cap, `bee close`, `bee worktree merge`
+and CI all run it. Two commands meant every surface had to say which door ran
+which, and they disagreed — the config reference called `verify` "never a local
+obligation" while the green base check told agents to run it locally before
+their first claim.
 
-## What is deleted (machinery and prose)
+This path stays alive as a pointer stub — a migrated source path is never
+deleted (okf-foundation D20) — so existing citations keep resolving.
 
-- The proof-tier matrix: `requiredProofTier`, change_class × lane tiers,
-  red-first evidence flags (`--behavior-change`, `--evidence-stdin/file`,
-  `red_failure_evidence`), evidence-tier trace fields.
-- `--feature-verify-pending` and the whole deferred-proof path:
-  `featureVerifyDebt`, `testCellDebt` (both kinds), the feature
-  close-door ladder tied to them, `trace.proof: "unrecorded"` arming.
-- Test-volume brakes: ratio ceiling, `new_suite_reason`, the
-  refactor-plus-new-test-file refusal.
-- The trailing-test-cell-per-slice planning mandate (coverage judgment
-  survives as craft in `.bee/expertise/tests.md`; TDD-first survives as
-  worker prose — discipline, not machinery).
-- Verified-transcripts-as-proof special path.
-- Classic per-cell `cells verify` as a taught path (the verb may remain
-  plumbing; prose stops teaching it).
+## Anchor map
 
-## What stays
+This source carried no numbered anchors: five numbered rules and a set of named
+sections.
 
-- `bee close`: still the close driver — now its doors are: `bee test`
-  green (full declared run) + capture reminder. Scribing/capture doors
-  are capture-side, unchanged.
-- Merge gate: `bee worktree merge` re-runs `commands.test` against the
-  staged merge — the last net.
-- "Never build on red": a red result is the next work item, never a base.
-- Communication rule: "done/green/fixed" only beside fresh output — now
-  always satisfiable by quoting the record.
-- Coverage judgment, triad shape, red-before-green: prose craft in
-  `.bee/expertise/tests.md`, applied by judgment, enforced by review —
-  not by cap doors.
-
-## Cost note
-
-This trades the deferred-proof economy for per-finish test runs, exactly
-fluent's trade. A host keeps it fast by pointing `commands.test` at a
-suite it is willing to run on every cap — there is no second, slower
-command to hide the full chain behind. bee's own repo declares its
-impacted-cap runner.
+| Was | Now owned by |
+|---|---|
+| 1. Declaration (`commands.test` is the single declaration) | [suite-topology-and-discovery.md](../knowledge/areas/verify-pipeline/suite-topology-and-discovery.md) — and see the 2.1.0 note above: `commands.verify` is gone |
+| 2. Deterministic runner (`bee test`, `.bee/logs/test-results.json`) | [suite-topology-and-discovery.md](../knowledge/areas/verify-pipeline/suite-topology-and-discovery.md) |
+| 3-5. Cap door, close door, merge gate | [suite-topology-and-discovery.md](../knowledge/areas/verify-pipeline/suite-topology-and-discovery.md) · [returning-and-the-merge-gate.md](../knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md) |
+| Deletions (proof tiers, evidence flags, debt doors, per-cell verify runs) | [suite-topology-and-discovery.md](../knowledge/areas/verify-pipeline/suite-topology-and-discovery.md) |
+| The trade (per-finish runs vs deferred proof) | [suite-topology-and-discovery.md](../knowledge/areas/verify-pipeline/suite-topology-and-discovery.md) · [`docs/config-reference.md`](../config-reference.md) |
