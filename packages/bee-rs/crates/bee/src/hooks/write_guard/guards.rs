@@ -38,8 +38,18 @@ pub(crate) fn under_allowed_prefix(rel: &str) -> bool {
     })
 }
 
-/// provenance: guards.mjs DIRECT_EDIT_DENY.
+/// provenance: guards.mjs DIRECT_EDIT_DENY. E2 (guard-hardening) extends the
+/// set to the cells/lanes stores and the onboarding marker.
 pub(crate) fn direct_edit_verb(normalized: &str) -> Option<&'static str> {
+    // E2: whole CLI-owned stores — any .json under the prefix is owned.
+    let prefix_json =
+        |prefix: &str| normalized.starts_with(prefix) && normalized.ends_with(".json");
+    if prefix_json(".bee/cells/") {
+        return Some("bee cells add/finish");
+    }
+    if prefix_json(".bee/lanes/") {
+        return Some("bee state start-feature --as-lane / bee state set --lane");
+    }
     match normalized {
         ".bee/state.json" => Some("bee state set --owner <selected pre-mutation phase>, or the dedicated state gate/worker/scribing-run verb"),
         ".bee/backlog.jsonl" => Some("bee backlog add"),
@@ -47,6 +57,7 @@ pub(crate) fn direct_edit_verb(normalized: &str) -> Option<&'static str> {
         ".bee/runtime/cross-worktree-holds.json" => Some("bee reservations reserve/release (holds are mirrored into the ledger automatically)"),
         ".bee/runtime/worktree-grants.json" => Some("bee worktree register / unregister"),
         ".bee/companion-session.json" => Some("bee worktree new --with-companion (started/ended automatically by the companion lifecycle)"),
+        ".bee/onboarding.json" => Some("bee onboard"),
         _ => None,
     }
 }

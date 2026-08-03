@@ -202,11 +202,15 @@ use std::process::ExitCode;
         assert_eq!(e.code, 0, "stderr: {}", e.stderr);
     }
 
+    // E2a (guard-hardening): flipped from the pre-E2 allow — cell files are
+    // CLI-owned now, like the rest of the direct-edit table.
     #[test]
-    fn bee_cells_json_passes() {
+    fn bee_cells_json_denied_names_owning_verb() {
         let fx = build_fixture("swarming", true);
         let e = expect_done(edit(".bee/cells/demo-1.json"), &fx.root);
-        assert_eq!(e.code, 0);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee cells add/finish"), "{}", e.stderr);
+        assert!(e.stderr.contains("direct-edit"), "{}", e.stderr);
     }
 
     #[test]
@@ -215,8 +219,59 @@ use std::process::ExitCode;
         let e = expect_done(edit(".bee/state.json"), &fx.root);
         assert_eq!(e.code, 2);
         assert!(e.stderr.contains("bee state"));
+        // E2a: the cells arm flipped to deny (CLI-owned in every phase);
+        // .bee/tmp/ stands in as the still-allowed other bee path.
         let e2 = expect_done(edit(".bee/cells/demo-1.json"), &fx.root);
-        assert_eq!(e2.code, 0);
+        assert_eq!(e2.code, 2, "{}", e2.stderr);
+        assert!(e2.stderr.contains("bee cells add/finish"), "{}", e2.stderr);
+        let e3 = expect_done(edit(".bee/tmp/demo/notes.md"), &fx.root);
+        assert_eq!(e3.code, 0, "{}", e3.stderr);
+    }
+
+    // ── E2 (guard-hardening): cells/lanes/onboarding join the CLI-owned set ─
+
+    #[test]
+    fn direct_edit_lanes_json_denied_names_owning_verbs() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(edit(".bee/lanes/demo.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("direct-edit"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee state start-feature --as-lane"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee state set --lane"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn direct_edit_onboarding_json_denied_names_owning_verb() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(edit(".bee/onboarding.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("direct-edit"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee onboard"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_mutation_of_lanes_json_denied() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("sed -i \"s/planning/swarming/\" .bee/lanes/demo.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee state start-feature --as-lane"), "{}", e.stderr);
+        let e2 = expect_done(bash("cat patch.json >> .bee/cells/demo-1.json"), &fx.root);
+        assert_eq!(e2.code, 2, "{}", e2.stderr);
+        assert!(e2.stderr.contains("bee cells add/finish"), "{}", e2.stderr);
+    }
+
+    #[test]
+    fn config_json_and_decisions_jsonl_stay_hand_writable() {
+        // E2 explicitly preserves the two sanctioned agent surfaces:
+        // gate-bypass config edits and decision log merges.
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(
+            json!({"tool_name":"Write","tool_input":{"file_path":".bee/config.json","content":"{}\n"}}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e2 = expect_done(edit(".bee/decisions.jsonl"), &fx.root);
+        assert_eq!(e2.code, 0, "{}", e2.stderr);
     }
 
     // ── check (d): CLI-shape validation, WIRED through the whole hook ──────
@@ -851,7 +906,16 @@ use std::process::ExitCode;
         deny(".bee/bin/.foo_stress_debug.sh");
         allow(".bee/tmp/th6/.foo_stress_debug.sh");
         allow("docs/history/tree-hygiene/reports/verdict-th6.md");
-        allow(".bee/cells/probe-th-6.json");
+        // E2a: `.bee/cells/*.json` is CLI-owned now — the direct-edit guard
+        // (ordered before scratch-shape in check_write) denies this row, so
+        // it moved out of the scratch allow set. Kept as a deny expectation
+        // (not dropped) to pin the direct-edit-before-scratch ordering.
+        let cells = expect_done(
+            json!({"tool_name":"Write","tool_input":{"file_path":".bee/cells/probe-th-6.json","content":"x\n"}}),
+            &fx.root,
+        );
+        assert_eq!(cells.code, 2, "{}", cells.stderr);
+        assert!(cells.stderr.contains("bee cells add/finish"), "{}", cells.stderr);
         allow(".claude-plugin/skills/bee-swarming/probe-render.json");
         allow("test/fixtures/sample.log");
         deny("results.log");
