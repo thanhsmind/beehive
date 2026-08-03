@@ -15,12 +15,11 @@ metadata:
 
 # Reviewing — independent inspection
 
-An independent review is the scrutiny a second team gives a pull
-request: fresh eyes over a completed, immutable scope, run only when
-the user explicitly asks for one. Finished work is never a trigger by
-itself, nor "merge"/"ship"/"release" alone — for those, report coverage
-(`bee reviews status`), ask one yes/no question, and let silence stay
-unreviewed. Gate bypass never creates or approves a review.
+Run only when the user explicitly asks for one. Finished work is never
+a trigger by itself, nor "merge"/"ship"/"release" alone — for those,
+report coverage (`bee reviews status`), ask one yes/no question, and
+let silence stay unreviewed. Gate bypass never creates or approves a
+review.
 
 ## Scope — the user owns the boundary
 
