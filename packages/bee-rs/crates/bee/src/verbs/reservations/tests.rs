@@ -442,8 +442,14 @@ use std::time::Instant;
         }
     }
 
+    /// Identity, not spelling. `main_root` comes out of the gitdir chain — git's
+    /// own writing of the path — while a fixture holds whatever `tempdir()`
+    /// returned; on a Windows runner those are the long and 8.3-short forms of
+    /// one directory, and a byte compare fails for a reason that has nothing to
+    /// do with what is being asserted.
     fn nrm(p: &Path) -> String {
-        p.to_string_lossy().replace('/', "\\")
+        let c = dunce::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        c.to_string_lossy().replace('/', "\\")
     }
 
     /// bee.mjs resolveMainRoot + resolveHoldTopology, all three topologies.

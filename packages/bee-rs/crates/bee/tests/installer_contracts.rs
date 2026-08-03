@@ -11,13 +11,14 @@
 //     enforces it" — and the cutover commit put an em dash in a comment. On
 //     Windows PowerShell 5.1 a non-ASCII byte in a BOM-less .ps1 is a
 //     parse-time bomb (docs/knowledge/patterns/20260714-non-ascii-in-a-ps1-...).
-//   * The R6 sweep removed the Node preflight from BOTH installers on the
-//     grounds that the runtime no longer needs Node — but INSTALLING still
-//     does. plugin_distribution.mjs is now ported (`bee dev
-//     plugin-distribution`); what still shells out to node is a handful of
-//     JSON steps inside the installers themselves. A missing preflight
-//     surfaces as `node: command not found` after a git clone and a
-//     multi-minute cargo build.
+//   * The Node preflight, in BOTH directions. It was once removed while the
+//     installers still needed Node (the failure then lands as `node: command
+//     not found` after a clone and a multi-minute cargo build); it would now
+//     be equally wrong to KEEP one, because neither installer runs node any
+//     more — `bee dev plugin-distribution` and `bee dev install-support`
+//     replaced every call. A preflight for a tool the script never invokes
+//     refuses installs for no reason. The test below asserts the biconditional
+//     rather than either half.
 //
 // These are cheap invariants with expensive failure modes, which is exactly
 // what a guard is for.

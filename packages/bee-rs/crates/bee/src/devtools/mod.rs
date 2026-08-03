@@ -43,6 +43,7 @@
 // symlink in the skill source, a missing input tree) return None instead.
 
 mod hook_manifests;
+mod install_support;
 mod jspath;
 mod plugin_distribution;
 mod prompts;
@@ -96,6 +97,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "statusline" => statusline::run(flags),
         "release-manifest" => release_manifest::run(flags),
         "plugin-distribution" => plugin_distribution::run(flags),
+        "install-support" => install_support::run(flags),
         "render-hook-manifests" => hook_manifests::run(flags),
         _ => None,
     }

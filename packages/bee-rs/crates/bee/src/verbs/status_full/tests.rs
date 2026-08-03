@@ -522,7 +522,13 @@ use crate::version::BEE_VERSION;
     fn control_root_re_roots_onto_main_from_a_granted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, granted, ungranted) = worktree_fixture(tmp.path());
-        let n = |p: &Path| normalize_abs_lexical(&p.to_string_lossy());
+        // Identity, not spelling: `main_root` comes out of the gitdir chain
+        // (git's own writing) while the fixture holds tempdir()'s, and on a
+        // Windows runner those are the long and 8.3-short forms of one path.
+        let n = |p: &Path| {
+            let c = dunce::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+            normalize_abs_lexical(&c.to_string_lossy())
+        };
 
         assert_eq!(n(&control_root_for(&mut ctx_at(&main)).unwrap()), n(&main));
         assert_eq!(n(&control_root_for(&mut ctx_at(&granted)).unwrap()), n(&main));
@@ -556,7 +562,13 @@ use crate::version::BEE_VERSION;
     fn reservations_control_root_follows_the_git_link() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, granted, ungranted) = worktree_fixture(tmp.path());
-        let n = |p: &Path| normalize_abs_lexical(&p.to_string_lossy());
+        // Identity, not spelling: `main_root` comes out of the gitdir chain
+        // (git's own writing) while the fixture holds tempdir()'s, and on a
+        // Windows runner those are the long and 8.3-short forms of one path.
+        let n = |p: &Path| {
+            let c = dunce::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+            normalize_abs_lexical(&c.to_string_lossy())
+        };
         assert_eq!(n(&reservations_control_root(&ctx_at(&main))), n(&main));
         assert_eq!(n(&reservations_control_root(&ctx_at(&granted))), n(&main));
         assert_eq!(n(&reservations_control_root(&ctx_at(&ungranted))), n(&main));

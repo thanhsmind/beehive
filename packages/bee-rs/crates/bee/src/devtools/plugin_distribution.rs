@@ -1109,6 +1109,13 @@ fn run_cli(argv: &[&str]) -> R<Value> {
     }))
 }
 
+/// Was the bee plugin installed for this runtime, per a client's own listing?
+/// Shared with `install-support plugin-installed`, which the installer uses to
+/// decide the inverse transition during rollback — one discovery rule, not two.
+pub(super) fn discover_plugin_installed(payload: &Value) -> bool {
+    discover_bee_plugin(payload, "").installed
+}
+
 pub fn run(flags: &[&str]) -> Option<ExitCode> {
     match run_cli(flags) {
         Ok(value) => {

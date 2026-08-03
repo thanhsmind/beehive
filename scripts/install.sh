@@ -158,15 +158,13 @@ case "$DISTRIBUTION_MODE" in plugin-first|repo-copy) ;; *) fail "--distribution 
 # up here would keep the toolchain a hard prerequisite for everyone while the
 # whole point is that most hosts no longer need it.
 
-# ...but INSTALLING bee still needs node, and that is a different question from
-# running it. plugin_distribution.mjs is GONE — it is `bee dev
-# plugin-distribution` on the native binary now — but five `node -e` JSON steps
-# in this script are not yet ported: the plugin-state merge and probe, the
-# onboarding plan-field reader, and the two verification assertions. Until those
-# are verbs too, this preflight stays: without it the failure lands as a bare
-# `node: command not found` AFTER a clone and a multi-minute cargo build, which
-# is the worst possible moment to pay for a missing check.
-command -v node >/dev/null 2>&1 || fail "Node.js is still required to INSTALL bee: five JSON steps in this installer (plugin-state merge and probe, onboarding plan-field reader, two verification assertions) are not ported yet. bee itself runs as a native binary — Node is not needed at runtime by Claude Code on any platform, nor by Codex on macOS/Linux; Codex on WINDOWS is the one runtime exception, whose hook transport launches node. Install Node 18+: https://nodejs.org"
+# ...and INSTALLING it no longer needs one either. The distribution helper is
+# `bee dev plugin-distribution`, and the five JSON steps this script used to
+# shell `node -e` out for are `bee dev install-support`. There is nothing left
+# here to preflight a Node runtime for, so the check went with its cause — a
+# preflight for a tool the script never runs refuses installs for no reason.
+# (Codex on WINDOWS still launches node from its hook transport at RUNTIME,
+# which is a separate question from installing.)
 
 # ---------- published binary (preferred) ----------
 #
@@ -396,7 +394,8 @@ probe_plugin_state() {
       claude plugin list --json > "$claude_json" 2> "$claude_err" || probe_broken_cli claude "$claude_json" "$claude_err"
     elif [ "$DISTRIBUTION_MODE" = "plugin-first" ]; then fail "Claude CLI is required for plugin-first"; fi
   fi
-  node -e 'const fs=require("fs"); const read=p=>JSON.parse(fs.readFileSync(p,"utf8")); fs.writeFileSync(process.argv[3], JSON.stringify({claude:read(process.argv[1]),codex:read(process.argv[2])}));' "$claude_json" "$codex_json" "$dest" \
+  "$BEE_BIN" dev install-support merge-plugin-state \
+      --claude "$claude_json" --codex "$codex_json" --out "$dest" \
     || fail "Plugin status probe returned unreadable data (package-list shape drift)"
 }
 
@@ -404,16 +403,7 @@ probe_plugin_state() {
 # Prints 1/0; used to decide the inverse transition during rollback.
 plugin_was_installed() {
   local rt="$1" src="$2"
-  node -e '
-    const fs=require("fs");
-    const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-    const list=s[process.argv[2]];
-    const arr=Array.isArray(list)?list:((list&&(list.plugins||list.items||list.data))||(list&&typeof list==="object"?[list]:[]));
-    const p=arr.find(x=>{const n=x&&(x.name||x.id||(x.plugin&&x.plugin.name));return n==="bee"||String(n||"").startsWith("bee@")});
-    let out="0";
-    if(p){const st=String(p.status||p.state||"").toLowerCase();out=(p.installed===true||!["removed","not_installed"].includes(st))?"1":"0";}
-    process.stdout.write(out);
-  ' "$src" "$rt" 2>/dev/null || printf '0'
+  "$BEE_BIN" dev install-support plugin-installed --state "$src" --runtime "$rt" 2>/dev/null || printf '0'
 }
 
 # POST-confirmation transition: plugin-first installs the plugin package; repo-copy
@@ -524,7 +514,7 @@ onboard_plan_stderr() {
 }
 # plan_field <json> <field> — extract one string field, or "parse_error" on bad JSON.
 plan_field() {
-  printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>{d+=c}).on("end",()=>{try{const s=JSON.parse(d);process.stdout.write(String(s[process.argv[1]]??""));}catch{process.stdout.write("parse_error");}})' "$2"
+  printf '%s' "$1" | "$BEE_BIN" dev install-support field --key "$2"
 }
 
 # 2. mutation-free preview: onboarding plan (writes nothing). A blocked/refused
@@ -634,31 +624,8 @@ fi
 
 STATUS="$(cd "$TARGET_DIR" && "$HOST_BEE" status --json 2>/dev/null)" \
   || fail "Verification failed: bee status did not run."
-printf '%s' "$STATUS" | node -e '
-  const s = JSON.parse(require("fs").readFileSync(0, "utf8"));
-  if (!s.onboarding || s.onboarding.installed !== true) { console.error("bee status reports not installed"); process.exit(1); }
-  const expected = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).version;
-  if (s.onboarding.bee_version !== expected || s.onboarding.plugin_version !== expected) {
-    console.error(`version parity failed: expected ${expected}, got bee=${s.onboarding.bee_version}, plugin=${s.onboarding.plugin_version}, drift=${s.onboarding.drift}`);
-    process.exit(1);
-  }
-  // drift_detail entries come in two shapes (computeRuntimeDrift, bee.mjs):
-  // hash-mismatch/missing entries are bare relative paths (optionally suffixed
-  // " (missing)"), extra-file entries are suffixed " (extra)" -- an unmanaged
-  // .mjs sitting in .bee/bin/lib/ that onboarding never recorded. That is a
-  // softer signal than a real hash/missing mismatch, so it is a warning, not a
-  // fatal version-parity failure: any non-"(extra)" entry still hard-fails.
-  if (s.onboarding.drift === true) {
-    const detail = Array.isArray(s.onboarding.drift_detail) ? s.onboarding.drift_detail : [];
-    const extraOnly = detail.length > 0 && detail.every((entry) => entry.endsWith(" (extra)"));
-    if (!extraOnly) {
-      console.error(`version parity failed: expected ${expected}, got bee=${s.onboarding.bee_version}, plugin=${s.onboarding.plugin_version}, drift=${s.onboarding.drift}`);
-      process.exit(1);
-    }
-    console.log(`verify   unmanaged extra file(s) in .bee/bin/lib/ (not fatal — remove them, or they self-heal on the next onboarding refresh): ${detail.join(", ")}`);
-  }
-  console.log(`verify   onboarding ok (bee ${s.onboarding.bee_version}), phase: ${s.phase}`);
-' "$BEE_SRC/.claude-plugin/plugin.json" || fail "Verification failed: unexpected bee status output."
+printf '%s' "$STATUS" | "$BEE_BIN" dev install-support assert-parity \
+  --expect-version-from "$BEE_SRC/.claude-plugin/plugin.json" || fail "Verification failed: unexpected bee status output."
 
 # Immediate up_to_date recheck: a fresh onboarding plan must find nothing to do.
 # This proves onboarding/runtime/project-projection surfaces all equal the source
@@ -670,17 +637,7 @@ printf '%s' "$STATUS" | node -e '
 # will actually use.
 RECHECK="$( cd "$BEE_SRC" && "$HOST_BEE" onboard --repo-root "$TARGET_DIR" --json ${ONBOARD_FLAGS[@]+"${ONBOARD_FLAGS[@]}"} 2>"$CLEANUP_DIR/recheck.err" )" \
   || fail "Verification failed: onboarding recheck did not run. $(sed -n '1,6p' "$CLEANUP_DIR/recheck.err" 2>/dev/null)"
-printf '%s' "$RECHECK" | node -e '
-  const s = JSON.parse(require("fs").readFileSync(0, "utf8"));
-  if (s.status !== "up_to_date") {
-    // NAME WHAT IS LEFT. "not up_to_date" alone sends the reader back to the
-    // whole installer; the outstanding plan says which surface did not settle.
-    const left = (s.plan || []).map(p => `${p.action} ${p.path || ""}`.trim());
-    console.error(`onboarding recheck expected up_to_date, got ${s.status}` +
-      (left.length ? ` — still outstanding: ${left.join("; ")}` : " with an empty plan"));
-    process.exit(1);
-  }
-' || fail "Verification failed: onboarding is not up_to_date immediately after apply."
+printf '%s' "$RECHECK" | "$BEE_BIN" dev install-support assert-recheck \n  || fail "Verification failed: onboarding is not up_to_date immediately after apply."
 
 # Plugin-first: the distribution recheck must also report nothing left to clean.
 if [ "$DISTRIBUTION_MODE" = "plugin-first" ]; then

@@ -297,7 +297,7 @@ fn join(base: &str, seg: &str) -> String {
 /// the right tiebreak, and it stays a FALLBACK so the common path pays no
 /// syscall and byte-compatibility with the old answer is preserved wherever
 /// the old answer was right.
-fn same_path(a: &str, b: &str) -> bool {
+pub(crate) fn same_path(a: &str, b: &str) -> bool {
     let (a, b) = (path_resolve(a, "."), path_resolve(b, "."));
     if a == b {
         return true;

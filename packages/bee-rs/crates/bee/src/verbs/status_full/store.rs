@@ -1041,7 +1041,12 @@ pub(crate) fn reservations_control_root(ctx: &Ctx) -> PathBuf {
             return None;
         }
         let reverse = read_ptr(&Path::new(&gitdir).join("gitdir"), Path::new(&gitdir))?;
-        if path_resolve(Path::new(&reverse), ".") != path_resolve(&marker, ".") {
+        // Identity, not spelling — the third copy of this walk, and the same
+        // reason as the other two (roots.rs `same_path`): an 8.3 component, a
+        // drive-letter case, or a junction makes two names for one file, and a
+        // byte compare here fails OPEN, silently answering with the worktree
+        // where main is the right answer.
+        if !crate::roots::same_path(&reverse, &marker.to_string_lossy()) {
             return None;
         }
         Some(PathBuf::from(path_dirname(&common_git_dir)))

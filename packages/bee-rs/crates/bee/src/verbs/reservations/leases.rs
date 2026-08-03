@@ -148,7 +148,11 @@ pub(crate) fn control_root_for(root: &str) -> Ex<String> {
         let Some(reverse) = read_ptr(&Path::new(&gitdir).join("gitdir"), &gitdir)? else {
             return Ok(None);
         };
-        if np_resolve1(&reverse)? != np_resolve1(&marker_s)? {
+        // Identity, not spelling (roots.rs `same_path`). This copy fails OPEN,
+        // so a byte-compare miss does not error — it quietly answers with the
+        // worktree when main is correct, which is how a granted worktree came
+        // to read its own empty holds ledger on Windows and release nobody.
+        if !crate::roots::same_path(&reverse, &marker_s) {
             return Ok(None);
         }
         Ok(Some(np_dirname(&common_git_dir)))
