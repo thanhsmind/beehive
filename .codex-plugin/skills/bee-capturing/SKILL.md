@@ -15,19 +15,14 @@ metadata:
 
 # Capturing — keep what settles
 
-Code remembers only outcomes. This skill owns everything else durable:
-the **state layer** — `docs/knowledge/` with a bundle, else
+Own the **state layer** — `docs/knowledge/` with a bundle, else
 `docs/specs/` — where every **area** (screen, API, job, pipeline, CLI
 command, process: any unit with observable behavior) has one spec that
 is its meaning; the decision log; and the learnings history.
-
-Together these are **this project's own knowledge layer**, and it is a
-different layer from `.bee/expertise/`: expertise holds craft that
-holds in any repo, this holds what is true *here* and expensive to
-re-derive. What belongs in it, how a fact is harvested from finished
-work, how the index routes, and what the always-loaded tier may cost:
-`.bee/expertise/knowledge.md` — read it before standing one up in a
-fresh project, and whenever the layer starts duplicating or piling.
+It is a different layer from `.bee/expertise/` (craft that holds in
+any repo): read `.bee/expertise/knowledge.md` before standing one up
+in a fresh project, and whenever the layer starts duplicating or
+piling.
 
 ## Capture the moment it settles
 
@@ -45,9 +40,10 @@ announce what settled, then record it:
 - A settlement that contradicts shipped behavior is recorded as "not
   yet implemented — see backlog", never stated as current.
 
-Close every task — cell, docs write, quick fix — with a capture line
-or an explicit "nothing settled"; smallness is never the answer. What
-deserves a record at all, and at what grain: `.bee/expertise/decisions.md`.
+Close every task with a capture line or an explicit "nothing settled"
+(AGENTS.md) — cell, docs write, quick fix alike; smallness is never
+the answer. What deserves a record at all, and at what grain:
+`.bee/expertise/decisions.md`.
 
 ## Scribe — keep area specs current
 
@@ -125,9 +121,9 @@ runs it.
 
 ## Headless
 
-Apply mechanical merges; log verbatim-quotable decisions. Harvest
-questions, ambiguous merges, and critical promotions go to
-`Outstanding Questions` — never self-answered.
+`bee-hive` ("Headless") governs; apply mechanical merges and log
+verbatim-quotable decisions — harvest questions, ambiguous merges, and
+critical promotions defer.
 
 ## References
 

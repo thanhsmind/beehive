@@ -18,10 +18,6 @@ metadata:
 
 # Researching — return with a map, not honey
 
-Research answers what exists, what can be reused, what the docs actually
-say, and what the lightest credible path is — before anything is planned
-or built. The cheapest correct code is the code you did not write.
-
 ## Order is the protocol
 
 Local evidence comes first; web research before it is a red flag, not a
@@ -86,8 +82,7 @@ only when paths differ materially in behavior, risk, or migration cost.
   that is a spike, a different lane.
 - Locked decisions win: a finding that contradicts one is noted with
   its evidence; superseding it is the user's move.
-- Headless: every would-be question becomes an Outstanding Questions
-  entry; recommendations are still made, labeled with confidence.
+- Headless: `bee-hive` ("Headless") governs.
 
 ## References
 
