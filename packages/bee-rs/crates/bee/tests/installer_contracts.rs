@@ -142,6 +142,66 @@ fn no_installer_help_text_names_the_deleted_node_onboarder() {
     }
 }
 
+/// Cloning a TAG lands on a detached HEAD, and git then prints ~15 lines of
+/// advice about branches and `git switch` — to stderr, where `--quiet` does not
+/// reach it. In an installer that wall is the loudest output of an otherwise
+/// successful run, about a throwaway checkout the user will never touch, and it
+/// reads as a failure. A user hit exactly that on 2.1.1 and asked what broke.
+#[test]
+fn neither_installer_lets_git_lecture_the_user_about_detached_head() {
+    for rel in ["scripts/install.sh", "scripts/install.ps1"] {
+        let text = read(rel);
+        for (i, line) in text.lines().enumerate() {
+            let t = line.trim_start();
+            // `--branch` is what makes it a clone-at-a-ref, and it is what
+            // lands the checkout detached. Keying on the substring "clone"
+            // instead matched `sparse-checkout`, which takes no ref at all.
+            if t.starts_with('#') || !t.contains("git ") || !t.contains("--branch") {
+                continue;
+            }
+            assert!(
+                line.contains("advice.detachedHead=false"),
+                "{rel}:{} clones without silencing git's detached-HEAD advice:
+  {}",
+                i + 1,
+                t
+            );
+        }
+    }
+}
+
+/// The fetch line must name the ref it ACTUALLY clones. It printed `$REF` —
+/// which defaults to `main` — while cloning `${PREBUILT_TAG:-$REF}`, so a user
+/// who downloaded a release binary was told they were fetching main and was
+/// given the pinned tag. A log that names the wrong input is worse than no log:
+/// it is the line someone reaches for when the two disagree.
+#[test]
+fn the_fetch_line_names_the_ref_that_is_cloned() {
+    let text = read("scripts/install.sh");
+    let clone_line = text
+        .lines()
+        .find(|l| !l.trim_start().starts_with('#') && l.contains("clone") && l.contains("--branch"))
+        .expect("install.sh must clone somewhere");
+    let logged = text
+        .lines()
+        .find(|l| !l.trim_start().starts_with('#') && l.contains("log \"fetch"))
+        .expect("install.sh must log its fetch");
+    // Whatever variable the clone pins to, the log must print the same one.
+    let var = clone_line
+        .split("--branch")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .map(|v| v.trim_matches('"').to_string())
+        .expect("the clone names a ref");
+    assert!(
+        logged.contains(&var),
+        "the fetch log prints a different ref from the one cloned.
+  clones: {var}
+  logs:   {}",
+        logged.trim()
+    );
+}
+
 /// cargo emits `bee` on unix and `bee.exe` on windows. An installer that knows
 /// only one of the two works on only one of the two platforms.
 #[test]

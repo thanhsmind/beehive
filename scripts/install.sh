@@ -255,10 +255,19 @@ elif [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/../packages/bee-rs/Cargo.toml" ];
 else
   command -v git >/dev/null 2>&1 || fail "git is required to fetch bee (or pass --source <local-checkout>)."
   CLEANUP_DIR="$(mktemp -d)"
-  log "fetch    $REPO_URL (ref: $REF)"
   # Pinned to the binary's own tag when one was downloaded: the vendored
-  # instruction layer and BEE_VERSION must come from one commit.
-  git clone --quiet --depth 1 --branch "${PREBUILT_TAG:-$REF}" "$REPO_URL" "$CLEANUP_DIR/bee" \
+  # instruction layer and BEE_VERSION must come from one commit. NAME THE REF
+  # ACTUALLY USED — this line printed "$REF" (which defaults to `main`) while
+  # cloning the pinned tag, so a user reading the log believed they had main
+  # and had a release tag.
+  CLONE_REF="${PREBUILT_TAG:-$REF}"
+  log "fetch    $REPO_URL (ref: $CLONE_REF)"
+  # `-c advice.detachedHead=false`: cloning a TAG lands on a detached HEAD and
+  # git prints ~15 lines of advice about branches and `git switch` to stderr.
+  # `--quiet` does not cover advice. In an installer that wall reads as a
+  # failure — it is the loudest output of an otherwise successful run, and it
+  # is about a throwaway checkout the user will never touch.
+  git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$CLONE_REF" "$REPO_URL" "$CLEANUP_DIR/bee" \
     || fail "Clone failed. Check network access to github.com/thanhsmind/beehive."
   BEE_SRC="$CLEANUP_DIR/bee"
 fi

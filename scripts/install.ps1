@@ -390,21 +390,24 @@ try {
     # warnings into terminating NativeCommandErrors. Exit codes and the probe decide.
     # Pinned to the binary's own tag when one was downloaded.
     $cloneRef = if ($prebuiltTag) { $prebuiltTag } else { $Ref }
-    git clone --quiet --depth 1 --branch $cloneRef --no-checkout $RepoUrl $clonePath
+    # -c advice.detachedHead=false: a tag checkout lands detached, and git
+    # prints a wall of advice about branches that reads as a failure in an
+    # installer. --quiet does not cover advice.
+    git -c advice.detachedHead=false clone --quiet --depth 1 --branch $cloneRef --no-checkout $RepoUrl $clonePath
     if ($LASTEXITCODE -ne 0) { Fail 'Clone failed. Check network access to github.com/thanhsmind/beehive.' }
 
     # sparse-checkout needs git 2.25+; on older git it exits non-zero and the checkout
     # below is simply a full one (which may still trip over an invalid path; the probe
     # is what turns that into an honest error instead of a silent empty source).
     git -C $clonePath sparse-checkout set skills packages .claude-plugin .codex-plugin docs/history/codex-harness-hardening
-    git -C $clonePath checkout --quiet HEAD
+    git -C $clonePath -c advice.detachedHead=false checkout --quiet HEAD
 
     $beeSrc = $clonePath
     # R6 CUTOVER: same marker move as the probe above. Keyed on the deleted
     # onboard_bee.mjs this became a HARD Fail on every clone-path install, with
     # a message blaming the user's git version for a file that no longer exists.
     if (-not (Test-Path (Join-Path $beeSrc 'packages\bee-rs\Cargo.toml'))) {
-      Fail "Checkout of $RepoUrl (ref: $Ref) produced no packages/ tree. Update git to 2.25+ (sparse checkout), or pass -Source <local-checkout>."
+      Fail "Checkout of $RepoUrl (ref: $cloneRef) produced no packages/ tree. Update git to 2.25+ (sparse checkout), or pass -Source <local-checkout>."
     }
   }
 
