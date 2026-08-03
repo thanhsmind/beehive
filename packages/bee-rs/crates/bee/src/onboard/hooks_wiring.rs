@@ -26,32 +26,45 @@ use std::path::Path;
 
 // ── Claude repo projection (.claude/settings.json) ─────────────────────────
 
-/// vendoredBeeBinary (l. 2242).
-fn vendored_bee_binary(repo_root: &Path) -> Option<&'static str> {
-    for name in ["bee.exe", "bee"] {
-        if exists(&repo_root.join(".bee").join("bin").join(name)) {
-            return Some(name);
-        }
-    }
-    None
+/// The main-checkout arm, appended to every projection that resolves the
+/// binary from a directory the host hands it.
+///
+/// A linked git worktree materialises TRACKED files only, and the vendored
+/// binary is deliberately untracked (decision 1f4262ca) — so a worktree starts
+/// with every hook wired to a path that does not exist, and each one fails
+/// open. Nothing bee-side can warn about it either: the thing that would do
+/// the warning is the binary that is missing. `--git-common-dir` is the one
+/// question git answers usefully from both sides — it names the MAIN
+/// repository's `.git`, whose parent is the checkout holding the binary.
+/// (`--show-toplevel` does not: from a linked worktree it returns the worktree
+/// itself. Measured, git 2.51.2.)
+///
+/// It runs ONLY after the direct candidates have missed, so an ordinary
+/// checkout never pays for the git process.
+pub(crate) fn main_checkout_arm(hook_name: &str, dir_expr: &str, args: &str) -> String {
+    format!(
+        "g=\"$(git -C {dir_expr} rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; \
+[ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; \
+do [ -x \"$b\" ] && exec \"$b\" hook {hook_name}{args}; done"
+    )
 }
 
 /// repoHookCommand (l. 2249).
 ///
-/// CUTOVER: both arms now name the binary. A host that ALREADY carries one
-/// keeps the exact single-token command R2 gave it (so a re-onboard of a
-/// post-R2 host is byte-unchanged); a host that has not built one yet gets the
-/// same runtime-detecting loop the plugin projection uses, ending in a VISIBLE
-/// fail-open. The old `node …/.bee/bin/hooks/<file>.mjs` arm is gone with the
-/// wrapper it named — rendering it would wire a hook that does nothing.
-fn repo_hook_command(file_name: &str, repo_root: Option<&Path>) -> String {
+/// ONE shape, whether or not the host already carries a binary. The old
+/// vendored-binary fast path rendered a bare `"$CLAUDE_PROJECT_DIR"/.bee/bin/
+/// bee hook X`, which in a linked worktree is not a missing candidate the
+/// runner can fall past — it is a command that does not exist, so no fallback
+/// could ever run behind it. Probing costs two `[ -x ]` tests against a
+/// process spawn; the fast path was never worth what it cost here.
+fn repo_hook_command(file_name: &str, _repo_root: Option<&Path>) -> String {
     let hook_name =
         file_name.strip_prefix("bee-").unwrap_or(file_name).strip_suffix(".mjs").unwrap_or(file_name);
-    if let Some(binary) = repo_root.and_then(vendored_bee_binary) {
-        return format!("\"$CLAUDE_PROJECT_DIR\"/.bee/bin/{binary} hook {hook_name}");
-    }
+    let arm = main_checkout_arm(hook_name, "\"$CLAUDE_PROJECT_DIR\"", "");
     format!(
-        "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\";          do [ -x \"$b\" ] && exec \"$b\" hook {hook_name}; done;          echo \"{CODEX_BINARY_MISSING_DIAGNOSTIC}\" >&2; exit 0"
+        "for b in \"$CLAUDE_PROJECT_DIR/.bee/bin/bee\" \"$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe\"; \
+do [ -x \"$b\" ] && exec \"$b\" hook {hook_name}; done; {arm}; \
+echo \"{CODEX_BINARY_MISSING_DIAGNOSTIC}\" >&2; exit 0"
     )
 }
 
@@ -232,6 +245,9 @@ pub(crate) fn codex_hook_command(file_name: &str) -> String {
         format!(
             "for b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook {name} --source=repo; done"
         ),
+        // `$r` is --show-toplevel, which in a linked worktree is the WORKTREE,
+        // not the checkout carrying the binary. Reach the main one.
+        main_checkout_arm(&name, "\"$r\"", " --source=repo"),
         format!("echo \"{CODEX_BINARY_MISSING_DIAGNOSTIC}\" >&2; exit 0"),
     ]
     .join("\n")
@@ -567,28 +583,33 @@ mod tests {
         assert!(cmd.contains("bee: hook binary missing"), "{cmd}");
     }
 
+    /// One shape whether or not a binary is already vendored — a host that
+    /// carries one must still be able to fall through to the main checkout
+    /// when the SAME settings file is read from a linked worktree.
     #[test]
-    fn vendored_binary_flips_wiring_to_the_subcommand_form() {
+    fn wiring_is_one_shape_and_reaches_the_main_checkout() {
         let dir = tempfile::tempdir().unwrap();
-        let bin = dir.path().join(".bee").join("bin");
-        std::fs::create_dir_all(&bin).unwrap();
-        // The probe order is ["bee.exe", "bee"] and the FILENAME found is what
-        // the command names — not a normalized "bee".
-        std::fs::write(bin.join("bee.exe"), "x").unwrap();
-        assert_eq!(
-            repo_hook_command("bee-write-guard.mjs", Some(dir.path())),
-            "\"$CLAUDE_PROJECT_DIR\"/.bee/bin/bee.exe hook write-guard"
+        let with_binary = {
+            let bin = dir.path().join(".bee").join("bin");
+            std::fs::create_dir_all(&bin).unwrap();
+            std::fs::write(bin.join("bee.exe"), "x").unwrap();
+            repo_hook_command("bee-write-guard.mjs", Some(dir.path()))
+        };
+        let without_binary = {
+            std::fs::remove_file(dir.path().join(".bee").join("bin").join("bee.exe")).unwrap();
+            repo_hook_command("bee-write-guard.mjs", Some(dir.path()))
+        };
+        assert_eq!(with_binary, without_binary, "the vendored fast path is gone");
+        // Direct candidates first, main checkout only after they miss.
+        assert!(with_binary.contains("$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe"), "{with_binary}");
+        assert!(with_binary.contains("--git-common-dir"), "{with_binary}");
+        assert!(with_binary.contains("$g/../.bee/bin/bee.exe"), "{with_binary}");
+        assert!(
+            with_binary.find("CLAUDE_PROJECT_DIR").unwrap() < with_binary.find("git-common-dir").unwrap(),
+            "the git probe must not run before the cheap candidates: {with_binary}"
         );
-        assert_eq!(
-            repo_hook_command("adapter.mjs", Some(dir.path())),
-            "\"$CLAUDE_PROJECT_DIR\"/.bee/bin/bee.exe hook adapter"
-        );
-        std::fs::remove_file(bin.join("bee.exe")).unwrap();
-        std::fs::write(bin.join("bee"), "x").unwrap();
-        assert_eq!(
-            repo_hook_command("bee-session-init.mjs", Some(dir.path())),
-            "\"$CLAUDE_PROJECT_DIR\"/.bee/bin/bee hook session-init"
-        );
+        assert!(with_binary.ends_with("exit 0"), "{with_binary}");
+        assert!(with_binary.contains("bee: hook binary missing"), "{with_binary}");
     }
 
     #[test]
@@ -709,6 +730,9 @@ mod tests {
                 "r=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n",
                 "[ -n \"$r\" ] || { echo \"bee: hook transport unavailable (no git root)\" >&2; exit 0; }\n",
                 "for b in \"$r\"/.bee/bin/bee \"$r\"/.bee/bin/bee.exe; do [ -x \"$b\" ] && exec \"$b\" hook write-guard --source=repo; done\n",
+                "g=\"$(git -C \"$r\" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)\"; ",
+                "[ -n \"$g\" ] && for b in \"$g/../.bee/bin/bee\" \"$g/../.bee/bin/bee.exe\"; ",
+                "do [ -x \"$b\" ] && exec \"$b\" hook write-guard --source=repo; done\n",
                 "echo \"bee: hook binary missing (.bee/bin/bee)\" >&2; exit 0"
             )
         );

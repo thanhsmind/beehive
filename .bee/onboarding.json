@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.1.5",
+  "bee_version": "2.1.6",
   "managed": {
     "agents_block": "2e31c625f88e4c6f7a3d5b11fdb2c2ea59237aae68ba1126bbc92b2715d80edf",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
@@ -40,11 +40,11 @@
       "worker-cell.md": "f2e443e627c60773f4a338f9c66e6beed859fc2fdaf9e49943b0c6485654d667"
     },
     "repo_hooks": {
-      ".codex/hooks.json": "ae8d3cc803e34de22e273dc9785dc19eaa2d25433df6f7d08f4722700e853be9"
+      ".codex/hooks.json": "c23084ec82ea0418547addc8e3fdf74ffc0fb2d65b7692f54ba5b95a94f8e4ae"
     }
   },
   "agents_sync": {
-    "bee_version": "2.1.5",
+    "bee_version": "2.1.6",
     "files": [
       ".claude/agents/bee-extract.md",
       ".claude/agents/bee-gather.md",
@@ -61,5 +61,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-03T05:10:42.741Z"
+  "updated_at": "2026-08-03T07:30:10.213Z"
 }

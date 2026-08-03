@@ -224,8 +224,10 @@ fn plugin_command(script: &str) -> String {
         "\"${CLAUDE_PLUGIN_ROOT}/.bee/bin/bee.exe\"",
     ]
     .join(" ");
+    // …then the main checkout, for a linked worktree — see main_checkout_arm.
+    let arm = crate::onboard::hooks_wiring::main_checkout_arm(name, "\"$CLAUDE_PROJECT_DIR\"", "");
     format!(
-        "for b in {candidates}; do [ -x \"$b\" ] && exec \"$b\" hook {name}; done; \
+        "for b in {candidates}; do [ -x \"$b\" ] && exec \"$b\" hook {name}; done; {arm}; \
          echo \"{BINARY_MISSING}\" >&2; exit 0"
     )
 }

@@ -573,28 +573,37 @@ fn repo_hooks_wires_both_projections_and_preserves_foreign_entries() {
 }
 
 #[test]
-fn a_vendored_binary_flips_hook_wiring_without_stacking_duplicates() {
+fn hook_wiring_does_not_depend_on_a_vendored_binary_and_never_stacks() {
     let fx = fixture();
     apply(&fx, &["--repo-hooks"]);
-    // Vendor the Rust binary, then re-onboard.
+    let read_command = |fx: &Fixture| -> Value {
+        let settings: Value = serde_json::from_str(
+            &std::fs::read_to_string(fx.repo.join(".claude").join("settings.json")).unwrap(),
+        )
+        .unwrap();
+        settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"].clone()
+    };
+    let before = read_command(&fx);
+    // Vendor the Rust binary, then re-onboard. The wiring resolves the binary
+    // at HOOK time, so its presence at ONBOARD time changes nothing — and it
+    // must not, or the same settings file would be wrong when read from a
+    // linked worktree that has no binary of its own.
     write(&fx.repo.join(".bee").join("bin").join("bee.exe"), "MZ");
     let p = plan(&fx, &["--repo-hooks"]);
-    assert!(actions(&p, "plan").contains(&"merge_repo_hook_settings".to_string()));
-    apply(&fx, &["--repo-hooks"]);
+    assert_eq!(p["plan"].as_array().unwrap().len(), 0, "vendoring must not re-wire");
+    assert_eq!(read_command(&fx), before);
+    let cmd = before.as_str().unwrap();
+    assert!(cmd.contains("$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe"), "{cmd}");
+    assert!(cmd.contains("--git-common-dir"), "the main-checkout arm: {cmd}");
     let settings: Value = serde_json::from_str(
         &std::fs::read_to_string(fx.repo.join(".claude").join("settings.json")).unwrap(),
     )
     .unwrap();
     assert_eq!(
-        settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"],
-        "\"$CLAUDE_PROJECT_DIR\"/.bee/bin/bee.exe hook prompt-context"
-    );
-    assert_eq!(
         settings["hooks"]["UserPromptSubmit"].as_array().unwrap().len(),
         1,
         "the node-shaped entry is REPLACED, never stacked beside the binary one"
     );
-    assert_eq!(plan(&fx, &["--repo-hooks"])["plan"].as_array().unwrap().len(), 0);
 }
 
 // ── expertise removal ──────────────────────────────────────────────────────

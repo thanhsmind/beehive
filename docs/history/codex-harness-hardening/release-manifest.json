@@ -123,7 +123,7 @@
     },
     {
       "path": ".claude-plugin/plugin.json",
-      "sha256": "273989bd60a9e37552d68c3cce12d9a6330fcd31bd7af664f77ca75e2d740c5b",
+      "sha256": "7ffa3473d18e321ced562b916a7c6eb52b97f61446f063f623e31b5071e54d55",
       "mode": "666",
       "role": "plugin_manifest",
       "packagePath": ".claude-plugin/plugin.json"
@@ -494,7 +494,7 @@
     },
     {
       "path": ".codex-plugin/plugin.json",
-      "sha256": "b5d67cdddd11c49acfc8e1dafe30ab5a0ae438a6d88baad9055bcda55b36fc41",
+      "sha256": "5c5e3e2060f9ed77b04a9249966a828cdc71c1c67d13a1eba4a155123febdf01",
       "mode": "666",
       "role": "plugin_manifest",
       "packagePath": ".codex-plugin/plugin.json"
@@ -995,14 +995,14 @@
     },
     {
       "path": "packages/bee/hooks/claude-hooks.json",
-      "sha256": "39c731ab09f1a9170833ca4440a2b30931ad8a6ff3f2a3db00b4adfb4e67dd26",
+      "sha256": "cb5d828dffbeee03b47d871592247a0a43bd1e18bae2c3da2503fcbe86fcc953",
       "mode": "666",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/claude-hooks.json"
     },
     {
       "path": "packages/bee/hooks/hooks.json",
-      "sha256": "2f6501d7b527c7bc6e22bbc2984f1530e3ba467c81ad346ab11199263a958316",
+      "sha256": "f4314e4bea6a173ee47d1e9a53c0a6b3fa0e1c25db7c252e7f66a7d36f777045",
       "mode": "666",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/hooks.json"

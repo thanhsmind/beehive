@@ -2,7 +2,7 @@
 type: bee.area
 title: "Worktree Parallelism — entering: creating a feature worktree and registering it"
 description: "The paved road that creates and grants a feature worktree in one move, the adoption command that registers a hand-made one, the fresh lifecycle state a bootstrap writes, a concurrency-aware refusal when the source checkout holds a shared nested checkout without a declared companion mount, and the typed zero-mutation refusals and best-effort rollback that guard all of it."
-timestamp: 2026-07-26
+timestamp: 2026-08-03
 bee:
   id: worktree-parallelism-entering-creating-and-registering
   lifecycle: active
@@ -44,6 +44,20 @@ the ordinary main checkout:
   open their next session there — a running session is never auto-teleported.
 - Slug allowlist `^[a-z0-9][a-z0-9-]*$`; every git call is an argv array (no shell), `--`
   before user-derived values.
+- **A worktree carries no runtime of its own, and must not need one.** A linked worktree
+  materialises TRACKED files only, and the vendored binary is deliberately untracked
+  (machine-local, decision 1f4262ca) — so a worktree's `.bee/bin/` holds prompts and nothing
+  else, while its `.claude/settings.json` (tracked) wires all eleven hooks at a path that is
+  not there. Every hook then took its visible-fail-open arm and exited 0: no gate enforcement,
+  no reservation check, no tier guard, no session preamble. Silent, and unreportable from the
+  inside — the component that would have raised the alarm is the one that is missing. Worse,
+  the worktree-first routing rule sends code-touching work *into* that state by design.
+  The wiring therefore resolves the binary at HOOK time, not at onboard time, and falls back
+  to the MAIN checkout via `git rev-parse --path-format=absolute --git-common-dir` — the one
+  question git answers usefully from both sides (`--show-toplevel` returns the worktree
+  itself). The probe runs only after the direct candidates miss, so an ordinary checkout
+  spawns no extra process, and every worktree runs the same binary the main checkout does —
+  never a stale copy. Found and closed 2026-08-03.
 - **The creation slug is recorded immutably, because the feature name is not.** Directory, branch
   and the worktree's own feature field all derive from one slug at creation — so at that instant
   they agree by construction. The feature field is then freely rewritten afterwards by ordinary
