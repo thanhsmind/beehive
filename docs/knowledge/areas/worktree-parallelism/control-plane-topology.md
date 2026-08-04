@@ -98,6 +98,36 @@ The split is a declared, tested boundary, not a inference from file location:
   write instead of just staying stale. `18c` closed this by re-rooting both
   sides of `bee`'s own sweep together.
 
+### A worker caps its own cell, and a lane closes (worktree-finish, lane-close, 2026-08-04)
+
+Two verbs sat on the wrong side of this split until the day they were ported,
+and in both cases the refusal read like a limitation while being a policy
+choice with one un-ported function behind it.
+
+- **`cells finish` from a granted worktree.** The narrow door refused it, so
+  the worker that did the work handed its cap back to the orchestrator after
+  merge — inverting cap-before-merge on every dispatch. The real blocker was
+  one function: cells' holds ledger keyed off the resolved root, which from a
+  worktree would have consulted an empty ledger and released nobody's holds
+  while reporting success. `finish` now takes the FULL door: **cell record and
+  claim at the main store** (one ledger, and the claim it validates already
+  lives there), **declared tests with cwd in the worktree** (the changed code
+  is the evidence), **holds released through `hold_topology()`** as
+  `(main_root, git-verified worktree id)`. Every other cells verb stays
+  narrow — the door did not widen.
+- **`bee close` for a lane feature.** Close delegated whenever
+  `.bee/lanes/<feature>.json` existed, so a lane never ran the close driver at
+  all. The debt was equally narrow: the lane record's own `last_scribing_run`
+  had to join `best_scribing_stamp_ms`' threshold, and a corrupt lane record
+  had to warn rather than throw. Both ported; the guard is gone; lane and
+  non-lane features close alike.
+
+The shape worth remembering: a delegation comment that names its own debt is a
+todo with a date on it. Both of these named exactly what was missing, and both
+outlived the runtime they delegated to — the symptom was a generic
+`unsupported_argument_shape`, which reads as "you passed a bad flag" rather
+than "this path was never ported".
+
 ## Onboarding migrates stranded worktree-local coordination records — all-or-nothing (multisession-native-18d)
 
 Before this cell, `bee onboard` had zero worktree-awareness: a granted

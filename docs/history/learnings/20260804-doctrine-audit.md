@@ -102,8 +102,15 @@ All five are the same shape at different depths:
   that no longer existed, and the symptom was a generic
   `unsupported_argument_shape` — the router could not tell "this verb refuses
   your flags" from "this path was never ported".
-- `bee close` refuses a lane feature outright (`router.rs:78` covers non-lane
-  features only), so a lane never runs the close driver's test door.
+- ~~`bee close` refuses a lane feature outright~~ — **fixed the same day**
+  (`lane-close`). The delegation guard is gone and the lane record's own
+  `last_scribing_run` now joins the scribing-debt threshold. Proven by closing
+  its own lane: tests fresh, scribing door clear, cell retired.
+- Three delegation gaps closed in one session — the terminal phase, `finish`
+  from a worktree, `close` for a lane — all three the same shape: a comment
+  that named its own debt, a runtime that was later deleted, and a router
+  message that blamed the caller's flags. When a port leaves a `Delegate`
+  behind, the debt outlives the runtime silently.
 - ~~A worker cannot run `cells finish` from inside its own worktree~~ —
   **fixed the same day** (`worktree-finish`). The refusal was policy, not
   physics: `worktree`, `status`/`orient` and `reservations` already span
