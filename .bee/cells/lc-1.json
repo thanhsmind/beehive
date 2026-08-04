@@ -1,0 +1,63 @@
+{
+  "id": "lc-1",
+  "feature": "lane-close",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Run bee close natively for a lane feature",
+  "action": "bee close delegates whenever the feature has a lane record (feature_has_lane_record, close.rs:781-791), so a lane feature never reaches the close driver at all - the router reports unsupported_argument_shape (router.rs:78 scopes close to non-lane features). The comment at close.rs:766-777 names the whole unported debt: best_scribing_stamp_ms (close.rs:272-294) must also fold in the lane record's own last_scribing_run when .bee/lanes/<feature>.json exists, taking the freshest of the jsonl ledger, the state record and the lane record; and a corrupt lane record warns with a relative path instead of throwing. Port both, then delete the delegation guard so close runs natively for lane and non-lane features alike. Every other close door - the tests door, D1 uncaptured behavior_change refusal, capture-deferral escape, cell retirement - stays exactly as it is.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers",
+  "must_haves": {
+    "truths": [
+      "bee close --feature <lane> runs the close driver instead of refusing",
+      "a lane record's last_scribing_run counts toward the scribing-debt threshold",
+      "a corrupt lane record warns and close still runs",
+      "non-lane close behaviour is byte-identical to today"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+  ],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": "dave",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+      "packages/bee-rs/crates/bee/src/router.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T13:13:07.699Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9f1a5dd3-4503-443a-95df-2a845fc0ad53",
+    "claimed_at": "2026-08-04T12:57:09.193Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-04T13:12:10.570Z",
+        "claim_session": "9f1a5dd3-4503-443a-95df-2a845fc0ad53",
+        "claimed_at": "2026-08-04T12:57:09.191Z",
+        "acquired_at": "2026-08-04T12:57:09.191Z",
+        "worker": "dave",
+        "verdict": "tests-red",
+        "failure_signature": "6fd0cd9c9db0",
+        "note": "tion)"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T13:12:56.196Z"
+  }
+}
