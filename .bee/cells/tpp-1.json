@@ -1,0 +1,44 @@
+{
+  "id": "tpp-1",
+  "feature": "terminal-phase-port",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Port the compounding-complete door natively so a feature can reach its terminal phase again",
+  "action": "Since the Rust cutover, state set --phase compounding-complete returns the Node delegate marker at set_gate.rs:179 and :213, so no lane or feature can EVER close - the router reports unsupported_argument_shape. Port the door: keep check_phase_transition (phase must be compounding; fresh last_compounding_run, waivable by --waive-compounding) as the freshness half, then add the scribing-debt half chain-integrity D2 specifies - refuse when drivers::close::scribing_debt(root, feature) > 0, naming every capped behavior_change cell still owing its spec sync. Two escapes, both loud: the --waive-scribing-debt flag (already a known flag at set_gate.rs:118-131 but consumed nowhere), or an already-logged capture-deferral decision naming the feature (drivers::close::has_capture_deferral_decision). Each waiver logs a decision naming the feature and every waived cell, matching the wording already in .bee/decisions.jsonl. Then perform the write instead of delegating - both Err2::Ex returns go. Works for the lane branch and the default record alike.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::state_group verbs::drivers",
+  "must_haves": {
+    "truths": [
+      "a clean compounding record reaches compounding-complete and the phase is written",
+      "debt>0 refuses and names every unscribed cell",
+      "--waive-scribing-debt passes and logs a decision naming the cells",
+      "a logged capture-deferral decision passes without the flag",
+      "the freshness half still refuses and --waive-compounding still lifts it",
+      "the lane branch and the default record behave the same"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+  ],
+  "decisions": [],
+  "status": "claimed",
+  "trace": {
+    "worker": "stuart",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9f1a5dd3-4503-443a-95df-2a845fc0ad53",
+    "claimed_at": "2026-08-04T10:57:00.327Z"
+  }
+}

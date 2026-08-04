@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature": "terminal-phase-port",
+  "mode": "standard",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"terminal-phase-port\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"terminal-phase-port\" (lane).",
+  "created_at": "2026-08-04T10:56:42.627Z"
+}
