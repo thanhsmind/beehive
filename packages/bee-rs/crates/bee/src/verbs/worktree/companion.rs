@@ -7,6 +7,7 @@ use super::*;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_roots_core, Resolution};
 use crate::verbs::reservations::{js_numberify, js_trim, now_iso, parse_flags, FlagV, Flags};
+use crate::textutil::truncate_chars_head;
 use crate::verbs::workspace_store as ws;
 use crate::verbs::{emit_no_root_error, record_timing};
 use crate::{jsjson, lock};
@@ -69,15 +70,6 @@ pub(crate) fn shell_sync(command: &str, cwd: &Path) -> GitOut {
         },
         Err(_) => GitOut { status: None, stdout: None, stderr: None },
     }
-}
-
-/// `String.prototype.slice(0, n)` — UTF-16 code units, not chars or bytes.
-pub(crate) fn js_slice_utf16(s: &str, n: usize) -> String {
-    let units: Vec<u16> = s.encode_utf16().collect();
-    if units.len() <= n {
-        return s.to_string();
-    }
-    String::from_utf16_lossy(&units[..n])
 }
 
 /// `haystack.replace('<needle>', replacement)` with a STRING pattern: the
@@ -204,7 +196,7 @@ pub(crate) fn run_companion_start(
         Err(e) => {
             return Err(format!(
                 "commands.worktree_companion_start must print JSON with a \"worktreePath\" field to stdout — got unparseable output ({e}). Raw stdout: {}",
-                js_slice_utf16(&stdout, 500)
+                truncate_chars_head(&stdout, 500)
             ))
         }
     };

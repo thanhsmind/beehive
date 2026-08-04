@@ -32,6 +32,7 @@
 
 use crate::hooks::adapter::{append_hook_log, now_iso, read_hook_context};
 use crate::hooks::Outcome;
+use crate::textutil::truncate_chars_head;
 use crate::jsjson;
 use crate::state::read_config_raw;
 use serde_json::{Map, Value};
@@ -715,23 +716,6 @@ fn derive_dispatch_economics(
 
 // ─── audit logs ─────────────────────────────────────────────────────────────
 
-/// JS String.prototype.slice(0, n) — UTF-16 code units. When the cut lands
-/// inside a surrogate pair we keep 119 units instead of emitting the lone
-/// surrogate Node would (log-only field; shape unchanged).
-fn utf16_slice(text: &str, max_units: usize) -> String {
-    let mut units = 0usize;
-    let mut out = String::new();
-    for c in text.chars() {
-        let w = c.len_utf16();
-        if units + w > max_units {
-            break;
-        }
-        units += w;
-        out.push(c);
-    }
-    out
-}
-
 fn log_dispatch(
     root: &Path,
     tool_name: &str,
@@ -748,7 +732,7 @@ fn log_dispatch(
     let description = tool_input
         .get("description")
         .and_then(Value::as_str)
-        .map(|d| utf16_slice(d, 120))
+        .map(|d| truncate_chars_head(d, 120))
         .unwrap_or_default();
     let str_or_null = |v: Option<&str>| v.map_or(Value::Null, |s| Value::String(s.to_string()));
     let mut entry = Map::new();
@@ -1287,7 +1271,7 @@ mod tests {
     }
 
     #[test]
-    fn description_is_truncated_to_120_utf16_units() {
+    fn description_is_truncated_to_120_chars() {
         let fx = fixture(&repo_config());
         let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"model": "haiku", "description": "z".repeat(300)}}));
         assert_eq!(code, 0);

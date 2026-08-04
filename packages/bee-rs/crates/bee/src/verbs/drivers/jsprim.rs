@@ -8,6 +8,7 @@ use crate::fsutil::{ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state::read_config_raw;
+use crate::textutil::{char_len, truncate_chars_head};
 use crate::verbs::reservations::{
     finish, js_is_ws, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
 };
@@ -65,29 +66,10 @@ pub(crate) fn vget<'a>(v: &'a Value, key: &str) -> Option<&'a Value> {
     v.as_object().and_then(|m| m.get(key))
 }
 
-/// JS `.slice(0, n)` over UTF-16 code units. A boundary that would split a
-/// surrogate pair drops the pair rather than emitting a lone high surrogate
-/// (no Rust String can hold one) — the mirror of test_runner.rs's utf16_tail
-/// divergence note, unreachable for ASCII/BMP prose.
-pub(crate) fn utf16_head(s: &str, n: usize) -> String {
-    let units: Vec<u16> = s.encode_utf16().collect();
-    if units.len() <= n {
-        return s.to_string();
-    }
-    let mut end = n;
-    if (0xD800..=0xDBFF).contains(&units[end - 1]) {
-        end -= 1;
-    }
-    String::from_utf16_lossy(&units[..end])
-}
-
-pub(crate) fn utf16_len(s: &str) -> usize {
-    s.encode_utf16().count()
-}
-
 /// provenance: dispatch-prepare.mjs oneLine(text, max = 140) —
 /// `String(text ?? '').replace(/\s+/g, ' ').trim()`, ellipsised at `max`
-/// UTF-16 units with a 3-unit "..." tail.
+/// CHARS with a 3-char "..." tail (decision D3: char-based, not the
+/// historical UTF-16-unit count).
 pub(crate) fn one_line(text: Option<&Value>, max: usize) -> String {
     let raw = match text {
         None | Some(Value::Null) => String::new(),
@@ -111,8 +93,8 @@ pub(crate) fn one_line(text: Option<&Value>, max: usize) -> String {
         collapsed.push(' ');
     }
     let flat = js_trim(&collapsed).to_string();
-    if utf16_len(&flat) > max {
-        format!("{}...", utf16_head(&flat, max - 3))
+    if char_len(&flat) > max {
+        format!("{}...", truncate_chars_head(&flat, max - 3))
     } else {
         flat
     }

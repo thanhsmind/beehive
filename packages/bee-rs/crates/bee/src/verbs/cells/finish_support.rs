@@ -10,6 +10,7 @@ use crate::lock;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state as bstate;
+use crate::textutil::truncate_chars_tail;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
@@ -89,15 +90,6 @@ pub(crate) fn spawn_declared(command: &str, cwd: &Path) -> Result<(Option<i32>, 
     }
 }
 
-/// String.prototype.slice(-n) over UTF-16 units (excerpt tail).
-pub(crate) fn js_slice_tail_utf16(s: &str, n: usize) -> String {
-    let units: Vec<u16> = s.encode_utf16().collect();
-    if units.len() <= n {
-        return s.to_string();
-    }
-    String::from_utf16_lossy(&units[units.len() - n..])
-}
-
 /// runDeclaredTests over an already-normalized declared command list.
 pub(crate) fn run_declared_tests(root: &Path, commands: &[String]) -> MR<TestsRun> {
     let ran_at = utc_now();
@@ -124,7 +116,7 @@ pub(crate) fn run_declared_tests(root: &Path, commands: &[String]) -> MR<TestsRu
             None
         } else {
             output = js_trim(&output).to_string();
-            let tail = js_slice_tail_utf16(&output, FAILURE_EXCERPT_MAX_CHARS);
+            let tail = truncate_chars_tail(&output, FAILURE_EXCERPT_MAX_CHARS);
             Some(if tail.is_empty() {
                 format!(
                     "(no output; exit {})",

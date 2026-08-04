@@ -53,6 +53,7 @@ use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::read_config_raw;
+use crate::textutil::truncate_chars_tail;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Value};
 use std::ffi::OsString;
@@ -62,8 +63,8 @@ use std::time::Instant;
 
 /// TEST_RESULTS_RELATIVE (lib/test-runner.mjs:30).
 const TEST_RESULTS_RELATIVE: &str = ".bee/logs/test-results.json";
-/// FAILURE_EXCERPT_MAX_CHARS (lib/test-runner.mjs:35) — UTF-16 units, like
-/// JS String.prototype.slice.
+/// FAILURE_EXCERPT_MAX_CHARS (lib/test-runner.mjs:35) — CHARS (decision D3:
+/// char-based, not the historical UTF-16-unit count).
 const FAILURE_EXCERPT_MAX: usize = 500;
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
@@ -283,7 +284,7 @@ fn run_declared_tests(root: &Path, commands: &[String], shell: &str) -> TestRun 
             None
         } else {
             let trimmed = js_trim(&output);
-            let tail = utf16_tail(&trimmed, FAILURE_EXCERPT_MAX);
+            let tail = truncate_chars_tail(&trimmed, FAILURE_EXCERPT_MAX);
             Some(if tail.is_empty() {
                 format!("(no output; exit {})", js_exit(exit))
             } else {
@@ -398,22 +399,6 @@ fn is_js_whitespace(c: char) -> bool {
 
 fn js_trim(s: &str) -> String {
     s.trim_matches(is_js_whitespace).to_string()
-}
-
-/// JS `.slice(-n)` counts UTF-16 code units. When the boundary would split a
-/// surrogate pair (where JS keeps a lone low surrogate no Rust String can
-/// hold) the window widens by one unit to keep the pair — the sole excerpt
-/// divergence, unreachable for ASCII/BMP output.
-fn utf16_tail(s: &str, n: usize) -> String {
-    let units: Vec<u16> = s.encode_utf16().collect();
-    if units.len() <= n {
-        return s.to_string();
-    }
-    let mut start = units.len() - n;
-    if (0xDC00..=0xDFFF).contains(&units[start]) {
-        start -= 1;
-    }
-    String::from_utf16_lossy(&units[start..])
 }
 
 #[cfg(test)]
@@ -549,14 +534,18 @@ mod tests {
     }
 
     #[test]
-    fn excerpt_keeps_only_the_last_500_utf16_units() {
+    fn excerpt_keeps_only_the_last_500_chars() {
         let long = "x".repeat(650);
-        assert_eq!(utf16_tail(&long, FAILURE_EXCERPT_MAX).len(), 500);
-        assert_eq!(utf16_tail("short", FAILURE_EXCERPT_MAX), "short");
-        // Astral chars count 2 units each, like JS .slice.
-        let astral = "🐝".repeat(300); // 600 units
-        let tail = utf16_tail(&astral, FAILURE_EXCERPT_MAX);
-        assert_eq!(tail.encode_utf16().count(), 500); // boundary lands on a pair
+        assert_eq!(truncate_chars_tail(&long, FAILURE_EXCERPT_MAX).len(), 500);
+        assert_eq!(truncate_chars_tail("short", FAILURE_EXCERPT_MAX), "short");
+        // Decision D3: the cap counts CHARS, not UTF-16 units — an astral
+        // char is one char, so 300 of them (600 UTF-16 units) fits under the
+        // 500-char cap untouched, where the old UTF-16-unit cap would have
+        // truncated it.
+        let astral = "🐝".repeat(300);
+        let tail = truncate_chars_tail(&astral, FAILURE_EXCERPT_MAX);
+        assert_eq!(tail.chars().count(), 300);
+        assert_eq!(tail, astral);
     }
 
     #[test]

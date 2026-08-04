@@ -82,11 +82,6 @@ pub(crate) fn str_trim_nonempty(v: Option<&Value>) -> Option<String> {
     }
 }
 
-/// UTF-16 code-unit length (JS String.length).
-pub(crate) fn utf16_len(s: &str) -> usize {
-    s.encode_utf16().count()
-}
-
 pub(crate) fn ascii_eq_ci(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
 }

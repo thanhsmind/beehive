@@ -8,6 +8,7 @@ use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_worktree, LinkedRoots, RootsWt};
 use crate::state::{bypass_level, read_config_raw};
+use crate::textutil::{char_len, truncate_chars_head};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::cell::RefCell;
@@ -32,17 +33,14 @@ pub(crate) fn orient_next_command(status: &JMap, ready_ids: &[Value]) -> Value {
     Value::Null
 }
 
-/// bee.mjs orientDecisionLine — first line, UTF-16 160-cap with '...'.
+/// bee.mjs orientDecisionLine — first line, 160-CHAR cap with '...' (decision
+/// D3: char-based, not the historical UTF-16-unit count).
 pub(crate) fn orient_decision_line(decision: Option<&Value>) -> String {
     let s = tpl(decision);
     let first = s.split('\n').next().unwrap_or("");
     let line = js_trim(first);
-    let units: Vec<u16> = line.encode_utf16().collect();
-    if units.len() > 160 {
-        // slice(0, 157) over UTF-16 units; bee decision text is BMP so the
-        // lossy re-decode is exact in practice.
-        let sliced = String::from_utf16_lossy(&units[..157]);
-        format!("{sliced}...")
+    if char_len(line) > 160 {
+        format!("{}...", truncate_chars_head(line, 157))
     } else {
         line.to_string()
     }

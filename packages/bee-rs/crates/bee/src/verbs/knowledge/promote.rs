@@ -8,6 +8,7 @@ use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::read_config_raw;
+use crate::textutil::{char_len, truncate_chars_head};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{js_trim, keys_known, parse_flags, FlagV, Flags};
 use serde_json::{json, Map, Number, Value};
@@ -35,8 +36,9 @@ use std::time::Instant;
 // deterministic text with no V8 message and no lock attempt, so they are
 // reproduced natively.
 
-/// `text.split(/\s+/).join(' ').trim()`, optionally capped at `limit` UTF-16
-/// units with a trailing ellipsis.
+/// `text.split(/\s+/).join(' ').trim()`, optionally capped at `limit` CHARS
+/// with a trailing ellipsis (decision D3: char-based, not the historical
+/// UTF-16-unit count).
 pub(crate) fn one_line(text: &str, limit: usize) -> String {
     let mut flat = String::new();
     let mut in_ws = false;
@@ -55,14 +57,10 @@ pub(crate) fn one_line(text: &str, limit: usize) -> String {
         flat.push(' ');
     }
     let flat = flat.trim_matches(js_is_space).to_string();
-    if limit == 0 {
+    if limit == 0 || char_len(&flat) <= limit {
         return flat;
     }
-    let units: Vec<u16> = flat.encode_utf16().collect();
-    if units.len() <= limit {
-        return flat;
-    }
-    format!("{}\u{2026}", String::from_utf16_lossy(&units[..limit - 1]))
+    format!("{}\u{2026}", truncate_chars_head(&flat, limit - 1))
 }
 
 /// deviationText: a plain string, `type: description`, or JSON.stringify.

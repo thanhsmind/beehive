@@ -7,6 +7,7 @@ use super::*;
 use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce};
+use crate::textutil::{char_len, truncate_chars_head};
 use crate::verbs::reservations::{
     date_parse_val, finish, jget, js_date_parse, js_disp, js_disp_opt, js_is_ws, js_number_flag,
     js_numberify, js_quote, js_trim, keys_known, now_iso, parse_flags,
@@ -147,20 +148,11 @@ pub(crate) fn decision_index_path(root: &Path) -> PathBuf {
     root.join("docs").join("decisions").join("index.md")
 }
 
-/// String.prototype.slice(0, n) — UTF-16 code units, matching V8.
-pub(crate) fn js_slice_head(s: &str, n: usize) -> String {
-    let units: Vec<u16> = s.encode_utf16().collect();
-    if units.len() <= n {
-        return s.to_string();
-    }
-    String::from_utf16_lossy(&units[..n])
-}
-
 /// formatIndexLine: `- short8 · YYYY-MM-DD · first line of decision text`.
 pub(crate) fn format_index_line(event: &Value) -> String {
-    let short8 = js_slice_head(&js_disp_opt(jget(event, "id")), 8);
+    let short8 = truncate_chars_head(&js_disp_opt(jget(event, "id")), 8);
     let date = match jget(event, "date") {
-        Some(Value::String(s)) => js_slice_head(s, 10),
+        Some(Value::String(s)) => truncate_chars_head(s, 10),
         _ => "0000-00-00".to_string(),
     };
     // String(event.decision ?? '').split(/\r?\n/)[0]
@@ -448,9 +440,8 @@ pub(crate) fn sweep_decision_citations(root: &Path, id: &str, short8: &str) -> V
         for (index, line) in split_crlf_lines(&text).into_iter().enumerate() {
             if word_bounded_ci_test(line, id) || word_bounded_ci_test(line, short8) {
                 let trimmed = js_trim(line);
-                let units = trimmed.encode_utf16().count();
-                let excerpt = if units > SWEEP_EXCERPT_MAX {
-                    format!("{}...", js_slice_head(trimmed, SWEEP_EXCERPT_MAX - 3))
+                let excerpt = if char_len(trimmed) > SWEEP_EXCERPT_MAX {
+                    format!("{}...", truncate_chars_head(trimmed, SWEEP_EXCERPT_MAX - 3))
                 } else {
                     trimmed.to_string()
                 };

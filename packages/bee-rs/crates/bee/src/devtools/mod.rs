@@ -270,28 +270,11 @@ pub(crate) fn sort_by_locale<T, F: Fn(&T) -> &str>(items: &mut [T], key: F) -> b
     true
 }
 
-/// JS default `Array.prototype.sort()` on strings: UTF-16 code-unit order.
-/// Distinct from `sort_by_locale` above and used where the .mjs calls bare
-/// `.sort()` (impact_registry's key/suite sorts, onboard's sidecar skill sort,
-/// render_plugin_skill_trees' `listBeeSkillDirs`).
-pub(crate) fn js_default_sort(items: &mut [String]) {
-    items.sort_by(|a, b| code_unit_cmp(a, b));
-}
-
-/// UTF-16 code-unit comparison (V8's `<` on strings).
-pub(crate) fn code_unit_cmp(a: &str, b: &str) -> Ordering {
-    let mut x = a.encode_utf16();
-    let mut y = b.encode_utf16();
-    loop {
-        match (x.next(), y.next()) {
-            (None, None) => return Ordering::Equal,
-            (None, Some(_)) => return Ordering::Less,
-            (Some(_), None) => return Ordering::Greater,
-            (Some(p), Some(q)) if p == q => continue,
-            (Some(p), Some(q)) => return p.cmp(&q),
-        }
-    }
-}
+/// Default string order for the sidecar/skill-tree sorts below: kept as
+/// UTF-16 code-unit order (`crate::textutil::code_unit_cmp`/`js_default_sort`
+/// — see that module's EXCEPTION note for the reproduction rationale), and
+/// distinct from `sort_by_locale` above, which reproduces `localeCompare`.
+pub(crate) use crate::textutil::{code_unit_cmp, js_default_sort};
 
 #[cfg(test)]
 mod tests {

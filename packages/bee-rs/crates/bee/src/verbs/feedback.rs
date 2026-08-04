@@ -98,11 +98,6 @@ pub(crate) fn js_truthy(v: &Value) -> bool {
     }
 }
 
-/// String.prototype.length / .slice unit: UTF-16 code units.
-pub(crate) fn utf16_len(s: &str) -> usize {
-    s.chars().map(char::len_utf16).sum()
-}
-
 /// True when re-serializing this parsed value via jsjson is provably
 /// byte-identical to a JS `JSON.stringify` of ITS parse of the same source.
 /// What remains is the INTEGER-PRECISION limit: serde_json keeps a >2^53
@@ -1146,13 +1141,13 @@ fn raw_title_str(c: &RawCandidate) -> &str {
     c.title.as_str().unwrap_or("")
 }
 
-/// capTitle: >200 UTF-16 units -> first 199 + '…'.
+/// capTitle: >200 CHARS -> first 199 + '…' (decision D3: char-based, not the
+/// historical UTF-16-unit count).
 fn cap_title(text: &str) -> String {
-    let units: Vec<u16> = text.encode_utf16().collect();
-    if units.len() <= MAX_TITLE {
+    if crate::textutil::char_len(text) <= MAX_TITLE {
         return text.to_string();
     }
-    format!("{}\u{2026}", String::from_utf16_lossy(&units[..MAX_TITLE - 1]))
+    format!("{}\u{2026}", crate::textutil::truncate_chars_head(text, MAX_TITLE - 1))
 }
 
 /// validFirstSeen: STRICT_ISO_DATE or null — never Date.parse's leniency.
@@ -2239,9 +2234,11 @@ mod tests {
     }
 
     #[test]
-    fn js_trim_and_utf16_len() {
+    fn js_trim_and_char_len() {
         assert_eq!(js_trim("\u{feff} x \u{a0}"), "x");
-        assert_eq!(utf16_len("ab😀"), 4); // astral char = 2 UTF-16 units
+        // char_len counts CHARS, not UTF-16 units: an astral char is one
+        // char even though it is two UTF-16 code units (decision D3).
+        assert_eq!(crate::textutil::char_len("ab😀"), 3);
     }
 
     #[test]

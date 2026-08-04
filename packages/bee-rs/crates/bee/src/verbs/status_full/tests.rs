@@ -399,13 +399,17 @@ use crate::version::BEE_VERSION;
     }
 
     #[test]
-    fn orient_decision_line_caps_at_160_utf16_units() {
+    fn orient_decision_line_caps_at_160_chars() {
         let long = "x".repeat(200);
         let capped = orient_decision_line(Some(&json!(long)));
         assert_eq!(capped.chars().count(), 160); // 157 + '...'
         assert!(capped.ends_with("..."));
         let short = orient_decision_line(Some(&json!("first line\nsecond")));
         assert_eq!(short, "first line");
+        // Decision D3: the cap counts CHARS, not UTF-16 units — 160 astral
+        // chars (320 UTF-16 units) fit under the char cap untouched.
+        let astral = "🐝".repeat(160);
+        assert_eq!(orient_decision_line(Some(&json!(astral))), astral);
     }
 
     #[test]

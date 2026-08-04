@@ -49,8 +49,7 @@
 
 use super::feedback::{
     backlog_allowed_type, emit_error, emit_success, find_ci, js_is_space, js_trim, js_truthy,
-    now_iso, parse_shape, random_bytes, read_jsonl, require_flag, utf16_len, value_js_safe,
-    ParsedArgs,
+    now_iso, parse_shape, random_bytes, read_jsonl, require_flag, value_js_safe, ParsedArgs,
 };
 use crate::fsutil::append_jsonl;
 use crate::jsjson;
@@ -58,6 +57,7 @@ use crate::lock::{acquire_store_lock_once, AcquireOnce};
 use crate::registry::{check_manifest_drift, Drift};
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::read_config_raw;
+use crate::textutil::char_len;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -740,7 +740,7 @@ fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCo
         return None;
     }
     let layer = require_flag(&parsed, "layer")?;
-    if utf16_len(title) > BACKLOG_MAX_TITLE || utf16_len(layer) > BACKLOG_MAX_LAYER {
+    if char_len(title) > BACKLOG_MAX_TITLE || char_len(layer) > BACKLOG_MAX_LAYER {
         return None;
     }
     // `flags.detail !== undefined && !== true ? String(flags.detail) : ''`.
@@ -794,11 +794,11 @@ fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCo
 
 fn run_propose(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let story = js_trim(require_flag(&parsed, "story")?).to_string();
-    if story.is_empty() || utf16_len(&story) > BACKLOG_MAX_STORY {
+    if story.is_empty() || char_len(&story) > BACKLOG_MAX_STORY {
         return None;
     }
     let cos = js_trim(require_flag(&parsed, "cos")?).to_string();
-    if cos.is_empty() || utf16_len(&cos) > BACKLOG_MAX_COS {
+    if cos.is_empty() || char_len(&cos) > BACKLOG_MAX_COS {
         return None;
     }
     let feature = parsed.flags.get("feature").cloned().unwrap_or_default();

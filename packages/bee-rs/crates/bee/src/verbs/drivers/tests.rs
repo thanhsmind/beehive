@@ -1139,11 +1139,16 @@ use std::time::Instant;
     }
 
     #[test]
-    fn utf16_slicing_matches_js() {
-        assert_eq!(utf16_head("abcdef", 3), "abc");
-        assert_eq!(utf16_head("abc", 10), "abc");
-        assert_eq!(utf16_tail(&"x".repeat(650), 500).len(), 500);
-        // Astral chars count 2 UTF-16 units each, like JS.
-        let astral = "🐝".repeat(4); // 8 units
-        assert_eq!(utf16_head(&astral, 5).encode_utf16().count(), 4);
+    fn char_slicing_follows_the_char_contract() {
+        use crate::textutil::{truncate_chars_head, truncate_chars_tail};
+        assert_eq!(truncate_chars_head("abcdef", 3), "abc");
+        assert_eq!(truncate_chars_head("abc", 10), "abc");
+        assert_eq!(truncate_chars_tail(&"x".repeat(650), 500).chars().count(), 500);
+        // Decision D3: the cap counts CHARS, not UTF-16 units — an astral
+        // char is one char, so a 5-char head of 4 astral chars is the whole
+        // string untouched (it would have been cut mid-pair under the old
+        // UTF-16-unit contract).
+        let astral = "🐝".repeat(4);
+        assert_eq!(truncate_chars_head(&astral, 5), astral);
+        assert_eq!(truncate_chars_head(&astral, 5).chars().count(), 4);
     }
