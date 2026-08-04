@@ -631,3 +631,4 @@
 {"ts":"2026-08-04T09:07:08.465Z","type":"finding","title":"Linux CI hides a red suite: cargo test piped to tee without pipefail reports success","detail":"","severity":"P1","layer":"ci","feature":""}
 {"ts":"2026-08-04T09:07:13.591Z","type":"debt","title":"Two Linux-red tests are platform-shaped: knowledge bundle_target uses a D: dir, decisions sweep asserts readdir order","detail":"","severity":"P2","layer":"tests","feature":""}
 {"ts":"2026-08-04T09:07:13.609Z","type":"debt","title":"release-manifest mode is not portable: 205 records carry Windows 666, so --check is red on any Linux checkout","detail":"","severity":"P2","layer":"devtools","feature":""}
+{"ts":"2026-08-04T09:28:47.735Z","type":"friction","title":"concurrency suite goes red only when run inside bee cells finish (twice), green standalone 3/3 and on retry","detail":"","severity":"P2","layer":"tests","feature":""}

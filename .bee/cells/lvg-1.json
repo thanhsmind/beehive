@@ -21,18 +21,40 @@
   ],
   "read_first": [],
   "decisions": [],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
+    "worker": "orchestrator-main",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+      "packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-04T09:28:38.721Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "9f1a5dd3-4503-443a-95df-2a845fc0ad53",
+    "claimed_at": "2026-08-04T09:25:43.999Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-04T09:27:52.177Z",
+        "claim_session": "9f1a5dd3-4503-443a-95df-2a845fc0ad53",
+        "claimed_at": "2026-08-04T09:25:43.981Z",
+        "acquired_at": "2026-08-04T09:25:43.981Z",
+        "worker": "orchestrator-main",
+        "verdict": "tests-red",
+        "failure_signature": "6fd0cd9c9db0",
+        "note": "tion)"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T09:28:27.119Z"
   }
 }

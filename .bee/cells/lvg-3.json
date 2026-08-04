@@ -19,18 +19,37 @@
   ],
   "read_first": [],
   "decisions": [],
-  "status": "open",
+  "status": "capped",
   "trace": {
     "worker": null,
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      ".github/workflows/ci.yml"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-04T09:27:14.646Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": null,
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-04T09:26:39.608Z",
+        "claim_session": null,
+        "claimed_at": null,
+        "acquired_at": null,
+        "worker": null,
+        "verdict": "tests-red",
+        "failure_signature": "6fd0cd9c9db0",
+        "note": "tion)"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T09:27:03.122Z"
   }
 }
