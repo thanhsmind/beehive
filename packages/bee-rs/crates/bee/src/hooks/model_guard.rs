@@ -444,8 +444,15 @@ fn with_field(tool_input: &Map<String, Value>, key: &str, value: Value) -> Value
     Value::Object(copy)
 }
 
-const PINNED_AGENT_TYPE: [(&str, &str); 3] =
-    [("generation", "bee-gather"), ("extraction", "bee-extract"), ("review", "bee-review")];
+/// The tier a rendered agent stands for. `generation` appears twice on
+/// purpose: bee-gather reads and bee-build writes, and both run at that
+/// tier's model — which is why `pinned_type_for` refuses to answer for it.
+const PINNED_AGENT_TYPE: [(&str, &str); 4] = [
+    ("generation", "bee-gather"),
+    ("generation", "bee-build"),
+    ("extraction", "bee-extract"),
+    ("review", "bee-review"),
+];
 
 fn pinned_type_for(tier: &str) -> &'static str {
     PINNED_AGENT_TYPE
@@ -506,6 +513,25 @@ fn evaluate_claude_dispatch(tool_input: &Value, models: &Models) -> Verdict {
     // guard owns outright, so making the caller re-issue the dispatch to
     // supply it buys nothing but a round trip and a chance to guess again.
     if let Some(t) = &tier {
+        if t == "generation" && subagent_type.as_deref() == Some("general-purpose") {
+            // Two agents, one tier: the guard cannot tell a gather from a
+            // cell execution by the tier alone, and guessing picked the
+            // read-only one for years — an execution dispatch that could
+            // never write. The caller says which; that is one word.
+            let reason = "bee-model-guard: [bee-tier: generation] dispatched with subagent_type \
+\"general-purpose\", and the generation tier carries TWO rendered agents — the guard will \
+not guess which.\n\
+FIX: name the one you mean. subagent_type \"bee-build\" executes a cell (reserves, writes, \
+commits, caps); subagent_type \"bee-gather\" reads and reports (never writes)."
+                .to_string();
+            return deny(
+                reason,
+                "generic-type-denied",
+                tier.clone(),
+                model_param,
+                subagent_type,
+            );
+        }
         if t != "ceiling" && subagent_type.as_deref() == Some("general-purpose") {
             let pinned = pinned_type_for(t);
             let note = format!(
@@ -982,10 +1008,43 @@ mod tests {
         assert_eq!(code, 0);
     }
 
+    /// The generation tier carries two agents — bee-gather reads, bee-build
+    /// writes — so "which agent does this tier mean" has no single answer and
+    /// the guard stops guessing. It used to answer bee-gather, which made
+    /// every execution dispatch land in an agent whose own contract forbids
+    /// writing: a cell could never be executed by a dispatched worker.
+    #[test]
+    fn a_generation_dispatch_names_its_agent_and_bee_build_is_allowed() {
+        let fx = fixture(&repo_config());
+
+        // Naming the execution agent is enough on its own — no marker needed.
+        let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "go", "subagent_type": "bee-build"}}));
+        assert_eq!(code, 0);
+
+        // general-purpose at the generation tier is refused, and the refusal
+        // names both agents and what each one is for.
+        let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "subagent_type": "general-purpose"}}));
+        assert_ne!(code, 0, "generation must not be repaired to one of two agents");
+        assert!(stderr.contains("bee-build"), "{stderr}");
+        assert!(stderr.contains("bee-gather"), "{stderr}");
+
+        // The other tiers have exactly one agent each and still repair.
+        for (tier, pinned) in [("extraction", "bee-extract"), ("review", "bee-review")] {
+            let (code, stdout, _) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": format!("[bee-tier: {tier}] go"), "subagent_type": "general-purpose"}}));
+            assert_eq!(code, 0, "tier {tier} still repairs");
+            assert_eq!(
+                repair_output(&stdout)["hookSpecificOutput"]["updatedInput"]["subagent_type"],
+                json!(pinned)
+            );
+        }
+    }
+
     #[test]
     fn pinned_type_rule() {
         let fx = fixture(&repo_config());
-        for (tier, pinned) in PINNED_AGENT_TYPE {
+        // generation is excluded: it carries two agents and refuses instead
+        // of repairing (a_generation_dispatch_names_its_agent_and_bee_build_is_allowed).
+        for &(tier, pinned) in PINNED_AGENT_TYPE.iter().filter(|(t, _)| *t != "generation") {
             let (code, stdout, stderr) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": format!("[bee-tier: {tier}] go"), "subagent_type": "general-purpose"}}));
             // Repaired, not refused: the tier was stated, so the agent type
             // it implies is the guard's own lookup to perform.
@@ -1005,13 +1064,11 @@ mod tests {
             assert_eq!(d["tier"], tier);
             assert_eq!(d["subagent_type"], pinned, "the audit records what will run");
         }
-        // a matching param does not change the repair — the type is still wrong
-        let (code, stdout, _) = run_full(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "model": "sonnet", "subagent_type": "general-purpose"}}));
-        assert_eq!(code, 0);
-        assert_eq!(
-            repair_output(&stdout)["hookSpecificOutput"]["updatedInput"]["subagent_type"],
-            json!("bee-gather")
-        );
+        // a matching param does not rescue general-purpose at generation —
+        // the type is still unnamed, and the refusal says so
+        let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go", "model": "sonnet", "subagent_type": "general-purpose"}}));
+        assert_ne!(code, 0);
+        assert!(stderr.contains("bee-build"), "{stderr}");
         // ceiling has no pinned agent
         let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: ceiling] go", "subagent_type": "general-purpose"}}));
         assert_eq!(code, 0);

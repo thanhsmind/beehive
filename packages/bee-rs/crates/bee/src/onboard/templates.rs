@@ -187,6 +187,10 @@ pub const REPO_SKILL_TARGETS: &[(&str, &[&str])] =
 
 /// onboard_bee.mjs AGENT_TIER_BY_NAME (l. 1933–1937).
 pub const AGENT_TIER_BY_NAME: &[(&str, &str)] = &[
+    // Two agents share the generation tier: bee-gather reads, bee-build
+    // writes. The tier decides the model; what the agent may DO is the
+    // agent file's own contract.
+    ("bee-build", "generation"),
     ("bee-gather", "generation"),
     ("bee-extract", "extraction"),
     ("bee-review", "review"),
