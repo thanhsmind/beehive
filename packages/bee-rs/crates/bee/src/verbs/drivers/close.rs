@@ -33,6 +33,11 @@ pub(crate) const FAILURE_EXCERPT_MAX: usize = 500;
 /// provenance: bee.mjs CLOSE_TESTS_UNDECLARED_DETAIL.
 pub(crate) const CLOSE_TESTS_UNDECLARED_DETAIL: &str = "no commands.test declared — close has no test door here; declare commands.test in .bee/config.json (string or array) to give it one";
 
+/// Pinned prefix of the D1 capture-debt refusal headline (message-contract
+/// test: `close_refuses_uncaptured_behavior_change_cells`). Cite: CONTEXT.md
+/// D1 (c2a7bd4f item 1).
+pub(crate) const CLOSE_CAPTURE_DEBT_PREFIX: &str = "Capture debt for";
+
 /// provenance: test-runner.mjs declaredTestCommands + state.mjs
 /// normalizeCommands (verbs/test_runner.rs:184 declared_test_commands).
 /// `None` == JS `null` (undeclared).
@@ -168,6 +173,24 @@ pub(crate) fn utf16_tail(s: &str, n: usize) -> String {
         start -= 1;
     }
     String::from_utf16_lossy(&units[start..])
+}
+
+/// The `tests` result field shared by every close outcome that has already
+/// run the suite (green, and the D1 capture-debt refusal that follows it) —
+/// one shape, so the two surfaces can never render the same run differently.
+pub(crate) fn tests_result_value(run: &TestRun) -> Value {
+    if run.undeclared {
+        return Value::Null;
+    }
+    let mut tests = Map::new();
+    tests.insert("ran_at".into(), Value::String(run.ran_at.clone()));
+    tests.insert("green".into(), Value::Bool(true));
+    tests.insert(
+        "commands".into(),
+        Value::Array(run.commands.iter().map(command_result_value).collect()),
+    );
+    tests.insert("results".into(), Value::String(TEST_RESULTS_RELATIVE.into()));
+    Value::Object(tests)
 }
 
 /// {command, exit, duration_ms, failure_excerpt} — frozen key order.
@@ -364,6 +387,27 @@ pub(crate) fn capture_queue_count(root: &Path) -> usize {
         .count()
 }
 
+/// D1 escape hatch: a logged decision tagged `capture-deferral` whose
+/// decision/rationale/alternatives text names the feature lifts the
+/// scribing-debt refusal. Reuses the decisions verb's own read model
+/// (crate::verbs::decisions::active_decisions + filter_decision_events)
+/// rather than hand-parsing decisions.jsonl a second way — same tag-exact,
+/// whole-token feature match `decisions active --tag --feature` already
+/// uses. Cite: CONTEXT.md D1 (precedent: decision c8e25271).
+pub(crate) fn has_capture_deferral_decision(root: &Path, feature: &str) -> D<bool> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    let filtered = crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some("capture-deferral".to_string()),
+            feature: Some(feature.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| Delegate)?;
+    Ok(!filtered.is_empty())
+}
+
 pub(crate) struct Door {
     pub(crate) door: &'static str,
     pub(crate) blocking: bool,
@@ -388,24 +432,39 @@ impl Door {
     }
 }
 
-/// provenance: bee.mjs buildCloseReportDoors — capture is DEFERRED (decision
-/// c8e25271): both doors are report-only reminders, never a due-now step.
+/// provenance: bee.mjs buildCloseReportDoors, extended by D1 — the
+/// capture-queue door stays report-only (decision c8e25271's blanket
+/// deferral, untouched here), but the scribing-debt door now BLOCKS close
+/// when the feature has behavior_change cells with no capture recorded and
+/// no logged `capture-deferral` decision names the feature (CONTEXT.md D1).
 pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door>> {
     let scribing = scribing_debt(root, feature)?;
+    let deferred = if scribing.count > 0 {
+        has_capture_deferral_decision(root, feature)?
+    } else {
+        false
+    };
+    let scribing_blocking = scribing.count > 0 && !deferred;
     let mut doors = Vec::new();
     doors.push(Door {
         door: "scribing-debt",
-        blocking: false,
-        detail: if scribing.count > 0 {
+        blocking: scribing_blocking,
+        detail: if scribing.count == 0 {
+            "clear".to_string()
+        } else if scribing_blocking {
             format!(
-                "pending — {} behavior_change cell(s) uncaptured ({}); settle later via bee-capturing",
+                "pending — {} behavior_change cell(s) uncaptured ({}); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"{feature}\" to defer it",
                 scribing.count,
                 js_join(&scribing.ids, ", ")
             )
         } else {
-            "clear".to_string()
+            format!(
+                "deferred — {} behavior_change cell(s) uncaptured ({}); a logged capture-deferral decision names \"{feature}\"",
+                scribing.count,
+                js_join(&scribing.ids, ", ")
+            )
         },
-        command: None,
+        command: if scribing_blocking { Some("bee-capturing") } else { None },
     });
     let queue = capture_queue_count(root);
     doors.push(Door {
@@ -589,6 +648,33 @@ pub(crate) fn close_handler(
     let mut doors = vec![tests_door];
     doors.extend(report_doors);
 
+    // ── D1: refuse on uncaptured behavior_change cells ──────────────────────
+    //
+    // Tests are GREEN (or undeclared) — the one remaining door that can still
+    // stop close is scribing-debt, and only when it is BLOCKING: the feature
+    // has behavior_change cells with no capture recorded and no logged
+    // `capture-deferral` decision names it (build_close_report_doors is the
+    // one place that decides `blocking` — this reads its verdict rather than
+    // recomputing it, so the counter and the refusal can never disagree).
+    if doors.iter().any(|d| d.door == "scribing-debt" && d.blocking) {
+        let debt = scribing_debt(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
+        result.insert("tests".into(), tests_result_value(&run));
+        let lines = vec![
+            format!(
+                "{CLOSE_CAPTURE_DEBT_PREFIX} \"{feature}\" — close stops at the scribing-debt door: {} behavior_change cell(s) uncaptured ({}).",
+                debt.count,
+                js_join(&debt.ids, ", ")
+            ),
+            format!("remedy: run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"{feature}\" to defer it."),
+            format!("next: settle the capture debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
     let headline = if run.undeclared {
         format!(
             "No commands.test declared for \"{feature}\" — nothing gated close; declare commands.test in .bee/config.json to give close a test door."
@@ -603,22 +689,7 @@ pub(crate) fn close_handler(
     result.insert("feature".into(), Value::String(feature.to_string()));
     result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
     result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
-    result.insert(
-        "tests".into(),
-        if run.undeclared {
-            Value::Null
-        } else {
-            let mut tests = Map::new();
-            tests.insert("ran_at".into(), Value::String(run.ran_at.clone()));
-            tests.insert("green".into(), Value::Bool(true));
-            tests.insert(
-                "commands".into(),
-                Value::Array(run.commands.iter().map(command_result_value).collect()),
-            );
-            tests.insert("results".into(), Value::String(TEST_RESULTS_RELATIVE.into()));
-            Value::Object(tests)
-        },
-    );
+    result.insert("tests".into(), tests_result_value(&run));
 
     // ── retire the feature's cells ────────────────────────────────────────
     //
@@ -630,12 +701,12 @@ pub(crate) fn close_handler(
     // features that were completely finished, and paid for all of them on
     // every orientation.
     //
-    // Three conditions, all necessary: the close is GREEN (a red close never
-    // reaches here), every one of the feature's cells is terminal (close's
-    // only blocking door is tests, so a feature CAN close green holding an
-    // open cell — that one is reported, not archived), and the repo has not
-    // opted out. Reversible either way: `bee cells archive --feature <f>`
-    // has an `unarchive` twin and the files stay in git.
+    // Three conditions, all necessary: the close is GREEN and past the
+    // scribing-debt door (a red close, or one refused on capture debt, never
+    // reaches here), every one of the feature's cells is terminal (an open
+    // cell is reported, not archived), and the repo has not opted out.
+    // Reversible either way: `bee cells archive --feature <f>` has an
+    // `unarchive` twin and the files stay in git.
     let retired = auto_archive_on_close(root, feature);
 
     let mut lines = vec![headline];
