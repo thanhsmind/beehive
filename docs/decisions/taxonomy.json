@@ -314,6 +314,8 @@
     "follow-up",
     "reviews",
     "delegation",
-    "agents"
+    "agents",
+    "decision-memory",
+    "knowledge-layer"
   ]
 }

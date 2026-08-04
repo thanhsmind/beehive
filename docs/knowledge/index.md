@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 95 concept(s)
-- [patterns/](patterns/index.md) — 86 concept(s)
+- [patterns/](patterns/index.md) — 87 concept(s)
 - [work/](work/index.md) — 4 concept(s)
 
 ## Critical patterns
@@ -94,5 +94,6 @@ never a generation timestamp or any other wall-clock value.
 - [A restatement can be born stricter than the law it restates](patterns/20260729-a-restatement-can-be-born-stricter-than-its-law.md) — A restatement can be born stricter than the law it restates
 - [A test selector that matches nothing reports green](patterns/20260729-a-selector-that-matches-nothing-reports-green.md) — A test selector that matches nothing reports green
 - [A test run under a configuration must assert the configuration is live](patterns/20260729-a-test-run-under-a-configuration-must-assert-the-configuration-is-live.md) — A test run under a configuration must assert the configuration is live
+- [A verified defect inventory is a floor, never a total](patterns/20260729-a-verified-defect-inventory-is-a-floor-never-a-total.md) — A verified defect inventory is a floor, never a total
 - [An advisory check that is wrong survives, because it cannot cost anything](patterns/20260729-an-advisory-check-that-is-wrong-survives-because-it-cannot-cost-anything.md) — A false-positive matcher reported a reachable pointer as missing for months; two workers in one session read the warning, wrote it off as pre-existing noise, and moved on — a blocking check with the same defect would have been fixed the day it landed.
 - [Fix the law, not the line the report cited](patterns/20260729-fix-the-law-not-the-line-the-report-cited.md) — Fix the law, not the line the report cited
