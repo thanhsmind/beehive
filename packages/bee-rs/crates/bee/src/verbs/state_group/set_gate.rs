@@ -451,123 +451,147 @@ pub(crate) fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<Exit
         Ok(c) => c,
         Err(code) => return Some(code),
     };
-    let out = (|| -> R2<Out> {
-        if flags.get("owner").is_some() {
-            return Ok(Out::Thrown(
-                "gate: --owner is not accepted \u{2014} routing ownership protects generic `state set` fields only. FIX: omit --owner and use the dedicated gate command.".to_string(),
-            ));
-        }
-        let merge = matches!(flags.get("merge"), Some(FlagV::Present));
-        if merge && flags.get("name").is_some() {
-            return Ok(Out::Thrown(
-                "gate: --merge cannot be combined with --name \u{2014} --merge always addresses BOTH shape and execution in one call. FIX: pass --merge alone, or drop --merge and use --name to approve a single gate.".to_string(),
-            ));
-        }
-        let spec: Vec<(&str, Option<&[&str]>)> = if merge {
-            vec![("approved", Some(&["true", "false"][..]))]
-        } else {
-            vec![
-                ("name", Some(&GATE_NAMES[..])),
-                ("approved", Some(&["true", "false"][..])),
-            ]
-        };
-        let values = match require_flags(&flags, &spec, EXAMPLE_GATE) {
-            Ok(v) => v,
-            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
-            Err(Err2::Ex) => return Err(Err2::Ex),
-        };
-        let (name, approved_raw) = if merge {
-            (String::new(), values[0].clone())
-        } else {
-            (values[0].clone(), values[1].clone())
-        };
-        let approved = approved_raw == "true";
-        let (lane_feature, no_lane) = match mutation_lane_selector(&flags, "gate") {
-            Ok(v) => v,
-            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
-            Err(Err2::Ex) => return Err(Err2::Ex),
-        };
-        let exec_component = merge || name == "execution";
-
-        let scope = resolve_mutation_lock_scope(&ctx.root, lane_feature.as_deref(), no_lane)?;
-        let workflows = list_workflows(&ctx.root)?;
-        // requireFreshAdvisorForHighRisk (advisorRefStale, lib/state.mjs) is a
-        // separate R6 debt — decided off a silent peek, before any lock.
-        if exec_component && approved {
-            if let Some(peek) =
-                peek_target_record(&ctx.root, &scope, lane_feature.as_deref())?
-            {
-                if matches!(peek.get("mode"), Some(Value::String(s)) if s == "high-risk") {
-                    return Err(Err2::Ex);
-                }
-            }
-        }
-        let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
-        let mut target =
-            resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "gate", no_lane)?;
-        if exec_component
-            && approved
-            && matches!(target.record().get("mode"), Some(Value::String(s)) if s == "high-risk")
-        {
-            return Err(Err2::Ex); // race: the peek missed the high-risk mode
-        }
-        let lane_note = target.lane_note();
-        // multisession-native-9 D7 / validation-diet D15 — the plan-rev stamp is
-        // LANE-ONLY and reads the live workflow's CURRENT plan_rev.
-        let mut stamps: Vec<(String, Value)> = Vec::new();
-        if exec_component {
-            if let Some(lane) = target.lane() {
-                let live = list_workflows(&ctx.root)?;
-                if let Some(wf) = find_live_workflow(&live, lane) {
-                    let rev = if approved {
-                        wf.get("plan_rev").cloned().unwrap_or(Value::Null)
-                    } else {
-                        Value::Null
-                    };
-                    if merge {
-                        stamps.push(("shape".to_string(), rev.clone()));
-                    }
-                    stamps.push(("execution".to_string(), rev));
-                }
-            }
-        }
-        {
-            let state = target.record_mut();
-            // Revocation tracking (AO13) — execution component only.
-            if exec_component && !approved {
-                let mut revoked = match state.get("gate_revoked_at") {
-                    Some(Value::Object(m)) => m.clone(),
-                    None | Some(Value::Null) | Some(Value::Bool(_)) | Some(Value::Number(_)) => {
-                        Map::new()
-                    }
-                    Some(_) => return Err(Err2::Ex), // string/array spread exotica
-                };
-                revoked.insert("execution".into(), json!(now_iso()));
-                state.insert("gate_revoked_at".into(), Value::Object(revoked));
-            }
-            let mut gates = match state.get("approved_gates") {
-                Some(Value::Object(m)) => m.clone(),
-                _ => Map::new(), // both strict readers always merge an object
-            };
-            if merge {
-                gates.insert("shape".into(), json!(approved));
-                gates.insert("execution".into(), json!(approved));
-            } else {
-                gates.insert(name.clone(), json!(approved));
-            }
-            state.insert("approved_gates".into(), Value::Object(gates));
-        }
-        let record = target.record().clone();
-        write_through_projection(&ctx.root, &target, &record, &stamps)?;
-        drop(locks);
-        let text = if merge {
-            format!("Gates \"shape\" and \"execution\" set to {approved}.{lane_note}")
-        } else {
-            format!("Gate \"{name}\" set to {approved}.{lane_note}")
-        };
-        Ok(Out::Emit(Value::Object(record), text, 0))
-    })();
+    let out = run_gate_body(&ctx.root, &flags);
     finish(&ctx, out)
+}
+
+/// A high-risk record's execution-gate approval always refuses, but the
+/// arm's OWN cause is honest about why: `requireFreshAdvisorForHighRisk`
+/// (advisorRefStale, lib/state.mjs) is unported R6 debt, so neither guard
+/// arm below can check `advisor_ref` for a fresh consult — each refuses
+/// EVERY high-risk execution approval unconditionally instead. Naming that
+/// (and that `bee state advisor-ref record` is declared but not built, so
+/// the refusal cannot be satisfied from the CLI today) keeps the dispatcher
+/// from rendering this as `unsupported argument shape`, which would blame
+/// the caller's flags for a lane-driven refusal.
+fn high_risk_execution_gate_refusal(target_desc: &str) -> String {
+    format!(
+        "gate: refused \u{2014} approving the execution gate for {target_desc} would approve a high-risk record, and nothing was written. A high-risk execution approval requires a fresh advisor consult first; that precondition (requireFreshAdvisorForHighRisk) is unported R6 debt, so this refuses every high-risk execution approval unconditionally instead of checking advisor_ref. `bee state advisor-ref record` is declared but not built, so this refusal cannot be satisfied from the CLI today \u{2014} the approval has to come from a human, or wait on that port."
+    )
+}
+
+/// The mutation body, root-parameterized so it can be exercised directly in
+/// tests without a process CWD (`run_gate` above is the only caller in
+/// production; `prelude`'s CWD-resolved root is threaded through as `root`).
+pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
+    if flags.get("owner").is_some() {
+        return Ok(Out::Thrown(
+            "gate: --owner is not accepted \u{2014} routing ownership protects generic `state set` fields only. FIX: omit --owner and use the dedicated gate command.".to_string(),
+        ));
+    }
+    let merge = matches!(flags.get("merge"), Some(FlagV::Present));
+    if merge && flags.get("name").is_some() {
+        return Ok(Out::Thrown(
+            "gate: --merge cannot be combined with --name \u{2014} --merge always addresses BOTH shape and execution in one call. FIX: pass --merge alone, or drop --merge and use --name to approve a single gate.".to_string(),
+        ));
+    }
+    let spec: Vec<(&str, Option<&[&str]>)> = if merge {
+        vec![("approved", Some(&["true", "false"][..]))]
+    } else {
+        vec![
+            ("name", Some(&GATE_NAMES[..])),
+            ("approved", Some(&["true", "false"][..])),
+        ]
+    };
+    let values = match require_flags(flags, &spec, EXAMPLE_GATE) {
+        Ok(v) => v,
+        Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+        Err(Err2::Ex) => return Err(Err2::Ex),
+    };
+    let (name, approved_raw) = if merge {
+        (String::new(), values[0].clone())
+    } else {
+        (values[0].clone(), values[1].clone())
+    };
+    let approved = approved_raw == "true";
+    let (lane_feature, no_lane) = match mutation_lane_selector(flags, "gate") {
+        Ok(v) => v,
+        Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+        Err(Err2::Ex) => return Err(Err2::Ex),
+    };
+    let exec_component = merge || name == "execution";
+
+    let scope = resolve_mutation_lock_scope(root, lane_feature.as_deref(), no_lane)?;
+    let workflows = list_workflows(root)?;
+    // requireFreshAdvisorForHighRisk (advisorRefStale, lib/state.mjs) is a
+    // separate R6 debt — decided off a silent peek, before any lock.
+    if exec_component && approved {
+        if let Some(peek) = peek_target_record(root, &scope, lane_feature.as_deref())? {
+            if matches!(peek.get("mode"), Some(Value::String(s)) if s == "high-risk") {
+                let target_desc = match &scope.feature {
+                    Some(f) if scope.lane => format!("lane \"{f}\""),
+                    _ => "default state".to_string(),
+                };
+                return Ok(Out::Thrown(high_risk_execution_gate_refusal(&target_desc)));
+            }
+        }
+    }
+    let locks = acquire_mutation_locks(root, &scope, &workflows)?;
+    let mut target = resolve_mutation_target(root, lane_feature.as_deref(), "gate", no_lane)?;
+    if exec_component
+        && approved
+        && matches!(target.record().get("mode"), Some(Value::String(s)) if s == "high-risk")
+    {
+        // race: the peek missed the high-risk mode
+        return Ok(Out::Thrown(high_risk_execution_gate_refusal(
+            &target.selected_record(),
+        )));
+    }
+    let lane_note = target.lane_note();
+    // multisession-native-9 D7 / validation-diet D15 — the plan-rev stamp is
+    // LANE-ONLY and reads the live workflow's CURRENT plan_rev.
+    let mut stamps: Vec<(String, Value)> = Vec::new();
+    if exec_component {
+        if let Some(lane) = target.lane() {
+            let live = list_workflows(root)?;
+            if let Some(wf) = find_live_workflow(&live, lane) {
+                let rev = if approved {
+                    wf.get("plan_rev").cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Null
+                };
+                if merge {
+                    stamps.push(("shape".to_string(), rev.clone()));
+                }
+                stamps.push(("execution".to_string(), rev));
+            }
+        }
+    }
+    {
+        let state = target.record_mut();
+        // Revocation tracking (AO13) — execution component only.
+        if exec_component && !approved {
+            let mut revoked = match state.get("gate_revoked_at") {
+                Some(Value::Object(m)) => m.clone(),
+                None | Some(Value::Null) | Some(Value::Bool(_)) | Some(Value::Number(_)) => {
+                    Map::new()
+                }
+                Some(_) => return Err(Err2::Ex), // string/array spread exotica
+            };
+            revoked.insert("execution".into(), json!(now_iso()));
+            state.insert("gate_revoked_at".into(), Value::Object(revoked));
+        }
+        let mut gates = match state.get("approved_gates") {
+            Some(Value::Object(m)) => m.clone(),
+            _ => Map::new(), // both strict readers always merge an object
+        };
+        if merge {
+            gates.insert("shape".into(), json!(approved));
+            gates.insert("execution".into(), json!(approved));
+        } else {
+            gates.insert(name.clone(), json!(approved));
+        }
+        state.insert("approved_gates".into(), Value::Object(gates));
+    }
+    let record = target.record().clone();
+    write_through_projection(root, &target, &record, &stamps)?;
+    drop(locks);
+    let text = if merge {
+        format!("Gates \"shape\" and \"execution\" set to {approved}.{lane_note}")
+    } else {
+        format!("Gate \"{name}\" set to {approved}.{lane_note}")
+    };
+    Ok(Out::Emit(Value::Object(record), text, 0))
 }
 
 // ─── state plan-rev bump ───────────────────────────────────────────────────
@@ -922,5 +946,50 @@ mod tests {
         assert_eq!(state["phase"], json!("compounding-complete"));
         let decisions = std::fs::read_to_string(root.join(".bee/decisions.jsonl")).unwrap();
         assert!(decisions.contains("compounding-run freshness check WAIVED"), "{decisions}");
+    }
+
+    // ── run_gate_body — the high-risk execution-gate refusal (gdr-1) ───────
+    //
+    // Before gdr-1 both guard arms `return Err(Err2::Ex)`, which `finish`
+    // turns into a bare `None` (emit.rs) so the dispatcher falls through to
+    // its generic argument-shape classifier and prints
+    // "bee: unsupported argument shape" (router.rs, kind
+    // "unsupported_argument_shape") — blaming the caller's flags for a
+    // lane-driven refusal. There was no existing test for `run_gate`/
+    // `run_gate_body` at all (grep confirms `run_gate` only appears at its
+    // own definition and its `try_native` dispatch line), so this is new
+    // coverage, not a duplicate of anything above.
+
+    /// A high-risk lane's execution-gate approval still refuses (the verdict
+    /// never changes), but now via `Out::Thrown` with a message naming the
+    /// real cause and the lane — never the generic Err2::Ex path that would
+    /// print "unsupported argument shape".
+    #[test]
+    fn high_risk_execution_gate_approval_refuses_with_the_advisor_cause_and_names_the_lane() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/gate-door-refusal.json",
+            r#"{"feature":"gate-door-refusal","phase":"planning","mode":"high-risk"}"#,
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "gate-door-refusal", "--merge", "--approved", "true"]),
+        );
+        let Ok(Out::Thrown(msg)) = out else {
+            panic!("expected Ok(Out::Thrown(_)) naming the cause, got an emit or Err(Err2::Ex)");
+        };
+        assert!(msg.contains("gate-door-refusal"), "{msg}");
+        assert!(msg.contains("high-risk"), "{msg}");
+        assert!(msg.contains("advisor"), "{msg}");
+        assert!(msg.contains("bee state advisor-ref record"), "{msg}");
+        assert!(
+            !msg.contains("unsupported argument shape"),
+            "must not read like the generic dispatcher refusal: {msg}"
+        );
+        // Nothing was written on the refusal path.
+        let lane = read_json_file(root, ".bee/lanes/gate-door-refusal.json");
+        assert!(lane.get("approved_gates").is_none(), "{lane:?}");
     }
 }
