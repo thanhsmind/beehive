@@ -1,0 +1,55 @@
+{
+  "id": "bh-3",
+  "feature": "hook-teeth",
+  "lane": "standard",
+  "title": "cells add refuses in a gated phase without approved execution",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/hook-teeth/CONTEXT.md",
+    "docs/history/hook-teeth/plan.md"
+  ],
+  "action": "In the add door (cells/handlers_write.rs): when the target feature's phase is a gated phase (exploring/planning) and approved_gates.execution is not true, refuse the add naming the pending merged gate (bee gate --merge) as the remedy. Feature resolution: the cell JSON's feature field, resolved to its lane record or the default state. Adds during swarming/idle and docs-lane features stay untouched. FIRST verify what cells add does today in a gated phase (it may already be allowed everywhere - the audit could not confirm); if an existing test asserts gated adds succeed, replace it with the stronger contract and name that in your outcome. D7 red-first: phase+gate resolution test before the refusal wires in; then refusal tests (gated+unapproved -> refuse; gated+approved -> allow; swarming -> allow; batch with mixed features -> each judged by its own feature).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "resolution test green before the flip",
+      "gated unapproved add refuses naming the merged gate",
+      "approved and swarming adds untouched",
+      "cells slice green"
+    ]
+  },
+  "decisions": [
+    "hook-teeth D3",
+    "hook-teeth D7"
+  ],
+  "deps": [
+    "bh-2"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-bh3",
+    "outcome": "cells add refuses whole batch on gated unapproved feature, lane beats default, docs-lane exempt; red-first; worktree run: cells 83 passed; commit as logged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T08:15:38.273Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T08:04:23.122Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T08:15:19.104Z"
+  },
+  "tier": "generation"
+}

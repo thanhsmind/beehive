@@ -1,0 +1,67 @@
+{
+  "id": "bh-2",
+  "feature": "hook-teeth",
+  "lane": "standard",
+  "title": "cells claim refuses on a red last test run absent a fix-first reason",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/hook-teeth/CONTEXT.md",
+    "docs/history/hook-teeth/plan.md"
+  ],
+  "action": "In the claim door (cells/handlers_write.rs, near the existing no-route and D4 checks): read .bee/logs/test-results.json (written by finish_support::run_declared_tests - mirror its schema); when the last recorded run is red, refuse the claim naming the failing command and quoting the red excerpt path, unless --fix-first <reason> is passed - the reason persists on the claim trace as fix_first. Missing or unparseable results file warns to stderr only, never refuses. Ordering: the already-claimed refusal and the D4 no-route deny keep their precedence; the red-base check runs after both. D7 red-first: test the red/green/missing classification of test-results.json BEFORE wiring the refusal; then refusal tests (red -> refuse pinned message; red + --fix-first -> claim succeeds and trace carries fix_first; green -> untouched; missing -> warn only).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "classification test green before the flip",
+      "red refuses, fix-first escapes onto trace",
+      "missing file never refuses",
+      "cells slice green"
+    ]
+  },
+  "decisions": [
+    "hook-teeth D2",
+    "hook-teeth D7"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-bh2",
+    "outcome": "Red-base claim refusal with --fix-first escape persisted on trace; registry updated; worktree run: cells 81 passed; commit 7ef3a1f7; prior finish red was a load-flaky concurrency run, re-run green (backlog P3 filed)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T08:04:14.409Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T07:47:12.798Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-04T08:02:55.892Z",
+        "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+        "claimed_at": "2026-08-04T08:01:15.942Z",
+        "acquired_at": "2026-08-04T07:47:12.797Z",
+        "worker": "worker-bh2",
+        "verdict": "tests-red",
+        "failure_signature": "d40eb01e7b61",
+        "note": "; 0 ignored; 0 measured; 0 filtered out; finished in 5.14s"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T08:03:41.813Z"
+  },
+  "tier": "generation"
+}

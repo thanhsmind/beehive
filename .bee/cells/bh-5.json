@@ -1,0 +1,53 @@
+{
+  "id": "bh-5",
+  "feature": "hook-teeth",
+  "lane": "standard",
+  "title": "route --set validates re-lane transitions",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/hook-teeth/CONTEXT.md",
+    "docs/history/hook-teeth/plan.md"
+  ],
+  "action": "In run_route's set branch (state_group/workflows.rs - note the granted-arm rework from counter-teeth ct-1 is already in this tree): when a route record already exists for the target, validate the transition: lane may move DOWN the ladder standard->small->tiny at most once per feature (track a demoted_at stamp on the route object), high-risk never demotes, any hard-gate flag in the NEW flag set blocks demotion, and any upward move is always allowed. A violated rule refuses with a message naming that rule. First-time route set is untouched. D7 red-first: transition-classification tests (down vs up vs same, hard-gate detection, demoted_at once-only) BEFORE the refusal wires in; then refusal tests per rule plus promotion-always-allowed.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "classification tests green before the flip",
+      "each violated rule names itself in the refusal",
+      "promotion always allowed",
+      "state_group slice green"
+    ]
+  },
+  "decisions": [
+    "hook-teeth D5",
+    "hook-teeth D7"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-bh5",
+    "outcome": "Re-lane transitions validated: downward once, high-risk never, hard-gate flags block, promotion free; red-first via stub; worktree run: state_group 56 passed; commit 95fe412d",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T08:02:40.276Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T07:47:13.130Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T08:02:21.232Z"
+  },
+  "tier": "generation"
+}

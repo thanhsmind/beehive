@@ -1,0 +1,49 @@
+{
+  "id": "jp-9",
+  "feature": "js-parity-cleanup",
+  "lane": "standard",
+  "change_class": "bugfix",
+  "behavior_change": true,
+  "deps": [
+    "jp-7"
+  ],
+  "title": "Restore UTF-16 counting at the AskUserQuestion header guard; fix the inverted code_unit_cmp rationale",
+  "action": "Two judge findings against jp-5. FIX 1 (behavior): hooks/write_guard/detectors.rs:156 was converted from utf16_len(h)>12 to char_len(h)>12, but the paired validator is EXTERNAL and JS — Claude Code's AskUserQuestion header limit counts String.length = UTF-16 code units (skills/bee-hive/references/gates-and-delegation.md:50, decision 3156acf1). A 7-astral-char header (14 code units) now passes bee's guard but violates the tool's limit. Add a utf16_len (code-unit length) helper to crates/bee/src/textutil.rs with a doc comment naming the external JS validator as its reason, and use it at detectors.rs:156. Do NOT convert any other site. FIX 2 (docs, dangerous-if-wrong): the D3-exception rationale is factually inverted — release-manifest paths are sorted by sort_by_locale (localeCompare), NOT code_unit_cmp; the real byte-reproduction constraints on code_unit_cmp are devtools/skill_trees.rs:331-341 manifest_fingerprint feeding sha256 sidecar digests (also :356,:424) and release_manifest.rs:468,474 diff.missing/diff.added ordering (locked by test changed_uses_locale_order_while_missing_uses_code_units). Rewrite textutil.rs:17-27 and devtools/mod.rs:274-276 to name those real constraints. Also append a one-line correction note to docs/history/js-parity-cleanup/CONTEXT.md under the evidence bullet (do not rewrite the original line; add 'CORRECTION (jp-9): ...'). Both fixes cite the judge pass in the commit body.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml green from the worktree; detectors.rs header threshold counts UTF-16 code units; textutil/devtools rationale names skill_trees digests not manifest sort",
+  "must_haves": {
+    "truths": [
+      "detectors.rs:156 counts UTF-16 code units again via a textutil helper whose comment names the external JS validator",
+      "textutil.rs and devtools/mod.rs rationale states the real constraint (skill_trees sidecar digests + diff report order), not the manifest path sort",
+      "CONTEXT.md carries an explicit CORRECTION note; full suite green"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-jp9",
+    "outcome": "Fixed inverted AskUserQuestion header guard (utf16_len restored) and corrected the code_unit_cmp EXCEPTION rationale (skill_trees digests + diff report, not manifest path sort); worktree cargo test --release: 1006 passed, 0 failed, 3 ignored (plus 9/13/5/10/11/2/9/10/3/5/8/2 across integration suites, all green)",
+    "files_changed": [
+      "docs/history/js-parity-cleanup/CONTEXT.md",
+      "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+      "packages/bee-rs/crates/bee/src/textutil.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T08:28:22.794Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "36955346-2280-4dc7-b0a5-b4d8c74c4b39",
+    "claimed_at": "2026-08-04T08:20:19.852Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T08:27:57.133Z"
+  },
+  "tier": "generation"
+}

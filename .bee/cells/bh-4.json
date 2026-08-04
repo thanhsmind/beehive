@@ -1,0 +1,55 @@
+{
+  "id": "bh-4",
+  "feature": "hook-teeth",
+  "lane": "standard",
+  "title": "handoff adopt refuses outside a fresh-session boundary",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/hook-teeth/CONTEXT.md",
+    "docs/history/hook-teeth/plan.md"
+  ],
+  "action": "Doctrine: planned-next handoff adoption fires only at a fresh-session boundary; resumed or compacted sessions never adopt. Make it mechanical: (a) find where session-init writes/updates the session record (search hooks/ for session record writes; the SessionStart hook receives source startup|resume|clear|compact) and persist that source on the session record if not already there; (b) in handoff adopt (workflow_store/handoff.rs), refuse when the calling session's recorded source is resume or compact, naming the pause-presentation fallback as the remedy; a missing source (older records) warns and proceeds. If session records live in a file other than session_init.rs expects, follow the actual write site - adjust your file list in the outcome line if you had to touch a different hook file (stay within hooks/ + workflow_store/). D7 red-first: source-persistence test and source-classification test before the refusal; then adopt tests (fresh startup -> adopts; resume -> refuses pinned message; compact -> refuses; absent source -> warn + proceed).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "source persisted on session records",
+      "resume and compact adoption refused",
+      "fresh adoption and missing-source proceed",
+      "workflow_store and hooks slices green"
+    ]
+  },
+  "decisions": [
+    "hook-teeth D4",
+    "hook-teeth D7"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-bh4",
+    "outcome": "Session records persist start source; adopt refuses on resume/compact with pause fallback named; missing source warns and proceeds; worktree runs: workflow_store 38, session_init 17, all green",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T08:01:21.322Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T07:47:12.967Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T07:59:23.095Z"
+  },
+  "tier": "generation"
+}
