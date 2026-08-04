@@ -507,13 +507,19 @@ pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
 // ── cells claim ────────────────────────────────────────────────────────────
 
 pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !rsv::keys_known(&flags, &["id", "worker", "session-id", "ttl", "isolate"]) {
+    if !rsv::keys_known(&flags, &["id", "worker", "session-id", "ttl", "isolate", "fix-first"]) {
         return None;
     }
     let id = flags.req_str("id")?.to_string();
     let worker = flags.req_str("worker")?.to_string();
     let session_flag = opt_string_flag(&flags, "session-id")?;
     let _isolate = bool_flag(&flags, "isolate")?;
+    // D2 (no claim on a red base): trimmed; empty/absent = None, same
+    // convention as capCellFromFlags's override_reason.
+    let fix_first: Option<String> = match opt_string_flag(&flags, "fix-first")? {
+        Some(s) if !js_trim(&s).is_empty() => Some(js_trim(&s).to_string()),
+        _ => None,
+    };
     let ttl: Option<f64> = match flags.get("ttl") {
         None => None,
         Some(FlagV::Present) => return None,
@@ -524,12 +530,13 @@ pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
     };
     dispatch("cells claim", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
-        let claimed = claim_cell_from_flags(
+        let claimed = claim_cell_from_flags_ex(
             &root,
             &id,
             &worker,
             session_flag.as_deref(),
             ttl,
+            fix_first.as_deref(),
         )?
         .cell;
         let worker_disp = match claimed.get("trace").and_then(|t| t.get("worker")) {
@@ -543,6 +550,97 @@ pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
         );
         Ok(Out::Emit(claimed, text, 0))
     })
+}
+
+// ─── D2 (no claim on a red base, docs/history/hook-teeth CONTEXT.md) ──────
+//
+// `cells claim` (and every door that shares claim_cell_cross_session_ex)
+// refuses when the LAST recorded declared-test run is red, unless the claim
+// carries `--fix-first <reason>` — that reason lands on the winning claim's
+// own trace (`trace.fix_first`) so a cold reader sees why a red base was
+// claimed onto anyway, without re-deriving it from logs.
+//
+// The record read is `.bee/logs/test-results.json` under the CONTROL root
+// (claims-store territory, msn-18b — the same root claims_dir/sessions_dir
+// already resolve through), in the EXACT shape
+// finish_support::run_declared_tests/tests_record_value writes:
+// `{ran_at, green, commands:[{command, exit, duration_ms, failure_excerpt}]}`.
+// The named failing command is the first row carrying a non-null
+// `failure_excerpt` — the same row run_declared_tests marks not-passed.
+//
+// A missing file (nothing has ever run the declared tests here) or one this
+// reader cannot trust (not an object, `green` not a bool, `commands` not an
+// array — a shape this schema's own writer would never produce) can prove
+// neither red nor green: it warns to stderr and lets the claim proceed,
+// exactly like D4's own "cannot know" arms elsewhere in this file. A GREEN
+// record is untouched — no warning, no refusal.
+pub(crate) enum RedBaseStatus {
+    /// No record on file, or one this reader cannot trust as the schema
+    /// finish_support writes — cannot know either way.
+    Unknown,
+    Green,
+    Red { failing_command: String },
+}
+
+/// Pure classifier — no I/O side effects beyond the one read — so the D7
+/// red/green/missing/unparseable classification can be pinned by a test
+/// with no captured stderr.
+pub(crate) fn classify_red_base(control: &Path) -> RedBaseStatus {
+    let value = match read_json(&test_results_path(control)) {
+        ReadJson::Missing => return RedBaseStatus::Unknown,
+        ReadJson::Corrupt => return RedBaseStatus::Unknown,
+        ReadJson::Parsed(v) => v,
+    };
+    let Value::Object(map) = &value else { return RedBaseStatus::Unknown };
+    let green = match map.get("green") {
+        Some(Value::Bool(b)) => *b,
+        _ => return RedBaseStatus::Unknown,
+    };
+    if green {
+        return RedBaseStatus::Green;
+    }
+    let failing_command = match map.get("commands") {
+        Some(Value::Array(rows)) => rows.iter().find_map(|row| {
+            let Value::Object(m) = row else { return None };
+            let failed = !matches!(m.get("failure_excerpt"), None | Some(Value::Null));
+            if !failed {
+                return None;
+            }
+            match m.get("command") {
+                Some(Value::String(s)) => Some(s.clone()),
+                _ => None,
+            }
+        }),
+        _ => None,
+    };
+    RedBaseStatus::Red {
+        failing_command: failing_command.unwrap_or_else(|| "(unknown command)".to_string()),
+    }
+}
+
+/// The claim-time gate itself: `None` lets the claim proceed (green,
+/// unknown, or escaped via `--fix-first`); `Some(reason)` is the typed
+/// refusal text `claim_cell_cross_session_ex` wraps as `RED_BASE`. The
+/// "cannot know" warning prints here, exactly once, at the point the door
+/// actually needed the answer — never speculatively.
+pub(crate) fn red_base_refusal(control: &Path, cell_id: &str, fix_first: Option<&str>) -> Option<String> {
+    match classify_red_base(control) {
+        RedBaseStatus::Green => None,
+        RedBaseStatus::Unknown => {
+            eprintln!(
+                "WARNING: {TEST_RESULTS_RELATIVE} is missing or not a recognized test-results record — cannot know whether the base is green or red; claim proceeding."
+            );
+            None
+        }
+        RedBaseStatus::Red { failing_command } => {
+            if fix_first.is_some() {
+                return None;
+            }
+            Some(format!(
+                "cell \"{cell_id}\" refused — the last recorded test run is red (\"{failing_command}\" failed; record: {TEST_RESULTS_RELATIVE}). D2: never claim onto a red base. FIX: fix the red, then retry — or pass --fix-first \"<reason>\" to claim anyway (the reason is stored on the claim's own trace.fix_first)."
+            ))
+        }
+    }
 }
 
 // ─── D4 (route-record warn-to-deny escalation, docs/history/counter-teeth
@@ -668,12 +766,29 @@ pub(crate) struct ClaimDoor {
 /// Every delegate-trigger is FRONT-LOADED (the two prescans, the store reads,
 /// the exotic-shape probes) because nothing after claimCellFile's O_EXCL
 /// write may delegate: the claim file would already exist for the Node re-run.
+///
+/// Thin wrapper over [`claim_cell_from_flags_ex`] for the callers (the
+/// `dispatch prepare --claim` door, and the pre-D2 test fixtures) that carry
+/// no `--fix-first` escape — same as passing `None`.
 pub(crate) fn claim_cell_from_flags(
     root: &Path,
     id: &str,
     worker: &str,
     session_flag: Option<&str>,
     ttl: Option<f64>,
+) -> MR<ClaimDoor> {
+    claim_cell_from_flags_ex(root, id, worker, session_flag, ttl, None)
+}
+
+/// `claim_cell_from_flags` + D2's `--fix-first <reason>` escape (cells
+/// claim's own flag; the `dispatch prepare --claim` door does not carry it).
+pub(crate) fn claim_cell_from_flags_ex(
+    root: &Path,
+    id: &str,
+    worker: &str,
+    session_flag: Option<&str>,
+    ttl: Option<f64>,
+    fix_first: Option<&str>,
 ) -> MR<ClaimDoor> {
     let root = root.to_path_buf();
     let id = id.to_string();
@@ -765,13 +880,13 @@ pub(crate) fn claim_cell_from_flags(
         }
 
         // claimCellCrossSession (shared with claim-next — see its own comment).
-        // D4's no-route deny lives INSIDE that call now, checked only once
-        // this caller has actually won the claim door (its own comment
-        // explains why: a racing LOSER must see the typed CLAIMED refusal,
-        // never the no-route one).
+        // D4's no-route deny and D2's red-base deny both live INSIDE that
+        // call now, checked only once this caller has actually won the claim
+        // door (its own comment explains why: a racing LOSER must see the
+        // typed CLAIMED refusal, never either of these).
         let session = session_id.clone();
         let cell_id = js_trim(&id).to_string();
-        let claimed = match claim_cell_cross_session(
+        let claimed = match claim_cell_cross_session_ex(
             &root,
             &control,
             session.as_deref(),
@@ -779,6 +894,7 @@ pub(crate) fn claim_cell_from_flags(
             &id,
             ttl,
             cell_for_policy.as_ref(),
+            fix_first,
         )? {
             CrossClaim::Ok { cell, .. } => cell,
             CrossClaim::Refused { code, reason } => {
@@ -826,6 +942,10 @@ pub(crate) enum CrossClaim {
 /// it here (`readCell(root, id)`); both callers pre-read it in the same
 /// command, and the store cannot change under this process between the two
 /// points, so the read is hoisted rather than repeated.
+///
+/// Thin wrapper over [`claim_cell_cross_session_ex`] for `cells claim-next`
+/// (handlers_select.rs), which carries no `--fix-first` escape — same as
+/// passing `None`: a red base always refuses that door.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn claim_cell_cross_session(
     root: &Path,
@@ -835,6 +955,22 @@ pub(crate) fn claim_cell_cross_session(
     cell_id_in: &str,
     ttl: Option<f64>,
     cell_for_budget: Option<&Value>,
+) -> MR<CrossClaim> {
+    claim_cell_cross_session_ex(root, control, session, worker, cell_id_in, ttl, cell_for_budget, None)
+}
+
+/// `claim_cell_cross_session` + D2's `--fix-first <reason>` escape (docs/
+/// history/hook-teeth CONTEXT.md D2: "no claim on a red base").
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn claim_cell_cross_session_ex(
+    root: &Path,
+    control: &Path,
+    session: Option<&str>,
+    worker: &str,
+    cell_id_in: &str,
+    ttl: Option<f64>,
+    cell_for_budget: Option<&Value>,
+    fix_first: Option<&str>,
 ) -> MR<CrossClaim> {
     if js_trim(worker).is_empty() {
         return Err(Fail::Thrown("claimCellCrossSession: worker is required.".into()));
@@ -902,6 +1038,16 @@ pub(crate) fn claim_cell_cross_session(
                 }
             }
         }
+    }
+    // D2 (no claim on a red base, docs/history/hook-teeth CONTEXT.md) —
+    // checked AFTER the already-claimed refusal (claim_cell_file above) and
+    // the D4 no-route deny, same reasoning as D4's own ordering note: a
+    // racing loser or a session still owed its one-time no-route warning
+    // must see ITS typed refusal first. Checked before the store-lock
+    // mutation below so a refusal here never touches cell status either.
+    if let Some(reason) = red_base_refusal(control, &cell_id, fix_first) {
+        release_claim(control, session, &cell_id)?;
+        return Ok(CrossClaim::Refused { code: "RED_BASE".to_string(), reason });
     }
     // claimCell under the per-cell store lock; every throw unwinds the
     // claim file and surfaces as CLAIM_CELL_FAILED.
@@ -976,6 +1122,12 @@ pub(crate) fn claim_cell_cross_session(
                     session.map(|s| Value::String(s.to_string())).unwrap_or(Value::Null),
                 );
                 trace.insert("claimed_at".into(), Value::String(utc_now()));
+                // D2: the --fix-first reason that escaped a red base, if any
+                // — a cold reader must be able to see WHY this claim went
+                // through onto a red result without re-deriving it.
+                if let Some(reason) = fix_first {
+                    trace.insert("fix_first".into(), Value::String(reason.to_string()));
+                }
                 cell_map.insert("trace".into(), Value::Object(trace));
                 let cell_value = Value::Object(cell_map);
                 write_cell(root, &cell_value)?;
