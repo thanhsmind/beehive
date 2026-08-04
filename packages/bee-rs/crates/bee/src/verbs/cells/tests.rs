@@ -2297,6 +2297,7 @@ use std::time::Instant;
             override_reason: String::new(),
             session_flag: None,
             force_ownership: false,
+            commit_pending: None,
         };
         let cell_body = |id: &str| {
             json!({
@@ -2336,6 +2337,170 @@ use std::time::Instant;
         let after = read_cell_norm(root2, "nt-2").ok().unwrap().unwrap();
         assert_eq!(after.get("status"), Some(&json!("claimed")), "a red run never caps");
         assert!(test_results_path(root2).exists(), "the red run IS recorded");
+    }
+
+    // ══ D6 — the cell commit trailer (docs/history/hook-teeth/CONTEXT.md) ══
+    //
+    // "`cells finish` verifies a commit whose trailer names the finishing
+    // cell id exists on the feature's branch (the granted worktree's HEAD
+    // history, else main's) when `files_changed` is non-empty;
+    // `--commit-pending <reason>` escapes and is stored on the trace. A cell
+    // with no file changes is exempt." D7 red-first: the pure trailer
+    // detector is pinned FIRST, against a real fixture git repo, before the
+    // refusal wiring that reads it.
+
+    fn git_ok(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the D6 fixtures");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A one-commit git repo — the base every D6 fixture builds on. Doubles
+    /// as the cell STORE root in these tests: no worktree grant exists, so
+    /// `commit_trailer_history_root` falls back to exactly this directory's
+    /// own HEAD history, the same directory `write_cell_fixture` writes into.
+    fn commit_history_repo(root: &Path) {
+        std::fs::write(root.join("f.txt"), "x").unwrap();
+        git_ok(root, &["init", "-q", "-b", "main", "."]);
+        git_ok(root, &["config", "user.email", "a@b.c"]);
+        git_ok(root, &["config", "user.name", "t"]);
+        git_ok(root, &["add", "-A"]);
+        git_ok(root, &["commit", "-qm", "init"]);
+    }
+
+    fn commit_with_message(root: &Path, file_content: &str, message: &str) {
+        std::fs::write(root.join("f.txt"), file_content).unwrap();
+        git_ok(root, &["commit", "-qam", message]);
+    }
+
+    #[test]
+    fn commit_trailer_present_matches_an_exact_trailer_line_in_recent_history() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+
+        // Only the init commit exists — no qualifying commit yet.
+        assert!(!commit_trailer_present(root, "bh-6"));
+
+        // A commit whose body MENTIONS the id in prose, but not as the exact
+        // trailer line, still does not satisfy it.
+        commit_with_message(root, "y", "touch up bh-6 handling");
+        assert!(!commit_trailer_present(root, "bh-6"));
+
+        // The real trailer, on its own line in the body.
+        commit_with_message(root, "z", "Do the thing\n\ncell: bh-6");
+        assert!(commit_trailer_present(root, "bh-6"));
+
+        // A DIFFERENT cell id's trailer never matches.
+        assert!(!commit_trailer_present(root, "bh-7"));
+    }
+
+    fn cap_flags_d6(id: &str, files: Vec<&str>, commit_pending: Option<&str>) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: files.into_iter().map(|f| json!(f)).collect(),
+            deviations: Vec::new(),
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: commit_pending.map(str::to_string),
+        }
+    }
+
+    fn cell_body_d6(id: &str) -> Value {
+        json!({
+            "id": id, "feature": "hook-teeth", "title": "t", "action": "a",
+            "verify": "echo ok", "lane": "tiny", "status": "claimed",
+            "deps": [], "files": [], "trace": {},
+        })
+    }
+
+    #[test]
+    fn finish_refuses_a_non_empty_files_cap_with_no_trailer_commit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        write_cell_fixture(root, "bh-6a", &cell_body_d6("bh-6a"));
+
+        let refusal = thrown(cap_cell_from_flags(
+            root,
+            &cap_flags_d6("bh-6a", vec!["a.rs"], None),
+            true, // finish
+        ));
+        assert!(
+            refusal.starts_with("capCell: cell \"bh-6a\" refused — one commit per cell"),
+            "{refusal}"
+        );
+        let after = read_cell_norm(root, "bh-6a").ok().unwrap().unwrap();
+        assert_eq!(after.get("status"), Some(&json!("claimed")), "a missing trailer never caps");
+    }
+
+    #[test]
+    fn finish_caps_once_the_trailer_commit_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        write_cell_fixture(root, "bh-6b", &cell_body_d6("bh-6b"));
+        commit_with_message(root, "y", "Wire the thing\n\ncell: bh-6b");
+
+        let capped =
+            cap_cell_from_flags(root, &cap_flags_d6("bh-6b", vec!["a.rs"], None), true).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn finish_commit_pending_escapes_and_is_recorded_on_the_trace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root); // no trailer commit — the escape is exercised for real
+        write_cell_fixture(root, "bh-6c", &cell_body_d6("bh-6c"));
+
+        let capped = cap_cell_from_flags(
+            root,
+            &cap_flags_d6("bh-6c", vec!["a.rs"], Some("commit lands after cap, batching two")),
+            true,
+        )
+        .unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(
+            capped["trace"]["commit_pending"],
+            json!("commit lands after cap, batching two")
+        );
+    }
+
+    #[test]
+    fn finish_with_empty_files_changed_is_exempt_from_the_trailer_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Deliberately NOT a git repo at all — proves the check never even
+        // shells out to git when files_changed is empty.
+        write_cell_fixture(root, "bh-6d", &cell_body_d6("bh-6d"));
+
+        let capped = cap_cell_from_flags(root, &cap_flags_d6("bh-6d", vec![], None), true).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn cap_without_finish_never_runs_the_trailer_check() {
+        // D6 scopes the check to `cells finish`; plain `cells cap`
+        // (finish == false) must cap a non-empty-files cell even with zero
+        // commit history (not even a git repo here).
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "bh-6e", &cell_body_d6("bh-6e"));
+
+        let capped =
+            cap_cell_from_flags(root, &cap_flags_d6("bh-6e", vec!["a.rs"], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
     }
 
     // ══ adoption + fencing (claims.mjs, msn-12 D4/D9 invariant 10) ═════════
