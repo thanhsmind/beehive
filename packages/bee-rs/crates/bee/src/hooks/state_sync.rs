@@ -761,8 +761,11 @@ fn renew_lease_path(ctrl2: &Path, id: &str, ttl: f64, now: &DateTime<Utc>) -> Re
 
 // ── cross-worktree hold renewal ─────────────────────────────────────────────
 
-/// Resolves the main root, then renews this session's active holds in that
-/// root's cross-worktree ledger, at most one lock attempt.
+/// Resolves the main root from the caller's root argument (never process
+/// cwd — keying on the argument, like renew_holds_by_session above, keeps
+/// the resolution hermetic when a test injects a tmp root), then renews
+/// this session's active holds in that root's cross-worktree ledger, at
+/// most one lock attempt.
 fn renew_cross_worktree_holds(root: &Path, sid: &str) -> Result<(), String> {
     let main_root = match resolve_roots_core(root) {
         Ok(RootsCore::LinkedValid { main_root, .. }) => main_root,

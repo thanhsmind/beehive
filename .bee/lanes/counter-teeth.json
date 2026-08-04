@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature": "counter-teeth",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"counter-teeth\" started at phase \"exploring\" (lane).",
+  "next_action": "All 6 cells capped and merged (verify green). Owed: bee-capturing flush of 5 queued stubs, then state scribing-run + compounding-run; then binary reinstall from main to activate the new refusals",
+  "created_at": "2026-08-04T05:14:24.746Z"
+}

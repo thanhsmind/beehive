@@ -1,0 +1,55 @@
+{
+  "id": "ct-2",
+  "feature": "counter-teeth",
+  "lane": "standard",
+  "title": "bee close refuses uncaptured behavior_change cells absent a deferral decision",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/counter-teeth/CONTEXT.md",
+    "docs/history/counter-teeth/plan.md"
+  ],
+  "action": "In bee close (drivers/close.rs): compute the closing feature's behavior_change cells lacking a recorded capture; if non-empty and no decision tagged capture-deferral names the feature, refuse the close, listing the uncaptured cell ids and both remedies (run bee-capturing, or log a capture-deferral decision). Red-first: test proving the uncaptured set is computed correctly BEFORE wiring the refusal (D6). Tests: refuse on uncaptured, green after capture, green with deferral decision, message contract pinned.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "uncaptured-set computation test green before the flip",
+      "close refuses with uncaptured cells and no deferral",
+      "deferral decision lifts refusal",
+      "full suite green"
+    ]
+  },
+  "decisions": [
+    "counter-teeth D1",
+    "counter-teeth D6"
+  ],
+  "deps": [
+    "ct-0"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-ct2",
+    "outcome": "close refuses uncaptured behavior_change cells absent capture-deferral decision; door and refusal share one verdict; worker worktree run: drivers 47 passed 0 failed; commit bf7f022f",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T07:10:50.454Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T06:52:28.122Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T07:10:31.987Z"
+  },
+  "tier": "generation"
+}

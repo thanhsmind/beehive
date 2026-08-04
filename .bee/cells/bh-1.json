@@ -1,0 +1,53 @@
+{
+  "id": "bh-1",
+  "feature": "hook-teeth",
+  "lane": "standard",
+  "title": "write-guard denies plan.md edits once the shape gate is approved",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/hook-teeth/CONTEXT.md",
+    "docs/history/hook-teeth/plan.md"
+  ],
+  "action": "In the write-guard (hooks/write_guard/checks.rs): deny Edit/Write/MultiEdit targeting docs/history/<feature>/plan.md when that feature's approved_gates.shape is true. Resolve the feature from the path segment, then read its lane record (.bee/lanes/<feature>.json) falling back to state.json when the feature matches the default record. The refusal names the two legal paths: bee state plan-rev bump for a stamp, or unapproving the shape gate for a redraft. CONTEXT.md and other docs/history files stay untouched. D7 red-first: test the feature-from-path + gate-state resolution BEFORE wiring the deny; then deny tests (shape approved -> deny with pinned message; shape unapproved -> allow; other feature's plan.md unaffected; lane record vs default record both resolved).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "resolution test green before the deny lands",
+      "deny fires only when shape approved for that feature",
+      "plan-rev bump path stays open",
+      "full write_guard slice green"
+    ]
+  },
+  "decisions": [
+    "hook-teeth D1",
+    "hook-teeth D7"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-bh1",
+    "outcome": "plan.md freeze deny in write-guard, feature resolved from path, lane-aware gate state; red-first resolution tests then deny tests; worktree run: write_guard 93 passed 0 failed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T08:01:54.522Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T07:47:12.619Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T08:01:34.698Z"
+  },
+  "tier": "generation"
+}

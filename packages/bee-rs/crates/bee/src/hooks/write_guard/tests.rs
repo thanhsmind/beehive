@@ -1785,3 +1785,159 @@ use std::process::ExitCode;
             HarnessRoots::from_bases(Some(PathBuf::from("not-abs")), Some(PathBuf::from("x")));
         assert!(relative.roots.is_empty());
     }
+
+    // ── D1 plan.md freeze (bh-1) — feature-from-path + lane-aware gate ─────
+    // D7 red-first: these resolver tests land (and are run RED against a
+    // stub) before the deny wires into check_write below.
+
+    fn write_lane(root: &Path, feature: &str, shape: bool) {
+        let dir = root.join(".bee").join("lanes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{feature}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "schema_version": "1.0",
+                    "feature": feature,
+                    "phase": "planning",
+                    "approved_gates": { "context": true, "shape": shape, "execution": false, "review": false }
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    fn default_state_for(feature: &str, shape: bool) -> Map<String, Value> {
+        match json!({
+            "phase": "planning",
+            "feature": feature,
+            "approved_gates": { "context": true, "shape": shape, "execution": false, "review": false }
+        }) {
+            Value::Object(m) => m,
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn plan_freeze_feature_parses_the_exact_shape_only() {
+        assert_eq!(
+            plan_freeze_feature("docs/history/hook-teeth/plan.md"),
+            Some("hook-teeth".to_string())
+        );
+        assert_eq!(plan_freeze_feature("docs/history/hook-teeth/CONTEXT.md"), None);
+        assert_eq!(plan_freeze_feature("docs/history/hook-teeth/reports/plan.md"), None);
+        assert_eq!(plan_freeze_feature("docs/plan.md"), None);
+        assert_eq!(plan_freeze_feature("docs/history//plan.md"), None);
+    }
+
+    #[test]
+    fn plan_freeze_shape_approved_reads_the_default_state_when_no_lane_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let approved = default_state_for("demo", true);
+        assert!(plan_freeze_shape_approved(&root.to_string_lossy(), &approved, "demo").unwrap());
+        let unapproved = default_state_for("demo", false);
+        assert!(!plan_freeze_shape_approved(&root.to_string_lossy(), &unapproved, "demo").unwrap());
+    }
+
+    #[test]
+    fn plan_freeze_shape_approved_is_no_opinion_when_default_state_names_another_feature() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let other = default_state_for("other", true);
+        // No lane file for "demo", and the default state's own feature is
+        // "other" — resolution never guesses, so it reads as unapproved.
+        assert!(!plan_freeze_shape_approved(&root.to_string_lossy(), &other, "demo").unwrap());
+    }
+
+    #[test]
+    fn plan_freeze_shape_approved_lane_record_beats_default_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        write_lane(&root, "demo", false);
+        let approved_default = default_state_for("demo", true);
+        // The lane record (shape: false) wins over the default state's own
+        // shape: true for the same feature.
+        assert!(!plan_freeze_shape_approved(&root.to_string_lossy(), &approved_default, "demo")
+            .unwrap());
+
+        write_lane(&root, "demo", true);
+        let unapproved_default = default_state_for("demo", false);
+        // And the reverse: lane says approved even though default doesn't.
+        assert!(plan_freeze_shape_approved(&root.to_string_lossy(), &unapproved_default, "demo")
+            .unwrap());
+    }
+
+    // ── D1 plan.md freeze — deny wired into check_write, full hook ─────────
+
+    fn plan_freeze_fixture(feature: &str, shape: bool) -> Fx {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        copy_lib(&root);
+        let st = json!({
+            "phase": "swarming",
+            "mode": "standard",
+            "feature": feature,
+            "approved_gates": { "context": true, "shape": shape, "execution": true, "review": false }
+        });
+        write_state(&root, &st);
+        Fx { _dir: dir, root }
+    }
+
+    #[test]
+    fn plan_md_denied_once_shape_is_approved_pinned_message() {
+        let fx = plan_freeze_fixture("demo", true);
+        let e = expect_done(edit("docs/history/demo/plan.md"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        for needle in [
+            "bee plan-freeze guard",
+            "docs/history/demo/plan.md",
+            "bee state plan-rev bump --lane demo",
+            "unapprove the shape gate",
+            "FIX",
+        ] {
+            assert!(e.stderr.contains(needle), "missing {needle}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn plan_md_allowed_when_shape_not_approved() {
+        let fx = plan_freeze_fixture("demo", false);
+        let e = expect_done(edit("docs/history/demo/plan.md"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn plan_md_allowed_for_another_feature_even_when_the_active_feature_is_approved() {
+        // The default state's own feature ("demo") has shape approved, but
+        // the write targets a DIFFERENT feature's plan.md with no lane
+        // record of its own — resolution is scoped to the path's feature,
+        // never the calling session's, so this reads as no opinion (allow).
+        let fx = plan_freeze_fixture("demo", true);
+        let e = expect_done(edit("docs/history/other-feature/plan.md"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn context_md_is_never_frozen_even_when_shape_is_approved() {
+        let fx = plan_freeze_fixture("demo", true);
+        let e = expect_done(edit("docs/history/demo/CONTEXT.md"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn plan_md_deny_wiring_honors_the_lane_record_over_default_state() {
+        // Full-hook proof that check_write actually calls the lane-aware
+        // resolver: default state says shape approved, but the lane record
+        // (the CLI's own view) says otherwise — the lane wins, allow.
+        let fx = plan_freeze_fixture("demo", true);
+        write_lane(&fx.root, "demo", false);
+        let e = expect_done(edit("docs/history/demo/plan.md"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }

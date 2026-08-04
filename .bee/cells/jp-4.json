@@ -1,0 +1,50 @@
+{
+  "id": "jp-4",
+  "feature": "js-parity-cleanup",
+  "lane": "standard",
+  "change_class": "refactor",
+  "behavior_change": true,
+  "deps": [
+    "jp-1",
+    "jp-2"
+  ],
+  "title": "Unify spread_gates to one Rust-native merge: object merges over defaults, every other shape takes defaults",
+  "action": "Locked decision D2 (docs/history/js-parity-cleanup/CONTEXT.md): two diverging definitions exist — state.rs:130 (full JS spread emulation: string to char-indexed keys, array to index keys) and verbs/state_group/store.rs:70 (partial, returns Err(Exotic) for string/array — a delegate-to-Node branch with no Node behind it; hooks/compaction.rs:201-205 masks that with .unwrap_or_else defaults). REPLACE BOTH with one function (put it beside defaultGates in state.rs, re-export for state_group): approved_gates is a JSON object -> its keys merge over default gates; ANY other shape (null/bool/number/string/array/missing) -> default gates. Callers: state.rs:94 read_state_brief, state_group/store.rs:105 merge_state_with_defaults, workflow_store/lanes.rs:73 lane_record_from, hooks/compaction.rs:201 (drop the masking fallback, call directly). Delete the Exotic error path from spread_gates signature; note verbs/state_group/mod.rs:120-123 comment naming this gap — update it. Rewrite the parity test state.rs:342 approved_gates_spread_covers_every_js_shape to assert the NEW contract (exotic shapes -> defaults) and rename it accordingly. This IS a behavior change for hand-corrupted state.json shapes (char-indexed gate keys can no longer appear); logged as decision D2 — cite docs/history/js-parity-cleanup/CONTEXT.md in the commit body.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml green from the worktree; single spread_gates definition remains",
+  "must_haves": {
+    "truths": [
+      "exactly one spread_gates (or renamed merge_gates) definition; no Exotic/Err branch in its signature",
+      "compaction.rs calls it directly with no masking fallback",
+      "the every-js-shape parity test is rewritten to the new exotic-to-defaults contract"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-jp4",
+    "outcome": "Unified spread_gates to one Rust-native merge in state.rs (object merges over defaults, every other shape falls back to defaults); re-exported for state_group, compaction.rs's masking fallback dropped, parity test rewritten. cargo test --release: 999 passed; 0 failed; 3 ignored (lib) plus all integration suites green.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/state.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/lanes.rs",
+      "packages/bee-rs/crates/bee/src/hooks/compaction.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T05:00:57.292Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "36955346-2280-4dc7-b0a5-b4d8c74c4b39",
+    "claimed_at": "2026-08-04T04:53:32.522Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T05:00:38.360Z"
+  },
+  "tier": "generation"
+}

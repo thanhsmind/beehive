@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature": "js-parity-cleanup",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"js-parity-cleanup\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"js-parity-cleanup\" (lane).",
+  "created_at": "2026-08-04T03:56:52.095Z"
+}

@@ -1,0 +1,59 @@
+{
+  "id": "bh-6",
+  "feature": "hook-teeth",
+  "lane": "standard",
+  "title": "cells finish verifies the cell commit trailer",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/hook-teeth/CONTEXT.md",
+    "docs/history/hook-teeth/plan.md"
+  ],
+  "action": "At cap time (cells finish path in handlers_close.rs / finish_support.rs): when files_changed is non-empty, verify a commit whose message body carries the trailer line cell: <id> exists in recent history of the feature's branch - the granted worktree's HEAD history when a grant exists for the feature (find_granted_worktree_for_feature is available since ct-1), else the current checkout's HEAD history; search a bounded window (e.g. last 50 commits). No such commit -> refuse the cap naming the one-commit-per-cell rule, unless --commit-pending <reason> is passed, persisted on the trace as commit_pending. A cell with empty files_changed is exempt. Run git via the crate's existing git helpers if any exist (search verbs/worktree/git.rs) - reuse, never shell out ad hoc if a helper exists. D7 red-first: trailer-detection test against fixture repos BEFORE the refusal; then refusal tests (no trailer -> refuse; trailer present -> cap; --commit-pending -> cap with trace; empty files_changed -> exempt).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "trailer detection test green before the flip",
+      "missing trailer refuses the cap",
+      "commit-pending escapes onto the trace",
+      "cells slice green"
+    ]
+  },
+  "decisions": [
+    "hook-teeth D6",
+    "hook-teeth D7"
+  ],
+  "deps": [
+    "bh-2",
+    "bh-3"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-bh6",
+    "outcome": "Commit-trailer check at finish over the feature branch history, --commit-pending escape on trace, empty files exempt; registry declared; worktree run: cells 89 passed, full suite 1058 passed 0 failed; commit 08e95a4e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T08:29:22.980Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T08:15:38.403Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T08:29:04.728Z"
+  },
+  "tier": "generation"
+}

@@ -1,0 +1,55 @@
+{
+  "id": "jp-8",
+  "feature": "js-parity-cleanup",
+  "lane": "standard",
+  "change_class": "refactor",
+  "behavior_change": false,
+  "deps": [
+    "jp-5"
+  ],
+  "title": "Route the scattered UTF-16 sort comparators through textutil::code_unit_cmp — pure dedup, zero behavior change",
+  "action": "jp-5 consolidated truncation helpers into crates/bee/src/textutil.rs and moved code_unit_cmp (UTF-16 code-unit ordering, kept for release-manifest byte-reproduction) there. Still scattered: hand-inlined `.encode_utf16().collect::<Vec<u16>>().cmp(...)`-style comparators in verbs/knowledge/promote.rs (compare_cell_ids / sort_utf16, ~3 spots), verbs/reservations/leases.rs (~2), verbs/state_group/flags.rs (~2), verbs/cells/validate.rs (~2), verbs/cells/schedule.rs (~4), verbs/cells/util.rs (~2) — re-grep `encode_utf16` outside textutil.rs for the authoritative list. REPLACE each inline comparator body with a call to textutil's code_unit_cmp (or js_default_sort where the callsite sorts a Vec<String>), keeping the EXACT same ordering semantics — this is dedup only; sort order must not change. Delete the now-empty local helpers (e.g. promote.rs sort_utf16) once their bodies route through textutil. If any site's comparator differs semantically from code_unit_cmp (not just syntactically), leave it and report it — do not force it through.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml green from the worktree; rg encode_utf16 outside textutil.rs returns zero hits or only reported-and-justified sites",
+  "must_haves": {
+    "truths": [
+      "every UTF-16 sort comparator routes through textutil (or is reported as semantically distinct)",
+      "zero duplicated comparator bodies remain",
+      "sort order provably unchanged: full suite green with no test edits"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-jp8",
+    "outcome": "Routed all scattered UTF-16 sort comparators (8 predecessor files + feedback.rs found on re-grep) through textutil::code_unit_cmp/js_default_sort; zero encode_utf16 hits remain outside textutil.rs; worktree cargo test --release green: 1004 passed/0 failed/3 ignored plus all integration suites 0 failed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/obligation.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/flags.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T06:50:06.360Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "36955346-2280-4dc7-b0a5-b4d8c74c4b39",
+    "claimed_at": "2026-08-04T05:15:20.635Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T06:49:34.520Z"
+  },
+  "tier": "generation"
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature": "hook-teeth",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"hook-teeth\" started at phase \"exploring\" (lane).",
+  "next_action": "All 6 cells capped and merged (verify green). Owed: bee-capturing flush of 9 queued stubs (counter-teeth 5 + hook-teeth 4), then scribing-run + compounding-run for both lanes; binary reinstall from main activates all ten new refusals",
+  "created_at": "2026-08-04T07:44:42.924Z"
+}

@@ -1,0 +1,54 @@
+{
+  "id": "ct-1",
+  "feature": "counter-teeth",
+  "lane": "standard",
+  "title": "Port the granted-worktree arm of route set (kill the Err2::Ex bail)",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/counter-teeth/CONTEXT.md",
+    "docs/history/counter-teeth/plan.md"
+  ],
+  "action": "run_route (workflows.rs ~620-624) bails with Err2::Ex when code_touching && any_granted_worktree, surfacing as a misleading unsupported_argument_shape refusal and deadlocking multi-worktree operation (P1 backlog finding, feature counter-teeth). Port the retired Node arm: a grant for the TARGET feature routes the worktree block to that grant; a grant for a DIFFERENT feature must not poison the call; any genuine refusal names the actual conflict. Red-first tests: route set succeeds with a foreign grant present; succeeds with own-feature grant; refusal message contract pinned.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "route set green with foreign worktree grant present",
+      "route set green with own-feature grant",
+      "no path surfaces unsupported_argument_shape for this arm",
+      "full suite green"
+    ]
+  },
+  "decisions": [
+    "counter-teeth D5"
+  ],
+  "deps": [
+    "ct-0"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-ct1",
+    "outcome": "Granted-worktree arm ported natively; Err2::Ex bail gone; foreign grants inert, own grant yields continue-there block; worker worktree run: state_group 48 passed 0 failed; commit f6398f8e",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T07:07:24.955Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T06:52:28.021Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T07:07:03.205Z"
+  },
+  "tier": "generation"
+}

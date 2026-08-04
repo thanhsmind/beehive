@@ -145,6 +145,66 @@ pub(crate) fn resolve_write_record(
     Ok(RecordResolution::Ok { record: merged, source: "lane" })
 }
 
+// ─── plan.md freeze (hook-teeth D1) ────────────────────────────────────────
+// docs/history/<feature>/plan.md denies Edit/Write/MultiEdit once that
+// feature's shape gate is approved. The feature is resolved from the path
+// segment itself — never from the calling session's own bound feature — so
+// a write to one feature's plan.md is judged solely on that feature's gate
+// state.
+
+/// Parses "docs/history/<feature>/plan.md" and returns the feature id, or
+/// None when the path is not exactly that shape (a nested path, a different
+/// filename, or a bare docs/history/ target). CONTEXT.md and every other
+/// docs/history file never match, so they never reach the deny below.
+pub(crate) fn plan_freeze_feature(normalized: &str) -> Option<String> {
+    let rest = normalized.strip_prefix("docs/history/")?;
+    let feature = rest.strip_suffix("/plan.md")?;
+    if feature.is_empty() || feature.contains('/') {
+        return None;
+    }
+    Some(feature.to_string())
+}
+
+/// Lane-aware gate read for the plan-freeze check: `.bee/lanes/<feature>.json`
+/// wins when it parses to an object, mirroring resolve_write_record's lane
+/// precedence over the default pipeline. Otherwise the default state (the
+/// `state` the caller already read) is consulted only when its own `feature`
+/// field names this same feature — a mismatched, absent, or corrupt-lane
+/// resolution is "no opinion", never a guess, so the caller allows.
+pub(crate) fn plan_freeze_shape_approved(
+    control_root: &str,
+    state: &Map<String, Value>,
+    feature: &str,
+) -> R<bool> {
+    let lane_file = Path::new(control_root)
+        .join(".bee")
+        .join("lanes")
+        .join(format!("{}.json", feature));
+    if let Some(Value::Object(lane)) = read_json_g(&lane_file)? {
+        let shape = lane
+            .get("approved_gates")
+            .and_then(|g| g.as_object())
+            .and_then(|g| g.get("shape"))
+            .map(|v| v == &Value::Bool(true))
+            .unwrap_or(false);
+        return Ok(shape);
+    }
+    let state_feature = match state.get("feature") {
+        Some(Value::String(s)) => Some(s.as_str()),
+        _ => None,
+    };
+    if state_feature != Some(feature) {
+        return Ok(false);
+    }
+    let shape = state
+        .get("approved_gates")
+        .and_then(|g| g.as_object())
+        .and_then(|g| g.get("shape"))
+        .map(|v| v == &Value::Bool(true))
+        .unwrap_or(false);
+    Ok(shape)
+}
+
 /// provenance: guards.mjs resolveHoldTopology.
 pub(crate) fn resolve_hold_topology<'a>(ctx: &'a JsCtx, control_root: &'a str) -> Option<(String, String)> {
     ctx.workspace_root.as_ref()?;
@@ -265,6 +325,22 @@ FIX: write it to .bee/tmp/ instead (or .bee/spikes/ for a feasibility proof), an
     let topo = resolve_write_topology(root, control_root_override)?;
     let ctx = &topo.ctx;
     let control_root = topo.control_root.clone();
+
+    // D1 (hook-teeth): plan.md freezes mechanically once its own feature's
+    // shape gate is approved — resolved from the path segment, never from
+    // the calling session's bound feature, and phase-independent like the
+    // other path-scoped denies above.
+    if let Some(feature) = plan_freeze_feature(&normalized) {
+        if plan_freeze_shape_approved(&control_root, state, &feature)? {
+            return Ok(WV::Deny(format!(
+                "bee plan-freeze guard: \"{}\" is {}'s plan.md and its shape gate is approved — \
+plan.md freezes once shape is locked and no longer accepts direct edits. \
+FIX: stamp a revision (`bee state plan-rev bump --lane {}`) instead of editing in place, or \
+unapprove the shape gate first to redraft the plan.",
+                normalized, feature, feature
+            )));
+        }
+    }
 
     let (record, source) = match resolve_write_record(&control_root, state, session_id, emit)? {
         RecordResolution::Fail { reason } => return Ok(WV::Deny(reason)),

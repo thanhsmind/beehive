@@ -1,0 +1,49 @@
+{
+  "id": "ct-0",
+  "feature": "counter-teeth",
+  "lane": "standard",
+  "title": "Make renew_cross_worktree_holds test hermetic (cwd-independent)",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/state_sync.rs"
+  ],
+  "read_first": [
+    "docs/history/counter-teeth/CONTEXT.md",
+    "docs/history/counter-teeth/plan.md",
+    "docs/knowledge/patterns/20260729-a-test-run-under-a-configuration-must-assert-the-configuration-is-live.md"
+  ],
+  "action": "hooks::state_sync::tests::renew_cross_worktree_holds_renews_active_session_rows_only (state_sync.rs ~1439-1483) fails when the suite runs from a linked worktree: it resolves main_root from process cwd instead of honoring the injected tmp root. Make the test (or the resolver seam it uses) hermetic so it passes from BOTH the main checkout and a linked worktree. Do not weaken the assertions.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "single test green from main checkout",
+      "single test green from a linked worktree",
+      "no assertion weakened"
+    ]
+  },
+  "decisions": [
+    "counter-teeth D6"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "orchestrator-ct",
+    "outcome": "Renewal keys on the root argument (was process cwd); suite green from worktree and main, worktree commit 5e82b32e. Deviation: executed inline by orchestrator - subagent capacity exhausted until 13:40",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/state_sync.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T06:51:37.605Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T06:46:15.906Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T06:51:18.900Z"
+  }
+}

@@ -657,6 +657,18 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         .unwrap();
     }
 
+    /// D4 fixture: stamp a session record's `source` the way session-init
+    /// (bh-4) now persists it, without going through the hook.
+    fn write_session_source(root: &Path, id: &str, source: &str) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            serde_json::to_string(&json!({"id": id, "source": source})).unwrap(),
+        )
+        .unwrap();
+    }
+
     fn planned_next_input() -> Map<String, Value> {
         let mut input = Map::new();
         input.insert("kind".into(), json!("planned-next"));
@@ -773,6 +785,72 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         match ok(adopt_mailbox_handoff(tmp.path(), "wf-1", "s", None)) {
             MailboxAdopt::Fail { reason } => assert!(reason.starts_with("handoff kind \"pause\" is not \"planned-next\"")),
             _ => panic!("expected NOT_PLANNED_NEXT"),
+        }
+    }
+
+    // ── D4 fresh-session-boundary gate on `state handoff adopt` (bh-4) ─────
+
+    #[test]
+    fn handoff_adopt_source_gate_classifies_eligible_and_blocked_sources() {
+        let tmp = tmp_root();
+        for eligible in ["startup", "clear"] {
+            write_session_source(tmp.path(), "s1", eligible);
+            assert!(
+                handoff_adopt_source_refusal(tmp.path(), "s1").is_none(),
+                "source={eligible} must be adopt-eligible"
+            );
+        }
+        for blocked in ["resume", "compact"] {
+            write_session_source(tmp.path(), "s1", blocked);
+            let reason = handoff_adopt_source_refusal(tmp.path(), "s1")
+                .unwrap_or_else(|| panic!("source={blocked} must refuse adoption (D4)"));
+            assert!(
+                reason.starts_with(HANDOFF_ADOPT_SOURCE_REFUSAL_PREFIX),
+                "refusal must carry the pinned prefix: {reason}"
+            );
+            assert!(reason.contains(blocked), "{reason}");
+        }
+        // No session record at all, and a record predating D4's `source`
+        // field: both eligible, fail-open — a missing source is a warning,
+        // never a refusal.
+        assert!(handoff_adopt_source_refusal(tmp.path(), "no-such-session").is_none());
+        let dir = tmp.path().join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("s2.json"), r#"{"id":"s2"}"#).unwrap();
+        assert!(handoff_adopt_source_refusal(tmp.path(), "s2").is_none());
+    }
+
+    #[test]
+    fn mailbox_adopt_refuses_a_resumed_or_compacted_session_and_leaves_the_handoff_open() {
+        let tmp = tmp_root();
+        capped_cell_and_claim(tmp.path(), "next", "sess-w");
+        ok(write_mailbox_handoff(tmp.path(), "wf-1", &planned_next_input(), None));
+        write_session_source(tmp.path(), "sess-new", "compact");
+        match ok(adopt_mailbox_handoff(tmp.path(), "wf-1", "sess-new", None)) {
+            MailboxAdopt::Fail { reason } => {
+                assert!(reason.starts_with(HANDOFF_ADOPT_SOURCE_REFUSAL_PREFIX), "{reason}");
+            }
+            MailboxAdopt::Ok { .. } => panic!("a compacted session must never adopt (D4)"),
+        }
+        // Nothing moved: the handoff is still open, the claim untouched.
+        let all = ok(list_handoff_mailbox(tmp.path(), "wf-1"));
+        assert_eq!(all[0].get("status"), Some(&json!("open")));
+        let claim: Value = serde_json::from_str(
+            &std::fs::read_to_string(tmp.path().join(".bee").join("claims").join("next.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(claim["session"], json!("sess-w"), "the claim never moved");
+    }
+
+    #[test]
+    fn mailbox_adopt_proceeds_for_a_fresh_session_boundary() {
+        let tmp = tmp_root();
+        capped_cell_and_claim(tmp.path(), "next", "sess-w");
+        ok(write_mailbox_handoff(tmp.path(), "wf-1", &planned_next_input(), None));
+        write_session_source(tmp.path(), "sess-new", "startup");
+        match ok(adopt_mailbox_handoff(tmp.path(), "wf-1", "sess-new", None)) {
+            MailboxAdopt::Ok { next_cell, .. } => assert_eq!(next_cell, "next"),
+            MailboxAdopt::Fail { reason } => panic!("unexpected refusal: {reason}"),
         }
     }
 

@@ -1261,9 +1261,11 @@ use std::time::Instant;
         for lane in ["small", "spike", "standard", "high-risk"] {
             assert!(is_code_touching_lane(lane, false));
         }
-        assert!(route_worktree_block(None, "standard", true).is_none());
-        assert!(route_worktree_block(Some("f1"), "docs", false).is_none());
-        let block = route_worktree_block(Some("f1"), "standard", true).unwrap();
+        let tmp = tmp_root();
+        let root = tmp.path(); // no grants registry at all -> the ordinary arm
+        assert!(route_worktree_block(root, None, "standard", true).is_none());
+        assert!(route_worktree_block(root, Some("f1"), "docs", false).is_none());
+        let block = route_worktree_block(root, Some("f1"), "standard", true).unwrap();
         assert_eq!(jget(&block, "required"), Some(&json!(true)));
         assert_eq!(
             jget(&block, "command"),
@@ -1272,6 +1274,139 @@ use std::time::Instant;
         assert!(js_disp_opt(jget(&block, "notice")).starts_with(
             "\u{26a0} WORKTREE-FIRST: lane \"standard\" is code-touching and this is the MAIN checkout."
         ));
+    }
+
+    // ── ct-1 (D5): the granted-worktree arm of `route --set` ───────────────
+    //
+    // The retired Node arm: `code_touching && any_granted_worktree` used to
+    // bail the WHOLE verb with `Err2::Ex` before any lock — surfacing as a
+    // misleading "unsupported argument shape" refusal — whenever ANY grant
+    // was `true`, even one for a completely different feature. Ported here:
+    // a foreign grant has zero effect (req. 1); the TARGET feature's own
+    // grant redirects the `worktree` block to "continue at the existing
+    // worktree" (req. 2); no path bails anymore (req. 3).
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixtures");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A real main checkout with two real linked `git worktree add` trees:
+    /// `wt-target`, granted and identified as feature "target-feat", and
+    /// `wt-foreign`, granted and identified as feature "foreign-feat" — so a
+    /// query for "target-feat" hits its own grant while every other feature
+    /// (including "foreign-feat" queried on its own, or any third name) must
+    /// see the grants registry as if it did not carry a matching entry.
+    fn route_worktree_fixture(tmp: &Path) -> PathBuf {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git(&main, &["init", "-q", "-b", "main", "."]);
+        git(&main, &["config", "user.email", "a@b.c"]);
+        git(&main, &["config", "user.name", "t"]);
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        let target = tmp.join("wt-target");
+        let foreign = tmp.join("wt-foreign");
+        git(&main, &["worktree", "add", "-q", target.to_str().unwrap(), "-b", "wt/target-feat"]);
+        git(&main, &["worktree", "add", "-q", foreign.to_str().unwrap(), "-b", "wt/foreign-feat"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-target\": true, \"wt-foreign\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(target.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            target.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"target-feat\"}",
+        )
+        .unwrap();
+        std::fs::create_dir_all(foreign.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            foreign.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"foreign-feat\"}",
+        )
+        .unwrap();
+        main
+    }
+
+    /// Requirement 1: a grant for a DIFFERENT feature must not affect the
+    /// call at all — proceed exactly as the no-grant path (the "create a
+    /// worktree" notice), never a decline, and never mention the foreign id.
+    #[test]
+    fn route_worktree_block_ignores_a_foreign_features_grant() {
+        let tmp = tmp_root();
+        let main = route_worktree_fixture(tmp.path());
+        // "other-feat" holds no grant of its own; "wt-foreign" is granted for
+        // an unrelated feature and must be invisible to this call.
+        let block = route_worktree_block(&main, Some("other-feat"), "standard", true)
+            .expect("still a code-touching feature -> still a block");
+        assert_eq!(
+            jget(&block, "command"),
+            Some(&json!("bee worktree new --feature other-feat"))
+        );
+        let notice = js_disp_opt(jget(&block, "notice"));
+        assert!(notice.starts_with(
+            "\u{26a0} WORKTREE-FIRST: lane \"standard\" is code-touching and this is the MAIN checkout."
+        ));
+        assert!(!notice.contains("wt-foreign"), "notice: {notice}");
+    }
+
+    /// Requirement 2: a grant for the TARGET feature routes the `worktree`
+    /// block to the EXISTING granted worktree — "continue there" — instead
+    /// of telling the caller to create a new one.
+    #[test]
+    fn route_worktree_block_names_the_existing_worktree_for_a_granted_feature() {
+        let tmp = tmp_root();
+        let main = route_worktree_fixture(tmp.path());
+        let block = route_worktree_block(&main, Some("target-feat"), "standard", true)
+            .expect("a granted feature is still code-touching -> still a block");
+        assert_ne!(
+            jget(&block, "command"),
+            Some(&json!("bee worktree new --feature target-feat")),
+            "must not tell the caller to create a worktree that already exists"
+        );
+        let notice = js_disp_opt(jget(&block, "notice"));
+        assert!(notice.contains("wt-target"), "notice: {notice}");
+        assert!(
+            notice.to_lowercase().contains("already"),
+            "notice must say the worktree already exists: {notice}"
+        );
+    }
+
+    /// Requirement 3: no path through this arm ever declines (`Err2::Ex`)
+    /// anymore. `route_worktree_block` is exactly what `run_route` calls to
+    /// build the response's `worktree` key, so "always answers `Some` for a
+    /// code-touching lane with a feature" — no matter which grants exist —
+    /// pins the fix at the boundary `run_route` actually consumes. Before
+    /// ct-1 this same shape (ANY grant `true`) made the WHOLE verb decline
+    /// with a misleading "unsupported argument shape" refusal.
+    #[test]
+    fn route_worktree_block_never_declines_under_any_grant_shape() {
+        let tmp = tmp_root();
+        let main = route_worktree_fixture(tmp.path());
+        let bare = tmp_root(); // zero grants at all
+        for (root, feature) in [
+            (bare.path(), "no-grants-anywhere"),
+            (main.as_path(), "other-feat"),   // grants exist, none match
+            (main.as_path(), "foreign-feat"), // matches wt-foreign's OWN grant
+            (main.as_path(), "target-feat"),  // matches wt-target's OWN grant
+        ] {
+            assert!(
+                route_worktree_block(root, Some(feature), "standard", true).is_some(),
+                "feature {feature} must still get a worktree block, never a decline"
+            );
+        }
     }
 
     #[test]
@@ -1322,4 +1457,177 @@ use std::time::Instant;
         )
         .unwrap();
         assert!(!ok(other_live_work_present(tmp.path())));
+    }
+
+    // ── state route --set re-lane transition validation (D5, hook-teeth bh-5) ──
+    //
+    // scout-and-ticks.md, "Re-lane checkpoint": downward moves only travel
+    // the standard->small->tiny ladder, one step or more but always
+    // downward; at most one demotion per feature EVER (a `demoted_at`
+    // stamp on the route object persists it); `high-risk` never demotes;
+    // any hard-gate flag in the NEW --flags set blocks a demotion. Any
+    // upward move or same-lane re-record is always allowed.
+
+    fn route_with(lane: &str) -> Map<String, Value> {
+        obj(&format!(r#"{{"class":"feature","lane":"{lane}","flags":[],"product_files":1}}"#))
+    }
+
+    fn route_with_demoted_at(lane: &str, stamp: &str) -> Map<String, Value> {
+        let mut r = route_with(lane);
+        r.insert("demoted_at".into(), json!(stamp));
+        r
+    }
+
+    #[test]
+    fn triage_ladder_rank_orders_only_the_three_demotable_lanes() {
+        assert!(triage_ladder_rank("tiny") < triage_ladder_rank("small"));
+        assert!(triage_ladder_rank("small") < triage_ladder_rank("standard"));
+        // docs/spike/high-risk are off this numeric ladder entirely — the
+        // high-risk case is an absolute rule of its own, and docs/spike
+        // moves are never classified as a ladder demotion by this rule.
+        for lane in ["docs", "spike", "high-risk", ""] {
+            assert_eq!(triage_ladder_rank(lane), None, "lane {lane}");
+        }
+    }
+
+    #[test]
+    fn a_first_demotion_stamps_demoted_at_and_a_second_ever_refuses() {
+        // standard -> small: within-threshold, zero hard-gate flags, no
+        // prior demotion -> allowed, stamps a fresh demoted_at.
+        let stamp = match validate_route_lane_transition(&route_with("standard"), "small", &[]) {
+            Ok(Some(s)) => s,
+            other => panic!("expected a fresh demoted_at stamp, got {other:?}"),
+        };
+        assert!(!stamp.is_empty());
+
+        // A second demotion attempt on a route that already carries that
+        // stamp -> refused, naming the once-per-feature rule, even though
+        // this is a DIFFERENT step (small -> tiny) on the SAME feature.
+        let existing = route_with_demoted_at("small", &stamp);
+        let message = match validate_route_lane_transition(&existing, "tiny", &[]) {
+            Err(m) => m,
+            Ok(v) => panic!("expected a refusal, got Ok({v:?})"),
+        };
+        assert!(
+            message.contains("at most one demotion per feature, ever"),
+            "message: {message}"
+        );
+        assert!(message.contains(&stamp), "message must cite the first stamp: {message}");
+    }
+
+    #[test]
+    fn multi_step_downward_demotion_is_allowed_as_a_single_demotion() {
+        // "one step or more but always downward" — standard -> tiny
+        // directly is still just ONE demotion, not two.
+        let existing = route_with("standard");
+        match validate_route_lane_transition(&existing, "tiny", &[]) {
+            Ok(Some(_)) => {}
+            other => panic!("expected a stamped single demotion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hard_gate_flag_in_the_new_flags_blocks_demotion() {
+        let existing = route_with("standard");
+        let flags = vec!["auth".to_string()];
+        let message = match validate_route_lane_transition(&existing, "small", &flags) {
+            Err(m) => m,
+            Ok(v) => panic!("expected a refusal, got Ok({v:?})"),
+        };
+        assert!(
+            message.contains("a hard-gate flag can never demote"),
+            "message: {message}"
+        );
+        assert!(message.contains("auth"), "message: {message}");
+
+        // Reuses validate_route_set_flags's own vocabulary — every entry
+        // in HARD_GATE_ROUTE_FLAGS must be a legal --flags value.
+        for f in HARD_GATE_ROUTE_FLAGS {
+            assert!(ROUTE_FLAG_VALUES.contains(&f), "hard-gate flag {f} not in ROUTE_FLAG_VALUES");
+        }
+
+        // A demotion with a flag OUTSIDE the hard-gate set is untouched.
+        let benign = vec!["multi-domain".to_string()];
+        match validate_route_lane_transition(&existing, "small", &benign) {
+            Ok(Some(_)) => {}
+            other => panic!("expected an allowed demotion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn high_risk_never_demotes_regardless_of_target_lane_or_flags() {
+        let existing = route_with("high-risk");
+        for target in ["standard", "small", "tiny", "docs", "spike"] {
+            let message = match validate_route_lane_transition(&existing, target, &[]) {
+                Err(m) => m,
+                Ok(v) => panic!("expected a refusal for high-risk -> {target}, got Ok({v:?})"),
+            };
+            assert!(
+                message.contains("high-risk lanes never demote"),
+                "message for {target}: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn upward_moves_and_off_ladder_moves_are_always_allowed() {
+        // Upward, even across multiple rungs.
+        assert_eq!(
+            ok2(validate_route_lane_transition(&route_with("tiny"), "standard", &[])),
+            None
+        );
+        // Promoting INTO high-risk from anywhere is always allowed.
+        assert_eq!(
+            ok2(validate_route_lane_transition(&route_with("small"), "high-risk", &[])),
+            None
+        );
+        // A move touching docs/spike is off the standard/small/tiny
+        // ladder entirely and is never classified as a ladder demotion.
+        assert_eq!(
+            ok2(validate_route_lane_transition(&route_with("standard"), "docs", &[])),
+            None
+        );
+        assert_eq!(
+            ok2(validate_route_lane_transition(&route_with("docs"), "standard", &[])),
+            None
+        );
+    }
+
+    #[test]
+    fn same_lane_re_record_is_allowed_and_carries_demotion_history_forward() {
+        // No prior demotion -> stays None.
+        assert_eq!(
+            ok2(validate_route_lane_transition(&route_with("standard"), "standard", &[])),
+            None
+        );
+        // A prior demotion's stamp survives an unrelated same-lane
+        // re-record UNCHANGED (never re-stamped, never dropped).
+        let existing = route_with_demoted_at("small", "2020-01-01T00:00:00.000Z");
+        assert_eq!(
+            ok2(validate_route_lane_transition(&existing, "small", &[])),
+            Some("2020-01-01T00:00:00.000Z".to_string())
+        );
+    }
+
+    #[test]
+    fn a_promotion_after_a_demotion_still_carries_the_demotion_history_forward() {
+        // The once-per-feature limit is "ever": a later promotion must not
+        // erase the fact that this feature already spent its one
+        // demotion, so a future re-demotion attempt still refuses.
+        let existing = route_with_demoted_at("small", "2020-01-01T00:00:00.000Z");
+        assert_eq!(
+            ok2(validate_route_lane_transition(&existing, "standard", &[])),
+            Some("2020-01-01T00:00:00.000Z".to_string())
+        );
+    }
+
+    /// `Result<Option<String>, String>` unwrapped for the assert_eq! call
+    /// sites above — panics with the refusal text on an unexpected Err,
+    /// which is exactly what a stray refusal in an "always allowed" case
+    /// should do.
+    fn ok2(r: Result<Option<String>, String>) -> Option<String> {
+        match r {
+            Ok(v) => v,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        }
     }

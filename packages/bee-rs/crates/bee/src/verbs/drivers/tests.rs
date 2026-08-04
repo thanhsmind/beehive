@@ -979,11 +979,16 @@ use std::time::Instant;
             "{\"kind\":\"stub\",\"id\":\"s1\"}\n{\"kind\":\"stub\",\"id\":\"s2\"}\n{\"kind\":\"flush\",\"id\":\"s1\"}\n",
         );
 
+        // D1: uncaptured behavior_change cells with no capture-deferral
+        // decision on file — the door BLOCKS.
         let doors = build_close_report_doors(&root, "demo").unwrap();
+        assert!(doors[0].blocking);
         assert_eq!(
             doors[0].detail,
-            "pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); settle later via bee-capturing"
+            "pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"demo\" to defer it"
         );
+        assert_eq!(doors[0].command, Some("bee-capturing"));
+        assert!(!doors[1].blocking);
         assert_eq!(
             doors[1].detail,
             "pending — 1 capture stub(s) awaiting flush; settle later via bee-capturing"
@@ -991,10 +996,29 @@ use std::time::Instant;
         assert_eq!(
             render_close_door_lines(&doors),
             vec![
-                "door scribing-debt: open — pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); settle later via bee-capturing",
+                "door scribing-debt: BLOCKING — pending — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"demo\" to defer it | settle: bee-capturing",
                 "door capture-queue: open — pending — 1 capture stub(s) awaiting flush; settle later via bee-capturing",
             ]
         );
+
+        // A logged capture-deferral decision naming the feature LIFTS the
+        // block without touching the count — same cells, softer door.
+        w(
+            &root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-07-02T12:00:00.000Z\",\"decision\":\"defer capture for demo until next sprint\",\"rationale\":\"r\",\"tags\":[\"capture-deferral\"],\"scope\":\"repo\"}\n",
+        );
+        let deferred_doors = build_close_report_doors(&root, "demo").unwrap();
+        assert!(!deferred_doors[0].blocking);
+        assert_eq!(deferred_doors[0].command, None);
+        assert_eq!(
+            deferred_doors[0].detail,
+            "deferred — 2 behavior_change cell(s) uncaptured (demo-4, demo-5); a logged capture-deferral decision names \"demo\""
+        );
+        // A capture-deferral decision naming a DIFFERENT feature never lifts
+        // THIS feature's block.
+        assert!(!has_capture_deferral_decision(&root, "elsewhere").unwrap());
+        std::fs::remove_file(root.join(".bee/decisions.jsonl")).unwrap();
 
         // A scribing run after the caps clears the debt (threshold is >, not >=).
         w(
@@ -1002,7 +1026,9 @@ use std::time::Instant;
             ".bee/logs/scribing-runs.jsonl",
             "{\"feature\":\"demo\",\"ts\":\"2026-07-03T00:00:00.000Z\"}\n",
         );
-        assert_eq!(build_close_report_doors(&root, "demo").unwrap()[0].detail, "clear");
+        let cleared = build_close_report_doors(&root, "demo").unwrap();
+        assert_eq!(cleared[0].detail, "clear");
+        assert!(!cleared[0].blocking);
         // A ledger row for ANOTHER feature never moves this feature's threshold.
         w(
             &root,
@@ -1010,6 +1036,184 @@ use std::time::Instant;
             "{\"feature\":\"elsewhere\",\"ts\":\"2026-07-03T00:00:00.000Z\"}\n",
         );
         assert_eq!(scribing_debt(&root, "demo").unwrap().count, 2);
+    }
+
+    // ── D1: the uncaptured-set computation (red-first, before the flip) ─────
+
+    /// The counter close's refusal reads (scribing_debt) is the SAME counter
+    /// the scribing-debt door already reported pre-D1 — one membership, one
+    /// owner. Pins the three fixture shapes D6 calls out: a behavior_change
+    /// capped cell with no capture counts; one capped AFTER a scribing run
+    /// does not; a non-behavior_change capped cell never counts regardless
+    /// of capture state.
+    #[test]
+    fn uncaptured_behavior_change_set_matches_the_scribing_debt_definition() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(&root, ".bee/cells/demo-1.json", r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        // Non-behavior_change: never counts, capture state notwithstanding.
+        w(&root, ".bee/cells/demo-2.json", r#"{"id":"demo-2","feature":"demo","status":"capped","trace":{"behavior_change":false,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        // Not even capped yet: an open cell never counts either way.
+        w(&root, ".bee/cells/demo-3.json", r#"{"id":"demo-3","feature":"demo","status":"open","trace":{"behavior_change":true}}"#);
+        let debt = scribing_debt(&root, "demo").unwrap();
+        assert_eq!(debt.count, 1);
+        assert_eq!(debt.ids, vec![json!("demo-1")]);
+
+        // A scribing run recorded AFTER the cap is "capture recorded" — the
+        // same cell drops out of the uncaptured set.
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2026-07-02T00:00:00.000Z\"}\n",
+        );
+        assert_eq!(scribing_debt(&root, "demo").unwrap().count, 0);
+    }
+
+    // ── D1: the refusal itself (red, green-after-capture, green-with-deferral) ─
+
+    fn declare_echo_test(tmp: &tempfile::TempDir) -> PathBuf {
+        repo(tmp, r#"{"commands":{"test":"echo suite-green"}}"#)
+    }
+
+    /// RED: a behavior_change cell with no capture recorded and no logged
+    /// capture-deferral decision refuses close, even with tests GREEN.
+    #[test]
+    fn close_refuses_uncaptured_behavior_change_cells() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = declare_echo_test(&tmp);
+        w(&root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        w(&root, ".bee/cells/demo-5.json", r#"{"id":"demo-5","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-02T00:00:00.000Z"}}"#);
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(result, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1, "capture debt refuses even though tests are green");
+        let lines: Vec<&str> = text.split('\n').collect();
+        // The refusal's pinned prefix — the message-contract test.
+        assert!(
+            lines[0].starts_with(CLOSE_CAPTURE_DEBT_PREFIX),
+            "refusal headline must start with the pinned prefix: {}",
+            lines[0]
+        );
+        assert_eq!(
+            lines[0],
+            "Capture debt for \"demo\" — close stops at the scribing-debt door: 2 behavior_change cell(s) uncaptured (demo-4, demo-5)."
+        );
+        // Both remedies are named.
+        assert!(lines[1].contains("bee-capturing"), "{}", lines[1]);
+        assert!(lines[1].contains("capture-deferral"), "{}", lines[1]);
+        assert!(lines[2].starts_with("next:"));
+        // Cells are NEVER archived on a refused close.
+        assert!(root.join(".bee/cells/demo-4.json").exists());
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(doors.iter().find(|d| d["door"] == "scribing-debt").unwrap()["blocking"], json!(true));
+    }
+
+    /// GREEN after capture: a scribing run recorded after the cap clears the
+    /// debt and close proceeds to its normal green report.
+    #[test]
+    fn close_proceeds_green_once_capture_is_recorded() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = declare_echo_test(&tmp);
+        w(&root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2026-07-02T00:00:00.000Z\"}\n",
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        assert!(text.starts_with("Tests GREEN for \"demo\""));
+        assert!(!text.starts_with(CLOSE_CAPTURE_DEBT_PREFIX));
+    }
+
+    /// GREEN with a capture-deferral decision: the debt is unchanged, but a
+    /// logged decision tagged capture-deferral naming the feature lifts the
+    /// refusal and close proceeds.
+    #[test]
+    fn close_proceeds_green_with_a_capture_deferral_decision() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = declare_echo_test(&tmp);
+        w(&root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        w(
+            &root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-07-02T00:00:00.000Z\",\"decision\":\"defer capture for demo until next sprint\",\"rationale\":\"r\",\"tags\":[\"capture-deferral\"],\"scope\":\"repo\"}\n",
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(result, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        assert!(text.starts_with("Tests GREEN for \"demo\""));
+        assert!(!text.starts_with(CLOSE_CAPTURE_DEBT_PREFIX));
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        let scribing = doors.iter().find(|d| d["door"] == "scribing-debt").unwrap();
+        assert_eq!(scribing["blocking"], json!(false));
+        assert!(scribing["detail"].as_str().unwrap().starts_with("deferred —"));
+        // The deferral only lifts the refusal — it does not touch the debt
+        // count reported in the door text a moment earlier.
+        assert!(scribing["detail"].as_str().unwrap().contains("1 behavior_change cell(s)"));
+        // A green close still retires the feature's (now terminal) cells.
+        assert_eq!(result.get("retired").unwrap().get("archived"), Some(&json!(true)));
+    }
+
+    /// A capture-deferral decision naming a DIFFERENT feature never lifts
+    /// this feature's refusal.
+    #[test]
+    fn close_refuses_when_the_deferral_decision_names_another_feature() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = declare_echo_test(&tmp);
+        w(&root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        w(
+            &root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-07-02T00:00:00.000Z\",\"decision\":\"defer capture for elsewhere until next sprint\",\"rationale\":\"r\",\"tags\":[\"capture-deferral\"],\"scope\":\"repo\"}\n",
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1);
+        assert!(text.starts_with(CLOSE_CAPTURE_DEBT_PREFIX));
+    }
+
+    /// A decision naming the feature but WITHOUT the capture-deferral tag
+    /// never lifts the refusal either.
+    #[test]
+    fn close_refuses_when_the_decision_lacks_the_capture_deferral_tag() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = declare_echo_test(&tmp);
+        w(&root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        w(
+            &root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-07-02T00:00:00.000Z\",\"decision\":\"note about demo\",\"rationale\":\"r\",\"tags\":[\"other\"],\"scope\":\"repo\"}\n",
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1);
+        assert!(text.starts_with(CLOSE_CAPTURE_DEBT_PREFIX));
     }
 
     /// Regression: the scribing-debt door JOINS the cell ids, so listCells'

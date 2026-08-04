@@ -1,0 +1,64 @@
+{
+  "id": "jp-5",
+  "feature": "js-parity-cleanup",
+  "lane": "standard",
+  "change_class": "refactor",
+  "behavior_change": true,
+  "deps": [
+    "jp-1",
+    "jp-3"
+  ],
+  "title": "Consolidate seven UTF-16 helper copies into one module; truncation goes char-based; manifest sort keeps code-unit order",
+  "action": "Locked decision D3 (docs/history/js-parity-cleanup/CONTEXT.md). Duplicated helpers: utf16_len x3 (verbs/feedback.rs:102, hooks/write_guard/jspath.rs:86, verbs/drivers/jsprim.rs:84), utf16_head (jsprim.rs:72), utf16_tail x2 byte-identical (verbs/drivers/close.rs:161, verbs/test_runner.rs:408 — circular mirror-of comments), js_slice_tail_utf16 (verbs/cells/finish_support.rs:93), js_slice_utf16 (verbs/worktree/companion.rs:75), js_slice_head (verbs/decisions/render.rs:151), utf16_slice (hooks/model_guard.rs:722), inline copies in verbs/knowledge/promote.rs:65 and :346 and verbs/status_full/orient.rs:36-48. PLAN: (a) create one text-utility module (e.g. crates/bee/src/textutil.rs) with char-based head/tail/len truncation helpers named for what they do (truncate_chars_head/tail, char_len); (b) port ALL truncation/length call sites to it — failure excerpt cap 500 (test_runner.rs:132, drivers/close.rs:132), decision-line cap 160 (status_full/orient.rs), backlog field caps (verbs/backlog.rs:743,797,801), write_guard detectors.rs:155,209, decisions/supersede.rs, model_guard.rs:752 — counting CHARS not UTF-16 units; outputs change only for astral-plane input; update the locked parity tests to the new contract (verbs/drivers/tests.rs:1142 utf16_slicing_matches_js, test_runner.rs:553 excerpt_keeps_only_the_last_500_utf16_units, verbs/status_full/tests.rs:402 orient_decision_line_caps_at_160_utf16_units) — rename them for the char contract; (c) EXCEPTION: devtools/mod.rs:282 code_unit_cmp KEEPS UTF-16 code-unit ordering — already-stamped release manifests reproduce byte-for-byte under it (devtools/release_manifest.rs:1023 test code_unit_sort_would_not_reproduce_the_manifest proves it); keep it, move it into the new module, and rewrite its comment with that reproduction rationale, no JS references. Behavior change logged as decision D3 — cite CONTEXT.md in the commit body. Delete every duplicated helper.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml green from the worktree; one shared text-utility module; zero utf16 helpers outside it",
+  "must_haves": {
+    "truths": [
+      "zero rg hits for utf16_ or js_slice outside the one shared module",
+      "all truncation caps count chars; the three parity tests renamed and asserting the char contract",
+      "code_unit_cmp survives with a reproduction rationale and release_manifest tests still green"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-jp5",
+    "outcome": "Consolidated 7 duplicated UTF-16 helpers + 3 inline copies into crates/bee/src/textutil.rs; truncation caps now count chars; code_unit_cmp/js_default_sort kept as the release-manifest reproduction exception. cargo test --release --manifest-path packages/bee-rs/Cargo.toml: all green (1004 passed, 0 failed, 3 ignored in the unit binary; every integration binary 0 failed).",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/textutil.rs",
+      "packages/bee-rs/crates/bee/src/main.rs",
+      "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/jspath.rs",
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/supersede.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/jsprim.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/companion.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T05:14:21.163Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "36955346-2280-4dc7-b0a5-b4d8c74c4b39",
+    "claimed_at": "2026-08-04T04:53:32.609Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T05:14:03.151Z"
+  },
+  "tier": "generation"
+}
