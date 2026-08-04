@@ -21,6 +21,20 @@
 // 'cells-archive' acquire + archived-only re-check, typed
 // CELLS_ARCHIVE_BUSY on contention).
 //
+// wf-1 — `cells finish` alone is worktree-native. Every mutating verb above
+// (including `cap`) dispatches through the shared `dispatch`
+// (handlers_write.rs) -> `rsv::prelude` -> `resolve_store_root`, the NARROW
+// door (roots.rs "the three doors"): it refuses a granted linked worktree by
+// name, naming the main checkout. `finish` alone routes through its own
+// `run_finish` (handlers_close.rs), the FULL door
+// (`resolve_store_root_worktree`): the cell record and its claim still
+// resolve at `StoreRoots::main_root()` (one ledger — this is not a second
+// per-worktree cell store), the declared test command's cwd is the calling
+// worktree when granted, and reservation/hold release threads
+// `StoreRoots::hold_topology()` (`finish_topology`, finish_support.rs).
+// Running `finish` from the main checkout is unchanged: `roots.linked` is
+// `None` there, so the FULL door answers exactly what the narrow one did.
+//
 // R6 — `cells claim-next` IS NOW NATIVE (the last cells debt). All four
 // pieces the previous header listed as missing are ported, in one piece so
 // the sweep never half-runs:
