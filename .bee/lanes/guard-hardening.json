@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "guard-hardening",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -10,7 +10,7 @@
     "review": false
   },
   "summary": "Feature \"guard-hardening\" started at phase \"planning\" (lane).",
-  "next_action": "Dispatch gh-1 then gh-2 then gh-3 workers in the guard-hardening worktree.",
+  "next_action": "CLOSED in substance - merged to main, suite 999/0, capture and learnings recorded. Parked at compounding pending the compounding-complete Rust port (chip filed during prompt-diet).",
   "created_at": "2026-08-03T08:52:08.495Z",
   "route": {
     "class": "feature",
@@ -23,5 +23,21 @@
     "product_files": 6,
     "rationale": "Write-guard containment exemption (narrow allowlist for harness memory/scratchpad - weakens an existing guard, security surface), extended .bee direct-edit deny set, and grep/find permissions.deny; Rust hook code + tests + repo settings + docs.",
     "updated_at": "2026-08-03T08:52:13.417Z"
+  },
+  "last_scribing_run": {
+    "feature": "guard-hardening",
+    "date": "2026-08-04",
+    "at": "2026-08-04T02:22:52.800Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "None - capture landed in-flight (unenforced-obedience + prompt-writing-standard synced by gh-3)."
+  },
+  "last_compounding_run": {
+    "feature": "guard-hardening",
+    "date": "2026-08-04",
+    "at": "2026-08-04T02:22:52.852Z",
+    "learnings": "docs/history/learnings/20260803-guard-hardening.md",
+    "next_action": null
   }
 }
